@@ -1,0 +1,34 @@
+item 84 weapon_shotgun at (192,-320,16) UP
+item 85 item_armor_combat at (-1472,448,528) UP
+item 86 item_armor_body at (256,-1344,208) taken respawn_in=21.9s
+item 92 item_health at (-1064,-672,208) UP
+item 93 weapon_shotgun at (-1144,-832,208) UP
+item 94 weapon_plasmagun at (-128,-832,272) UP
+item 97 ammo_bullets at (208,-848,16) UP
+item 98 ammo_slugs at (304,-848,16) UP
+item 99 ammo_cells at (256,-896,16) taken respawn_in=36.2s
+item 100 ammo_rockets at (256,-800,16) taken respawn_in=35.9s
+item 101 item_health at (256,-848,16) UP
+item 102 ammo_shells at (164,-66,272) UP
+item 103 item_health at (-64,-800,528) UP
+item 104 ammo_bullets at (-1216,-320,144) UP
+item 105 ammo_slugs at (-1472,-320,144) UP
+item 106 ammo_cells at (-1344,-64,80) UP
+item 108 item_health at (24,-576,272) UP
+item 110 ammo_rockets at (-672,1104,144) UP
+item 113 ammo_slugs at (448,-32,528) UP
+item 114 weapon_railgun at (448,-160,528) UP
+item 116 weapon_rocketlauncher at (-576,-768,528) UP
+item 167 item_health at (-576,480,272) UP
+item 168 item_armor_shard at (-192,320,16) UP
+item 169 item_armor_shard at (-144,320,16) UP
+item 170 item_armor_shard at (-96,320,16) UP
+item 171 item_armor_shard at (-48,312,16) UP
+item 172 item_armor_shard at (0,296,16) UP
+item 173 ammo_grenades at (164,-16,272) UP
+item 174 weapon_grenadelauncher at (-1600,-192,528) UP
+item 175 weapon_lightning at (-768,320,16) UP
+item 176 ammo_lightning at (928,-640,400) taken respawn_in=34.0s
+item 177 item_health at (-1600,-48,80) UP
+item 179 item_quad at (-576,-256,16) taken respawn_in=45.5s
+item 244 weapon_plasmagun at (262,-1185,183) UP

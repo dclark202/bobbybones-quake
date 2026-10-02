@@ -1,0 +1,9 @@
+# local session data: recordings, telemetry, videos, logs
+data/
+__pycache__/
+*.pyc
+# minqlx build outputs
+minqlx/*.o
+minqlx/HDE/*.o
+minqlx/bin/*.so
+minqlx/bin/minqlx.zip
