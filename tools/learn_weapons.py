@@ -58,7 +58,9 @@ for fn in sys.argv[1:]:
             last_fire[sid] = (fr, s["weapon"], key)
         prev_hp = {k: v["hp"] for k, v in players.items()}
 
-policy = {}
+import os
+seed = os.environ.get("POLICY_SEED")
+policy = json.load(open(seed)) if seed and os.path.exists(seed) else {}   # e.g. the table learned in training
 for key in sorted(policy_counts):
     used = policy_counts[key]
     if sum(used.values()) < MIN_FRAMES:

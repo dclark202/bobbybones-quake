@@ -112,5 +112,82 @@ for o, v in sorted(elo["opponents"].items(), key=lambda kv: -kv[1]["rating"]):
 recent = results[-20:]
 if recent:
     report.append("  last {} frag diffs: {}".format(len(recent), " ".join("{:+d}".format(r["bobby_score"] - r["opp_score"]) for r in recent)))
+
+# ---------------- movement: best route/movement style per trip ----------------
+legs = []
+for d in dirs:
+    f = os.path.join(d, "legs.jsonl")
+    if os.path.exists(f):
+        for line in open(f):
+            try:
+                legs.append(json.loads(line))
+            except ValueError:
+                pass
+by_style = defaultdict(lambda: defaultdict(list))
+for l in legs:
+    if l["fight"] > 1.0 or l["picked"] != l["key"].split(">")[1]:
+        continue                                   # fights and detours don't measure the route
+    st = l["style"]
+    sig = json.dumps(st, sort_keys=True)
+    by_style[l["key"]][sig].append(l)
+move_policy = {}
+report.append("")
+report.append("Movement (median travel time per trip; best style needs >= 3 clean runs, >= 80% without getting stuck):")
+for key in sorted(by_style):
+    best = None
+    for sig, runs in by_style[key].items():
+        ok = [r for r in runs if r["stucks"] == 0]
+        if len(runs) < 3 or len(ok) / len(runs) < 0.8:
+            continue
+        med = sorted(r["travel"] for r in ok)[len(ok) // 2]
+        if best is None or med < best[0]:
+            best = (med, sig, len(runs))
+    all_runs = [r for runs in by_style[key].values() for r in runs]
+    overall = sorted(r["travel"] for r in all_runs)[len(all_runs) // 2]
+    if best:
+        move_policy[key] = json.loads(best[1])
+        report.append("  {:<8} best {:.1f}s (n={}) vs all styles {:.1f}s  style {}".format(key, best[0], best[2], overall, best[1]))
+json.dump(move_policy, open(os.path.join(SHARED, "movement_policy.json"), "w"), indent=1)
+
+# ---------------- did it move the needle? first vs last third of the run ----------------
+def window_stats(rs, ls, xs):
+    out = {}
+    if rs:
+        w = sum(1 for r in rs if r["bobby_score"] > r["opp_score"])
+        out["win rate"] = "{:.0f}% ({} matches)".format(100.0 * w / len(rs), len(rs))
+        out["avg frag diff"] = "{:+.1f}".format(sum(r["bobby_score"] - r["opp_score"] for r in rs) / len(rs))
+    clean = [l for l in ls if l["fight"] <= 1.0]
+    if clean:
+        out["trips stuck"] = "{:.0f}% of {} trips".format(100.0 * sum(1 for l in clean if l["stucks"]) / len(clean), len(clean))
+        out["median trip time"] = "{:.1f}s".format(sorted(l["travel"] for l in clean)[len(clean) // 2])
+    shots = sum(e["n"] * REFIRE.get(e["w"], 0.5) for e in xs if e["k"] == "shot")
+    dmg = sum(e["n"] for e in xs if e["k"] == "dmg")
+    if shots:
+        out["damage per second of firing"] = "{:.0f}".format(dmg / shots)
+    return out
+
+
+exp = []
+for d in dirs:
+    f = os.path.join(d, "experience.jsonl")
+    if os.path.exists(f):
+        for line in open(f):
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if "t" in e:
+                exp.append(e)
+stamps = [r["t"] for r in results] + [l["t"] for l in legs] + [e["t"] for e in exp]
+if stamps:
+    t0, t1 = min(stamps), max(stamps)
+    a, b = t0 + (t1 - t0) / 3.0, t0 + 2 * (t1 - t0) / 3.0
+    first = window_stats([r for r in results if r["t"] < a], [l for l in legs if l["t"] < a], [e for e in exp if e["t"] < a])
+    last = window_stats([r for r in results if r["t"] >= b], [l for l in legs if l["t"] >= b], [e for e in exp if e["t"] >= b])
+    report.append("")
+    report.append("First third vs last third of training ({:.1f} h total):".format((t1 - t0) / 3600.0))
+    for k in sorted(set(first) | set(last)):
+        report.append("  {:<28} {:>22}  ->  {}".format(k, first.get(k, "-"), last.get(k, "-")))
+
 open(os.path.join(SHARED, "report.txt"), "w").write("\n".join(report) + "\n")
 print("\n".join(report))

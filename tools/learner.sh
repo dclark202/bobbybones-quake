@@ -19,14 +19,19 @@ while true; do
         fi
         S=/tmp/train/shared
         [ -f "$S/nav_$MAP.json" ] && cp "$S/nav_$MAP.json" "$D/nav_$MAP.json" && $R "qlx !ir nav" --wait 1 >/dev/null
+        [ -f "$S/movement_policy.json" ] && cp "$S/movement_policy.json" "$D/movement_policy.json"
         [ -f "$S/weapon_policy.json" ] && cp "$S/weapon_policy.json" "$D/weapon_policy.json" && $R "qlx !ir policy" --wait 1 >/dev/null
         echo "$(date -u) pulled shared knowledge" >> $D/learner.log
     else
-        POLICY_OUT=$D/weapon_policy.json python3 /tools/learn_weapons.py $D/trace_live*.txt > $D/learner_last.txt 2>&1 \
+        # public: start from what training promoted (if any), learn from humans on top
+        P=$D/promoted
+        POLICY_SEED=$P/weapon_policy.json POLICY_OUT=$D/weapon_policy.json \
+            python3 /tools/learn_weapons.py $D/trace_live*.txt > $D/learner_last.txt 2>&1 \
             && $R "qlx !ir policy" --wait 1 >/dev/null
         if [ -n "$MAP" ] && [ -f "$D/trace_live_$MAP.txt" ]; then
             BASE=/ql/maps-data/$MAP/walk_trace.txt
             [ -f "$BASE" ] || BASE=""
+            NAV_MERGE=$P/nav_$MAP.json NAV_BANNED=$P/banned_moves_pruned.txt \
             python3 /tools/navgraph.py $BASE $D/trace_live_$MAP.txt $D/nav_$MAP.json.new >> $D/learner_last.txt 2>&1 \
                 && mv $D/nav_$MAP.json.new $D/nav_$MAP.json \
                 && $R "qlx !ir nav" --wait 1 >/dev/null

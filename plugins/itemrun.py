@@ -43,6 +43,11 @@ POLICY = os.path.join(LOGDIR, "weapon_policy.json")
 RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
 TRAINING = os.environ.get("LAB_MODE") == "train"
 EXPLORE = 0.2 if TRAINING else 0.0        # chance per engagement to try a different weapon
+MOVE_EXPLORE = 0.2 if TRAINING else 0.0   # chance per trip to try a different route/movement style
+MOVE_POLICY = os.path.join(LOGDIR, "movement_policy.json")
+STYLE_CHOICES = dict(lookahead=[80.0, 110.0, 150.0, 200.0], hop_straight=[200.0, 300.0, 350.0, 500.0, 99999.0],
+                     noise=[0.0, 0.0, 0.3, 0.6])
+DEFAULT_STYLE = dict(lookahead=110.0, hop_straight=350.0, noise=0.0, seed=0)
 # fair mode: hearing radii (units) and aim error (1-sigma, units at the target)
 HEAR_STEPS, HEAR_JUMP, HEAR_FIRE, HEAR_ITEM, SEE_ITEM = 700, 900, 1500, 1000, 600
 # aim model: crosshair pursues the target like a hand on a mouse (gain per frame, max deg/s),
@@ -52,6 +57,11 @@ AIM_MAX_DPS = 720.0
 AIM_DRIFT = {6: 2.5, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 6.0, 4: 20.0, 11: 12.0, 13: 6.0, 14: 6.0, 1: 4.0}
 ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega"}
 VALUE = {"RA": 3, "MH": 2, "YA": 1}
+
+
+def time_now():
+    import time
+    return round(time.time(), 1)
 
 
 def is_bot(p):
@@ -101,7 +111,7 @@ class Nav:
                 best, bd = i, d
         return best, bd
 
-    def route(self, a, b, banned=()):
+    def route(self, a, b, banned=(), noise=0.0, seed=0):
         dist, prev = {a: 0.0}, {}
         pq = [(0.0, a)]
         while pq:
@@ -113,6 +123,8 @@ class Nav:
             for v, c, kind in self.adj[u]:
                 if (u, v) in banned:
                     continue
+                if noise:
+                    c *= 1.0 + noise * (((u * 73856093 ^ v * 19349663 ^ seed * 83492791) % 1000) / 500.0 - 1.0)
                 nd = d + c
                 if nd < dist.get(v, 1e18):
                     dist[v], prev[v] = nd, (u, kind)
@@ -301,6 +313,8 @@ class itemrun(minqlx.Plugin):
                 self.log("picked {} at {:.1f}s, {} after spawn (leg {:.1f}s)".format(
                     key, now / 1000.0, "{} ms".format(err) if err is not None else "?", self.leg_time(now)))
                 self.learn_speed(now)
+                self.log_leg(now, key)
+                self.last_item = key
                 p = self.player(self.bot)
                 p.health = 100
                 p.armor = 0
@@ -324,17 +338,29 @@ class itemrun(minqlx.Plugin):
                 return
             _, self.goal, self.path, cost = best
             self.path_i = 0
-            self.leg = dict(start=now, planned=cost)
+            leg_key = "{}>{}".format(getattr(self, "last_item", "spawn"), self.goal)
+            self.style = self.pick_style(leg_key)
+            self.lookahead, self.hop_straight = self.style["lookahead"], self.style["hop_straight"]
+            if self.style.get("noise"):
+                styled, styled_cost = self.plan(x, y, z, items[self.goal]["pos"], self.style)
+                if styled is not None:
+                    self.path, cost = styled, styled_cost
+            self.leg = dict(start=now, planned=cost, key=leg_key, stucks=0, fight_ms=0, arrive=None)
             self.log("-> {} (planned {:.1f}s, spawns in {:.1f}s)".format(
                 self.goal, cost, (items[self.goal]["spawn"] - now) / 1000.0))
 
         it = items[self.goal]
         dist_item = math.hypot(it["pos"][0] - x, it["pos"][1] - y)
+        if self.leg is not None:
+            if self.leg["arrive"] is None and dist_item < 120 and abs(it["pos"][2] - z) < 80:
+                self.leg["arrive"] = now
+            if getattr(self, "in_combat", False):
+                self.leg["fight_ms"] += 25
         time_to_spawn = (it["spawn"] - now) / 1000.0
 
         # replan if we left the path (fell off, got bumped)
         if self.path is None or self.off_path(x, y, z):
-            self.path, _ = self.plan(x, y, z, it["pos"])
+            self.path, _ = self.plan(x, y, z, it["pos"], getattr(self, "style", None))
             self.path_i = 0
             if self.path is None:
                 self.input(0, 0, 0, 0.0)
@@ -373,6 +399,8 @@ class itemrun(minqlx.Plugin):
             elif now - self.leg["best_t"] > 3000 and self.path and self.path_i + 1 < len(self.path):
                 e = (self.path[self.path_i][0], self.path[self.path_i + 1][0])
                 self.banned.add(e)
+                if self.leg is not None:
+                    self.leg["stucks"] = self.leg.get("stucks", 0) + 1
                 cells = getattr(self.nav, "cells", None)
                 if cells:
                     with open(os.path.join(LOGDIR, "banned_moves.txt"), "a") as f:
@@ -389,7 +417,7 @@ class itemrun(minqlx.Plugin):
         self.telemetry(now, x, y, z, speed, items, self.goal)
 
     # ------------------------------------------------------------------
-    def plan(self, x, y, z, item_pos):
+    def plan(self, x, y, z, item_pos, style=None):
         b, db = self.nav.nearest(*item_pos, maxdz=64)
         if b is None:
             return None, 1e9
@@ -399,7 +427,8 @@ class itemrun(minqlx.Plugin):
             for da, a in self.nav.nearest_k(x, y, z):
                 if da > 250:
                     break
-                route, cost = self.nav.route(a, b, banned)
+                st_ = style or {}
+                route, cost = self.nav.route(a, b, banned, st_.get("noise", 0.0), st_.get("seed", 0))
                 if route is not None:
                     if banned is not getattr(self, "banned", None):
                         self.banned = set()   # had to forgive bans to find a way
@@ -505,7 +534,34 @@ class itemrun(minqlx.Plugin):
         minqlx.set_bot_input(self.bot, int(fwd), int(right), int(up), 0, 0, 0.0, float(yaw))
 
     # ---------------- combat ----------------
+    def pick_style(self, leg_key):
+        """best known route/movement style for this trip; in training, sometimes try something new"""
+        best = getattr(self, "move_policy", {}).get(leg_key)
+        if best is not None and random.random() >= MOVE_EXPLORE:
+            return dict(best)
+        if MOVE_EXPLORE:
+            st = {k: random.choice(v) for k, v in STYLE_CHOICES.items()}
+            st["seed"] = random.randint(1, 10 ** 6)
+            return st
+        return dict(DEFAULT_STYLE)
+
+    def log_leg(self, now, picked):
+        leg = self.leg
+        if leg is None:
+            return
+        rec = dict(t=time_now(), key=leg["key"], picked=picked, style=getattr(self, "style", DEFAULT_STYLE),
+                   travel=((leg["arrive"] or now) - leg["start"]) / 1000.0, total=(now - leg["start"]) / 1000.0,
+                   planned=round(leg["planned"], 2), stucks=leg.get("stucks", 0), fight=leg["fight_ms"] / 1000.0,
+                   ok=picked == self.goal and leg.get("stucks", 0) == 0)
+        with open(os.path.join(LOGDIR, "legs.jsonl"), "a") as f:
+            f.write(json.dumps(rec) + "\n")
+
     def load_policy(self):
+        try:
+            self.move_policy = json.load(open(MOVE_POLICY))   # {"RA>MH": style, ...} learned in training
+            self.log("movement policy loaded: {} trips".format(len(self.move_policy)))
+        except Exception:
+            self.move_policy = {}
         try:
             self.policy = json.load(open(POLICY))   # {"<band>": weapon, ...} learned from the human
             self.log("weapon policy loaded: {} situations".format(len(self.policy)))
@@ -687,7 +743,7 @@ class itemrun(minqlx.Plugin):
     def experience(self, kind, wp, n):
         """Bobby's own combat results per situation: shots fired and damage dealt (self-play learning)"""
         with open(os.path.join(LOGDIR, "experience.jsonl"), "a") as f:
-            f.write(json.dumps(dict(k=kind, band=getattr(self, "cur_band", "?"), w=wp, n=n)) + "\n")
+            f.write(json.dumps(dict(t=time_now(), k=kind, band=getattr(self, "cur_band", "?"), w=wp, n=n)) + "\n")
 
     def track_opponent(self, now, p, st, me):
         """the opponent's own accuracy per weapon (keyed by steam id), used to set Bobby's targets"""

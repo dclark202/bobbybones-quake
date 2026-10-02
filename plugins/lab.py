@@ -17,6 +17,7 @@ TRAIN = os.environ.get("LAB_MODE") == "train"
 # training: real 10-minute matches vs rotating Nightmare (skill 5) bots
 OPPONENTS = os.environ.get("LAB_OPPONENTS", "sarge,anarki,visor,xaero,klesk,doom,keel,major,orbb,ranger,slash,uriel,hunter,mynx,razor,sorlag").split(",")
 RESULTS = "/tmp/practice/results.jsonl"
+DEADLINE = float(os.environ.get("TRAIN_DEADLINE", "0") or 0)   # unix time; trainers go idle after it
 LAB_FACTORY = "duel"
 CHECK_EVERY = 5.0
 NOTICE = ("^7Welcome to the ^1B^3o^2b^5b^4y^6B^1o^3n^2e^5s ^7lab. Matches here are recorded (movement, item timing, "
@@ -99,6 +100,13 @@ class lab(minqlx.Plugin):
             self.log("enforce error: {!r}".format(e))
 
     def enforce(self, now):
+        if TRAIN and DEADLINE and now > DEADLINE:
+            bots = [p for p in self.players() if is_bot(p)]
+            if bots:
+                self.log("training deadline reached - going idle")
+                for p in bots:
+                    minqlx.console_command("kick {}".format(p.id))
+            return
         if (minqlx.get_cvar("mapname") or "").lower() != LAB_MAP or minqlx.get_cvar("g_factory") not in (None, "", LAB_FACTORY):
             return self.fix_map()
         if now < self.fixing_map_until - 12:          # give a fresh map a few seconds to settle

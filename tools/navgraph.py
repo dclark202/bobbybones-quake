@@ -73,6 +73,23 @@ for cid, tr in tracks.items():
                     edge_t[key], edge_kind[key] = dt, kind
         prev_ground = (fr, c, (x, y, z))
 
+# merge a previously learned graph (e.g. promoted from training): union of moves, fastest wins
+merge = os.environ.get("NAV_MERGE")
+if merge and os.path.exists(merge):
+    g = json.load(open(merge))
+    if g.get("cells"):
+        mc = [tuple(c) for c in g["cells"]]
+        for i, c in enumerate(mc):
+            if len(node_pts[c]) < 2:
+                node_pts[c] += [tuple(g["nodes"][i])] * 2
+        for a, b, t, kind in g["edges"]:
+            key = (mc[a], mc[b])
+            if kind == "tele":
+                tele[key] += 2
+                continue
+            edge_n[key] += 2
+            if key not in edge_t or t < edge_t[key]:
+                edge_t[key], edge_kind[key] = t, kind
 cells = [c for c, pts in node_pts.items() if len(pts) >= 2]
 index = {c: i for i, c in enumerate(cells)}
 nodes = []
