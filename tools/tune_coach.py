@@ -28,7 +28,11 @@ SPACE = {                   # name: (low, high)
     "AGGRESSION": (0.0, 1.0), "SELFPRESERVATION": (0.0, 1.0), "CAMPER": (0.0, 1.0), "ALERTNESS": (0.0, 1.0),
     "JUMPER": (0.0, 1.0), "WEAPONJUMPING": (0.0, 1.0), "EASY_FRAGGER": (0.0, 1.0),
     "FS_HEALTH": (0.5, 5.0), "FS_ARMOR": (0.5, 5.0),
+    # fair aim (human-like limits)
+    "AIM_REACT": (120.0, 300.0), "AIM_GAIN_X": (0.6, 1.6), "AIM_DRIFT_X": (0.4, 1.6),
+    "AIM_SETTLE": (1.5, 5.0), "AIM_DPS": (500.0, 1100.0),
 }
+AIM_DEFAULTS = dict(AIM_REACT=170.0, AIM_GAIN_X=1.0, AIM_DRIFT_X=1.0, AIM_SETTLE=2.5, AIM_DPS=720.0)
 os.makedirs(OUT, exist_ok=True)
 pak = zipfile.ZipFile("/ql/baseq3/pak00.pk3")
 ORIG_C = pak.read("botfiles/bots/bones_c.c").decode("latin1")
@@ -88,10 +92,14 @@ def matches_for(i, gen, cid, since):
 
 
 base = original_params()
+base.update(AIM_DEFAULTS)
 state_f = os.path.join(OUT, "state.json")
 if os.path.exists(state_f):
     st = json.load(open(state_f))
     mu, sigma, gen = st["mu"], st["sigma"], st["gen"]
+    for k, (lo, hi) in SPACE.items():                     # knobs added since the last run
+        mu.setdefault(k, base.get(k, (lo + hi) / 2))
+        sigma.setdefault(k, (hi - lo) / 4)
 else:
     mu = {k: base.get(k, (lo + hi) / 2) for k, (lo, hi) in SPACE.items()}
     sigma = {k: (hi - lo) / 4 for k, (lo, hi) in SPACE.items()}

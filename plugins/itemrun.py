@@ -60,6 +60,8 @@ HEAR_STEPS, HEAR_JUMP, HEAR_FIRE, HEAR_ITEM, SEE_ITEM = 700, 900, 1500, 1000, 60
 # plus a slow, small drift (units at the target). Misses come mostly from the target changing direction.
 AIM_GAIN = {6: 0.7, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.5, 4: 0.4, 11: 0.45, 13: 0.5, 14: 0.5, 1: 0.6}
 AIM_MAX_DPS = 720.0
+# tunable aim knobs (human-like ranges enforced by the coach); defaults = the hand-tuned values
+AIM_KNOBS = dict(AIM_REACT=170.0, AIM_GAIN_X=1.0, AIM_DRIFT_X=1.0, AIM_SETTLE=2.5, AIM_DPS=720.0)
 AIM_DRIFT = {6: 2.5, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 6.0, 4: 20.0, 11: 12.0, 13: 6.0, 14: 6.0, 1: 4.0}
 ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega",
          "RL": "weapon_rocketlauncher", "LG": "weapon_lightning", "RG": "weapon_railgun"}
@@ -261,6 +263,16 @@ class itemrun(minqlx.Plugin):
             self.running = True
             self.hybrid = False
             self.aim_scale = getattr(self, "aim_scale", {})
+            self.knobs = dict(AIM_KNOBS)
+            try:
+                if TRAINING:
+                    c = json.load(open(os.path.join(LOGDIR, "candidate.json")))
+                    self.knobs.update({k: float(v) for k, v in c.get("params", {}).items() if k in AIM_KNOBS})
+                else:
+                    self.knobs.update({k: float(v) for k, v in json.load(open(os.path.join(LOGDIR, "aim_knobs.json"))).items()
+                                       if k in AIM_KNOBS})
+            except Exception:
+                pass
             self.static_items, self.item_nodes, self.belief = None, None, None
             self.enemy_stack, self.mode, self.goal_score = 125, "fight", 0.0
             try:
@@ -874,7 +886,8 @@ class itemrun(minqlx.Plugin):
         # letting go of the trigger between shots (rocket refire etc.) is not losing sight
         if visible and now - getattr(self, "prev_seen", -1e9) > 1000:
             self.engage_start = now
-            self.reaction = random.uniform(170, 260)       # ms before the first shot
+            r0 = self.knobs["AIM_REACT"]
+            self.reaction = random.uniform(r0, r0 + 90)      # ms before the first shot
         if visible:
             self.prev_seen = now
         self.was_visible = visible
@@ -898,7 +911,7 @@ class itemrun(minqlx.Plugin):
             tz += 0.5 * GRAVITY * (t - 0.05) ** 2          # grenades: aim above for the lob
         # human-like aim: small slow drift around the target point...
         scale = self.aim_scale.get(w, 1.0)                 # <1 tighter, >1 looser (self-tuned)
-        drift = AIM_DRIFT.get(w, 10.0) * scale * (3.0 if not k["exact"] else 1.0)
+        drift = AIM_DRIFT.get(w, 10.0) * scale * self.knobs["AIM_DRIFT_X"] * (3.0 if not k["exact"] else 1.0)
         rho = 0.97                                         # ~0.8 s correlation at 40 Hz
         self.err_h = getattr(self, "err_h", 0.0) * rho + random.gauss(0, drift * math.sqrt(1 - rho * rho))
         self.err_v = getattr(self, "err_v", 0.0) * rho + random.gauss(0, drift * math.sqrt(1 - rho * rho))
@@ -913,14 +926,15 @@ class itemrun(minqlx.Plugin):
         if cy is None or now - getattr(self, "cross_t", 0) > 1000:
             v = minqlx.view_angles(self.bot)
             cy, cp = v[1], v[0]                            # start from where the AI was looking
-        gain = min(0.9, AIM_GAIN.get(w, 0.45) / math.sqrt(scale))
-        step = AIM_MAX_DPS * 0.025
+        gain = min(0.9, AIM_GAIN.get(w, 0.45) * self.knobs["AIM_GAIN_X"] / math.sqrt(scale))
+        step = self.knobs["AIM_DPS"] * 0.025
         dyaw, dpit = wrap(want_yaw - cy), want_pitch - cp
         cy += max(-step, min(step, dyaw * gain))
         cp += max(-step, min(step, dpit * gain))
         self.cross_yaw, self.cross_pitch, self.cross_t = cy, cp, now
         yaw, pitch = cy, cp
-        settled = abs(wrap(want_yaw - cy)) < 2.5 and abs(want_pitch - cp) < 2.5
+        st_ = self.knobs["AIM_SETTLE"]
+        settled = abs(wrap(want_yaw - cy)) < st_ and abs(want_pitch - cp) < st_
         allow = visible and now - getattr(self, "engage_start", now) >= getattr(self, "reaction", 200)
         if w in (3, 4, 5, 7, 8, 11):
             allow = allow and settled                      # aimed shots: fire once the flick lands
