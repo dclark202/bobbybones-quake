@@ -33,6 +33,7 @@ GRAVITY = 800.0
 # fighting: winning = frags. Items are a means. Engage when healthy, hold the weapon's best range.
 PREF_RANGE = {6: 380.0, 5: 350.0, 7: 900.0, 3: 180.0, 8: 300.0, 2: 500.0, 14: 500.0, 13: 400.0, 4: 400.0, 11: 350.0}
 ENGAGE_STACK = 80          # health + armor needed to choose a fight; below it, go get stuff
+ARMED_WITH = ("rl", "lg", "rg", "pg", "sg")   # a real weapon is needed to choose a fight (not just the MG)
 SPRAY = {2, 6, 13, 14}                          # held-trigger tracking weapons: MG, LG, CG, HMG
 # accuracy targets (tunable live: e.g. "bobby_acc_lg 0.45" in the server console); aim self-tunes toward them
 ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.40), 7: ("bobby_acc_rg", 0.65), 5: ("bobby_acc_rl", 0.70),
@@ -824,10 +825,11 @@ class itemrun(minqlx.Plugin):
             return False                                   # no fresh sight of them: items
         me = minqlx.player_state(self.bot)
         stack = me.health + me.armor
-        if stack < ENGAGE_STACK:
-            return False                                   # weak: break off and go collect
         ex, ey, ez = k["pos"]
         dist = math.hypot(ex - x, ey - y)
+        armed = any(getattr(me.weapons, n, False) and getattr(me.ammo, n, 0) > 0 for n in ARMED_WITH)
+        if dist > 250 and (stack < ENGAGE_STACK or not armed):
+            return False                                   # weak or only a machine gun: go collect first
         to_yaw = math.degrees(math.atan2(ey - y, ex - x))
         pref = PREF_RANGE.get(me.weapon, 400.0)
         if now >= getattr(self, "circle_next", 0):
