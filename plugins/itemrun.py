@@ -31,15 +31,18 @@ WEAPONS = {1: "g", 2: "mg", 3: "sg", 4: "gl", 5: "rl", 6: "lg", 7: "rg", 8: "pg"
 PROJECTILE_SPEED = {4: 700.0, 5: 1000.0, 8: 2000.0, 11: 1000.0}   # grenades, rockets, plasma, nails
 GRAVITY = 800.0
 SPRAY = {2, 6, 13, 14}                          # held-trigger tracking weapons: MG, LG, CG, HMG
+# accuracy targets (tunable live: e.g. "bobby_acc_lg 0.45" in the server console); aim self-tunes toward them
+ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.50), 7: ("bobby_acc_rg", 0.60), 5: ("bobby_acc_rl", 0.60),
+                    8: ("bobby_acc_pg", 0.35), 3: ("bobby_acc_sg", 0.50), 14: ("bobby_acc_hmg", 0.40)}
 POLICY = os.path.join(LOGDIR, "weapon_policy.json")
 RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
 # fair mode: hearing radii (units) and aim error (1-sigma, units at the target)
 HEAR_STEPS, HEAR_JUMP, HEAR_FIRE, HEAR_ITEM, SEE_ITEM = 700, 900, 1500, 1000, 600
 # aim model: crosshair pursues the target like a hand on a mouse (gain per frame, max deg/s),
 # plus a slow, small drift (units at the target). Misses come mostly from the target changing direction.
-AIM_GAIN = {6: 0.55, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.5, 4: 0.4, 11: 0.45, 13: 0.5, 14: 0.5, 1: 0.6}
+AIM_GAIN = {6: 0.7, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.5, 4: 0.4, 11: 0.45, 13: 0.5, 14: 0.5, 1: 0.6}
 AIM_MAX_DPS = 720.0
-AIM_DRIFT = {6: 4.0, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 6.0, 4: 20.0, 11: 12.0, 13: 6.0, 14: 6.0, 1: 4.0}
+AIM_DRIFT = {6: 2.5, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 6.0, 4: 20.0, 11: 12.0, 13: 6.0, 14: 6.0, 1: 4.0}
 ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega"}
 VALUE = {"RA": 3, "MH": 2, "YA": 1}
 
@@ -173,6 +176,7 @@ class itemrun(minqlx.Plugin):
             self.nav = Nav(nav)
             self.running = True
             self.hybrid = False
+            self.aim_scale = getattr(self, "aim_scale", {})
             self.load_policy()
             self.goal = None
             self.path = None
@@ -581,7 +585,8 @@ class itemrun(minqlx.Plugin):
         if w == 4:
             tz += 0.5 * GRAVITY * (t - 0.05) ** 2          # grenades: aim above for the lob
         # human-like aim: small slow drift around the target point...
-        drift = AIM_DRIFT.get(w, 10.0) * (3.0 if not k["exact"] else 1.0)
+        scale = self.aim_scale.get(w, 1.0)                 # <1 tighter, >1 looser (self-tuned)
+        drift = AIM_DRIFT.get(w, 10.0) * scale * (3.0 if not k["exact"] else 1.0)
         rho = 0.97                                         # ~0.8 s correlation at 40 Hz
         self.err_h = getattr(self, "err_h", 0.0) * rho + random.gauss(0, drift * math.sqrt(1 - rho * rho))
         self.err_v = getattr(self, "err_v", 0.0) * rho + random.gauss(0, drift * math.sqrt(1 - rho * rho))
@@ -596,7 +601,7 @@ class itemrun(minqlx.Plugin):
         if cy is None or now - getattr(self, "cross_t", 0) > 1000:
             v = minqlx.view_angles(self.bot)
             cy, cp = v[1], v[0]                            # start from where the AI was looking
-        gain = AIM_GAIN.get(w, 0.45)
+        gain = min(0.9, AIM_GAIN.get(w, 0.45) / math.sqrt(scale))
         step = AIM_MAX_DPS * 0.025
         dyaw, dpit = wrap(want_yaw - cy), want_pitch - cp
         cy += max(-step, min(step, dyaw * gain))
@@ -639,11 +644,31 @@ class itemrun(minqlx.Plugin):
         self.prev_hp = hp
         if now >= self.acc_log:
             self.acc_log = now + 30000
+            self.tune_aim()
             names = {1: "G", 2: "MG", 3: "SG", 4: "GL", 5: "RL", 6: "LG", 7: "RG", 8: "PG", 11: "NG", 13: "CG", 14: "HMG"}
             parts = ["{} {:.0f}% ({}/{})".format(names.get(wp, wp), 100.0 * min(h, s_) / s_, min(h, s_), s_)
                      for wp, (s_, h) in sorted(acc.items()) if s_ > 0]
             if parts:
                 self.log("accuracy: " + ", ".join(parts))
+
+    def tune_aim(self):
+        """nudge each weapon's aim toward its accuracy target using the shots since the last step"""
+        last = getattr(self, "acc_prev", {})
+        for wp, (shots, hits) in self.acc.items():
+            ps, ph = last.get(wp, (0, 0))
+            ds, dh = shots - ps, hits - ph
+            if wp not in ACC_TARGET_CVARS or ds < 30:
+                continue
+            name, default = ACC_TARGET_CVARS[wp]
+            try:
+                target = float(minqlx.get_cvar(name) or default)
+            except ValueError:
+                target = default
+            acc = min(dh, ds) / float(ds)
+            old = self.aim_scale.get(wp, 1.0)
+            self.aim_scale[wp] = max(0.2, min(3.0, old * math.exp(-2.0 * (target - acc))))
+            self.log("aim tune w{}: {:.0f}% vs target {:.0f}% -> scale {:.2f}".format(wp, acc * 100, target * 100, self.aim_scale[wp]))
+        self.acc_prev = {wp: tuple(v) for wp, v in self.acc.items()}
 
     def dodge_yaw(self, yaw, now):
         """Fight movement: unpredictable ground strafing around the intended direction.
