@@ -45,6 +45,9 @@ def is_bot(p):
 class bobby(minqlx.Plugin):
     def __init__(self):
         self.add_hook("death", self.on_death)
+        self.add_hook("frame", self.on_frame)       # warmup emits no death stats: watch health instead
+        self.hp = {}
+        self.bobby_fired = 0.0
         self.add_hook("player_loaded", self.on_loaded)
         self.add_command("bobbyname", self.cmd_name)
         self.last_taunt = 0.0
@@ -70,21 +73,39 @@ class bobby(minqlx.Plugin):
         if b is not None and b.name != NAME:
             b.name = NAME
 
-    def on_death(self, victim, killer, data):
-        if killer is None or victim is None or not is_bot(killer) or is_bot(victim):
+    def on_frame(self):
+        b = self.bobby_player()
+        if b is None:
             return
-        if "Bobby" not in killer.clean_name.replace(" ", ""):
-            return
+        now = time.time()
+        if minqlx.last_usercmd(b.id)[1] & 1:
+            self.bobby_fired = now
+        for p in self.players():
+            if is_bot(p):
+                continue
+            st = p.state
+            hp = st.health if st else 0
+            if self.hp.get(p.id, 1) > 0 and hp <= 0 and now - self.bobby_fired < 1.5:
+                self.taunt(b, "")
+            self.hp[p.id] = hp
+
+    def taunt(self, killer, weapon):
         now = time.time()
         if now - self.last_taunt < 4:          # don't flood the chat
             return
         self.last_taunt = now
-        weapon = str(data.get("MOD", "")) if isinstance(data, dict) else ""
         pool = list(TAUNTS)
         for key, extra in WEAPON_TAUNTS.items():
             if key in weapon:
                 pool += extra * 2
         self.say_later(killer.id, random.choice(pool))
+
+    def on_death(self, victim, killer, data):
+        if killer is None or victim is None or not is_bot(killer) or is_bot(victim):
+            return
+        if "Bobby" not in killer.clean_name.replace(" ", ""):
+            return
+        self.taunt(killer, str(data.get("MOD", "")) if isinstance(data, dict) else "")
 
     @minqlx.delay(0.8)
     def say_later(self, cid, text):

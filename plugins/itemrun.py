@@ -34,9 +34,9 @@ RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
 HEAR_STEPS, HEAR_JUMP, HEAR_FIRE, HEAR_ITEM, SEE_ITEM = 700, 900, 1500, 1000, 600
 # aim model: crosshair pursues the target like a hand on a mouse (gain per frame, max deg/s),
 # plus a slow, small drift (units at the target). Misses come mostly from the target changing direction.
-AIM_GAIN = {6: 0.42, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.45, 4: 0.4}
+AIM_GAIN = {6: 0.55, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.45, 4: 0.4}
 AIM_MAX_DPS = 720.0
-AIM_DRIFT = {6: 6.0, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 10.0, 4: 20.0}
+AIM_DRIFT = {6: 4.0, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 10.0, 4: 20.0}
 ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega"}
 VALUE = {"RA": 3, "MH": 2, "YA": 1}
 
