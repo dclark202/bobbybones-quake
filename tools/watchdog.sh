@@ -7,6 +7,11 @@ while true; do
     sleep 30
     pid=$(pgrep -f qzeroded | head -1)
     [ -z "$pid" ] && continue
+    if [ -f /tmp/practice/restart.flag ]; then          # the tuning coach wants fresh bot files loaded
+        rm -f /tmp/practice/restart.flag
+        echo "$(date -u) restart requested (new candidate)" >> /tmp/practice/watchdog.log
+        kill -9 "$pid"; last=""; stuck=0; continue
+    fi
     t=$(awk '{print $14 + $15}' /proc/$pid/stat 2>/dev/null)
     if [ -n "$last" ] && [ "$t" = "$last" ]; then
         stuck=$((stuck + 1))

@@ -835,9 +835,13 @@ class itemrun(minqlx.Plugin):
             self.in_combat = False
             return
         self.tracking = now - getattr(self, "last_seen", -1e9) < 350
-        if visible and not getattr(self, "was_visible", False):
+        # a new engagement (= reaction time again) only after losing sight for a full second; the AI
+        # letting go of the trigger between shots (rocket refire etc.) is not losing sight
+        if visible and now - getattr(self, "prev_seen", -1e9) > 1000:
             self.engage_start = now
             self.reaction = random.uniform(170, 260)       # ms before the first shot
+        if visible:
+            self.prev_seen = now
         self.was_visible = visible
         ex, ey, ez = k["pos"]
         evx, evy, evz = k["vel"]
