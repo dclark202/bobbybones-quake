@@ -41,6 +41,8 @@ ACC_CAP = {6: 0.60, 7: 0.80, 5: 0.85, 8: 0.50, 3: 0.65, 14: 0.55}
 ACC_FLOOR = 0.15
 POLICY = os.path.join(LOGDIR, "weapon_policy.json")
 RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
+TRAINING = os.environ.get("LAB_MODE") == "train"
+EXPLORE = 0.2 if TRAINING else 0.0        # chance per engagement to try a different weapon
 # fair mode: hearing radii (units) and aim error (1-sigma, units at the target)
 HEAR_STEPS, HEAR_JUMP, HEAR_FIRE, HEAR_ITEM, SEE_ITEM = 700, 900, 1500, 1000, 600
 # aim model: crosshair pursues the target like a hand on a mouse (gain per frame, max deg/s),
@@ -64,6 +66,7 @@ class Nav:
     def __init__(self, path):
         g = json.load(open(path))
         self.nodes = [tuple(n) for n in g["nodes"]]
+        self.cells = g.get("cells")
         self.adj = [[] for _ in self.nodes]
         have = set()
         for a, b, t, kind in g["edges"]:
@@ -158,7 +161,7 @@ class itemrun(minqlx.Plugin):
         if sub == "start":
             # "auto" = first bot on the server; never drive a human client
             if msg[2] == "auto":
-                bots = [p.id for p in self.players() if is_bot(p)]
+                bots = [p.id for p in self.players() if is_bot(p) and "Bobby" in p.clean_name.replace(" ", "")] or                        [p.id for p in self.players() if is_bot(p)]
                 if not bots:
                     self.log("no bot on the server")
                     return
@@ -370,6 +373,10 @@ class itemrun(minqlx.Plugin):
             elif now - self.leg["best_t"] > 3000 and self.path and self.path_i + 1 < len(self.path):
                 e = (self.path[self.path_i][0], self.path[self.path_i + 1][0])
                 self.banned.add(e)
+                cells = getattr(self.nav, "cells", None)
+                if cells:
+                    with open(os.path.join(LOGDIR, "banned_moves.txt"), "a") as f:
+                        f.write("{}>{}\n".format(",".join(map(str, cells[e[0]])), ",".join(map(str, cells[e[1]]))))
                 self.log("stuck near {} -> banning edge {} and rerouting".format((round(x), round(y), round(z)), e))
                 self.path, self.leg["best_remaining"] = None, None
                 return
@@ -513,6 +520,15 @@ class itemrun(minqlx.Plugin):
     def choose_weapon(self, dist, dz, enemy_air, ammo):
         prefs = []
         b = self.band(dist, dz, enemy_air)
+        self.cur_band = b
+        if EXPLORE:
+            ex = getattr(self, "explore", None)
+            if ex is None or ex[0] != b or self.now - ex[2] > 4000:
+                usable = [w for w, n in ammo.items() if n > 0 and w != 1]
+                pick = random.choice(usable) if usable and random.random() < EXPLORE else None
+                self.explore = ex = (b, pick, self.now)
+            if ex[1] is not None and ammo.get(ex[1], 0) > 0:
+                return ex[1]
         if self.policy and b in self.policy:
             prefs.append(int(self.policy[b]))
         # defaults until the learned table covers a situation
@@ -530,8 +546,9 @@ class itemrun(minqlx.Plugin):
         return 2
 
     def human(self):
+        """the opponent: whoever else is playing (a human on the public server, a bot in training)"""
         for p in self.players():
-            if p.id != self.bot and not is_bot(p) and p.team != "spectator":
+            if p.id != self.bot and p.team != "spectator":
                 st = p.state
                 if st and (st.is_alive or st.health > 0):
                     return p, st
@@ -648,6 +665,7 @@ class itemrun(minqlx.Plugin):
                 a = acc.setdefault(wp, [0, 0])
                 a[0] += used
                 self.last_shot[wp] = now
+                self.experience("shot", wp, used)
             self.prev_ammo[wp] = n
         self.track_opponent(now, p, st, me)
         hp = st.health + st.armor
@@ -655,6 +673,7 @@ class itemrun(minqlx.Plugin):
             window = {4: 2500, 5: 1500, 8: 800, 11: 1500}.get(me.weapon, 100)
             if now - self.last_shot.get(me.weapon, -1e9) <= window:
                 acc.setdefault(me.weapon, [0, 0])[1] += 1
+                self.experience("dmg", me.weapon, self.prev_hp - hp)
         self.prev_hp = hp
         if now >= self.acc_log:
             self.acc_log = now + 30000
@@ -664,6 +683,11 @@ class itemrun(minqlx.Plugin):
                      for wp, (s_, h) in sorted(acc.items()) if s_ > 0]
             if parts:
                 self.log("accuracy: " + ", ".join(parts))
+
+    def experience(self, kind, wp, n):
+        """Bobby's own combat results per situation: shots fired and damage dealt (self-play learning)"""
+        with open(os.path.join(LOGDIR, "experience.jsonl"), "a") as f:
+            f.write(json.dumps(dict(k=kind, band=getattr(self, "cur_band", "?"), w=wp, n=n)) + "\n")
 
     def track_opponent(self, now, p, st, me):
         """the opponent's own accuracy per weapon (keyed by steam id), used to set Bobby's targets"""
@@ -742,10 +766,10 @@ class itemrun(minqlx.Plugin):
         return yaw + getattr(self, "dodge_side", 1) * self.dodge_angle, hop
 
     def update_hybrid(self):
-        humans = [p for p in self.players() if not is_bot(p) and p.team != "spectator"]
+        humans = [p for p in self.players() if p.id != self.bot and p.team != "spectator"]
         h = bool(humans)
         if h != getattr(self, "hybrid", None):
-            self.log("hybrid combat mode {} ({} human player(s))".format("ON" if h else "OFF", len(humans)))
+            self.log("hybrid combat mode {} ({} opponent(s))".format("ON" if h else "OFF", len(humans)))
         self.hybrid = h
 
     def leg_time(self, now):
@@ -770,6 +794,8 @@ class itemrun(minqlx.Plugin):
             ip.velocity(reset=True)
 
     def telemetry(self, now, x, y, z, speed, items, state):
+        if TRAINING:
+            return                                         # trainers don't need per-frame video telemetry
         rec = dict(t=now, x=round(x), y=round(y), z=round(z), v=round(speed), s=state,
                    it={k: (v["avail"], round((v["spawn"] - now) / 1000.0, 2)) for k, v in items.items()})
         with open(os.path.join(LOGDIR, "itemrun_frames.jsonl"), "a") as f:

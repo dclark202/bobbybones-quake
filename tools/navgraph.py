@@ -9,6 +9,7 @@ jump pads and jumps are included and are directional.
 """
 import json
 import math
+import os
 import sys
 from collections import defaultdict
 
@@ -37,6 +38,7 @@ def cell_of(x, y, z):
 node_pts = defaultdict(list)
 edge_t = {}
 edge_kind = {}
+edge_n = defaultdict(int)  # how often each move was seen
 tele = defaultdict(int)   # (src cell, dst cell) -> times seen; repeated = a teleporter, one-offs = respawns
 for cid, tr in tracks.items():
     tr.sort()
@@ -66,6 +68,7 @@ for cid, tr in tracks.items():
             # ignore implausibly slow transitions (bot stood around, fought, etc.)
             d = math.dist(prev_ground[2], (x, y, z))
             if dt < 3.0 and (kind == "air" or d / max(dt, 0.025) > 150):
+                edge_n[key] += 1
                 if key not in edge_t or dt < edge_t[key]:
                     edge_t[key], edge_kind[key] = dt, kind
         prev_ground = (fr, c, (x, y, z))
@@ -76,8 +79,24 @@ nodes = []
 for c in cells:
     pts = node_pts[c]
     nodes.append([round(sum(p[i] for p in pts) / len(pts), 1) for i in range(3)])
+def plausible(a, b, t):
+    # very fast/long flights are usually knockback from hits, not a move: require seeing them twice
+    if edge_kind[(a, b)] != "air":
+        return True
+    pa, pb = node_pts[a][0], node_pts[b][0]
+    speed = math.hypot(pb[0] - pa[0], pb[1] - pa[1]) / max(t, 0.025)
+    return speed < 450 or edge_n[(a, b)] >= 2
+
+
+banned = set()
+if os.environ.get("NAV_BANNED") and os.path.exists(os.environ["NAV_BANNED"]):
+    # moves that failed repeatedly in practice (cells as "x,y,z>x,y,z" lines)
+    for line in open(os.environ["NAV_BANNED"]):
+        a, b = line.strip().split(">")
+        banned.add((tuple(map(int, a.split(","))), tuple(map(int, b.split(",")))))
 edges = [[index[a], index[b], round(t, 3), edge_kind[(a, b)]] for (a, b), t in edge_t.items()
-         if a in index and b in index]
+         if a in index and b in index and plausible(a, b, t) and (a, b) not in banned]
+cell_of_node = {index[c]: c for c in cells}
 # teleporters: the same source -> destination seen at least twice (respawns land at random-ish spots)
 def coarse(c):
     return (c[0] // 2, c[1] // 2, c[2])
@@ -92,5 +111,5 @@ for key, items in groups.items():
             edges.append([index[a], index[b], 0.1, "tele"])
             n_tele += 1
 print("teleporters", n_tele)
-json.dump(dict(nodes=nodes, edges=edges), open(out, "w"))
+json.dump(dict(nodes=nodes, edges=edges, cells=[list(cell_of_node[i]) for i in range(len(nodes))]), open(out, "w"))
 print("nodes", len(nodes), "edges", len(edges), "air", sum(1 for e in edges if e[3] == "air"))

@@ -6,12 +6,17 @@
 - BobbyBones present and named, item run + combat running, recording on
 - tells every joining player that matches are recorded and why
 """
+import json
 import os
 import time
 
 import minqlx
 
 LAB_MAP = os.environ.get("LAB_MAP", "bloodrun")
+TRAIN = os.environ.get("LAB_MODE") == "train"
+# training: real 10-minute matches vs rotating Nightmare (skill 5) bots
+OPPONENTS = os.environ.get("LAB_OPPONENTS", "sarge,anarki,visor,xaero,klesk,doom,keel,major,orbb,ranger,slash,uriel,hunter,mynx,razor,sorlag").split(",")
+RESULTS = "/tmp/practice/results.jsonl"
 LAB_FACTORY = "duel"
 CHECK_EVERY = 5.0
 NOTICE = ("^7Welcome to the ^1B^3o^2b^5b^4y^6B^1o^3n^2e^5s ^7lab. Matches here are recorded (movement, item timing, "
@@ -26,8 +31,11 @@ class lab(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        self.add_hook("game_countdown", self.on_countdown)
-        self.add_hook("game_start", self.on_countdown)
+        if not TRAIN:
+            self.add_hook("game_countdown", self.on_countdown)
+            self.add_hook("game_start", self.on_countdown)
+        self.add_hook("game_end", self.on_game_end)
+        self.opp_i = int(os.environ.get("LAB_OPPONENT_START", "0"))
         self.add_hook("vote_called", self.on_vote)
         self.add_hook("player_loaded", self.on_loaded)
         self.next_check = 0.0
@@ -95,16 +103,23 @@ class lab(minqlx.Plugin):
             return self.fix_map()
         if now < self.fixing_map_until - 12:          # give a fresh map a few seconds to settle
             return
-        for name, value in (("timelimit", "0"), ("fraglimit", "0"), ("g_doWarmup", "1")):
+        wanted = (("timelimit", "10"), ("fraglimit", "0"), ("g_doWarmup", "0")) if TRAIN else                  (("timelimit", "0"), ("fraglimit", "0"), ("g_doWarmup", "1"))
+        for name, value in wanted:
             if minqlx.get_cvar(name) != value:
                 minqlx.set_cvar(name, value)
-        if self.game is not None and self.game.state not in ("warmup", None):
+        if not TRAIN and self.game is not None and self.game.state not in ("warmup", None):
             self.log("game state {} - aborting to warmup".format(self.game.state))
             minqlx.console_command("abort")
         bots = [p for p in self.players() if is_bot(p)]
-        if not bots:
+        bobby = [p for p in bots if "Bobby" in p.clean_name.replace(" ", "")]
+        if not bobby:
             self.log("BobbyBones missing - adding him")
             minqlx.console_command("addbot bones 5 free 0 BobbyBones")
+            return
+        if TRAIN and len(bots) < 2:
+            opp = OPPONENTS[self.opp_i % len(OPPONENTS)].strip()
+            self.log("adding Nightmare opponent {}".format(opp))
+            minqlx.console_command("addbot {} 5".format(opp))
             return
         plugins = minqlx.Plugin._loaded_plugins
         bobby = plugins.get("bobby")
@@ -118,3 +133,24 @@ class lab(minqlx.Plugin):
         if itemrun is not None and not getattr(itemrun, "running", False):
             self.log("item run not running - starting")
             minqlx.console_command("qlx !ir start auto -1")
+
+    def on_game_end(self, data):
+        """training: log the match result (for the Elo rating) and rotate to the next opponent"""
+        if not TRAIN:
+            return
+        players = [p for p in self.players() if p.team != "spectator"]
+        bobby = [p for p in players if "Bobby" in p.clean_name.replace(" ", "")]
+        opp = [p for p in players if p not in bobby]
+        if not bobby or not opp:
+            return
+        res = dict(t=time.time(), map=LAB_MAP, bobby_score=bobby[0].score, opp=opp[0].clean_name,
+                   opp_score=opp[0].score, container=os.environ.get("HOSTNAME", "?"))
+        with open(RESULTS, "a") as f:
+            f.write(json.dumps(res) + "\n")
+        self.log("match over: BobbyBones {} - {} {}".format(res["bobby_score"], res["opp_score"], res["opp"]))
+        self.opp_i += 1
+        self.kick_later(opp[0].id)
+
+    @minqlx.delay(5)
+    def kick_later(self, cid):
+        minqlx.console_command("kick {}".format(cid))

@@ -1,4 +1,5 @@
 """bobby: BobbyBones' personality - an obnoxious rainbow name and trash talk after frags."""
+import os
 import random
 import time
 
@@ -90,6 +91,8 @@ class bobby(minqlx.Plugin):
             self.hp[p.id] = hp
 
     def taunt(self, killer, weapon):
+        if os.environ.get("LAB_MODE") == "train":
+            return
         now = time.time()
         if now - self.last_taunt < 4:          # don't flood the chat
             return
