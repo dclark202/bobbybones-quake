@@ -214,7 +214,8 @@ class lab(minqlx.Plugin):
         if not bobby or not opp:
             return
         ir = minqlx.Plugin._loaded_plugins.get("itemrun")
-        res = dict(t=time.time(), map=LAB_MAP, variant="control" if CONTROL else "bobby",
+        res = dict(t=time.time(), map=LAB_MAP,
+                   variant="control" if CONTROL else "bobby-" + os.environ.get("LAB_VARIANT", "full"),
                    mode="spar" if SPAR else "match", aggr=getattr(ir, "aggr", None) if not CONTROL else None,
                    bobby_score=bobby[0].score, opp=opp[0].clean_name,
                    opp_score=opp[0].score, container=os.environ.get("HOSTNAME", "?"))

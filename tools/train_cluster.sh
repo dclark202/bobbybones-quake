@@ -15,9 +15,10 @@ case "$1" in
       mkdir -p "data/train/c$i"
       AGG=0; [ "$i" = "1" ] && AGG=1
       CTRL=0; [ "$i" -gt $((N - CONTROLS)) ] && CTRL=1
+      VAR=$(echo "${SPLIT:-}" | cut -d, -f$i); [ -z "$VAR" ] && VAR=full   # SPLIT = per-trainer variant list
       MSYS_NO_PATHCONV=1 docker run -d --name "qltrain$i" --restart unless-stopped \
         -e LAB_MODE=train -e TRAIN_AGGREGATOR=$AGG -e LAB_OPPONENT_START=$((i - 1)) \
-        -e TRAIN_DEADLINE="${TRAIN_DEADLINE:-0}" -e TRAIN_SINCE="${TRAIN_SINCE:-0}" -e LAB_CONTROL=$CTRL -e LAB_SPAR="${LAB_SPAR:-0}" \
+        -e TRAIN_DEADLINE="${TRAIN_DEADLINE:-0}" -e TRAIN_SINCE="${TRAIN_SINCE:-0}" -e LAB_CONTROL=$CTRL -e LAB_SPAR="${LAB_SPAR:-0}" -e LAB_VARIANT=$VAR \
         -v "$ROOT/data/train/c$i:/tmp/practice" -v "$ROOT/data/train:/tmp/train" \
         qlbot +set sv_master 0 +set sv_serverType 0 +set sv_hostname "bobby-train-$i" >/dev/null
       echo "started qltrain$i"

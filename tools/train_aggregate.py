@@ -93,7 +93,11 @@ results.sort(key=lambda r: r["t"])
 since = float(os.environ.get("TRAIN_SINCE", "0") or 0)          # only this run
 results = [r for r in results if r["t"] >= since]
 control_results = [r for r in results if r.get("variant") == "control"]
-results = [r for r in results if r.get("variant", "bobby") == "bobby"]
+all_bobby = [r for r in results if r.get("variant", "bobby").startswith("bobby")]
+by_variant = defaultdict(list)
+for r in all_bobby:
+    by_variant[r.get("variant", "bobby")].append(r)
+results = all_bobby
 rating, opp_r, K = 1500.0, defaultdict(lambda: 1500.0), 24.0
 wins = losses = draws = 0
 per_opp = defaultdict(lambda: [0, 0, 0])
@@ -113,6 +117,10 @@ with open(os.path.join(SHARED, "elo_history.jsonl"), "a") as f:
 report.append("")
 report.append("Rating: BobbyBones {} after {} matches (W {} / D {} / L {}) vs Nightmare bots".format(
     elo["rating"], len(results), wins, draws, losses))
+for v, rs in sorted(by_variant.items()):
+    report.append("Variant {:<16} {} matches, win rate {:.0f}%, frags {:.1f} vs {:.1f}".format(
+        v, len(rs), 100.0 * sum(r["bobby_score"] > r["opp_score"] for r in rs) / len(rs),
+        sum(r["bobby_score"] for r in rs) / len(rs), sum(r["opp_score"] for r in rs) / len(rs)))
 if control_results:
     cw = sum(1 for r in control_results if r["bobby_score"] > r["opp_score"])
     cd = sum(r["bobby_score"] - r["opp_score"] for r in control_results) / len(control_results)

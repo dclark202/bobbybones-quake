@@ -60,9 +60,11 @@ void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd) {
                 // convert our world move direction into forward/right relative to the final view yaw
                 float ai_yaw = (float)((cmd->angles[1] + delta[1]) & 65535) * (360.0f / 65536.0f);
                 float rel = (o->move_yaw - ai_yaw) * (3.14159265f / 180.0f);
-                cmd->forwardmove = (signed char)(127.0f * o->move_speed * cosf(rel));
-                cmd->rightmove = (signed char)(-127.0f * o->move_speed * sinf(rel));
-                cmd->upmove = o->up;
+                if (o->move_speed >= 0) {          // < 0: leave the AI's own movement alone
+                    cmd->forwardmove = (signed char)(127.0f * o->move_speed * cosf(rel));
+                    cmd->rightmove = (signed char)(-127.0f * o->move_speed * sinf(rel));
+                    cmd->upmove = o->up;
+                }
                 goto done;
             }
             cmd->forwardmove = o->forward;
@@ -119,7 +121,7 @@ PyObject* PyMinqlx_SetBotMove(PyObject* self, PyObject* args) {
         return NULL;
     bot_override_t* o = &overrides[id];
     o->move_yaw = move_yaw;
-    o->move_speed = speed < 0 ? 0 : speed > 1 ? 1 : speed;
+    o->move_speed = speed < 0 ? -1.0f : speed > 1 ? 1 : speed;
     o->up = (signed char)(up > 127 ? 127 : up < -127 ? -127 : up);
     o->hybrid = 1;
     o->active = 1;

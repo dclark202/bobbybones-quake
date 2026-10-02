@@ -46,6 +46,8 @@ ACC_FLOOR = 0.15
 POLICY = os.path.join(LOGDIR, "weapon_policy.json")
 RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000, "RL": 5000, "LG": 5000, "RG": 5000}
 TRAINING = os.environ.get("LAB_MODE") == "train"
+# diagnostic split: full = our movement + our aim; aimonly = AI movement + our aim; moveonly = our movement + AI aim
+VARIANT = os.environ.get("LAB_VARIANT", "full")
 EXPLORE = 0.2 if TRAINING else 0.0        # chance per engagement to try a different weapon
 MOVE_EXPLORE = 0.2 if TRAINING else 0.0   # chance per trip to try a different route/movement style
 MOVE_POLICY = os.path.join(LOGDIR, "movement_policy.json")
@@ -696,6 +698,9 @@ class itemrun(minqlx.Plugin):
         minqlx.set_bot_input(self.bot, 127, side * 127, 127 if ground else 0, 0, 0, 0.0, yaw)
 
     def input(self, fwd, right, up, yaw):
+        if self.hybrid and VARIANT == "aimonly":
+            minqlx.set_bot_move(self.bot, 0.0, 0, -1.0)   # keep the AI's movement; our aim still applies
+            return
         if self.hybrid:
             now = getattr(self, "now", 0)
             if fwd == 0 and right == 0 and not getattr(self, "in_combat", False):
@@ -883,7 +888,10 @@ class itemrun(minqlx.Plugin):
         fire_mode = 1 if allow else 0
         if w in SPRAY and allow and self.tracking:
             fire_mode = 2                                  # LG/MG/CG/HMG: track continuously, trigger held
-        minqlx.set_bot_aim(self.bot, pitch, yaw, w, fire_mode)
+        if VARIANT == "moveonly":
+            minqlx.set_bot_aim(self.bot, 0.0, 0.0, -1)    # the built-in AI aims and picks weapons
+        else:
+            minqlx.set_bot_aim(self.bot, pitch, yaw, w, fire_mode)
         if visible:
             self.combat_until = now + 1200
         self.in_combat = now < getattr(self, "combat_until", 0)
