@@ -20,6 +20,7 @@ while true; do
         S=/tmp/train/shared
         [ -f "$S/nav_$MAP.json" ] && cp "$S/nav_$MAP.json" "$D/nav_$MAP.json" && $R "qlx !ir nav" --wait 1 >/dev/null
         [ -f "$S/movement_policy.json" ] && cp "$S/movement_policy.json" "$D/movement_policy.json"
+        [ -f "$S/route_policy.json" ] && cp "$S/route_policy.json" "$D/route_policy.json"
         [ -f "$S/weapon_policy.json" ] && cp "$S/weapon_policy.json" "$D/weapon_policy.json" && $R "qlx !ir policy" --wait 1 >/dev/null
         echo "$(date -u) pulled shared knowledge" >> $D/learner.log
     else

@@ -181,6 +181,36 @@ for key in sorted(by_style):
         report.append("  {:<8} best {:.1f}s (n={}) vs all styles {:.1f}s  style {}".format(key, best[0], best[2], overall, best[1]))
 json.dump(move_policy, open(os.path.join(SHARED, "movement_policy.json"), "w"), indent=1)
 
+# routing arm: per trip, Nightmare's own pathing vs our routes (clean trips only); ours takes over where faster
+trips = []
+for d in dirs:
+    f = os.path.join(d, "trips.jsonl")
+    if os.path.exists(f):
+        for line in open(f):
+            try:
+                tr = json.loads(line)
+            except ValueError:
+                continue
+            if tr["t"] >= since and tr["fight"] <= 1.0 and tr["secs"] < 30:
+                trips.append(tr)
+by_trip = defaultdict(lambda: defaultdict(list))
+for tr in trips:
+    if tr["driver"] == "ai" or tr["stucks"] == 0:
+        by_trip[tr["key"]][tr["driver"]].append(tr["secs"])
+route_policy, wins = {}, []
+for key, d in by_trip.items():
+    if len(d["ai"]) >= 4 and len(d["ours"]) >= 4:
+        ai = sorted(d["ai"])[len(d["ai"]) // 2]
+        ours = sorted(d["ours"])[len(d["ours"]) // 2]
+        if ours < ai * 0.95:
+            route_policy[key] = "ours"
+            wins.append((key, ai, ours))
+json.dump(route_policy, open(os.path.join(SHARED, "route_policy.json"), "w"), indent=1)
+report.append("")
+report.append("Routing arm: {} clean trips, {} trip types compared, our routes faster on {}{}".format(
+    len(trips), sum(1 for d in by_trip.values() if len(d["ai"]) >= 4 and len(d["ours"]) >= 4), len(route_policy),
+    "" if not wins else ": " + ", ".join("{} {:.1f}s->{:.1f}s".format(k, a, o) for k, a, o in sorted(wins)[:6])))
+
 # ---------------- did it move the needle? first vs last third of the run ----------------
 def window_stats(rs, ls, xs):
     out = {}

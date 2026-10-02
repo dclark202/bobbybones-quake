@@ -17,7 +17,7 @@ bash tools/train_cluster.sh stop >/dev/null || true
 
 echo "== promoting to the public server"
 mkdir -p data/practice/promoted
-for f in nav_$MAP.json weapon_policy.json movement_policy.json decision_policy.json banned_moves_pruned.txt; do
+for f in nav_$MAP.json weapon_policy.json movement_policy.json decision_policy.json route_policy.json banned_moves_pruned.txt; do
     [ -f "data/train/shared/$f" ] && cp "data/train/shared/$f" "data/practice/promoted/$f"
 done
 cp data/practice/promoted/nav_$MAP.json "data/practice/nav_$MAP.json"

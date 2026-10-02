@@ -87,6 +87,9 @@ LOW_AMMO = {"rl": 5, "lg": 50, "rg": 5, "pg": 30, "sg": 5, "mg": 30, "gl": 4, "h
 # fight / stack / push. aggr shifts how readily he fights (+) or stacks (-); varied per round in training
 AGGR_CHOICES = [-50, -25, 0, 25, 50]
 DECISION_POLICY = os.path.join(LOGDIR, "decision_policy.json")
+# routing arm (Nightmare base): who drives out-of-combat trips between major items, the AI or our routes
+ROUTE_POLICY = os.path.join(LOGDIR, "route_policy.json")
+ROUTE_EXPLORE = 0.25 if TRAINING else 0.0
 
 
 def time_now():
@@ -373,6 +376,10 @@ class itemrun(minqlx.Plugin):
         self.last_z = z
         now, truth = self.item_table()
         self.now = now
+        if s.health <= 0 and getattr(self, "trip_from", None) != "spawn":
+            self.trip_from, self.trip_start, self.trip_fight = "spawn", now, 0     # died: new trip from spawn
+        if getattr(self, "in_combat", False):
+            self.trip_fight = getattr(self, "trip_fight", 0) + 25
         items = self.believe(now, truth, x, y, z) if getattr(self, "fair", True) else truth
         if self.hybrid:
             self.combat(x, y, z, now)
@@ -387,6 +394,8 @@ class itemrun(minqlx.Plugin):
             if was and not it["avail"] and math.dist((x, y, z), it["pos"]) >= 90 and \
                     math.dist((x, y, z), it["pos"]) < HEAR_ITEM and it["kind"] in ("hp", "mega", "ar"):
                 self.enemy_stack = min(300, self.enemy_stack + it["amount"])   # heard them take it
+            if was and not it["avail"] and math.dist((x, y, z), it["pos"]) < 90 and it["label"] in MAJOR:
+                self.end_trip(now, key)
             if was and not it["avail"] and math.dist((x, y, z), it["pos"]) < 90:
                 err = now - self.spawned_at[key] if key in self.spawned_at else None
                 self.pickups.append(dict(item=key, t=now, error_ms=err, leg_s=self.leg_time(now)))
@@ -429,6 +438,8 @@ class itemrun(minqlx.Plugin):
                     if items[key]["label"] in MAJOR or key == "ENEMY":
                         self.log("-> {} [{}] (planned {:.1f}s, spawns in {:.1f}s)".format(
                             key, self.mode, cost, (items[key]["spawn"] - now) / 1000.0))
+                if key != self.goal:
+                    self.pick_driver(key)
                 self.goal, self.path, self.goal_score = key, route, score
                 self.path_i = 0
                 if self.style.get("noise") and key != "ENEMY":
@@ -488,7 +499,8 @@ class itemrun(minqlx.Plugin):
             best = self.leg.get("best_remaining")
             if best is None or remaining < best - 0.3:
                 self.leg["best_remaining"], self.leg["best_t"] = remaining, now
-            elif now - self.leg["best_t"] > 3000 and self.path and self.path_i + 1 < len(self.path):
+            elif now - self.leg["best_t"] > 3000 and self.path and self.path_i + 1 < len(self.path) and \
+                    (VARIANT != "aimonly" or getattr(self, "driver", "ai") == "ours"):   # only judge our own driving
                 e = (self.path[self.path_i][0], self.path[self.path_i + 1][0])
                 self.banned.add(e)
                 if self.leg is not None:
@@ -698,8 +710,8 @@ class itemrun(minqlx.Plugin):
         minqlx.set_bot_input(self.bot, 127, side * 127, 127 if ground else 0, 0, 0, 0.0, yaw)
 
     def input(self, fwd, right, up, yaw):
-        if self.hybrid and VARIANT == "aimonly":
-            minqlx.set_bot_move(self.bot, 0.0, 0, -1.0)   # keep the AI's movement; our aim still applies
+        if self.hybrid and VARIANT == "aimonly" and (getattr(self, "driver", "ai") != "ours" or getattr(self, "in_combat", False)):
+            minqlx.set_bot_move(self.bot, 0.0, 0, -1.0)   # Nightmare drives; our aim still applies
             return
         if self.hybrid:
             now = getattr(self, "now", 0)
@@ -731,6 +743,25 @@ class itemrun(minqlx.Plugin):
             return st
         return dict(DEFAULT_STYLE)
 
+    def pick_driver(self, goal):
+        """Nightmare drives by default; our route takes the trip if it has proven faster for it (or to explore)"""
+        trip = "{}>{}".format(getattr(self, "trip_from", "spawn"), goal)
+        learned = getattr(self, "route_policy", {}).get(trip) == "ours"
+        self.driver = "ours" if (learned or random.random() < ROUTE_EXPLORE) else "ai"
+        self.driver_trip = trip
+
+    def end_trip(self, now, picked):
+        start = getattr(self, "trip_start", None)
+        if start is not None:
+            rec = dict(t=time_now(), key="{}>{}".format(getattr(self, "trip_from", "spawn"), picked),
+                       secs=(now - start) / 1000.0, fight=getattr(self, "trip_fight", 0) / 1000.0,
+                       driver=getattr(self, "driver", "ai") if getattr(self, "driver_trip", "").endswith(">" + picked) else "ai",
+                       stucks=(self.leg or {}).get("stucks", 0))
+            with open(os.path.join(LOGDIR, "trips.jsonl"), "a") as f:
+                f.write(json.dumps(rec) + "\n")
+        self.trip_from, self.trip_start, self.trip_fight = picked, now, 0
+        self.driver = "ai"
+
     def log_leg(self, now, picked):
         leg = self.leg
         if leg is None:
@@ -744,6 +775,10 @@ class itemrun(minqlx.Plugin):
             f.write(json.dumps(rec) + "\n")
 
     def load_policy(self):
+        try:
+            self.route_policy = json.load(open(ROUTE_POLICY))   # {"RA@119>YA@96": "ours", ...}
+        except Exception:
+            self.route_policy = {}
         try:
             self.move_policy = json.load(open(MOVE_POLICY))   # {"RA>MH": style, ...} learned in training
             self.log("movement policy loaded: {} trips".format(len(self.move_policy)))
