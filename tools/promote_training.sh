@@ -17,12 +17,13 @@ bash tools/train_cluster.sh stop >/dev/null || true
 
 echo "== promoting to the public server"
 mkdir -p data/practice/promoted
-for f in nav_$MAP.json weapon_policy.json movement_policy.json banned_moves_pruned.txt; do
+for f in nav_$MAP.json weapon_policy.json movement_policy.json decision_policy.json banned_moves_pruned.txt; do
     [ -f "data/train/shared/$f" ] && cp "data/train/shared/$f" "data/practice/promoted/$f"
 done
 cp data/practice/promoted/nav_$MAP.json "data/practice/nav_$MAP.json"
 cp data/practice/promoted/weapon_policy.json data/practice/weapon_policy.json
 cp data/practice/promoted/movement_policy.json data/practice/movement_policy.json
+[ -f data/practice/promoted/decision_policy.json ] && cp data/practice/promoted/decision_policy.json data/practice/decision_policy.json
 date -u > data/practice/promoted/promoted_at.txt
 
 echo "== restarting the public server on the current image"

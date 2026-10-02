@@ -121,6 +121,17 @@ if control_results:
                   "  |  BobbyBones avg frag diff {:+.1f}".format(len(control_results), 100.0 * cw / len(control_results), cd, bd))
 for o, v in sorted(elo["opponents"].items(), key=lambda kv: -kv[1]["rating"]):
     report.append("  {:<10} {:>5}  W/D/L {}".format(o, v["rating"], "/".join(map(str, v["wdl"]))))
+# fight/stack/push: which aggression level wins the most frags?
+by_aggr = defaultdict(list)
+for r in results:
+    if r.get("aggr") is not None:
+        by_aggr[r["aggr"]].append(r["bobby_score"] - r["opp_score"])
+if by_aggr:
+    report.append("  by aggression (+ fights more readily, - stacks more): " + ", ".join(
+        "{:+d}: {:+.1f} (n={})".format(a, sum(v) / len(v), len(v)) for a, v in sorted(by_aggr.items())))
+    ok = {a: sum(v) / len(v) for a, v in by_aggr.items() if len(v) >= 5}
+    if ok:
+        json.dump(dict(aggr=max(ok, key=ok.get), by_aggr=ok), open(os.path.join(SHARED, "decision_policy.json"), "w"), indent=1)
 recent = results[-20:]
 if recent:
     report.append("  last {} frag diffs: {}".format(len(recent), " ".join("{:+d}".format(r["bobby_score"] - r["opp_score"]) for r in recent)))

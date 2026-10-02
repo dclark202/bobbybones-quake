@@ -179,9 +179,13 @@ class lab(minqlx.Plugin):
                     sp["kills"] += 1                       # opponent died while Bobby was shooting
             sp["hp"][side] = hp
         if now - sp["start"] >= SPAR_ROUND:
+            ir = minqlx.Plugin._loaded_plugins.get("itemrun")
             res = dict(t=now, map=LAB_MAP, variant="control" if CONTROL else "bobby", mode="spar",
                        bobby_score=sp["kills"], opp=o.clean_name, opp_score=sp["deaths"],
+                       aggr=getattr(ir, "aggr", None) if not CONTROL else None,
                        container=os.environ.get("HOSTNAME", "?"))
+            if ir is not None and not CONTROL:
+                ir.new_round()
             with open(RESULTS, "a") as f:
                 f.write(json.dumps(res) + "\n")
             self.log("spar round: BobbyBones {} - {} {}".format(sp["kills"], sp["deaths"], o.clean_name))

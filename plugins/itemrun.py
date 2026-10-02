@@ -63,6 +63,28 @@ ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_
          "RL": "weapon_rocketlauncher", "LG": "weapon_lightning", "RG": "weapon_railgun"}
 VALUE = {"RA": 3, "MH": 2, "YA": 1, "RL": 5, "LG": 4, "RG": 4}   # weapons only count while he lacks them
 WEAPON_ITEM = {"RL": "rl", "LG": "lg", "RG": "rg"}
+# classname -> (label, kind, amount or weapon, respawn ms). Every health/armor/ammo/weapon item counts.
+ITEM_KINDS = {
+    "item_health_small": ("h5", "hp", 5, 35000), "item_health": ("h25", "hp", 25, 35000),
+    "item_health_large": ("h50", "hp", 50, 35000), "item_health_mega": ("MH", "mega", 100, 35000),
+    "item_armor_shard": ("sh", "ar", 5, 25000), "item_armor_jacket": ("GA", "ar", 25, 25000),
+    "item_armor_combat": ("YA", "ar", 50, 25000), "item_armor_body": ("RA", "ar", 100, 25000),
+    "weapon_shotgun": ("SG", "wp", "sg", 5000), "weapon_grenadelauncher": ("GL", "wp", "gl", 5000),
+    "weapon_rocketlauncher": ("RL", "wp", "rl", 5000), "weapon_lightning": ("LG", "wp", "lg", 5000),
+    "weapon_railgun": ("RG", "wp", "rg", 5000), "weapon_plasmagun": ("PG", "wp", "pg", 5000),
+    "weapon_hmg": ("HMG", "wp", "hmg", 5000), "weapon_nailgun": ("NG", "wp", "ng", 5000),
+    "weapon_chaingun": ("CG", "wp", "cg", 5000),
+    "ammo_bullets": ("am", "ammo", "mg", 40000), "ammo_shells": ("am", "ammo", "sg", 40000),
+    "ammo_grenades": ("am", "ammo", "gl", 40000), "ammo_rockets": ("am", "ammo", "rl", 40000),
+    "ammo_lightning": ("am", "ammo", "lg", 40000), "ammo_slugs": ("am", "ammo", "rg", 40000),
+    "ammo_cells": ("am", "ammo", "pg", 40000), "ammo_hmg": ("am", "ammo", "hmg", 40000),
+    "ammo_nails": ("am", "ammo", "ng", 40000), "ammo_belt": ("am", "ammo", "cg", 40000),
+}
+MAJOR = {"RA", "YA", "GA", "MH", "RL", "LG", "RG", "PG", "SG", "GL"}
+LOW_AMMO = {"rl": 5, "lg": 50, "rg": 5, "pg": 30, "sg": 5, "mg": 30, "gl": 4, "hmg": 30, "ng": 10, "cg": 30}
+# fight / stack / push. aggr shifts how readily he fights (+) or stacks (-); varied per round in training
+AGGR_CHOICES = [-50, -25, 0, 25, 50]
+DECISION_POLICY = os.path.join(LOGDIR, "decision_policy.json")
 
 
 def time_now():
@@ -116,6 +138,34 @@ class Nav:
             if d < bd:
                 best, bd = i, d
         return best, bd
+
+    def dists(self, a, banned=()):
+        """single-source shortest times from node a to every node (one search for all items)"""
+        dist, prev = {a: 0.0}, {}
+        pq = [(0.0, a)]
+        while pq:
+            d, u = heapq.heappop(pq)
+            if d > dist.get(u, 1e18):
+                continue
+            for v, c, kind in self.adj[u]:
+                if (u, v) in banned:
+                    continue
+                nd = d + c
+                if nd < dist.get(v, 1e18):
+                    dist[v], prev[v] = nd, (u, kind)
+                    heapq.heappush(pq, (nd, v))
+        return dist, prev
+
+    @staticmethod
+    def path_to(prev, a, b):
+        path, kinds, u = [b], [], b
+        while u != a:
+            u, kind = prev[u]
+            path.append(u)
+            kinds.append(kind)
+        path.reverse()
+        kinds.reverse()
+        return list(zip(path, ["start"] + kinds))
 
     def route(self, a, b, banned=(), noise=0.0, seed=0):
         dist, prev = {a: 0.0}, {}
@@ -206,6 +256,14 @@ class itemrun(minqlx.Plugin):
             self.running = True
             self.hybrid = False
             self.aim_scale = getattr(self, "aim_scale", {})
+            self.static_items, self.item_nodes, self.belief = None, None, None
+            self.enemy_stack, self.mode, self.goal_score = 125, "fight", 0.0
+            try:
+                self.aggr = int(json.load(open(DECISION_POLICY)).get("aggr", 0))
+            except Exception:
+                self.aggr = 0
+            if TRAINING:
+                self.aggr = random.choice(AGGR_CHOICES)
             self.opp_acc = getattr(self, "opp_acc", {})       # steam id -> {weapon: [shots, hits]}
             self.opp_mem = {}
             self.load_policy()
@@ -251,14 +309,19 @@ class itemrun(minqlx.Plugin):
 
     def item_table(self):
         level_time, items = minqlx.item_states()
+        static = getattr(self, "static_items", None)
         tab = {}
         for num, cls, x, y, z, avail, nextthink in sorted(items):
-            for base, c in ITEMS.items():
-                if cls == c:
-                    key, n = base, 2
-                    while key in tab:                      # maps with two of the same item: YA, YA2, ...
-                        key, n = "{}{}".format(base, n), n + 1
-                    tab[key] = dict(pos=(x, y, z), avail=bool(avail), spawn=level_time if avail else nextthink)
+            k = ITEM_KINDS.get(cls)
+            if k is None:
+                continue
+            key = "{}@{}".format(k[0], num)
+            if static is not None and key not in static:
+                continue                                       # dropped weapons etc.: not map items
+            tab[key] = dict(pos=(x, y, z), avail=bool(avail), spawn=level_time if avail else nextthink,
+                            label=k[0], kind=k[1], amount=k[2], respawn=k[3])
+        if static is None:
+            self.static_items = set(tab)
         return level_time, tab
 
     def believe(self, now, truth, x, y, z):
@@ -267,6 +330,8 @@ class itemrun(minqlx.Plugin):
         bel = getattr(self, "belief", None)
         if bel is None:
             bel = self.belief = {k: dict(pos=v["pos"], spawn=now, avail=True) for k, v in truth.items()}
+        for k, v in truth.items():
+            bel.setdefault(k, dict(pos=v["pos"], spawn=now, avail=True))
         prev = getattr(self, "truth_prev", {})
         for k, v in truth.items():
             d = math.dist((x, y, z), v["pos"])
@@ -275,13 +340,17 @@ class itemrun(minqlx.Plugin):
                 if v["avail"]:
                     bel[k].update(avail=True, spawn=now)
                 elif bel[k]["avail"]:
-                    bel[k].update(avail=False, spawn=now + RESPAWN[k[:2]] // 2)   # gone, unknown when: guess
+                    bel[k].update(avail=False, spawn=now + v["respawn"] // 2)   # gone, unknown when: guess
             if was is not None and was != v["avail"] and d < HEAR_ITEM:      # heard pickup / respawn
                 bel[k].update(avail=v["avail"], spawn=v["spawn"])
             if not bel[k]["avail"] and now >= bel[k]["spawn"]:
                 bel[k]["avail"] = True                         # by his own count it should be up
         self.truth_prev = {k: v["avail"] for k, v in truth.items()}
-        return {k: dict(pos=b["pos"], avail=b["avail"], spawn=now if b["avail"] else b["spawn"]) for k, b in bel.items()}
+        out = {}
+        for k, b in bel.items():
+            if k in truth:
+                out[k] = dict(truth[k], avail=b["avail"], spawn=now if b["avail"] else b["spawn"])
+        return out
 
     def tick(self):
         self.frame += 1
@@ -313,11 +382,15 @@ class itemrun(minqlx.Plugin):
             was = self.prev_avail.get(key)
             if it["avail"] and was is False:
                 self.spawned_at[key] = now
+            if was and not it["avail"] and math.dist((x, y, z), it["pos"]) >= 90 and \
+                    math.dist((x, y, z), it["pos"]) < HEAR_ITEM and it["kind"] in ("hp", "mega", "ar"):
+                self.enemy_stack = min(300, self.enemy_stack + it["amount"])   # heard them take it
             if was and not it["avail"] and math.dist((x, y, z), it["pos"]) < 90:
                 err = now - self.spawned_at[key] if key in self.spawned_at else None
                 self.pickups.append(dict(item=key, t=now, error_ms=err, leg_s=self.leg_time(now)))
-                self.log("picked {} at {:.1f}s, {} after spawn (leg {:.1f}s)".format(
-                    key, now / 1000.0, "{} ms".format(err) if err is not None else "?", self.leg_time(now)))
+                if it["label"] in MAJOR:
+                    self.log("picked {} at {:.1f}s, {} after spawn (leg {:.1f}s)".format(
+                        key, now / 1000.0, "{} ms".format(err) if err is not None else "?", self.leg_time(now)))
                 self.learn_speed(now)
                 self.log_leg(now, key)
                 self.last_item = key
@@ -329,36 +402,37 @@ class itemrun(minqlx.Plugin):
                 self.goal, self.path = None, None
             self.prev_avail[key] = it["avail"]
 
-        # choose the next item: earliest possible pickup, ties -> more valuable
-        if self.goal is None:
-            best = None
-            have = minqlx.player_state(self.bot).weapons
-            for key, it in items.items():
-                if key[:2] in WEAPON_ITEM and getattr(have, WEAPON_ITEM[key[:2]], False):
-                    continue                                   # already has this weapon
-                route, cost = self.plan(x, y, z, it["pos"])
-                if route is None:
-                    continue
-                eta = now + cost * self.speed_factor * 1000
-                pickup = max(eta, it["spawn"])
-                rank = (pickup - VALUE[key[:2]] * 1500, key)
-                if best is None or rank < best[0]:
-                    best = (rank, key, route, cost)
+        # fight / stack / push decision, and the opponent as a "goal" when pushing
+        if self.hybrid:
+            self.decide(now)
+            k = getattr(self, "known", None)
+            if self.mode == "push" and k is not None:
+                items["ENEMY"] = dict(pos=k["pos"], avail=True, spawn=now, label="ENEMY", kind="enemy", amount=0, respawn=0)
+
+        # choose / re-evaluate the goal: what each item is worth to us right now, per second to get it
+        if self.goal is None or self.goal not in items or now >= getattr(self, "reeval_at", 0):
+            self.reeval_at = now + 1500
+            best = self.best_goal(x, y, z, now, items)
             if best is None:
                 self.input(0, 0, 0, 0.0)
                 return
-            _, self.goal, self.path, cost = best
-            self.path_i = 0
-            leg_key = "{}>{}".format(getattr(self, "last_item", "spawn"), self.goal)
-            self.style = self.pick_style(leg_key)
-            self.lookahead, self.hop_straight = self.style["lookahead"], self.style["hop_straight"]
-            if self.style.get("noise"):
-                styled, styled_cost = self.plan(x, y, z, items[self.goal]["pos"], self.style)
-                if styled is not None:
-                    self.path, cost = styled, styled_cost
-            self.leg = dict(start=now, planned=cost, key=leg_key, stucks=0, fight_ms=0, arrive=None)
-            self.log("-> {} (planned {:.1f}s, spawns in {:.1f}s)".format(
-                self.goal, cost, (items[self.goal]["spawn"] - now) / 1000.0))
+            score, key, route, cost = best
+            cur = getattr(self, "goal_score", 0.0) if self.goal in items else 0.0
+            if self.goal is None or self.goal not in items or (key != self.goal and score > cur * 1.4) or key == "ENEMY":
+                if key != self.goal:
+                    leg_key = "{}>{}".format(getattr(self, "last_item", "spawn"), key)
+                    self.style = self.pick_style(leg_key)
+                    self.lookahead, self.hop_straight = self.style["lookahead"], self.style["hop_straight"]
+                    self.leg = dict(start=now, planned=cost, key=leg_key, stucks=0, fight_ms=0, arrive=None)
+                    if items[key]["label"] in MAJOR or key == "ENEMY":
+                        self.log("-> {} [{}] (planned {:.1f}s, spawns in {:.1f}s)".format(
+                            key, self.mode, cost, (items[key]["spawn"] - now) / 1000.0))
+                self.goal, self.path, self.goal_score = key, route, score
+                self.path_i = 0
+                if self.style.get("noise") and key != "ENEMY":
+                    styled, styled_cost = self.plan(x, y, z, items[key]["pos"], self.style)
+                    if styled is not None:
+                        self.path = styled
 
         it = items[self.goal]
         dist_item = math.hypot(it["pos"][0] - x, it["pos"][1] - y)
@@ -433,6 +507,95 @@ class itemrun(minqlx.Plugin):
         self.telemetry(now, x, y, z, speed, items, self.goal)
 
     # ------------------------------------------------------------------
+    def item_value(self, it, me):
+        """what picking this up is worth to us right now (health/armor points, with meta bonuses)"""
+        kind, amt = it["kind"], it["amount"]
+        hp, ar = me.health, me.armor
+        stack_w = 1.8 if getattr(self, "mode", "") == "stack" else 1.0
+        if kind == "hp":
+            return max(0, min(amt, (200 if amt <= 5 else 100) - hp)) * stack_w
+        if kind == "mega":
+            return max(0, min(100, 200 - hp)) * 1.2 * stack_w + 25          # +deny
+        if kind == "ar":
+            deny = 35 if amt >= 100 else (15 if amt >= 50 else 0)
+            return max(0, min(amt, 200 - ar)) * 1.3 * stack_w + deny
+        if kind == "wp":
+            return 0 if getattr(me.weapons, amt, False) else 60
+        if kind == "ammo":
+            if not getattr(me.weapons, amt, False):
+                return 0
+            return 20 if getattr(me.ammo, amt, 0) < LOW_AMMO.get(amt, 10) else 1
+        if kind == "enemy":
+            return 300 if getattr(self, "mode", "") == "push" else 0
+        return 0
+
+    def best_goal(self, x, y, z, now, items):
+        me = minqlx.player_state(self.bot)
+        node_of = getattr(self, "item_nodes", None)
+        if node_of is None:
+            node_of = self.item_nodes = {}
+        for banned in (getattr(self, "banned", set()), set()):
+            for da, a in self.nav.nearest_k(x, y, z):
+                if da > 250:
+                    break
+                dist, prev = self.nav.dists(a, banned)
+                if len(dist) < 20:
+                    continue                                   # dead-end start cell, try the next
+                best = None
+                for key, it in items.items():
+                    v = self.item_value(it, me)
+                    if v <= 0:
+                        continue
+                    if key == "ENEMY":
+                        b, db = self.nav.nearest(*it["pos"], maxdz=64)
+                    else:
+                        if key not in node_of:
+                            node_of[key] = self.nav.nearest(*it["pos"], maxdz=64)
+                        b, db = node_of[key]
+                    if b is None or b not in dist:
+                        continue
+                    eta = (dist[b] + (da + db) / RUN) * self.speed_factor
+                    wait = max(0.0, (it["spawn"] - now) / 1000.0 - eta)
+                    score = v / (eta + wait + 0.5)
+                    if best is None or score > best[0]:
+                        best = (score, key, b, eta)
+                if best is not None:
+                    score, key, b, eta = best
+                    return score, key, self.nav.path_to(prev, a, b), eta
+        return None
+
+    def decide(self, now):
+        """fight when armed and not behind, stack when behind, push when clearly ahead.
+        The opponent's stack is estimated only from fair info: what we heard/saw them pick up,
+        damage we dealt, and their deaths (kill feed)."""
+        me = minqlx.player_state(self.bot)
+        my = me.health + me.armor
+        dt = (now - getattr(self, "est_t", now)) / 1000.0
+        self.est_t = now
+        if self.enemy_stack > 100:
+            self.enemy_stack = max(100, self.enemy_stack - dt)  # stack above 100 decays like the game does
+        p, st = self.human()
+        if p is not None and st is not None and st.health <= 0:
+            self.enemy_stack = 125                            # they died (kill feed): fresh spawn
+        armed = any(getattr(me.weapons, n, False) and getattr(me.ammo, n, 0) > 0 for n in ARMED_WITH)
+        k = getattr(self, "known", None)
+        fresh = k is not None and now - k["t"] < 6000
+        a = getattr(self, "aggr", 0)
+        if armed and fresh and my - self.enemy_stack > 75 - a:
+            mode = "push"
+        elif armed and my >= max(70, self.enemy_stack - 25 - a):
+            mode = "fight"
+        else:
+            mode = "stack"
+        if mode != getattr(self, "mode", None):
+            self.reeval_at = 0                                 # re-plan right away on a mode change
+        self.mode = mode
+
+    def new_round(self):
+        """training: try a different aggression level each scored round"""
+        if TRAINING:
+            self.aggr = random.choice(AGGR_CHOICES)
+
     def plan(self, x, y, z, item_pos, style=None):
         b, db = self.nav.nearest(*item_pos, maxdz=64)
         if b is None:
@@ -749,6 +912,7 @@ class itemrun(minqlx.Plugin):
             window = {4: 2500, 5: 1500, 8: 800, 11: 1500}.get(me.weapon, 100)
             if now - self.last_shot.get(me.weapon, -1e9) <= window:
                 acc.setdefault(me.weapon, [0, 0])[1] += 1
+                self.enemy_stack = max(0, self.enemy_stack - (self.prev_hp - hp))
                 self.experience("dmg", me.weapon, self.prev_hp - hp)
         self.prev_hp = hp
         if now >= self.acc_log:
@@ -828,8 +992,8 @@ class itemrun(minqlx.Plugin):
         ex, ey, ez = k["pos"]
         dist = math.hypot(ex - x, ey - y)
         armed = any(getattr(me.weapons, n, False) and getattr(me.ammo, n, 0) > 0 for n in ARMED_WITH)
-        if dist > 250 and (stack < ENGAGE_STACK or not armed):
-            return False                                   # weak or only a machine gun: go collect first
+        if dist > 250 and (stack < ENGAGE_STACK or not armed or getattr(self, "mode", "fight") == "stack"):
+            return False                                   # behind, weak or only a machine gun: go stack up
         to_yaw = math.degrees(math.atan2(ey - y, ex - x))
         pref = PREF_RANGE.get(me.weapon, 400.0)
         if now >= getattr(self, "circle_next", 0):
