@@ -18,6 +18,8 @@ TRAIN = os.environ.get("LAB_MODE") == "train"
 OPPONENTS = os.environ.get("LAB_OPPONENTS", "sarge,anarki,visor,xaero,klesk,doom,keel,major,orbb,ranger,slash,uriel,hunter,mynx,razor,sorlag").split(",")
 RESULTS = "/tmp/practice/results.jsonl"
 DEADLINE = float(os.environ.get("TRAIN_DEADLINE", "0") or 0)   # unix time; trainers go idle after it
+SPAR = os.environ.get("LAB_SPAR") == "1"         # training in permanent warmup: all weapons, endless fighting
+SPAR_ROUND = 600.0                                 # seconds per scored round (kills vs deaths)
 CONTROL = os.environ.get("LAB_CONTROL") == "1"   # control group: plain built-in Nightmare bot as "BobbyBones"
 LAB_FACTORY = "duel"
 CHECK_EVERY = 5.0
@@ -33,9 +35,10 @@ class lab(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        if not TRAIN:
+        if not TRAIN or SPAR:
             self.add_hook("game_countdown", self.on_countdown)
             self.add_hook("game_start", self.on_countdown)
+        self.spar = dict(start=time.time(), kills=0, deaths=0, hp={}, fired=0.0)
         self.add_hook("game_end", self.on_game_end)
         self.opp_i = int(os.environ.get("LAB_OPPONENT_START", "0"))
         self.add_hook("vote_called", self.on_vote)
@@ -92,6 +95,11 @@ class lab(minqlx.Plugin):
 
     def on_frame(self):
         now = time.time()
+        if TRAIN and SPAR:
+            try:
+                self.spar_frame(now)
+            except Exception as e:
+                self.log("spar error: {!r}".format(e))
         if now < self.next_check:
             return
         self.next_check = now + CHECK_EVERY
@@ -112,11 +120,14 @@ class lab(minqlx.Plugin):
             return self.fix_map()
         if now < self.fixing_map_until - 12:          # give a fresh map a few seconds to settle
             return
-        wanted = (("timelimit", "10"), ("fraglimit", "0"), ("g_doWarmup", "0")) if TRAIN else                  (("timelimit", "0"), ("fraglimit", "0"), ("g_doWarmup", "1"))
+        if TRAIN and not SPAR:
+            wanted = (("timelimit", "10"), ("fraglimit", "0"), ("g_doWarmup", "0"))
+        else:
+            wanted = (("timelimit", "0"), ("fraglimit", "0"), ("g_doWarmup", "1"))
         for name, value in wanted:
             if minqlx.get_cvar(name) != value:
                 minqlx.set_cvar(name, value)
-        if not TRAIN and self.game is not None and self.game.state not in ("warmup", None):
+        if (not TRAIN or SPAR) and self.game is not None and self.game.state not in ("warmup", None):
             self.log("game state {} - aborting to warmup".format(self.game.state))
             minqlx.console_command("abort")
         bots = [p for p in self.players() if is_bot(p)]
@@ -145,10 +156,43 @@ class lab(minqlx.Plugin):
             self.log("item run not running - starting")
             minqlx.console_command("qlx !ir start auto -1")
 
+    def spar_frame(self, now):
+        """warmup keeps no score: count kills/deaths ourselves and log a result every SPAR_ROUND seconds"""
+        sp = self.spar
+        players = [p for p in self.players() if p.team != "spectator"]
+        bobby = [p for p in players if "Bobby" in p.clean_name.replace(" ", "")]
+        opp = [p for p in players if p not in bobby]
+        if not bobby or not opp:
+            sp["start"] = now                              # no fight going on: don't run the clock
+            return
+        b, o = bobby[0], opp[0]
+        if minqlx.last_usercmd(b.id)[1] & 1:
+            sp["fired"] = now
+        for p, side in ((b, "b"), (o, "o")):
+            st = p.state
+            hp = st.health if st else 0
+            was = sp["hp"].get(side, 1)
+            if was > 0 >= hp:
+                if side == "b":
+                    sp["deaths"] += 1                      # Bobby died (to the opponent or himself)
+                elif now - sp["fired"] < 2.0:
+                    sp["kills"] += 1                       # opponent died while Bobby was shooting
+            sp["hp"][side] = hp
+        if now - sp["start"] >= SPAR_ROUND:
+            res = dict(t=now, map=LAB_MAP, variant="control" if CONTROL else "bobby", mode="spar",
+                       bobby_score=sp["kills"], opp=o.clean_name, opp_score=sp["deaths"],
+                       container=os.environ.get("HOSTNAME", "?"))
+            with open(RESULTS, "a") as f:
+                f.write(json.dumps(res) + "\n")
+            self.log("spar round: BobbyBones {} - {} {}".format(sp["kills"], sp["deaths"], o.clean_name))
+            self.spar = dict(start=now, kills=0, deaths=0, hp={}, fired=0.0)
+            self.opp_i += 1
+            self.kick_later(o.id)                          # next round, next opponent
+
     def on_game_end(self, data):
         """training: log the match result (for the Elo rating) and rotate to the next opponent"""
-        if not TRAIN:
-            return
+        if not TRAIN or SPAR:
+            return                                         # sparring is scored by spar_frame; aborts aren't matches
         players = [p for p in self.players() if p.team != "spectator"]
         bobby = [p for p in players if "Bobby" in p.clean_name.replace(" ", "")]
         opp = [p for p in players if p not in bobby]
