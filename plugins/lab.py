@@ -35,9 +35,11 @@ class lab(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        if not TRAIN or SPAR:
+        if not TRAIN:
             self.add_hook("game_countdown", self.on_countdown)
             self.add_hook("game_start", self.on_countdown)
+        if TRAIN and SPAR:
+            self.add_hook("player_spawn", self.on_spawn)
         self.spar = dict(start=time.time(), kills=0, deaths=0, hp={}, fired=0.0)
         self.add_hook("game_end", self.on_game_end)
         self.opp_i = int(os.environ.get("LAB_OPPONENT_START", "0"))
@@ -95,11 +97,6 @@ class lab(minqlx.Plugin):
 
     def on_frame(self):
         now = time.time()
-        if TRAIN and SPAR:
-            try:
-                self.spar_frame(now)
-            except Exception as e:
-                self.log("spar error: {!r}".format(e))
         if now < self.next_check:
             return
         self.next_check = now + CHECK_EVERY
@@ -120,14 +117,16 @@ class lab(minqlx.Plugin):
             return self.fix_map()
         if now < self.fixing_map_until - 12:          # give a fresh map a few seconds to settle
             return
-        if TRAIN and not SPAR:
+        if TRAIN:
             wanted = (("timelimit", "10"), ("fraglimit", "0"), ("g_doWarmup", "0"))
         else:
             wanted = (("timelimit", "0"), ("fraglimit", "0"), ("g_doWarmup", "1"))
         for name, value in wanted:
             if minqlx.get_cvar(name) != value:
                 minqlx.set_cvar(name, value)
-        if (not TRAIN or SPAR) and self.game is not None and self.game.state not in ("warmup", None):
+        if not TRAIN and self.game is not None and self.game.state not in ("warmup", None)                 and now - getattr(self, "last_abort", 0) > 30:
+            # should not happen (ready threshold is unreachable); aborting in a loop can hang the server
+            self.last_abort = now
             self.log("game state {} - aborting to warmup".format(self.game.state))
             minqlx.console_command("abort")
         bots = [p for p in self.players() if is_bot(p)]
@@ -155,6 +154,18 @@ class lab(minqlx.Plugin):
         if itemrun is not None and not getattr(itemrun, "running", False):
             self.log("item run not running - starting")
             minqlx.console_command("qlx !ir start auto -1")
+
+    def on_spawn(self, player):
+        self.give_loadout(player)
+
+    @minqlx.delay(0.2)
+    def give_loadout(self, player):
+        """sparring: every weapon at spawn, moderate ammo (ammo boxes still matter)"""
+        try:
+            player.weapons(g=True, mg=True, sg=True, gl=True, rl=True, lg=True, rg=True, pg=True, hmg=True)
+            player.ammo(mg=100, sg=10, gl=5, rl=10, lg=100, rg=5, pg=50, hmg=50)
+        except Exception as e:
+            self.log("loadout error: {!r}".format(e))
 
     def spar_frame(self, now):
         """warmup keeps no score: count kills/deaths ourselves and log a result every SPAR_ROUND seconds"""
@@ -195,19 +206,23 @@ class lab(minqlx.Plugin):
 
     def on_game_end(self, data):
         """training: log the match result (for the Elo rating) and rotate to the next opponent"""
-        if not TRAIN or SPAR:
-            return                                         # sparring is scored by spar_frame; aborts aren't matches
+        if not TRAIN:
+            return
         players = [p for p in self.players() if p.team != "spectator"]
         bobby = [p for p in players if "Bobby" in p.clean_name.replace(" ", "")]
         opp = [p for p in players if p not in bobby]
         if not bobby or not opp:
             return
+        ir = minqlx.Plugin._loaded_plugins.get("itemrun")
         res = dict(t=time.time(), map=LAB_MAP, variant="control" if CONTROL else "bobby",
+                   mode="spar" if SPAR else "match", aggr=getattr(ir, "aggr", None) if not CONTROL else None,
                    bobby_score=bobby[0].score, opp=opp[0].clean_name,
                    opp_score=opp[0].score, container=os.environ.get("HOSTNAME", "?"))
         with open(RESULTS, "a") as f:
             f.write(json.dumps(res) + "\n")
         self.log("match over: BobbyBones {} - {} {}".format(res["bobby_score"], res["opp_score"], res["opp"]))
+        if ir is not None and not CONTROL:
+            ir.new_round()
         self.opp_i += 1
         self.kick_later(opp[0].id)
 
