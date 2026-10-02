@@ -68,7 +68,10 @@ class Nav:
         have = set()
         for a, b, t, kind in g["edges"]:
             d = math.dist(self.nodes[a], self.nodes[b])
-            cost = d / RUN if kind == "walk" else max(t, d / 900.0)
+            if kind == "tele":
+                cost = 0.1                                 # walk into the teleporter
+            else:
+                cost = d / RUN if kind == "walk" else max(t, d / 900.0)
             self.adj[a].append((b, cost, kind))
             have.add((a, b))
         # walking on (nearly) flat ground works both ways
@@ -416,7 +419,7 @@ class itemrun(minqlx.Plugin):
         c, px, py = 0.0, x, y
         for node, kind in self.path[self.path_i:]:
             nx, ny, nz = self.nav.nodes[node]
-            c += math.hypot(nx - px, ny - py) / RUN
+            c += 0.1 if kind == "tele" else math.hypot(nx - px, ny - py) / RUN
             px, py = nx, ny
         it_pos = None
         return c
@@ -428,6 +431,9 @@ class itemrun(minqlx.Plugin):
         acc, px, py = 0.0, x, y
         next_air_up = False
         for i, (nx, ny, nz) in enumerate(pts):
+            if kinds[i] == "tele" and i > 0:
+                target = pts[i - 1]                        # run into the teleporter; we re-plan on arrival
+                break
             if kinds[i] == "air" and i > 0:
                 px0, py0, pz0 = pts[i - 1]
                 gap = math.hypot(nx - px0, ny - py0)
@@ -446,7 +452,7 @@ class itemrun(minqlx.Plugin):
         straight = True
         acc, px, py = 0.0, x, y
         for i, (nx, ny, nz) in enumerate(pts):
-            if abs(nz - z) > 12 or kinds[i] == "air":
+            if abs(nz - z) > 12 or kinds[i] in ("air", "tele"):
                 straight = False
                 break
             acc += math.hypot(nx - px, ny - py)

@@ -17,13 +17,17 @@ srcs, out = sys.argv[1:-1], sys.argv[-1]   # several recordings (bots + humans) 
 
 tracks = defaultdict(list)
 for i, src in enumerate(srcs):
+    seg, last_fr = 0, -1
     for line in open(src):
         f = line.split()
         if len(f) < 8:
             continue
         fr, cid = int(f[0]), int(f[1])
+        if fr < last_fr - 5:
+            seg += 1                       # frame counter reset (server/plugin restart): new recording
+        last_fr = max(last_fr, fr) if fr >= last_fr - 5 else fr
         x, y, z, vx, vy, vz = map(float, f[2:8])
-        tracks[(i, cid)].append((fr, x, y, z, vz))
+        tracks[(i, seg, cid)].append((fr, x, y, z, vz))
 
 
 def cell_of(x, y, z):
@@ -33,19 +37,28 @@ def cell_of(x, y, z):
 node_pts = defaultdict(list)
 edge_t = {}
 edge_kind = {}
+tele = defaultdict(int)   # (src cell, dst cell) -> times seen; repeated = a teleporter, one-offs = respawns
 for cid, tr in tracks.items():
     tr.sort()
     prev_ground = None  # (frame, cell)
     last = None
+    pending_tele = None
     for fr, x, y, z, vz in tr:
         if last is not None and (fr - last[0] > 3 or math.dist((x, y, z), last[1:4]) > 80 * (fr - last[0])):
-            prev_ground = None  # respawn / teleport / gap: break the chain
+            # respawn / teleport / gap: break the chain, but remember where we left from
+            jumped = fr - last[0] <= 2 and math.dist((x, y, z), last[1:4]) > 200
+            pending_tele = (prev_ground[1], fr) if (jumped and prev_ground is not None and fr - prev_ground[0] <= 8) else None
+            prev_ground = None
         last = (fr, x, y, z)
         ground = abs(vz) < 1
         if not ground:
             continue
         c = cell_of(x, y, z)
         node_pts[c].append((x, y, z))
+        if pending_tele is not None:
+            if fr - pending_tele[1] <= 20:
+                tele[(pending_tele[0], c)] += 1
+            pending_tele = None
         if prev_ground is not None and prev_ground[1] != c:
             dt = (fr - prev_ground[0]) * 0.025
             kind = "air" if fr - prev_ground[0] > 1 and dt > 0.05 else "walk"
@@ -65,5 +78,19 @@ for c in cells:
     nodes.append([round(sum(p[i] for p in pts) / len(pts), 1) for i in range(3)])
 edges = [[index[a], index[b], round(t, 3), edge_kind[(a, b)]] for (a, b), t in edge_t.items()
          if a in index and b in index]
+# teleporters: the same source -> destination seen at least twice (respawns land at random-ish spots)
+def coarse(c):
+    return (c[0] // 2, c[1] // 2, c[2])
+groups = defaultdict(list)
+for (a, b), n in tele.items():
+    groups[(coarse(a), coarse(b))].append((n, a, b))
+n_tele = 0
+for key, items in groups.items():
+    if sum(n for n, a, b in items) >= 2:
+        n, a, b = max(items)
+        if a in index and b in index:
+            edges.append([index[a], index[b], 0.1, "tele"])
+            n_tele += 1
+print("teleporters", n_tele)
 json.dump(dict(nodes=nodes, edges=edges), open(out, "w"))
 print("nodes", len(nodes), "edges", len(edges), "air", sum(1 for e in edges if e[3] == "air"))
