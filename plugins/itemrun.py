@@ -32,12 +32,12 @@ PROJECTILE_SPEED = {4: 700.0, 5: 1000.0, 8: 2000.0, 11: 1000.0}   # grenades, ro
 GRAVITY = 800.0
 SPRAY = {2, 6, 13, 14}                          # held-trigger tracking weapons: MG, LG, CG, HMG
 # accuracy targets (tunable live: e.g. "bobby_acc_lg 0.45" in the server console); aim self-tunes toward them
-ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.40), 7: ("bobby_acc_rg", 0.60), 5: ("bobby_acc_rl", 0.60),
+ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.40), 7: ("bobby_acc_rg", 0.65), 5: ("bobby_acc_rl", 0.70),
                     8: ("bobby_acc_pg", 0.35), 3: ("bobby_acc_sg", 0.50), 14: ("bobby_acc_hmg", 0.40)}
 # "flex": once we've measured the opponent's own accuracy with a weapon, aim for theirs + FLEX_MARGIN
 FLEX_MARGIN = 0.05
 FLEX_MIN_SHOTS = 40
-ACC_CAP = {6: 0.60, 7: 0.75, 5: 0.75, 8: 0.50, 3: 0.65, 14: 0.55}
+ACC_CAP = {6: 0.60, 7: 0.80, 5: 0.85, 8: 0.50, 3: 0.65, 14: 0.55}
 ACC_FLOOR = 0.15
 POLICY = os.path.join(LOGDIR, "weapon_policy.json")
 RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
