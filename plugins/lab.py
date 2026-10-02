@@ -18,6 +18,7 @@ TRAIN = os.environ.get("LAB_MODE") == "train"
 OPPONENTS = os.environ.get("LAB_OPPONENTS", "sarge,anarki,visor,xaero,klesk,doom,keel,major,orbb,ranger,slash,uriel,hunter,mynx,razor,sorlag").split(",")
 RESULTS = "/tmp/practice/results.jsonl"
 DEADLINE = float(os.environ.get("TRAIN_DEADLINE", "0") or 0)   # unix time; trainers go idle after it
+CONTROL = os.environ.get("LAB_CONTROL") == "1"   # control group: plain built-in Nightmare bot as "BobbyBones"
 LAB_FACTORY = "duel"
 CHECK_EVERY = 5.0
 NOTICE = ("^7Welcome to the ^1B^3o^2b^5b^4y^6B^1o^3n^2e^5s ^7lab. Matches here are recorded (movement, item timing, "
@@ -138,6 +139,8 @@ class lab(minqlx.Plugin):
             botctl.recording = True
             self.log("recording was off - on again")
         itemrun = plugins.get("itemrun")
+        if CONTROL:
+            return                                     # control group: leave the built-in AI alone
         if itemrun is not None and not getattr(itemrun, "running", False):
             self.log("item run not running - starting")
             minqlx.console_command("qlx !ir start auto -1")
@@ -151,7 +154,8 @@ class lab(minqlx.Plugin):
         opp = [p for p in players if p not in bobby]
         if not bobby or not opp:
             return
-        res = dict(t=time.time(), map=LAB_MAP, bobby_score=bobby[0].score, opp=opp[0].clean_name,
+        res = dict(t=time.time(), map=LAB_MAP, variant="control" if CONTROL else "bobby",
+                   bobby_score=bobby[0].score, opp=opp[0].clean_name,
                    opp_score=opp[0].score, container=os.environ.get("HOSTNAME", "?"))
         with open(RESULTS, "a") as f:
             f.write(json.dumps(res) + "\n")

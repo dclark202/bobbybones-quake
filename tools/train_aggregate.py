@@ -36,11 +36,13 @@ for d in dirs:
 pruned = [m for m, n in bans.items() if n >= BAN_MIN]
 ban_file = os.path.join(SHARED, "banned_moves_pruned.txt")
 open(ban_file, "w").write("\n".join(pruned) + ("\n" if pruned else ""))
+# trainers' own fights are full of knockback flights and scrambles; they made routes worse in run 1.
+# So: start from the clean base graph and only prune moves that keep failing.
 traces = [f for f in ["/ql/maps-data/{}/walk_trace.txt".format(MAP)] if os.path.exists(f)]
-traces += [f for f in (os.path.join(d, "trace_live_{}.txt".format(MAP)) for d in dirs) if os.path.exists(f)]
 nav_out = os.path.join(SHARED, "nav_{}.json".format(MAP))
+base_nav = "/ql/maps-data/{}/nav.json".format(MAP)
 r = subprocess.run(["python3", "/tools/navgraph.py"] + traces + [nav_out + ".new"],
-                   env=dict(os.environ, NAV_BANNED=ban_file), capture_output=True, text=True)
+                   env=dict(os.environ, NAV_BANNED=ban_file, NAV_MERGE=base_nav), capture_output=True, text=True)
 if r.returncode == 0:
     os.replace(nav_out + ".new", nav_out)
 report.append("Routes: {} | failed moves reported {} | pruned (>= {} failures) {}".format(
@@ -88,6 +90,10 @@ for d in dirs:
             except ValueError:
                 pass
 results.sort(key=lambda r: r["t"])
+since = float(os.environ.get("TRAIN_SINCE", "0") or 0)          # only this run
+results = [r for r in results if r["t"] >= since]
+control_results = [r for r in results if r.get("variant") == "control"]
+results = [r for r in results if r.get("variant", "bobby") == "bobby"]
 rating, opp_r, K = 1500.0, defaultdict(lambda: 1500.0), 24.0
 wins = losses = draws = 0
 per_opp = defaultdict(lambda: [0, 0, 0])
@@ -107,6 +113,12 @@ with open(os.path.join(SHARED, "elo_history.jsonl"), "a") as f:
 report.append("")
 report.append("Rating: BobbyBones {} after {} matches (W {} / D {} / L {}) vs Nightmare bots".format(
     elo["rating"], len(results), wins, draws, losses))
+if control_results:
+    cw = sum(1 for r in control_results if r["bobby_score"] > r["opp_score"])
+    cd = sum(r["bobby_score"] - r["opp_score"] for r in control_results) / len(control_results)
+    bd = sum(r["bobby_score"] - r["opp_score"] for r in results) / max(1, len(results))
+    report.append("Control (plain built-in Nightmare bot in Bobby's seat): {} matches, win rate {:.0f}%, avg frag diff {:+.1f}"
+                  "  |  BobbyBones avg frag diff {:+.1f}".format(len(control_results), 100.0 * cw / len(control_results), cd, bd))
 for o, v in sorted(elo["opponents"].items(), key=lambda kv: -kv[1]["rating"]):
     report.append("  {:<10} {:>5}  W/D/L {}".format(o, v["rating"], "/".join(map(str, v["wdl"]))))
 recent = results[-20:]
@@ -123,6 +135,7 @@ for d in dirs:
                 legs.append(json.loads(line))
             except ValueError:
                 pass
+legs = [l for l in legs if l["t"] >= since]
 by_style = defaultdict(lambda: defaultdict(list))
 for l in legs:
     if l["fight"] > 1.0 or l["picked"] != l["key"].split(">")[1]:
@@ -156,7 +169,7 @@ def window_stats(rs, ls, xs):
         w = sum(1 for r in rs if r["bobby_score"] > r["opp_score"])
         out["win rate"] = "{:.0f}% ({} matches)".format(100.0 * w / len(rs), len(rs))
         out["avg frag diff"] = "{:+.1f}".format(sum(r["bobby_score"] - r["opp_score"] for r in rs) / len(rs))
-    clean = [l for l in ls if l["fight"] <= 1.0]
+    clean = [l for l in ls if l["fight"] <= 1.0 and not l.get("explored")]   # policy trips only
     if clean:
         out["trips stuck"] = "{:.0f}% of {} trips".format(100.0 * sum(1 for l in clean if l["stucks"]) / len(clean), len(clean))
         out["median trip time"] = "{:.1f}s".format(sorted(l["travel"] for l in clean)[len(clean) // 2])
@@ -176,7 +189,7 @@ for d in dirs:
                 e = json.loads(line)
             except ValueError:
                 continue
-            if "t" in e:
+            if "t" in e and e["t"] >= since:
                 exp.append(e)
 stamps = [r["t"] for r in results] + [l["t"] for l in legs] + [e["t"] for e in exp]
 if stamps:

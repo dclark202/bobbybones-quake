@@ -30,6 +30,9 @@ FRAME = 0.025
 WEAPONS = {1: "g", 2: "mg", 3: "sg", 4: "gl", 5: "rl", 6: "lg", 7: "rg", 8: "pg", 11: "ng", 13: "cg", 14: "hmg"}
 PROJECTILE_SPEED = {4: 700.0, 5: 1000.0, 8: 2000.0, 11: 1000.0}   # grenades, rockets, plasma, nails
 GRAVITY = 800.0
+# fighting: winning = frags. Items are a means. Engage when healthy, hold the weapon's best range.
+PREF_RANGE = {6: 380.0, 5: 350.0, 7: 900.0, 3: 180.0, 8: 300.0, 2: 500.0, 14: 500.0, 13: 400.0, 4: 400.0, 11: 350.0}
+ENGAGE_STACK = 80          # health + armor needed to choose a fight; below it, go get stuff
 SPRAY = {2, 6, 13, 14}                          # held-trigger tracking weapons: MG, LG, CG, HMG
 # accuracy targets (tunable live: e.g. "bobby_acc_lg 0.45" in the server console); aim self-tunes toward them
 ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.40), 7: ("bobby_acc_rg", 0.65), 5: ("bobby_acc_rl", 0.70),
@@ -373,6 +376,11 @@ class itemrun(minqlx.Plugin):
                 self.input(0, 0, 0, 0.0)
                 return
 
+        # fight first: if we can see them and we're healthy enough, take the fight instead of the route
+        if self.hybrid and self.engage(x, y, z, now):
+            self.telemetry(now, x, y, z, speed, items, "fight")
+            return
+
         # timing: if we'd arrive early, hold position short of the item
         remaining = self.remaining_cost(x, y, z) * self.speed_factor
         hold = time_to_spawn - remaining > 0.15 and dist_item < 260
@@ -544,9 +552,11 @@ class itemrun(minqlx.Plugin):
     def pick_style(self, leg_key):
         """best known route/movement style for this trip; in training, sometimes try something new"""
         best = getattr(self, "move_policy", {}).get(leg_key)
+        self.style_explored = False
         if best is not None and random.random() >= MOVE_EXPLORE:
             return dict(best)
         if MOVE_EXPLORE:
+            self.style_explored = True
             st = {k: random.choice(v) for k, v in STYLE_CHOICES.items()}
             st["seed"] = random.randint(1, 10 ** 6)
             return st
@@ -559,7 +569,8 @@ class itemrun(minqlx.Plugin):
         rec = dict(t=time_now(), key=leg["key"], picked=picked, style=getattr(self, "style", DEFAULT_STYLE),
                    travel=((leg["arrive"] or now) - leg["start"]) / 1000.0, total=(now - leg["start"]) / 1000.0,
                    planned=round(leg["planned"], 2), stucks=leg.get("stucks", 0), fight=leg["fight_ms"] / 1000.0,
-                   ok=picked == self.goal and leg.get("stucks", 0) == 0)
+                   ok=picked == self.goal and leg.get("stucks", 0) == 0,
+                   explored=getattr(self, "style_explored", False))
         with open(os.path.join(LOGDIR, "legs.jsonl"), "a") as f:
             f.write(json.dumps(rec) + "\n")
 
@@ -804,6 +815,34 @@ class itemrun(minqlx.Plugin):
             self.aim_scale[wp] = max(0.2, min(3.0, old * math.exp(-2.0 * (target - acc))))
             self.log("aim tune w{}: {:.0f}% vs target {:.0f}% -> scale {:.2f}".format(wp, acc * 100, target * 100, self.aim_scale[wp]))
         self.acc_prev = {wp: tuple(v) for wp, v in self.acc.items()}
+
+    def engage(self, x, y, z, now):
+        """Fight movement: hold the current weapon's preferred range, circle-strafe, dodge.
+        Returns False (keep running the item plan) when it's not a fight worth taking."""
+        k = getattr(self, "known", None)
+        if k is None or not k["exact"] or now - getattr(self, "last_seen", -1e9) > 1500:
+            return False                                   # no fresh sight of them: items
+        me = minqlx.player_state(self.bot)
+        stack = me.health + me.armor
+        if stack < ENGAGE_STACK:
+            return False                                   # weak: break off and go collect
+        ex, ey, ez = k["pos"]
+        dist = math.hypot(ex - x, ey - y)
+        to_yaw = math.degrees(math.atan2(ey - y, ex - x))
+        pref = PREF_RANGE.get(me.weapon, 400.0)
+        if now >= getattr(self, "circle_next", 0):
+            self.circle_side = random.choice((-1, 1))
+            self.circle_next = now + random.uniform(600, 1600)
+        if dist > pref * 1.3:
+            base = to_yaw + self.circle_side * 25.0        # close in, slightly angled
+        elif dist < pref * 0.7:
+            base = to_yaw + 180.0 - self.circle_side * 25.0  # back off
+        else:
+            base = to_yaw + self.circle_side * 90.0        # circle-strafe at range
+        self.in_combat = True
+        self.input(127, 0, 0, base)                        # input() adds the unpredictable dodge on top
+        self.engaged_ms = getattr(self, "engaged_ms", 0) + 25
+        return True
 
     def dodge_yaw(self, yaw, now):
         """Fight movement: unpredictable ground strafing around the intended direction.
