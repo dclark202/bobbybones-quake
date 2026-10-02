@@ -72,5 +72,7 @@ for key in sorted(policy_counts):
     policy[key] = w
     print("{:<20} {:<3} dps by weapon: {}".format(key, NAMES[w], ", ".join(
         "{} {:.0f} ({:.1f}s)".format(NAMES[k], v, used[k] / 40.0) for k, v in sorted(eff.items(), key=lambda kv: -kv[1]))))
-json.dump(policy, open("data/practice/weapon_policy.json", "w"), indent=1)
+import os
+out = os.environ.get("POLICY_OUT", "data/practice/weapon_policy.json")
+json.dump(policy, open(out, "w"), indent=1)
 print("situations learned:", len(policy))

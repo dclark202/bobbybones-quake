@@ -188,6 +188,8 @@ class itemrun(minqlx.Plugin):
             minqlx.set_cvar("fraglimit", "0")
             self.log("item run started bot={} lookahead={} hop_straight={} nodes={}".format(
                 self.bot, self.lookahead, self.hop_straight, len(self.nav.nodes)))
+        elif sub == "policy":
+            self.load_policy()                     # hot-reload the learned weapon table
         elif sub == "stop":
             self.running = False
             minqlx.clear_bot_input(self.bot)
