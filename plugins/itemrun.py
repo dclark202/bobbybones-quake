@@ -17,9 +17,12 @@ import random
 import minqlx
 
 LOGDIR = "/tmp/practice"
-# nav graph: freshly learned copy in the data dir wins, otherwise the one shipped in the image
-NAV = next((f for f in (os.path.join(LOGDIR, "nav_campgrounds.json"), "/ql/maps-data/campgrounds/nav.json")
-            if os.path.exists(f)), "/ql/maps-data/campgrounds/nav.json")
+def nav_path(mapname):
+    """nav graph for a map: freshly learned copy in the data dir wins, otherwise the one shipped in the image"""
+    for f in (os.path.join(LOGDIR, "nav_{}.json".format(mapname)), "/ql/maps-data/{}/nav.json".format(mapname)):
+        if os.path.exists(f):
+            return f
+    return None
 PARK = (-768.0, 320.0, 40.0)
 RUN = 320.0
 FRAME = 0.025
@@ -158,7 +161,13 @@ class itemrun(minqlx.Plugin):
                 return
             self.lookahead = float(msg[4]) if len(msg) > 4 else 110.0
             self.hop_straight = float(msg[5]) if len(msg) > 5 else 350.0
-            self.nav = Nav(NAV)
+            mapname = minqlx.get_cvar("mapname")
+            nav = nav_path(mapname)
+            if nav is None:
+                self.log("no nav graph for {} yet - record bots on it first".format(mapname))
+                self.bot = None
+                return
+            self.nav = Nav(nav)
             self.running = True
             self.hybrid = False
             self.load_policy()
@@ -198,9 +207,12 @@ class itemrun(minqlx.Plugin):
     def item_table(self):
         level_time, items = minqlx.item_states()
         tab = {}
-        for num, cls, x, y, z, avail, nextthink in items:
-            for key, c in ITEMS.items():
+        for num, cls, x, y, z, avail, nextthink in sorted(items):
+            for base, c in ITEMS.items():
                 if cls == c:
+                    key, n = base, 2
+                    while key in tab:                      # maps with two of the same item: YA, YA2, ...
+                        key, n = "{}{}".format(base, n), n + 1
                     tab[key] = dict(pos=(x, y, z), avail=bool(avail), spawn=level_time if avail else nextthink)
         return level_time, tab
 
@@ -218,7 +230,7 @@ class itemrun(minqlx.Plugin):
                 if v["avail"]:
                     bel[k].update(avail=True, spawn=now)
                 elif bel[k]["avail"]:
-                    bel[k].update(avail=False, spawn=now + RESPAWN[k] // 2)   # gone, unknown when: guess
+                    bel[k].update(avail=False, spawn=now + RESPAWN[k[:2]] // 2)   # gone, unknown when: guess
             if was is not None and was != v["avail"] and d < HEAR_ITEM:      # heard pickup / respawn
                 bel[k].update(avail=v["avail"], spawn=v["spawn"])
             if not bel[k]["avail"] and now >= bel[k]["spawn"]:
@@ -277,7 +289,7 @@ class itemrun(minqlx.Plugin):
                     continue
                 eta = now + cost * self.speed_factor * 1000
                 pickup = max(eta, it["spawn"])
-                rank = (pickup - VALUE[key] * 1500, key)
+                rank = (pickup - VALUE[key[:2]] * 1500, key)
                 if best is None or rank < best[0]:
                     best = (rank, key, route, cost)
             if best is None:
