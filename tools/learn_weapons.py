@@ -11,7 +11,7 @@ import math
 import sys
 from collections import Counter, defaultdict
 
-NAMES = {2: "MG", 3: "SG", 4: "GL", 5: "RL", 6: "LG", 7: "RG", 8: "PG"}
+NAMES = {1: "G", 2: "MG", 3: "SG", 4: "GL", 5: "RL", 6: "LG", 7: "RG", 8: "PG", 11: "NG", 13: "CG", 14: "HMG"}
 MIN_FRAMES = 40   # ~1 s of firing before a situation counts
 MIN_DPS = 10.0    # the winning weapon must have done real damage in this situation
 

@@ -26,17 +26,20 @@ def nav_path(mapname):
 PARK = (-768.0, 320.0, 40.0)
 RUN = 320.0
 FRAME = 0.025
-WEAPONS = {2: "mg", 3: "sg", 4: "gl", 5: "rl", 6: "lg", 7: "rg", 8: "pg"}
-PROJECTILE_SPEED = {5: 1000.0, 8: 2000.0}      # rockets, plasma; everything else we use is hitscan
+# QL weapon ids (ammo field names from minqlx)
+WEAPONS = {1: "g", 2: "mg", 3: "sg", 4: "gl", 5: "rl", 6: "lg", 7: "rg", 8: "pg", 11: "ng", 13: "cg", 14: "hmg"}
+PROJECTILE_SPEED = {4: 700.0, 5: 1000.0, 8: 2000.0, 11: 1000.0}   # grenades, rockets, plasma, nails
+GRAVITY = 800.0
+SPRAY = {2, 6, 13, 14}                          # held-trigger tracking weapons: MG, LG, CG, HMG
 POLICY = os.path.join(LOGDIR, "weapon_policy.json")
 RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
 # fair mode: hearing radii (units) and aim error (1-sigma, units at the target)
 HEAR_STEPS, HEAR_JUMP, HEAR_FIRE, HEAR_ITEM, SEE_ITEM = 700, 900, 1500, 1000, 600
 # aim model: crosshair pursues the target like a hand on a mouse (gain per frame, max deg/s),
 # plus a slow, small drift (units at the target). Misses come mostly from the target changing direction.
-AIM_GAIN = {6: 0.55, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.45, 4: 0.4}
+AIM_GAIN = {6: 0.55, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.5, 4: 0.4, 11: 0.45, 13: 0.5, 14: 0.5, 1: 0.6}
 AIM_MAX_DPS = 720.0
-AIM_DRIFT = {6: 4.0, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 10.0, 4: 20.0}
+AIM_DRIFT = {6: 4.0, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 6.0, 4: 20.0, 11: 12.0, 13: 6.0, 14: 6.0, 1: 4.0}
 ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega"}
 VALUE = {"RA": 3, "MH": 2, "YA": 1}
 
@@ -488,13 +491,15 @@ class itemrun(minqlx.Plugin):
         b = self.band(dist, dz, enemy_air)
         if self.policy and b in self.policy:
             prefs.append(int(self.policy[b]))
-        # defaults: LG close, rockets when they're below or grounded mid-range, rail far
-        if dist < 700:
-            prefs += [6, 5, 8, 3, 2]
+        # defaults until the learned table covers a situation
+        if dist < 120:
+            prefs += [3, 5, 6, 8, 13, 14]                  # point blank: shotgun
+        elif dist < 700:
+            prefs += [6, 5, 8, 3, 13, 14, 2]
         elif dz < -64 or (not enemy_air and dist < 1000):
-            prefs += [5, 7, 6, 2]
+            prefs += [5, 4, 7, 6, 14, 2]                   # they're below / grounded: rockets, grenades
         else:
-            prefs += [7, 5, 2]
+            prefs += [7, 5, 14, 2]
         for w in prefs:
             if ammo.get(w, 0) > 0:
                 return w
@@ -553,7 +558,8 @@ class itemrun(minqlx.Plugin):
         ex, ey, ez = k["pos"]
         evx, evy, evz = k["vel"]
         a = minqlx.player_state(self.bot).ammo
-        ammo = {2: a.mg, 3: a.sg, 4: a.gl, 5: a.rl, 6: a.lg, 7: a.rg, 8: a.pg}
+        ammo = {i: getattr(a, n, 0) for i, n in WEAPONS.items()}
+        ammo[1] = 1                                        # gauntlet never runs out
         dist = math.dist((x, y, z), (ex, ey, ez))
         enemy_air = abs(evz) > 1
         w = self.choose_weapon(dist, ez - z, enemy_air, ammo)
@@ -565,6 +571,8 @@ class itemrun(minqlx.Plugin):
         tx, ty, tz = ex + evx * t, ey + evy * t, ez + evz * t
         if w == 5 and not enemy_air:
             tz -= 20                                       # rockets at the feet for splash
+        if w == 4:
+            tz += 0.5 * GRAVITY * (t - 0.05) ** 2          # grenades: aim above for the lob
         # human-like aim: small slow drift around the target point...
         drift = AIM_DRIFT.get(w, 10.0) * (3.0 if not k["exact"] else 1.0)
         rho = 0.97                                         # ~0.8 s correlation at 40 Hz
@@ -590,11 +598,11 @@ class itemrun(minqlx.Plugin):
         yaw, pitch = cy, cp
         settled = abs(wrap(want_yaw - cy)) < 2.5 and abs(want_pitch - cp) < 2.5
         allow = visible and now - getattr(self, "engage_start", now) >= getattr(self, "reaction", 200)
-        if w in (7, 5):
-            allow = allow and settled                      # rail/rockets: fire once the flick lands
+        if w in (3, 4, 5, 7, 8, 11):
+            allow = allow and settled                      # aimed shots: fire once the flick lands
         fire_mode = 1 if allow else 0
-        if w == 6 and allow and self.tracking:
-            fire_mode = 2                                  # LG: track continuously, trigger held
+        if w in SPRAY and allow and self.tracking:
+            fire_mode = 2                                  # LG/MG/CG/HMG: track continuously, trigger held
         minqlx.set_bot_aim(self.bot, pitch, yaw, w, fire_mode)
         if visible:
             self.combat_until = now + 1200
@@ -608,7 +616,7 @@ class itemrun(minqlx.Plugin):
             acc = self.acc = {}
             self.prev_ammo, self.prev_hp, self.acc_log, self.last_shot = {}, None, now + 30000, {}
         me = minqlx.player_state(self.bot)
-        cur = {5: me.ammo.rl, 6: me.ammo.lg, 7: me.ammo.rg, 8: me.ammo.pg, 3: me.ammo.sg, 2: me.ammo.mg}
+        cur = {i: getattr(me.ammo, n, 0) for i, n in WEAPONS.items() if i != 1}
         for wp, n in cur.items():
             used = self.prev_ammo.get(wp, n) - n
             if 0 < used < 20:
@@ -618,13 +626,13 @@ class itemrun(minqlx.Plugin):
             self.prev_ammo[wp] = n
         hp = st.health + st.armor
         if self.prev_hp is not None and hp < self.prev_hp and st.health > 0:
-            window = {5: 1500, 8: 800}.get(me.weapon, 100)
+            window = {4: 2500, 5: 1500, 8: 800, 11: 1500}.get(me.weapon, 100)
             if now - self.last_shot.get(me.weapon, -1e9) <= window:
                 acc.setdefault(me.weapon, [0, 0])[1] += 1
         self.prev_hp = hp
         if now >= self.acc_log:
             self.acc_log = now + 30000
-            names = {2: "MG", 3: "SG", 5: "RL", 6: "LG", 7: "RG", 8: "PG"}
+            names = {1: "G", 2: "MG", 3: "SG", 4: "GL", 5: "RL", 6: "LG", 7: "RG", 8: "PG", 11: "NG", 13: "CG", 14: "HMG"}
             parts = ["{} {:.0f}% ({}/{})".format(names.get(wp, wp), 100.0 * min(h, s_) / s_, min(h, s_), s_)
                      for wp, (s_, h) in sorted(acc.items()) if s_ > 0]
             if parts:
