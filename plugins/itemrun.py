@@ -32,8 +32,13 @@ PROJECTILE_SPEED = {4: 700.0, 5: 1000.0, 8: 2000.0, 11: 1000.0}   # grenades, ro
 GRAVITY = 800.0
 SPRAY = {2, 6, 13, 14}                          # held-trigger tracking weapons: MG, LG, CG, HMG
 # accuracy targets (tunable live: e.g. "bobby_acc_lg 0.45" in the server console); aim self-tunes toward them
-ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.50), 7: ("bobby_acc_rg", 0.60), 5: ("bobby_acc_rl", 0.60),
+ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.40), 7: ("bobby_acc_rg", 0.60), 5: ("bobby_acc_rl", 0.60),
                     8: ("bobby_acc_pg", 0.35), 3: ("bobby_acc_sg", 0.50), 14: ("bobby_acc_hmg", 0.40)}
+# "flex": once we've measured the opponent's own accuracy with a weapon, aim for theirs + FLEX_MARGIN
+FLEX_MARGIN = 0.05
+FLEX_MIN_SHOTS = 40
+ACC_CAP = {6: 0.60, 7: 0.75, 5: 0.75, 8: 0.50, 3: 0.65, 14: 0.55}
+ACC_FLOOR = 0.15
 POLICY = os.path.join(LOGDIR, "weapon_policy.json")
 RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
 # fair mode: hearing radii (units) and aim error (1-sigma, units at the target)
@@ -177,6 +182,8 @@ class itemrun(minqlx.Plugin):
             self.running = True
             self.hybrid = False
             self.aim_scale = getattr(self, "aim_scale", {})
+            self.opp_acc = getattr(self, "opp_acc", {})       # steam id -> {weapon: [shots, hits]}
+            self.opp_mem = {}
             self.load_policy()
             self.goal = None
             self.path = None
@@ -636,6 +643,7 @@ class itemrun(minqlx.Plugin):
                 a[0] += used
                 self.last_shot[wp] = now
             self.prev_ammo[wp] = n
+        self.track_opponent(now, p, st, me)
         hp = st.health + st.armor
         if self.prev_hp is not None and hp < self.prev_hp and st.health > 0:
             window = {4: 2500, 5: 1500, 8: 800, 11: 1500}.get(me.weapon, 100)
@@ -651,6 +659,42 @@ class itemrun(minqlx.Plugin):
             if parts:
                 self.log("accuracy: " + ", ".join(parts))
 
+    def track_opponent(self, now, p, st, me):
+        """the opponent's own accuracy per weapon (keyed by steam id), used to set Bobby's targets"""
+        opp = self.opp_acc.setdefault(str(p.steam_id), {})
+        mem = self.opp_mem
+        if mem.get("sid") != str(p.steam_id):
+            mem.clear()
+            mem["sid"] = str(p.steam_id)
+        cur = {i: getattr(st.ammo, n, 0) for i, n in WEAPONS.items() if i != 1}
+        prev = mem.get("ammo", cur)
+        for wp, n in cur.items():
+            used = prev.get(wp, n) - n
+            if 0 < used < 20:
+                opp.setdefault(wp, [0, 0])[0] += used
+                mem.setdefault("last_shot", {})[wp] = now
+        mem["ammo"] = cur
+        my_hp = me.health + me.armor
+        if mem.get("my_hp") is not None and my_hp < mem["my_hp"] and me.health > 0:
+            window = {4: 2500, 5: 1500, 8: 800, 11: 1500}.get(st.weapon, 100)
+            if now - mem.get("last_shot", {}).get(st.weapon, -1e9) <= window:
+                opp.setdefault(st.weapon, [0, 0])[1] += 1
+        mem["my_hp"] = my_hp
+
+    def target_for(self, wp):
+        name, default = ACC_TARGET_CVARS[wp]
+        try:
+            target = float(minqlx.get_cvar(name) or default)
+        except ValueError:
+            target = default
+        p, st = self.human()
+        if p is not None:
+            shots, hits = self.opp_acc.get(str(p.steam_id), {}).get(wp, (0, 0))
+            if shots >= FLEX_MIN_SHOTS:
+                theirs = min(hits, shots) / float(shots)
+                target = max(ACC_FLOOR, min(ACC_CAP.get(wp, 0.6), theirs + FLEX_MARGIN))
+        return target
+
     def tune_aim(self):
         """nudge each weapon's aim toward its accuracy target using the shots since the last step"""
         last = getattr(self, "acc_prev", {})
@@ -659,11 +703,7 @@ class itemrun(minqlx.Plugin):
             ds, dh = shots - ps, hits - ph
             if wp not in ACC_TARGET_CVARS or ds < 30:
                 continue
-            name, default = ACC_TARGET_CVARS[wp]
-            try:
-                target = float(minqlx.get_cvar(name) or default)
-            except ValueError:
-                target = default
+            target = self.target_for(wp)
             acc = min(dh, ds) / float(ds)
             old = self.aim_scale.get(wp, 1.0)
             self.aim_scale[wp] = max(0.2, min(3.0, old * math.exp(-2.0 * (target - acc))))
