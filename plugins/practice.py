@@ -331,7 +331,7 @@ class CEM:
 class practice(minqlx.Plugin):
     def __init__(self):
         os.makedirs(LOGDIR, exist_ok=True)
-        self.add_command("pr", self.cmd_pr, usage="start <bot> <idle> [tasks] | stop | status | replay <task> | survey ...")
+        self.add_command("pr", self.cmd_pr, usage="start <bot> <idle> [tasks] | stop | status | replay <task> | survey ...", permission=5)
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
         self.bot = self.idle = None

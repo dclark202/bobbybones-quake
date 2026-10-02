@@ -7,9 +7,8 @@ cd /ql
 ./run_server_x64_minqlx.sh \
     +set net_ip 0.0.0.0 \
     +set net_port 27960 \
-    +set sv_hostname "ql-bot lab" \
     +set fs_homepath /ql/home \
-    +set qlx_plugins "botctl, jumplab, practice, itemrun, bobby" \
+    +set qlx_plugins "botctl, jumplab, practice, itemrun, bobby, lab" \
     +set qlx_pluginsPath /ql/minqlx-plugins \
     +set qlx_owner "${QLX_OWNER:-}" \
     +set zmq_stats_enable 1 \

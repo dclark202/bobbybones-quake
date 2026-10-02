@@ -39,7 +39,7 @@ KEYS = list(SPACE)
 
 class jumplab(minqlx.Plugin):
     def __init__(self):
-        self.add_command("jl", self.cmd_jl, usage="start <bot> <idle_bot> [gens] | stop | best | replay")
+        self.add_command("jl", self.cmd_jl, usage="start <bot> <idle_bot> [gens] | stop | best | replay", permission=5)
         self.add_hook("frame", self.on_frame)
         self.bot = None
         self.idle = None

@@ -49,7 +49,7 @@ class bobby(minqlx.Plugin):
         self.hp = {}
         self.bobby_fired = 0.0
         self.add_hook("player_loaded", self.on_loaded)
-        self.add_command("bobbyname", self.cmd_name)
+        self.add_command("bobbyname", self.cmd_name, permission=5)
         self.last_taunt = 0.0
 
     def bobby_player(self):

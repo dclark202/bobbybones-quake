@@ -9,15 +9,15 @@ BUTTON_ATTACK = 1
 
 class botctl(minqlx.Plugin):
     def __init__(self):
-        self.add_command("probe", self.cmd_probe)
-        self.add_command("drive", self.cmd_drive, usage="<client_id> <test|aim|strafe>")
-        self.add_command("release", self.cmd_release, usage="<client_id>")
-        self.add_command("range", self.cmd_range, usage="<shooter_id> <target_id>")
-        self.add_command("items", self.cmd_items)
-        self.add_command("follow", self.cmd_follow, usage="<spectator_id> <target_id>")
+        self.add_command("probe", self.cmd_probe, permission=5)
+        self.add_command("drive", self.cmd_drive, usage="<client_id> <test|aim|strafe>", permission=5)
+        self.add_command("release", self.cmd_release, usage="<client_id>", permission=5)
+        self.add_command("range", self.cmd_range, usage="<shooter_id> <target_id>", permission=5)
+        self.add_command("items", self.cmd_items, permission=5)
+        self.add_command("follow", self.cmd_follow, usage="<spectator_id> <target_id>", permission=5)
         self.add_hook("player_loaded", self.on_player_loaded)
-        self.add_command("autospec", self.cmd_autospec, usage="<on|off>")
-        self.add_command("record", self.cmd_record, usage="<on|off>")
+        self.add_command("autospec", self.cmd_autospec, usage="<on|off>", permission=5)
+        self.add_command("record", self.cmd_record, usage="<on|off>", permission=5)
         self.add_hook("frame", self.on_frame)
         self.recording = False
         self.hits = []
@@ -124,13 +124,15 @@ class botctl(minqlx.Plugin):
         now = time.time()
         if self.recording:
             self.rec_frame = getattr(self, "rec_frame", 0) + 1
-            with open("/tmp/practice/trace_live.txt", "a") as f:
+            # one recording per map; last column = steam id (per-player profiles)
+            path = "/tmp/practice/trace_live_{}.txt".format((minqlx.get_cvar("mapname") or "unknown").lower())
+            with open(path, "a") as f:
                 for p in self.players():
                     s = p.state
                     if s.is_alive or s.health > 0:
                         cmd = minqlx.last_usercmd(p.id)
-                        f.write("{} {} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f} {} {} {}\n".format(
-                            self.rec_frame, p.id, *s.position, *s.velocity, s.weapon, cmd[1], s.health))
+                        f.write("{} {} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f} {} {} {} {}\n".format(
+                            self.rec_frame, p.id, *s.position, *s.velocity, s.weapon, cmd[1], s.health, p.steam_id))
         for p in self.players():
             h = self.hist.setdefault(p.id, [])
             h.append((now, tuple(p.state.position)))

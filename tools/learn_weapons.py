@@ -28,7 +28,7 @@ for fn in sys.argv[1:]:
     humans = set()
     for line in open(fn):
         f = line.split()
-        if len(f) != 11:
+        if len(f) not in (11, 12):
             continue                                   # older recordings without weapon/buttons
         fr, cid = int(f[0]), int(f[1])
         x, y, z, vx, vy, vz = map(float, f[2:8])

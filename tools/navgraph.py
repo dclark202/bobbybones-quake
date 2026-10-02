@@ -13,16 +13,17 @@ import sys
 from collections import defaultdict
 
 CELL = 40.0
-src, out = sys.argv[1], sys.argv[2]
+srcs, out = sys.argv[1:-1], sys.argv[-1]   # several recordings (bots + humans) -> one graph
 
 tracks = defaultdict(list)
-for line in open(src):
-    f = line.split()
-    if len(f) != 8:
-        continue
-    fr, cid = int(f[0]), int(f[1])
-    x, y, z, vx, vy, vz = map(float, f[2:])
-    tracks[cid].append((fr, x, y, z, vz))
+for i, src in enumerate(srcs):
+    for line in open(src):
+        f = line.split()
+        if len(f) < 8:
+            continue
+        fr, cid = int(f[0]), int(f[1])
+        x, y, z, vx, vy, vz = map(float, f[2:8])
+        tracks[(i, cid)].append((fr, x, y, z, vz))
 
 
 def cell_of(x, y, z):

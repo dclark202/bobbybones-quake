@@ -1,10 +1,5 @@
 #!/bin/bash
-# Bring the lab back to "duel vs BobbyBones in permanent warmup" after every (re)start.
+# First-start nudge; the lab plugin keeps everything (map, warmup, bot, item run, recording) in shape after that.
 sleep 12
-R="python3 /tools/rcon.py"
-MAP="${LAB_MAP:-bloodrun}"
-printf "%s|duel\n" "$MAP" > /ql/baseq3/mappool_lab.txt
-$R "sv_mapPoolFile mappool_lab.txt" "g_doWarmup 1" "sv_warmupReadyPercentage 2" "map $MAP duel" --wait 10
-$R "timelimit 0" "fraglimit 0" "qlx !autospec off" "addbot bones 5 free 0 BobbyBones" --wait 8
-$R "qlx !bobbyname" "qlx !record on" "qlx !ir start auto -1" --wait 2
-echo "bootstrap done $MAP $(date -u)" >> /tmp/practice/bootstrap.log
+python3 /tools/rcon.py "qlx !record on" --wait 2
+echo "bootstrap done $(date -u)" >> /tmp/practice/bootstrap.log

@@ -117,7 +117,7 @@ class Nav:
 
 class itemrun(minqlx.Plugin):
     def __init__(self):
-        self.add_command("ir", self.cmd_ir, usage="start <bot> <idle> [lookahead] [hop_straight] | stop | status")
+        self.add_command("ir", self.cmd_ir, usage="start <bot> <idle> [lookahead] [hop_straight] | stop | status", permission=5)
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
         self.running = False
@@ -190,6 +190,11 @@ class itemrun(minqlx.Plugin):
                 self.bot, self.lookahead, self.hop_straight, len(self.nav.nodes)))
         elif sub == "policy":
             self.load_policy()                     # hot-reload the learned weapon table
+        elif sub == "nav":
+            nav = nav_path(minqlx.get_cvar("mapname"))
+            if nav and getattr(self, "running", False):   # hot-reload the (re)learned route graph
+                self.nav, self.path, self.banned = Nav(nav), None, set()
+                self.log("nav reloaded: {} nodes".format(len(self.nav.nodes)))
         elif sub == "stop":
             self.running = False
             minqlx.clear_bot_input(self.bot)
