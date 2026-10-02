@@ -40,7 +40,7 @@ FLEX_MIN_SHOTS = 40
 ACC_CAP = {6: 0.60, 7: 0.80, 5: 0.85, 8: 0.50, 3: 0.65, 14: 0.55}
 ACC_FLOOR = 0.15
 POLICY = os.path.join(LOGDIR, "weapon_policy.json")
-RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000}
+RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000, "RL": 5000, "LG": 5000, "RG": 5000}
 TRAINING = os.environ.get("LAB_MODE") == "train"
 EXPLORE = 0.2 if TRAINING else 0.0        # chance per engagement to try a different weapon
 MOVE_EXPLORE = 0.2 if TRAINING else 0.0   # chance per trip to try a different route/movement style
@@ -55,8 +55,10 @@ HEAR_STEPS, HEAR_JUMP, HEAR_FIRE, HEAR_ITEM, SEE_ITEM = 700, 900, 1500, 1000, 60
 AIM_GAIN = {6: 0.7, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.5, 4: 0.4, 11: 0.45, 13: 0.5, 14: 0.5, 1: 0.6}
 AIM_MAX_DPS = 720.0
 AIM_DRIFT = {6: 2.5, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 6.0, 4: 20.0, 11: 12.0, 13: 6.0, 14: 6.0, 1: 4.0}
-ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega"}
-VALUE = {"RA": 3, "MH": 2, "YA": 1}
+ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega",
+         "RL": "weapon_rocketlauncher", "LG": "weapon_lightning", "RG": "weapon_railgun"}
+VALUE = {"RA": 3, "MH": 2, "YA": 1, "RL": 5, "LG": 4, "RG": 4}   # weapons only count while he lacks them
+WEAPON_ITEM = {"RL": "rl", "LG": "lg", "RG": "rg"}
 
 
 def time_now():
@@ -315,16 +317,21 @@ class itemrun(minqlx.Plugin):
                 self.learn_speed(now)
                 self.log_leg(now, key)
                 self.last_item = key
-                p = self.player(self.bot)
-                p.health = 100
-                p.armor = 0
+                if not self.hybrid:
+                    # solo item practice only: reset so he can keep collecting; never in a real fight
+                    p = self.player(self.bot)
+                    p.health = 100
+                    p.armor = 0
                 self.goal, self.path = None, None
             self.prev_avail[key] = it["avail"]
 
         # choose the next item: earliest possible pickup, ties -> more valuable
         if self.goal is None:
             best = None
+            have = minqlx.player_state(self.bot).weapons
             for key, it in items.items():
+                if key[:2] in WEAPON_ITEM and getattr(have, WEAPON_ITEM[key[:2]], False):
+                    continue                                   # already has this weapon
                 route, cost = self.plan(x, y, z, it["pos"])
                 if route is None:
                     continue
@@ -715,9 +722,10 @@ class itemrun(minqlx.Plugin):
             self.prev_ammo, self.prev_hp, self.acc_log, self.last_shot = {}, None, now + 30000, {}
         me = minqlx.player_state(self.bot)
         cur = {i: getattr(me.ammo, n, 0) for i, n in WEAPONS.items() if i != 1}
+        firing = bool(minqlx.last_usercmd(self.bot)[1] & 1) and me.health > 0
         for wp, n in cur.items():
             used = self.prev_ammo.get(wp, n) - n
-            if 0 < used < 20:
+            if 0 < used < 20 and firing and wp == me.weapon:
                 a = acc.setdefault(wp, [0, 0])
                 a[0] += used
                 self.last_shot[wp] = now
@@ -754,9 +762,10 @@ class itemrun(minqlx.Plugin):
             mem["sid"] = str(p.steam_id)
         cur = {i: getattr(st.ammo, n, 0) for i, n in WEAPONS.items() if i != 1}
         prev = mem.get("ammo", cur)
+        firing = bool(minqlx.last_usercmd(p.id)[1] & 1) and st.health > 0
         for wp, n in cur.items():
             used = prev.get(wp, n) - n
-            if 0 < used < 20:
+            if 0 < used < 20 and firing and wp == st.weapon:
                 opp.setdefault(wp, [0, 0])[0] += used
                 mem.setdefault("last_shot", {})[wp] = now
         mem["ammo"] = cur
