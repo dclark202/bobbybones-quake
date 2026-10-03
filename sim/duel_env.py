@@ -26,8 +26,10 @@ N_WALL, N_FLOOR, N_ROCK = 16, 8, 2
 OBS_DIM = 3 + 1 + 1 + 1 + 1 + N_WALL + N_FLOOR + 12 + 6 * N_ROCK + 3
 ROCKET_SPEED, ROCKET_DMG, SPLASH_DMG, SPLASH_R, REFIRE = 1000.0, 100.0, 84.0, 120.0, 0.8
 KNOCK, SELF_FACTOR, SPAWN_HP, VIEW_H = 1.1, 0.5, 125.0, 26.0
-RG_DMG, RG_REFIRE, RG_KNOCK = 80.0, 1.5, 0.85
-LG_DMG_PER_S, LG_RANGE, LG_KNOCK = 120.0, 768.0, 0.5    # QL: 6 damage every 50 ms
+RG_DMG, RG_REFIRE, RG_KNOCK = 80.0, 1.5, 0.85          # measured: 80 damage, 340 u/s knockback
+LG_DMG, LG_TICK, LG_RANGE, LG_KNOCK = 6.0, 0.05, 768.0, 1.167   # measured: 6 per 50 ms, 35 u/s per tick, 700 hits / 800 misses
+KNOCK_OTHER, KNOCK_SELF = 0.9, 1.1                     # measured: direct hit 450 u/s, own rocket at the feet 550 u/s
+SPLASH_NEAR = 20.0                                     # measured splash falloff sits ~20 units closer than box distance
 SWITCH = 0.1                                             # seconds to change weapons
 REACT_FRAMES = 6                                         # 150 ms: what a player knows about the opponent lags
 FOV_COS = math.cos(math.radians(55))
@@ -50,6 +52,7 @@ class DuelEnv:
         self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in self.w.spawns()], np.float32)
         self.close_p = close_p
+        self.level = 0.95                                     # pitch easing per frame (1.0 = off, for tests)
         self.round_len = 15.0                                 # seconds; matches restart (players near each other) after this
         self.round_t = self.rng.uniform(0, 15.0, n_matches).astype(np.float32)
         self.spots = None
@@ -71,6 +74,9 @@ class DuelEnv:
         self.rv = np.zeros((n, K, 3), np.float32)
         self.ra = np.zeros((n, K), bool)
         self.weapon = np.zeros(n, np.int64)                  # 0 RL, 1 RG, 2 LG
+        self.fire_q = np.zeros(n, bool)                       # shots triggered last frame (they leave this frame)
+        self.fire_w = np.zeros(n, np.int64)
+        self.rnew = np.zeros((n, K), bool)                    # rockets that appeared this frame (move from the next)
         self.opp_hist = []                                    # delayed opponent features (reaction time)
         self.stats = dict(frags=0, suicides=0, shots=0, direct=0, splash_hits=0, dmg=0.0, self_dmg=0.0,
                           rg_shots=0, rg_hits=0, lg_frames=0, lg_hits=0, rl_frags=0, rg_frags=0, lg_frags=0)
@@ -94,6 +100,7 @@ class DuelEnv:
                     self.weapon[i] = 0
                     self.seen_t[i] = 9.0
                     self.ra[i] = False
+                    self.fire_q[i] = False
                     return
         k = int(self.rng.integers(len(self.spawns)))
         if avoid is not None:                            # QL-ish: prefer a spawn away from the opponent
@@ -108,6 +115,7 @@ class DuelEnv:
         self.weapon[i] = 0
         self.seen_t[i] = 9.0
         self.ra[i] = False
+        self.fire_q[i] = False
 
     def _eye(self, s):
         e = s[:, :3].copy()
@@ -206,7 +214,7 @@ class DuelEnv:
         self.cool = np.where(sw, np.maximum(self.cool, SWITCH), self.cool)
         moves = np.stack([fwd, side, jump], 1).astype(np.int8)
         y0 = self.yaw.copy()
-        p1 = np.clip(self.pitch * 0.95 + dpit, -89, 89)    # the view eases back toward level (crosshair at head height)
+        p1 = np.clip(self.pitch * self.level + dpit, -89, 89)   # the view eases back toward level (crosshair at head height)
         done_ms = 0
         for ms in self.substeps:
             done_ms += ms
@@ -219,57 +227,56 @@ class DuelEnv:
         dmg_taken = np.zeros(n, np.float32)
         attacker = np.full(n, -1)
 
-        # fire
+        # fire. Measured on a real server (plugins/weaponlab.py, sim/validate_weapons.py): a shot leaves one
+        # frame after the command, and a rocket does not move on the frame it appears.
         self.cool = np.maximum(0.0, self.cool - DT)
+        do_fire, do_w = self.fire_q, self.fire_w
         shoot = fire & (self.cool <= 0)
+        self.cool = np.where(shoot, np.array([REFIRE, RG_REFIRE, LG_TICK])[self.weapon], self.cool)
+        self.fire_q, self.fire_w = shoot, self.weapon.copy()
         hitscan_kill = {}
-        if shoot.any():
-            # railgun / lightning gun: instant traces along the view
+        kicked = False
+        if do_fire.any():
             yr, pr = np.radians(self.yaw), np.radians(self.pitch)
             fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
             eye = self._eye(s)
-            for i in np.nonzero(shoot & (self.weapon > 0))[0]:
-                wpn = int(self.weapon[i])
-                rng_ = 8192.0 if wpn == 1 else LG_RANGE
+            for i in np.nonzero(do_fire)[0]:
+                wpn = int(do_w[i])
+                if wpn == 0:                                # rocket
+                    slot = np.nonzero(~self.ra[i])[0]
+                    if len(slot):
+                        k = slot[0]
+                        self.rp[i, k] = eye[i] + fdir[i] * 14.0
+                        self.rv[i, k] = fdir[i] * ROCKET_SPEED
+                        self.ra[i, k] = True
+                        self.rnew[i, k] = True
+                        self.stats["shots"] += 1
+                    continue
+                rng_ = 8192.0 if wpn == 1 else LG_RANGE      # railgun / lightning gun: instant trace along the view
                 fr = self.w.rays_each(eye[i:i + 1], fdir[i:i + 1, None, :], rng_)[0, 0]
                 end = eye[i] + fdir[i] * rng_ * fr
                 v = i ^ 1
                 hit = bool(self._seg_box(eye[i:i + 1], end[None], s[v:v + 1, :3])[0])
                 if wpn == 1:
-                    self.cool[i] = RG_REFIRE
                     self.stats["rg_shots"] += 1
                     dmg, kf = RG_DMG, RG_KNOCK
                 else:
-                    self.cool[i] = 0.0
                     self.stats["lg_frames"] += 1
-                    dmg, kf = LG_DMG_PER_S * DT, LG_KNOCK
+                    dmg, kf = LG_DMG, LG_KNOCK
                 if hit:
-                    kdir = fdir[i]
-                    self.w.knockback(int(v), kdir * (1000.0 * kf * dmg / 200.0), int(dmg))
+                    self.w.knockback(int(v), fdir[i] * (1000.0 * kf * dmg / 200.0), int(dmg))
+                    kicked = True
                     self.hp[v] -= dmg
                     dmg_taken[v] += dmg
                     attacker[v] = i
                     self.stats["dmg"] += dmg
                     self.stats["rg_hits" if wpn == 1 else "lg_hits"] += 1
                     hitscan_kill[v] = wpn
-            shoot = shoot & (self.weapon == 0)
-        if shoot.any():
-            yr, pr = np.radians(self.yaw), np.radians(self.pitch)
-            fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
-            eye = self._eye(s)
-            for i in np.nonzero(shoot)[0]:
-                slot = np.nonzero(~self.ra[i])[0]
-                if not len(slot):
-                    continue
-                k = slot[0]
-                self.rp[i, k] = eye[i] + fdir[i] * 14.0
-                self.rv[i, k] = fdir[i] * ROCKET_SPEED
-                self.ra[i, k] = True
-                self.cool[i] = REFIRE
-                self.stats["shots"] += 1
 
         # rockets fly: direct hits on the opponent, explosions on walls
-        alive = np.nonzero(self.ra)
+        fresh = self.rnew.copy()
+        self.rnew[:] = False
+        alive = np.nonzero(self.ra & ~fresh)
         if len(alive[0]):
             owner, slot = alive
             p0 = self.rp[owner, slot]
@@ -285,25 +292,33 @@ class DuelEnv:
                 i, k = owner[q], slot[q]
                 self.ra[i, k] = False
                 ep = hitpt[q]
-                victims = []
+                victims = []                                  # (player, health damage, knockback points, direction)
                 if direct[q]:
-                    victims.append((i ^ 1, ROCKET_DMG, True))
+                    victims.append((i ^ 1, ROCKET_DMG, ROCKET_DMG, dirs[q], True))
                     self.stats["direct"] += 1
                 for v in (i, i ^ 1):                        # splash on both players (owner too)
                     if direct[q] and v == (i ^ 1):
                         continue
                     c = s[v, :3]
-                    near = np.clip(ep, c + MINS, c + MAXS)
-                    d = float(np.linalg.norm(ep - near))
+                    e2 = ep.copy()                            # measured: splash acts SPLASH_NEAR units closer than
+                    h = c[:2] - ep[:2]                        # the plain box distance (horizontally toward the player)
+                    hl = float(np.linalg.norm(h))
+                    if hl > 1e-3:
+                        e2[:2] += h / hl * min(SPLASH_NEAR, hl)
+                    near = np.clip(e2, c + MINS, c + MAXS)
+                    d = float(np.linalg.norm(e2 - near))
                     if d < SPLASH_R and self.w.trace(ep, c)["fraction"] >= 0.999:
-                        victims.append((v, SPLASH_DMG * (1 - d / SPLASH_R), False))
-                for v, dmg, is_direct in victims:
+                        f_ = 1.0 - d / SPLASH_R
+                        kdir = c - e2
+                        kdir[2] += 24.0                       # as in Quake 3: splash pushes upward
+                        kn = float(np.linalg.norm(kdir))
+                        kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
+                        victims.append((v, SPLASH_DMG * f_, ROCKET_DMG * f_, kdir, False))
+                for v, dmg, kpts, kdir, is_direct in victims:
                     take = dmg * (SELF_FACTOR if v == i else 1.0)
-                    kdir = s[v, :3] + np.array([0, 0, 4.0], np.float32) - ep
-                    kn = np.linalg.norm(kdir)
-                    kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
-                    knock = min(200.0, dmg)
-                    self.w.knockback(int(v), kdir * (1000.0 * KNOCK * knock / 200.0), int(knock))
+                    kf = KNOCK_SELF if v == i else KNOCK_OTHER
+                    self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * kpts / 200.0), int(kpts))
+                    kicked = True
                     self.hp[v] -= take
                     dmg_taken[v] += take
                     if v != i:
@@ -315,6 +330,7 @@ class DuelEnv:
                         self.stats["self_dmg"] += take
                         if attacker[v] < 0:
                             attacker[v] = v
+        if kicked:
             self.state = s = self.w.state()                  # knockback changed velocities
 
         # shaping (curriculum, annealed by the trainer): reward damage dealt to the opponent. Penalizing damage

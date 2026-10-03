@@ -29,20 +29,22 @@ Findings and numbers go in [FINDINGS.md](FINDINGS.md).
 | 5 | Reinforcement learning in real QL (cluster) on top of 3/4 | later |
 | 6 | Opponent profiles, player reports | later |
 
-## High priority for the next session (2026-10-03)
+## Priorities (owner decisions, 2026-10-03 noon), in order
 
-1. Review the duel run (`duel_v1`; results in FINDINGS.md, raw in `data/sim_runs/duel_v1/eval_duel.json`).
-   Biggest gaps: finding the opponent (needs memory + map knowledge), rail/LG unused, no strafe jumping in fights.
-2. Commit and push everything since 2026-10-02 (owner approval needed; nothing committed yet).
-3. Smooth, human-like turning: continuous mouse-style aim with a cost on jerky turns. Fixes the jitter in the
-   strafe-jump video and is needed for rail and LG.
-4. Duel simulator: every item on the 3 maps with QL timers and rules, spawn with gauntlet + MG, ammo limits.
-5. Combine skills: start duel training from the movement policy (it currently doesn't strafe jump in fights),
-   and switch to the memory model (GRU) at the same time. GPU PyTorch install (~2.5 GB) needs approval.
-6. Check weapons against the real game (record Nightmare duels; compare damage, splash, knockback).
-7. Nav builder: running-start jumps so items like Aerowalk's Red Armor are reachable.
-8. Start the demo pipeline (parser + inferring keys with the simulator).
-9. Decide when the public server comes back up (stopped since 2026-10-02).
+1. DONE (FINDINGS.md): weapons checked against the real game; RL/RG/LG damage, timing and knockback in the
+   simulator now match. Still to measure: weapon switch time, armor, the other weapons.
+   Original item: **Check weapons against the real game first**: controlled tests on a real server (rocket direct/splash by
+   distance, self-splash for rocket jumps, rail, LG damage and range, knockback, rocket speed), same setups in
+   the simulator, fix the simulator until they match. Training in the simulator is only trusted after this.
+2. **Smooth, human-like aim that can still flick**: continuous mouse-style turning (fine control for tracking,
+   large fast moves allowed for flicks), a cost on jitter. Fixes the video jitter; needed for rail/LG.
+3. **Items in the duel simulator**: every item on the 3 maps with QL rules and timers; items must be picked up.
+   Option (curriculum): spawn with the full weapon set while learning to aim, ammo/pickups still matter.
+4. **Combine skills + memory**: start duel training from the movement skills, switch to the recurrent model.
+5. **Nav builder: running-start jumps** (Aerowalk Red Armor reachable).
+6. **Pro-demo pipeline**: parser + inferring the pros' keys with the simulator.
+7. **Public server stays off** until a model beats the Nightmare bots reliably.
+Done: duel run reviewed (FINDINGS.md); everything committed and pushed (a04f9e2).
 
 ## Next steps (in order)
 

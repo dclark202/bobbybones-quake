@@ -5,6 +5,38 @@ lives in the git-ignored `data/` folder (paths given so results can be re-checke
 
 ---
 
+## 2026-10-03 (afternoon): weapons checked against real Quake Live
+
+Method: `plugins/weaponlab.py` puts two fully controlled bots on a 1,408-unit flat stretch of Campgrounds and
+fires controlled setups (4 repetitions; the first of each is discarded as a setup glitch), logging health and
+velocity every frame. `sim/validate_weapons.py` replays the identical setup in the duel simulator.
+Data: `data/weaponlab/`, `data/weaponlab2/`. Real damage includes ~1 point of health decay (tests start at 200 hp).
+
+| Test | Real: damage / hit frame / knockback (horizontal, vertical) | Simulator after fixes |
+|---|---|---|
+| Rocket at the body, 400 units | 100 / 17 / 449, -24 | 100 / 17 / 449, -25 |
+| Rocket at the body, 800 units | 101 / 33 / 450, -12 | 100 / 33 / 450, -12 |
+| Rocket at own feet (rocket jump) | 42-43 self damage, 549 u/s up | 42, 550 |
+| Rocket at the floor 0 / 20 / 40 / 60 / 80 / 100 / 120 / 140 units in front | 85 / 81 / 64 / 46 / 38 / 23 / 8 / 0 | 84 / 78 / 63 / 47 / 37 / 23 / 10 / 0 |
+| ...same, knockback (h, v) at 20 / 60 / 100 | (167, 391) / (196, 138) / (104, 49) | (181, 382) / (208, 145) / (116, 54) |
+| Railgun, 1000 units | 80 / frame 2 / 340, 0 | 80 / 2 / 340, -7 |
+| Lightning gun | 6 per 50 ms (120/s), 35 u/s per tick, hits at 700, misses at 800+ | same (range 768) |
+
+What the real game does (now in `sim/duel_env.py`):
+- A shot leaves one frame (25 ms) after the fire command; a rocket does not move on the frame it appears.
+- Rocket speed 1000 u/s. Direct hit 100 damage. Splash: 84 damage and "100 points" of knockback, both falling
+  off linearly to zero at 120 units; the falloff sits ~20 units closer to the target than the plain
+  distance-to-hitbox (calibrated constant).
+- Knockback = 5 u/s per point, times 0.9 on other players (direct hit: 450 u/s), times 1.1 on yourself (rocket
+  at your feet: 550 u/s up); splash pushes upward (Quake 3's +24 on the direction). Own splash damage is halved.
+- Railgun 80 damage, knockback factor 0.85 (340 u/s). Lightning gun 6 damage per 50 ms, range 768, ~35 u/s per tick.
+
+Wrong in the first-pass simulator (and so in the `duel_v1` run): no firing delay, rockets moved on the spawn
+frame, splash knockback mostly sideways instead of up, one knockback factor (1.1) for everything, splash ~20
+units too short, LG knockback too weak. `duel_v1` should be retrained on the corrected simulator.
+
+Not yet measured: weapon switch time, damage through armor, shotgun/grenades/plasma/MG/HMG, air targets.
+
 ## 2026-10-03: duel simulator, first self-play run (`duel_v1`)
 
 Setup: `sim/duel_env.py` (2 players per match, RL/RG/LG with infinite ammo, QL damage/splash/knockback,
