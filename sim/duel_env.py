@@ -89,7 +89,7 @@ class DuelEnv:
         self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in self.w.spawns()], np.float32)
         self.close_p = close_p
-        self.level = 0.99                               # pitch eases slowly back toward level (1.0 = off)
+        self.level = 0.95                               # pitch eases back toward level (1.0 = off). 0.99 let it drift to floor/sky
         self.drill_p = 0.0                              # share of rounds where both players have ONE weapon
         self.mode = np.zeros(n_matches, np.int64)       # per match: 0 = normal, 1 RL only, 2 RG only, 3 LG only
         self.mg_ok = np.ones(2 * n_matches, bool)
