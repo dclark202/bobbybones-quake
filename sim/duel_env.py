@@ -264,8 +264,11 @@ class DuelEnv:
             dd = np.linalg.norm(tov, axis=1) + 1e-6
             u = (tov / dd[:, None]).astype(np.float32)
             infov = ((u * fdir).sum(1) > FOV_COS) & (dd < 1500)
-            fr = self.w.rays_each(eye, u[:, None, :], 1500.0)[:, 0]
-            sees = infov & (fr * 1500.0 >= dd - 24)
+            sees = np.zeros(n, bool)
+            ci = np.nonzero(infov)[0]                         # only trace toward items in view and in range
+            if len(ci):
+                fr = self.w.rays_each(eye[ci], u[ci][:, None, :], 1500.0)[:, 0]
+                sees[ci] = fr * 1500.0 >= dd[ci] - 24
             isup = up[ar, it]
             items[:, 6 * j:6 * j + 3] = rot(p - pos) / 1000.0
             items[:, 6 * j + 3] = 1.0
