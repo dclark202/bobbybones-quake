@@ -39,7 +39,7 @@ WEAPONS = ("rl", "rg", "lg", "mg")
 ACTION_DIMS = (3, 3, 2, len(TURN), len(PITCH), 2, 5)   # forward, strafe, jump, turn, pitch, fire, weapon (keep/RL/RG/LG/MG)
 N_WALL, N_FLOOR, N_ROCK = 16, 8, 2
 SLOTS = ("MH", "RA", "YA", "GA", "RL", "RG", "LG")     # nearest item of each kind is an input
-OBS_DIM = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 12 + 6 * N_ROCK + 4 + 3 + 3 + 6 * len(SLOTS)
+OBS_DIM = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 6 * N_ROCK + 4 + 3 + 3 + 6 * len(SLOTS)
 
 ROCKET_SPEED, ROCKET_DMG, SPLASH_DMG, SPLASH_R, REFIRE = 1000.0, 100.0, 84.0, 120.0, 0.8
 RG_DMG, RG_REFIRE, RG_KNOCK = 80.0, 1.5, 0.85          # measured: 80 damage, 340 u/s knockback
@@ -89,7 +89,10 @@ class DuelEnv:
         self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in self.w.spawns()], np.float32)
         self.close_p = close_p
-        self.level = 0.95                               # pitch easing per frame (1.0 = off, for tests)
+        self.level = 0.99                               # pitch eases slowly back toward level (1.0 = off)
+        self.drill_p = 0.0                              # share of rounds where both players have ONE weapon
+        self.mode = np.zeros(n_matches, np.int64)       # per match: 0 = normal, 1 RL only, 2 RG only, 3 LG only
+        self.mg_ok = np.ones(2 * n_matches, bool)
         self.round_len = 15.0                           # seconds; matches restart (players near each other) after this
         self.round_t = self.rng.uniform(0, 15.0, n_matches).astype(np.float32)
         self.spots = None
@@ -143,9 +146,14 @@ class DuelEnv:
         self.cmd[i] = 0.0
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
         has, ammo = LOADOUTS[self.loadout]
+        mode = int(self.mode[i // 2])
+        if mode:                                        # weapon drill: only this weapon, ammo never runs out
+            has = tuple(k == mode - 1 for k in range(3))
+            ammo = tuple(AMMO_MAX[k] if k == mode - 1 else 0 for k in range(3))
+        self.mg_ok[i] = mode == 0
         self.has[i] = has
         self.ammo[i] = ammo
-        self.weapon[i] = 0 if has[0] else 3
+        self.weapon[i] = mode - 1 if mode else (0 if has[0] else 3)
         self.seen_t[i] = 9.0
         self.ra[i] = False
         self.fire_q[i] = False
@@ -228,15 +236,31 @@ class DuelEnv:
         fdir = np.stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
         # opponent: exact when visible, last known (noisy) when heard / remembered
         opp = np.arange(n) ^ 1
-        rel = rot(self.known - pos) / 1000.0
-        exact = self.visible.astype(np.float32)
-        ovel = rot(vel[opp]) / 400.0 * exact[:, None]
-        to = self.known - eye
+        # Reaction time: what the player knows about the opponent (where, how fast, visible or not) is
+        # REACT_FRAMES old. The player's own view is current, so the crosshair-to-enemy readings respond to
+        # mouse movement immediately, as on a real screen.
+        self.opp_hist.append((self.known.copy(), self.visible.copy(), vel[opp].copy(), self.seen_t.copy()))
+        if len(self.opp_hist) > REACT_FRAMES + 1:
+            self.opp_hist.pop(0)
+        known, visible, opp_vel, seen_t = self.opp_hist[0]
+        rel = rot(known - pos) / 1000.0
+        exact = visible.astype(np.float32)
+        ovel = rot(opp_vel) / 400.0 * exact[:, None]
+        to = known + np.array([0, 0, 4.0], np.float32) - eye
         hd = np.hypot(to[:, 0], to[:, 1]) + 1e-6
         ang_yaw = np.arctan2(to[:, 1], to[:, 0]) - yaw
         ang_pit = -np.arctan2(to[:, 2], hd) - pit
-        opp_feat = np.concatenate([[exact], [np.exp(-self.seen_t)], rel.T, ovel.T, [np.sin(ang_yaw)], [np.cos(ang_yaw)],
-                                   [np.cos(ang_pit)], [np.sin(ang_pit)]], 0).T * (self.seen_t < 5)[:, None]
+        # reticle distance to the enemy, in degrees: coarse (+-15) and fine (+-2) readings, both axes
+        ey = np.degrees((ang_yaw + np.pi) % (2 * np.pi) - np.pi)
+        ep_ = np.degrees(ang_pit)
+        dist3 = np.linalg.norm(to, axis=1) + 1e-6
+        on_target = self._seg_box(eye, eye + fdir.astype(np.float32) * 4000.0, known) & visible
+        size = np.degrees(np.arctan2(20.0, dist3)) / 10.0      # how big the target looks
+        opp_feat = np.concatenate([[exact], [np.exp(-seen_t)], rel.T, ovel.T, [np.sin(ang_yaw)], [np.cos(ang_yaw)],
+                                   [np.cos(ang_pit)], [np.sin(ang_pit)],
+                                   [np.clip(ey / 15.0, -1, 1)], [np.clip(ey / 2.0, -1, 1)],
+                                   [np.clip(ep_ / 15.0, -1, 1)], [np.clip(ep_ / 2.0, -1, 1)],
+                                   [on_target.astype(np.float32)], [np.clip(size, 0, 1)]], 0).T * (seen_t < 5)[:, None]
         # incoming rockets (the opponent's), nearest N_ROCK
         rk = np.zeros((n, 6 * N_ROCK), np.float32)
         orp, orv, ora = self.rp[opp], self.rv[opp], self.ra[opp]
@@ -274,11 +298,6 @@ class DuelEnv:
             items[:, 6 * j + 3] = 1.0
             items[:, 6 * j + 4] = sees & isup
             items[:, 6 * j + 5] = sees & ~isup
-        # reaction time: the opponent part of the observation is what the player saw REACT_FRAMES ago
-        self.opp_hist.append(opp_feat.astype(np.float32))
-        if len(self.opp_hist) > REACT_FRAMES + 1:
-            self.opp_hist.pop(0)
-        opp_feat = self.opp_hist[0]
         own = np.stack([self.hp / 200.0, self.armor / 200.0, np.minimum(self.cool, 1.5) / 1.5, self.pitch / 90.0,
                         (self.hp <= 0).astype(np.float32)], 1)
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], own, self.mv / 30.0, walls, floors, opp_feat, rk,
@@ -302,7 +321,7 @@ class DuelEnv:
         turn, dpit = self.mv[:, 0], self.mv[:, 1]
         # weapon switch (only to weapons owned)
         want = np.where(a[:, 6] == 0, self.weapon, a[:, 6].astype(np.int64) - 1)
-        owned = np.concatenate([self.has, np.ones((n, 1), bool)], 1)[np.arange(n), want]
+        owned = np.concatenate([self.has, self.mg_ok[:, None]], 1)[np.arange(n), want]
         want = np.where(owned, want, self.weapon)
         sw = want != self.weapon
         self.weapon = want
@@ -327,11 +346,12 @@ class DuelEnv:
         # move on the frame it appears.
         self.cool = np.maximum(0.0, self.cool - DT)
         do_fire, do_w = self.fire_q, self.fire_w
-        ammo_ok = np.concatenate([self.ammo > 0, np.ones((n, 1), bool)], 1)[np.arange(n), self.weapon]
+        ammo_ok = np.concatenate([self.ammo > 0, self.mg_ok[:, None]], 1)[np.arange(n), self.weapon]
         shoot = fire & (self.cool <= 0) & ammo_ok
         self.cool = np.where(shoot, np.array([REFIRE, RG_REFIRE, LG_TICK, MG_TICK])[self.weapon], self.cool)
+        drill = np.repeat(self.mode > 0, 2)
         for wi in range(3):
-            self.ammo[:, wi] -= shoot & (self.weapon == wi)
+            self.ammo[:, wi] -= shoot & (self.weapon == wi) & ~drill
         self.fire_q, self.fire_w = shoot, self.weapon.copy()
         kill_w = {}
         kicked = False
@@ -447,6 +467,8 @@ class DuelEnv:
                     continue                                  # the other player took it this frame
                 kind, val, resp, cap, lab = self.item_def[it]
                 took = False
+                if self.mode[m] and kind in ("wp", "am", "pack"):
+                    continue                                  # weapon drill: no other weapons or ammo
                 gain = 0.0
                 if kind == "hp" and self.hp[i] < cap:
                     gain = min(cap, self.hp[i] + val) - self.hp[i]
@@ -508,6 +530,7 @@ class DuelEnv:
         ends = np.nonzero(self.round_t > self.round_len * self.rng.uniform(0.67, 1.33, self.M))[0]
         for m in ends:
             self.round_t[m] = 0.0
+            self.mode[m] = int(self.rng.integers(1, 4)) if self.rng.random() < self.drill_p else 0
             a_, b_ = 2 * m, 2 * m + 1
             done[a_] = done[b_] = True
             self._spawn(a_, avoid=None)

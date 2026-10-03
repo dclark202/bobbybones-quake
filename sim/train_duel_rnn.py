@@ -27,12 +27,13 @@ ROOT = os.path.dirname(HERE)
 DT_MIN = 0.025 / 60.0
 
 
-def worker(remote, bsp, matches, seed, nav, loadout, item_reward):
+def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
     env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout)
     env.item_reward = item_reward
+    env.drill_p = drill_p
     remote.send(env.observe())
     last = dict(env.stats)
     while True:
@@ -73,6 +74,8 @@ def main():
     ap.add_argument("--item-reward", type=float, default=0.05, help="reward per 100 points of health/armor picked up")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
+    ap.add_argument("--drill-p", type=float, default=0.75,
+                    help="share of rounds where both players have one weapon only (rockets, rail or LG, equal chance)")
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
 
@@ -92,7 +95,7 @@ def main():
         p_main, p_work = mp.Pipe()
         mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches, 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
-                                        a.item_reward), daemon=True).start()
+                                        a.item_reward, a.drill_p), daemon=True).start()
         pipes.append(p_main)
     obs = np.concatenate([p.recv() for p in pipes])
     N = len(obs)
