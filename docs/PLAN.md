@@ -36,9 +36,13 @@ Findings and numbers go in [FINDINGS.md](FINDINGS.md).
    Original item: **Check weapons against the real game first**: controlled tests on a real server (rocket direct/splash by
    distance, self-splash for rocket jumps, rail, LG damage and range, knockback, rocket speed), same setups in
    the simulator, fix the simulator until they match. Training in the simulator is only trusted after this.
-2. **Smooth, human-like aim that can still flick**: continuous mouse-style turning (fine control for tracking,
+2. IN CODE, training in `duel_v2`: mouse-like aim (21 turn speeds 0.1-60 deg/frame, view inertia, small jerk cost).
+   Original item: **Smooth, human-like aim that can still flick**: continuous mouse-style turning (fine control for tracking,
    large fast moves allowed for flicks), a cost on jitter. Fixes the video jitter; needed for rail/LG.
-3. **Items in the duel simulator**: every item on the 3 maps with QL rules and timers; items must be picked up.
+3. IN CODE, training in `duel_v2`: all health/armor/weapon/ammo items with timers, armor absorption, decay,
+   limited ammo, machine-gun fallback, spawn with the full set ("full" loadout; "mg" = pick everything up).
+   Pickup amounts, ammo caps, MG damage and switch time still to be measured on the real server.
+   Original item: **Items in the duel simulator**: every item on the 3 maps with QL rules and timers; items must be picked up.
    Option (curriculum): spawn with the full weapon set while learning to aim, ammo/pickups still matter.
 4. **Combine skills + memory**: start duel training from the movement skills, switch to the recurrent model.
 5. **Nav builder: running-start jumps** (Aerowalk Red Armor reachable).

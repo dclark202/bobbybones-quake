@@ -45,6 +45,13 @@ def simulate(env, rec):
     env.yaw[:] = [rec["yaw"], rec["yaw"] + 180]
     env.pitch[:] = [rec["pitch"], 0.0]
     env.hp[:] = 200.0
+    env.armor[:] = 0.0
+    env.has[:] = True
+    env.ammo[:] = 100.0
+    env.item_up[:] = False                                   # no pickups during the tests
+    env.item_t[:] = 1e9
+    env.mv[:] = 0.0
+    env.fire_q[:] = False
     env.cool[:] = 0.0
     env.weapon[:] = weapon
     env.ra[:] = False

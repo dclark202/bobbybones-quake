@@ -68,8 +68,9 @@ def main():
     pipes = []
     for w in range(a.workers):
         p_main, p_work = mp.Pipe()
-        mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", a.map + ".bsp"), a.matches,
-                                        2000 + w, os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(a.map))),
+        m = a.map.split(",")[w % len(a.map.split(","))]        # workers are spread over the maps
+        mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches,
+                                        2000 + w, os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m))),
                    daemon=True).start()
         pipes.append(p_main)
     obs = np.concatenate([p.recv() for p in pipes])
@@ -196,7 +197,12 @@ def main():
                    rj=round(agg["rj"] / max(1, agg["players"]), 4),
                    rg_hit=round(agg["rg_hits"] / max(1, agg["rg_shots"]), 3),
                    lg_hit=round(agg["lg_hits"] / max(1, agg["lg_frames"]), 3),
-                   frag_share_rl_rg_lg=[round(agg[k] / max(1, agg["frags"]), 2) for k in ("rl_frags", "rg_frags", "lg_frags")],
+                   mg_hit=round(agg["mg_hits"] / max(1, agg["mg_frames"]), 3),
+                   frag_share_rl_rg_lg_mg=[round(agg[k] / max(1, agg["frags"]), 2)
+                                           for k in ("rl_frags", "rg_frags", "lg_frags", "mg_frags")],
+                   pickups_per_player_min={k[5:]: round(agg[k] / (2 * sim_min), 2)
+                                           for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_am")},
+                   jerk_deg_per_frame=round(agg["jerk"] / max(1, agg["players"]), 2),
                    reward=round(float(b_rew.mean()), 4), entropy=round(float(ent), 3), close_p=round(close_p, 2))
         log.write(json.dumps(rec) + "\n")
         log.flush()
