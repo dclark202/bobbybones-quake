@@ -12,3 +12,7 @@ sim/qsim.dll
 sim/qsim.lib
 sim/qsim.exp
 sim/__pycache__/
+tools/demodump/build/
+tools/demodump/*.exe
+tools/demodump/*.lib
+tools/demodump/*.exp

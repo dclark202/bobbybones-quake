@@ -46,7 +46,8 @@ Findings and numbers go in [FINDINGS.md](FINDINGS.md).
    Option (curriculum): spawn with the full weapon set while learning to aim, ammo/pickups still matter.
 4. **Combine skills + memory**: start duel training from the movement skills, switch to the recurrent model.
 5. **Nav builder: running-start jumps** (Aerowalk Red Armor reachable).
-6. **Pro-demo pipeline**: parser + inferring the pros' keys with the simulator.
+6. **Pro-demo pipeline** (owner: start with Blood Run and Aerowalk only, 226 + 148 recent demos; fetch more
+   or older demos later if needed): parser + inferring the pros' keys with the simulator.
 7. **Public server stays off** until a model beats the Nightmare bots reliably.
 Done: duel run reviewed (FINDINGS.md); everything committed and pushed (a04f9e2).
 
