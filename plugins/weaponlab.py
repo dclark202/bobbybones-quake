@@ -1,14 +1,13 @@
 """weaponlab: measure Quake Live's real weapon numbers so the duel simulator can be checked against them.
 
 Two fully controlled bots on a long flat stretch of Campgrounds. For each test the shooter fires one setup and
-both bots' health, armor, position and velocity are logged every frame for 1.2 s. Tests (each repeated):
-  rl_body       rocket at the target's body from 400 units
-  rl_floor_<d>  rocket at the floor d units in front of the target's feet (splash falloff + knockback)
-  rl_self       rocket straight down at the shooter's own feet (rocket jump)
-  rl_speed      rocket at the body from 800 units (travel time)
-  rg_body       railgun at the body from 1000 units
-  lg_<d>        lightning gun held 1 s at the target from d units (damage per frame, range)
-Load with QLX_PLUGINS="botctl, weaponlab" and LAB_MAP=campgrounds. Writes /tmp/practice/weaponlab.jsonl.
+both bots' health, armor, position and velocity are logged every frame. Test names: <weapon>_<what>:
+  *_body / *_<dist>   shot(s) at the target's body from that distance (default 400)
+  *_floor_<d>         one shot at the floor d units in front of the target's feet (splash falloff + knockback)
+  *_self              one shot straight down at the shooter's own feet
+  lg/mg/hmg/pg/g      held for 1 s with the target pinned in place (damage rate, range, projectile speed)
+WEAPONLAB_SET=1 (default): rockets, rail, lightning. =2: machine gun, heavy machine gun, shotgun, plasma,
+grenades, gauntlet. Load with QLX_PLUGINS="botctl, weaponlab". Writes /tmp/practice/weaponlab.jsonl.
 """
 import json
 import math
@@ -20,10 +19,32 @@ import minqlx
 D = "/tmp/practice"
 LINE_START = (-1377.0, -817.0, 538.1)       # longest flat, clear floor run on Campgrounds (1408 units, simulator search)
 LINE_YAW = 0.0
-TESTS = (["rl_body", "rl_self", "rl_speed", "rg_body"] + ["rl_floor_{}".format(d) for d in (0, 20, 40, 60, 80, 100, 120, 140)] +
-         ["lg_300", "lg_700", "lg_800", "lg_850", "lg_875", "lg_900", "lg_925", "lgkick_300"])
+WEAPON = {"g": 1, "mg": 2, "sg": 3, "gl": 4, "rl": 5, "lg": 6, "rg": 7, "pg": 8, "hmg": 14}
 REPEATS = 4
-WEAPON = {"rl": 5, "lg": 6, "rg": 7}
+
+
+def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0):
+    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off)
+
+
+SETS = {
+    "1": dict(
+        [("rl_body", spec("rl")), ("rl_self", spec("rl", aim="self")), ("rl_speed", spec("rl", dist=800)),
+         ("rg_body", spec("rg", dist=1000))] +
+        [("rl_floor_{}".format(d), spec("rl", aim="floor", off=d)) for d in (0, 20, 40, 60, 80, 100, 120, 140)] +
+        [("lg_{}".format(d), spec("lg", dist=d, hold=40, pin=True)) for d in (300, 700, 750, 800)] +
+        [("lgkick_300", spec("lg", dist=300, hold=2))]),
+    "2": dict(
+        [("mg_400", spec("mg", hold=40, pin=True)), ("mgkick_400", spec("mg", hold=2)),
+         ("hmg_400", spec("hmg", hold=40, pin=True)), ("hmgkick_400", spec("hmg", hold=2)),
+         ("sg_100", spec("sg", dist=100)), ("sg_300", spec("sg", dist=300)), ("sg_600", spec("sg", dist=600)),
+         ("pg_400", spec("pg", hold=40, pin=True)), ("pg_800", spec("pg", dist=800, hold=40, pin=True)),
+         ("pgkick_400", spec("pg", hold=1)), ("pg_self", spec("pg", aim="self"))] +
+        [("pg_floor_{}".format(d), spec("pg", aim="floor", off=d)) for d in (0, 10, 20, 30)] +
+        [("gl_150", spec("gl", dist=150, frames=140)), ("gl_self", spec("gl", aim="self", frames=140)),
+         ("g_40", spec("g", dist=40, hold=40, pin=True)), ("g_70", spec("g", dist=70, hold=40, pin=True))]),
+}
+TESTS = SETS[os.environ.get("WEAPONLAB_SET", "1")]
 
 
 def is_bot(p):
@@ -46,12 +67,9 @@ class weaponlab(minqlx.Plugin):
         return [p for p in self.players() if is_bot(p) and p.team != "spectator"]
 
     def setup_test(self, shooter, target, name):
+        sp_ = TESTS[name]
         dirx, diry = math.cos(math.radians(LINE_YAW)), math.sin(math.radians(LINE_YAW))
-        dist = {"rl_speed": 800.0, "rg_body": 1000.0}.get(name, 400.0)
-        if name.startswith("lg_"):
-            dist = float(name[3:])
-        if name.startswith("lgkick_"):
-            dist = float(name[7:])
+        dist = float(sp_["dist"])
         sx, sy, sz = LINE_START
         sp = (sx + dirx * 64, sy + diry * 64, sz + 2)
         tp = (sp[0] + dirx * dist, sp[1] + diry * dist, sz + 2)
@@ -60,25 +78,23 @@ class weaponlab(minqlx.Plugin):
             p.velocity(reset=True)
             p.health = 200
             p.armor = 0
-            p.weapons(g=True, mg=True, rl=True, lg=True, rg=True)
-            p.ammo(rl=50, lg=200, rg=50, mg=100)
-        wname = name.split("_")[0].replace("lgkick", "lg")
-        # aim point
+            p.weapons(g=True, mg=True, sg=True, gl=True, rl=True, lg=True, rg=True, pg=True, hmg=True)
+            p.ammo(mg=150, sg=25, gl=25, rl=50, lg=200, rg=50, pg=200, hmg=200)
         eye = (sp[0], sp[1], sp[2] + 26.0)
-        if name == "rl_self":
+        if sp_["aim"] == "self":
             pitch, yaw = 89.0, LINE_YAW
         else:
-            if name.startswith("rl_floor_"):
-                off = float(name.split("_")[2])
+            if sp_["aim"] == "floor":
+                off = float(sp_["off"])
                 aim = (tp[0] - dirx * (15 + off), tp[1] - diry * (15 + off), tp[2] - 24.0)   # floor, in front of the box
             else:
                 aim = (tp[0], tp[1], tp[2] + 4.0)                                            # body centre
             dx, dy, dz = aim[0] - eye[0], aim[1] - eye[1], aim[2] - eye[2]
             pitch = -math.degrees(math.atan2(dz, math.hypot(dx, dy)))
             yaw = math.degrees(math.atan2(dy, dx))
-        self.cur = dict(name=name, tpos=tp, shooter=shooter.id, target=target.id, weapon=WEAPON[wname], pitch=pitch, yaw=yaw,
-                        frame=-30, dist=dist, rows=[])
-        minqlx.set_bot_input(shooter.id, 0, 0, 0, 0, WEAPON[wname], pitch, yaw)
+        self.cur = dict(name=name, spec=sp_, tpos=tp, shooter=shooter.id, target=target.id, weapon=WEAPON[sp_["weapon"]],
+                        pitch=pitch, yaw=yaw, frame=-30, dist=dist, rows=[])
+        minqlx.set_bot_input(shooter.id, 0, 0, 0, 0, self.cur["weapon"], pitch, yaw)
         minqlx.set_bot_input(target.id, 0, 0, 0, 0, 2, 0.0, LINE_YAW + 180.0)
 
     def on_frame(self):
@@ -111,28 +127,33 @@ class weaponlab(minqlx.Plugin):
             return
         c["frame"] += 1
         f = c["frame"]
+        sp_ = c["spec"]
         if f < 0:                                               # settle, weapon up, keep both still
             if f == -10:
                 for p in (shooter, target):
                     p.health = 200
                     p.armor = 0
                     p.velocity(reset=True)
+                tgt = self.player(c["target"])
+                if tgt is not None:
+                    tgt.position(x=c["tpos"][0], y=c["tpos"][1], z=c["tpos"][2])
             minqlx.set_bot_input(c["shooter"], 0, 0, 0, 0, c["weapon"], c["pitch"], c["yaw"])
             return
-        firing = (f == 0) or (c["name"].startswith("lg_") and f < 40) or (c["name"].startswith("lgkick_") and f < 2)
+        firing = f < sp_["hold"]
         minqlx.set_bot_input(c["shooter"], 0, 0, 0, 1 if firing else 0, c["weapon"], c["pitch"], c["yaw"])
         row = [f]
         for pid in (c["shooter"], c["target"]):
             st = minqlx.player_state(pid)
             row += [st.health, st.armor, *[round(v, 2) for v in st.position], *[round(v, 2) for v in st.velocity]]
         c["rows"].append(row)
-        if c["name"].startswith("lg_"):                       # pin the target so the beam stays on it (damage rate, range)
+        if sp_["pin"]:                                          # keep the target in the line of fire
             tgt = self.player(c["target"])
             if tgt is not None:
                 tgt.position(x=c["tpos"][0], y=c["tpos"][1], z=c["tpos"][2])
                 tgt.velocity(reset=True)
-        if f >= 48:
+        if f >= sp_["frames"]:
             rec = dict(test=c["name"], rep=c["rep"], dist=c["dist"], pitch=round(c["pitch"], 3), yaw=round(c["yaw"], 3),
+                       spec=sp_,
                        cols="frame s_hp s_armor s_x s_y s_z s_vx s_vy s_vz t_hp t_armor t_x t_y t_z t_vx t_vy t_vz",
                        rows=c["rows"])
             with open(os.path.join(D, "weaponlab.jsonl"), "a") as fh:

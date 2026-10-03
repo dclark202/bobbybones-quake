@@ -29,6 +29,7 @@ def metrics(rows):
     i = hit[0] if hit else None
     return dict(t_dmg=f0[9] - min(r[9] for r in rows), s_dmg=f0[1] - min(r[1] for r in rows),
                 hit_frame=rows[i][0] if i is not None else None,
+                n_hits=len(hit),
                 kick_h=round(math.hypot(rows[i][14], rows[i][15])) if i is not None else 0,
                 kick_z=round(rows[i][16]) if i is not None else 0,
                 self_vz=round(max(r[8] for r in rows)))
@@ -38,8 +39,10 @@ def simulate(env, rec):
     rows = rec["rows"]
     f0 = rows[0]
     name = rec["test"]
-    wname = name.split("_")[0].replace("lgkick", "lg")
-    weapon = {"rl": 0, "rg": 1, "lg": 2}[wname]
+    wname = name.split("_")[0].replace("kick", "")
+    weapon = D.WEAPONS.index(wname)
+    sp = rec.get("spec") or dict(hold=40 if name.startswith("lg_") else 2 if name.startswith("lgkick_") else 1,
+                                 pin=name.startswith("lg_"))
     for i, base in ((0, 3), (1, 11)):
         env.w.reset(i, (f0[base], f0[base + 1], f0[base + 2]), (0, 0, 0), rec["yaw"] if i == 0 else rec["yaw"] + 180)
     env.yaw[:] = [rec["yaw"], rec["yaw"] + 180]
@@ -48,6 +51,7 @@ def simulate(env, rec):
     env.armor[:] = 0.0
     env.has[:] = True
     env.ammo[:] = 100.0
+    env.mode[:] = -1
     env.item_up[:] = False                                   # no pickups during the tests
     env.item_t[:] = 1e9
     env.mv[:] = 0.0
@@ -64,12 +68,12 @@ def simulate(env, rec):
         a[:, 0] = a[:, 1] = 1
         a[:, 3] = list(D.TURN).index(0)
         a[:, 4] = list(D.PITCH).index(0)
-        firing = k == 0 or (name.startswith("lg_") and k < 40) or (name.startswith("lgkick_") and k < 2)
+        firing = k < sp["hold"]
         a[0, 5] = 1 if firing else 0
         env.step(a)
         s = env.state
         out.append([k + 1, env.hp[0], 0, *s[0, :3], *s[0, 3:6], env.hp[1], 0, *s[1, :3], *s[1, 3:6]])
-        if name.startswith("lg_"):                           # pinned like the real test
+        if sp["pin"]:                                        # pinned like the real test
             env.w.reset(1, tpos, (0, 0, 0), rec["yaw"] + 180)
             env.state = env.w.state()
     return [[0, 200.0, 0, *f0[3:9], 200.0, 0, *f0[11:17]]] + out
@@ -86,19 +90,19 @@ def main():
     real, sim = defaultdict(list), defaultdict(list)
     for r in recs:
         m = metrics(r["rows"])
-        if m["hit_frame"] is None and m["s_dmg"] < 5 and not r["test"].startswith(("rl_floor_14", "lg_9", "lg_8")):
-            continue                                         # a setup glitch (first repetition), not a measurement
+        if r["rep"] == 0:
+            continue                                         # the first repetition has setup glitches
         real[r["test"]].append(m)
         sim[r["test"]].append(metrics(simulate(env, r)))
-    keys = ("t_dmg", "s_dmg", "hit_frame", "kick_h", "kick_z", "self_vz")
-    print("{:14} {:>26} | {:>26}".format("test", "real: dmg self frame kh kz svz", "sim: dmg self frame kh kz svz"))
+    keys = ("t_dmg", "s_dmg", "hit_frame", "n_hits", "kick_h", "kick_z", "self_vz")
+    print("{:14} {:>30} | {:>30}".format("test", "real: dmg self frame hits kh kz svz", "sim: dmg self frame hits kh kz svz"))
     for t in sorted(real):
         def med(rows, k):
             v = [x[k] for x in rows if x[k] is not None]
             return int(np.median(v)) if v else -1
         rv = [med(real[t], k) for k in keys]
         sv = [med(sim[t], k) for k in keys]
-        print("{:14} {:>26} | {:>26}".format(t, " ".join(str(x) for x in rv), " ".join(str(x) for x in sv)))
+        print("{:14} {:>30} | {:>30}".format(t, " ".join(str(x) for x in rv), " ".join(str(x) for x in sv)))
 
 
 if __name__ == "__main__":

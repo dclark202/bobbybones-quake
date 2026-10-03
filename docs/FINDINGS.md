@@ -5,6 +5,38 @@ lives in the git-ignored `data/` folder (paths given so results can be re-checke
 
 ---
 
+## 2026-10-03 (afternoon): aiming fixed, weapon drills, all nine weapons measured and simulated
+
+**Why self-play only ever used rockets** (`duel_v1`, `duel_v2`, first GRU run: 98-100% of frags):
+1. A structural defect in the inputs: the 150 ms reaction delay was applied to the whole "angle from crosshair to
+   enemy" reading, so the player saw the effect of its own mouse movement 6 frames late. Fixed: only the
+   opponent's state (position, velocity, visible or not) is delayed; the player's own view is current.
+2. No direct reading of the reticle-to-enemy distance. Added: coarse (+-15 deg) and fine (+-2 deg) offsets on both
+   axes, a "crosshair is on the enemy" flag, and the target's apparent size.
+3. Nothing forced practice with rail/LG. Added: weapon drill rounds (both players have exactly one weapon).
+Result (`duel_gru_v2`, 75% drill rounds over RL/RG/LG, 19 minutes in): rail hit rate 0.3% -> 12%, LG 0.2% -> 9%,
+frags by weapon rockets 47% / LG 31% / rail 22%, 5.3 frags per match-minute.
+Also learned the hard way: weakening the view's pull toward level from 5% to 1% per frame made the pitch drift to
+floor/sky again and players stopped seeing each other (3% visible); reverted.
+
+**Remaining weapons measured on a real server** (`plugins/weaponlab.py`, WEAPONLAB_SET=2, `data/weaponlab3/`):
+
+| Weapon | Real Quake Live | Simulator |
+|---|---|---|
+| Machine gun (starting weapon) | 5 per 100 ms, 10 u/s knockback per hit | same |
+| Heavy machine gun | 8 per 75 ms, 25 u/s per hit | same |
+| Shotgun | 100 at 100 units, 60 at 300, 25 at 600; knockback 415 / 254 / 106 | 20 pellets x 5, gaussian spread 3 deg (expected 100 / 61 / 23) |
+| Plasma | 20 per hit every 100 ms, 2000 u/s (first hit frame 9 at 400 units, 17 at 800), 110 u/s knockback; splash 16 / 16 / 10 / 3 at 0 / 10 / 20 / 30 units; at own feet 7-9 damage, 95 u/s lift | same timing; splash 16 / 16 / 10 / 3; own feet 8, 98 u/s |
+| Grenades | 100 direct at 150 units (frame 9, 542 u/s knockback), 2.5 s fuse, own feet 44 damage / 277 u/s lift | direct 100, frame 9, 544; own feet 53 / 650 (NOT matched: bounce before the fuse) |
+| Gauntlet | 50 per ~425 ms, hits at 40 units, not at 70; 219 u/s | same |
+
+Model changes from these: plasma moves on the frame it appears (rockets and grenades do not); grenades get Quake's
+loft (+0.2 on the forward z); splash knockback = 5 u/s x splash damage x 1.07 on others, x 1.3 on yourself (fits
+rockets 450 / 549 and plasma 80 / 95); refire timer rounding fixed (machine guns were firing 20% slow).
+Bug found by a smoke test: a projectile at rest (grenade on the floor) counted as a direct hit on the opponent
+anywhere (zero-length segment in the hit test). Fixed in `sim/duel_env.py`; the frozen `duel_env_v2.py` used by
+the running job only has it for exactly axis-parallel or zero-length shots.
+
 ## 2026-10-03 (afternoon): weapons checked against real Quake Live
 
 Method: `plugins/weaponlab.py` puts two fully controlled bots on a 1,408-unit flat stretch of Campgrounds and

@@ -27,13 +27,15 @@ ROOT = os.path.dirname(HERE)
 DT_MIN = 0.025 / 60.0
 
 
-def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p):
+def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
     env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout)
     env.item_reward = item_reward
     env.drill_p = drill_p
+    from duel_env import WEAPONS
+    env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
     remote.send(env.observe())
     last = dict(env.stats)
     while True:
@@ -75,14 +77,15 @@ def main():
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
     ap.add_argument("--drill-p", type=float, default=0.75,
-                    help="share of rounds where both players have one weapon only (rockets, rail or LG, equal chance)")
+                    help="share of rounds where both players have one weapon only")
+    ap.add_argument("--drill-weapons", default="rl,rg,lg", help="weapons used in drill rounds (equal chance)")
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
 
     import torch
     import torch.nn as nn
     sys.path.insert(0, HERE)
-    from duel_env import ACTION_DIMS, OBS_DIM
+    from duel_env import ACTION_DIMS, OBS_DIM, WEAPONS
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if dev.type == "cpu":
         torch.set_num_threads(6)
@@ -95,7 +98,7 @@ def main():
         p_main, p_work = mp.Pipe()
         mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches, 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
-                                        a.item_reward, a.drill_p), daemon=True).start()
+                                        a.item_reward, a.drill_p, a.drill_weapons), daemon=True).start()
         pipes.append(p_main)
     obs = np.concatenate([p.recv() for p in pipes])
     N = len(obs)
@@ -271,12 +274,8 @@ def main():
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    frags_per_match_min=round(agg["frags"] / sim_min, 3),
                    suicides_per_match_min=round(agg["suicides"] / sim_min, 3),
-                   rocket_hit=round((agg["direct"] + agg["splash_hits"]) / max(1, agg["shots"]), 3),
-                   rg_hit=round(agg["rg_hits"] / max(1, agg["rg_shots"]), 3),
-                   lg_hit=round(agg["lg_hits"] / max(1, agg["lg_frames"]), 3),
-                   mg_hit=round(agg["mg_hits"] / max(1, agg["mg_frames"]), 3),
-                   frag_share_rl_rg_lg_mg=[round(agg[k] / max(1, agg["frags"]), 2)
-                                           for k in ("rl_frags", "rg_frags", "lg_frags", "mg_frags")],
+                   hit_rate={w: round(agg[w + "_hits"] / max(1, agg[w + "_shots"]), 3) for w in WEAPONS},
+                   frag_share={w: round(agg[w + "_frags"] / max(1, agg["frags"]), 2) for w in WEAPONS},
                    pickups_per_player_min={k[5:]: round(agg[k] / (2 * sim_min), 2)
                                            for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_am")},
                    visible=round(agg["visible"] / max(1, agg["players"]), 3),
