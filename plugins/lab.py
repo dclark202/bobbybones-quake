@@ -1,6 +1,7 @@
 """lab: supervisor that keeps the BobbyBones server in its intended state, no matter what.
 
-- always LAB_MAP (default bloodrun) in duel; anything else is corrected within seconds
+- always a map from LAB_MAPS (default: just LAB_MAP) in duel; anything else is corrected within seconds.
+  Map votes are allowed only for maps in the pool; the owner can switch with !map <name>
 - permanent warmup: any match countdown/start is aborted
 - map/kick votes blocked (nobody votes Bobby off or changes the map)
 - BobbyBones present and named, item run + combat running, recording on
@@ -13,10 +14,12 @@ import time
 import minqlx
 
 LAB_MAP = os.environ.get("LAB_MAP", "bloodrun")
+LAB_MAPS = [m.strip().lower() for m in os.environ.get("LAB_MAPS", LAB_MAP).split(",") if m.strip()]
 TRAIN = os.environ.get("LAB_MODE") == "train"
 # training: real 10-minute matches vs rotating Nightmare (skill 5) bots
 OPPONENTS = os.environ.get("LAB_OPPONENTS", "sarge,anarki,visor,xaero,klesk,doom,keel,major,orbb,ranger,slash,uriel,hunter,mynx,razor,sorlag").split(",")
 RESULTS = "/tmp/practice/results.jsonl"
+HUMAN_LOG = "/tmp/practice/human_results.jsonl"   # public: every frag between Bobby and a human, by steam id
 DEADLINE = float(os.environ.get("TRAIN_DEADLINE", "0") or 0)   # unix time; trainers go idle after it
 SPAR = os.environ.get("LAB_SPAR") == "1"         # training in permanent warmup: all weapons, endless fighting
 SPAR_ROUND = 600.0                                 # seconds per scored round (kills vs deaths)
@@ -45,8 +48,10 @@ class lab(minqlx.Plugin):
         self.opp_i = int(os.environ.get("LAB_OPPONENT_START", "0"))
         self.add_hook("vote_called", self.on_vote)
         self.add_hook("player_loaded", self.on_loaded)
+        self.add_command("map", self.cmd_map, permission=5, usage="<{}>".format("|".join(LAB_MAPS)))
         self.next_check = 0.0
         self.fixing_map_until = 0.0
+        self.hum = dict(hp={}, fired={})
 
     def log(self, msg):
         minqlx.console_print("[lab] " + msg + "\n")
@@ -58,7 +63,7 @@ class lab(minqlx.Plugin):
 
     # ---- events ----
     def on_map(self, mapname, factory):
-        if mapname.lower() != LAB_MAP or factory != LAB_FACTORY:
+        if mapname.lower() not in LAB_MAPS or factory != LAB_FACTORY:
             self.fix_map()
 
     def on_countdown(self, *args):
@@ -69,7 +74,17 @@ class lab(minqlx.Plugin):
     def abort_later(self):
         minqlx.console_command("abort")
 
+    def cmd_map(self, player, msg, channel):
+        m = msg[1].lower() if len(msg) > 1 else ""
+        if m not in LAB_MAPS:
+            channel.reply("^3Map pool: {}".format(", ".join(LAB_MAPS)))
+            return
+        self.log("owner map change -> {}".format(m))
+        minqlx.console_command("map {} {}".format(m, LAB_FACTORY))
+
     def on_vote(self, caller, vote, args):
+        if vote.lower() == "map" and args and args.split()[0].lower() in LAB_MAPS and len(LAB_MAPS) > 1:
+            return                                         # map votes within the pool are fine
         if vote.lower() in ("map", "kick", "clientkick", "map_restart", "nextmap", "g_gametype", "teamsize"):
             caller.tell("^3That vote is disabled on the BobbyBones lab.")
             return minqlx.RET_STOP_ALL
@@ -97,6 +112,13 @@ class lab(minqlx.Plugin):
 
     def on_frame(self):
         now = time.time()
+        if not TRAIN:
+            try:
+                self.human_frame(now)
+            except Exception as e:
+                if now > getattr(self, "hum_err", 0):
+                    self.hum_err = now + 60
+                    self.log("human log error: {!r}".format(e))
         if now < self.next_check:
             return
         self.next_check = now + CHECK_EVERY
@@ -113,7 +135,7 @@ class lab(minqlx.Plugin):
                 for p in bots:
                     minqlx.console_command("kick {}".format(p.id))
             return
-        if (minqlx.get_cvar("mapname") or "").lower() != LAB_MAP or minqlx.get_cvar("g_factory") not in (None, "", LAB_FACTORY):
+        if (minqlx.get_cvar("mapname") or "").lower() not in LAB_MAPS or minqlx.get_cvar("g_factory") not in (None, "", LAB_FACTORY):
             return self.fix_map()
         if now < self.fixing_map_until - 12:          # give a fresh map a few seconds to settle
             return
@@ -191,7 +213,7 @@ class lab(minqlx.Plugin):
             sp["hp"][side] = hp
         if now - sp["start"] >= SPAR_ROUND:
             ir = minqlx.Plugin._loaded_plugins.get("itemrun")
-            res = dict(t=now, map=LAB_MAP, variant="control" if CONTROL else "bobby", mode="spar",
+            res = dict(t=now, map=(minqlx.get_cvar("mapname") or LAB_MAP).lower(), variant="control" if CONTROL else "bobby", mode="spar",
                        bobby_score=sp["kills"], opp=o.clean_name, opp_score=sp["deaths"],
                        aggr=getattr(ir, "aggr", None) if not CONTROL else None,
                        container=os.environ.get("HOSTNAME", "?"))
@@ -220,11 +242,12 @@ class lab(minqlx.Plugin):
             cand = [c["gen"], c["id"]]                      # which tuning candidate played this match
         except Exception:
             pass
-        res = dict(t=time.time(), map=LAB_MAP, cand=cand,
+        res = dict(t=time.time(), map=(minqlx.get_cvar("mapname") or LAB_MAP).lower(), cand=cand,
                    variant="control" if CONTROL else "bobby-" + os.environ.get("LAB_VARIANT", "full"),
                    mode="spar" if SPAR else "match", aggr=getattr(ir, "aggr", None) if not CONTROL else None,
                    bobby_score=bobby[0].score, opp=opp[0].clean_name,
-                   opp_score=opp[0].score, container=os.environ.get("HOSTNAME", "?"))
+                   opp_score=opp[0].score, container=os.environ.get("HOSTNAME", "?"),
+                   layers=dict(getattr(ir, "layer_stats", None) or {}) if ir is not None and not CONTROL else None)
         with open(RESULTS, "a") as f:
             f.write(json.dumps(res) + "\n")
         self.log("match over: BobbyBones {} - {} {}".format(res["bobby_score"], res["opp_score"], res["opp"]))
@@ -232,6 +255,37 @@ class lab(minqlx.Plugin):
             ir.new_round()
         self.opp_i += 1
         self.kick_later(opp[0].id)
+
+    def human_frame(self, now):
+        """public server: warmup keeps no score, so log each death in a Bobby-vs-human fight ourselves.
+        One line per death (who died, who was shooting) keyed by steam id; reports aggregate later."""
+        players = [p for p in self.players() if p.team != "spectator"]
+        bobby = [p for p in players if is_bot(p) and "Bobby" in p.clean_name.replace(" ", "")]
+        humans = [p for p in players if not is_bot(p)]
+        if not bobby or not humans:
+            self.hum["hp"].clear()
+            return
+        b = bobby[0]
+        for p in [b] + humans:
+            if minqlx.last_usercmd(p.id)[1] & 1:
+                self.hum["fired"][p.id] = now
+        for p in [b] + humans:
+            st = p.state
+            hp = st.health if st else 0
+            was = self.hum["hp"].get(p.id, 1)
+            if was > 0 >= hp:
+                if p.id == b.id:
+                    killer = [h for h in humans if now - self.hum["fired"].get(h.id, -1e9) < 2.0]
+                    rows = [dict(died="bobby", by="human" if killer else "self/world", sid=str(h.steam_id),
+                                 name=h.clean_name) for h in (killer or humans[:1])]
+                else:
+                    by = "bobby" if now - self.hum["fired"].get(b.id, -1e9) < 2.0 else "self/world"
+                    rows = [dict(died="human", by=by, sid=str(p.steam_id), name=p.clean_name)]
+                for r in rows:
+                    r.update(t=now, map=(minqlx.get_cvar("mapname") or LAB_MAP).lower(), bobby_wpn=b.state.weapon if b.state else None)
+                    with open(HUMAN_LOG, "a") as f:
+                        f.write(json.dumps(r) + "\n")
+            self.hum["hp"][p.id] = hp
 
     @minqlx.delay(5)
     def kick_later(self, cid):

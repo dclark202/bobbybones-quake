@@ -11,6 +11,8 @@ PyObject* PyMinqlx_SetBotInput(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ClearBotInput(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ViewAngles(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_LastUsercmd(PyObject* self, PyObject* args);
+PyObject* PyMinqlx_RanUsercmd(PyObject* self, PyObject* args);
+PyObject* PyMinqlx_SetBotSubsteps(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ItemStates(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetBotMove(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetBotAim(PyObject* self, PyObject* args);

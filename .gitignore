@@ -7,3 +7,8 @@ minqlx/*.o
 minqlx/HDE/*.o
 minqlx/bin/*.so
 minqlx/bin/minqlx.zip
+sim/build/
+sim/qsim.dll
+sim/qsim.lib
+sim/qsim.exp
+sim/__pycache__/

@@ -21,11 +21,18 @@ typedef struct {
     int weapon;
     float pitch, yaw;
     signed char forward, right, up;
+    int substeps;         // full control: split each command into this many moves (3 = 125 fps human physics)
+    int cleared_bot_flag; // we cleared SVF_BOT so the game moves on every command (restored when off)
+    float prev_yaw;
+    int have_prev_yaw;
 } bot_override_t;
+
+#define BOTCTL_SVF_BOT 0x00000008   // Q3/QL: bots' commands are queued and moved once per server frame
 
 static bot_override_t overrides[MAX_CLIENTS];
 static long long think_calls[MAX_CLIENTS];
 static int ai_wants_fire[MAX_CLIENTS];
+static usercmd_t ran_cmd[MAX_CLIENTS];
 
 SV_ClientThink_ptr SV_ClientThink;
 
@@ -76,9 +83,35 @@ void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd) {
             cmd->angles[0] = (BOTCTL_ANGLE2SHORT(o->pitch) - delta[0]) & 65535;
             cmd->angles[1] = (BOTCTL_ANGLE2SHORT(o->yaw) - delta[1]) & 65535;
             cmd->angles[2] = (0 - delta[2]) & 65535;
+            if (o->substeps > 1) {
+                // Human physics: a 125 fps player sends a command every ~8 ms and each one is moved on its own.
+                // The game only moves bots once per frame, so drop the bot flag while we drive and feed the
+                // frame's 25 ms as substeps commands, turning the view a share of the way on each.
+                gentity_t* ent = &g_entities[id];
+                if (ent->r.svFlags & BOTCTL_SVF_BOT) {
+                    ent->r.svFlags &= ~BOTCTL_SVF_BOT;
+                    o->cleared_bot_flag = 1;
+                }
+                int t0 = ent->client->ps.commandTime, t1 = cmd->serverTime, span = t1 - t0;
+                if (span >= 2 * o->substeps && span <= 100) {
+                    float y0 = o->have_prev_yaw ? o->prev_yaw : o->yaw;
+                    float dy = fmodf(o->yaw - y0 + 540.0f, 360.0f) - 180.0f;
+                    for (int k = 1; k < o->substeps; k++) {
+                        usercmd_t sub = *cmd;
+                        sub.serverTime = t0 + span * k / o->substeps;
+                        float yk = y0 + dy * (float)(sub.serverTime - t0) / (float)span;
+                        sub.angles[1] = (BOTCTL_ANGLE2SHORT(yk) - ent->client->ps.delta_angles[1]) & 65535;
+                        SV_ClientThink(cl, &sub);
+                    }
+                }
+                o->prev_yaw = o->yaw;
+                o->have_prev_yaw = 1;
+            }
         }
     }
 done:
+    if (id >= 0 && id < MAX_CLIENTS)
+        ran_cmd[id] = *cmd;            // the exact command this think runs (cl->lastUsercmd is stale for bots)
     SV_ClientThink(cl, cmd);
 }
 
@@ -111,6 +144,24 @@ PyObject* PyMinqlx_SetBotInput(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
+// set_bot_substeps(client_id, n): with full control (set_bot_input), move the bot n times per server frame
+// like a human client at ~n*40 fps (3 = 125 fps). 0 or 1 turns it off and gives the bot flag back.
+PyObject* PyMinqlx_SetBotSubsteps(PyObject* self, PyObject* args) {
+    int id, n;
+    if (!PyArg_ParseTuple(args, "ii:set_bot_substeps", &id, &n))
+        return NULL;
+    if (!valid_client(id))
+        return NULL;
+    bot_override_t* o = &overrides[id];
+    o->substeps = n > 1 ? (n > 8 ? 8 : n) : 0;
+    o->have_prev_yaw = 0;
+    if (!o->substeps && o->cleared_bot_flag && g_entities) {
+        g_entities[id].r.svFlags |= BOTCTL_SVF_BOT;
+        o->cleared_bot_flag = 0;
+    }
+    Py_RETURN_NONE;
+}
+
 // set_bot_move(client_id, move_yaw, up): hybrid control - AI aims and shoots, we steer
 PyObject* PyMinqlx_SetBotMove(PyObject* self, PyObject* args) {
     int id, up;
@@ -135,6 +186,10 @@ PyObject* PyMinqlx_ClearBotInput(PyObject* self, PyObject* args) {
     if (!valid_client(id))
         return NULL;
     overrides[id].active = 0;
+    if (overrides[id].cleared_bot_flag && g_entities && g_entities[id].client)
+        g_entities[id].r.svFlags |= BOTCTL_SVF_BOT;
+    overrides[id].cleared_bot_flag = 0;
+    overrides[id].substeps = 0;
     Py_RETURN_NONE;
 }
 
@@ -161,6 +216,25 @@ PyObject* PyMinqlx_LastUsercmd(PyObject* self, PyObject* args) {
     usercmd_t* c = &svs->clients[id].lastUsercmd;
     return Py_BuildValue("(iiiiiiL)", c->serverTime, c->buttons, (int)c->weapon,
         (int)c->forwardmove, (int)c->rightmove, (int)c->upmove, think_calls[id]);
+}
+
+// ran_usercmd(client_id) -> (serverTime, buttons, weapon, forward, right, up, pitch, yaw): the last command
+// SV_ClientThink actually ran for this client (after any bot override), view angles in degrees incl. delta
+PyObject* PyMinqlx_RanUsercmd(PyObject* self, PyObject* args) {
+    int id;
+    if (!PyArg_ParseTuple(args, "i:ran_usercmd", &id))
+        return NULL;
+    if (!valid_client(id))
+        return NULL;
+    usercmd_t* c = &ran_cmd[id];
+    float pitch = 0, yaw = 0;
+    if (g_entities && g_entities[id].client) {
+        int* delta = g_entities[id].client->ps.delta_angles;
+        pitch = (float)((c->angles[0] + delta[0]) & 65535) * (360.0f / 65536.0f);
+        yaw = (float)((c->angles[1] + delta[1]) & 65535) * (360.0f / 65536.0f);
+    }
+    return Py_BuildValue("(iiiiiiff)", c->serverTime, c->buttons, (int)c->weapon,
+        (int)c->forwardmove, (int)c->rightmove, (int)c->upmove, pitch, yaw);
 }
 
 // item_states() -> (level_time, [(entity_num, classname, x, y, z, available, nextthink), ...])

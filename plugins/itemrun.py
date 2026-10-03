@@ -35,7 +35,8 @@ PREF_RANGE = {6: 380.0, 5: 350.0, 7: 900.0, 3: 180.0, 8: 300.0, 2: 500.0, 14: 50
 ENGAGE_STACK = 80          # health + armor needed to choose a fight; below it, go get stuff
 ARMED_WITH = ("rl", "lg", "rg", "pg", "sg")   # a real weapon is needed to choose a fight (not just the MG)
 SPRAY = {2, 6, 13, 14}                          # held-trigger tracking weapons: MG, LG, CG, HMG
-# accuracy targets (tunable live: e.g. "bobby_acc_lg 0.45" in the server console); aim self-tunes toward them
+# accuracy targets: reference numbers only, logged next to real accuracy. Aim never loosens itself to hit them
+# (no deliberate misses); its quality comes from the human-like limits (reaction, turn speed, drift).
 ACC_TARGET_CVARS = {6: ("bobby_acc_lg", 0.40), 7: ("bobby_acc_rg", 0.65), 5: ("bobby_acc_rl", 0.70),
                     8: ("bobby_acc_pg", 0.35), 3: ("bobby_acc_sg", 0.50), 14: ("bobby_acc_hmg", 0.40)}
 # "flex": once we've measured the opponent's own accuracy with a weapon, aim for theirs + FLEX_MARGIN
@@ -48,7 +49,7 @@ RESPAWN = {"RA": 25000, "YA": 25000, "MH": 35000, "RL": 5000, "LG": 5000, "RG": 
 TRAINING = os.environ.get("LAB_MODE") == "train"
 # diagnostic split: full = our movement + our aim; aimonly = AI movement + our aim; moveonly = our movement + AI aim
 VARIANT = os.environ.get("LAB_VARIANT", "full")
-EXPLORE = 0.2 if TRAINING else 0.0        # chance per engagement to try a different weapon
+EXPLORE = 0.1 if TRAINING else 0.0        # chance per engagement to try a different (real) weapon
 MOVE_EXPLORE = 0.2 if TRAINING else 0.0   # chance per trip to try a different route/movement style
 MOVE_POLICY = os.path.join(LOGDIR, "movement_policy.json")
 STYLE_CHOICES = dict(lookahead=[80.0, 110.0, 150.0, 200.0], hop_straight=[200.0, 300.0, 350.0, 500.0, 99999.0],
@@ -62,6 +63,16 @@ AIM_GAIN = {6: 0.7, 7: 0.55, 5: 0.45, 8: 0.45, 3: 0.5, 2: 0.5, 4: 0.4, 11: 0.45,
 AIM_MAX_DPS = 720.0
 # tunable aim knobs (human-like ranges enforced by the coach); defaults = the hand-tuned values
 AIM_KNOBS = dict(AIM_REACT=170.0, AIM_GAIN_X=1.0, AIM_DRIFT_X=1.0, AIM_SETTLE=2.5, AIM_DPS=720.0)
+# trainable layers on top of Nightmare. Defaults reproduce the old behaviour (layer off); the coach turns
+# them on per candidate and keeps what wins. Switches count as on above 0.5.
+LAYER_KNOBS = dict(
+    W_DUEL=0.0, W_LG_MAX=450.0, W_RG_MIN=800.0, W_POLICY=1.0,   # weapon choice: duel defaults, ranges, learned table
+    PF_ON=0.0, PF_WINDOW=1200.0,                                 # prefire rockets where they were just seen/heard
+    T_ON=0.0, T_LEAD=8.0, T_DENY=1.0,                            # item timing: take the wheel to be on a spawn
+    S_LEAD=0.0, S_TRAIL=0.0,                                     # play the score: safe when ahead, push when behind
+    P_HOLD=0.0, P_LEAD=2.0,                                      # positioning: hold the big items when ahead
+)
+KNOBS_FILE = os.path.join(LOGDIR, "bobby_knobs.json")           # public: promoted knobs (aim + layers)
 AIM_DRIFT = {6: 2.5, 7: 9.0, 5: 14.0, 8: 12.0, 3: 12.0, 2: 6.0, 4: 20.0, 11: 12.0, 13: 6.0, 14: 6.0, 1: 4.0}
 ITEMS = {"RA": "item_armor_body", "YA": "item_armor_combat", "MH": "item_health_mega",
          "RL": "weapon_rocketlauncher", "LG": "weapon_lightning", "RG": "weapon_railgun"}
@@ -255,24 +266,28 @@ class itemrun(minqlx.Plugin):
             self.hop_straight = float(msg[5]) if len(msg) > 5 else 350.0
             mapname = minqlx.get_cvar("mapname")
             nav = nav_path(mapname)
-            if nav is None:
+            if nav is None and VARIANT != "aimonly":
                 self.log("no nav graph for {} yet - record bots on it first".format(mapname))
                 self.bot = None
                 return
-            self.nav = Nav(nav)
+            if nav is None:
+                self.log("no nav graph for {} yet - Nightmare drives everything, our aim/weapons still run".format(mapname))
+            self.nav = Nav(nav) if nav else None
             self.running = True
             self.hybrid = False
             self.aim_scale = getattr(self, "aim_scale", {})
-            self.knobs = dict(AIM_KNOBS)
-            try:
-                if TRAINING:
-                    c = json.load(open(os.path.join(LOGDIR, "candidate.json")))
-                    self.knobs.update({k: float(v) for k, v in c.get("params", {}).items() if k in AIM_KNOBS})
-                else:
-                    self.knobs.update({k: float(v) for k, v in json.load(open(os.path.join(LOGDIR, "aim_knobs.json"))).items()
-                                       if k in AIM_KNOBS})
-            except Exception:
-                pass
+            self.knobs = dict(AIM_KNOBS, **LAYER_KNOBS)
+            srcs = [os.path.join(LOGDIR, "candidate.json")] if TRAINING else \
+                [os.path.join(LOGDIR, "aim_knobs.json"), KNOBS_FILE]
+            for f in srcs:
+                try:
+                    d = json.load(open(f))
+                    d = d.get("params", d)
+                    self.knobs.update({k: float(v) for k, v in d.items() if k in self.knobs})
+                except Exception:
+                    pass
+            self.layer_stats = {}
+            self.log("knobs: " + " ".join("{}={:g}".format(k, v) for k, v in sorted(self.knobs.items())))
             self.static_items, self.item_nodes, self.belief = None, None, None
             self.enemy_stack, self.mode, self.goal_score = 125, "fight", 0.0
             try:
@@ -297,13 +312,14 @@ class itemrun(minqlx.Plugin):
             minqlx.set_cvar("timelimit", "0")
             minqlx.set_cvar("fraglimit", "0")
             self.log("item run started bot={} lookahead={} hop_straight={} nodes={}".format(
-                self.bot, self.lookahead, self.hop_straight, len(self.nav.nodes)))
+                self.bot, self.lookahead, self.hop_straight, len(self.nav.nodes) if self.nav else 0))
         elif sub == "policy":
             self.load_policy()                     # hot-reload the learned weapon table
         elif sub == "nav":
             nav = nav_path(minqlx.get_cvar("mapname"))
             if nav and getattr(self, "running", False):   # hot-reload the (re)learned route graph
                 self.nav, self.path, self.banned = Nav(nav), None, set()
+                self.item_nodes = None
                 self.log("nav reloaded: {} nodes".format(len(self.nav.nodes)))
         elif sub == "stop":
             self.running = False
@@ -428,6 +444,9 @@ class itemrun(minqlx.Plugin):
         # fight / stack / push decision, and the opponent as a "goal" when pushing
         if self.hybrid:
             self.decide(now)
+        if self.nav is None:                                   # no routes on this map yet: Nightmare drives
+            minqlx.set_bot_move(self.bot, 0.0, 0, -1.0)
+            return
             k = getattr(self, "known", None)
             if self.mode == "push" and k is not None:
                 items["ENEMY"] = dict(pos=k["pos"], avail=True, spawn=now, label="ENEMY", kind="enemy", amount=0, respawn=0)
@@ -459,6 +478,8 @@ class itemrun(minqlx.Plugin):
                     if styled is not None:
                         self.path = styled
 
+        if self.hybrid:
+            self.layer_driver(now, items)
         it = items[self.goal]
         dist_item = math.hypot(it["pos"][0] - x, it["pos"][1] - y)
         if self.leg is not None:
@@ -540,10 +561,11 @@ class itemrun(minqlx.Plugin):
         stack_w = 1.8 if getattr(self, "mode", "") == "stack" else 1.0
         if kind == "hp":
             return max(0, min(amt, (200 if amt <= 5 else 100) - hp)) * stack_w
+        dw = self.knobs.get("T_DENY", 1.0) if getattr(self, "knobs", None) else 1.0
         if kind == "mega":
-            return max(0, min(100, 200 - hp)) * 1.2 * stack_w + 25          # +deny
+            return max(0, min(100, 200 - hp)) * 1.2 * stack_w + 25 * dw     # +deny
         if kind == "ar":
-            deny = 35 if amt >= 100 else (15 if amt >= 50 else 0)
+            deny = (35 if amt >= 100 else (15 if amt >= 50 else 0)) * dw
             return max(0, min(amt, 200 - ar)) * 1.3 * stack_w + deny
         if kind == "wp":
             return 0 if getattr(me.weapons, amt, False) else 60
@@ -607,6 +629,11 @@ class itemrun(minqlx.Plugin):
         k = getattr(self, "known", None)
         fresh = k is not None and now - k["t"] < 6000
         a = getattr(self, "aggr", 0)
+        lead = self.score_lead()
+        if lead > 0:
+            a -= self.knobs.get("S_LEAD", 0.0) * 12 * min(lead, 5)    # ahead: take fewer risks
+        elif lead < 0:
+            a += self.knobs.get("S_TRAIL", 0.0) * 12 * min(-lead, 5)  # behind: force fights
         if armed and fresh and my - self.enemy_stack > 75 - a:
             mode = "push"
         elif armed and my >= max(70, self.enemy_stack - 25 - a):
@@ -621,6 +648,43 @@ class itemrun(minqlx.Plugin):
         """training: try a different aggression level each scored round"""
         if TRAINING:
             self.aggr = random.choice(AGGR_CHOICES)
+        self.layer_stats = {}
+
+    def stat(self, name, n=1):
+        """per-match counters of what each layer did (logged with the match result)"""
+        st = getattr(self, "layer_stats", None)
+        if st is None:
+            st = self.layer_stats = {}
+        st[name] = st.get(name, 0) + n
+
+    def score_lead(self):
+        me, (p, _) = self.player(self.bot), self.human()
+        try:
+            return int(me.score) - int(p.score) if me is not None and p is not None else 0
+        except Exception:
+            return 0
+
+    def layer_driver(self, now, items):
+        """When our own routing takes the wheel from Nightmare. Fights stay Nightmare's unless retreating."""
+        self.retreat = False
+        if VARIANT != "aimonly":
+            return
+        kn, it = self.knobs, items.get(self.goal)
+        lead, why = self.score_lead(), None
+        big = it is not None and it["label"] in ("MH", "RA", "YA")
+        if kn["S_LEAD"] > 0.5 and lead >= 1 and getattr(self, "mode", "") == "stack":
+            why, self.retreat = "retreat", True                # ahead but weaker: break off, stack up
+        elif kn["T_ON"] > 0.5 and big and 0 <= (it["spawn"] - now) / 1000.0 <= kn["T_LEAD"]:
+            why = "timing"                                     # be on the spawn
+        elif kn["P_HOLD"] > 0.5 and big and lead >= kn["P_LEAD"]:
+            why = "hold"                                       # ahead: sit on the big items
+        if why is not None:
+            if getattr(self, "drive_why", None) != why:
+                self.stat(why)
+            self.driver, self.drive_why = "ours", why
+        else:
+            self.driver = getattr(self, "trip_driver", "ai")
+            self.drive_why = "route" if self.driver == "ours" else None
 
     def plan(self, x, y, z, item_pos, style=None):
         b, db = self.nav.nearest(*item_pos, maxdz=64)
@@ -722,7 +786,8 @@ class itemrun(minqlx.Plugin):
         minqlx.set_bot_input(self.bot, 127, side * 127, 127 if ground else 0, 0, 0, 0.0, yaw)
 
     def input(self, fwd, right, up, yaw):
-        if self.hybrid and VARIANT == "aimonly" and (getattr(self, "driver", "ai") != "ours" or getattr(self, "in_combat", False)):
+        if self.hybrid and VARIANT == "aimonly" and (getattr(self, "driver", "ai") != "ours" or
+                                                     (getattr(self, "in_combat", False) and not getattr(self, "retreat", False))):
             minqlx.set_bot_move(self.bot, 0.0, 0, -1.0)   # Nightmare drives; our aim still applies
             return
         if self.hybrid:
@@ -760,19 +825,23 @@ class itemrun(minqlx.Plugin):
         trip = "{}>{}".format(getattr(self, "trip_from", "spawn"), goal)
         learned = getattr(self, "route_policy", {}).get(trip) == "ours"
         self.driver = "ours" if (learned or random.random() < ROUTE_EXPLORE) else "ai"
+        self.trip_driver, self.drive_why = self.driver, ("route" if self.driver == "ours" else None)
         self.driver_trip = trip
 
     def end_trip(self, now, picked):
         start = getattr(self, "trip_start", None)
         if start is not None:
-            rec = dict(t=time_now(), key="{}>{}".format(getattr(self, "trip_from", "spawn"), picked),
+            rec = dict(t=time_now(), map=(minqlx.get_cvar("mapname") or "").lower(),
+                       key="{}>{}".format(getattr(self, "trip_from", "spawn"), picked),
                        secs=(now - start) / 1000.0, fight=getattr(self, "trip_fight", 0) / 1000.0,
-                       driver=getattr(self, "driver", "ai") if getattr(self, "driver_trip", "").endswith(">" + picked) else "ai",
+                       driver=(getattr(self, "trip_driver", "ai") if getattr(self, "driver_trip", "").endswith(">" + picked) else "ai")
+                       if getattr(self, "drive_why", None) in (None, "route") else "layer",
+                       why=getattr(self, "drive_why", None),
                        stucks=(self.leg or {}).get("stucks", 0))
             with open(os.path.join(LOGDIR, "trips.jsonl"), "a") as f:
                 f.write(json.dumps(rec) + "\n")
         self.trip_from, self.trip_start, self.trip_fight = picked, now, 0
-        self.driver = "ai"
+        self.driver = self.trip_driver = "ai"
 
     def log_leg(self, now, picked):
         leg = self.leg
@@ -814,14 +883,29 @@ class itemrun(minqlx.Plugin):
         if EXPLORE:
             ex = getattr(self, "explore", None)
             if ex is None or ex[0] != b or self.now - ex[2] > 4000:
-                usable = [w for w, n in ammo.items() if n > 0 and w != 1]
+                usable = [w for w, n in ammo.items() if n > 0 and w in (3, 4, 5, 6, 7, 8)]
                 pick = random.choice(usable) if usable and random.random() < EXPLORE else None
                 self.explore = ex = (b, pick, self.now)
             if ex[1] is not None and ammo.get(ex[1], 0) > 0:
                 return ex[1]
-        if self.policy and b in self.policy:
+        if self.policy and b in self.policy and self.knobs.get("W_POLICY", 1.0) > 0.5:
             prefs.append(int(self.policy[b]))
-        # defaults until the learned table covers a situation
+        kn = self.knobs
+        if kn.get("W_DUEL", 0.0) > 0.5:
+            # duel defaults: rockets are the main weapon, LG for airborne targets in range, rail at long range
+            if dist < 120:
+                prefs += [3, 5, 6, 8]
+            elif dist >= kn["W_RG_MIN"]:
+                prefs += [7, 5, 6, 14, 2]
+            elif enemy_air and dist <= kn["W_LG_MAX"]:
+                prefs += [6, 5, 8, 7, 3]
+            elif dist <= kn["W_LG_MAX"] * 0.6:
+                prefs += [5, 6, 8, 3, 7]
+            elif dist <= kn["W_LG_MAX"]:
+                prefs += [6, 5, 8, 7]
+            else:
+                prefs += [5, 7, 6, 14, 2]
+        # old defaults until the learned table covers a situation
         if dist < 120:
             prefs += [3, 5, 6, 8, 13, 14]                  # point blank: shotgun
         elif dist < 700:
@@ -899,6 +983,12 @@ class itemrun(minqlx.Plugin):
         dist = math.dist((x, y, z), (ex, ey, ez))
         enemy_air = abs(evz) > 1
         w = self.choose_weapon(dist, ez - z, enemy_air, ammo)
+        # prefire: they just left sight (or we heard them): put rockets where they are about to be
+        # only from a real sighting (not sound: that spams walls), not point blank, not when low (self-splash)
+        prefire = (not visible and self.knobs["PF_ON"] > 0.5 and k["exact"] and now - k["t"] < self.knobs["PF_WINDOW"]
+                   and dist > 300 and ammo.get(5, 0) > 3 and minqlx.player_state(self.bot).health > 40)
+        if prefire:
+            w = 5
         t = 0.05
         if w in PROJECTILE_SPEED:
             for _ in range(3):
@@ -910,7 +1000,7 @@ class itemrun(minqlx.Plugin):
         if w == 4:
             tz += 0.5 * GRAVITY * (t - 0.05) ** 2          # grenades: aim above for the lob
         # human-like aim: small slow drift around the target point...
-        scale = self.aim_scale.get(w, 1.0)                 # <1 tighter, >1 looser (self-tuned)
+        scale = self.aim_scale.get(w, 1.0)                 # fixed at 1: aim never loosens itself (no deliberate misses)
         drift = AIM_DRIFT.get(w, 10.0) * scale * self.knobs["AIM_DRIFT_X"] * (3.0 if not k["exact"] else 1.0)
         rho = 0.97                                         # ~0.8 s correlation at 40 Hz
         self.err_h = getattr(self, "err_h", 0.0) * rho + random.gauss(0, drift * math.sqrt(1 - rho * rho))
@@ -941,6 +1031,11 @@ class itemrun(minqlx.Plugin):
         fire_mode = 1 if allow else 0
         if w in SPRAY and allow and self.tracking:
             fire_mode = 2                                  # LG/MG/CG/HMG: track continuously, trigger held
+        if prefire and settled:
+            fire_mode = 2                                  # hold fire on the predicted spot (refire limits the rate)
+            if now - getattr(self, "pf_logged", 0) > 800:
+                self.pf_logged = now
+                self.stat("prefire")
         if VARIANT == "moveonly":
             minqlx.set_bot_aim(self.bot, 0.0, 0.0, -1)    # the built-in AI aims and picks weapons
         else:
@@ -1028,7 +1123,7 @@ class itemrun(minqlx.Plugin):
         return target
 
     def tune_aim(self):
-        """nudge each weapon's aim toward its accuracy target using the shots since the last step"""
+        """log accuracy vs the reference target. Never changes the aim: missing on purpose is not allowed."""
         last = getattr(self, "acc_prev", {})
         for wp, (shots, hits) in self.acc.items():
             ps, ph = last.get(wp, (0, 0))
@@ -1037,9 +1132,7 @@ class itemrun(minqlx.Plugin):
                 continue
             target = self.target_for(wp)
             acc = min(dh, ds) / float(ds)
-            old = self.aim_scale.get(wp, 1.0)
-            self.aim_scale[wp] = max(0.2, min(3.0, old * math.exp(-2.0 * (target - acc))))
-            self.log("aim tune w{}: {:.0f}% vs target {:.0f}% -> scale {:.2f}".format(wp, acc * 100, target * 100, self.aim_scale[wp]))
+            self.log("aim w{}: {:.0f}% (reference {:.0f}%)".format(wp, acc * 100, target * 100))
         self.acc_prev = {wp: tuple(v) for wp, v in self.acc.items()}
 
     def engage(self, x, y, z, now):

@@ -28,7 +28,5 @@ date -u > data/practice/promoted/promoted_at.txt
 
 echo "== restarting the public server on the current image"
 docker build -q -t qlbot . >/dev/null
-docker rm -f ql >/dev/null 2>&1 || true
-docker run -d --name ql --restart unless-stopped -p 27970:27970/udp \
-    -v "$ROOT/data/practice:/tmp/practice" qlbot +set net_port 27970 >/dev/null
+bash tools/public.sh
 echo "public BobbyBones restarted with promoted knowledge"

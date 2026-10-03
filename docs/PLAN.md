@@ -1,0 +1,132 @@
+# BobbyBones: plan
+
+Goal: a Quake Live duel bot that **learns** to play (movement, aim, tactics) and beats people fairly:
+human physics, human-like limits, knowledge only from sight and sound. Judge everything by match win
+rate against a control group of plain Nightmare bots, and by live tests on a real QL server.
+Findings and numbers go in [FINDINGS.md](FINDINGS.md).
+
+## Approach
+
+1. **Learn in a fast simulator, verify in the real game.** Quake Live runs in real time; the simulator
+   (`sim/`) runs ~18,000x faster with the same physics (validated). Every learned skill gets a live check
+   (`plugins/movetest.py` style) before it is trusted.
+2. **Learn from people.** Pro duel demos and our own server's recordings teach what good players do
+   (imitation). Then reinforcement learning improves on it.
+3. **Nightmare stays the fallback** for anything not yet learned better. Promote only what beats control.
+
+## Status
+
+| Stage | What | Status |
+|---|---|---|
+| 1 | Movement simulator (Q3 Pmove + collision, QL settings, jump pads, teleporters) | done, validated |
+| 1 | Movement policy (PPO): strafe jumping emerged | done (Blood Run) |
+| 1 | Live transfer test, human physics on the server (8 ms split) | done: live/sim time 1.01 |
+| 2 | Nav graphs built by the simulator instead of recordings | done (3 maps, ~10 s each) |
+| 2 | One movement policy on Blood Run + Aerowalk + Campgrounds | done: 96% sim, live 67-100% |
+| 3 | Duel simulator: RL/RG/LG, damage, knockback, 150 ms reaction, self-play | first pass training |
+| 3 | Robustness options (sensor noise, late commands) | in code, not trained yet |
+| 4 | Pro-demo imitation (parser, inferred actions, model) | data downloaded (380 demos) |
+| 5 | Reinforcement learning in real QL (cluster) on top of 3/4 | later |
+| 6 | Opponent profiles, player reports | later |
+
+## High priority for the next session (2026-10-03)
+
+1. Review the duel run (`duel_v1`; results in FINDINGS.md, raw in `data/sim_runs/duel_v1/eval_duel.json`).
+   Biggest gaps: finding the opponent (needs memory + map knowledge), rail/LG unused, no strafe jumping in fights.
+2. Commit and push everything since 2026-10-02 (owner approval needed; nothing committed yet).
+3. Smooth, human-like turning: continuous mouse-style aim with a cost on jerky turns. Fixes the jitter in the
+   strafe-jump video and is needed for rail and LG.
+4. Duel simulator: every item on the 3 maps with QL timers and rules, spawn with gauntlet + MG, ammo limits.
+5. Combine skills: start duel training from the movement policy (it currently doesn't strafe jump in fights),
+   and switch to the memory model (GRU) at the same time. GPU PyTorch install (~2.5 GB) needs approval.
+6. Check weapons against the real game (record Nightmare duels; compare damage, splash, knockback).
+7. Nav builder: running-start jumps so items like Aerowalk's Red Armor are reachable.
+8. Start the demo pipeline (parser + inferring keys with the simulator).
+9. Decide when the public server comes back up (stopped since 2026-10-02).
+
+## Next steps (in order)
+
+### A. Simulator-built nav graphs (all maps)
+Flood-fill each map with simulated movement (walk, drops, jumps, jump pads, teleports) instead of old
+recordings. Removes junk nodes, works on any map at once (Aerowalk, Campgrounds have little recorded data).
+Done when movement policies train on all three maps with no falls and live tests pass.
+
+### A2. Simulator gaps found by live tests
+Nav builder: add running-start jumps (and later rocket jumps) so items like Aerowalk's Red Armor become
+reachable. Find why ~17% of Aerowalk trips stall only in the live game (robustness training, D, may help).
+
+### B. Duel simulator, first pass (the big one)
+Add to the simulator: rockets (projectile, splash, knockback incl. self-knockback so rocket jumps are
+possible), health/armor, damage, death/respawn. Two players controlled by the same policy (self-play),
+each seeing the other only with line of sight. Reward = frags. Later: rail, LG, items and respawn timers,
+armor, all weapons. Watch for emergent aiming, dodging, prefire, rocket jumps, item control.
+
+### C. More maps (generalization)
+Train on Blood Run, Aerowalk, Campgrounds together, then more of QL's ~27 duel maps. Skills should stop
+being memorized routes.
+
+### D. Robustness for transfer
+Small random noise in position, velocity and timing, an occasional one-frame delay, during training.
+
+### E. More human-like control and memory
+Finer turning (smoother "mouse"), a short memory of the last moment (hop timing, tracking a target).
+
+### F. Richer goals
+Arrive with speed for the next leg, arrive exactly at an item spawn, pay for health (fall damage,
+rocket-jump self-damage).
+
+### G. Pro-demo imitation
+Parse the 380 demos (UberDemoTools), infer movement keys with the simulator (demos have no inputs),
+train a model on fair information only, then fine-tune with B's reinforcement learning.
+
+## Scope and priorities (owner decisions, 2026-10-03)
+
+- Maps: Blood Run (ZTN), Aerowalk, Campgrounds only, until told otherwise.
+- The simulator's maps must have every item (health incl. 5 hp bubbles, armor incl. shards, mega, weapons,
+  ammo) with Quake Live's respawn timers and rules, plus correct teleporters and jump pads.
+- Weapons: the "main 3" first (rockets, lightning gun, railgun), then the rest (shotgun, grenades, plasma,
+  machine gun, HMG, gauntlet).
+- Memory is required for a good duel bot: switch to a recurrent model (GRU) when the duel simulator gets items
+  and timers (next phase), and use it from the start for pro-demo imitation.
+
+## Getting the main 3 weapons used (not just rockets)
+Self-play first drifted to rockets only (100% of frags): rail and LG need fine, steady aim and were never
+rewarded early. Planned, in order of expected effect:
+1. Mouse-like aim: continuous (or much finer) yaw/pitch control instead of coarse turn steps.
+2. Realistic loadout: spawn with gauntlet + machine gun, pick weapons up on the map, limited ammo. Rockets
+   stop being the only answer when they run out and rails are lying around.
+3. Short weapon drills as a curriculum (rail at range, LG tracking a strafing target), then full duels.
+4. Pro-demo imitation: pros' weapon choices are the strongest prior.
+5. Report per-weapon accuracy and frag share every run; no permanent reward for "using weapon X".
+
+## Simulator accuracy: what still needs adding or checking
+- Items: all pickups, QL respawn timers, armor rules (protection share, tiers, max 200), health/armor decay
+  above 100, mega rules, spawn 125 hp, starting weapons, ammo counts and limits, weapon pickup ammo.
+- Weapons: all of them with QL values (refire, damage, splash, knockback, projectile speed, LG range, shotgun
+  spread, bouncing grenades, plasma), weapon switch times (`pmove_WeaponRaiseTime/DropTime`), self-damage
+  and rocket-jump knockback checked against recordings.
+- Players: real hitbox, crouching, fall damage, spawn-point selection rules, death/respawn delay.
+- Senses: sound ranges for footsteps, jumps, landings, item pickups, weapon fire (now only "moving fast within
+  800 units").
+- Validation: record Nightmare-vs-Nightmare duels on a real server and compare damage per shot, splash, knockback
+  and item timings with the simulator, as done for movement.
+
+## Fairness rules (owner decisions)
+
+- Human physics only (125 fps); no bot-only frame-rate tricks.
+- Human-like reaction and aim limits; never miss on purpose to hit a number; no wallhacks.
+- Promote to the public server only what beats the control group's win rate.
+
+## How to run (short)
+
+```bash
+sim\build.bat                                             # Windows: build sim\qsim.dll (MSVC)
+python sim/validate.py <inputs_map.txt> data/maps/<map>.bsp   # simulator vs recorded QL frames
+python sim/train_move.py --run <name> --minutes 60        # movement PPO (human physics by default)
+python sim/eval_move.py --run <name>                      # trips vs Nightmare, strafe-jump detector, picture
+python sim/export_policy.py --run <name> --out data/movetest/policy.npz
+docker run -d --name qlmove -e QLX_PLUGINS="botctl, movetest" -e LAB_MAP=bloodrun \
+  -v "<repo>/data/movetest:/tmp/practice" qlbot +set sv_master 0 +set sv_serverType 0
+python sim/compare_live.py                                # live vs simulator vs Nightmare
+```
+Maps are extracted from the game's pak into `data/maps/` (never committed).

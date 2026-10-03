@@ -1,1 +1,3 @@
 bloodrun|duel
+aerowalk|duel
+campgrounds|duel

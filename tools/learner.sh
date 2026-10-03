@@ -15,7 +15,9 @@ while true; do
     MAP=$($R "mapname" --wait 1 | sed -n 's/.*"mapname" is:"\([^^"]*\).*/\1/p' | tr 'A-Z' 'a-z')
     if [ "$LAB_MODE" = "train" ]; then
         if [ "$TRAIN_AGGREGATOR" = "1" ]; then
-            LAB_MAP=${MAP:-bloodrun} python3 /tools/train_aggregate.py > $D/aggregate_last.txt 2>&1
+            for M in $(echo "${TRAIN_MAPS:-${MAP:-bloodrun}}" | tr ',' ' '); do   # routes per map; last map's report wins
+                LAB_MAP=$M python3 /tools/train_aggregate.py > $D/aggregate_$M.txt 2>&1
+            done
         fi
         S=/tmp/train/shared
         [ -f "$S/nav_$MAP.json" ] && cp "$S/nav_$MAP.json" "$D/nav_$MAP.json" && $R "qlx !ir nav" --wait 1 >/dev/null
@@ -39,12 +41,18 @@ while true; do
         fi
         echo "$(date -u) map=$MAP $(grep -h 'situations learned\|nodes' $D/learner_last.txt | tr '\n' ' ')" >> $D/learner.log
     fi
-    # housekeeping: rotate anything over 200 MB, keep 3 old copies
-    for f in $D/itemrun_frames.jsonl $D/server.log $D/trace_live_*.txt $D/experience.jsonl; do
+    # housekeeping: rotate anything over 200 MB. Training keeps 3 old copies; the public server keeps
+    # everything (human games are the real training data), compressed into archive/ with a timestamp.
+    for f in $D/itemrun_frames.jsonl $D/server.log $D/trace_live_*.txt $D/experience.jsonl $D/human_results.jsonl; do
         [ -f "$f" ] || continue
         if [ "$(stat -c %s "$f")" -gt 209715200 ]; then
-            for i in 2 1; do [ -f "$f.$i.gz" ] && mv "$f.$i.gz" "$f.$((i+1)).gz"; done
-            gzip -c "$f" > "$f.1.gz" && : > "$f"
+            if [ "$LAB_MODE" = "train" ]; then
+                for i in 2 1; do [ -f "$f.$i.gz" ] && mv "$f.$i.gz" "$f.$((i+1)).gz"; done
+                gzip -c "$f" > "$f.1.gz" && : > "$f"
+            else
+                mkdir -p $D/archive
+                gzip -c "$f" > "$D/archive/$(basename "$f").$(date -u +%Y%m%d-%H%M%S).gz" && : > "$f"
+            fi
         fi
     done
 done

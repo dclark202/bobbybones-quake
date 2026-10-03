@@ -191,7 +191,7 @@ for d in dirs:
                 tr = json.loads(line)
             except ValueError:
                 continue
-            if tr["t"] >= since and tr["fight"] <= 1.0 and tr["secs"] < 30:
+            if tr["t"] >= since and tr["fight"] <= 1.0 and tr["secs"] < 30 and tr.get("map", MAP) == MAP:
                 trips.append(tr)
 by_trip = defaultdict(lambda: defaultdict(list))
 for tr in trips:

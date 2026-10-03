@@ -125,14 +125,23 @@ class botctl(minqlx.Plugin):
         if self.recording:
             self.rec_frame = getattr(self, "rec_frame", 0) + 1
             # one recording per map; last column = steam id (per-player profiles)
-            path = "/tmp/practice/trace_live_{}.txt".format((minqlx.get_cvar("mapname") or "unknown").lower())
-            with open(path, "a") as f:
+            mapname = (minqlx.get_cvar("mapname") or "unknown").lower()
+            path = "/tmp/practice/trace_live_{}.txt".format(mapname)
+            # inputs_<map>.txt: the exact command each player's movement ran on, next to the resulting state
+            # (movement simulator validation; action labels for imitation learning). Columns:
+            # frame serverTime id x y z vx vy vz pitch yaw forward right up buttons weapon health steam_id
+            ipath = "/tmp/practice/inputs_{}.txt".format(mapname)
+            with open(path, "a") as f, open(ipath, "a") as fi:
                 for p in self.players():
                     s = p.state
                     if s.is_alive or s.health > 0:
                         cmd = minqlx.last_usercmd(p.id)
                         f.write("{} {} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f} {} {} {} {}\n".format(
                             self.rec_frame, p.id, *s.position, *s.velocity, s.weapon, cmd[1], s.health, p.steam_id))
+                        rc = minqlx.ran_usercmd(p.id)      # exact command the last think ran (incl. bot overrides)
+                        fi.write("{} {} {} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {} {} {} {} {} {} {}\n".format(
+                            self.rec_frame, rc[0], p.id, *s.position, *s.velocity, rc[6], rc[7],
+                            rc[3], rc[4], rc[5], rc[1], rc[2], s.health, p.steam_id))
         for p in self.players():
             h = self.hist.setdefault(p.id, [])
             h.append((now, tuple(p.state.position)))

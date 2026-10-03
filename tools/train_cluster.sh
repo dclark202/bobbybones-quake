@@ -2,6 +2,8 @@
 # Start N training BobbyBones servers (private, not published), each playing real 10-minute duels
 # against rotating Nightmare bots on Blood Run. Trainer 1 also aggregates everyone's experience.
 #   tools/train_cluster.sh start 12     tools/train_cluster.sh stop     tools/train_cluster.sh status
+# Boots are staggered: BATCH trainers (default 60) every GAP seconds (default 120). The coach staggers its
+# restarts the same way (COACH_BATCH / COACH_GAP).
 set -e
 N=${2:-12}
 CONTROLS=${3:-0}            # the last CONTROLS trainers run the plain built-in bot (control group)
@@ -16,21 +18,27 @@ case "$1" in
       AGG=0; [ "$i" = "1" ] && AGG=1
       CTRL=0; [ "$i" -gt $((N - CONTROLS)) ] && CTRL=1
       VAR=$(echo "${SPLIT:-}" | cut -d, -f$i); [ -z "$VAR" ] && VAR=${VARIANT:-full}   # SPLIT = per-trainer variant list
+      # MAPS = comma list. Bobby trainers rotate maps per block of POP so every candidate's replicas
+      # cover every map; controls alternate maps.
+      IFS=, read -ra MAPARR <<< "${MAPS:-bloodrun}"
+      if [ "$CTRL" = "1" ]; then MI=$(( (i - 1) % ${#MAPARR[@]} )); else MI=$(( (i - 1) / ${POP:-$N} % ${#MAPARR[@]} )); fi
+      TMAP=${MAPARR[$MI]}
       BOTMOUNT=""
       if [ "$CTRL" = "0" ] && [ -n "$TUNE" ]; then        # tuned bot files for BobbyBones (not the control group)
           mkdir -p "data/train/c$i/botfiles/bots"
           BOTMOUNT="-v $ROOT/data/train/c$i/botfiles:/ql/home/baseq3/botfiles"
       fi
       MSYS_NO_PATHCONV=1 docker run -d --name "qltrain$i" --restart unless-stopped \
-        -e LAB_MODE=train -e TRAIN_AGGREGATOR=$AGG -e LAB_OPPONENT_START=$((i - 1)) \
+        -e LAB_MODE=train -e LAB_MAP=$TMAP -e TRAIN_MAPS="${MAPS:-bloodrun}" -e TRAIN_AGGREGATOR=$AGG -e LAB_OPPONENT_START=$((i - 1)) \
         -e TRAIN_DEADLINE="${TRAIN_DEADLINE:-0}" -e TRAIN_SINCE="${TRAIN_SINCE:-0}" -e LAB_CONTROL=$CTRL -e LAB_SPAR="${LAB_SPAR:-0}" -e LAB_VARIANT=$VAR \
         -v "$ROOT/data/train/c$i:/tmp/practice" -v "$ROOT/data/train:/tmp/train" $BOTMOUNT \
         qlbot +set sv_master 0 +set sv_serverType 0 +set sv_hostname "bobby-train-$i" >/dev/null
       echo "started qltrain$i"
+      [ $((i % ${BATCH:-60})) = 0 ] && [ "$i" -lt "$N" ] && sleep "${GAP:-120}"   # stagger boots (public server lags otherwise)
     done ;;
   coach)
-    MSYS_NO_PATHCONV=1 docker run -d --name qlcoach --restart unless-stopped -v "$ROOT/data/train:/tmp/train" \
-        --entrypoint python3 qlbot /tools/tune_coach.py "$N" >/dev/null && echo "coach started for $N trainers" ;;
+    MSYS_NO_PATHCONV=1 docker run -d --name qlcoach --restart unless-stopped -e COACH_BATCH=${BATCH:-60} -e COACH_GAP=${GAP:-120} -v "$ROOT/data/train:/tmp/train" \
+        --entrypoint python3 qlbot /tools/tune_coach.py "$N" ${POP:-} >/dev/null && echo "coach started for $N trainers (pop ${POP:-$N})" ;;
   stop)
     docker ps -a --format '{{.Names}}' | grep -E '^(qltrain|qlcoach)' | xargs -r docker rm -f ;;
   status)
