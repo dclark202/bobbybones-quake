@@ -1,6 +1,6 @@
 # BobbyBones: project notes for Claude
 
-A Quake Live duel bot that plays real people on a real QL dedicated server, learns from them, and (later) gives players reports. Repo: `dclark202/bobbybones-quake` (public, GPL-3.0 because of the bundled minqlx). Local path: `C:\Users\dacla\ql-bot` (rename to `bobbybones-quake` only when no containers are mounted from it).
+A Quake Live duel bot that plays real people on a real QL dedicated server, learns from them, and (later) gives players reports. Repo: `dclark202/bobbybones-quake` (public, GPL-3.0 because of the bundled minqlx). Local path: the `ql-bot` folder in the owner's home directory (rename to `bobbybones-quake` only when no containers are mounted from it).
 
 ## The owner's goals (read first)
 - **Winning = win rate.** Items and routes are only a means. Judge every change by match WIN RATE (frag diff only breaks ties) against a control group of plain built-in Nightmare bots, never by route metrics alone. Promote only what beats the control group.
