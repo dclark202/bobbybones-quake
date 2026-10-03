@@ -142,6 +142,10 @@ def main():
     snap_players = torch.from_numpy(league & is_odd).to(dev)          # controlled by the snapshot
     learn = (~snap_players).float()                                    # trained on
     snaps = []                                                         # frozen past policies (state dicts)
+    if a.resume:                                                       # the league survives a restart
+        import glob
+        for f in sorted(glob.glob(os.path.join(out, "snapshots", "snap_*.pt")))[-8:]:
+            snaps.append(torch.load(f, weights_only=False, map_location=dev)["model"])
     opp = copy.deepcopy(pol).eval()
     last_snap = time.time()
     h = torch.zeros(N, H, device=dev)
