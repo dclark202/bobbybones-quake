@@ -85,6 +85,7 @@ class DuelEnv:
         self.substeps = tuple(substeps)
         self.dmg_reward = dmg_reward
         self.loadout = loadout
+        self.item_reward = 0.0                          # optional shaping: reward per 100 points of health/armor picked up
         self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in self.w.spawns()], np.float32)
         self.close_p = close_p
@@ -443,12 +444,15 @@ class DuelEnv:
                     continue                                  # the other player took it this frame
                 kind, val, resp, cap, lab = self.item_def[it]
                 took = False
+                gain = 0.0
                 if kind == "hp" and self.hp[i] < cap:
-                    self.hp[i] = min(cap, self.hp[i] + val)
+                    gain = min(cap, self.hp[i] + val) - self.hp[i]
+                    self.hp[i] += gain
                     took = True
                     self.stats["pick_mega" if lab == "MH" else "pick_hp"] += 1
                 elif kind == "ar" and self.armor[i] < cap:
-                    self.armor[i] = min(cap, self.armor[i] + val)
+                    gain = min(cap, self.armor[i] + val) - self.armor[i]
+                    self.armor[i] += gain
                     took = True
                     self.stats["pick_ra" if lab == "RA" else "pick_ar"] += 1
                 elif kind == "wp":
@@ -465,6 +469,7 @@ class DuelEnv:
                     took = True
                     self.stats["pick_am"] += 1
                 if took:
+                    reward[i] += self.item_reward * (gain if kind in ("hp", "ar") else 10.0) / 100.0
                     self.item_up[m, it] = False
                     self.item_t[m, it] = resp
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
