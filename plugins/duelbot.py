@@ -10,7 +10,7 @@ roughly when heard nearby. Both players spawn with the loadout the policy traine
 Test rooms (!room ...): Bobby's body becomes the scripted target / fighter of the simulator's rooms and the
 human is measured with the same metrics, giving a human baseline card (docs/LOGS.md).
 
-Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
+Opponent: the first human on the server; with DUEL_OPP=bot a plain Hardcore bot fills in while no human is
 there. The server is held in warmup on the three maps.
 
 Chat commands: !note <text>, !drill <weapon|off>, !map <name>, !room <...> (see cmd_room), !rooms.
@@ -48,7 +48,7 @@ LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade laun
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["move", "*"]] + \
-    [["fight", "nightmare"]]
+    [["fight", "hardcore"]]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
     [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"]] + \
@@ -85,6 +85,7 @@ class duelbot(minqlx.Plugin):
         self.room_test = os.environ.get("DUEL_ROOMTEST", "") == "1"
         self.alive = {}                                      # client id -> was alive last frame
         self.score = dict(bobby=0, opp=0)
+        self.want_w = {}
         self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w={})
         self.next_summary = time.time() + 60
         self.err_t = 0.0
@@ -114,6 +115,8 @@ class duelbot(minqlx.Plugin):
         self.sess = os.path.join(D, "sessions", "{}_{}_{}".format(time.strftime("%Y%m%d-%H%M%S"), mapname, kind))
         os.makedirs(self.sess, exist_ok=True)
         self.sess_opp = opp.id
+        self.sess_t0 = time.time()
+        self.h[:] = 0                                        # a new opponent: fresh memory
         self.score = dict(bobby=0, opp=0)
         self.tot = {}
         self.item_was = {}
@@ -200,13 +203,13 @@ class duelbot(minqlx.Plugin):
         self.msg("Drill: {}".format(self.drill or "off (normal loadout)"))
 
     def cmd_spar(self, player, msg, channel):
-        """!spar on: you become a spectator and Bobby plays a Nightmare bot (a real match). !spar off: back to you."""
+        """!spar on: you become a spectator and Bobby plays a Hardcore bot (skill 4) (a real match). !spar off: back to you."""
         on = len(msg) < 2 or msg[1].lower() != "off"
         self.opp_bot = on
         self.room, self.queue = None, []
         if on:
             player.put("spectator")
-            self.msg("Spar: BobbyBones against a Nightmare bot. Join the game or type !spar off to stop.")
+            self.msg("Spar: BobbyBones against a Hardcore bot (skill 4). Join the game or type !spar off to stop.")
         else:
             for p in self.players():
                 if is_bot(p) and "Bones" not in p.clean_name:
@@ -217,7 +220,7 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!room fight nightmare (60 s): the game's Nightmare bot")
+            player.tell("!room fight hardcore (60 s): the game's Hardcore bot")
             player.tell("!room fight <{}> (30 s): scripted styles".format("|".join(self.R.PERSONAS)))
             player.tell("!room suite = every room, about 20 minutes | !room off")
             return
@@ -275,9 +278,9 @@ class duelbot(minqlx.Plugin):
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
                 key = "speed" if a[0] == "speed" else a[1]
                 return dict(kind="speed", lab=True, name="move/" + key, script=0, secs=30, key=key)
-            if a[0] == "fight" and (len(a) < 2 or a[1] == "nightmare"):
-                # the game's own Nightmare bot: our control of Bobby's body is released for the room
-                return dict(kind="ladder", lab=True, name="fight/nightmare", style=0, script=0, secs=60, ai=True)
+            if a[0] == "fight" and (len(a) < 2 or a[1] in ("hardcore", "nightmare")):
+                # the game's own Hardcore bot: our control of Bobby's body is released for the room
+                return dict(kind="ladder", lab=True, name="fight/hardcore", style=0, script=0, secs=60, ai=True)
             if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
                 return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=30,
                             persona=R.PERSONAS.index(a[1]))
@@ -330,6 +333,12 @@ class duelbot(minqlx.Plugin):
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.env.react_frames = round(self.react_ms / 25)    # same reaction delay as in training (newer simulators)
+        self.rules2 = hasattr(E, "ACQUIRE_FRAMES")           # simulators with sounds, clock, crouch, human aim limits
+        if self.rules2:
+            self.env.acquire_frames = round(float(self.P["acquire_ms"]) / 25) if "acquire_ms" in self.P else E.ACQUIRE_FRAMES
+            self.env.lab = None
+        self.prev_opp, self.fb_next, self.sess_t0 = None, np.zeros(4, np.float32), time.time()
+        self.round_base = (0, 0)
         self.h = np.zeros((1, self.P["whh"].shape[1]), np.float32)
         # the test rooms always use the current simulator's scripted players; slot 0 = human, slot 1 = Bobby
         self.R = R = importlib.import_module("duel_env")
@@ -485,6 +494,10 @@ class duelbot(minqlx.Plugin):
             vis[cand] = env._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
         env.visible = vis
         heard = (~vis) & alive & (dist < E.HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250)
+        if hasattr(env, "vis_run"):                          # newer rules: an enemy is noticed only after a moment in view
+            env.vis_run = np.where(vis, env.vis_run + 1, 0)
+            vis = vis & (env.vis_run >= max(1, env.acquire_frames - env.react_frames))
+            env.acquired = vis
         env.known[vis] = s[opp[vis], :3]
         if heard.any():
             env.known[heard] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
@@ -492,20 +505,45 @@ class duelbot(minqlx.Plugin):
         env.seen_t = np.where(vis | heard, 0.0, env.seen_t + E.DT).astype(np.float32)
         return dist
 
+    def held(self, env, i):
+        """the weapon slot i has chosen (as in the simulator, where a switch is immediate); the game's own weapon
+        when nothing was chosen, the chosen one is not owned, or the game has disagreed for over a second"""
+        real = int(env.weapon[i])
+        k = (id(env), i)
+        want, since = self.want_w.get(k, (real, 0))
+        if want == real:
+            since = 0
+        else:
+            since += 1
+        if want >= env.has.shape[1] or not env.has[i, want] or since > 80:
+            want, since = real, 0
+        self.want_w[k] = (want, since)
+        return want
+
     def drive(self, p, env, E, i, a, pitch, yaw, only=None):
         """turn one action row into keys and mouse for the controlled bot in slot i (same rules as the simulator)"""
-        fwd, side, jump = (int(a[0]) - 1) * 127, (int(a[1]) - 1) * 127, int(a[2]) * 127
+        rules2 = hasattr(E, "ACQUIRE_FRAMES") and len(a) > 7 and env.script[i] == 0
+        key = E.WALK if (rules2 and a[7] == 1) else 127
+        fwd, side = (int(a[0]) - 1) * key, (int(a[1]) - 1) * key
+        jump = (127 if a[2] == 1 else -127 if a[2] == 2 else 0) if len(a) > 7 else int(a[2]) * 127
+        if rules2:
+            env.duck[i] = a[2] == 2
         cmd = np.array([E.TURN[a[3]], E.PITCH[a[4]]], np.float32)
         nine = hasattr(E, "NW")
         sm = np.where(np.abs(cmd) <= 1.0, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH) if hasattr(E, "MOUSE_SMOOTH_FINE") \
             else E.MOUSE_SMOOTH
         env.mv[i] = sm * env.mv[i] + (1.0 - sm) * cmd
-        yaw = (yaw + float(env.mv[i, 0]) + 180.0) % 360.0 - 180.0
+        turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
+        if rules2 and env.human_aim:                         # flick cap and hand noise, as in training
+            env.mv[i, 0] = np.clip(env.mv[i, 0], -E.TURN_CAP, E.TURN_CAP)
+            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(env.mv[i]) + E.MOTOR_BASE)
+            turn, dpit = float(env.mv[i, 0] + jit[0]), float(env.mv[i, 1] + jit[1])
+        yaw = (yaw + turn + 180.0) % 360.0 - 180.0
         lev = 1.0 if (nine and env.seen_t[i] <= 0.5) else env.level     # newer simulators: no pull while an enemy is in view
-        pitch = float(np.clip(pitch * lev + env.mv[i, 1], -89, 89))
+        pitch = float(np.clip(pitch * lev + dpit, -89, 89))
         names = E.WEAPONS
         ncol = env.has.shape[1]
-        w = int(env.weapon[i])
+        w = self.want_w.get((id(env), i), (int(env.weapon[i]), 0))[0] if nine else int(env.weapon[i])
         if only:
             w = names.index(only)
         if a[6] > 0:                                         # switch only to weapons owned
@@ -518,12 +556,19 @@ class duelbot(minqlx.Plugin):
         env.cool[i] = max(0.0, env.cool[i] - E.DT)
         if nine:
             env.fire_cd[i] = max(0.0, env.fire_cd[i] - E.DT)
-        if fire and env.cool[i] <= 0:
-            refire = E.W_REFIRE if nine else (E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK)
+        refire = E.W_REFIRE if nine else (E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK)
+        ready = env.cool[i] <= 0
+        if fire and ready:
             env.cool[i] = float(refire[w])
             if nine:
                 env.fire_cd[i] = float(refire[w])
-        minqlx.set_bot_input(p.id, fwd, side, jump, 1 if fire else 0, QLNUM[names[w]], pitch, yaw)
+            if rules2 and env.human_aim and refire[w] >= 0.4:    # nobody fires on the exact frame the reload ends
+                env.cool[i] += min(float(self.rng.exponential(E.RELOAD_JITTER)), E.RELOAD_JITTER_MAX)
+        # slow weapons under the newer rules: the button is only pressed when our own reload timer allows it
+        if nine:
+            self.want_w[(id(env), i)] = (w, self.want_w.get((id(env), i), (w, 0))[1])
+        press = fire and (ready or not (rules2 and refire[w] >= 0.4))
+        minqlx.set_bot_input(p.id, fwd, side, jump, 1 if press else 0, QLNUM[names[w]], pitch, yaw)
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 
     # ------------------------------------------------------------------ frame
@@ -571,7 +616,7 @@ class duelbot(minqlx.Plugin):
         if bobby is None:
             if now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot bones 5 free 0 BobbyBones")
+                minqlx.console_command("addbot bones 4 free 0 BobbyBones")
             return
         if human is not None and filler is not None:
             if now > self.next_check:
@@ -582,7 +627,7 @@ class duelbot(minqlx.Plugin):
         if opp is None:
             if self.opp_bot and now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot sarge 5")
+                minqlx.console_command("addbot sarge 4")
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, 0.0)
             if self.sess:
                 self.end_session()
@@ -604,8 +649,12 @@ class duelbot(minqlx.Plugin):
                 else:
                     self.give_loadout(p)
                 self.tot.pop(who, None)
+                if who == "opp" and getattr(self, "rules2", False):
+                    self.env.dmg_life[0] = 0.0               # what Bobby knows about this opponent's damage resets
+                self.want_w.clear()
                 if who == "bobby":
-                    self.h[:] = 0
+                    if not getattr(self, "rules2", False):
+                        self.h[:] = 0                        # older runs: memory per life. Newer: kept for the session
                     for env in (self.env, self.renv):
                         env.mv[:] = 0
                         env.cool[:] = 0
@@ -638,14 +687,55 @@ class duelbot(minqlx.Plugin):
         opos = self.fill_player(env, E, 1, opp, os_)[0]
         for cls, slot in self.sync_world(env, E, (bobby.id, opp.id)):
             self.record(event="pickup", item=cls, by=("bobby", "opp")[slot] if slot >= 0 else "?")
+            if getattr(self, "rules2", False) and slot == 1:
+                big = 0 if cls == "item_health_mega" else 1 if cls == "item_armor_body" else \
+                    2 if cls in ("item_armor_combat", "item_armor_jacket") else 3 if cls.startswith("weapon_") else None
+                if big is not None:
+                    env._hear(0, np.array([1]), big)
+        taken_items = []
+        if self.rules2:
+            env.kind[0] = E.NORMAL
+            if now - self.sess_t0 > 120.0:                           # training rounds last about two minutes:
+                self.sess_t0 = now                                   # clock, score and memory start over
+                self.round_base = (self.score["bobby"], self.score["opp"])
+                self.h[:] = 0
+            env.round_t[0] = now - self.sess_t0
+            env.frags_r[:] = (self.score["bobby"] - self.round_base[0], self.score["opp"] - self.round_base[1])
+            oc_ = minqlx.ran_usercmd(opp.id)
+            env.duck[1] = oc_[5] < 0
+            env.snd_t += E.DT
+            po = self.prev_opp
+            if po is not None and os_.health > 0:
+                if oc_[1] & 1:                                       # the opponent is firing
+                    env._hear(1, np.array([1]))
+                if po[1] > 0.5 and env.state[1, 6] < 0.5 and env.state[1, 5] > 100:
+                    env._hear(2, np.array([1]))                      # jumped
+                if np.linalg.norm(env.state[1, :3] - po[0]) > 200:
+                    env._hear(3, np.array([1]))                      # teleported
+            self.prev_opp = (env.state[1, :3].copy(), float(env.state[1, 6]))
+            env.fb[0] = self.fb_next
         self.senses(env, E)
-        a = self.act(env.observe()[:1])
+        if hasattr(E, "NW"):
+            env.weapon[0] = self.held(env, 0)                # the chosen weapon, as the simulator shows it
+        ob = env.observe()[:1]
+        if os.environ.get("DUEL_OBSDUMP"):                   # debugging: keep the inputs to compare with the simulator's
+            self.obs_dump = getattr(self, "obs_dump", [])
+            self.obs_dump.append(ob[0].copy())
+            if len(self.obs_dump) % 2000 == 0:
+                np.save("/tmp/practice/obs_dump.npy", np.array(self.obs_dump[-12000:]))
+        a = self.act(ob)
         w, fire, pitch, yaw, keys = self.drive(bobby, env, E, 0, a, pitch, yaw, only=self.drill)
         wname = E.WEAPONS[w]
         self.last = dict(bobby=[round(float(v)) for v in pos], opp=[round(float(v)) for v in opos],
                          bobby_hp=[bs.health, bs.armor], opp_hp=[os_.health, os_.armor], weapon=wname,
                          visible=bool(env.visible[0]), seen_ago=round(float(env.seen_t[0]), 1))
-        self.log_frame(now, env, 0, bobby, opp, bs, os_, keys, self.drill)
+        dmg, _ = self.log_frame(now, env, 0, bobby, opp, bs, os_, keys, self.drill)
+        if self.rules2:                                      # hit feedback for the next frame, and damage dealt this life
+            dealt, took = dmg.get("opp", 0), dmg.get("bobby", 0)
+            ang = math.atan2(opos[1] - pos[1], opos[0] - pos[0]) - math.radians(yaw)
+            self.fb_next = np.array([min(dealt / 100.0, 2.0), min(took / 100.0, 2.0),
+                                     math.sin(ang) * (took > 0), math.cos(ang) * (took > 0)], np.float32)
+            env.dmg_life[0] += dealt
         c = self.acc
         c["frames"] += 1
         c["visible"] += int(env.visible[0])
@@ -681,7 +771,7 @@ class duelbot(minqlx.Plugin):
                      "dodger": "dodges, backs off when hurt", "stander": "stands still",
                      "jumper": "runs at you, always jumping", "spammer": "fires blind"}.get(r["name"].split("/")[-1], "")
             if r.get("ai"):
-                return "All weapons, your choice. Play to win. Opponent: the game's Nightmare bot."
+                return "All weapons, your choice. Play to win. Opponent: the game's Hardcore bot."
             return "All weapons, your choice. Play to win. Opponent: {} ({}).".format(r["name"].split("/")[-1], style)
         return ""
 
@@ -920,7 +1010,7 @@ class duelbot(minqlx.Plugin):
             self.tot = {}
             human.center_print("^2GO: {}".format(r["name"]))
         keys = [0, 0, 0, 0]
-        if r.get("ai"):                                      # Nightmare fight: the game's AI drives the body
+        if r.get("ai"):                                      # bot fight: the game's AI drives the body
             if not r.get("placed"):
                 r["placed"] = True
                 self.lab_place(bobby, human)

@@ -5,6 +5,23 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-04 16:30-17:10 — `duel_gru_v4` on a real server (plugin update, B-57)
+
+- The plugin now plays networks trained under the newer rules (311 inputs: clock, score, sounds, hit feedback,
+  crouch, walk, noticing delay, flick cap, hand noise, reload delay). No frame errors in 15 minutes of sparring.
+- **Bug found and fixed: weapon switches were cancelled live.** The plugin sent the new weapon number for one
+  frame; the game needs it held for the whole switch (0.4 s) and otherwise falls back. The chosen weapon is now
+  remembered, as in the simulator. This bug was present in every earlier play test.
+- Live rounds now match training: clock, score and memory start over every two minutes.
+- Sparring opponent changed from Nightmare (skill 5, which cheats) to Hardcore (skill 4), owner's decision.
+- Spar at 629 min, Blood Run, all weapons: 2-8 in five minutes against Hardcore. Shotgun in hand 84-100% of the
+  time, mean speed 130 u/s, enemy in view 14% of the time, damage dealt 1505 against 977 taken.
+- **Not a transfer problem:** the same network in the simulator under the same conditions (Blood Run, all weapons,
+  two-minute rounds, scripted all-round fighter) holds the shotgun 100% of the time at a mean speed of 106 u/s,
+  and wins there (32 frags, 5750 damage dealt against 2452 taken). With every weapon in hand he has learned
+  "walk slowly with the shotgun". What did not work: random loadouts and the round recut have not broken the
+  shotgun habit in full-loadout fights, and course speed (500 u/s) does not carry into fights.
+
 ## At a glance
 
 | Worked | Did not work |

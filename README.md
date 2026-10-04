@@ -61,11 +61,11 @@ python sim/train_duel_rnn.py --run my_run --minutes 600    # self-play training 
 python sim/test_suite.py --run my_run                      # scorecard in the test rooms
 docker build -t qlbot .                                    # game server image
 bash tools/duel_server.sh my_run bloodrun                  # private play-test server on UDP 27970
-SPAR=1 bash tools/duel_server.sh my_run bloodrun           # the same network against a Nightmare bot
+SPAR=1 bash tools/duel_server.sh my_run bloodrun           # the same network against a Hardcore bot
 ```
 
 On the play-test server, chat commands save feedback (`!note`), run the test chamber on you (`!map bobbylab`,
-`!room suite`) and let you watch him play a Nightmare bot (`!spar`). Full list: [docs/COMMANDS.md](docs/COMMANDS.md).
+`!room suite`) and let you watch him play a Hardcore bot (`!spar`). Full list: [docs/COMMANDS.md](docs/COMMANDS.md).
 
 ## Repo layout
 
