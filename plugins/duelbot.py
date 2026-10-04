@@ -45,8 +45,8 @@ REP_SECS = 10.0
 GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 # the test map "bobbylab" (tools/make_lab_map.py): fixed rooms, the suite never changes maps
 LAB_WEAPONS = ("mg", "sg", "gl", "rl", "lg", "rg", "pg", "hmg")
-LAB_STYLES = {"still": 1, "walk": 0, "jump": 4, "env": 0}
-LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in ("still", "walk", "jump", "env")] + \
+LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
+LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["terrain", k] for k in ("b2r", "pillars", "aero_ra", "ztn_ra")] + [["speed"]] + \
     [["fight", p_] for p_ in ("allround", "sniper", "rusher", "tracker")]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
@@ -74,6 +74,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("room", self.cmd_room, 0,
                          usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
         self.add_command("rooms", self.cmd_rooms, 0)
+        self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
         self.drill = None                                    # weapon drill: both players have only this weapon
         self.top_up = 0.0
         self.last = {}                                       # latest snapshot of both players, for notes
@@ -198,12 +199,26 @@ class duelbot(minqlx.Plugin):
                 self.give_loadout(p)
         self.msg("Drill: {}".format(self.drill or "off (normal loadout)"))
 
+    def cmd_spar(self, player, msg, channel):
+        """!spar on: you become a spectator and Bobby plays a Nightmare bot (a real match). !spar off: back to you."""
+        on = len(msg) < 2 or msg[1].lower() != "off"
+        self.opp_bot = on
+        self.room, self.queue = None, []
+        if on:
+            player.put("spectator")
+            self.msg("Spar: BobbyBones against a Nightmare bot. Join the game or type !spar off to stop.")
+        else:
+            for p in self.players():
+                if is_bot(p) and "Bones" not in p.clean_name:
+                    minqlx.console_command("kick {}".format(p.id))
+            self.msg("Spar off. Join the game to play him yourself.")
+
     def cmd_rooms(self, player, msg, channel):
         if self.lab:
-            player.tell("!room aim <{}> <still|walk|jump|env>  (25 s)".format("|".join(LAB_WEAPONS)))
+            player.tell("!room aim <{}> <walk|jump|env>  (30 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room terrain <{}> (60 s) | speed (60 s)".format("|".join(self.lab["stations"])))
             player.tell("!room fight <{}> (100 s)".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 41 rooms, about 29 minutes | !room off")
+            player.tell("!room suite = all 33 rooms, about 27 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -242,8 +257,8 @@ class duelbot(minqlx.Plugin):
         R = self.R
         if self.lab:
             if a[0] == "aim" and len(a) >= 3 and a[1] in LAB_WEAPONS and a[2] in LAB_STYLES:
-                return dict(kind="aim", lab=True, name="aim/{}/{}".format(a[1], a[2]), weapon=a[1], style=LAB_STYLES[a[2]],
-                            script=1, secs=25, where="env" if a[2] == "env" else "aim")
+                return dict(kind="aim", lab=True, name="aim/{}/{}".format(a[1], a[2]), weapon=a[1], style=0,
+                            script=1, secs=30, where="env" if a[2] == "env" else "aim", jump=a[2] == "jump")
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed":
@@ -686,7 +701,7 @@ class duelbot(minqlx.Plugin):
             a = L["aim"]
             self.put(human, a["subject"], a["yaw"], human=True)
             self.put(bobby, a["target"], float(self.rng.uniform(-180, 180)))
-            r["home"], r["zone"] = a["target"], a["zone"]
+            r["home"], r["zone"], r["hard"] = a["target"], a["zone"], [352, 16, 1520, 1008]
         else:
             e = L["env"]
             spots = [np.array([x, y, e["z"]], np.float32) for x, y in e["spots"]]
@@ -699,6 +714,7 @@ class duelbot(minqlx.Plugin):
             self.put(human, spots[j], face, human=True)
             b = e["bounds"]
             r["home"], r["zone"] = [float(v) for v in spots[i]], [b[0] + 48, b[1] + 48, b[2] - 48, b[3] - 48]
+            r["hard"] = [b[0], b[1], b[2], b[3]]
         self.renv.mv[:] = 0
 
     def lab_keep(self, p, pos, human=False):
@@ -821,11 +837,23 @@ class duelbot(minqlx.Plugin):
                 self.room_loadout(bobby, human, only="opp")
                 env.round_t[0] = 0.0
                 self.tot = {}
-            elif r.get("lab") and not (r["zone"][0] <= bpos[0] <= r["zone"][2] and r["zone"][1] <= bpos[1] <= r["zone"][3]):
-                self.put(bobby, r["home"], byaw)             # the target stays in its zone
             else:
                 env.round_t[0] += R.DT
-                a = env._script_actions(np.array([1]))[0]
+                a = env._script_actions(np.array([1]))[0].copy()
+                if r.get("lab"):
+                    # lab targets: random walk in all four directions, with or without jumping (jump is tapped,
+                    # the game wants a fresh press per jump); near the edge of its zone the target walks back
+                    a[2] = int(r.get("jump", False) and m["frames"] % 2 == 0)
+                    z = r["zone"]
+                    if not (z[0] + 120 <= bpos[0] <= z[2] - 120 and z[1] + 120 <= bpos[1] <= z[3] - 120):
+                        dx, dy = r["home"][0] - bpos[0], r["home"][1] - bpos[1]
+                        yr = math.radians(byaw)
+                        f_, l_ = dx * math.cos(yr) + dy * math.sin(yr), -dx * math.sin(yr) + dy * math.cos(yr)
+                        a[0] = (1 if f_ > 40 else -1 if f_ < -40 else 0) + 1
+                        a[1] = (-1 if l_ > 40 else 1 if l_ < -40 else 0) + 1
+                    h_ = r["hard"]                           # only moved back if it gets right up to the subject or out of the room
+                    if not (h_[0] <= bpos[0] <= h_[2] and h_[1] <= bpos[1] <= h_[3]):
+                        self.put(bobby, r["home"], byaw)     # far outside (knocked out): put it back
                 keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
         elif r["kind"] == "ladder":
             if r.get("lab"):
