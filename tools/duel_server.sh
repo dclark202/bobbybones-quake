@@ -3,7 +3,9 @@
 # Container qlduel, UDP 27970. No password by default (PASSWORD=<word> sets one). The owner's Steam ID lives in
 # data/owner.env (git-ignored): QLX_OWNER=<SteamID64>
 #   bash tools/duel_server.sh <run> [map] [env module]     e.g. bash tools/duel_server.sh duel_gru_v2 bloodrun duel_env_v2
+#   bash tools/duel_server.sh - bloodrun                    use the policy.npz already in data/duellive (no PyTorch needed)
 #   bash tools/duel_server.sh stop
+# Options: PASSWORD=<word>, RESTART=1 (restart after a crash or reboot), HOSTNAME_QL="<name in the server list>"
 # With SPAR=1 no port is opened and a Nightmare bot is the opponent (for measuring).
 set -e
 cd "$(dirname "$0")/.."
@@ -16,7 +18,12 @@ docker rm -f "$NAME" >/dev/null 2>&1 || true
 RUN="${1:?run name}"; MAP="${2:-bloodrun}"; ENVMOD="${3:-duel_env}"
 PY="${PYTHON:-python}"
 mkdir -p $DATA
-"$PY" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out $DATA/policy.npz
+if [ "$RUN" = "-" ]; then                # "-" = use the policy.npz already in $DATA (a machine without PyTorch)
+    [ -f "$DATA/policy.npz" ] || { echo "no $DATA/policy.npz"; exit 1; }
+else
+    "$PY" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out $DATA/policy.npz
+fi
+RESTART_OPT=""; [ -n "$RESTART" ] && RESTART_OPT="--restart unless-stopped"   # RESTART=1: come back after a crash or reboot
 if [ -n "$SPAR" ]; then
     docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" \
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/bobbylab/bobbylab.pk3:/ql/baseq3/bobbylab.pk3:ro" qlbot +set sv_master 0 +set sv_serverType 0 >/dev/null
@@ -25,7 +32,7 @@ fi
 QLX_OWNER=""
 [ -f data/owner.env ] && QLX_OWNER="$(grep '^QLX_OWNER=' data/owner.env | cut -d= -f2)"
 PW="${PASSWORD:-}"                     # no password by default; PASSWORD=<word> sets one
-docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" \
+docker run -d $RESTART_OPT --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" \
     -p 27970:27970/udp -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/bobbylab/bobbylab.pk3:/ql/baseq3/bobbylab.pk3:ro" qlbot +set net_port 27970 \
-    +set sv_hostname "BobbyBones playtest" +set g_password "$PW" >/dev/null
+    +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port 27970, map $MAP ($([ -n "$PW" ] && echo "password set" || echo "no password"))"

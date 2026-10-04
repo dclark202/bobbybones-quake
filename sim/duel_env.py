@@ -348,7 +348,8 @@ class DuelEnv:
             self.stats[wn + "_frags"] = 0
         self.stats["direct"] = 0                        # rockets hitting the body
         # per course: attempts, finishes, time (finished attempts), distance, top speed, speed sum, frames, falls, height
-        self.stats["course"] = np.zeros((max(1, len(self.courses)), 9))
+        self.stats["course"] = np.zeros((16, 9))
+        self.lab_course_ids = list(range(len(self.courses)))     # courses used when a lab round picks one
         for i in range(n):
             self._spawn(i, avoid=None if i % 2 == 0 else self.w.state()[i - 1, :3])
         self.state = self.w.state()
@@ -509,8 +510,10 @@ class DuelEnv:
             where = f["where"] if f else ("env" if rng.random() < 0.33 else "aim")
             if where == "aim":
                 A = L["aim"]
-                home, subj, face = np.array(A["target"], np.float32), np.array(A["subject"], np.float32), float(A["yaw"])
-                self.lab_zone[m] = A["zone"]
+                lg = self.mode[m] == LG and "zone_lg" in A      # keep the target inside lightning gun range
+                home = np.array(A["target_lg"] if lg else A["target"], np.float32)
+                subj, face = np.array(A["subject"], np.float32), float(A["yaw"])
+                self.lab_zone[m] = A["zone_lg"] if lg else A["zone"]
             else:
                 E_ = L["env"]
                 spots = [np.array([q[0], q[1], q[2] if len(q) > 2 else E_["z"]], np.float32) for q in E_["spots"]]
@@ -530,7 +533,7 @@ class DuelEnv:
             self._fresh(a_, face)
         else:
             for q in (a_, b_):
-                self._course_start(q, int(f["course"]) if f else int(rng.integers(len(self.courses))))
+                self._course_start(q, int(f["course"]) if f else int(rng.choice(self.lab_course_ids)))
 
     def _lab_respawn(self, v):
         """a death on the lab map: back to the room's own spot, not to a map spawn point"""

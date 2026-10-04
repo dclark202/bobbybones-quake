@@ -10,6 +10,22 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-04 (15:01): `duel_gru_v4` restarted with lab movement courses
+
+Starts B-68. The run was stopped right after a checkpoint (`policy_before_courses.pt`, 536 min) and resumed
+until 19:00 with the test map as a fourth training map: 4 of 18 workers (22% of playing time) run the speed,
+slalom and ramps courses, rewarded by progress along the course. On the other three maps the time split is
+45% normal, 18% aim, 12% single weapon, 25% movement. The lab aim rooms are not in training yet.
+
+Before the restart (48 minutes of the new rules): frags by weapon LG 22%, shotgun 24%, rail 16%, plasma 10%,
+HMG 10%; switches 8.6 per minute; movement rounds 355 u/s with 34% fast-air; ahead of every scripted style
+except the tracker (1.8 frags to 1.9 deaths per minute); crouches 16% and walks 27% of the time, which is more
+than expected and worth watching; fall damage 11 points per player-minute.
+
+LG aim rooms on the lab map now keep the target inside lightning gun range (zone 256-670 units from the subject).
+
+---
+
 ## 2026-10-04 (14:30): owner's test-chamber card, lab rooms in the simulator, `duel_gru_v4` started
 
 Settles B-57 (simulator half), B-34. Raises B-67, B-68.

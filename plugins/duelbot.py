@@ -750,8 +750,11 @@ class duelbot(minqlx.Plugin):
         if r.get("where") == "aim":
             a = L["aim"]
             self.put(human, a["subject"], a["yaw"], human=True)
-            self.put(bobby, a["target"], float(self.rng.uniform(-180, 180)))
-            r["home"], r["zone"], r["hard"] = a["target"], a["zone"], [-64, -64, 1600, 1088]
+            self.put(bobby, a["target_lg"] if (r.get("weapon") == "lg" and "target_lg" in a) else a["target"],
+                     float(self.rng.uniform(-180, 180)))
+            lg = r.get("weapon") == "lg" and "zone_lg" in a          # keep the target inside lightning gun range
+            r["home"], r["zone"], r["hard"] = (a["target_lg"] if lg else a["target"]), \
+                (a["zone_lg"] if lg else a["zone"]), [-64, -64, 1600, 1088]
         else:
             e = L["env"]
             spots = [np.array([q[0], q[1], q[2] if len(q) > 2 else e["z"]], np.float32) for q in e["spots"]]

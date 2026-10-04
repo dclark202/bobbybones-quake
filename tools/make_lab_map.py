@@ -104,7 +104,8 @@ def main():
     # ---- aim box
     room(0, 0, 0, 1536, 1024, 400)
     box(96, 0, 0, 104, 1024, 1, TRIM)                               # the firing line
-    rooms["aim"] = dict(subject=[128, 512, 8], yaw=0, target=[832, 512, 8], zone=[640, 112, 1280, 912])
+    rooms["aim"] = dict(subject=[128, 512, 8], yaw=0, target=[832, 512, 8], zone=[640, 112, 1280, 912],
+                        target_lg=[576, 512, 8], zone_lg=[384, 192, 800, 832])     # lightning gun reaches 768 units
     spawns.append((128, 512, 24, 0))
     spawns.append((832, 512, 24, 180))
     # ---- environment box

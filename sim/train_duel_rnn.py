@@ -28,7 +28,7 @@ DT_MIN = 0.025 / 60.0
 
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
-           teacher):
+           teacher, lab_courses):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
@@ -38,6 +38,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.react_frames = react_frames[0]
     env.acquire_frames = react_frames[1]
     env.kind_p = kind_p
+    if env.lab is not None:                                  # the test map: movement courses only (for now)
+        env.lab_p = (0.0, 1.0)
+        env.lab_course_ids = [k for k, C in enumerate(env.courses) if C["key"] in lab_courses] or env.lab_course_ids
     env.bot_p = bot_p
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
@@ -85,6 +88,8 @@ def main():
     ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
+    ap.add_argument("--lab-courses", default="speed,slalom,ramps",
+                    help="movement courses of the test map (bobbylab) used when that map is in --map")
     ap.add_argument("--minibatches", type=int, default=8,
                     help="players are split into this many groups per training pass (more = less GPU memory)")
     ap.add_argument("--gamma", type=float, default=0.998,
@@ -110,6 +115,10 @@ def main():
     out = os.path.join(ROOT, "data", "sim_runs", a.run)
     os.makedirs(os.path.join(out, "snapshots"), exist_ok=True)
     maps = a.map.split(",")
+    course_keys = []
+    lab_json = os.path.join(ROOT, "maps", "bobbylab", "rooms.json")
+    if os.path.exists(lab_json):
+        course_keys = list(json.load(open(lab_json)).get("courses", {}))
     pipes = []
     for w in range(a.workers):
         m = maps[w % len(maps)]
@@ -118,7 +127,8 @@ def main():
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
-                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None),
+                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
+                                        tuple(a.lab_courses.split(","))),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -334,6 +344,10 @@ def main():
                    vs_persona={n_: [round(float(agg["vs_persona"][0, j] / max(1.0, agg["vs_persona"][2, j]) * 2400), 2),
                                     round(float(agg["vs_persona"][1, j] / max(1.0, agg["vs_persona"][2, j]) * 2400), 2)]
                                for j, n_ in enumerate(PERSONAS)},
+                   course={key: dict(speed=int(agg["course"][k_, 5] / max(1.0, agg["course"][k_, 6])),
+                                     finishes_per_min=round(float(agg["course"][k_, 1] / max(1.0, agg["course"][k_, 6]) * 2400), 2),
+                                     falls_per_min=round(float(agg["course"][k_, 7] / max(1.0, agg["course"][k_, 6]) * 2400), 2))
+                           for k_, key in enumerate(course_keys) if agg["course"][k_, 6] > 0},
                    teach=[round(kick, 3), round(float(kick_l), 3)],
                    crouch=round(float(agg["duck_frames"] / max(1, agg["play_frames"])), 3),
                    walk=round(float(agg["walk_frames"] / max(1, agg["play_frames"])), 3),
