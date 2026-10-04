@@ -18,6 +18,7 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Training min | Score (Bobby-Nightmare) | Damage dealt / taken | Mean speed | Enemy in view | Weapon held |
 |---|---|---|---|---|---|
 | 686 (before this change) | 1-10 | 1320 / 1278 | 95 u/s | 10% | shotgun 86% |
+| 704 (22 min after) | 7-5 | 1355 / 872 | 120 u/s | 12% | shotgun 87% |
 
 ## 2026-10-04 16:30-17:10 — `duel_gru_v4` on a real server (plugin update, B-57)
 
