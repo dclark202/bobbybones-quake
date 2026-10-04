@@ -1,59 +1,89 @@
 # bobbybones-quake
 
-A Quake Live duel bot, **BobbyBones**, that plays real people on a real Quake Live dedicated server, learns from how they play, and gives them a report on their game.
+**BobbyBones** is a Quake Live duel bot that learns to play from scratch. Nothing about how to aim, move or
+fight is hand-coded: a neural network plays millions of duels against itself in a fast simulator of the game,
+is checked on a real Quake Live server, and is play-tested by people. The goal is a bot that beats strong
+players fairly and shows learned behavior such as strafe jumping, weapon choice and item control.
 
-## Vision
+## Fairness rules
 
-1. **Bobby learns from opponents.** Every match is recorded: how players move, which weapons they pick in which situations, where they prefire, which areas they control, and how they time items. That feeds back into his routes, weapon choices and item timing.
-2. **Players get a report.** After playing Bobby: a heatmap of where you spent your time, item timing (how long after spawn you took RA/YA/MH, what you gave away), movement stats (speed, strafe-jumping share), and weapon usage.
-3. **Nightmare first, aim tiers later.** Get a very strong but fair bot public so it can learn from many players. Different aim and difficulty tiers come after.
+- **Human physics.** He moves with the same 125 fps physics a human client gets. No bot-only frame-rate tricks.
+- **Human senses.** He knows where you are only when you are in his field of view with a clear line of sight,
+  or roughly when you are heard nearby. No wallhacks.
+- **Mouse-like aim.** He turns his view like a mouse (fine tracking and flicks), with a reaction delay. He
+  never misses on purpose to hit an accuracy number.
+- **Earn the public server.** Nothing goes public until it beats the game's Nightmare bots.
 
 ## How it works
 
-- **Server:** Quake Live dedicated server (Steam app 349090) in Docker, with [minqlx](https://github.com/MinoMino/minqlx) for Python plugins.
-- **Bot control** (`minqlx/botctl.c`): a hook on the engine's `SV_ClientThink` lets Python override a bot's per-frame input (movement, view, buttons, weapon).
-- **Hybrid combat:** the built-in bot AI decides *when* it can shoot (it traces line of sight). Our code chooses the weapon, aims with human-like error and reaction time, and steers movement. There's no wallhack: Bobby only knows your position from sight or sound.
-- **Item control** (`plugins/itemrun.py`): routes on a navigation graph learned from recorded bot and player movement (`maps/campgrounds/nav.json`), strafe-jumping on straight stretches, arriving at RA/YA/MH on their spawn timers. Item timers are fair: he only knows what he saw or heard.
-- **Skill practice** (`plugins/practice.py`, `plugins/jumplab.py`): trial-and-error optimization (cross-entropy method) of movement tricks such as rocket jumps, pillar hops and the bridge-to-rail jump.
-- **Analysis** (`tools/`): session reports and heatmaps (`analyze_session.py`), nav graph builder (`navgraph.py`), video renderers.
+1. **Simulator** (`sim/`). Quake 3's movement and collision code (ioquake3 `bg_pmove`, `cm_*`) compiled into a
+   library with Quake Live's settings, plus a duel layer in Python: nine weapons, items, armor, respawns,
+   senses. Movement was validated frame by frame against the real game; weapon damage, timing, knockback,
+   switch time and pickup amounts were measured on a real server and reproduced.
+2. **Training** (`sim/train_duel_rnn.py`). Self-play reinforcement learning (PPO) with a recurrent network
+   (GRU, about 1.3 million weights) against a league of its own past versions and scripted opponents of
+   several styles. Rounds are mixed: normal duels, aim rounds, single-weapon rounds and movement rounds.
+   A movement-only network (`sim/train_move.py`), in which strafe jumping emerged from reward alone, serves
+   as a teacher for movement.
+3. **Real game** (`minqlx/`, `plugins/`). A Quake Live dedicated server in Docker with
+   [minqlx](https://github.com/MinoMino/minqlx). A C hook on the engine's `SV_ClientThink`
+   (`minqlx/botctl.c`) lets a plugin drive a bot's keys and view each frame. `plugins/duelbot.py` rebuilds
+   the network's inputs from the live game with the simulator's own code and plays the trained network.
+4. **Testing.** `sim/test_suite.py` scores any checkpoint in fixed test rooms (aim per weapon and target,
+   weapon choice by range, movement, items, a ladder of scripted opponents). The same rooms run on the
+   play-test server with a person as the subject, for a human baseline. Every play-test session is logged
+   per frame, with the player's notes.
 
-## Running it
-
-```bash
-docker build -t qlbot .
-docker run -d --name ql --restart unless-stopped -p 27970:27970/udp -v "$PWD/data/practice:/tmp/practice" qlbot +set net_port 27970 +set sv_serverType 2
-```
-
-The server sets itself up on start (`tools/bootstrap.sh`): campgrounds duel in permanent warmup with all weapons, BobbyBones added, recording on, item control and combat running. In the Quake Live console, run `connect 127.0.0.1:27970`.
-
-Remote console: `docker exec ql python3 /tools/rcon.py "status"`.
-
-## Status
+## Where it stands
 
 | | |
 |---|---|
-| Bot input control, strafe jumping, rocket jumps | working |
-| Item timing (RA 25 s, YA 25 s, MH 35 s) | working; routing still has rough spots |
-| Hybrid combat with fair senses and aim error | first version; accuracy tuning in progress |
-| Session report + heatmaps | working (offline script) |
-| Learning weapon choice from players | recording in place, policy builder next |
-| Public server, per-player profiles | not yet |
+| Movement simulator matches the real game; learned movement transfers (time ratio 1.01) | done |
+| Strafe jumping learned from reward alone | done |
+| Nine weapons, items and pickups measured on a real server and simulated | done |
+| Self-play duel training with memory | running; aim is strong, movement, positioning and weapon choice are the current work |
+| Playing the trained network on a real server | done (private play-test server) |
+| Beating the Nightmare bots | not yet |
+| Learning from pro demos (374 parsed), player reports, opponent profiles | later |
+
+Details, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:
+[docs/PLAN.md](docs/PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md). Log formats: [docs/LOGS.md](docs/LOGS.md).
+
+## Running it
+
+You need a Quake Live install for the map files (extracted to `data/maps/`, never committed), Python with
+PyTorch, a C compiler for the simulator, and Docker for the game server.
+
+```bash
+sim/build.bat                                             # Windows: build the simulator library
+python sim/train_duel_rnn.py --run my_run --minutes 600    # self-play training (GPU if available)
+python sim/test_suite.py --run my_run                      # scorecard in the test rooms
+docker build -t qlbot .                                    # game server image
+bash tools/duel_server.sh my_run bloodrun                  # private play-test server on UDP 27970
+SPAR=1 bash tools/duel_server.sh my_run bloodrun           # the same network against a Nightmare bot
+```
+
+On the play-test server (chat): `!note <text>` saves feedback with the game state, `!drill <weapon>` gives both
+players one weapon, `!room suite` runs the test rooms on you, `!map <bloodrun|aerowalk|campgrounds>`.
 
 ## Repo layout
 
 ```
-Dockerfile, entrypoint.sh   server image
-server/                     lab server config
-minqlx/                     vendored minqlx + BobbyBones input hook (see minqlx/UPSTREAM.md)
-plugins/                    botctl (control/recording), itemrun (item control + combat), practice, jumplab
-tools/                      rcon, stats feed, bootstrap, nav graph, analysis, video renderers
-maps/campgrounds/           learned map knowledge: nav graph, walk traces, item spots, pillar survey
-docs/                       feasibility report
-data/                       (git-ignored) local recordings, telemetry, videos
+sim/                 simulator (vendored ioquake3 physics in sim/q3), environments, trainers, test suite
+plugins/             minqlx plugins: duelbot (plays the network, rooms, logs), weapon and item labs, older bots
+minqlx/              vendored minqlx + the input hook (see minqlx/UPSTREAM.md)
+tools/               server scripts, demo downloader and parser, older analysis tools
+docs/                PLAN, BACKLOG, RESULTS, LOGS
+Dockerfile           Quake Live dedicated server image
+data/                (git-ignored) maps, training runs, recordings, play-test sessions
 ```
 
-Optional: `-e QLX_OWNER=<your steam id64>` gives your Steam account minqlx owner permissions in game.
+## History
+
+The project started as a hand-built layer on top of the game's Nightmare bot (item routes, fair aim, a
+settings search). That did not beat plain Nightmare, and was dropped in favor of learning in a simulator.
+The older code is still in `plugins/` and `tools/`; the story is in [docs/RESULTS.md](docs/RESULTS.md).
 
 ## License
 
-GPL-3.0 (see `LICENSE`). The bundled minqlx is GPL-3.0, so the project follows it.
+GPL-3.0 (see `LICENSE`). The bundled minqlx and ioquake3 code are GPL, so the project follows it.
