@@ -215,11 +215,11 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab:
-            player.tell("!room aim <{}> <walk|jump|env>  (15 s)".format("|".join(LAB_WEAPONS)))
+            player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
             player.tell("!room fight nightmare (60 s): the game's Nightmare bot")
             player.tell("!room fight <{}> (30 s): scripted styles".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 26 rooms, about 11 minutes | !room off")
+            player.tell("!room suite = all 26 rooms, about 16 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -265,7 +265,8 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             if a[0] == "aim" and len(a) >= 3 and a[1] in LAB_WEAPONS and a[2] in LAB_STYLES:
                 return dict(kind="aim", lab=True, name="aim/{}/{}".format(a[1], a[2]), weapon=a[1], style=0,
-                            script=1, secs=15, where="env" if a[2] == "env" else "aim", jump=a[2] == "jump")
+                            script=1, secs=45 if a[2] == "env" else 25, where="env" if a[2] == "env" else "aim",
+                            jump=a[2] == "jump")
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
@@ -746,7 +747,7 @@ class duelbot(minqlx.Plugin):
             r["home"], r["zone"], r["hard"] = a["target"], a["zone"], [-64, -64, 1600, 1088]
         else:
             e = L["env"]
-            spots = [np.array([x, y, e["z"]], np.float32) for x, y in e["spots"]]
+            spots = [np.array([q[0], q[1], q[2] if len(q) > 2 else e["z"]], np.float32) for q in e["spots"]]
             i = int(self.rng.integers(len(spots)))
             d = [float(np.linalg.norm(q - spots[i])) for q in spots]
             cand = [k for k, v in enumerate(d) if 400 <= v <= 1300] or [int(np.argmax(d))]
@@ -764,8 +765,8 @@ class duelbot(minqlx.Plugin):
         e = self.lab["env"]
         b = e["bounds"]
         if not (b[0] <= pos[0] <= b[2] and b[1] <= pos[1] <= b[3]):
-            x, y = e["spots"][int(self.rng.integers(len(e["spots"])))]
-            self.put(p, (x, y, e["z"]), 0.0, human=human)
+            q = e["spots"][int(self.rng.integers(len(e["spots"])))]
+            self.put(p, (q[0], q[1], q[2] if len(q) > 2 else e["z"]), 0.0, human=human)
 
     def lab_terrain(self, now, human, hpos, hvel, hground):
         """trick-jump stations and the speed straight: put the subject at the start, time each attempt"""

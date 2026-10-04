@@ -1,6 +1,6 @@
 # Play-test routine
 
-Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 11 minutes). Everything is
+Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 16 minutes). Everything is
 logged per frame; your notes are what the numbers cannot show. Log formats: [LOGS.md](LOGS.md).
 
 ## Before you start
@@ -34,7 +34,7 @@ Questions to answer at the end (as notes or in chat):
 3. What would a decent player punish first?
 4. Anything that looked like a bug (stuck, not shooting, spinning)?
 
-## Part 2: the test chamber (about 11 minutes)
+## Part 2: the test chamber (about 16 minutes)
 
 Bobby's body becomes the scripted target or opponent and **you** are measured, with the same metrics the
 simulator uses for him. This gives the human bar for each room. All commands: [COMMANDS.md](COMMANDS.md).
@@ -44,7 +44,7 @@ simulator uses for him. This gives the human bar for each room. All commands: [C
 
 | Rooms | What happens | What to do |
 |---|---|---|
-| 21 aim rooms, 15 s each | Seven weapons (no grenade launcher), three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
+| 21 aim rooms, 25 s each in the aim box and 45 s in the environment box | Seven weapons (no grenade launcher), three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
 | 4 movement courses, up to 30 s each | Speed straight (flat, 20,000 units), gaps (pits of growing width), ramps and stairs, slalom. Gauntlet only. A course ends when you reach the far end | Get as far as you can, as fast as you can |
 | 1 fight, 60 s | In the environment box against the game's Nightmare bot, every weapon in hand | Play to win |
 

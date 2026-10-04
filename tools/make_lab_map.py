@@ -108,7 +108,7 @@ def main():
         box(1280 - (s + 1) * 32, ey + 672, 0, 1280 - s * 32, ey + 864, 96 - (s + 1) * 16, TRIM)
     rooms["env"] = dict(bounds=[0, ey, 1536, ey + 1536], z=8,
                         spots=[[128, ey + 128], [1408, ey + 128], [128, ey + 1408], [1408, ey + 1408], [768, ey + 768],
-                               [128, ey + 768], [768, ey + 128], [768, ey + 1408], [1400, ey + 768]])
+                               [128, ey + 768], [768, ey + 128], [768, ey + 1408], [1400, ey + 768, 104]])
     for x, y in rooms["env"]["spots"][:4]:
         spawns.append((x, y, 24, 0))
     # ---- speed straight
