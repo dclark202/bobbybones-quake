@@ -84,6 +84,8 @@ def main():
     ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
+    ap.add_argument("--gamma", type=float, default=0.998,
+                    help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
     ap.add_argument("--teach", type=float, default=0.5, help="weight of the teacher loss at the start of this run")
     ap.add_argument("--teach-minutes", type=float, default=240, help="the teacher loss fades to zero over this time")
@@ -177,7 +179,7 @@ def main():
     scr = torch.zeros(N, device=dev)                                   # scripted players (not trained on)
 
     T = a.steps
-    gamma, lam, clip, ent_coef = 0.995, 0.95, 0.2, 0.01
+    gamma, lam, clip, ent_coef = a.gamma, 0.95, 0.2, 0.01
     t_start, total, update = time.time(), 0, 0
     log = open(os.path.join(out, "metrics.jsonl"), "a")
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
@@ -329,6 +331,9 @@ def main():
                                     round(float(agg["vs_persona"][1, j] / max(1.0, agg["vs_persona"][2, j]) * 2400), 2)]
                                for j, n_ in enumerate(PERSONAS)},
                    teach=[round(kick, 3), round(float(kick_l), 3)],
+                   crouch=round(float(agg["duck_frames"] / max(1, agg["play_frames"])), 3),
+                   walk=round(float(agg["walk_frames"] / max(1, agg["play_frames"])), 3),
+                   fall_dmg_per_min=round(float(agg["fall_dmg"] / (2 * sim_min)), 2),
                    target_kills_per_min=round(float(agg["target_kills"] / max(1, agg["aim_round_frames"]) * 2400), 2),
                    visible=round(agg["visible"] / max(1, agg["players"]), 3),
                    air_fast=round(agg["air_fast"] / max(1, agg["players"]), 3),

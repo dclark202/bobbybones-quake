@@ -87,6 +87,18 @@ class World:
                 out.append((e["classname"], e["model"], dest["origin"]))
         return out
 
+    def trigger_spots(self):
+        """(kind, center of the trigger brush, destination) for jump pads (kind 0) and teleporters (kind 1)"""
+        if not hasattr(self.lib, "qsim_model_bounds"):
+            return []
+        self.lib.qsim_model_bounds.argtypes = [ctypes.c_int, F32]
+        out = []
+        for cls, model, dest in self.triggers:
+            b = np.zeros(6, np.float32)
+            self.lib.qsim_model_bounds(int(model[1:]), b)
+            out.append((0 if cls == "trigger_push" else 1, (b[:3] + b[3:]) / 2.0, np.asarray(dest, np.float32)))
+        return out
+
     def set_params(self, jump_velocity, auto_hop, chain_jump, chain_velocity, chain_ms):
         self.lib.qsim_params(jump_velocity, auto_hop, chain_jump, chain_velocity, chain_ms)
 

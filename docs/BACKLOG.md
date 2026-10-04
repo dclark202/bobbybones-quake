@@ -39,6 +39,21 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-45 | P2 | open | Pro-demo position prior: where pros stand and which weapon they hold by distance, from the 374 parsed demos (positions need no key inference); use as a benchmark first, as a small reward only if needed | B-30, B-09 |
 | B-46 | P2 | open | Suite rooms for these: route times against a reference, speed in normal rounds, share of fights from higher ground, big-item share over a full duel, weapon by distance against opponents that fight back | B-35 |
 
+## New inputs and rules (owner 2026-10-04: all high and medium inputs, round-level memory, crouch, walk, fall damage, true hitbox)
+
+| ID | P | Status | Item | Why / evidence |
+|---|---|---|---|---|
+| B-47 | P1 | built in the simulator, not yet trained | New inputs (311 total): clock and score, all item types (several per kind), sounds (pickups, weapon fire, jumps, teleports), map position and identity, view / up / long rays, enemy weapon and facing, damage dealt estimate, hit feedback, nearest teleporter and jump pad | He could not see these; positioning and decisions depend on them |
+| B-48 | P1 | built in the simulator, not yet trained | Memory kept across deaths for the whole round; longer training sequences (6.4 s) and horizon (gamma 0.998) | Stack and item timers must survive a death |
+| B-49 | P1 | built in the simulator, not yet trained | Crouch and walk (walking is silent), fall damage (Quake 3 rule: 5 / 10 by landing speed) | Owner request |
+| B-50 | P1 | open | Widen the `duel_gru_v3` network to the new inputs and actions without losing its skills (new inputs start at zero weight); verify on a copy | So aim is kept |
+| B-51 | P1 | open | Mirror B-47 to B-49 in `plugins/duelbot.py` (sounds, clock, score, crouch, walk) so the next Bobby can be played | |
+| B-52 | P2 | open | True hitbox check on the real server: rail shots at the edges of the box, standing and crouched (the simulator uses the game's 30 x 30 x 56 box, 40 high crouched; Keel's model matches it) | Owner: hitbox must be true |
+| B-53 | P2 | open | Measure on the real server: how far pickups, weapon fire, jumps and teleporters are heard (simulator: 1200 units, a guess); fall damage values | New rules are unmeasured |
+| B-54 | P1 | open | Simulator speed: the new rays and item inputs halve steps per second; profile and speed up | Smoke test 9.5k vs 18.9k steps/s in one process |
+| B-55 | P2 | open | Test rooms for the new abilities: item timing (back at mega when it respawns), sound (enemy takes an item out of sight: does he react), memory across a death (returns to the fight or the item), fall damage per minute, crouch and walk use, high-ground fights | Owner request |
+| B-56 | P3 | flagged | Not true to the game yet: short rounds, items reset at round start, spawning with every weapon, close respawns. Kept for now to coax out the behavior; move to real duel rules later (B-42) | Owner 2026-10-04 |
+
 ## Test suite
 
 | ID | P | Status | Item | Why / evidence |

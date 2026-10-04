@@ -223,6 +223,14 @@ API int qsim_add_trigger(int model_num, int type, const float *target, float ang
 
 API void qsim_clear_triggers(void) { ntriggers = 0; }
 
+/* bounds of an inline model (trigger brush): out = mins xyz, maxs xyz */
+API void qsim_model_bounds(int model_num, float *out) {
+    vec3_t mins, maxs;
+    CM_ModelBounds(CM_InlineModel(model_num), mins, maxs);
+    VectorCopy(mins, out);
+    VectorCopy(maxs, out + 3);
+}
+
 static void touch_triggers(playerState_t *ps) {
     static const vec3_t pmins = {-15, -15, -24}, pmaxs = {15, 15, 32};
     int j;
