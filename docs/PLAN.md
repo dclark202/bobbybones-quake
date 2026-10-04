@@ -12,6 +12,7 @@ rate against a control group of plain Nightmare bots, and by live tests on a rea
 | [BACKLOG.md](BACKLOG.md) | Every open, planned and finished work item, with an ID (`B-nn`) and priority | An item is added, started, finished or dropped |
 | [RESULTS.md](RESULTS.md) | Dated log of what was tried and what happened, including what did **not** work | Every training run, live test or measurement |
 | [PLAYTEST.md](PLAYTEST.md) | The play-test routine and how to run the test suite | The routine or the rooms change |
+| [COMMANDS.md](COMMANDS.md) | Every server chat command | A command is added or changed |
 | [LOGS.md](LOGS.md) | Schema of the recorded data (play-test sessions, training metrics, weapon lab) | A log format changes |
 
 Rules: a result entry names the backlog items it settles (`B-nn`); a backlog item marked done links to the
@@ -69,8 +70,9 @@ Next after the run: B-32 (play `duel_gru_v3` live), B-33/B-34 (test suite with a
   resource comes later ("getting him to not suck first").
 - Weapons were validated against the real game before training was trusted; keep doing that for new mechanics.
 - Pro demos: Blood Run and Aerowalk first; fetch more only if needed.
-- Public server stays off until a model beats Nightmare reliably. Play-testing happens on the private,
-  password-protected server (`tools/duel_server.sh`).
+- Sharing (2026-10-04): post to the Quake community once Bobby is decent (after the next run), with a video,
+  a public server for playing him and one for the test chamber, a how-to-help page and a results page
+  (B-61 to B-65). This replaces the earlier rule "no public server until he beats Nightmare".
 - Log as much as possible from human-played rounds.
 - Long-term focus (2026-10-04): smooth, efficient movement that keeps speed, and good choices of position and
   weapon, not just good aim (BACKLOG B-42 to B-46).

@@ -47,6 +47,7 @@ BobbyBones can be tuned to help new players learn the game by adapting to the sk
 
 Details, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:
 [docs/PLAN.md](docs/PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md). Log formats: [docs/LOGS.md](docs/LOGS.md).
+Server commands: [docs/COMMANDS.md](docs/COMMANDS.md). Play-test routine: [docs/PLAYTEST.md](docs/PLAYTEST.md).
 
 ## Running it
 
@@ -62,8 +63,8 @@ bash tools/duel_server.sh my_run bloodrun                  # private play-test s
 SPAR=1 bash tools/duel_server.sh my_run bloodrun           # the same network against a Nightmare bot
 ```
 
-On the play-test server (chat): `!note <text>` saves feedback with the game state, `!drill <weapon>` gives both
-players one weapon, `!room suite` runs the test rooms on you, `!map <bloodrun|aerowalk|campgrounds>`.
+On the play-test server, chat commands save feedback (`!note`), run the test chamber on you (`!map bobbylab`,
+`!room suite`) and let you watch him play a Nightmare bot (`!spar`). Full list: [docs/COMMANDS.md](docs/COMMANDS.md).
 
 ## Repo layout
 

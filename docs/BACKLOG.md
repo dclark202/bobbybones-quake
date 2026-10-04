@@ -58,7 +58,11 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-58 | P1 | built, not trained | Human aim limits: 200 ms acquisition, 50 ms tracking, flick cap, hand noise, reload jitter, fire-button cost | Owner play test 2026-10-04: aim superhuman |
 | B-59 | P1 | built, not trained | Random 1-2 weapon loadouts per player (60%), real duel spawn (20%), all weapons (20%); two-sided damage reward | Owner play test: shotgun only, takes every fight |
 | B-60 | P2 | open | Tune the aim limits from the owner's test-suite card (human baseline per room) | Owner 2026-10-04 |
-| B-61 | P2 | open | Community release: public test server (rooms + play), opt-in baseline cards, feedback channel | Owner wants to share on Reddit |
+| B-61 | P2 | open | Community release, after the next run: two rented servers (play Bobby / test chamber), hardened for strangers (restart policy, queue, command limits, privacy notice) | Owner 2026-10-04: hold until Bobby is decent |
+| B-62 | P2 | open | Videos for the post: first-person clip of Bobby playing, and of the strafe jumping he learned | Owner 2026-10-04 |
+| B-63 | P2 | open | "How to help" page: connect, play, run the test chamber, leave notes; what is recorded | Owner 2026-10-04 |
+| B-64 | P1 | open | Results for players: after the test chamber a player sees their own card, Bobby's, and the average of all players, in game (`!card`) and on a results page updated per run | Owner 2026-10-04 |
+| B-65 | P3 | open | Check whether a Quake Live client downloads `bobbylab` from the server; if not, publish it on the Steam Workshop | Owner believes clients can download it |
 
 ## Test suite
 

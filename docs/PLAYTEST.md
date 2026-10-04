@@ -1,6 +1,6 @@
 # Play-test routine
 
-Two parts: play Bobby (about 20 minutes), then run the test rooms on yourself (about 25 minutes). Everything is
+Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 27 minutes). Everything is
 logged per frame; your notes are what the numbers cannot show. Log formats: [LOGS.md](LOGS.md).
 
 ## Before you start
@@ -11,7 +11,7 @@ bash tools/duel_server.sh <run> bloodrun <env module>     # e.g. duel_gru_v3 blo
 - Connect to port 27970. In the console first: `password <value>` (the `DUEL_PASSWORD` line in `data/owner.env`).
 - The server stays in warmup: no clock, no score, endless play. Both players spawn with every weapon and one
   pickup's worth of ammo (this is not true to the game; items and weapons still respawn normally).
-- Chat commands: `!note <text>`, `!drill <weapon|off>`, `!map <bloodrun|aerowalk|campgrounds>`, `!room ...`, `!rooms`.
+- Chat commands: [COMMANDS.md](COMMANDS.md). To watch him against a Nightmare bot: `!spar`.
 
 ## Part 1: play him (about 20 minutes)
 
@@ -34,34 +34,29 @@ Questions to answer at the end (as notes or in chat):
 3. What would a decent player punish first?
 4. Anything that looked like a bug (stuck, not shooting, spinning)?
 
-## Part 2: test rooms on yourself (about 25 minutes)
+## Part 2: the test chamber (about 27 minutes)
 
 Bobby's body becomes the scripted target or opponent and **you** are measured, with the same metrics the
-simulator uses for him. This gives the "decent human" bar for each room.
+simulator uses for him. This gives the human bar for each room. All commands: [COMMANDS.md](COMMANDS.md).
 
-- `!room suite` runs the standard set: 12 aim rooms (LG, rail, rockets against a still and a fast target at mid
-  range, and the fast target at close and far range), 3 weapon-choice rooms, movement, solo, and 4 ladder
-  opponents (allround, sniper, rusher, tracker). About 25 minutes. `!room off` stops it at any time.
-- Each room counts down 5 s, then runs 40-120 s and prints your result in chat.
-- Aim and weapon-choice rooms move you to a new spot every 10 s, roughly facing the target, with fresh ammo.
-  The target never dies and never shoots. Just shoot it as well as you can.
-- Weapon-choice rooms: you have every weapon. Use whatever you think is right for the distance.
-- Movement room: the screen names an item ("Go to: Mega Health"). Get there as fast as you can; the next goal
-  follows. Weapons are taken away.
-- Solo room: two minutes alone. Collect what you would collect in a real game. Do not shoot Bobby (he stands still).
-- Ladder rooms: a two-minute fight against a scripted opponent of one style. Play to win.
+1. `!map bobbylab` (the test map: an aim box, an environment box with pillars and cover, a speed straight, and
+   copies of four classic trick spots).
+2. `!room suite`: 33 rooms, back to back. `!room off` stops it at any time.
 
-Single rooms, for repeats or weapons outside the suite:
-```
-!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]
-!room choice <close|mid|far>
-!room move        !room solo
-!room ladder [allround|sniper|rusher|tracker|dodger|stander|jumper|spammer]
-```
-Repeating a room averages your results. Running the suite two or three times gives a steadier baseline.
+| Rooms | What happens | What to do |
+|---|---|---|
+| 24 aim rooms, 30 s each | Eight weapons, three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
+| 4 trick jumps, 60 s each | Campgrounds bridge to rail, Campgrounds pillars, Aerowalk red armor, Blood Run red armor. You start at the start spot and are returned there after each attempt. Gauntlet only | Make the jump as often and as fast as you can |
+| Speed straight, 60 s | A 2000-unit flat run | To the far end and back, as fast as you can |
+| 4 fights, 100 s each | In the environment box against the allround, sniper, rusher and tracker styles, every weapon in hand | Play to win |
+
+Each room counts down 5 s and prints your result in chat. Single rooms for repeats: `!rooms` lists them.
+Repeating a room averages your results; two or three runs of the suite give a steadier baseline.
+
+If a trick station's start or goal is in the wrong place, say where with `!note stuck ...`.
 
 Your card is saved to `data/duellive/suite/human_<time>.json`; the session with every frame and note is in
-`data/duellive/sessions/`.
+`data/duellive/sessions/`. The stock maps have their own, older set of rooms (see COMMANDS.md).
 
 ## Running the test suite on Bobby (simulator)
 
