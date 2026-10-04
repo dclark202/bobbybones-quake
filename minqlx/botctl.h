@@ -12,6 +12,7 @@ void Botctl_AfterFrame(void);
 PyObject* PyMinqlx_SetBotInput(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ClearBotInput(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ViewAngles(PyObject* self, PyObject* args);
+PyObject* PyMinqlx_SetView(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_LastUsercmd(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_RanUsercmd(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetBotSubsteps(PyObject* self, PyObject* args);

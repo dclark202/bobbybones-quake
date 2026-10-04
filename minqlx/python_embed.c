@@ -1725,6 +1725,7 @@ static PyMethodDef minqlxMethods[] = {
     {"set_bot_input", PyMinqlx_SetBotInput, METH_VARARGS, "Override a client's usercmd."},
     {"clear_bot_input", PyMinqlx_ClearBotInput, METH_VARARGS, "Stop overriding a client's usercmd."},
     {"view_angles", PyMinqlx_ViewAngles, METH_VARARGS, "Get a client's view angles."},
+    {"set_view", PyMinqlx_SetView, METH_VARARGS, "Turn a player's view to pitch, yaw."},
     {"last_usercmd", PyMinqlx_LastUsercmd, METH_VARARGS, "Get a client's last usercmd."},
     {"ran_usercmd", PyMinqlx_RanUsercmd, METH_VARARGS, "Get the last usercmd SV_ClientThink actually ran for a client."},
     {"set_bot_substeps", PyMinqlx_SetBotSubsteps, METH_VARARGS, "Move a fully controlled bot n times per frame (human physics)."},

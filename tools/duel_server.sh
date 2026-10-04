@@ -16,8 +16,8 @@ PY="${PYTHON:-python}"
 mkdir -p data/duellive
 "$PY" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out data/duellive/policy.npz
 if [ -n "$SPAR" ]; then
-    docker run -d --name qlduel -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot \
-        -v "$ROOT/data/duellive:/tmp/practice" qlbot +set sv_master 0 +set sv_serverType 0 >/dev/null
+    docker run -d --name qlduel -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" \
+        -v "$ROOT/data/duellive:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" qlbot +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs Nightmare on $MAP)"; exit 0
 fi
 QLX_OWNER=""; DUEL_PASSWORD=""
@@ -27,6 +27,6 @@ if [ -z "$DUEL_PASSWORD" ]; then
     echo "DUEL_PASSWORD=$DUEL_PASSWORD" >> data/owner.env
 fi
 docker run -d --name qlduel -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" \
-    -p 27970:27970/udp -v "$ROOT/data/duellive:/tmp/practice" qlbot +set net_port 27970 \
+    -p 27970:27970/udp -v "$ROOT/data/duellive:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" qlbot +set net_port 27970 \
     +set sv_hostname "BobbyBones playtest" +set g_password "$DUEL_PASSWORD" >/dev/null
 echo "play-test server up on port 27970, map $MAP (password in data/owner.env)"

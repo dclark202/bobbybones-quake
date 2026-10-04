@@ -27,14 +27,16 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-29 | P1 | doing (`duel_gru_v3`) | Bigger health/armor bonus (0.3 per 100 points), to be faded later | Play test: owner took ~75 big items, Bobby 14 |
 | B-30 | P2 | open | Positioning: high ground, where people stand, not lingering at teleporters | Play test notes; needs full duels (B-12) or demos (B-10) |
 | B-31 | P2 | open | Rockets aimed at surfaces near the enemy, not only at the body | Play test note |
-| B-32 | P2 | open | Mirror the new simulator rules (view smoothing, pitch rule, nine weapons, goal inputs) in `plugins/duelbot.py` so `duel_gru_v3` can be played | Needed for the morning play test |
+| B-32 | P2 | done (dry run vs Nightmare; human test pending) | Mirror the new simulator rules (view smoothing, pitch rule, nine weapons, goal inputs) in `plugins/duelbot.py` so `duel_gru_v3` can be played | Needed for the morning play test |
 
 ## Test suite
 
 | ID | P | Status | Item | Why / evidence |
 |---|---|---|---|---|
-| B-33 | P1 | open | Standard test rooms run on every checkpoint: aim range per weapon and target, movement course, weapon choice by range, ammo discipline, item room, dodge room, awareness, fixed opponent ladder; one scorecard, regressions flagged | Owner request 2026-10-03 |
-| B-34 | P1 | open | The same rooms playable on the play-test server so the owner can set a "decent human" baseline | Owner will run it a few times |
+| B-33 | P1 | done (v1: `sim/test_suite.py`) | Standard test rooms run on any checkpoint: aim per weapon and target, weapon choice by range, movement, solo (items, firing at nothing), scripted-fighter ladder; one scorecard with changes against an earlier card | Owner request 2026-10-03 |
+| B-35 | P2 | open | Test suite v2: dodge room, awareness room (enemy leaves view), frozen past checkpoints and Nightmare on the ladder, run automatically at every league snapshot | Left out of v1 |
+| B-34 | P1 | built, waiting for the owner's runs | The same rooms on the play-test server (`!room ...`, `!room suite`), human baseline card in `data/duellive/suite/` | Dry run with a Nightmare bot as the subject worked |
+| B-36 | P2 | open | Run Bobby himself through the live rooms (needs a second controlled bot as the target) | Now only the simulator scores Bobby |
 
 ## Learning from people
 

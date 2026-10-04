@@ -52,6 +52,30 @@ an opponent is in the game with Bobby and ends when they leave or the map change
 
 Suggested note tags (first word of the text): `aim`, `move`, `weapon`, `items`, `stuck`, `weird`, `good`.
 
+### Test rooms (schema 2 additions)
+- `frames.csv` column `drill` holds `room:<room name>` while a room runs; in rooms the `o_` player is the
+  subject (the human) and `b_` is the scripted target or fighter.
+- `events.jsonl`: `room_start` (`room`), `room_result` (`room`, `result` = the room's metrics); `note` and
+  `death` carry `room`.
+
+## Test suite cards
+One JSON per card: `{suite, run, subject, minutes, maps, rooms: {<room name>: {<metric>: value}}}`.
+- Policy cards: `data/sim_runs/<run>/suite/card_<minutes>.json` and `.md` (`sim/test_suite.py`).
+- Human cards: `data/duellive/suite/human_<UTC time>.json` (play-test server, `!room ...`); repeated rooms are
+  averaged and `runs` counts them.
+
+| Room | Metrics |
+|---|---|
+| `aim/<weapon>/<still,slow,fast,jump>[@close,@far]` | `hit_rate`, `damage_per_s`, `kills_per_min`, `aim_err_deg` and `on_target` (while the target is in view), `sees_target` |
+| `choice/<close,mid,far>` | `held` (weapon share while the target is in view), `switches_per_min`, `damage_per_s`, `kills_per_min` |
+| `move` | `arrivals_per_min`, `speed`, `fast_air` (share of frames airborne above 330 u/s) |
+| `solo` | `mega_per_min`, `red_armor_per_min`, `armor_per_min`, `health_per_min`, `fire`, `blind_fire`, `switches_per_min` |
+| `ladder/fighter` | `frags_per_min`, `deaths_per_min`, `damage_dealt_per_min`, `damage_taken_per_min`, `switches_per_min`, `blind_fire` |
+
+Differences between the simulator rooms and the live rooms: live targets have endless health and kills are
+counted as damage / 125; a human's hits are derived from damage and ammo used; live aim rooms re-place both
+players every 10 s; the simulator runs 32 subjects per map at once.
+
 ## Training runs (`data/sim_runs/<run>/`)
 - `metrics.jsonl`: one line per report: `update`, `steps`, `minutes`, `sps`, `frags_per_match_min`,
   `suicides_per_match_min`, per-weapon hit rates and frag shares, `pickups_per_player_min`, `visible`,

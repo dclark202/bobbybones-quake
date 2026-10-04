@@ -1,15 +1,21 @@
-"""duelbot: play a duel policy trained in the simulator (sim/train_duel_rnn.py) on the real Quake Live server.
+"""duelbot: play a duel policy trained in the simulator (sim/train_duel_rnn.py) on the real Quake Live server,
+and run the standard test rooms (sim/test_suite.py) with a human as the subject.
 
-BobbyBones is fully controlled by the network with human physics (3 moves per frame). His inputs are built by
-the exact same code as in training (the simulator's observe()), fed from the real game: positions, health,
-armor, weapons, ammo, the opponent's rockets, item states. The same fairness rules apply as in training: the
-opponent is only known when in view with line of sight (150 ms late) or roughly when heard nearby.
+Policy play: BobbyBones is fully controlled by the network with human physics (3 moves per frame). His inputs
+are built by the exact same code as in training (the simulator's observe()), fed from the real game: positions,
+health, armor, weapons, ammo, the opponent's projectiles, item states. The same fairness rules apply as in
+training: the opponent is only known when in view with line of sight (after the trained reaction delay) or
+roughly when heard nearby. Both players spawn with the loadout the policy trained with.
 
-Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human
-is there. Both players spawn with the loadout the policy trained with (MG, RL, RG, LG and a little ammo).
+Test rooms (!room ...): Bobby's body becomes the scripted target / fighter of the simulator's rooms and the
+human is measured with the same metrics, giving a human baseline card (docs/LOGS.md).
 
-Load with QLX_PLUGINS="botctl, duelbot". Needs /tmp/practice/policy.npz (sim/export_duel.py).
-Writes /tmp/practice/duel_live.jsonl (frags and a summary line every minute) and duelbot.log.
+Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
+there. The server is held in warmup on the three maps.
+
+Chat commands: !note <text>, !drill <weapon|off>, !map <name>, !room <...> (see cmd_room), !rooms.
+Load with QLX_PLUGINS="botctl, duelbot". Needs /tmp/practice/policy.npz (sim/export_duel.py); rooms need
+/maps/nav_<map>_sim.json. Writes /tmp/practice/sessions/<session>/ and /tmp/practice/suite/.
 """
 import importlib
 import json
@@ -25,13 +31,21 @@ import numpy as np
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
 MAPS = ("bloodrun", "aerowalk", "campgrounds")
-QL_WEAPON = (5, 7, 6, 2)                                    # simulator weapon index (RL, RG, LG, MG) -> game number
-SIM_WEAPON = {5: 0, 7: 1, 6: 2, 2: 3}
-SCHEMA = 1
+QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
+QLNAME = {v: k for k, v in QLNUM.items()}
+SCHEMA = 2
 _P = ["x", "y", "z", "vx", "vy", "vz", "pitch", "yaw", "health", "armor", "weapon", "ammo_rl", "ammo_rg", "ammo_lg",
       "fwd", "right", "up", "fire"]
 FRAME_COLS = ["t", "server_ms", "drill"] + ["b_" + c for c in _P] + ["o_" + c for c in _P] + \
     ["b_sees", "b_seen_ago", "los", "b_aim_err", "o_aim_err", "missiles"]
+BANDS = {"close": (150.0, 300.0), "mid": (350.0, 650.0), "far": (800.0, 1200.0)}
+STYLES = ("still", "slow", "fast", "jump")
+ROOM_SECS = {"aim": 60, "choice": 40, "move": 90, "solo": 120, "ladder": 120}
+REP_SECS = 10.0
+GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
+SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
+    [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
+    [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"], ["ladder"]]
 
 
 def is_bot(p):
@@ -48,7 +62,10 @@ class duelbot(minqlx.Plugin):
         self.add_hook("map", self.on_map)
         self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|campgrounds>")
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
-        self.add_command("drill", self.cmd_drill, 0, usage="<rl|rg|lg|off>")
+        self.add_command("drill", self.cmd_drill, 0, usage="<weapon|off>")
+        self.add_command("room", self.cmd_room, 0,
+                         usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder | suite | off")
+        self.add_command("rooms", self.cmd_rooms, 0)
         self.drill = None                                    # weapon drill: both players have only this weapon
         self.top_up = 0.0
         self.last = {}                                       # latest snapshot of both players, for notes
@@ -56,13 +73,16 @@ class duelbot(minqlx.Plugin):
         self.next_check = 0.0
         self.want_map = os.environ.get("LAB_MAP", "bloodrun").lower()
         self.opp_bot = os.environ.get("DUEL_OPP", "") == "bot"
+        self.room_test = os.environ.get("DUEL_ROOMTEST", "") == "1"
         self.alive = {}                                      # client id -> was alive last frame
         self.score = dict(bobby=0, opp=0)
-        self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w=[0, 0, 0, 0])
+        self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w={})
         self.next_summary = time.time() + 60
         self.err_t = 0.0
+        self.last_abort = 0.0
         self.sess, self.frames_f, self.sess_opp = None, None, None
-        self.tot, self.item_was = {}, {}
+        self.tot, self.item_was, self.item_ent = {}, {}, {}
+        self.room, self.queue, self.card, self.card_path = None, [], {}, None
 
     def log(self, msg):
         minqlx.console_print("[duelbot] " + msg + "\n")
@@ -110,36 +130,39 @@ class duelbot(minqlx.Plugin):
                 round(float(va[0]), 2), round(float(va[1]), 2), st.health, st.armor, int(st.weapon),
                 am.rl if own.rl else -1, am.rg if own.rg else -1, am.lg if own.lg else -1, *cmd]
 
-    def aim_err(self, i):
+    @staticmethod
+    def aim_err(env, i):
         """degrees between player i's crosshair and the true direction to the other player's body"""
-        env = self.env
         to = env.state[i ^ 1, :3] + np.array([0, 0, 4.0], np.float32) - env._eye(env.state)[i]
         yr, pr = math.radians(float(env.yaw[i])), math.radians(float(env.pitch[i]))
         f = np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), -math.sin(pr)])
         c = float((to * f).sum() / (np.linalg.norm(to) + 1e-6))
         return round(math.degrees(math.acos(max(-1.0, min(1.0, c)))), 2)
 
-    def log_frame(self, now, bobby, opp, bs, os_, bcmd):
-        env = self.env
+    def log_frame(self, now, env, bs_slot, bobby, opp, bs, os_, bcmd, tag):
+        """one frames.csv row; env slot bs_slot is Bobby, the other slot is the opponent"""
+        o_slot = bs_slot ^ 1
         oc = minqlx.ran_usercmd(opp.id)                       # the opponent's real keys and buttons this frame
         eye = env._eye(env.state)
         los = bool(env._los(eye[:1], env.state[1:2, :3] + np.array([0, 0, 8.0], np.float32))[0])
-        row = [round(now, 3), minqlx.item_states()[0], self.drill or "-",
+        row = [round(now, 3), minqlx.item_states()[0], tag or "-",
                *self.player_row(bobby, bs, bcmd), *self.player_row(opp, os_, [oc[3], oc[4], oc[5], oc[1] & 1]),
-               int(env.visible[0]), round(float(env.seen_t[0]), 2), int(los), self.aim_err(0), self.aim_err(1),
-               len(minqlx.missiles())]
+               int(env.visible[bs_slot]), round(float(env.seen_t[bs_slot]), 2), int(los),
+               self.aim_err(env, bs_slot), self.aim_err(env, o_slot), len(minqlx.missiles())]
         self.frames_f.write(",".join(str(v) for v in row) + "\n")
-        # damage events from health + armor drops
-        for who, st, other in (("bobby", bs, os_), ("opp", os_, bs)):
+        dmg = {}
+        for who, st, other in (("bobby", bs, os_), ("opp", os_, bs)):   # damage events from health + armor drops
             tot = max(0, st.health) + st.armor
             prev = self.tot.get(who)
             if prev is not None and prev - tot >= 3 and prev > 0:
-                self.record(event="hit", victim=who, dmg=int(prev - tot), killed=bool(st.health <= 0),
+                dmg[who] = int(prev - tot)
+                self.record(event="hit", victim=who, dmg=dmg[who], killed=bool(st.health <= 0),
                             attacker_weapon=int(other.weapon), victim_weapon=int(st.weapon),
-                            dist=round(float(np.linalg.norm(env.state[0, :3] - env.state[1, :3]))), los=los,
-                            drill=self.drill)
+                            dist=round(float(np.linalg.norm(env.state[0, :3] - env.state[1, :3]))), los=los, drill=tag)
             self.tot[who] = tot
+        return dmg, los
 
+    # ------------------------------------------------------------------ commands
     def cmd_map(self, player, msg, channel):
         if len(msg) < 2 or msg[1].lower() not in MAPS:
             return minqlx.RET_USAGE
@@ -150,12 +173,15 @@ class duelbot(minqlx.Plugin):
         """the play-tester's feedback, stamped with the game state at that moment"""
         if len(msg) < 2:
             return minqlx.RET_USAGE
-        self.record(event="note", text=" ".join(msg[1:]), drill=self.drill, state=self.last, **self.score)
+        self.record(event="note", text=" ".join(msg[1:]), drill=self.drill, room=self.room["name"] if self.room else None,
+                    state=self.last, **self.score)
         player.tell("noted")
 
     def cmd_drill(self, player, msg, channel):
-        if len(msg) < 2 or msg[1].lower() not in ("rl", "rg", "lg", "off"):
-            return minqlx.RET_USAGE
+        names = [w for w in self.E.WEAPONS if w != "g"] if self.ready else []
+        if len(msg) < 2 or msg[1].lower() not in names + ["off"]:
+            player.tell("usage: !drill <{}|off>".format("|".join(names)))
+            return
         self.drill = None if msg[1].lower() == "off" else msg[1].lower()
         self.record(event="drill", drill=self.drill, **self.score)
         for p in self.players():
@@ -163,10 +189,56 @@ class duelbot(minqlx.Plugin):
                 self.give_loadout(p)
         self.msg("Drill: {}".format(self.drill or "off (normal loadout)"))
 
+    def cmd_rooms(self, player, msg, channel):
+        player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
+        player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s) | ladder (120 s)")
+        player.tell("!room suite = the standard set, about 20 minutes | !room off")
+
+    def cmd_room(self, player, msg, channel):
+        a = [m.lower() for m in msg[1:]]
+        if not a or not self.ready:
+            return minqlx.RET_USAGE
+        if a[0] == "off":
+            self.queue, self.room = [], None
+            self.msg("Rooms off: back to the normal duel.")
+            return
+        specs = SUITE if a[0] == "suite" else [a]
+        out = []
+        for s in specs:
+            r = self.room_spec(s)
+            if r is None:
+                return minqlx.RET_USAGE
+            out.append(r)
+        if self.renv.field is None and any(r["kind"] == "move" for r in out):
+            player.tell("The movement room needs this map's nav file.")
+            out = [r for r in out if r["kind"] != "move"]
+        self.queue += out
+        if a[0] == "suite":
+            self.msg("Test suite: {} rooms, about {} minutes. !room off stops it.".format(
+                len(out), round(sum(r["secs"] + 6 for r in out) / 60)))
+
+    def room_spec(self, a):
+        R = self.R
+        if a[0] == "aim" and len(a) >= 3 and a[1] in R.WEAPONS and a[1] != "g" and a[2] in STYLES:
+            band = a[3] if len(a) > 3 and a[3] in BANDS else "mid"
+            name = "aim/{}/{}".format(a[1], a[2]) + ("" if band == "mid" else "@" + band)
+            return dict(kind="aim", name=name, weapon=a[1], style=R.STYLES.index(a[2]), band=BANDS[band], script=1,
+                        secs=ROOM_SECS["aim"])
+        if a[0] == "choice" and len(a) >= 2 and a[1] in BANDS:
+            return dict(kind="choice", name="choice/" + a[1], style=3, band=BANDS[a[1]], script=1, secs=ROOM_SECS["choice"])
+        if a[0] == "move":
+            return dict(kind="move", name="move", script=0, secs=ROOM_SECS["move"])
+        if a[0] == "solo":
+            return dict(kind="solo", name="solo", script=0, secs=ROOM_SECS["solo"])
+        if a[0] == "ladder":
+            return dict(kind="ladder", name="ladder/fighter", style=0, script=2, secs=ROOM_SECS["ladder"])
+        return None
+
     def on_map(self, mapname, factory):
         self.end_session()
         self.ready = False
         self.alive = {}
+        self.room, self.queue = None, []
 
     # ------------------------------------------------------------------ setup
     def setup(self):
@@ -182,13 +254,19 @@ class duelbot(minqlx.Plugin):
         self.E = E = importlib.import_module(str(self.P["env"]))
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
-        self.env.react_frames = round(self.react_ms / 25)   # same reaction delay as in training (newer simulators)
+        self.env.react_frames = round(self.react_ms / 25)    # same reaction delay as in training (newer simulators)
         self.h = np.zeros((1, self.P["whh"].shape[1]), np.float32)
-        self.refire = np.array([E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK], np.float32)
-        self.item_ent = {}                                   # game entity number -> simulator item index
+        # the test rooms always use the current simulator's scripted players; slot 0 = human, slot 1 = Bobby
+        self.R = R = importlib.import_module("duel_env")
+        nav = "/maps/nav_{}_sim.json".format(mapname)
+        self.renv = R.DuelEnv(bsp, n_matches=1, seed=2, nav=nav if os.path.exists(nav) else None)
+        self.goal_labels = [d[4] for d in self.renv.item_def if d[4] in GOAL_NAMES]
+        self.rng = np.random.default_rng(int(time.time()))
+        self.item_ent = {}
         self.ready = True
-        self.log("ready on {}: policy {} ({} min of training), {} inputs".format(
-            mapname, self.P["run"], int(self.P["minutes"]), E.OBS_DIM))
+        self.log("ready on {}: policy {} ({} min of training), {} inputs, reaction {} ms, rooms nav {}".format(
+            mapname, self.P["run"], int(self.P["minutes"]), E.OBS_DIM, int(self.react_ms),
+            "yes" if self.renv.field is not None else "no"))
 
     def act(self, obs):
         P = self.P
@@ -212,7 +290,7 @@ class duelbot(minqlx.Plugin):
             i += d
         return out
 
-    # ------------------------------------------------------------------ players
+    # ------------------------------------------------------------------ players and world
     def cast(self):
         bobby, human, filler = None, None, None
         for p in self.players():
@@ -225,24 +303,39 @@ class duelbot(minqlx.Plugin):
                     filler = p
             elif human is None:
                 human = p
+        if self.room_test and human is None:                 # dry run of the rooms with a bot as the subject
+            human, filler = filler, None
         return bobby, human, filler
 
-    def give_loadout(self, p):
+    def give_loadout(self, p, E=None, only=None, boost=1):
+        """spawn weapons as in training. only = one weapon (drill / aim room); boost multiplies the ammo"""
+        E = E or self.E
+        if only is None:
+            only = self.drill
+        nine = hasattr(E, "NW")
         try:
-            if self.drill:                                   # as in training: one weapon, ammo never runs out
-                p.weapons(reset=True, **{self.drill: True})
-                p.ammo(**{self.drill: 150 if self.drill == "lg" else 25})
-                p.weapon({"rl": 5, "rg": 7, "lg": 6}[self.drill])
-                return
-            has, ammo = self.E.LOADOUTS["full"]
-            p.weapons(reset=True, g=True, mg=True, rl=bool(has[0]), rg=bool(has[1]), lg=bool(has[2]))
-            p.ammo(mg=100, rl=int(ammo[0]), rg=int(ammo[1]), lg=int(ammo[2]))
+            if only:
+                k = E.WEAPONS.index(only)
+                p.weapons(reset=True, g=nine, **{only: True})
+                p.ammo(**{only: int(E.DRILL_AMMO[k]) if nine else (150 if only == "lg" else 25)})
+                p.weapon(QLNUM[only])
+            elif nine:
+                owned, ammo = E.LOADOUTS["all"]
+                kw = {E.WEAPONS[k]: True for k in owned}
+                kw.update(mg=True, g=True)
+                p.weapons(reset=True, **kw)
+                p.ammo(**{E.WEAPONS[k]: int(min(E.AMMO_MAX[k], v * boost)) for k, v in ammo.items()})
+                p.weapon(QLNUM[E.WEAPONS[owned[0]]])          # the simulator spawns holding the first weapon (rockets)
+            else:
+                has, ammo = E.LOADOUTS["full"]
+                p.weapons(reset=True, g=True, mg=True, rl=bool(has[0]), rg=bool(has[1]), lg=bool(has[2]))
+                p.ammo(mg=100, rl=int(ammo[0]), rg=int(ammo[1]), lg=int(ammo[2]))
         except Exception as e:
             self.log("loadout error: {!r}".format(e))
 
-    def fill_player(self, i, p, st):
+    @staticmethod
+    def fill_player(env, E, i, p, st):
         """copy one real player's state into simulator slot i; returns (pos, vel, ground, pitch, yaw)"""
-        env = self.env
         pos = np.array(st.position, np.float32)
         vel = np.array(st.velocity, np.float32)
         floor = env.w.rays(pos[None], np.array([[0, 0, -1.0]], np.float32), 30.0)[0, 0] < 1
@@ -252,39 +345,51 @@ class duelbot(minqlx.Plugin):
         env.state[i] = [*pos, *vel, ground, yaw]
         env.yaw[i], env.pitch[i] = yaw, pitch
         env.hp[i], env.armor[i] = st.health, st.armor
-        env.weapon[i] = SIM_WEAPON.get(int(st.weapon), 3)
-        env.has[i] = [bool(st.weapons.rl), bool(st.weapons.rg), bool(st.weapons.lg)]
-        env.ammo[i] = [max(0, st.ammo.rl), max(0, st.ammo.rg), max(0, st.ammo.lg)]
+        names = E.WEAPONS
+        num = {QLNUM[w]: k for k, w in enumerate(names)}
+        env.weapon[i] = num.get(int(st.weapon), names.index("mg"))
+        for k in range(env.has.shape[1]):
+            env.has[i, k] = bool(getattr(st.weapons, names[k]))
+            env.ammo[i, k] = 0 if names[k] == "g" else max(0, getattr(st.ammo, names[k]))
         return pos, vel, ground, pitch, yaw
 
-    def sync_world(self, bobby, opp):
-        """rockets in flight and item states from the real game into the simulator"""
-        env, E = self.env, self.E
+    def sync_world(self, env, E, ids):
+        """projectiles in flight and item states from the real game into the simulator. ids = client id per slot.
+        Returns the items taken this frame as (class name, slot or -1)."""
         env.ra[:] = False
-        for owner, slot in ((opp.id, 1), (bobby.id, 0)):
+        kinds = {5: 0}
+        if hasattr(E, "NW"):
+            kinds = {5: E.RL, 4: E.GL, 8: E.PG}
+        ms = minqlx.missiles()
+        for slot, owner in enumerate(ids):
             k = 0
-            for num, own, weapon, x, y, z, vx, vy, vz in minqlx.missiles():
-                if own == owner and weapon == 5 and k < E.K:
+            for num, own, weapon, x, y, z, vx, vy, vz in ms:
+                if own == owner and weapon in kinds and k < E.K:
                     env.rp[slot, k] = (x, y, z)
                     env.rv[slot, k] = (vx, vy, vz)
                     env.ra[slot, k] = True
+                    if hasattr(env, "rw"):
+                        env.rw[slot, k] = kinds[weapon]
                     k += 1
+        taken = []
         if env.nI:
             for num, cls, x, y, z, up, _ in minqlx.item_states()[1]:
-                k = self.item_ent.get(num)
+                key = (id(env), num)
+                k = self.item_ent.get(key)
                 if k is None:
                     d = np.linalg.norm(env.item_pos - np.array([x, y, z], np.float32), axis=1)
-                    k = self.item_ent[num] = int(d.argmin()) if d.min() < 40 else -1
+                    k = self.item_ent[key] = int(d.argmin()) if d.min() < 40 else -1
                 if k >= 0:
                     env.item_up[0, k] = bool(up)
                 if self.item_was.get(num, up) and not up:    # an item was just taken: by the nearer player
                     d = np.linalg.norm(env.state[:, :3] - np.array([x, y, z], np.float32), axis=1)
-                    self.record(event="pickup", item=cls, by=("bobby", "opp")[int(d.argmin())] if d.min() < 120 else "?")
+                    taken.append((cls, int(d.argmin()) if d.min() < 120 else -1))
                 self.item_was[num] = up
+        return taken
 
-    def senses(self):
+    @staticmethod
+    def senses(env, E):
         """sight (line of sight + field of view) and hearing, same rules as the simulator's step()"""
-        env, E = self.env, self.E
         s, n = env.state, 2
         eye = env._eye(s)
         opp = np.arange(n) ^ 1
@@ -305,6 +410,37 @@ class duelbot(minqlx.Plugin):
             env.known[heard] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
         env.seen_t = np.where(vis | heard, 0.0, env.seen_t + E.DT).astype(np.float32)
+        return dist
+
+    def drive(self, p, env, E, i, a, pitch, yaw, only=None):
+        """turn one action row into keys and mouse for the controlled bot in slot i (same rules as the simulator)"""
+        fwd, side, jump = (int(a[0]) - 1) * 127, (int(a[1]) - 1) * 127, int(a[2]) * 127
+        cmd = np.array([E.TURN[a[3]], E.PITCH[a[4]]], np.float32)
+        nine = hasattr(E, "NW")
+        sm = np.where(np.abs(cmd) <= 1.0, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH) if hasattr(E, "MOUSE_SMOOTH_FINE") \
+            else E.MOUSE_SMOOTH
+        env.mv[i] = sm * env.mv[i] + (1.0 - sm) * cmd
+        yaw = (yaw + float(env.mv[i, 0]) + 180.0) % 360.0 - 180.0
+        lev = 1.0 if (nine and env.seen_t[i] <= 0.5) else env.level     # newer simulators: no pull while an enemy is in view
+        pitch = float(np.clip(pitch * lev + env.mv[i, 1], -89, 89))
+        names = E.WEAPONS
+        ncol = env.has.shape[1]
+        w = int(env.weapon[i])
+        if only:
+            w = names.index(only)
+        if a[6] > 0:                                         # switch only to weapons owned
+            want = int(a[6]) - 1
+            ok = bool(env.has[i, want]) if want < ncol else not only     # older simulator: machine gun always owned
+            if ok and want != w and not (only and not nine):
+                w = want
+                env.cool[i] = max(env.cool[i], E.SWITCH)
+        fire = bool(a[5] == 1)
+        env.cool[i] = max(0.0, env.cool[i] - E.DT)
+        if fire and env.cool[i] <= 0:
+            refire = E.W_REFIRE if nine else (E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK)
+            env.cool[i] = float(refire[w])
+        minqlx.set_bot_input(p.id, fwd, side, jump, 1 if fire else 0, QLNUM[names[w]], pitch, yaw)
+        return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 
     # ------------------------------------------------------------------ frame
     def on_frame(self):
@@ -326,7 +462,18 @@ class duelbot(minqlx.Plugin):
                     return
                 self.setup()
             return
+        if (minqlx.get_cvar("mapname") or "").lower() not in MAPS:       # the game rotated to another map
+            if now > self.next_check:
+                self.next_check = now + 10
+                minqlx.console_command("map {} duel".format(self.want_map))
+            return
         bobby, human, filler = self.cast()
+        real_human = human is not None and not is_bot(human)
+        if real_human and self.game is not None and self.game.state not in ("warmup", None) \
+                and now - self.last_abort > 30:
+            self.last_abort = now                            # with a human: stay in warmup (never abort in a tight loop)
+            self.log("game state {} - back to warmup".format(self.game.state))
+            minqlx.console_command("abort")
         if bobby is None:
             if now > self.next_check:
                 self.next_check = now + 5
@@ -345,79 +492,291 @@ class duelbot(minqlx.Plugin):
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, 0.0)
             if self.sess:
                 self.end_session()
+            self.room, self.queue = None, []
             return
-        env, E = self.env, self.E
-        if self.sess is None or self.sess_opp != opp.id:
-            self.start_session(opp)
         bs, os_ = bobby.state, opp.state
         if bs is None or os_ is None:
             return
+        if self.sess is None or self.sess_opp != opp.id:
+            self.start_session(opp)
+        in_room = (self.room is not None or bool(self.queue)) and human is not None
         # deaths and respawns
         for p, st, who in ((bobby, bs, "bobby"), (opp, os_, "opp")):
             up = st.health > 0
             was = self.alive.get(p.id)
             if up and not was:
-                self.give_loadout(p)
+                if in_room and self.room is not None and self.room.get("started"):
+                    self.room_loadout(bobby, opp, only=who)
+                else:
+                    self.give_loadout(p)
                 self.tot.pop(who, None)
                 if who == "bobby":
                     self.h[:] = 0
-                    env.mv[0] = 0
-                    env.cool[0] = 0
-                    env.seen_t[0] = 9.0
-                    env.opp_hist = []
+                    for env in (self.env, self.renv):
+                        env.mv[:] = 0
+                        env.cool[:] = 0
+                        env.seen_t[:] = 9.0
+                        env.opp_hist = []
                     minqlx.set_bot_substeps(bobby.id, 3)
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
                 self.score[other] += 1
-                self.record(event="death", who=who, drill=self.drill, state=self.last, **self.score)
+                if self.room is not None and self.room.get("started"):
+                    self.room["m"]["frags" if who == "bobby" else "deaths"] += 1
+                self.record(event="death", who=who, drill=self.drill, room=self.room["name"] if self.room else None,
+                            state=self.last, **self.score)
             self.alive[p.id] = up
+        if in_room:
+            return self.room_frame(now, bobby, opp, bs, os_)
+        env, E = self.env, self.E
         if bs.health <= 0:                                   # tap fire to respawn
             minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
-            self.fill_player(0, bobby, bs)
-            self.fill_player(1, opp, os_)
+            self.fill_player(env, E, 0, bobby, bs)
+            self.fill_player(env, E, 1, opp, os_)
             env.visible[:] = False
-            self.log_frame(now, bobby, opp, bs, os_, [0, 0, 0, 0])
+            self.log_frame(now, env, 0, bobby, opp, bs, os_, [0, 0, 0, 0], self.drill)
             return
-        if self.drill and now > self.top_up:
+        if self.drill and not hasattr(E, "NW") and now > self.top_up:    # older simulator: drills had endless ammo
             self.top_up = now + 2
             for p in (bobby, opp):
                 p.ammo(**{self.drill: 150 if self.drill == "lg" else 25})
-        pos, vel, ground, pitch, yaw = self.fill_player(0, bobby, bs)
-        opos = self.fill_player(1, opp, os_)[0]
-        self.sync_world(bobby, opp)
-        self.senses()
+        pos, vel, ground, pitch, yaw = self.fill_player(env, E, 0, bobby, bs)
+        opos = self.fill_player(env, E, 1, opp, os_)[0]
+        for cls, slot in self.sync_world(env, E, (bobby.id, opp.id)):
+            self.record(event="pickup", item=cls, by=("bobby", "opp")[slot] if slot >= 0 else "?")
+        self.senses(env, E)
         a = self.act(env.observe()[:1])
-        fwd, side, jump = (a[0] - 1) * 127, (a[1] - 1) * 127, a[2] * 127
-        env.mv[0] = E.MOUSE_SMOOTH * env.mv[0] + (1.0 - E.MOUSE_SMOOTH) * np.array([E.TURN[a[3]], E.PITCH[a[4]]])
-        yaw = (yaw + float(env.mv[0, 0]) + 180.0) % 360.0 - 180.0
-        pitch = float(np.clip(pitch * env.level + env.mv[0, 1], -89, 89))
-        w = int(env.weapon[0])
-        if self.drill:                                       # drill rounds have no machine gun, as in training
-            w = ("rl", "rg", "lg").index(self.drill)
-        if a[6] > 0:                                         # switch only to weapons owned
-            want = a[6] - 1
-            if ((want == 3 and not self.drill) or (want < 3 and env.has[0, want])) and want != w:
-                w = want
-                env.cool[0] = max(env.cool[0], E.SWITCH)
-        fire = a[5] == 1
-        env.cool[0] = max(0.0, env.cool[0] - E.DT)
-        if fire and env.cool[0] <= 0 and (w == 3 or env.ammo[0, w] > 0):
-            env.cool[0] = self.refire[w]
-        minqlx.set_bot_input(bobby.id, fwd, side, jump, 1 if fire else 0, QL_WEAPON[w], pitch, yaw)
+        w, fire, pitch, yaw, keys = self.drive(bobby, env, E, 0, a, pitch, yaw, only=self.drill)
+        wname = E.WEAPONS[w]
         self.last = dict(bobby=[round(float(v)) for v in pos], opp=[round(float(v)) for v in opos],
-                         bobby_hp=[bs.health, bs.armor], opp_hp=[os_.health, os_.armor], weapon=E.WEAPONS[w],
+                         bobby_hp=[bs.health, bs.armor], opp_hp=[os_.health, os_.armor], weapon=wname,
                          visible=bool(env.visible[0]), seen_ago=round(float(env.seen_t[0]), 1))
-        self.log_frame(now, bobby, opp, bs, os_, [fwd, side, jump, int(fire)])
+        self.log_frame(now, env, 0, bobby, opp, bs, os_, keys, self.drill)
         c = self.acc
         c["frames"] += 1
         c["visible"] += int(env.visible[0])
         c["fire"] += int(fire)
-        c["w"][w] += 1
+        c["w"][wname] = c["w"].get(wname, 0) + 1
         c["fast_air"] += int(math.hypot(vel[0], vel[1]) > 330 and not ground)
         if now > self.next_summary:
             self.next_summary = now + 60
             f = max(1, c["frames"])
-            self.record(event="minute", visible=round(c["visible"] / f, 3),
-                        fire=round(c["fire"] / f, 3), fast_air=round(c["fast_air"] / f, 3), weapon_share=[round(x / f, 2) for x in c["w"]],
+            self.record(event="minute", visible=round(c["visible"] / f, 3), fire=round(c["fire"] / f, 3),
+                        fast_air=round(c["fast_air"] / f, 3), weapon_share={k: round(v / f, 2) for k, v in c["w"].items()},
                         dmg_dealt=bobby.stats.damage_dealt, dmg_taken=bobby.stats.damage_taken, **self.score)
-            self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w=[0, 0, 0, 0])
+            self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w={})
+
+    # ------------------------------------------------------------------ test rooms (human = subject, slot 0)
+    def room_loadout(self, bobby, human, only=None):
+        r, R = self.room, self.R
+        if only in (None, "opp"):
+            if r["kind"] == "aim":
+                self.give_loadout(human, R, only=r["weapon"])
+            elif r["kind"] == "move":
+                human.weapons(reset=True, g=True)
+            else:
+                self.give_loadout(human, R, only="")
+            r["ammo"] = None
+        if only in (None, "bobby"):
+            if r["kind"] == "ladder":
+                self.give_loadout(bobby, R, only="", boost=3)
+            else:
+                bobby.weapons(reset=True, g=True)
+
+    def place_pair(self, bobby, human):
+        """target at a map spawn point, the subject 'band' units away with a clear line, facing it within 60 degrees"""
+        env, r = self.renv, self.room
+        eye = np.array([0, 0, self.R.VIEW_H], np.float32)
+        if env.spots is None:
+            return False
+        for _ in range(30):
+            k = int(self.rng.integers(len(env.spawns)))
+            t = env.spawns[k] + np.array([0, 0, 9.0], np.float32)
+            d = np.linalg.norm(env.spots - t, axis=1)
+            cand = np.nonzero((d > r["band"][0]) & (d < r["band"][1]))[0]
+            for j in self.rng.permutation(cand)[:24]:
+                q = env.spots[j]
+                if env.w.trace(q + eye, t + np.array([0, 0, 8.0], np.float32))["fraction"] >= 0.999:
+                    face = math.degrees(math.atan2(t[1] - q[1], t[0] - q[0])) + float(self.rng.uniform(-60, 60))
+                    bobby.position(x=float(t[0]), y=float(t[1]), z=float(t[2]))
+                    bobby.velocity(reset=True)
+                    human.position(x=float(q[0]), y=float(q[1]), z=float(q[2]) + 2.0)
+                    human.velocity(reset=True)
+                    minqlx.set_view(human.id, 0.0, face)
+                    minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, float(self.rng.uniform(-180, 180)))
+                    env.mv[:] = 0
+                    return True
+        return False
+
+    def new_goal(self, human, pos):
+        env, r = self.renv, self.room
+        f = env.field
+        node, _ = f.locate(pos[None])
+        T = f.T[:, node[0]]
+        ok = np.nonzero((T > 1.5) & (T < 12.0))[0]
+        if not len(ok):
+            ok = np.nonzero(T < 1e8)[0]
+        if not len(ok):
+            r["goal"] = None
+            return
+        g = int(self.rng.choice(ok))
+        r["goal"] = g
+        human.center_print("Go to: ^3{}".format(GOAL_NAMES[self.goal_labels[g]]))
+        human.tell("Go to: ^3{}".format(GOAL_NAMES[self.goal_labels[g]]))
+
+    def room_frame(self, now, bobby, human, bs, hs):
+        R, env = self.R, self.renv
+        if self.room is None:                                # next room from the queue, after a short countdown
+            r = self.room = self.queue.pop(0)
+            r.update(t0=now + 5, started=False, rep_end=0.0, ammo=None, goal=None, prev_w=None, said=0,
+                     m=dict(frames=0, shots=0, dmg=0, hit_events=0, aim_err=0.0, aim_frames=0, on_target=0, held={},
+                            switches=0, fire=0, blind=0, arrive=0, speed=0.0, fast=0, frags=0, deaths=0, dmg_taken=0,
+                            picks={}))
+            self.msg("^3Room {}^7 starts in 5 s ({} s).".format(r["name"], r["secs"]))
+            self.record(event="room_start", room=r["name"])
+        r = self.room
+        m = r["m"]
+        hpos, hvel, hground, hpitch, hyaw = self.fill_player(env, R, 0, human, hs)
+        bpos, bvel, bground, bpitch, byaw = self.fill_player(env, R, 1, bobby, bs)
+        taken = self.sync_world(env, R, (human.id, bobby.id))
+        env.script[:] = (0, r["script"])
+        env.sc_style = r.get("style", 0)
+        self.senses(env, R)
+        self.last = dict(bobby=[round(float(v)) for v in bpos], opp=[round(float(v)) for v in hpos],
+                         bobby_hp=[bs.health, bs.armor], opp_hp=[hs.health, hs.armor], room=r["name"])
+        if not r["started"]:
+            if bs.health <= 0:
+                minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
+            else:
+                minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
+                if bs.health < 150 and r["kind"] in ("aim", "choice", "move", "solo"):
+                    bobby.health = 200                       # nobody kills the target between rooms
+            if now < r["t0"]:
+                return
+            r["started"], r["t_end"] = True, now + r["secs"]
+            self.room_loadout(bobby, human)
+            if r["kind"] == "move":
+                self.new_goal(human, hpos)
+            self.tot = {}
+            human.center_print("^2GO: {}".format(r["name"]))
+        keys = [0, 0, 0, 0]
+        if bs.health <= 0:
+            minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
+        elif r["kind"] in ("aim", "choice"):
+            if now >= r["rep_end"]:                          # new placement every REP_SECS, fresh ammo
+                r["rep_end"] = now + REP_SECS
+                self.place_pair(bobby, human)
+                self.room_loadout(bobby, human, only="opp")
+                env.round_t[0] = 0.0
+                self.tot = {}
+            else:
+                env.round_t[0] += R.DT
+                a = env._script_actions(np.array([1]))[0]
+                keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
+        elif r["kind"] == "ladder":
+            a = env._script_actions(np.array([1]))[0]
+            keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
+        else:
+            minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
+        dmg, los = self.log_frame(now, env, 1, bobby, human, bs, hs, keys, "room:" + r["name"])
+        if r["kind"] in ("aim", "choice") and bs.health > 0 and (bs.health < 150 or bs.armor > 0):
+            bobby.health = 200                               # the target never dies; its damage was counted above
+            bobby.armor = 0
+            self.tot["bobby"] = 200
+        # ---- the subject's numbers
+        oc = minqlx.ran_usercmd(human.id)
+        fire = bool(oc[1] & 1)
+        m["frames"] += 1
+        m["fire"] += int(fire)
+        m["blind"] += int(fire and env.seen_t[0] > 1.0)
+        m["dmg"] += dmg.get("bobby", 0)
+        m["hit_events"] += int("bobby" in dmg)
+        m["dmg_taken"] += dmg.get("opp", 0)
+        wnow = int(hs.weapon)
+        if r["prev_w"] is not None and wnow != r["prev_w"]:
+            m["switches"] += 1
+        r["prev_w"] = wnow
+        ammo = {w: getattr(hs.ammo, w) for w in R.WEAPONS if w != "g"}
+        if r["ammo"] is not None:
+            m["shots"] += sum(max(0, r["ammo"][w] - ammo[w]) for w in ammo)
+        r["ammo"] = ammo
+        if env.visible[0]:
+            m["aim_frames"] += 1
+            m["aim_err"] += self.aim_err(env, 0)
+            eye = env._eye(env.state)
+            yr, pr = math.radians(hyaw), math.radians(hpitch)
+            fd = np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), -math.sin(pr)], np.float32)
+            m["on_target"] += int(env._seg_box(eye[:1], (eye[0] + fd * 4000.0)[None], env.state[1:2, :3])[0])
+            name = QLNAME.get(wnow, "?")
+            m["held"][name] = m["held"].get(name, 0) + 1
+        sp = math.hypot(hvel[0], hvel[1])
+        m["speed"] += sp
+        m["fast"] += int(sp > 330 and not hground)
+        for cls, slot in taken:
+            self.record(event="pickup", item=cls, by=("opp", "bobby")[slot] if slot >= 0 else "?")
+            if slot == 0:
+                key = "mega" if cls == "item_health_mega" else "red_armor" if cls == "item_armor_body" else \
+                    "armor" if cls.startswith("item_armor") else "health" if cls.startswith("item_health") else None
+                if key:
+                    m["picks"][key] = m["picks"].get(key, 0) + 1
+        if r["kind"] == "move" and r["goal"] is not None:
+            gp = env.field.goals[r["goal"]]
+            if math.hypot(gp[0] - hpos[0], gp[1] - hpos[1]) < 40 and abs(gp[2] - hpos[2]) < 64:
+                m["arrive"] += 1
+                self.new_goal(human, hpos)
+            elif now > r["said"]:
+                r["said"] = now + 2
+                human.center_print("Go to: ^3{}".format(GOAL_NAMES[self.goal_labels[r["goal"]]]))
+        if now >= r["t_end"]:
+            self.finish_room(human)
+
+    def finish_room(self, human):
+        r, R = self.room, self.R
+        m = r["m"]
+        f = max(1, m["frames"])
+        mins = f * R.DT / 60.0
+        if r["kind"] == "aim":
+            k = R.WEAPONS.index(r["weapon"])
+            kind = R.W_KIND[k]
+            hits = m["hit_events"] if kind == "proj" else m["dmg"] / float(R.W_DMG[k])
+            shots = m["shots"] * (R.SG_PELLETS if kind == "pellet" else 1)
+            res = dict(hit_rate=hits / max(1, shots), damage_per_s=m["dmg"] / (mins * 60),
+                       kills_per_min=m["dmg"] / 125.0 / mins, aim_err_deg=m["aim_err"] / max(1, m["aim_frames"]),
+                       on_target=m["on_target"] / max(1, m["aim_frames"]), sees_target=m["aim_frames"] / f)
+        elif r["kind"] == "choice":
+            tot = max(1, sum(m["held"].values()))
+            held = dict(sorted(((k, round(v / tot, 2)) for k, v in m["held"].items()), key=lambda kv: -kv[1])[:3])
+            res = dict(held=held, switches_per_min=m["switches"] / mins, damage_per_s=m["dmg"] / (mins * 60),
+                       kills_per_min=m["dmg"] / 125.0 / mins)
+        elif r["kind"] == "move":
+            res = dict(arrivals_per_min=m["arrive"] / mins, speed=m["speed"] / f, fast_air=m["fast"] / f)
+        elif r["kind"] == "solo":
+            p = m["picks"]
+            res = dict(mega_per_min=p.get("mega", 0) / mins, red_armor_per_min=p.get("red_armor", 0) / mins,
+                       armor_per_min=p.get("armor", 0) / mins, health_per_min=p.get("health", 0) / mins,
+                       fire=m["fire"] / f, blind_fire=m["fire"] / f, switches_per_min=m["switches"] / mins)
+        else:
+            res = dict(frags_per_min=m["frags"] / mins, deaths_per_min=m["deaths"] / mins,
+                       damage_dealt_per_min=m["dmg"] / mins, damage_taken_per_min=m["dmg_taken"] / mins,
+                       switches_per_min=m["switches"] / mins, blind_fire=m["blind"] / f)
+        res = {k: (v if isinstance(v, dict) else round(float(v), 3)) for k, v in res.items()}
+        self.record(event="room_result", room=r["name"], result=res)
+        self.msg("^3{}^7: {}".format(r["name"], "  ".join("{} {}".format(k, v) for k, v in res.items())))
+        # human baseline card, same shape as sim/test_suite.py cards (repeats of a room are averaged)
+        if self.card_path is None:
+            os.makedirs(os.path.join(D, "suite"), exist_ok=True)
+            self.card_path = os.path.join(D, "suite", "human_{}.json".format(time.strftime("%Y%m%d-%H%M%S")))
+        self.card.setdefault(r["name"], []).append(res)
+        rooms = {}
+        for name, runs in self.card.items():
+            out = {}
+            for k in runs[0]:
+                out[k] = runs[-1][k] if isinstance(runs[0][k], dict) else round(float(np.mean([x[k] for x in runs])), 3)
+            out["runs"] = len(runs)
+            rooms[name] = out
+        with open(self.card_path, "w") as fh:
+            json.dump(dict(suite=1, run="human", subject="human", minutes=0, rooms=rooms), fh, indent=1)
+        self.room = None
+        if not self.queue:
+            self.msg("Rooms done: back to the normal duel. Card saved.")
+            self.give_loadout(human)

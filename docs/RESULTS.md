@@ -10,6 +10,26 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-03 (night): test suite v1 and live rooms
+
+Settles B-32, B-33; B-34 built. Raises B-35, B-36.
+
+- `sim/test_suite.py`: fixed rooms and seeds for any checkpoint (aim per weapon against still / slow / fast /
+  jumping targets and at three distances, weapon choice by range, movement, solo, scripted-fighter ladder).
+  First card: `duel_gru_v3` at 5 minutes of training (near-random; the baseline to improve on).
+- The same rooms run on the play-test server with a person as the subject (`!room ...`, `!room suite`).
+  Dry run with a Nightmare bot standing in as the subject: LG 76% on a still target and 30% on a fast strafe,
+  rail 14% of slugs on a still target, rockets 90% still / 62% fast (direct or splash).
+- Bugs found and fixed in the dry run: target damage was dropped on the frame it was healed; healing a dead
+  target left it stuck; aborting the match with two bots looped (warmup is now only held for a human).
+- New hook function `minqlx.set_view()` turns a player's view (used to face the subject toward the target).
+- `duel_gru_v3` at 31 minutes: 133k steps/s; switches 28 per minute (387 at the start); movement rounds
+  271 u/s with 10.7% fast-air and 6.8 arrivals per minute; crosshair error in view 27 degrees (38 at start);
+  megas 0.34 and red armors 0.51 per player-minute. Watch item: he holds the shotgun 87-97% of the time in
+  normal rounds (it forgives bad aim).
+
+---
+
 ## 2026-10-03 (night): first human play test, and what changed for `duel_gru_v3`
 
 Settles B-08. Raises B-28 to B-34.

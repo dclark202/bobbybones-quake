@@ -205,6 +205,26 @@ PyObject* PyMinqlx_ClearBotInput(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
+// set_view(client_id, pitch, yaw): turn a player's view (as a teleporter does), for humans and bots
+PyObject* PyMinqlx_SetView(PyObject* self, PyObject* args) {
+    int id;
+    float pitch, yaw;
+    if (!PyArg_ParseTuple(args, "iff:set_view", &id, &pitch, &yaw))
+        return NULL;
+    if (!valid_client(id))
+        return NULL;
+    if (!g_entities || !g_entities[id].client)
+        Py_RETURN_NONE;
+    playerState_t* ps = &g_entities[id].client->ps;
+    ps->delta_angles[0] = BOTCTL_ANGLE2SHORT(pitch) - ran_cmd[id].angles[0];
+    ps->delta_angles[1] = BOTCTL_ANGLE2SHORT(yaw) - ran_cmd[id].angles[1];
+    ps->delta_angles[2] = 0 - ran_cmd[id].angles[2];
+    ps->viewangles[0] = pitch;
+    ps->viewangles[1] = yaw;
+    ps->viewangles[2] = 0;
+    Py_RETURN_NONE;
+}
+
 // view_angles(client_id) -> (pitch, yaw, roll)
 PyObject* PyMinqlx_ViewAngles(PyObject* self, PyObject* args) {
     int id;

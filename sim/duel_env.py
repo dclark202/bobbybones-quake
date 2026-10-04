@@ -69,7 +69,8 @@ SWITCH = 0.425                                         # seconds from the switch
 SWITCH_COST = 0.002                                    # tiny reward cost per weapon switch
 BLIND_FIRE_COST = 0.0005                               # per frame of holding fire with no enemy seen for over a second
 MOUSE_SMOOTH_FINE = 0.2                                # less view inertia for small corrections (commands up to 1 degree)
-NORMAL, AIM, DRILL, MOVE = range(4)                    # round kinds
+NORMAL, AIM, DRILL, MOVE, SOLO = range(5)              # round kinds (SOLO: test rooms only, alone on the map)
+STYLES = ("random", "still", "slow", "fast", "jump")   # scripted target movement (test rooms use 1-4)
 DRILL_AMMO = np.array([15, 10, 100, 100, 15, 10, 80, 100, 1], np.float32)   # finite ammo in drill and aim rounds
 MOVE_SCALE, MOVE_ARRIVE = 0.2, 0.3                     # movement rounds: reward per second gained toward the goal, arrival
 N_GOAL = 7                                             # goal inputs: on, where (3), next waypoint (3)
@@ -150,6 +151,9 @@ class DuelEnv:
         self.sc_dir = np.ones(2 * n_matches, np.int64)
         self.sc_fwd = np.zeros(2 * n_matches, np.int64)
         self.sc_jump = np.zeros(2 * n_matches, bool)
+        self.sc_style = 0                               # target movement: 0 random (training), else STYLES index
+        self.close_band = (300.0, 700.0)                # distance of "close" spawns (test rooms set their own)
+        self.fixed_kind = None                          # test rooms: (kind, scripted type for the odd player)
         self.goal = np.full(2 * n_matches, -1, np.int64)  # MOVE rounds: index of the goal item
         self.phi = np.zeros(2 * n_matches, np.float32)    # estimated seconds to the goal
         self.walls = np.ones((2 * n_matches, N_WALL), np.float32)
@@ -203,7 +207,7 @@ class DuelEnv:
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
-                          w_dist=np.zeros((3, NW)))
+                          w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0)
         for wn in WEAPONS:
             self.stats[wn + "_shots"] = 0               # shots, ticks or pellets fired
             self.stats[wn + "_shots_vis"] = 0           # ... while the opponent was in view
@@ -266,8 +270,8 @@ class DuelEnv:
         p_close = self.close_p if close is None else float(close)
         if avoid is not None and self.spots is not None and self.rng.random() < p_close:
             d = np.linalg.norm(self.spots - avoid, axis=1)
-            cand = np.nonzero((d > 300) & (d < 700))[0]
-            for k in self.rng.permutation(cand)[:8]:
+            cand = np.nonzero((d > self.close_band[0]) & (d < self.close_band[1]))[0]
+            for k in self.rng.permutation(cand)[:24]:
                 p = self.spots[k]
                 if self.w.trace(p + np.array([0, 0, VIEW_H], np.float32),
                                 avoid + np.array([0, 0, 8.0], np.float32))["fraction"] >= 0.999:
@@ -438,6 +442,8 @@ class DuelEnv:
         kf = W_KNOCK[wpn]
         self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
         st["dmg_taken"][v] += self._damage(v, dmg)
+        self.stats["dmg_h"] += float(dmg) * (self.script[i] == 0)
+        self.stats["dmg_from_script"] += float(dmg) * (self.script[v] == 0 and self.script[i] != 0)
         st["attacker"][v] = i
         st["kill_w"][v] = wpn
         st["kicked"] = True
@@ -477,6 +483,8 @@ class DuelEnv:
             if v != i:
                 st["attacker"][v] = i
                 st["kill_w"][v] = wpn
+                self.stats["dmg_h"] += float(take) * (self.script[i] == 0)
+                self.stats["dmg_from_script"] += float(take) * (self.script[v] == 0 and self.script[i] != 0)
                 self.stats["dmg"] += take
                 self.stats[WEAPONS[wpn] + "_hits"] += int(self.script[i] == 0)
                 if is_direct and wpn == RL:
@@ -500,6 +508,16 @@ class DuelEnv:
             self.sc_dir[ch] = rng.choice([-1, -1, 1, 1, 0], len(ch))
             self.sc_fwd[ch] = rng.choice([-1, 0, 0, 1], len(ch))
             self.sc_jump[ch] = rng.random(len(ch)) < 0.2
+        if self.sc_style:                                   # test rooms: a fixed, repeatable target pattern
+            ph = (self.round_t[idx // 2] / DT).astype(np.int64)
+            if self.sc_style == 1:                           # still
+                self.sc_dir[idx], self.sc_fwd[idx], self.sc_jump[idx] = 0, 0, False
+            else:                                            # strafe left/right, switching every 0.8 s
+                side = np.where((ph // 32) % 2 == 0, 1, -1)
+                if self.sc_style == 2:                       # slow: moves one frame in three (~1/3 run speed)
+                    side = np.where(ph % 3 == 0, side, 0)
+                self.sc_dir[idx], self.sc_fwd[idx] = side, 0
+                self.sc_jump[idx] = self.sc_style == 4
         fighter = self.script[idx] == 2
         opp = idx ^ 1
         eye = s[idx, :3] + np.array([0, 0, VIEW_H], np.float32)
@@ -518,6 +536,8 @@ class DuelEnv:
         chase = fighter & (self.seen_t[idx] < 2.0)
         turn = np.where(vis | chase, np.clip(ey * 0.4, -10, 10), np.clip(wander * 0.15, -6, 6))
         turn = np.where(fighter, turn + rng.normal(0, 0.3, k), np.clip(wander * 0.1, -3, 3))
+        if self.sc_style:
+            turn = np.where(fighter, turn, 0.0)             # test-room targets keep their facing (straight strafes)
         dpit = np.where(vis, np.clip(ep * 0.4, -6, 6), -self.pitch[idx] * 0.2)
         out = np.zeros((k, 7), np.int64)
         fwd = np.where(fighter, np.where(vis, np.where(dist > 500, 1, np.where(dist < 200, -1, self.sc_fwd[idx])), 1),
@@ -802,6 +822,8 @@ class DuelEnv:
         # short rounds (curriculum): restart both players near each other every ~round_len seconds
         self.round_t += DT
         klen = np.where(self.kind == NORMAL, self.round_len, np.where(self.kind == MOVE, 20.0, 15.0))
+        if self.fixed_kind is not None:
+            klen = np.full(self.M, self.round_len)
         ends = np.nonzero(self.round_t > klen * self.rng.uniform(0.67, 1.33, self.M))[0]
         for m in ends:
             self.round_t[m] = 0.0
@@ -809,13 +831,21 @@ class DuelEnv:
             kd = int(self.rng.choice(4, p=self.kind_p))
             if self.rng.random() < self.drill_p:            # older option: share of one-weapon rounds
                 kd = DRILL
+            if self.fixed_kind is not None:
+                kd = self.fixed_kind[0]
             if kd == MOVE and self.field is None:
                 kd = NORMAL
             self.kind[m] = kd
             self.mode[m] = -1
             self.script[a_] = self.script[b_] = 0
             self.goal[a_] = self.goal[b_] = -1
-            if kd == DRILL:
+            if self.fixed_kind is not None:                 # test rooms decide who the odd player is
+                self.script[b_] = self.fixed_kind[1]
+                if kd == AIM:
+                    self.mode[m] = int(self.rng.choice(self.aim_weapons))
+                elif kd == DRILL:
+                    self.mode[m] = int(self.rng.choice(self.drill_weapons))
+            elif kd == DRILL:
                 self.mode[m] = int(self.rng.choice(self.drill_weapons))
             elif kd == AIM:
                 self.mode[m] = int(self.rng.choice(self.aim_weapons))
@@ -823,7 +853,8 @@ class DuelEnv:
             elif kd == NORMAL and self.rng.random() < self.bot_p:
                 self.script[b_] = 2
             done[a_] = done[b_] = True
-            if kd == AIM:                                   # the target first, then the shooter close by, facing it
+            if kd == AIM or (self.fixed_kind is not None and kd == NORMAL):
+                # the target first, then the shooter close by, facing it
                 self._spawn(b_, avoid=None)
                 self._spawn(a_, avoid=self.w.state()[b_, :3], close=True)
             else:
@@ -850,9 +881,9 @@ class DuelEnv:
         if len(cand):
             vis[cand] = self._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
         pkind = np.repeat(self.kind, 2)
-        vis &= pkind != MOVE                                # movement rounds: the other player does not exist
+        vis &= (pkind != MOVE) & (pkind != SOLO)            # movement / solo rounds: the other player does not exist
         self.visible = vis
-        heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE)
+        heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO)
         vh = np.nonzero(vis & (self.script == 0))[0]        # aim quality while the opponent is in view
         if len(vh):
             cosang = np.clip((to[vh] * fdir[vh]).sum(1) / dist[vh], -1, 1)

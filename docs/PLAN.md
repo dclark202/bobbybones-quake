@@ -78,7 +78,7 @@ Next after the run: B-32 (play `duel_gru_v3` live), B-33/B-34 (test suite with a
 ```bash
 sim\build.bat                                              # Windows: build sim\qsim.dll (MSVC)
 python sim/train_duel_rnn.py --run <name> --minutes 600    # self-play with memory (GPU if available)
-python sim/eval_duel.py --run <name>                       # behavior numbers in the simulator
+python sim/test_suite.py --run <name> [--compare card.json]   # standard test rooms, one scorecard
 bash tools/duel_server.sh <run> bloodrun <env module>      # private play-test server, port 27970
 SPAR=1 bash tools/duel_server.sh <run> bloodrun <env module>   # same policy against a Nightmare bot, no port
 python sim/validate_weapons.py                             # simulator weapons vs real-server measurements
