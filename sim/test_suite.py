@@ -173,6 +173,54 @@ def run_room(E, env, pol, room):
     return r
 
 
+LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")
+
+
+def lab_rooms(E, env):
+    """the rooms of the test map: the same names as on the play-test server (plugins/duelbot.py)"""
+    W = {w: i for i, w in enumerate(E.WEAPONS)}
+    out = []
+    for w in LAB_WEAPONS:
+        for t in ("walk", "jump", "env"):
+            out.append(dict(name="aim/{}/{}".format(w, t), secs=45 if t == "env" else 25,
+                            force=dict(kind=E.AIM, weapon=W[w], where="env" if t == "env" else "aim", jump=t == "jump")))
+    for k, C in enumerate(env.courses):
+        out.append(dict(name="move/" + C["key"], secs=30, force=dict(kind=E.COURSE, course=k), course=k))
+    return out
+
+
+def run_lab_room(E, env, pol, room):
+    """one lab room: every match runs exactly this room once, for its full length"""
+    env.lab_force = room["force"]
+    env.lab_aim_len = env.course_len = float(room["secs"])
+    env.inf_ammo = room["name"].startswith("aim/")
+    env.round_t[:] = 1e9
+    n = env.n
+    h = pol.zeros(n)
+    base = {k: np.copy(v) for k, v in env.stats.items()}     # before the step that starts the room (counts the attempts)
+    obs, _, done, _ = env.step(np.zeros((n, len(pol.dims)), np.int64))
+    frames = int(room["secs"] / E.DT) - 1
+    for _ in range(frames):
+        act, h = pol.act(obs, h)
+        obs, _, done, _ = env.step(act)
+        h[done] = 0.0
+    if "course" in room:                                     # close the attempts still running
+        for i in range(n):
+            env._course_close(i, False)
+            env.course[i] = -1
+    d = {k: env.stats[k] - base[k] for k in env.stats}
+    mins = frames * E.DT / 60.0 * env.M
+    if "course" in room:
+        r_ = d["course"][room["course"]]
+        att = max(1.0, r_[0])
+        return dict(finished=r_[1] / att, time=(r_[2] / r_[1]) if r_[1] else -1.0, distance=r_[3] / att,
+                    top_speed=r_[4] / att, mean_speed=r_[5] / max(1.0, r_[6]), falls=r_[7] / att, height=r_[8] / att)
+    w = E.WEAPONS[room["force"]["weapon"]]
+    return dict(hit_rate=d[w + "_hits"] / max(1, d[w + "_shots"]), damage_per_s=d["dmg_h"] / (mins * 60),
+                kills_per_min=d["target_kills"] / mins, aim_err_deg=d["aim_err"] / max(1, d["aim_frames"]),
+                on_target=d["on_target"] / max(1, d["aim_frames"]), sees_target=d["aim_frames"] / max(1, frames * env.M))
+
+
 def merge(cards):
     """average the per-map results of one room"""
     out = {}
@@ -218,6 +266,7 @@ def main():
     ap.add_argument("--matches", type=int, default=32)
     ap.add_argument("--maps", default=",".join(MAPS))
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--lab", action="store_true", help="the test map's rooms (bobbylab), as on the play-test server")
     ap.add_argument("--compare", default=None, help="an earlier card (JSON) to show changes against")
     a = ap.parse_args()
     import importlib
@@ -225,12 +274,18 @@ def main():
     path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = Policy(path, seed=11)
     maps = a.maps.split(",")[:1] if a.quick else a.maps.split(",")
+    if a.lab:
+        maps = ["bobbylab"]
     per_room = {}
     t0 = time.time()
     for mp in maps:
         env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=a.matches, seed=7,
                         nav=os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp)), close_p=1.0, loadout="all")
         env.react_frames = round(pol.react_ms / 25)
+        if a.lab:
+            for room in lab_rooms(E, env):
+                per_room.setdefault(room["name"], []).append(run_lab_room(E, env, pol, room))
+            continue
         for room in rooms(E, a.quick):
             per_room.setdefault(room["name"], []).append(run_room(E, env, pol, room))
         print("{} done ({:.0f} s)".format(mp, time.time() - t0), flush=True)
@@ -238,7 +293,7 @@ def main():
                 rooms={k: merge(v) for k, v in per_room.items()})
     out = os.path.join(ROOT, "data", "sim_runs", a.run, "suite")
     os.makedirs(out, exist_ok=True)
-    stem = os.path.join(out, "card_{:04d}{}".format(int(pol.minutes), "_quick" if a.quick else ""))
+    stem = os.path.join(out, "{}_{:04d}{}".format("lab" if a.lab else "card", int(pol.minutes), "_quick" if a.quick else ""))
     other = json.load(open(a.compare)) if a.compare else None
     md = markdown(card, other)
     json.dump(card, open(stem + ".json", "w"), indent=1)

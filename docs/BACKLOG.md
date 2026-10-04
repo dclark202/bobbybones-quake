@@ -54,7 +54,7 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-55 | P2 | open | Test rooms for the new abilities: item timing (back at mega when it respawns), sound (enemy takes an item out of sight: does he react), memory across a death (returns to the fight or the item), fall damage per minute, crouch and walk use, high-ground fights | Owner request |
 | B-56 | P3 | flagged | Not true to the game yet: short rounds, items reset at round start, spawning with every weapon, close respawns. Kept for now to coax out the behavior; move to real duel rules later (B-42) | Owner 2026-10-04 |
 
-| B-57 | P1 | open | Lab-map rooms in the simulator suite (same 41 rooms for Bobby), and the human-aim limits and new inputs mirrored in `plugins/duelbot.py` (acquisition delay, hand noise, reload jitter, sounds, clock, crouch, walk) | Needed to compare cards and to play the next Bobby |
+| B-57 | P1 | half done (simulator suite done 2026-10-04; plugin still to do) | Lab-map rooms in the simulator suite, and the human-aim limits and new inputs mirrored in `plugins/duelbot.py` (acquisition delay, hand noise, reload jitter, sounds, clock, crouch, walk) | Needed to compare cards and to play the next Bobby |
 | B-58 | P1 | built, not trained | Human aim limits: 200 ms acquisition, 50 ms tracking, flick cap, hand noise, reload jitter, fire-button cost | Owner play test 2026-10-04: aim superhuman |
 | B-59 | P1 | built, not trained | Random 1-2 weapon loadouts per player (60%), real duel spawn (20%), all weapons (20%); two-sided damage reward | Owner play test: shotgun only, takes every fight |
 | B-60 | P2 | open | Tune the aim limits from the owner's test-suite card (human baseline per room) | Owner 2026-10-04 |
@@ -65,6 +65,10 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-65 | P3 | open | Check whether a Quake Live client downloads `bobbylab` from the server; if not, publish it on the Steam Workshop | Owner believes clients can download it |
 
 | B-66 | P3 | dropped | Trick-jump stations on the test map (copies of four spots from the real maps) | Owner 2026-10-04: not clear what they test. Removed from the map and the suite; the copy tool stays in `tools/make_lab_map.py` |
+
+| B-67 | P1 | open | Aim style, not only hit rate: time from reload to the next shot, crosshair angle at the shot, trigger holding, flick speed; from the per-frame logs for humans and from the simulator for Bobby | Owner 2026-10-04 |
+| B-68 | P1 | open | Lab rooms in training: courses and lab aim rooms as round types (after the owner has reviewed the rooms); aim box distances that suit LG | Owner 2026-10-04; first lab card |
+| B-69 | P2 | open | Hosting: three rented machines (Chicago, Europe, US west), two servers each, setup script, central results, hardening | Owner 2026-10-04: public sooner |
 
 ## Test suite
 

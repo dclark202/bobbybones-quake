@@ -69,7 +69,7 @@ SWITCH = 0.425                                         # seconds from the switch
 SWITCH_COST = 0.02                                     # reward cost per weapon switch (0.002 was drowned out by the entropy bonus)
 BLIND_FIRE_COST = 0.003                                # per frame of holding fire with no enemy seen for over a second (was 0.0005)
 MOUSE_SMOOTH_FINE = 0.2                                # less view inertia for small corrections (commands up to 1 degree)
-NORMAL, AIM, DRILL, MOVE, SOLO = range(5)              # round kinds (SOLO: test rooms only, alone on the map)
+NORMAL, AIM, DRILL, MOVE, SOLO, COURSE = range(6)      # round kinds (SOLO: test rooms only; COURSE: lab-map movement courses)
 STYLES = ("random", "still", "slow", "fast", "jump")   # scripted target movement (test rooms use 1-4)
 DRILL_AMMO = np.array([15, 10, 100, 100, 15, 10, 80, 100, 1], np.float32)   # finite ammo in drill and aim rounds
 MOVE_SCALE, MOVE_ARRIVE = 0.2, 0.3                     # movement rounds: reward per second gained toward the goal, arrival
@@ -252,6 +252,42 @@ class DuelEnv:
         la = np.linspace(0, 2 * np.pi, N_LONG, endpoint=False)
         self.long_dirs = np.stack([np.cos(la), np.sin(la)], 1).astype(np.float32)
         self.lo, self.hi = [np.asarray(v, np.float32) for v in self.w.bounds()]
+        # Test map ("lab"): fixed rooms described in maps/<map>/rooms.json (tools/make_lab_map.py). On such a map
+        # every round is a lab room: an aim room (fixed placement, walking or jumping target) or a movement course.
+        # New courses added to the map file are picked up here without code changes.
+        self.lab, self.courses = None, []
+        for cand in (os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "maps", name, "rooms.json"),
+                     os.path.join("/ql/maps-data", name, "rooms.json")):
+            if os.path.exists(cand):
+                self.lab = json.load(open(cand))
+                break
+        nn2 = 2 * n_matches
+        self.course = np.full(nn2, -1, np.int64)        # movement course a player is running (-1 = none)
+        self.prog = np.zeros(nn2, np.float32)           # distance along the course's path
+        self.seg = np.zeros(nn2, np.int64)
+        self.c_t = np.zeros(nn2, np.float32)            # seconds in this attempt
+        self.c_top = np.zeros(nn2, np.float32)
+        self.c_h = np.zeros(nn2, np.float32)
+        self.lab_zone = np.zeros((n_matches, 4), np.float32)
+        self.lab_home = np.zeros((n_matches, 3), np.float32)
+        self.lab_subj = np.zeros((n_matches, 4), np.float32)    # subject spot and facing
+        self.lab_jump = np.zeros(n_matches, bool)
+        self.lab_p = (0.4, 0.6)                         # share of lab rounds: aim rooms / movement courses
+        self.lab_force = None                           # test suite: dict(kind=..., weapon / where / jump / course)
+        self.lab_aim_len, self.course_len = 25.0, 30.0
+        if self.lab is not None:
+            for key, c_ in self.lab.get("courses", {}).items():
+                path = np.array(c_["path"], np.float32)
+                seg_len = np.linalg.norm(path[1:] - path[:-1], axis=1)
+                cum = np.concatenate([[0.0], np.cumsum(seg_len)]).astype(np.float32)
+                cps = np.array([q[:3] for q in c_["checkpoints"]], np.float32)
+                cyaw = np.array([q[3] if len(q) > 3 else c_["yaw"] for q in c_["checkpoints"]], np.float32)
+                d = np.linalg.norm(path[None, :, :] - cps[:, None, :2], axis=2)
+                self.courses.append(dict(key=key, path=path, seg_len=np.maximum(seg_len, 1e-3), cum=cum, cps=cps, cyaw=cyaw,
+                                         cprog=cum[d.argmin(1)], start=np.array(c_["start"], np.float32), yaw=float(c_["yaw"]),
+                                         fall_z=float(c_["fall_z"]), end_r=float(c_.get("end_r", 120)),
+                                         end_z=c_.get("end_z"), weapon=c_.get("weapon", "g"), length=float(cum[-1])))
+            self.round_t[:] = 1e9                                     # every match starts a lab room at once
         if nav and os.path.exists(nav):                 # movement goals: mega, red and yellow armor
             goals = [self.item_pos[k] for k, d in enumerate(self.item_def) if d[4] in ("MH", "RA", "YA")]
             if goals:
@@ -311,6 +347,8 @@ class DuelEnv:
             self.stats[wn + "_hits"] = 0
             self.stats[wn + "_frags"] = 0
         self.stats["direct"] = 0                        # rockets hitting the body
+        # per course: attempts, finishes, time (finished attempts), distance, top speed, speed sum, frames, falls, height
+        self.stats["course"] = np.zeros((max(1, len(self.courses)), 9))
         for i in range(n):
             self._spawn(i, avoid=None if i % 2 == 0 else self.w.state()[i - 1, :3])
         self.state = self.w.state()
@@ -329,7 +367,7 @@ class DuelEnv:
         kind = int(self.kind[i // 2])
         self.has[i] = False
         self.ammo[i] = 0.0
-        if kind == MOVE or self.script[i] == 1:         # movement round / strafing target: unarmed
+        if kind in (MOVE, COURSE) or self.script[i] == 1:   # movement round / course / strafing target: unarmed
             self.weapon[i] = G
         elif mode >= 0:                                 # one weapon (finite ammo) + gauntlet
             self.has[i, mode] = True
@@ -373,6 +411,141 @@ class DuelEnv:
         g = int(self.rng.choice(ok))
         self.goal[i] = g
         self.phi[i] = f.potential(np.array([g]), pos[None])[0][0]
+
+    def _course_start(self, i, c):
+        """put player i at the start of course c and begin an attempt"""
+        C = self.courses[c]
+        self.w.reset(i, (C["start"][0], C["start"][1], C["start"][2] + 2.0), (0, 0, 0), C["yaw"])
+        self._fresh(i, C["yaw"])
+        self.course[i], self.prog[i], self.seg[i], self.c_t[i], self.c_top[i], self.c_h[i] = c, 0.0, 0, 0.0, 0.0, 0.0
+        if C["weapon"] == "rl":
+            self.has[i, RL], self.ammo[i, RL], self.weapon[i] = True, 25, RL
+        self.stats["course"][c, 0] += 1
+
+    def _course_close(self, i, finished):
+        """an attempt ends (finished, or the round is over): add it to the course statistics"""
+        c = int(self.course[i])
+        if c < 0:
+            return
+        row = self.stats["course"][c]
+        row[1] += int(finished)
+        row[2] += float(self.c_t[i]) if finished else 0.0
+        row[3] += self.courses[c]["length"] if finished else float(self.prog[i])
+        row[4] += float(self.c_top[i])
+        row[8] += float(self.c_h[i])
+
+    def _course_back(self, i):
+        """after a fall or a death: back to the last checkpoint already passed"""
+        C = self.courses[int(self.course[i])]
+        ok = np.nonzero(C["cprog"] <= self.prog[i] + 32)[0]
+        k = int(ok[C["cprog"][ok].argmax()]) if len(ok) else 0
+        self.w.reset(i, (C["cps"][k, 0], C["cps"][k, 1], C["cps"][k, 2] + 2.0), (0, 0, 0), float(C["cyaw"][k]))
+        self.yaw[i], self.pitch[i], self.mv[i] = float(C["cyaw"][k]), 0.0, 0.0
+        self.hp[i], self.armor[i] = SPAWN_HP, 0.0
+        self.stats["course"][int(self.course[i]), 7] += 1
+
+    def _course_step(self, reward):
+        """movement courses: progress along the path, falls, the finish. Returns True if anybody was moved."""
+        moved = False
+        s = self.state
+        for c in np.unique(self.course[self.course >= 0]):
+            C = self.courses[int(c)]
+            idx = np.nonzero(self.course == c)[0]
+            pos = s[idx, :3]
+            a_, b_ = C["path"][:-1], C["path"][1:]
+            ab = b_ - a_
+            t_ = np.clip(((pos[:, None, :2] - a_[None]) * ab[None]).sum(2) / (C["seg_len"] ** 2)[None], 0, 1)
+            d = np.linalg.norm(pos[:, None, :2] - (a_[None] + ab[None] * t_[:, :, None]), axis=2)
+            ks = np.arange(len(a_))[None, :]
+            d = np.where(np.abs(ks - self.seg[idx][:, None]) <= 1, d, 1e9)      # only near the current segment
+            k = d.argmin(1)
+            ar_ = np.arange(len(idx))
+            prog = C["cum"][k] + t_[ar_, k] * C["seg_len"][k]
+            self.seg[idx] = k
+            new = np.maximum(self.prog[idx], prog)
+            reward[idx] += MOVE_SCALE * (np.clip((new - self.prog[idx]) / 320.0, -0.5, 0.5) - DT)
+            self.prog[idx] = new
+            sp = np.hypot(s[idx, 3], s[idx, 4])
+            self.c_t[idx] += DT
+            self.c_top[idx] = np.maximum(self.c_top[idx], sp)
+            self.c_h[idx] = np.maximum(self.c_h[idx], pos[:, 2] - C["start"][2])
+            self.stats["course"][c, 5] += float(sp.sum())
+            self.stats["course"][c, 6] += len(idx)
+            if C["weapon"] == "rl":
+                self.ammo[idx, RL] = 25
+            end = C["path"][-1]
+            at_end = (np.hypot(pos[:, 0] - end[0], pos[:, 1] - end[1]) < C["end_r"]) & \
+                ((pos[:, 2] >= C["end_z"]) if C["end_z"] is not None else True)
+            fell = (pos[:, 2] < C["fall_z"]) & ~at_end
+            for i in idx[fell]:
+                reward[i] -= 0.1
+                self._course_back(int(i))
+                moved = True
+            for i in idx[at_end]:
+                reward[i] += 2 * MOVE_ARRIVE
+                self._course_close(int(i), True)
+                self._course_start(int(i), int(c))
+                moved = True
+        return moved
+
+    def _lab_round(self, m):
+        """start a lab room for match m: an aim room (odd player = target) or a movement course for both players"""
+        a_, b_ = 2 * m, 2 * m + 1
+        for q in (a_, b_):
+            self._course_close(q, False)
+        f, L, rng = self.lab_force, self.lab, self.rng
+        kd = f["kind"] if f else (AIM if (rng.random() < self.lab_p[0] or not self.courses) else COURSE)
+        self.kind[m], self.mode[m] = kd, -1
+        self.script[a_] = self.script[b_] = 0
+        self.goal[a_] = self.goal[b_] = -1
+        self.course[a_] = self.course[b_] = -1
+        self.load_sets[a_] = self.load_sets[b_] = None
+        self.frags_r[a_] = self.frags_r[b_] = 0
+        self.snd_t[a_] = self.snd_t[b_] = 99.0
+        if kd == AIM:
+            self.mode[m] = int(f["weapon"]) if f else int(rng.choice(self.aim_weapons))
+            self.script[b_] = 1
+            self.lab_jump[m] = bool(f["jump"]) if f else rng.random() < 0.5
+            where = f["where"] if f else ("env" if rng.random() < 0.33 else "aim")
+            if where == "aim":
+                A = L["aim"]
+                home, subj, face = np.array(A["target"], np.float32), np.array(A["subject"], np.float32), float(A["yaw"])
+                self.lab_zone[m] = A["zone"]
+            else:
+                E_ = L["env"]
+                spots = [np.array([q[0], q[1], q[2] if len(q) > 2 else E_["z"]], np.float32) for q in E_["spots"]]
+                i = int(rng.integers(len(spots)))
+                d = [float(np.linalg.norm(q - spots[i])) for q in spots]
+                cand = [k for k, v in enumerate(d) if 400 <= v <= 1300] or [int(np.argmax(d))]
+                j = int(rng.choice(cand))
+                home, subj = spots[i], spots[j]
+                face = math.degrees(math.atan2(home[1] - subj[1], home[0] - subj[0]))
+                b = E_["bounds"]
+                self.lab_zone[m] = [b[0] + 48, b[1] + 48, b[2] - 48, b[3] - 48]
+            self.lab_home[m], self.lab_subj[m] = home, [subj[0], subj[1], subj[2], face]
+            ty = float(rng.uniform(-180, 180))
+            self.w.reset(b_, (home[0], home[1], home[2] + 2.0), (0, 0, 0), ty)
+            self._fresh(b_, ty)
+            self.w.reset(a_, (subj[0], subj[1], subj[2] + 2.0), (0, 0, 0), face)
+            self._fresh(a_, face)
+        else:
+            for q in (a_, b_):
+                self._course_start(q, int(f["course"]) if f else int(rng.integers(len(self.courses))))
+
+    def _lab_respawn(self, v):
+        """a death on the lab map: back to the room's own spot, not to a map spawn point"""
+        m = v // 2
+        if self.course[v] >= 0:
+            self._course_back(v)
+        elif self.script[v] == 1:
+            h = self.lab_home[m]
+            ty = float(self.rng.uniform(-180, 180))
+            self.w.reset(v, (h[0], h[1], h[2] + 2.0), (0, 0, 0), ty)
+            self._fresh(v, ty)
+        else:
+            q = self.lab_subj[m]
+            self.w.reset(v, (q[0], q[1], q[2] + 2.0), (0, 0, 0), float(q[3]))
+            self._fresh(v, float(q[3]))
 
     def _teach_update(self):
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
@@ -594,6 +767,20 @@ class DuelEnv:
             goal[gi, 0] = 1.0
             goal[gi, 1:4] = rotg(f.goals[g] - pos[gi]) / 2000.0
             goal[gi, 4:7] = np.clip(rotg(wp - pos[gi]) / 500.0, -1, 1)
+        for cc in np.unique(self.course[self.course >= 0]):
+            C = self.courses[int(cc)]
+            ci_ = np.nonzero(self.course == cc)[0]
+            cg, sg = c[ci_], si[ci_]
+
+            def ahead(dist_):
+                pr = np.minimum(self.prog[ci_] + dist_, C["cum"][-1])
+                return np.stack([np.interp(pr, C["cum"], C["path"][:, 0]), np.interp(pr, C["cum"], C["path"][:, 1])], 1)
+
+            def rotc(v):
+                return np.stack([cg * v[:, 0] + sg * v[:, 1], -sg * v[:, 0] + cg * v[:, 1]], 1)
+            goal[ci_, 0] = 1.0
+            goal[ci_, 1:3] = rotc(ahead(600.0) - pos[ci_, :2]) / 2000.0
+            goal[ci_, 4:6] = np.clip(rotc(ahead(200.0) - pos[ci_, :2]) / 500.0, -1, 1)
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], own, self.mv / 30.0, walls, floors, opp_feat, rk,
                               np.eye(NW, dtype=np.float32)[self.weapon], self.has.astype(np.float32),
                               self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
@@ -792,6 +979,19 @@ class DuelEnv:
         out[:, 6] = np.where(fighter & (want != cur) & self.has[idx, want], want + 1, 0)
         tol = np.where(cur == RL, 6.0, 2.5)
         out[:, 5] = (vis & (np.abs(ey) < tol) & (np.abs(ep) < 4.0)) | (fighter & (per == 7))   # the spammer always fires
+        if self.lab is not None:
+            t1 = self.script[idx] == 1
+            z = self.lab_zone[idx // 2]
+            pos = s[idx, :3]
+            near = t1 & ~((z[:, 0] + 120 <= pos[:, 0]) & (pos[:, 0] <= z[:, 2] - 120) &
+                          (z[:, 1] + 120 <= pos[:, 1]) & (pos[:, 1] <= z[:, 3] - 120))
+            dx, dy = (z[:, 0] + z[:, 2]) / 2 - pos[:, 0], (z[:, 1] + z[:, 3]) / 2 - pos[:, 1]
+            yr_ = np.radians(self.yaw[idx])
+            f_, l_ = dx * np.cos(yr_) + dy * np.sin(yr_), -dx * np.sin(yr_) + dy * np.cos(yr_)
+            out[:, 0] = np.where(near, np.sign(np.where(np.abs(f_) > 40, f_, 0)).astype(np.int64) + 1, out[:, 0])
+            out[:, 1] = np.where(near, -np.sign(np.where(np.abs(l_) > 40, l_, 0)).astype(np.int64) + 1, out[:, 1])
+            out[:, 2] = np.where(t1, self.lab_jump[idx // 2], out[:, 2])
+            out[:, 3] = np.where(t1, int(np.abs(TURN).argmin()), out[:, 3])
         return out
 
     # ---------------------------------------------------------------- step
@@ -854,9 +1054,9 @@ class DuelEnv:
         fall = np.where(land & (prev[:, 5] < 0), np.where(delta > FALL_FAR, 10.0, np.where(delta > FALL_MED, 5.0, 0.0)), 0.0)
         fallers = np.nonzero(fall > 0)[0]
         reward -= SWITCH_COST * sw
-        blind = fire & (self.seen_t > 1.0) & (pkind != MOVE)
+        blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & (pkind != COURSE)
         reward -= BLIND_FIRE_COST * blind
-        fight = human & (pkind != MOVE)
+        fight = human & (pkind != MOVE) & (pkind != COURSE)
         self.stats["switches"] += int((sw & fight).sum())
         self.stats["fire_frames"] += int((fire & fight).sum())
         self.stats["blind_frames"] += int((blind & fight).sum())
@@ -888,6 +1088,9 @@ class DuelEnv:
             self._damage(int(v), float(fall[v]))
             self.stats["fall_dmg"] += float(fall[v])
 
+        if self.courses and (self.course >= 0).any() and self._course_step(reward):
+            self.state = s = self.w.state()
+            self.yaw = s[:, 7].copy()
         # fire: a shot leaves one frame after the command
         self.cool = np.maximum(0.0, self.cool - DT)
         self.fire_cd = np.maximum(0.0, self.fire_cd - DT)
@@ -1091,6 +1294,9 @@ class DuelEnv:
                 self.stats["suicides"] += 1
             events.append(dict(victim=int(v), killer=int(k), weapon=int(kill_w.get(v, -1))))
         for v in dead:
+            if self.lab is not None:
+                self._lab_respawn(int(v))
+                continue
             self._spawn(int(v), avoid=s[v ^ 1, :3], close=True if self.kind[v // 2] == AIM else None)
             if self.goal[v] >= 0:
                 self._new_goal(int(v))
@@ -1110,9 +1316,15 @@ class DuelEnv:
         if self.fixed_kind is not None:
             klen = np.full(self.M, self.round_len)
         ends = np.nonzero(self.round_t > klen * self.rng.uniform(0.67, 1.33, self.M))[0]
+        if self.lab is not None:                            # lab rooms have exact lengths
+            ends = np.nonzero(self.round_t >= np.where(self.kind == COURSE, self.course_len, self.lab_aim_len))[0]
         for m in ends:
             self.round_t[m] = 0.0
             a_, b_ = 2 * m, 2 * m + 1
+            if self.lab is not None:
+                self._lab_round(int(m))
+                done[a_] = done[b_] = True
+                continue
             # kind_p is the share of playing TIME per kind: normal rounds last much longer than the others, so
             # the chance of starting each kind is weighted by 1 / its length
             wts = np.asarray(self.kind_p, np.float64) / np.array([self.round_len, 15.0, 15.0, self.move_len])
@@ -1183,9 +1395,9 @@ class DuelEnv:
         if len(cand):
             vis[cand] = self._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
         pkind = np.repeat(self.kind, 2)
-        vis &= (pkind != MOVE) & (pkind != SOLO)            # movement / solo rounds: the other player does not exist
+        vis &= (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)   # movement / solo / course: no other player
         self.visible = vis
-        heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO)
+        heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
         vh = np.nonzero(vis & (self.script == 0))[0]        # aim quality while the opponent is in view
         if len(vh):
             cosang = np.clip((to[vh] * fdir[vh]).sum(1) / dist[vh], -1, 1)

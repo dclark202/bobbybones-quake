@@ -10,6 +10,55 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-04 (14:30): owner's test-chamber card, lab rooms in the simulator, `duel_gru_v4` started
+
+Settles B-57 (simulator half), B-34. Raises B-67, B-68.
+
+**Owner's card** (`data/duellive/suite/human_20261004-183837.json`, lab map, 15 s aim rooms):
+
+| Weapon | Walking target | Jumping target | Environment box |
+|---|---|---|---|
+| LG | 51% | 89% | 55% |
+| Rail | 70% | 100% | 57% |
+| Shotgun (pellets) | 42% | 57% | 44% |
+| Machine gun | 58% | 80% | 54% |
+| HMG | 51% | 63% | 49% |
+| Plasma | 46% | 59% | 47% |
+
+Crosshair about 4 degrees off a walking target, on target 54-56% with LG. A jumping target is much easier than a
+walking one. Movement: speed straight 718 u/s average and 854 top (20,300 units in 28 s), ramps 605, slalom 550;
+the old gaps course was not finishable (4 falls). The owner rates his aim "decent, not great": Bobby may sit a
+bit above these numbers, not far above.
+
+**Did not work on the lab map:** a placement spot inside the raised platform (invisible Nightmare bot, respawn
+inside solid); removing weapons without removing the one in hand (rocket launcher in movement rooms); targets
+warped back at walls; trick-jump stations (dropped: unclear what they test); the 480-unit gap (not clearable
+while strafe jumping).
+
+**Lab map now:** aim box, environment box, nine movement courses (speed, circle-jump gaps, two-hop gaps, ramps,
+slalom, turns, narrow path, pillars, rocket jumps), one fight against the game's Nightmare bot.
+
+**Lab rooms in the simulator** (`sim/duel_env.py` lab mode, `sim/test_suite.py --lab`): the rooms are read from
+`maps/bobbylab/rooms.json`, so courses added to the map need no code. Checked with scripted players: course
+progress, falls and checkpoints, finish; target zones and jumping.
+
+**First lab card for Bobby** (`duel_gru_v4` at 501 min, 13 minutes into the new rules;
+`data/sim_runs/duel_gru_v4/suite/lab_0501.md`): aim rooms 2-9% hit rate with the crosshair 16-26 degrees off;
+speed straight 395 u/s average, 501 top; turns 10,650 of 11,900 units; slalom stuck at the walls; circle,
+two-hop, narrow and pillars: 9-24 falls, no progress past the first obstacles; rocket course: first ledge only.
+- Why aim is so low there while it is 40-70% in his training rounds: at the start of a room he turns away
+  before the new 200 ms noticing delay has passed (0 to 72 degrees off in 8 frames), the target then leaves his
+  view, and he takes seconds to find it again. The map is also new to him. The human starts each room already
+  looking at the target after a countdown. Not a scoring bug: his error at frame 0 is 0 degrees.
+- LG reaches 768 units and half of the aim box's target zone is beyond that from the subject's start.
+
+**`duel_gru_v4`** started 14:08 (widened from v3; outputs identical before training). First launch stalled: 6.4 s
+sequences filled the GPU memory; restarted with 24 minibatches. 56-61k steps per second. At 14 minutes: frags
+spread over weapons (LG 24%, shotgun 20%, rail 15%), movement rounds 335 u/s with 32% fast-air (8% before),
+beats the rusher, jumper and spammer styles, loses to the sniper, dodger and allround.
+
+---
+
 ## 2026-10-04 (afternoon): `duel_gru_v3` final, second human play test, changes approved for the next run
 
 Settles B-38, B-43/B-44 (built), raises B-57 to B-60.
