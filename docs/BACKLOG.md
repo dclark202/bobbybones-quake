@@ -29,6 +29,16 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-31 | P2 | open | Rockets aimed at surfaces near the enemy, not only at the body | Play test note |
 | B-32 | P2 | done (dry run vs Nightmare; human test pending) | Mirror the new simulator rules (view smoothing, pitch rule, nine weapons, goal inputs) in `plugins/duelbot.py` so `duel_gru_v3` can be played | Needed for the morning play test |
 
+## Beyond aim (owner priority 2026-10-04: smooth, fast movement; positioning; weapon choice)
+
+| ID | P | Status | Item | Why / evidence |
+|---|---|---|---|---|
+| B-42 | P1 | open | Full-length duels with clock and score as the main round type, so speed, items and position pay through winning | Short rounds reward only aim; B-12 |
+| B-43 | P1 | open | Movement teacher: copy the strafe-jumping movement policy's actions in movement rounds (extra loss), plus longer item circuits and a bonus for arriving with speed | Movement rounds sit at 302 u/s (run speed); the movement-only policy strafe-jumps |
+| B-44 | P1 | open | Opponents that punish bad choices: scripted styles (keeps range with rail, rushes with rockets, LG tracker, retreats when hurt, dodges) in the league and the test rooms | Every weapon gives the same kills per minute against the current target |
+| B-45 | P2 | open | Pro-demo position prior: where pros stand and which weapon they hold by distance, from the 374 parsed demos (positions need no key inference); use as a benchmark first, as a small reward only if needed | B-30, B-09 |
+| B-46 | P2 | open | Suite rooms for these: route times against a reference, speed in normal rounds, share of fights from higher ground, big-item share over a full duel, weapon by distance against opponents that fight back | B-35 |
+
 ## Test suite
 
 | ID | P | Status | Item | Why / evidence |

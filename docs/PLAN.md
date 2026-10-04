@@ -71,6 +71,8 @@ Next after the run: B-32 (play `duel_gru_v3` live), B-33/B-34 (test suite with a
 - Public server stays off until a model beats Nightmare reliably. Play-testing happens on the private,
   password-protected server (`tools/duel_server.sh`).
 - Log as much as possible from human-played rounds.
+- Long-term focus (2026-10-04): smooth, efficient movement that keeps speed, and good choices of position and
+  weapon, not just good aim (BACKLOG B-42 to B-46).
 - No personal data in the repo.
 
 ## How to run (short)
