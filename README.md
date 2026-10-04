@@ -2,8 +2,9 @@
 
 **BobbyBones** is a Quake Live duel bot that learns to play from scratch. Nothing about how to aim, move or
 fight is hand-coded: a neural network plays millions of duels against itself in a fast simulator of the game,
-is checked on a real Quake Live server, and is play-tested by people. The goal is a bot that beats strong
-players fairly and shows learned behavior such as strafe jumping, weapon choice and item control.
+is checked on a real Quake Live server, and is play-tested by people. The goal is a bot that can beat strong
+players fairly and shows learned behavior such as strafe jumping, weapon choice and item control. Down the road, 
+BobbyBones can be tuned to help new players learn the game by adapting to the skill level of his opponent. 
 
 ## Fairness rules
 
