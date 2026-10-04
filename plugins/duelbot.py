@@ -645,6 +645,27 @@ class duelbot(minqlx.Plugin):
             self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w={})
 
     # ------------------------------------------------------------------ test rooms (human = subject, slot 0)
+    def room_hint(self, r):
+        """one line that tells the player what to do and with which weapons"""
+        k = r["kind"]
+        if k == "aim":
+            return "{} only, endless ammo. Hit the target as much as you can.".format(r["weapon"].upper())
+        if k == "choice":
+            return "All weapons. Use whatever you think is right at this distance."
+        if k == "speed":
+            return "Gauntlet only. Run the straight as fast as you can."
+        if k == "move":
+            return "Gauntlet only. Run to the item named on screen."
+        if k == "solo":
+            return "All weapons. Collect what you would in a real game."
+        if k == "ladder":
+            style = {"allround": "rockets close, LG mid, rail far", "sniper": "rail, keeps its distance",
+                     "rusher": "rockets, always closing in", "tracker": "LG at mid range",
+                     "dodger": "dodges, backs off when hurt", "stander": "stands still",
+                     "jumper": "runs at you, always jumping", "spammer": "fires blind"}.get(r["name"].split("/")[-1], "")
+            return "All weapons, your choice. Play to win. Opponent: {} ({}).".format(r["name"].split("/")[-1], style)
+        return ""
+
     def room_loadout(self, bobby, human, only=None):
         r, R = self.room, self.R
         if only in (None, "opp"):
@@ -796,6 +817,8 @@ class duelbot(minqlx.Plugin):
                             switches=0, fire=0, blind=0, arrive=0, speed=0.0, fast=0, frags=0, deaths=0, dmg_taken=0,
                             picks={}))
             self.msg("^3Next: {}^7 ({} s). Starts in 5 s; the countdown is not scored.".format(r["name"], r["secs"]))
+            self.msg("^5" + self.room_hint(r))
+            human.center_print("^3{}^7: {}".format(r["name"], self.room_hint(r)))
             self.record(event="room_start", room=r["name"])
         r = self.room
         m = r["m"]
