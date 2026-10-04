@@ -47,7 +47,7 @@ GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
-    [["move", c_] for c_ in ("speed", "gaps", "ramps", "slalom")] + \
+    [["move", "*"]] + \
     [["fight", "nightmare"]]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
@@ -219,7 +219,7 @@ class duelbot(minqlx.Plugin):
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
             player.tell("!room fight nightmare (60 s): the game's Nightmare bot")
             player.tell("!room fight <{}> (30 s): scripted styles".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 26 rooms, about 16 minutes | !room off")
+            player.tell("!room suite = every room, about 20 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -238,6 +238,9 @@ class duelbot(minqlx.Plugin):
             self.msg("Rooms off: back to the normal duel.")
             return
         specs = (LAB_SUITE if self.lab else SUITE) if a[0] == "suite" else [a]
+        if self.lab:                                         # "move *" = every movement course on the map
+            specs = [x for sp_ in specs for x in ([["move", k] for k in self.lab.get("courses", {})]
+                                                   if sp_ == ["move", "*"] else [sp_])]
         out = []
         for s in specs:
             r = self.room_spec(s)
@@ -665,8 +668,8 @@ class duelbot(minqlx.Plugin):
         if k == "choice":
             return "All weapons. Use whatever you think is right at this distance."
         if k == "speed":
-            return "Gauntlet only. {}: reach the far end as fast as you can.".format(
-                self.lab["courses"][r["key"]]["name"] if self.lab else "Course")
+            c_ = self.lab["courses"][r["key"]]
+            return ("Rocket launcher. " if c_.get("weapon") == "rl" else "Gauntlet only. ") + c_.get("hint", c_["name"])
         if k == "move":
             return "Gauntlet only. Run to the item named on screen."
         if k == "solo":
@@ -693,6 +696,10 @@ class duelbot(minqlx.Plugin):
         if only in (None, "opp"):
             if r["kind"] == "aim":
                 self.give_loadout(human, R, only=r["weapon"])
+            elif r["kind"] == "speed" and self.lab and self.lab["courses"][r["key"]].get("weapon") == "rl":
+                human.weapons(reset=True, g=True, rl=True)   # rocket-jump course
+                human.ammo(rl=25)
+                human.weapon(QLNUM["rl"])
             elif r["kind"] in ("move", "terrain", "speed"):
                 self.gauntlet_only(human)
             else:
@@ -774,19 +781,53 @@ class duelbot(minqlx.Plugin):
         sp = math.hypot(hvel[0], hvel[1])
         if r["kind"] == "speed":
             st = self.lab["courses"][r.get("key", "speed")]
+            path = st["path"]
             if r.get("leg") is None:
                 self.put(human, st["start"], st["yaw"], human=True)
-                r["leg"], r["t_run"] = 0, None
+                r["leg"], r["t_run"], r["seg"], r["prog"] = 0, None, 0, 0.0
                 return
             r["top"] = max(r.get("top", 0.0), sp)
-            m["dist"] = max(m.get("dist", 0.0), float(hpos[0] - st["start"][0]))
+            if st.get("weapon") == "rl" and getattr(human.state.ammo, "rl") < 10:
+                human.ammo(rl=25)
+            # progress = distance along the path at the nearest point, searched near the current segment only
+            best = None
+            for k in range(max(0, r["seg"] - 1), min(len(path) - 1, r["seg"] + 2)):
+                ax, ay = path[k]
+                bx, by = path[k + 1]
+                L = math.hypot(bx - ax, by - ay) or 1.0
+                t_ = max(0.0, min(1.0, ((hpos[0] - ax) * (bx - ax) + (hpos[1] - ay) * (by - ay)) / (L * L)))
+                d = math.hypot(hpos[0] - (ax + (bx - ax) * t_), hpos[1] - (ay + (by - ay) * t_))
+                if best is None or d < best[0]:
+                    best = (d, k, t_ * L)
+            r["seg"] = best[1]
+            done_len = sum(math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]) for k in range(best[1]))
+            r["prog"] = max(r["prog"], done_len + best[2])
+            m["dist"] = r["prog"]
+            m["height"] = max(m.get("height", 0.0), float(hpos[2] - st["start"][2]))
             if r["t_run"] is None and sp > 50:
                 r["t_run"] = now
-            if hpos[2] < st["fall_z"]:                      # fell into a pit: back to the start of that platform
-                cps = [c for c in st["checkpoints"] if c <= hpos[0]] or st["checkpoints"][:1]
-                self.put(human, [cps[-1], st["start"][1], st["start"][2]], st["yaw"], human=True)
+            ex, ey_ = path[-1]
+            at_end = math.hypot(hpos[0] - ex, hpos[1] - ey_) < st.get("end_r", 120) and \
+                (st.get("end_z") is None or hpos[2] >= st["end_z"])
+            if hpos[2] < st["fall_z"]:                      # fell: back to the last checkpoint reached
+                cp, cl = st["checkpoints"][0], -1.0
+                for c in st["checkpoints"]:
+                    # how far along the path this checkpoint is (nearest path point)
+                    acc, bestc = 0.0, None
+                    for k in range(len(path) - 1):
+                        ax, ay = path[k]
+                        bx, by = path[k + 1]
+                        L = math.hypot(bx - ax, by - ay) or 1.0
+                        t_ = max(0.0, min(1.0, ((c[0] - ax) * (bx - ax) + (c[1] - ay) * (by - ay)) / (L * L)))
+                        d = math.hypot(c[0] - (ax + (bx - ax) * t_), c[1] - (ay + (by - ay) * t_))
+                        if bestc is None or d < bestc[0]:
+                            bestc = (d, acc + t_ * L)
+                        acc += L
+                    if bestc[1] <= r["prog"] + 32 and bestc[1] > cl:
+                        cp, cl = c, bestc[1]
+                self.put(human, cp[:3], cp[3] if len(cp) > 3 else st["yaw"], human=True)
                 m["falls"] = m.get("falls", 0) + 1
-            elif hpos[0] > st["end_x"]:                     # reached the end: the room is over
+            elif at_end:                                    # reached the end: the room is over
                 t = now - (r["t_run"] or now)
                 m["best"] = t
                 human.tell("^2{:.2f} s^7 for {} units, top speed {:.0f}".format(t, int(st["length"]), r.get("top", 0.0)))
@@ -1018,7 +1059,7 @@ class duelbot(minqlx.Plugin):
         elif r["kind"] == "speed":
             res = dict(finished=1.0 if "best" in m else 0.0, time=m["best"] if "best" in m else -1.0,
                        distance=m.get("dist", 0.0), top_speed=r.get("top", 0.0), mean_speed=m["speed"] / f,
-                       falls=m.get("falls", 0))
+                       falls=m.get("falls", 0), height=m.get("height", 0.0))
         elif r["kind"] == "solo":
             p = m["picks"]
             res = dict(mega_per_min=p.get("mega", 0) / mins, red_armor_per_min=p.get("red_armor", 0) / mins,

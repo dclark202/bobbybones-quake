@@ -6,11 +6,12 @@
 Areas (flat walls, stock textures):
   aim box          empty box 1536 x 1024 x 400: subject at one end, target about 700 units away
   environment box  1536 x 1536 x 400: pillars, two low walls, a platform with steps
-  movement courses speed straight (20480 x 512, a mark every 2048 units), gaps (pits of growing width), ramps and
-                   stairs up and down, slalom (walls from alternating sides)
+  movement courses speed straight, circle-jump gaps, two-hop gaps, ramps and stairs, slalom, turns (45 / 90 /
+                   135 degrees and a hairpin), narrow path, pillars, rocket jumps
 Needs the real maps in data/maps/ (extracted from the game) and sim/qsim built.
 """
 import json
+import math
 import os
 import sys
 
@@ -37,6 +38,18 @@ def ramp(x0, y0, x1, y1, za, zb, base, tex=TRIM):
     p = [(x1, y1, zb, x1, y0, zb, x0, y1, za), (x1, y1, zt, x0, y1, zt, x1, y1, base), (x1, y1, zt, x1, y1, base, x1, y0, zt),
          (x0, y0, base, x1, y0, base, x0, y1, base), (x0, y0, base, x0, y0, zt, x1, y0, base), (x0, y0, base, x0, y1, base, x0, y0, zt)]
     brushes.append("{\n" + "\n".join(f.format(*[int(round(v)) for v in q], tex) for q in p) + "\n}")
+
+
+def prism(pts, z0, z1, tex=WALL):
+    """a brush with vertical sides over a convex footprint (points counter-clockwise seen from above)"""
+    f = "( {} {} {} ) ( {} {} {} ) ( {} {} {} ) {} 0 0 0 0.5 0.5 0 0 0"
+    pts = [(int(round(x)), int(round(y))) for x, y in pts]
+    (ax, ay), (bx, by), (cx, cy) = pts[0], pts[1], pts[2]
+    faces = [(ax, ay, z1, cx, cy, z1, bx, by, z1), (ax, ay, z0, bx, by, z0, cx, cy, z0)]
+    for k in range(len(pts)):
+        (px, py), (qx, qy) = pts[k], pts[(k + 1) % len(pts)]
+        faces.append((px, py, z0, px, py, z1, qx, qy, z0))
+    brushes.append("{\n" + "\n".join(f.format(*q, tex) for q in faces) + "\n}")
 
 
 def room(x0, y0, z0, x1, y1, z1, t=32, floor=FLOOR):
@@ -118,27 +131,44 @@ def main():
     for mark in range(2048, SL, 2048):                                          # distance marks on the floor
         box(mark, sy, 0, mark + 8, sy + 512, 1, TRIM)
     rooms["speed"] = dict(start=[64, sy + 256, 8], yaw=0, far=[SL - 64, sy + 256, 8], length=SL - 128)
-    courses = dict(speed=dict(name="Speed straight", start=[64, sy + 256, 8], yaw=0, end_x=SL - 104, fall_z=-1e9,
-                              checkpoints=[64], length=SL - 168, y=[sy, sy + 512]))
-    # ---- gaps: a long run with pits to jump, each wider than the last (a running jump clears about 220 units)
-    gy, x = 12000, 0
-    plats, pits = [], []
-    for g in (160, 224, 288, 352, 416, 480):
-        plats.append((x, x + 1536))
-        pits.append((x + 1536, x + 1536 + g))
-        x += 1536 + g
-    plats.append((x, x + 1536))
-    GL = x + 1536
-    room(0, gy, -256, GL, gy + 512, 320)
-    for a, b in plats:
-        box(a, gy, -256, b, gy + 512, 0, FLOOR)
-        box(b - 8, gy, 0, b, gy + 512, 1, TRIM)                                   # the edge is marked
-    courses["gaps"] = dict(name="Gaps", start=[64, gy + 256, 8], yaw=0, end_x=GL - 104, fall_z=-100,
-                           checkpoints=[a + 64 for a, b in plats], length=GL - 168, y=[gy, gy + 512])
+    # Movement courses. Each has: start, yaw, path (the line progress is measured along), end (point and radius),
+    # fall_z (below it = fell), checkpoints (where a fall puts the player back: x, y, z, yaw), weapon, hint.
+    courses = {}
+
+    def course(key, name, hint, start, path, fall_z=-1e9, checkpoints=None, weapon="g", yaw=0, end_r=120, end_z=None):
+        length = sum(math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]) for k in range(len(path) - 1))
+        courses[key] = dict(name=name, hint=hint, start=[float(v) for v in start], yaw=yaw,
+                            path=[[float(x), float(y)] for x, y in path], end_r=end_r, end_z=end_z, fall_z=fall_z,
+                            checkpoints=checkpoints or [[float(start[0]), float(start[1]), float(start[2]), yaw]],
+                            weapon=weapon, length=round(length))
+        spawns.append((start[0], start[1], start[2] + 16, yaw))
+
+    course("speed", "Speed straight", "Flat straight: build speed and hold it to the far end.",
+           [64, sy + 256, 8], [[64, sy + 256], [SL - 104, sy + 256]])
+
+    def gap_course(key, name, hint, gy, plat, gaps):
+        """platforms of length plat separated by pits; a fall puts the player back at the start of that platform"""
+        x, plats = 0, []
+        for g in gaps:
+            plats.append((x, x + plat))
+            x += plat + g
+        plats.append((x, x + plat))
+        L = x + plat
+        room(0, gy, -256, L, gy + 512, 320)
+        for a_, b_ in plats:
+            box(a_, gy, -256, b_, gy + 512, 0, FLOOR)
+            box(b_ - 8, gy, 0, b_, gy + 512, 1, TRIM)
+        course(key, name, hint, [64, gy + 256, 8], [[64, gy + 256], [L - 104, gy + 256]], fall_z=-100,
+               checkpoints=[[a_ + 64, gy + 256, 8, 0] for a_, b_ in plats])
+
+    # a plain running jump clears about 250 units; these need more speed than that
+    gap_course("circle", "Circle-jump gaps", "Short platforms: each gap needs one good circle jump from a standing start.",
+               12000, 512, (264, 280, 296, 312, 328))
+    gap_course("twohop", "Two-hop gaps", "Each platform has room for two jumps: circle jump, one strafe jump, then the gap.",
+               13000, 768, (336, 360, 384, 400, 416))
     # ---- ramps and stairs, up and down
     ry, x = 14000, 1024
     RH = 640
-    feats = []                                      # (kind, length, height before, height after)
     h = 0
 
     def stairs(up, steps):
@@ -169,9 +199,9 @@ def main():
     slope(768, 192); flat(384); slope(768, -192); flat(1024)
     RL_ = x
     room(0, ry, 0, RL_, ry + 512, RH)
-    courses["ramps"] = dict(name="Ramps and stairs", start=[64, ry + 256, 8], yaw=0, end_x=RL_ - 104, fall_z=-1e9,
-                            checkpoints=[64], length=RL_ - 168, y=[ry, ry + 512])
-    # ---- slalom: walls from alternating sides, speed has to be kept through the turns
+    course("ramps", "Ramps and stairs", "Stairs and ramps up and down: keep your speed over them.",
+           [64, ry + 256, 8], [[64, ry + 256], [RL_ - 104, ry + 256]])
+    # ---- slalom: walls from alternating sides
     zy, ZL, ZW = 16000, 10240, 768
     room(0, zy, 0, ZL, zy + ZW, 320)
     for k, wx in enumerate(range(1280, ZL - 640, 1024)):
@@ -179,11 +209,99 @@ def main():
             box(wx, zy, 0, wx + 64, zy + 448, 320, BLOCK)
         else:
             box(wx, zy + ZW - 448, 0, wx + 64, zy + ZW, 320, BLOCK)
-    courses["slalom"] = dict(name="Slalom", start=[64, zy + ZW // 2, 8], yaw=0, end_x=ZL - 104, fall_z=-1e9,
-                             checkpoints=[64], length=ZL - 168, y=[zy, zy + ZW])
+    course("slalom", "Slalom", "Walls from alternating sides: weave through without losing speed.",
+           [64, zy + ZW // 2, 8], [[64, zy + ZW // 2], [ZL - 104, zy + ZW // 2]])
+    # ---- turns: 45, 90, 135 degrees and a hairpin, in a walled corridor
+    ty, W = 20000, 448
+    c45 = math.sqrt(0.5)
+    P = [(128.0, 0.0)]
+    for dx, dy in ((1536, 0), (1280 * c45, 1280 * c45), (1280, 0), (0, 1280), (1536, 0), (-1280 * c45, -1280 * c45),
+                   (1536, 0), (0, -640), (-1536, 0)):
+        P.append((P[-1][0] + dx, P[-1][1] + dy))
+    xs_, ys_ = [q[0] for q in P], [q[1] for q in P]
+    shift = (-min(xs_) + 400, ty - min(ys_) + 400)
+    P = [(q[0] + shift[0], q[1] + shift[1]) for q in P]
+    room(min(q[0] for q in P) - 400, min(q[1] for q in P) - 400, 0, max(q[0] for q in P) + 400, max(q[1] for q in P) + 400, 320)
+
+    def offset_line(pts, d):
+        """the path moved sideways by d (left positive), with mitred corners"""
+        out = []
+        for k in range(len(pts)):
+            def nrm(a_, b_):
+                l_ = math.hypot(b_[0] - a_[0], b_[1] - a_[1])
+                return (-(b_[1] - a_[1]) / l_, (b_[0] - a_[0]) / l_)
+            if k == 0:
+                n = nrm(pts[0], pts[1])
+                out.append((pts[0][0] + n[0] * d - (pts[1][0] - pts[0][0]) / 1536 * 128, pts[0][1] + n[1] * d))
+            elif k == len(pts) - 1:
+                n = nrm(pts[-2], pts[-1])
+                out.append((pts[-1][0] + n[0] * d, pts[-1][1] + n[1] * d))
+            else:
+                n1, n2 = nrm(pts[k - 1], pts[k]), nrm(pts[k], pts[k + 1])
+                bx_, by_ = n1[0] + n2[0], n1[1] + n2[1]
+                bl = math.hypot(bx_, by_)
+                bx_, by_ = bx_ / bl, by_ / bl
+                m = d / max(0.3, bx_ * n1[0] + by_ * n1[1])
+                out.append((pts[k][0] + bx_ * m, pts[k][1] + by_ * m))
+        return out
+
+    for side in (1, -1):
+        line = offset_line(P, side * W / 2)
+        for k in range(len(line) - 1):
+            a_, b_ = line[k], line[k + 1]
+            l_ = math.hypot(b_[0] - a_[0], b_[1] - a_[1])
+            n = (-(b_[1] - a_[1]) / l_ * side * 32, (b_[0] - a_[0]) / l_ * side * 32)
+            quad = [a_, b_, (b_[0] + n[0], b_[1] + n[1]), (a_[0] + n[0], a_[1] + n[1])]
+            if side == 1:
+                quad = [quad[0], quad[3], quad[2], quad[1]]
+            prism(quad, 0, 192, BLOCK)
+    course("turns", "Turns", "A corridor with 45, 90 and 135 degree turns and a hairpin: take them as fast as you can.",
+           [P[0][0] + 32, P[0][1], 8], P)
+    # ---- narrow path over a pit, getting narrower
+    ny_ = 24000
+    segs = ((96, 1536), (64, 1536), (48, 1536), (32, 1536))
+    NL = sum(l_ for w_, l_ in segs) + 512 + 512
+    room(0, ny_, -256, NL, ny_ + 512, 320)
+    box(0, ny_, -256, 512, ny_ + 512, 0, FLOOR)                                   # start pad
+    x, cps, path = 512, [[64, ny_ + 256, 8, 0]], [[64, ny_ + 256]]
+    for k, (w_, l_) in enumerate(segs):
+        cy = ny_ + 256 + (48 if k % 2 else -48)                                   # the beam jogs sideways each time
+        box(x, cy - w_ / 2, -256, x + l_, cy + w_ / 2, 0, TRIM)
+        box(x - 64, ny_ + 256 - 128, -256, x + 64, ny_ + 256 + 128, 0, FLOOR)      # a small pad joins the beams
+        cps.append([x, ny_ + 256, 8, 0])
+        path += [[x, ny_ + 256], [x + 96, cy], [x + l_, cy]]
+        x += l_
+    box(x - 64, ny_ + 256 - 128, -256, x + 64, ny_ + 256 + 128, 0, FLOOR)
+    box(x, ny_, -256, NL, ny_ + 512, 0, FLOOR)                                    # end pad
+    path.append([NL - 104, ny_ + 256])
+    course("narrow", "Narrow path", "A beam over a pit that gets narrower (96, 64, 48, 32 wide): fast, without falling.",
+           [64, ny_ + 256, 8], path, fall_z=-100, checkpoints=cps)
+    # ---- pillars: hop from top to top (spacing of the Campgrounds pillars), slight zigzag
+    py_, NP, SPC = 26000, 36, 222
+    PL = 384 + NP * SPC + 384
+    room(0, py_, -256, PL, py_ + 512, 320)
+    box(0, py_, -256, 320, py_ + 512, 0, FLOOR)
+    path, cps = [[64, py_ + 256]], [[64, py_ + 256, 8, 0]]
+    for k in range(NP):
+        cx_, cy = 320 + 96 + k * SPC + 32, py_ + 256 + (40 if (k // 3) % 2 else -40)
+        box(cx_ - 32, cy - 32, -256, cx_ + 32, cy + 32, 0, BLOCK)
+        path.append([cx_, cy])
+        if k % 6 == 5:
+            cps.append([cx_, cy, 8, 0])
+    box(PL - 384, py_, -256, PL, py_ + 512, 0, FLOOR)
+    path.append([PL - 104, py_ + 256])
+    course("pillars", "Pillars", "Hop from pillar to pillar (64 wide, 222 apart) to the far side.",
+           [64, py_ + 256, 8], path, fall_z=-100, checkpoints=cps)
+    # ---- rocket jumps: three ledges, each higher than a normal jump reaches
+    ky = 28000
+    room(0, ky, 0, 2560, ky + 512, 1200)
+    tops = (224, 544, 944)                                                         # steps of 224, 320 and 400
+    for k, t_ in enumerate(tops):
+        box(640 + k * 640, ky, 0, 2560, ky + 512, t_, BLOCK)
+    course("rocket", "Rocket jumps", "Rocket launcher, endless ammo: rocket-jump up three ledges (224, 320 and 400 high).",
+           [64, ky + 256, 8], [[64, ky + 256], [640, ky + 256], [1280, ky + 256], [1920, ky + 256], [2400, ky + 256]],
+           weapon="rl", end_z=tops[-1] - 8)
     rooms["courses"] = courses
-    for c in courses.values():
-        spawns.append((c["start"][0], c["start"][1], 24, 0))
     # ---- terrain stations: 3D copies of the real spots
     # The trick-jump copies (Campgrounds bridge to rail and pillars, Aerowalk and Blood Run red armor) were
     # removed on 2026-10-04: as test rooms they were not clear enough. copy_region() is kept for later use.

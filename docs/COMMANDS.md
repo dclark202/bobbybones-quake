@@ -20,11 +20,11 @@ and prints your result in chat. `!rooms` lists the rooms for the current map; `!
 
 | Command | Room | Length |
 |---|---|---|
-| `!room suite` | All 26 rooms below, back to back | about 16 min |
+| `!room suite` | Every room below except the scripted fights, back to back | about 20 min |
 | `!room aim <weapon> walk` | Aim box: the target moves left, right, forward and back at random. Weapons: `mg`, `sg`, `rl`, `lg`, `rg`, `pg`, `hmg` | 25 s |
 | `!room aim <weapon> jump` | Aim box: the same movement, with jumping | 25 s |
 | `!room aim <weapon> env` | Environment box (pillars, cover): the target moves at random | 45 s |
-| `!room move <course>` | Movement course, 30 s or until you reach the end. Courses: `speed` (flat 20,000-unit straight), `gaps` (pits of growing width to jump; falling in puts you back at the start of that platform), `ramps` (ramps and stairs up and down), `slalom` (walls from alternating sides) | up to 30 s |
+| `!room move <course>` | Movement course, 30 s or until you reach the end. Courses: `speed` (flat 20,000-unit straight), `circle` (gaps that each need one circle jump from a standing start), `twohop` (gaps that need a circle jump plus one strafe jump), `ramps` (ramps and stairs), `slalom` (walls from alternating sides), `turns` (45, 90, 135 degree turns and a hairpin), `narrow` (a beam over a pit, 96 down to 32 wide), `pillars` (hop from pillar to pillar), `rocket` (rocket-jump up three ledges; rocket launcher). A fall puts you back at the last checkpoint | up to 30 s |
 | `!room fight nightmare` | A fight in the environment box against the game's own Nightmare bot (in the suite) | 60 s |
 | `!room fight <style>` | The same against a scripted style: `allround`, `sniper`, `rusher`, `tracker`, `dodger`, `stander`, `jumper`, `spammer` (not in the suite) | 30 s |
 
