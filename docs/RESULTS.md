@@ -10,6 +10,27 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-04 (15:27): `duel_gru_v4` recut (owner's mix), heavier damage penalty, teacher removed
+
+Resumed from `policy_before_recut.pt` (561 min) until 19:00.
+- Playing time: stock maps 67% (12 of 18 workers) = normal duels 44%, movement 11%, aim 11%; lab map 33% =
+  courses (speed, slalom, ramps) 22%, lab aim rooms 11%. The owner's shares (40 / 10 / 10 / 20 / 10) summed to
+  90 and were scaled up.
+- Normal duels: 40% one or two random weapons per player, 20% real duel spawn, 20% every weapon, 20% the same
+  single weapon for both (the old single-weapon rounds, now inside normal duels).
+- Damage taken, from any source (opponent, own splash, falls), now weighs twice as much as damage dealt.
+- The movement teacher is off (owner: its settings were too different to help further). It lifted fast-air in
+  item runs from 8% to 32-34% in its 80 minutes.
+- Lab aim rooms: the subject starts having already noticed the target, like a person after the countdown.
+
+Before the recut (25 minutes with the courses): speed straight 482 u/s average, ramps 435, slalom 329 (361 / 361 /
+306 at the start); crouch 19% and walk 30% of the time.
+
+**Server tick rate checked:** Quake Live locks `sv_fps` at 40 (setting 125 on the command line is ignored;
+frames measured at 25.0 ms). A "better" server can only come from hardware and network, not from a higher tick.
+
+---
+
 ## 2026-10-04 (15:01): `duel_gru_v4` restarted with lab movement courses
 
 Starts B-68. The run was stopped right after a checkpoint (`policy_before_courses.pt`, 536 min) and resumed

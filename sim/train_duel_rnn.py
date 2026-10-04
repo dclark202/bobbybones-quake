@@ -28,7 +28,7 @@ DT_MIN = 0.025 / 60.0
 
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
-           teacher, lab_courses):
+           teacher, lab_courses, lab_p):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
@@ -39,7 +39,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.acquire_frames = react_frames[1]
     env.kind_p = kind_p
     if env.lab is not None:                                  # the test map: movement courses only (for now)
-        env.lab_p = (0.0, 1.0)
+        env.lab_p = lab_p
         env.lab_course_ids = [k for k, C in enumerate(env.courses) if C["key"] in lab_courses] or env.lab_course_ids
     env.bot_p = bot_p
     from duel_env import WEAPONS
@@ -88,6 +88,7 @@ def main():
     ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
+    ap.add_argument("--lab-p", default="0.29,0.71", help="test map: share of playing time in aim rooms / movement courses")
     ap.add_argument("--lab-courses", default="speed,slalom,ramps",
                     help="movement courses of the test map (bobbylab) used when that map is in --map")
     ap.add_argument("--minibatches", type=int, default=8,
@@ -128,7 +129,7 @@ def main():
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
-                                        tuple(a.lab_courses.split(","))),
+                                        tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(","))),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]

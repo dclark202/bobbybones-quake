@@ -99,6 +99,7 @@ ACQUIRE_FRAMES = 8                                     # 200 ms: an enemy who ha
 TURN_CAP = 30.0                                        # fastest flick, degrees per frame (1200 deg/s)
 MOTOR_NOISE, MOTOR_BASE = 0.08, 0.02                   # hand noise: this share of the view movement, plus a little, per frame
 RELOAD_JITTER, RELOAD_JITTER_MAX = 0.05, 0.12          # slow weapons: random extra delay after the reload (mean, max seconds)
+DMG_TAKEN_W = 2.0                                      # damage taken (any source) weighs this much against damage dealt
 FIRE_TOGGLE_COST = 0.003                               # reward cost each time the fire button changes (holding is free)
 LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loadouts draw from (all but machine gun, gauntlet)
 #                                                       older note: default 25 ms (one frame): what a player knows about the opponent lags.
@@ -168,7 +169,7 @@ class DuelEnv:
         self.human_aim = True                           # flick cap, hand noise and reload jitter for policy players
         # spawn weapons in normal rounds: share of rounds with 1-2 random weapons each / the real duel spawn
         # (machine gun + gauntlet) / every weapon. Sets are drawn per player at the start of each round.
-        self.loadout_p = (0.6, 0.2, 0.2)
+        self.loadout_p = (0.4, 0.2, 0.2, 0.2)           # ..., and both players with the same single weapon
         self.load_sets = [None] * (2 * n_matches)
         self.item_reward = 0.0                          # optional shaping: reward per 100 points of health/armor picked up
         self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
@@ -495,7 +496,9 @@ class DuelEnv:
         for q in (a_, b_):
             self._course_close(q, False)
         f, L, rng = self.lab_force, self.lab, self.rng
-        kd = f["kind"] if f else (AIM if (rng.random() < self.lab_p[0] or not self.courses) else COURSE)
+        pa = self.lab_p[0] / self.lab_aim_len
+        pc = self.lab_p[1] / self.course_len
+        kd = f["kind"] if f else (AIM if (rng.random() < pa / (pa + pc) or not self.courses) else COURSE)
         self.kind[m], self.mode[m] = kd, -1
         self.script[a_] = self.script[b_] = 0
         self.goal[a_] = self.goal[b_] = -1
@@ -531,6 +534,9 @@ class DuelEnv:
             self._fresh(b_, ty)
             self.w.reset(a_, (subj[0], subj[1], subj[2] + 2.0), (0, 0, 0), face)
             self._fresh(a_, face)
+            # like a person after the countdown, the subject starts the room already looking at the target
+            self.vis_run[a_], self.acquired[a_], self.seen_t[a_] = self.acquire_frames, True, 0.0
+            self.known[a_] = home
         else:
             for q in (a_, b_):
                 self._course_start(q, int(f["course"]) if f else int(rng.choice(self.lab_course_ids)))
@@ -1215,8 +1221,8 @@ class DuelEnv:
         # shaping (curriculum): reward damage dealt to the opponent
         opp_all = ar ^ 1
         dealt = np.where(attacker[opp_all] == ar, dmg_taken[opp_all], 0.0)
-        taken = np.where((attacker >= 0) & (attacker != ar), dmg_taken, 0.0)
-        reward += self.dmg_reward * (dealt - taken)         # a fight costs what it takes, not only pays what it deals
+        taken = dmg_taken + fall                            # from the opponent, own splash and falls alike
+        reward += self.dmg_reward * (dealt - DMG_TAKEN_W * taken)   # getting hurt costs more than hurting pays
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
@@ -1368,6 +1374,8 @@ class DuelEnv:
                                                                                     replace=False))
                 elif u < self.loadout_p[0] + self.loadout_p[1]:
                     self.load_sets[a_] = self.load_sets[b_] = ()
+                elif u >= sum(self.loadout_p[:3]):              # the same single weapon for both (finite ammo)
+                    self.mode[m] = int(self.rng.choice(self.drill_weapons))
             self.frags_r[a_] = self.frags_r[b_] = 0
             self.snd_t[a_] = self.snd_t[b_] = 99.0
             if kd == AIM or (self.fixed_kind is not None and kd == NORMAL):
