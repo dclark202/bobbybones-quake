@@ -190,6 +190,7 @@ class DuelEnv:
         self.has = np.zeros((n, NW), bool)
         self.ammo = np.zeros((n, NW), np.float32)
         self.cool = np.zeros(n, np.float32)
+        self.fire_cd = np.zeros(n, np.float32)          # reload left from the last shot (a switch waits for it)
         self.seen_t = np.full(n, 9.0, np.float32)       # seconds since this player last saw/heard the opponent
         self.known = np.zeros((n, 3), np.float32)       # last known opponent position
         self.rp = np.zeros((n, K, 3), np.float32)       # projectiles, owned by player i
@@ -225,6 +226,7 @@ class DuelEnv:
         self.mv[i] = 0.0
         self.cmd[i] = 0.0
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
+        self.fire_cd[i] = 0.0
         mode = int(self.mode[i // 2])
         kind = int(self.kind[i // 2])
         self.has[i] = False
@@ -582,7 +584,8 @@ class DuelEnv:
         want = np.where(self.has[ar, want], want, self.weapon)
         sw = want != self.weapon
         self.weapon = want
-        self.cool = np.where(sw, np.maximum(self.cool, SWITCH), self.cool)
+        # as in the game: a weapon change only starts once the reload from the last shot is over
+        self.cool = np.where(sw, np.maximum(self.cool, self.fire_cd + SWITCH), self.cool)
         moves = np.stack([fwd, side, jump], 1).astype(np.int8)
         y0 = self.yaw.copy()
         # the view eases back toward level, but not while an enemy is in sight (no pull against vertical aim)
@@ -628,10 +631,12 @@ class DuelEnv:
 
         # fire: a shot leaves one frame after the command
         self.cool = np.maximum(0.0, self.cool - DT)
+        self.fire_cd = np.maximum(0.0, self.fire_cd - DT)
         do_fire, do_w = self.fire_q, self.fire_w
         ammo_ok = (self.ammo[ar, self.weapon] > 0) | (self.weapon == G)
         shoot = fire & (self.cool <= 1e-4) & ammo_ok & self.has[ar, self.weapon]
         self.cool = np.where(shoot, W_REFIRE[self.weapon], self.cool)
+        self.fire_cd = np.where(shoot, W_REFIRE[self.weapon], self.fire_cd)
         use = shoot & (self.weapon != G)                    # ammo is finite in every round kind
         self.ammo[ar[use], self.weapon[use]] -= 1
         self.fire_q, self.fire_w = shoot, self.weapon.copy()
@@ -828,7 +833,10 @@ class DuelEnv:
         for m in ends:
             self.round_t[m] = 0.0
             a_, b_ = 2 * m, 2 * m + 1
-            kd = int(self.rng.choice(4, p=self.kind_p))
+            # kind_p is the share of playing TIME per kind: normal rounds last much longer than the others, so
+            # the chance of starting each kind is weighted by 1 / its length
+            wts = np.asarray(self.kind_p, np.float64) / np.array([self.round_len, 15.0, 15.0, 20.0])
+            kd = int(self.rng.choice(4, p=wts / wts.sum()))
             if self.rng.random() < self.drill_p:            # older option: share of one-weapon rounds
                 kd = DRILL
             if self.fixed_kind is not None:

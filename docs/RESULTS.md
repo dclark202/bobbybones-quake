@@ -10,6 +10,31 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-03 (23:15): `duel_gru_v3` at 149 minutes, two simulator defects fixed mid-run
+
+Raises B-37, B-38. The run was stopped and resumed from its checkpoint twice (about 10 minutes lost);
+`policy_before_switchfix.pt` is the checkpoint from before the fixes.
+
+At 149 minutes: crosshair error in view 8.7 degrees (38 at the start), on target 66% of the time in view,
+LG 28% and rail 29% hit rate, 2.4 frags to 1.3 deaths per minute against the scripted fighter, 70% kill share
+against older snapshots, movement rounds 293 u/s. But: shotgun held 88-95% of the time at every range and
+84% of frags, and switches back up to 144 per minute.
+
+Defects found:
+1. **Switching during a reload was free.** In the game a weapon change only starts once the reload from the
+   last shot is over; the simulator let the 0.425 s switch run inside the reload, so flicking weapons after a
+   shotgun or rail shot cost nothing. Fixed: the switch now waits for the reload (`fire_cd`). Not yet
+   measured on the real server for the firing case (B-37); it follows the Quake 3 rule.
+2. **The round mix was a share of round starts, not of playing time.** Normal rounds last about 100 s and the
+   others 10-15 s, so about 86% of playing time was normal rounds and aim rounds got about 6%, not 25%.
+   Fixed: `kind_p` is now the share of time.
+
+Not changed (decision for the owner, B-38): the spawn loadout gives 10 shells but only 60 cells and 5 slugs,
+so the shotgun carries the most damage per spawn (about 1000 potential against 360 for LG). The shotgun
+preference may be a rational answer to those arbitrary amounts. Real pickup amounts are still unmeasured (B-14).
+
+---
+
 ## 2026-10-03 (night): test suite v1 and live rooms
 
 Settles B-32, B-33; B-34 built. Raises B-35, B-36.

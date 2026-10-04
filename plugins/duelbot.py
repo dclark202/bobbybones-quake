@@ -433,12 +433,16 @@ class duelbot(minqlx.Plugin):
             ok = bool(env.has[i, want]) if want < ncol else not only     # older simulator: machine gun always owned
             if ok and want != w and not (only and not nine):
                 w = want
-                env.cool[i] = max(env.cool[i], E.SWITCH)
+                env.cool[i] = max(env.cool[i], (float(env.fire_cd[i]) if nine else 0.0) + E.SWITCH)
         fire = bool(a[5] == 1)
         env.cool[i] = max(0.0, env.cool[i] - E.DT)
+        if nine:
+            env.fire_cd[i] = max(0.0, env.fire_cd[i] - E.DT)
         if fire and env.cool[i] <= 0:
             refire = E.W_REFIRE if nine else (E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK)
             env.cool[i] = float(refire[w])
+            if nine:
+                env.fire_cd[i] = float(refire[w])
         minqlx.set_bot_input(p.id, fwd, side, jump, 1 if fire else 0, QLNUM[names[w]], pitch, yaw)
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 

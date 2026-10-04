@@ -38,6 +38,9 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-34 | P1 | built, waiting for the owner's runs | The same rooms on the play-test server (`!room ...`, `!room suite`), human baseline card in `data/duellive/suite/` | Dry run with a Nightmare bot as the subject worked |
 | B-36 | P2 | open | Run Bobby himself through the live rooms (needs a second controlled bot as the target) | Now only the simulator scores Bobby |
 
+| B-37 | P2 | open | Measure on the real server: weapon switch started during a reload (simulator now waits for the reload, Quake 3 rule) | RESULTS 2026-10-03 23:15 |
+| B-38 | P1 | open | Spawn loadout ammo: shotgun dominates (10 shells vs 60 cells, 5 slugs). Decide amounts, ideally from measured pickups (B-14) | `duel_gru_v3`: shotgun held 88-95%, 84% of frags |
+
 ## Learning from people
 
 | ID | P | Status | Item | Why / evidence |
