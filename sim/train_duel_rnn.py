@@ -42,6 +42,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         env.lab_p = lab_p
         env.lab_course_ids = [k for k, C in enumerate(env.courses) if C["key"] in lab_courses] or env.lab_course_ids
     env.bot_p = bot_p
+    env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
     env._teach_update()

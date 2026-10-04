@@ -186,6 +186,7 @@ class DuelEnv:
         self.kind_p = (1.0, 0.0, 0.0, 0.0)              # chance of NORMAL, AIM, DRILL, MOVE at each round start
         self.bot_p = 0.0                                # share of NORMAL rounds where the odd player is a scripted fighter
         self.aim_weapons = (LG, LG, LG, RG, RG, RL, PG, SG, HMG, MG)
+        self.sg_spawn = True                            # False: nobody spawns holding a shotgun in normal rounds
         self.script = np.zeros(2 * n_matches, np.int64)  # per player: 0 = policy, 1 = strafing target, 2 = scripted fighter
         self.sc_t = np.zeros(2 * n_matches, np.float32)
         self.sc_dir = np.ones(2 * n_matches, np.int64)
@@ -378,6 +379,8 @@ class DuelEnv:
             self.weapon[i] = mode
         else:
             owned, ammo = LOADOUTS[self.loadout]
+            if self.loadout == "all" and not self.sg_spawn:     # as in the real game: the shotgun has to be picked up
+                owned = tuple(k for k in owned if k != SG)
             if self.load_sets[i] is not None and self.script[i] != 2:   # this round's drawn weapon set
                 owned = self.load_sets[i]
                 ammo = {k: LOADOUTS["all"][1][k] for k in owned}
@@ -1370,7 +1373,7 @@ class DuelEnv:
                 u = self.rng.random()
                 if u < self.loadout_p[0]:
                     for q in (a_, b_):
-                        self.load_sets[q] = tuple(int(x) for x in self.rng.choice(LOAD_GUNS, int(self.rng.integers(1, 3)),
+                        self.load_sets[q] = tuple(int(x) for x in self.rng.choice(LOAD_GUNS if self.sg_spawn else [g for g in LOAD_GUNS if g != SG], int(self.rng.integers(1, 3)),
                                                                                     replace=False))
                 elif u < self.loadout_p[0] + self.loadout_p[1]:
                     self.load_sets[a_] = self.load_sets[b_] = ()

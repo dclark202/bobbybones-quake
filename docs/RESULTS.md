@@ -5,6 +5,20 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-04 16:55 and 17:32 — `duel_gru_v4`: self-play only, less aim, no shotgun at spawn (owner)
+
+- 16:55 (650 min): scripted fighters removed from duel rounds (`--bot-p 0`): duels are Bobby against himself and
+  his older snapshots. The game's bots are for benchmarking only and are never trained against.
+- 17:32 (686 min): playing time recut to self-play duels 50%, lab movement courses 30%, stock-map movement 10%,
+  aim rooms 10% (about 7% stock, 3% lab). To break the shotgun habit nobody spawns with a shotgun in duel
+  rounds any more (`NO_SG_SPAWN=1`, and it is out of the same-single-weapon rounds): as in the real game it has
+  to be picked up. Checkpoints kept: `policy_before_selfplay.pt`, `policy_before_mix3.pt`.
+- Hourly benchmark against Nightmare (Blood Run, five minutes, every weapon in hand):
+
+| Training min | Score (Bobby-Nightmare) | Damage dealt / taken | Mean speed | Enemy in view | Weapon held |
+|---|---|---|---|---|---|
+| 686 (before this change) | 1-10 | 1320 / 1278 | 95 u/s | 10% | shotgun 86% |
+
 ## 2026-10-04 16:30-17:10 — `duel_gru_v4` on a real server (plugin update, B-57)
 
 - The plugin now plays networks trained under the newer rules (311 inputs: clock, score, sounds, hit feedback,
