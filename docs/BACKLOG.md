@@ -70,6 +70,16 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-68 | P1 | open | Lab rooms in training: courses and lab aim rooms as round types (after the owner has reviewed the rooms); aim box distances that suit LG | Owner 2026-10-04; first lab card |
 | B-69 | P2 | open | Hosting: three rented machines (Chicago, Europe, US west), two servers each, setup script, central results, hardening | Owner 2026-10-04: public sooner |
 
+## Next training batch (owner 2026-10-04: all of these go in together, with one widening of the network)
+
+| ID | P | Status | Item | Why / evidence |
+|---|---|---|---|---|
+| B-70 | P1 | next | Beam inputs: the last rail trail seen (start, end, fading over a second) and the enemy's LG beam direction while in view | A trail shows where a shot came from; he sees neither |
+| B-71 | P1 | next | Heard weapon fire says which weapon it was | People tell a rail from a rocket launcher by ear |
+| B-72 | P1 | next | Map atlas inputs, computed per map from the route graph: route time and first-step direction to each big item (for him and from the enemy's last known position), how exposed his spot is, direction to cover, height relative to the enemy, direction to higher ground | The map lives only in the weights: slow to learn, not inspectable, does not carry to a new map (lab card: aim 3-5% on an unseen map) |
+| B-73 | P2 | open | Value map per map stored outside the network (how good each spot is in a given situation), filled from pro demos and public sessions, with a planner on top of the current network | The durable answer to "know the map inside out"; after B-72 |
+| B-74 | P3 | open | Local top-down picture of the surroundings read by a small image network | Only if B-72 and B-73 leave a gap |
+
 ## Test suite
 
 | ID | P | Status | Item | Why / evidence |

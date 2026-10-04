@@ -58,7 +58,7 @@ Running overnight as `duel_gru_v3` (2026-10-03 20:43 to 07:00), fresh network, n
 7. B-07 train on the nine-weapon simulator (fresh start)
 8. B-08 owner's play-test notes applied: B-28 real switch time, B-15 finite ammo, B-29 item bonus, B-11 movement rounds
 
-Next after the run: B-32 (play `duel_gru_v3` live), B-33/B-34 (test suite with a human baseline).
+Next training batch (after `duel_gru_v4` ends and the owner has reviewed it): B-70 beam inputs, B-71 weapon-specific sounds, B-72 map atlas inputs, B-68 more lab rooms; then B-73 (value map from pro demos). Also open: B-57 plugin update so the new Bobby can be played, B-61/B-69 public server.
 
 ## Owner decisions
 
