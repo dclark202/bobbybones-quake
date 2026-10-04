@@ -66,8 +66,8 @@ SG_PELLETS, SG_SIGMA = 20, 3.0                         # pellet spread: gaussian
 SELF_FACTOR, SPAWN_HP, VIEW_H = 0.5, 125.0, 26.0
 SWITCH = 0.425                                         # seconds from the switch command until the new weapon can fire
                                                        # (measured: 17 frames, weaponlab set 3; was a guessed 0.1)
-SWITCH_COST = 0.002                                    # tiny reward cost per weapon switch
-BLIND_FIRE_COST = 0.0005                               # per frame of holding fire with no enemy seen for over a second
+SWITCH_COST = 0.02                                     # reward cost per weapon switch (0.002 was drowned out by the entropy bonus)
+BLIND_FIRE_COST = 0.003                                # per frame of holding fire with no enemy seen for over a second (was 0.0005)
 MOUSE_SMOOTH_FINE = 0.2                                # less view inertia for small corrections (commands up to 1 degree)
 NORMAL, AIM, DRILL, MOVE, SOLO = range(5)              # round kinds (SOLO: test rooms only, alone on the map)
 STYLES = ("random", "still", "slow", "fast", "jump")   # scripted target movement (test rooms use 1-4)

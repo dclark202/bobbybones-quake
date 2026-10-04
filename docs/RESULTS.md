@@ -10,6 +10,30 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-04 (morning): crash at 00:40, test-suite card at 231 minutes, costs raised
+
+Raises B-39. Settles nothing yet (run resumed until 12:00).
+
+- The PC blue-screened at 00:40 (bugcheck 0x1E; the earlier one on 10-01 was 0xD1), 231 minutes into
+  `duel_gru_v3`. The checkpoint from 00:40 survived (`policy_0231_crash.pt`); about six hours of training
+  time were lost. Resumed at 07:35.
+- Test suite card at 231 minutes (`data/sim_runs/duel_gru_v3/suite/card_0230.md`, three maps):
+  - Aim at 350-650 units: LG 50-56% hit rate on every target type, rail 62-65%, rockets 46-51% (direct or
+    splash). Close range: LG 73%, rail 79%. Far (800-1200): 11-16%, he loses sight of the target
+    (in view 12-16% of the time).
+  - Weapon choice: shotgun 87-98% at every distance.
+  - Movement: 10.8 arrivals per minute, 302 u/s, 8% fast-air.
+  - Solo: 0.29 megas and 0.39 red armors per minute; fire held 42% of the time with nobody there;
+    448 switches per minute.
+  - Scripted fighter: 3.0 frags to 1.4 deaths per minute.
+- **Did not work:** the 0.002 switch cost and 0.0005 blind-fire cost. Both were about ten times smaller than
+  the entropy bonus PPO pays for keeping those choices random, so with no enemy around he switched and fired
+  at random (solo room: 448 switches per minute). Raised to 0.02 per switch and 0.003 per frame of blind
+  fire. Nine minutes after the restart: switches 191 -> 9.6 per minute, blind fire 22% -> 8.5%.
+- Still open: shotgun preference (B-38).
+
+---
+
 ## 2026-10-03 (23:15): `duel_gru_v3` at 149 minutes, two simulator defects fixed mid-run
 
 Raises B-37, B-38. The run was stopped and resumed from its checkpoint twice (about 10 minutes lost);

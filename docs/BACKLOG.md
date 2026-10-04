@@ -41,6 +41,10 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-37 | P2 | open | Measure on the real server: weapon switch started during a reload (simulator now waits for the reload, Quake 3 rule) | RESULTS 2026-10-03 23:15 |
 | B-38 | P1 | open | Spawn loadout ammo: shotgun dominates (10 shells vs 60 cells, 5 slugs). Decide amounts, ideally from measured pickups (B-14) | `duel_gru_v3`: shotgun held 88-95%, 84% of frags |
 
+| B-39 | P2 | open | Shaping costs must be sized against the entropy bonus (or lower the entropy weight on the weapon and fire choices) | RESULTS 2026-10-04 morning |
+| B-40 | P2 | open | Far-range aim: he loses sight of targets at 800-1200 units (in view 12-16% of the time) | Test suite card at 231 min |
+| B-41 | P3 | open | Training survives a PC crash: auto-resume on boot, test suite at each snapshot | Crash 2026-10-04 00:40 lost six hours |
+
 ## Learning from people
 
 | ID | P | Status | Item | Why / evidence |
