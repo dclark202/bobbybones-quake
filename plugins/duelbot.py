@@ -44,7 +44,7 @@ ROOM_SECS = {"aim": 60, "choice": 40, "move": 90, "solo": 120, "ladder": 120}
 REP_SECS = 10.0
 GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 # the test map "bobbylab" (tools/make_lab_map.py): fixed rooms, the suite never changes maps
-LAB_WEAPONS = ("mg", "sg", "gl", "rl", "lg", "rg", "pg", "hmg")
+LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["speed"]] + \
@@ -218,7 +218,7 @@ class duelbot(minqlx.Plugin):
             player.tell("!room aim <{}> <walk|jump|env>  (15 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room speed (30 s): the long straight, one way")
             player.tell("!room fight <{}> (30 s)".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 29 rooms, about 11 minutes | !room off")
+            player.tell("!room suite = all 26 rooms, about 10 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -818,6 +818,7 @@ class duelbot(minqlx.Plugin):
                             picks={}))
             self.msg("^3Next: {}^7 ({} s). Starts in 5 s; the countdown is not scored.".format(r["name"], r["secs"]))
             self.msg("^5" + self.room_hint(r))
+            human.weapons(reset=True)                         # no weapons during the countdown
             human.center_print("^3{}^7: {}".format(r["name"], self.room_hint(r)))
             self.record(event="room_start", room=r["name"])
         r = self.room
@@ -832,6 +833,8 @@ class duelbot(minqlx.Plugin):
         self.last = dict(bobby=[round(float(v)) for v in bpos], opp=[round(float(v)) for v in hpos],
                          bobby_hp=[bs.health, bs.armor], opp_hp=[hs.health, hs.armor], room=r["name"])
         if not r["started"]:
+            if 0 < hs.health < 150:
+                human.health = 200
             if bs.health <= 0:
                 minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
             else:
@@ -946,6 +949,9 @@ class duelbot(minqlx.Plugin):
             elif now > r["said"]:
                 r["said"] = now + 2
                 human.center_print("Go to: ^3{}".format(GOAL_NAMES[self.goal_labels[r["goal"]]]))
+        if r["kind"] != "ladder" and 0 < hs.health < 150:
+            human.health = 200                               # the subject cannot die in a test room (fights excepted)
+            self.tot.pop("opp", None)
         if now >= r["t_end"]:
             self.finish_room(human)
 

@@ -1,6 +1,6 @@
 # Play-test routine
 
-Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 11 minutes). Everything is
+Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 10 minutes). Everything is
 logged per frame; your notes are what the numbers cannot show. Log formats: [LOGS.md](LOGS.md).
 
 ## Before you start
@@ -34,17 +34,17 @@ Questions to answer at the end (as notes or in chat):
 3. What would a decent player punish first?
 4. Anything that looked like a bug (stuck, not shooting, spinning)?
 
-## Part 2: the test chamber (about 11 minutes)
+## Part 2: the test chamber (about 10 minutes)
 
 Bobby's body becomes the scripted target or opponent and **you** are measured, with the same metrics the
 simulator uses for him. This gives the human bar for each room. All commands: [COMMANDS.md](COMMANDS.md).
 
 1. `!map bobbylab` (the test map: an aim box, an environment box with pillars and cover, and a long speed straight).
-2. `!room suite`: 29 rooms, back to back. `!room off` stops it at any time.
+2. `!room suite`: 26 rooms, back to back. `!room off` stops it at any time.
 
 | Rooms | What happens | What to do |
 |---|---|---|
-| 24 aim rooms, 15 s each | Eight weapons, three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
+| 21 aim rooms, 15 s each | Seven weapons (no grenade launcher), three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
 | Speed straight, 30 s | A 20,000-unit flat run with a floor mark every 2,048 units. Gauntlet only | Run the full length as fast as you can; you are put back at the start after each run |
 | 4 fights, 30 s each | In the environment box against the allround, sniper, rusher and tracker styles, every weapon in hand | Play to win |
 
