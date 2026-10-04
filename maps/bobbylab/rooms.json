@@ -80,5 +80,89 @@
    8
   ],
   "length": 20352
+ },
+ "courses": {
+  "speed": {
+   "name": "Speed straight",
+   "start": [
+    64,
+    6256,
+    8
+   ],
+   "yaw": 0,
+   "end_x": 20376,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    64
+   ],
+   "length": 20312,
+   "y": [
+    6000,
+    6512
+   ]
+  },
+  "gaps": {
+   "name": "Gaps",
+   "start": [
+    64,
+    12256,
+    8
+   ],
+   "yaw": 0,
+   "end_x": 12568,
+   "fall_z": -100,
+   "checkpoints": [
+    64,
+    1760,
+    3520,
+    5344,
+    7232,
+    9184,
+    11200
+   ],
+   "length": 12504,
+   "y": [
+    12000,
+    12512
+   ]
+  },
+  "ramps": {
+   "name": "Ramps and stairs",
+   "start": [
+    64,
+    14256,
+    8
+   ],
+   "yaw": 0,
+   "end_x": 11928,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    64
+   ],
+   "length": 11864,
+   "y": [
+    14000,
+    14512
+   ]
+  },
+  "slalom": {
+   "name": "Slalom",
+   "start": [
+    64,
+    16384,
+    8
+   ],
+   "yaw": 0,
+   "end_x": 10136,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    64
+   ],
+   "length": 10072,
+   "y": [
+    16000,
+    16768
+   ]
+  }
  }
 }

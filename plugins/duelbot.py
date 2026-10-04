@@ -47,7 +47,7 @@ GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
-    [["speed"]] + \
+    [["move", c_] for c_ in ("speed", "gaps", "ramps", "slalom")] + \
     [["fight", p_] for p_ in ("allround", "sniper", "rusher", "tracker")]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
@@ -216,9 +216,9 @@ class duelbot(minqlx.Plugin):
     def cmd_rooms(self, player, msg, channel):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (15 s)".format("|".join(LAB_WEAPONS)))
-            player.tell("!room speed (30 s): the long straight, one way")
+            player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
             player.tell("!room fight <{}> (30 s)".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 26 rooms, about 10 minutes | !room off")
+            player.tell("!room suite = all 29 rooms, about 12 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -227,8 +227,11 @@ class duelbot(minqlx.Plugin):
 
     def cmd_room(self, player, msg, channel):
         a = [m.lower() for m in msg[1:]]
-        if not a or not self.ready:
-            return minqlx.RET_USAGE
+        if not self.ready:
+            player.tell("The server is still loading the map, try again in a few seconds.")
+            return
+        if not a:
+            return self.cmd_rooms(player, msg, channel)
         if a[0] == "off":
             self.queue, self.room = [], None
             self.msg("Rooms off: back to the normal duel.")
@@ -238,8 +241,11 @@ class duelbot(minqlx.Plugin):
         for s in specs:
             r = self.room_spec(s)
             if r is None:
-                return minqlx.RET_USAGE
+                player.tell("^1No such room:^7 !room {}".format(" ".join(a)))
+                return self.cmd_rooms(player, msg, channel)
             out.append(r)
+        if a[0] != "suite":                                  # a single room starts right away, replacing whatever runs
+            self.queue, self.room = [], None
         if a[0] == "suite" and self.lab:
             self.queue += out
             self.msg("Test suite on the lab map: {} rooms, about {} minutes. !room off stops it.".format(
@@ -261,8 +267,9 @@ class duelbot(minqlx.Plugin):
                             script=1, secs=15, where="env" if a[2] == "env" else "aim", jump=a[2] == "jump")
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
-            if a[0] == "speed":
-                return dict(kind="speed", lab=True, name="speed", script=0, secs=30)
+            if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
+                key = "speed" if a[0] == "speed" else a[1]
+                return dict(kind="speed", lab=True, name="move/" + key, script=0, secs=30, key=key)
             if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
                 return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=30,
                             persona=R.PERSONAS.index(a[1]))
@@ -653,7 +660,8 @@ class duelbot(minqlx.Plugin):
         if k == "choice":
             return "All weapons. Use whatever you think is right at this distance."
         if k == "speed":
-            return "Gauntlet only. Run the straight as fast as you can."
+            return "Gauntlet only. {}: reach the far end as fast as you can.".format(
+                self.lab["courses"][r["key"]]["name"] if self.lab else "Course")
         if k == "move":
             return "Gauntlet only. Run to the item named on screen."
         if k == "solo":
@@ -751,7 +759,7 @@ class duelbot(minqlx.Plugin):
         r, m = self.room, self.room["m"]
         sp = math.hypot(hvel[0], hvel[1])
         if r["kind"] == "speed":
-            st = self.lab["speed"]
+            st = self.lab["courses"][r.get("key", "speed")]
             if r.get("leg") is None:
                 self.put(human, st["start"], st["yaw"], human=True)
                 r["leg"], r["t_run"] = 0, None
@@ -760,12 +768,15 @@ class duelbot(minqlx.Plugin):
             m["dist"] = max(m.get("dist", 0.0), float(hpos[0] - st["start"][0]))
             if r["t_run"] is None and sp > 50:
                 r["t_run"] = now
-            if hpos[0] > st["far"][0] - 40:                 # one way: the full length, then back to the start
+            if hpos[2] < st["fall_z"]:                      # fell into a pit: back to the start of that platform
+                cps = [c for c in st["checkpoints"] if c <= hpos[0]] or st["checkpoints"][:1]
+                self.put(human, [cps[-1], st["start"][1], st["start"][2]], st["yaw"], human=True)
+                m["falls"] = m.get("falls", 0) + 1
+            elif hpos[0] > st["end_x"]:                     # reached the end: the room is over
                 t = now - (r["t_run"] or now)
-                m["laps"] = m.get("laps", 0) + 1
-                m["best"] = min(m.get("best", 1e9), t)
-                human.tell("^2{:.2f} s^7 for {} units, top speed {:.0f}".format(t, int(st.get("length", 0)), r.get("top", 0.0)))
-                r["leg"] = None
+                m["best"] = t
+                human.tell("^2{:.2f} s^7 for {} units, top speed {:.0f}".format(t, int(st["length"]), r.get("top", 0.0)))
+                r["t_end"] = now
             return
         st = self.lab["stations"][r["key"]]
         via = st.get("via") or [st["goal"]]
@@ -981,9 +992,9 @@ class duelbot(minqlx.Plugin):
                        success_rate=m.get("successes", 0) / max(1, att),
                        best_time=m["best"] if "best" in m else -1.0, speed_at_goal=m.get("speed_at_goal", 0.0))
         elif r["kind"] == "speed":
-            res = dict(distance=m.get("dist", 0.0), laps=m.get("laps", 0), best_time=m["best"] if "best" in m else -1.0,
-                       top_speed=r.get("top", 0.0),
-                       mean_speed=m["speed"] / f)
+            res = dict(finished=1.0 if "best" in m else 0.0, time=m["best"] if "best" in m else -1.0,
+                       distance=m.get("dist", 0.0), top_speed=r.get("top", 0.0), mean_speed=m["speed"] / f,
+                       falls=m.get("falls", 0))
         elif r["kind"] == "solo":
             p = m["picks"]
             res = dict(mega_per_min=p.get("mega", 0) / mins, red_armor_per_min=p.get("red_armor", 0) / mins,

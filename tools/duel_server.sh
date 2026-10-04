@@ -1,7 +1,7 @@
 #!/bin/bash
 # Private play-test server: the owner against a simulator-trained duel policy (plugins/duelbot.py).
-# Container qlduel, UDP 27970 (the public server "ql" must be off). Password protected; the password and the
-# owner's Steam ID live in data/owner.env (git-ignored): QLX_OWNER=<SteamID64>, DUEL_PASSWORD=<password>
+# Container qlduel, UDP 27970. No password by default (PASSWORD=<word> sets one). The owner's Steam ID lives in
+# data/owner.env (git-ignored): QLX_OWNER=<SteamID64>
 #   bash tools/duel_server.sh <run> [map] [env module]     e.g. bash tools/duel_server.sh duel_gru_v2 bloodrun duel_env_v2
 #   bash tools/duel_server.sh stop
 # With SPAR=1 no port is opened and a Nightmare bot is the opponent (for measuring).
@@ -22,13 +22,10 @@ if [ -n "$SPAR" ]; then
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/bobbylab/bobbylab.pk3:/ql/baseq3/bobbylab.pk3:ro" qlbot +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs Nightmare on $MAP)"; exit 0
 fi
-QLX_OWNER=""; DUEL_PASSWORD=""
-[ -f data/owner.env ] && . data/owner.env
-if [ -z "$DUEL_PASSWORD" ]; then
-    DUEL_PASSWORD="bones$(( (RANDOM * 32768 + RANDOM) % 900000 + 100000 ))"
-    echo "DUEL_PASSWORD=$DUEL_PASSWORD" >> data/owner.env
-fi
+QLX_OWNER=""
+[ -f data/owner.env ] && QLX_OWNER="$(grep '^QLX_OWNER=' data/owner.env | cut -d= -f2)"
+PW="${PASSWORD:-}"                     # no password by default; PASSWORD=<word> sets one
 docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" \
     -p 27970:27970/udp -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/bobbylab/bobbylab.pk3:/ql/baseq3/bobbylab.pk3:ro" qlbot +set net_port 27970 \
-    +set sv_hostname "BobbyBones playtest" +set g_password "$DUEL_PASSWORD" >/dev/null
-echo "play-test server up on port 27970, map $MAP (password in data/owner.env)"
+    +set sv_hostname "BobbyBones playtest" +set g_password "$PW" >/dev/null
+echo "play-test server up on port 27970, map $MAP ($([ -n "$PW" ] && echo "password set" || echo "no password"))"

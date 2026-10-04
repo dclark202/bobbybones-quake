@@ -6,7 +6,8 @@
 Areas (flat walls, stock textures):
   aim box          empty box 1536 x 1024 x 400: subject at one end, target about 700 units away
   environment box  1536 x 1536 x 400: pillars, two low walls, a platform with steps
-  speed straight   20480 x 512 flat run with a mark every 2048 units
+  movement courses speed straight (20480 x 512, a mark every 2048 units), gaps (pits of growing width), ramps and
+                   stairs up and down, slalom (walls from alternating sides)
 Needs the real maps in data/maps/ (extracted from the game) and sim/qsim built.
 """
 import json
@@ -26,6 +27,15 @@ def box(x0, y0, z0, x1, y1, z1, tex=WALL):
     f = "( {} {} {} ) ( {} {} {} ) ( {} {} {} ) {} 0 0 0 0.5 0.5 0 0 0"
     p = [(x1, y1, z1, x1, y0, z1, x0, y1, z1), (x1, y1, z1, x0, y1, z1, x1, y1, z0), (x1, y1, z1, x1, y1, z0, x1, y0, z1),
          (x0, y0, z0, x1, y0, z0, x0, y1, z0), (x0, y0, z0, x0, y0, z1, x1, y0, z0), (x0, y0, z0, x0, y1, z0, x0, y0, z1)]
+    brushes.append("{\n" + "\n".join(f.format(*[int(round(v)) for v in q], tex) for q in p) + "\n}")
+
+
+def ramp(x0, y0, x1, y1, za, zb, base, tex=TRIM):
+    """a brush whose top slopes from height za at x0 to zb at x1 (bottom at base)"""
+    f = "( {} {} {} ) ( {} {} {} ) ( {} {} {} ) {} 0 0 0 0.5 0.5 0 0 0"
+    zt = max(za, zb)
+    p = [(x1, y1, zb, x1, y0, zb, x0, y1, za), (x1, y1, zt, x0, y1, zt, x1, y1, base), (x1, y1, zt, x1, y1, base, x1, y0, zt),
+         (x0, y0, base, x1, y0, base, x0, y1, base), (x0, y0, base, x0, y0, zt, x1, y0, base), (x0, y0, base, x0, y1, base, x0, y0, zt)]
     brushes.append("{\n" + "\n".join(f.format(*[int(round(v)) for v in q], tex) for q in p) + "\n}")
 
 
@@ -94,7 +104,7 @@ def main():
     box(576, ey + 240, 0, 960, ey + 272, 64, BLOCK)                              # low walls (crouch cover)
     box(576, ey + 1264, 0, 960, ey + 1296, 64, BLOCK)
     box(1280, ey + 576, 0, 1536, ey + 960, 96, TRIM)                             # platform
-    for s in range(6):                                                          # steps up to it
+    for s in range(5):                                                          # steps up to it
         box(1280 - (s + 1) * 32, ey + 672, 0, 1280 - s * 32, ey + 864, 96 - (s + 1) * 16, TRIM)
     rooms["env"] = dict(bounds=[0, ey, 1536, ey + 1536], z=8,
                         spots=[[128, ey + 128], [1408, ey + 128], [128, ey + 1408], [1408, ey + 1408], [768, ey + 768],
@@ -108,6 +118,72 @@ def main():
     for mark in range(2048, SL, 2048):                                          # distance marks on the floor
         box(mark, sy, 0, mark + 8, sy + 512, 1, TRIM)
     rooms["speed"] = dict(start=[64, sy + 256, 8], yaw=0, far=[SL - 64, sy + 256, 8], length=SL - 128)
+    courses = dict(speed=dict(name="Speed straight", start=[64, sy + 256, 8], yaw=0, end_x=SL - 104, fall_z=-1e9,
+                              checkpoints=[64], length=SL - 168, y=[sy, sy + 512]))
+    # ---- gaps: a long run with pits to jump, each wider than the last (a running jump clears about 220 units)
+    gy, x = 12000, 0
+    plats, pits = [], []
+    for g in (160, 224, 288, 352, 416, 480):
+        plats.append((x, x + 1536))
+        pits.append((x + 1536, x + 1536 + g))
+        x += 1536 + g
+    plats.append((x, x + 1536))
+    GL = x + 1536
+    room(0, gy, -256, GL, gy + 512, 320)
+    for a, b in plats:
+        box(a, gy, -256, b, gy + 512, 0, FLOOR)
+        box(b - 8, gy, 0, b, gy + 512, 1, TRIM)                                   # the edge is marked
+    courses["gaps"] = dict(name="Gaps", start=[64, gy + 256, 8], yaw=0, end_x=GL - 104, fall_z=-100,
+                           checkpoints=[a + 64 for a, b in plats], length=GL - 168, y=[gy, gy + 512])
+    # ---- ramps and stairs, up and down
+    ry, x = 14000, 1024
+    RH = 640
+    feats = []                                      # (kind, length, height before, height after)
+    h = 0
+
+    def stairs(up, steps):
+        nonlocal x, h
+        for k in range(steps):
+            z0, z1 = (h + k * 16, h + (k + 1) * 16) if up else (h - (k + 1) * 16, h - k * 16)
+            top = z1 if up else z0
+            box(x + k * 32, ry, 0, x + (k + 1) * 32, ry + 512, max(top, 1), TRIM)
+        x += steps * 32
+        h += steps * 16 if up else -steps * 16
+
+    def flat(length):
+        nonlocal x
+        if h > 0:
+            box(x, ry, 0, x + length, ry + 512, h, BLOCK)
+        x += length
+
+    def slope(length, dh):
+        nonlocal x, h
+        ramp(x, ry, x + length, ry + 512, h, h + dh, -16)
+        x += length
+        h += dh
+
+    stairs(True, 12); flat(512); slope(768, -192); flat(768)
+    slope(768, 256); flat(512); stairs(False, 16); flat(768)
+    slope(512, 128); h = 0; flat(1024)                                           # a kicker: off the top, back to the floor
+    stairs(True, 8); slope(512, -128); flat(768)
+    slope(768, 192); flat(384); slope(768, -192); flat(1024)
+    RL_ = x
+    room(0, ry, 0, RL_, ry + 512, RH)
+    courses["ramps"] = dict(name="Ramps and stairs", start=[64, ry + 256, 8], yaw=0, end_x=RL_ - 104, fall_z=-1e9,
+                            checkpoints=[64], length=RL_ - 168, y=[ry, ry + 512])
+    # ---- slalom: walls from alternating sides, speed has to be kept through the turns
+    zy, ZL, ZW = 16000, 10240, 768
+    room(0, zy, 0, ZL, zy + ZW, 320)
+    for k, wx in enumerate(range(1280, ZL - 640, 1024)):
+        if k % 2 == 0:
+            box(wx, zy, 0, wx + 64, zy + 448, 320, BLOCK)
+        else:
+            box(wx, zy + ZW - 448, 0, wx + 64, zy + ZW, 320, BLOCK)
+    courses["slalom"] = dict(name="Slalom", start=[64, zy + ZW // 2, 8], yaw=0, end_x=ZL - 104, fall_z=-1e9,
+                             checkpoints=[64], length=ZL - 168, y=[zy, zy + ZW])
+    rooms["courses"] = courses
+    for c in courses.values():
+        spawns.append((c["start"][0], c["start"][1], 24, 0))
     # ---- terrain stations: 3D copies of the real spots
     # The trick-jump copies (Campgrounds bridge to rail and pillars, Aerowalk and Blood Run red armor) were
     # removed on 2026-10-04: as test rooms they were not clear enough. copy_region() is kept for later use.
