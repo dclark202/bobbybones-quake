@@ -16,6 +16,16 @@ second server per machine can be added later the same way.
 
 Prices are from third-party listings in 2026; check the provider's own page before buying.
 
+## Server quality
+
+Quake Live locks the tick rate at 40 per second (`sv_fps` cannot be raised; measured: frames 25.0 ms apart).
+A server that feels better than others has to get there through hardware and network:
+- a plan with a **dedicated CPU core** (Vultr "CPU Optimized", 2 cores / 4 GB, about $40 a month), so no other
+  customer can take time from the game;
+- one game server per core and nothing else on the machine;
+- a provider with good routes into Chicago.
+Rent by the hour for a first week, play on it, and compare before committing.
+
 ## What you do (accounts and payment)
 
 1. Create the provider account and add a payment method.

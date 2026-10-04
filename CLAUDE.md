@@ -32,8 +32,9 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   (`sim/build.bat`, MSVC) or `libqsim.so` (built in the Docker image). `qsim.py` wraps it. One `World` per
   process: worlds share buffers sized by player count, never create a second one with a different size.
 - **Environments**: `duel_env.py` (current: nine weapons, items, sounds, clock, crouch, walk, fall damage,
-  human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO, scripted opponents with eight styles, movement
-  teacher). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs; a policy must be played and
+  human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO / COURSE, scripted opponents with eight styles, lab
+  mode on the test map: aim rooms and movement courses read from `maps/bobbylab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the
+  inputs or actions of a simulator that a run still needs); a policy must be played and
   evaluated with the module it was trained in. `movement_env.py` is the movement-only task.
 - **Training**: `train_duel_rnn.py` (PPO, GRU 512, league of snapshots, `--resume`). `upgrade_policy.py` widens an
   older network to new inputs and actions (new inputs are appended at the end, zero weights). GPU PyTorch lives
@@ -57,7 +58,7 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
 python sim/train_duel_rnn.py --run <run> --resume --minutes <n>      # Anaconda Python; see RESULTS for settings
 python sim/test_suite.py --run <run> [--env duel_env_v3] [--compare card.json]
 docker build -t qlbot .
-bash tools/duel_server.sh <run> <map> <env module>                   # play-test server, UDP 27970, password in data/owner.env
+bash tools/duel_server.sh <run> <map> <env module>                   # play-test server, UDP 27970 (no password unless PASSWORD=<word>)
 NAME=qltest DATA=data/labtest SPAR=1 bash tools/duel_server.sh ...   # second private server, Bobby vs a Nightmare bot
 docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("status" prints nothing)
 ```
@@ -66,8 +67,11 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 ## Hard-won gotchas
 - Git Bash heredocs mangle backslashes: write patch scripts and `.cmd` files with the Write tool.
 - The PC has blue-screened twice under load; long runs should save often (they do, every 10 updates) and be resumed.
+- Long sequences fill GPU memory (256 steps needs `--minibatches 24` on 16 GB); a stalled first update is the sign.
+- Restart a run only right after a checkpoint save (every 10 updates) and keep a copy of it.
 - A background shell is capped at two hours; chain waiters or launch detached.
 - Aborting a warmup countdown in a loop hangs the server; the plugin aborts at most every 30 s and only with a human.
+- Quake Live locks `sv_fps` at 40; a higher tick rate is not possible.
 - The QL client uses UDP 27960, so servers use 27970. An idle server runs no frames until someone joins.
 - minqlx has no damage event; hits are inferred from health drops. Warmup emits no kill stats.
 - Docker on Windows: LF line endings (`.gitattributes`).

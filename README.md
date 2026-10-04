@@ -40,8 +40,9 @@ BobbyBones can be tuned to help new players learn the game by adapting to the sk
 | Movement simulator matches the real game; learned movement transfers (time ratio 1.01) | done |
 | Strafe jumping learned from reward alone | done |
 | Nine weapons, items and pickups measured on a real server and simulated | done |
-| Self-play duel training with memory | running; aim is strong, movement, positioning and weapon choice are the current work |
+| Self-play duel training with memory | running; aim is strong (now under human limits), movement, positioning and weapon choice are the current work |
 | Playing the trained network on a real server | done (private play-test server) |
+| Test chamber: the same rooms for the bot and for people, on a custom map | done; first human scorecard recorded |
 | Beating the Nightmare bots | not yet |
 | Learning from pro demos (374 parsed), player reports, opponent profiles | later |
 
