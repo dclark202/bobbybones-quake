@@ -1,7 +1,72 @@
-# BobbyBones: findings log
+# BobbyBones: results log
 
-What we tried, what we measured, and what it means. Newest first. Numbers are from local runs; raw data
-lives in the git-ignored `data/` folder (paths given so results can be re-checked).
+What we tried, what we measured, and what it means, **including what did not work**. Newest first. Each
+entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B-nn`); the plan is in
+[PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
+the git-ignored `data/` folder (paths given so results can be re-checked).
+
+## At a glance
+
+| Worked | Did not work |
+|---|---|
+| Simulator physics match the real game; learned movement transfers (time ratio 1.01) | Settings search (coach) on top of Nightmare: 6% win rate vs control 69% |
+| Strafe jumping emerged from reward alone (human physics) | Our own routing/movement on top of Nightmare: 0/108 |
+| Nine weapons measured on a real server and reproduced | Recorded nav graphs (17% junk nodes) |
+| Rail flicks and three-weapon use after the aim-input fix and drills | 25 ms bot physics (learned a ground-strafing exploit) |
+| A simulator-trained duel policy runs on the real server | Self-play before the aim-input fix: rockets only |
+| | `duel_gru_v2` vs Nightmare: 0-10; LG tracking stuck at 4-5%; weapon choice random |
+
+---
+
+## 2026-10-03 (evening): first GRU self-play run with memory (`duel_gru_v2`) and first live duel
+
+Settles B-106, B-108. Raises B-01 to B-07.
+
+**Training** (`data/sim_runs/duel_gru_v2/`, 272 minutes, 2.48 billion steps, ~152k steps/s, three maps,
+RL/RG/LG/MG, 75% single-weapon drill rounds, 150 ms reaction delay, simulator `sim/duel_env_v2.py`):
+
+| | 102 min | 219 min | 272 min (end) |
+|---|---|---|---|
+| Rail hit rate | 8-9% | 20% | 17-20% |
+| Rocket hit rate | 4% | 6-7% | 8-10% |
+| LG hit rate | 4% | 5% | 4-5% |
+| Frags by weapon (RL / RG / LG) | 26 / 41 / 33% | 22 / 48 / 30% | 21 / 46 / 33% |
+| Enemy visible | 6% | 8% | 7% |
+| Megas / red armors per player-minute | 0.13 / 0.16 | 0.27 / 0.20 | 0.24 / 0.15 |
+| Suicides per match-minute | 0.1-0.2 | 0.06-0.07 | 0.05-0.06 |
+| Kill share vs older snapshots | 55-71% | 56-63% | 49-57% |
+| Fast-air share (strafe jumping) | ~2% | 2% | 2% |
+
+- Worked: rail flicks learned on their own; all three main weapons score frags; fewer suicides.
+- Did not work: LG tracking never moved; no strafe jumping; item control low; improvement against its own
+  past versions had nearly stopped by the end.
+
+**Live port** (`plugins/duelbot.py`, `sim/export_duel.py`, `tools/duel_server.sh`): the policy's inputs are
+rebuilt on the real server by the simulator's own `observe()` (positions, health, weapons, ammo, the
+opponent's rockets, item states), the network runs in numpy, and Bobby is driven with human physics.
+- A server crash was found and fixed: with human physics the bot flag was dropped for good, and the server
+  crashed ("netchan queue is not properly initialized") as soon as a second player joined. The flag is now
+  restored after every game frame (`Botctl_AfterFrame`).
+- New hook function `minqlx.missiles()` lists projectiles in flight.
+
+**Live vs Nightmare, Blood Run** (`data/duellive/duel_live_test2.jsonl`, `data/duellive/spar/`):
+
+| Setting | Minutes | Frags Bobby - Nightmare | Damage dealt / taken |
+|---|---|---|---|
+| Normal loadout | 5 | 0 - 10 | 560 / 1162 |
+| LG-only drill | 2 | 2 - 6 (cumulative with ~1 min normal) | 750 / 638 |
+
+- All 560 damage in the normal loadout was rail hits (7 x 80). LG and rockets did nothing.
+- He holds each of the four weapons about 25% of the time, the machine gun included: weapon choice was
+  never learned, because in 75% of training rounds there was only one weapon (B-04).
+- He holds fire about half the time with the enemy on screen 6-20% of the time (B-05).
+- In LG-only rounds he out-damaged Nightmare, so the simulator's aim does carry over; the normal-loadout
+  loss is mostly weapon choice.
+- Not measured yet: a human opponent (first play-test session planned the same evening, B-08).
+
+**Read on the 150 ms reaction delay** (B-03): fair for reacting to something new, but it is applied to all
+enemy information, including smooth tracking, where people predict and show almost no lag. At strafing speed
+the target moves ~48 units in 150 ms, more than a body width. Plan: curriculum from 50 ms to 125 ms.
 
 ---
 

@@ -68,7 +68,17 @@ Each trainer ~2.5-5% of one core and ~71 MB; 208 trainers = ~550% CPU of 2000%, 
 - Nav graph: drop knockback flights (fast air edges seen once), split recordings at frame-counter resets, detect teleporters as repeated source->destination jumps, don't merge trainers' fight traces into routes.
 - The PC crashed once (Windows bugcheck 0xD1 driver fault) during a 24-trainer run. Docker Desktop only restarts after login. Scale carefully and check stability.
 
+## Docs (keep in sync, one commit)
+The project pivoted on 2026-10-03 from the coach described above to learning in a simulator (`sim/`), self-play and pro demos. Current truth lives in `docs/`:
+- `docs/PLAN.md`: approach, status, the "Now" list (backlog IDs only), owner decisions.
+- `docs/BACKLOG.md`: every work item with an ID (`B-nn`), priority and status.
+- `docs/RESULTS.md`: dated log of every run, live test and measurement, including what did not work; entries name the backlog IDs they settle or raise.
+- `docs/LOGS.md`: schemas of recorded data (play-test sessions, training metrics).
+After any run, test or decision: add a RESULTS entry, update the BACKLOG statuses, and update PLAN if status or the "Now" list changed.
+The public server stays off until a model beats Nightmare; play-testing is on the private server (`tools/duel_server.sh`).
+
 ## Next steps
+See `docs/PLAN.md` ("Now") and `docs/BACKLOG.md`. Older list, kept for history:
 1. Finish the scale-up (64 -> 100 trainers) if stable. Read the end-of-run report. Promote only what beats baseline and control.
 2. Opponent adaptation: per-Steam-ID profiles (item habits, routes, aggression, accuracy) that shift Bobby's aggression/item focus/prefire.
 3. Player reports after matches (heatmap, item timing, weapon use), per Steam ID.

@@ -6,7 +6,7 @@ heard nearby; incoming projectiles; item positions (map knowledge) and whether a
 looking at it. One policy can control both players (self-play).
 Reward: +1 frag, -1 death (suicide = death), plus optional damage-dealt / item shaping (curriculum).
 
-Weapons, measured on a real server (plugins/weaponlab.py, sim/validate_weapons.py, docs/FINDINGS.md):
+Weapons, measured on a real server (plugins/weaponlab.py, sim/validate_weapons.py, docs/RESULTS.md):
   rocket launcher   100 direct, 84 splash within 120 units, 1000 u/s, refire 0.8 s
   railgun           80, instant, refire 1.5 s
   lightning gun     6 per 50 ms, range 768

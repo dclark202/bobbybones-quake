@@ -27,6 +27,11 @@ D = "/tmp/practice"
 MAPS = ("bloodrun", "aerowalk", "campgrounds")
 QL_WEAPON = (5, 7, 6, 2)                                    # simulator weapon index (RL, RG, LG, MG) -> game number
 SIM_WEAPON = {5: 0, 7: 1, 6: 2, 2: 3}
+SCHEMA = 1
+_P = ["x", "y", "z", "vx", "vy", "vz", "pitch", "yaw", "health", "armor", "weapon", "ammo_rl", "ammo_rg", "ammo_lg",
+      "fwd", "right", "up", "fire"]
+FRAME_COLS = ["t", "server_ms", "drill"] + ["b_" + c for c in _P] + ["o_" + c for c in _P] + \
+    ["b_sees", "b_seen_ago", "los", "b_aim_err", "o_aim_err", "missiles"]
 
 
 def is_bot(p):
@@ -56,6 +61,8 @@ class duelbot(minqlx.Plugin):
         self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w=[0, 0, 0, 0])
         self.next_summary = time.time() + 60
         self.err_t = 0.0
+        self.sess, self.frames_f, self.sess_opp = None, None, None
+        self.tot, self.item_was = {}, {}
 
     def log(self, msg):
         minqlx.console_print("[duelbot] " + msg + "\n")
@@ -65,8 +72,73 @@ class duelbot(minqlx.Plugin):
     def record(self, **rec):
         rec["t"] = round(time.time(), 2)
         rec["map"] = (minqlx.get_cvar("mapname") or "").lower()
-        with open(os.path.join(D, "duel_live.jsonl"), "a") as f:
+        path = os.path.join(self.sess, "events.jsonl") if self.sess else os.path.join(D, "duel_live.jsonl")
+        with open(path, "a") as f:
             f.write(json.dumps(rec) + "\n")
+
+    # ------------------------------------------------------------------ session logs (schema: docs/LOGS.md)
+    def start_session(self, opp):
+        self.end_session()
+        kind = "spar" if is_bot(opp) else "human"
+        mapname = (minqlx.get_cvar("mapname") or "").lower()
+        self.sess = os.path.join(D, "sessions", "{}_{}_{}".format(time.strftime("%Y%m%d-%H%M%S"), mapname, kind))
+        os.makedirs(self.sess, exist_ok=True)
+        self.sess_opp = opp.id
+        self.score = dict(bobby=0, opp=0)
+        self.tot = {}
+        self.item_was = {}
+        meta = dict(schema=SCHEMA, started=round(time.time(), 2), map=mapname, opponent=kind,
+                    opponent_name=opp.clean_name if is_bot(opp) else "human", policy=str(self.P["run"]),
+                    train_minutes=int(self.P["minutes"]), env=str(self.P["env"]),
+                    react_ms=int(self.E.REACT_FRAMES * 25), frame_ms=25, frame_columns=FRAME_COLS)
+        with open(os.path.join(self.sess, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=1)
+        self.frames_f = open(os.path.join(self.sess, "frames.csv"), "a")
+        self.frames_f.write(",".join(FRAME_COLS) + "\n")
+        self.log("session {}".format(os.path.basename(self.sess)))
+
+    def end_session(self):
+        if self.sess:
+            self.record(event="end", **self.score)
+            self.frames_f.close()
+        self.sess, self.frames_f, self.sess_opp = None, None, None
+
+    def player_row(self, p, st, cmd):
+        va = minqlx.view_angles(p.id)
+        own, am = st.weapons, st.ammo
+        return [*[round(float(v), 1) for v in st.position], *[round(float(v), 1) for v in st.velocity],
+                round(float(va[0]), 2), round(float(va[1]), 2), st.health, st.armor, int(st.weapon),
+                am.rl if own.rl else -1, am.rg if own.rg else -1, am.lg if own.lg else -1, *cmd]
+
+    def aim_err(self, i):
+        """degrees between player i's crosshair and the true direction to the other player's body"""
+        env = self.env
+        to = env.state[i ^ 1, :3] + np.array([0, 0, 4.0], np.float32) - env._eye(env.state)[i]
+        yr, pr = math.radians(float(env.yaw[i])), math.radians(float(env.pitch[i]))
+        f = np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), -math.sin(pr)])
+        c = float((to * f).sum() / (np.linalg.norm(to) + 1e-6))
+        return round(math.degrees(math.acos(max(-1.0, min(1.0, c)))), 2)
+
+    def log_frame(self, now, bobby, opp, bs, os_, bcmd):
+        env = self.env
+        oc = minqlx.ran_usercmd(opp.id)                       # the opponent's real keys and buttons this frame
+        eye = env._eye(env.state)
+        los = bool(env._los(eye[:1], env.state[1:2, :3] + np.array([0, 0, 8.0], np.float32))[0])
+        row = [round(now, 3), minqlx.item_states()[0], self.drill or "-",
+               *self.player_row(bobby, bs, bcmd), *self.player_row(opp, os_, [oc[3], oc[4], oc[5], oc[1] & 1]),
+               int(env.visible[0]), round(float(env.seen_t[0]), 2), int(los), self.aim_err(0), self.aim_err(1),
+               len(minqlx.missiles())]
+        self.frames_f.write(",".join(str(v) for v in row) + "\n")
+        # damage events from health + armor drops
+        for who, st, other in (("bobby", bs, os_), ("opp", os_, bs)):
+            tot = max(0, st.health) + st.armor
+            prev = self.tot.get(who)
+            if prev is not None and prev - tot >= 3 and prev > 0:
+                self.record(event="hit", victim=who, dmg=int(prev - tot), killed=bool(st.health <= 0),
+                            attacker_weapon=int(other.weapon), victim_weapon=int(st.weapon),
+                            dist=round(float(np.linalg.norm(env.state[0, :3] - env.state[1, :3]))), los=los,
+                            drill=self.drill)
+            self.tot[who] = tot
 
     def cmd_map(self, player, msg, channel):
         if len(msg) < 2 or msg[1].lower() not in MAPS:
@@ -92,6 +164,7 @@ class duelbot(minqlx.Plugin):
         self.msg("Drill: {}".format(self.drill or "off (normal loadout)"))
 
     def on_map(self, mapname, factory):
+        self.end_session()
         self.ready = False
         self.alive = {}
 
@@ -202,6 +275,10 @@ class duelbot(minqlx.Plugin):
                     k = self.item_ent[num] = int(d.argmin()) if d.min() < 40 else -1
                 if k >= 0:
                     env.item_up[0, k] = bool(up)
+                if self.item_was.get(num, up) and not up:    # an item was just taken: by the nearer player
+                    d = np.linalg.norm(env.state[:, :3] - np.array([x, y, z], np.float32), axis=1)
+                    self.record(event="pickup", item=cls, by=("bobby", "opp")[int(d.argmin())] if d.min() < 120 else "?")
+                self.item_was[num] = up
 
     def senses(self):
         """sight (line of sight + field of view) and hearing, same rules as the simulator's step()"""
@@ -264,8 +341,12 @@ class duelbot(minqlx.Plugin):
                 self.next_check = now + 5
                 minqlx.console_command("addbot sarge 5")
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, 0.0)
+            if self.sess:
+                self.end_session()
             return
         env, E = self.env, self.E
+        if self.sess is None or self.sess_opp != opp.id:
+            self.start_session(opp)
         bs, os_ = bobby.state, opp.state
         if bs is None or os_ is None:
             return
@@ -275,6 +356,7 @@ class duelbot(minqlx.Plugin):
             was = self.alive.get(p.id)
             if up and not was:
                 self.give_loadout(p)
+                self.tot.pop(who, None)
                 if who == "bobby":
                     self.h[:] = 0
                     env.mv[0] = 0
@@ -285,10 +367,14 @@ class duelbot(minqlx.Plugin):
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
                 self.score[other] += 1
-                self.record(event="death", who=who, vs=opp.clean_name, human=not is_bot(opp), **self.score)
+                self.record(event="death", who=who, drill=self.drill, state=self.last, **self.score)
             self.alive[p.id] = up
         if bs.health <= 0:                                   # tap fire to respawn
             minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
+            self.fill_player(0, bobby, bs)
+            self.fill_player(1, opp, os_)
+            env.visible[:] = False
+            self.log_frame(now, bobby, opp, bs, os_, [0, 0, 0, 0])
             return
         if self.drill and now > self.top_up:
             self.top_up = now + 2
@@ -319,12 +405,7 @@ class duelbot(minqlx.Plugin):
         self.last = dict(bobby=[round(float(v)) for v in pos], opp=[round(float(v)) for v in opos],
                          bobby_hp=[bs.health, bs.armor], opp_hp=[os_.health, os_.armor], weapon=E.WEAPONS[w],
                          visible=bool(env.visible[0]), seen_ago=round(float(env.seen_t[0]), 1))
-        with open(os.path.join(D, "duel_frames_{}.txt".format(time.strftime("%Y%m%d"))), "a") as f:
-            # time | bobby x y z weapon pitch yaw fire sees_opp health armor | opp x y z pitch yaw weapon health armor | drill
-            row = [round(now, 2), *self.last["bobby"], w, round(pitch, 1), round(yaw, 1), int(fire), int(env.visible[0]),
-                   bs.health, bs.armor, *self.last["opp"], round(float(env.pitch[1]), 1), round(float(env.yaw[1]), 1),
-                   int(os_.weapon), os_.health, os_.armor, self.drill or "-"]
-            f.write(" ".join(str(v) for v in row) + "\n")
+        self.log_frame(now, bobby, opp, bs, os_, [fwd, side, jump, int(fire)])
         c = self.acc
         c["frames"] += 1
         c["visible"] += int(env.visible[0])
@@ -334,7 +415,7 @@ class duelbot(minqlx.Plugin):
         if now > self.next_summary:
             self.next_summary = now + 60
             f = max(1, c["frames"])
-            self.record(event="minute", vs=opp.clean_name, human=not is_bot(opp), visible=round(c["visible"] / f, 3),
+            self.record(event="minute", visible=round(c["visible"] / f, 3),
                         fire=round(c["fire"] / f, 3), fast_air=round(c["fast_air"] / f, 3), weapon_share=[round(x / f, 2) for x in c["w"]],
                         dmg_dealt=bobby.stats.damage_dealt, dmg_taken=bobby.stats.damage_taken, **self.score)
             self.acc = dict(frames=0, visible=0, fire=0, fast_air=0, w=[0, 0, 0, 0])
