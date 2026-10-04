@@ -44,14 +44,18 @@ same commit.
 
 In order. Details in [BACKLOG.md](BACKLOG.md).
 
+Running overnight as `duel_gru_v3` (2026-10-03 20:43 to 07:00), fresh network, nine weapons:
+
 1. B-01 aim-only rounds (scripted strafing target, LG-weighted)
-2. B-02 tracking fixes (finer small turns, lighter smoothing, pitch pull replaced by a cost)
+2. B-02 tracking fixes (finer small turns, lighter smoothing, no pitch pull while an enemy is in view)
 3. B-03 reaction delay 25 ms for now (owner: learn first, pare back later if it feels unfair)
 4. B-04 fewer single-weapon drills so weapon choice is learned
 5. B-05 small cost for firing with no enemy in view
 6. B-06 scripted Nightmare-like opponents in the league
 7. B-07 train on the nine-weapon simulator (fresh start)
-8. B-08 use the owner's play-test notes and logs to re-rank this list
+8. B-08 owner's play-test notes applied: B-28 real switch time, B-15 finite ammo, B-29 item bonus, B-11 movement rounds
+
+Next after the run: B-32 (play `duel_gru_v3` live), B-33/B-34 (test suite with a human baseline).
 
 ## Owner decisions
 

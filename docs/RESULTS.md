@@ -8,7 +8,48 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 ## At a glance
 
 | Worked | Did not work |
-|---|---|
+|---
+
+## 2026-10-03 (night): first human play test, and what changed for `duel_gru_v3`
+
+Settles B-08. Raises B-28 to B-34.
+
+**Play test** (owner vs `duel_gru_v2`, 28 minutes, three maps; `data/duellive/sessions/*_human`): owner 54,
+Bobby 14.
+
+| Owner's note | Measured in the session logs | Cause in training |
+|---|---|---|
+| Switches weapons constantly | 33-75 switches per minute (normal loadout) | Switch cost was a guessed 0.1 s |
+| Spams, runs dry, then does not shoot | Fire held 74-80% of frames with the enemy in view, 38-42% with nobody in view | Endless ammo in drills, endless machine gun |
+| Odd weapon priority | Under 300 units: rail 50-56%, rockets 13-25% | 75% single-weapon rounds |
+| Cannot track a slow strafe | Median crosshair error 6 degrees while in view; within 3 degrees 20-25% of frames | 150 ms delay, coarse smoothed turns |
+| Jumps constantly, no speed | Jump key 30% of frames (owner 7%); above 330 u/s 5% (owner 37-46%) | Nothing rewards speed; nobody punishes jumping |
+| Low ground, odd spots, stuck at a teleporter | Below the owner ~50% of the time | 15 s rounds |
+| Rarely picks up health or armor | Big items: owner ~75, Bobby 14 | Tiny item bonus, short rounds |
+
+His crosshair was within 3 degrees more often than the owner's (20-25% vs 5-18%): aim is undersold by the
+spam, as the owner noted. Play-test bugs seen: a real match could start and the map then rotated out of the
+pool; session folders could carry the wrong map label.
+
+**Weapon switch time measured** (`plugins/weaponlab.py` set 3, `data/weaponlab4/`): from the switch command
+to the first shot is 17 frames = 0.425 s for every pair tested (the held weapon changes after 10 frames).
+The simulator had 0.1 s.
+
+**Changes in the simulator for `duel_gru_v3`** (`sim/duel_env.py`, 171 inputs):
+- Switch time 0.425 s and a 0.002 cost per switch; ammo finite in every round; 0.0005 per frame for holding
+  fire when no enemy was seen for over a second; item bonus 0.3 per 100 points; reaction delay 25 ms.
+- Aim: turn steps down to 0.03 degrees per frame, lighter smoothing for commands up to 1 degree, and the
+  pull toward level only applies when no enemy is in view (a pure cost was not tried: 0.99 collapsed before).
+- Round kinds: 45% normal (all weapons at spawn), 25% aim rounds against a scripted strafing target
+  (LG-weighted), 15% one-weapon rounds, 15% movement rounds (run to mega / red / yellow armor).
+- 20% of normal rounds are against a scripted fighter (turns onto the enemy, rockets close / LG mid / rail far).
+- Scripted players are not trained on and not counted in the accuracy numbers.
+- New metrics: accuracy and crosshair error while the enemy is in view, switches per minute, blind fire,
+  weapon held by distance, movement-round speed and arrivals, results against the scripted fighter.
+- Smoke run (7 minutes): 134k steps per second; switches, blind fire and crosshair error falling, movement
+  arrivals and speed rising. Results of the full run go in the next entry.
+
+---|---|
 | Simulator physics match the real game; learned movement transfers (time ratio 1.01) | Settings search (coach) on top of Nightmare: 6% win rate vs control 69% |
 | Strafe jumping emerged from reward alone (human physics) | Our own routing/movement on top of Nightmare: 0/108 |
 | Nine weapons measured on a real server and reproduced | Recorded nav graphs (17% junk nodes) |

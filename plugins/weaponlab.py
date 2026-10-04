@@ -23,8 +23,8 @@ WEAPON = {"g": 1, "mg": 2, "sg": 3, "gl": 4, "rl": 5, "lg": 6, "rg": 7, "pg": 8,
 REPEATS = 4
 
 
-def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0):
-    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off)
+def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None):
+    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre)
 
 
 SETS = {
@@ -43,6 +43,11 @@ SETS = {
         [("pg_floor_{}".format(d), spec("pg", aim="floor", off=d)) for d in (0, 10, 20, 30)] +
         [("gl_150", spec("gl", dist=150, frames=140)), ("gl_self", spec("gl", aim="self", frames=140)),
          ("g_40", spec("g", dist=40, hold=40, pin=True)), ("g_70", spec("g", dist=70, hold=40, pin=True))]),
+    # weapon switch time: hold `pre` during the settle, then select `weapon` and hold fire from frame 0
+    "3": dict(
+        [("sw_{}_{}".format(a, b), spec(b, hold=70, frames=80, pin=True, pre=a))
+         for a, b in (("mg", "rg"), ("rl", "rg"), ("rg", "lg"), ("lg", "rl"), ("rg", "mg"), ("mg", "rl"))] +
+        [("base_{}".format(b), spec(b, hold=70, frames=80, pin=True)) for b in ("rg", "lg", "rl", "mg")]),
 }
 TESTS = SETS[os.environ.get("WEAPONLAB_SET", "1")]
 
@@ -92,9 +97,9 @@ class weaponlab(minqlx.Plugin):
             dx, dy, dz = aim[0] - eye[0], aim[1] - eye[1], aim[2] - eye[2]
             pitch = -math.degrees(math.atan2(dz, math.hypot(dx, dy)))
             yaw = math.degrees(math.atan2(dy, dx))
-        self.cur = dict(name=name, spec=sp_, tpos=tp, shooter=shooter.id, target=target.id, weapon=WEAPON[sp_["weapon"]],
+        self.cur = dict(name=name, spec=sp_, tpos=tp, shooter=shooter.id, target=target.id, weapon=WEAPON[sp_["weapon"]], pre=WEAPON[sp_["pre"] or sp_["weapon"]],
                         pitch=pitch, yaw=yaw, frame=-30, dist=dist, rows=[])
-        minqlx.set_bot_input(shooter.id, 0, 0, 0, 0, self.cur["weapon"], pitch, yaw)
+        minqlx.set_bot_input(shooter.id, 0, 0, 0, 0, self.cur["pre"], pitch, yaw)
         minqlx.set_bot_input(target.id, 0, 0, 0, 0, 2, 0.0, LINE_YAW + 180.0)
 
     def on_frame(self):
@@ -137,7 +142,7 @@ class weaponlab(minqlx.Plugin):
                 tgt = self.player(c["target"])
                 if tgt is not None:
                     tgt.position(x=c["tpos"][0], y=c["tpos"][1], z=c["tpos"][2])
-            minqlx.set_bot_input(c["shooter"], 0, 0, 0, 0, c["weapon"], c["pitch"], c["yaw"])
+            minqlx.set_bot_input(c["shooter"], 0, 0, 0, 0, c["pre"], c["pitch"], c["yaw"])
             return
         firing = f < sp_["hold"]
         minqlx.set_bot_input(c["shooter"], 0, 0, 0, 1 if firing else 0, c["weapon"], c["pitch"], c["yaw"])
@@ -146,6 +151,7 @@ class weaponlab(minqlx.Plugin):
             st = minqlx.player_state(pid)
             row += [st.health, st.armor, *[round(v, 2) for v in st.position], *[round(v, 2) for v in st.velocity]]
         c["rows"].append(row)
+        row.append(int(minqlx.player_state(c["shooter"]).weapon))
         if sp_["pin"]:                                          # keep the target in the line of fire
             tgt = self.player(c["target"])
             if tgt is not None:
@@ -154,7 +160,7 @@ class weaponlab(minqlx.Plugin):
         if f >= sp_["frames"]:
             rec = dict(test=c["name"], rep=c["rep"], dist=c["dist"], pitch=round(c["pitch"], 3), yaw=round(c["yaw"], 3),
                        spec=sp_,
-                       cols="frame s_hp s_armor s_x s_y s_z s_vx s_vy s_vz t_hp t_armor t_x t_y t_z t_vx t_vy t_vz",
+                       cols="frame s_hp s_armor s_x s_y s_z s_vx s_vy s_vz t_hp t_armor t_x t_y t_z t_vx t_vy t_vz s_weapon",
                        rows=c["rows"])
             with open(os.path.join(D, "weaponlab.jsonl"), "a") as fh:
                 fh.write(json.dumps(rec) + "\n")

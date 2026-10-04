@@ -27,7 +27,7 @@ ROOT = os.path.dirname(HERE)
 DT_MIN = 0.025 / 60.0
 
 
-def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames):
+def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
@@ -35,16 +35,18 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.item_reward = item_reward
     env.drill_p = drill_p
     env.react_frames = react_frames
+    env.kind_p = kind_p
+    env.bot_p = bot_p
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
     remote.send(env.observe())
-    last = dict(env.stats)
+    last = {k: np.copy(v) for k, v in env.stats.items()}
     while True:
         cmd, data = remote.recv()
         if cmd == "step":
             obs, rew, done, info = env.step(data)
             delta = {k: env.stats[k] - last[k] for k in env.stats}
-            last = dict(env.stats)
+            last = {k: np.copy(v) for k, v in env.stats.items()}
             s = env.state
             delta["air_fast"] = int(((np.hypot(s[:, 3], s[:, 4]) > 330) & (s[:, 6] < 0.5)).sum())
             delta["visible"] = int(env.visible.sum())
@@ -55,7 +57,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % 2 == 1)
             delta["match_of_kill"] = [e["killer"] // 2 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             delta["even_kill"] = [e["killer"] % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
-            remote.send((obs, rew, done, delta))
+            remote.send((obs, rew, done, delta, env.script > 0))
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward = data
             remote.send(True)
@@ -73,13 +75,16 @@ def main():
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--lr", type=float, default=2.5e-4)
     ap.add_argument("--hidden", type=int, default=512)
-    ap.add_argument("--loadout", default="full")
-    ap.add_argument("--item-reward", type=float, default=0.05, help="reward per 100 points of health/armor picked up")
+    ap.add_argument("--loadout", default="all")
+    ap.add_argument("--item-reward", type=float, default=0.3, help="reward per 100 points of health/armor picked up")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
-    ap.add_argument("--drill-p", type=float, default=0.75,
+    ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
-    ap.add_argument("--drill-weapons", default="rl,rg,lg", help="weapons used in drill rounds (equal chance)")
+    ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
+    ap.add_argument("--kind-p", default="0.45,0.25,0.15,0.15",
+                    help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
+    ap.add_argument("--bot-p", type=float, default=0.2, help="share of normal rounds against the scripted fighter")
     ap.add_argument("--react-ms", type=float, default=25, help="reaction delay on what is known about the opponent")
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
@@ -100,7 +105,8 @@ def main():
         p_main, p_work = mp.Pipe()
         mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches, 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
-                                        a.item_reward, a.drill_p, a.drill_weapons, round(a.react_ms / 25)), daemon=True).start()
+                                        a.item_reward, a.drill_p, a.drill_weapons, round(a.react_ms / 25),
+                                        tuple(float(x) for x in a.kind_p.split(",")), a.bot_p), daemon=True).start()
         pipes.append(p_main)
     obs = np.concatenate([p.recv() for p in pipes])
     N = len(obs)
@@ -159,6 +165,7 @@ def main():
     last_snap = time.time()
     h = torch.zeros(N, H, device=dev)
     h_opp = torch.zeros(N, H, device=dev)
+    scr = torch.zeros(N, device=dev)                                   # scripted players (not trained on)
 
     T = a.steps
     gamma, lam, clip, ent_coef = 0.995, 0.95, 0.2, 0.01
@@ -189,6 +196,7 @@ def main():
         b_val = torch.zeros(T + 1, N, device=dev)
         b_rew = torch.zeros(T, N, device=dev)
         b_done = torch.zeros(T, N, device=dev)
+        b_w = torch.zeros(T, N, device=dev)
         h0 = h.clone()
         raw, agg = [], {}
         lk = [0, 0]                                                      # league matches: learner kills, snapshot kills
@@ -205,6 +213,7 @@ def main():
                     act_o = torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
             b_obs[t], b_act[t], b_logp[t], b_val[t] = x, act, logp, val
+            b_w[t] = learn * (1.0 - scr)
             an = act.cpu().numpy()
             for p, c in zip(pipes, np.array_split(an, len(pipes))):
                 p.send(("step", c))
@@ -213,6 +222,7 @@ def main():
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
             d = torch.from_numpy(np.concatenate([r[2] for r in res]).astype(np.float32)).to(dev)
             b_done[t] = d
+            scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
             for r in res:
@@ -259,7 +269,7 @@ def main():
                 A = b_act[:, chunk]
                 lp = sum(dd.log_prob(A[..., j]) for j, dd in enumerate(ds))
                 ent = sum(dd.entropy() for dd in ds)
-                wgt = learn[chunk][None, :].expand(T, -1)
+                wgt = b_w[:, chunk]
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
                 ad = (ad - (ad * wgt).sum() / wsum) / (ad[wgt > 0].std() + 1e-8)
@@ -277,10 +287,25 @@ def main():
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    frags_per_match_min=round(agg["frags"] / sim_min, 3),
                    suicides_per_match_min=round(agg["suicides"] / sim_min, 3),
-                   hit_rate={w: round(agg[w + "_hits"] / max(1, agg[w + "_shots"]), 3) for w in WEAPONS},
-                   frag_share={w: round(agg[w + "_frags"] / max(1, agg["frags"]), 2) for w in WEAPONS},
-                   pickups_per_player_min={k[5:]: round(agg[k] / (2 * sim_min), 2)
+                   hit_rate={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots"])), 3) for w in WEAPONS},
+                   frag_share={w: round(float(agg[w + "_frags"] / max(1, sum(agg[x + "_frags"] for x in WEAPONS))), 2) for w in WEAPONS},
+                   pickups_per_player_min={k[5:]: round(float(agg[k] / (2 * sim_min)), 2)
                                            for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_am")},
+                   acc_visible={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots_vis"])), 3) for w in ("rl", "rg", "lg")},
+                   aim_err_visible=round(float(agg["aim_err"] / max(1, agg["aim_frames"])), 2),
+                   on_target_visible=round(float(agg["on_target"] / max(1, agg["aim_frames"])), 3),
+                   switches_per_min=round(float(agg["switches"] / max(1, agg["play_frames"]) * 2400), 1),
+                   fire=round(float(agg["fire_frames"] / max(1, agg["play_frames"])), 3),
+                   blind_fire=round(float(agg["blind_frames"] / max(1, agg["play_frames"])), 3),
+                   weapon_by_dist={b: {w: round(float(agg["w_dist"][j, i] / max(1.0, agg["w_dist"][j].sum())), 2)
+                                       for i, w in enumerate(WEAPONS) if agg["w_dist"][j, i] / max(1.0, agg["w_dist"][j].sum()) >= 0.05}
+                                   for j, b in enumerate(("close", "mid", "far"))},
+                   move=dict(arrive_per_min=round(float(agg["move_arrive"] / max(1, agg["move_frames"]) * 2400), 2),
+                             speed=int(round(agg["move_speed"] / max(1, agg["move_frames"]))),
+                             fast_air=round(float(agg["move_fast"] / max(1, agg["move_frames"])), 3)),
+                   vs_bot=dict(frags_per_min=round(float(agg["frags_vs_bot"] / max(1, agg["bot_frames"]) * 2400), 2),
+                               deaths_per_min=round(float(agg["bot_frags"] / max(1, agg["bot_frames"]) * 2400), 2)),
+                   target_kills_per_min=round(float(agg["target_kills"] / max(1, agg["aim_round_frames"]) * 2400), 2),
                    visible=round(agg["visible"] / max(1, agg["players"]), 3),
                    air_fast=round(agg["air_fast"] / max(1, agg["players"]), 3),
                    jerk=round(agg["jerk"] / max(1, agg["players"]), 2),

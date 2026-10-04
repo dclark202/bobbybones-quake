@@ -19,7 +19,19 @@ import os
 import sys
 
 import numpy as np
-from scipy.spatial import cKDTree
+try:
+    from scipy.spatial import cKDTree
+except Exception:                                           # scipy missing or broken: plain numpy nearest-point search
+    class cKDTree:
+        def __init__(self, pts):
+            self.pts = np.asarray(pts, np.float32)
+            self.sq = (self.pts ** 2).sum(1)
+
+        def query(self, x):
+            x = np.asarray(x, np.float32)
+            d2 = (x ** 2).sum(1)[:, None] - 2.0 * x @ self.pts.T + self.sq[None, :]
+            k = d2.argmin(1)
+            return np.sqrt(np.maximum(d2[np.arange(len(x)), k], 0.0)), k
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qsim import World  # noqa: E402
