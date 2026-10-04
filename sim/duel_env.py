@@ -65,7 +65,8 @@ SPLASH_NEAR = 20.0                                     # measured splash falloff
 SG_PELLETS, SG_SIGMA = 20, 3.0                         # pellet spread: gaussian, degrees
 SELF_FACTOR, SPAWN_HP, VIEW_H = 0.5, 125.0, 26.0
 SWITCH = 0.1                                           # seconds to change weapons (not yet measured)
-REACT_FRAMES = 6                                       # 150 ms: what a player knows about the opponent lags
+REACT_FRAMES = 1                                       # default 25 ms (one frame): what a player knows about the opponent lags.
+                                                       # Was 6 (150 ms) up to duel_gru_v2; per run: env.react_frames / --react-ms
 MOUSE_SMOOTH = 0.5                                     # view velocity inertia per frame
 JERK_COST = 0.00002                                    # reward cost per degree/frame of change in the turn command
 FOV_COS = math.cos(math.radians(55))
@@ -120,6 +121,7 @@ class DuelEnv:
         self.substeps = tuple(substeps)
         self.dmg_reward = dmg_reward
         self.loadout = loadout
+        self.react_frames = REACT_FRAMES
         self.item_reward = 0.0                          # optional shaping: reward per 100 points of health/armor picked up
         self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in self.w.spawns()], np.float32)
@@ -287,7 +289,7 @@ class DuelEnv:
         # REACT_FRAMES old. The player's own view is current, so the crosshair-to-enemy readings respond to
         # mouse movement immediately, as on a real screen.
         self.opp_hist.append((self.known.copy(), self.visible.copy(), vel[opp].copy(), self.seen_t.copy()))
-        if len(self.opp_hist) > REACT_FRAMES + 1:
+        while len(self.opp_hist) > self.react_frames + 1:
             self.opp_hist.pop(0)
         known, visible, opp_vel, seen_t = self.opp_hist[0]
         rel = rot(known - pos) / 1000.0

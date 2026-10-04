@@ -46,7 +46,7 @@ In order. Details in [BACKLOG.md](BACKLOG.md).
 
 1. B-01 aim-only rounds (scripted strafing target, LG-weighted)
 2. B-02 tracking fixes (finer small turns, lighter smoothing, pitch pull replaced by a cost)
-3. B-03 reaction delay as a curriculum (50 ms rising to 125 ms)
+3. B-03 reaction delay 25 ms for now (owner: learn first, pare back later if it feels unfair)
 4. B-04 fewer single-weapon drills so weapon choice is learned
 5. B-05 small cost for firing with no enemy in view
 6. B-06 scripted Nightmare-like opponents in the league
@@ -57,7 +57,8 @@ In order. Details in [BACKLOG.md](BACKLOG.md).
 
 - Maps: Blood Run (ZTN), Aerowalk, Campgrounds only, until told otherwise.
 - Human physics only (125 fps); no bot-only frame-rate tricks.
-- Human-like reaction and aim limits; never miss on purpose; no wallhacks.
+- Human-like reaction and aim limits; never miss on purpose; no wallhacks. Reaction delay is 25 ms while he
+  learns (2026-10-03); it goes back up toward human values if he feels unfair.
 - Aim should be smooth like a mouse but allow flicks.
 - Spawning with the full weapon set is fine while learning to aim; items must be picked up. Ammo as a scarce
   resource comes later ("getting him to not suck first").

@@ -27,13 +27,14 @@ ROOT = os.path.dirname(HERE)
 DT_MIN = 0.025 / 60.0
 
 
-def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons):
+def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
     env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout)
     env.item_reward = item_reward
     env.drill_p = drill_p
+    env.react_frames = react_frames
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
     remote.send(env.observe())
@@ -79,6 +80,7 @@ def main():
     ap.add_argument("--drill-p", type=float, default=0.75,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg", help="weapons used in drill rounds (equal chance)")
+    ap.add_argument("--react-ms", type=float, default=25, help="reaction delay on what is known about the opponent")
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
 
@@ -98,7 +100,7 @@ def main():
         p_main, p_work = mp.Pipe()
         mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches, 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
-                                        a.item_reward, a.drill_p, a.drill_weapons), daemon=True).start()
+                                        a.item_reward, a.drill_p, a.drill_weapons, round(a.react_ms / 25)), daemon=True).start()
         pipes.append(p_main)
     obs = np.concatenate([p.recv() for p in pipes])
     N = len(obs)
@@ -136,7 +138,8 @@ def main():
 
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
-                        obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes),
+                        obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
+                        react_ms=a.react_ms),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot

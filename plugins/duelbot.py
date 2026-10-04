@@ -90,7 +90,7 @@ class duelbot(minqlx.Plugin):
         meta = dict(schema=SCHEMA, started=round(time.time(), 2), map=mapname, opponent=kind,
                     opponent_name=opp.clean_name if is_bot(opp) else "human", policy=str(self.P["run"]),
                     train_minutes=int(self.P["minutes"]), env=str(self.P["env"]),
-                    react_ms=int(self.E.REACT_FRAMES * 25), frame_ms=25, frame_columns=FRAME_COLS)
+                    react_ms=int(self.react_ms), frame_ms=25, frame_columns=FRAME_COLS)
         with open(os.path.join(self.sess, "meta.json"), "w") as f:
             json.dump(meta, f, indent=1)
         self.frames_f = open(os.path.join(self.sess, "frames.csv"), "a")
@@ -181,6 +181,8 @@ class duelbot(minqlx.Plugin):
         self.dims = [int(x) for x in self.P["action_dims"]]
         self.E = E = importlib.import_module(str(self.P["env"]))
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1)
+        self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
+        self.env.react_frames = round(self.react_ms / 25)   # same reaction delay as in training (newer simulators)
         self.h = np.zeros((1, self.P["whh"].shape[1]), np.float32)
         self.refire = np.array([E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK], np.float32)
         self.item_ent = {}                                   # game entity number -> simulator item index

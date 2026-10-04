@@ -10,7 +10,7 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 |---|---|---|---|---|
 | B-01 | P1 | next | Aim-only rounds: close, facing, against a scripted strafing/jumping target, weighted toward LG | LG hit rate flat at 4-5% all run; owner's pick |
 | B-02 | P1 | next | Tracking fixes: turn bins below 0.1 deg/frame, lighter smoothing on small corrections, pitch pull (x0.95 per frame) replaced by a small cost | Smoothing and the pitch pull fight fine tracking |
-| B-03 | P1 | next | Reaction delay as a curriculum: 50 ms rising to 125 ms | 150 ms on all enemy info = 48 units of stale position at strafe speed; humans predict smooth motion |
+| B-03 | P1 | next | Reaction delay 25 ms (one frame) for now; pare back toward human values once he plays well (owner, 2026-10-03) | 150 ms on all enemy info = 48 units of stale position at strafe speed; humans predict smooth motion |
 | B-04 | P1 | next | Single-weapon drills 75% -> ~35% of rounds | Live: he holds each weapon ~25% of the time (random choice); 0-10 normal vs 2-6 in LG-only |
 | B-05 | P2 | next | Small cost per shot with no enemy in view | Fires 50% of frames with the enemy visible 6-20% |
 | B-06 | P1 | next | Scripted Nightmare-like opponents in the league | The bar is Nightmare; self-play alone never meets one |
