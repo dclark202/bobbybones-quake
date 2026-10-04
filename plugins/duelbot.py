@@ -47,7 +47,7 @@ GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 LAB_WEAPONS = ("mg", "sg", "gl", "rl", "lg", "rg", "pg", "hmg")
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
-    [["terrain", k] for k in ("b2r", "pillars", "aero_ra", "ztn_ra")] + [["speed"]] + \
+    [["speed"]] + \
     [["fight", p_] for p_ in ("allround", "sniper", "rusher", "tracker")]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
@@ -216,9 +216,9 @@ class duelbot(minqlx.Plugin):
     def cmd_rooms(self, player, msg, channel):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (15 s)".format("|".join(LAB_WEAPONS)))
-            player.tell("!room terrain <{}> (60 s) | speed (60 s)".format("|".join(self.lab["stations"])))
+            player.tell("!room speed (90 s): the long straight, one way")
             player.tell("!room fight <{}> (100 s)".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 33 rooms, about 21 minutes | !room off")
+            player.tell("!room suite = all 29 rooms, about 17 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -262,7 +262,7 @@ class duelbot(minqlx.Plugin):
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed":
-                return dict(kind="speed", lab=True, name="terrain/speed", script=0, secs=60)
+                return dict(kind="speed", lab=True, name="speed", script=0, secs=90)
             if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
                 return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=100,
                             persona=R.PERSONAS.index(a[1]))
@@ -738,14 +738,12 @@ class duelbot(minqlx.Plugin):
             r["top"] = max(r.get("top", 0.0), sp)
             if r["t_run"] is None and sp > 50:
                 r["t_run"] = now
-            if r["leg"] == 0 and hpos[0] > st["far"][0] - 40:
-                r["leg"] = 1
-            elif r["leg"] == 1 and hpos[0] < st["start"][0] + 60:
+            if hpos[0] > st["far"][0] - 40:                 # one way: the full length, then back to the start
                 t = now - (r["t_run"] or now)
                 m["laps"] = m.get("laps", 0) + 1
                 m["best"] = min(m.get("best", 1e9), t)
-                human.tell("lap {:.2f} s".format(t))
-                r["leg"], r["t_run"] = 0, None
+                human.tell("^2{:.2f} s^7 for {} units, top speed {:.0f}".format(t, int(st.get("length", 0)), r.get("top", 0.0)))
+                r["leg"] = None
             return
         st = self.lab["stations"][r["key"]]
         via = st.get("via") or [st["goal"]]
@@ -796,7 +794,7 @@ class duelbot(minqlx.Plugin):
                      m=dict(frames=0, shots=0, dmg=0, hit_events=0, aim_err=0.0, aim_frames=0, on_target=0, held={},
                             switches=0, fire=0, blind=0, arrive=0, speed=0.0, fast=0, frags=0, deaths=0, dmg_taken=0,
                             picks={}))
-            self.msg("^3Room {}^7 starts in 5 s ({} s).".format(r["name"], r["secs"]))
+            self.msg("^3Next: {}^7 ({} s). Starts in 5 s; the countdown is not scored.".format(r["name"], r["secs"]))
             self.record(event="room_start", room=r["name"])
         r = self.room
         m = r["m"]
@@ -846,7 +844,7 @@ class duelbot(minqlx.Plugin):
                     a[2] = int(r.get("jump", False) and m["frames"] % 2 == 0)
                     z = r["zone"]
                     if not (z[0] + 120 <= bpos[0] <= z[2] - 120 and z[1] + 120 <= bpos[1] <= z[3] - 120):
-                        dx, dy = r["home"][0] - bpos[0], r["home"][1] - bpos[1]
+                        dx, dy = (z[0] + z[2]) / 2.0 - bpos[0], (z[1] + z[3]) / 2.0 - bpos[1]   # toward the middle
                         yr = math.radians(byaw)
                         f_, l_ = dx * math.cos(yr) + dy * math.sin(yr), -dx * math.sin(yr) + dy * math.cos(yr)
                         a[0] = (1 if f_ > 40 else -1 if f_ < -40 else 0) + 1

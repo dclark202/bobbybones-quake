@@ -64,6 +64,8 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-64 | P1 | open | Results for players: after the test chamber a player sees their own card, Bobby's, and the average of all players, in game (`!card`) and on a results page updated per run | Owner 2026-10-04 |
 | B-65 | P3 | open | Check whether a Quake Live client downloads `bobbylab` from the server; if not, publish it on the Steam Workshop | Owner believes clients can download it |
 
+| B-66 | P3 | dropped | Trick-jump stations on the test map (copies of four spots from the real maps) | Owner 2026-10-04: not clear what they test. Removed from the map and the suite; the copy tool stays in `tools/make_lab_map.py` |
+
 ## Test suite
 
 | ID | P | Status | Item | Why / evidence |

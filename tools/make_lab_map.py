@@ -6,9 +6,7 @@
 Areas (flat walls, stock textures):
   aim box          empty box 1536 x 1024 x 400: subject at one end, target about 700 units away
   environment box  1536 x 1536 x 400: pillars, two low walls, a platform with steps
-  speed straight   2048 x 256 flat run
-  terrain stations 3D copies (8-unit blocks) of four classic spots on the real maps, sampled with the
-                   simulator: Campgrounds bridge-to-rail and pillars, Aerowalk red armor, Blood Run red armor
+  speed straight   20480 x 512 flat run with a mark every 2048 units
 Needs the real maps in data/maps/ (extracted from the game) and sim/qsim built.
 """
 import json
@@ -105,22 +103,15 @@ def main():
         spawns.append((x, y, 24, 0))
     # ---- speed straight
     sy = 6000
-    room(0, sy, 0, 2048, sy + 256, 256)
-    box(1984, sy, 0, 1992, sy + 256, 1, TRIM)
-    rooms["speed"] = dict(start=[64, sy + 128, 8], yaw=0, far=[1988, sy + 128, 8])
+    SL = 20480                                                                  # long enough to build real speed
+    room(0, sy, 0, SL, sy + 512, 256)
+    for mark in range(2048, SL, 2048):                                          # distance marks on the floor
+        box(mark, sy, 0, mark + 8, sy + 512, 1, TRIM)
+    rooms["speed"] = dict(start=[64, sy + 256, 8], yaw=0, far=[SL - 64, sy + 256, 8], length=SL - 128)
     # ---- terrain stations: 3D copies of the real spots
-    stations = [
-        ("b2r", "campgrounds", (-320, -1100, 380), (720, 40, 700),
-         dict(start=[-100, -920, 545], yaw=0, goal=[448, -160, 528], goal_r=70, goal_dz=20,
-              name="Campgrounds bridge to rail")),
-        ("pillars", "campgrounds", (-1640, -110, 300), (-1060, 520, 680),
-         dict(start=[-1356, 330, 0], yaw=-110, goal=[-1450, 56, 0], goal_r=40, goal_dz=30,
-              via=[[-1450, 56], [-1228, 56], [-1356, 330]], name="Campgrounds pillars")),
-        ("aero_ra", "aerowalk", (-780, -470, 20), (20, 330, 520),
-         dict(start=[-304, 290, 0], yaw=-90, goal=[-384, -70, 352], goal_r=50, goal_dz=24, name="Aerowalk red armor")),
-        ("ztn_ra", "bloodrun", (-560, -384, 190), (240, 416, 700),
-         dict(start=[160, 300, 0], yaw=-135, goal=[-160, 16, 528], goal_r=50, goal_dz=24, name="Blood Run red armor")),
-    ]
+    # The trick-jump copies (Campgrounds bridge to rail and pillars, Aerowalk and Blood Run red armor) were
+    # removed on 2026-10-04: as test rooms they were not clear enough. copy_region() is kept for later use.
+    stations = []
     ox = 0
     for key, mp, lo, hi, info in stations:
         w = World(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n=2)
