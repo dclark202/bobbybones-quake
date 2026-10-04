@@ -215,10 +215,10 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab:
-            player.tell("!room aim <{}> <walk|jump|env>  (30 s)".format("|".join(LAB_WEAPONS)))
+            player.tell("!room aim <{}> <walk|jump|env>  (15 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room terrain <{}> (60 s) | speed (60 s)".format("|".join(self.lab["stations"])))
             player.tell("!room fight <{}> (100 s)".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 33 rooms, about 27 minutes | !room off")
+            player.tell("!room suite = all 33 rooms, about 21 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -258,7 +258,7 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             if a[0] == "aim" and len(a) >= 3 and a[1] in LAB_WEAPONS and a[2] in LAB_STYLES:
                 return dict(kind="aim", lab=True, name="aim/{}/{}".format(a[1], a[2]), weapon=a[1], style=0,
-                            script=1, secs=30, where="env" if a[2] == "env" else "aim", jump=a[2] == "jump")
+                            script=1, secs=15, where="env" if a[2] == "env" else "aim", jump=a[2] == "jump")
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed":
@@ -701,7 +701,7 @@ class duelbot(minqlx.Plugin):
             a = L["aim"]
             self.put(human, a["subject"], a["yaw"], human=True)
             self.put(bobby, a["target"], float(self.rng.uniform(-180, 180)))
-            r["home"], r["zone"], r["hard"] = a["target"], a["zone"], [352, 16, 1520, 1008]
+            r["home"], r["zone"], r["hard"] = a["target"], a["zone"], [-64, -64, 1600, 1088]
         else:
             e = L["env"]
             spots = [np.array([x, y, e["z"]], np.float32) for x, y in e["spots"]]
@@ -714,7 +714,7 @@ class duelbot(minqlx.Plugin):
             self.put(human, spots[j], face, human=True)
             b = e["bounds"]
             r["home"], r["zone"] = [float(v) for v in spots[i]], [b[0] + 48, b[1] + 48, b[2] - 48, b[3] - 48]
-            r["hard"] = [b[0], b[1], b[2], b[3]]
+            r["hard"] = [b[0] - 64, b[1] - 64, b[2] + 64, b[3] + 64]
         self.renv.mv[:] = 0
 
     def lab_keep(self, p, pos, human=False):
@@ -851,7 +851,7 @@ class duelbot(minqlx.Plugin):
                         f_, l_ = dx * math.cos(yr) + dy * math.sin(yr), -dx * math.sin(yr) + dy * math.cos(yr)
                         a[0] = (1 if f_ > 40 else -1 if f_ < -40 else 0) + 1
                         a[1] = (-1 if l_ > 40 else 1 if l_ < -40 else 0) + 1
-                    h_ = r["hard"]                           # only moved back if it gets right up to the subject or out of the room
+                    h_ = r["hard"]                           # never moved at a wall; only if it somehow leaves the room
                     if not (h_[0] <= bpos[0] <= h_[2] and h_[1] <= bpos[1] <= h_[3]):
                         self.put(bobby, r["home"], byaw)     # far outside (knocked out): put it back
                 keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]

@@ -1,6 +1,6 @@
 # Play-test routine
 
-Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 27 minutes). Everything is
+Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 21 minutes). Everything is
 logged per frame; your notes are what the numbers cannot show. Log formats: [LOGS.md](LOGS.md).
 
 ## Before you start
@@ -34,7 +34,7 @@ Questions to answer at the end (as notes or in chat):
 3. What would a decent player punish first?
 4. Anything that looked like a bug (stuck, not shooting, spinning)?
 
-## Part 2: the test chamber (about 27 minutes)
+## Part 2: the test chamber (about 21 minutes)
 
 Bobby's body becomes the scripted target or opponent and **you** are measured, with the same metrics the
 simulator uses for him. This gives the human bar for each room. All commands: [COMMANDS.md](COMMANDS.md).
@@ -45,7 +45,7 @@ simulator uses for him. This gives the human bar for each room. All commands: [C
 
 | Rooms | What happens | What to do |
 |---|---|---|
-| 24 aim rooms, 30 s each | Eight weapons, three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
+| 24 aim rooms, 15 s each | Eight weapons, three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
 | 4 trick jumps, 60 s each | Campgrounds bridge to rail, Campgrounds pillars, Aerowalk red armor, Blood Run red armor. You start at the start spot and are returned there after each attempt. Gauntlet only | Make the jump as often and as fast as you can |
 | Speed straight, 60 s | A 2000-unit flat run | To the far end and back, as fast as you can |
 | 4 fights, 100 s each | In the environment box against the allround, sniper, rusher and tracker styles, every weapon in hand | Play to win |

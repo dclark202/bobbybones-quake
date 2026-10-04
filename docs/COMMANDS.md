@@ -20,10 +20,10 @@ and prints your result in chat. `!rooms` lists the rooms for the current map; `!
 
 | Command | Room | Length |
 |---|---|---|
-| `!room suite` | All 33 rooms below, back to back | about 27 min |
-| `!room aim <weapon> walk` | Aim box: the target moves left, right, forward and back at random. Weapons: `mg`, `sg`, `gl`, `rl`, `lg`, `rg`, `pg`, `hmg` | 30 s |
-| `!room aim <weapon> jump` | Aim box: the same movement, with jumping | 30 s |
-| `!room aim <weapon> env` | Environment box (pillars, cover): the target moves at random | 30 s |
+| `!room suite` | All 33 rooms below, back to back | about 21 min |
+| `!room aim <weapon> walk` | Aim box: the target moves left, right, forward and back at random. Weapons: `mg`, `sg`, `gl`, `rl`, `lg`, `rg`, `pg`, `hmg` | 15 s |
+| `!room aim <weapon> jump` | Aim box: the same movement, with jumping | 15 s |
+| `!room aim <weapon> env` | Environment box (pillars, cover): the target moves at random | 15 s |
 | `!room terrain <station>` | Trick jump, stations: `b2r` (Campgrounds bridge to rail), `pillars` (Campgrounds pillars), `aero_ra` (Aerowalk red armor), `ztn_ra` (Blood Run red armor). You are returned to the start after each attempt | 60 s |
 | `!room speed` | Speed straight: to the far end and back | 60 s |
 | `!room fight <style>` | A fight in the environment box against a scripted style: `allround`, `sniper`, `rusher`, `tracker` (these four are in the suite), `dodger`, `stander`, `jumper`, `spammer` | 100 s |
