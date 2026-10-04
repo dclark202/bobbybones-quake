@@ -42,6 +42,11 @@ class duelbot(minqlx.Plugin):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
         self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|campgrounds>")
+        self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
+        self.add_command("drill", self.cmd_drill, 0, usage="<rl|rg|lg|off>")
+        self.drill = None                                    # weapon drill: both players have only this weapon
+        self.top_up = 0.0
+        self.last = {}                                       # latest snapshot of both players, for notes
         self.ready = False
         self.next_check = 0.0
         self.want_map = os.environ.get("LAB_MAP", "bloodrun").lower()
@@ -68,6 +73,23 @@ class duelbot(minqlx.Plugin):
             return minqlx.RET_USAGE
         self.want_map = msg[1].lower()
         minqlx.console_command("map {} duel".format(self.want_map))
+
+    def cmd_note(self, player, msg, channel):
+        """the play-tester's feedback, stamped with the game state at that moment"""
+        if len(msg) < 2:
+            return minqlx.RET_USAGE
+        self.record(event="note", text=" ".join(msg[1:]), drill=self.drill, state=self.last, **self.score)
+        player.tell("noted")
+
+    def cmd_drill(self, player, msg, channel):
+        if len(msg) < 2 or msg[1].lower() not in ("rl", "rg", "lg", "off"):
+            return minqlx.RET_USAGE
+        self.drill = None if msg[1].lower() == "off" else msg[1].lower()
+        self.record(event="drill", drill=self.drill, **self.score)
+        for p in self.players():
+            if p.team != "spectator" and p.state and p.state.health > 0:
+                self.give_loadout(p)
+        self.msg("Drill: {}".format(self.drill or "off (normal loadout)"))
 
     def on_map(self, mapname, factory):
         self.ready = False
@@ -132,6 +154,11 @@ class duelbot(minqlx.Plugin):
 
     def give_loadout(self, p):
         try:
+            if self.drill:                                   # as in training: one weapon, ammo never runs out
+                p.weapons(reset=True, **{self.drill: True})
+                p.ammo(**{self.drill: 150 if self.drill == "lg" else 25})
+                p.weapon({"rl": 5, "rg": 7, "lg": 6}[self.drill])
+                return
             has, ammo = self.E.LOADOUTS["full"]
             p.weapons(reset=True, g=True, mg=True, rl=bool(has[0]), rg=bool(has[1]), lg=bool(has[2]))
             p.ammo(mg=100, rl=int(ammo[0]), rg=int(ammo[1]), lg=int(ammo[2]))
@@ -263,8 +290,12 @@ class duelbot(minqlx.Plugin):
         if bs.health <= 0:                                   # tap fire to respawn
             minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
             return
-        _, vel, ground, pitch, yaw = self.fill_player(0, bobby, bs)
-        self.fill_player(1, opp, os_)
+        if self.drill and now > self.top_up:
+            self.top_up = now + 2
+            for p in (bobby, opp):
+                p.ammo(**{self.drill: 150 if self.drill == "lg" else 25})
+        pos, vel, ground, pitch, yaw = self.fill_player(0, bobby, bs)
+        opos = self.fill_player(1, opp, os_)[0]
         self.sync_world(bobby, opp)
         self.senses()
         a = self.act(env.observe()[:1])
@@ -273,9 +304,11 @@ class duelbot(minqlx.Plugin):
         yaw = (yaw + float(env.mv[0, 0]) + 180.0) % 360.0 - 180.0
         pitch = float(np.clip(pitch * env.level + env.mv[0, 1], -89, 89))
         w = int(env.weapon[0])
+        if self.drill:                                       # drill rounds have no machine gun, as in training
+            w = ("rl", "rg", "lg").index(self.drill)
         if a[6] > 0:                                         # switch only to weapons owned
             want = a[6] - 1
-            if (want == 3 or env.has[0, want]) and want != w:
+            if ((want == 3 and not self.drill) or (want < 3 and env.has[0, want])) and want != w:
                 w = want
                 env.cool[0] = max(env.cool[0], E.SWITCH)
         fire = a[5] == 1
@@ -283,6 +316,15 @@ class duelbot(minqlx.Plugin):
         if fire and env.cool[0] <= 0 and (w == 3 or env.ammo[0, w] > 0):
             env.cool[0] = self.refire[w]
         minqlx.set_bot_input(bobby.id, fwd, side, jump, 1 if fire else 0, QL_WEAPON[w], pitch, yaw)
+        self.last = dict(bobby=[round(float(v)) for v in pos], opp=[round(float(v)) for v in opos],
+                         bobby_hp=[bs.health, bs.armor], opp_hp=[os_.health, os_.armor], weapon=E.WEAPONS[w],
+                         visible=bool(env.visible[0]), seen_ago=round(float(env.seen_t[0]), 1))
+        with open(os.path.join(D, "duel_frames_{}.txt".format(time.strftime("%Y%m%d"))), "a") as f:
+            # time | bobby x y z weapon pitch yaw fire sees_opp health armor | opp x y z pitch yaw weapon health armor | drill
+            row = [round(now, 2), *self.last["bobby"], w, round(pitch, 1), round(yaw, 1), int(fire), int(env.visible[0]),
+                   bs.health, bs.armor, *self.last["opp"], round(float(env.pitch[1]), 1), round(float(env.yaw[1]), 1),
+                   int(os_.weapon), os_.health, os_.armor, self.drill or "-"]
+            f.write(" ".join(str(v) for v in row) + "\n")
         c = self.acc
         c["frames"] += 1
         c["visible"] += int(env.visible[0])
