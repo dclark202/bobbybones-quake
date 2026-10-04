@@ -674,13 +674,20 @@ class duelbot(minqlx.Plugin):
             return "All weapons, your choice. Play to win. Opponent: {} ({}).".format(r["name"].split("/")[-1], style)
         return ""
 
+    @staticmethod
+    def gauntlet_only(p):
+        """take every gun away. The weapon in hand and its ammo must go too: the game fires whatever is held."""
+        p.weapons(reset=True, g=True)
+        p.ammo(**{w: 0 for w in QLNUM if w != "g"})
+        p.weapon(QLNUM["g"])
+
     def room_loadout(self, bobby, human, only=None):
         r, R = self.room, self.R
         if only in (None, "opp"):
             if r["kind"] == "aim":
                 self.give_loadout(human, R, only=r["weapon"])
             elif r["kind"] in ("move", "terrain", "speed"):
-                human.weapons(reset=True, g=True)
+                self.gauntlet_only(human)
             else:
                 self.give_loadout(human, R, only="")
             r["ammo"] = None
@@ -829,7 +836,7 @@ class duelbot(minqlx.Plugin):
                             picks={}))
             self.msg("^3Next: {}^7 ({} s). Starts in 5 s; the countdown is not scored.".format(r["name"], r["secs"]))
             self.msg("^5" + self.room_hint(r))
-            human.weapons(reset=True)                         # no weapons during the countdown
+            self.gauntlet_only(human)                         # no guns during the countdown
             human.center_print("^3{}^7: {}".format(r["name"], self.room_hint(r)))
             self.record(event="room_start", room=r["name"])
         r = self.room
