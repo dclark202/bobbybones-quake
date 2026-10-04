@@ -85,6 +85,8 @@ def main():
     ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
+    ap.add_argument("--minibatches", type=int, default=8,
+                    help="players are split into this many groups per training pass (more = less GPU memory)")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
@@ -268,7 +270,7 @@ def main():
         frac = min(1.0, (time.time() - t_start) / (a.minutes * 60))
         for g in opt.param_groups:
             g["lr"] = a.lr * (1.0 - 0.9 * frac)
-        n_mb = 8
+        n_mb = a.minibatches
         kick = a.teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.teach_minutes)
         kick_l = torch.zeros(())
         for epoch in range(3):
