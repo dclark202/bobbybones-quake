@@ -10,6 +10,43 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-04 (08:30): pickups measured, spawn ammo raised, and why he holds the shotgun
+
+Settles B-38 (owner: spawn with normal pickup ammo) and most of B-14.
+
+**Pickups measured on a real server** (`plugins/itemlab.py`, `data/itemlab/`, three maps, first pickup from empty):
+
+| Item | Gives |
+|---|---|
+| Weapons | RL 10, RG 10, LG 100, SG 10, GL 10, PG 50 |
+| Ammo boxes | rockets 5, slugs 5, lightning 50, shells 5, grenades 5, cells 50, bullets 50 |
+| Health | 5 / 25 / 50 / mega 100 |
+| Armor | shard 5 / 25 / 50 / 100 |
+
+The simulator had weapon pickups RL 5, RG 5, GL 5 and ammo boxes lightning 60, shells 10: corrected. Spawn
+loadout is now one pickup's worth per weapon (was RL 10, RG 5, LG 60, GL 5). Still unmeasured: ammo caps,
+a weapon picked up when already owned, damage through armor, HMG (not on these maps).
+
+**Shotgun: not a bug.** After the ammo change and a random spawn weapon he still selected the shotgun
+98-100% of the time in normal rounds. Forcing each weapon in the weapon-choice room (Blood Run, fast target):
+
+| Forced weapon | Close: kills/min | Mid: kills/min | Far: kills/min |
+|---|---|---|---|
+| his own choice (shotgun) | 17.5 | 13.7 | 2.2 |
+| shotgun | 19.9 | 13.6 | 2.7 |
+| LG | 18.4 | 13.8 | 2.8 |
+| rail | 16.4 | 12.2 | 1.9 |
+| rockets | 14.2 | 8.9 | 1.6 |
+| plasma | 20.7 | 13.5 | 2.6 |
+
+Every weapon gives him about the same kills per minute, because his time per kill (about 4 s) is mostly
+finding and turning onto the target, not the weapon. With a switch costing time and reward, staying on one
+weapon is rational. The simulator's shotgun matches the real one (100 / 61 / 26 damage at 100 / 300 / 600
+units measured, same in the simulator). Weapon choice will only matter against opponents that punish it;
+that is a job for stronger opponents and the human play test, not for a reward on weapon use.
+
+---
+
 ## 2026-10-04 (morning): crash at 00:40, test-suite card at 231 minutes, costs raised
 
 Raises B-39. Settles nothing yet (run resumed until 12:00).

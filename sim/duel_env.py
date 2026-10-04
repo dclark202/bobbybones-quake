@@ -18,7 +18,7 @@ Weapons, measured on a real server (plugins/weaponlab.py, sim/validate_weapons.p
   gauntlet          50 per 400 ms, melee reach
   A shot leaves one frame after the command; a projectile does not move on the frame it appears.
   Knockback: 5 u/s per point, with a factor per weapon; splash pushes upward; own splash damage is halved.
-Items (Quake Live duel rules; pickup amounts and ammo caps not yet checked against the game):
+Items (Quake Live duel rules; pickup amounts measured on a real server, ammo caps not yet):
   health +5 (to 200) / +25 / +50 (to 100) / mega +100 (to 200), respawn 35 s; armor shard +5 / 25 / 50 / 100
   (to 200), respawn 25 s; weapons respawn 5 s; ammo 40 s. Armor absorbs 2/3 of damage. Health and armor above
   100 decay 1 per second. Spawn: 125 health, 0 armor.
@@ -87,8 +87,9 @@ ARMOR_ABSORB = 0.66
 AMMO_MAX = np.array([25, 25, 150, 150, 25, 25, 150, 150, 1], np.float32)      # per weapon (gauntlet: none)
 ALWAYS = np.array([False, False, False, True, False, False, False, False, True])   # machine gun + gauntlet
 LOADOUTS = {   # weapons owned at spawn, ammo
-    "full": ((RL, RG, LG), {RL: 10, RG: 5, LG: 60, MG: 100}),
-    "all": ((RL, RG, LG, SG, GL, PG, HMG), {RL: 10, RG: 5, LG: 60, MG: 100, SG: 10, GL: 5, PG: 50, HMG: 50}),
+    # ammo = what one weapon pickup gives in the real game (measured, plugins/itemlab.py)
+    "full": ((RL, RG, LG), {RL: 10, RG: 10, LG: 100, MG: 100}),
+    "all": ((RL, RG, LG, SG, GL, PG, HMG), {RL: 10, RG: 10, LG: 100, MG: 100, SG: 10, GL: 10, PG: 50, HMG: 50}),
     "mg": ((), {MG: 100}),
 }
 ACTION_DIMS = (3, 3, 2, len(TURN), len(PITCH), 2, 1 + NW)   # forward, strafe, jump, turn, pitch, fire, weapon (keep/...)
@@ -101,12 +102,12 @@ ITEM_DEFS = {
     "item_health_large": ("hp", 50, 35, 100, None), "item_health_mega": ("hp", 100, 35, 200, "MH"),
     "item_armor_shard": ("ar", 5, 25, 200, None), "item_armor_jacket": ("ar", 25, 25, 200, "GA"),
     "item_armor_combat": ("ar", 50, 25, 200, "YA"), "item_armor_body": ("ar", 100, 25, 200, "RA"),
-    "weapon_rocketlauncher": ("wp", RL, 5, 5, "RL"), "weapon_railgun": ("wp", RG, 5, 5, "RG"),
+    "weapon_rocketlauncher": ("wp", RL, 5, 10, "RL"), "weapon_railgun": ("wp", RG, 5, 10, "RG"),
     "weapon_lightning": ("wp", LG, 5, 100, "LG"), "weapon_shotgun": ("wp", SG, 5, 10, "SG"),
-    "weapon_grenadelauncher": ("wp", GL, 5, 5, "GL"), "weapon_plasmagun": ("wp", PG, 5, 50, "PG"),
+    "weapon_grenadelauncher": ("wp", GL, 5, 10, "GL"), "weapon_plasmagun": ("wp", PG, 5, 50, "PG"),
     "weapon_hmg": ("wp", HMG, 5, 50, "HMG"),
-    "ammo_rockets": ("am", RL, 40, 5, None), "ammo_slugs": ("am", RG, 40, 5, None), "ammo_lightning": ("am", LG, 40, 60, None),
-    "ammo_bullets": ("am", MG, 40, 50, None), "ammo_shells": ("am", SG, 40, 10, None), "ammo_grenades": ("am", GL, 40, 5, None),
+    "ammo_rockets": ("am", RL, 40, 5, None), "ammo_slugs": ("am", RG, 40, 5, None), "ammo_lightning": ("am", LG, 40, 50, None),
+    "ammo_bullets": ("am", MG, 40, 50, None), "ammo_shells": ("am", SG, 40, 5, None), "ammo_grenades": ("am", GL, 40, 5, None),
     "ammo_cells": ("am", PG, 40, 50, None), "ammo_hmg": ("am", HMG, 40, 50, None),
     "ammo_pack": ("pack", 0, 40, 0, None),
 }
@@ -245,7 +246,9 @@ class DuelEnv:
                 self.has[i, k] = True
             for k, v in ammo.items():
                 self.ammo[i, k] = v
-            self.weapon[i] = owned[0] if owned else MG
+            # spawn holding a random owned weapon, so normal fights are experienced with every weapon
+            # (always starting on rockets, he switched to the shotgun once and never tried the others)
+            self.weapon[i] = int(self.rng.choice(owned)) if owned else MG
             if self.script[i] == 2:                     # the scripted fighter does not run dry
                 self.ammo[i] = np.minimum(AMMO_MAX, self.ammo[i] * 3)
         self.seen_t[i] = 9.0

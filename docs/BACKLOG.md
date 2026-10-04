@@ -39,7 +39,7 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-36 | P2 | open | Run Bobby himself through the live rooms (needs a second controlled bot as the target) | Now only the simulator scores Bobby |
 
 | B-37 | P2 | open | Measure on the real server: weapon switch started during a reload (simulator now waits for the reload, Quake 3 rule) | RESULTS 2026-10-03 23:15 |
-| B-38 | P1 | open | Spawn loadout ammo: shotgun dominates (10 shells vs 60 cells, 5 slugs). Decide amounts, ideally from measured pickups (B-14) | `duel_gru_v3`: shotgun held 88-95%, 84% of frags |
+| B-38 | P1 | done (spawn = one measured pickup per weapon; shotgun use explained in RESULTS 2026-10-04 08:30) | Spawn loadout ammo: shotgun dominates (10 shells vs 60 cells, 5 slugs). Decide amounts, ideally from measured pickups (B-14) | `duel_gru_v3`: shotgun held 88-95%, 84% of frags |
 
 | B-39 | P2 | open | Shaping costs must be sized against the entropy bonus (or lower the entropy weight on the weapon and fire choices) | RESULTS 2026-10-04 morning |
 | B-40 | P2 | open | Far-range aim: he loses sight of targets at 800-1200 units (in view 12-16% of the time) | Test suite card at 231 min |
@@ -57,7 +57,7 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 
 | ID | P | Status | Item | Why / evidence |
 |---|---|---|---|---|
-| B-14 | P2 | open | Measure on the real server: pickup amounts, ammo caps, damage through armor (switch time done: 0.425 s) | Marked unverified in `sim/duel_env.py` |
+| B-14 | P2 | open | Measure on the real server: ammo caps, weapon picked up when already owned, damage through armor, HMG (pickup amounts and switch time done) | Marked unverified in `sim/duel_env.py` |
 | B-19 | P3 | open | Grenade at own feet: lift is 650 u/s in the simulator vs 277 measured | RESULTS 2026-10-03 afternoon |
 | B-20 | P3 | open | Nav builder: running-start jumps (Aerowalk Red Armor reachable) | Owner: on the list |
 | B-21 | P3 | open | Sound model: footsteps, jumps, pickups, weapon fire (now only "moving fast within 800 units") | |
