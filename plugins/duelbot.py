@@ -48,7 +48,7 @@ LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade laun
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["move", c_] for c_ in ("speed", "gaps", "ramps", "slalom")] + \
-    [["fight", p_] for p_ in ("allround", "sniper", "rusher", "tracker")]
+    [["fight", "nightmare"]]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
     [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"]] + \
@@ -217,8 +217,9 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (15 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!room fight <{}> (30 s)".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 29 rooms, about 12 minutes | !room off")
+            player.tell("!room fight nightmare (60 s): the game's Nightmare bot")
+            player.tell("!room fight <{}> (30 s): scripted styles".format("|".join(self.R.PERSONAS)))
+            player.tell("!room suite = all 26 rooms, about 11 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -270,6 +271,9 @@ class duelbot(minqlx.Plugin):
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
                 key = "speed" if a[0] == "speed" else a[1]
                 return dict(kind="speed", lab=True, name="move/" + key, script=0, secs=30, key=key)
+            if a[0] == "fight" and (len(a) < 2 or a[1] == "nightmare"):
+                # the game's own Nightmare bot: our control of Bobby's body is released for the room
+                return dict(kind="ladder", lab=True, name="fight/nightmare", style=0, script=0, secs=60, ai=True)
             if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
                 return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=30,
                             persona=R.PERSONAS.index(a[1]))
@@ -671,6 +675,8 @@ class duelbot(minqlx.Plugin):
                      "rusher": "rockets, always closing in", "tracker": "LG at mid range",
                      "dodger": "dodges, backs off when hurt", "stander": "stands still",
                      "jumper": "runs at you, always jumping", "spammer": "fires blind"}.get(r["name"].split("/")[-1], "")
+            if r.get("ai"):
+                return "All weapons, your choice. Play to win. Opponent: the game's Nightmare bot."
             return "All weapons, your choice. Play to win. Opponent: {} ({}).".format(r["name"].split("/")[-1], style)
         return ""
 
@@ -868,7 +874,17 @@ class duelbot(minqlx.Plugin):
             self.tot = {}
             human.center_print("^2GO: {}".format(r["name"]))
         keys = [0, 0, 0, 0]
-        if bs.health <= 0:
+        if r.get("ai"):                                      # Nightmare fight: the game's AI drives the body
+            if not r.get("placed"):
+                r["placed"] = True
+                self.lab_place(bobby, human)
+                minqlx.clear_bot_input(bobby.id)
+            else:
+                if bs.health > 0:
+                    self.lab_keep(bobby, bpos)
+                if hs.health > 0:
+                    self.lab_keep(human, hpos, human=True)
+        elif bs.health <= 0:
             minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
         elif r["kind"] in ("aim", "choice"):
             if now >= r["rep_end"]:                          # new placement every REP_SECS, fresh ammo
@@ -1028,6 +1044,8 @@ class duelbot(minqlx.Plugin):
             rooms[name] = out
         with open(self.card_path, "w") as fh:
             json.dump(dict(suite=1, run="human", subject="human", minutes=0, rooms=rooms), fh, indent=1)
+        if r.get("ai"):
+            minqlx.set_bot_substeps(self.cast()[0].id, 3)    # our control of the body resumes
         self.room = None
         if not self.queue:
             self.msg("Rooms done: back to the normal duel. Card saved.")
