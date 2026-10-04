@@ -1729,6 +1729,7 @@ static PyMethodDef minqlxMethods[] = {
     {"ran_usercmd", PyMinqlx_RanUsercmd, METH_VARARGS, "Get the last usercmd SV_ClientThink actually ran for a client."},
     {"set_bot_substeps", PyMinqlx_SetBotSubsteps, METH_VARARGS, "Move a fully controlled bot n times per frame (human physics)."},
     {"item_states", PyMinqlx_ItemStates, METH_NOARGS, "List item entities and whether they are spawned."},
+    {"missiles", PyMinqlx_Missiles, METH_NOARGS, "List projectiles in flight (owner, weapon, position, velocity)."},
     {"set_bot_move", PyMinqlx_SetBotMove, METH_VARARGS, "Hybrid control: AI aims/shoots, caller steers movement."},
     {"set_bot_aim", PyMinqlx_SetBotAim, METH_VARARGS, "Hybrid aim override used whenever the AI decides to shoot."},
     {"ai_wants_fire", PyMinqlx_AiWantsFire, METH_VARARGS, "Whether the bot AI pressed attack this frame (line of sight)."},

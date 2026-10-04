@@ -115,6 +115,18 @@ done:
     SV_ClientThink(cl, cmd);
 }
 
+// Called right after the game has run its frame. The bot flag is only dropped while the game moves the
+// player; it must be back before the server sends snapshots, or the server tries to send network messages
+// to a bot (crash: "netchan queue is not properly initialized" once a message needs fragments).
+void Botctl_AfterFrame(void) {
+    if (!g_entities)
+        return;
+    for (int id = 0; id < MAX_CLIENTS; id++) {
+        if (overrides[id].cleared_bot_flag && overrides[id].substeps && g_entities[id].inuse && g_entities[id].client)
+            g_entities[id].r.svFlags |= BOTCTL_SVF_BOT;
+    }
+}
+
 static int valid_client(int id) {
     if (id < 0 || id >= sv_maxclients->integer) {
         PyErr_Format(PyExc_ValueError, "client_id must be a number from 0 to %d.", sv_maxclients->integer - 1);
@@ -253,6 +265,24 @@ PyObject* PyMinqlx_ItemStates(PyObject* self, PyObject* args) {
     PyObject* res = Py_BuildValue("(iO)", level ? level->time : 0, list);
     Py_DECREF(list);
     return res;
+}
+
+// missiles() -> [(entity_num, owner, weapon, x, y, z, vx, vy, vz), ...] for projectiles in flight
+PyObject* PyMinqlx_Missiles(PyObject* self, PyObject* args) {
+    PyObject* list = PyList_New(0);
+    if (!g_entities)
+        return list;
+    for (int i = 0; i < MAX_GENTITIES; i++) {
+        gentity_t* ent = &g_entities[i];
+        if (!ent->inuse || ent->s.eType != ET_MISSILE)
+            continue;
+        float* o = ent->r.currentOrigin;
+        float* v = ent->s.pos.trDelta;
+        PyObject* t = Py_BuildValue("(iiiffffff)", i, ent->r.ownerNum, ent->s.weapon, o[0], o[1], o[2], v[0], v[1], v[2]);
+        PyList_Append(list, t);
+        Py_DECREF(t);
+    }
+    return list;
 }
 
 // set_bot_aim(client_id, pitch, yaw, weapon): hybrid aim override (weapon < 0 turns it off)

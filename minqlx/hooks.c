@@ -176,6 +176,7 @@ void  __cdecl My_G_RunFrame(int time) {
     }
 
     G_RunFrame(time);
+    Botctl_AfterFrame();
 }
 
 char* __cdecl My_ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
