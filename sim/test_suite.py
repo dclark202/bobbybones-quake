@@ -114,6 +114,7 @@ def run_room(E, env, pol, room):
     env.close_p = room["close_p"]
     env.round_len = room["round_len"]
     env.persona_force = room.get("persona")
+    env.inf_ammo = room["name"].startswith("aim/")           # aim rooms measure aim, not ammo discipline
     if "weapon" in room:
         env.aim_weapons = (room["weapon"],)
     if room["kind"][0] == E.NORMAL and not room.get("fighter"):

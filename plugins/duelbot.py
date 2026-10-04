@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("bloodrun", "aerowalk", "campgrounds")
+MAPS = ("bloodrun", "aerowalk", "campgrounds", "bobbylab")
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 2
@@ -43,6 +43,12 @@ STYLES = ("still", "slow", "fast", "jump")
 ROOM_SECS = {"aim": 60, "choice": 40, "move": 90, "solo": 120, "ladder": 120}
 REP_SECS = 10.0
 GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
+# the test map "bobbylab" (tools/make_lab_map.py): fixed rooms, the suite never changes maps
+LAB_WEAPONS = ("mg", "sg", "gl", "rl", "lg", "rg", "pg", "hmg")
+LAB_STYLES = {"still": 1, "walk": 0, "jump": 4, "env": 0}
+LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in ("still", "walk", "jump", "env")] + \
+    [["terrain", k] for k in ("b2r", "pillars", "aero_ra", "ztn_ra")] + [["speed"]] + \
+    [["fight", p_] for p_ in ("allround", "sniper", "rusher", "tracker")]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
     [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"]] + \
@@ -61,7 +67,8 @@ class duelbot(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|campgrounds>")
+        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|campgrounds|bobbylab>")
+        self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 0, usage="<weapon|off>")
         self.add_command("room", self.cmd_room, 0,
@@ -81,6 +88,7 @@ class duelbot(minqlx.Plugin):
         self.next_summary = time.time() + 60
         self.err_t = 0.0
         self.last_abort = 0.0
+        self.reload_check, self.policy_mtime = 0.0, 0.0
         self.sess, self.frames_f, self.sess_opp = None, None, None
         self.tot, self.item_was, self.item_ent = {}, {}, {}
         self.room, self.queue, self.card, self.card_path = None, [], {}, None
@@ -191,6 +199,12 @@ class duelbot(minqlx.Plugin):
         self.msg("Drill: {}".format(self.drill or "off (normal loadout)"))
 
     def cmd_rooms(self, player, msg, channel):
+        if self.lab:
+            player.tell("!room aim <{}> <still|walk|jump|env>  (25 s)".format("|".join(LAB_WEAPONS)))
+            player.tell("!room terrain <{}> (60 s) | speed (60 s)".format("|".join(self.lab["stations"])))
+            player.tell("!room fight <{}> (100 s)".format("|".join(self.R.PERSONAS)))
+            player.tell("!room suite = all 41 rooms, about 29 minutes | !room off")
+            return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
         player.tell("!room ladder [{}] (120 s)".format("|".join(self.R.PERSONAS)))
@@ -204,13 +218,18 @@ class duelbot(minqlx.Plugin):
             self.queue, self.room = [], None
             self.msg("Rooms off: back to the normal duel.")
             return
-        specs = SUITE if a[0] == "suite" else [a]
+        specs = (LAB_SUITE if self.lab else SUITE) if a[0] == "suite" else [a]
         out = []
         for s in specs:
             r = self.room_spec(s)
             if r is None:
                 return minqlx.RET_USAGE
             out.append(r)
+        if a[0] == "suite" and self.lab:
+            self.queue += out
+            self.msg("Test suite on the lab map: {} rooms, about {} minutes. !room off stops it.".format(
+                len(out), round(sum(r["secs"] + 5 for r in out) / 60)))
+            return
         if self.renv.field is None and any(r["kind"] == "move" for r in out):
             player.tell("The movement room needs this map's nav file.")
             out = [r for r in out if r["kind"] != "move"]
@@ -221,6 +240,18 @@ class duelbot(minqlx.Plugin):
 
     def room_spec(self, a):
         R = self.R
+        if self.lab:
+            if a[0] == "aim" and len(a) >= 3 and a[1] in LAB_WEAPONS and a[2] in LAB_STYLES:
+                return dict(kind="aim", lab=True, name="aim/{}/{}".format(a[1], a[2]), weapon=a[1], style=LAB_STYLES[a[2]],
+                            script=1, secs=25, where="env" if a[2] == "env" else "aim")
+            if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
+                return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
+            if a[0] == "speed":
+                return dict(kind="speed", lab=True, name="terrain/speed", script=0, secs=60)
+            if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
+                return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=100,
+                            persona=R.PERSONAS.index(a[1]))
+            return None
         if a[0] == "aim" and len(a) >= 3 and a[1] in R.WEAPONS and a[1] != "g" and a[2] in STYLES:
             band = a[3] if len(a) > 3 and a[3] in BANDS else "mid"
             name = "aim/{}/{}".format(a[1], a[2]) + ("" if band == "mid" else "@" + band)
@@ -248,12 +279,22 @@ class duelbot(minqlx.Plugin):
     def setup(self):
         mapname = (minqlx.get_cvar("mapname") or "").lower()
         bsp = "/tmp/maps/{}.bsp".format(mapname)
-        if not os.path.exists(bsp):
+        if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
             os.makedirs("/tmp/maps", exist_ok=True)
+            data = None
+            for pak in ("/ql/baseq3/pak00.pk3", "/ql/baseq3/{}.pk3".format(mapname)):
+                try:
+                    data = zipfile.ZipFile(pak).read("maps/{}.bsp".format(mapname))
+                    break
+                except (KeyError, OSError):
+                    pass
+            if data is None:
+                raise RuntimeError("no map file for " + mapname)
             with open(bsp, "wb") as f:
-                f.write(zipfile.ZipFile("/ql/baseq3/pak00.pk3").read("maps/{}.bsp".format(mapname)))
+                f.write(data)
         P = np.load(os.path.join(D, "policy.npz"))
         self.P = {k: P[k] for k in P.files}
+        self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
         self.E = E = importlib.import_module(str(self.P["env"]))
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1)
@@ -265,6 +306,10 @@ class duelbot(minqlx.Plugin):
         nav = "/maps/nav_{}_sim.json".format(mapname)
         self.renv = R.DuelEnv(bsp, n_matches=1, seed=2, nav=nav if os.path.exists(nav) else None)
         self.goal_labels = [d[4] for d in self.renv.item_def if d[4] in GOAL_NAMES]
+        self.lab = None
+        if mapname == "bobbylab":
+            with open("/ql/maps-data/bobbylab/rooms.json") as f:
+                self.lab = json.load(f)
         self.rng = np.random.default_rng(int(time.time()))
         self.item_ent = {}
         self.ready = True
@@ -475,6 +520,16 @@ class duelbot(minqlx.Plugin):
                 self.next_check = now + 10
                 minqlx.console_command("map {} duel".format(self.want_map))
             return
+        if now > self.reload_check and self.room is None and not self.queue:
+            self.reload_check = now + 5                      # a newer policy.npz is picked up without a restart
+            try:
+                if os.path.getmtime(os.path.join(D, "policy.npz")) != self.policy_mtime:
+                    self.end_session()
+                    self.setup()
+                    self.msg("^3New BobbyBones loaded^7: {} at {} minutes of training.".format(
+                        self.P["run"], int(self.P["minutes"])))
+            except OSError:
+                pass
         bobby, human, filler = self.cast()
         real_human = human is not None and not is_bot(human)
         if real_human and self.game is not None and self.game.state not in ("warmup", None) \
@@ -580,7 +635,7 @@ class duelbot(minqlx.Plugin):
         if only in (None, "opp"):
             if r["kind"] == "aim":
                 self.give_loadout(human, R, only=r["weapon"])
-            elif r["kind"] == "move":
+            elif r["kind"] in ("move", "terrain", "speed"):
                 human.weapons(reset=True, g=True)
             else:
                 self.give_loadout(human, R, only="")
@@ -615,6 +670,91 @@ class duelbot(minqlx.Plugin):
                     env.mv[:] = 0
                     return True
         return False
+
+    def put(self, p, pos, yaw=None, human=False):
+        p.position(x=float(pos[0]), y=float(pos[1]), z=float(pos[2]) + 2.0)
+        p.velocity(reset=True)
+        if yaw is not None and human:
+            minqlx.set_view(p.id, 0.0, float(yaw))
+        elif yaw is not None:
+            minqlx.set_bot_input(p.id, 0, 0, 0, 0, 0, 0.0, float(yaw))
+
+    def lab_place(self, bobby, human):
+        """fixed placement on the lab map: aim box (about 700 units apart) or the environment box"""
+        r, L = self.room, self.lab
+        if r.get("where") == "aim":
+            a = L["aim"]
+            self.put(human, a["subject"], a["yaw"], human=True)
+            self.put(bobby, a["target"], float(self.rng.uniform(-180, 180)))
+            r["home"], r["zone"] = a["target"], a["zone"]
+        else:
+            e = L["env"]
+            spots = [np.array([x, y, e["z"]], np.float32) for x, y in e["spots"]]
+            i = int(self.rng.integers(len(spots)))
+            d = [float(np.linalg.norm(q - spots[i])) for q in spots]
+            cand = [k for k, v in enumerate(d) if 400 <= v <= 1300] or [int(np.argmax(d))]
+            j = int(self.rng.choice(cand))
+            face = math.degrees(math.atan2(spots[i][1] - spots[j][1], spots[i][0] - spots[j][0]))
+            self.put(bobby, spots[i], float(self.rng.uniform(-180, 180)))
+            self.put(human, spots[j], face, human=True)
+            b = e["bounds"]
+            r["home"], r["zone"] = [float(v) for v in spots[i]], [b[0] + 48, b[1] + 48, b[2] - 48, b[3] - 48]
+        self.renv.mv[:] = 0
+
+    def lab_keep(self, p, pos, human=False):
+        """fights: a player who respawned elsewhere on the lab map is moved back into the environment box"""
+        e = self.lab["env"]
+        b = e["bounds"]
+        if not (b[0] <= pos[0] <= b[2] and b[1] <= pos[1] <= b[3]):
+            x, y = e["spots"][int(self.rng.integers(len(e["spots"])))]
+            self.put(p, (x, y, e["z"]), 0.0, human=human)
+
+    def lab_terrain(self, now, human, hpos, hvel, hground):
+        """trick-jump stations and the speed straight: put the subject at the start, time each attempt"""
+        r, m = self.room, self.room["m"]
+        sp = math.hypot(hvel[0], hvel[1])
+        if r["kind"] == "speed":
+            st = self.lab["speed"]
+            if r.get("leg") is None:
+                self.put(human, st["start"], st["yaw"], human=True)
+                r["leg"], r["t_run"] = 0, None
+                return
+            r["top"] = max(r.get("top", 0.0), sp)
+            if r["t_run"] is None and sp > 50:
+                r["t_run"] = now
+            if r["leg"] == 0 and hpos[0] > st["far"][0] - 40:
+                r["leg"] = 1
+            elif r["leg"] == 1 and hpos[0] < st["start"][0] + 60:
+                t = now - (r["t_run"] or now)
+                m["laps"] = m.get("laps", 0) + 1
+                m["best"] = min(m.get("best", 1e9), t)
+                human.tell("lap {:.2f} s".format(t))
+                r["leg"], r["t_run"] = 0, None
+            return
+        st = self.lab["stations"][r["key"]]
+        via = st.get("via") or [st["goal"]]
+        if r.get("leg") is None or r.get("reset"):
+            self.put(human, st["start"], st["yaw"], human=True)
+            r["leg"], r["t_run"], r["reset"] = 0, None, False
+            return
+        if r["t_run"] is None:
+            if math.hypot(hpos[0] - st["start"][0], hpos[1] - st["start"][1]) > 48:
+                r["t_run"] = now
+                m["attempts"] = m.get("attempts", 0) + 1
+            return
+        g = via[r["leg"]]
+        gz = g[2] if len(g) > 2 else st["goal"][2]
+        if hground and math.hypot(hpos[0] - g[0], hpos[1] - g[1]) < st["goal_r"] and abs(hpos[2] - gz) < st["goal_dz"] + 24:
+            r["leg"] += 1
+            if r["leg"] >= len(via):
+                t = now - r["t_run"]
+                m["successes"] = m.get("successes", 0) + 1
+                m["best"] = min(m.get("best", 1e9), t)
+                m["speed_at_goal"] = max(m.get("speed_at_goal", 0.0), sp)
+                human.tell("^2made it^7 in {:.2f} s".format(t))
+                r["reset"] = True
+        elif hpos[2] < min(st["start"][2], st["goal"][2]) - 150 or now - r["t_run"] > 15:
+            r["reset"] = True
 
     def new_goal(self, human, pos):
         env, r = self.renv, self.room
@@ -658,7 +798,7 @@ class duelbot(minqlx.Plugin):
                 minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
             else:
                 minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
-                if bs.health < 150 and r["kind"] in ("aim", "choice", "move", "solo"):
+                if bs.health < 150 and r["kind"] in ("aim", "choice", "move", "solo", "terrain", "speed"):
                     bobby.health = 200                       # nobody kills the target between rooms
             if now < r["t0"]:
                 return
@@ -673,18 +813,35 @@ class duelbot(minqlx.Plugin):
             minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
         elif r["kind"] in ("aim", "choice"):
             if now >= r["rep_end"]:                          # new placement every REP_SECS, fresh ammo
-                r["rep_end"] = now + REP_SECS
-                self.place_pair(bobby, human)
+                r["rep_end"] = now + (1e9 if r.get("lab") else REP_SECS)
+                if r.get("lab"):
+                    self.lab_place(bobby, human)             # lab rooms: one fixed placement for the whole room
+                else:
+                    self.place_pair(bobby, human)
                 self.room_loadout(bobby, human, only="opp")
                 env.round_t[0] = 0.0
                 self.tot = {}
+            elif r.get("lab") and not (r["zone"][0] <= bpos[0] <= r["zone"][2] and r["zone"][1] <= bpos[1] <= r["zone"][3]):
+                self.put(bobby, r["home"], byaw)             # the target stays in its zone
             else:
                 env.round_t[0] += R.DT
                 a = env._script_actions(np.array([1]))[0]
                 keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
         elif r["kind"] == "ladder":
+            if r.get("lab"):
+                if not r.get("placed"):
+                    r["placed"] = True
+                    self.lab_place(bobby, human)
+                else:
+                    self.lab_keep(bobby, bpos)
+                    if hs.health > 0:
+                        self.lab_keep(human, hpos, human=True)
             a = env._script_actions(np.array([1]))[0]
             keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
+        elif r["kind"] in ("terrain", "speed"):
+            minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
+            if hs.health > 0:
+                self.lab_terrain(now, human, hpos, hvel, hground)
         else:
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
         dmg, los = self.log_frame(now, env, 1, bobby, human, bs, hs, keys, "room:" + r["name"])
@@ -709,6 +866,9 @@ class duelbot(minqlx.Plugin):
         if r["ammo"] is not None:
             m["shots"] += sum(max(0, r["ammo"][w] - ammo[w]) for w in ammo)
         r["ammo"] = ammo
+        if r["kind"] == "aim" and ammo.get(r["weapon"], 0) < 0.5 * float(R.AMMO_MAX[R.WEAPONS.index(r["weapon"])]):
+            human.ammo(**{r["weapon"]: int(R.AMMO_MAX[R.WEAPONS.index(r["weapon"])])})   # aim rooms: ammo never runs out
+            r["ammo"] = None
         if env.visible[0]:
             m["aim_frames"] += 1
             m["aim_err"] += self.aim_err(env, 0)
@@ -759,6 +919,14 @@ class duelbot(minqlx.Plugin):
                        kills_per_min=m["dmg"] / 125.0 / mins)
         elif r["kind"] == "move":
             res = dict(arrivals_per_min=m["arrive"] / mins, speed=m["speed"] / f, fast_air=m["fast"] / f)
+        elif r["kind"] == "terrain":
+            att = max(m.get("attempts", 0), m.get("successes", 0))
+            res = dict(successes=m.get("successes", 0), attempts=att,
+                       success_rate=m.get("successes", 0) / max(1, att),
+                       best_time=m["best"] if "best" in m else -1.0, speed_at_goal=m.get("speed_at_goal", 0.0))
+        elif r["kind"] == "speed":
+            res = dict(laps=m.get("laps", 0), best_time=m["best"] if "best" in m else -1.0, top_speed=r.get("top", 0.0),
+                       mean_speed=m["speed"] / f)
         elif r["kind"] == "solo":
             p = m["picks"]
             res = dict(mega_per_min=p.get("mega", 0) / mins, red_armor_per_min=p.get("red_armor", 0) / mins,

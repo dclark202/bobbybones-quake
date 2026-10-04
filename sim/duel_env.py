@@ -869,6 +869,8 @@ class DuelEnv:
         self.cool = np.where(shoot, W_REFIRE[self.weapon], self.cool)
         self.fire_cd = np.where(shoot, W_REFIRE[self.weapon], self.fire_cd)
         use = shoot & (self.weapon != G)                    # ammo is finite in every round kind
+        if getattr(self, "inf_ammo", False):               # test-suite aim rooms: ammo never runs out
+            use = use & False
         self.ammo[ar[use], self.weapon[use]] -= 1
         self.fire_q, self.fire_w = shoot, self.weapon.copy()
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
