@@ -27,11 +27,12 @@ ROOT = os.path.dirname(HERE)
 DT_MIN = 0.025 / 60.0
 
 
-def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p):
+def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
+           teacher):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
-    env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout)
+    env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout, teacher=teacher)
     env.item_reward = item_reward
     env.drill_p = drill_p
     env.react_frames = react_frames
@@ -39,7 +40,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.bot_p = bot_p
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
-    remote.send(env.observe())
+    env._teach_update()
+    remote.send((env.observe(), env.teach.copy()))
     last = {k: np.copy(v) for k, v in env.stats.items()}
     while True:
         cmd, data = remote.recv()
@@ -57,7 +59,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % 2 == 1)
             delta["match_of_kill"] = [e["killer"] // 2 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             delta["even_kill"] = [e["killer"] % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
-            remote.send((obs, rew, done, delta, env.script > 0))
+            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy()))
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward = data
             remote.send(True)
@@ -82,9 +84,12 @@ def main():
     ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
-    ap.add_argument("--kind-p", default="0.45,0.25,0.15,0.15",
+    ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
+    ap.add_argument("--teach", type=float, default=0.5, help="weight of the teacher loss at the start of this run")
+    ap.add_argument("--teach-minutes", type=float, default=240, help="the teacher loss fades to zero over this time")
+    ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
                     help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
-    ap.add_argument("--bot-p", type=float, default=0.2, help="share of normal rounds against the scripted fighter")
+    ap.add_argument("--bot-p", type=float, default=0.5, help="share of normal rounds against the scripted fighter")
     ap.add_argument("--react-ms", type=float, default=25, help="reaction delay on what is known about the opponent")
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
@@ -92,7 +97,7 @@ def main():
     import torch
     import torch.nn as nn
     sys.path.insert(0, HERE)
-    from duel_env import ACTION_DIMS, OBS_DIM, WEAPONS
+    from duel_env import ACTION_DIMS, OBS_DIM, PERSONAS, WEAPONS
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if dev.type == "cpu":
         torch.set_num_threads(6)
@@ -106,9 +111,13 @@ def main():
         mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches, 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
                                         a.item_reward, a.drill_p, a.drill_weapons, round(a.react_ms / 25),
-                                        tuple(float(x) for x in a.kind_p.split(",")), a.bot_p), daemon=True).start()
+                                        tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
+                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None),
+                   daemon=True).start()
         pipes.append(p_main)
-    obs = np.concatenate([p.recv() for p in pipes])
+    first = [p.recv() for p in pipes]
+    obs = np.concatenate([f[0] for f in first])
+    teach = np.concatenate([f[1] for f in first])
     N = len(obs)
     H = a.hidden
 
@@ -197,6 +206,7 @@ def main():
         b_rew = torch.zeros(T, N, device=dev)
         b_done = torch.zeros(T, N, device=dev)
         b_w = torch.zeros(T, N, device=dev)
+        b_teach = torch.zeros(T, N, 4, dtype=torch.long, device=dev)
         h0 = h.clone()
         raw, agg = [], {}
         lk = [0, 0]                                                      # league matches: learner kills, snapshot kills
@@ -214,6 +224,7 @@ def main():
                     act = torch.where(snap_players[:, None], act_o, act)
             b_obs[t], b_act[t], b_logp[t], b_val[t] = x, act, logp, val
             b_w[t] = learn * (1.0 - scr)
+            b_teach[t] = torch.from_numpy(teach).to(dev)
             an = act.cpu().numpy()
             for p, c in zip(pipes, np.array_split(an, len(pipes))):
                 p.send(("step", c))
@@ -223,6 +234,7 @@ def main():
             d = torch.from_numpy(np.concatenate([r[2] for r in res]).astype(np.float32)).to(dev)
             b_done[t] = d
             scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
+            teach = np.concatenate([r[5] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
             for r in res:
@@ -253,6 +265,8 @@ def main():
         for g in opt.param_groups:
             g["lr"] = a.lr * (1.0 - 0.9 * frac)
         n_mb = 8
+        kick = a.teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.teach_minutes)
+        kick_l = torch.zeros(())
         for epoch in range(3):
             perm = torch.randperm(N, device=dev)
             for chunk in perm.chunk(n_mb):                               # whole sequences per player
@@ -278,6 +292,12 @@ def main():
                 vl = (0.5 * (v - ret[:, chunk]).pow(2) * wgt).sum() / wsum
                 en = (ent * wgt).sum() / wsum
                 loss = pg + 0.5 * vl - ent_coef * en
+                if kick > 0:                                             # imitate the movement teacher in movement rounds
+                    tl = b_teach[:, chunk]
+                    tm = (tl[..., 0] >= 0).float() * wgt
+                    lt = sum(ds[j].log_prob(tl[..., j].clamp(min=0)) for j in range(4))
+                    kick_l = -(lt * tm).sum() / tm.sum().clamp(min=1.0)
+                    loss = loss + kick * kick_l
                 opt.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
@@ -305,6 +325,10 @@ def main():
                              fast_air=round(float(agg["move_fast"] / max(1, agg["move_frames"])), 3)),
                    vs_bot=dict(frags_per_min=round(float(agg["frags_vs_bot"] / max(1, agg["bot_frames"]) * 2400), 2),
                                deaths_per_min=round(float(agg["bot_frags"] / max(1, agg["bot_frames"]) * 2400), 2)),
+                   vs_persona={n_: [round(float(agg["vs_persona"][0, j] / max(1.0, agg["vs_persona"][2, j]) * 2400), 2),
+                                    round(float(agg["vs_persona"][1, j] / max(1.0, agg["vs_persona"][2, j]) * 2400), 2)]
+                               for j, n_ in enumerate(PERSONAS)},
+                   teach=[round(kick, 3), round(float(kick_l), 3)],
                    target_kills_per_min=round(float(agg["target_kills"] / max(1, agg["aim_round_frames"]) * 2400), 2),
                    visible=round(agg["visible"] / max(1, agg["players"]), 3),
                    air_fast=round(agg["air_fast"] / max(1, agg["players"]), 3),

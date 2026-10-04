@@ -34,8 +34,8 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | ID | P | Status | Item | Why / evidence |
 |---|---|---|---|---|
 | B-42 | P1 | open | Full-length duels with clock and score as the main round type, so speed, items and position pay through winning | Short rounds reward only aim; B-12 |
-| B-43 | P1 | open | Movement teacher: copy the strafe-jumping movement policy's actions in movement rounds (extra loss), plus longer item circuits and a bonus for arriving with speed | Movement rounds sit at 302 u/s (run speed); the movement-only policy strafe-jumps |
-| B-44 | P1 | open | Opponents that punish bad choices: scripted styles (keeps range with rail, rushes with rockets, LG tracker, retreats when hurt, dodges) in the league and the test rooms | Every weapon gives the same kills per minute against the current target |
+| B-43 | P1 | built, for the next run | Movement teacher: copy the strafe-jumping movement policy's actions in movement rounds (extra loss), plus longer item circuits and a bonus for arriving with speed | Movement rounds sit at 302 u/s (run speed); the movement-only policy strafe-jumps |
+| B-44 | P1 | built, for the next run (8 styles: allround, sniper, rusher, tracker, dodger, and the bad ones stander, jumper, spammer) | Opponents that punish bad choices: scripted styles (keeps range with rail, rushes with rockets, LG tracker, retreats when hurt, dodges) in the league and the test rooms | Every weapon gives the same kills per minute against the current target |
 | B-45 | P2 | open | Pro-demo position prior: where pros stand and which weapon they hold by distance, from the 374 parsed demos (positions need no key inference); use as a benchmark first, as a small reward only if needed | B-30, B-09 |
 | B-46 | P2 | open | Suite rooms for these: route times against a reference, speed in normal rounds, share of fights from higher ground, big-item share over a full duel, weapon by distance against opponents that fight back | B-35 |
 

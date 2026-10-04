@@ -10,6 +10,29 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-04 (09:10): built for the next run: movement teacher and opponent styles
+
+Builds B-43, B-44 (owner: "2 and 3, different types of opponent behavior, good or bad, and movement drills
+for building and maintaining speed").
+
+- **Movement teacher.** In movement rounds the three-map movement policy (`multimap_v1`, which strafe-jumps)
+  is asked what it would do from the same spot, and its (sampled) keys and turn are offered as labels; the
+  trainer adds an imitation loss that fades out (`--teach 0.5 --teach-minutes 240`). Check: players that
+  simply follow the labels in the duel simulator move at 390 u/s with 41% fast-air (Bobby alone: 302 u/s, 8%).
+  A fresh network with the loss reached 311 u/s and 26% fast-air in 75 seconds of training.
+- **Movement drills.** Goals 3-20 s away (were 1.5-12), 40 s rounds so several goals chain, and the arrival
+  bonus grows with arrival speed. Default time share of movement rounds 35% (was 15%).
+- **Opponent styles** for the scripted fighter, half of normal rounds: allround, sniper (rail, keeps
+  700-1200 units), rusher (rockets at the feet, always closing), tracker (LG at 250-550), dodger (fast
+  direction changes, backs off when hurt), and deliberately bad ones: stander, jumper (straight line,
+  always jumping), spammer (fires blind, random weapons). Results per style are logged (`vs_persona`), and the
+  test suite and the live rooms have one ladder room per style (`!room ladder sniper`).
+- **Did not work:** building the teacher with its own simulator world corrupted memory (worlds share buffers
+  sized by player count); it now reuses the duel world. Importing torch inside a worker crashed numpy; the
+  teacher loads plain numpy weights.
+
+---
+
 ## 2026-10-04 (08:30): pickups measured, spawn ammo raised, and why he holds the shotgun
 
 Settles B-38 (owner: spawn with normal pickup ammo) and most of B-14.

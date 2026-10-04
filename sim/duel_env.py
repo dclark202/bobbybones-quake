@@ -74,6 +74,14 @@ STYLES = ("random", "still", "slow", "fast", "jump")   # scripted target movemen
 DRILL_AMMO = np.array([15, 10, 100, 100, 15, 10, 80, 100, 1], np.float32)   # finite ammo in drill and aim rounds
 MOVE_SCALE, MOVE_ARRIVE = 0.2, 0.3                     # movement rounds: reward per second gained toward the goal, arrival
 N_GOAL = 7                                             # goal inputs: on, where (3), next waypoint (3)
+# scripted fighter styles, good and bad. Columns: turn gain, aim noise (deg), backs off below this distance,
+# advances above this distance, fixed weapon (-1 = rockets close / lightning mid / rail far, -2 = random)
+PERSONAS = ("allround", "sniper", "rusher", "tracker", "dodger", "stander", "jumper", "spammer")
+P_GAIN = np.array([0.4, 0.4, 0.4, 0.45, 0.4, 0.15, 0.3, 0.3], np.float32)
+P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5], np.float32)
+P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200], np.float32)
+P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500], np.float32)
+P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2], np.int64)
 REACT_FRAMES = 1                                       # default 25 ms (one frame): what a player knows about the opponent lags.
                                                        # Was 6 (150 ms) up to duel_gru_v2; per run: env.react_frames / --react-ms
 MOUSE_SMOOTH = 0.5                                     # view velocity inertia per frame
@@ -120,7 +128,7 @@ def _phi(x):
 
 class DuelEnv:
     def __init__(self, bsp, n_matches=256, seed=0, substeps=(8, 8, 9), dmg_reward=0.004, nav=None, close_p=0.0,
-                 loadout="full", drill_weapons=(RL, RG, LG)):
+                 loadout="full", drill_weapons=(RL, RG, LG), teacher=None):
         """close_p: chance a respawn lands 300-700 units from the opponent with line of sight (curriculum).
         loadout: weapons at spawn ("full" = RL/RG/LG, "all" = every weapon, "mg" = machine gun + gauntlet only).
         drill_p (attribute): share of rounds where both players have exactly one weapon from drill_weapons."""
@@ -152,6 +160,15 @@ class DuelEnv:
         self.sc_dir = np.ones(2 * n_matches, np.int64)
         self.sc_fwd = np.zeros(2 * n_matches, np.int64)
         self.sc_jump = np.zeros(2 * n_matches, bool)
+        self.sc_persona = np.zeros(2 * n_matches, np.int64)   # scripted fighter style (PERSONAS)
+        self.sc_wpn = np.zeros(2 * n_matches, np.int64)
+        self.persona_p = np.full(len(PERSONAS), 1.0 / len(PERSONAS))
+        self.persona_force = None                       # test rooms: always this style
+        self.move_len = 40.0                            # seconds per movement round (several goals in a row)
+        # movement teacher: a movement-only policy (sim/train_move.py) whose actions are offered as labels in
+        # movement rounds (self.teach: forward, strafe, jump, turn bin; -1 = no label)
+        self.teacher = None
+        self.teach = np.full((2 * n_matches, 4), -1, np.int64)
         self.sc_style = 0                               # target movement: 0 random (training), else STYLES index
         self.close_band = (300.0, 700.0)                # distance of "close" spawns (test rooms set their own)
         self.fixed_kind = None                          # test rooms: (kind, scripted type for the odd player)
@@ -181,6 +198,24 @@ class DuelEnv:
             if goals:
                 from movement_env import NavField
                 self.field = NavField(nav, goals, world=self.w)
+            if goals and teacher and os.path.exists(teacher):
+                import movement_env as M
+                ck = np.load(teacher)                           # sim/export_policy.py output (no torch in workers)
+                self.teacher_w = tuple(ck[k] for k in ("w0", "b0", "w1", "b1", "wp", "bp", "obs_mean", "obs_var"))
+                # the teacher's observation code, on this world (a second World would resize shared buffers)
+                T = self.teacher = M.MoveEnv.__new__(M.MoveEnv)
+                T.w, T.obs_noise, T.rng = self.w, 0.0, self.rng
+                tg = [e["origin"] for e in self.w.entities
+                      if e.get("classname", "").startswith(M.GOAL_CLASSES) and "origin" in e]
+                T.field = M.NavField(nav, tg, world=self.w)
+                T.goal_pos = T.field.goals
+                ta = np.linspace(0, 2 * np.pi, M.N_WALL, endpoint=False)
+                T.wall_dirs = np.stack([np.cos(ta), np.sin(ta), np.zeros_like(ta)], 1).astype(np.float32)
+                tf = np.linspace(0, 2 * np.pi, M.N_FLOOR, endpoint=False)
+                T.floor_off = np.stack([np.cos(tf), np.sin(tf)], 1).astype(np.float32) * 96.0
+                d = np.linalg.norm(self.teacher.goal_pos[None, :, :] - self.field.goals[:, None, :], axis=2)
+                self.t_goal = d.argmin(1).astype(np.int32)        # our goal index -> the teacher's goal index
+                self.t_turn = np.abs(TURN[None, :] - M.TURN_BINS[:, None]).argmin(1)   # teacher turn bin -> ours
         n = self.n
         self.yaw = np.zeros(n, np.float32)
         self.pitch = np.zeros(n, np.float32)
@@ -209,7 +244,8 @@ class DuelEnv:
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
-                          w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0)
+                          w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0,
+                          vs_persona=np.zeros((3, len(PERSONAS))))      # rows: frags against, deaths to, frames
         for wn in WEAPONS:
             self.stats[wn + "_shots"] = 0               # shots, ticks or pellets fired
             self.stats[wn + "_shots_vis"] = 0           # ... while the opponent was in view
@@ -261,15 +297,41 @@ class DuelEnv:
         pos = self.w.state()[i, :3]
         node, _ = f.locate(pos[None])
         T = f.T[:, node[0]]
-        ok = np.nonzero((T > 1.5) & (T < 12.0))[0]
+        ok = np.nonzero((T > 3.0) & (T < 20.0))[0]            # long trips: speed has to be built and kept
         if not len(ok):
-            ok = np.nonzero(T < 1e8)[0]
+            ok = np.nonzero((T > 1.0) & (T < 1e8))[0]
         if not len(ok):
             self.goal[i] = -1
             return
         g = int(self.rng.choice(ok))
         self.goal[i] = g
         self.phi[i] = f.potential(np.array([g]), pos[None])[0][0]
+
+    def _teach_update(self):
+        """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
+        self.teach[:] = -1
+        if self.teacher is None:
+            return
+        mi = np.nonzero((self.goal >= 0) & (self.script == 0))[0]
+        if not len(mi):
+            return
+        T, s = self.teacher, self.state
+        T.n, T.state, T.yaw = len(mi), s[mi], self.yaw[mi]
+        T.goal = self.t_goal[self.goal[mi]]
+        T.phi = T.field.potential(T.goal, s[mi, :3])[0]
+        w0, b0, w1, b1, wp, bp, mean, var = self.teacher_w
+        x = np.clip((T.observe() - mean) / np.sqrt(var + 1e-8), -10, 10).astype(np.float32)
+        h = np.tanh(np.tanh(x @ w0.T + b0) @ w1.T + b1)
+        lg = h @ wp.T + bp
+        out, j = [], 0
+        for d in (3, 3, 2, 9):
+            l = lg[:, j:j + d]
+            pr = np.exp(l - l.max(1, keepdims=True))
+            pr /= pr.sum(1, keepdims=True)
+            out.append((pr.cumsum(1) > self.rng.random((len(mi), 1))).argmax(1))
+            j += d
+        out[3] = self.t_turn[out[3]]
+        self.teach[mi] = np.stack(out, 1)
 
     def _spawn(self, i, avoid, close=None):
         p_close = self.close_p if close is None else float(close)
@@ -509,7 +571,9 @@ class DuelEnv:
         self.sc_t[idx] -= DT
         ch = idx[self.sc_t[idx] <= 0]
         if len(ch):
-            self.sc_t[ch] = rng.uniform(0.3, 1.2, len(ch))
+            self.sc_t[ch] = np.where(self.sc_persona[ch] == 4, rng.uniform(0.15, 0.5, len(ch)),
+                                     rng.uniform(0.3, 1.2, len(ch)))          # the dodger changes direction fast
+            self.sc_wpn[ch] = rng.choice([RL, RG, LG, SG, PG, MG], len(ch))
             self.sc_dir[ch] = rng.choice([-1, -1, 1, 1, 0], len(ch))
             self.sc_fwd[ch] = rng.choice([-1, 0, 0, 1], len(ch))
             self.sc_jump[ch] = rng.random(len(ch)) < 0.2
@@ -538,27 +602,39 @@ class DuelEnv:
         score = self.walls[idx] + 0.3 * np.cos(np.radians(ang))[None, :] + rng.uniform(0, 0.1, (k, N_WALL))
         score[:, np.abs(ang) > 100] = -1.0
         wander = ang[score.argmax(1)]
+        per = self.sc_persona[idx]
+        rush = fighter & (per == 2) & (dist < 400)             # the rusher aims rockets at the feet
+        ep = np.where(rush, -np.degrees(np.arctan2(to[:, 2] - 24.0, np.hypot(to[:, 0], to[:, 1]) + 1e-6))
+                      - self.pitch[idx], ep)
         chase = fighter & (self.seen_t[idx] < 2.0)
-        turn = np.where(vis | chase, np.clip(ey * 0.4, -10, 10), np.clip(wander * 0.15, -6, 6))
-        turn = np.where(fighter, turn + rng.normal(0, 0.3, k), np.clip(wander * 0.1, -3, 3))
+        turn = np.where(vis | chase, np.clip(ey * P_GAIN[per], -10, 10), np.clip(wander * 0.15, -6, 6))
+        turn = np.where(fighter, turn + rng.normal(0, 1.0, k) * P_NOISE[per], np.clip(wander * 0.1, -3, 3))
         if self.sc_style:
             turn = np.where(fighter, turn, 0.0)             # test-room targets keep their facing (straight strafes)
         dpit = np.where(vis, np.clip(ep * 0.4, -6, 6), -self.pitch[idx] * 0.2)
         out = np.zeros((k, 7), np.int64)
-        fwd = np.where(fighter, np.where(vis, np.where(dist > 500, 1, np.where(dist < 200, -1, self.sc_fwd[idx])), 1),
-                       self.sc_fwd[idx])
-        out[:, 0] = fwd + 1
-        out[:, 1] = self.sc_dir[idx] + 1
-        out[:, 2] = self.sc_jump[idx]
+        ffwd = np.where(vis, np.where(dist > P_FAR[per], 1, np.where(dist < P_NEAR[per], -1, self.sc_fwd[idx])), 1)
+        hurt = (per == 4) & (self.hp[idx] + self.armor[idx] < 80)
+        ffwd = np.where(hurt & vis, -1, ffwd)                  # the dodger backs off when hurt
+        ffwd = np.where(per == 5, 0, ffwd)                     # the stander does not move
+        fside = np.where((per == 5) | (per == 6), 0, self.sc_dir[idx])
+        fjump = np.where(per == 6, True, np.where(per == 5, False, self.sc_jump[idx]))
+        out[:, 0] = np.where(fighter, ffwd, self.sc_fwd[idx]) + 1
+        out[:, 1] = np.where(fighter, fside, self.sc_dir[idx]) + 1
+        out[:, 2] = np.where(fighter, fjump, self.sc_jump[idx])
         out[:, 3] = np.abs(TURN[None, :] - turn[:, None]).argmin(1)
         out[:, 4] = np.abs(PITCH[None, :] - dpit[:, None]).argmin(1)
         am = self.ammo[idx]
         want = np.where((dist < 350) & (am[:, RL] > 0), RL, np.where((dist < 800) & (am[:, LG] > 0), LG,
                         np.where(am[:, RG] > 0, RG, np.where(am[:, MG] > 0, MG, G))))
+        fixed = P_WEAPON[per]
+        fx = np.maximum(fixed, 0)
+        want = np.where((fixed >= 0) & (am[np.arange(k), fx] > 0), fx, want)
+        want = np.where(fixed == -2, self.sc_wpn[idx], want)
         cur = self.weapon[idx]
         out[:, 6] = np.where(fighter & (want != cur) & self.has[idx, want], want + 1, 0)
         tol = np.where(cur == RL, 6.0, 2.5)
-        out[:, 5] = vis & (np.abs(ey) < tol) & (np.abs(ep) < 4.0)
+        out[:, 5] = (vis & (np.abs(ey) < tol) & (np.abs(ep) < 4.0)) | (fighter & (per == 7))   # the spammer always fires
         return out
 
     # ---------------------------------------------------------------- step
@@ -612,6 +688,7 @@ class DuelEnv:
         self.stats["blind_frames"] += int((blind & fight).sum())
         self.stats["play_frames"] += int(fight.sum())
         self.stats["bot_frames"] += int((self.script == 2).sum())
+        np.add.at(self.stats["vs_persona"][2], self.sc_persona[self.script == 2], 1)
         self.stats["aim_round_frames"] += int((human & (pkind == AIM)).sum())
         # movement rounds: reward = seconds gained toward the goal (nav-graph time), like movement_env
         mi = np.nonzero(self.goal >= 0)[0]
@@ -625,8 +702,8 @@ class DuelEnv:
             self.stats["move_frames"] += len(mi)
             self.stats["move_speed"] += float(sp.sum())
             self.stats["move_fast"] += int(((sp > 330) & (s[mi, 6] < 0.5)).sum())
-            for i in mi[arrived]:
-                reward[i] += MOVE_ARRIVE
+            for i, v in zip(mi[arrived], sp[arrived]):
+                reward[i] += MOVE_ARRIVE * (0.5 + min(1.5, float(v) / 320.0))   # arriving fast is worth more
                 self.stats["move_arrive"] += 1
                 self._new_goal(int(i))
         self.stats["jerk"] += float(jerk.sum())
@@ -806,10 +883,12 @@ class DuelEnv:
                 self.stats[WEAPONS[kill_w.get(v, 0)] + "_frags"] += int(self.script[k] == 0)
                 if self.script[v] == 2:
                     self.stats["frags_vs_bot"] += 1
+                    self.stats["vs_persona"][0, self.sc_persona[v]] += 1
                 elif self.script[v] == 1:
                     self.stats["target_kills"] += 1
                 if self.script[k] == 2:
                     self.stats["bot_frags"] += 1
+                    self.stats["vs_persona"][1, self.sc_persona[k]] += 1
             else:
                 self.stats["suicides"] += 1
             events.append(dict(victim=int(v), killer=int(k), weapon=int(kill_w.get(v, -1))))
@@ -829,7 +908,7 @@ class DuelEnv:
                     self._new_goal(int(v))
         # short rounds (curriculum): restart both players near each other every ~round_len seconds
         self.round_t += DT
-        klen = np.where(self.kind == NORMAL, self.round_len, np.where(self.kind == MOVE, 20.0, 15.0))
+        klen = np.where(self.kind == NORMAL, self.round_len, np.where(self.kind == MOVE, self.move_len, 15.0))
         if self.fixed_kind is not None:
             klen = np.full(self.M, self.round_len)
         ends = np.nonzero(self.round_t > klen * self.rng.uniform(0.67, 1.33, self.M))[0]
@@ -838,7 +917,7 @@ class DuelEnv:
             a_, b_ = 2 * m, 2 * m + 1
             # kind_p is the share of playing TIME per kind: normal rounds last much longer than the others, so
             # the chance of starting each kind is weighted by 1 / its length
-            wts = np.asarray(self.kind_p, np.float64) / np.array([self.round_len, 15.0, 15.0, 20.0])
+            wts = np.asarray(self.kind_p, np.float64) / np.array([self.round_len, 15.0, 15.0, self.move_len])
             kd = int(self.rng.choice(4, p=wts / wts.sum()))
             if self.rng.random() < self.drill_p:            # older option: share of one-weapon rounds
                 kd = DRILL
@@ -863,6 +942,9 @@ class DuelEnv:
                 self.script[b_] = 1
             elif kd == NORMAL and self.rng.random() < self.bot_p:
                 self.script[b_] = 2
+            if self.script[b_] == 2:
+                self.sc_persona[b_] = self.persona_force if self.persona_force is not None else \
+                    int(self.rng.choice(len(PERSONAS), p=self.persona_p))
             done[a_] = done[b_] = True
             if kd == AIM or (self.fixed_kind is not None and kd == NORMAL):
                 # the target first, then the shooter close by, facing it
@@ -909,5 +991,6 @@ class DuelEnv:
             self.known[heard] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
         self.seen_t = np.where(vis | heard, 0.0, self.seen_t + DT)
+        self._teach_update()
         info = dict(events=events)
         return self.observe(), reward.astype(np.float32), done, info

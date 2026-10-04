@@ -11,7 +11,8 @@ Rooms (the subject is the even player of every match; the odd player is scripted
   choice/close|mid|far       every weapon in hand, fast target at that distance: which weapon is held
   move                       no opponent: run to mega / red / yellow armor (arrivals, speed)
   solo                       alone with weapons for two minutes: items collected, firing at nothing
-  ladder/fighter             duel against the scripted fighter
+  ladder/<style>             duel against each scripted fighter style (allround, sniper, rusher, tracker, dodger,
+                             and the deliberately bad ones: stander, jumper, spammer)
 Metrics are per subject. Cards are saved as JSON + markdown in data/sim_runs/<run>/suite/.
 The same room names are used by the play-test server (plugins/duelbot.py, !room) for a human baseline.
 """
@@ -97,8 +98,11 @@ def rooms(E, quick=False):
                         close_p=1.0, bin=("close", "mid", "far").index(tag)))
     out.append(dict(name="move", kind=(E.MOVE, 0), secs=30 if quick else 90, round_len=30.0, close_p=0.0))
     out.append(dict(name="solo", kind=(E.SOLO, 1), style=1, secs=40 if quick else 120, round_len=1000.0, close_p=0.0))
-    out.append(dict(name="ladder/fighter", kind=(E.NORMAL, 2), style=0, band=(300.0, 700.0), secs=40 if quick else 120,
-                    round_len=90.0, close_p=0.2, fighter=True))
+    for j, per in enumerate(E.PERSONAS):
+        if quick and j > 1:
+            continue
+        out.append(dict(name="ladder/" + per, kind=(E.NORMAL, 2), style=0, band=(300.0, 700.0),
+                        secs=40 if quick else 90, round_len=90.0, close_p=0.2, fighter=True, persona=j))
     return out
 
 
@@ -109,6 +113,7 @@ def run_room(E, env, pol, room):
     env.close_band = room.get("band", (300.0, 700.0))
     env.close_p = room["close_p"]
     env.round_len = room["round_len"]
+    env.persona_force = room.get("persona")
     if "weapon" in room:
         env.aim_weapons = (room["weapon"],)
     if room["kind"][0] == E.NORMAL and not room.get("fighter"):

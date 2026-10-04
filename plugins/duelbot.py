@@ -45,7 +45,8 @@ REP_SECS = 10.0
 GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
-    [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"], ["ladder"]]
+    [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"]] + \
+    [["ladder", p] for p in ("allround", "sniper", "rusher", "tracker")]
 
 
 def is_bot(p):
@@ -64,7 +65,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 0, usage="<weapon|off>")
         self.add_command("room", self.cmd_room, 0,
-                         usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder | suite | off")
+                         usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
         self.add_command("rooms", self.cmd_rooms, 0)
         self.drill = None                                    # weapon drill: both players have only this weapon
         self.top_up = 0.0
@@ -191,7 +192,8 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
-        player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s) | ladder (120 s)")
+        player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
+        player.tell("!room ladder [{}] (120 s)".format("|".join(self.R.PERSONAS)))
         player.tell("!room suite = the standard set, about 20 minutes | !room off")
 
     def cmd_room(self, player, msg, channel):
@@ -231,7 +233,9 @@ class duelbot(minqlx.Plugin):
         if a[0] == "solo":
             return dict(kind="solo", name="solo", script=0, secs=ROOM_SECS["solo"])
         if a[0] == "ladder":
-            return dict(kind="ladder", name="ladder/fighter", style=0, script=2, secs=ROOM_SECS["ladder"])
+            per = a[1] if len(a) > 1 and a[1] in R.PERSONAS else "allround"
+            return dict(kind="ladder", name="ladder/" + per, style=0, script=2, secs=ROOM_SECS["ladder"],
+                        persona=R.PERSONAS.index(per))
         return None
 
     def on_map(self, mapname, factory):
@@ -645,6 +649,7 @@ class duelbot(minqlx.Plugin):
         taken = self.sync_world(env, R, (human.id, bobby.id))
         env.script[:] = (0, r["script"])
         env.sc_style = r.get("style", 0)
+        env.sc_persona[1] = r.get("persona", 0)
         self.senses(env, R)
         self.last = dict(bobby=[round(float(v)) for v in bpos], opp=[round(float(v)) for v in hpos],
                          bobby_hp=[bs.health, bs.armor], opp_hp=[hs.health, hs.armor], room=r["name"])
