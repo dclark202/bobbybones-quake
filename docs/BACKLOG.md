@@ -54,6 +54,12 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-55 | P2 | open | Test rooms for the new abilities: item timing (back at mega when it respawns), sound (enemy takes an item out of sight: does he react), memory across a death (returns to the fight or the item), fall damage per minute, crouch and walk use, high-ground fights | Owner request |
 | B-56 | P3 | flagged | Not true to the game yet: short rounds, items reset at round start, spawning with every weapon, close respawns. Kept for now to coax out the behavior; move to real duel rules later (B-42) | Owner 2026-10-04 |
 
+| B-57 | P1 | open | Lab-map rooms in the simulator suite (same 41 rooms for Bobby), and the human-aim limits and new inputs mirrored in `plugins/duelbot.py` (acquisition delay, hand noise, reload jitter, sounds, clock, crouch, walk) | Needed to compare cards and to play the next Bobby |
+| B-58 | P1 | built, not trained | Human aim limits: 200 ms acquisition, 50 ms tracking, flick cap, hand noise, reload jitter, fire-button cost | Owner play test 2026-10-04: aim superhuman |
+| B-59 | P1 | built, not trained | Random 1-2 weapon loadouts per player (60%), real duel spawn (20%), all weapons (20%); two-sided damage reward | Owner play test: shotgun only, takes every fight |
+| B-60 | P2 | open | Tune the aim limits from the owner's test-suite card (human baseline per room) | Owner 2026-10-04 |
+| B-61 | P2 | open | Community release: public test server (rooms + play), opt-in baseline cards, feedback channel | Owner wants to share on Reddit |
+
 ## Test suite
 
 | ID | P | Status | Item | Why / evidence |
@@ -96,7 +102,7 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-24 | P2 | open | Trainer metrics: accuracy while the enemy is visible, crosshair error while visible | Hit rate now counts shots at nothing |
 | B-25 | P3 | open | Exact per-shot attribution in session logs (now inferred from health drops) | minqlx has no damage event |
 | B-26 | P3 | open | Opponent profiles and player reports | Stage 6 |
-| B-27 | P3 | open | Rewrite CLAUDE.md around the simulator approach (it still describes the retired coach) | |
+| B-27 | P3 | done | Rewrite CLAUDE.md around the simulator approach; old bot moved to `legacy/` | 2026-10-04 |
 
 ## Done
 

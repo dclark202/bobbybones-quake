@@ -1,15 +1,13 @@
 #!/bin/bash
 redis-server --daemonize yes >/dev/null
 cp -n /ql/baseq3-extra/* /ql/baseq3/ 2>/dev/null
-/tools/bootstrap.sh >/dev/null 2>&1 &
-/tools/learner.sh >/dev/null 2>&1 &
 /tools/watchdog.sh >/dev/null 2>&1 &
 cd /ql
 ./run_server_x64_minqlx.sh \
     +set net_ip 0.0.0.0 \
     +set net_port 27960 \
     +set fs_homepath /ql/home \
-    +set qlx_plugins "${QLX_PLUGINS:-botctl, jumplab, practice, itemrun, bobby, lab}" \
+    +set qlx_plugins "${QLX_PLUGINS:-botctl, duelbot}" \
     +set qlx_pluginsPath /ql/minqlx-plugins \
     +set qlx_owner "${QLX_OWNER:-}" \
     +set zmq_stats_enable 1 \

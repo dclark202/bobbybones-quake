@@ -35,7 +35,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout, teacher=teacher)
     env.item_reward = item_reward
     env.drill_p = drill_p
-    env.react_frames = react_frames
+    env.react_frames = react_frames[0]
+    env.acquire_frames = react_frames[1]
     env.kind_p = kind_p
     env.bot_p = bot_p
     from duel_env import WEAPONS
@@ -92,7 +93,8 @@ def main():
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
                     help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
     ap.add_argument("--bot-p", type=float, default=0.5, help="share of normal rounds against the scripted fighter")
-    ap.add_argument("--react-ms", type=float, default=25, help="reaction delay on what is known about the opponent")
+    ap.add_argument("--react-ms", type=float, default=50, help="tracking delay on an enemy already in view")
+    ap.add_argument("--acquire-ms", type=float, default=200, help="delay before an enemy who just came into view is noticed")
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
 
@@ -112,7 +114,7 @@ def main():
         p_main, p_work = mp.Pipe()
         mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches, 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
-                                        a.item_reward, a.drill_p, a.drill_weapons, round(a.react_ms / 25),
+                                        a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None),
                    daemon=True).start()
@@ -156,7 +158,7 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
-                        react_ms=a.react_ms),
+                        react_ms=a.react_ms, acquire_ms=a.acquire_ms),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot

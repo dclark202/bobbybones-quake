@@ -94,7 +94,14 @@ P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5], np.float32)
 P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200], np.float32)
 P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500], np.float32)
 P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2], np.int64)
-REACT_FRAMES = 1                                       # default 25 ms (one frame): what a player knows about the opponent lags.
+REACT_FRAMES = 2                                       # 50 ms: tracking an enemy already in view lags by this much.
+ACQUIRE_FRAMES = 8                                     # 200 ms: an enemy who has just come into view is not reacted to before this
+TURN_CAP = 30.0                                        # fastest flick, degrees per frame (1200 deg/s)
+MOTOR_NOISE, MOTOR_BASE = 0.08, 0.02                   # hand noise: this share of the view movement, plus a little, per frame
+RELOAD_JITTER, RELOAD_JITTER_MAX = 0.05, 0.12          # slow weapons: random extra delay after the reload (mean, max seconds)
+FIRE_TOGGLE_COST = 0.003                               # reward cost each time the fire button changes (holding is free)
+LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loadouts draw from (all but machine gun, gauntlet)
+#                                                       older note: default 25 ms (one frame): what a player knows about the opponent lags.
                                                        # Was 6 (150 ms) up to duel_gru_v2; per run: env.react_frames / --react-ms
 MOUSE_SMOOTH = 0.5                                     # view velocity inertia per frame
 JERK_COST = 0.00002                                    # reward cost per degree/frame of change in the turn command
@@ -154,6 +161,15 @@ class DuelEnv:
         self.dmg_reward = dmg_reward
         self.loadout = loadout
         self.react_frames = REACT_FRAMES
+        self.acquire_frames = ACQUIRE_FRAMES
+        self.vis_run = np.zeros(2 * n_matches, np.int64)       # frames the opponent has been in view without a break
+        self.acquired = np.zeros(2 * n_matches, bool)          # in view long enough to have been noticed
+        self.fire_prev = np.zeros(2 * n_matches, bool)
+        self.human_aim = True                           # flick cap, hand noise and reload jitter for policy players
+        # spawn weapons in normal rounds: share of rounds with 1-2 random weapons each / the real duel spawn
+        # (machine gun + gauntlet) / every weapon. Sets are drawn per player at the start of each round.
+        self.loadout_p = (0.6, 0.2, 0.2)
+        self.load_sets = [None] * (2 * n_matches)
         self.item_reward = 0.0                          # optional shaping: reward per 100 points of health/armor picked up
         self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in self.w.spawns()], np.float32)
@@ -322,6 +338,10 @@ class DuelEnv:
             self.weapon[i] = mode
         else:
             owned, ammo = LOADOUTS[self.loadout]
+            if self.load_sets[i] is not None and self.script[i] != 2:   # this round's drawn weapon set
+                owned = self.load_sets[i]
+                ammo = {k: LOADOUTS["all"][1][k] for k in owned}
+                ammo[MG] = LOADOUTS["all"][1][MG]
             self.has[i, ALWAYS] = True
             for k in owned:
                 self.has[i, k] = True
@@ -333,6 +353,8 @@ class DuelEnv:
             if self.script[i] == 2:                     # the scripted fighter does not run dry
                 self.ammo[i] = np.minimum(AMMO_MAX, self.ammo[i] * 3)
         self.seen_t[i] = 9.0
+        self.vis_run[i] = 0
+        self.acquired[i] = False
         self.ra[i] = False
         self.fire_q[i] = False
 
@@ -512,7 +534,7 @@ class DuelEnv:
         # Reaction time: what the player knows about the opponent (where, how fast, visible or not) is
         # REACT_FRAMES old. The player's own view is current, so the crosshair-to-enemy readings respond to
         # mouse movement immediately, as on a real screen.
-        self.opp_hist.append((self.known.copy(), self.visible.copy(), vel[opp].copy(), self.seen_t.copy()))
+        self.opp_hist.append((self.known.copy(), self.acquired.copy(), vel[opp].copy(), self.seen_t.copy()))
         while len(self.opp_hist) > self.react_frames + 1:
             self.opp_hist.pop(0)
         known, visible, opp_vel, seen_t = self.opp_hist[0]
@@ -795,7 +817,13 @@ class DuelEnv:
         self.cmd = cmd
         sm = np.where(np.abs(cmd) <= 1.0, MOUSE_SMOOTH_FINE, MOUSE_SMOOTH)   # small corrections follow faster
         self.mv = sm * self.mv + (1.0 - sm) * cmd
-        turn, dpit = self.mv[:, 0], self.mv[:, 1]
+        if self.human_aim:
+            self.mv[:, 0] = np.clip(self.mv[:, 0], -TURN_CAP, TURN_CAP)
+            jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE)
+            jit[self.script > 0] = 0.0
+            turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
+        else:
+            turn, dpit = self.mv[:, 0], self.mv[:, 1]
         # weapon switch (only to weapons owned)
         want = np.where(a[:, 6] == 0, self.weapon, a[:, 6].astype(np.int64) - 1)
         want = np.where(self.has[ar, want], want, self.weapon)
@@ -868,6 +896,11 @@ class DuelEnv:
         shoot = fire & (self.cool <= 1e-4) & ammo_ok & self.has[ar, self.weapon]
         self.cool = np.where(shoot, W_REFIRE[self.weapon], self.cool)
         self.fire_cd = np.where(shoot, W_REFIRE[self.weapon], self.fire_cd)
+        if self.human_aim:                                  # nobody fires on the exact frame the reload ends
+            slow = shoot & (W_REFIRE[self.weapon] >= 0.4) & (self.script == 0)
+            self.cool = self.cool + slow * np.minimum(self.rng.exponential(RELOAD_JITTER, n), RELOAD_JITTER_MAX).astype(np.float32)
+        reward -= FIRE_TOGGLE_COST * (fire != self.fire_prev)
+        self.fire_prev = fire.copy()
         use = shoot & (self.weapon != G)                    # ammo is finite in every round kind
         if getattr(self, "inf_ammo", False):               # test-suite aim rooms: ammo never runs out
             use = use & False
@@ -976,7 +1009,8 @@ class DuelEnv:
         # shaping (curriculum): reward damage dealt to the opponent
         opp_all = ar ^ 1
         dealt = np.where(attacker[opp_all] == ar, dmg_taken[opp_all], 0.0)
-        reward += self.dmg_reward * dealt
+        taken = np.where((attacker >= 0) & (attacker != ar), dmg_taken, 0.0)
+        reward += self.dmg_reward * (dealt - taken)         # a fight costs what it takes, not only pays what it deals
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
@@ -1110,6 +1144,15 @@ class DuelEnv:
                 self.sc_persona[b_] = self.persona_force if self.persona_force is not None else \
                     int(self.rng.choice(len(PERSONAS), p=self.persona_p))
             done[a_] = done[b_] = True
+            self.load_sets[a_] = self.load_sets[b_] = None
+            if kd == NORMAL and self.fixed_kind is None:
+                u = self.rng.random()
+                if u < self.loadout_p[0]:
+                    for q in (a_, b_):
+                        self.load_sets[q] = tuple(int(x) for x in self.rng.choice(LOAD_GUNS, int(self.rng.integers(1, 3)),
+                                                                                    replace=False))
+                elif u < self.loadout_p[0] + self.loadout_p[1]:
+                    self.load_sets[a_] = self.load_sets[b_] = ()
             self.frags_r[a_] = self.frags_r[b_] = 0
             self.snd_t[a_] = self.snd_t[b_] = 99.0
             if kd == AIM or (self.fixed_kind is not None and kd == NORMAL):
@@ -1153,11 +1196,14 @@ class DuelEnv:
                                                          np.where(self.duck[opp[vh]], TOP_DUCK, TOP)).sum())
             nv = vh[pkind[vh] == NORMAL]
             np.add.at(self.stats["w_dist"], (np.digitize(dist[nv], [300.0, 700.0]), self.weapon[nv]), 1)
-        self.known[vis] = s[opp[vis], :3]
+        self.vis_run = np.where(vis, self.vis_run + 1, 0)
+        acq = vis & (self.vis_run >= max(1, self.acquire_frames - self.react_frames))
+        self.acquired = acq
+        self.known[acq] = s[opp[acq], :3]
         if heard.any():
             self.known[heard] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
-        self.seen_t = np.where(vis | heard, 0.0, self.seen_t + DT)
+        self.seen_t = np.where(acq | heard, 0.0, self.seen_t + DT)
         self._teach_update()
         info = dict(events=events)
         return self.observe(), reward.astype(np.float32), done, info

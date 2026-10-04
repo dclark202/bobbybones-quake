@@ -10,6 +10,43 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Worked | Did not work |
 |---
 
+## 2026-10-04 (afternoon): `duel_gru_v3` final, second human play test, changes approved for the next run
+
+Settles B-38, B-43/B-44 (built), raises B-57 to B-60.
+
+**Final card, 489 minutes** (`data/sim_runs/duel_gru_v3/suite/card_0487.md`, endless ammo in aim rooms):
+LG 82% and rail 94% on a fast-strafing target at mid range, shotgun pellets 70%; shotgun held 94-99% at every
+range; movement 283 u/s; solo 0.88 megas and 0.35 red armors per minute; scripted fighters: 4.3 frags to 1.2
+deaths per minute against allround, 3.0 to 2.4 against the sniper, 3.6 to 2.2 against the tracker.
+First live minutes against Nightmare: 2-2 with even damage (yesterday's version: 0-10).
+
+**Owner's play test** (sessions `data/duellive/sessions/20261004-17*_human`): much better, still easy to beat.
+- Hitscan aim is superhuman: turns onto the player instantly, never misses, tracks with the shotgun like nobody can.
+- Taps the LG trigger instead of holding it; fires on the exact frame a reload ends.
+- Always has the shotgun out; could not be coaxed onto other weapons.
+- Does not pick up items or move fast; stands in odd spots; takes every fight he sees, even from a bad position;
+  works his way around a wall toward the player instead of finding a better position.
+
+**What did not work in v3:** one-sided damage reward (dealt only) made every sighting worth fighting; a 25 ms
+reaction with no hand limits gave inhuman aim; all-weapon spawns let him settle on one weapon.
+
+**Approved for the next run (built in `sim/duel_env.py`, not trained yet):**
+- Aim limits: 200 ms before a newly visible enemy is noticed, 50 ms tracking delay, flick cap 1200 deg/s, hand
+  noise proportional to view speed, 0-120 ms random delay after the reload of slow weapons, a cost per change
+  of the fire button. Weapon fire is heard by the enemy (B-47).
+- Weapons: 60% of normal rounds with 1-2 random weapons per player (drawn independently), 20% real duel spawn
+  (machine gun + gauntlet), 20% all weapons. Half of normal rounds against the eight scripted styles.
+- Fights: damage reward is now dealt minus taken. Horizon 0.998, memory across deaths, 311 inputs (B-47, B-48).
+- Movement: strafe-jump teacher, long drills, 35% of playing time (B-43).
+
+**Test map** `bobbylab` built (B-33/B-34 follow-up): aim box, environment box, speed straight, and 3D copies
+(8-unit blocks) of four trick spots. Compiled with q3map2; bots need the `.aas` (mbspc `-forcesidesvisible`).
+Lab rooms run on the server (41 rooms, about 29 minutes); the simulator side of the lab rooms is still to do (B-57).
+
+**Repo:** the first approach (Nightmare layer, coach, cluster) moved to `legacy/`.
+
+---
+
 ## 2026-10-04 (09:10): built for the next run: movement teacher and opponent styles
 
 Builds B-43, B-44 (owner: "2 and 3, different types of opponent behavior, good or bad, and movement drills

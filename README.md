@@ -68,9 +68,11 @@ players one weapon, `!room suite` runs the test rooms on you, `!map <bloodrun|ae
 
 ```
 sim/                 simulator (vendored ioquake3 physics in sim/q3), environments, trainers, test suite
-plugins/             minqlx plugins: duelbot (plays the network, rooms, logs), weapon and item labs, older bots
+plugins/             minqlx plugins: duelbot (plays the network, test rooms, logs), weapon and item labs
 minqlx/              vendored minqlx + the input hook (see minqlx/UPSTREAM.md)
-tools/               server scripts, demo downloader and parser, older analysis tools
+tools/               server script, test-map builder, demo downloader and parser
+maps/bobbylab/       the test map (aim box, environment box, trick-jump stations)
+legacy/              the first approach (a layer on the Nightmare bot); not used
 docs/                PLAN, BACKLOG, RESULTS, LOGS
 Dockerfile           Quake Live dedicated server image
 data/                (git-ignored) maps, training runs, recordings, play-test sessions
