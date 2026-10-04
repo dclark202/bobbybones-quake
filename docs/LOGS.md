@@ -77,7 +77,7 @@ Lab-map rooms (`bobbylab`):
 | Room | Metrics |
 |---|---|
 | `aim/<weapon>/<walk,jump,env>` | Same as the aim rooms above |
-| `speed` | `laps`, `best_time`, `top_speed`, `mean_speed` |
+| `speed` | `distance` (units covered in the room), `laps`, `best_time`, `top_speed`, `mean_speed` |
 | `fight/<style>` | Same as `ladder/<style>` |
 
 Differences between the simulator rooms and the live rooms: live targets have endless health and kills are

@@ -20,12 +20,12 @@ and prints your result in chat. `!rooms` lists the rooms for the current map; `!
 
 | Command | Room | Length |
 |---|---|---|
-| `!room suite` | All 29 rooms below, back to back | about 17 min |
+| `!room suite` | All 29 rooms below, back to back | about 11 min |
 | `!room aim <weapon> walk` | Aim box: the target moves left, right, forward and back at random. Weapons: `mg`, `sg`, `gl`, `rl`, `lg`, `rg`, `pg`, `hmg` | 15 s |
 | `!room aim <weapon> jump` | Aim box: the same movement, with jumping | 15 s |
 | `!room aim <weapon> env` | Environment box (pillars, cover): the target moves at random | 15 s |
-| `!room speed` | Speed straight: 20,000 units, one way; you are put back at the start after each run | 90 s |
-| `!room fight <style>` | A fight in the environment box against a scripted style: `allround`, `sniper`, `rusher`, `tracker` (these four are in the suite), `dodger`, `stander`, `jumper`, `spammer` | 100 s |
+| `!room speed` | Speed straight: 20,000 units, one way; you are put back at the start after each run | 30 s |
+| `!room fight <style>` | A fight in the environment box against a scripted style: `allround`, `sniper`, `rusher`, `tracker` (these four are in the suite), `dodger`, `stander`, `jumper`, `spammer` | 30 s |
 
 Aim rooms: endless ammo, the target never shoots or dies. Speed room: gauntlet only.
 

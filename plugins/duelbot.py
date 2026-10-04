@@ -216,9 +216,9 @@ class duelbot(minqlx.Plugin):
     def cmd_rooms(self, player, msg, channel):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (15 s)".format("|".join(LAB_WEAPONS)))
-            player.tell("!room speed (90 s): the long straight, one way")
-            player.tell("!room fight <{}> (100 s)".format("|".join(self.R.PERSONAS)))
-            player.tell("!room suite = all 29 rooms, about 17 minutes | !room off")
+            player.tell("!room speed (30 s): the long straight, one way")
+            player.tell("!room fight <{}> (30 s)".format("|".join(self.R.PERSONAS)))
+            player.tell("!room suite = all 29 rooms, about 11 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
@@ -262,9 +262,9 @@ class duelbot(minqlx.Plugin):
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed":
-                return dict(kind="speed", lab=True, name="speed", script=0, secs=90)
+                return dict(kind="speed", lab=True, name="speed", script=0, secs=30)
             if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
-                return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=100,
+                return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=30,
                             persona=R.PERSONAS.index(a[1]))
             return None
         if a[0] == "aim" and len(a) >= 3 and a[1] in R.WEAPONS and a[1] != "g" and a[2] in STYLES:
@@ -736,6 +736,7 @@ class duelbot(minqlx.Plugin):
                 r["leg"], r["t_run"] = 0, None
                 return
             r["top"] = max(r.get("top", 0.0), sp)
+            m["dist"] = max(m.get("dist", 0.0), float(hpos[0] - st["start"][0]))
             if r["t_run"] is None and sp > 50:
                 r["t_run"] = now
             if hpos[0] > st["far"][0] - 40:                 # one way: the full length, then back to the start
@@ -951,7 +952,8 @@ class duelbot(minqlx.Plugin):
                        success_rate=m.get("successes", 0) / max(1, att),
                        best_time=m["best"] if "best" in m else -1.0, speed_at_goal=m.get("speed_at_goal", 0.0))
         elif r["kind"] == "speed":
-            res = dict(laps=m.get("laps", 0), best_time=m["best"] if "best" in m else -1.0, top_speed=r.get("top", 0.0),
+            res = dict(distance=m.get("dist", 0.0), laps=m.get("laps", 0), best_time=m["best"] if "best" in m else -1.0,
+                       top_speed=r.get("top", 0.0),
                        mean_speed=m["speed"] / f)
         elif r["kind"] == "solo":
             p = m["picks"]

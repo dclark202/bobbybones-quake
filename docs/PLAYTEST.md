@@ -1,6 +1,6 @@
 # Play-test routine
 
-Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 17 minutes). Everything is
+Two parts: play Bobby (about 20 minutes), then run the test chamber on yourself (about 11 minutes). Everything is
 logged per frame; your notes are what the numbers cannot show. Log formats: [LOGS.md](LOGS.md).
 
 ## Before you start
@@ -34,7 +34,7 @@ Questions to answer at the end (as notes or in chat):
 3. What would a decent player punish first?
 4. Anything that looked like a bug (stuck, not shooting, spinning)?
 
-## Part 2: the test chamber (about 17 minutes)
+## Part 2: the test chamber (about 11 minutes)
 
 Bobby's body becomes the scripted target or opponent and **you** are measured, with the same metrics the
 simulator uses for him. This gives the human bar for each room. All commands: [COMMANDS.md](COMMANDS.md).
@@ -45,8 +45,8 @@ simulator uses for him. This gives the human bar for each room. All commands: [C
 | Rooms | What happens | What to do |
 |---|---|---|
 | 24 aim rooms, 15 s each | Eight weapons, three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
-| Speed straight, 90 s | A 20,000-unit flat run with a floor mark every 2,048 units. Gauntlet only | Run the full length as fast as you can; you are put back at the start after each run |
-| 4 fights, 100 s each | In the environment box against the allround, sniper, rusher and tracker styles, every weapon in hand | Play to win |
+| Speed straight, 30 s | A 20,000-unit flat run with a floor mark every 2,048 units. Gauntlet only | Run the full length as fast as you can; you are put back at the start after each run |
+| 4 fights, 30 s each | In the environment box against the allround, sniper, rusher and tracker styles, every weapon in hand | Play to win |
 
 Each room counts down 5 s and prints your result in chat. Single rooms for repeats: `!rooms` lists them.
 Repeating a room averages your results; two or three runs of the suite give a steadier baseline.
