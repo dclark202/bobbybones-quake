@@ -951,6 +951,7 @@ class duelbot(minqlx.Plugin):
                     a[2] = int(r.get("jump", False) and m["frames"] % 2 == 0)
                     z = r["zone"]
                     if not (z[0] + 120 <= bpos[0] <= z[2] - 120 and z[1] + 120 <= bpos[1] <= z[3] - 120):
+                        a[2] = 0                             # near the edge: stop jumping so it can walk back in
                         dx, dy = (z[0] + z[2]) / 2.0 - bpos[0], (z[1] + z[3]) / 2.0 - bpos[1]   # toward the middle
                         yr = math.radians(byaw)
                         f_, l_ = dx * math.cos(yr) + dy * math.sin(yr), -dx * math.sin(yr) + dy * math.cos(yr)

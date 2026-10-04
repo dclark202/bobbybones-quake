@@ -999,7 +999,7 @@ class DuelEnv:
             f_, l_ = dx * np.cos(yr_) + dy * np.sin(yr_), -dx * np.sin(yr_) + dy * np.cos(yr_)
             out[:, 0] = np.where(near, np.sign(np.where(np.abs(f_) > 40, f_, 0)).astype(np.int64) + 1, out[:, 0])
             out[:, 1] = np.where(near, -np.sign(np.where(np.abs(l_) > 40, l_, 0)).astype(np.int64) + 1, out[:, 1])
-            out[:, 2] = np.where(t1, self.lab_jump[idx // 2], out[:, 2])
+            out[:, 2] = np.where(t1, self.lab_jump[idx // 2] & ~near, out[:, 2])   # no jumping while walking back in
             out[:, 3] = np.where(t1, int(np.abs(TURN).argmin()), out[:, 3])
         return out
 
