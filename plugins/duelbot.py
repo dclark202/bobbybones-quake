@@ -627,7 +627,7 @@ class duelbot(minqlx.Plugin):
         if opp is None:
             if self.opp_bot and now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot sarge 4")
+                minqlx.console_command("addbot sarge {}".format(os.environ.get("DUEL_BOT_SKILL") or 4))   # 4 Hardcore, 5 Nightmare
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, 0.0)
             if self.sess:
                 self.end_session()

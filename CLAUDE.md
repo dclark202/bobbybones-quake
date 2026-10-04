@@ -59,7 +59,7 @@ python sim/train_duel_rnn.py --run <run> --resume --minutes <n>      # Anaconda 
 python sim/test_suite.py --run <run> [--env duel_env_v3] [--compare card.json]
 docker build -t qlbot .
 bash tools/duel_server.sh <run> <map> <env module>                   # play-test server, UDP 27970 (no password unless PASSWORD=<word>)
-NAME=qltest DATA=data/labtest SPAR=1 bash tools/duel_server.sh ...   # second private server, Bobby vs a Nightmare bot
+NAME=qltest DATA=data/labtest SPAR=1 bash tools/duel_server.sh ...   # second private server, Bobby vs the game's bot (Hardcore; SKILL=5 Nightmare). Benchmark only: never train against the game's bots
 docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("status" prints nothing)
 ```
 `data/` is git-ignored (maps from the game, runs, sessions, tools, `owner.env`).

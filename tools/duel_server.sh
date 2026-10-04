@@ -6,7 +6,7 @@
 #   bash tools/duel_server.sh - bloodrun                    use the policy.npz already in data/duellive (no PyTorch needed)
 #   bash tools/duel_server.sh stop
 # Options: PASSWORD=<word>, RESTART=1 (restart after a crash or reboot), HOSTNAME_QL="<name in the server list>"
-# With SPAR=1 no port is opened and a Hardcore bot (skill 4) is the opponent (for measuring).
+# With SPAR=1 no port is opened and a Hardcore bot (skill 4) is the opponent (for measuring); SKILL=5 makes it Nightmare.
 set -e
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
@@ -25,7 +25,7 @@ else
 fi
 RESTART_OPT=""; [ -n "$RESTART" ] && RESTART_OPT="--restart unless-stopped"   # RESTART=1: come back after a crash or reboot
 if [ -n "$SPAR" ]; then
-    docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" \
+    docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_BOT_SKILL="${SKILL:-4}" \
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/bobbylab/bobbylab.pk3:/ql/baseq3/bobbylab.pk3:ro" qlbot +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs Hardcore on $MAP)"; exit 0
 fi
