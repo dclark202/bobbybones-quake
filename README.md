@@ -10,9 +10,7 @@ players fairly and shows learned behavior such as strafe jumping, weapon choice 
 - **Human physics.** He moves with the same 125 fps physics a human client gets. No bot-only frame-rate tricks.
 - **Human senses.** He knows where you are only when you are in his field of view with a clear line of sight,
   or roughly when you are heard nearby. No wallhacks.
-- **Mouse-like aim.** He turns his view like a mouse (fine tracking and flicks), with a reaction delay. He
-  never misses on purpose to hit an accuracy number.
-- **Earn the public server.** Nothing goes public until it beats the game's Nightmare bots.
+- **Mouse-like aim.** He turns his view like a mouse (fine tracking and flicks), with a reaction delay.
 
 ## How it works
 
@@ -21,7 +19,7 @@ players fairly and shows learned behavior such as strafe jumping, weapon choice 
    senses. Movement was validated frame by frame against the real game; weapon damage, timing, knockback,
    switch time and pickup amounts were measured on a real server and reproduced.
 2. **Training** (`sim/train_duel_rnn.py`). Self-play reinforcement learning (PPO) with a recurrent network
-   (GRU, about 1.3 million weights) against a league of its own past versions and scripted opponents of
+   (GRU) against a league of its own past versions and scripted opponents of
    several styles. Rounds are mixed: normal duels, aim rounds, single-weapon rounds and movement rounds.
    A movement-only network (`sim/train_move.py`), in which strafe jumping emerged from reward alone, serves
    as a teacher for movement.
@@ -77,12 +75,6 @@ docs/                PLAN, BACKLOG, RESULTS, LOGS
 Dockerfile           Quake Live dedicated server image
 data/                (git-ignored) maps, training runs, recordings, play-test sessions
 ```
-
-## History
-
-The project started as a hand-built layer on top of the game's Nightmare bot (item routes, fair aim, a
-settings search). That did not beat plain Nightmare, and was dropped in favor of learning in a simulator.
-The older code is still in `plugins/` and `tools/`; the story is in [docs/RESULTS.md](docs/RESULTS.md).
 
 ## License
 
