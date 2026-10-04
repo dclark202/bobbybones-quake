@@ -335,6 +335,7 @@ class duelbot(minqlx.Plugin):
         self.R = R = importlib.import_module("duel_env")
         nav = "/maps/nav_{}_sim.json".format(mapname)
         self.renv = R.DuelEnv(bsp, n_matches=1, seed=2, nav=nav if os.path.exists(nav) else None)
+        self.renv.lab = None                                 # the plugin runs the lab rooms itself (placement, zones, jumping)
         self.goal_labels = [d[4] for d in self.renv.item_def if d[4] in GOAL_NAMES]
         self.lab = None
         if mapname == "bobbylab":
