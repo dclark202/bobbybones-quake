@@ -12,6 +12,7 @@ import json
 import os
 import random
 import time
+import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -63,7 +64,7 @@ def main():
             skipped += 1
             continue
         try:
-            data = get(FILES.format(demo["file"]), timeout=120)
+            data = get(FILES.format(urllib.parse.quote(demo["file"])), timeout=120)
             with open(path + ".part", "wb") as f:
                 f.write(data)
             os.replace(path + ".part", path)
