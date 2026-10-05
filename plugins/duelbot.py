@@ -47,8 +47,7 @@ GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
-    [["move", "*"]] + [["peek"], ["items"]] + \
-    [["fight", "nightmare"]]
+    [["move", "*"]]                        # aim rooms and movement courses; items and the fight only on request
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
     [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"]] + \
@@ -231,9 +230,8 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!room peek (45 s): rail duel through gaps in a wall | !room items (120 s): time the mega and the red armor")
-            player.tell("!room fight nightmare (60 s): the game's Nightmare bot")
-            player.tell("!room fight <{}> (30 s): scripted styles".format("|".join(self.R.PERSONAS)))
+            player.tell("!room moves = every movement course in a row, with a table of times at the end")
+            player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
@@ -253,6 +251,8 @@ class duelbot(minqlx.Plugin):
             self.msg("Rooms off: back to the normal duel.")
             return
         specs = (LAB_SUITE if self.lab else SUITE) if a[0] == "suite" else [a]
+        if self.lab and a[0] == "moves":                     # every movement course in a row, timed
+            specs = [["move", "*"]]
         if self.lab:                                         # "move *" = every movement course on the map
             specs = [x for sp_ in specs for x in ([["move", k] for k in self.lab.get("courses", {})]
                                                    if sp_ == ["move", "*"] else [sp_])]
@@ -265,6 +265,12 @@ class duelbot(minqlx.Plugin):
             out.append(r)
         if a[0] != "suite":                                  # a single room starts right away, replacing whatever runs
             self.queue, self.room = [], None
+        self.batch = None
+        if self.lab and a[0] == "moves":
+            self.batch = dict(names=[r["name"] for r in out], results={})
+            self.queue += out
+            self.msg("All {} movement courses in a row. A table of your times follows the last one. !room off stops.".format(len(out)))
+            return
         if a[0] == "suite" and self.lab:
             self.queue += out
             self.msg("Test suite on the lab map: {} rooms, about {} minutes. !room off stops it.".format(
@@ -290,18 +296,12 @@ class duelbot(minqlx.Plugin):
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
                 key = "speed" if a[0] == "speed" else a[1]
                 return dict(kind="speed", lab=True, name="move/" + key, script=0, secs=30, key=key)
-            if a[0] == "peek" and "peek" in self.lab:
-                return dict(kind="ladder", lab=True, name="peek", style=0, script=2, secs=45, where="peek",
-                            persona=R.PERSONAS.index("stander"))
             if a[0] == "items" and "items" in self.lab:
                 return dict(kind="solo", lab=True, name="items", script=0, secs=int(self.lab["items"].get("secs", 120)),
                             where="items")
-            if a[0] == "fight" and (len(a) < 2 or a[1] in ("hardcore", "nightmare")):
+            if a[0] == "fight":
                 # the game's own Nightmare bot: our control of Bobby's body is released for the room
                 return dict(kind="ladder", lab=True, name="fight/nightmare", style=0, script=0, secs=60, ai=True)
-            if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
-                return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=30,
-                            persona=R.PERSONAS.index(a[1]))
             return None
         if a[0] == "aim" and len(a) >= 3 and a[1] in R.WEAPONS and a[1] != "g" and a[2] in STYLES:
             band = a[3] if len(a) > 3 and a[3] in BANDS else "mid"
@@ -1042,6 +1042,10 @@ class duelbot(minqlx.Plugin):
                 return
             r["started"], r["t_end"] = True, now + r["secs"]
             self.room_loadout(bobby, human)
+            r["mortal"] = r["kind"] == "speed" and bool(self.lab) and bool(self.lab["courses"][r["key"]].get("mortal"))
+            if r["mortal"]:
+                human.health = 100
+                human.armor = 0
             if r["kind"] == "move":
                 self.new_goal(human, hpos)
             self.tot = {}
@@ -1207,7 +1211,11 @@ class duelbot(minqlx.Plugin):
             elif now > r["said"]:
                 r["said"] = now + 2
                 human.center_print("Go to: ^3{}".format(GOAL_NAMES[self.goal_labels[r["goal"]]]))
-        if (r["kind"] != "ladder" or r.get("where") == "peek") and r.get("where") != "items" and 0 < hs.health < 150:
+        if r.get("mortal") and hs.health <= 0 and "died" not in m:
+            m["died"] = 1                                    # this room is over when you die
+            human.tell("^1You died:^7 the run ends here.")
+            r["t_end"] = now
+        if r["kind"] != "ladder" and r.get("where") != "items" and not r.get("mortal") and 0 < hs.health < 150:
             human.health = 200                               # the subject cannot die in a test room (fights excepted)
             self.tot.pop("opp", None)
         if now >= r["t_end"]:
@@ -1242,6 +1250,10 @@ class duelbot(minqlx.Plugin):
             res = dict(finished=1.0 if "best" in m else 0.0, time=m["best"] if "best" in m else -1.0,
                        distance=m.get("dist", 0.0), top_speed=r.get("top", 0.0), mean_speed=m["speed"] / f,
                        falls=m.get("falls", 0), height=m.get("height", 0.0), damage_taken=m["dmg_taken"])
+            if r.get("mortal"):
+                res["died"] = m.get("died", 0)
+                if res["died"]:
+                    res["finished"], res["time"] = 0.0, -1.0
         elif r["kind"] == "solo" and r.get("where") == "items":
             p = m["picks"]
             res = dict(mega=p.get("mega", 0), mega_possible=1 + int(r["secs"] // 35), red_armor=p.get("red_armor", 0),
@@ -1257,6 +1269,25 @@ class duelbot(minqlx.Plugin):
                        switches_per_min=m["switches"] / mins, blind_fire=m["blind"] / f)
         res = {k: (v if isinstance(v, dict) else round(float(v), 3)) for k, v in res.items()}
         self.record(event="room_result", room=r["name"], result=res)
+        b = getattr(self, "batch", None)
+        if b and r["name"] in b["names"]:
+            b["results"][r["name"]] = res
+            if len(b["results"]) == len(b["names"]):
+                tot, done_ = 0.0, 0
+                self.msg("^3Movement courses:")
+                for nm in b["names"]:
+                    x = b["results"][nm]
+                    ok_ = x.get("finished", 0) >= 1 and x.get("time", -1) > 0
+                    tot += x["time"] if ok_ else 30.0
+                    done_ += int(ok_)
+                    self.msg("  {:<14} {}  top {:.0f}  mean {:.0f}{}".format(
+                        nm.split("/")[-1], "^2{:.2f} s^7".format(x["time"]) if ok_ else "^1not finished^7",
+                        x.get("top_speed", 0), x.get("mean_speed", 0),
+                        "  falls {:.0f}".format(x["falls"]) if x.get("falls") else ""))
+                self.msg("^3Finished {} of {}. Total {:.1f} s^7 (30 s counted for each one not finished).".format(
+                    done_, len(b["names"]), tot))
+                self.record(event="moves_result", total=round(tot, 2), finished=done_, courses=b["results"])
+                self.batch = None
         self.msg("^3{}^7: {}".format(r["name"], "  ".join("{} {}".format(k, v) for k, v in res.items())))
         # human baseline card, same shape as sim/test_suite.py cards (repeats of a room are averaged)
         if self.card_path is None:

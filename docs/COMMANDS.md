@@ -21,20 +21,19 @@ and prints your result in chat. `!rooms` lists the rooms for the current map; `!
 
 | Command | Room | Length |
 |---|---|---|
-| `!room suite` | Every room below except the scripted fights, back to back | about 20 min |
+| `!room suite` | Every aim room and every movement course, back to back | about 22 min |
 | `!room aim <weapon> walk` | Aim box: the target moves left, right, forward and back at random. Weapons: `mg`, `sg`, `rl`, `lg`, `rg`, `pg`, `hmg` | 25 s |
 | `!room aim <weapon> jump` | Aim box: the same movement, with jumping | 25 s |
 | `!room aim <weapon> env` | Environment box (pillars, cover): the target moves at random | 45 s |
 | `!room move <course>` | Movement course, 30 s or until you reach the end. Courses: `speed` (flat 20,000-unit straight), `circle` (gaps that each need one circle jump from a standing start), `twohop` (gaps that need a circle jump plus one strafe jump), `ramps` (ramps and stairs), `slalom` (walls from alternating sides), `turns` (45, 90, 135 degree turns and a hairpin), `narrow` (a beam over a pit, 96 down to 32 wide), `pillars` (hop from pillar to pillar), `rocket` (rocket-jump up four ledges, the last needs a double rocket jump; rocket launcher). A fall puts you back at the last checkpoint | up to 30 s |
+| `!room moves` | Every movement course in a row, then a table of your times and the total (30 s counted for each one not finished) | about 8 min |
 | `!room move bends` | A track with no walls over a pit, with 45-degree bends: carry speed by air-steering | 30 s |
 | `!room move pads` | Jump pad up to a ledge, a teleporter at its end, a jump pad over a wall | 30 s |
-| `!room move drops` | Get down 1200 units fast without fall damage (drops of 200, 240, 320, 440; side ledges split the big ones). Reports damage taken | 30 s |
+| `!room move drops` | Get down 1200 units fast on 100 health with no refills (drops of 200, 240, 320, 440; side ledges split the big ones). Dying ends the run | 30 s |
 | `!room move climb` | Eighteen ledges, each 40 high (a jump each) | 30 s |
 | `!room move dodge` | A rocket turret fires at you from the far end of a corridor with a little cover: reach the line in front of it. Reports damage taken | 30 s |
-| `!room peek` | Rail duel through two gaps in a wall; the opponent stands in the open and shoots back. Damage dealt and taken (in the suite) | 45 s |
-| `!room items` | A ring corridor with a mega health (35 s) and a red armor (25 s) in opposite corners, gauntlet only: how many of the possible pickups you get (in the suite) | 120 s |
-| `!room fight nightmare` | A fight in the environment box against the game's own Nightmare bot (in the suite) | 60 s |
-| `!room fight <style>` | The same against a scripted style: `allround`, `sniper`, `rusher`, `tracker`, `dodger`, `stander`, `jumper`, `spammer` (not in the suite) | 30 s |
+| `!room items` | A ring corridor with a mega health (35 s) and a red armor (25 s) in opposite corners, gauntlet only: how many of the possible pickups you get (not in the suite: meant for Bobby) | 120 s |
+| `!room fight` | A fight in the environment box against the game's own Nightmare bot (not in the suite) | 60 s |
 
 Aim rooms: endless ammo, the target never shoots or dies. Movement courses: gauntlet only. You hold no weapon during
 the 5 s countdown, and you cannot die in a test room except in the fights.

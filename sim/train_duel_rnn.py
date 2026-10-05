@@ -96,6 +96,14 @@ def main():
                     help="players are split into this many groups per training pass (more = less GPU memory)")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
+    ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
+    ap.add_argument("--demo-coef", type=float, default=0.0, help="weight of the imitation loss on pro demos (0 = off)")
+    ap.add_argument("--demo-minutes", type=float, default=0.0, help="the demo loss fades to zero over this time (0 = constant)")
+    ap.add_argument("--demo-batch", type=int, default=64, help="demo sequences per minibatch")
+    ap.add_argument("--demo-len", type=int, default=64, help="frames per demo sequence")
+    ap.add_argument("--demo-pool", type=int, default=48, help="demo files held in memory (a new random set every 20 updates)")
+    ap.add_argument("--demo-heads", default="0,1,2,3,4,5,6,7",
+                    help="action heads imitated: 0 forward 1 strafe 2 vertical 3 turn 4 pitch 5 fire 6 weapon 7 walk")
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
     ap.add_argument("--teach", type=float, default=0.5, help="weight of the teacher loss at the start of this run")
     ap.add_argument("--teach-minutes", type=float, default=240, help="the teacher loss fades to zero over this time")
@@ -168,6 +176,37 @@ def main():
 
     def norm(o):
         return np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
+
+    # ---- pro demos: sequences of (inputs, what the player did), imitated alongside the self-play loss
+    import glob as _glob
+    demo_files = [f for d_ in a.demo_dir.split(",") if d_ for f in sorted(_glob.glob(os.path.join(d_, "*.npz")))]
+    demo_heads = [int(x) for x in a.demo_heads.split(",")]
+    demo_rng = np.random.default_rng(77)
+    demo_pool = []
+
+    def demo_refill():
+        demo_pool.clear()
+        for k in demo_rng.choice(len(demo_files), min(a.demo_pool, len(demo_files)), replace=False):
+            z = np.load(demo_files[k])
+            if len(z["act"]) > a.demo_len + 1 and z["obs"].shape[1] == OBS_DIM:
+                demo_pool.append((z["obs"], z["act"], z["first"]))
+
+    def demo_batch():
+        """(T, B, obs), (T, B, 8) actions, (T, B) first-frame flags"""
+        T_, B_ = a.demo_len, a.demo_batch
+        o = np.zeros((T_, B_, OBS_DIM), np.float32)
+        ac = np.zeros((T_, B_, len(ACTION_DIMS)), np.int64)
+        fi = np.zeros((T_, B_), np.float32)
+        for b in range(B_):
+            ob, act_, first_ = demo_pool[int(demo_rng.integers(len(demo_pool)))]
+            s0 = int(demo_rng.integers(0, len(act_) - T_))
+            o[:, b], ac[:, b], fi[:, b] = norm(ob[s0:s0 + T_].astype(np.float32)), act_[s0:s0 + T_], first_[s0:s0 + T_]
+        return torch.from_numpy(o).to(dev), torch.from_numpy(ac).to(dev), torch.from_numpy(fi).to(dev)
+
+    if a.demo_coef > 0:
+        assert demo_files, "no demo files in --demo-dir"
+        demo_refill()
+        print("pro demos: {} files, {} in memory, weight {}".format(len(demo_files), len(demo_pool), a.demo_coef), flush=True)
 
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
@@ -285,6 +324,10 @@ def main():
         n_mb = a.minibatches
         kick = a.teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.teach_minutes)
         kick_l = torch.zeros(())
+        demo_w = a.demo_coef * (max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.demo_minutes) if a.demo_minutes > 0 else 1.0)
+        demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
+        if demo_w > 0 and update % 20 == 0:
+            demo_refill()
         for epoch in range(3):
             perm = torch.randperm(N, device=dev)
             for chunk in perm.chunk(n_mb):                               # whole sequences per player
@@ -316,6 +359,22 @@ def main():
                     lt = sum(ds[j].log_prob(tl[..., j].clamp(min=0)) for j in range(4))
                     kick_l = -(lt * tm).sum() / tm.sum().clamp(min=1.0)
                     loss = loss + kick * kick_l
+                if demo_w > 0:                                           # imitate what pro players did in the same situation
+                    d_obs, d_act, d_first = demo_batch()
+                    dh = torch.zeros(d_obs.shape[1], H, device=dev)
+                    dl = []
+                    for t in range(d_obs.shape[0]):
+                        dh = dh * (1.0 - d_first[t])[:, None]
+                        lg_, _, dh = pol.step(d_obs[t], dh)
+                        dl.append(lg_)
+                    dd_ = dists(torch.stack(dl)[8:])                      # the first frames only warm the memory up
+                    da = d_act[8:]
+                    demo_l = -sum(dd_[j].log_prob(da[..., j]).mean() for j in demo_heads)
+                    loss = loss + demo_w * demo_l
+                    with torch.no_grad():
+                        demo_acc = [float(((dd_[0].logits.argmax(-1) == da[..., 0]) & (dd_[1].logits.argmax(-1) == da[..., 1])).float().mean()),
+                                    float((dd_[2].logits.argmax(-1) == da[..., 2]).float().mean()),
+                                    float(((dd_[3].logits.argmax(-1) - da[..., 3]).abs() <= 1).float().mean())]
                 opt.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
@@ -351,6 +410,8 @@ def main():
                                      falls_per_min=round(float(agg["course"][k_, 7] / max(1.0, agg["course"][k_, 6]) * 2400), 2))
                            for k_, key in enumerate(course_keys) if agg["course"][k_, 6] > 0},
                    teach=[round(kick, 3), round(float(kick_l), 3)],
+                   demo=dict(weight=round(demo_w, 3), loss=round(float(demo_l), 3), keys_right=round(demo_acc[0], 3),
+                             vertical_right=round(demo_acc[1], 3), turn_within_one_bin=round(demo_acc[2], 3)),
                    crouch=round(float(agg["duck_frames"] / max(1, agg["play_frames"])), 3),
                    walk=round(float(agg["walk_frames"] / max(1, agg["play_frames"])), 3),
                    fall_dmg_per_min=round(float(agg["fall_dmg"] / (2 * sim_min)), 2),

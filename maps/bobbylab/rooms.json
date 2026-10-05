@@ -93,26 +93,6 @@
   ],
   "length": 20352
  },
- "peek": {
-  "subject": [
-   200,
-   40512,
-   8
-  ],
-  "yaw": 0,
-  "target": [
-   1300,
-   40512,
-   8
-  ],
-  "target_yaw": 180,
-  "bounds": [
-   0,
-   40000,
-   1600,
-   41024
-  ]
- },
  "items": {
   "start": [
    1536,
@@ -854,7 +834,7 @@
   },
   "drops": {
    "name": "Drops",
-   "hint": "Get to the bottom fast without fall damage: drops of 200, 240, 320 and 440; the side ledges split the big ones.",
+   "hint": "You have 100 health and no refills: get to the bottom fast. Drops of 200, 240, 320 and 440; the side ledges split the big ones.",
    "start": [
     64.0,
     34256.0,
@@ -883,7 +863,8 @@
     ]
    ],
    "weapon": "g",
-   "length": 4632
+   "length": 4632,
+   "mortal": true
   },
   "climb": {
    "name": "Climb",

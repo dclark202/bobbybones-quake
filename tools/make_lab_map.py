@@ -411,8 +411,9 @@ def main():
         box(x0_, dy_, 0, x1_, dy_ + 512, top, BLOCK)
     box(1920, dy_ + 256, 520, 2240, dy_ + 512, 680, TRIM)                         # side ledges: the careful way down
     box(2880, dy_ + 256, 80, 3200, dy_ + 512, 300, TRIM)
-    course("drops", "Drops", "Get to the bottom fast without fall damage: drops of 200, 240, 320 and 440; the side ledges split the big ones.",
+    course("drops", "Drops", "You have 100 health and no refills: get to the bottom fast. Drops of 200, 240, 320 and 440; the side ledges split the big ones.",
            [64, dy_ + 256, 1288], [[64, dy_ + 256], [4696, dy_ + 256]])
+    courses["drops"]["mortal"] = True                                             # 100 health, dying ends the run
 
     # ---- climb: ledges that each need a jump (40 high: more than a step, less than a jump)
     cy_ = 36000

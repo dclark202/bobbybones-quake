@@ -5,7 +5,8 @@
 
 Source: demos.quakelive.ru (public JSON API; files on files.quakelive.ru). One request at a time with a
 pause between downloads; already-downloaded files are skipped, so it can be stopped and resumed.
-Writes data/demos/<map>/<file> and data/demos/index.jsonl (the API's metadata incl. per-player stats).
+Writes <demo root>/demos/<map>/<file> and <demo root>/demos/index.jsonl (demo root: data/, or the folder named in
+data/demo_root.txt) (the API's metadata incl. per-player stats).
 """
 import argparse
 import json
@@ -19,6 +20,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = "https://demos.quakelive.ru/api/demos?type=Duel&map_id={}&per_page=100&page={}"
 FILES = "https://files.quakelive.ru/{}"
 MAPS = {6: "bloodrun", 1: "aerowalk", 20: "lostworld", 9: "campgrounds"}
+def demo_root():
+    """where demos and the training data made from them live: the folder named in data/demo_root.txt (one line,
+    for a big separate drive), else data/"""
+    f = os.path.join(ROOT, "data", "demo_root.txt")
+    if os.path.exists(f):
+        p = open(f).read().strip()
+        if p:
+            return p
+    return os.path.join(ROOT, "data")
+
+
 UA = {"User-Agent": "bobbybones-quake research bot (one file at a time; github.com/dclark202/bobbybones-quake)"}
 
 
@@ -33,7 +45,7 @@ def main():
     ap.add_argument("--gap", type=float, default=8.0, help="seconds between downloads (plus jitter)")
     ap.add_argument("--ext", default=".dm_91")
     a = ap.parse_args()
-    out = os.path.join(ROOT, "data", "demos")
+    out = os.path.join(demo_root(), "demos")
     os.makedirs(out, exist_ok=True)
     index_f = os.path.join(out, "index.jsonl")
     known = set()
