@@ -5,6 +5,32 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-05 08:50 — does a bigger network help? (imitation test on the pro demos) and the new mix's smoke test
+
+**Size test** (`sim/bc_size_test.py`): the same kind of network at three sizes, imitation only, 160 Blood Run
+demos (25 hours) for 8 minutes each, scored on 30 demos (4.6 hours) it never saw.
+
+| Layers x memory | Weights | Steps in 8 min | Held-out loss | Movement keys right | Turn within one bin |
+|---|---|---|---|---|---|
+| 256 x 512 (current) | 1.4 M | 21,651 | 3.38 | 78.6% | 74.0% |
+| 512 x 1024 | 5.2 M | 20,645 | 3.81 | 75.3% | 72.4% |
+| 512 x 2048 | 16.3 M | 8,718 | 3.89 | 74.8% | 71.6% |
+
+The current size predicts unseen pro play best; both bigger ones are worse on every head. Limits of the test:
+equal time, not equal steps (the largest got 40% of the steps); 25 hours of data, where a bigger network
+overfits sooner; no tuning per size; it measures copying pros, not learning by self-play. Reading: nothing here
+says the network is too small. The current size stays.
+
+**Smoke test of the next mix** (9 minutes from the night's checkpoint; arena 26%, run-and-gun 21%, aim 21%,
+Blood Run duels 16%, courses 16%; damage taken at equal weight; walk key off; no demos): runs at the expected
+speed. Arena: 6 -> 9.5 frags per player-minute, enemy in view 64% -> 70%, speed 245 -> 199 u/s (he stands and
+shoots in the boxes: to watch). Run-and-gun: damage 834 -> 1744 a minute, speed with a target about 280 u/s,
+not rising yet. Aim error in view 16 -> 10 degrees. Walk 0%.
+
+Also after the PC crashed at about 08:10: nothing was training; checkpoints and code intact; the size test and
+one video were redone; play-test server restarted. All demos are downloaded (Blood Run 1293, Aerowalk 1012,
+Lost World 1411; only Blood Run converted).
+
 ## 2026-10-04 21:12 — overnight run: combat, movement rooms, pro demos (`duel_gru_v4` from 775 min, until 07:00)
 
 Owner's plan: three parts of equal weight, Blood Run only for the real map. What was built, checked and started:
