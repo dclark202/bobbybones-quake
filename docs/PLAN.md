@@ -45,17 +45,26 @@ same commit.
 | 5 | Public servers and community play tests | scoped (HOSTING.md); waits for a decent Bobby and the plugin update |
 | 6 | Opponent profiles, player reports | later |
 
+## Goal 1 (owner, 2026-10-05)
+
+The first target is smaller than "a duel bot on the popular duel maps":
+1. Plays human-like Quake (no key spam, steady aim, looks where it matters).
+2. In one small arena (the environment room or the yard; which one is decided at the 19:00 review).
+3. Shows knowledge of that map and moves efficiently on it.
+4. One against one, or all against all up to four players, whichever brings out the behaviour better.
+5. Beats Nightmare there (done: 23-11 to 32-10 in five minutes, RESULTS 2026-10-05).
+
+The duel maps (Blood Run, Aerowalk, Lost World) come after this. The owner's favourite mode is free-for-all with
+three or four players.
+
 ## Now
 
-Nothing is training. The night of 2026-10-04 (`duel_gru_v4` to 1361 min) made the courses much faster, left the
-duels where they were and cost a lot of aim (RESULTS 2026-10-04 21:12, "Result of the night").
+`duel_gru_v5` is training until 19:00 on 2026-10-05: self-play in the environment box, finger and sight limits,
+rocket weapon sets drawn per player (RESULTS 2026-10-05 09:26). Built and waiting for the review: groups of up to
+six (B-86), the yard with items (B-87), switching the server and benchmarks to the new simulator (B-88).
 
-Proposed next run, waiting for the owner: arena self-play in the aim box and the environment box (his idea: no
-room to avoid each other), run-and-gun (B-81, built), Blood Run duels with the demo movement loss, courses with
-more time on the three unfinished ones, aim rooms back to 15%, items room with a random start. Open decisions:
-weight of damage taken, removing the walk key, a network-size test on the demos.
-
-Alongside: B-64 results for players; B-61 / B-69 public server.
+Proposed order after the review: the arena with items, two players; then a share of rounds with three or four
+players; judged by the videos, the Nightmare score and item and movement numbers on that map.
 
 ## Owner decisions
 
