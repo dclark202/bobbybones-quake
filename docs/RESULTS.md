@@ -5,6 +5,16 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-04 20:15 — Lost World replaces Campgrounds; older pro demos
+
+- Lost World: map file taken from the server's game data, route graph built by the simulator (1272 spots, 7126
+  walk links, 11762 air links, 29 teleporter links), loads in the duel simulator (weapons on the map: RL, LG, SG,
+  GL, PG; one teleporter, two jump pads). It takes the third map slot of the inputs (was Campgrounds). Atlas
+  built from the graph only so far.
+- Demo site totals for Blood Run duels: 1309 (1071 in the 2009-2014 format `.dm_73`, which the parser reads;
+  236 `.dm_91`). The 1071 older ones are downloading; Aerowalk and Lost World follow in the same queue
+  (`data/fetch_more.cmd`).
+
 ## 2026-10-04 20:05 — test map: seven more rooms, rocket ledges lowered (owner)
 
 - New: `move bends`, `move pads` (jump pads and a teleporter: the map builder now writes trigger and item

@@ -27,7 +27,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
-MAPS = ("bloodrun", "aerowalk", "campgrounds")
+MAPS = ("bloodrun", "aerowalk", "lostworld")
 SUITE_VERSION = 1
 
 

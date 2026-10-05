@@ -1,6 +1,6 @@
 """Self-play PPO with memory (GRU) in the duel simulator, against a league of its own past versions.
 
-    python sim/train_duel_rnn.py --map bloodrun,aerowalk,campgrounds --minutes 480 --run duel_gru_v1
+    python sim/train_duel_rnn.py --map bloodrun,aerowalk,lostworld --minutes 480 --run duel_gru_v1
 
 Model: encoder (2 x 256) -> GRU (512) -> heads for each control + a value estimate. ~1.6 M weights.
 The memory is carried frame to frame and reset when the player dies or the round restarts; training runs
@@ -74,7 +74,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--map", default="bloodrun,aerowalk,campgrounds")
+    ap.add_argument("--map", default="bloodrun,aerowalk,lostworld")
     ap.add_argument("--run", default="duel_gru_v1")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--matches", type=int, default=128, help="matches per worker (2 players each)")

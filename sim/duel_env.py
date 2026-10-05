@@ -80,7 +80,7 @@ N_GOAL = 7                                             # goal inputs: on, where 
 N_XITEMS = 8
 N_VIEW, N_UP, N_LONG = 15, 5, 8
 N_EXTRA = 10 + 6 * N_XITEMS + 20 + 6 + (N_VIEW + N_UP + N_LONG) + 12 + 4 + 11 + 1
-MAP_IDS = ("bloodrun", "aerowalk", "campgrounds")
+MAP_IDS = ("bloodrun", "aerowalk", "lostworld")       # third slot was campgrounds until 2026-10-04
 HEAR_EVT = 1200.0                                      # item pickups, weapon fire, jumps, teleports are heard this far
                                                        # (not measured against the game)
 VIEW_H_DUCK, TOP, TOP_DUCK = 12.0, 32.0, 16.0          # eye height and box top when crouched (Quake 3 values)

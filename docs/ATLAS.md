@@ -13,7 +13,8 @@ python tools/build_atlas.py --picture                                # pictures 
 |---|---|---|---|---|---|---|
 | Blood Run | 1185 | 26 | 10 | 224 | 81,084 | 2.8 |
 | Aerowalk | 906 | 20 | 11 | 148 | 45,885 | 2.7 |
-| Campgrounds | 1643 | 32 | 12 | 0 (the six demos are not parsed yet) | 0 | 2.7 |
+| Lost World | 1272 | 28 | 9 | 0 (demos queued for download) | 0 | see file |
+| Campgrounds (no longer a training map) | 1643 | 32 | 12 | 0 | 0 | 2.7 |
 
 ## Contents of the file
 

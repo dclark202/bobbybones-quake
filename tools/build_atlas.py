@@ -1,6 +1,6 @@
 """Build the map atlas: one inspectable file per map with what a good player knows about it.
 
-    python tools/build_atlas.py --maps bloodrun,aerowalk,campgrounds      (Anaconda Python; needs sim/qsim)
+    python tools/build_atlas.py --maps bloodrun,aerowalk,lostworld      (Anaconda Python; needs sim/qsim)
 
 Output: maps/atlas/<map>.json and maps/atlas/<map>.png
 
@@ -338,7 +338,7 @@ def picture(atlas, nodes, path):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--maps", default="bloodrun,aerowalk,campgrounds")
+    ap.add_argument("--maps", default="bloodrun,aerowalk,lostworld")
     ap.add_argument("--demos", default=os.path.join(ROOT, "data", "demos_parsed"))
     ap.add_argument("--out", default=os.path.join(ROOT, "maps", "atlas"))
     ap.add_argument("--picture", action="store_true", help="only redraw the pictures from the JSON files")

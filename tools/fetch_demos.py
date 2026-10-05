@@ -18,7 +18,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = "https://demos.quakelive.ru/api/demos?type=Duel&map_id={}&per_page=100&page={}"
 FILES = "https://files.quakelive.ru/{}"
-MAPS = {6: "bloodrun", 1: "aerowalk", 9: "campgrounds"}
+MAPS = {6: "bloodrun", 1: "aerowalk", 20: "lostworld", 9: "campgrounds"}
 UA = {"User-Agent": "bobbybones-quake research bot (one file at a time; github.com/dclark202/bobbybones-quake)"}
 
 

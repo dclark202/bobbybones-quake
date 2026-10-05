@@ -13,7 +13,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.
-- Maps: Blood Run (ZTN), Aerowalk, Campgrounds, plus the test map `bobbylab`.
+- Maps: Blood Run (ZTN), Aerowalk, Lost World (replaced Campgrounds on 2026-10-04), plus the test map `bobbylab`.
 - Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder. Copying the
   test map pk3 into its `baseq3` is allowed (he asked for it); nothing else.
 - No personal data in the repo (Steam IDs, home IP, Windows usernames, passwords). The repo is public.

@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("bloodrun", "aerowalk", "campgrounds", "bobbylab")
+MAPS = ("bloodrun", "aerowalk", "lostworld", "campgrounds", "bobbylab")
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 2
@@ -67,7 +67,7 @@ class duelbot(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|campgrounds|bobbylab>")
+        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|lostworld|campgrounds|bobbylab>")
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 0, usage="<weapon|off>")

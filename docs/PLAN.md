@@ -88,6 +88,9 @@ B-61 / B-69 public server.
 - Map knowledge should not live only in the network's weights: an atlas per map with several learned routes per
   item, seeded from pro play (B-72, B-75), then a value map (B-73).
 - Pro demos come after self-play has gone as far as it can; first use is routes and positions.
+- Third map is Lost World, not Campgrounds (2026-10-04): more played, and it has elements he has not seen.
+- The game's bots are a benchmark only (Nightmare, ten minutes per checkpoint); he trains against himself.
+- Spawn weapons are only those that lie on the map.
 - No personal data in the repo.
 
 ## How to run (short)
