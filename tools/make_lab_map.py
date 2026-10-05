@@ -457,45 +457,59 @@ def main():
                           bounds=[0, iy, 3072, iy + 2048], secs=120)
     spawns.append((1536, iy + 256, 24, 0))
 
-    # ================= the yard (2026-10-05): a small duel arena in the manner of the duel maps =================
-    # 1792 x 1536, two levels. Ground: an open middle with pillars, a crate and a low wall; a tunnel under the north
-    # balcony (two doorways) and a low-ceilinged strip under the east balcony for close fights. Upper level (192
-    # up): north and east balconies joined at the corner, a catwalk from the east balcony to a tower in the middle.
-    # Ways up: stairs on the west wall, a ramp in front of the north balcony, a jump pad onto the tower. A
-    # teleporter leads from the tunnel's east end to the south-west corner.
-    YY = 50000
-    room(0, YY, 0, 1792, YY + 1536, 512)
-    UP = 192
-    box(0, YY + 1280, UP - 16, 1792, YY + 1536, UP, TRIM)                          # north balcony (a slab)
-    for x0_, x1_ in ((0, 384), (512, 1152), (1280, 1792)):                         # its front wall below, two doorways
-        box(x0_, YY + 1280, 0, x1_, YY + 1296, UP - 16, BLOCK)
-    box(800, YY + 1392, 0, 864, YY + 1536, 96, BLOCK)                              # a half wall inside the tunnel
-    box(1536, YY + 512, UP - 16, 1792, YY + 1280, UP, TRIM)                        # east balcony
-    box(1536, YY + 768, 0, 1552, YY + 1024, UP - 16, BLOCK)                        # a wall under its edge
-    box(1536, YY + 512, 0, 1568, YY + 544, UP - 16, BLOCK)                         # corner post
-    for k in range(12):                                                            # stairs on the west wall, up to the north balcony
-        box(0, YY + 896 + k * 32, 0, 192, YY + 896 + (k + 1) * 32, 16 * (k + 1), TRIM)
-    ramp(640, YY + 1152, 1024, YY + 1280, 0, UP, 0)                                # ramp in front of the north balcony
-    box(1024, YY + 1152, 0, 1152, YY + 1280, UP, BLOCK)                            # its landing, joined to the balcony
-    box(768, YY + 512, 0, 896, YY + 736, UP, BLOCK)                                # the tower
-    box(896, YY + 576, UP - 16, 1536, YY + 672, UP, TRIM)                          # catwalk: tower to east balcony
-    box(416, YY + 320, 0, 480, YY + 384, 512, BLOCK)                               # pillars
-    box(1184, YY + 256, 0, 1248, YY + 320, 512, BLOCK)
-    box(1088, YY + 960, 0, 1152, YY + 1024, 512, BLOCK)
-    box(960, YY + 400, 0, 1216, YY + 432, 64, BLOCK)                               # low wall (crouch cover)
-    box(288, YY + 928, 0, 384, YY + 1024, 96, BLOCK)                               # crate
-    box(700, YY + 1380, UP, 764, YY + 1444, UP + 64, BLOCK)                        # crate on the north balcony
-    box(1600, YY + 880, UP, 1632, YY + 1040, UP + 56, BLOCK)                       # low wall on the east balcony
-    box(300 - 56, YY + 624 - 56, 0, 300 + 56, YY + 624 + 56, 2, TRIM)               # jump pad plate
-    trigger("trigger_push", 300 - 48, YY + 624 - 48, 2, 300 + 48, YY + 624 + 48, 18, (630, YY + 624, 340))
-    box(1680, YY + 1330, 0, 1690, YY + 1500, 2, TRIM)                              # line in front of the teleporter
-    trigger("trigger_teleport", 1728, YY + 1344, 0, 1776, YY + 1488, 128, (128, YY + 128, 40), angle=45)
-    rooms["yard"] = dict(bounds=[0, YY, 1792, YY + 1536], z=8, spots=[
-        [128, YY + 320, 8], [1664, YY + 128, 8], [896, YY + 128, 8], [640, YY + 900, 8], [1300, YY + 700, 8],
-        [200, YY + 1420, 8], [1400, YY + 1420, 8], [1650, YY + 640, 8],
-        [200, YY + 1408, UP + 8], [1400, YY + 1408, UP + 8], [1664, YY + 700, UP + 8], [832, YY + 624, UP + 8]])
-    for q in rooms["yard"]["spots"][:4]:
-        spawns.append((q[0], q[1], q[2] + 16, 0))
+    def yard(YY, R=None, items=False):
+        # ================= the yard (2026-10-05): a small duel arena in the manner of the duel maps =================
+        # 1792 x 1536, two levels. Ground: an open middle with pillars, a crate and a low wall; a tunnel under the north
+        # balcony (two doorways) and a low-ceilinged strip under the east balcony for close fights. Upper level (192
+        # up): north and east balconies joined at the corner, a catwalk from the east balcony to a tower in the middle.
+        # Ways up: stairs on the west wall, a ramp in front of the north balcony, a jump pad onto the tower. A
+        # teleporter leads from the tunnel's east end to the south-west corner.
+        R_ = rooms if R is None else R
+        room(0, YY, 0, 1792, YY + 1536, 512)
+        UP = 192
+        box(0, YY + 1280, UP - 16, 1792, YY + 1536, UP, TRIM)                          # north balcony (a slab)
+        for x0_, x1_ in ((0, 384), (512, 1152), (1280, 1792)):                         # its front wall below, two doorways
+            box(x0_, YY + 1280, 0, x1_, YY + 1296, UP - 16, BLOCK)
+        box(800, YY + 1392, 0, 864, YY + 1536, 96, BLOCK)                              # a half wall inside the tunnel
+        box(1536, YY + 512, UP - 16, 1792, YY + 1280, UP, TRIM)                        # east balcony
+        box(1536, YY + 768, 0, 1552, YY + 1024, UP - 16, BLOCK)                        # a wall under its edge
+        box(1536, YY + 512, 0, 1568, YY + 544, UP - 16, BLOCK)                         # corner post
+        for k in range(12):                                                            # stairs on the west wall, up to the north balcony
+            box(0, YY + 896 + k * 32, 0, 192, YY + 896 + (k + 1) * 32, 16 * (k + 1), TRIM)
+        ramp(640, YY + 1152, 1024, YY + 1280, 0, UP, 0)                                # ramp in front of the north balcony
+        box(1024, YY + 1152, 0, 1152, YY + 1280, UP, BLOCK)                            # its landing, joined to the balcony
+        box(768, YY + 512, 0, 896, YY + 736, UP, BLOCK)                                # the tower
+        box(896, YY + 576, UP - 16, 1536, YY + 672, UP, TRIM)                          # catwalk: tower to east balcony
+        box(416, YY + 320, 0, 480, YY + 384, 512, BLOCK)                               # pillars
+        box(1184, YY + 256, 0, 1248, YY + 320, 512, BLOCK)
+        box(1088, YY + 960, 0, 1152, YY + 1024, 512, BLOCK)
+        box(960, YY + 400, 0, 1216, YY + 432, 64, BLOCK)                               # low wall (crouch cover)
+        box(288, YY + 928, 0, 384, YY + 1024, 96, BLOCK)                               # crate
+        box(700, YY + 1380, UP, 764, YY + 1444, UP + 64, BLOCK)                        # crate on the north balcony
+        box(1600, YY + 880, UP, 1632, YY + 1040, UP + 56, BLOCK)                       # low wall on the east balcony
+        box(300 - 56, YY + 624 - 56, 0, 300 + 56, YY + 624 + 56, 2, TRIM)               # jump pad plate
+        trigger("trigger_push", 300 - 48, YY + 624 - 48, 2, 300 + 48, YY + 624 + 48, 18, (630, YY + 624, 340))
+        box(1680, YY + 1330, 0, 1690, YY + 1500, 2, TRIM)                              # line in front of the teleporter
+        trigger("trigger_teleport", 1728, YY + 1344, 0, 1776, YY + 1488, 128, (128, YY + 128, 40), angle=45)
+        R_["yard"] = dict(bounds=[0, YY, 1792, YY + 1536], z=8, spots=[
+            [128, YY + 320, 8], [1664, YY + 128, 8], [896, YY + 128, 8], [640, YY + 900, 8], [1300, YY + 700, 8],
+            [200, YY + 1420, 8], [1400, YY + 1420, 8], [1650, YY + 640, 8],
+            [200, YY + 1408, UP + 8], [1400, YY + 1408, UP + 8], [1664, YY + 700, UP + 8], [832, YY + 624, UP + 8]])
+        for q in R_["yard"]["spots"][:4]:
+            spawns.append((q[0], q[1], q[2] + 16, 0))
+        if items:                                                                  # the duel version: things to fight over
+            for cls, x_, y_, z_ in (("item_health_mega", 832, 624, UP + 24),      # on the tower (the jump pad lands there)
+                                    ("item_armor_body", 200, 1420, 24),           # in the tunnel, west end
+                                    ("weapon_railgun", 1500, 1408, UP + 24),      # north balcony, east end
+                                    ("weapon_rocketlauncher", 1500, 200, 24),     # open ground, south-east
+                                    ("weapon_lightning", 1664, 1000, 24),         # under the east balcony
+                                    ("item_health", 128, 700, 24), ("item_health", 1000, 1000, 24),
+                                    ("item_armor_shard", 640, 200, 24), ("item_armor_shard", 700, 200, 24)):
+                extra.append('{{\n"classname" "{}"\n"origin" "{} {} {}"\n}}'.format(cls, x_, YY + y_, z_))
+            R_["yard"]["items"] = True
+            R_["yard"]["spots"] = [q for q in R_["yard"]["spots"] if not (q[0] == 832 and q[2] > 100)] + [[1100, YY + 624, UP + 8]]
+
+    yard(50000)
     rooms["courses"] = courses
     # ---- terrain stations: 3D copies of the real spots
     # The trick-jump copies (Campgrounds bridge to rail and pillars, Aerowalk and Blood Run red armor) were
@@ -527,22 +541,30 @@ def main():
         spawns.append((st["start"][0], st["start"][1], st["start"][2] + 8, info["yaw"]))
         print("{}: {} boxes, size {}".format(key, len(boxes), size))
         ox += size[0] + 256
-    # ---- write the .map
-    ents = ['{\n"classname" "worldspawn"\n"message" "BobbyBones test lab"\n"_ambient" "45"\n"_color" "1 1 1"\n'
-            + "\n".join(brushes) + "\n}"]
-    for x, y, z, a in spawns:
-        ents.append('{{\n"classname" "info_player_deathmatch"\n"origin" "{} {} {}"\n"angle" "{}"\n}}'.format(
-            int(x), int(y), int(z), int(a)))
-    ents += extra
-    for x, y, z, v in lights:
-        ents.append('{{\n"classname" "light"\n"origin" "{} {} {}"\n"light" "{}"\n}}'.format(int(x), int(y), int(z), v))
-    os.makedirs(os.path.join(ROOT, "data", "lab", "maps"), exist_ok=True)
-    os.makedirs(os.path.join(ROOT, "maps", "bobbylab"), exist_ok=True)
-    with open(os.path.join(ROOT, "data", "lab", "maps", "bobbylab.map"), "w", newline="\n") as f:
-        f.write("\n".join(ents) + "\n")
-    with open(os.path.join(ROOT, "maps", "bobbylab", "rooms.json"), "w", newline="\n") as f:
-        json.dump(rooms, f, indent=1)
-    print("{} brushes, {} lights, {} spawns -> data/lab/maps/bobbylab.map".format(len(brushes), len(lights), len(spawns)))
+    # ---- write the maps
+    def write(name, R, message):
+        ents = ['{\n"classname" "worldspawn"\n"message" "' + message + '"\n"_ambient" "45"\n"_color" "1 1 1"\n'
+                + "\n".join(brushes) + "\n}"]
+        for x, y, z, a in spawns:
+            ents.append('{{\n"classname" "info_player_deathmatch"\n"origin" "{} {} {}"\n"angle" "{}"\n}}'.format(
+                int(x), int(y), int(z), int(a)))
+        ents += extra
+        for x, y, z, v in lights:
+            ents.append('{{\n"classname" "light"\n"origin" "{} {} {}"\n"light" "{}"\n}}'.format(int(x), int(y), int(z), v))
+        os.makedirs(os.path.join(ROOT, "data", "lab", "maps"), exist_ok=True)
+        os.makedirs(os.path.join(ROOT, "maps", name), exist_ok=True)
+        with open(os.path.join(ROOT, "data", "lab", "maps", name + ".map"), "w", newline="\n") as f:
+            f.write("\n".join(ents) + "\n")
+        with open(os.path.join(ROOT, "maps", name, "rooms.json"), "w", newline="\n") as f:
+            json.dump(R, f, indent=1)
+        print("{}: {} brushes, {} lights, {} spawns -> data/lab/maps/{}.map".format(name, len(brushes), len(lights), len(spawns), name))
+
+    write("bobbylab", rooms, "BobbyBones test lab")
+    # the second map: only the yard, with items to fight over (mega health, red armor, rockets, lightning, rail)
+    brushes.clear(); lights.clear(); spawns.clear(); extra.clear()
+    rooms2 = dict(map="bobbyyard", stations={}, courses={})
+    yard(0, R=rooms2, items=True)
+    write("bobbyyard", rooms2, "BobbyBones yard")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 | Command | What it does |
 |---|---|
 | `!note <text>` | Saves your comment with the game state at that moment (both positions, health, his weapon, whether he could see you, the room if one is running). Start with a tag: `aim`, `move`, `weapon`, `items`, `position`, `stuck`, `unfair`, `weird`, `good` |
-| `!map <name>` | Changes the map: `bloodrun`, `aerowalk`, `campgrounds`, or `bobbylab` (the test map) |
+| `!map <name>` | Changes the map: `bloodrun`, `aerowalk`, `lostworld`, `campgrounds`, `bobbylab` (the test map) or `bobbyyard` (the yard as a small duel map with a mega health, a red armor, rocket launcher, lightning gun and railgun to pick up; duel spawn) |
 | `!drill <weapon>` / `!drill off` | Both players get only that weapon (`rl`, `rg`, `lg`, `mg`, `sg`, `gl`, `pg`, `hmg`); `off` returns to the normal spawn weapons |
 | `!nosg` / `!nosg off` | Nobody spawns with a shotgun (it can still be picked up on the map); `off` returns to every weapon |
 | `!arena box` / `!arena env` / `!arena yard` `[minutes]` / `!arena off` | On the test map: fight BobbyBones in the aim box, the environment box or the yard (a small two-level duel arena: balconies, stairs, a ramp, a tower with a catwalk, a jump pad, a teleporter, a tunnel; not in his training yet) under the rules he trains with: full weapon set at spawn, 125 health, nobody leaves the room, five minutes (or the number given). The score and damage are announced at the end |

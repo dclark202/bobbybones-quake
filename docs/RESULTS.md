@@ -97,6 +97,19 @@ the one weapon, and tracking hit rates are back above the owner's card.
 Five minutes after: kills by weapon LG 41%, rail 35%, MG 12%, shotgun 10%; rail 72%, MG 67%, LG 54%; enemy in
 view 42% (70% with the open box in the mix); aim error 7.7 degrees; standing still 22%.
 
+**12:50 — `bobbyyard`: the yard as its own small duel map with items** (owner; for his feedback, not in training).
+Mega health on the tower (where the jump pad lands), red armor in the tunnel's west end, railgun on the north
+balcony's east end, rocket launcher on the open ground south-east, lightning gun under the east balcony, two
+25-health and two shards. Its own map file so that the test map and the running training are untouched
+(`maps/bobbyyard/`; `tools/make_lab_map.py` writes both). On it nobody is handed weapons: the game's duel
+spawn. Checked: loads in the simulator and on the server; in three minutes against Nightmare both bots picked
+items up (Nightmare the red armor ten times and the mega six).
+
+**12:30 — does moving protect him?** (`tools/dodge_check.py`, two minutes of self-play in the environment box):
+damage per second of firing at an enemy in view is 87 when he stands, 70 when he moves slowly, 71 above 200
+u/s: moving costs the shooter about 18%. He moves sideways at 156 u/s with the enemy in view and changes
+direction 0.3 times a second.
+
 After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
 24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
 

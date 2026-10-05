@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("bloodrun", "aerowalk", "lostworld", "campgrounds", "bobbylab")
+MAPS = ("bloodrun", "aerowalk", "lostworld", "campgrounds", "bobbylab", "bobbyyard")
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 2
@@ -66,7 +66,7 @@ class duelbot(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|lostworld|campgrounds|bobbylab>")
+        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|lostworld|campgrounds|bobbylab|bobbyyard>")
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 0, usage="<weapon|off>")
@@ -226,8 +226,10 @@ class duelbot(minqlx.Plugin):
         if not self.lab:
             player.tell("The arena is on the test map: !map bobbylab first.")
             return
-        if not a or a[0] not in ("box", "env", "yard") or (a[0] == "yard" and "yard" not in self.lab):
-            return minqlx.RET_USAGE
+        here = {k: v for k, v in (("box", "aim"), ("env", "env"), ("yard", "yard")) if v in self.lab}
+        if not a or a[0] not in here:
+            player.tell("usage: !arena <{}|off> [minutes]".format("|".join(here)))
+            return
         mins = float(a[1]) if len(a) > 1 and a[1].replace(".", "", 1).isdigit() else 5.0
         self.arena_start(a[0], mins)
 
@@ -235,8 +237,10 @@ class duelbot(minqlx.Plugin):
         self.queue, self.room, self.drill = [], None, None
         self.arena = dict(where=where, t_end=time.time() + mins * 60, mins=mins, base=dict(self.score), place=True, dmg=[0, 0])
         self.record(event="arena_start", where=where, minutes=mins)
-        self.msg("^3Arena: the {}^7, {:g} minutes. Full weapons at spawn, nobody leaves the room. !arena off stops.".format(
-            {"box": "aim box", "env": "environment box", "yard": "yard"}[where], mins))
+        own = bool(self.lab.get("yard", {}).get("items")) and where == "yard"
+        self.msg("^3Arena: the {}^7, {:g} minutes. {} !arena off stops.".format(
+            {"box": "aim box", "env": "environment box", "yard": "yard"}[where], mins,
+            "Duel spawn: the weapons, mega health and red armor are on the map." if own else "Full weapons at spawn, nobody leaves the room."))
 
     def arena_end(self, why="time"):
         A = self.arena
@@ -279,6 +283,9 @@ class duelbot(minqlx.Plugin):
             self.msg("Spar off. Join the game to play him yourself.")
 
     def cmd_rooms(self, player, msg, channel):
+        if self.lab and "aim" not in self.lab:
+            player.tell("This map is the yard with items: a normal duel, or !arena yard [minutes] for a timed one. !map bobbylab has the rooms.")
+            return
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
@@ -473,6 +480,8 @@ class duelbot(minqlx.Plugin):
         E = E or self.E
         if only is None:
             only = self.drill
+        if not only and self.lab and self.lab.get("yard", {}).get("items"):
+            return                                           # a map with its own weapons: the game's duel spawn stands
         nine = hasattr(E, "NW")
         try:
             if only:
@@ -766,7 +775,7 @@ class duelbot(minqlx.Plugin):
             return self.room_frame(now, bobby, opp, bs, os_)
         if self.arena and not self.lab:
             self.arena = None
-        if self.arena is None and self.lab and os.environ.get("DUEL_ARENA") in ("box", "env") and is_bot(opp) \
+        if self.arena is None and self.lab and os.environ.get("DUEL_ARENA") in ("box", "env", "yard") and is_bot(opp) \
                 and not getattr(self, "arena_auto_done", False):
             self.arena_auto_done = True                      # benchmark servers: one arena fight against the game's bot
             self.arena_start(os.environ["DUEL_ARENA"], float(os.environ.get("DUEL_ARENA_MIN") or 5))
@@ -781,7 +790,7 @@ class duelbot(minqlx.Plugin):
                         self.give_loadout(p_)
             A["place"] = False
             for p_, st_ in ((bobby, bs), (opp, os_)):        # a match start hands out the default weapons again: re-arm
-                if st_.health > 0 and not st_.weapons.rl:
+                if st_.health > 0 and not st_.weapons.rl and not self.lab.get("yard", {}).get("items"):
                     self.give_loadout(p_)
             if now >= A["t_end"]:
                 self.arena_end("time")

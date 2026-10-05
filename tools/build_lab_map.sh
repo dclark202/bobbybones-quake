@@ -9,16 +9,20 @@ cd "$ROOT"
 cd data/lab
 Q=../tools/q3map2.exe
 BP="$(pwd -W)"
-$Q -game quakelive -fs_basepath "$BP" -fs_game . -meta maps/bobbylab.map 2>&1 | grep -iE "leak|error|degenerate|bad" | head -5 || true
-$Q -game quakelive -fs_basepath "$BP" -fs_game . -vis -fast maps/bobbylab.bsp 2>&1 | grep -iE "error" | head -2 || true
-$Q -game quakelive -fs_basepath "$BP" -fs_game . -light -fast maps/bobbylab.bsp 2>&1 | grep -iE "error" | head -2 || true
-../tools/mbspc.exe -forcesidesvisible -bsp2aas maps/bobbylab.bsp 2>&1 | grep -iE "error|leak|total reach" | tail -2 || true
+for M in bobbylab bobbyyard; do
+  $Q -game quakelive -fs_basepath "$BP" -fs_game . -meta maps/$M.map 2>&1 | grep -iE "leak|error|degenerate|bad" | head -5 || true
+  $Q -game quakelive -fs_basepath "$BP" -fs_game . -vis -fast maps/$M.bsp 2>&1 | grep -iE "error" | head -2 || true
+  $Q -game quakelive -fs_basepath "$BP" -fs_game . -light -fast maps/$M.bsp 2>&1 | grep -iE "error" | head -2 || true
+  ../tools/mbspc.exe -forcesidesvisible -bsp2aas maps/$M.bsp 2>&1 | grep -iE "error|leak|total reach" | tail -2 || true
+done
 cd "$ROOT"
-cp data/lab/maps/bobbylab.bsp data/maps/bobbylab.bsp
-"$PYTHON" -c "
+for M in bobbylab bobbyyard; do
+  cp data/lab/maps/$M.bsp data/maps/$M.bsp
+  "$PYTHON" -c "
 import zipfile
-z = zipfile.ZipFile('maps/bobbylab/bobbylab.pk3', 'w', zipfile.ZIP_DEFLATED)
-z.write('data/lab/maps/bobbylab.bsp', 'maps/bobbylab.bsp')
-z.write('data/lab/maps/bobbylab.aas', 'maps/bobbylab.aas')
+z = zipfile.ZipFile('maps/$M/$M.pk3', 'w', zipfile.ZIP_DEFLATED)
+z.write('data/lab/maps/$M.bsp', 'maps/$M.bsp')
+z.write('data/lab/maps/$M.aas', 'maps/$M.aas')
 z.close()"
-echo "built maps/bobbylab/bobbylab.pk3"
+done
+echo "built maps/bobbylab/bobbylab.pk3 and maps/bobbyyard/bobbyyard.pk3"
