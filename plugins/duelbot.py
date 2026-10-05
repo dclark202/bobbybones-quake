@@ -10,7 +10,7 @@ roughly when heard nearby. Both players spawn with the loadout the policy traine
 Test rooms (!room ...): Bobby's body becomes the scripted target / fighter of the simulator's rooms and the
 human is measured with the same metrics, giving a human baseline card (docs/LOGS.md).
 
-Opponent: the first human on the server; with DUEL_OPP=bot a plain Hardcore bot fills in while no human is
+Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
 there. The server is held in warmup on the three maps.
 
 Chat commands: !note <text>, !drill <weapon|off>, !map <name>, !room <...> (see cmd_room), !rooms.
@@ -48,7 +48,7 @@ LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade laun
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["move", "*"]] + \
-    [["fight", "hardcore"]]
+    [["fight", "nightmare"]]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
     [["choice", b] for b in ("close", "mid", "far")] + [["move"], ["solo"]] + \
@@ -214,13 +214,13 @@ class duelbot(minqlx.Plugin):
         self.msg("Spawn weapons: {}".format("everything except the shotgun" if self.no_sg else "everything"))
 
     def cmd_spar(self, player, msg, channel):
-        """!spar on: you become a spectator and Bobby plays a Hardcore bot (skill 4) (a real match). !spar off: back to you."""
+        """!spar on: you become a spectator and Bobby plays a Nightmare bot (a real match). !spar off: back to you."""
         on = len(msg) < 2 or msg[1].lower() != "off"
         self.opp_bot = on
         self.room, self.queue = None, []
         if on:
             player.put("spectator")
-            self.msg("Spar: BobbyBones against a Hardcore bot (skill 4). Join the game or type !spar off to stop.")
+            self.msg("Spar: BobbyBones against a Nightmare bot. Join the game or type !spar off to stop.")
         else:
             for p in self.players():
                 if is_bot(p) and "Bones" not in p.clean_name:
@@ -231,7 +231,7 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!room fight hardcore (60 s): the game's Hardcore bot")
+            player.tell("!room fight nightmare (60 s): the game's Nightmare bot")
             player.tell("!room fight <{}> (30 s): scripted styles".format("|".join(self.R.PERSONAS)))
             player.tell("!room suite = every room, about 20 minutes | !room off")
             return
@@ -290,8 +290,8 @@ class duelbot(minqlx.Plugin):
                 key = "speed" if a[0] == "speed" else a[1]
                 return dict(kind="speed", lab=True, name="move/" + key, script=0, secs=30, key=key)
             if a[0] == "fight" and (len(a) < 2 or a[1] in ("hardcore", "nightmare")):
-                # the game's own Hardcore bot: our control of Bobby's body is released for the room
-                return dict(kind="ladder", lab=True, name="fight/hardcore", style=0, script=0, secs=60, ai=True)
+                # the game's own Nightmare bot: our control of Bobby's body is released for the room
+                return dict(kind="ladder", lab=True, name="fight/nightmare", style=0, script=0, secs=60, ai=True)
             if a[0] == "fight" and len(a) >= 2 and a[1] in R.PERSONAS:
                 return dict(kind="ladder", lab=True, name="fight/" + a[1], style=0, script=2, secs=30,
                             persona=R.PERSONAS.index(a[1]))
@@ -630,7 +630,7 @@ class duelbot(minqlx.Plugin):
         if bobby is None:
             if now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot bones 4 free 0 BobbyBones")
+                minqlx.console_command("addbot bones 5 free 0 BobbyBones")
             return
         if human is not None and filler is not None:
             if now > self.next_check:
@@ -641,7 +641,7 @@ class duelbot(minqlx.Plugin):
         if opp is None:
             if self.opp_bot and now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot sarge {}".format(os.environ.get("DUEL_BOT_SKILL") or 4))   # 4 Hardcore, 5 Nightmare
+                minqlx.console_command("addbot sarge {}".format(os.environ.get("DUEL_BOT_SKILL") or 5))   # 5 Nightmare, 4 Hardcore
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, 0.0)
             if self.sess:
                 self.end_session()
@@ -785,7 +785,7 @@ class duelbot(minqlx.Plugin):
                      "dodger": "dodges, backs off when hurt", "stander": "stands still",
                      "jumper": "runs at you, always jumping", "spammer": "fires blind"}.get(r["name"].split("/")[-1], "")
             if r.get("ai"):
-                return "All weapons, your choice. Play to win. Opponent: the game's Hardcore bot."
+                return "All weapons, your choice. Play to win. Opponent: the game's Nightmare bot."
             return "All weapons, your choice. Play to win. Opponent: {} ({}).".format(r["name"].split("/")[-1], style)
         return ""
 

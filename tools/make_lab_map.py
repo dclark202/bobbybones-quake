@@ -44,6 +44,9 @@ def prism(pts, z0, z1, tex=WALL):
     """a brush with vertical sides over a convex footprint (points counter-clockwise seen from above)"""
     f = "( {} {} {} ) ( {} {} {} ) ( {} {} {} ) {} 0 0 0 0.5 0.5 0 0 0"
     pts = [(int(round(x)), int(round(y))) for x, y in pts]
+    area = sum(pts[k][0] * pts[(k + 1) % len(pts)][1] - pts[(k + 1) % len(pts)][0] * pts[k][1] for k in range(len(pts)))
+    if area < 0:                                             # make the footprint counter-clockwise
+        pts = pts[::-1]
     (ax, ay), (bx, by), (cx, cy) = pts[0], pts[1], pts[2]
     faces = [(ax, ay, z1, cx, cy, z1, bx, by, z1), (ax, ay, z0, bx, by, z0, cx, cy, z0)]
     for k in range(len(pts)):
@@ -147,7 +150,7 @@ def main():
     course("speed", "Speed straight", "Flat straight: build speed and hold it to the far end.",
            [64, sy + 256, 8], [[64, sy + 256], [SL - 104, sy + 256]])
 
-    def gap_course(key, name, hint, gy, plat, gaps):
+    def gap_course(key, name, hint, gy, plat, gaps, marks=None):
         """platforms of length plat separated by pits; a fall puts the player back at the start of that platform"""
         x, plats = 0, []
         for g in gaps:
@@ -159,14 +162,19 @@ def main():
         for a_, b_ in plats:
             box(a_, gy, -256, b_, gy + 512, 0, FLOOR)
             box(b_ - 8, gy, 0, b_, gy + 512, 1, TRIM)
-        course(key, name, hint, [64, gy + 256, 8], [[64, gy + 256], [L - 104, gy + 256]], fall_z=-100,
-               checkpoints=[[a_ + 64, gy + 256, 8, 0] for a_, b_ in plats])
+            if marks and b_ < L:                             # distances back from the edge: start of the run, first jump
+                box(b_ - marks[0] - 48, gy + 128, 0, b_ - marks[0], gy + 384, 1, BLOCK)       # a pad: start here
+                box(b_ - marks[1] - 8, gy + 64, 0, b_ - marks[1], gy + 448, 1, TRIM)          # a line: first jump
+        back = (marks[0] + 24) if marks else None
+        course(key, name, hint, [(plats[0][1] - back) if marks else 64, gy + 256, 8], [[64, gy + 256], [L - 104, gy + 256]],
+               fall_z=-100,
+               checkpoints=[[(b_ - back) if (marks and b_ < L) else a_ + 64, gy + 256, 8, 0] for a_, b_ in plats])
 
     # a plain running jump clears about 250 units; these need more speed than that
     gap_course("circle", "Circle-jump gaps", "Short platforms: each gap needs one good circle jump from a standing start.",
                12000, 512, (264, 280, 296, 312, 328))
-    gap_course("twohop", "Two-hop gaps", "Each platform has room for two jumps: circle jump, one strafe jump, then the gap.",
-               13000, 768, (336, 360, 384, 400, 416))
+    gap_course("twohop", "Two-hop gaps", "Start on the dark pad, circle jump at the first line, strafe jump, take off again at the edge.",
+               13000, 768, (336, 360, 384, 400, 416), marks=(480, 330))
     # ---- ramps and stairs, up and down
     ry, x = 14000, 1024
     RH = 640
@@ -246,16 +254,51 @@ def main():
                 out.append((pts[k][0] + bx_ * m, pts[k][1] + by_ * m))
         return out
 
+    # Walls: one plain rectangle per straight and side, no mitred corners (their odd angles gave the bot
+    # navigation compiler more planes than it accepts). The outer wall of a turn runs on to the corner, the
+    # inner one stops short of it.
     for side in (1, -1):
-        line = offset_line(P, side * W / 2)
-        for k in range(len(line) - 1):
-            a_, b_ = line[k], line[k + 1]
+        for k in range(len(P) - 1):
+            a_, b_ = P[k], P[k + 1]
             l_ = math.hypot(b_[0] - a_[0], b_[1] - a_[1])
-            n = (-(b_[1] - a_[1]) / l_ * side * 32, (b_[0] - a_[0]) / l_ * side * 32)
-            quad = [a_, b_, (b_[0] + n[0], b_[1] + n[1]), (a_[0] + n[0], a_[1] + n[1])]
-            if side == 1:
-                quad = [quad[0], quad[3], quad[2], quad[1]]
-            prism(quad, 0, 192, BLOCK)
+            u = ((b_[0] - a_[0]) / l_, (b_[1] - a_[1]) / l_)
+            n = (-u[1] * side, u[0] * side)
+            ext = []
+            for v, (p0, p1, p2) in ((0, (P[k - 1] if k else None, a_, b_)), (1, (a_, b_, P[k + 2] if k + 2 < len(P) else None))):
+                if p0 is None or p2 is None:
+                    ext.append(128.0 if v == 0 else 0.0)
+                    continue
+                d1 = (p1[0] - p0[0], p1[1] - p0[1])
+                d2 = (p2[0] - p1[0], p2[1] - p1[1])
+                cr = d1[0] * d2[1] - d1[1] * d2[0]
+                th = abs(math.atan2(cr, d1[0] * d2[0] + d1[1] * d2[1]))
+                m = (W / 2) * math.tan(th / 2)
+                inner = (cr > 0) == (side == 1)
+                if inner:
+                    ext.append(-m)
+                elif m <= 260:
+                    ext.append(m + 32.0 * math.tan(th / 2))
+                else:
+                    # a sharp turn: running both outer walls on to the corner would cut into other parts of the
+                    # corridor, so they stop early and a short wall across the corner closes it
+                    ext.append(256.0)
+                    if v == 0 and side in (1, -1):
+                        u1 = (d1[0] / math.hypot(*d1), d1[1] / math.hypot(*d1))
+                        u2 = (d2[0] / math.hypot(*d2), d2[1] / math.hypot(*d2))
+                        n1, n2 = (-u1[1] * side, u1[0] * side), (-u2[1] * side, u2[0] * side)
+                        e1 = (p1[0] + u1[0] * 256 + n1[0] * W / 2, p1[1] + u1[1] * 256 + n1[1] * W / 2)
+                        e2 = (p1[0] - u2[0] * 256 + n2[0] * W / 2, p1[1] - u2[1] * 256 + n2[1] * W / 2)
+                        mid = ((e1[0] + e2[0]) / 2 - p1[0], (e1[1] + e2[1]) / 2 - p1[1])
+                        ml = math.hypot(*mid)
+                        o = (mid[0] / ml * 32, mid[1] / ml * 32)
+                        prism([e1, e2, (e2[0] + o[0], e2[1] + o[1]), (e1[0] + o[0], e1[1] + o[1])], 0, 192, BLOCK)
+            s0 = (a_[0] - u[0] * ext[0], a_[1] - u[1] * ext[0])
+            s1 = (b_[0] + u[0] * ext[1], b_[1] + u[1] * ext[1])
+            if math.hypot(s1[0] - s0[0], s1[1] - s0[1]) < 16 or (s1[0] - s0[0]) * u[0] + (s1[1] - s0[1]) * u[1] <= 0:
+                continue
+            d0, d1_ = W / 2, W / 2 + 32
+            prism([(s0[0] + n[0] * d0, s0[1] + n[1] * d0), (s1[0] + n[0] * d0, s1[1] + n[1] * d0),
+                   (s1[0] + n[0] * d1_, s1[1] + n[1] * d1_), (s0[0] + n[0] * d1_, s0[1] + n[1] * d1_)], 0, 192, BLOCK)
     course("turns", "Turns", "A corridor with 45, 90 and 135 degree turns and a hairpin: take them as fast as you can.",
            [P[0][0] + 32, P[0][1], 8], P)
     # ---- narrow path over a pit, getting narrower
@@ -278,7 +321,7 @@ def main():
     course("narrow", "Narrow path", "A beam over a pit that gets narrower (96, 64, 48, 32 wide): fast, without falling.",
            [64, ny_ + 256, 8], path, fall_z=-100, checkpoints=cps)
     # ---- pillars: hop from top to top (spacing of the Campgrounds pillars), slight zigzag
-    py_, NP, SPC = 26000, 36, 222
+    py_, NP, SPC = 26000, 18, 222
     PL = 384 + NP * SPC + 384
     room(0, py_, -256, PL, py_ + 512, 320)
     box(0, py_, -256, 320, py_ + 512, 0, FLOOR)
@@ -295,12 +338,12 @@ def main():
            [64, py_ + 256, 8], path, fall_z=-100, checkpoints=cps)
     # ---- rocket jumps: three ledges, each higher than a normal jump reaches
     ky = 28000
-    room(0, ky, 0, 2560, ky + 512, 1200)
-    tops = (224, 544, 944)                                                         # steps of 224, 320 and 400
+    room(0, ky, 0, 3200, ky + 512, 1900)
+    tops = (224, 544, 944, 1584)                                                   # steps of 224, 320, 400 and 640 (two rockets)
     for k, t_ in enumerate(tops):
-        box(640 + k * 640, ky, 0, 2560, ky + 512, t_, BLOCK)
-    course("rocket", "Rocket jumps", "Rocket launcher, endless ammo: rocket-jump up three ledges (224, 320 and 400 high).",
-           [64, ky + 256, 8], [[64, ky + 256], [640, ky + 256], [1280, ky + 256], [1920, ky + 256], [2400, ky + 256]],
+        box(640 + k * 640, ky, 0, 3200, ky + 512, t_, BLOCK)
+    course("rocket", "Rocket jumps", "Rocket launcher, endless ammo: rocket-jump up four ledges (224, 320, 400, and 640: that one needs a double rocket jump).",
+           [64, ky + 256, 8], [[64, ky + 256], [640, ky + 256], [1280, ky + 256], [1920, ky + 256], [2560, ky + 256], [3040, ky + 256]],
            weapon="rl", end_z=tops[-1] - 8)
     rooms["courses"] = courses
     # ---- terrain stations: 3D copies of the real spots

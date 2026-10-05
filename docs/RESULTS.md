@@ -5,6 +5,16 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-04 19:45 — test map: owner's review of the new movement rooms
+
+- `turns` was an empty room: its corridor walls were dropped by the map compiler (footprints wound the wrong way).
+  Rebuilt as plain rectangles with short walls across the two sharp corners (mitred corners gave the bot
+  navigation compiler more planes than it accepts); checked in the simulator: walls on both sides, sealed.
+- `twohop`: every platform has a dark pad (start of the run) and a line (first jump); a fall puts you back on the pad.
+- `pillars`: 18 pillars instead of 36. `rocket`: a fourth ledge, 640 high (needs a double rocket jump).
+- The game's bot in `!spar` and the fight room is Nightmare again (`SKILL=4` gives Hardcore).
+- `tools/build_lab_map.sh` builds the map in one step.
+
 ## 2026-10-04 19:40 — map atlases built (B-75, first version)
 
 - `tools/build_atlas.py` -> `maps/atlas/<map>.json` and `.png` (see ATLAS.md). Blood Run: 26 areas, 10 big items,

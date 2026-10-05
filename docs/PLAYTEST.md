@@ -11,7 +11,7 @@ bash tools/duel_server.sh <run> bloodrun <env module>     # e.g. duel_gru_v3 blo
 - Connect to port 27970 (`connect 127.0.0.1:27970` in the console). No password.
 - The server stays in warmup: no clock, no score, endless play. Both players spawn with every weapon and one
   pickup's worth of ammo (this is not true to the game; items and weapons still respawn normally).
-- Chat commands: [COMMANDS.md](COMMANDS.md). To watch him against a Hardcore bot (skill 4): `!spar`.
+- Chat commands: [COMMANDS.md](COMMANDS.md). To watch him against a Nightmare bot: `!spar`.
 
 ## Part 1: play him (about 20 minutes)
 
@@ -46,7 +46,7 @@ simulator uses for him. This gives the human bar for each room. All commands: [C
 |---|---|---|
 | 21 aim rooms, 25 s each in the aim box and 45 s in the environment box | Seven weapons (no grenade launcher), three rooms each: target walking at random, target walking and jumping, target in the environment box. Endless ammo; the target never shoots or dies | Hit it as much as you can |
 | 9 movement courses, up to 30 s each | Speed straight, circle-jump gaps, two-hop gaps, ramps and stairs, slalom, turns, narrow path, pillars, rocket jumps. Gauntlet only (rocket launcher in the rocket course). A course ends when you reach the far end | Get as far as you can, as fast as you can |
-| 1 fight, 60 s | In the environment box against the game's Hardcore bot, every weapon in hand | Play to win |
+| 1 fight, 60 s | In the environment box against the game's Nightmare bot, every weapon in hand | Play to win |
 
 Each room counts down 5 s and prints your result in chat. Single rooms for repeats: `!rooms` lists them.
 Repeating a room averages your results; two or three runs of the suite give a steadier baseline.
