@@ -60,6 +60,9 @@ because the meaning of the inputs changed (`duel_env_v4.py` is the frozen copy f
 | 12:35 | 1543 (no HMG, aim nudged, env box only since 12:15) | - / 5.2 | 94.6% | 7.4 deg | 18% | 0.6% | 26-15 (damage 3133 / 1626, speed 191 u/s, in view 36%, held rail 70%) |
 | 13:35 | 1575 (slower left hand since 13:13) | 17.6 / 4.6 | 95% | 6.1 deg | 27% | 0.4% | 32-10 (damage 3894 / 1126, speed 207 u/s, in view 35%, held rail 84%); rail 81%, MG 73%, LG 51%; rail 70% of kills; moving enemy takes 75 damage/s against 97 standing |
 | 14:35 | 1640 (enemy movement read 200 ms late from 14:40) | 14.4 / 5.1 | 93% | 4.8 deg | 14.5% | 0.1% | 23-11 (damage 2856 / 1127, speed 166 u/s, in view 32%, held rail 82%); rail 85%, MG 75%, LG 52% before the nudge; rail 70% of kills |
+| 15:40 | 1697 (rocket weapon sets, drawn per player, since 15:18) | 14.2 / 5.1 | 93% | 5.5 deg | 12% | 2.8% | **29-9** (damage 3534 / 1035, speed 205 u/s, in view 32%, held rail 83%); self-play: rail 78%, MG 69%, LG 55%, rockets 21%; kills rail 53%, LG 27%, MG 19%, rockets 1%; speed 254 u/s |
+
+**15:18 — weapon sets changed (owner's idea)**: each player draws his own set, a quarter each: rockets / rockets + lightning / rockets + rail / all three (machine gun and gauntlet always), so most fights are uneven and half his spawns have no rail (`ARENA_SETS`; checkpoint before it: `policy_before_rocketsets.pt`). Shotgun, plasma and grenades get no practice in this run. After 20 minutes: rail's share of kills 70% -> 53%, lightning 14% -> 27%, rockets still 1% of kills at 21% hits.
 
 **10:10 — fight inputs added (owner: must have), network widened 311 -> 340 inputs at a checkpoint** (new inputs
 get zero weights, so nothing learned is lost; `sim/widen_obs.py`; the 311-input checkpoint is kept as
