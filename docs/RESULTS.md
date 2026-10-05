@@ -52,6 +52,20 @@ Still not there: the enemy's health and armor (not knowable in the game either),
 Found while reading the trainer: the damage part of the reward is 0.001 per point, not 0.004 (it fades with an
 old curriculum setting that has long reached its floor). Kills at +-1 dominate; left as it is for this run.
 
+**10:27 — right hand and zoom added (owner), damage reward 0.005; network widened to 343 inputs and a ninth
+action head (zoom) at a checkpoint** (`policy_340_inputs.pt` kept):
+- right hand: fire on the index finger (cannot change again for 75 ms: at most 6.7 clicks a second), zoom on
+  the middle finger (150 ms);
+- zoom, held: the view shrinks to 40% (100 x 75 -> 40 x 30 degrees, so the sight limits become tunnel vision),
+  the same hand movement turns the view 40% as far (finer aim, 40% of the hand shake floor, top turn speed
+  480 deg/s). The new head starts "off" 99% of the time; inputs: zoomed, fire finger free, zoom finger free.
+- checked: ring walls seen 5 -> 1 of 16 when zoomed; an enemy 30 degrees off centre is seen unzoomed and not
+  zoomed; the fastest turn covers 289 degrees in 10 frames unzoomed and 116 zoomed; a fire button asked to flip
+  every frame changes 13.3 times a second.
+- The damage reward is set outright to 0.005 per point from here (`--dmg-reward`).
+Numbers at the restart (61 min of arena training): aim error 6.6 deg, rail 64%, LG 42%, MG 57%, HMG 56%;
+frags by weapon HMG 64-66%, LG 13%, shotgun 11-13%; 61-67% of kills against his older selves; keys refused 92.5%.
+
 After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
 24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
 

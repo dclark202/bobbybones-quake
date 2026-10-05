@@ -143,9 +143,9 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-79 | P2 | open | Demo data: add enemy health (from damage events), sounds and hit feedback to the converted inputs, then try imitating mouse and trigger again | The reason the mouse cannot be imitated today |
 | B-80 | P2 | open | Test map cleanup at the next rebuild: remove the unused peek room; `dodge` turret in the simulator | |
 | B-81 | P1 | built in the simulator, not in training, no server room yet (RESULTS 2026-10-04 night, 01:50) | Run-and-gun: a test room and a training round where aiming only counts while moving (for example targets along a course, or an aim room where damage is scored by the shooter's own speed), so that speed and aim are learned together | Owner 2026-10-04: after the demo loss he moves fast but his aim error in view doubled; aim alone is cheap to get back, aim while moving is the skill |
-| B-82 | P1 | next restart of `duel_gru_v5` | Damage pays 0.005 per point (`--dmg-reward 0.005`; it had faded to 0.001) | Owner 2026-10-05 |
-| B-83 | P1 | open (after the current run has baked) | The right hand: fire on the index finger and zoom on the middle finger, with the same kind of finger limits as the left hand | Owner 2026-10-05 |
-| B-84 | P1 | open (with B-83) | Zoom as an action: narrower view (with the sight limits that means tunnel vision), finer mouse and less hand shake per degree, slower turning; aim measurements have to account for it | Owner 2026-10-05: zoom should be a feature; it is not one today |
+| B-82 | P1 | done (2026-10-05 10:27) | Damage pays 0.005 per point (`--dmg-reward 0.005`; it had faded to 0.001) | Owner 2026-10-05 |
+| B-83 | P1 | done, in training (2026-10-05 10:27) | The right hand: fire on the index finger and zoom on the middle finger, with the same kind of finger limits as the left hand | Owner 2026-10-05 |
+| B-84 | P1 | done, in training (2026-10-05 10:27); the scorecard does not record zoom state yet | Zoom as an action: narrower view (with the sight limits that means tunnel vision), finer mouse and less hand shake per degree, slower turning; aim measurements have to account for it | Owner 2026-10-05: zoom should be a feature; it is not one today |
 | B-85 | P1 | done (2026-10-05) | Left-hand finger model, sight limited to the field of view, fight inputs (enemy shots, reload, trails, own hand), arena self-play, `!arena` on the server | See RESULTS 2026-10-05 |
 
 ## Dropped

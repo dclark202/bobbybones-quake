@@ -31,11 +31,21 @@ def main():
         sd = ck["model"] if "model" in ck else ck
         old = sd["enc.0.weight"].shape[1]
         extra = E.OBS_DIM - old
-        if extra <= 0:
+        if extra <= 0 and sd["pi.weight"].shape[0] >= sum(E.ACTION_DIMS):
             continue
         shutil.copy(f, f + ".before_widen")
         sd["enc.0.weight"] = torch.cat([sd["enc.0.weight"], torch.zeros(sd["enc.0.weight"].shape[0], extra,
                                                                          dtype=sd["enc.0.weight"].dtype)], 1)
+        # new action heads (appended): zero weights, and a bias that starts them almost always "off"
+        have = sd["pi.weight"].shape[0]
+        need = sum(E.ACTION_DIMS)
+        if need > have:
+            assert (need - have) % 2 == 0, "only on/off heads can be added"
+            k = (need - have) // 2
+            sd["pi.weight"] = torch.cat([sd["pi.weight"], torch.zeros(need - have, sd["pi.weight"].shape[1], dtype=sd["pi.weight"].dtype)], 0)
+            sd["pi.bias"] = torch.cat([sd["pi.bias"], torch.tensor([2.5, -2.5] * k, dtype=sd["pi.bias"].dtype)])
+            if "action_dims" in ck:
+                ck["action_dims"] = tuple(E.ACTION_DIMS)
         if "obs_mean" in ck:
             ck["obs_mean"] = np.concatenate([ck["obs_mean"], np.zeros(extra)])
             ck["obs_var"] = np.concatenate([ck["obs_var"], np.ones(extra)])

@@ -94,6 +94,12 @@ WALK = 64                                              # key strength when walki
 RING, MIDDLE, INDEX, THUMB, LITTLE = range(5)
 FINGER_HOLD = np.array([6, 6, 6, 4, 6], np.int64)      # frames: 150 ms, the thumb (jump) 100 ms
 KEY_RATE, KEY_BURST = 5.0, 3.0
+# The right hand on the mouse: index finger = fire, middle finger = zoom (held). The same rule: a finger that has
+# just acted cannot act again for this many frames (a click is a press and a release: at most about six a second).
+MOUSE_HOLD = np.array([3, 6], np.int64)                # fire 75 ms, zoom 150 ms
+# Zoom: the view narrows to ZOOM of its size (100 x 75 degrees -> 40 x 30), and the same hand movement turns the
+# view ZOOM as far: finer aim and less shake in degrees, but slower turning and no view of the surroundings.
+ZOOM = 0.4
 # Sight limits (2026-10-05): distances to walls, floor and ceiling are only known inside the field of view (about
 # 100 x 75 degrees around where he is looking, pitch included). Outside it they read UNSEEN.
 FOV_H, FOV_V = math.radians(50.0), math.radians(37.5)
@@ -135,7 +141,7 @@ LOADOUTS = {   # weapons owned at spawn, ammo
     "mg": ((), {MG: 100}),
 }
 # forward, strafe, vertical (none / jump / crouch), turn, pitch, fire, weapon (keep/...), walk
-ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2)
+ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2)     # ..., walk, zoom
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "YA", "GA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6 * len(SLOTS) + N_GOAL   # as in duel_gru_v3
@@ -146,7 +152,8 @@ OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6
 #     relative to him) 3 + a flag that fades with the trail 1                                             = 4
 #   the enemy in view: crouched 1, in the air 1                                                           = 2
 #   his own hand: the keys in effect 3, the budget of key actions 1, which fingers are free 5              = 9
-N_FIGHT = 14 + 4 + 2 + 9
+#   his right hand: zoomed 1, fire finger free 1, zoom finger free 1                                       = 3
+N_FIGHT = 14 + 4 + 2 + 9 + 3
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
@@ -319,6 +326,9 @@ class DuelEnv:
         self.key_last = np.tile(np.array([1, 1, 0], np.int64), (nn2, 1))    # the key states in effect
         self.key_hold = np.full((nn2, 5), 99, np.int64)                    # frames since each finger last acted
         self.key_tok = np.full(nn2, KEY_BURST, np.float32)                 # budget of key changes
+        self.zoom = np.zeros(nn2, bool)                 # zoomed in
+        self.fire_last = np.zeros(nn2, bool)            # the fire button as the finger has it
+        self.mouse_hold = np.full((nn2, 2), 99, np.int64)
         self.shot_t = np.full(nn2, 99.0, np.float32)    # seconds since the last enemy shot this player saw or heard
         self.shot_w = np.zeros(nn2, np.int64)           # the weapon of that shot
         self.shot_seen = np.zeros(nn2, bool)            # seen (else only heard)
@@ -394,7 +404,7 @@ class DuelEnv:
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
                           arena=np.zeros(8),              # frags, player-frames, sum of speed, frames with the enemy in view, damage,
                                                           # frames standing still, frames looking over 40 degrees up or down, crouched frames
-                          key_changes=0, key_blocked=0,   # movement-key changes made / refused by the finger limits
+                          zoom_frames=0.0, key_changes=0, key_blocked=0,   # movement-key changes made / refused by the finger limits
                           gun=np.zeros(3),                # run-and-gun: damage dealt, runner frames, sum of runner speed
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
@@ -426,6 +436,7 @@ class DuelEnv:
         self.duck[i] = False
         self.key_last[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), 99, KEY_BURST
         self.shot_t[i ^ 1] = self.trail_t[i ^ 1] = 99.0     # what the opponent knew about this player's shots is void
+        self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
         self.dmg_life[i ^ 1] = 0.0                      # what the opponent knows about this player's damage resets
         mode = int(self.mode[i // 2])
         kind = int(self.kind[i // 2])
@@ -787,6 +798,11 @@ class DuelEnv:
         e[:, 2] += np.where(self.duck[:len(e)], VIEW_H_DUCK, VIEW_H)
         return e
 
+    def fov(self):
+        """half-width and half-height of each player's view (radians) and the cosine of his sight cone"""
+        z = np.where(self.zoom, ZOOM, 1.0)
+        return FOV_H * z, FOV_V * z, np.cos(np.radians(55.0) * z)
+
     def note_shots(self, src):
         """players src fired this frame: the opponent notes it if he has the shooter in view (after the noticing
         delay) or is within earshot; a bullet, rail or lightning line that he can see is remembered as a trail"""
@@ -817,7 +833,7 @@ class DuelEnv:
             dn = np.linalg.norm(to, axis=1) + 1e-6
             yl, pl = np.radians(self.yaw[li]), np.radians(self.pitch[li])
             fl = np.stack([np.cos(pl) * np.cos(yl), np.cos(pl) * np.sin(yl), -np.sin(pl)], 1)
-            vis = (self.acquired[li] | ((to * fl).sum(1) / dn > FOV_COS)) & (dn < 2000.0)
+            vis = (self.acquired[li] | ((to * fl).sum(1) / dn > self.fov()[2][li])) & (dn < 2000.0)
             for k in np.nonzero(vis)[0]:
                 if self.acquired[li[k]] or self.w.trace(eye[li[k]], near[k].astype(np.float32))["fraction"] >= 0.999:
                     self.trail_t[li[k]] = 0.0
@@ -842,7 +858,9 @@ class DuelEnv:
                                (self.key_last[:, 2:3] == 1).astype(np.float32) - (self.key_last[:, 2:3] == 2).astype(np.float32),
                                (self.key_tok / KEY_BURST)[:, None],
                                (self.key_hold >= FINGER_HOLD[None, :]).astype(np.float32)], 1)
-        return np.concatenate([shots, trail, body, hand], 1).astype(np.float32)
+        mouse = np.concatenate([self.zoom.astype(np.float32)[:, None],
+                                (self.mouse_hold >= MOUSE_HOLD[None, :]).astype(np.float32)], 1)
+        return np.concatenate([shots, trail, body, hand, mouse], 1).astype(np.float32)
 
     def _hear(self, cat, src, kind=None):
         """players src made a sound of category cat: their opponents hear it within HEAR_EVT (rough position)"""
@@ -877,7 +895,7 @@ class DuelEnv:
         tov = p - eye
         dd = np.linalg.norm(tov, axis=1) + 1e-6
         u = (tov / dd[:, None]).astype(np.float32)
-        infov = ((u * fdir).sum(1) > FOV_COS) & (dd < 1500)
+        infov = ((u * fdir).sum(1) > self.fov()[2][:len(u)]) & (dd < 1500)
         sees = np.zeros(n, bool)
         ci = np.nonzero(infov)[0]                             # only trace toward items in view and in range
         if len(ci):
@@ -941,7 +959,8 @@ class DuelEnv:
         self.walls = walls
         if self.fov_sight:                                   # only what the eyes cover (see FOV_H, FOV_V)
             wa = (np.linspace(0, 2 * np.pi, N_WALL, endpoint=False) + np.pi) % (2 * np.pi) - np.pi
-            see = (np.abs(wa)[None, :] <= FOV_H) & (np.abs(pit)[:, None] <= FOV_V)
+            fh, fv, _ = self.fov()
+            see = (np.abs(wa)[None, :] <= fh[:, None]) & (np.abs(pit)[:, None] <= fv[:, None])
             walls = np.where(see, walls, UNSEEN).astype(np.float32)
         off = np.stack([c[:, None] * self.floor_off[None, :, 0] - si[:, None] * self.floor_off[None, :, 1],
                         si[:, None] * self.floor_off[None, :, 0] + c[:, None] * self.floor_off[None, :, 1]], 2)
@@ -951,7 +970,7 @@ class DuelEnv:
         if self.fov_sight:                                   # a floor spot is seen if the line from the eyes to it is in view
             fa = (np.linspace(0, 2 * np.pi, N_FLOOR, endpoint=False) + np.pi) % (2 * np.pi) - np.pi
             down = np.arctan2(VIEW_H + floors * 256.0, 96.0)             # how far below the horizon that spot lies
-            see = (np.abs(fa)[None, :] <= FOV_H) & (np.abs(pit[:, None] - down) <= FOV_V)
+            see = (np.abs(fa)[None, :] <= fh[:, None]) & (np.abs(pit[:, None] - down) <= fv[:, None])
             floors = np.where(see, floors, UNSEEN).astype(np.float32)
         eye = self._eye(s)
         fdir = np.stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
@@ -994,7 +1013,7 @@ class DuelEnv:
             if self.fov_sight:
                 to_p = orp[ar, idx] - eye
                 dn = np.linalg.norm(to_p, axis=1) + 1e-6
-                ok &= ((to_p * fdir).sum(1) / dn > FOV_COS) | (dn < 400.0)
+                ok &= ((to_p * fdir).sum(1) / dn > self.fov()[2]) | (dn < 400.0)
             rk[:, 9 * j:9 * j + 3] = rot(orp[ar, idx] - pos) / 1000.0 * ok[:, None]
             rk[:, 9 * j + 3:9 * j + 6] = rot(orv[ar, idx]) / 1000.0 * ok[:, None]
             kind = orw[ar, idx]
@@ -1069,7 +1088,8 @@ class DuelEnv:
         where = np.concatenate([(pos - self.lo) / np.maximum(self.hi - self.lo, 1.0) * 2.0 - 1.0,
                                 np.eye(len(MAP_IDS) + 1, dtype=np.float32)[np.full(n, self.map_id)][:, :len(MAP_IDS)]], 1)
         # sight: a coarse picture along the view, what is above, and long horizontal distances
-        gy, gp = yaw[:, None] + self.view_grid[None, :, 0], pit[:, None] + self.view_grid[None, :, 1]
+        zf = np.where(self.zoom, ZOOM, 1.0)[:, None]                 # zoomed: the picture covers a smaller angle
+        gy, gp = yaw[:, None] + self.view_grid[None, :, 0] * zf, pit[:, None] + self.view_grid[None, :, 1] * zf
         vd = np.stack([np.cos(gp) * np.cos(gy), np.cos(gp) * np.sin(gy), -np.sin(gp)], 2).astype(np.float32)
         view = self.w.rays_each(eye, vd, 2000.0)
         ud = self.up_dirs
@@ -1080,7 +1100,8 @@ class DuelEnv:
         if self.fov_sight:
             az = np.where(np.hypot(ud[:, 0], ud[:, 1]) > 1e-3, np.arctan2(ud[:, 1], ud[:, 0]), 0.0)
             el = np.arcsin(np.clip(ud[:, 2], -1, 1))
-            see = (np.abs(az)[None, :] <= FOV_H) & (np.abs(el[None, :] + pit[:, None]) <= FOV_V)
+            fh, fv, _ = self.fov()
+            see = (np.abs(az)[None, :] <= fh[:, None]) & (np.abs(el[None, :] + pit[:, None]) <= fv[:, None])
             above = np.where(see, above, UNSEEN).astype(np.float32)
         ld = self.long_dirs
         ldw = np.stack([c[:, None] * ld[None, :, 0] - si[:, None] * ld[None, :, 1],
@@ -1089,7 +1110,7 @@ class DuelEnv:
         far = self.w.rays_each(pos, ldw, 2000.0)
         if self.fov_sight:
             la_ = np.arctan2(ld[:, 1], ld[:, 0])
-            see = (np.abs(la_)[None, :] <= FOV_H) & (np.abs(pit)[:, None] <= FOV_V)
+            see = (np.abs(la_)[None, :] <= fh[:, None]) & (np.abs(pit)[:, None] <= fv[:, None])
             far = np.where(see, far, UNSEEN).astype(np.float32)
         # the enemy while in view: weapon in hand, whether he faces this player, damage dealt to him this life
         v_ = visible.astype(np.float32)[:, None]
@@ -1303,6 +1324,19 @@ class DuelEnv:
         # little finger: crouch
         c_now, c_want = last[:, 2] == 2, a[:, 2] == 2
         c_new = np.where(act(LITTLE, c_now != c_want), c_want, c_now)
+        # the right hand: fire (index finger) and zoom (middle finger); no shared budget, only the hold per finger
+        self.mouse_hold += 1
+        f_want = a[:, 5] == 1
+        f_ok = who & (f_want != self.fire_last) & (self.mouse_hold[:, 0] >= MOUSE_HOLD[0])
+        self.mouse_hold[f_ok, 0] = 0
+        self.fire_last = np.where(who, np.where(f_ok, f_want, self.fire_last), f_want)
+        a[:, 5] = self.fire_last
+        if a.shape[1] > 8:
+            z_want = a[:, 8] == 1
+            z_ok = who & (z_want != self.zoom) & (self.mouse_hold[:, 1] >= MOUSE_HOLD[1])
+            self.mouse_hold[z_ok, 1] = 0
+            self.zoom = np.where(who, np.where(z_ok, z_want, self.zoom), False)
+            a[:, 8] = self.zoom
         strafe = np.where(l_new & ~d_new, 0, np.where(d_new & ~l_new, 2, 1))       # both down cancel out
         vert = np.where(j_new, 1, np.where(c_new, 2, 0))
         new = np.stack([f_new, strafe, vert], 1)
@@ -1331,13 +1365,15 @@ class DuelEnv:
         prev = self.state.copy()
         # mouse: the chosen turn speed is followed with a little inertia; jerky commands cost a little
         cmd = np.stack([TURN[a[:, 3]], PITCH[a[:, 4]]], 1)
+        cmd = cmd * np.where(self.zoom, ZOOM, 1.0).astype(np.float32)[:, None]      # zoomed: the same hand movement turns less
         jerk = np.abs(cmd - self.cmd).sum(1)
         self.cmd = cmd
         sm = np.where(np.abs(cmd) <= 1.0, MOUSE_SMOOTH_FINE, MOUSE_SMOOTH)   # small corrections follow faster
         self.mv = sm * self.mv + (1.0 - sm) * cmd
         if self.human_aim:
-            self.mv[:, 0] = np.clip(self.mv[:, 0], -TURN_CAP, TURN_CAP)
-            jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE)
+            zs = np.where(self.zoom, ZOOM, 1.0).astype(np.float32)
+            self.mv[:, 0] = np.clip(self.mv[:, 0], -TURN_CAP * zs, TURN_CAP * zs)
+            jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
             jit[self.script > 0] = 0.0
             turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
         else:
@@ -1656,6 +1692,7 @@ class DuelEnv:
                 self.stats["arena"][5] += float((np.hypot(s[am, 3], s[am, 4]) < 50).sum())
                 self.stats["arena"][6] += float((np.abs(self.pitch[am]) > 40).sum())
                 self.stats["arena"][7] += float(self.duck[am].sum())
+                self.stats["zoom_frames"] += float(self.zoom[am].sum())
                 self.stats["arena"][0] += float(sum(1 for e in events if am[e["victim"]] and e["killer"] >= 0 and e["killer"] != e["victim"]))
             self.stats["lab_items"][2] += float(self.items_room.sum())
         for m in ends:
@@ -1732,7 +1769,7 @@ class DuelEnv:
         dist = np.linalg.norm(to, axis=1) + 1e-6
         yr, pr = np.radians(self.yaw), np.radians(self.pitch)
         fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
-        infov = (to * fdir).sum(1) / dist > FOV_COS
+        infov = (to * fdir).sum(1) / dist > self.fov()[2]
         cand = np.nonzero(infov & (dist < 4000))[0]
         vis = np.zeros(n, bool)
         if len(cand):

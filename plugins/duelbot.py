@@ -564,7 +564,7 @@ class duelbot(minqlx.Plugin):
         dist = np.linalg.norm(to, axis=1) + 1e-6
         yr, pr = np.radians(env.yaw), np.radians(env.pitch)
         fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
-        infov = (to * fdir).sum(1) / dist > E.FOV_COS
+        infov = (to * fdir).sum(1) / dist > (env.fov()[2] if hasattr(env, "fov") else E.FOV_COS)
         alive = env.hp[opp] > 0
         cand = np.nonzero(infov & (dist < 4000) & alive)[0]
         vis = np.zeros(n, bool)
@@ -611,14 +611,16 @@ class duelbot(minqlx.Plugin):
         if rules2:
             env.duck[i] = a[2] == 2
         cmd = np.array([E.TURN[a[3]], E.PITCH[a[4]]], np.float32)
+        zs = float(E.ZOOM) if (rules2 and hasattr(env, "zoom") and env.zoom[i]) else 1.0     # zoomed: the hand turns the view less
+        cmd = cmd * zs
         nine = hasattr(E, "NW")
         sm = np.where(np.abs(cmd) <= 1.0, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH) if hasattr(E, "MOUSE_SMOOTH_FINE") \
             else E.MOUSE_SMOOTH
         env.mv[i] = sm * env.mv[i] + (1.0 - sm) * cmd
         turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
         if rules2 and env.human_aim:                         # flick cap and hand noise, as in training
-            env.mv[i, 0] = np.clip(env.mv[i, 0], -E.TURN_CAP, E.TURN_CAP)
-            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(env.mv[i]) + E.MOTOR_BASE)
+            env.mv[i, 0] = np.clip(env.mv[i, 0], -E.TURN_CAP * zs, E.TURN_CAP * zs)
+            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(env.mv[i]) + E.MOTOR_BASE * zs)
             turn, dpit = float(env.mv[i, 0] + jit[0]), float(env.mv[i, 1] + jit[1])
         yaw = (yaw + turn + 180.0) % 360.0 - 180.0
         lev = 1.0 if (nine and env.seen_t[i] <= 0.5) else env.level     # newer simulators: no pull while an enemy is in view
