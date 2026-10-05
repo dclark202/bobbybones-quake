@@ -34,6 +34,7 @@ because the meaning of the inputs changed (`duel_env_v4.py` is the frozen copy f
 |---|---|---|---|---|---|---|---|
 | 09:33 | 1369 | about 70 / 5.2 | 93% | 12.0 deg | 12.5% | 1.9% | 13-23 |
 | 10:15 | 1409 | - / 5.4 | 92.5% | 6.9 deg | 14.7% | 1.6% | - |
+| 11:30 | 1483 | - / 5.5 | 92.7% | 5.4 deg | 12.5% | 0.7% | **28-15** (damage 3424 / 1642, speed 211 u/s, in view 32%, held LG 40% / HMG 39%) |
 
 **10:10 — fight inputs added (owner: must have), network widened 311 -> 340 inputs at a checkpoint** (new inputs
 get zero weights, so nothing learned is lost; `sim/widen_obs.py`; the 311-input checkpoint is kept as
@@ -82,6 +83,11 @@ balcony, a low strip under the east balcony, balconies 192 up joined at the corn
 stairs, a ramp, a jump pad onto the tower, a teleporter from the tunnel to the far corner. Checked in the
 simulator: stairs and ramp walk up to the balcony, the pad lands on the tower and catwalk, the teleporter and
 all twelve spawn spots work. Server: `!arena yard`.
+
+**11:30 — first win against Nightmare**: 28-15 in five minutes in the environment box (13-23 two hours of
+training earlier). In training: hit rates rail 79%, MG 79-81%, HMG 79%, LG 50-66%; HMG 69-80% of kills, LG 12-21%;
+zoomed 1.2-1.6%; crouched 6-7%; keys refused 92.7% (unchanged). To watch: the HMG has replaced the shotgun as
+the one weapon, and tracking hit rates are back above the owner's card.
 
 After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
 24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
