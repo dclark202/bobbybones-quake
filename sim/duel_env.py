@@ -110,6 +110,7 @@ ZOOM = 0.4
 # 100 x 75 degrees around where he is looking, pitch included). Outside it they read UNSEEN.
 FOV_H, FOV_V = math.radians(50.0), math.radians(37.5)
 UNSEEN = -1.0
+VEL_REACT_FRAMES = 8                                   # the enemy's velocity is known 200 ms late
 ITEMS_ROOM_REWARD = 0.5                                # per pickup in the lab map's items room
 FALL_MED, FALL_FAR = 40.0, 60.0                        # Quake 3 fall damage: 5 above "medium", 10 above "far"
 # scripted fighter styles, good and bad. Columns: turn gain, aim noise (deg), backs off below this distance,
@@ -329,6 +330,7 @@ class DuelEnv:
         self.arena_len = 30.0
         self.arena_rooms = (1, 2)                       # rooms used for arena rounds: 1 = aim box, 2 = environment box
         self.arena_full_p = 0.5                         # share of arena rounds with the full weapon set (else two random weapons)
+        self.vel_frames = VEL_REACT_FRAMES              # delay on the enemy's velocity (see observe)
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
         self.fov_sight = True                           # geometry only inside the field of view
@@ -1004,9 +1006,13 @@ class DuelEnv:
         # REACT_FRAMES old. The player's own view is current, so the crosshair-to-enemy readings respond to
         # mouse movement immediately, as on a real screen.
         self.opp_hist.append((self.known.copy(), self.acquired.copy(), vel[opp].copy(), self.seen_t.copy()))
-        while len(self.opp_hist) > self.react_frames + 1:
+        # (2026-10-05) How the enemy is MOVING is read later than where he is: a person follows steady movement
+        # closely but needs about 200 ms to pick up a change of direction. So a well-timed reversal shakes the aim.
+        keep = max(self.react_frames, self.vel_frames) + 1
+        while len(self.opp_hist) > keep:
             self.opp_hist.pop(0)
-        known, visible, opp_vel, seen_t = self.opp_hist[0]
+        known, visible, _, seen_t = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.react_frames)]
+        opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
         rel = rot(known - pos) / 1000.0
         exact = visible.astype(np.float32)
         ovel = rot(opp_vel) / 400.0 * exact[:, None]

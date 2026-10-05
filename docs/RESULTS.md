@@ -126,6 +126,11 @@ Before: he asked for about 40 key changes a second. Right after: 17.6 asked, 4.6
 The trainer was found dead at 13:10 (stopped without an error message some time after 12:50; memory was not
 short); restarted from the 12:43 checkpoint, about 25 minutes of training lost.
 
+**13:55 — aim down one more notch (owner: getting quite good)** (`policy_before_velreact.pt` kept): how the enemy
+is moving is now known 200 ms late (where he is: still 75 ms). A person follows steady movement closely and
+needs about that long to pick up a reversal; it also makes a change of direction worth something to the one
+being shot at. This is the single extra nudge the owner allowed for the day.
+
 After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
 24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
 
