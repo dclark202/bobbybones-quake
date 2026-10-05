@@ -5,6 +5,35 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-05 09:26 — `duel_gru_v5`: arena fights only, with finger and sight limits (until 16:00)
+
+Owner's change of course: become good at combat first, in the two boxes, and see what emerges; limit his actions
+until the right kind of play appears. From `duel_gru_v4` at 1363 min (`policy_after_night.pt`); a new run name
+because the meaning of the inputs changed (`duel_env_v4.py` is the frozen copy for older checkpoints).
+
+- **Training:** only arena self-play on the test map, aim box and environment box half each; 60 s rounds; two
+  random weapons (the same for both) in half the rounds, the full set in the other half; 125 health, no items;
+  himself and up to eight older selves as opponents. Reward: frag +-1, damage dealt minus damage taken at equal
+  weight, the small costs. Exploration bonus halved (0.005). No walk key, no demos, no courses, no Blood Run.
+- **Finger limits (new):** one hand, five fingers. Ring = strafe left; middle = forward and back (no direct
+  reversal); index = strafe right and the weapon keys; thumb = jump; little finger = crouch. A finger cannot act
+  again for 150 ms (thumb 100 ms); the hand has 5 key actions a second (burst 3). Before the limit he asked for
+  35-45 key changes a second; with it 5.2 are made and 93% of his requests are refused (start of the run).
+- **Sight limits (new):** wall, floor and ceiling distances only inside a 100 x 75 degree view around where he
+  looks; rockets seen in view or heard within 400 units; no waypoint compass on courses. Looking 60 degrees up
+  he sees no walls and no floor (checked).
+- Effect on the unadapted network in the environment box (60 s, simulator): no limits 2.4-3.5 frags per
+  player-minute; sight limits alone 1.4-1.6; both 1.0-2.4.
+- **Server:** `!arena box|env [minutes]` (COMMANDS.md); the same mode against Nightmare is the benchmark
+  (`tools/bench_arena.sh`). First benchmark, 1368 min (before adapting), environment box, 5 min: **13-23**, damage
+  1611 / 2360, speed 198 u/s, Nightmare in view 41% of the time, shotgun held 71% (Nightmare held it 78%).
+  Two bugs found and fixed on the way: placing the game's bot froze it; a match start took the weapons away.
+- Training speed 76k steps/s.
+
+| Time | Train min | Key changes asked / made per s | Refused | Aim error in view | Standing | Looking up or down | vs Nightmare (env box, 5 min) |
+|---|---|---|---|---|---|---|---|
+| 09:33 | 1369 | about 70 / 5.2 | 93% | 12.0 deg | 12.5% | 1.9% | 13-23 |
+
 ## 2026-10-05 08:50 — does a bigger network help? (imitation test on the pro demos) and the new mix's smoke test
 
 **Size test** (`sim/bc_size_test.py`): the same kind of network at three sizes, imitation only, 160 Blood Run

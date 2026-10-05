@@ -75,6 +75,8 @@ class duelbot(minqlx.Plugin):
         self.add_command("rooms", self.cmd_rooms, 0)
         self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 0, usage="<on|off>")
+        self.add_command("arena", self.cmd_arena, 0, usage="<box|env|off> [minutes]")
+        self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
         self.drill = None                                    # weapon drill: both players have only this weapon
@@ -213,6 +215,54 @@ class duelbot(minqlx.Plugin):
                 self.give_loadout(p)
         self.msg("Spawn weapons: {}".format("everything except the shotgun" if self.no_sg else "everything"))
 
+    def cmd_arena(self, player, msg, channel):
+        """!arena box | env [minutes]: fight BobbyBones in the aim box or the environment box under the rules he
+        trains with there: full weapon set at spawn, 125 health, nobody leaves the room, five minutes. !arena off ends."""
+        a = [m.lower() for m in msg[1:]]
+        if a and a[0] == "off":
+            if self.arena:
+                self.arena_end("stopped")
+            return
+        if not self.lab:
+            player.tell("The arena is on the test map: !map bobbylab first.")
+            return
+        if not a or a[0] not in ("box", "env"):
+            return minqlx.RET_USAGE
+        mins = float(a[1]) if len(a) > 1 and a[1].replace(".", "", 1).isdigit() else 5.0
+        self.arena_start(a[0], mins)
+
+    def arena_start(self, where, mins=5.0):
+        self.queue, self.room, self.drill = [], None, None
+        self.arena = dict(where=where, t_end=time.time() + mins * 60, mins=mins, base=dict(self.score), place=True, dmg=[0, 0])
+        self.record(event="arena_start", where=where, minutes=mins)
+        self.msg("^3Arena: the {}^7, {:g} minutes. Full weapons at spawn, nobody leaves the room. !arena off stops.".format(
+            "aim box" if where == "box" else "environment box", mins))
+
+    def arena_end(self, why="time"):
+        A = self.arena
+        self.arena = None
+        b, o = self.score["bobby"] - A["base"]["bobby"], self.score["opp"] - A["base"]["opp"]
+        self.record(event="arena_result", where=A["where"], minutes=A["mins"], why=why, bobby=b, opp=o,
+                    dmg_dealt=A["dmg"][0], dmg_taken=A["dmg"][1])
+        self.msg("^3Arena over ({})^7: BobbyBones ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
+
+    def arena_spot(self, other):
+        """a place in the arena at least 500 units from the other player"""
+        L = self.lab
+        if self.arena["where"] == "box":
+            z = float(L["aim"]["subject"][2])
+            cand = [np.array([self.rng.uniform(96, 1440), self.rng.uniform(96, 928), z], np.float32) for _ in range(12)]
+        else:
+            e = L["env"]
+            cand = [np.array([q[0], q[1], q[2] if len(q) > 2 else e["z"]], np.float32) for q in e["spots"]]
+        d = np.array([float(np.linalg.norm(q - np.asarray(other, np.float32))) for q in cand])
+        ok = np.nonzero(d > 500)[0]
+        return cand[int(self.rng.choice(ok))] if len(ok) else cand[int(d.argmax())]
+
+    def arena_inside(self, pos):
+        b = [-32, -32, 1568, 1056] if self.arena["where"] == "box" else self.lab["env"]["bounds"]
+        return b[0] - 48 <= pos[0] <= b[2] + 48 and b[1] - 48 <= pos[1] <= b[3] + 48
+
     def cmd_spar(self, player, msg, channel):
         """!spar on: you become a spectator and Bobby plays a Nightmare bot (a real match). !spar off: back to you."""
         on = len(msg) < 2 or msg[1].lower() != "off"
@@ -231,6 +281,7 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
+            player.tell("!arena box | env = fight BobbyBones in that room for 5 minutes, full weapons (the rules he trains with)")
             player.tell("!room moves = every movement course in a row, with a table of times at the end")
             player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
@@ -679,6 +730,11 @@ class duelbot(minqlx.Plugin):
                     self.room_loadout(bobby, opp, only=who)
                 else:
                     self.give_loadout(p)
+                    if self.arena and self.lab:              # arena: come back inside the room, away from the other one
+                        o_ = (opp if who == "bobby" else bobby).state
+                        q = self.arena_spot(o_.position if o_ else (0, 0, 0))
+                        face = math.degrees(math.atan2(o_.position[1] - q[1], o_.position[0] - q[0])) if o_ else 0.0
+                        self.put(p, q, face, human=(who == "opp" and not is_bot(p)))
                 self.tot.pop(who, None)
                 if who == "opp" and getattr(self, "rules2", False):
                     self.env.dmg_life[0] = 0.0               # what Bobby knows about this opponent's damage resets
@@ -702,6 +758,27 @@ class duelbot(minqlx.Plugin):
             self.alive[p.id] = up
         if in_room:
             return self.room_frame(now, bobby, opp, bs, os_)
+        if self.arena and not self.lab:
+            self.arena = None
+        if self.arena is None and self.lab and os.environ.get("DUEL_ARENA") in ("box", "env") and is_bot(opp) \
+                and not getattr(self, "arena_auto_done", False):
+            self.arena_auto_done = True                      # benchmark servers: one arena fight against the game's bot
+            self.arena_start(os.environ["DUEL_ARENA"], float(os.environ.get("DUEL_ARENA_MIN") or 5))
+        if self.arena:
+            A = self.arena
+            for p_, st_, other_, who_ in ((bobby, bs, os_, "bobby"), (opp, os_, bs, "opp")):
+                if st_.health > 0 and (A["place"] or not self.arena_inside(st_.position)):
+                    q = self.arena_spot(other_.position)
+                    self.put(p_, q, math.degrees(math.atan2(other_.position[1] - q[1], other_.position[0] - q[0])),
+                             human=(who_ == "opp" and not is_bot(p_)))
+                    if A["place"]:
+                        self.give_loadout(p_)
+            A["place"] = False
+            for p_, st_ in ((bobby, bs), (opp, os_)):        # a match start hands out the default weapons again: re-arm
+                if st_.health > 0 and not st_.weapons.rl:
+                    self.give_loadout(p_)
+            if now >= A["t_end"]:
+                self.arena_end("time")
         env, E = self.env, self.E
         if bs.health <= 0:                                   # tap fire to respawn
             minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
@@ -726,7 +803,7 @@ class duelbot(minqlx.Plugin):
         taken_items = []
         if self.rules2:
             env.kind[0] = E.NORMAL
-            if now - self.sess_t0 > 120.0:                           # training rounds last about two minutes:
+            if now - self.sess_t0 > (60.0 if self.arena else 120.0):  # training rounds: two minutes (arena: one)
                 self.sess_t0 = now                                   # clock, score and memory start over
                 self.round_base = (self.score["bobby"], self.score["opp"])
                 self.h[:] = 0
@@ -767,6 +844,9 @@ class duelbot(minqlx.Plugin):
             self.fb_next = np.array([min(dealt / 100.0, 2.0), min(took / 100.0, 2.0),
                                      math.sin(ang) * (took > 0), math.cos(ang) * (took > 0)], np.float32)
             env.dmg_life[0] += dealt
+        if self.arena:
+            self.arena["dmg"][0] += dmg.get("opp", 0)
+            self.arena["dmg"][1] += dmg.get("bobby", 0)
         c = self.acc
         c["frames"] += 1
         c["visible"] += int(env.visible[0])
@@ -873,8 +953,8 @@ class duelbot(minqlx.Plugin):
     def put(self, p, pos, yaw=None, human=False):
         p.position(x=float(pos[0]), y=float(pos[1]), z=float(pos[2]) + 2.0)
         p.velocity(reset=True)
-        if yaw is not None and human:
-            minqlx.set_view(p.id, 0.0, float(yaw))
+        if yaw is not None and (human or (is_bot(p) and "bobby" not in p.clean_name.lower())):
+            minqlx.set_view(p.id, 0.0, float(yaw))           # people and the game's own bots: only turn the view
         elif yaw is not None:
             minqlx.set_bot_input(p.id, 0, 0, 0, 0, 0, 0.0, float(yaw))
 

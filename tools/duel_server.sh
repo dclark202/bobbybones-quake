@@ -25,7 +25,7 @@ else
 fi
 RESTART_OPT=""; [ -n "$RESTART" ] && RESTART_OPT="--restart unless-stopped"   # RESTART=1: come back after a crash or reboot
 if [ -n "$SPAR" ]; then
-    docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" \
+    docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" \
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/bobbylab/bobbylab.pk3:/ql/baseq3/bobbylab.pk3:ro" qlbot +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs the game bot, skill ${SKILL:-5}, on $MAP)"; exit 0
 fi
