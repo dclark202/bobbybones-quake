@@ -47,6 +47,7 @@ Owner's plan: three parts of equal weight, Blood Run only for the real map. What
 | 21:12 | 775 | 361 | 39% | 8 deg | 25% / 35% | 84% | (19:00: 6-21, 116 u/s live) | 106 u/s (17:00) |
 | 22:15 | 836 | 796 | 74% | 13-20 deg | 10% / 12% | 6% | 0-11, 330 / 1232 damage, 87 u/s, in view 4%, shotgun held 76% | 136 u/s, above 330 u/s 3% of the time, in view 8% |
 | 23:15 | 893 | 707 (finishes 8 of 13 courses; not circle, twohop, pillars, rocket) | 77% | 16 deg | 12% / 39% | 4% | 1-24, 1405 / 2973 damage, 140 u/s, in view 11%, shotgun held 81% | 184 u/s, above 330 u/s 6%, in view 6% |
+| 00:15 | 955 | 777 (first finishes on circle) | 79% | 12 deg | 21% / 33% | 11% | 1-18, 975 / 2155 damage, 135 u/s, in view 9%, shotgun held 80% | 168 u/s, above 330 u/s 6%, in view 12% |
 
 22:20: the speed is in the courses only. In Blood Run duels in the simulator he still moves at 136 u/s and the
 two players see each other 8% of the time: self-play duels have become avoiding each other. Given every weapon
