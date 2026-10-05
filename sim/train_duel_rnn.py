@@ -28,11 +28,16 @@ DT_MIN = 0.025 / 60.0
 
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
-           teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5):
+           teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5,
+           env_module="duel_env", group=2):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
-    from duel_env import DuelEnv, WEAPONS as WEAPONS_
-    env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout, teacher=teacher)
+    import importlib
+    E_ = importlib.import_module(env_module)
+    DuelEnv, WEAPONS_ = E_.DuelEnv, E_.WEAPONS
+    env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout, teacher=teacher,
+                  **(dict(group=group) if group != 2 else {}))
+    G = group
     env.item_reward = item_reward
     env.drill_p = drill_p
     env.react_frames = react_frames[0]
@@ -53,9 +58,11 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     if os.environ.get("ARENA_SETS"):                         # e.g. "rl;rl,lg;rl,rg;rl,rg,lg": each player draws one, separately
         env.arena_sets = [tuple(WEAPONS_.index(x) for x in s_.split(",")) for s_ in os.environ["ARENA_SETS"].split(";")]
     if os.environ.get("ARENA_ROOMS"):                        # "env", "box" or "box,env"
-        env.arena_rooms = tuple({"box": 1, "env": 2}[x] for x in os.environ["ARENA_ROOMS"].split(","))
+        env.arena_rooms = tuple({"box": 1, "env": 2, "yard": 3}[x] for x in os.environ["ARENA_ROOMS"].split(","))
+    if os.environ.get("ARENA_STACK") == "0":                 # arena rounds start on the normal spawn health, no armor
+        env.arena_stack = False
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
-    from duel_env import WEAPONS
+    WEAPONS = WEAPONS_
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
     env._teach_update()
     remote.send((env.observe(), env.teach.copy()))
@@ -72,10 +79,10 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["players"] = env.n
             # frags scored by even (learner) players and by odd players, for learner-vs-snapshot win tracking
             ev = info["events"]
-            delta["kills_even"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % 2 == 0)
-            delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % 2 == 1)
-            delta["match_of_kill"] = [e["killer"] // 2 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
-            delta["even_kill"] = [e["killer"] % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
+            delta["kills_even"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 0)
+            delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 1)
+            delta["match_of_kill"] = [e["killer"] // G for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
+            delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy()))
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward = data
@@ -139,12 +146,17 @@ def main():
     ap.add_argument("--react-ms", type=float, default=50, help="tracking delay on an enemy already in view")
     ap.add_argument("--acquire-ms", type=float, default=200, help="delay before an enemy who just came into view is noticed")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa: groups of more than two players)")
+    ap.add_argument("--group", type=int, default=2, help="players per group, all against all (needs --env duel_env_ffa)")
     a = ap.parse_args()
 
     import torch
     import torch.nn as nn
     sys.path.insert(0, HERE)
-    from duel_env import ACTION_DIMS, OBS_DIM, PERSONAS, WEAPONS
+    import importlib
+    E_ = importlib.import_module(a.env)
+    ACTION_DIMS, OBS_DIM, PERSONAS, WEAPONS = E_.ACTION_DIMS, E_.OBS_DIM, E_.PERSONAS, E_.WEAPONS
+    G = a.group
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if dev.type == "cpu":
         torch.set_num_threads(6)
@@ -166,7 +178,7 @@ def main():
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
-                                        a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full),
+                                        a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, a.group),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -240,12 +252,14 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
+                        env_module=a.env, group=G,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk)),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
-    is_odd = (np.arange(N) % 2 == 1)
-    per_worker = 2 * a.matches
+    # (groups of more than two: every second member)
+    is_odd = (np.arange(N) % G % 2 == 1)
+    per_worker = G * a.matches
     league = np.zeros(N, bool)
     for w in range(a.workers):
         league[w * per_worker + per_worker // 2:(w + 1) * per_worker] = True
@@ -413,13 +427,13 @@ def main():
                 nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
         total += T * N
-        sim_min = T * DT_MIN * (N // 2)
+        sim_min = T * DT_MIN * (N // G)
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    frags_per_match_min=round(agg["frags"] / sim_min, 3),
                    suicides_per_match_min=round(agg["suicides"] / sim_min, 3),
                    hit_rate={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots"])), 3) for w in WEAPONS},
                    frag_share={w: round(float(agg[w + "_frags"] / max(1, sum(agg[x + "_frags"] for x in WEAPONS))), 2) for w in WEAPONS},
-                   pickups_per_player_min={k[5:]: round(float(agg[k] / (2 * sim_min)), 2)
+                   pickups_per_player_min={k[5:]: round(float(agg[k] / (G * sim_min)), 2)
                                            for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_am")},
                    acc_visible={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots_vis"])), 3) for w in ("rl", "rg", "lg")},
                    aim_err_visible=round(float(agg["aim_err"] / max(1, agg["aim_frames"])), 2),
@@ -442,7 +456,7 @@ def main():
                                      finishes_per_min=round(float(agg["course"][k_, 1] / max(1.0, agg["course"][k_, 6]) * 2400), 2),
                                      falls_per_min=round(float(agg["course"][k_, 7] / max(1.0, agg["course"][k_, 6]) * 2400), 2))
                            for k_, key in enumerate(course_keys) if agg["course"][k_, 6] > 0},
-                   arena=dict(frags_per_min=round(float(agg["arena"][0] / max(1.0, agg["arena"][1]) * 4800), 2),
+                   arena=dict(frags_per_min=round(float(agg["arena"][0] / max(1.0, agg["arena"][1]) * 2400 * G), 2),
                               speed=int(agg["arena"][2] / max(1.0, agg["arena"][1])),
                               in_view=round(float(agg["arena"][3] / max(1.0, agg["arena"][1])), 3),
                               damage_per_min=round(float(agg["arena"][4] / max(1.0, agg["arena"][1]) * 2400), 1),
@@ -452,8 +466,8 @@ def main():
                               zoomed=round(float(agg["zoom_frames"] / max(1.0, agg["arena"][1])), 3)),
                    run_and_gun=dict(damage_per_min=round(float(agg["gun"][0] / max(1.0, agg["gun"][1]) * 2400), 1),
                                     speed=int(agg["gun"][2] / max(1.0, agg["gun"][1]))),
-                   keys=dict(asked_per_s=round(float(agg["key_asked"] / max(1.0, 2 * sim_min * 60)), 2),
-                             changes_per_s=round(float(agg["key_changes"] / max(1.0, 2 * sim_min * 60)), 2),
+                   keys=dict(asked_per_s=round(float(agg["key_asked"] / max(1.0, G * sim_min * 60)), 2),
+                             changes_per_s=round(float(agg["key_changes"] / max(1.0, G * sim_min * 60)), 2),
                              refused=round(float(agg["key_blocked"] / max(1.0, agg["key_blocked"] + agg["key_changes"])), 3)),
                    teach=[round(kick, 3), round(float(kick_l), 3)],
                    items_room=dict(mega_per_2min=round(float(agg["lab_items"][0] / max(1.0, agg["lab_items"][2]) * 4800), 2),
@@ -462,7 +476,7 @@ def main():
                              vertical_right=round(demo_acc[1], 3), turn_within_one_bin=round(demo_acc[2], 3)),
                    crouch=round(float(agg["duck_frames"] / max(1, agg["play_frames"])), 3),
                    walk=round(float(agg["walk_frames"] / max(1, agg["play_frames"])), 3),
-                   fall_dmg_per_min=round(float(agg["fall_dmg"] / (2 * sim_min)), 2),
+                   fall_dmg_per_min=round(float(agg["fall_dmg"] / (G * sim_min)), 2),
                    target_kills_per_min=round(float(agg["target_kills"] / max(1, agg["aim_round_frames"]) * 2400), 2),
                    visible=round(agg["visible"] / max(1, agg["players"]), 3),
                    air_fast=round(agg["air_fast"] / max(1, agg["players"]), 3),

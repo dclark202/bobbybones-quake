@@ -147,6 +147,9 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-83 | P1 | done, in training (2026-10-05 10:27) | The right hand: fire on the index finger and zoom on the middle finger, with the same kind of finger limits as the left hand | Owner 2026-10-05 |
 | B-84 | P1 | done, in training (2026-10-05 10:27); the scorecard does not record zoom state yet | Zoom as an action: narrower view (with the sight limits that means tunnel vision), finer mouse and less hand shake per degree, slower turning; aim measurements have to account for it | Owner 2026-10-05: zoom should be a feature; it is not one today |
 | B-85 | P1 | done (2026-10-05) | Left-hand finger model, sight limited to the field of view, fight inputs (enemy shots, reload, trails, own hand), arena self-play, `!arena` on the server | See RESULTS 2026-10-05 |
+| B-86 | P1 | built and checked, not in training (2026-10-05); the owner decides at the 19:00 review | Groups of 2 to 6 players, all against all (`sim/duel_env_ffa.py`, written by `tools/make_ffa_env.py`; trainer `--env duel_env_ffa --group N`). Every player sees, hears and can hit every other; the enemy inputs describe the one he attends to; 18 more inputs for two more enemies in view | Owner 2026-10-05; RESULTS 2026-10-05 15:45 |
+| B-87 | P1 | built and checked, not in training (2026-10-05) | Train in the yard with items (map `bobbyyard`: mega, red armor, rockets, lightning, rail, healths, shards): `--map bobbyyard`, `ARENA_ROOMS=yard`; items respawn on their timers and reset each round | Owner 2026-10-05 |
+| B-88 | P2 | open | The play-test server, the fight videos and the benchmarks still use `duel_env.py`: at the switch, freeze it as `duel_env_v5.py` and make `duel_env_ffa.py` the current one (widen the network 348 -> 366) | Follows B-86 |
 
 ## Dropped
 

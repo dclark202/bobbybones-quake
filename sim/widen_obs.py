@@ -21,8 +21,10 @@ sys.path.insert(0, HERE)
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
+    ap.add_argument("--env", default="duel_env", help="simulator module to widen to")
     a = ap.parse_args()
-    import duel_env as E
+    import importlib
+    E = importlib.import_module(a.env)
     d = os.path.join(ROOT, "data", "sim_runs", a.run)
     files = [os.path.join(d, "policy.pt")] + sorted(glob.glob(os.path.join(d, "snapshots", "snap_*.pt")))
     n = 0

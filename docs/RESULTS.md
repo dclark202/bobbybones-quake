@@ -5,6 +5,28 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-05 15:45 — built for tonight, not in training: groups of up to six, and the yard with items (B-86, B-87)
+
+Owner's idea for after the 19:00 review: several bots at once, all against all, so there is more to dodge and
+react to; and move them to the room with items. Built beside the running simulator so the run is not touched.
+- `sim/duel_env_ffa.py` (written from `duel_env.py` by `tools/make_ffa_env.py`): groups of G players. Each one
+  sees, hears and can hit every other; rockets splash on all; a shot on a line with two players hits the nearer.
+  The enemy inputs describe the enemy he attends to: the noticed one nearest his crosshair (the current one
+  preferred a little), else the one seen or heard last. 18 new inputs at the end (348 -> 366): two more enemies
+  in view (there, where, direction, whether he faces this player), how many are in view, how many players.
+  Reward as before: +1 a frag, -1 a death, damage dealt minus damage taken, whoever it is.
+- Check (`tools/ffa_check.py`): with two players it is **identical to `duel_env` over 3000 frames** (same seed
+  and actions; inputs, rewards and round ends compared; 50 frags and 19,700 damage in both). With 4 and 6 players
+  in the environment box and in the yard it runs and fights (6 in the box: 145 frags in 75 s of 8 groups).
+- The yard with items (`--map bobbyyard`, `ARENA_ROOMS=yard`): pickups work (weapons, red armor, mega), items
+  come back on their timers and reset each round. Weapon sets by `ARENA_SETS` (`mg` = machine gun and gauntlet
+  only, the duel spawn); `ARENA_STACK=0` turns the random health and armor off.
+- A one-minute training test with four players in the yard (the v5 network widened): runs at the usual speed per
+  player, he fights and picks weapons up (about one a minute per player).
+- The league in a group: every second member of half the groups is played by a past version.
+- Not done yet: the play-test server, the videos and the Nightmare benchmark still use the two-player simulator
+  (B-88).
+
 ## 2026-10-05 09:26 — `duel_gru_v5`: arena fights only, with finger and sight limits (until 16:00)
 
 Owner's change of course: become good at combat first, in the two boxes, and see what emerges; limit his actions
