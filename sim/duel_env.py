@@ -139,7 +139,15 @@ ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2)
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "YA", "GA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6 * len(SLOTS) + N_GOAL   # as in duel_gru_v3
-OBS_DIM = OBS_BASE + N_EXTRA
+# Fight inputs (2026-10-05), appended after everything else:
+#   enemy shots he saw or heard: firing right now 1, time since the last one 2, which weapon it was 9 (every weapon
+#     has its own sound), how long until that weapon can fire again 1, whether he saw it or only heard it 1   = 14
+#   the line of the enemy's last bullet, rail or lightning shot, while it is on screen (nearest point of it,
+#     relative to him) 3 + a flag that fades with the trail 1                                             = 4
+#   the enemy in view: crouched 1, in the air 1                                                           = 2
+#   his own hand: the keys in effect 3, the budget of key actions 1, which fingers are free 5              = 9
+N_FIGHT = 14 + 4 + 2 + 9
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -311,6 +319,11 @@ class DuelEnv:
         self.key_last = np.tile(np.array([1, 1, 0], np.int64), (nn2, 1))    # the key states in effect
         self.key_hold = np.full((nn2, 5), 99, np.int64)                    # frames since each finger last acted
         self.key_tok = np.full(nn2, KEY_BURST, np.float32)                 # budget of key changes
+        self.shot_t = np.full(nn2, 99.0, np.float32)    # seconds since the last enemy shot this player saw or heard
+        self.shot_w = np.zeros(nn2, np.int64)           # the weapon of that shot
+        self.shot_seen = np.zeros(nn2, bool)            # seen (else only heard)
+        self.trail_t = np.full(nn2, 99.0, np.float32)   # seconds since the last enemy bullet / rail / lightning line seen
+        self.trail_p = np.zeros((nn2, 3), np.float32)   # the point of that line nearest to this player
         self.no_walk = False                            # True: the walk key does nothing
         self.gun_courses = ("speed", "ramps", "slalom", "turns")
         self.gun = np.zeros(nn2, bool)                  # player is a run-and-gun runner
@@ -412,6 +425,7 @@ class DuelEnv:
         self.fire_cd[i] = 0.0
         self.duck[i] = False
         self.key_last[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), 99, KEY_BURST
+        self.shot_t[i ^ 1] = self.trail_t[i ^ 1] = 99.0     # what the opponent knew about this player's shots is void
         self.dmg_life[i ^ 1] = 0.0                      # what the opponent knows about this player's damage resets
         mode = int(self.mode[i // 2])
         kind = int(self.kind[i // 2])
@@ -773,6 +787,63 @@ class DuelEnv:
         e[:, 2] += np.where(self.duck[:len(e)], VIEW_H_DUCK, VIEW_H)
         return e
 
+    def note_shots(self, src):
+        """players src fired this frame: the opponent notes it if he has the shooter in view (after the noticing
+        delay) or is within earshot; a bullet, rail or lightning line that he can see is remembered as a trail"""
+        src = np.asarray(src)
+        if not len(src):
+            return
+        s = self.state
+        lis = src ^ 1
+        k_ = np.repeat(self.kind, 2)[lis]
+        alone = ((k_ == MOVE) | (k_ == SOLO) | ((k_ == COURSE) & ~self.gun[lis]))
+        d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
+        seen = self.acquired[lis] & ~alone
+        ok = (seen | (d < HEAR_EVT)) & ~alone & (self.hp[lis] > 0)
+        self.shot_t[lis[ok]] = 0.0
+        self.shot_w[lis[ok]] = self.weapon[src[ok]]
+        self.shot_seen[lis[ok]] = seen[ok]
+        # the line of a hitscan shot (not rockets, grenades, plasma: those are projectiles he sees anyway)
+        hit = np.isin(self.weapon[src], (RG, LG, MG, HMG, SG)) & ~alone & (self.hp[lis] > 0)
+        if hit.any():
+            sh, li = src[hit], lis[hit]
+            eye = self._eye(s)
+            yr, pr = np.radians(self.yaw[sh]), np.radians(self.pitch[sh])
+            dv = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
+            reach = np.where(self.weapon[sh] == LG, 768.0, 4000.0)
+            along = np.clip(((eye[li] - eye[sh]) * dv).sum(1), 0.0, reach)
+            near = eye[sh] + dv * along[:, None]
+            to = near - eye[li]
+            dn = np.linalg.norm(to, axis=1) + 1e-6
+            yl, pl = np.radians(self.yaw[li]), np.radians(self.pitch[li])
+            fl = np.stack([np.cos(pl) * np.cos(yl), np.cos(pl) * np.sin(yl), -np.sin(pl)], 1)
+            vis = (self.acquired[li] | ((to * fl).sum(1) / dn > FOV_COS)) & (dn < 2000.0)
+            for k in np.nonzero(vis)[0]:
+                if self.acquired[li[k]] or self.w.trace(eye[li[k]], near[k].astype(np.float32))["fraction"] >= 0.999:
+                    self.trail_t[li[k]] = 0.0
+                    self.trail_p[li[k]] = near[k]
+
+    def _fight(self, pos, eye, rot, visible):
+        """the inputs added on 2026-10-05 (see N_FIGHT)"""
+        n = self.n
+        opp = np.arange(n) ^ 1
+        t = self.shot_t
+        known = (t < 5.0).astype(np.float32)
+        reload_ = np.clip((W_REFIRE[self.shot_w] - t) / 1.5, 0.0, 1.0) * known
+        shots = np.concatenate([(t < 0.06).astype(np.float32)[:, None], np.exp(-2.0 * t)[:, None],
+                                (np.minimum(t, 3.0) / 3.0)[:, None], np.eye(NW, dtype=np.float32)[self.shot_w] * known[:, None],
+                                reload_[:, None], (self.shot_seen & (t < 5.0)).astype(np.float32)[:, None]], 1)
+        fade = np.exp(-4.0 * self.trail_t)
+        on = (self.trail_t < 1.0).astype(np.float32)
+        trail = np.concatenate([np.clip(rot(self.trail_p - eye) / 500.0, -4, 4) * on[:, None], fade[:, None]], 1)
+        v_ = visible.astype(np.float32)
+        body = np.stack([self.duck[opp].astype(np.float32) * v_, (self.state[opp, 6] < 0.5).astype(np.float32) * v_], 1)
+        hand = np.concatenate([(self.key_last - np.array([1, 1, 0]))[:, :2].astype(np.float32),
+                               (self.key_last[:, 2:3] == 1).astype(np.float32) - (self.key_last[:, 2:3] == 2).astype(np.float32),
+                               (self.key_tok / KEY_BURST)[:, None],
+                               (self.key_hold >= FINGER_HOLD[None, :]).astype(np.float32)], 1)
+        return np.concatenate([shots, trail, body, hand], 1).astype(np.float32)
+
     def _hear(self, cat, src, kind=None):
         """players src made a sound of category cat: their opponents hear it within HEAR_EVT (rough position)"""
         src = np.asarray(src)
@@ -972,7 +1043,8 @@ class DuelEnv:
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], own, self.mv / 30.0, walls, floors, opp_feat, rk,
                               np.eye(NW, dtype=np.float32)[self.weapon], self.has.astype(np.float32),
                               self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
-                                                                              yaw, pit, visible)], 1)
+                                                                              yaw, pit, visible),
+                              self._fight(pos, eye, rot, visible)], 1)
         return obs.astype(np.float32)
 
     def _extra(self, pos, vel, eye, fdir, up, rot, c, si, yaw, pit, visible):
@@ -1292,6 +1364,8 @@ class DuelEnv:
         self.yaw = s[:, 7].copy()
         reward = -JERK_COST * jerk.astype(np.float32)
         self.snd_t += DT
+        self.shot_t += DT
+        self.trail_t += DT
         self._hear(2, np.nonzero((prev[:, 6] > 0.5) & (s[:, 6] < 0.5) & (s[:, 5] > 100))[0])      # jumps
         self._hear(3, np.nonzero(np.linalg.norm(s[:, :3] - prev[:, :3], axis=1) > 200)[0])       # teleports
         # fall damage (Quake 3 rule: from the speed of the landing)
@@ -1356,6 +1430,7 @@ class DuelEnv:
         self.ammo[ar[use], self.weapon[use]] -= 1
         self.fire_q, self.fire_w = shoot, self.weapon.copy()
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
+        self.note_shots(np.nonzero(shoot & (self.weapon != G))[0])
         if do_fire.any():
             yr, pr = np.radians(self.yaw), np.radians(self.pitch)
             fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)

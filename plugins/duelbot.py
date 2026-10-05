@@ -738,6 +738,9 @@ class duelbot(minqlx.Plugin):
                 self.tot.pop(who, None)
                 if who == "opp" and getattr(self, "rules2", False):
                     self.env.dmg_life[0] = 0.0               # what Bobby knows about this opponent's damage resets
+                    self.opp_ammo = None
+                    if hasattr(self.env, "shot_t"):
+                        self.env.shot_t[0] = self.env.trail_t[0] = 99.0
                 self.want_w.clear()
                 if who == "bobby":
                     if not getattr(self, "rules2", False):
@@ -812,6 +815,15 @@ class duelbot(minqlx.Plugin):
             oc_ = minqlx.ran_usercmd(opp.id)
             env.duck[1] = oc_[5] < 0
             env.snd_t += E.DT
+            if hasattr(env, "note_shots"):                           # enemy shots seen or heard, and their trails
+                env.shot_t += E.DT
+                env.trail_t += E.DT
+                am_ = {w_: getattr(os_.ammo, w_) for w_ in E.WEAPONS if w_ != "g"}
+                wn_ = E.WEAPONS[int(env.weapon[1])] if int(env.weapon[1]) < len(E.WEAPONS) else "mg"
+                pa_ = getattr(self, "opp_ammo", None)
+                if pa_ is not None and os_.health > 0 and wn_ in am_ and am_[wn_] < pa_.get(wn_, am_[wn_]):
+                    env.note_shots(np.array([1]))                    # the weapon in his hand lost ammo: he fired
+                self.opp_ammo = am_
             po = self.prev_opp
             if po is not None and os_.health > 0:
                 if oc_[1] & 1:                                       # the opponent is firing

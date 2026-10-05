@@ -33,6 +33,27 @@ because the meaning of the inputs changed (`duel_env_v4.py` is the frozen copy f
 | Time | Train min | Key changes asked / made per s | Refused | Aim error in view | Standing | Looking up or down | vs Nightmare (env box, 5 min) |
 |---|---|---|---|---|---|---|---|
 | 09:33 | 1369 | about 70 / 5.2 | 93% | 12.0 deg | 12.5% | 1.9% | 13-23 |
+| 10:15 | 1409 | - / 5.4 | 92.5% | 6.9 deg | 14.7% | 1.6% | - |
+
+**10:10 — fight inputs added (owner: must have), network widened 311 -> 340 inputs at a checkpoint** (new inputs
+get zero weights, so nothing learned is lost; `sim/widen_obs.py`; the 311-input checkpoint is kept as
+`policy_311_inputs.pt`):
+- enemy shots he saw or heard: firing now, time since the last shot (two scalings), which weapon it was (every
+  weapon has its own sound), time until that weapon can fire again, seen or only heard: 14 inputs;
+- the line of the enemy's last bullet, rail or lightning shot while it is on screen (nearest point, fading over
+  a second): 4;
+- the enemy in view: crouched, in the air: 2;
+- his own hand: keys in effect, key budget, which fingers are free: 9 (so he can tell whether a press took).
+Checked in the simulator: a rail seen gives "firing", weapon rail, 1.5 s counting down, a trail; a rail heard
+from behind gives the weapon and no trail. On the server the enemy's shots are read from his ammo dropping.
+Already present before: enemy weapon in hand while in view, the two nearest incoming projectiles, hit feedback.
+Still not there: the enemy's health and armor (not knowable in the game either), more than two projectiles.
+
+Found while reading the trainer: the damage part of the reward is 0.001 per point, not 0.004 (it fades with an
+old curriculum setting that has long reached its floor). Kills at +-1 dominate; left as it is for this run.
+
+After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
+24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
 
 ## 2026-10-05 08:50 — does a bigger network help? (imitation test on the pro demos) and the new mix's smoke test
 
