@@ -111,6 +111,20 @@ damage per second of firing at an enemy in view is 87 when he stands, 70 when he
 u/s: moving costs the shooter about 18%. He moves sideways at 156 u/s with the enemy in view and changes
 direction 0.3 times a second.
 
+**13:13 — the left hand slowed down (owner: 40 key decisions a second is far too many; bursts yes, but not for long)**
+(`policy_before_keyrate.pt` kept):
+- the left hand decides ten times a second: keys and weapon choice are read from the network every fourth frame
+  (staggered by player) and held in between; the mouse and the fire button stay at 40 a second;
+- stamina: a burst of up to 10 key actions, refilled at 4 a second (was burst 3, 5 a second). Random mashing gets
+  13.5 actions into the first second and 4.0 a second after that (measured);
+- exploration bonus per action: none on the movement keys and the fire button, a quarter on the mouse, half on
+  the weapon choice, full on zoom (so that zoom still gets tried). Owner asked about removing it altogether:
+  kept small where a choice could otherwise freeze before it has been explored.
+- Fight videos now show the keys his fingers pressed, not every request (they had shown the requests).
+Before: he asked for about 40 key changes a second. Right after: 17.6 asked, 4.6 made.
+The trainer was found dead at 13:10 (stopped without an error message some time after 12:50; memory was not
+short); restarted from the 12:43 checkpoint, about 25 minutes of training lost.
+
 After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
 24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
 
