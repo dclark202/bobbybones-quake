@@ -235,6 +235,9 @@ class DuelEnv:
         self.item_up = np.ones((n_matches, self.nI), bool)
         self.item_t = np.zeros((n_matches, self.nI), np.float32)        # seconds until it respawns
         self.slot_items = [[k for k, d in enumerate(self.item_def) if d[4] == lab] for lab in SLOTS]
+        # Weapons that lie on this map: nobody spawns with a weapon the map does not have (no heavy machine gun
+        # on Aerowalk, for instance). A map without weapon pickups (the test map) allows all.
+        self.map_weapons = sorted({int(d[1]) for d in self.item_def if d[0] == "wp"}) or list(range(NW))
         # more items as inputs: second yellow armor, three nearest 25/50 healths, two nearest bubbles or shards,
         # two nearest ammo boxes
         ya = [k for k, d in enumerate(self.item_def) if d[4] == "YA"]
@@ -379,8 +382,9 @@ class DuelEnv:
             self.weapon[i] = mode
         else:
             owned, ammo = LOADOUTS[self.loadout]
-            if self.loadout == "all" and not self.sg_spawn:     # as in the real game: the shotgun has to be picked up
-                owned = tuple(k for k in owned if k != SG)
+            if self.loadout == "all":
+                owned = tuple(k for k in owned if k in self.map_weapons and (self.sg_spawn or k != SG))
+                ammo = {k: v for k, v in ammo.items() if k in owned or k == MG}
             if self.load_sets[i] is not None and self.script[i] != 2:   # this round's drawn weapon set
                 owned = self.load_sets[i]
                 ammo = {k: LOADOUTS["all"][1][k] for k in owned}
@@ -1371,14 +1375,15 @@ class DuelEnv:
             self.load_sets[a_] = self.load_sets[b_] = None
             if kd == NORMAL and self.fixed_kind is None:
                 u = self.rng.random()
+                guns = [g for g in LOAD_GUNS if g in self.map_weapons and (self.sg_spawn or g != SG)]
                 if u < self.loadout_p[0]:
                     for q in (a_, b_):
-                        self.load_sets[q] = tuple(int(x) for x in self.rng.choice(LOAD_GUNS if self.sg_spawn else [g for g in LOAD_GUNS if g != SG], int(self.rng.integers(1, 3)),
-                                                                                    replace=False))
+                        self.load_sets[q] = tuple(int(x) for x in self.rng.choice(guns, min(len(guns), int(self.rng.integers(1, 3))), replace=False))
                 elif u < self.loadout_p[0] + self.loadout_p[1]:
                     self.load_sets[a_] = self.load_sets[b_] = ()
                 elif u >= sum(self.loadout_p[:3]):              # the same single weapon for both (finite ammo)
-                    self.mode[m] = int(self.rng.choice(self.drill_weapons))
+                    dw = [g for g in self.drill_weapons if g in self.map_weapons or g == MG] or list(self.drill_weapons)
+                    self.mode[m] = int(self.rng.choice(dw))
             self.frags_r[a_] = self.frags_r[b_] = 0
             self.snd_t[a_] = self.snd_t[b_] = 99.0
             if kd == AIM or (self.fixed_kind is not None and kd == NORMAL):

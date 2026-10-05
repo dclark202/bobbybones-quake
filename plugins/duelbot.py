@@ -421,6 +421,10 @@ class duelbot(minqlx.Plugin):
                 p.weapon(QLNUM[only])
             elif nine:
                 owned, ammo = E.LOADOUTS["all"]
+                mw = getattr(self.env, "map_weapons", None)      # only weapons that lie on this map
+                if mw is not None:
+                    owned = tuple(k for k in owned if k in mw)
+                    ammo = {k: v for k, v in ammo.items() if k in owned or E.WEAPONS[k] == "mg"}
                 if getattr(self, "no_sg", False):
                     owned = tuple(k for k in owned if E.WEAPONS[k] != "sg")
                     ammo = {k: v for k, v in ammo.items() if E.WEAPONS[k] != "sg"}
