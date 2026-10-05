@@ -103,6 +103,8 @@ def main():
                     "/ arena fights (third value optional)")
     ap.add_argument("--loadout-p", default="", help="normal rounds, share by spawn: random 1-2 weapons, real duel spawn "
                     "(machine gun and gauntlet), every weapon on the map, the same single weapon for both")
+    ap.add_argument("--ent-heads", default="", help="weight of the exploration bonus per action head (forward, strafe, "
+                    "vertical, turn, pitch, fire, weapon, walk, zoom); empty = 1 for all")
     ap.add_argument("--ent-coef", type=float, default=0.01, help="exploration bonus (entropy coefficient)")
     ap.add_argument("--arena-len", type=float, default=30.0, help="test map: seconds per arena round")
     ap.add_argument("--arena-full", type=float, default=0.5, help="test map: share of arena rounds with the full weapon set")
@@ -260,6 +262,8 @@ def main():
 
     T = a.steps
     gamma, lam, clip, ent_coef = a.gamma, 0.95, 0.2, a.ent_coef
+    ent_heads = [float(x) for x in a.ent_heads.split(",")] if a.ent_heads else [1.0] * len(ACTION_DIMS)
+    ent_heads += [1.0] * (len(ACTION_DIMS) - len(ent_heads))
     t_start, total, update = time.time(), 0, 0
     log = open(os.path.join(out, "metrics.jsonl"), "a")
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
@@ -370,7 +374,7 @@ def main():
                 ds = dists(lg)
                 A = b_act[:, chunk]
                 lp = sum(dd.log_prob(A[..., j]) for j, dd in enumerate(ds))
-                ent = sum(dd.entropy() for dd in ds)
+                ent = sum(w_ * dd.entropy() for w_, dd in zip(ent_heads, ds))
                 wgt = b_w[:, chunk]
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
@@ -446,7 +450,8 @@ def main():
                               zoomed=round(float(agg["zoom_frames"] / max(1.0, agg["arena"][1])), 3)),
                    run_and_gun=dict(damage_per_min=round(float(agg["gun"][0] / max(1.0, agg["gun"][1]) * 2400), 1),
                                     speed=int(agg["gun"][2] / max(1.0, agg["gun"][1]))),
-                   keys=dict(changes_per_s=round(float(agg["key_changes"] / max(1.0, 2 * sim_min * 60)), 2),
+                   keys=dict(asked_per_s=round(float(agg["key_asked"] / max(1.0, 2 * sim_min * 60)), 2),
+                             changes_per_s=round(float(agg["key_changes"] / max(1.0, 2 * sim_min * 60)), 2),
                              refused=round(float(agg["key_blocked"] / max(1.0, agg["key_blocked"] + agg["key_changes"])), 3)),
                    teach=[round(kick, 3), round(float(kick_l), 3)],
                    items_room=dict(mega_per_2min=round(float(agg["lab_items"][0] / max(1.0, agg["lab_items"][2]) * 4800), 2),

@@ -94,7 +94,12 @@ WALK = 64                                              # key strength when walki
 RING, MIDDLE, INDEX, THUMB, LITTLE = range(5)
 FINGER_HOLD = np.array([6, 6, 6, 4, 20], np.int64)     # frames: 150 ms, the thumb (jump) 100 ms, the little finger
                                                        # (crouch) 500 ms: at most one crouch a second
-KEY_RATE, KEY_BURST = 5.0, 3.0
+KEY_RATE, KEY_BURST = 4.0, 10.0
+# (2026-10-05, later) The budget is the hand's stamina: a burst of up to KEY_BURST key actions in quick succession,
+# refilled at KEY_RATE a second, so that after a burst the hand is slow until it has recovered.
+# The left hand also decides only every KEY_EVERY frames (ten times a second): what the keys and the weapon choice
+# should be is read from the network then and held in between. The mouse and the fire button stay at 40 a second.
+KEY_EVERY = 4
 # The right hand on the mouse: index finger = fire, middle finger = zoom (held). The same rule: a finger that has
 # just acted cannot act again for this many frames (a click is a press and a release: at most about six a second).
 MOUSE_HOLD = np.array([4, 6], np.int64)                # fire 100 ms (at most five clicks a second), zoom 150 ms
@@ -330,6 +335,8 @@ class DuelEnv:
         self.key_last = np.tile(np.array([1, 1, 0], np.int64), (nn2, 1))    # the key states in effect
         self.key_hold = np.full((nn2, 5), 99, np.int64)                    # frames since each finger last acted
         self.key_tok = np.full(nn2, KEY_BURST, np.float32)                 # budget of key changes
+        self.key_req = np.tile(np.array([1, 1, 0, 0], np.int64), (nn2, 1)) # the left hand's standing decision: keys, weapon
+        self.key_tick = 0
         self.pain_t = np.full(nn2, 99.0, np.float32)    # seconds since this player last heard the enemy's pain sound
         self.pain_b = np.zeros(nn2, np.int64)           # which one: 0 under 25 health, 1 under 50, 2 under 75, 3 above
         self.arena_stack = True                         # arena rounds: random health and armor, the same for both players
@@ -413,7 +420,7 @@ class DuelEnv:
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
                           arena=np.zeros(8),              # frags, player-frames, sum of speed, frames with the enemy in view, damage,
                                                           # frames standing still, frames looking over 40 degrees up or down, crouched frames
-                          zoom_frames=0.0, key_changes=0, key_blocked=0,   # movement-key changes made / refused by the finger limits
+                          zoom_frames=0.0, key_asked=0, key_changes=0, key_blocked=0,   # movement-key changes made / refused by the finger limits
                           gun=np.zeros(3),                # run-and-gun: damage dealt, runner frames, sum of runner speed
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
@@ -444,6 +451,7 @@ class DuelEnv:
         self.fire_cd[i] = 0.0
         self.duck[i] = False
         self.key_last[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), 99, KEY_BURST
+        self.key_req[i] = (1, 1, 0, 0)
         self.shot_t[i ^ 1] = self.trail_t[i ^ 1] = 99.0     # what the opponent knew about this player's shots is void
         self.pain_t[i ^ 1] = 99.0
         self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
@@ -1307,6 +1315,12 @@ class DuelEnv:
         Changes a[:, :3] and a[:, 6] in place."""
         if who is None:
             who = self.script == 0
+        self.key_tick += 1                                  # the left hand decides ten times a second (staggered by player)
+        dec = ((self.key_tick + np.arange(len(a))) % KEY_EVERY == 0) | ~who
+        cols = [0, 1, 2, 6]
+        self.stats["key_asked"] += int(((a[:, :3] != self.key_last) & who[:, None] & dec[:, None]).sum())
+        self.key_req = np.where(dec[:, None], a[:, cols], self.key_req)
+        a[:, cols] = np.where(who[:, None], self.key_req, a[:, cols])
         self.key_tok = np.minimum(KEY_BURST, self.key_tok + KEY_RATE * DT).astype(np.float32)
         self.key_hold += 1
         ready = self.key_hold >= FINGER_HOLD[None, :]
