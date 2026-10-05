@@ -16,3 +16,4 @@ tools/demodump/build/
 tools/demodump/*.exe
 tools/demodump/*.lib
 tools/demodump/*.exp
+videos/

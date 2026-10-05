@@ -56,6 +56,9 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
 - **Pro demos**: `tools/fetch_demos.py` downloads, `sim/demo_dataset.py` converts (inputs + inferred keys), the trainer
   imitates with `--demo-dir/--demo-coef/--demo-heads`. Demos and sets live in the folder named in `data/demo_root.txt`.
   Imitating mouse or trigger at full weight destroys aim (RESULTS 2026-10-04 21:12): movement heads only.
+- **Videos**: `sim/render_course.py` renders first-person videos from the simulator (flat-shaded, with keys, mouse,
+  speed): every movement course, or `--fight aim|env` for a self-play fight in a box. Output in `videos/<run>_<minutes>/`
+  (git-ignored). The owner finds these useful: render them after a run without being asked and send the files.
 - `legacy/`: the first approach (Nightmare bot + routes + coach + cluster). Not used.
 
 ## Running things (Git Bash; `export MSYS_NO_PATHCONV=1` before docker commands)
