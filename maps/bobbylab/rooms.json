@@ -834,7 +834,7 @@
   },
   "drops": {
    "name": "Drops",
-   "hint": "You have 100 health and no refills: get to the bottom fast. Drops of 200, 240, 320 and 440; the side ledges split the big ones.",
+   "hint": "You have 1 health: any fall damage kills and ends the run. Get to the bottom fast; the side ledges split the big drops.",
    "start": [
     64.0,
     34256.0,

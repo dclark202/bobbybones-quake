@@ -1044,7 +1044,7 @@ class duelbot(minqlx.Plugin):
             self.room_loadout(bobby, human)
             r["mortal"] = r["kind"] == "speed" and bool(self.lab) and bool(self.lab["courses"][r["key"]].get("mortal"))
             if r["mortal"]:
-                human.health = 100
+                human.health = 1                             # any fall damage at all ends the run
                 human.armor = 0
             if r["kind"] == "move":
                 self.new_goal(human, hpos)

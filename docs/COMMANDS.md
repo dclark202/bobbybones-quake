@@ -29,7 +29,7 @@ and prints your result in chat. `!rooms` lists the rooms for the current map; `!
 | `!room moves` | Every movement course in a row, then a table of your times and the total (30 s counted for each one not finished) | about 8 min |
 | `!room move bends` | A track with no walls over a pit, with 45-degree bends: carry speed by air-steering | 30 s |
 | `!room move pads` | Jump pad up to a ledge, a teleporter at its end, a jump pad over a wall | 30 s |
-| `!room move drops` | Get down 1200 units fast on 100 health with no refills (drops of 200, 240, 320, 440; side ledges split the big ones). Dying ends the run | 30 s |
+| `!room move drops` | Get down 1200 units fast on 1 health: any fall damage kills and ends the run (drops of 200, 240, 320, 440; side ledges split the big ones) | 30 s |
 | `!room move climb` | Eighteen ledges, each 40 high (a jump each) | 30 s |
 | `!room move dodge` | A rocket turret fires at you from the far end of a corridor with a little cover: reach the line in front of it. Reports damage taken | 30 s |
 | `!room items` | A ring corridor with a mega health (35 s) and a red armor (25 s) in opposite corners, gauntlet only: how many of the possible pickups you get (not in the suite: meant for Bobby) | 120 s |
