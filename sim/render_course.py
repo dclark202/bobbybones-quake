@@ -240,6 +240,10 @@ def fight(env, pol, where, secs, round_len):
         act, h = pol.act(obs, h)
         fr["a"] = act[0].copy()
         obs, r, done, info = env.step(act)
+        if hasattr(env, "key_last"):                             # show what his fingers actually did, not every request
+            fr["asked"] = int((act[0, :3] != env.key_last[0]).sum())
+            fr["a"][:3] = env.key_last[0]
+            fr["a"][5] = int(env.fire_last[0])
         h[done] = 0.0
         for e in info.get("events", []) if isinstance(info, dict) else []:
             if e["killer"] in (0, 1) and e["killer"] != e["victim"]:
