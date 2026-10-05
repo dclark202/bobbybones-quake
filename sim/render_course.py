@@ -161,11 +161,11 @@ WCOL = {"rl": (255, 120, 40), "gl": (90, 220, 90), "pg": (90, 200, 255), "rg": (
         "mg": (255, 240, 150), "hmg": (255, 210, 120), "sg": (255, 230, 170), "g": (200, 200, 200)}
 
 
-def draw_enemy(d, fr):
-    """the opponent as a figure: legs, body, head, and his weapon pointing where he aims"""
-    o, yaw = fr["opp"], fr["opp_yaw"]
-    duck = fr["opp_duck"]
-    hurt = fr["dealt"] > 0
+def draw_enemy(d, fr, e):
+    """an opponent as a figure: legs, body, head, and his weapon pointing where he aims"""
+    o, yaw = e["pos"], e["yaw"]
+    duck = e["duck"]
+    hurt = e["hurt"]
     body = (255, 255, 255) if hurt else (70, 200, 90)          # bright green, like an enemy model; white when hit
     dark = (255, 255, 255) if hurt else (40, 130, 60)
     top = 16.0 if duck else 32.0
@@ -173,30 +173,29 @@ def draw_enemy(d, fr):
     draw_box(d, fr, o, yaw, (8, 14), -4.0 if not duck else -12.0, top - 10.0, body)                  # body
     draw_box(d, fr, o, yaw, (6, 6), top - 10.0, top, (235, 200, 160) if not hurt else (255, 255, 255))   # head
     # weapon: a bar from his right hand along his aim
-    yr, pr = math.radians(yaw), math.radians(fr["opp_pitch"])
+    yr, pr = math.radians(yaw), math.radians(e["pitch"])
     f = np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), -math.sin(pr)])
     right = np.array([math.sin(yr), -math.cos(yr), 0.0])
     hand = np.array(o, np.float64) + right * 12.0 + np.array([0, 0, top - 16.0])
     sx, sy, ok = project(fr, [hand, hand + f * 26.0])
     if ok.all():
-        d.line([float(sx[0]), float(sy[0]), float(sx[1]), float(sy[1])], fill=WCOL.get(fr["w"][1], (220, 220, 220)), width=4)
+        d.line([float(sx[0]), float(sy[0]), float(sx[1]), float(sy[1])], fill=WCOL.get(e["w"], (220, 220, 220)), width=4)
     return hand + f * 26.0, f
 
 
-def draw_shots(d, fr, muzzle, f_opp):
+def draw_shots(d, fr, muzzles):
     """beams and trails of this frame's hitscan shots, and every projectile in flight with its own look"""
     eye = fr["pos"] + np.array([0, 0, 26.0], np.float32)
-    for who in (0, 1):
-        if not fr["shot"][who]:
+    for who, (w, shot, muzzle, f_opp) in enumerate([(fr["w"][0], fr["shot"][0], None, None)] + muzzles):
+        if not shot:
             continue
-        w = fr["w"][who]
         if w not in ("rg", "lg", "mg", "hmg", "sg"):
             continue
         col = WCOL[w]
         width = 5 if w == "rg" else 3 if w == "lg" else 1
         if who == 0:                                             # his own shot: from the gun at the bottom right to the crosshair
             d.line([W * 2 - 150, H * 2 - 40, W, H], fill=col, width=width)
-        elif fr["seen"] and muzzle is not None:
+        elif muzzle is not None:
             reach = 768.0 if w == "lg" else 3000.0
             sx, sy, ok = project(fr, [muzzle, muzzle + f_opp * reach])
             if ok[0]:
@@ -213,8 +212,8 @@ def draw_shots(d, fr, muzzle, f_opp):
         col = WCOL.get(name, (255, 200, 60))
         if name == "rl" and ok[1]:                               # rocket: a smoke trail behind it
             d.line([x, y, float(sx[1]), float(sy[1])], fill=(170, 170, 170), width=max(2, int(r / 2)))
-        d.ellipse([x - r, y - r, x + r, y + r], fill=col, outline=(255, 255, 255) if owner == 1 else (60, 60, 60), width=2)
-        if owner == 1:                                           # the enemy's: a ring so it stands out
+        d.ellipse([x - r, y - r, x + r, y + r], fill=col, outline=(255, 255, 255) if owner != 0 else (60, 60, 60), width=2)
+        if owner != 0:                                           # the enemy's: a ring so it stands out
             d.ellipse([x - r - 4, y - r - 4, x + r + 4, y + r + 4], outline=(255, 60, 60), width=2)
 
 
@@ -226,8 +225,10 @@ def fight(env, pol, where, secs, round_len):
     env.lab_force = dict(kind=E.NORMAL, arena=where)
     env.round_t[:] = 1e9
     h = pol.zeros(env.n)
+    nin = len(pol.mean)                                      # a network trained before inputs were added at the end
     obs, _, done, _ = env.step(np.zeros((env.n, len(pol.dims)), np.int64))
     frames, frags = [], [0, 0]
+    labels = {"MH": "MEGA", "RA": "RED ARMOR", "YA": "YELLOW ARMOR", "GA": "GREEN ARMOR"}
     for t in range(int(secs / E.DT)):
         s = env.state.copy()
         fr = dict(pos=s[0, :3].copy(), vel=s[0, 3:6].copy(), ground=float(s[0, 6]), yaw=float(env.yaw[0]), pitch=float(env.pitch[0]),
@@ -238,8 +239,22 @@ def fight(env, pol, where, secs, round_len):
                   opp_yaw=float(env.yaw[1]), opp_pitch=float(env.pitch[1]), opp_vel=s[1, 3:6].copy(),
                   zoom=bool(getattr(env, "zoom", np.zeros(2, bool))[0]),
                   rockets=[(env.rp[i, k].copy(), int(env.rw[i, k]), i, env.rv[i, k].copy())
-                           for i in (0, 1) for k in range(env.rp.shape[1]) if env.ra[i, k]])
-        act, h = pol.act(obs, h)
+                           for i in range(env.n) for k in range(env.rp.shape[1]) if env.ra[i, k]])
+        eye0 = env._eye(s)[:1]
+        fr["others"] = [dict(pos=s[j, :3].copy(), duck=bool(env.duck[j]), yaw=float(env.yaw[j]), pitch=float(env.pitch[j]),
+                             w=E.WEAPONS[int(env.weapon[j])],
+                             seen=bool(env._los(eye0, s[j:j + 1, :3] + np.array([0, 0, 8.0], np.float32))[0]))
+                        for j in range(1, env.n)]
+        fr["items"] = []
+        if where == 3:                                           # the yard: what lies there, while it is up and in sight
+            for k_, dfn in enumerate(env.item_def):
+                ip = env.item_pos[k_]
+                if env.item_up[0, k_] and env.w.trace(eye0[0], (ip + np.array([0, 0, 16.0], np.float32)).astype(np.float32))["fraction"] >= 0.999:
+                    nm = labels.get(dfn[4]) or (E.WEAPONS[int(dfn[1])].upper() if dfn[0] == "wp" else
+                                                "+{}".format(int(dfn[1])) if dfn[0] in ("hp", "ar") else "ammo")
+                    fr["items"].append((ip.copy(), nm, dfn[0]))
+        before = (env.hp + env.armor).copy()
+        act, h = pol.act(obs[:, :nin], h)
         fr["a"] = act[0].copy()
         obs, r, done, info = env.step(act)
         if hasattr(env, "key_last"):                             # show what his fingers actually did, not every request
@@ -248,11 +263,13 @@ def fight(env, pol, where, secs, round_len):
             fr["a"][5] = int(env.fire_last[0])
         h[done] = 0.0
         for e in info.get("events", []) if isinstance(info, dict) else []:
-            if e["killer"] in (0, 1) and e["killer"] != e["victim"]:
-                frags[e["killer"]] += 1
+            if e["killer"] >= 0 and e["killer"] != e["victim"]:
+                frags[min(1, e["killer"])] += 1
         fr["frags"] = tuple(frags)
         fq = getattr(env, "fire_q", np.zeros(env.n, bool))
         fr["shot"] = (bool(fq[0]), bool(fq[1]))                  # who fired on this frame (weapons as held before it)
+        for j, o_ in enumerate(fr["others"], 1):
+            o_["shot"], o_["hurt"] = bool(fq[j]), bool(env.hp[j] + env.armor[j] < before[j])
         fr["took"] = float(env.fb[0, 1]) * 100.0
         fr["dealt"] = float(env.fb[0, 0]) * 100.0
         frames.append(fr)
@@ -263,8 +280,18 @@ def overlay_fight(img, fr, label, t, font, big):
     im = Image.fromarray(img).resize((W * 2, H * 2), Image.NEAREST)
     d = ImageDraw.Draw(im)
     # the opponent as a figure (only with a clear line to him), then shots and projectiles
-    muzzle, f_opp = (draw_enemy(d, fr) if fr["seen"] else (None, None))
-    draw_shots(d, fr, muzzle, f_opp)
+    for ip, nm, kind in fr.get("items", []):
+        sx, sy, ok = project(fr, [ip + np.array([0, 0, 8.0], np.float32)])
+        if ok[0]:
+            col = {"hp": (90, 160, 255), "ar": (255, 90, 90), "wp": (255, 220, 90)}.get(kind, (200, 200, 200))
+            x, y = float(sx[0]), float(sy[0])
+            d.polygon([(x, y - 9), (x + 7, y), (x, y + 9), (x - 7, y)], fill=col, outline=(20, 20, 20))
+            d.text((x + 10, y - 9), nm, fill=col, font=font)
+    muzzles = []
+    for e in sorted(fr["others"], key=lambda q: -float(np.linalg.norm(q["pos"] - fr["pos"]))):     # far ones first
+        mz, fo = draw_enemy(d, fr, e) if e["seen"] else (None, None)
+        muzzles.append((e["w"], e["shot"], mz, fo))
+    draw_shots(d, fr, muzzles)
     if fr["took"] > 0:                                         # he was hit: a red frame
         d.rectangle([0, 0, W * 2 - 1, H * 2 - 1], outline=(255, 40, 40), width=10)
     if fr["zoom"]:
@@ -277,9 +304,14 @@ def overlay_fight(img, fr, label, t, font, big):
     d.line([20 + 120, 14, 20 + 120, 46], fill=(255, 80, 80), width=3)
     d.text((330, 16), "{:4.0f} u/s".format(sp), fill=(255, 255, 255), font=big)
     d.text((20, 78), "{}   {:5.1f} s   this round: {}".format(label, t, fr["guns"] or "every weapon"), fill=(255, 255, 255), font=font)
-    d.text((560, 16), "frags  him {}  :  {} other".format(*fr["frags"]), fill=(255, 255, 255), font=big)
+    d.text((560, 16), "frags  him {}  :  {} {}".format(fr["frags"][0], fr["frags"][1], "other" if len(fr["others"]) == 1 else "others"),
+           fill=(255, 255, 255), font=big)
     d.text((20, 380), "holding {}   health {:.0f}  armor {:.0f}".format(fr["w"][0].upper(), fr["hp"][0], fr["hp"][1]), fill=(255, 255, 255), font=big)
-    d.text((560, 46), "other: {}  health {:.0f}".format(fr["w"][1].upper(), fr["hp"][2]), fill=(255, 200, 200), font=font)
+    if len(fr["others"]) == 1:
+        d.text((560, 46), "other: {}  health {:.0f}".format(fr["w"][1].upper(), fr["hp"][2]), fill=(255, 200, 200), font=font)
+    else:
+        d.text((560, 46), "{} others, {} in sight".format(len(fr["others"]), sum(e["seen"] for e in fr["others"])),
+               fill=(255, 200, 200), font=font)
     for k, on, (x, y) in (("W", fwd > 0, (90, 420)), ("A", side < 0, (40, 470)), ("S", fwd < 0, (90, 470)), ("D", side > 0, (140, 470))):
         d.rectangle([x, y, x + 44, y + 44], fill=(240, 240, 240) if on else (40, 40, 40), outline=(200, 200, 200))
         d.text((x + 14, y + 10), k, fill=(0, 0, 0) if on else (160, 160, 160), font=big)
@@ -297,12 +329,22 @@ def main():
     ap.add_argument("--policy", default=None)
     ap.add_argument("--courses", default="")
     ap.add_argument("--tries", type=int, default=4)
-    ap.add_argument("--fight", default="", help="'aim' or 'env': a self-play fight in that box instead of the courses")
+    ap.add_argument("--fight", default="", help="'aim', 'env' or 'yard': a self-play fight in that room instead of the courses")
+    ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa for more than two players)")
+    ap.add_argument("--group", type=int, default=2, help="players in the fight (needs --env duel_env_ffa)")
+    ap.add_argument("--map", default="bobbylab", help="bobbyyard: the yard with items (with --fight yard)")
     ap.add_argument("--secs", type=float, default=60.0)
     ap.add_argument("--round", type=float, default=20.0, help="fight: seconds per round (new random weapons each round)")
     a = ap.parse_args()
     pol = T.Policy(a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt"), seed=5)
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "bobbylab.bsp"), n_matches=1, seed=4, loadout="all")
+    if a.env != "duel_env":
+        import importlib
+        global E
+        E = importlib.import_module(a.env)
+    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n_matches=1, seed=4, loadout="all",
+                    **(dict(group=a.group) if a.group != 2 else {}))
+    if os.environ.get("ARENA_STACK") == "0":
+        env.arena_stack = False
     env.react_frames = round(pol.react_ms / 25)
     xs = (np.arange(W) + 0.5) / W * 2 - 1
     ys = (np.arange(H) + 0.5) / H * 2 - 1
@@ -318,9 +360,12 @@ def main():
     out_dir = os.path.join(ROOT, "videos", "{}_{:04d}".format(a.run, int(pol.minutes)))
     os.makedirs(out_dir, exist_ok=True)
     if a.fight:
-        frames = fight(env, pol, 1 if a.fight == "aim" else 2, a.secs, a.round)
-        label = "fight against himself, {} box".format("aim" if a.fight == "aim" else "environment")
-        path = os.path.join(out_dir, "fight_{}.mp4".format(a.fight))
+        frames = fight(env, pol, {"aim": 1, "env": 2, "yard": 3}[a.fight], a.secs, a.round)
+        label = "fight against himself, {}".format({"aim": "aim box", "env": "environment box", "yard": "yard"}[a.fight])
+        if a.group != 2:
+            label = "{} copies of himself, all against all, {}".format(a.group, {"aim": "aim box", "env": "environment box", "yard": "yard"}[a.fight])
+        path = os.path.join(out_dir, "fight_{}{}{}.mp4".format(a.fight, "" if a.group == 2 else "_{}".format(a.group),
+                                                             "" if a.map == "bobbylab" else "_items"))
         ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s",
                                "{}x{}".format(W * 2, H * 2), "-r", "40", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p",
                                "-crf", "23", path], stdin=subprocess.PIPE)
