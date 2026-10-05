@@ -15,6 +15,7 @@ Nightmare score, and numbers for items and movement on that map.
 | [PLAYTEST.md](PLAYTEST.md) | The play-test routine and how to run the test suite | The routine or the rooms change |
 | [COMMANDS.md](COMMANDS.md) | Every server chat command | A command is added or changed |
 | [HOSTING.md](HOSTING.md) | How to rent and start a public server | The hosting setup changes |
+| [INPUTS.csv](INPUTS.csv) | Every input of the network in order, with meaning and scale (written by `tools/list_inputs.py`, checked against the simulator's count) | Inputs are added or changed |
 | [LOGS.md](LOGS.md) | Schema of the recorded data (play-test sessions, training metrics, weapon lab) | A log format changes |
 
 Rules: a result entry names the backlog items it settles (`B-nn`); a backlog item marked done links to the
