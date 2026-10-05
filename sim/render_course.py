@@ -166,12 +166,12 @@ def draw_enemy(d, fr, e):
     o, yaw = e["pos"], e["yaw"]
     duck = e["duck"]
     hurt = e["hurt"]
-    body = (255, 255, 255) if hurt else (70, 200, 90)          # bright green, like an enemy model; white when hit
-    dark = (255, 255, 255) if hurt else (40, 130, 60)
+    body = (255, 45, 45) if hurt else (70, 200, 90)            # bright green, like an enemy model; red when hit
+    dark = (200, 25, 25) if hurt else (40, 130, 60)
     top = 16.0 if duck else 32.0
     draw_box(d, fr, o, yaw, (7, 12), -24.0, -4.0 if not duck else -12.0, dark)                       # legs
     draw_box(d, fr, o, yaw, (8, 14), -4.0 if not duck else -12.0, top - 10.0, body)                  # body
-    draw_box(d, fr, o, yaw, (6, 6), top - 10.0, top, (235, 200, 160) if not hurt else (255, 255, 255))   # head
+    draw_box(d, fr, o, yaw, (6, 6), top - 10.0, top, (235, 200, 160) if not hurt else (255, 90, 90))   # head
     # weapon: a bar from his right hand along his aim
     yr, pr = math.radians(yaw), math.radians(e["pitch"])
     f = np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), -math.sin(pr)])
@@ -201,17 +201,37 @@ def draw_shots(d, fr, muzzles):
             if ok[0]:
                 x1, y1 = (float(sx[1]), float(sy[1])) if ok[1] else (float(sx[0]) + (float(sx[0]) - W) * 4, float(sy[0]) + (float(sy[0]) - H) * 4)
                 d.line([float(sx[0]), float(sy[0]), x1, y1], fill=col, width=width)
-    for rp, kind, owner, rv in fr["rockets"]:
+    for bp, kind, age, vis in fr.get("booms", []):               # explosions: a flash, then a ring that fades
+        if not vis:
+            continue
         name = E.WEAPONS[kind]
-        sx, sy, ok = project(fr, [rp, rp - rv / (np.linalg.norm(rv) + 1e-6) * 60.0])
+        R_ = (40.0 if name == "pg" else 120.0) * min(1.0, 0.35 + 0.2 * age)
+        sx, sy, ok = project(fr, [bp, bp + np.array([0, 0, R_], np.float32)])
+        if not ok.all():
+            continue
+        x, y, r = float(sx[0]), float(sy[0]), min(150.0, max(4.0, abs(float(sy[1]) - float(sy[0]))))
+        if age < 4:
+            d.ellipse([x - r, y - r, x + r, y + r], outline=(255, 150, 40) if name != "pg" else (120, 210, 255), width=max(3, int(r * 0.3)))
+            d.ellipse([x - r * 0.45, y - r * 0.45, x + r * 0.45, y + r * 0.45], fill=(255, 245, 190))
+        else:
+            d.ellipse([x - r, y - r, x + r, y + r], outline=(255, 140, 50) if name != "pg" else (120, 210, 255),
+                      width=max(1, 6 - (age - 4)))
+    for rp, kind, owner, rv, trail, vis in fr["rockets"]:
+        if not vis:                                              # behind a wall
+            continue
+        name = E.WEAPONS[kind]
+        sx, sy, ok = project(fr, [rp])
         if not ok[0]:
             continue
         dist = float(np.linalg.norm(rp - eye)) + 1.0
         r = max(3.0, min(26.0, 2200.0 / dist)) * (0.6 if name == "pg" else 1.0)
         x, y = float(sx[0]), float(sy[0])
         col = WCOL.get(name, (255, 200, 60))
-        if name == "rl" and ok[1]:                               # rocket: a smoke trail behind it
-            d.line([x, y, float(sx[1]), float(sy[1])], fill=(170, 170, 170), width=max(2, int(r / 2)))
+        if name in ("rl", "gl") and len(trail) > 1:              # smoke where it has been
+            tx, ty, tok = project(fr, trail)
+            pts = [(float(a_), float(b_)) for a_, b_, o_ in zip(tx, ty, tok) if o_]
+            if len(pts) > 1:
+                d.line(pts + [(x, y)], fill=(175, 175, 175) if name == "rl" else (120, 160, 120), width=max(2, int(r / 2)))
         d.ellipse([x - r, y - r, x + r, y + r], fill=col, outline=(255, 255, 255) if owner != 0 else (60, 60, 60), width=2)
         if owner != 0:                                           # the enemy's: a ring so it stands out
             d.ellipse([x - r - 4, y - r - 4, x + r + 4, y + r + 4], outline=(255, 60, 60), width=2)
@@ -228,6 +248,7 @@ def fight(env, pol, where, secs, round_len):
     nin = len(pol.mean)                                      # a network trained before inputs were added at the end
     obs, _, done, _ = env.step(np.zeros((env.n, len(pol.dims)), np.int64))
     frames, frags = [], [0, 0]
+    trails, booms = {}, []                                   # where each projectile has been; explosions still showing
     labels = {"MH": "MEGA", "RA": "RED ARMOR", "YA": "YELLOW ARMOR", "GA": "GREEN ARMOR"}
     for t in range(int(secs / E.DT)):
         s = env.state.copy()
@@ -238,9 +259,25 @@ def fight(env, pol, where, secs, round_len):
                   guns=" + ".join(E.WEAPONS[g].upper() for g in (env.load_sets[0] or ())),
                   opp_yaw=float(env.yaw[1]), opp_pitch=float(env.pitch[1]), opp_vel=s[1, 3:6].copy(),
                   zoom=bool(getattr(env, "zoom", np.zeros(2, bool))[0]),
-                  rockets=[(env.rp[i, k].copy(), int(env.rw[i, k]), i, env.rv[i, k].copy())
-                           for i in range(env.n) for k in range(env.rp.shape[1]) if env.ra[i, k]])
+                  rockets=[])
         eye0 = env._eye(s)[:1]
+
+        def sees(pt):
+            return np.linalg.norm(pt - eye0[0]) < 40 or env.w.trace(eye0[0], np.asarray(pt, np.float32))["fraction"] >= 0.97
+        live = set()
+        for i in range(env.n):
+            for k in range(env.rp.shape[1]):
+                if env.ra[i, k]:
+                    live.add((i, k))
+                    tr_ = trails.setdefault((i, k), [])
+                    fr["rockets"].append((env.rp[i, k].copy(), int(env.rw[i, k]), i, env.rv[i, k].copy(), list(tr_[-14:]),
+                                          bool(sees(env.rp[i, k]))))
+                    tr_.append(env.rp[i, k].copy())
+        for key in [q for q in trails if q not in live]:
+            del trails[key]
+        booms = [(bp, bk, age + 1) for bp, bk, age in booms if age < 9]
+        fr["booms"] = [(bp, bk, age, bool(sees(bp))) for bp, bk, age in booms]
+        was = {q: (int(env.rw[q]), float(env.rage[q])) for q in live}
         fr["others"] = [dict(pos=s[j, :3].copy(), duck=bool(env.duck[j]), yaw=float(env.yaw[j]), pitch=float(env.pitch[j]),
                              w=E.WEAPONS[int(env.weapon[j])],
                              seen=bool(env._los(eye0, s[j:j + 1, :3] + np.array([0, 0, 8.0], np.float32))[0]))
@@ -269,7 +306,10 @@ def fight(env, pol, where, secs, round_len):
         fq = getattr(env, "fire_q", np.zeros(env.n, bool))
         fr["shot"] = (bool(fq[0]), bool(fq[1]))                  # who fired on this frame (weapons as held before it)
         for j, o_ in enumerate(fr["others"], 1):
-            o_["shot"], o_["hurt"] = bool(fq[j]), bool(env.hp[j] + env.armor[j] < before[j])
+            o_["shot"], o_["hurt"] = bool(fq[j]), bool(env.hp[j] + env.armor[j] < before[j] - 0.5)
+        for q, (kind_, age_) in was.items():                     # a projectile that is gone exploded where it ended
+            if not env.ra[q] or env.rage[q] < age_:
+                booms.append((env.rp[q].copy(), kind_, -1))
         fr["took"] = float(env.fb[0, 1]) * 100.0
         fr["dealt"] = float(env.fb[0, 0]) * 100.0
         frames.append(fr)
