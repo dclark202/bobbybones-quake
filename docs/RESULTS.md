@@ -35,6 +35,7 @@ because the meaning of the inputs changed (`duel_env_v4.py` is the frozen copy f
 | 09:33 | 1369 | about 70 / 5.2 | 93% | 12.0 deg | 12.5% | 1.9% | 13-23 |
 | 10:15 | 1409 | - / 5.4 | 92.5% | 6.9 deg | 14.7% | 1.6% | - |
 | 11:30 | 1483 | - / 5.5 | 92.7% | 5.4 deg | 12.5% | 0.7% | **28-15** (damage 3424 / 1642, speed 211 u/s, in view 32%, held LG 40% / HMG 39%) |
+| 12:35 | 1543 (no HMG, aim nudged, env box only since 12:15) | - / 5.2 | 94.6% | 7.4 deg | 18% | 0.6% | 26-15 (damage 3133 / 1626, speed 191 u/s, in view 36%, held rail 70%) |
 
 **10:10 — fight inputs added (owner: must have), network widened 311 -> 340 inputs at a checkpoint** (new inputs
 get zero weights, so nothing learned is lost; `sim/widen_obs.py`; the 311-input checkpoint is kept as
