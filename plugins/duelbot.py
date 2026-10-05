@@ -46,6 +46,9 @@ GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 # the test map "bobbylab" (tools/make_lab_map.py): fixed rooms, the suite never changes maps
 LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
+# the aim-reflex experiment: three short rooms in the aim box that measure a player's hands and eyes, not his game
+# (tools/reflex_report.py reads the session and works out steadiness, tracking lag, reaction and flick speed)
+REFLEX = [["reflex", "still"], ["reflex", "track"], ["reflex", "flick"], ["reflex", "rocket"]]
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["move", "*"]]                        # aim rooms and movement courses; items and the fight only on request
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
@@ -73,6 +76,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("room", self.cmd_room, 0,
                          usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
         self.add_command("rooms", self.cmd_rooms, 0)
+        self.add_command("reflex", self.cmd_reflex, 0)
         self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 0, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 0, usage="<box|env|yard|off> [minutes]")
@@ -293,11 +297,25 @@ class duelbot(minqlx.Plugin):
             player.tell("!room moves = every movement course in a row, with a table of times at the end")
             player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
+            player.tell("^3!reflex^7 = the aim reflex test: four short aim rooms, three minutes (lightning, rail, rockets)")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
         player.tell("!room choice <close|mid|far> (40 s) | move (90 s) | solo (120 s)")
         player.tell("!room ladder [{}] (120 s)".format("|".join(self.R.PERSONAS)))
         player.tell("!room suite = the standard set, about 20 minutes | !room off")
+
+    def cmd_reflex(self, player, msg, channel):
+        """!reflex = !room reflex"""
+        return self.cmd_room(player, ["!room", "reflex"], channel)
+
+    def subject_id(self, p):
+        """an anonymous id for a player: the same person gets the same id on this server, nothing personal is stored"""
+        import hashlib
+        path = os.path.join(D, "salt.txt")
+        if not os.path.exists(path):
+            with open(path, "w") as f:
+                f.write(hashlib.sha1(os.urandom(32)).hexdigest())
+        return hashlib.sha1((open(path).read().strip() + str(getattr(p, "steam_id", p.id))).encode()).hexdigest()[:10]
 
     def cmd_room(self, player, msg, channel):
         a = [m.lower() for m in msg[1:]]
@@ -311,6 +329,11 @@ class duelbot(minqlx.Plugin):
             self.msg("Rooms off: back to the normal duel.")
             return
         specs = (LAB_SUITE if self.lab else SUITE) if a[0] == "suite" else [a]
+        if a[0] == "reflex" and len(a) == 1:
+            if not (self.lab and "aim" in self.lab):
+                player.tell("The reflex test runs on the test map: ^3!map bobbylab^7, then ^3!reflex")
+                return
+            specs = REFLEX
         if self.lab and a[0] == "moves":                     # every movement course in a row, timed
             specs = [["move", "*"]]
         if self.lab:                                         # "move *" = every movement course on the map
@@ -323,6 +346,11 @@ class duelbot(minqlx.Plugin):
                 player.tell("^1No such room:^7 !room {}".format(" ".join(a)))
                 return self.cmd_rooms(player, msg, channel)
             out.append(r)
+        if a[0] == "reflex" and len(a) == 1:
+            self.queue, self.room, self.batch = list(out), None, None
+            self.msg("^3Aim reflex test:^7 four short rooms, about three minutes. Stand where you are put and aim "
+                     "as well as you can; nothing shoots back. !room off stops it.")
+            return
         if a[0] != "suite":                                  # a single room starts right away, replacing whatever runs
             self.queue, self.room = [], None
         self.batch = None
@@ -351,6 +379,14 @@ class duelbot(minqlx.Plugin):
                 return dict(kind="aim", lab=True, name="aim/{}/{}".format(a[1], a[2]), weapon=a[1], style=0,
                             script=1, secs=45 if a[2] == "env" else 25, where="env" if a[2] == "env" else "aim",
                             jump=a[2] == "jump")
+            if a[0] == "reflex" and len(a) >= 2 and a[1] in ("still", "track", "flick", "rocket") and "aim" in self.lab:
+                # still: the target stands (steadiness). track: it strafes left and right and turns round at
+                # random moments (tracking lag, reaction to a change of direction). flick: it stands, and jumps to a
+                # new place every two to three seconds (time to react, flick speed, time to the shot)
+                return dict(kind="aim", lab=True, reflex=a[1], name="reflex/" + a[1], script=1, where="aim", jump=False,
+                            weapon={"flick": "rg", "rocket": "rl"}.get(a[1], "lg"), near=a[1] != "flick",
+                            style=0 if a[1] in ("track", "rocket") else 1,
+                            secs={"still": 15, "track": 40, "flick": 45, "rocket": 30}[a[1]])
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
@@ -893,6 +929,12 @@ class duelbot(minqlx.Plugin):
     def room_hint(self, r):
         """one line that tells the player what to do and with which weapons"""
         k = r["kind"]
+        if k == "aim" and r.get("reflex"):
+            return {"still": "Lightning gun. The target stands still: hold your crosshair on it and keep firing.",
+                    "track": "Lightning gun. The target strafes and turns round without warning: stay on it.",
+                    "flick": "Railgun. The target jumps to a new place every few seconds: hit it as fast as you can.",
+                    "rocket": "Rockets. The target strafes and turns round without warning: hit it."}[r["reflex"]] + \
+                " Please stand still: this measures your aim, not your movement."
         if k == "aim":
             return "{} only, endless ammo. Hit the target as much as you can.".format(r["weapon"].upper())
         if k == "choice":
@@ -992,9 +1034,10 @@ class duelbot(minqlx.Plugin):
         if r.get("where") == "aim":
             a = L["aim"]
             self.put(human, a["subject"], a["yaw"], human=True)
-            self.put(bobby, a["target_lg"] if (r.get("weapon") == "lg" and "target_lg" in a) else a["target"],
-                     float(self.rng.uniform(-180, 180)))
-            lg = r.get("weapon") == "lg" and "zone_lg" in a          # keep the target inside lightning gun range
+            lg = (r.get("weapon") == "lg" or r.get("near")) and "zone_lg" in a   # lightning range; reflex rockets too
+            tg_ = a["target_lg"] if lg else a["target"]
+            self.put(bobby, tg_, float(self.rng.uniform(-180, 180)) if not r.get("reflex") else   # reflex: facing the subject,
+                     math.degrees(math.atan2(a["subject"][1] - tg_[1], a["subject"][0] - tg_[0])))     # so its strafe is sideways to him
             r["home"], r["zone"], r["hard"] = (a["target_lg"] if lg else a["target"]), \
                 (a["zone_lg"] if lg else a["zone"]), [-64, -64, 1600, 1088]
         else:
@@ -1131,7 +1174,7 @@ class duelbot(minqlx.Plugin):
             self.msg("^5" + self.room_hint(r))
             self.gauntlet_only(human)                         # no guns during the countdown
             human.center_print("^3{}^7: {}".format(r["name"], self.room_hint(r)))
-            self.record(event="room_start", room=r["name"])
+            self.record(event="room_start", room=r["name"], subject=self.subject_id(human), subject_is_bot=is_bot(human))
         r = self.room
         m = r["m"]
         hpos, hvel, hground, hpitch, hyaw = self.fill_player(env, R, 0, human, hs)
@@ -1190,6 +1233,24 @@ class duelbot(minqlx.Plugin):
             else:
                 env.round_t[0] += R.DT
                 a = env._script_actions(np.array([1]))[0].copy()
+                if r.get("reflex") in ("track", "rocket"):   # sideways only: left or right, turning round at random moments
+                    a[0] = 1
+                    if a[1] == 1:
+                        a[1] = 0 if int(now * 1000) % 2 else 2
+                        env.sc_dir[1] = a[1] - 1
+                if r.get("reflex") == "flick" and now >= r.get("hop_t", r["t_end"] - r["secs"] + 1.5):
+                    z = r["zone"]                            # the target jumps to a new place, at least 150 units away
+                    for _ in range(20):
+                        hp_ = [float(self.rng.uniform(z[0] + 140, z[2] - 140)), float(self.rng.uniform(z[1] + 140, z[3] - 140)),
+                               float(r["home"][2])]
+                        if math.hypot(hp_[0] - bpos[0], hp_[1] - bpos[1]) > 150:
+                            break
+                    self.put(bobby, hp_, math.degrees(math.atan2(hpos[1] - hp_[1], hpos[0] - hp_[0])))
+                    r["home"] = hp_
+                    r["hop_t"] = now + float(self.rng.uniform(1.8, 3.2))
+                    self.record(event="hop", room=r["name"], pos=[round(v, 1) for v in hp_], frame_t=round(now, 3))
+                if r.get("reflex") in ("still", "flick") and math.hypot(bpos[0] - r["home"][0], bpos[1] - r["home"][1]) > 12:
+                    self.put(bobby, r["home"], byaw)         # a standing target is not pushed around by the hits
                 if r.get("lab"):
                     # lab targets: random walk in all four directions, with or without jumping (jump is tapped,
                     # the game wants a fresh press per jump); near the edge of its zone the target walks back
@@ -1420,6 +1481,9 @@ class duelbot(minqlx.Plugin):
         if r.get("ai"):
             minqlx.set_bot_substeps(self.cast()[0].id, 3)    # our control of the body resumes
         self.room = None
-        if not self.queue:
+        if not self.queue and r.get("reflex"):
+            self.msg("^2Reflex test done, thank you.^7 Your numbers are saved without your name. ^3!reflex^7 runs it again "
+                     "(two or three runs give a steadier result).")
+        elif not self.queue:
             self.msg("Rooms done: back to the normal duel. Card saved.")
             self.give_loadout(human)

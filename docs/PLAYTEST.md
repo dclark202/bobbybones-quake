@@ -55,6 +55,24 @@ Repeating a room averages your results; two or three runs of the suite give a st
 Your card is saved to `data/duellive/suite/human_<time>.json`; the session with every frame and note is in
 `data/duellive/sessions/`. The stock maps have their own, older set of rooms (see COMMANDS.md).
 
+## The aim reflex test (about three minutes)
+
+A short test of hands and eyes only, for setting Bobby's aim limits against real players. `!map bobbylab`, then
+`!reflex`. Stand where you are put; nothing shoots back; two or three runs give a steadier result.
+
+| Room | Weapon | Target | What it measures |
+|---|---|---|---|
+| still, 15 s | lightning gun | stands | steadiness: aim error, hand jitter |
+| track, 40 s | lightning gun | strafes, turns at random moments | how far the view runs behind, how soon a turn is followed, aim error |
+| flick, 45 s | railgun | jumps to a new place every 2 to 3 s | time until the view starts to move, time until it is on the target, turn speed, first-shot hits |
+| rocket, 30 s | rockets | strafes, turns at random moments | damage a rocket, how far ahead of the target the aim is |
+
+```bash
+python tools/reflex_report.py --bobby <run>      # everyone who ran it on this server, side by side with Bobby in the simulator
+```
+Players are listed by an anonymous id (a salted hash made on the server; no names or Steam IDs are stored with
+the results). Times come from 25 ms frames: single values are no finer than that, medians over many events are.
+
 ## Running the test suite on Bobby (simulator)
 
 ```bash
