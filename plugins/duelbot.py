@@ -550,6 +550,10 @@ class duelbot(minqlx.Plugin):
     def drive(self, p, env, E, i, a, pitch, yaw, only=None):
         """turn one action row into keys and mouse for the controlled bot in slot i (same rules as the simulator)"""
         rules2 = hasattr(E, "ACQUIRE_FRAMES") and len(a) > 7 and env.script[i] == 0
+        if rules2 and hasattr(env, "limit_keys") and getattr(env, "key_limits", False):    # finger limits, as in training
+            A = np.tile(np.asarray(a, np.int64), (env.n, 1))
+            env.limit_keys(A, who=np.arange(env.n) == i)
+            a = A[i]
         key = E.WALK if (rules2 and a[7] == 1 and not self.no_walk) else 127
         fwd, side = (int(a[0]) - 1) * key, (int(a[1]) - 1) * key
         jump = (127 if a[2] == 1 else -127 if a[2] == 2 else 0) if len(a) > 7 else int(a[2]) * 127

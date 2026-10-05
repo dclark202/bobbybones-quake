@@ -433,6 +433,8 @@ def main():
                               damage_per_min=round(float(agg["arena"][4] / max(1.0, agg["arena"][1]) * 2400), 1)),
                    run_and_gun=dict(damage_per_min=round(float(agg["gun"][0] / max(1.0, agg["gun"][1]) * 2400), 1),
                                     speed=int(agg["gun"][2] / max(1.0, agg["gun"][1]))),
+                   keys=dict(changes_per_s=round(float(agg["key_changes"] / max(1.0, 2 * sim_min * 60)), 2),
+                             refused=round(float(agg["key_blocked"] / max(1.0, agg["key_blocked"] + agg["key_changes"])), 3)),
                    teach=[round(kick, 3), round(float(kick_l), 3)],
                    items_room=dict(mega_per_2min=round(float(agg["lab_items"][0] / max(1.0, agg["lab_items"][2]) * 4800), 2),
                                    red_armor_per_2min=round(float(agg["lab_items"][1] / max(1.0, agg["lab_items"][2]) * 4800), 2)),

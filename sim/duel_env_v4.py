@@ -85,16 +85,6 @@ HEAR_EVT = 1200.0                                      # item pickups, weapon fi
                                                        # (not measured against the game)
 VIEW_H_DUCK, TOP, TOP_DUCK = 12.0, 32.0, 16.0          # eye height and box top when crouched (Quake 3 values)
 WALK = 64                                              # key strength when walking (silent: under the footstep speed)
-# Finger limits (2026-10-05): a key cannot change state again until it has been held this many frames (forward /
-# back, strafe, jump / crouch), and all movement keys together share a budget of changes per second. Set from how
-# fast a hand can tap (about six presses a second sustained), not from the demos: the keys inferred from demos
-# flicker too much to measure it.
-KEY_HOLD = (3, 3, 2)
-KEY_RATE, KEY_BURST = 8.0, 4.0
-# Sight limits (2026-10-05): distances to walls, floor and ceiling are only known inside the field of view (about
-# 100 x 75 degrees around where he is looking, pitch included). Outside it they read UNSEEN.
-FOV_H, FOV_V = math.radians(50.0), math.radians(37.5)
-UNSEEN = -1.0
 ITEMS_ROOM_REWARD = 0.5                                # per pickup in the lab map's items room
 FALL_MED, FALL_FAR = 40.0, 60.0                        # Quake 3 fall damage: 5 above "medium", 10 above "far"
 # scripted fighter styles, good and bad. Columns: turn gain, aim noise (deg), backs off below this distance,
@@ -302,11 +292,6 @@ class DuelEnv:
         self.arena = np.zeros(n_matches, np.int64)      # 0 = not an arena round, 1 = aim box, 2 = environment box
         self.arena_len = 30.0
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
-        self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
-        self.fov_sight = True                           # geometry only inside the field of view
-        self.key_last = np.tile(np.array([1, 1, 0], np.int64), (nn2, 1))    # the key states in effect
-        self.key_hold = np.full((nn2, 3), 99, np.int64)                    # frames each has been held
-        self.key_tok = np.full(nn2, KEY_BURST, np.float32)                 # budget of key changes
         self.no_walk = False                            # True: the walk key does nothing
         self.gun_courses = ("speed", "ramps", "slalom", "turns")
         self.gun = np.zeros(nn2, bool)                  # player is a run-and-gun runner
@@ -376,7 +361,6 @@ class DuelEnv:
         self.stats = dict(frags=0, suicides=0, dmg=0.0, self_dmg=0.0, jerk=0.0,
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
                           arena=np.zeros(5),              # frags, player-frames, sum of speed, frames with the enemy in view, damage
-                          key_changes=0, key_blocked=0,   # movement-key changes made / refused by the finger limits
                           gun=np.zeros(3),                # run-and-gun: damage dealt, runner frames, sum of runner speed
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
@@ -406,7 +390,6 @@ class DuelEnv:
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
         self.fire_cd[i] = 0.0
         self.duck[i] = False
-        self.key_last[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), 99, KEY_BURST
         self.dmg_life[i ^ 1] = 0.0                      # what the opponent knows about this player's damage resets
         mode = int(self.mode[i // 2])
         kind = int(self.kind[i // 2])
@@ -861,20 +844,11 @@ class DuelEnv:
                          np.zeros((n, N_WALL), np.float32)], 2)
         walls = self.w.rays_each(pos, dirs, 512.0)
         self.walls = walls
-        if self.fov_sight:                                   # only what the eyes cover (see FOV_H, FOV_V)
-            wa = (np.linspace(0, 2 * np.pi, N_WALL, endpoint=False) + np.pi) % (2 * np.pi) - np.pi
-            see = (np.abs(wa)[None, :] <= FOV_H) & (np.abs(pit)[:, None] <= FOV_V)
-            walls = np.where(see, walls, UNSEEN).astype(np.float32)
         off = np.stack([c[:, None] * self.floor_off[None, :, 0] - si[:, None] * self.floor_off[None, :, 1],
                         si[:, None] * self.floor_off[None, :, 0] + c[:, None] * self.floor_off[None, :, 1]], 2)
         starts = np.concatenate([pos[:, None, :2] + off, np.repeat(pos[:, None, 2:3], N_FLOOR, 1)], 2)
         floors = self.w.rays(starts.reshape(-1, 3).astype(np.float32), np.array([[0, 0, -1.0]], np.float32),
                              256.0).reshape(n, N_FLOOR)
-        if self.fov_sight:                                   # a floor spot is seen if the line from the eyes to it is in view
-            fa = (np.linspace(0, 2 * np.pi, N_FLOOR, endpoint=False) + np.pi) % (2 * np.pi) - np.pi
-            down = np.arctan2(VIEW_H + floors * 256.0, 96.0)             # how far below the horizon that spot lies
-            see = (np.abs(fa)[None, :] <= FOV_H) & (np.abs(pit[:, None] - down) <= FOV_V)
-            floors = np.where(see, floors, UNSEEN).astype(np.float32)
         eye = self._eye(s)
         fdir = np.stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
         opp = np.arange(n) ^ 1
@@ -913,10 +887,6 @@ class DuelEnv:
         for j in range(N_PROJ):
             idx = order[:, j]
             ok = dist[ar, idx] < 1500
-            if self.fov_sight:
-                to_p = orp[ar, idx] - eye
-                dn = np.linalg.norm(to_p, axis=1) + 1e-6
-                ok &= ((to_p * fdir).sum(1) / dn > FOV_COS) | (dn < 400.0)
             rk[:, 9 * j:9 * j + 3] = rot(orp[ar, idx] - pos) / 1000.0 * ok[:, None]
             rk[:, 9 * j + 3:9 * j + 6] = rot(orv[ar, idx]) / 1000.0 * ok[:, None]
             kind = orw[ar, idx]
@@ -957,11 +927,8 @@ class DuelEnv:
             def rotc(v):
                 return np.stack([cg * v[:, 0] + sg * v[:, 1], -sg * v[:, 0] + cg * v[:, 1]], 1)
             goal[ci_, 0] = 1.0
-            if self.fov_sight:                               # the track has to be seen; only its far end is known
-                goal[ci_, 1:3] = np.clip(rotc(C["path"][-1][None] - pos[ci_, :2]) / 2000.0, -3, 3)
-            else:
-                goal[ci_, 1:3] = rotc(ahead(600.0) - pos[ci_, :2]) / 2000.0
-                goal[ci_, 4:6] = np.clip(rotc(ahead(200.0) - pos[ci_, :2]) / 500.0, -1, 1)
+            goal[ci_, 1:3] = rotc(ahead(600.0) - pos[ci_, :2]) / 2000.0
+            goal[ci_, 4:6] = np.clip(rotc(ahead(200.0) - pos[ci_, :2]) / 500.0, -1, 1)
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], own, self.mv / 30.0, walls, floors, opp_feat, rk,
                               np.eye(NW, dtype=np.float32)[self.weapon], self.has.astype(np.float32),
                               self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
@@ -998,20 +965,11 @@ class DuelEnv:
                         si[:, None] * ud[None, :, 0] + c[:, None] * ud[None, :, 1],
                         np.repeat(ud[None, :, 2], n, 0)], 2).astype(np.float32)
         above = self.w.rays_each(eye, udw, 512.0)
-        if self.fov_sight:
-            az = np.where(np.hypot(ud[:, 0], ud[:, 1]) > 1e-3, np.arctan2(ud[:, 1], ud[:, 0]), 0.0)
-            el = np.arcsin(np.clip(ud[:, 2], -1, 1))
-            see = (np.abs(az)[None, :] <= FOV_H) & (np.abs(el[None, :] + pit[:, None]) <= FOV_V)
-            above = np.where(see, above, UNSEEN).astype(np.float32)
         ld = self.long_dirs
         ldw = np.stack([c[:, None] * ld[None, :, 0] - si[:, None] * ld[None, :, 1],
                         si[:, None] * ld[None, :, 0] + c[:, None] * ld[None, :, 1],
                         np.zeros((n, N_LONG), np.float32)], 2).astype(np.float32)
         far = self.w.rays_each(pos, ldw, 2000.0)
-        if self.fov_sight:
-            la_ = np.arctan2(ld[:, 1], ld[:, 0])
-            see = (np.abs(la_)[None, :] <= FOV_H) & (np.abs(pit)[:, None] <= FOV_V)
-            far = np.where(see, far, UNSEEN).astype(np.float32)
         # the enemy while in view: weapon in hand, whether he faces this player, damage dealt to him this life
         v_ = visible.astype(np.float32)[:, None]
         oy = np.radians(self.yaw[opp])
@@ -1185,25 +1143,6 @@ class DuelEnv:
         return out
 
     # ---------------------------------------------------------------- step
-    def limit_keys(self, a, who=None):
-        """finger limits: a requested change of a movement key only happens if that key has been held long enough
-        and the budget of key changes allows it; otherwise the key stays as it was. Changes a[:, :3] in place."""
-        if who is None:
-            who = self.script == 0
-        self.key_tok = np.minimum(KEY_BURST, self.key_tok + KEY_RATE * DT).astype(np.float32)
-        self.key_hold += 1
-        for j in range(3):
-            want, last = a[:, j], self.key_last[:, j]
-            ch = who & (want != last)
-            ok = ch & (self.key_hold[:, j] >= KEY_HOLD[j]) & (self.key_tok >= 1.0)
-            self.key_tok[ok] -= 1.0
-            self.key_hold[ok, j] = 0
-            new = np.where(ok | ~who, want, last)
-            self.stats["key_changes"] += int(ok.sum())
-            self.stats["key_blocked"] += int((ch & ~ok).sum())
-            self.key_last[:, j] = new
-            a[:, j] = new
-
     def step(self, actions):
         a = np.array(actions, copy=True)
         n = self.n
@@ -1211,8 +1150,6 @@ class DuelEnv:
         sc = np.nonzero(self.script > 0)[0]
         if len(sc):
             a[sc] = self._script_actions(sc)
-        if self.key_limits:
-            self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
         pkind = np.repeat(self.kind, 2)
         walk = (a[:, 7] == 1) & (not self.no_walk)
