@@ -5,6 +5,17 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-04 19:40 — map atlases built (B-75, first version)
+
+- `tools/build_atlas.py` -> `maps/atlas/<map>.json` and `.png` (see ATLAS.md). Blood Run: 26 areas, 10 big items,
+  224 pro demos, 81,084 trips, 2.8 routes per (area, item); in 140 of 240 pairs pros use two or more routes.
+  Aerowalk: 20 areas, 148 demos, 45,885 trips. Campgrounds: built from the graph only (its six demos are not parsed).
+- Pro play adds routes the route graph does not have (Blood Run: 47-odd per map, for example a 0.6 s way to the
+  red armor the graph takes 7.6 s for), which also shows where the route graph is missing jumps.
+- Pros on Blood Run spend most time around mega health (12%), the grenade launcher (9%), red armor (7%).
+- Also today: `!nosg` on the play-test server (spawn with every weapon except the shotgun).
+- Not done: nothing reads the atlas yet; areas are clusters, not rooms; arrival is not pickup.
+
 ## 2026-10-04 16:55 and 17:32 — `duel_gru_v4`: self-play only, less aim, no shotgun at spawn (owner)
 
 - 16:55 (650 min): scripted fighters removed from duel rounds (`--bot-p 0`): duels are Bobby against himself and

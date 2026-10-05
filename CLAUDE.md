@@ -51,6 +51,8 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
 - **Test map**: `tools/make_lab_map.py` -> `maps/bobbylab/` (pk3 + `rooms.json`), compiled with q3map2 and
   mbspc from `data/tools` (NetRadiant-custom; mbspc needs `-forcesidesvisible`). Bots cannot join a map
   without an `.aas` file.
+- **Map atlas**: `tools/build_atlas.py` -> `maps/atlas/<map>.json` + `.png` (areas, items, several routes per item
+  seeded from pro demos; `docs/ATLAS.md`). Matplotlib is broken in the Anaconda Python: draw with `--picture` in the system Python.
 - `legacy/`: the first approach (Nightmare bot + routes + coach + cluster). Not used.
 
 ## Running things (Git Bash; `export MSYS_NO_PATHCONV=1` before docker commands)
