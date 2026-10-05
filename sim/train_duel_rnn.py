@@ -28,7 +28,7 @@ DT_MIN = 0.025 / 60.0
 
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
-           teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False):
+           teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
@@ -49,6 +49,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.lab_gun_p = lab_gun_p
     env.dmg_taken_w = dmg_taken_w
     env.no_walk = no_walk
+    env.arena_len, env.arena_full_p = arena_len, arena_full
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
@@ -100,6 +101,9 @@ def main():
                     "/ arena fights (third value optional)")
     ap.add_argument("--loadout-p", default="", help="normal rounds, share by spawn: random 1-2 weapons, real duel spawn "
                     "(machine gun and gauntlet), every weapon on the map, the same single weapon for both")
+    ap.add_argument("--ent-coef", type=float, default=0.01, help="exploration bonus (entropy coefficient)")
+    ap.add_argument("--arena-len", type=float, default=30.0, help="test map: seconds per arena round")
+    ap.add_argument("--arena-full", type=float, default=0.5, help="test map: share of arena rounds with the full weapon set")
     ap.add_argument("--dmg-taken-w", type=float, default=2.0, help="weight of damage taken against damage dealt in the reward")
     ap.add_argument("--no-walk", action="store_true", help="the walk key does nothing")
     ap.add_argument("--lab-gun", type=float, default=0.0, help="test map: chance that a course round is run-and-gun "
@@ -155,7 +159,7 @@ def main():
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
-                                        a.dmg_taken_w, a.no_walk),
+                                        a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -252,7 +256,7 @@ def main():
     scr = torch.zeros(N, device=dev)                                   # scripted players (not trained on)
 
     T = a.steps
-    gamma, lam, clip, ent_coef = a.gamma, 0.95, 0.2, 0.01
+    gamma, lam, clip, ent_coef = a.gamma, 0.95, 0.2, a.ent_coef
     t_start, total, update = time.time(), 0, 0
     log = open(os.path.join(out, "metrics.jsonl"), "a")
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
@@ -430,7 +434,10 @@ def main():
                    arena=dict(frags_per_min=round(float(agg["arena"][0] / max(1.0, agg["arena"][1]) * 4800), 2),
                               speed=int(agg["arena"][2] / max(1.0, agg["arena"][1])),
                               in_view=round(float(agg["arena"][3] / max(1.0, agg["arena"][1])), 3),
-                              damage_per_min=round(float(agg["arena"][4] / max(1.0, agg["arena"][1]) * 2400), 1)),
+                              damage_per_min=round(float(agg["arena"][4] / max(1.0, agg["arena"][1]) * 2400), 1),
+                              standing=round(float(agg["arena"][5] / max(1.0, agg["arena"][1])), 3),
+                              looking_up_or_down=round(float(agg["arena"][6] / max(1.0, agg["arena"][1])), 3),
+                              crouched=round(float(agg["arena"][7] / max(1.0, agg["arena"][1])), 3)),
                    run_and_gun=dict(damage_per_min=round(float(agg["gun"][0] / max(1.0, agg["gun"][1]) * 2400), 1),
                                     speed=int(agg["gun"][2] / max(1.0, agg["gun"][1]))),
                    keys=dict(changes_per_s=round(float(agg["key_changes"] / max(1.0, 2 * sim_min * 60)), 2),

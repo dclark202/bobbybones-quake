@@ -85,12 +85,15 @@ HEAR_EVT = 1200.0                                      # item pickups, weapon fi
                                                        # (not measured against the game)
 VIEW_H_DUCK, TOP, TOP_DUCK = 12.0, 32.0, 16.0          # eye height and box top when crouched (Quake 3 values)
 WALK = 64                                              # key strength when walking (silent: under the footstep speed)
-# Finger limits (2026-10-05): a key cannot change state again until it has been held this many frames (forward /
-# back, strafe, jump / crouch), and all movement keys together share a budget of changes per second. Set from how
-# fast a hand can tap (about six presses a second sustained), not from the demos: the keys inferred from demos
-# flicker too much to measure it.
-KEY_HOLD = (3, 3, 2)
-KEY_RATE, KEY_BURST = 8.0, 4.0
+# Finger limits (2026-10-05): the left hand as on a keyboard. Five fingers, each with its own keys:
+#   ring = strafe left, middle = forward AND back (one finger: no direct reversal, it passes through "no key"),
+#   index = strafe right AND the weapon keys, thumb = jump, little finger = crouch (and walk).
+# A finger that has just acted cannot act again for FINGER_HOLD frames, and the whole hand has a budget of
+# KEY_RATE key actions a second (a press and a release are one action each; a weapon switch is one action).
+# The numbers come from how fast a hand taps, not from the demos: keys inferred from demos flicker too much.
+RING, MIDDLE, INDEX, THUMB, LITTLE = range(5)
+FINGER_HOLD = np.array([6, 6, 6, 4, 6], np.int64)      # frames: 150 ms, the thumb (jump) 100 ms
+KEY_RATE, KEY_BURST = 5.0, 3.0
 # Sight limits (2026-10-05): distances to walls, floor and ceiling are only known inside the field of view (about
 # 100 x 75 degrees around where he is looking, pitch included). Outside it they read UNSEEN.
 FOV_H, FOV_V = math.radians(50.0), math.radians(37.5)
@@ -301,11 +304,12 @@ class DuelEnv:
         # environment box, with the same one or two random weapons. No room to avoid each other.
         self.arena = np.zeros(n_matches, np.int64)      # 0 = not an arena round, 1 = aim box, 2 = environment box
         self.arena_len = 30.0
+        self.arena_full_p = 0.5                         # share of arena rounds with the full weapon set (else two random weapons)
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
         self.fov_sight = True                           # geometry only inside the field of view
         self.key_last = np.tile(np.array([1, 1, 0], np.int64), (nn2, 1))    # the key states in effect
-        self.key_hold = np.full((nn2, 3), 99, np.int64)                    # frames each has been held
+        self.key_hold = np.full((nn2, 5), 99, np.int64)                    # frames since each finger last acted
         self.key_tok = np.full(nn2, KEY_BURST, np.float32)                 # budget of key changes
         self.no_walk = False                            # True: the walk key does nothing
         self.gun_courses = ("speed", "ramps", "slalom", "turns")
@@ -375,7 +379,8 @@ class DuelEnv:
         self.opp_hist = []                              # delayed opponent state (reaction time)
         self.stats = dict(frags=0, suicides=0, dmg=0.0, self_dmg=0.0, jerk=0.0,
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
-                          arena=np.zeros(5),              # frags, player-frames, sum of speed, frames with the enemy in view, damage
+                          arena=np.zeros(8),              # frags, player-frames, sum of speed, frames with the enemy in view, damage,
+                                                          # frames standing still, frames looking over 40 degrees up or down, crouched frames
                           key_changes=0, key_blocked=0,   # movement-key changes made / refused by the finger limits
                           gun=np.zeros(3),                # run-and-gun: damage dealt, runner frames, sum of runner speed
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
@@ -605,9 +610,11 @@ class DuelEnv:
         self.snd_t[a_] = self.snd_t[b_] = 99.0
         if kd == NORMAL:                                    # arena: the two fight each other, same weapons for both
             self.arena[m] = int(f["arena"]) if (f and "arena" in f) else int(rng.integers(1, 3))
-            guns = tuple(int(x) for x in rng.choice(LOAD_GUNS, int(rng.integers(1, 3)), replace=False))
+            guns = tuple(int(x) for x in rng.choice(LOAD_GUNS, 2, replace=False))      # two random weapons, the same for both
             if f and "weapon" in f:
                 guns = (int(f["weapon"]),)
+            if rng.random() < self.arena_full_p and not (f and "weapon" in f):
+                guns = None                                 # the full weapon set
             self.load_sets[a_] = self.load_sets[b_] = guns
             self.state = self.w.state()
             self._arena_spawn(a_, first=True)
@@ -1186,23 +1193,50 @@ class DuelEnv:
 
     # ---------------------------------------------------------------- step
     def limit_keys(self, a, who=None):
-        """finger limits: a requested change of a movement key only happens if that key has been held long enough
-        and the budget of key changes allows it; otherwise the key stays as it was. Changes a[:, :3] in place."""
+        """finger limits (see FINGER_HOLD): turns the requested keys and weapon choice into what one hand can do.
+        Changes a[:, :3] and a[:, 6] in place."""
         if who is None:
             who = self.script == 0
         self.key_tok = np.minimum(KEY_BURST, self.key_tok + KEY_RATE * DT).astype(np.float32)
         self.key_hold += 1
-        for j in range(3):
-            want, last = a[:, j], self.key_last[:, j]
-            ch = who & (want != last)
-            ok = ch & (self.key_hold[:, j] >= KEY_HOLD[j]) & (self.key_tok >= 1.0)
+        ready = self.key_hold >= FINGER_HOLD[None, :]
+        last = self.key_last
+
+        def act(finger, wants):
+            """the fingers that act now among those that want to; books the action"""
+            ok = who & wants & ready[:, finger] & (self.key_tok >= 1.0)
             self.key_tok[ok] -= 1.0
-            self.key_hold[ok, j] = 0
-            new = np.where(ok | ~who, want, last)
+            self.key_hold[ok, finger] = 0
+            ready[ok, finger] = False
             self.stats["key_changes"] += int(ok.sum())
-            self.stats["key_blocked"] += int((ch & ~ok).sum())
-            self.key_last[:, j] = new
-            a[:, j] = new
+            self.stats["key_blocked"] += int((who & wants & ~ok).sum())
+            return ok
+
+        # thumb: jump key down or up
+        j_now, j_want = last[:, 2] == 1, a[:, 2] == 1
+        j_new = np.where(act(THUMB, j_now != j_want), j_want, j_now)
+        # index finger: a weapon key first, then strafe right
+        w_want = (a[:, 6] > 0) & (a[:, 6] - 1 != self.weapon)
+        w_ok = act(INDEX, w_want)
+        a[:, 6] = np.where(who & w_want & ~w_ok, 0, a[:, 6])
+        d_now, d_want = last[:, 1] == 2, a[:, 1] == 2
+        d_new = np.where(act(INDEX, d_now != d_want), d_want, d_now)
+        # ring finger: strafe left
+        l_now, l_want = last[:, 1] == 0, a[:, 1] == 0
+        l_new = np.where(act(RING, l_now != l_want), l_want, l_now)
+        # middle finger: forward and back; a reversal first lets go
+        f_now, f_want = last[:, 0], a[:, 0].copy()
+        f_want = np.where((f_now != 1) & (f_want != 1) & (f_now != f_want), 1, f_want)
+        f_new = np.where(act(MIDDLE, f_now != f_want), f_want, f_now)
+        # little finger: crouch
+        c_now, c_want = last[:, 2] == 2, a[:, 2] == 2
+        c_new = np.where(act(LITTLE, c_now != c_want), c_want, c_now)
+        strafe = np.where(l_new & ~d_new, 0, np.where(d_new & ~l_new, 2, 1))       # both down cancel out
+        vert = np.where(j_new, 1, np.where(c_new, 2, 0))
+        new = np.stack([f_new, strafe, vert], 1)
+        new = np.where(who[:, None], new, a[:, :3])
+        self.key_last[:] = new
+        a[:, :3] = new
 
     def step(self, actions):
         a = np.array(actions, copy=True)
@@ -1544,6 +1578,9 @@ class DuelEnv:
                 self.stats["arena"][2] += float(np.hypot(s[am, 3], s[am, 4]).sum())
                 self.stats["arena"][3] += float(self.visible[am].sum())
                 self.stats["arena"][4] += float(dealt[am].sum())
+                self.stats["arena"][5] += float((np.hypot(s[am, 3], s[am, 4]) < 50).sum())
+                self.stats["arena"][6] += float((np.abs(self.pitch[am]) > 40).sum())
+                self.stats["arena"][7] += float(self.duck[am].sum())
                 self.stats["arena"][0] += float(sum(1 for e in events if am[e["victim"]] and e["killer"] >= 0 and e["killer"] != e["victim"]))
             self.stats["lab_items"][2] += float(self.items_room.sum())
         for m in ends:
