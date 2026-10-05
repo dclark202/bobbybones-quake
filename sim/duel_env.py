@@ -85,6 +85,7 @@ HEAR_EVT = 1200.0                                      # item pickups, weapon fi
                                                        # (not measured against the game)
 VIEW_H_DUCK, TOP, TOP_DUCK = 12.0, 32.0, 16.0          # eye height and box top when crouched (Quake 3 values)
 WALK = 64                                              # key strength when walking (silent: under the footstep speed)
+ITEMS_ROOM_REWARD = 0.5                                # per pickup in the lab map's items room
 FALL_MED, FALL_FAR = 40.0, 60.0                        # Quake 3 fall damage: 5 above "medium", 10 above "far"
 # scripted fighter styles, good and bad. Columns: turn gain, aim noise (deg), backs off below this distance,
 # advances above this distance, fixed weapon (-1 = rockets close / lightning mid / rail far, -2 = random)
@@ -280,6 +281,10 @@ class DuelEnv:
         self.lab_p = (0.4, 0.6)                         # share of lab rounds: aim rooms / movement courses
         self.lab_force = None                           # test suite: dict(kind=..., weapon / where / jump / course)
         self.lab_aim_len, self.course_len = 25.0, 30.0
+        self.lab_len = np.full(n_matches, 30.0, np.float32)     # length of the lab round each match is in
+        self.items_room = np.zeros(nn2, bool)           # player is in the items room (mega health and red armor on timers)
+        self.lab_items_p = 0.0                          # chance that a course round is the items room instead
+        self.items_len = 120.0
         if self.lab is not None:
             for key, c_ in self.lab.get("courses", {}).items():
                 path = np.array(c_["path"], np.float32)
@@ -291,7 +296,8 @@ class DuelEnv:
                 self.courses.append(dict(key=key, path=path, seg_len=np.maximum(seg_len, 1e-3), cum=cum, cps=cps, cyaw=cyaw,
                                          cprog=cum[d.argmin(1)], start=np.array(c_["start"], np.float32), yaw=float(c_["yaw"]),
                                          fall_z=float(c_["fall_z"]), end_r=float(c_.get("end_r", 120)),
-                                         end_z=c_.get("end_z"), weapon=c_.get("weapon", "g"), length=float(cum[-1])))
+                                         end_z=c_.get("end_z"), weapon=c_.get("weapon", "g"), length=float(cum[-1]),
+                                         mortal=bool(c_.get("mortal"))))
             self.round_t[:] = 1e9                                     # every match starts a lab room at once
         if nav and os.path.exists(nav):                 # movement goals: mega, red and yellow armor
             goals = [self.item_pos[k] for k, d in enumerate(self.item_def) if d[4] in ("MH", "RA", "YA")]
@@ -341,6 +347,7 @@ class DuelEnv:
         self.opp_hist = []                              # delayed opponent state (reaction time)
         self.stats = dict(frags=0, suicides=0, dmg=0.0, self_dmg=0.0, jerk=0.0,
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
+                          lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
@@ -429,6 +436,8 @@ class DuelEnv:
         self.course[i], self.prog[i], self.seg[i], self.c_t[i], self.c_top[i], self.c_h[i] = c, 0.0, 0, 0.0, 0.0, 0.0
         if C["weapon"] == "rl":
             self.has[i, RL], self.ammo[i, RL], self.weapon[i] = True, 25, RL
+        if C["mortal"]:
+            self.hp[i] = 1.0                                # any fall damage at all ends the attempt
         self.stats["course"][c, 0] += 1
 
     def _course_close(self, i, finished):
@@ -450,7 +459,7 @@ class DuelEnv:
         k = int(ok[C["cprog"][ok].argmax()]) if len(ok) else 0
         self.w.reset(i, (C["cps"][k, 0], C["cps"][k, 1], C["cps"][k, 2] + 2.0), (0, 0, 0), float(C["cyaw"][k]))
         self.yaw[i], self.pitch[i], self.mv[i] = float(C["cyaw"][k]), 0.0, 0.0
-        self.hp[i], self.armor[i] = SPAWN_HP, 0.0
+        self.hp[i], self.armor[i] = (1.0 if C["mortal"] else SPAWN_HP), 0.0
         self.stats["course"][int(self.course[i]), 7] += 1
 
     def _course_step(self, reward):
@@ -510,6 +519,8 @@ class DuelEnv:
         self.script[a_] = self.script[b_] = 0
         self.goal[a_] = self.goal[b_] = -1
         self.course[a_] = self.course[b_] = -1
+        self.items_room[a_] = self.items_room[b_] = False
+        self.lab_len[m] = self.lab_aim_len if kd == AIM else self.course_len
         self.load_sets[a_] = self.load_sets[b_] = None
         self.frags_r[a_] = self.frags_r[b_] = 0
         self.snd_t[a_] = self.snd_t[b_] = 99.0
@@ -544,6 +555,17 @@ class DuelEnv:
             # like a person after the countdown, the subject starts the room already looking at the target
             self.vis_run[a_], self.acquired[a_], self.seen_t[a_] = self.acquire_frames, True, 0.0
             self.known[a_] = home
+        elif "items" in L and ((f and f.get("items")) or (not f and rng.random() < self.lab_items_p)):
+            # the items room: the first player alone with a mega health and a red armor on their timers (both up at
+            # the start); the second player runs a course meanwhile
+            I = L["items"]
+            self.lab_len[m] = self.items_len
+            self.item_up[m, :], self.item_t[m, :] = True, 0.0
+            self.w.reset(a_, (I["start"][0], I["start"][1], I["start"][2] + 2.0), (0, 0, 0), float(I["yaw"]))
+            self._fresh(a_, float(I["yaw"]))
+            self.hp[a_], self.armor[a_] = 100.0, 0.0
+            self.items_room[a_] = True
+            self._course_start(b_, int(rng.choice(self.lab_course_ids)))
         else:
             for q in (a_, b_):
                 self._course_start(q, int(f["course"]) if f else int(rng.choice(self.lab_course_ids)))
@@ -553,6 +575,11 @@ class DuelEnv:
         m = v // 2
         if self.course[v] >= 0:
             self._course_back(v)
+        elif self.items_room[v]:
+            I = self.lab["items"]
+            self.w.reset(v, (I["start"][0], I["start"][1], I["start"][2] + 2.0), (0, 0, 0), float(I["yaw"]))
+            self._fresh(v, float(I["yaw"]))
+            self.hp[v], self.armor[v] = 100.0, 0.0
         elif self.script[v] == 1:
             h = self.lab_home[m]
             ty = float(self.rng.uniform(-180, 180))
@@ -1277,6 +1304,10 @@ class DuelEnv:
                     self.stats["pick_am"] += 1
                 if took and (lab in ("MH", "RA", "YA", "GA") or kind == "wp"):
                     self._hear(0, np.array([i]), 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "ar" else 3)
+                if took and self.items_room[i]:              # the items room: each pickup counts, and he can always take the next
+                    reward[i] += ITEMS_ROOM_REWARD
+                    self.hp[i], self.armor[i] = 100.0, 0.0
+                    self.stats["lab_items"][0 if lab == "MH" else 1] += 1
                 if took:
                     reward[i] += self.item_reward * (gain if kind in ("hp", "ar") else 10.0) / 100.0
                     self.item_up[m, it] = False
@@ -1333,7 +1364,8 @@ class DuelEnv:
             klen = np.full(self.M, self.round_len)
         ends = np.nonzero(self.round_t > klen * self.rng.uniform(0.67, 1.33, self.M))[0]
         if self.lab is not None:                            # lab rooms have exact lengths
-            ends = np.nonzero(self.round_t >= np.where(self.kind == COURSE, self.course_len, self.lab_aim_len))[0]
+            ends = np.nonzero(self.round_t >= self.lab_len)[0]
+            self.stats["lab_items"][2] += float(self.items_room.sum())
         for m in ends:
             self.round_t[m] = 0.0
             a_, b_ = 2 * m, 2 * m + 1

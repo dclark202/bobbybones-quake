@@ -28,7 +28,7 @@ DT_MIN = 0.025 / 60.0
 
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
-           teacher, lab_courses, lab_p):
+           teacher, lab_courses, lab_p, loadout_p, lab_items_p):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
@@ -42,6 +42,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         env.lab_p = lab_p
         env.lab_course_ids = [k for k, C in enumerate(env.courses) if C["key"] in lab_courses] or env.lab_course_ids
     env.bot_p = bot_p
+    if loadout_p:
+        env.loadout_p = loadout_p
+    env.lab_items_p = lab_items_p
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
@@ -90,6 +93,9 @@ def main():
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
     ap.add_argument("--lab-p", default="0.29,0.71", help="test map: share of playing time in aim rooms / movement courses")
+    ap.add_argument("--loadout-p", default="", help="normal rounds, share by spawn: random 1-2 weapons, real duel spawn "
+                    "(machine gun and gauntlet), every weapon on the map, the same single weapon for both")
+    ap.add_argument("--lab-items", type=float, default=0.0, help="test map: chance that a course round is the items room")
     ap.add_argument("--lab-courses", default="speed,slalom,ramps",
                     help="movement courses of the test map (bobbylab) used when that map is in --map")
     ap.add_argument("--minibatches", type=int, default=8,
@@ -102,8 +108,8 @@ def main():
     ap.add_argument("--demo-batch", type=int, default=64, help="demo sequences per minibatch")
     ap.add_argument("--demo-len", type=int, default=64, help="frames per demo sequence")
     ap.add_argument("--demo-pool", type=int, default=48, help="demo files held in memory (a new random set every 20 updates)")
-    ap.add_argument("--demo-heads", default="0,1,2,3,4,5,6,7",
-                    help="action heads imitated: 0 forward 1 strafe 2 vertical 3 turn 4 pitch 5 fire 6 weapon 7 walk")
+    ap.add_argument("--demo-heads", default="1,1,1,1,1,0.5,0.5,1",
+                    help="weight of each action head in the demo loss: forward, strafe, vertical, turn, pitch, fire, weapon, walk")
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
     ap.add_argument("--teach", type=float, default=0.5, help="weight of the teacher loss at the start of this run")
     ap.add_argument("--teach-minutes", type=float, default=240, help="the teacher loss fades to zero over this time")
@@ -138,7 +144,8 @@ def main():
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
-                                        tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(","))),
+                                        tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
+                                        tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -180,12 +187,13 @@ def main():
     # ---- pro demos: sequences of (inputs, what the player did), imitated alongside the self-play loss
     import glob as _glob
     demo_files = [f for d_ in a.demo_dir.split(",") if d_ for f in sorted(_glob.glob(os.path.join(d_, "*.npz")))]
-    demo_heads = [int(x) for x in a.demo_heads.split(",")]
+    demo_heads = [float(x) for x in a.demo_heads.split(",")]
     demo_rng = np.random.default_rng(77)
     demo_pool = []
 
     def demo_refill():
         demo_pool.clear()
+        demo_files[:] = [f for d_ in a.demo_dir.split(",") if d_ for f in sorted(_glob.glob(os.path.join(d_, "*.npz")))]   # new conversions join in
         for k in demo_rng.choice(len(demo_files), min(a.demo_pool, len(demo_files)), replace=False):
             z = np.load(demo_files[k])
             if len(z["act"]) > a.demo_len + 1 and z["obs"].shape[1] == OBS_DIM:
@@ -326,7 +334,7 @@ def main():
         kick_l = torch.zeros(())
         demo_w = a.demo_coef * (max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.demo_minutes) if a.demo_minutes > 0 else 1.0)
         demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
-        if demo_w > 0 and update % 20 == 0:
+        if demo_w > 0 and update % 5 == 0:
             demo_refill()
         for epoch in range(3):
             perm = torch.randperm(N, device=dev)
@@ -369,7 +377,7 @@ def main():
                         dl.append(lg_)
                     dd_ = dists(torch.stack(dl)[8:])                      # the first frames only warm the memory up
                     da = d_act[8:]
-                    demo_l = -sum(dd_[j].log_prob(da[..., j]).mean() for j in demo_heads)
+                    demo_l = -sum(w_ * dd_[j].log_prob(da[..., j]).mean() for j, w_ in enumerate(demo_heads) if w_ > 0)
                     loss = loss + demo_w * demo_l
                     with torch.no_grad():
                         demo_acc = [float(((dd_[0].logits.argmax(-1) == da[..., 0]) & (dd_[1].logits.argmax(-1) == da[..., 1])).float().mean()),
@@ -410,6 +418,8 @@ def main():
                                      falls_per_min=round(float(agg["course"][k_, 7] / max(1.0, agg["course"][k_, 6]) * 2400), 2))
                            for k_, key in enumerate(course_keys) if agg["course"][k_, 6] > 0},
                    teach=[round(kick, 3), round(float(kick_l), 3)],
+                   items_room=dict(mega_per_2min=round(float(agg["lab_items"][0] / max(1.0, agg["lab_items"][2]) * 4800), 2),
+                                   red_armor_per_2min=round(float(agg["lab_items"][1] / max(1.0, agg["lab_items"][2]) * 4800), 2)),
                    demo=dict(weight=round(demo_w, 3), loss=round(float(demo_l), 3), keys_right=round(demo_acc[0], 3),
                              vertical_right=round(demo_acc[1], 3), turn_within_one_bin=round(demo_acc[2], 3)),
                    crouch=round(float(agg["duck_frames"] / max(1, agg["play_frames"])), 3),

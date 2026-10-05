@@ -837,18 +837,18 @@
    "hint": "You have 1 health: any fall damage kills and ends the run. Get to the bottom fast; the side ledges split the big drops.",
    "start": [
     64.0,
-    34256.0,
+    34128,
     1288.0
    ],
    "yaw": 0,
    "path": [
     [
      64.0,
-     34256.0
+     34128.0
     ],
     [
      4696.0,
-     34256.0
+     34128.0
     ]
    ],
    "end_r": 120,
@@ -857,7 +857,7 @@
    "checkpoints": [
     [
      64.0,
-     34256.0,
+     34128.0,
      1288.0,
      0
     ]

@@ -47,20 +47,17 @@ same commit.
 
 ## Now
 
-Finished: `duel_gru_v4` (continues `duel_gru_v3`, widened to 311 inputs), 775 min, 2026-10-04 19:00. Since 17:32: self-play only, duels 50% / lab courses 30% / stock movement 10% / aim 10%, no shotgun at spawn. The game's bots are a benchmark only (ten minutes against Nightmare per checkpoint).
-In it: B-47 new inputs, B-48 round-level memory and longer horizon, B-49 crouch / walk / fall damage, B-58 human
-aim limits, B-59 random loadouts and two-sided damage (damage taken weighs double), B-44 opponent styles,
-B-68 lab courses (speed, slalom, ramps) and lab aim rooms. Playing time: normal duels 44%, lab courses 22%,
-stock-map movement 11%, stock-map aim 11%, lab aim rooms 11%.
+Running until 07:00 on 2026-10-05: `duel_gru_v4` from 775 min. Blood Run self-play duels (half of the playing
+time; real duel spawn in half of them, no shotgun at spawn, item reward doubled), movement rooms on the test map
+(half; thirteen courses, the items room, a little aim), and imitation of pro players' movement keys from 367
+Blood Run demos (B-76, B-78). Every hour: ten minutes against Nightmare. Details and the smoke tests that set
+the demo weight: RESULTS 2026-10-04 21:12.
 
-Next training batch (after the owner's review at 19:00), one widening of the network:
-B-70 beam inputs, B-71 weapon-specific sounds, B-72 map atlas inputs, B-75 learned multi-route atlas seeded from
-pro demos, more lab courses in training once the owner has confirmed them (B-68).
+Next: read the night's result (does aim while moving recover, does speed in fights rise, the shotgun habit).
+Then Aerowalk and Lost World back in with their demos, B-79 (richer demo inputs), B-70 / B-71 / B-72 / B-75
+(new inputs and the atlas, one widening of the network), B-77.
 
-Then: B-73 value map per map from pro demos and public sessions.
-
-Alongside: B-57 plugin update so `duel_gru_v4` can be played; B-67 aim-style metrics; B-64 results for players;
-B-61 / B-69 public server.
+Alongside: B-64 results for players; B-61 / B-69 public server.
 
 ## Owner decisions
 

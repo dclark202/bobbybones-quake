@@ -5,6 +5,41 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-04 21:12 — overnight run: combat, movement rooms, pro demos (`duel_gru_v4` from 775 min, until 07:00)
+
+Owner's plan: three parts of equal weight, Blood Run only for the real map. What was built, checked and started:
+
+- **Shotgun check.** Real game 100 / 61 / 26 damage at 100 / 300 / 600 units (four shots each, stored
+  measurements), the same as the simulator. The habit is not a simulator error.
+- **Combat (half of the playing time).** Self-play duels on Blood Run. Spawn: 50% machine gun and gauntlet only
+  (the real duel spawn), 30% one or two random weapons from the map, 20% every weapon on the map; never a
+  shotgun at spawn (checked on 512 spawns: 49% / 29% / 23%, shotgun 0%). Item reward doubled (0.6 per 100 points).
+- **Movement rooms (half of the playing time).** Thirteen courses with equal time (speed, circle, twohop, ramps,
+  slalom, turns, narrow, pillars, rocket, bends, pads, drops, climb), the items room (a pickup pays 0.5; mega and
+  red armor on their timers; two-minute rounds), 10% of this half in aim rooms. `dodge` is not in the simulator.
+  Checked with a scripted runner: every course starts and measures progress; the straight line through `drops`
+  kills (1 health); jump pads and the teleporter work; items give their reward and respawn after 35 s / 25 s.
+- **Pro demos.** 367 Blood Run demos converted (`sim/demo_dataset.py`, 95% of frames kept); the inferred keys
+  reproduce the recorded next-frame velocity to a median of 2.3 u/s (23 u/s without keys). Newly downloaded
+  demos are converted every 45 minutes and join in.
+- **What did not work: equal weight for the demos.** Smoke tests, 8 minutes each from the same checkpoint:
+
+| Demo loss | Pro keys predicted | Hit rate RL / RG / LG at the end | Aim error in view | Crouch / walk |
+|---|---|---|---|---|
+| none (control: new spawn rule only) | - | 0.58 / 0.74 / 0.69 | 9.9 deg | 25% / 39% |
+| weight 1.0, all heads (the "equal weight" setting) | 36% -> 61% | 0.10 / 0.13 / 0.13 | 18.2 deg | 5% / 1% |
+| weight 0.2, keys + turn at a quarter | 33% -> 54% | 0.27 / 0.68 / 0.55 | 19.0 deg | 7% / 4% |
+| weight 0.2, keys only | 34% -> 52% | 0.41 / 0.71 / 0.60 | 19.0 deg | 8% / 6% |
+
+  At full weight on every head his aim collapsed within minutes: the demo inputs lack the enemy's health, sounds
+  and hit feedback, so copying the pros' mouse and trigger from them is wrong. With the movement keys (and a
+  little of the turn) at weight 0.2 the hit rates hold, walking and crouching all but disappear, and the error
+  to the target while it is in view doubles: he moves at speed now and has to learn to aim while doing it. The
+  run uses that setting. Whether the aim error comes back down is the thing to watch tonight.
+- A first launch at 21:06 used the old settings by mistake (the new command file had not been written); it was
+  stopped after five minutes and the checkpoint restored from `policy_before_night.pt`.
+- Speed: 58k steps/s with the demo batches (63k without).
+
 ## 2026-10-04 20:15 — Lost World replaces Campgrounds; older pro demos
 
 - Lost World: map file taken from the server's game data, route graph built by the simulator (1272 spots, 7126

@@ -412,7 +412,7 @@ def main():
     box(1920, dy_ + 256, 520, 2240, dy_ + 512, 680, TRIM)                         # side ledges: the careful way down
     box(2880, dy_ + 256, 80, 3200, dy_ + 512, 300, TRIM)
     course("drops", "Drops", "You have 1 health: any fall damage kills and ends the run. Get to the bottom fast; the side ledges split the big drops.",
-           [64, dy_ + 256, 1288], [[64, dy_ + 256], [4696, dy_ + 256]])
+           [64, dy_ + 128, 1288], [[64, dy_ + 128], [4696, dy_ + 128]])       # the straight line is the deadly one
     courses["drops"]["mortal"] = True                                             # 1 health: any fall damage ends the run
 
     # ---- climb: ledges that each need a jump (40 high: more than a step, less than a jump)

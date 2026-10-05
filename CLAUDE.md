@@ -53,6 +53,9 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   without an `.aas` file.
 - **Map atlas**: `tools/build_atlas.py` -> `maps/atlas/<map>.json` + `.png` (areas, items, several routes per item
   seeded from pro demos; `docs/ATLAS.md`). Matplotlib is broken in the Anaconda Python: draw with `--picture` in the system Python.
+- **Pro demos**: `tools/fetch_demos.py` downloads, `sim/demo_dataset.py` converts (inputs + inferred keys), the trainer
+  imitates with `--demo-dir/--demo-coef/--demo-heads`. Demos and sets live in the folder named in `data/demo_root.txt`.
+  Imitating mouse or trigger at full weight destroys aim (RESULTS 2026-10-04 21:12): movement heads only.
 - `legacy/`: the first approach (Nightmare bot + routes + coach + cluster). Not used.
 
 ## Running things (Git Bash; `export MSYS_NO_PATHCONV=1` before docker commands)
@@ -69,6 +72,8 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 ## Hard-won gotchas
 - Git Bash heredocs mangle backslashes: write patch scripts and `.cmd` files with the Write tool.
 - The PC has blue-screened twice under load; long runs should save often (they do, every 10 updates) and be resumed.
+- Write `.cmd` run files to the scratchpad and copy them over: writing over an existing one can fail silently in a chain,
+  and the old settings then run (it happened).
 - Long sequences fill GPU memory (256 steps needs `--minibatches 24` on 16 GB); a stalled first update is the sign.
 - Restart a run only right after a checkpoint save (every 10 updates) and keep a copy of it.
 - A background shell is capped at two hours; chain waiters or launch detached.
