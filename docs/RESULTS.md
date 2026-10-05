@@ -40,6 +40,18 @@ Owner's plan: three parts of equal weight, Blood Run only for the real map. What
   stopped after five minutes and the checkpoint restored from `policy_before_night.pt`.
 - Speed: 58k steps/s with the demo batches (63k without).
 
+### Hourly reports of the night
+
+| Time | Train min | Speed straight | Pro keys right | Aim error in view | Crouch / walk | Shotgun frag share | Nightmare, 10 min (all weapons in hand) | Speed in duels (simulator) |
+|---|---|---|---|---|---|---|---|---|
+| 21:12 | 775 | 361 | 39% | 8 deg | 25% / 35% | 84% | (19:00: 6-21, 116 u/s live) | 106 u/s (17:00) |
+| 22:15 | 836 | 796 | 74% | 13-20 deg | 10% / 12% | 6% | 0-11, 330 / 1232 damage, 87 u/s, in view 4%, shotgun held 76% | 136 u/s, above 330 u/s 3% of the time, in view 8% |
+
+22:20: the speed is in the courses only. In Blood Run duels in the simulator he still moves at 136 u/s and the
+two players see each other 8% of the time: self-play duels have become avoiding each other. Given every weapon
+he still takes the shotgun (76%). Left running as planned; this is the finding to act on in the morning
+(candidates: B-81 run-and-gun, the double weight on damage taken, movement rounds on Blood Run itself).
+
 ## 2026-10-04 20:15 — Lost World replaces Campgrounds; older pro demos
 
 - Lost World: map file taken from the server's game data, route graph built by the simulator (1272 spots, 7126
