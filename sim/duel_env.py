@@ -118,7 +118,7 @@ P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2], np.int64)
 REACT_FRAMES = 2                                       # 50 ms: tracking an enemy already in view lags by this much.
 ACQUIRE_FRAMES = 8                                     # 200 ms: an enemy who has just come into view is not reacted to before this
 TURN_CAP = 30.0                                        # fastest flick, degrees per frame (1200 deg/s)
-MOTOR_NOISE, MOTOR_BASE = 0.08, 0.02                   # hand noise: this share of the view movement, plus a little, per frame
+MOTOR_NOISE, MOTOR_BASE = 0.10, 0.03                   # hand noise: this share of the view movement, plus a little, per frame
 RELOAD_JITTER, RELOAD_JITTER_MAX = 0.05, 0.12          # slow weapons: random extra delay after the reload (mean, max seconds)
 DMG_TAKEN_W = 2.0                                      # damage taken (any source) weighs this much against damage dealt
 FIRE_TOGGLE_COST = 0.003                               # reward cost each time the fire button changes (holding is free)
@@ -217,7 +217,7 @@ class DuelEnv:
         self.kind = np.zeros(n_matches, np.int64)
         self.kind_p = (1.0, 0.0, 0.0, 0.0)              # chance of NORMAL, AIM, DRILL, MOVE at each round start
         self.bot_p = 0.0                                # share of NORMAL rounds where the odd player is a scripted fighter
-        self.aim_weapons = (LG, LG, LG, RG, RG, RL, PG, SG, HMG, MG)
+        self.aim_weapons = (LG, LG, LG, RG, RG, RL, PG, SG, MG)
         self.sg_spawn = True                            # False: nobody spawns holding a shotgun in normal rounds
         self.script = np.zeros(2 * n_matches, np.int64)  # per player: 0 = policy, 1 = strafing target, 2 = scripted fighter
         self.sc_t = np.zeros(2 * n_matches, np.float32)
@@ -269,7 +269,7 @@ class DuelEnv:
         self.slot_items = [[k for k, d in enumerate(self.item_def) if d[4] == lab] for lab in SLOTS]
         # Weapons that lie on this map: nobody spawns with a weapon the map does not have (no heavy machine gun
         # on Aerowalk, for instance). A map without weapon pickups (the test map) allows all.
-        self.map_weapons = sorted({int(d[1]) for d in self.item_def if d[0] == "wp"}) or list(range(NW))
+        self.map_weapons = sorted({int(d[1]) for d in self.item_def if d[0] == "wp"}) or             [k for k in range(NW) if k != HMG]              # no heavy machine gun: most duel maps do not have one
         # more items as inputs: second yellow armor, three nearest 25/50 healths, two nearest bubbles or shards,
         # two nearest ammo boxes
         ya = [k for k, d in enumerate(self.item_def) if d[4] == "YA"]
@@ -322,6 +322,7 @@ class DuelEnv:
         # environment box, with the same one or two random weapons. No room to avoid each other.
         self.arena = np.zeros(n_matches, np.int64)      # 0 = not an arena round, 1 = aim box, 2 = environment box
         self.arena_len = 30.0
+        self.arena_rooms = (1, 2)                       # rooms used for arena rounds: 1 = aim box, 2 = environment box
         self.arena_full_p = 0.5                         # share of arena rounds with the full weapon set (else two random weapons)
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
@@ -643,8 +644,9 @@ class DuelEnv:
         self.frags_r[a_] = self.frags_r[b_] = 0
         self.snd_t[a_] = self.snd_t[b_] = 99.0
         if kd == NORMAL:                                    # arena: the two fight each other, same weapons for both
-            self.arena[m] = int(f["arena"]) if (f and "arena" in f) else int(rng.integers(1, 3))
-            guns = tuple(int(x) for x in rng.choice(LOAD_GUNS, 2, replace=False))      # two random weapons, the same for both
+            self.arena[m] = int(f["arena"]) if (f and "arena" in f) else int(rng.choice(self.arena_rooms))
+            pool = [g for g in LOAD_GUNS if g in self.map_weapons]
+            guns = tuple(int(x) for x in rng.choice(pool, 2, replace=False))           # two random weapons, the same for both
             if f and "weapon" in f:
                 guns = (int(f["weapon"]),)
             if rng.random() < self.arena_full_p and not (f and "weapon" in f):

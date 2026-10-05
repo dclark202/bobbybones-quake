@@ -89,6 +89,14 @@ training earlier). In training: hit rates rail 79%, MG 79-81%, HMG 79%, LG 50-66
 zoomed 1.2-1.6%; crouched 6-7%; keys refused 92.7% (unchanged). To watch: the HMG has replaced the shotgun as
 the one weapon, and tracking hit rates are back above the owner's card.
 
+**12:08 and 12:15 — no HMG, aim limits nudged down, environment box only (owner)** (`policy_before_nohmg.pt` kept):
+- the heavy machine gun is out of the test map's loadouts and aim rooms (most duel maps do not have one);
+- aim limits: tracking delay 50 -> 75 ms, hand noise 0.08 -> 0.10 of the view movement plus 0.02 -> 0.03 degrees
+  a frame; just before the change hit rates were rail 84%, MG 84%, HMG 82%, LG 51%, aim error 3.7 degrees;
+- arena rounds only in the environment box (LG and HMG ruling an empty box is no surprise).
+Five minutes after: kills by weapon LG 41%, rail 35%, MG 12%, shotgun 10%; rail 72%, MG 67%, LG 54%; enemy in
+view 42% (70% with the open box in the mix); aim error 7.7 degrees; standing still 22%.
+
 After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
 24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
 

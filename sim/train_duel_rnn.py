@@ -50,6 +50,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.dmg_taken_w = dmg_taken_w
     env.no_walk = no_walk
     env.arena_len, env.arena_full_p = arena_len, arena_full
+    if os.environ.get("ARENA_ROOMS"):                        # "env", "box" or "box,env"
+        env.arena_rooms = tuple({"box": 1, "env": 2}[x] for x in os.environ["ARENA_ROOMS"].split(","))
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))

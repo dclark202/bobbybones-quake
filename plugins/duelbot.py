@@ -44,7 +44,7 @@ ROOM_SECS = {"aim": 60, "choice": 40, "move": 90, "solo": 120, "ladder": 120}
 REP_SECS = 10.0
 GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 # the test map "bobbylab" (tools/make_lab_map.py): fixed rooms, the suite never changes maps
-LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade launcher: not an aim weapon
+LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["move", "*"]]                        # aim rooms and movement courses; items and the fight only on request

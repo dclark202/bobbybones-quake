@@ -173,7 +173,7 @@ def run_room(E, env, pol, room):
     return r
 
 
-LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")
+LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg")
 
 
 def lab_rooms(E, env):
