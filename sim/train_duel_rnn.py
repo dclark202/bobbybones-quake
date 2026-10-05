@@ -28,7 +28,7 @@ DT_MIN = 0.025 / 60.0
 
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
-           teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0):
+           teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
@@ -40,12 +40,15 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.kind_p = kind_p
     if env.lab is not None:                                  # the test map: movement courses only (for now)
         env.lab_p = lab_p
-        env.lab_course_ids = [k for k, C in enumerate(env.courses) if C["key"] in lab_courses] or env.lab_course_ids
+        keys_ = [C["key"] for C in env.courses]             # a course named twice gets twice the time
+        env.lab_course_ids = [keys_.index(n_) for n_ in lab_courses if n_ in keys_] or env.lab_course_ids
     env.bot_p = bot_p
     if loadout_p:
         env.loadout_p = loadout_p
     env.lab_items_p = lab_items_p
     env.lab_gun_p = lab_gun_p
+    env.dmg_taken_w = dmg_taken_w
+    env.no_walk = no_walk
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
@@ -93,9 +96,12 @@ def main():
     ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
-    ap.add_argument("--lab-p", default="0.29,0.71", help="test map: share of playing time in aim rooms / movement courses")
+    ap.add_argument("--lab-p", default="0.29,0.71", help="test map: share of playing time in aim rooms / movement courses "
+                    "/ arena fights (third value optional)")
     ap.add_argument("--loadout-p", default="", help="normal rounds, share by spawn: random 1-2 weapons, real duel spawn "
                     "(machine gun and gauntlet), every weapon on the map, the same single weapon for both")
+    ap.add_argument("--dmg-taken-w", type=float, default=2.0, help="weight of damage taken against damage dealt in the reward")
+    ap.add_argument("--no-walk", action="store_true", help="the walk key does nothing")
     ap.add_argument("--lab-gun", type=float, default=0.0, help="test map: chance that a course round is run-and-gun "
                     "(a weapon, a target ahead beside the path, damage paid by the runner's speed)")
     ap.add_argument("--lab-items", type=float, default=0.0, help="test map: chance that a course round is the items room")
@@ -148,7 +154,8 @@ def main():
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
-                                        tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun),
+                                        tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
+                                        a.dmg_taken_w, a.no_walk),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -222,7 +229,7 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
-                        react_ms=a.react_ms, acquire_ms=a.acquire_ms),
+                        react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk)),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
@@ -420,6 +427,10 @@ def main():
                                      finishes_per_min=round(float(agg["course"][k_, 1] / max(1.0, agg["course"][k_, 6]) * 2400), 2),
                                      falls_per_min=round(float(agg["course"][k_, 7] / max(1.0, agg["course"][k_, 6]) * 2400), 2))
                            for k_, key in enumerate(course_keys) if agg["course"][k_, 6] > 0},
+                   arena=dict(frags_per_min=round(float(agg["arena"][0] / max(1.0, agg["arena"][1]) * 4800), 2),
+                              speed=int(agg["arena"][2] / max(1.0, agg["arena"][1])),
+                              in_view=round(float(agg["arena"][3] / max(1.0, agg["arena"][1])), 3),
+                              damage_per_min=round(float(agg["arena"][4] / max(1.0, agg["arena"][1]) * 2400), 1)),
                    run_and_gun=dict(damage_per_min=round(float(agg["gun"][0] / max(1.0, agg["gun"][1]) * 2400), 1),
                                     speed=int(agg["gun"][2] / max(1.0, agg["gun"][1]))),
                    teach=[round(kick, 3), round(float(kick_l), 3)],

@@ -76,6 +76,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 0, usage="<on|off>")
         self.no_sg = False
+        self.no_walk = False
         self.drill = None                                    # weapon drill: both players have only this weapon
         self.top_up = 0.0
         self.last = {}                                       # latest snapshot of both players, for notes
@@ -351,6 +352,7 @@ class duelbot(minqlx.Plugin):
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.env.react_frames = round(self.react_ms / 25)    # same reaction delay as in training (newer simulators)
+        self.no_walk = bool(self.P["no_walk"]) if "no_walk" in self.P else False    # trained without the walk key
         self.rules2 = hasattr(E, "ACQUIRE_FRAMES")           # simulators with sounds, clock, crouch, human aim limits
         if self.rules2:
             self.env.acquire_frames = round(float(self.P["acquire_ms"]) / 25) if "acquire_ms" in self.P else E.ACQUIRE_FRAMES
@@ -548,7 +550,7 @@ class duelbot(minqlx.Plugin):
     def drive(self, p, env, E, i, a, pitch, yaw, only=None):
         """turn one action row into keys and mouse for the controlled bot in slot i (same rules as the simulator)"""
         rules2 = hasattr(E, "ACQUIRE_FRAMES") and len(a) > 7 and env.script[i] == 0
-        key = E.WALK if (rules2 and a[7] == 1) else 127
+        key = E.WALK if (rules2 and a[7] == 1 and not self.no_walk) else 127
         fwd, side = (int(a[0]) - 1) * key, (int(a[1]) - 1) * key
         jump = (127 if a[2] == 1 else -127 if a[2] == 2 else 0) if len(a) > 7 else int(a[2]) * 127
         if rules2:

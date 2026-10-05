@@ -287,6 +287,12 @@ class DuelEnv:
         # Run-and-gun (off unless lab_gun_p > 0): the first player runs a course with a weapon, the second is a
         # target that keeps appearing ahead of him beside the path. Damage pays in proportion to the runner's speed.
         self.lab_gun_p = 0.0
+        # Arena (third value of lab_p): the two players of a match fight each other in the aim box or the
+        # environment box, with the same one or two random weapons. No room to avoid each other.
+        self.arena = np.zeros(n_matches, np.int64)      # 0 = not an arena round, 1 = aim box, 2 = environment box
+        self.arena_len = 30.0
+        self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
+        self.no_walk = False                            # True: the walk key does nothing
         self.gun_courses = ("speed", "ramps", "slalom", "turns")
         self.gun = np.zeros(nn2, bool)                  # player is a run-and-gun runner
         self.gun_w = np.zeros(n_matches, np.int64)      # his weapon
@@ -354,6 +360,7 @@ class DuelEnv:
         self.opp_hist = []                              # delayed opponent state (reaction time)
         self.stats = dict(frags=0, suicides=0, dmg=0.0, self_dmg=0.0, jerk=0.0,
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
+                          arena=np.zeros(5),              # frags, player-frames, sum of speed, frames with the enemy in view, damage
                           gun=np.zeros(3),                # run-and-gun: damage dealt, runner frames, sum of runner speed
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
@@ -565,18 +572,31 @@ class DuelEnv:
         f, L, rng = self.lab_force, self.lab, self.rng
         pa = self.lab_p[0] / self.lab_aim_len
         pc = self.lab_p[1] / self.course_len
-        kd = f["kind"] if f else (AIM if (rng.random() < pa / (pa + pc) or not self.courses) else COURSE)
+        pr = (self.lab_p[2] / self.arena_len) if len(self.lab_p) > 2 else 0.0
+        u = rng.random() * (pa + pc + pr)
+        kd = f["kind"] if f else (NORMAL if u < pr else AIM if (u < pr + pa or not self.courses) else COURSE)
         self.kind[m], self.mode[m] = kd, -1
+        self.arena[m] = 0
         self.script[a_] = self.script[b_] = 0
         self.goal[a_] = self.goal[b_] = -1
         self.course[a_] = self.course[b_] = -1
         self.items_room[a_] = self.items_room[b_] = False
         self.gun[a_] = self.gun[b_] = False
-        self.lab_len[m] = self.lab_aim_len if kd == AIM else self.course_len
+        self.lab_len[m] = self.lab_aim_len if kd == AIM else self.arena_len if kd == NORMAL else self.course_len
         self.load_sets[a_] = self.load_sets[b_] = None
         self.frags_r[a_] = self.frags_r[b_] = 0
         self.snd_t[a_] = self.snd_t[b_] = 99.0
-        if kd == AIM:
+        if kd == NORMAL:                                    # arena: the two fight each other, same weapons for both
+            self.arena[m] = int(f["arena"]) if (f and "arena" in f) else int(rng.integers(1, 3))
+            guns = tuple(int(x) for x in rng.choice(LOAD_GUNS, int(rng.integers(1, 3)), replace=False))
+            if f and "weapon" in f:
+                guns = (int(f["weapon"]),)
+            self.load_sets[a_] = self.load_sets[b_] = guns
+            self.state = self.w.state()
+            self._arena_spawn(a_, first=True)
+            self.state = self.w.state()
+            self._arena_spawn(b_)
+        elif kd == AIM:
             self.mode[m] = int(f["weapon"]) if f else int(rng.choice(self.aim_weapons))
             self.script[b_] = 1
             self.lab_jump[m] = bool(f["jump"]) if f else rng.random() < 0.5
@@ -613,8 +633,12 @@ class DuelEnv:
             I = L["items"]
             self.lab_len[m] = self.items_len
             self.item_up[m, :], self.item_t[m, :] = True, 0.0
-            self.w.reset(a_, (I["start"][0], I["start"][1], I["start"][2] + 2.0), (0, 0, 0), float(I["yaw"]))
-            self._fresh(a_, float(I["yaw"]))
+            b = I["bounds"]                                 # start in the middle of one of the four corridors
+            mids = ((b[0] + b[2]) / 2, b[1] + 256), ((b[0] + b[2]) / 2, b[3] - 256), (b[0] + 256, (b[1] + b[3]) / 2), (b[2] - 256, (b[1] + b[3]) / 2)
+            sx, sy_ = mids[int(rng.integers(4))]
+            iyaw = float(rng.uniform(-180, 180))
+            self.w.reset(a_, (sx, sy_, I["start"][2] + 2.0), (0, 0, 0), iyaw)
+            self._fresh(a_, iyaw)
             self.hp[a_], self.armor[a_] = 100.0, 0.0
             self.items_room[a_] = True
             self._course_start(b_, int(rng.choice(self.lab_course_ids)))
@@ -628,10 +652,33 @@ class DuelEnv:
             for q in (a_, b_):
                 self._course_start(q, int(f["course"]) if f else int(rng.choice(self.lab_course_ids)))
 
+    def _arena_spawn(self, i, first=False):
+        """put player i somewhere in his arena, facing the opponent and (unless first) well away from him"""
+        m, L, rng = i // 2, self.lab, self.rng
+        opp = self.state[i ^ 1, :3]
+        if self.arena[m] == 1:                              # the aim box: anywhere on its floor
+            A = L["aim"]
+            z = float(A["subject"][2])
+            cand = [np.array([rng.uniform(96, 1440), rng.uniform(96, 928), z], np.float32) for _ in range(12)]
+        else:
+            E_ = L["env"]
+            cand = [np.array([q[0], q[1], q[2] if len(q) > 2 else E_["z"]], np.float32) for q in E_["spots"]]
+        if first:
+            p = cand[int(rng.integers(len(cand)))]
+        else:
+            d = np.array([float(np.linalg.norm(q - opp)) for q in cand])
+            ok = np.nonzero(d > 500)[0]
+            p = cand[int(rng.choice(ok))] if len(ok) else cand[int(d.argmax())]
+        face = math.degrees(math.atan2(opp[1] - p[1], opp[0] - p[0])) if not first else float(rng.uniform(-180, 180))
+        self.w.reset(i, (p[0], p[1], p[2] + 2.0), (0, 0, 0), face)
+        self._fresh(i, face)
+
     def _lab_respawn(self, v):
         """a death on the lab map: back to the room's own spot, not to a map spawn point"""
         m = v // 2
-        if self.course[v] >= 0:
+        if self.arena[m]:
+            self._arena_spawn(v)
+        elif self.course[v] >= 0:
             self._course_back(v)
         elif self.items_room[v]:
             I = self.lab["items"]
@@ -1105,7 +1152,8 @@ class DuelEnv:
             a[sc] = self._script_actions(sc)
         human = self.script == 0                            # policy-controlled players (for the statistics)
         pkind = np.repeat(self.kind, 2)
-        key = np.where(a[:, 7] == 1, WALK, 127).astype(np.int32)   # walking: slower and silent
+        walk = (a[:, 7] == 1) & (not self.no_walk)
+        key = np.where(walk, WALK, 127).astype(np.int32)   # walking: slower and silent
         fwd = (a[:, 0].astype(np.int32) - 1) * key
         side = (a[:, 1].astype(np.int32) - 1) * key
         jump = np.where(a[:, 2] == 1, 127, np.where(a[:, 2] == 2, -127, 0)).astype(np.int32)   # jump / crouch
@@ -1163,7 +1211,7 @@ class DuelEnv:
         self.stats["blind_frames"] += int((blind & fight).sum())
         self.stats["play_frames"] += int(fight.sum())
         self.stats["duck_frames"] += int((self.duck & fight).sum())
-        self.stats["walk_frames"] += int(((a[:, 7] == 1) & fight).sum())
+        self.stats["walk_frames"] += int((walk & fight).sum())
         self.stats["bot_frames"] += int((self.script == 2).sum())
         np.add.at(self.stats["vs_persona"][2], self.sc_persona[self.script == 2], 1)
         self.stats["aim_round_frames"] += int((human & (pkind == AIM)).sum())
@@ -1318,7 +1366,7 @@ class DuelEnv:
             gsp = np.clip(np.hypot(s[:, 3], s[:, 4]) / 320.0, 0.0, 1.5)
             self.stats["gun"][0] += float(dealt[self.gun].sum())
             dealt = np.where(self.gun, dealt * gsp, dealt)
-        reward += self.dmg_reward * (dealt - DMG_TAKEN_W * taken)   # getting hurt costs more than hurting pays
+        reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
@@ -1427,6 +1475,13 @@ class DuelEnv:
         ends = np.nonzero(self.round_t > klen * self.rng.uniform(0.67, 1.33, self.M))[0]
         if self.lab is not None:                            # lab rooms have exact lengths
             ends = np.nonzero(self.round_t >= self.lab_len)[0]
+            am = np.repeat(self.arena > 0, 2)
+            if am.any():
+                self.stats["arena"][1] += float(am.sum())
+                self.stats["arena"][2] += float(np.hypot(s[am, 3], s[am, 4]).sum())
+                self.stats["arena"][3] += float(self.visible[am].sum())
+                self.stats["arena"][4] += float(dealt[am].sum())
+                self.stats["arena"][0] += float(sum(1 for e in events if am[e["victim"]] and e["killer"] >= 0 and e["killer"] != e["victim"]))
             self.stats["lab_items"][2] += float(self.items_room.sum())
         for m in ends:
             self.round_t[m] = 0.0
