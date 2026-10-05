@@ -456,6 +456,46 @@ def main():
     rooms["items"] = dict(start=[1536, iy + 256, 8], yaw=0, mega=[256, iy + 256, 24], red_armor=[2816, iy + 1792, 24],
                           bounds=[0, iy, 3072, iy + 2048], secs=120)
     spawns.append((1536, iy + 256, 24, 0))
+
+    # ================= the yard (2026-10-05): a small duel arena in the manner of the duel maps =================
+    # 1792 x 1536, two levels. Ground: an open middle with pillars, a crate and a low wall; a tunnel under the north
+    # balcony (two doorways) and a low-ceilinged strip under the east balcony for close fights. Upper level (192
+    # up): north and east balconies joined at the corner, a catwalk from the east balcony to a tower in the middle.
+    # Ways up: stairs on the west wall, a ramp in front of the north balcony, a jump pad onto the tower. A
+    # teleporter leads from the tunnel's east end to the south-west corner.
+    YY = 50000
+    room(0, YY, 0, 1792, YY + 1536, 512)
+    UP = 192
+    box(0, YY + 1280, UP - 16, 1792, YY + 1536, UP, TRIM)                          # north balcony (a slab)
+    for x0_, x1_ in ((0, 384), (512, 1152), (1280, 1792)):                         # its front wall below, two doorways
+        box(x0_, YY + 1280, 0, x1_, YY + 1296, UP - 16, BLOCK)
+    box(800, YY + 1392, 0, 864, YY + 1536, 96, BLOCK)                              # a half wall inside the tunnel
+    box(1536, YY + 512, UP - 16, 1792, YY + 1280, UP, TRIM)                        # east balcony
+    box(1536, YY + 768, 0, 1552, YY + 1024, UP - 16, BLOCK)                        # a wall under its edge
+    box(1536, YY + 512, 0, 1568, YY + 544, UP - 16, BLOCK)                         # corner post
+    for k in range(12):                                                            # stairs on the west wall, up to the north balcony
+        box(0, YY + 896 + k * 32, 0, 192, YY + 896 + (k + 1) * 32, 16 * (k + 1), TRIM)
+    ramp(640, YY + 1152, 1024, YY + 1280, 0, UP, 0)                                # ramp in front of the north balcony
+    box(1024, YY + 1152, 0, 1152, YY + 1280, UP, BLOCK)                            # its landing, joined to the balcony
+    box(768, YY + 512, 0, 896, YY + 736, UP, BLOCK)                                # the tower
+    box(896, YY + 576, UP - 16, 1536, YY + 672, UP, TRIM)                          # catwalk: tower to east balcony
+    box(416, YY + 320, 0, 480, YY + 384, 512, BLOCK)                               # pillars
+    box(1184, YY + 256, 0, 1248, YY + 320, 512, BLOCK)
+    box(1088, YY + 960, 0, 1152, YY + 1024, 512, BLOCK)
+    box(960, YY + 400, 0, 1216, YY + 432, 64, BLOCK)                               # low wall (crouch cover)
+    box(288, YY + 928, 0, 384, YY + 1024, 96, BLOCK)                               # crate
+    box(700, YY + 1380, UP, 764, YY + 1444, UP + 64, BLOCK)                        # crate on the north balcony
+    box(1600, YY + 880, UP, 1632, YY + 1040, UP + 56, BLOCK)                       # low wall on the east balcony
+    box(300 - 56, YY + 624 - 56, 0, 300 + 56, YY + 624 + 56, 2, TRIM)               # jump pad plate
+    trigger("trigger_push", 300 - 48, YY + 624 - 48, 2, 300 + 48, YY + 624 + 48, 18, (630, YY + 624, 340))
+    box(1680, YY + 1330, 0, 1690, YY + 1500, 2, TRIM)                              # line in front of the teleporter
+    trigger("trigger_teleport", 1728, YY + 1344, 0, 1776, YY + 1488, 128, (128, YY + 128, 40), angle=45)
+    rooms["yard"] = dict(bounds=[0, YY, 1792, YY + 1536], z=8, spots=[
+        [128, YY + 320, 8], [1664, YY + 128, 8], [896, YY + 128, 8], [640, YY + 900, 8], [1300, YY + 700, 8],
+        [200, YY + 1420, 8], [1400, YY + 1420, 8], [1650, YY + 640, 8],
+        [200, YY + 1408, UP + 8], [1400, YY + 1408, UP + 8], [1664, YY + 700, UP + 8], [832, YY + 624, UP + 8]])
+    for q in rooms["yard"]["spots"][:4]:
+        spawns.append((q[0], q[1], q[2] + 16, 0))
     rooms["courses"] = courses
     # ---- terrain stations: 3D copies of the real spots
     # The trick-jump copies (Campgrounds bridge to rail and pillars, Aerowalk and Blood Run red armor) were

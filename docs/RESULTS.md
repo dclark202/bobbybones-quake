@@ -66,6 +66,23 @@ action head (zoom) at a checkpoint** (`policy_340_inputs.pt` kept):
 Numbers at the restart (61 min of arena training): aim error 6.6 deg, rail 64%, LG 42%, MG 57%, HMG 56%;
 frags by weapon HMG 64-66%, LG 13%, shotgun 11-13%; 61-67% of kills against his older selves; keys refused 92.5%.
 
+**10:44 — tighter limits, random stacks, pain sounds (owner); network widened to 348 inputs** (`policy_343_inputs.pt` kept):
+- crouch: the little finger rests 500 ms after acting (at most one crouch a second; measured 1.05); fire: 100 ms
+  (at most five clicks a second; measured 4.0);
+- arena rounds start both players on the same random health and armor, each one of 25, 50, ... 200 (checked);
+- the enemy's health is not an input and never was; he has the damage of each of his own hits (the number a
+  player sees) and the running total for this enemy life. New: the enemy's pain sound when hit within earshot,
+  one of four by his health (under 25 / 50 / 75 / above), 5 inputs; checked against his true health.
+Numbers at this restart (77 min of arena training): aim error 6.7 deg; 75% of kills against older selves;
+standing 12%; zoomed 1.7%; keys refused 92.6%; HMG 67% of kills.
+
+**10:50 — the yard: a small two-level duel arena on the test map** (owner: closer to the duel maps, for his
+feedback; not in training). 1792 x 1536: open middle with pillars and low cover, a tunnel under the north
+balcony, a low strip under the east balcony, balconies 192 up joined at the corner, a tower with a catwalk,
+stairs, a ramp, a jump pad onto the tower, a teleporter from the tunnel to the far corner. Checked in the
+simulator: stairs and ramp walk up to the balcony, the pad lands on the tower and catwalk, the teleporter and
+all twelve spawn spots work. Server: `!arena yard`.
+
 After 46 minutes of arena-only training: aim error in view 12 -> 6.9 degrees, hit rates rail 34 -> 69%, LG
 24 -> 42%, MG 26 -> 59%, HMG 21 -> 51%; frags by weapon HMG 43%, LG 21%, shotgun 20% (72% at the start).
 

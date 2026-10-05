@@ -10,7 +10,7 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 | `!map <name>` | Changes the map: `bloodrun`, `aerowalk`, `campgrounds`, or `bobbylab` (the test map) |
 | `!drill <weapon>` / `!drill off` | Both players get only that weapon (`rl`, `rg`, `lg`, `mg`, `sg`, `gl`, `pg`, `hmg`); `off` returns to the normal spawn weapons |
 | `!nosg` / `!nosg off` | Nobody spawns with a shotgun (it can still be picked up on the map); `off` returns to every weapon |
-| `!arena box` / `!arena env` `[minutes]` / `!arena off` | On the test map: fight BobbyBones in the aim box or the environment box under the rules he trains with there: full weapon set at spawn, 125 health, nobody leaves the room, five minutes (or the number given). The score and damage are announced at the end |
+| `!arena box` / `!arena env` / `!arena yard` `[minutes]` / `!arena off` | On the test map: fight BobbyBones in the aim box, the environment box or the yard (a small two-level duel arena: balconies, stairs, a ramp, a tower with a catwalk, a jump pad, a teleporter, a tunnel; not in his training yet) under the rules he trains with: full weapon set at spawn, 125 health, nobody leaves the room, five minutes (or the number given). The score and damage are announced at the end |
 | `!spar` / `!spar off` | You become a spectator and BobbyBones plays a Nightmare bot in a real match. `!spar off`, or joining the game, ends it |
 
 ## Test rooms

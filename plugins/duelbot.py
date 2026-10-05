@@ -75,7 +75,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("rooms", self.cmd_rooms, 0)
         self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 0, usage="<on|off>")
-        self.add_command("arena", self.cmd_arena, 0, usage="<box|env|off> [minutes]")
+        self.add_command("arena", self.cmd_arena, 0, usage="<box|env|yard|off> [minutes]")
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
@@ -226,7 +226,7 @@ class duelbot(minqlx.Plugin):
         if not self.lab:
             player.tell("The arena is on the test map: !map bobbylab first.")
             return
-        if not a or a[0] not in ("box", "env"):
+        if not a or a[0] not in ("box", "env", "yard") or (a[0] == "yard" and "yard" not in self.lab):
             return minqlx.RET_USAGE
         mins = float(a[1]) if len(a) > 1 and a[1].replace(".", "", 1).isdigit() else 5.0
         self.arena_start(a[0], mins)
@@ -236,7 +236,7 @@ class duelbot(minqlx.Plugin):
         self.arena = dict(where=where, t_end=time.time() + mins * 60, mins=mins, base=dict(self.score), place=True, dmg=[0, 0])
         self.record(event="arena_start", where=where, minutes=mins)
         self.msg("^3Arena: the {}^7, {:g} minutes. Full weapons at spawn, nobody leaves the room. !arena off stops.".format(
-            "aim box" if where == "box" else "environment box", mins))
+            {"box": "aim box", "env": "environment box", "yard": "yard"}[where], mins))
 
     def arena_end(self, why="time"):
         A = self.arena
@@ -253,14 +253,15 @@ class duelbot(minqlx.Plugin):
             z = float(L["aim"]["subject"][2])
             cand = [np.array([self.rng.uniform(96, 1440), self.rng.uniform(96, 928), z], np.float32) for _ in range(12)]
         else:
-            e = L["env"]
+            e = L["yard" if self.arena["where"] == "yard" else "env"]
             cand = [np.array([q[0], q[1], q[2] if len(q) > 2 else e["z"]], np.float32) for q in e["spots"]]
         d = np.array([float(np.linalg.norm(q - np.asarray(other, np.float32))) for q in cand])
         ok = np.nonzero(d > 500)[0]
         return cand[int(self.rng.choice(ok))] if len(ok) else cand[int(d.argmax())]
 
     def arena_inside(self, pos):
-        b = [-32, -32, 1568, 1056] if self.arena["where"] == "box" else self.lab["env"]["bounds"]
+        b = [-32, -32, 1568, 1056] if self.arena["where"] == "box" else \
+            self.lab["yard" if self.arena["where"] == "yard" else "env"]["bounds"]
         return b[0] - 48 <= pos[0] <= b[2] + 48 and b[1] - 48 <= pos[1] <= b[3] + 48
 
     def cmd_spar(self, player, msg, channel):
@@ -281,7 +282,7 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!arena box | env = fight BobbyBones in that room for 5 minutes, full weapons (the rules he trains with)")
+            player.tell("!arena box | env | yard = fight BobbyBones in that room for 5 minutes, full weapons (yard: the new two-level arena)")
             player.tell("!room moves = every movement course in a row, with a table of times at the end")
             player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
