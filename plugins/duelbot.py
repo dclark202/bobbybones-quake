@@ -858,6 +858,10 @@ class duelbot(minqlx.Plugin):
             self.fb_next = np.array([min(dealt / 100.0, 2.0), min(took / 100.0, 2.0),
                                      math.sin(ang) * (took > 0), math.cos(ang) * (took > 0)], np.float32)
             env.dmg_life[0] += dealt
+            if hasattr(env, "pain_t"):                       # the opponent's pain sound, by his health after the hit
+                env.pain_t += E.DT
+                if dealt > 0 and os_.health > 0 and float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < E.HEAR_EVT:
+                    env.pain_t[0], env.pain_b[0] = 0.0, min(3, int(os_.health) // 25)
         if self.arena:
             self.arena["dmg"][0] += dmg.get("opp", 0)
             self.arena["dmg"][1] += dmg.get("bobby", 0)

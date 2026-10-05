@@ -126,6 +126,98 @@ def project(fr, pts):
     return sx, sy, x > 8
 
 
+def hull(px, py):
+    """convex hull of screen points (for drawing a box as a filled shape)"""
+    pts = sorted(set(zip([float(v) for v in px], [float(v) for v in py])))
+    if len(pts) < 3:
+        return pts
+
+    def half(seq):
+        out = []
+        for q in seq:
+            while len(out) >= 2 and (out[-1][0] - out[-2][0]) * (q[1] - out[-2][1]) - (out[-1][1] - out[-2][1]) * (q[0] - out[-2][0]) <= 0:
+                out.pop()
+            out.append(q)
+        return out[:-1]
+    return half(pts) + half(pts[::-1])
+
+
+def draw_box(d, fr, centre, yaw, size, lo, hi, fill, outline=(20, 20, 20)):
+    """a box turned to yaw (degrees): half-sizes size = (forward, sideways), from height lo to hi above centre"""
+    c, s_ = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    pts = []
+    for fx in (-size[0], size[0]):
+        for sy_ in (-size[1], size[1]):
+            for z in (lo, hi):
+                pts.append((centre[0] + c * fx - s_ * sy_, centre[1] + s_ * fx + c * sy_, centre[2] + z))
+    sx, sy, ok = project(fr, pts)
+    if ok.all():
+        h = hull(sx, sy)
+        if len(h) >= 3:
+            d.polygon(h, fill=fill, outline=outline)
+
+
+WCOL = {"rl": (255, 120, 40), "gl": (90, 220, 90), "pg": (90, 200, 255), "rg": (120, 255, 160), "lg": (190, 220, 255),
+        "mg": (255, 240, 150), "hmg": (255, 210, 120), "sg": (255, 230, 170), "g": (200, 200, 200)}
+
+
+def draw_enemy(d, fr):
+    """the opponent as a figure: legs, body, head, and his weapon pointing where he aims"""
+    o, yaw = fr["opp"], fr["opp_yaw"]
+    duck = fr["opp_duck"]
+    hurt = fr["dealt"] > 0
+    body = (255, 255, 255) if hurt else (70, 200, 90)          # bright green, like an enemy model; white when hit
+    dark = (255, 255, 255) if hurt else (40, 130, 60)
+    top = 16.0 if duck else 32.0
+    draw_box(d, fr, o, yaw, (7, 12), -24.0, -4.0 if not duck else -12.0, dark)                       # legs
+    draw_box(d, fr, o, yaw, (8, 14), -4.0 if not duck else -12.0, top - 10.0, body)                  # body
+    draw_box(d, fr, o, yaw, (6, 6), top - 10.0, top, (235, 200, 160) if not hurt else (255, 255, 255))   # head
+    # weapon: a bar from his right hand along his aim
+    yr, pr = math.radians(yaw), math.radians(fr["opp_pitch"])
+    f = np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), -math.sin(pr)])
+    right = np.array([math.sin(yr), -math.cos(yr), 0.0])
+    hand = np.array(o, np.float64) + right * 12.0 + np.array([0, 0, top - 16.0])
+    sx, sy, ok = project(fr, [hand, hand + f * 26.0])
+    if ok.all():
+        d.line([float(sx[0]), float(sy[0]), float(sx[1]), float(sy[1])], fill=WCOL.get(fr["w"][1], (220, 220, 220)), width=4)
+    return hand + f * 26.0, f
+
+
+def draw_shots(d, fr, muzzle, f_opp):
+    """beams and trails of this frame's hitscan shots, and every projectile in flight with its own look"""
+    eye = fr["pos"] + np.array([0, 0, 26.0], np.float32)
+    for who in (0, 1):
+        if not fr["shot"][who]:
+            continue
+        w = fr["w"][who]
+        if w not in ("rg", "lg", "mg", "hmg", "sg"):
+            continue
+        col = WCOL[w]
+        width = 5 if w == "rg" else 3 if w == "lg" else 1
+        if who == 0:                                             # his own shot: from the gun at the bottom right to the crosshair
+            d.line([W * 2 - 150, H * 2 - 40, W, H], fill=col, width=width)
+        elif fr["seen"] and muzzle is not None:
+            reach = 768.0 if w == "lg" else 3000.0
+            sx, sy, ok = project(fr, [muzzle, muzzle + f_opp * reach])
+            if ok[0]:
+                x1, y1 = (float(sx[1]), float(sy[1])) if ok[1] else (float(sx[0]) + (float(sx[0]) - W) * 4, float(sy[0]) + (float(sy[0]) - H) * 4)
+                d.line([float(sx[0]), float(sy[0]), x1, y1], fill=col, width=width)
+    for rp, kind, owner, rv in fr["rockets"]:
+        name = E.WEAPONS[kind]
+        sx, sy, ok = project(fr, [rp, rp - rv / (np.linalg.norm(rv) + 1e-6) * 60.0])
+        if not ok[0]:
+            continue
+        dist = float(np.linalg.norm(rp - eye)) + 1.0
+        r = max(3.0, min(26.0, 2200.0 / dist)) * (0.6 if name == "pg" else 1.0)
+        x, y = float(sx[0]), float(sy[0])
+        col = WCOL.get(name, (255, 200, 60))
+        if name == "rl" and ok[1]:                               # rocket: a smoke trail behind it
+            d.line([x, y, float(sx[1]), float(sy[1])], fill=(170, 170, 170), width=max(2, int(r / 2)))
+        d.ellipse([x - r, y - r, x + r, y + r], fill=col, outline=(255, 255, 255) if owner == 1 else (60, 60, 60), width=2)
+        if owner == 1:                                           # the enemy's: a ring so it stands out
+            d.ellipse([x - r - 4, y - r - 4, x + r + 4, y + r + 4], outline=(255, 60, 60), width=2)
+
+
 def fight(env, pol, where, secs, round_len):
     """self-play in an arena (1 = aim box, 2 = environment box): frames from player 0's eyes"""
     env.arena_len = round_len
@@ -141,7 +233,10 @@ def fight(env, pol, where, secs, round_len):
                   hp=(float(env.hp[0]), float(env.armor[0]), float(env.hp[1]), float(env.armor[1])),
                   w=(E.WEAPONS[int(env.weapon[0])], E.WEAPONS[int(env.weapon[1])]),
                   guns=" + ".join(E.WEAPONS[g].upper() for g in (env.load_sets[0] or ())),
-                  rockets=[env.rp[i, k].copy() for i in (0, 1) for k in range(env.rp.shape[1]) if env.ra[i, k]])
+                  opp_yaw=float(env.yaw[1]), opp_pitch=float(env.pitch[1]), opp_vel=s[1, 3:6].copy(),
+                  zoom=bool(getattr(env, "zoom", np.zeros(2, bool))[0]),
+                  rockets=[(env.rp[i, k].copy(), int(env.rw[i, k]), i, env.rv[i, k].copy())
+                           for i in (0, 1) for k in range(env.rp.shape[1]) if env.ra[i, k]])
         act, h = pol.act(obs, h)
         fr["a"] = act[0].copy()
         obs, r, done, info = env.step(act)
@@ -150,6 +245,9 @@ def fight(env, pol, where, secs, round_len):
             if e["killer"] in (0, 1) and e["killer"] != e["victim"]:
                 frags[e["killer"]] += 1
         fr["frags"] = tuple(frags)
+        fq = getattr(env, "fire_q", np.zeros(env.n, bool))
+        fr["shot"] = (bool(fq[0]), bool(fq[1]))                  # who fired on this frame (weapons as held before it)
+        fr["took"] = float(env.fb[0, 1]) * 100.0
         fr["dealt"] = float(env.fb[0, 0]) * 100.0
         frames.append(fr)
     return frames
@@ -158,19 +256,13 @@ def fight(env, pol, where, secs, round_len):
 def overlay_fight(img, fr, label, t, font, big):
     im = Image.fromarray(img).resize((W * 2, H * 2), Image.NEAREST)
     d = ImageDraw.Draw(im)
-    # the opponent: his box, drawn only with a clear line to him
-    if fr["seen"]:
-        o = fr["opp"]
-        top = 16.0 if fr["opp_duck"] else 32.0
-        pts = [(o[0] + dx, o[1] + dy, o[2] + dz) for dx in (-15, 15) for dy in (-15, 15) for dz in (-24, top)]
-        sx, sy, ok = project(fr, pts)
-        if ok.all():
-            d.rectangle([float(sx.min()), float(sy.min()), float(sx.max()), float(sy.max())], outline=(255, 60, 60), width=3,
-                        fill=(200, 60, 60) if fr["dealt"] > 0 else None)
-    for rp in fr["rockets"]:
-        sx, sy, ok = project(fr, [rp])
-        if ok[0]:
-            d.ellipse([float(sx[0]) - 5, float(sy[0]) - 5, float(sx[0]) + 5, float(sy[0]) + 5], fill=(255, 200, 60))
+    # the opponent as a figure (only with a clear line to him), then shots and projectiles
+    muzzle, f_opp = (draw_enemy(d, fr) if fr["seen"] else (None, None))
+    draw_shots(d, fr, muzzle, f_opp)
+    if fr["took"] > 0:                                         # he was hit: a red frame
+        d.rectangle([0, 0, W * 2 - 1, H * 2 - 1], outline=(255, 40, 40), width=10)
+    if fr["zoom"]:
+        d.text((W - 30, 60), "ZOOM", fill=(255, 255, 120), font=big)
     v, a = fr["vel"], fr["a"]
     sp = math.hypot(v[0], v[1])
     fwd, side, vert, fire = int(a[0]) - 1, int(a[1]) - 1, int(a[2]), int(a[5])
@@ -178,7 +270,7 @@ def overlay_fight(img, fr, label, t, font, big):
     d.rectangle([20, 20, 20 + int(min(sp, 800) / 800 * 300), 40], fill=(80, 220, 120) if sp > 320 else (230, 200, 80))
     d.line([20 + 120, 14, 20 + 120, 46], fill=(255, 80, 80), width=3)
     d.text((330, 16), "{:4.0f} u/s".format(sp), fill=(255, 255, 255), font=big)
-    d.text((20, 52), "{}   {:5.1f} s   this round: {}".format(label, t, fr["guns"] or "MG"), fill=(255, 255, 255), font=font)
+    d.text((20, 78), "{}   {:5.1f} s   this round: {}".format(label, t, fr["guns"] or "every weapon"), fill=(255, 255, 255), font=font)
     d.text((560, 16), "frags  him {}  :  {} other".format(*fr["frags"]), fill=(255, 255, 255), font=big)
     d.text((20, 380), "holding {}   health {:.0f}  armor {:.0f}".format(fr["w"][0].upper(), fr["hp"][0], fr["hp"][1]), fill=(255, 255, 255), font=big)
     d.text((560, 46), "other: {}  health {:.0f}".format(fr["w"][1].upper(), fr["hp"][2]), fill=(255, 200, 200), font=font)

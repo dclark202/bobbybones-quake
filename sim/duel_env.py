@@ -92,11 +92,12 @@ WALK = 64                                              # key strength when walki
 # KEY_RATE key actions a second (a press and a release are one action each; a weapon switch is one action).
 # The numbers come from how fast a hand taps, not from the demos: keys inferred from demos flicker too much.
 RING, MIDDLE, INDEX, THUMB, LITTLE = range(5)
-FINGER_HOLD = np.array([6, 6, 6, 4, 6], np.int64)      # frames: 150 ms, the thumb (jump) 100 ms
+FINGER_HOLD = np.array([6, 6, 6, 4, 20], np.int64)     # frames: 150 ms, the thumb (jump) 100 ms, the little finger
+                                                       # (crouch) 500 ms: at most one crouch a second
 KEY_RATE, KEY_BURST = 5.0, 3.0
 # The right hand on the mouse: index finger = fire, middle finger = zoom (held). The same rule: a finger that has
 # just acted cannot act again for this many frames (a click is a press and a release: at most about six a second).
-MOUSE_HOLD = np.array([3, 6], np.int64)                # fire 75 ms, zoom 150 ms
+MOUSE_HOLD = np.array([4, 6], np.int64)                # fire 100 ms (at most five clicks a second), zoom 150 ms
 # Zoom: the view narrows to ZOOM of its size (100 x 75 degrees -> 40 x 30), and the same hand movement turns the
 # view ZOOM as far: finer aim and less shake in degrees, but slower turning and no view of the surroundings.
 ZOOM = 0.4
@@ -153,7 +154,9 @@ OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6
 #   the enemy in view: crouched 1, in the air 1                                                           = 2
 #   his own hand: the keys in effect 3, the budget of key actions 1, which fingers are free 5              = 9
 #   his right hand: zoomed 1, fire finger free 1, zoom finger free 1                                       = 3
-N_FIGHT = 14 + 4 + 2 + 9 + 3
+#   the enemy's pain sound when he is hit within earshot: which of the four (it depends on his health: under 25,
+#     under 50, under 75, above) 4, fading 1. The only clue to the enemy's health; his health itself is never an input. = 5
+N_FIGHT = 14 + 4 + 2 + 9 + 3 + 5
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
@@ -326,6 +329,11 @@ class DuelEnv:
         self.key_last = np.tile(np.array([1, 1, 0], np.int64), (nn2, 1))    # the key states in effect
         self.key_hold = np.full((nn2, 5), 99, np.int64)                    # frames since each finger last acted
         self.key_tok = np.full(nn2, KEY_BURST, np.float32)                 # budget of key changes
+        self.pain_t = np.full(nn2, 99.0, np.float32)    # seconds since this player last heard the enemy's pain sound
+        self.pain_b = np.zeros(nn2, np.int64)           # which one: 0 under 25 health, 1 under 50, 2 under 75, 3 above
+        self.arena_stack = True                         # arena rounds: random health and armor, the same for both players
+        self.arena_hp = np.full(n_matches, SPAWN_HP, np.float32)
+        self.arena_ar = np.zeros(n_matches, np.float32)
         self.zoom = np.zeros(nn2, bool)                 # zoomed in
         self.fire_last = np.zeros(nn2, bool)            # the fire button as the finger has it
         self.mouse_hold = np.full((nn2, 2), 99, np.int64)
@@ -436,6 +444,7 @@ class DuelEnv:
         self.duck[i] = False
         self.key_last[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), 99, KEY_BURST
         self.shot_t[i ^ 1] = self.trail_t[i ^ 1] = 99.0     # what the opponent knew about this player's shots is void
+        self.pain_t[i ^ 1] = 99.0
         self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
         self.dmg_life[i ^ 1] = 0.0                      # what the opponent knows about this player's damage resets
         mode = int(self.mode[i // 2])
@@ -641,6 +650,8 @@ class DuelEnv:
             if rng.random() < self.arena_full_p and not (f and "weapon" in f):
                 guns = None                                 # the full weapon set
             self.load_sets[a_] = self.load_sets[b_] = guns
+            stack = (25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0)
+            self.arena_hp[m], self.arena_ar[m] = float(rng.choice(stack)), float(rng.choice(stack))
             self.state = self.w.state()
             self._arena_spawn(a_, first=True)
             self.state = self.w.state()
@@ -721,6 +732,8 @@ class DuelEnv:
         face = math.degrees(math.atan2(opp[1] - p[1], opp[0] - p[0])) if not first else float(rng.uniform(-180, 180))
         self.w.reset(i, (p[0], p[1], p[2] + 2.0), (0, 0, 0), face)
         self._fresh(i, face)
+        if self.arena_stack:                                # this round's health and armor
+            self.hp[i], self.armor[i] = self.arena_hp[m], self.arena_ar[m]
 
     def _lab_respawn(self, v):
         """a death on the lab map: back to the room's own spot, not to a map spawn point"""
@@ -860,7 +873,9 @@ class DuelEnv:
                                (self.key_hold >= FINGER_HOLD[None, :]).astype(np.float32)], 1)
         mouse = np.concatenate([self.zoom.astype(np.float32)[:, None],
                                 (self.mouse_hold >= MOUSE_HOLD[None, :]).astype(np.float32)], 1)
-        return np.concatenate([shots, trail, body, hand, mouse], 1).astype(np.float32)
+        heard = (self.pain_t < 1.5).astype(np.float32)
+        pain = np.concatenate([np.eye(4, dtype=np.float32)[self.pain_b] * heard[:, None], np.exp(-3.0 * self.pain_t)[:, None]], 1)
+        return np.concatenate([shots, trail, body, hand, mouse, pain], 1).astype(np.float32)
 
     def _hear(self, cat, src, kind=None):
         """players src made a sound of category cat: their opponents hear it within HEAR_EVT (rough position)"""
@@ -1401,6 +1416,7 @@ class DuelEnv:
         reward = -JERK_COST * jerk.astype(np.float32)
         self.snd_t += DT
         self.shot_t += DT
+        self.pain_t += DT
         self.trail_t += DT
         self._hear(2, np.nonzero((prev[:, 6] > 0.5) & (s[:, 6] < 0.5) & (s[:, 5] > 100))[0])      # jumps
         self._hear(3, np.nonzero(np.linalg.norm(s[:, :3] - prev[:, :3], axis=1) > 200)[0])       # teleports
@@ -1568,6 +1584,12 @@ class DuelEnv:
 
         # shaping (curriculum): reward damage dealt to the opponent
         opp_all = ar ^ 1
+        hurt = np.nonzero((dmg_taken > 0) & (self.hp > 0))[0]              # pain sounds: the opponent hears them within earshot
+        if len(hurt):
+            lis_ = hurt ^ 1
+            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
+            self.pain_t[lis_[near_]] = 0.0
+            self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
         dealt = np.where(attacker[opp_all] == ar, dmg_taken[opp_all], 0.0)
         taken = dmg_taken + fall                            # from the opponent, own splash and falls alike
         if self.gun.any():                                  # run-and-gun: damage pays by how fast the runner is moving
