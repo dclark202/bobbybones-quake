@@ -51,6 +51,7 @@ Owner's plan: three parts of equal weight, Blood Run only for the real map. What
 | 01:15 | 1016 | 814 | 80% | 18 deg | 16% / 25% | 7% | 0-21, 870 / 2485 damage, 113 u/s, in view 10%, shotgun held 79% | 133 u/s, above 330 u/s 4%, in view 12% |
 | 02:15 | 1074 | 827 (circle now finished 1.3 times a minute) | 80% | 18 deg | 26% / 35% | 14% | 0-21, 586 / 2699 damage, 132 u/s, in view 12%, shotgun held 61% | 143 u/s, above 330 u/s 6%, in view 9% |
 | 03:15 | 1135 | 857 (first finishes on twohop) | 82% | 21 deg | 31% / 43% | 4% | 0-24, 1340 / 3006 damage, 140 u/s, in view 13%, shotgun held 69% | 140 u/s, above 330 u/s 5%, in view 9% |
+| 04:15 | 1196 | 818 (circle 3.4 finishes a minute) | 80% | 25 deg | 29% / 42% | 12% | 1-18, 1210 / 2447 damage, 167 u/s, in view 10%, shotgun held 65% | 127 u/s, above 330 u/s 4%, in view 19% |
 
 01:50: run-and-gun round built in the simulator (B-81), **not switched on** (`--lab-gun`, off by default): the
 runner has a weapon on the speed, slalom, ramps or turns course, a target keeps appearing 500-900 units ahead
