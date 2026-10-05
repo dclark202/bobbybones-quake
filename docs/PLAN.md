@@ -1,8 +1,9 @@
 # BobbyBones: plan
 
-Goal: a Quake Live duel bot that **learns** to play (movement, aim, tactics) and beats people fairly:
-human physics, human-like limits, knowledge only from sight and sound. Judge everything by match win
-rate against a control group of plain Nightmare bots, and by live tests on a real QL server.
+Long-term goal: a Quake Live bot that **learns** to play (movement, aim, tactics) and beats people fairly:
+human physics, human-like limits, knowledge only from sight and sound. The current target is Goal 1 below: one
+small arena, played like a person would play it. Judge by how the play looks (videos, play tests), the
+Nightmare score, and numbers for items and movement on that map.
 
 ## How the docs fit together (keep them in sync)
 
@@ -29,7 +30,7 @@ same commit.
 3. **Measure against people.** A fixed test chamber scores Bobby and human players in the same rooms; play tests
    and (soon) a public server give the human side. Nightmare is a milestone, not the gate.
 
-## Status (2026-10-04 afternoon)
+## Status (2026-10-05)
 
 | Stage | What | Status |
 |---|---|---|
@@ -40,8 +41,10 @@ same commit.
 | 3 | Self-play with memory (GRU, league, scripted opponent styles) | `duel_gru_v3` done (489 min); `duel_gru_v4` done (775 min, self-play only since 650 min) |
 | 3 | Play-test server: plays a trained network, session logs, notes, test rooms with a human as the subject | done, including networks trained under the newer rules |
 | 3 | Test suite: fixed rooms and scorecards, in the simulator and on the server; test map `bobbylab` | done (aim rooms, nine movement courses, Nightmare fight); first human card recorded |
-| 3 | A duel network that beats Nightmare | not yet: `duel_gru_v4` 6-21 in ten minutes; `duel_gru_v3` 2-2 then 5-11 in mixed live minutes |
-| 4 | Pro demos | 374 parsed; planned use: routes and positions for the map atlas (B-75, B-73) |
+| 3 | Human limits: five-finger left hand, right-hand click limits, sight only in the field of view, aim limits | done (`duel_gru_v5`, B-83 to B-85) |
+| 3 | A network that beats Nightmare | in the environment box: yes, 23-11 to 32-10 in five minutes (`duel_gru_v5`). On Blood Run: not yet (`duel_gru_v4` 6-21 in ten minutes) |
+| 3 | Goal 1: the yard with items, map knowledge, up to four players | simulator and map built (B-86, B-87); the owner reviews the map first |
+| 4 | Pro demos | 3,700 downloaded for three maps, Blood Run converted; a night of movement imitation made courses faster, duels no better (RESULTS 2026-10-04 21:12) |
 | 5 | Public servers and community play tests | scoped (HOSTING.md); waits for a decent Bobby and the plugin update |
 | 6 | Opponent profiles, player reports | later |
 
@@ -49,13 +52,20 @@ same commit.
 
 The first target is smaller than "a duel bot on the popular duel maps":
 1. Plays human-like Quake (no key spam, steady aim, looks where it matters).
-2. In one small arena (the environment room or the yard; which one is decided at the 19:00 review).
+2. In one small arena: the yard (map `bobbyyard`, chosen by the owner 2026-10-05; he reviews the map before it
+   goes into training).
 3. Shows knowledge of that map and moves efficiently on it.
 4. One against one, or all against all up to four players, whichever brings out the behaviour better.
 5. Beats Nightmare there (done: 23-11 to 32-10 in five minutes, RESULTS 2026-10-05).
 
-The duel maps (Blood Run, Aerowalk, Lost World) come after this. The owner's favourite mode is free-for-all with
-three or four players.
+The duel maps (Blood Run, Aerowalk, Lost World) are folded back in once he meets these consistently. The
+owner's favourite mode is free-for-all with three or four players. Map knowledge is the hard part: it is
+deciding, not reacting, and it is also what makes the game fun and the goal interesting (owner).
+
+How each point is measured: 1 by the videos and the key numbers (asked against made); 3 by the share of mega
+and red armor spawns he takes and how soon, whether he is on his way before they appear, speed between fights,
+use of the jump pad and teleporter, and whether he fetches a weapon after a machine-gun spawn (B-89); 5 by five
+minutes against Nightmare at each checkpoint.
 
 ## Now
 
@@ -63,8 +73,8 @@ three or four players.
 rocket weapon sets drawn per player (RESULTS 2026-10-05 09:26). Built and waiting for the review: groups of up to
 six (B-86), the yard with items (B-87), switching the server and benchmarks to the new simulator (B-88).
 
-Proposed order after the review: the arena with items, two players; then a share of rounds with three or four
-players; judged by the videos, the Nightmare score and item and movement numbers on that map.
+Order after the review: the yard with items, two players (B-87); then a share of rounds with three or four
+players (B-86); the map-knowledge numbers (B-89) and the proposed inputs (B-90) alongside.
 
 ## Owner decisions
 
@@ -95,6 +105,10 @@ players; judged by the videos, the Nightmare score and item and movement numbers
 - Third map is Lost World, not Campgrounds (2026-10-04): more played, and it has elements he has not seen.
 - The game's bots are a benchmark only (Nightmare, ten minutes per checkpoint); he trains against himself.
 - Spawn weapons are only those that lie on the map.
+- Goal 1 (2026-10-05): the yard, human-like play, map knowledge, one against one or up to four players,
+  beating Nightmare there. The duel maps wait until he meets it consistently.
+- Method (2026-10-05): limit what he can do until the right play appears; do not reward single behaviors (speed,
+  dodging). Changing the reward is the owner's call.
 - No personal data in the repo.
 
 ## How to run (short)

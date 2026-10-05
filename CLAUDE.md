@@ -13,7 +13,12 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.
-- Maps: Blood Run (ZTN), Aerowalk, Lost World (replaced Campgrounds on 2026-10-04), plus the test map `bobbylab`.
+- **Goal 1 (2026-10-05)**: human-like play in one small arena, the yard (`bobbyyard`, with items), showing
+  knowledge of the map and efficient movement on it, one against one or all against all up to four players, and
+  beating Nightmare there. See `docs/PLAN.md`. Method: tighten the human limits until the right play appears;
+  do not add rewards for single behaviors without asking.
+- Maps: the yard first. Blood Run (ZTN), Aerowalk, Lost World (replaced Campgrounds on 2026-10-04) come back once
+  Goal 1 is met consistently. Test map: `bobbylab`.
 - Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder. Copying the
   test map pk3 into its `baseq3` is allowed (he asked for it); nothing else.
 - No personal data in the repo (Steam IDs, home IP, Windows usernames, passwords). The repo is public.
@@ -31,6 +36,9 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
 - **Simulator** (`sim/`): `sim_api.c` + vendored ioquake3 movement and collision (`sim/q3`) -> `qsim.dll`
   (`sim/build.bat`, MSVC) or `libqsim.so` (built in the Docker image). `qsim.py` wraps it. One `World` per
   process: worlds share buffers sized by player count, never create a second one with a different size.
+- **Groups**: `duel_env_ffa.py` is written from `duel_env.py` by `tools/make_ffa_env.py` (2 to 6 players, all
+  against all; 18 more inputs); `tools/ffa_check.py` proves it identical at two players. Change `duel_env.py`,
+  then regenerate and re-check; do not edit the generated file. Trainer: `--env duel_env_ffa --group N`.
 - **Environments**: `duel_env.py` (current: nine weapons, items, sounds, clock, crouch, walk, fall damage,
   human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO / COURSE, scripted opponents with eight styles, lab
   mode on the test map: aim rooms and movement courses read from `maps/bobbylab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the
