@@ -104,6 +104,7 @@ def main():
     ap.add_argument("--ent-coef", type=float, default=0.01, help="exploration bonus (entropy coefficient)")
     ap.add_argument("--arena-len", type=float, default=30.0, help="test map: seconds per arena round")
     ap.add_argument("--arena-full", type=float, default=0.5, help="test map: share of arena rounds with the full weapon set")
+    ap.add_argument("--dmg-reward", type=float, default=0.0, help="reward per point of damage (0 = the old curriculum value, 0.001 by now)")
     ap.add_argument("--dmg-taken-w", type=float, default=2.0, help="weight of damage taken against damage dealt in the reward")
     ap.add_argument("--no-walk", action="store_true", help="the walk key does nothing")
     ap.add_argument("--lab-gun", type=float, default=0.0, help="test map: chance that a course round is run-and-gun "
@@ -267,6 +268,8 @@ def main():
         close_p = max(0.2, 1.0 - 0.8 * mins / a.close_minutes)
         round_len = 15.0 + 105.0 * (1.0 - (close_p - 0.2) / 0.8)
         dmg_reward = 0.004 * max(0.25, close_p)                         # damage shaping fades with the curriculum
+        if a.dmg_reward > 0:                                            # ... unless it is set outright
+            dmg_reward = a.dmg_reward
         for p in pipes:
             p.send(("curriculum", (close_p, round_len, dmg_reward)))
         for p in pipes:
