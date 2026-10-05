@@ -221,6 +221,8 @@ def draw_shots(d, fr, muzzle, f_opp):
 def fight(env, pol, where, secs, round_len):
     """self-play in an arena (1 = aim box, 2 = environment box): frames from player 0's eyes"""
     env.arena_len = round_len
+    if os.environ.get("ARENA_SETS"):                         # e.g. "rl;rl,lg;rl,rg;rl,rg,lg": each player draws one, separately
+        env.arena_sets = [tuple(E.WEAPONS.index(x) for x in s_.split(",")) for s_ in os.environ["ARENA_SETS"].split(";")]
     env.lab_force = dict(kind=E.NORMAL, arena=where)
     env.round_t[:] = 1e9
     h = pol.zeros(env.n)

@@ -31,7 +31,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
            teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
-    from duel_env import DuelEnv
+    from duel_env import DuelEnv, WEAPONS as WEAPONS_
     env = DuelEnv(bsp, n_matches=matches, seed=seed, nav=nav, close_p=1.0, loadout=loadout, teacher=teacher)
     env.item_reward = item_reward
     env.drill_p = drill_p
@@ -50,6 +50,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.dmg_taken_w = dmg_taken_w
     env.no_walk = no_walk
     env.arena_len, env.arena_full_p = arena_len, arena_full
+    if os.environ.get("ARENA_SETS"):                         # e.g. "rl;rl,lg;rl,rg;rl,rg,lg": each player draws one, separately
+        env.arena_sets = [tuple(WEAPONS_.index(x) for x in s_.split(",")) for s_ in os.environ["ARENA_SETS"].split(";")]
     if os.environ.get("ARENA_ROOMS"):                        # "env", "box" or "box,env"
         env.arena_rooms = tuple({"box": 1, "env": 2}[x] for x in os.environ["ARENA_ROOMS"].split(","))
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups

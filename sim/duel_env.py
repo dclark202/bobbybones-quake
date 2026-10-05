@@ -329,6 +329,7 @@ class DuelEnv:
         self.arena = np.zeros(n_matches, np.int64)      # 0 = not an arena round, 1 = aim box, 2 = environment box
         self.arena_len = 30.0
         self.arena_rooms = (1, 2)                       # rooms used for arena rounds: 1 = aim box, 2 = environment box
+        self.arena_sets = None                          # or a list of weapon sets: each player draws his own (uneven fights)
         self.arena_full_p = 0.5                         # share of arena rounds with the full weapon set (else two random weapons)
         self.vel_frames = VEL_REACT_FRAMES              # delay on the enemy's velocity (see observe)
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
@@ -662,6 +663,9 @@ class DuelEnv:
             if rng.random() < self.arena_full_p and not (f and "weapon" in f):
                 guns = None                                 # the full weapon set
             self.load_sets[a_] = self.load_sets[b_] = guns
+            if self.arena_sets and not (f and "weapon" in f):   # fixed sets, drawn separately for each player
+                for q in (a_, b_):
+                    self.load_sets[q] = tuple(self.arena_sets[int(rng.integers(len(self.arena_sets)))])
             stack = (25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0)
             self.arena_hp[m], self.arena_ar[m] = float(rng.choice(stack)), float(rng.choice(stack))
             self.state = self.w.state()
