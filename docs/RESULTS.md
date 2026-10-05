@@ -55,6 +55,26 @@ Owner's plan: three parts of equal weight, Blood Run only for the real map. What
 | 05:15 | 1254 | 868 | 81% | 14 deg | 38% / 43% | 12% | 0-22, 1335 / 2906 damage, 161 u/s, in view 11%, shotgun held 62% | 138 u/s, above 330 u/s 6%, in view 25% |
 | 06:15 | 1314 | 914 | 82% | 16 deg | 33% / 44% | 14% | 0-25, 965 / 3241 damage, 156 u/s, in view 13%, shotgun held 60% | 128 u/s, above 330 u/s 5%, in view 23% |
 
+| 07:00 (final) | 1361 | 966 | 82% | 15 deg | 31% / 45% | 5% | 0-24, 1390 / 3366 damage, 165 u/s, in view 13%, shotgun held 60% | 132 u/s, above 330 u/s 5%, in view 28% |
+
+### Result of the night (1361 min, `suite/lab_1363`, checkpoint `policy_after_night.pt`)
+
+- **Courses: clearly better, several past the owner.** Speed straight 19.1 s at 971 u/s (owner 28.1 s, 718);
+  ramps 14.8 s (19.7 s); narrow 13.5 s (14.4 s); circle 8.0 s (13.6 s); drops 7.5 s (11.3 s). Slower than him on
+  slalom (24.2 s against 19.3 s), bends (26.8 s against 15.4 s), turns, climb. Never finished: twohop, pillars,
+  rocket. Items room: 3.3-4.4 megas per two minutes of 4 possible, red armor never.
+- **Duels: no better.** Nightmare 0-24 at the end and never more than one frag in ten minutes all night
+  (6-21 before the run). Speed in Blood Run duels about 130 u/s throughout; walk 45%, crouch 31% of frames.
+- **Aim: much worse in the aim rooms.** Hit rate walk / jump / environment, before -> after: LG 87 / 90 / 69 ->
+  32 / 30 / 24; MG 88 / 84 / 73 -> 52 / 51 / 42; HMG 87 / 85 / 75 -> 40 / 41 / 19; plasma 55 / 53 / 51 ->
+  24 / 23 / 19; rail 90 / 88 / 85 -> 72 / 68 / 50; rockets 61 / 41 / 60 -> 43 / 31 / 32. He now keeps the
+  target in view about 87% of the time (30-45% before), so damage per second is about the same; the
+  precision is what went. With 5% of the time in aim rooms and a demo loss on the turn, nothing held it.
+- **What did not work:** equal thirds did not produce movement in fights; the demo loss on movement keys changed
+  his keys for an hour and self-play undid it; nine hours without progress in duels.
+- **Why (reading, not proven):** damage taken costs double what damage dealt pays, so avoiding each other is
+  rational in self-play; demos show pro situations, not his; courses teach speed with nothing to shoot.
+
 01:50: run-and-gun round built in the simulator (B-81), **not switched on** (`--lab-gun`, off by default): the
 runner has a weapon on the speed, slalom, ramps or turns course, a target keeps appearing 500-900 units ahead
 beside the path, and damage pays in proportion to his speed. First measurement with tonight's checkpoint (1016

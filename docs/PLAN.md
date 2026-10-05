@@ -47,15 +47,13 @@ same commit.
 
 ## Now
 
-Running until 07:00 on 2026-10-05: `duel_gru_v4` from 775 min. Blood Run self-play duels (half of the playing
-time; real duel spawn in half of them, no shotgun at spawn, item reward doubled), movement rooms on the test map
-(half; thirteen courses, the items room, a little aim), and imitation of pro players' movement keys from 367
-Blood Run demos (B-76, B-78). Every hour: ten minutes against Nightmare. Details and the smoke tests that set
-the demo weight: RESULTS 2026-10-04 21:12.
+Nothing is training. The night of 2026-10-04 (`duel_gru_v4` to 1361 min) made the courses much faster, left the
+duels where they were and cost a lot of aim (RESULTS 2026-10-04 21:12, "Result of the night").
 
-Next: read the night's result (does aim while moving recover, does speed in fights rise, the shotgun habit).
-Then Aerowalk and Lost World back in with their demos, B-79 (richer demo inputs), B-70 / B-71 / B-72 / B-75
-(new inputs and the atlas, one widening of the network), B-77.
+Proposed next run, waiting for the owner: arena self-play in the aim box and the environment box (his idea: no
+room to avoid each other), run-and-gun (B-81, built), Blood Run duels with the demo movement loss, courses with
+more time on the three unfinished ones, aim rooms back to 15%, items room with a random start. Open decisions:
+weight of damage taken, removing the walk key, a network-size test on the demos.
 
 Alongside: B-64 results for players; B-61 / B-69 public server.
 
