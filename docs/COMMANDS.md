@@ -9,6 +9,7 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 | `!note <text>` | Saves your comment with the game state at that moment (both positions, health, his weapon, whether he could see you, the room if one is running). Start with a tag: `aim`, `move`, `weapon`, `items`, `position`, `stuck`, `unfair`, `weird`, `good` |
 | `!map <name>` | Changes the map: `bloodrun`, `aerowalk`, `campgrounds`, or `bobbylab` (the test map) |
 | `!drill <weapon>` / `!drill off` | Both players get only that weapon (`rl`, `rg`, `lg`, `mg`, `sg`, `gl`, `pg`, `hmg`); `off` returns to the normal spawn weapons |
+| `!nosg` / `!nosg off` | Nobody spawns with a shotgun (it can still be picked up on the map); `off` returns to every weapon |
 | `!spar` / `!spar off` | You become a spectator and BobbyBones plays a Hardcore bot (skill 4) in a real match. `!spar off`, or joining the game, ends it |
 
 ## Test rooms

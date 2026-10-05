@@ -75,6 +75,8 @@ class duelbot(minqlx.Plugin):
                          usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
         self.add_command("rooms", self.cmd_rooms, 0)
         self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
+        self.add_command("nosg", self.cmd_nosg, 0, usage="<on|off>")
+        self.no_sg = False
         self.drill = None                                    # weapon drill: both players have only this weapon
         self.top_up = 0.0
         self.last = {}                                       # latest snapshot of both players, for notes
@@ -201,6 +203,15 @@ class duelbot(minqlx.Plugin):
             if p.team != "spectator" and p.state and p.state.health > 0:
                 self.give_loadout(p)
         self.msg("Drill: {}".format(self.drill or "off (normal loadout)"))
+
+    def cmd_nosg(self, player, msg, channel):
+        """!nosg: nobody spawns with a shotgun (it can still be picked up on the map). !nosg off: back to normal."""
+        self.no_sg = len(msg) < 2 or msg[1].lower() != "off"
+        self.record(event="nosg", on=self.no_sg, **self.score)
+        for p in self.players():
+            if p.team != "spectator" and p.state and p.state.health > 0:
+                self.give_loadout(p)
+        self.msg("Spawn weapons: {}".format("everything except the shotgun" if self.no_sg else "everything"))
 
     def cmd_spar(self, player, msg, channel):
         """!spar on: you become a spectator and Bobby plays a Hardcore bot (skill 4) (a real match). !spar off: back to you."""
@@ -410,6 +421,9 @@ class duelbot(minqlx.Plugin):
                 p.weapon(QLNUM[only])
             elif nine:
                 owned, ammo = E.LOADOUTS["all"]
+                if getattr(self, "no_sg", False):
+                    owned = tuple(k for k in owned if E.WEAPONS[k] != "sg")
+                    ammo = {k: v for k, v in ammo.items() if E.WEAPONS[k] != "sg"}
                 kw = {E.WEAPONS[k]: True for k in owned}
                 kw.update(mg=True, g=True)
                 p.weapons(reset=True, **kw)
