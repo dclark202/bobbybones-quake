@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
 FLOOR, WALL, BLOCK, TRIM = "base_floor/concretefloor1", "base_wall/concrete", "gothic_block/blocks18c", "base_floor/clang_floor"
 VOX = 8
-brushes, lights, spawns = [], [], []
+brushes, lights, spawns, extra = [], [], [], []      # extra: whole entities (triggers, items) as text
 
 
 def box(x0, y0, z0, x1, y1, z1, tex=WALL):
@@ -338,13 +338,123 @@ def main():
            [64, py_ + 256, 8], path, fall_z=-100, checkpoints=cps)
     # ---- rocket jumps: three ledges, each higher than a normal jump reaches
     ky = 28000
-    room(0, ky, 0, 3200, ky + 512, 1900)
-    tops = (224, 544, 944, 1584)                                                   # steps of 224, 320, 400 and 640 (two rockets)
+    room(0, ky, 0, 3200, ky + 512, 1500)
+    tops = (160, 384, 664, 1112)                                                   # steps of 160, 224, 280 and 448 (two rockets)
     for k, t_ in enumerate(tops):
         box(640 + k * 640, ky, 0, 3200, ky + 512, t_, BLOCK)
-    course("rocket", "Rocket jumps", "Rocket launcher, endless ammo: rocket-jump up four ledges (224, 320, 400, and 640: that one needs a double rocket jump).",
+    course("rocket", "Rocket jumps", "Rocket launcher, endless ammo: rocket-jump up four ledges (160, 224, 280, and 448: that one needs a double rocket jump).",
            [64, ky + 256, 8], [[64, ky + 256], [640, ky + 256], [1280, ky + 256], [1920, ky + 256], [2560, ky + 256], [3040, ky + 256]],
            weapon="rl", end_z=tops[-1] - 8)
+
+    # ================= rooms added 2026-10-04 (evening): bends, pads, drops, climb, dodge, peek, items =================
+    def strip(pts, width, z0, z1, tex=FLOOR):
+        """a platform along a polyline: one rectangle per leg, run on by half the width at both ends so legs join"""
+        for k in range(len(pts) - 1):
+            a_, b_ = pts[k], pts[k + 1]
+            l_ = math.hypot(b_[0] - a_[0], b_[1] - a_[1])
+            u = ((b_[0] - a_[0]) / l_, (b_[1] - a_[1]) / l_)
+            n = (-u[1] * width / 2, u[0] * width / 2)
+            s0 = (a_[0] - u[0] * width / 2, a_[1] - u[1] * width / 2)
+            s1 = (b_[0] + u[0] * width / 2, b_[1] + u[1] * width / 2)
+            prism([(s0[0] + n[0], s0[1] + n[1]), (s1[0] + n[0], s1[1] + n[1]), (s1[0] - n[0], s1[1] - n[1]),
+                   (s0[0] - n[0], s0[1] - n[1])], z0, z1, tex)
+
+    # ---- bends: a track with no walls over a pit; speed has to be carried through the bends by air-steering
+    by = 46000
+    d45 = 724.0                                                                   # 1024 along a 45 degree leg
+    B = [(256.0, by + 1500.0)]
+    for dx, dy in ((1024, 0), (d45, d45), (512, 0), (2 * d45, -2 * d45), (512, 0), (2 * d45, 2 * d45), (512, 0),
+                   (d45, -d45), (1024, 0)):
+        B.append((B[-1][0] + dx, B[-1][1] + dy))
+    BL = B[-1][0] + 256
+    room(0, by, -256, BL, by + 3000, 320)
+    strip(B, 320, -256, 0)
+    box(0, by + 1244, -256, 416, by + 1756, 0, FLOOR)                             # start pad
+    box(BL - 416, B[-1][1] - 256, -256, BL, B[-1][1] + 256, 0, FLOOR)             # end pad
+    course("bends", "Bends", "A track with no walls over a pit: carry your speed through the bends.",
+           [128, by + 1500, 8], [[128, by + 1500]] + [list(q) for q in B[1:]], fall_z=-100,
+           checkpoints=[[128, by + 1500, 8, 0]] + [[q[0], q[1], 8, 0] for q in B[1:-1:2]])
+
+    # ---- pads: a jump pad up to a ledge, a teleporter off it, a jump pad over a wall
+    py2 = 32000
+    yc = py2 + 256
+    room(0, py2, 0, 6400, py2 + 512, 1100)
+    box(1800, py2, 0, 3200, py2 + 512, 400, BLOCK)                                # the ledge
+    box(4600, py2, 0, 4700, py2 + 512, 300, BLOCK)                                # the wall
+    n_t = 0
+
+    def trigger(kind, x0, y0, z0, x1, y1, z1, dest, angle=None):
+        nonlocal n_t
+        n_t += 1
+        f = "( {} {} {} ) ( {} {} {} ) ( {} {} {} ) common/trigger 0 0 0 0.5 0.5 0 0 0"
+        p = [(x1, y1, z1, x1, y0, z1, x0, y1, z1), (x1, y1, z1, x0, y1, z1, x1, y1, z0), (x1, y1, z1, x1, y1, z0, x1, y0, z1),
+             (x0, y0, z0, x1, y0, z0, x0, y1, z0), (x0, y0, z0, x0, y0, z1, x1, y0, z0), (x0, y0, z0, x0, y1, z0, x0, y0, z1)]
+        br = "{\n" + "\n".join(f.format(*[int(round(v)) for v in q]) for q in p) + "\n}"
+        extra.append('{{\n"classname" "{}"\n"target" "lab_t{}"\n{}\n}}'.format(kind, n_t, br))
+        extra.append('{{\n"classname" "{}"\n"targetname" "lab_t{}"\n"origin" "{} {} {}"{}\n}}'.format(
+            "target_position" if kind == "trigger_push" else "misc_teleporter_dest", n_t, int(dest[0]), int(dest[1]), int(dest[2]),
+            "" if angle is None else '\n"angle" "{}"'.format(int(angle))))
+
+    box(1024 - 56, yc - 56, 0, 1024 + 56, yc + 56, 2, TRIM)                       # pad plates (what you see)
+    trigger("trigger_push", 1024 - 48, yc - 48, 2, 1024 + 48, yc + 48, 18, (1700, yc, 640))
+    box(3090, yc - 80, 400, 3100, yc + 80, 402, TRIM)                             # line in front of the teleporter
+    trigger("trigger_teleport", 3120, yc - 72, 400, 3168, yc + 72, 528, (3520, yc, 40), angle=0)
+    box(4200 - 56, yc - 56, 0, 4200 + 56, yc + 56, 2, TRIM)
+    trigger("trigger_push", 4200 - 48, yc - 48, 2, 4200 + 48, yc + 48, 18, (4650, yc, 520))
+    course("pads", "Jump pads and teleporter", "Jump pad up to the ledge, teleporter at its end, jump pad over the wall: keep moving.",
+           [64, yc, 8], [[64, yc], [1024, yc], [1800, yc], [3120, yc], [3520, yc], [4200, yc], [5100, yc], [6296, yc]])
+
+    # ---- drops: get down fast without fall damage (a fall of more than about 250 units hurts, 375 hurts more)
+    dy_ = 34000
+    room(0, dy_, 0, 4800, dy_ + 512, 1700)
+    for x0_, x1_, top in ((0, 640, 1280), (640, 1280, 1080), (1280, 1920, 840), (1920, 2880, 520), (2880, 4800, 80)):
+        box(x0_, dy_, 0, x1_, dy_ + 512, top, BLOCK)
+    box(1920, dy_ + 256, 520, 2240, dy_ + 512, 680, TRIM)                         # side ledges: the careful way down
+    box(2880, dy_ + 256, 80, 3200, dy_ + 512, 300, TRIM)
+    course("drops", "Drops", "Get to the bottom fast without fall damage: drops of 200, 240, 320 and 440; the side ledges split the big ones.",
+           [64, dy_ + 256, 1288], [[64, dy_ + 256], [4696, dy_ + 256]])
+
+    # ---- climb: ledges that each need a jump (40 high: more than a step, less than a jump)
+    cy_ = 36000
+    room(0, cy_, 0, 4200, cy_ + 512, 1100)
+    x, top = 512, 0
+    for k in range(18):
+        top += 40
+        depth = 160 if k % 3 else 96
+        box(x, cy_, 0, 4200, cy_ + 512, top, TRIM if k % 2 else BLOCK)
+        x += depth
+    course("climb", "Climb", "Eighteen ledges, each 40 high: jump up them without losing your rhythm.",
+           [64, cy_ + 256, 8], [[64, cy_ + 256], [x + 600, cy_ + 256]], end_z=top - 8, end_r=200)
+
+    # ---- dodge: a rocket turret at the far end; get to the line in front of it
+    oy = 38000
+    room(0, oy, 0, 3600, oy + 768, 320)
+    for k, px in enumerate(range(700, 2800, 500)):
+        box(px, oy + (120 if k % 2 else 520), 0, px + 64, oy + (248 if k % 2 else 648), 320, BLOCK)   # a little cover
+    box(3000, oy, 0, 3008, oy + 768, 1, TRIM)                                     # the finish line
+    box(3300, oy + 320, 0, 3500, oy + 448, 64, BLOCK)                             # the turret stands on this
+    course("dodge", "Rocket dodge", "A rocket turret fires at you from the far end: reach the line in front of it taking as little damage as you can.",
+           [64, oy + 384, 8], [[64, oy + 384], [3000, oy + 384]], end_r=400)
+    courses["dodge"]["turret"] = [3400, oy + 384, 72, 180]
+
+    # ---- peek: a rail duel through two gaps in a wall; the opponent stands in the open and does not move
+    ky2 = 40000
+    room(0, ky2, 0, 1600, ky2 + 1024, 320)
+    for y0_, y1_ in ((0, 300), (420, 604), (724, 1024)):
+        box(480, ky2 + y0_, 0, 512, ky2 + y1_, 320, BLOCK)
+    rooms["peek"] = dict(subject=[200, ky2 + 512, 8], yaw=0, target=[1300, ky2 + 512, 8], target_yaw=180,
+                         bounds=[0, ky2, 1600, ky2 + 1024])
+    spawns.append((200, ky2 + 512, 24, 0))
+
+    # ---- items: a ring corridor with a mega health and a red armor in opposite corners (35 s and 25 s timers)
+    iy = 42000
+    room(0, iy, 0, 3072, iy + 2048, 320)
+    box(512, iy + 512, 0, 2560, iy + 1536, 320, BLOCK)
+    extra.append('{{\n"classname" "item_health_mega"\n"origin" "{} {} 24"\n}}'.format(256, iy + 256))
+    extra.append('{{\n"classname" "item_armor_body"\n"origin" "{} {} 24"\n}}'.format(2816, iy + 1792))
+    rooms["items"] = dict(start=[1536, iy + 256, 8], yaw=0, mega=[256, iy + 256, 24], red_armor=[2816, iy + 1792, 24],
+                          bounds=[0, iy, 3072, iy + 2048], secs=120)
+    spawns.append((1536, iy + 256, 24, 0))
     rooms["courses"] = courses
     # ---- terrain stations: 3D copies of the real spots
     # The trick-jump copies (Campgrounds bridge to rail and pillars, Aerowalk and Blood Run red armor) were
@@ -382,6 +492,7 @@ def main():
     for x, y, z, a in spawns:
         ents.append('{{\n"classname" "info_player_deathmatch"\n"origin" "{} {} {}"\n"angle" "{}"\n}}'.format(
             int(x), int(y), int(z), int(a)))
+    ents += extra
     for x, y, z, v in lights:
         ents.append('{{\n"classname" "light"\n"origin" "{} {} {}"\n"light" "{}"\n}}'.format(int(x), int(y), int(z), v))
     os.makedirs(os.path.join(ROOT, "data", "lab", "maps"), exist_ok=True)

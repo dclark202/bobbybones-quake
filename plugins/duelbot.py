@@ -47,7 +47,7 @@ GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
 LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg", "hmg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
-    [["move", "*"]] + \
+    [["move", "*"]] + [["peek"], ["items"]] + \
     [["fight", "nightmare"]]
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
     [["aim", w, "fast", b] for w in ("lg", "rg", "rl") for b in ("close", "far")] + \
@@ -231,6 +231,7 @@ class duelbot(minqlx.Plugin):
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
+            player.tell("!room peek (45 s): rail duel through gaps in a wall | !room items (120 s): time the mega and the red armor")
             player.tell("!room fight nightmare (60 s): the game's Nightmare bot")
             player.tell("!room fight <{}> (30 s): scripted styles".format("|".join(self.R.PERSONAS)))
             player.tell("!room suite = every room, about 20 minutes | !room off")
@@ -289,6 +290,12 @@ class duelbot(minqlx.Plugin):
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
                 key = "speed" if a[0] == "speed" else a[1]
                 return dict(kind="speed", lab=True, name="move/" + key, script=0, secs=30, key=key)
+            if a[0] == "peek" and "peek" in self.lab:
+                return dict(kind="ladder", lab=True, name="peek", style=0, script=2, secs=45, where="peek",
+                            persona=R.PERSONAS.index("stander"))
+            if a[0] == "items" and "items" in self.lab:
+                return dict(kind="solo", lab=True, name="items", script=0, secs=int(self.lab["items"].get("secs", 120)),
+                            where="items")
             if a[0] == "fight" and (len(a) < 2 or a[1] in ("hardcore", "nightmare")):
                 # the game's own Nightmare bot: our control of Bobby's body is released for the room
                 return dict(kind="ladder", lab=True, name="fight/nightmare", style=0, script=0, secs=60, ai=True)
@@ -781,6 +788,8 @@ class duelbot(minqlx.Plugin):
             return ("Rocket launcher. " if c_.get("weapon") == "rl" else "Gauntlet only. ") + c_.get("hint", c_["name"])
         if k == "move":
             return "Gauntlet only. Run to the item named on screen."
+        if k == "solo" and r.get("where") == "items":
+            return "Gauntlet only. Mega health (35 s) and red armor (25 s) in opposite corners: be there each time one comes back."
         if k == "solo":
             return "All weapons. Collect what you would in a real game."
         if k == "ladder":
@@ -788,6 +797,8 @@ class duelbot(minqlx.Plugin):
                      "rusher": "rockets, always closing in", "tracker": "LG at mid range",
                      "dodger": "dodges, backs off when hurt", "stander": "stands still",
                      "jumper": "runs at you, always jumping", "spammer": "fires blind"}.get(r["name"].split("/")[-1], "")
+            if r.get("where") == "peek":
+                return "Railgun only. He stands in the open and shoots back: deal damage through the gaps, take as little as you can."
             if r.get("ai"):
                 return "All weapons, your choice. Play to win. Opponent: the game's Nightmare bot."
             return "All weapons, your choice. Play to win. Opponent: {} ({}).".format(r["name"].split("/")[-1], style)
@@ -809,13 +820,21 @@ class duelbot(minqlx.Plugin):
                 human.weapons(reset=True, g=True, rl=True)   # rocket-jump course
                 human.ammo(rl=25)
                 human.weapon(QLNUM["rl"])
-            elif r["kind"] in ("move", "terrain", "speed"):
+            elif r["kind"] in ("move", "terrain", "speed") or r.get("where") == "items":
                 self.gauntlet_only(human)
+            elif r.get("where") == "peek":
+                self.give_loadout(human, R, only="rg")
             else:
                 self.give_loadout(human, R, only="")
             r["ammo"] = None
         if only in (None, "bobby"):
-            if r["kind"] == "ladder":
+            if r.get("where") == "peek":
+                self.give_loadout(bobby, R, only="rg", boost=3)
+            elif r["kind"] == "speed" and self.lab and "turret" in self.lab["courses"][r["key"]]:
+                bobby.weapons(reset=True, g=True, rl=True)   # the rocket turret of the dodge room
+                bobby.ammo(rl=50)
+                bobby.weapon(QLNUM["rl"])
+            elif r["kind"] == "ladder":
                 self.give_loadout(bobby, R, only="", boost=3)
             else:
                 bobby.weapons(reset=True, g=True)
@@ -1069,6 +1088,28 @@ class duelbot(minqlx.Plugin):
                     if not (h_[0] <= bpos[0] <= h_[2] and h_[1] <= bpos[1] <= h_[3]):
                         self.put(bobby, r["home"], byaw)     # far outside (knocked out): put it back
                 keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
+        elif r["kind"] == "ladder" and r.get("where") == "peek":
+            pk = self.lab["peek"]
+            if not r.get("placed"):
+                r["placed"] = True
+                self.put(human, pk["subject"], pk["yaw"], human=True)
+                self.put(bobby, pk["target"], pk["target_yaw"])
+                env.mv[:] = 0
+            b_ = pk["bounds"]
+            if not (b_[0] <= hpos[0] <= b_[2] and b_[1] <= hpos[1] <= b_[3]) and hs.health > 0:
+                self.put(human, pk["subject"], pk["yaw"], human=True)
+            if math.hypot(bpos[0] - pk["target"][0], bpos[1] - pk["target"][1]) > 200:
+                self.put(bobby, pk["target"], pk["target_yaw"])
+            a = env._script_actions(np.array([1]))[0].copy()
+            a[0], a[1], a[2] = 1, 1, 0                       # he aims and shoots but does not move
+            if len(a) > 6:
+                a[6] = 0
+            keys = self.drive(bobby, env, R, 1, a, bpitch, byaw, only="rg")[4]
+            if bs.ammo.rg < 10:
+                bobby.ammo(rg=40)
+            if hs.ammo.rg < 10:
+                human.ammo(rg=40)
+                r["ammo"] = None
         elif r["kind"] == "ladder":
             if r.get("lab"):
                 if not r.get("placed"):
@@ -1081,13 +1122,41 @@ class duelbot(minqlx.Plugin):
             a = env._script_actions(np.array([1]))[0]
             keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
         elif r["kind"] in ("terrain", "speed"):
-            minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
+            tur = self.lab["courses"][r["key"]].get("turret") if r["kind"] == "speed" else None
+            if tur:                                          # the rocket turret: stands still, leads its target
+                if not r.get("turret_on") or math.hypot(bpos[0] - tur[0], bpos[1] - tur[1]) > 64:
+                    r["turret_on"] = True
+                    self.put(bobby, tur[:3], tur[3])
+                if bs.ammo.rl < 10:
+                    bobby.ammo(rl=50)
+                eye_ = np.array([bpos[0], bpos[1], bpos[2] + R.VIEW_H], np.float32)
+                aim = np.array([hpos[0], hpos[1], hpos[2] - 16.0], np.float32)      # at the feet, for splash
+                for _ in range(2):                           # where he will be when the rocket gets there
+                    t_fly = float(np.linalg.norm(aim - eye_)) / 1000.0
+                    aim = np.array([hpos[0] + hvel[0] * t_fly, hpos[1] + hvel[1] * t_fly, hpos[2] - 16.0], np.float32)
+                dv = aim - eye_
+                tyaw = math.degrees(math.atan2(dv[1], dv[0]))
+                tpit = -math.degrees(math.atan2(dv[2], math.hypot(dv[0], dv[1])))
+                minqlx.set_bot_input(bobby.id, 0, 0, 0, 1 if hs.health > 0 else 0, QLNUM["rl"], tpit, tyaw)
+            else:
+                minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
             if hs.health > 0:
                 self.lab_terrain(now, human, hpos, hvel, hground)
+        elif r.get("where") == "items":
+            it = self.lab["items"]
+            minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
+            b_ = it["bounds"]
+            if not r.get("placed") or not (b_[0] <= hpos[0] <= b_[2] and b_[1] <= hpos[1] <= b_[3]):
+                r["placed"] = True
+                self.put(human, it["start"], it["yaw"], human=True)
+            if hs.health > 0 and (hs.health != 100 or hs.armor != 0):
+                human.health = 100                           # always able to pick both items up
+                human.armor = 0
+                self.tot.pop("opp", None)
         else:
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, byaw)
         dmg, los = self.log_frame(now, env, 1, bobby, human, bs, hs, keys, "room:" + r["name"])
-        if r["kind"] in ("aim", "choice") and bs.health > 0 and (bs.health < 150 or bs.armor > 0):
+        if (r["kind"] in ("aim", "choice") or r.get("where") == "peek") and bs.health > 0 and (bs.health < 150 or bs.armor > 0):
             bobby.health = 200                               # the target never dies; its damage was counted above
             bobby.armor = 0
             self.tot["bobby"] = 200
@@ -1138,7 +1207,7 @@ class duelbot(minqlx.Plugin):
             elif now > r["said"]:
                 r["said"] = now + 2
                 human.center_print("Go to: ^3{}".format(GOAL_NAMES[self.goal_labels[r["goal"]]]))
-        if r["kind"] != "ladder" and 0 < hs.health < 150:
+        if (r["kind"] != "ladder" or r.get("where") == "peek") and r.get("where") != "items" and 0 < hs.health < 150:
             human.health = 200                               # the subject cannot die in a test room (fights excepted)
             self.tot.pop("opp", None)
         if now >= r["t_end"]:
@@ -1172,7 +1241,11 @@ class duelbot(minqlx.Plugin):
         elif r["kind"] == "speed":
             res = dict(finished=1.0 if "best" in m else 0.0, time=m["best"] if "best" in m else -1.0,
                        distance=m.get("dist", 0.0), top_speed=r.get("top", 0.0), mean_speed=m["speed"] / f,
-                       falls=m.get("falls", 0), height=m.get("height", 0.0))
+                       falls=m.get("falls", 0), height=m.get("height", 0.0), damage_taken=m["dmg_taken"])
+        elif r["kind"] == "solo" and r.get("where") == "items":
+            p = m["picks"]
+            res = dict(mega=p.get("mega", 0), mega_possible=1 + int(r["secs"] // 35), red_armor=p.get("red_armor", 0),
+                       red_armor_possible=1 + int(r["secs"] // 25), mean_speed=m["speed"] / f)
         elif r["kind"] == "solo":
             p = m["picks"]
             res = dict(mega_per_min=p.get("mega", 0) / mins, red_armor_per_min=p.get("red_armor", 0) / mins,

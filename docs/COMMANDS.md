@@ -26,6 +26,13 @@ and prints your result in chat. `!rooms` lists the rooms for the current map; `!
 | `!room aim <weapon> jump` | Aim box: the same movement, with jumping | 25 s |
 | `!room aim <weapon> env` | Environment box (pillars, cover): the target moves at random | 45 s |
 | `!room move <course>` | Movement course, 30 s or until you reach the end. Courses: `speed` (flat 20,000-unit straight), `circle` (gaps that each need one circle jump from a standing start), `twohop` (gaps that need a circle jump plus one strafe jump), `ramps` (ramps and stairs), `slalom` (walls from alternating sides), `turns` (45, 90, 135 degree turns and a hairpin), `narrow` (a beam over a pit, 96 down to 32 wide), `pillars` (hop from pillar to pillar), `rocket` (rocket-jump up four ledges, the last needs a double rocket jump; rocket launcher). A fall puts you back at the last checkpoint | up to 30 s |
+| `!room move bends` | A track with no walls over a pit, with 45-degree bends: carry speed by air-steering | 30 s |
+| `!room move pads` | Jump pad up to a ledge, a teleporter at its end, a jump pad over a wall | 30 s |
+| `!room move drops` | Get down 1200 units fast without fall damage (drops of 200, 240, 320, 440; side ledges split the big ones). Reports damage taken | 30 s |
+| `!room move climb` | Eighteen ledges, each 40 high (a jump each) | 30 s |
+| `!room move dodge` | A rocket turret fires at you from the far end of a corridor with a little cover: reach the line in front of it. Reports damage taken | 30 s |
+| `!room peek` | Rail duel through two gaps in a wall; the opponent stands in the open and shoots back. Damage dealt and taken (in the suite) | 45 s |
+| `!room items` | A ring corridor with a mega health (35 s) and a red armor (25 s) in opposite corners, gauntlet only: how many of the possible pickups you get (in the suite) | 120 s |
 | `!room fight nightmare` | A fight in the environment box against the game's own Nightmare bot (in the suite) | 60 s |
 | `!room fight <style>` | The same against a scripted style: `allround`, `sniper`, `rusher`, `tracker`, `dodger`, `stander`, `jumper`, `spammer` (not in the suite) | 30 s |
 

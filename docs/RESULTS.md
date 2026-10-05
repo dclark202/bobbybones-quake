@@ -5,6 +5,18 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-04 20:05 — test map: seven more rooms, rocket ledges lowered (owner)
+
+- New: `move bends`, `move pads` (jump pads and a teleporter: the map builder now writes trigger and item
+  entities), `move drops`, `move climb`, `move dodge` (Bobby's body is a rocket turret that leads its target),
+  `peek` (rail duel through gaps; the opponent stands still and shoots back; nobody dies), `items` (mega health
+  and red armor on their real timers in a ring corridor).
+- Rocket ledges about 30% lower: steps of 160, 224, 280 and 448 (was 224, 320, 400, 640).
+- Checked in the simulator: floors along every path; a player holding forward takes the first pad onto the
+  ledge, is teleported, takes the second pad over the wall and reaches the end; the climb works with hops.
+  Not yet seen in the game itself: the turret, the peek duel and the items room are new server code.
+- Spawn weapons are now limited to the weapons that lie on the map (simulator and server).
+
 ## 2026-10-04 19:45 — test map: owner's review of the new movement rooms
 
 - `turns` was an empty room: its corridor walls were dropped by the map compiler (footprints wound the wrong way).
