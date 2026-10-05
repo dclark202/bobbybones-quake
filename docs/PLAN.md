@@ -37,17 +37,17 @@ same commit.
 | 1 | Movement policy: strafe jumping emerged, transfers live (time ratio 1.01) | done |
 | 2 | Simulator-built nav graphs, one movement policy on three maps | done (live 67-100% of trips) |
 | 3 | Duel simulator: nine weapons, items and pickups, switch time measured on a real server; sounds, clock, crouch, walk, fall damage; human aim limits | done; unmeasured values listed in B-14, B-37, B-53 |
-| 3 | Self-play with memory (GRU, league, scripted opponent styles) | `duel_gru_v3` done (489 min); `duel_gru_v4` running until 19:00 |
-| 3 | Play-test server: plays a trained network, session logs, notes, test rooms with a human as the subject | done for networks up to `duel_gru_v3`; plugin update for v4 open (B-57) |
+| 3 | Self-play with memory (GRU, league, scripted opponent styles) | `duel_gru_v3` done (489 min); `duel_gru_v4` done (775 min, self-play only since 650 min) |
+| 3 | Play-test server: plays a trained network, session logs, notes, test rooms with a human as the subject | done, including networks trained under the newer rules |
 | 3 | Test suite: fixed rooms and scorecards, in the simulator and on the server; test map `bobbylab` | done (aim rooms, nine movement courses, Nightmare fight); first human card recorded |
-| 3 | A duel network that beats Nightmare | not yet: `duel_gru_v3` went 2-2 then 5-11 in mixed live minutes; `duel_gru_v2` 0-10 |
+| 3 | A duel network that beats Nightmare | not yet: `duel_gru_v4` 6-21 in ten minutes; `duel_gru_v3` 2-2 then 5-11 in mixed live minutes |
 | 4 | Pro demos | 374 parsed; planned use: routes and positions for the map atlas (B-75, B-73) |
 | 5 | Public servers and community play tests | scoped (HOSTING.md); waits for a decent Bobby and the plugin update |
 | 6 | Opponent profiles, player reports | later |
 
 ## Now
 
-Running: `duel_gru_v4` (continues `duel_gru_v3`, widened to 311 inputs), until 19:00 on 2026-10-04.
+Finished: `duel_gru_v4` (continues `duel_gru_v3`, widened to 311 inputs), 775 min, 2026-10-04 19:00. Since 17:32: self-play only, duels 50% / lab courses 30% / stock movement 10% / aim 10%, no shotgun at spawn. The game's bots are a benchmark only (ten minutes against Nightmare per checkpoint).
 In it: B-47 new inputs, B-48 round-level memory and longer horizon, B-49 crouch / walk / fall damage, B-58 human
 aim limits, B-59 random loadouts and two-sided damage (damage taken weighs double), B-44 opponent styles,
 B-68 lab courses (speed, slalom, ramps) and lab aim rooms. Playing time: normal duels 44%, lab courses 22%,

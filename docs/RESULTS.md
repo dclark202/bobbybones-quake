@@ -19,6 +19,24 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 |---|---|---|---|---|---|
 | 686 (before this change) | 1-10 | 1320 / 1278 | 95 u/s | 10% | shotgun 86% |
 | 704 (22 min after) | 7-5 | 1355 / 872 | 120 u/s | 12% | shotgun 87% |
+| 775 (final, ten minutes) | 6-21 (5-10 at five minutes) | 2625 / 2814 | 116 u/s | 12% | shotgun 87% |
+
+The 7-5 was a lucky five minutes: over ten minutes the final checkpoint lost 6-21. Benchmarks need ten minutes or more.
+
+### `duel_gru_v4` final (775 min, 19:00)
+- Training (self-play only for the last two hours): frag share LG 32%, HMG 16%, rail 14%, SG 10%, MG 10%, RL 9%,
+  PG 8%; hit rates LG 72%, rail 84%, RL 56%; 7.4 switches a minute; blind fire 0.0%; crouch 29% and walk 39% of
+  frames (rose all afternoon); enemy in view 9% of the time.
+- Courses in training: speed 679 u/s, ramps 549, slalom 406. Lab card (`suite/lab_0775`): speed straight mean
+  704 u/s (owner 718), ramps 581 (owner 605), slalom 405 (owner 550). Untrained courses (circle, twohop, turns,
+  narrow, pillars, rocket): none finished.
+- Lab aim rooms: hit rates at or above the owner's (LG 87 / 90 / 70% against 51 / 89 / 55; rail 90 / 88 / 85
+  against 70 / 100 / 57; rockets below: 61 / 41 / 60 against 89 / 83 / 88), but damage per second is mostly
+  lower than his because he has the target in view only 20-45% of the time with the tracking weapons: he looks
+  away between bursts.
+- What did not work: with every weapon in hand at spawn he still holds the shotgun 87% of the time and walks
+  (116 u/s) on a real server; movement speed from the courses does not carry into fights; he loses clearly to
+  Nightmare.
 
 ## 2026-10-04 16:30-17:10 — `duel_gru_v4` on a real server (plugin update, B-57)
 
