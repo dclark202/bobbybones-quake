@@ -131,6 +131,10 @@ FIRE_TOGGLE_COST = 0.003                               # reward cost each time t
 LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loadouts draw from (all but machine gun, gauntlet)
 #                                                       older note: default 25 ms (one frame): what a player knows about the opponent lags.
                                                        # Was 6 (150 ms) up to duel_gru_v2; per run: env.react_frames / --react-ms
+# (2026-10-05) He reads where the enemy is against his crosshair only this well: a slowly drifting error, in degrees,
+# on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
+# gap between crosshair and target by eye, not to a hundredth of a degree.
+PERCEPT_SIGMA, PERCEPT_TAU = 0.5, 0.15                  # degrees; seconds over which the error drifts
 MOUSE_SMOOTH = 0.5                                     # view velocity inertia per frame
 JERK_COST = 0.00002                                    # reward cost per degree/frame of change in the turn command
 FOV_COS = math.cos(math.radians(55))
@@ -348,6 +352,8 @@ class DuelEnv:
         self.arena_rooms = (1, 2)                       # rooms used for arena rounds: 1 = aim box, 2 = environment box
         self.arena_sets = None                          # or a list of weapon sets: each player draws his own (uneven fights)
         self.arena_full_p = 0.5                         # share of arena rounds with the full weapon set (else two random weapons)
+        self.percept = np.zeros((self.n, 2), np.float32)  # error on the seen direction to the enemy (yaw, pitch), degrees
+        self.percept_sigma = PERCEPT_SIGMA
         self.vel_frames = VEL_REACT_FRAMES              # delay on the enemy's velocity (see observe)
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
@@ -1059,6 +1065,15 @@ class DuelEnv:
             self.opp_hist.pop(0)
         known, visible, _, seen_t = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.react_frames)]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
+        if self.percept_sigma > 0:                           # the enemy is seen a little off from where he is
+            rho = math.exp(-DT / PERCEPT_TAU)
+            self.percept = (rho * self.percept + math.sqrt(1.0 - rho * rho) * self.percept_sigma *
+                            self.rng.normal(0, 1, (n, 2))).astype(np.float32)
+            t_ = known - eye
+            hd_ = np.hypot(t_[:, 0], t_[:, 1]) + 1e-6
+            d_ = np.linalg.norm(t_, axis=1)
+            off = np.tan(np.radians(self.percept)) * d_[:, None] * (visible & (self.script == 0))[:, None]
+            known = known + np.stack([-t_[:, 1] / hd_ * off[:, 0], t_[:, 0] / hd_ * off[:, 0], off[:, 1]], 1).astype(np.float32)
         rel = rot(known - pos) / 1000.0
         exact = visible.astype(np.float32)
         ovel = rot(opp_vel) / 400.0 * exact[:, None]
