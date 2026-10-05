@@ -50,6 +50,13 @@ Owner's plan: three parts of equal weight, Blood Run only for the real map. What
 | 00:15 | 955 | 777 (first finishes on circle) | 79% | 12 deg | 21% / 33% | 11% | 1-18, 975 / 2155 damage, 135 u/s, in view 9%, shotgun held 80% | 168 u/s, above 330 u/s 6%, in view 12% |
 | 01:15 | 1016 | 814 | 80% | 18 deg | 16% / 25% | 7% | 0-21, 870 / 2485 damage, 113 u/s, in view 10%, shotgun held 79% | 133 u/s, above 330 u/s 4%, in view 12% |
 
+01:50: run-and-gun round built in the simulator (B-81), **not switched on** (`--lab-gun`, off by default): the
+runner has a weapon on the speed, slalom, ramps or turns course, a target keeps appearing 500-900 units ahead
+beside the path, and damage pays in proportion to his speed. First measurement with tonight's checkpoint (1016
+min, lightning gun): on the speed straight he runs 735 u/s alone and 295 u/s with a target in view (in view
+99% of the time, 1397 damage a minute); turns 401 -> 294 u/s. He slows to walking pace to shoot: this round
+measures exactly the habit it is meant to train away.
+
 22:20: the speed is in the courses only. In Blood Run duels in the simulator he still moves at 136 u/s and the
 two players see each other 8% of the time: self-play duels have become avoiding each other. Given every weapon
 he still takes the shotgun (76%). Left running as planned; this is the finding to act on in the morning

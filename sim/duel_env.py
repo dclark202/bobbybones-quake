@@ -284,6 +284,13 @@ class DuelEnv:
         self.lab_len = np.full(n_matches, 30.0, np.float32)     # length of the lab round each match is in
         self.items_room = np.zeros(nn2, bool)           # player is in the items room (mega health and red armor on timers)
         self.lab_items_p = 0.0                          # chance that a course round is the items room instead
+        # Run-and-gun (off unless lab_gun_p > 0): the first player runs a course with a weapon, the second is a
+        # target that keeps appearing ahead of him beside the path. Damage pays in proportion to the runner's speed.
+        self.lab_gun_p = 0.0
+        self.gun_courses = ("speed", "ramps", "slalom", "turns")
+        self.gun = np.zeros(nn2, bool)                  # player is a run-and-gun runner
+        self.gun_w = np.zeros(n_matches, np.int64)      # his weapon
+        self.gun_tp = np.zeros(n_matches, np.float32)   # how far along the path the target stands
         self.items_len = 120.0
         if self.lab is not None:
             for key, c_ in self.lab.get("courses", {}).items():
@@ -347,6 +354,7 @@ class DuelEnv:
         self.opp_hist = []                              # delayed opponent state (reaction time)
         self.stats = dict(frags=0, suicides=0, dmg=0.0, self_dmg=0.0, jerk=0.0,
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
+                          gun=np.zeros(3),                # run-and-gun: damage dealt, runner frames, sum of runner speed
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
@@ -438,6 +446,9 @@ class DuelEnv:
             self.has[i, RL], self.ammo[i, RL], self.weapon[i] = True, 25, RL
         if C["mortal"]:
             self.hp[i] = 1.0                                # any fall damage at all ends the attempt
+        if self.gun[i]:
+            self._gun_arm(i)
+            self._gun_place(i // 2)
         self.stats["course"][c, 0] += 1
 
     def _course_close(self, i, finished):
@@ -460,7 +471,39 @@ class DuelEnv:
         self.w.reset(i, (C["cps"][k, 0], C["cps"][k, 1], C["cps"][k, 2] + 2.0), (0, 0, 0), float(C["cyaw"][k]))
         self.yaw[i], self.pitch[i], self.mv[i] = float(C["cyaw"][k]), 0.0, 0.0
         self.hp[i], self.armor[i] = (1.0 if C["mortal"] else SPAWN_HP), 0.0
+        if self.gun[i]:
+            self._gun_arm(i)
         self.stats["course"][int(self.course[i]), 7] += 1
+
+    def _gun_arm(self, i):
+        w_ = int(self.gun_w[i // 2])
+        self.has[i, w_], self.ammo[i, w_], self.weapon[i] = True, AMMO_MAX[w_], w_
+
+    def _gun_place(self, m):
+        """put the target of a run-and-gun round beside the path, 500 to 900 units ahead of the runner"""
+        a_, b_ = 2 * m, 2 * m + 1
+        C = self.courses[int(self.course[a_])]
+        tp = min(float(self.prog[a_]) + float(self.rng.uniform(500, 900)), C["length"] - 150.0)
+        x = float(np.interp(tp, C["cum"], C["path"][:, 0]))
+        y = float(np.interp(tp, C["cum"], C["path"][:, 1]))
+        k = int(np.clip(np.searchsorted(C["cum"], tp) - 1, 0, len(C["seg_len"]) - 1))
+        d = (C["path"][k + 1] - C["path"][k]) / C["seg_len"][k]
+        off = float(self.rng.uniform(-120, 120))
+        x, y = x - d[1] * off, y + d[0] * off
+        z = float(self.state[a_, 2])
+        for up_ in (40.0, 120.0, 220.0, 340.0):             # the floor there: start inside the room, not in a ramp or the ceiling
+            top = float(self.state[a_, 2]) + up_
+            t = self.w.trace(np.array([x, y, top], np.float32), np.array([x, y, top - 2000.0], np.float32))
+            if t["fraction"] > 0.001:
+                z = float(t["endpos"][2]) + 26.0
+                break
+        self.gun_tp[m] = tp
+        self.lab_home[m] = (x, y, z)
+        self.lab_zone[m] = (x - 220, y - 220, x + 220, y + 220)
+        self.lab_jump[m] = self.rng.random() < 0.5
+        ty = float(self.rng.uniform(-180, 180))
+        self.w.reset(b_, (x, y, z + 2.0), (0, 0, 0), ty)
+        self._fresh(b_, ty)
 
     def _course_step(self, reward):
         """movement courses: progress along the path, falls, the finish. Returns True if anybody was moved."""
@@ -491,6 +534,14 @@ class DuelEnv:
             self.stats["course"][c, 6] += len(idx)
             if C["weapon"] == "rl":
                 self.ammo[idx, RL] = 25
+            for i in idx[self.gun[idx]]:
+                m_ = int(i) // 2
+                self.ammo[i, self.gun_w[m_]] = AMMO_MAX[self.gun_w[m_]]
+                self.stats["gun"][1] += 1
+                self.stats["gun"][2] += float(np.hypot(s[i, 3], s[i, 4]))
+                if self.prog[i] > self.gun_tp[m_] - 150.0 and self.gun_tp[m_] < C["length"] - 160.0:
+                    self._gun_place(m_)
+                    moved = True
             end = C["path"][-1]
             at_end = (np.hypot(pos[:, 0] - end[0], pos[:, 1] - end[1]) < C["end_r"]) & \
                 ((pos[:, 2] >= C["end_z"]) if C["end_z"] is not None else True)
@@ -520,6 +571,7 @@ class DuelEnv:
         self.goal[a_] = self.goal[b_] = -1
         self.course[a_] = self.course[b_] = -1
         self.items_room[a_] = self.items_room[b_] = False
+        self.gun[a_] = self.gun[b_] = False
         self.lab_len[m] = self.lab_aim_len if kd == AIM else self.course_len
         self.load_sets[a_] = self.load_sets[b_] = None
         self.frags_r[a_] = self.frags_r[b_] = 0
@@ -566,6 +618,12 @@ class DuelEnv:
             self.hp[a_], self.armor[a_] = 100.0, 0.0
             self.items_room[a_] = True
             self._course_start(b_, int(rng.choice(self.lab_course_ids)))
+        elif (f and f.get("gun")) or (not f and rng.random() < self.lab_gun_p):
+            ids = [k for k, C in enumerate(self.courses) if C["key"] in self.gun_courses]
+            self.gun_w[m] = int(f["weapon"]) if (f and "weapon" in f) else int(rng.choice(self.aim_weapons))
+            self.gun[a_] = True
+            self.script[b_] = 1
+            self._course_start(a_, int(f["course"]) if (f and "course" in f) else int(rng.choice(ids)))
         else:
             for q in (a_, b_):
                 self._course_start(q, int(f["course"]) if f else int(rng.choice(self.lab_course_ids)))
@@ -1097,9 +1155,9 @@ class DuelEnv:
         fall = np.where(land & (prev[:, 5] < 0), np.where(delta > FALL_FAR, 10.0, np.where(delta > FALL_MED, 5.0, 0.0)), 0.0)
         fallers = np.nonzero(fall > 0)[0]
         reward -= SWITCH_COST * sw
-        blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & (pkind != COURSE)
+        blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         reward -= BLIND_FIRE_COST * blind
-        fight = human & (pkind != MOVE) & (pkind != COURSE)
+        fight = human & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         self.stats["switches"] += int((sw & fight).sum())
         self.stats["fire_frames"] += int((fire & fight).sum())
         self.stats["blind_frames"] += int((blind & fight).sum())
@@ -1256,6 +1314,10 @@ class DuelEnv:
         opp_all = ar ^ 1
         dealt = np.where(attacker[opp_all] == ar, dmg_taken[opp_all], 0.0)
         taken = dmg_taken + fall                            # from the opponent, own splash and falls alike
+        if self.gun.any():                                  # run-and-gun: damage pays by how fast the runner is moving
+            gsp = np.clip(np.hypot(s[:, 3], s[:, 4]) / 320.0, 0.0, 1.5)
+            self.stats["gun"][0] += float(dealt[self.gun].sum())
+            dealt = np.where(self.gun, dealt * gsp, dealt)
         reward += self.dmg_reward * (dealt - DMG_TAKEN_W * taken)   # getting hurt costs more than hurting pays
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
@@ -1446,7 +1508,7 @@ class DuelEnv:
         if len(cand):
             vis[cand] = self._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
         pkind = np.repeat(self.kind, 2)
-        vis &= (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)   # movement / solo / course: no other player
+        vis &= (pkind != MOVE) & (pkind != SOLO) & ((pkind != COURSE) | self.gun)   # movement / solo / course: no other player
         self.visible = vis
         heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
         vh = np.nonzero(vis & (self.script == 0))[0]        # aim quality while the opponent is in view

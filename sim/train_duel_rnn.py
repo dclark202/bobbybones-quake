@@ -28,7 +28,7 @@ DT_MIN = 0.025 / 60.0
 
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
-           teacher, lab_courses, lab_p, loadout_p, lab_items_p):
+           teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from duel_env import DuelEnv
@@ -45,6 +45,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     if loadout_p:
         env.loadout_p = loadout_p
     env.lab_items_p = lab_items_p
+    env.lab_gun_p = lab_gun_p
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     from duel_env import WEAPONS
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
@@ -95,6 +96,8 @@ def main():
     ap.add_argument("--lab-p", default="0.29,0.71", help="test map: share of playing time in aim rooms / movement courses")
     ap.add_argument("--loadout-p", default="", help="normal rounds, share by spawn: random 1-2 weapons, real duel spawn "
                     "(machine gun and gauntlet), every weapon on the map, the same single weapon for both")
+    ap.add_argument("--lab-gun", type=float, default=0.0, help="test map: chance that a course round is run-and-gun "
+                    "(a weapon, a target ahead beside the path, damage paid by the runner's speed)")
     ap.add_argument("--lab-items", type=float, default=0.0, help="test map: chance that a course round is the items room")
     ap.add_argument("--lab-courses", default="speed,slalom,ramps",
                     help="movement courses of the test map (bobbylab) used when that map is in --map")
@@ -145,7 +148,7 @@ def main():
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
-                                        tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items),
+                                        tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -417,6 +420,8 @@ def main():
                                      finishes_per_min=round(float(agg["course"][k_, 1] / max(1.0, agg["course"][k_, 6]) * 2400), 2),
                                      falls_per_min=round(float(agg["course"][k_, 7] / max(1.0, agg["course"][k_, 6]) * 2400), 2))
                            for k_, key in enumerate(course_keys) if agg["course"][k_, 6] > 0},
+                   run_and_gun=dict(damage_per_min=round(float(agg["gun"][0] / max(1.0, agg["gun"][1]) * 2400), 1),
+                                    speed=int(agg["gun"][2] / max(1.0, agg["gun"][1]))),
                    teach=[round(kick, 3), round(float(kick_l), 3)],
                    items_room=dict(mega_per_2min=round(float(agg["lab_items"][0] / max(1.0, agg["lab_items"][2]) * 4800), 2),
                                    red_armor_per_2min=round(float(agg["lab_items"][1] / max(1.0, agg["lab_items"][2]) * 4800), 2)),

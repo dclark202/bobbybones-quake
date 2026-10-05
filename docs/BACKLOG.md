@@ -142,7 +142,7 @@ Priority: P1 = blocks beating Nightmare, P2 = needed for good play, P3 = later.
 | B-78 | P1 | in training (2026-10-04 night) | Items room, 1-health drops and the newer courses in the simulator's lab mode; spawn weapons only from the map; real duel spawn in half of the duels; no shotgun at spawn | Owner 2026-10-04 |
 | B-79 | P2 | open | Demo data: add enemy health (from damage events), sounds and hit feedback to the converted inputs, then try imitating mouse and trigger again | The reason the mouse cannot be imitated today |
 | B-80 | P2 | open | Test map cleanup at the next rebuild: remove the unused peek room; `dodge` turret in the simulator | |
-| B-81 | P1 | open | Run-and-gun: a test room and a training round where aiming only counts while moving (for example targets along a course, or an aim room where damage is scored by the shooter's own speed), so that speed and aim are learned together | Owner 2026-10-04: after the demo loss he moves fast but his aim error in view doubled; aim alone is cheap to get back, aim while moving is the skill |
+| B-81 | P1 | built in the simulator, not in training, no server room yet (RESULTS 2026-10-04 night, 01:50) | Run-and-gun: a test room and a training round where aiming only counts while moving (for example targets along a course, or an aim room where damage is scored by the shooter's own speed), so that speed and aim are learned together | Owner 2026-10-04: after the demo loss he moves fast but his aim error in view doubled; aim alone is cheap to get back, aim while moving is the skill |
 
 ## Dropped
 
