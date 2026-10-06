@@ -45,6 +45,7 @@ class Policy:
         self.w0, self.b0, self.w1, self.b1 = sd["enc.0.weight"], sd["enc.0.bias"], sd["enc.2.weight"], sd["enc.2.bias"]
         self.wih, self.whh, self.bih, self.bhh = sd["gru.weight_ih"], sd["gru.weight_hh"], sd["gru.bias_ih"], sd["gru.bias_hh"]
         self.wp, self.bp = sd["pi.weight"], sd["pi.bias"]
+        self.cell = sd.get("cell.weight")                    # the learned map (v8): the last two inputs are cell numbers
         self.mean, self.var = ck["obs_mean"], ck["obs_var"]
         self.dims = [int(x) for x in ck["action_dims"]]
         self.minutes = float(ck.get("minutes", 0.0))
@@ -57,6 +58,9 @@ class Policy:
 
     def act(self, obs, h):
         x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
+        if self.cell is not None:
+            ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
+            x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
         x = np.tanh(x @ self.w0.T + self.b0)
         x = np.tanh(x @ self.w1.T + self.b1)
         gi = x @ self.wih.T + self.bih

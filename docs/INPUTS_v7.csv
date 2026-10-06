@@ -1,0 +1,473 @@
+index,group,input,meaning,scale,added in
+0,self,velocity: forward,"his own speed, turned to his facing",units/s / 400,v3
+1,self,velocity: left,"his own speed, turned to his facing",units/s / 400,v3
+2,self,velocity: up,"his own speed, turned to his facing",units/s / 400,v3
+3,self,on the ground,standing on something,0 or 1,v3
+4,self,health,,/ 200,v3
+5,self,armor,,/ 200,v3
+6,self,weapon not ready,time until he can fire (reload or weapon change),"seconds / 1.5, capped at 1",v3
+7,self,view pitch,looking up or down,degrees / 90,v3
+8,self,dead,,0 or 1,v3
+9,self,mouse speed: turn,how fast his view is turning,degrees per frame / 30,v3
+10,self,mouse speed: pitch,,degrees per frame / 30,v3
+11,walls,wall distance at 0.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+12,walls,wall distance at 22.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+13,walls,wall distance at 45.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+14,walls,wall distance at 67.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+15,walls,wall distance at 90.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+16,walls,wall distance at 112.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+17,walls,wall distance at 135.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+18,walls,wall distance at 157.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+19,walls,wall distance at 180.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+20,walls,wall distance at 202.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+21,walls,wall distance at 225.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+22,walls,wall distance at 247.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+23,walls,wall distance at 270.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+24,walls,wall distance at 292.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+25,walls,wall distance at 315.0 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+26,walls,wall distance at 337.5 deg,"distance to the wall in that direction (0 = straight ahead, counted to the left), at body height; -1 when outside his field of view","units / 512, capped at 1",v3
+27,floor,drop at 0 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+28,floor,drop at 45 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+29,floor,drop at 90 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+30,floor,drop at 135 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+31,floor,drop at 180 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+32,floor,drop at 225 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+33,floor,drop at 270 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+34,floor,drop at 315 deg,"how far down the floor is, 96 units away in that direction; -1 when outside his field of view","units / 256, capped at 1",v3
+35,enemy,noticed in view,"in his field of view with a clear line, for long enough to be noticed (as it was one reaction time ago)",0 or 1,v3
+36,enemy,seen or heard recently,fades after he was last seen or heard,exp(-seconds),v3
+37,enemy,last known position: forward,"from him, turned to his facing; exact while in view, rough when only heard",units / 1000,v3
+38,enemy,last known position: left,"from him, turned to his facing; exact while in view, rough when only heard",units / 1000,v3
+39,enemy,last known position: up,"from him, turned to his facing; exact while in view, rough when only heard",units / 1000,v3
+40,enemy,velocity: forward,only while in view; read 200 ms late,units/s / 400,v3
+41,enemy,velocity: left,only while in view; read 200 ms late,units/s / 400,v3
+42,enemy,velocity: up,only while in view; read 200 ms late,units/s / 400,v3
+43,enemy,direction: sin,"angle from his crosshair to the enemy, left-right",sin,v3
+44,enemy,direction: cos,,cos,v3
+45,enemy,direction up-down: cos,,cos,v3
+46,enemy,direction up-down: sin,,sin,v3
+47,enemy,"crosshair error left-right, coarse",,"degrees / 15, capped at 1",v3
+48,enemy,"crosshair error left-right, fine",,"degrees / 2, capped at 1",v3
+49,enemy,"crosshair error up-down, coarse",,"degrees / 15, capped at 1",v3
+50,enemy,"crosshair error up-down, fine",,"degrees / 2, capped at 1",v3
+51,enemy,crosshair on him,a shot along the view would hit,0 or 1,v3
+52,enemy,apparent size,how big he looks (nearer = bigger),"degrees / 10, capped at 1",v3
+53,projectiles,nearest enemy projectile: position forward,within 1500 units and in view (or within 400),units / 1000,v3
+54,projectiles,nearest enemy projectile: position left,within 1500 units and in view (or within 400),units / 1000,v3
+55,projectiles,nearest enemy projectile: position up,within 1500 units and in view (or within 400),units / 1000,v3
+56,projectiles,nearest enemy projectile: velocity forward,,units/s / 1000,v3
+57,projectiles,nearest enemy projectile: velocity left,,units/s / 1000,v3
+58,projectiles,nearest enemy projectile: velocity up,,units/s / 1000,v3
+59,projectiles,nearest enemy projectile: is a rocket,,0 or 1,v3
+60,projectiles,nearest enemy projectile: is a grenade,,0 or 1,v3
+61,projectiles,nearest enemy projectile: is a plasma,,0 or 1,v3
+62,projectiles,second nearest enemy projectile: position forward,within 1500 units and in view (or within 400),units / 1000,v3
+63,projectiles,second nearest enemy projectile: position left,within 1500 units and in view (or within 400),units / 1000,v3
+64,projectiles,second nearest enemy projectile: position up,within 1500 units and in view (or within 400),units / 1000,v3
+65,projectiles,second nearest enemy projectile: velocity forward,,units/s / 1000,v3
+66,projectiles,second nearest enemy projectile: velocity left,,units/s / 1000,v3
+67,projectiles,second nearest enemy projectile: velocity up,,units/s / 1000,v3
+68,projectiles,second nearest enemy projectile: is a rocket,,0 or 1,v3
+69,projectiles,second nearest enemy projectile: is a grenade,,0 or 1,v3
+70,projectiles,second nearest enemy projectile: is a plasma,,0 or 1,v3
+71,weapons,holding rocket launcher,,0 or 1,v3
+72,weapons,holding railgun,,0 or 1,v3
+73,weapons,holding lightning gun,,0 or 1,v3
+74,weapons,holding machine gun,,0 or 1,v3
+75,weapons,holding shotgun,,0 or 1,v3
+76,weapons,holding grenade launcher,,0 or 1,v3
+77,weapons,holding plasma gun,,0 or 1,v3
+78,weapons,holding heavy machine gun,,0 or 1,v3
+79,weapons,holding gauntlet,,0 or 1,v3
+80,weapons,owns rocket launcher,,0 or 1,v3
+81,weapons,owns railgun,,0 or 1,v3
+82,weapons,owns lightning gun,,0 or 1,v3
+83,weapons,owns machine gun,,0 or 1,v3
+84,weapons,owns shotgun,,0 or 1,v3
+85,weapons,owns grenade launcher,,0 or 1,v3
+86,weapons,owns plasma gun,,0 or 1,v3
+87,weapons,owns heavy machine gun,,0 or 1,v3
+88,weapons,owns gauntlet,,0 or 1,v3
+89,weapons,ammo: rocket launcher,,share of the maximum,v3
+90,weapons,ammo: railgun,,share of the maximum,v3
+91,weapons,ammo: lightning gun,,share of the maximum,v3
+92,weapons,ammo: machine gun,,share of the maximum,v3
+93,weapons,ammo: shotgun,,share of the maximum,v3
+94,weapons,ammo: grenade launcher,,share of the maximum,v3
+95,weapons,ammo: plasma gun,,share of the maximum,v3
+96,weapons,ammo: heavy machine gun,,share of the maximum,v3
+97,weapons,ammo: gauntlet,,share of the maximum,v3
+98,items,nearest mega health: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+99,items,nearest mega health: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+100,items,nearest mega health: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+101,items,nearest mega health: exists,the map has one,0 or 1,v3
+102,items,nearest mega health: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+103,items,nearest mega health: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+104,items,nearest red armor: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+105,items,nearest red armor: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+106,items,nearest red armor: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+107,items,nearest red armor: exists,the map has one,0 or 1,v3
+108,items,nearest red armor: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+109,items,nearest red armor: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+110,items,nearest yellow armor: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+111,items,nearest yellow armor: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+112,items,nearest yellow armor: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+113,items,nearest yellow armor: exists,the map has one,0 or 1,v3
+114,items,nearest yellow armor: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+115,items,nearest yellow armor: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+116,items,nearest green armor: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+117,items,nearest green armor: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+118,items,nearest green armor: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+119,items,nearest green armor: exists,the map has one,0 or 1,v3
+120,items,nearest green armor: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+121,items,nearest green armor: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+122,items,nearest rocket launcher: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+123,items,nearest rocket launcher: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+124,items,nearest rocket launcher: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+125,items,nearest rocket launcher: exists,the map has one,0 or 1,v3
+126,items,nearest rocket launcher: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+127,items,nearest rocket launcher: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+128,items,nearest railgun: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+129,items,nearest railgun: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+130,items,nearest railgun: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+131,items,nearest railgun: exists,the map has one,0 or 1,v3
+132,items,nearest railgun: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+133,items,nearest railgun: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+134,items,nearest lightning gun: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+135,items,nearest lightning gun: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+136,items,nearest lightning gun: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+137,items,nearest lightning gun: exists,the map has one,0 or 1,v3
+138,items,nearest lightning gun: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+139,items,nearest lightning gun: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+140,items,nearest shotgun: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+141,items,nearest shotgun: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+142,items,nearest shotgun: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+143,items,nearest shotgun: exists,the map has one,0 or 1,v3
+144,items,nearest shotgun: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+145,items,nearest shotgun: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+146,items,nearest grenade launcher: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+147,items,nearest grenade launcher: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+148,items,nearest grenade launcher: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+149,items,nearest grenade launcher: exists,the map has one,0 or 1,v3
+150,items,nearest grenade launcher: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+151,items,nearest grenade launcher: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+152,items,nearest plasma gun: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+153,items,nearest plasma gun: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+154,items,nearest plasma gun: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+155,items,nearest plasma gun: exists,the map has one,0 or 1,v3
+156,items,nearest plasma gun: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+157,items,nearest plasma gun: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+158,items,nearest heavy machine gun: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+159,items,nearest heavy machine gun: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+160,items,nearest heavy machine gun: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v3
+161,items,nearest heavy machine gun: exists,the map has one,0 or 1,v3
+162,items,nearest heavy machine gun: seen up,he is looking at it within 1500 units and it is there,0 or 1,v3
+163,items,nearest heavy machine gun: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v3
+164,movement goal,goal set,movement rounds and courses only (zero in fights),0 or 1,v3
+165,movement goal,goal: forward,where the goal or the far end of the course is,units / 2000,v3
+166,movement goal,goal: left,where the goal or the far end of the course is,units / 2000,v3
+167,movement goal,goal: up,where the goal or the far end of the course is,units / 2000,v3
+168,movement goal,next waypoint: forward,movement rounds on real maps only,units / 500,v3
+169,movement goal,next waypoint: left,movement rounds on real maps only,units / 500,v3
+170,movement goal,next waypoint: up,movement rounds on real maps only,units / 500,v3
+171,clock and score,round time,,"seconds / 120, capped at 2",v4
+172,clock and score,"clock: sin, 25 s cycle","armor comes back every 25 s, mega and health every 35 s",sin,v4
+173,clock and score,"clock: cos, 25 s cycle",,cos,v4
+174,clock and score,"clock: sin, 35 s cycle","armor comes back every 25 s, mega and health every 35 s",sin,v4
+175,clock and score,"clock: cos, 35 s cycle",,cos,v4
+176,clock and score,"clock: sin, 60 s cycle","armor comes back every 25 s, mega and health every 35 s",sin,v4
+177,clock and score,"clock: cos, 60 s cycle",,cos,v4
+178,clock and score,his frags this round,,"/ 10, capped at 2",v4
+179,clock and score,enemy frags this round,the best of the others with more than two players,"/ 10, capped at 2",v4
+180,clock and score,score difference,,"/ 5, between -2 and 2",v4
+181,more items,second yellow armor: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+182,more items,second yellow armor: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+183,more items,second yellow armor: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+184,more items,second yellow armor: exists,the map has one,0 or 1,v4
+185,more items,second yellow armor: seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+186,more items,second yellow armor: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+187,more items,nearest health (25 or 50): forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+188,more items,nearest health (25 or 50): left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+189,more items,nearest health (25 or 50): up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+190,more items,nearest health (25 or 50): exists,the map has one,0 or 1,v4
+191,more items,nearest health (25 or 50): seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+192,more items,nearest health (25 or 50): seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+193,more items,second nearest health: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+194,more items,second nearest health: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+195,more items,second nearest health: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+196,more items,second nearest health: exists,the map has one,0 or 1,v4
+197,more items,second nearest health: seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+198,more items,second nearest health: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+199,more items,third nearest health: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+200,more items,third nearest health: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+201,more items,third nearest health: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+202,more items,third nearest health: exists,the map has one,0 or 1,v4
+203,more items,third nearest health: seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+204,more items,third nearest health: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+205,more items,nearest health bubble or armor shard: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+206,more items,nearest health bubble or armor shard: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+207,more items,nearest health bubble or armor shard: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+208,more items,nearest health bubble or armor shard: exists,the map has one,0 or 1,v4
+209,more items,nearest health bubble or armor shard: seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+210,more items,nearest health bubble or armor shard: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+211,more items,second nearest bubble or shard: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+212,more items,second nearest bubble or shard: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+213,more items,second nearest bubble or shard: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+214,more items,second nearest bubble or shard: exists,the map has one,0 or 1,v4
+215,more items,second nearest bubble or shard: seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+216,more items,second nearest bubble or shard: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+217,more items,nearest ammo box: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+218,more items,nearest ammo box: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+219,more items,nearest ammo box: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+220,more items,nearest ammo box: exists,the map has one,0 or 1,v4
+221,more items,nearest ammo box: seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+222,more items,nearest ammo box: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+223,more items,second nearest ammo box: forward,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+224,more items,second nearest ammo box: left,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+225,more items,second nearest ammo box: up,"where it is from him, turned to his facing (known from the map, not from sight)",units / 1000,v4
+226,more items,second nearest ammo box: exists,the map has one,0 or 1,v4
+227,more items,second nearest ammo box: seen up,he is looking at it within 1500 units and it is there,0 or 1,v4
+228,more items,second nearest ammo box: seen gone,he is looking at its place within 1500 units and it is taken,0 or 1,v4
+229,sounds,heard: item pickup,fades after the enemy made that sound within 1200 units,exp(-seconds),v4
+230,sounds,heard: weapon fire,fades after the enemy made that sound within 1200 units,exp(-seconds),v4
+231,sounds,heard: jump,fades after the enemy made that sound within 1200 units,exp(-seconds),v4
+232,sounds,heard: teleport,fades after the enemy made that sound within 1200 units,exp(-seconds),v4
+233,sounds,item pickup sound: position forward,"roughly where it came from, for 5 seconds",units / 1000,v4
+234,sounds,item pickup sound: position left,"roughly where it came from, for 5 seconds",units / 1000,v4
+235,sounds,item pickup sound: position up,"roughly where it came from, for 5 seconds",units / 1000,v4
+236,sounds,weapon fire sound: position forward,"roughly where it came from, for 5 seconds",units / 1000,v4
+237,sounds,weapon fire sound: position left,"roughly where it came from, for 5 seconds",units / 1000,v4
+238,sounds,weapon fire sound: position up,"roughly where it came from, for 5 seconds",units / 1000,v4
+239,sounds,jump sound: position forward,"roughly where it came from, for 5 seconds",units / 1000,v4
+240,sounds,jump sound: position left,"roughly where it came from, for 5 seconds",units / 1000,v4
+241,sounds,jump sound: position up,"roughly where it came from, for 5 seconds",units / 1000,v4
+242,sounds,teleport sound: position forward,"roughly where it came from, for 5 seconds",units / 1000,v4
+243,sounds,teleport sound: position left,"roughly where it came from, for 5 seconds",units / 1000,v4
+244,sounds,teleport sound: position up,"roughly where it came from, for 5 seconds",units / 1000,v4
+245,sounds,pickup heard was mega health,for 5 seconds,0 or 1,v4
+246,sounds,pickup heard was red armor,for 5 seconds,0 or 1,v4
+247,sounds,pickup heard was other armor,for 5 seconds,0 or 1,v4
+248,sounds,pickup heard was a weapon,for 5 seconds,0 or 1,v4
+249,place,position on the map: x,,-1 to 1 across the map,v4
+250,place,position on the map: y,,-1 to 1 across the map,v4
+251,place,position on the map: z,,-1 to 1 across the map,v4
+252,place,map is bloodrun,all zero on the test maps,0 or 1,v4
+253,place,map is aerowalk,all zero on the test maps,0 or 1,v4
+254,place,map is lostworld,all zero on the test maps,0 or 1,v4
+255,sight,"view distance: 40 deg right, 25 deg up",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+256,sight,"view distance: 20 deg right, 25 deg up",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+257,sight,"view distance: 0 deg ahead, 25 deg up",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+258,sight,"view distance: 20 deg left, 25 deg up",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+259,sight,"view distance: 40 deg left, 25 deg up",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+260,sight,"view distance: 40 deg right, 0 deg level",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+261,sight,"view distance: 20 deg right, 0 deg level",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+262,sight,"view distance: 0 deg ahead, 0 deg level",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+263,sight,"view distance: 20 deg left, 0 deg level",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+264,sight,"view distance: 40 deg left, 0 deg level",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+265,sight,"view distance: 40 deg right, 25 deg down",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+266,sight,"view distance: 20 deg right, 25 deg down",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+267,sight,"view distance: 0 deg ahead, 25 deg down",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+268,sight,"view distance: 20 deg left, 25 deg down",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+269,sight,"view distance: 40 deg left, 25 deg down",how far he sees along that line of his view (angles shrink when zoomed),"units / 2000, capped at 1",v4
+270,sight,ceiling: straight up,distance to what is above; -1 when outside his field of view,"units / 512, capped at 1",v4
+271,sight,ceiling: up and ahead,distance to what is above; -1 when outside his field of view,"units / 512, capped at 1",v4
+272,sight,ceiling: up and left,distance to what is above; -1 when outside his field of view,"units / 512, capped at 1",v4
+273,sight,ceiling: up and behind,distance to what is above; -1 when outside his field of view,"units / 512, capped at 1",v4
+274,sight,ceiling: up and right,distance to what is above; -1 when outside his field of view,"units / 512, capped at 1",v4
+275,sight,long distance at 0 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+276,sight,long distance at 45 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+277,sight,long distance at 90 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+278,sight,long distance at 135 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+279,sight,long distance at 180 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+280,sight,long distance at 225 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+281,sight,long distance at 270 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+282,sight,long distance at 315 deg,far wall distance in that direction; -1 when outside his field of view,"units / 2000, capped at 1",v4
+283,enemy,enemy holds rocket launcher,only while in view,0 or 1,v4
+284,enemy,enemy holds railgun,only while in view,0 or 1,v4
+285,enemy,enemy holds lightning gun,only while in view,0 or 1,v4
+286,enemy,enemy holds machine gun,only while in view,0 or 1,v4
+287,enemy,enemy holds shotgun,only while in view,0 or 1,v4
+288,enemy,enemy holds grenade launcher,only while in view,0 or 1,v4
+289,enemy,enemy holds plasma gun,only while in view,0 or 1,v4
+290,enemy,enemy holds heavy machine gun,only while in view,0 or 1,v4
+291,enemy,enemy holds gauntlet,only while in view,0 or 1,v4
+292,enemy,enemy facing: sin,whether the enemy is turned toward him; only while in view,sin,v4
+293,enemy,enemy facing: cos,,cos,v4
+294,enemy,damage dealt to the enemy this life,what he knows he has hit for; no readout of the enemy's health,"/ 200, capped at 2",v4
+295,hits,damage dealt this frame,,"/ 100, capped at 2",v4
+296,hits,damage taken this frame,,"/ 100, capped at 2",v4
+297,hits,hit came from: sin,direction of the attacker,sin,v4
+298,hits,hit came from: cos,,cos,v4
+299,place,nearest teleporter entrance: forward,,units / 1000,v4
+300,place,nearest teleporter entrance: left,,units / 1000,v4
+301,place,nearest teleporter entrance: up,,units / 1000,v4
+302,place,its exit: forward,,units / 1000,v4
+303,place,its exit: left,,units / 1000,v4
+304,place,its exit: up,,units / 1000,v4
+305,place,map has a teleporter,,0 or 1,v4
+306,place,nearest jump pad: forward,,units / 1000,v4
+307,place,nearest jump pad: left,,units / 1000,v4
+308,place,nearest jump pad: up,,units / 1000,v4
+309,place,map has a jump pad,,0 or 1,v4
+310,self,crouched,,0 or 1,v4
+311,enemy shots,enemy firing now,a shot he saw (enemy noticed in view) or heard (within 1200 units) in the last frames,0 or 1,v5
+312,enemy shots,enemy shot recently,fades after the last shot,exp(-2 x seconds),v5
+313,enemy shots,time since the enemy's last shot,,"seconds / 3, capped at 1",v5
+314,enemy shots,last shot was a rocket launcher,every weapon has its own sound; for 5 seconds,0 or 1,v5
+315,enemy shots,last shot was a railgun,every weapon has its own sound; for 5 seconds,0 or 1,v5
+316,enemy shots,last shot was a lightning gun,every weapon has its own sound; for 5 seconds,0 or 1,v5
+317,enemy shots,last shot was a machine gun,every weapon has its own sound; for 5 seconds,0 or 1,v5
+318,enemy shots,last shot was a shotgun,every weapon has its own sound; for 5 seconds,0 or 1,v5
+319,enemy shots,last shot was a grenade launcher,every weapon has its own sound; for 5 seconds,0 or 1,v5
+320,enemy shots,last shot was a plasma gun,every weapon has its own sound; for 5 seconds,0 or 1,v5
+321,enemy shots,last shot was a heavy machine gun,every weapon has its own sound; for 5 seconds,0 or 1,v5
+322,enemy shots,last shot was a gauntlet,every weapon has its own sound; for 5 seconds,0 or 1,v5
+323,enemy shots,enemy reloading,time until that weapon can fire again,seconds / 1.5,v5
+324,enemy shots,the shot was seen,"seen, not only heard",0 or 1,v5
+325,enemy shots,"bullet, rail or lightning line: nearest point forward",the line of the enemy's last such shot while it is on screen (one second),"units / 500, between -4 and 4",v5
+326,enemy shots,"bullet, rail or lightning line: nearest point left",the line of the enemy's last such shot while it is on screen (one second),"units / 500, between -4 and 4",v5
+327,enemy shots,"bullet, rail or lightning line: nearest point up",the line of the enemy's last such shot while it is on screen (one second),"units / 500, between -4 and 4",v5
+328,enemy shots,line just appeared,fades,exp(-4 x seconds),v5
+329,enemy,enemy crouched,only while in view,0 or 1,v5
+330,enemy,enemy in the air,only while in view,0 or 1,v5
+331,own hands,forward / back key held,what his fingers are actually holding,"-1, 0 or 1",v5
+332,own hands,strafe key held,,"-1, 0 or 1",v5
+333,own hands,jump / crouch held,,"1 jump, -1 crouch",v5
+334,own hands,left-hand stamina,"budget of key changes left (10 quick ones, refilling at 4 a second)",0 to 1,v5
+335,own hands,ring finger (strafe left) free,that finger can act again,0 or 1,v5
+336,own hands,middle finger (forward / back) free,that finger can act again,0 or 1,v5
+337,own hands,"index finger (strafe right, weapon keys) free",that finger can act again,0 or 1,v5
+338,own hands,thumb (jump) free,that finger can act again,0 or 1,v5
+339,own hands,little finger (crouch) free,that finger can act again,0 or 1,v5
+340,own hands,zoomed in,,0 or 1,v5
+341,own hands,fire finger free,at most five clicks a second,0 or 1,v5
+342,own hands,zoom finger free,,0 or 1,v5
+343,enemy pain,pain sound: enemy health under 25,"the sound an enemy makes when hit, heard within 1200 units; for 1.5 s",0 or 1,v5
+344,enemy pain,pain sound: enemy health 25 to 49,"the sound an enemy makes when hit, heard within 1200 units; for 1.5 s",0 or 1,v5
+345,enemy pain,pain sound: enemy health 50 to 74,"the sound an enemy makes when hit, heard within 1200 units; for 1.5 s",0 or 1,v5
+346,enemy pain,pain sound: enemy health 75 or more,"the sound an enemy makes when hit, heard within 1200 units; for 1.5 s",0 or 1,v5
+347,enemy pain,pain sound just heard,fades,exp(-3 x seconds),v5
+348,memory,mega health: known to be taken,"he took it, or heard it taken",0 or 1,v6
+349,memory,mega health: how long ago,against its 35 s timer,"seconds / 35, capped at 2",v6
+350,memory,red armor: known to be taken,"he took it, or heard it taken",0 or 1,v6
+351,memory,red armor: how long ago,against its 25 s timer,"seconds / 25, capped at 2",v6
+352,memory,enemy has the mega health,heard or seen taken since his last death,0 or 1,v6
+353,memory,enemy has the red armor,heard or seen taken since his last death,0 or 1,v6
+354,memory,enemy seen with rocket launcher,in his hands at some point since his last death,0 or 1,v6
+355,memory,enemy seen with railgun,in his hands at some point since his last death,0 or 1,v6
+356,memory,enemy seen with lightning gun,in his hands at some point since his last death,0 or 1,v6
+357,memory,enemy seen with machine gun,in his hands at some point since his last death,0 or 1,v6
+358,memory,enemy seen with shotgun,in his hands at some point since his last death,0 or 1,v6
+359,memory,enemy seen with grenade launcher,in his hands at some point since his last death,0 or 1,v6
+360,memory,enemy seen with plasma gun,in his hands at some point since his last death,0 or 1,v6
+361,memory,enemy seen with heavy machine gun,in his hands at some point since his last death,0 or 1,v6
+362,memory,enemy seen with gauntlet,in his hands at some point since his last death,0 or 1,v6
+363,memory,time since his own respawn,,"seconds / 30, capped at 2",v6
+364,memory,enemy's last death known,"he killed him, or heard him die",0 or 1,v6
+365,memory,time since the enemy's last death,,"seconds / 30, capped at 2",v6
+366,self,focus left,"sharp tracking for 2 s with an enemy in view, then slower until it has come back",-0.25 to 1,v6
+367,routes,mega health: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+368,routes,mega health: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+369,routes,mega health: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+370,routes,mega health: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+371,routes,red armor: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+372,routes,red armor: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+373,routes,red armor: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+374,routes,red armor: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+375,routes,rocket launcher: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+376,routes,rocket launcher: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+377,routes,rocket launcher: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+378,routes,rocket launcher: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+379,routes,railgun: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+380,routes,railgun: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+381,routes,railgun: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+382,routes,railgun: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+383,routes,lightning gun: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+384,routes,lightning gun: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+385,routes,lightning gun: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+386,routes,lightning gun: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+387,more enemies,second enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+388,more enemies,second enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+389,more enemies,second enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+390,more enemies,second enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+391,more enemies,second enemy: direction sin,,sin,ffa (not trained yet)
+392,more enemies,second enemy: direction cos,,cos,ffa (not trained yet)
+393,more enemies,second enemy: direction up-down,,sin,ffa (not trained yet)
+394,more enemies,second enemy faces him,,cos,ffa (not trained yet)
+395,more enemies,third enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+396,more enemies,third enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+397,more enemies,third enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+398,more enemies,third enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+399,more enemies,third enemy: direction sin,,sin,ffa (not trained yet)
+400,more enemies,third enemy: direction cos,,cos,ffa (not trained yet)
+401,more enemies,third enemy: direction up-down,,sin,ffa (not trained yet)
+402,more enemies,third enemy faces him,,cos,ffa (not trained yet)
+403,more enemies,enemies in view,,count / 5,ffa (not trained yet)
+404,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)
+405,own hands,hand on the mouse pad,from the left edge to the right edge; 240 degrees of turning across,-1 to 1,v7
+406,own hands,mouse in the air,lifted to set it back in the middle: the view does not turn for 125 ms,0 or 1,v7
+407,hearing,sound just heard,"an enemy's running steps, jump, landing or shot within 1000 units, no line of sight needed",0 or 1,v7
+408,hearing,sound heard recently,fades,exp(-2 x seconds),v7
+409,hearing,direction of the sound: sin,"against his view, about 10 degrees rough; kept for 3 s",sin,v7
+410,hearing,direction of the sound: cos,,cos,v7
+411,hearing,above or below,height of the sound against his own,"units / 200, between -1.5 and 1.5",v7
+412,hearing,loudness,"1 next to him, 0 at the edge of earshot",0 to 1,v7
+413,hearing,coming or going,positive: the gap is closing,"units/s / 400, between -1.5 and 1.5",v7
+414,hearing,railgun hum,an enemy within 500 units holds a railgun (heard even when he stands still),0 or 1,v7
+415,hearing,lightning gun hum,an enemy within 500 units holds a lightning gun,0 or 1,v7
+416,hazards,"lava at 0 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+417,hazards,"lava at 45 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+418,hazards,"lava at 90 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+419,hazards,"lava at 135 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+420,hazards,"lava at 180 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+421,hazards,"lava at 225 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+422,hazards,"lava at 270 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+423,hazards,"lava at 315 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+424,hazards,"deadly drop at 0 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+425,hazards,"deadly drop at 45 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+426,hazards,"deadly drop at 90 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+427,hazards,"deadly drop at 135 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+428,hazards,"deadly drop at 180 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+429,hazards,"deadly drop at 225 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+430,hazards,"deadly drop at 270 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+431,hazards,"deadly drop at 315 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+432,hazards,"lava at 0 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+433,hazards,"lava at 45 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+434,hazards,"lava at 90 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+435,hazards,"lava at 135 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+436,hazards,"lava at 180 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+437,hazards,"lava at 225 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+438,hazards,"lava at 270 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+439,hazards,"lava at 315 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+440,hazards,"deadly drop at 0 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+441,hazards,"deadly drop at 45 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+442,hazards,"deadly drop at 90 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+443,hazards,"deadly drop at 135 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+444,hazards,"deadly drop at 180 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+445,hazards,"deadly drop at 225 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+446,hazards,"deadly drop at 270 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+447,hazards,"deadly drop at 315 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+448,enemy,last known speed: forward,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+449,enemy,last known speed: left,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+450,enemy,last known speed: up,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+451,place,where the nearest jump pad lands: forward,,units / 1000,v7
+452,place,where the nearest jump pad lands: left,,units / 1000,v7
+453,place,where the nearest jump pad lands: up,,units / 1000,v7
+454,projectiles,his own nearest projectile: position forward,,units / 1000,v7
+455,projectiles,his own nearest projectile: position left,,units / 1000,v7
+456,projectiles,his own nearest projectile: position up,,units / 1000,v7
+457,projectiles,his own nearest projectile: velocity forward,,units/s / 1000,v7
+458,projectiles,his own nearest projectile: velocity left,,units/s / 1000,v7
+459,projectiles,his own nearest projectile: velocity up,,units/s / 1000,v7
+460,projectiles,his own nearest projectile: is a rocket,,0 or 1,v7
+461,projectiles,his own nearest projectile: is a grenade,,0 or 1,v7
+462,projectiles,his own nearest projectile: is a plasma,,0 or 1,v7
+463,projectiles,his own second nearest projectile: position forward,,units / 1000,v7
+464,projectiles,his own second nearest projectile: position left,,units / 1000,v7
+465,projectiles,his own second nearest projectile: position up,,units / 1000,v7
+466,projectiles,his own second nearest projectile: velocity forward,,units/s / 1000,v7
+467,projectiles,his own second nearest projectile: velocity left,,units/s / 1000,v7
+468,projectiles,his own second nearest projectile: velocity up,,units/s / 1000,v7
+469,projectiles,his own second nearest projectile: is a rocket,,0 or 1,v7
+470,projectiles,his own second nearest projectile: is a grenade,,0 or 1,v7
+471,projectiles,his own second nearest projectile: is a plasma,,0 or 1,v7

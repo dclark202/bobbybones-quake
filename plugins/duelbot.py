@@ -542,6 +542,9 @@ class duelbot(minqlx.Plugin):
     def act(self, obs):
         P = self.P
         x = np.clip((obs - P["obs_mean"]) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
+        if "cell" in P.files:                                # the learned map (v8): the last two inputs are cell numbers
+            ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
+            x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
         x = np.tanh(x @ P["w0"].T + P["b0"])
         x = np.tanh(x @ P["w1"].T + P["b1"])
         gi = x @ P["wih"].T + P["bih"]
@@ -976,11 +979,14 @@ class duelbot(minqlx.Plugin):
             if len(self.obs_dump) % 2000 == 0:
                 np.save("/tmp/practice/obs_dump.npy", np.array(self.obs_dump[-12000:]))
         a = self.act(ob)
+        if len(a) > 10 and hasattr(env, "intend"):           # the intention head (v8), as in training
+            env.intend(np.full(env.n, int(a[10]), np.int64), np.arange(env.n) == 0)
         w, fire, pitch, yaw, keys = self.drive(bobby, env, E, 0, a, pitch, yaw, only=self.drill)
         wname = E.WEAPONS[w]
         self.last = dict(bobby=[round(float(v)) for v in pos], opp=[round(float(v)) for v in opos],
                          bobby_hp=[bs.health, bs.armor], opp_hp=[os_.health, os_.armor], weapon=wname,
-                         visible=bool(env.visible[0]), seen_ago=round(float(env.seen_t[0]), 1))
+                         visible=bool(env.visible[0]), seen_ago=round(float(env.seen_t[0]), 1),
+                         intent=E.INTENTS[int(env.intent[0])] if hasattr(E, "INTENTS") else "")
         dmg, _ = self.log_frame(now, env, 0, bobby, opp, bs, os_, keys, self.drill)
         if self.rules2:                                      # hit feedback for the next frame, and damage dealt this life
             dealt, took = dmg.get("opp", 0), dmg.get("bobby", 0)

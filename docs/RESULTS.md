@@ -5,7 +5,53 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-06 12:16 — `duel_gru_v8`: an explicit intention, a learned map, 97 fewer inputs (owner: "try a model change"; until 19:00) (B-100, B-101, B-103)
+
+Why: `duel_gru_v7` took the mega 0.02 times per player-minute and the red armor never, all morning, through three
+sizes of pickup reward. He had the map knowledge as inputs (routes, timers, his stack) and did not act on it. The
+diagnosis (owner agreed): nothing he trains against needs a stack, the red armor sits past the void he has learned
+to avoid, and the travel reward of 11:35 (0.0025 a frame) was smaller than the exploration bonus. The two-player
+checkpoint-mates still fight at 125/0.
+
+From `duel_gru_v7` at update 40 of the restart (`policy_end_v7_update40.pt`, 2160 min), carried over by name with
+`sim/reshape_policy.py` (360 inputs kept with their weights, 112 retired, 15 new at zero; `policy_start_from_v7.pt`).
+
+- **The intention head** (one more action, 6 choices): nothing, the mega, the red armor, rockets, rail, lightning.
+  Read once a second per player (staggered; at once after a spawn), held in between; the trainer masks the head's loss
+  to the frames it was read on. Changing it costs 0.02. Inputs back to him (13): the chosen way's seconds and next step,
+  the chosen item up / coming back in, which intention, seconds since chosen. So "follow the arrow" is easy and
+  "which arrow" is the decision, and the decision is logged: share of time per intention, trips chosen / reached /
+  abandoned / ended by death, seconds to reach. The plugin and the videos show it.
+- **Rewards (owner's sizes):** pickup 0.75 per 100 points of health or armor (a full mega or red armor 0.75 against 1 for
+  a frag, "never more than a frag"), a weapon he lacked 0.19; **an enemy's mega or red costs the others half of what he
+  gained** (-0.375 for a full one); the chosen way pays 1.0 per second of it gained (0.025 a frame, five times the
+  exploration bonus), while the item is up or comes back before he can be there, fading to a quarter over six hours
+  (`--intent-seek 1.0 --intent-seek-minutes 360`). The old nearest-item travel reward is off.
+- **A learned map (2 inputs, a table of 4096 x 16 learned numbers):** the 64-unit cell he stands in and the cell the enemy
+  was last known in (two height layers), looked up in a table the network learns ("what this place is like"). Starts
+  at random with zero weights into the encoder, so nothing changes until training uses it. Exported with the policy;
+  the plugin and the numpy policies read it.
+- **Retired (112, owner: keep the network near 500 and the server cheap):** everything that is always zero on `arena1`:
+  yellow and green armor, shotgun, grenade launcher, plasma gun, heavy machine gun (as items, held, owned, ammo, in the
+  enemy's hands, in memory, as shot sounds), grenades and plasma in flight, the third health, the ammo boxes, the map
+  name, the 60 s clock, the directions of the five routes (seconds stay; the chosen route has its direction). 472 -> 375
+  inputs (357 with two players); 1.45 M weights; graphics memory 9.8 of 16.4 GB. They come back with the duel maps
+  (B-101), by the same tool.
+- **Not done, kept as an option (B-102):** a scripted "runner" in the league that takes the mega and red and fights with a
+  stack, so that not stacking costs something in self-play. The owner wants pure self-play for now.
+- **New measurements:** `tools/heatmap.py` (where he spends his time on the map, top view, with items and deaths; how
+  many cells hold half of his time) and in the training numbers the share of time the mega and the red armor lie
+  there untaken (`mega_lying`, `red_armor_lying`: both should go down). Videos can be rendered larger (`--width 640`).
+- First update (thin sample, 2 min): intentions uniform (a sixth each), 58 changes per player-minute, 0.3% of trips
+  reached; mega 0.078 per player-minute, lying 99% of the time.
+
+| Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lying) | Intentions: none / mega / red / RL / RG / LG, trips a min, reached | Void deaths | Half of his time in (cells) | vs Nightmare on arena1, 10 min |
+|---|---|---|---|---|---|---|---|---|
+| 12:18 (start) | 2163 | 4.1, -, - | - | 0.078 (99%), 0.003 (100%) | 17 / 17 / 17 / 17 / 17 / 17 %, 58, 0.3% | 0.15 | 328 of 32 x 32 (v7 at 12:09; 12% of the cells visited) | - |
+
 ## 2026-10-06 07:00 — `duel_gru_v7`: pickup reward, routes to the items, groups of 2, 3 and 4 (owner's plan after the night)
+
+**Ended 12:09 at update 40 of the 11:35 restart (2160 min; `policy_end_v7_update40.pt`). Did not work for items:** mega 0.02 per player-minute and red armor 0 the whole morning, through pickup rewards of 0.3, 0.6 and 1.5 and a travel reward; he out-damaged Nightmare every hour and lost 2-21, 3-32, 3-26, 4-28 on stack. What did improve: void deaths 0.40 -> 0.16 per player-minute, firing 18 -> 23% of the time, no hiding, rail hits 40 -> 47%. Replaced by `duel_gru_v8` (above).
 
 From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), not from the passive morning one.
 - **Players:** a third of the workers each with groups of 2, 3 and 4, all against all (`--group 2,3,4`; about the same

@@ -38,7 +38,15 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   process: worlds share buffers sized by player count, never create a second one with a different size.
 - **Groups**: `duel_env_ffa.py` is written from `duel_env.py` by `tools/make_ffa_env.py` (2 to 6 players, all
   against all; 18 more inputs); `tools/ffa_check.py` proves it identical at two players. Change `duel_env.py`,
-  then regenerate and re-check; do not edit the generated file. Trainer: `--env duel_env_ffa --group N`.
+  then regenerate and re-check; do not edit the generated file. Trainer: `--env duel_env_ffa --group N`. The
+  generator matches exact lines of `duel_env.py` (the `OBS_DIM` line, the `observe()` concatenation, `pkind = ...`,
+  `return [i ^ 1]`): update its anchors when those lines change.
+- **Intention and map cells (v8, 2026-10-06)**: the last action head is the intention (`INTENTS`: nothing, mega, red,
+  RL, RG, LG), read every `INTENT_EVERY` frames by `env.intend()` (the plugin calls it too); the trainer masks that
+  head's loss to the frames it was read on (`intent_live`). The last two inputs (`CELL_COLS`) are map-cell numbers
+  looked up in a learned table (`cell` in the policy, `nn.Embedding`), not values: every policy loader (trainer,
+  `test_suite.Policy`, the plugin's `act`, `export_duel.py`) handles them. Inputs that were always zero on `arena1`
+  were retired (B-101); `sim/reshape_policy.py` carries a network over by input name (old and new `docs/INPUTS.csv`).
 - **Environments**: `duel_env.py` (current: nine weapons, items, sounds, clock, crouch, walk, fall damage,
   human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO / COURSE, scripted opponents with eight styles, lab
   mode on the test map: aim rooms and movement courses read from `maps/testlab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the

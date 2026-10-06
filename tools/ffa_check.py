@@ -26,6 +26,7 @@ def run(module, group, frames, out, bsp="testlab", rooms=(2,), sets=None, matche
     if sets:
         env.arena_sets = sets
     rng = np.random.default_rng(11)
+    cut = E.OBS_BASE + E.N_EXTRA + E.N_FIGHT + E.N_MEM + E.N_ROUTE      # where the group block sits in duel_env_ffa
     obs, rew, don = [], [], []
     o = env.observe()
     for t in range(frames):
@@ -41,7 +42,8 @@ def run(module, group, frames, out, bsp="testlab", rooms=(2,), sets=None, matche
         a[:, 3] = np.where(aim, np.abs(E.TURN[None, :] - np.clip(ey, -20, 20)[:, None]).argmin(1), a[:, 3])
         a[:, 4] = np.where(aim, np.abs(E.PITCH[None, :] - np.clip(ep, -10, 10)[:, None]).argmin(1), a[:, 4])
         o, r, d, info = env.step(a)
-        obs.append(o[:, :348].copy()), rew.append(r.copy()), don.append(d.copy())
+        oo = o if not hasattr(E, "N_FFA") else np.delete(o, np.s_[cut:cut + E.N_FFA], axis=1)     # drop the group block: the rest must match
+        obs.append(oo.copy()), rew.append(r.copy()), don.append(d.copy())
     st = env.stats
     line = "{} group {} on {}: {} inputs, frags {}, suicides {}, damage {:.0f}, in view {:.2f}, pickups mega {} red {} weapons {}".format(
         module, group, bsp, o.shape[1], int(st["frags"]), int(st["suicides"]), float(st["dmg"]), float(env.visible.mean()),

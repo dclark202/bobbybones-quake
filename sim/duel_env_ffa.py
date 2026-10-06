@@ -77,9 +77,15 @@ N_GOAL = 7                                             # goal inputs: on, where 
 # inputs added after duel_gru_v3 (appended at the end, so an older network can be widened without losing skills):
 # clock and score 10, more items 8 x 6, sounds 20, map position and identity 6, view / up / long rays 28,
 # enemy details 12, hit feedback 4, nearest teleporter and jump pad 11, crouched 1
-N_XITEMS = 8
+# (2026-10-06, v8) Inputs that are always zero on arena1 were retired, to keep the network near 400 inputs: yellow
+# and green armor, shotgun, grenade launcher, plasma gun and heavy machine gun (as items, as weapons held, owned,
+# with ammo, in the enemy's hands, in memory, as shot sounds), grenades and plasma in flight, the third health, the
+# ammo boxes, the map name, the 60 s clock, and the directions of the routes (the chosen route keeps its direction,
+# see N_INTENT). They come back with the duel maps (BACKLOG B-101): a widening, as before.
+OBS_W = np.array([0, 1, 2, 3, 8])                          # the weapons the inputs cover: RL, RG, LG, MG, gauntlet
+N_XITEMS = 4
 N_VIEW, N_UP, N_LONG = 15, 5, 8
-N_EXTRA = 10 + 6 * N_XITEMS + 20 + 6 + (N_VIEW + N_UP + N_LONG) + 12 + 4 + 11 + 1
+N_EXTRA = 8 + 6 * N_XITEMS + 20 + 3 + (N_VIEW + N_UP + N_LONG) + (len(OBS_W) + 3) + 4 + 11 + 1
 MAP_IDS = ("bloodrun", "aerowalk", "lostworld")       # third slot was campgrounds until 2026-10-04
 HEAR_EVT = 1200.0                                      # item pickups, weapon fire, jumps, teleports are heard this far
                                                        # (not measured against the game)
@@ -160,10 +166,18 @@ LOADOUTS = {   # weapons owned at spawn, ammo
     "mg": ((), {MG: 100}),
 }
 # forward, strafe, vertical (none / jump / crouch), turn, pitch, fire, weapon (keep/...), walk
-ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2)  # ..., walk, zoom, lift the mouse
+# Intention (2026-10-06, v8): an explicit choice of what to go for, read once a second (INTENT_EVERY frames, staggered
+# by player) and held in between: nothing, the mega, the red armor, the rocket launcher, the railgun, the lightning
+# gun. Changing it costs INTENT_SWITCH. Travel toward the chosen item pays (env.intent_seek per second of the way
+# gained, while the item is up or comes up before he gets there), taking it pays env.item_reward. The choice is an
+# input back to him, with the way to it, so "follow the arrow" is easy and "which arrow" is the decision.
+INTENTS = ("none", "MH", "RA", "RL", "RG", "LG")
+INTENT_EVERY, INTENT_SWITCH = 40, 0.02
+ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2, len(INTENTS))  # ..., walk, zoom, lift the mouse, intention
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
-SLOTS = ("MH", "RA", "YA", "GA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
-OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6 * len(SLOTS) + N_GOAL   # as in duel_gru_v3
+SLOTS = ("MH", "RA", "RL", "RG", "LG")                 # nearest item of each kind is an input
+MEM_COLS = np.array([0, 1] + [2 + int(w) for w in OBS_W])  # the columns of e_got that are inputs (see N_MEM)
+OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 7 * N_PROJ + 3 * len(OBS_W) + 6 * len(SLOTS) + N_GOAL
 # Fight inputs (2026-10-05), appended after everything else:
 #   enemy shots he saw or heard: firing right now 1, time since the last one 2, which weapon it was 9 (every weapon
 #     has its own sound), how long until that weapon can fire again 1, whether he saw it or only heard it 1   = 14
@@ -174,7 +188,7 @@ OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6
 #   his right hand: zoomed 1, fire finger free 1, zoom finger free 1                                       = 3
 #   the enemy's pain sound when he is hit within earshot: which of the four (it depends on his health: under 25,
 #     under 50, under 75, above) 4, fading 1. The only clue to the enemy's health; his health itself is never an input. = 5
-N_FIGHT = 14 + 4 + 2 + 9 + 3 + 5
+N_FIGHT = (5 + len(OBS_W)) + 4 + 2 + 9 + 3 + 5
 # Memory aids (2026-10-05, B-90: things a player keeps in his head), appended after the fight inputs:
 #   the mega health and the red armor: known to have been taken (he took it or heard it taken) 1, and how long ago
 #     as a share of its timer (35 s, 25 s) 1, for each: 4
@@ -182,12 +196,12 @@ N_FIGHT = 14 + 4 + 2 + 9 + 3 + 5
 #     seen in his hands 9: 11
 #   seconds since his own respawn 1; the enemy's last death known 1 and how long ago 1: 3
 #   his own focus (see FOCUS_SECS): 1
-N_MEM = 4 + 11 + 3 + 1
+N_MEM = 4 + len(MEM_COLS) + 3 + 1
 # Routes (2026-10-06): the way to the mega health, the red armor and the three main weapons along the floor, as a
 # player who knows the map has it: seconds of travel 1, and where the next step of the way lies 3, for each. The
 # straight line he had before points through walls, and to the red armor of arena1 across a drop that kills.
 ROUTE_ITEMS = ("MH", "RA", "RL", "RG", "LG")
-N_ROUTE = 4 * len(ROUTE_ITEMS)
+N_ROUTE = len(ROUTE_ITEMS)                               # v8: seconds only; the chosen route has its direction
 # The mouse pad (2026-10-06): the view is turned by a mouse on a pad of finite width. PAD_DEG degrees of turning
 # take the hand from one edge to the other; at the edge it cannot turn further that way: the mouse has to be lifted
 # and set back in the middle, PAD_LIFT frames during which the view does not move. He can also lift it himself in
@@ -210,13 +224,20 @@ N_EAR = 7 + 2
 #   where the nearest jump pad lands: 3
 #   his own two nearest projectiles in flight: place 3, speed 3, kind 3, each: 18
 HAZ_DIST = (96.0, 224.0)
-N_MORE = 32 + 3 + 3 + 18
+N_MORE = 32 + 3 + 3 + 14
 # A denser picture of the view (an experiment, off unless the environment variable DENSE_VIEW is 1): 9 x 5 distances
 # across his view where the standard picture has 5 x 3, for reading cover, doorways and corners. Not in any run yet.
 DENSE_YAW, DENSE_PITCH = np.radians(np.linspace(-48, 48, 9)), np.radians(np.linspace(-30, 30, 5))
 N_DENSE = len(DENSE_YAW) * len(DENSE_PITCH) if os.environ.get("DENSE_VIEW") == "1" else 0
+# The intention as an input (see INTENTS): the chosen way's seconds 1, next step 3, the item up 1, seconds until it
+# comes back 1, which intention 6, seconds since chosen 1; and the map cells (v8): the 64-unit cell of the map he
+# stands in and the one the enemy was last known in, as numbers for a learned table (the network keeps 16 learned
+# numbers per cell: what that place is like). 0 = unknown. Always the last two inputs (CELL_COLS).
+N_INTENT = 13 + 2
+MAX_CELLS, CELL_SIZE = 4096, 64.0
 N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_INTENT
+CELL_COLS = (OBS_DIM - 2, OBS_DIM - 1)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -410,7 +431,7 @@ class DuelEnv:
         hl = [k for k, d in enumerate(self.item_def) if d[0] == "hp" and d[1] in (25, 50)]
         sm = [k for k, d in enumerate(self.item_def) if d[0] in ("hp", "ar") and d[1] == 5]
         am = [k for k, d in enumerate(self.item_def) if d[0] in ("am", "pack")]
-        self.xslots = [(ya, 1), (hl, 0), (hl, 1), (hl, 2), (sm, 0), (sm, 1), (am, 0), (am, 1)]
+        self.xslots = [(hl, 0), (hl, 1), (sm, 0), (sm, 1)]
         # teleporter entrances with their exits, and jump pads (from the map's trigger brushes)
         spots = self.w.trigger_spots() if hasattr(self.w, "trigger_spots") else []
         self.tele_in = np.array([c for k, c, d in spots if k == 1], np.float32).reshape(-1, 3)
@@ -424,6 +445,8 @@ class DuelEnv:
         la = np.linspace(0, 2 * np.pi, N_LONG, endpoint=False)
         self.long_dirs = np.stack([np.cos(la), np.sin(la)], 1).astype(np.float32)
         self.lo, self.hi = [np.asarray(v, np.float32) for v in self.w.bounds()]
+        self.cell_n = np.maximum(1, np.ceil((self.hi[:2] - self.lo[:2]) / CELL_SIZE)).astype(np.int64)   # map cells (N_INTENT)
+        self.cell_zmid = float(self.lo[2] + self.hi[2]) / 2.0
         # Test map ("lab"): fixed rooms described in maps/<map>/rooms.json (tools/make_lab_map.py). On such a map
         # every round is a lab room: an aim room (fixed placement, walking or jumping target) or a movement course.
         # New courses added to the map file are picked up here without code changes.
@@ -484,6 +507,17 @@ class DuelEnv:
         self.item_seek = 0.0                                # reward per second of travel gained toward the nearest big item
         self.seek_phi = np.full(self.n, 15.0, np.float32)   # he could use and that is lying there (see step)
         self.route_item = []
+        self.intent = np.zeros(self.n, np.int64)            # the intention (see INTENTS)
+        self.intent_t = np.zeros(self.n, np.float32)        # seconds since chosen
+        self.intent_phi = np.zeros(self.n, np.float32)      # seconds of the way left, last frame
+        self.intent_live = np.zeros(self.n, bool)           # the head was read this frame
+        self.intent_changed = np.zeros(self.n, bool)
+        self.intent_new = np.ones(self.n, bool)             # just spawned: read the head at once
+        self.intent_done = np.zeros(self.n, bool)           # the chosen item was taken since the choice
+        self.int_tick = 0
+        self.intent_seek = 0.0                              # reward per second of the chosen way gained
+        self.item_loss = 0.5                                # an enemy's mega or red costs this share of its pickup reward
+        self.intent_gi = [-1] * len(INTENTS)                # intention -> index into route_goal
         self.route, self.route_goal = None, []              # the ways to the big items (see N_ROUTE)
         if nav and os.path.exists(nav):
             pos_ = {}
@@ -497,6 +531,7 @@ class DuelEnv:
             if self.route_goal:
                 self.route = RouteField(nav, [pos_[lab_] for lab_ in self.route_goal],
                                         pads=[(c, d) for k, c, d in spots if k == 0])
+                self.intent_gi = [-1] + [self.route_goal.index(lab_) if lab_ in self.route_goal else -1 for lab_ in INTENTS[1:]]
         self.flinch_on = True
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
@@ -610,6 +645,10 @@ class DuelEnv:
         # seconds after the spawn (sum), count
         self.stats["big_wait"], self.stats["big_taken"], self.stats["first_wp"] = np.zeros(2), np.zeros(2), np.zeros(2)
         self.stats["direct"] = 0                        # rockets hitting the body
+        # intentions: frames per intention; trips chosen, reached, abandoned, ended by death; seconds to reach (sum)
+        self.stats["intent_frames"], self.stats["intent_trips"], self.stats["intent_reach"] = np.zeros(len(INTENTS)), np.zeros(4), 0.0
+        self.stats["big_up"], self.stats["big_frames"] = np.zeros(2), 0      # mega / red: frames lying there, frames
+        self.big_ids = [next((k_ for k_, d_ in enumerate(self.item_def) if d_[4] == lab_), -1) for lab_ in ("MH", "RA")]
         # per course: attempts, finishes, time (finished attempts), distance, top speed, speed sum, frames, falls, height
         self.stats["course"] = np.zeros((16, 9))
         self.lab_course_ids = list(range(len(self.courses)))     # courses used when a lab round picks one
@@ -637,6 +676,9 @@ class DuelEnv:
         self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
         self.flinch[i], self.focus[i] = 0.0, FOCUS_SECS
         self.life_t[i], self.first_wp[i] = 0.0, False
+        if self.intent[i] > 0 and not self.intent_done[i]:
+            self.stats["intent_trips"][3] += 1
+        self.intent[i], self.intent_t[i], self.intent_new[i], self.intent_done[i] = 0, 0.0, True, False
         self.pad[i], self.pad_lift[i], self.ear_t[i] = 0.0, 0, 99.0
         self.walk_last[i] = False
         self.e_got[self._mates(i), self._slot(i)] = 0.0     # what the others knew him to have is gone with him
@@ -1092,16 +1134,15 @@ class DuelEnv:
         if len(self.pads):
             k = np.linalg.norm(self.pads[None] - pos[:, None], axis=2).argmin(1)
             pd = np.clip(rot(self.pad_dest[k] - pos) / 1000.0, -3, 3)
-        own = np.zeros((n, 18), np.float32)
+        own = np.zeros((n, 14), np.float32)
         dist = np.where(self.ra, np.linalg.norm(self.rp - pos[:, None, :], axis=2), 1e9)
         order = np.argsort(dist, axis=1)[:, :2]
         for j in range(2):
             idx = order[:, j]
             ok = dist[ar, idx] < 1e8
-            own[:, 9 * j:9 * j + 3] = np.clip(rot(self.rp[ar, idx] - pos) / 1000.0, -3, 3) * ok[:, None]
-            own[:, 9 * j + 3:9 * j + 6] = rot(self.rv[ar, idx]) / 1000.0 * ok[:, None]
-            kind = self.rw[ar, idx]
-            own[:, 9 * j + 6], own[:, 9 * j + 7], own[:, 9 * j + 8] = ok & (kind == RL), ok & (kind == GL), ok & (kind == PG)
+            own[:, 7 * j:7 * j + 3] = np.clip(rot(self.rp[ar, idx] - pos) / 1000.0, -3, 3) * ok[:, None]
+            own[:, 7 * j + 3:7 * j + 6] = rot(self.rv[ar, idx]) / 1000.0 * ok[:, None]
+            own[:, 7 * j + 6] = ok & (self.rw[ar, idx] == RL)
         return np.concatenate([haz, lv, pd, own], 1).astype(np.float32)
 
     def _dense(self, eye, yaw, pit):
@@ -1166,7 +1207,7 @@ class DuelEnv:
         ek = (el < 90.0).astype(np.float32)
         life = np.stack([np.minimum(self.life_t / 30.0, 2.0), ek, np.minimum(el / 30.0, 2.0) * ek], 1)
         focus = np.clip(self.focus / FOCUS_SECS, -0.25, 1.0)[:, None]
-        return np.concatenate([items, self.e_got[ar, self._slot(opp)], life, focus], 1).astype(np.float32)
+        return np.concatenate([items, self.e_got[ar, self._slot(opp)][:, MEM_COLS], life, focus], 1).astype(np.float32)
 
     def _routes(self, pos, rot):
         """the inputs of N_ROUTE"""
@@ -1177,14 +1218,59 @@ class DuelEnv:
         node = R.locate(pos)
         off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
         for gi, lab in enumerate(self.route_goal):
-            k = 4 * ROUTE_ITEMS.index(lab)
             t = R.T[gi, node]
-            ok = t < 1e8
-            nx = R.next[gi, node]
-            wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[gi][None])
-            out[:, k] = np.minimum((t + off) / 10.0, 2.0) * ok
-            out[:, k + 1:k + 4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
+            out[:, ROUTE_ITEMS.index(lab)] = np.minimum((t + off) / 10.0, 2.0) * (t < 1e8)
         return out
+
+    def _cell(self, p, ok):
+        """the map cell a point lies in, as a number for the learned table (see N_INTENT); 0 = unknown"""
+        c = np.clip(((p[:, :2] - self.lo[:2]) / CELL_SIZE).astype(np.int64), 0, self.cell_n - 1)
+        layer = (p[:, 2] > self.cell_zmid).astype(np.int64)
+        idx = 1 + layer * int(self.cell_n[0] * self.cell_n[1]) + c[:, 1] * int(self.cell_n[0]) + c[:, 0]
+        return np.where(ok, np.minimum(idx, MAX_CELLS - 1), 0).astype(np.float32)
+
+    def _intent(self, pos, rot, known, seen_t):
+        """the inputs of N_INTENT"""
+        n = self.n
+        out = np.zeros((n, N_INTENT), np.float32)
+        R = self.route
+        k = self.intent
+        if R is not None:
+            gi = np.array(self.intent_gi)[k]
+            valid = gi >= 0
+            g = np.maximum(gi, 0)
+            node = R.locate(pos)
+            off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
+            t = R.T[g, node]
+            ok = valid & (t < 1e8)
+            nx = R.next[g, node]
+            wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
+            out[:, 0] = np.minimum((t + off) / 10.0, 2.0) * ok
+            out[:, 1:4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
+            grp = np.arange(n) // (self._others_arr().shape[1] + 1)
+            it = np.array(self.route_item)[g]
+            out[:, 4] = self.item_up[grp, it] * valid
+            out[:, 5] = np.minimum(self.item_t[grp, it] / 30.0, 2.0) * valid
+        out[:, 6:12] = np.eye(len(INTENTS), dtype=np.float32)[k]
+        out[:, 12] = np.minimum(self.intent_t / 10.0, 2.0)
+        out[:, 13] = self._cell(pos, np.ones(n, bool))
+        out[:, 14] = self._cell(known, seen_t < 5.0)
+        return out
+
+    def intend(self, choice, who):
+        """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
+        who = the players it applies to (the game-server plugin passes one). Returns who was read this frame."""
+        n = self.n
+        self.int_tick += 1
+        live = who & (((self.int_tick + np.arange(n)) % INTENT_EVERY == 0) | self.intent_new)
+        choice = np.asarray(choice, np.int64)
+        changed = live & (choice != self.intent)
+        self.intent = np.where(live, choice, self.intent)
+        self.intent_t = np.where(changed, 0.0, self.intent_t + DT * who).astype(np.float32)
+        self.intent_new = np.where(live, False, self.intent_new)
+        self.intent_done = np.where(changed, False, self.intent_done)
+        self.intent_live, self.intent_changed = live, changed
+        return live
 
     def _eye(self, s):
         e = s[:, :3].copy()
@@ -1243,7 +1329,7 @@ class DuelEnv:
         known = (t < 5.0).astype(np.float32)
         reload_ = np.clip((W_REFIRE[self.shot_w] - t) / 1.5, 0.0, 1.0) * known
         shots = np.concatenate([(t < 0.06).astype(np.float32)[:, None], np.exp(-2.0 * t)[:, None],
-                                (np.minimum(t, 3.0) / 3.0)[:, None], np.eye(NW, dtype=np.float32)[self.shot_w] * known[:, None],
+                                (np.minimum(t, 3.0) / 3.0)[:, None], np.eye(NW, dtype=np.float32)[self.shot_w][:, OBS_W] * known[:, None],
                                 reload_[:, None], (self.shot_seen & (t < 5.0)).astype(np.float32)[:, None]], 1)
         fade = np.exp(-4.0 * self.trail_t)
         on = (self.trail_t < 1.0).astype(np.float32)
@@ -1435,7 +1521,7 @@ class DuelEnv:
                                    [np.clip(ep_ / 15.0, -1, 1)], [np.clip(ep_ / 2.0, -1, 1)],
                                    [on_target.astype(np.float32)], [np.clip(size, 0, 1)]], 0).T * (seen_t < 5)[:, None]
         # incoming projectiles (the opponent's), nearest N_PROJ: position, velocity, kind (rocket / grenade / plasma)
-        rk = np.zeros((n, 9 * N_PROJ), np.float32)
+        rk = np.zeros((n, 7 * N_PROJ), np.float32)
         oth = self.others                                    # everybody else's projectiles
         orp, orv = self.rp[oth].reshape(n, -1, 3), self.rv[oth].reshape(n, -1, 3)
         ora, orw = self.ra[oth].reshape(n, -1), self.rw[oth].reshape(n, -1)
@@ -1449,12 +1535,9 @@ class DuelEnv:
                 to_p = orp[ar, idx] - eye
                 dn = np.linalg.norm(to_p, axis=1) + 1e-6
                 ok &= ((to_p * fdir).sum(1) / dn > self.fov()[2]) | (dn < 400.0)
-            rk[:, 9 * j:9 * j + 3] = rot(orp[ar, idx] - pos) / 1000.0 * ok[:, None]
-            rk[:, 9 * j + 3:9 * j + 6] = rot(orv[ar, idx]) / 1000.0 * ok[:, None]
-            kind = orw[ar, idx]
-            rk[:, 9 * j + 6] = ok & (kind == RL)
-            rk[:, 9 * j + 7] = ok & (kind == GL)
-            rk[:, 9 * j + 8] = ok & (kind == PG)
+            rk[:, 7 * j:7 * j + 3] = rot(orp[ar, idx] - pos) / 1000.0 * ok[:, None]
+            rk[:, 7 * j + 3:7 * j + 6] = rot(orv[ar, idx]) / 1000.0 * ok[:, None]
+            rk[:, 7 * j + 6] = ok & (orw[ar, idx] == RL)
         # items: where the nearest one of each big kind is (map knowledge), and whether it is up, but only
         # while looking at it from within 1500 units (no timers given: remembering them is the player's job)
         up = np.repeat(self.item_up, self.G, axis=0)                          # per player (its match)
@@ -1495,12 +1578,13 @@ class DuelEnv:
                 goal[ci_, 1:3] = rotc(ahead(600.0) - pos[ci_, :2]) / 2000.0
                 goal[ci_, 4:6] = np.clip(rotc(ahead(200.0) - pos[ci_, :2]) / 500.0, -1, 1)
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], own, self.mv / 30.0, walls, floors, opp_feat, rk,
-                              np.eye(NW, dtype=np.float32)[self.weapon], self.has.astype(np.float32),
-                              self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
-                                                                              yaw, pit, visible),
+                              np.eye(NW, dtype=np.float32)[self.weapon][:, OBS_W], self.has[:, OBS_W].astype(np.float32),
+                              (self.ammo / AMMO_MAX)[:, OBS_W], items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
+                                                                                         yaw, pit, visible),
                               self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
-                              self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit)], 1)
+                              self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
+                              self._intent(pos, rot, known, seen_t)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -1547,8 +1631,7 @@ class DuelEnv:
         t = np.repeat(self.round_t, self.G)
         best = self.frags_r[self.others].max(1)
         clock = np.stack([np.minimum(t / 120.0, 2.0), np.sin(2 * np.pi * t / 25.0), np.cos(2 * np.pi * t / 25.0),
-                          np.sin(2 * np.pi * t / 35.0), np.cos(2 * np.pi * t / 35.0), np.sin(2 * np.pi * t / 60.0),
-                          np.cos(2 * np.pi * t / 60.0), np.minimum(self.frags_r / 10.0, 2.0),
+                          np.sin(2 * np.pi * t / 35.0), np.cos(2 * np.pi * t / 35.0), np.minimum(self.frags_r / 10.0, 2.0),
                           np.minimum(best / 10.0, 2.0),
                           np.clip((self.frags_r - best) / 5.0, -2, 2)], 1)
         xitems = np.concatenate([self._item_block(ids, r, pos, eye, fdir, up, rot) for ids, r in self.xslots], 1)
@@ -1558,8 +1641,7 @@ class DuelEnv:
         snd = np.concatenate([np.exp(-self.snd_t), rel.reshape(n, 12),
                               np.eye(4, dtype=np.float32)[self.snd_kind] * fresh[:, :1]], 1)
         # where on the map, and which map
-        where = np.concatenate([(pos - self.lo) / np.maximum(self.hi - self.lo, 1.0) * 2.0 - 1.0,
-                                np.eye(len(MAP_IDS) + 1, dtype=np.float32)[np.full(n, self.map_id)][:, :len(MAP_IDS)]], 1)
+        where = (pos - self.lo) / np.maximum(self.hi - self.lo, 1.0) * 2.0 - 1.0
         # sight: a coarse picture along the view, what is above, and long horizontal distances
         zf = np.where(self.zoom, ZOOM, 1.0)[:, None]                 # zoomed: the picture covers a smaller angle
         gy, gp = yaw[:, None] + self.view_grid[None, :, 0] * zf, pit[:, None] + self.view_grid[None, :, 1] * zf
@@ -1589,7 +1671,7 @@ class DuelEnv:
         v_ = visible.astype(np.float32)[:, None]
         oy = np.radians(self.yaw[opp])
         back = np.arctan2(pos[:, 1] - self.state[opp, 1], pos[:, 0] - self.state[opp, 0]) - oy
-        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self.weapon[opp]] * v_,
+        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self.weapon[opp]][:, OBS_W] * v_,
                                 np.stack([np.sin(back), np.cos(back)], 1) * v_,
                                 np.minimum((self.dmg_life if self.G == 2 else self.dmg_on[ar, self.slot[opp]])
                                            / 200.0, 2.0)[:, None]], 1)
@@ -1839,6 +1921,11 @@ class DuelEnv:
         if self.key_limits:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
+        prev_int = self.intent.copy()
+        self.intend(a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64), human)
+        self.stats["intent_trips"][0] += int((self.intent_changed & (self.intent > 0)).sum())
+        self.stats["intent_trips"][2] += int((self.intent_changed & (prev_int > 0) & ~self.intent_done).sum())
+        self.stats["intent_frames"] += np.bincount(self.intent[human], minlength=len(INTENTS))
         pkind = np.repeat(self.kind, self.G)
         walk = (a[:, 7] == 1) & (not self.no_walk)
         key = np.where(walk, WALK, 127).astype(np.int32)   # walking: slower and silent
@@ -2110,6 +2197,10 @@ class DuelEnv:
             self.item_up_t = np.zeros_like(self.item_t)
         self.item_up_t = np.where(self.item_up, self.item_up_t + DT, 0.0).astype(np.float32)
         self.item_up |= self.item_t <= 0
+        for k_, id_ in enumerate(self.big_ids):
+            if id_ >= 0:
+                self.stats["big_up"][k_] += int(self.item_up[:, id_].sum())
+        self.stats["big_frames"] += self.item_up.shape[0]
         if self.nI:
             dxy = np.linalg.norm(s[:, None, :2] - self.item_pos[None, :, :2], axis=2)
             dz = np.abs(s[:, None, 2] - self.item_pos[None, :, 2])
@@ -2166,6 +2257,15 @@ class DuelEnv:
                     # health and armor by the points gained; a weapon he did not have counts as 25 points, one he
                     # has already (ammo) as nothing, so standing on a weapon's spot earns nothing
                     reward[i] += self.item_reward * (gain if kind in ("hp", "ar") else 25.0 if new_wp else 0.0) / 100.0
+                    want_ = lab if lab in ("MH", "RA") else WEAPONS[int(val)].upper() if kind == "wp" else ""
+                    if want_ in INTENTS and self.intent[i] == INTENTS.index(want_) and not self.intent_done[i]:
+                        self.intent_done[i] = True                       # the trip he chose is complete
+                        self.stats["intent_trips"][1] += 1
+                        self.stats["intent_reach"] += float(self.intent_t[i])
+                    if lab in ("MH", "RA") and self.item_loss > 0:       # the others lose a share: it was theirs to take
+                        for o_ in self._mates(i):
+                            if self.hp[o_] > 0:
+                                reward[o_] -= self.item_loss * self.item_reward * gain / 100.0
                     self.item_up[m, it] = False
                     self.item_t[m, it] = resp
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
@@ -2186,6 +2286,22 @@ class DuelEnv:
             gain = self.seek_phi - phi
             reward += self.item_seek * np.where(np.abs(gain) < 0.4, gain, 0.0) * (self.script == 0) * (self.hp > 0)
             self.seek_phi = phi.astype(np.float32)
+        if self.route is not None:
+            # The chosen way pays as he goes (see INTENTS): seconds of it gained, while the item is up or comes up before
+            # he can be there. Only steady movement counts; a changed intention starts a new count.
+            R_ = self.route
+            gi_ = np.array(self.intent_gi)[self.intent]
+            valid = gi_ >= 0
+            g_ = np.maximum(gi_, 0)
+            node = R_.locate(s[:, :3])
+            phi = np.where(valid, R_.T[g_, node] + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
+            grp = np.arange(n) // (self._others_arr().shape[1] + 1)
+            it_ = np.array(self.route_item)[g_]
+            soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0)
+            gain = self.intent_phi - phi
+            pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0) & (np.abs(gain) < 0.4)
+            reward += self.intent_seek * gain * pay - INTENT_SWITCH * (self.intent_changed & (prev_int > 0))
+            self.intent_phi = phi.astype(np.float32)
 
         # deaths, frags, respawns
         done = np.zeros(n, bool)                            # end of the round (memory and returns reset here only)

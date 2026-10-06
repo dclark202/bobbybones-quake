@@ -21,7 +21,8 @@ sys.path.insert(0, HERE)
 import duel_env as E                 # noqa: E402
 import test_suite as T               # noqa: E402
 
-W, H, FOV = 480, 270, 100.0
+W, H, FOV = 480, 270, 100.0                   # --width sets W (H follows, 16:9); the video is 2x that
+CRF = "23"
 
 
 def attempt(env, pol, k, secs=30.0):
@@ -259,6 +260,7 @@ def fight(env, pol, where, secs, round_len):
                   guns=" + ".join(E.WEAPONS[g].upper() for g in (env.load_sets[0] or ())),
                   opp_yaw=float(env.yaw[1]), opp_pitch=float(env.pitch[1]), opp_vel=s[1, 3:6].copy(),
                   zoom=bool(getattr(env, "zoom", np.zeros(2, bool))[0]),
+                  intent=E.INTENTS[int(env.intent[0])] if hasattr(E, "INTENTS") else "",
                   rockets=[])
         eye0 = env._eye(s)[:1]
 
@@ -347,6 +349,8 @@ def overlay_fight(img, fr, label, t, font, big):
     d.text((560, 16), "frags  him {}  :  {} {}".format(fr["frags"][0], fr["frags"][1], "other" if len(fr["others"]) == 1 else "others"),
            fill=(255, 255, 255), font=big)
     d.text((20, 380), "holding {}   health {:.0f}  armor {:.0f}".format(fr["w"][0].upper(), fr["hp"][0], fr["hp"][1]), fill=(255, 255, 255), font=big)
+    if fr.get("intent") and fr["intent"] != "none":
+        d.text((20, 350), "going for: {}".format({"MH": "MEGA", "RA": "RED ARMOR"}.get(fr["intent"], fr["intent"])), fill=(120, 255, 160), font=big)
     if len(fr["others"]) == 1:
         d.text((560, 46), "other: {}  health {:.0f}".format(fr["w"][1].upper(), fr["hp"][2]), fill=(255, 200, 200), font=font)
     else:
@@ -378,9 +382,13 @@ def main():
     ap.add_argument("--group", type=int, default=2, help="players in the fight (needs --env duel_env_ffa)")
     ap.add_argument("--map", default="testlab", help="arena1: the yard with items (with --fight yard)")
     ap.add_argument("--secs", type=float, default=60.0)
+    ap.add_argument("--width", type=int, default=480, help="rendering width in pixels (480 = 960x540 video, 640 = 1280x720)")
     ap.add_argument("--round", type=float, default=20.0, help="fight: seconds per round (new random weapons each round)")
     a = ap.parse_args()
     pol = T.Policy(a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt"), seed=5)
+    global W, H, CRF
+    if a.width != 480:
+        W, H, CRF = a.width, a.width * 9 // 16, "20"
     if a.env != "duel_env":
         import importlib
         global E
@@ -433,7 +441,7 @@ def main():
             path = path.replace(".mp4", "_highlights.mp4")
         ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s",
                                "{}x{}".format(W * 2, H * 2), "-r", "40", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                               "-crf", "23", path], stdin=subprocess.PIPE)
+                               "-crf", CRF, path], stdin=subprocess.PIPE)
         for i, fr in enumerate(frames):
             ff.stdin.write(overlay_fight(render(env, fr, cam), fr, label, i * E.DT, font, big).tobytes())
         ff.stdin.close()
@@ -457,7 +465,7 @@ def main():
         path = os.path.join(out_dir, C["key"] + ".mp4")
         ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s",
                                "{}x{}".format(W * 2, H * 2), "-r", "40", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                               "-crf", "23", path], stdin=subprocess.PIPE)
+                               "-crf", CRF, path], stdin=subprocess.PIPE)
         last = None
         for i, fr in enumerate(frames):
             last = overlay(render(env, fr, cam), fr, label, i * E.DT, font, big)

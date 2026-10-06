@@ -29,7 +29,7 @@ DT_MIN = 0.025 / 60.0
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
            teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5,
-           env_module="duel_env", group=2):
+           env_module="duel_env", group=2, intent_seek=0.0, item_loss=0.5):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     import importlib
@@ -40,6 +40,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     G = group
     env.item_reward = item_reward
     env.item_seek = float(os.environ.get("ITEM_SEEK", "0"))  # reward per second of travel gained toward a big item he can use
+    env.intent_seek, env.item_loss = intent_seek, item_loss
     env.drill_p = drill_p
     env.react_frames = react_frames[0]
     env.acquire_frames = react_frames[1]
@@ -84,9 +85,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 1)
             delta["match_of_kill"] = [e["killer"] // G for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
-            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy()))
+            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy()))
         elif cmd == "curriculum":
-            env.close_p, env.round_len, env.dmg_reward = data
+            env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
         elif cmd == "close":
             break
@@ -104,6 +105,9 @@ def main():
     ap.add_argument("--hidden", type=int, default=512)
     ap.add_argument("--loadout", default="all")
     ap.add_argument("--item-reward", type=float, default=0.3, help="reward per 100 points of health/armor picked up")
+    ap.add_argument("--item-loss", type=float, default=0.5, help="an enemy's mega or red armor costs this share of its pickup reward")
+    ap.add_argument("--intent-seek", type=float, default=1.0, help="reward per second of the chosen way gained (the intention head)")
+    ap.add_argument("--intent-seek-minutes", type=float, default=0.0, help="that reward fades to a quarter over this time (0 = constant)")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
     ap.add_argument("--drill-p", type=float, default=0.0,
@@ -183,7 +187,8 @@ def main():
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
-                                        a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w]),
+                                        a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w],
+                                        a.intent_seek, a.item_loss),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -192,15 +197,22 @@ def main():
     N = len(obs)
     H = a.hidden
 
+    CELL_DIM = 16                                            # the learned map: 16 numbers per 64-unit cell (see E_.N_INTENT)
+    assert tuple(E_.CELL_COLS) == (OBS_DIM - 2, OBS_DIM - 1)
+
     class Policy(nn.Module):
         def __init__(self):
             super().__init__()
-            self.enc = nn.Sequential(nn.Linear(OBS_DIM, 256), nn.Tanh(), nn.Linear(256, 256), nn.Tanh())
+            self.cell = nn.Embedding(E_.MAX_CELLS, CELL_DIM)
+            nn.init.normal_(self.cell.weight, 0.0, 0.1)
+            self.enc = nn.Sequential(nn.Linear(OBS_DIM - 2 + 2 * CELL_DIM, 256), nn.Tanh(), nn.Linear(256, 256), nn.Tanh())
             self.gru = nn.GRUCell(256, H)
             self.pi = nn.Linear(H, sum(ACTION_DIMS))
             self.v = nn.Linear(H, 1)
 
         def step(self, x, h):
+            ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
+            x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
             h = self.gru(self.enc(x), h)
             return self.pi(h), self.v(h).squeeze(-1), h
 
@@ -209,7 +221,7 @@ def main():
 
     pol = Policy().to(dev)
     with torch.no_grad():                                   # start out mostly keeping the current weapon
-        pol.pi.bias[sum(ACTION_DIMS[:-1])] += 3.0
+        pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam(pol.parameters(), lr=a.lr, eps=1e-5)
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
@@ -220,7 +232,9 @@ def main():
         elapsed0 = ck.get("minutes", 0.0)
 
     def norm(o):
-        return np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
+        x = np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
+        x[:, -2:] = o[:, -2:]                                   # cell numbers stay as they are
+        return x
 
     # ---- pro demos: sequences of (inputs, what the player did), imitated alongside the self-play loss
     import glob as _glob
@@ -258,7 +272,8 @@ def main():
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
                         env_module=a.env, group=groups[0], groups=groups,
-                        react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk)),
+                        react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
+                        cells=E_.MAX_CELLS, cell_dim=CELL_DIM),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
@@ -300,8 +315,10 @@ def main():
         dmg_reward = 0.004 * max(0.25, close_p)                         # damage shaping fades with the curriculum
         if a.dmg_reward > 0:                                            # ... unless it is set outright
             dmg_reward = a.dmg_reward
+        seek_now = a.intent_seek * (max(0.25, 1.0 - (time.time() - t_start) / 60.0 / a.intent_seek_minutes)
+                                    if a.intent_seek_minutes > 0 else 1.0)
         for p in pipes:
-            p.send(("curriculum", (close_p, round_len, dmg_reward)))
+            p.send(("curriculum", (close_p, round_len, dmg_reward, seek_now)))
         for p in pipes:
             p.recv()
         if time.time() - last_snap > a.snapshot_min * 60:                # new league member
@@ -318,6 +335,7 @@ def main():
         b_rew = torch.zeros(T, N, device=dev)
         b_done = torch.zeros(T, N, device=dev)
         b_w = torch.zeros(T, N, device=dev)
+        b_live = torch.zeros(T, N, device=dev)                           # the intention head was read on that frame
         b_teach = torch.zeros(T, N, 4, dtype=torch.long, device=dev)
         h0 = h.clone()
         raw, agg = [], {}
@@ -329,7 +347,8 @@ def main():
                 logits, val, h = pol.step(x, h)
                 ds = dists(logits)
                 act = torch.stack([d.sample() for d in ds], -1)
-                logp = sum(d.log_prob(act[:, i]) for i, d in enumerate(ds))
+                lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
+                logp = sum(lps[:-1])                                     # the intention's part counts only when it was read
                 if snaps:
                     lo, _, h_opp = opp.step(x, h_opp)
                     act_o = torch.stack([d.sample() for d in dists(lo)], -1)
@@ -345,6 +364,9 @@ def main():
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
             d = torch.from_numpy(np.concatenate([r[2] for r in res]).astype(np.float32)).to(dev)
             b_done[t] = d
+            live = torch.from_numpy(np.concatenate([r[6] for r in res]).astype(np.float32)).to(dev)
+            b_live[t] = live
+            b_logp[t] = b_logp[t] + lps[-1] * live
             scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
             teach = np.concatenate([r[5] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
@@ -397,8 +419,9 @@ def main():
                 v = torch.stack(vals)
                 ds = dists(lg)
                 A = b_act[:, chunk]
-                lp = sum(dd.log_prob(A[..., j]) for j, dd in enumerate(ds))
-                ent = sum(w_ * dd.entropy() for w_, dd in zip(ent_heads, ds))
+                lv = b_live[:, chunk]
+                lp = sum(dd.log_prob(A[..., j]) for j, dd in enumerate(ds[:-1])) + ds[-1].log_prob(A[..., -1]) * lv
+                ent = sum(w_ * dd.entropy() for w_, dd in zip(ent_heads[:-1], ds[:-1])) + ent_heads[-1] * ds[-1].entropy() * lv
                 wgt = b_w[:, chunk]
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
@@ -480,7 +503,17 @@ def main():
                              first_weapon_s=round(float(agg.get("first_wp", np.zeros(2))[0] / max(1.0, agg.get("first_wp", np.zeros(2))[1])), 1),
                              lives_with_a_weapon_per_min=round(float(agg.get("first_wp", np.zeros(2))[1] / (G * sim_min)), 2),
                              void_deaths_per_player_min=round(float(agg.get("void_deaths", 0) / (G * sim_min)), 3),
+                             mega_lying=round(float(agg["big_up"][0] / max(1, agg["big_frames"])), 3),
+                             red_armor_lying=round(float(agg["big_up"][1] / max(1, agg["big_frames"])), 3),
                              lava_dmg_per_player_min=round(float(agg.get("hurt_dmg", 0.0) / (G * sim_min)), 1)),
+                   intent=dict(share={nm: round(float(agg["intent_frames"][k] / max(1.0, agg["intent_frames"].sum())), 3)
+                                      for k, nm in enumerate(E_.INTENTS)},
+                               trips_per_player_min=round(float(agg["intent_trips"][0] / (G * sim_min)), 2),
+                               reached=round(float(agg["intent_trips"][1] / max(1.0, agg["intent_trips"][0])), 3),
+                               abandoned=round(float(agg["intent_trips"][2] / max(1.0, agg["intent_trips"][0])), 3),
+                               died=round(float(agg["intent_trips"][3] / max(1.0, agg["intent_trips"][0])), 3),
+                               reach_s=round(float(agg["intent_reach"] / max(1.0, agg["intent_trips"][1])), 1),
+                               seek=round(seek_now, 3)),
                    run_and_gun=dict(damage_per_min=round(float(agg["gun"][0] / max(1.0, agg["gun"][1]) * 2400), 1),
                                     speed=int(agg["gun"][2] / max(1.0, agg["gun"][1]))),
                    keys=dict(asked_per_s=round(float(agg["key_asked"] / max(1.0, G * sim_min * 60)), 2),

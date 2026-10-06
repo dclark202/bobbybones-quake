@@ -21,6 +21,7 @@ def add(group, name, meaning, scale="", since="v3"):
 
 XYZ = ("forward", "left", "up")
 W = E.WEAPONS
+OW = [E.WEAPONS[i] for i in E.OBS_W]      # the weapons the inputs cover since v8
 WN = dict(rl="rocket launcher", rg="railgun", lg="lightning gun", mg="machine gun", sg="shotgun", gl="grenade launcher",
           pg="plasma gun", hmg="heavy machine gun", g="gauntlet")
 
@@ -75,14 +76,13 @@ for j in range(E.N_PROJ):
         add("projectiles", "{} enemy projectile: position {}".format(n_, ax), "within 1500 units and in view (or within 400)", "units / 1000")
     for ax in XYZ:
         add("projectiles", "{} enemy projectile: velocity {}".format(n_, ax), "", "units/s / 1000")
-    for k_ in ("rocket", "grenade", "plasma"):
-        add("projectiles", "{} enemy projectile: is a {}".format(n_, k_), "", "0 or 1")
+    add("projectiles", "{} enemy projectile: is a rocket".format(n_), "", "0 or 1")
 # ---- weapons
-for w in W:
+for w in OW:
     add("weapons", "holding {}".format(WN[w]), "", "0 or 1")
-for w in W:
+for w in OW:
     add("weapons", "owns {}".format(WN[w]), "", "0 or 1")
-for w in W:
+for w in OW:
     add("weapons", "ammo: {}".format(WN[w]), "", "share of the maximum")
 # ---- items
 NAMES = dict(MH="mega health", RA="red armor", YA="yellow armor", GA="green armor", RL="rocket launcher", RG="railgun",
@@ -98,14 +98,13 @@ assert len(rows) == E.OBS_BASE, (len(rows), E.OBS_BASE)
 
 # ---- added for duel_gru_v4
 add("clock and score", "round time", "", "seconds / 120, capped at 2", "v4")
-for per in (25, 35, 60):
+for per in (25, 35):
     add("clock and score", "clock: sin, {} s cycle".format(per), "armor comes back every 25 s, mega and health every 35 s", "sin", "v4")
     add("clock and score", "clock: cos, {} s cycle".format(per), "", "cos", "v4")
 add("clock and score", "his frags this round", "", "/ 10, capped at 2", "v4")
 add("clock and score", "enemy frags this round", "the best of the others with more than two players", "/ 10, capped at 2", "v4")
 add("clock and score", "score difference", "", "/ 5, between -2 and 2", "v4")
-for what in ("second yellow armor", "nearest health (25 or 50)", "second nearest health", "third nearest health",
-             "nearest health bubble or armor shard", "second nearest bubble or shard", "nearest ammo box", "second nearest ammo box"):
+for what in ("nearest health (25 or 50)", "second nearest health", "nearest health bubble or armor shard", "second nearest bubble or shard"):
     item("more items", what, "v4")
 SND = ("item pickup", "weapon fire", "jump", "teleport")
 for c_ in SND:
@@ -117,8 +116,6 @@ for k_ in ("mega health", "red armor", "other armor", "a weapon"):
     add("sounds", "pickup heard was {}".format(k_), "for 5 seconds", "0 or 1", "v4")
 for ax in ("x", "y", "z"):
     add("place", "position on the map: {}".format(ax), "", "-1 to 1 across the map", "v4")
-for m in E.MAP_IDS:
-    add("place", "map is {}".format(m), "all zero on the test maps", "0 or 1", "v4")
 for q in (-25, 0, 25):
     for y in (-40, -20, 0, 20, 40):
         add("sight", "view distance: {} deg {}, {} deg {}".format(abs(y), "left" if y > 0 else "right" if y < 0 else "ahead",
@@ -129,7 +126,7 @@ for n_ in ("straight up", "up and ahead", "up and left", "up and behind", "up an
 for k in range(E.N_LONG):
     add("sight", "long distance at {} deg".format(k * 45), "far wall distance in that direction; -1 when outside his field of view",
         "units / 2000, capped at 1", "v4")
-for w in W:
+for w in OW:
     add("enemy", "enemy holds {}".format(WN[w]), "only while in view", "0 or 1", "v4")
 add("enemy", "enemy facing: sin", "whether the enemy is turned toward him; only while in view", "sin", "v4")
 add("enemy", "enemy facing: cos", "", "cos", "v4")
@@ -153,7 +150,7 @@ assert len(rows) == E.OBS_BASE + E.N_EXTRA, (len(rows), E.OBS_BASE + E.N_EXTRA)
 add("enemy shots", "enemy firing now", "a shot he saw (enemy noticed in view) or heard (within 1200 units) in the last frames", "0 or 1", "v5")
 add("enemy shots", "enemy shot recently", "fades after the last shot", "exp(-2 x seconds)", "v5")
 add("enemy shots", "time since the enemy's last shot", "", "seconds / 3, capped at 1", "v5")
-for w in W:
+for w in OW:
     add("enemy shots", "last shot was a {}".format(WN[w]), "every weapon has its own sound; for 5 seconds", "0 or 1", "v5")
 add("enemy shots", "enemy reloading", "time until that weapon can fire again", "seconds / 1.5", "v5")
 add("enemy shots", "the shot was seen", "seen, not only heard", "0 or 1", "v5")
@@ -182,7 +179,7 @@ for it_, tm in (("mega health", 35), ("red armor", 25)):
     add("memory", "{}: how long ago".format(it_), "against its {} s timer".format(tm), "seconds / {}, capped at 2".format(tm), "v6")
 add("memory", "enemy has the mega health", "heard or seen taken since his last death", "0 or 1", "v6")
 add("memory", "enemy has the red armor", "heard or seen taken since his last death", "0 or 1", "v6")
-for w in W:
+for w in OW:
     add("memory", "enemy seen with {}".format(WN[w]), "in his hands at some point since his last death", "0 or 1", "v6")
 add("memory", "time since his own respawn", "", "seconds / 30, capped at 2", "v6")
 add("memory", "enemy's last death known", "he killed him, or heard him die", "0 or 1", "v6")
@@ -191,8 +188,6 @@ add("self", "focus left", "sharp tracking for 2 s with an enemy in view, then sl
 # ---- routes (2026-10-06): the way along the floor, as a player who knows the map has it
 for it_ in ("mega health", "red armor", "rocket launcher", "railgun", "lightning gun"):
     add("routes", "{}: travel time".format(it_), "along the floor from where he stands (zero on maps without a walking map)", "seconds / 10, capped at 2", "v7")
-    for ax in XYZ:
-        add("routes", "{}: next step {}".format(it_, ax), "where the way there leads next", "units / 200, between -1 and 1", "v7")
 # ---- the mouse pad and hearing (2026-10-06)
 N_BEFORE = len(rows)                                     # (in the group network the "more enemies" block sits here)
 add("own hands", "hand on the mouse pad", "from the left edge to the right edge; 240 degrees of turning across", "-1 to 1", "v7")
@@ -220,8 +215,18 @@ for j in range(2):
         add("projectiles", "his own {} projectile: position {}".format(n_, ax), "", "units / 1000", "v7")
     for ax in XYZ:
         add("projectiles", "his own {} projectile: velocity {}".format(n_, ax), "", "units/s / 1000", "v7")
-    for k_ in ("rocket", "grenade", "plasma"):
-        add("projectiles", "his own {} projectile: is a {}".format(n_, k_), "", "0 or 1", "v7")
+    add("projectiles", "his own {} projectile: is a rocket".format(n_), "", "0 or 1", "v7")
+# ---- the intention and the map cells (2026-10-06, v8)
+add("intention", "chosen way: travel time", "seconds along the floor to the item he has chosen to go for (zero with none chosen)", "seconds / 10, capped at 2", "v8")
+for ax in XYZ:
+    add("intention", "chosen way: next step {}".format(ax), "where the way there leads next", "units / 200, between -1 and 1", "v8")
+add("intention", "chosen item is up", "", "0 or 1", "v8")
+add("intention", "chosen item comes back in", "", "seconds / 30, capped at 2", "v8")
+for nm in ("none", "the mega health", "the red armor", "the rocket launcher", "the railgun", "the lightning gun"):
+    add("intention", "going for {}".format(nm), "his own choice, read once a second and held", "0 or 1", "v8")
+add("intention", "seconds since chosen", "", "seconds / 10, capped at 2", "v8")
+add("map cells", "his own cell", "the 64-unit map cell (two height layers) he stands in; the network keeps 16 learned numbers per cell", "cell number (a learned table)", "v8")
+add("map cells", "the enemy's last known cell", "where he was last seen or heard, for 5 s; 0 = unknown", "cell number (a learned table)", "v8")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now
@@ -251,5 +256,6 @@ for r in rows:
     groups[r[1]] = groups.get(r[1], 0) + 1
 print("{} inputs ({} in the network training now) -> docs/INPUTS.csv".format(len(rows), E.OBS_DIM))
 print(", ".join("{} {}".format(v, k) for k, v in groups.items()))
-ACT = ("forward / back", "strafe", "jump / crouch", "turn speed", "pitch speed", "fire", "weapon key", "walk (does nothing)", "zoom")
+ACT = ("forward / back", "strafe", "jump / crouch", "turn speed", "pitch speed", "fire", "weapon key", "walk", "zoom", "lift the mouse",
+       "intention")
 print("outputs: " + ", ".join("{} ({} choices)".format(n, d) for n, d in zip(ACT, E.ACTION_DIMS)))

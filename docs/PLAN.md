@@ -70,12 +70,13 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-`duel_gru_v7` is training until 19:00 on 2026-10-06 on `arena1`: groups of 2, 3 and 4, a pickup reward, damage taken
-at half weight, routes to the items as inputs (RESULTS 2026-10-06 07:00). The night before (`duel_gru_v6`, two
-players, no pickup reward) made him passive: the copies learned to stay apart and never took the items.
+`duel_gru_v8` is training until 19:00 on 2026-10-06 on `arena1` (B-100): groups of 2, 3 and 4, an explicit intention
+head (what to go for, read once a second, fed back with the way there), a learned map table, pickup reward 0.75 with a
+loss when an enemy takes the mega or red, 97 fewer inputs (RESULTS 2026-10-06 12:16). The morning's `duel_gru_v7` did
+not take items at any pickup reward; the night's `duel_gru_v6` hid.
 
-Open ideas: a mouse pad that runs out (against spinning on the spot), fading the pickup reward out once items are
-fought over, B-92 (benchmark after training, more players), B-95 (key budget), `arena2`.
+Open: B-102 (a stacking runner in the league, if the intention collapses to "nothing"), fading the item rewards out
+once items are fought over, B-92 (more players for the benchmark), B-95 (key budget), B-99 items 6 to 8, `arena2`.
 
 ## Owner decisions
 
