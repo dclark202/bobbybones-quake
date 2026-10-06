@@ -58,6 +58,17 @@ Suggested note tags (first word of the text): `aim`, `move`, `weapon`, `items`, 
 - `events.jsonl`: `room_start` (`room`), `room_result` (`room`, `result` = the room's metrics); `note` and
   `death` carry `room`.
 
+## Free-for-all sessions (`plugins/ffabot.py`, schema 4)
+
+One session per map load, in `data/<server data>/sessions/<date>_<map>_ffa/`. `meta.json` as the 1v1 sessions with
+`kind: ffa`, `seats: 6`. `frames.csv`: one row per Bobby per server frame (25 ms): `t, server_ms, bot, seat`, his own
+state (`b_*`, the same 18 columns as the 1v1 rows: position, velocity, view, health, armor, weapon, ammo, keys),
+`foe_seat` (the enemy he attends to), `foe_bot`, `b_sees`, `b_seen_ago`, `b_aim_err` (to that enemy; -1 with none),
+`intent` (none / MH / RA / RL / RG / LG), `people`, `bots`. `events.jsonl`: `join` / `leave` (seat, bot), `death`
+(seat, bot, the game's kill and death counts), `pickup` (item, seat, bot), `bots` (n set by a player), `note`,
+`minute` per Bobby (share of frames with an enemy in sight, firing, weapon shares, the game's kills, deaths, damage
+dealt and taken, how many people and bots), `end`. No names or Steam IDs.
+
 ## Test suite cards
 One JSON per card: `{suite, run, subject, minutes, maps, rooms: {<room name>: {<metric>: value}}}`.
 - Policy cards: `data/sim_runs/<run>/suite/card_<minutes>.json` and `.md` (`sim/test_suite.py`).

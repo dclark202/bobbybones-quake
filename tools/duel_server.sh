@@ -8,6 +8,8 @@
 #   bash tools/duel_server.sh stop
 # Options: PASSWORD=<word>, RESTART=1 (restart after a crash or reboot), HOSTNAME_QL="<name in the server list>"
 # With SPAR=1 no port is opened and a Nightmare bot is the opponent (for measuring); SKILL=4 makes it Hardcore.
+# FFA=<n> runs the free-for-all plugin instead (plugins/ffabot.py): n Bobbys (1 to 4), six seats, !bots changes n.
+# PORT=<udp port> for a second container (default 27970).
 set -e
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
@@ -33,7 +35,10 @@ fi
 QLX_OWNER=""
 [ -f data/owner.env ] && QLX_OWNER="$(grep '^QLX_OWNER=' data/owner.env | cut -d= -f2)"
 PW="${PASSWORD:-}"                     # no password by default; PASSWORD=<word> sets one
-docker run -d $RESTART_OPT --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" \
-    -p 27970:27970/udp -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" qlbot +set net_port 27970 \
+PORT="${PORT:-27970}"
+PLUGINS="botctl, duelbot"; FACTORY=duel; MODE="1v1"
+if [ -n "$FFA" ]; then PLUGINS="botctl, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
+docker run -d $RESTART_OPT --name "$NAME" -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" \
+    -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" qlbot +set net_port "$PORT" \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
-echo "play-test server up on port 27970, map $MAP ($([ -n "$PW" ] && echo "password set" || echo "no password"))"
+echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"))"

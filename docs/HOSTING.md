@@ -69,6 +69,17 @@ RESTART=1 HOSTNAME_QL="BobbyBones | duel the learning bot | !rooms" bash tools/d
 
 One server holds one duel at a time; other players spectate and queue (the game's own duel queue).
 
+## Free-for-all instead of 1v1
+
+```bash
+FFA=3 bash tools/duel_server.sh duel_gru_v8 arena1 duel_env_ffa     # three Bobbys, three seats for people
+```
+`FFA=<n>` loads `plugins/ffabot.py` instead of the duel plugin and the `ffa` factory: one six-seat group simulator
+(the one he trained in), every client gets a seat on joining, all Bobbys think in one network pass per frame. `!bots <n>`
+changes the number of Bobbys while the server runs. Cost per Bobby per frame is about 70 ray casts and one pass of a
+1.5 M-weight network in numpy: four Bobbys fit inside the 25 ms server frame on one core. `PORT=<udp port>` runs a second
+container beside the 1v1 one. Logs: `docs/LOGS.md`, schema 4.
+
 ## Our own maps and the Steam Workshop
 
 Quake Live clients get custom maps only from the Steam Workshop: the old downloads from the server (HTTP, UDP)

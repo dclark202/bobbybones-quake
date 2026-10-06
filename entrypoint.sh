@@ -20,5 +20,5 @@ cd /ql
     +set bot_nochat 1 \
     +exec lab.cfg \
     "$@" \
-    +map "${LAB_MAP:-bloodrun}" duel 2>&1 | tee -a /tmp/practice/server.log
+    +map "${LAB_MAP:-bloodrun}" "${FACTORY:-duel}" 2>&1 | tee -a /tmp/practice/server.log
 exit ${PIPESTATUS[0]}

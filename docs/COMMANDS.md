@@ -14,6 +14,19 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 | `!arena box` / `!arena env` / `!arena yard` `[minutes]` / `!arena off` | On the test map: fight BobbyBones in the aim box, the environment box or the yard (a small two-level duel arena: balconies, stairs, a ramp, a tower with a catwalk, a jump pad, a teleporter, a tunnel; not in his training yet) under the rules he trains with: full weapon set at spawn, 125 health, nobody leaves the room, five minutes (or the number given). The score and damage are announced at the end |
 | `!spar` / `!spar off` | You become a spectator and BobbyBones plays a Nightmare bot in a real match. `!spar off`, or joining the game, ends it |
 
+## Free-for-all servers (`plugins/ffabot.py`)
+
+A server started with `FFA=<n>` runs up to four Bobbys and people together, six seats in all, everybody against
+everybody, in permanent warmup.
+
+| Command | Who | What it does |
+|---|---|---|
+| `!bots <1-4>` | anyone | how many Bobbys play; people get the other seats (6 - n). Raising it is refused while more people than that are playing; lowering it frees seats. Nobody can push a bot out. |
+| `!map <arena1|testlab|bloodrun|aerowalk|lostworld>` | anyone | change the map (free-for-all factory) |
+| `!help`, `!note <text>` | anyone | as on the 1v1 server |
+
+The 1v1 commands (`!duel`, `!reflex`, `!movement`, `!room`) are not on a free-for-all server.
+
 ## Test rooms
 
 BobbyBones' body becomes the scripted target or opponent and you are measured. Each room counts down 5 s, runs,

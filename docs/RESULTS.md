@@ -60,6 +60,8 @@ From `duel_gru_v7` at update 40 of the restart (`policy_end_v7_update40.pt`, 216
 6. **Learning rate over cumulative training time** (`--lr-minutes 1440`: a tenth after 24 h in all), not reset to full at every restart (six restarts today, six jolts).
 Plugin fix on the way: the server had crashed on the table lookup (`P.files` on a dict); retested 2-5 in 2 min.
 
+**13:30 — free-for-all plugin built (B-105, owner's request, not on the public server yet):** `plugins/ffabot.py`, up to four Bobbys and people in six seats. Test with three Bobbys on `arena1`: no errors over 9,000 frames, each at 257 to 277 u/s, an enemy in sight 33 to 41% of the time, firing 18%, 13 kills in the first 90 s, intentions spread over mega / rockets / lightning (red armor 9% for one of them). Test server on port 27971 for the owner to try.
+
 **What "really bad" means, agreed in advance:** fights per group-minute under 5 or firing under 15% (he avoids fights for the items); void deaths above 0.4 per player-minute; the run stalls (no update for 10 min); or by 19:00 intention trips reached still under 2% with mega under 0.05 per player-minute. Anything else waits for the 19:00 review.
 
 ## 2026-10-06 07:00 — `duel_gru_v7`: pickup reward, routes to the items, groups of 2, 3 and 4 (owner's plan after the night)
