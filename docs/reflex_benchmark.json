@@ -1,47 +1,79 @@
 {
- "note": "Benchmark for BobbyBones' aim limits (2026-10-05): 15% better than the first player measured (two runs of the reflex test, averaged). To be replaced by the median of more players.",
+ "note": "Benchmark for BobbyBones' aim limits (2026-10-05): 20% better than the first player measured (his latest run of the reflex test, moving as he normally aims), for the calm half and for the half under fire. To be replaced by the middle of more players.",
  "player": {
-  "flick": {
-   "first_shot_hits": 0.847,
-   "reaction_ms": 237.5,
-   "time_on_target_ms": 462.5
-  },
-  "rocket": {
-   "damage_per_rocket": 59.85,
-   "rockets_that_hurt": 0.911
-  },
   "slow": {
-   "aim_error_deg": 2.73,
-   "on_target": 0.736
+   "aim_error_deg": 1.85,
+   "on_target": 0.67
   },
   "track": {
-   "aim_error_deg": 4.13,
-   "damage_per_s": 63.8,
-   "on_target": 0.433,
-   "tracking_lag_ms": 192.0,
-   "turn_reaction_ms": 150.0
+   "aim_error_deg": 2.45,
+   "on_target": 0.401,
+   "tracking_lag_ms": 102.0,
+   "turn_reaction_ms": 212.0,
+   "damage_per_s": 57.7
+  },
+  "track_fire": {
+   "aim_error_deg": 4.55,
+   "on_target": 0.204,
+   "tracking_lag_ms": 138.0,
+   "turn_reaction_ms": 225.0,
+   "damage_per_s": 35.7
+  },
+  "flick": {
+   "reaction_ms": 200.0,
+   "time_on_target_ms": 350.0,
+   "first_shot_hits": 0.875
+  },
+  "flick_fire": {
+   "reaction_ms": 350.0,
+   "time_on_target_ms": 550.0,
+   "first_shot_hits": 0.625
+  },
+  "rocket": {
+   "rockets_that_hurt": 0.833,
+   "damage_per_rocket": 53.9
+  },
+  "rocket_fire": {
+   "rockets_that_hurt": 0.917,
+   "damage_per_rocket": 51.7
   }
  },
  "target": {
-  "flick": {
-   "first_shot_hits": 0.97,
-   "reaction_ms": 201.9,
-   "time_on_target_ms": 393.1
-  },
-  "rocket": {
-   "damage_per_rocket": 68.8,
-   "rockets_that_hurt": 0.97
-  },
   "slow": {
-   "aim_error_deg": 2.321,
-   "on_target": 0.846
+   "aim_error_deg": 1.48,
+   "on_target": 0.804
   },
   "track": {
-   "aim_error_deg": 3.51,
-   "damage_per_s": 73.4,
-   "on_target": 0.498,
-   "tracking_lag_ms": 163.2,
-   "turn_reaction_ms": 127.5
+   "aim_error_deg": 1.96,
+   "on_target": 0.481,
+   "tracking_lag_ms": 81.6,
+   "turn_reaction_ms": 169.6,
+   "damage_per_s": 69.2
+  },
+  "track_fire": {
+   "aim_error_deg": 3.64,
+   "on_target": 0.245,
+   "tracking_lag_ms": 110.4,
+   "turn_reaction_ms": 180.0,
+   "damage_per_s": 42.8
+  },
+  "flick": {
+   "reaction_ms": 160.0,
+   "time_on_target_ms": 280.0,
+   "first_shot_hits": 0.95
+  },
+  "flick_fire": {
+   "reaction_ms": 280.0,
+   "time_on_target_ms": 440.0,
+   "first_shot_hits": 0.75
+  },
+  "rocket": {
+   "rockets_that_hurt": 0.95,
+   "damage_per_rocket": 64.7
+  },
+  "rocket_fire": {
+   "rockets_that_hurt": 0.95,
+   "damage_per_rocket": 62.0
   }
  }
 }

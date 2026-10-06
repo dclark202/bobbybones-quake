@@ -101,7 +101,7 @@ plugins/             minqlx plugins: duelbot (plays the network, test rooms, log
 minqlx/              vendored minqlx + the input hook (see minqlx/UPSTREAM.md)
 tools/               server script, test-map builder, demo downloader and parser
 maps/testlab/       the test map (aim box, environment box, movement courses, the yard without items)
-maps/train-arena/      the yard with items: the arena of the current goal
+maps/arena1/      the yard with items: the arena of the current goal
 maps/atlas/          per duel map: areas, items and routes seeded from pro demos
 legacy/              the first approach (a layer on the Nightmare bot); not used
 docs/                PLAN, BACKLOG, RESULTS, LOGS

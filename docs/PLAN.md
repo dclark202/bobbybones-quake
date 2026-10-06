@@ -53,7 +53,7 @@ same commit.
 
 The first target is smaller than "a duel bot on the popular duel maps":
 1. Plays human-like Quake (no key spam, steady aim, looks where it matters).
-2. In one small arena: the yard (map `train-arena`, chosen by the owner 2026-10-05; he reviews the map before it
+2. In one small arena: the yard (map `arena1`, chosen by the owner 2026-10-05; he reviews the map before it
    goes into training).
 3. Shows knowledge of that map and moves efficiently on it.
 4. One against one, or all against all up to four players, whichever brings out the behaviour better.

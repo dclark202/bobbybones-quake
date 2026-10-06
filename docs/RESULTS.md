@@ -5,6 +5,43 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-05 21:45 — the benchmark redone from a run where the player moves as he aims; `arena1` (B-91 to B-94)
+
+The owner: telling players to stand still is wrong, good players aim by moving. He ran the test again moving
+normally; that run alone is the benchmark now, at 20% better than him (`docs/reflex_benchmark.json`).
+
+**What went wrong before**: tracking lag was measured from how the view turns against how the direction to the
+target changes. A player who strafes with the target hardly turns his view, so that number was meaningless (it
+gave 192 ms, then 0 ms). It is now the slope of the gap between crosshair and target against how fast the target
+itself crosses the view, which holds however the gap is closed. On that measure he and Bobby were about level in
+timing all along; **the 150 ms tracking delay set two hours earlier was based on the bad number and is withdrawn**
+(75 ms stays). Where Bobby is ahead is precision, not speed.
+
+| Measure | Player (last run) | Benchmark (20% better) | Bobby (`duel_gru_v5`, new limits, untrained for them) |
+|---|---|---|---|
+| Strafing target: share of time on it | 40% | 48% | 62% |
+| Strafing target: lightning damage a second | 58 | 69 | 86 |
+| Strafing target: crosshair trails it by | 102 ms | 82 ms | 132 ms |
+| Strafing target: catches a turn after | 212 ms | 170 ms | 228 ms |
+| Jumping target: a third of the way there after | 200 ms | 160 ms | 197 ms |
+| Jumping target: on it after | 350 ms | 280 ms | 309 ms |
+| Jumping target: first shot hits | 88% | 95% | 73% |
+| Rockets: share that hurt the target | 83% | 95% | 19% |
+| Under fire: time on the strafing target | 20% (-49%) | 25% | 41% (-35%) |
+| Under fire: lightning damage a second | 36 (-38%) | 43 | 65 (-24%) |
+| Under fire: first rail shot hits | 63% (-29%) | 75% | 49% (-33%) |
+| Under fire: on a new target after | 550 ms (+57%) | 440 ms | 309 ms (+0%) |
+
+- **Limits set from it**: error on the seen direction 0.5 -> 1.0 deg; flinch 0.06 -> 0.2 deg per point of damage (at
+  most 4); tracking delay stays 75 ms with focus bursts (50 ms sharp for 2 s, then 100 ms). Being shot at cost the
+  player about half his tracking and a third of his rail hits: the flinch is sized to that.
+- **Still off**: his lightning tracking is above the benchmark (62% against 48%) and his rail and rockets below it.
+  Four 20-second samples per room are noisy (one sweep gave more time on target with more error), and the network
+  has not trained under these limits, so the next step is to train, then measure with more repeats, then adjust.
+- The reflex test no longer asks players to stand still; Bobby is measured moving freely too. Aim error is the
+  median now (the mean was thrown by moments of looking away).
+- Map `train-arena` renamed `arena1` (an `arena2` for closer fights is planned).
+
 ## 2026-10-05 21:00 — aim under fire and focus in bursts: built, measured on Bobby, waiting for the player's run (B-93, B-94)
 
 - **Reflex test**: in track, flick and rocket the target now shoots back with the machine gun for the second 20

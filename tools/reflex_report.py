@@ -70,36 +70,29 @@ def measure(room, d):
     shots = int(d["shot"].sum())
     if room in ("slow", "track"):
         k = slice(int(2.0 / DT), None)                        # the first two seconds are for finding the target
-        out.update(aim_error_deg=round(float(np.mean(err[k])), 2), on_target=round(float(np.mean(on[k])), 3),
+        out.update(aim_error_deg=round(float(np.median(err[k])), 2), on_target=round(float(np.mean(on[k])), 3),
                    damage_per_s=round(float(d["dmg"][k].sum() / max(1, len(err[k])) / DT), 1))
     if room == "slow":                                        # view movement that the target's movement does not explain
         k = slice(int(2.0 / DT), None)
         out["jitter_deg_per_frame"] = round(float(np.sqrt(np.mean((vy[k] - sm(vb)[k]) ** 2 + vp[k] ** 2))), 3)
     if room == "track":
+        # Good players aim by moving as much as with the mouse, so the view's own turning says little. What counts
+        # is the gap between crosshair and target, however it is closed. The crosshair trails the target's own
+        # sideways movement: gap = lag x how fast the target moves across the view. The lag is that slope.
         k0 = int(2.0 / DT)
-        a, b = vy[k0:], vb[k0:]
-        best, cors = 0, []
-        for lag in range(0, 21):                              # how many frames the view runs behind the target
-            x, y = a[lag:], b[:len(b) - lag]
-            cors.append(float(np.corrcoef(x, y)[0, 1]) if x.std() > 1e-6 and y.std() > 1e-6 else 0.0)
-        best = int(np.argmax(cors))
-        frac = 0.0
-        if 0 < best < 20:                                     # finer than one frame: the top of a parabola through three points
-            c0, c1, c2 = cors[best - 1], cors[best], cors[best + 1]
-            den = c0 - 2 * c1 + c2
-            frac = 0.5 * (c0 - c2) / den if abs(den) > 1e-9 else 0.0
-        out["tracking_lag_ms"] = round((best + frac) * DT * 1000)
-        out["tracking_match"] = round(max(cors), 2)           # 1 = the view follows the target's movement exactly
-        # turns: the target's sideways movement changes sign; how long until the view turns the new way
-        sgn = np.sign(np.where(np.abs(vb) > 0.05, vb, 0.0))
-        vs = np.sign(sm(vy))                                  # the view's direction, smoothed over five frames
+        nxt = np.vstack([d["tpos"][1:], d["tpos"][-1:]]) + np.array([0, 0, 4.0]) - eye       # target one frame on, eye held
+        w_t = wrap(np.degrees(np.arctan2(nxt[:, 1], nxt[:, 0])) - bear) / DT                   # degrees a second, his doing only
+        w_t = sm(w_t, 3)
+        e_, w_ = ey[k0:], w_t[k0:]
+        ok = np.abs(w_) < 200                                # (not the frames where the target is put somewhere new)
+        out["tracking_lag_ms"] = round(float((e_[ok] * w_[ok]).sum() / max(1e-6, (w_[ok] ** 2).sum()) * 1000))
+        # turns: the target reverses; the gap then grows on the new side until the player has caught on
+        sgn = np.sign(np.where(np.abs(w_t) > 8.0, w_t, 0.0))
         turns, last = [], 0.0
-        for i in range(k0, len(sgn) - 40):
-            if sgn[i] != 0 and last != 0 and sgn[i] != last and (sgn[i + 1:i + 6] == sgn[i]).all() and vs[i] != sgn[i]:
-                for j in range(i, i + 36):
-                    if (vs[j:j + 4] == sgn[i]).all():
-                        turns.append((j - i) * DT * 1000)
-                        break
+        for i in range(k0, len(sgn) - 30):
+            if sgn[i] != 0 and last != 0 and sgn[i] != last and (sgn[i + 1:i + 6] == sgn[i]).all():
+                g = sm(ey, 3)[i:i + 24] * sgn[i]
+                turns.append(int(np.argmax(g)) * DT * 1000)
             if sgn[i] != 0:
                 last = sgn[i]
         out["turn_reaction_ms"] = round(float(np.median(turns))) if turns else None
@@ -111,8 +104,9 @@ def measure(room, d):
             end = min(len(err), hops[n_ + 1] if n_ + 1 < len(hops) else len(err), h + int(1.8 / DT))
             sp = np.hypot(vy[h:end], vp[h:end])
             size.append(float(err[min(h + 1, len(err) - 1)]))
-            e0 = float(err[min(h + 1, len(err) - 1)])         # the view has started toward the new place: a tenth of the way
-            mv = np.nonzero(err[h + 1:end] < 0.9 * e0)[0]
+            e0 = float(err[min(h + 1, len(err) - 1)])         # he is on his way to the new place:
+            gap = err[h + 1:end]                              # ... a third of the way, and staying there
+            mv = np.nonzero((gap[:-1] < 0.67 * e0) & (gap[1:] < 0.67 * e0))[0]
             if len(mv) and e0 > 3.0:
                 react.append((mv[0] + 1) * DT * 1000)
             o_ = np.nonzero(on[h + 1:end])[0]
@@ -188,7 +182,7 @@ def sessions(folder):
 
 
 # ---------------------------------------------------------------- BobbyBones: the same rooms in the simulator
-def bobby(run, policy=None, repeats=4, react_ms=None):
+def bobby(run, policy=None, repeats=4, react_ms=None, percept=None, flinch=None):
     sys.path.insert(0, os.path.join(ROOT, "sim"))
     import duel_env as E
     import test_suite as T
@@ -196,6 +190,10 @@ def bobby(run, policy=None, repeats=4, react_ms=None):
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "testlab.bsp"), n_matches=repeats, seed=21, loadout="all")
     env.react_frames = round((react_ms or pol.react_ms) / 25)
     env.no_walk, env.inf_ammo = True, True
+    if percept is not None:
+        env.percept_sigma = percept
+    if flinch is not None:
+        E.FLINCH_PER_DMG = flinch
     A = env.lab["aim"]
     rng = np.random.default_rng(3)
     subj = np.arange(0, env.n, 2)
@@ -274,7 +272,6 @@ def bobby(run, policy=None, repeats=4, react_ms=None):
                 r["pos"].append(s[i, :3].copy()), r["yaw"].append(float(env.yaw[i])), r["pitch"].append(float(env.pitch[i]))
                 r["tpos"].append(s[i + 1, :3].copy())
             act, h = pol.act(obs, h)
-            act[subj, 0], act[subj, 1], act[subj, 2] = 1, 1, 0   # he stands, as people are asked to: hands and eyes only
             if room == "flick":
                 pin = env.state[tgt, :3].copy()
             obs, _, done, _ = env.step(act)
@@ -307,16 +304,16 @@ def mean_of(runs):
     return out
 
 
-LINES = (("slow", "own_speed", "Slow target: his own speed (should be near 0)"),
+LINES = (("slow", "own_speed", "Slow target: his own speed"),
          ("slow", "aim_error_deg", "Slow target: aim error (degrees)"),
          ("slow", "jitter_deg_per_frame", "Slow target: hand jitter (degrees a frame)"),
          ("slow", "on_target", "Slow target: share of time on it"),
          ("track", "aim_error_deg", "Strafing target: aim error (degrees)"),
          ("track", "on_target", "Strafing target: share of time on it"),
-         ("track", "tracking_lag_ms", "Strafing target: view runs behind by (ms)"),
-         ("track", "turn_reaction_ms", "Strafing target: follows a turn after (ms)"),
+         ("track", "tracking_lag_ms", "Strafing target: crosshair trails it by (ms)"),
+         ("track", "turn_reaction_ms", "Strafing target: catches a turn after (ms)"),
          ("track", "damage_per_s", "Strafing target: lightning damage a second"),
-         ("flick", "reaction_ms", "Jumping target: view starts moving after (ms)"),
+         ("flick", "reaction_ms", "Jumping target: a third of the way there after (ms)"),
          ("flick", "time_on_target_ms", "Jumping target: on it after (ms)"),
          ("flick", "time_to_shot_ms", "Jumping target: shot after (ms)"),
          ("flick", "peak_speed_deg_per_s", "Jumping target: fastest turn (degrees a second)"),
@@ -330,9 +327,9 @@ LINES = (("slow", "own_speed", "Slow target: his own speed (should be near 0)"),
 
 FIRE = (("track", "aim_error_deg", "Strafing target: aim error (degrees)"),
         ("track", "on_target", "Strafing target: share of time on it"),
-        ("track", "tracking_lag_ms", "Strafing target: view runs behind by (ms)"),
+        ("track", "tracking_lag_ms", "Strafing target: crosshair trails it by (ms)"),
         ("track", "damage_per_s", "Strafing target: lightning damage a second"),
-        ("flick", "reaction_ms", "Jumping target: view starts moving after (ms)"),
+        ("flick", "reaction_ms", "Jumping target: a third of the way there after (ms)"),
         ("flick", "time_on_target_ms", "Jumping target: on it after (ms)"),
         ("flick", "first_shot_hits", "Jumping target: first shot hits"),
         ("rocket", "rockets_that_hurt", "Rockets: share that hurt the target"),
@@ -344,13 +341,16 @@ def main():
     ap.add_argument("--sessions", default=os.path.join(ROOT, "data", "duellive", "sessions"))
     ap.add_argument("--bobby", default="", help="run name: also measure this checkpoint in the simulator")
     ap.add_argument("--policy", default=None)
+    ap.add_argument("--percept", type=float, default=None, help="measure him with this error on the seen direction (degrees)")
+    ap.add_argument("--flinch", type=float, default=None, help="measure him with this flinch (degrees per point of damage)")
+    ap.add_argument("--last", action="store_true", help="people: only each player's latest run of each room (default: the mean of all)")
     ap.add_argument("--react-ms", type=float, default=None, help="measure him with this tracking delay (default: the one he trained with)")
     a = ap.parse_args()
     table = {}
     for who, rooms in sessions(a.sessions).items():
-        table[who] = {room: mean_of(runs) for room, runs in rooms.items()}
+        table[who] = {room: mean_of(runs[-1:] if a.last else runs) for room, runs in rooms.items()}
     if a.bobby:
-        name, rooms = bobby(a.bobby, a.policy, react_ms=a.react_ms)
+        name, rooms = bobby(a.bobby, a.policy, react_ms=a.react_ms, percept=a.percept, flinch=a.flinch)
         table[name] = {room: mean_of(runs) for room, runs in rooms.items()}
     if not table:
         print("no reflex rooms found in", a.sessions)

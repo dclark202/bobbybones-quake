@@ -68,5 +68,5 @@ if __name__ == "__main__":
         bad = np.nonzero((a["obs"] != b["obs"]).any((1, 2)) | (a["rew"] != b["rew"]).any(1))[0]
         print("first difference at frame", int(bad[0]), "inputs", np.nonzero((a["obs"][bad[0]] != b["obs"][bad[0]]).any(0))[0][:20])
     print("TWO PLAYERS: {}".format("identical to duel_env over 3000 frames" if same else "DIFFERENT"))
-    for g, bsp, room in ((4, "testlab", 2), (6, "testlab", 2), (4, "train-arena", 3), (6, "train-arena", 3)):
+    for g, bsp, room in ((4, "testlab", 2), (6, "testlab", 2), (4, "arena1", 3), (6, "arena1", 3)):
         subprocess.run([sys.executable, __file__, "duel_env_ffa", str(g), "3000", "-", bsp, str(room)], check=True)

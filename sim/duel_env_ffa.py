@@ -134,11 +134,11 @@ LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loa
 # (2026-10-05) He reads where the enemy is against his crosshair only this well: a slowly drifting error, in degrees,
 # on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
 # gap between crosshair and target by eye, not to a hundredth of a degree.
-PERCEPT_SIGMA, PERCEPT_TAU = 0.5, 0.15                  # degrees; seconds over which the error drifts
+PERCEPT_SIGMA, PERCEPT_TAU = 1.0, 0.15                  # degrees; seconds over which the error drifts
 # (2026-10-05, B-94) Being shot at costs aim: a hit throws his read of the enemy's direction off by FLINCH_PER_DMG
 # degrees per point of damage (at most FLINCH_MAX at a time), and the error stays larger while the flinch fades
 # (FLINCH_TAU seconds). First values; to be set from players in the reflex test (calm half against the half under fire).
-FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = 0.06, 2.5, 0.3
+FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = 0.2, 4.0, 0.3
 # (2026-10-05, B-93) The tracking delay is an average, not a floor: with an enemy in view he is sharper for a short
 # spell (FOCUS_GAIN frames quicker) while his focus lasts, then slower than the average (FOCUS_LOSS frames) until
 # it has come back. Focus runs down at one second a second with an enemy in view and comes back at FOCUS_REFILL.

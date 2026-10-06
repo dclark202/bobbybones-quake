@@ -13,7 +13,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.
-- **Goal 1 (2026-10-05)**: human-like play in one small arena, the yard (`train-arena`, with items), showing
+- **Goal 1 (2026-10-05)**: human-like play in one small arena, the yard (`arena1`, with items), showing
   knowledge of the map and efficient movement on it, one against one or all against all up to four players, and
   beating Nightmare there. See `docs/PLAN.md`. Method: tighten the human limits until the right play appears;
   do not add rewards for single behaviors without asking.

@@ -58,7 +58,7 @@ Your card is saved to `data/duellive/suite/human_<time>.json`; the session with 
 ## The aim reflex test (about three minutes)
 
 A short test of hands and eyes only, for setting Bobby's aim limits against real players. `!map testlab`, then
-`!reflex`. Stand where you are put; nothing shoots back; two or three runs give a steadier result.
+`!reflex`. Move as you normally would when you aim. In track, flick and rocket the target shoots back for the second 20 seconds (you cannot die): each half is measured, and the difference is what being shot at costs. Two or three runs give a steadier result.
 
 | Room | Weapon | Target | What it measures |
 |---|---|---|---|

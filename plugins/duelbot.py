@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("testlab", "train-arena", "bloodrun", "aerowalk", "lostworld", "campgrounds")      # the only maps a player can pick with !map
+MAPS = ("testlab", "arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds")      # the only maps a player can pick with !map
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 3
@@ -77,7 +77,7 @@ class duelbot(minqlx.Plugin):
         self.add_hook("team_switch_attempt", self.on_team_switch)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("maps", self.cmd_maps, 0)
-        self.add_command("map", self.cmd_map, 0, usage="<testlab|train-arena|bloodrun|aerowalk|lostworld|campgrounds>")
+        self.add_command("map", self.cmd_map, 0, usage="<testlab|arena1|bloodrun|aerowalk|lostworld|campgrounds>")
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 5, usage="<weapon|off>")
@@ -211,7 +211,7 @@ class duelbot(minqlx.Plugin):
             player.tell(line)
 
     def cmd_maps(self, player, msg, channel):
-        player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests, ^3train-arena^7 is the small duel map.".format(", ".join(MAPS)))
+        player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests, ^3arena1^7 is the small duel map.".format(", ".join(MAPS)))
 
     def on_player_loaded(self, player):
         if not is_bot(player):
@@ -364,7 +364,7 @@ class duelbot(minqlx.Plugin):
         """!duel [minutes] = a timed duel against BobbyBones: in the environment room on the test lab (full weapons),
         on the training arena across the whole map (duel spawn, items on the map)"""
         if not self.lab:
-            player.tell("Timed duels are on ^3!map testlab^7 and ^3!map train-arena")
+            player.tell("Timed duels are on ^3!map testlab^7 and ^3!map arena1")
             return
         where = "env" if "env" in self.lab else "yard"
         return self.cmd_arena(player, ["!arena", where] + [m for m in msg[1:2]], channel)
@@ -411,8 +411,8 @@ class duelbot(minqlx.Plugin):
             out.append(r)
         if a[0] == "reflex" and len(a) == 1:
             self.queue, self.room, self.batch = list(out), None, None
-            self.msg("^3Aim reflex test:^7 four short rooms, about three and a half minutes. In three of them the target shoots back for the second half. Stand where you are put and aim "
-                     "as well as you can; nothing shoots back. !room off stops it.")
+            self.msg("^3Aim reflex test:^7 four short rooms, about three and a half minutes. In three of them the target shoots back for the second half. Aim as well as you can and move as you normally would. "
+                     "!room off stops it.")
             return
         if a[0] != "suite":                                  # a single room starts right away, replacing whatever runs
             self.queue, self.room = [], None
@@ -1000,7 +1000,7 @@ class duelbot(minqlx.Plugin):
                     "track": "Lightning gun. The target strafes and turns round without warning: stay on it.",
                     "flick": "Railgun. The target jumps to a new place every few seconds: hit it as fast as you can.",
                     "rocket": "Rockets. The target strafes and turns round without warning: hit it."}[r["reflex"]] + \
-                " Please stand still: this measures your aim, not your movement." + \
+                " Move as you normally would when you aim." + \
                 (" After 20 seconds the target shoots back (you cannot die): keep aiming." if r.get("under_fire") else "")
         if k == "aim":
             return "{} only, endless ammo. Hit the target as much as you can.".format(r["weapon"].upper())

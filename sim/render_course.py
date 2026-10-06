@@ -372,7 +372,7 @@ def main():
     ap.add_argument("--fight", default="", help="'aim', 'env' or 'yard': a self-play fight in that room instead of the courses")
     ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa for more than two players)")
     ap.add_argument("--group", type=int, default=2, help="players in the fight (needs --env duel_env_ffa)")
-    ap.add_argument("--map", default="testlab", help="train-arena: the yard with items (with --fight yard)")
+    ap.add_argument("--map", default="testlab", help="arena1: the yard with items (with --fight yard)")
     ap.add_argument("--secs", type=float, default=60.0)
     ap.add_argument("--round", type=float, default=20.0, help="fight: seconds per round (new random weapons each round)")
     a = ap.parse_args()

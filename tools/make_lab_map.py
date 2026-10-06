@@ -481,11 +481,11 @@ def main():
 
     write("testlab", rooms, "BobbyBones test lab")
     brushes.clear(); lights.clear(); spawns.clear(); extra.clear()
-    write("train-arena", arena(trigger), "BobbyBones training arena")
+    write("arena1", arena(trigger), "BobbyBones arena 1")
 
 
 def arena(trigger):
-    """The training arena (map "train-arena", 2026-10-05; the owner's notes worked in the same evening): a small
+    """The training arena (map "arena1", 2026-10-05; the owner's notes worked in the same evening): a small
     two-level arena in the manner of the duel maps. Inside 1792 x 1536.
       ground     an open middle with pillars and cover; a tunnel under the north balcony; a closed room in the
                  south-east (two doors, the railgun inside); a low strip under the east balcony; a lava pit under the
@@ -620,7 +620,7 @@ def arena(trigger):
                             ("item_health", 128, 700, 24), ("item_health", 1000, 1000, 24),
                             ("item_armor_shard", 1400, 100, UP + 24), ("item_armor_shard", 1680, 300, UP + 24)):
         extra.append('{{\n"classname" "{}"\n"origin" "{} {} {}"\n}}'.format(cls, x_, y_, z_))
-    return dict(map="train-arena", stations={}, courses={}, hurt=hurt, ambient=50,
+    return dict(map="arena1", stations={}, courses={}, hurt=hurt, ambient=50,
                 yard=dict(bounds=[0, VY, X, Y], z=8, spots=spots, items=True))
 
 
