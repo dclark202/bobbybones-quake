@@ -180,7 +180,8 @@ class ffabot(duelbot):
         self.P = {k: P[k] for k in P.files}
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
-        self.E = E = importlib.import_module("duel_env_ffa")       # the group simulator (identical to duel_env with two seats)
+        envmod = str(self.P["env"]) if "ffa" in str(self.P["env"]) else "duel_env_ffa"     # the group simulator the policy was trained in
+        self.E = E = importlib.import_module(envmod)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.no_walk = bool(self.P["no_walk"]) if "no_walk" in self.P else False
         self.rules2 = hasattr(E, "ACQUIRE_FRAMES")

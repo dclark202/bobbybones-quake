@@ -184,7 +184,8 @@ def sessions(folder):
 # ---------------------------------------------------------------- BobbyBones: the same rooms in the simulator
 def bobby(run, policy=None, repeats=4, react_ms=None, percept=None, flinch=None):
     sys.path.insert(0, os.path.join(ROOT, "sim"))
-    import duel_env as E
+    import importlib
+    E = importlib.import_module(os.environ.get("REFLEX_ENV", "duel_env"))     # REFLEX_ENV=duel_env_v8: a frozen simulator for an older policy
     import test_suite as T
     pol = T.Policy(policy or os.path.join(ROOT, "data", "sim_runs", run, "policy.pt"), seed=5)
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "testlab.bsp"), n_matches=repeats, seed=21, loadout="all")
