@@ -65,6 +65,10 @@ Plugin fix on the way: the server had crashed on the table lookup (`P.files` on 
 
 **14:30 — the owner played v8 (2225 min) on the local free-for-all server:** "quite good: he doesn't pick up items yet but the play is good; a bit too reliant on the railgun; definitely feels human-like, not botty". Three Bobbys among themselves hold the rail 70 to 90% of the time (rail hits 49% in the simulator against 40% for lightning). Pushed to the public server at 14:28: free-for-all with three Bobbys on `arena1` by default, `!map testlab` for the 1v1 rooms.
 
+**16:30 — the trigger, measured (`tools/fire_holds.py`, 72 player-minutes of self-play):** he holds the lightning gun down 250 ms median, 527 ms mean, 2% of presses under 100 ms, 1.6 presses a second with an enemy in view; rail 150 ms median; machine gun 250 ms. So the fire spam the owner saw on the server is not in the network's behaviour: it is on the plugin or server side (bot sub-steps, the attack button per server frame) — to find before the next deploy.
+
+**16:30 — what four Bobbys cost per server frame (measured on the training PC):** building the inputs for 6 seats 1.55 ms (2.28 ms with the dense view), one network pass for 4 Bobbys 0.57 ms (0.76 ms). The rented server (2 cloud vCPUs) is about 2.5 times slower and the game itself keeps one core busy: about 8 to 10 ms of a 25 ms frame today. Budget set with the owner: 15 ms. Inputs that are numbers he already knows cost nothing; ray casts (68 per seat now) and network size are what cost.
+
 **What "really bad" means, agreed in advance:** fights per group-minute under 5 or firing under 15% (he avoids fights for the items); void deaths above 0.4 per player-minute; the run stalls (no update for 10 min); or by 19:00 intention trips reached still under 2% with mega under 0.05 per player-minute. Anything else waits for the 19:00 review.
 
 ## 2026-10-06 07:00 — `duel_gru_v7`: pickup reward, routes to the items, groups of 2, 3 and 4 (owner's plan after the night)
@@ -129,6 +133,7 @@ Both are rewards for a single behaviour, against the method chosen on 2026-10-05
 | 11:05 | 2097 (less flinch, pickup reward 0.6 since 10:27) | 6.4, 25%, 210 u/s | 47% / 39% / 39% / 30% | 0.016 (236 s), 0 | 13.7 s | 0.17 | 4-28 (damage 2950 / 2260, held MG 77%, LG 7%, rail 6%) |
 | 12:05 | 2155 (pickup 1.5, travel reward since 11:35) | 7.7, 31%, 235 u/s | 47% / 41% / 42% / 33% | 0.028 (166 s), 0.002 (194 s) | 9.0 s | 0.16 | 3-23 (run at 12:10 from the same checkpoint; damage 2367 / 1848, held MG 88%; the 12:05 attempt did not start) |
 | 15:05 | 2315 | 9.7, 33%, 245 u/s (firing 26%) | 50% / 41% / 42% / 20% | 0.026 (96%), 0.001 (100%) | 5 / 28 / 4 / 12 / 2 / 49 %, 13, 1.4% | 0.11 | 378 (14%) | 6-27 (damage 2878 / 2555, held MG 73%, rail 17%) |
+| 16:05 | 2377 | 9.7, 33%, 241 u/s (firing 27%) | 52% / 41% / 43% / 27% | 0.030 (96%), 0.001 (100%) | 5 / 26 / 3 / 5 / 1 / 60 %, 12, 1.7% | 0.09 | 391 (14%) | **15-27** (damage 3724 / 2189, held MG 70%, rail 12%, LG 9%) |
 
 ## 2026-10-05 21:03 — `duel_gru_v6`: `arena1` with items, the limits from the reflex test, memory inputs (until 07:00) (B-87, B-90, B-92 to B-94)
 
