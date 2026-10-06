@@ -54,6 +54,7 @@ From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), n
 | 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |
 | 08:05 | 1920 (stood still 07:30 to 07:56; pad, hearing and hum in) | 5.2, 28%, 227 u/s | 37% / 33% / 36% / 13% | 0.017 (36 s), 0.003 (36 s) | 14.3 s | 0.38 | 2-21 (damage 2004 / 1827, held MG 91%) |
 | 09:05 | 1980 (audit inputs and walk key since 08:29) | 5.1, 25%, 212 u/s | 39% / 33% / 36% / 25% | 0.024 (242 s), 0.01 (259 s) | 16.6 s | 0.28 | 3-32 (damage 2785 / 2971, held MG 72%, rail 16%) |
+| 10:05 | 2038 | 4.8, 24%, 183 u/s | 41% / 37% / 34% / 27% | 0.017 (495 s), 0.002 (709 s) | 17.9 s | 0.20 | 3-26 (damage 2679 / 2425, held MG 82%, rail 9%) |
 
 ## 2026-10-05 21:03 — `duel_gru_v6`: `arena1` with items, the limits from the reflex test, memory inputs (until 07:00) (B-87, B-90, B-92 to B-94)
 
