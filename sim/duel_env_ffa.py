@@ -135,7 +135,7 @@ LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loa
 # on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
 # gap between crosshair and target by eye, not to a hundredth of a degree.
 PERCEPT_SIGMA, PERCEPT_TAU = 0.5, 0.15                  # degrees; seconds over which the error drifts
-MOUSE_SMOOTH = 0.5                                     # view velocity inertia per frame
+MOUSE_SMOOTH = 0.75                                    # view velocity inertia per frame
 JERK_COST = 0.00002                                    # reward cost per degree/frame of change in the turn command
 FOV_COS = math.cos(math.radians(55))
 HEAR = 800.0

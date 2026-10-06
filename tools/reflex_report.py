@@ -169,13 +169,13 @@ def sessions(folder):
 
 
 # ---------------------------------------------------------------- BobbyBones: the same rooms in the simulator
-def bobby(run, policy=None, repeats=4):
+def bobby(run, policy=None, repeats=4, react_ms=None):
     sys.path.insert(0, os.path.join(ROOT, "sim"))
     import duel_env as E
     import test_suite as T
     pol = T.Policy(policy or os.path.join(ROOT, "data", "sim_runs", run, "policy.pt"), seed=5)
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "testlab.bsp"), n_matches=repeats, seed=21, loadout="all")
-    env.react_frames = round(pol.react_ms / 25)
+    env.react_frames = round((react_ms or pol.react_ms) / 25)
     env.no_walk, env.inf_ammo = True, True
     A = env.lab["aim"]
     rng = np.random.default_rng(3)
@@ -299,12 +299,13 @@ def main():
     ap.add_argument("--sessions", default=os.path.join(ROOT, "data", "duellive", "sessions"))
     ap.add_argument("--bobby", default="", help="run name: also measure this checkpoint in the simulator")
     ap.add_argument("--policy", default=None)
+    ap.add_argument("--react-ms", type=float, default=None, help="measure him with this tracking delay (default: the one he trained with)")
     a = ap.parse_args()
     table = {}
     for who, rooms in sessions(a.sessions).items():
         table[who] = {room: mean_of(runs) for room, runs in rooms.items()}
     if a.bobby:
-        name, rooms = bobby(a.bobby, a.policy)
+        name, rooms = bobby(a.bobby, a.policy, react_ms=a.react_ms)
         table[name] = {room: mean_of(runs) for room, runs in rooms.items()}
     if not table:
         print("no reflex rooms found in", a.sessions)
@@ -315,6 +316,9 @@ def main():
             room: {k: (round(float(np.median([table[w][room][k] for w in people if room in table[w] and table[w][room].get(k) is not None])), 3)
                        if any(room in table[w] and table[w][room].get(k) is not None for w in people) else None)
                    for _, k, _ in [x for x in LINES if x[0] == room]} for room in ROOMS}
+    bm = os.path.join(ROOT, "docs", "reflex_benchmark.json")       # what his limits are being set to reach
+    if os.path.exists(bm):
+        table["benchmark"] = json.load(open(bm))["target"]
     cols = list(table)
     print("{:<50}".format("") + "".join("{:>26}".format(c[:25]) for c in cols))
     for room, key, label in LINES:

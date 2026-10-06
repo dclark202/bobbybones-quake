@@ -5,6 +5,50 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-05 20:10 — first player measured in the reflex test; benchmark set; maps renamed and the arena rebuilt (B-91, B-92, B-87)
+
+**The owner ran `!reflex` twice** (averages; Bobby = `duel_gru_v5` at 1888 min in the same rooms in the simulator,
+standing still, with the limits he trained under):
+
+| Measure | Player | Bobby | Benchmark (15% better than the player) |
+|---|---|---|---|
+| Strafing target: view runs behind by | 192 ms | 76 ms | 163 ms |
+| Strafing target: follows a turn after | 150 ms | 75 ms | 128 ms |
+| Strafing target: share of time on it | 43% | 79% | 50% |
+| Strafing target: aim error | 4.1 deg | 1.1 deg | 3.5 deg |
+| Strafing target: lightning damage a second | 64 | 102 | 73 |
+| Jumping target: view starts moving after | 238 ms | 125 ms | 202 ms |
+| Jumping target: on it after | 463 ms | 172 ms | 393 ms |
+| Jumping target: first shot hits | 85% | 78% | - |
+| Slow target: hand jitter | 0.71 deg a frame | 0.98 | - |
+| Rockets: share that hurt the target, damage a rocket | 91%, 60 | fires none | - |
+
+- He reacted about twice as fast as the player everywhere; his hand shake was already at the player's level. So
+  the day's shake nudges were aimed at the wrong thing: the gap is reaction and tracking.
+- Caveats: one player, two runs; he was moving in the slow-target room (285 u/s), so that row is not a clean
+  steadiness reading.
+- **Benchmark** (owner: 10 to 20% better than him until more players are measured): `docs/reflex_benchmark.json`;
+  `tools/reflex_report.py` prints it as a column.
+- **Limits changed to reach it**: tracking delay 75 -> 150 ms (`--react-ms 150`), view inertia 0.5 -> 0.75
+  (`MOUSE_SMOOTH`). The current network measured under them, untrained for them: view behind by 155 ms
+  (benchmark 163), view starts moving after 200 ms (202), follows a turn after 150 ms (128), on a new target
+  after 281 ms (393: still too fast; more inertia, 0.85, did not change it because he simply asks for faster
+  turns, so that needs a limit on how fast the hand speeds up), time on the strafing target 30% (50%; expected to
+  recover with training). To be re-measured after the next run.
+- **Keys** (the server now counts changes over every command a client sends, 125 a second): the player made 4 to 7
+  movement-key changes a second in the movement courses, 7 to 19 in the busiest second. Bobby's hand allows 10 in a
+  burst and 4 a second sustained, and he makes about 5: his budget is not looser than a person's.
+
+**Maps**: `bobbylab` is now `testlab`, `bobbyyard` is `train-arena` (code, docs and files; older entries below keep
+the old names). The arena after the owner's play test: a closed room in the south-east, a long wall on the west
+side, the south wall open to a drop that kills, the red armor on an island in it (walkway round, or a circle jump
+of 256 units: in the simulator a plain running jump falls short and a circle jump lands), a lava pit under the
+catwalk (20 damage a second), a mound in the south-west corner, game textures and coloured light. Lava and the
+drop are in the simulator (`hurt` in `rooms.json`); the group simulator still matches the two-player one.
+Server commands `!reflex`, `!movement`, `!duel`. What went wrong on the way: the arena rebuild dropped the
+course list from the test lab's data (`!movement` reported no courses) and the first version showed a lava
+stripe on the cliff and sky where walls should be; all fixed the same evening.
+
 ## 2026-10-05 15:45 — built for tonight, not in training: groups of up to six, and the yard with items (B-86, B-87)
 
 Owner's idea for after the 19:00 review: several bots at once, all against all, so there is more to dodge and
