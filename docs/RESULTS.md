@@ -5,6 +5,20 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-05 21:00 — aim under fire and focus in bursts: built, measured on Bobby, waiting for the player's run (B-93, B-94)
+
+- **Reflex test**: in track, flick and rocket the target now shoots back with the machine gun for the second 20
+  seconds; `tools/reflex_report.py` measures each half and prints what being shot at costs, per aim type.
+- **Before the change Bobby lost nothing under fire** (old limits: aim error 1.08 deg under fire against 1.27 calm,
+  first rail shot 77% against 79%): a hit only pushed him.
+- **Flinch (B-94)**: a hit throws his read of the enemy's direction off by 0.06 deg per point of damage (at most
+  2.5), fading over 0.3 s. **Focus (B-93)**: 2 s of sharp tracking (delay 50 ms shorter), then 25 ms longer than the
+  set delay until focus is back (a quarter of a second per second out of contact). First values, to be set from
+  players.
+- Bobby (`duel_gru_v5`, untrained for any of this) with a 150 ms delay, focus and flinch: view behind a strafing
+  target by 168 ms over 40 s (benchmark 163); under machine-gun fire time to get on a new target 291 -> 328 ms
+  (+13%), first rail shot 71% -> 67%, tracking about unchanged (machine-gun hits are 5 damage each: 0.3 deg).
+
 ## 2026-10-05 20:10 — first player measured in the reflex test; benchmark set; maps renamed and the arena rebuilt (B-91, B-92, B-87)
 
 **The owner ran `!reflex` twice** (averages; Bobby = `duel_gru_v5` at 1888 min in the same rooms in the simulator,

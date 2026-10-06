@@ -135,6 +135,14 @@ LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loa
 # on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
 # gap between crosshair and target by eye, not to a hundredth of a degree.
 PERCEPT_SIGMA, PERCEPT_TAU = 0.5, 0.15                  # degrees; seconds over which the error drifts
+# (2026-10-05, B-94) Being shot at costs aim: a hit throws his read of the enemy's direction off by FLINCH_PER_DMG
+# degrees per point of damage (at most FLINCH_MAX at a time), and the error stays larger while the flinch fades
+# (FLINCH_TAU seconds). First values; to be set from players in the reflex test (calm half against the half under fire).
+FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = 0.06, 2.5, 0.3
+# (2026-10-05, B-93) The tracking delay is an average, not a floor: with an enemy in view he is sharper for a short
+# spell (FOCUS_GAIN frames quicker) while his focus lasts, then slower than the average (FOCUS_LOSS frames) until
+# it has come back. Focus runs down at one second a second with an enemy in view and comes back at FOCUS_REFILL.
+FOCUS_SECS, FOCUS_REFILL, FOCUS_GAIN, FOCUS_LOSS = 2.0, 0.25, 2, 1
 MOUSE_SMOOTH = 0.75                                    # view velocity inertia per frame
 JERK_COST = 0.00002                                    # reward cost per degree/frame of change in the turn command
 FOV_COS = math.cos(math.radians(55))
@@ -340,6 +348,10 @@ class DuelEnv:
         self.arena_full_p = 0.5                         # share of arena rounds with the full weapon set (else two random weapons)
         self.percept = np.zeros((self.n, 2), np.float32)  # error on the seen direction to the enemy (yaw, pitch), degrees
         self.percept_sigma = PERCEPT_SIGMA
+        self.flinch = np.zeros(self.n, np.float32)        # extra error on that direction after being hit, degrees
+        self.flinch_on = True
+        self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
+        self.focus_on = True
         self.vel_frames = VEL_REACT_FRAMES              # delay on the enemy's velocity (see observe)
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
@@ -468,6 +480,7 @@ class DuelEnv:
         self.shot_t[i ^ 1] = self.trail_t[i ^ 1] = 99.0     # what the opponent knew about this player's shots is void
         self.pain_t[i ^ 1] = 99.0
         self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
+        self.flinch[i], self.focus[i] = 0.0, FOCUS_SECS
         self.dmg_life[i ^ 1] = 0.0                      # what the opponent knows about this player's damage resets
         mode = int(self.mode[i // 2])
         kind = int(self.kind[i // 2])
@@ -1022,14 +1035,27 @@ class DuelEnv:
         self.opp_hist.append((self.known.copy(), self.acquired.copy(), vel[opp].copy(), self.seen_t.copy()))
         # (2026-10-05) How the enemy is MOVING is read later than where he is: a person follows steady movement
         # closely but needs about 200 ms to pick up a change of direction. So a well-timed reversal shakes the aim.
-        keep = max(self.react_frames, self.vel_frames) + 1
+        keep = max(self.react_frames + FOCUS_LOSS, self.vel_frames) + 1
         while len(self.opp_hist) > keep:
             self.opp_hist.pop(0)
         known, visible, _, seen_t = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.react_frames)]
+        if self.focus_on:                                    # the delay per player: sharp while focus lasts, then dull
+            self.focus = np.where(self.acquired, self.focus - DT, self.focus + FOCUS_REFILL * DT)
+            self.focus = np.clip(self.focus, -0.5, FOCUS_SECS).astype(np.float32)
+            dly = self.react_frames + np.where(self.focus > 0, -FOCUS_GAIN, FOCUS_LOSS)
+            dly = np.where(self.script == 0, np.maximum(dly, 1), self.react_frames)
+            L_ = len(self.opp_hist)
+            pick = np.maximum(0, L_ - 1 - dly)
+            ar_ = np.arange(n)
+            known = np.stack([h_[0] for h_ in self.opp_hist])[pick, ar_]
+            visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
+            seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
         if self.percept_sigma > 0:                           # the enemy is seen a little off from where he is
             rho = math.exp(-DT / PERCEPT_TAU)
-            self.percept = (rho * self.percept + math.sqrt(1.0 - rho * rho) * self.percept_sigma *
+            self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
+            sig_ = (self.percept_sigma + self.flinch)[:, None]
+            self.percept = (rho * self.percept + math.sqrt(1.0 - rho * rho) * sig_ *
                             self.rng.normal(0, 1, (n, 2))).astype(np.float32)
             t_ = known - eye
             hd_ = np.hypot(t_[:, 0], t_[:, 1]) + 1e-6
@@ -1655,6 +1681,10 @@ class DuelEnv:
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
+        if self.flinch_on and hitby.any():                  # a hit throws the aim off at once, and for a moment after
+            add = np.minimum(FLINCH_MAX, FLINCH_PER_DMG * dmg_taken) * hitby * (self.script == 0)
+            self.flinch = np.minimum(FLINCH_MAX, self.flinch + add).astype(np.float32)
+            self.percept = (self.percept + add[:, None] * self.rng.normal(0, 1, (n, 2))).astype(np.float32)
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
         self.fb = np.stack([np.minimum(dealt / 100.0, 2.0), np.minimum(dmg_taken / 100.0, 2.0),
                             np.sin(ang) * hitby, np.cos(ang) * hitby], 1).astype(np.float32)

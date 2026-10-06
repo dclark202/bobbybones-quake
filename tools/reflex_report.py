@@ -12,6 +12,8 @@ People run `!reflex` on the play-test server (map testlab): four short rooms in 
                                                          (Anaconda Python; add --policy <file> for a specific one)
 
 People are listed by an anonymous id (a salted hash made on the server). Results go to data/reflex/report.json.
+In track, flick and rocket the target shoots back (machine gun) for the second 20 seconds: every measure is
+taken for the calm half and for the half under fire, and the difference is what being shot at costs.
 Frames are 25 ms apart, so single times are no finer than that; the medians over many events are.
 """
 import argparse
@@ -32,6 +34,20 @@ ROOMS = ("slow", "track", "flick", "rocket")
 
 def wrap(a):
     return (a + 180.0) % 360.0 - 180.0
+
+
+def cut(d, a, b):
+    """frames a..b of a room's arrays"""
+    out = {k: v[a:b] for k, v in d.items() if k != "hops"}
+    out["hops"] = [h - a for h in d["hops"] if a <= h < b]
+    return out
+
+
+def halves(room, d, split):
+    """the room as (name, measures): the whole of it, or the calm half and the half under fire"""
+    if split is None or split < 200 or split > len(d["yaw"]) - 200:
+        return [(room, measure(room, d))]
+    return [(room, measure(room, cut(d, 0, split))), (room + "_fire", measure(room, cut(d, split, len(d["yaw"]))))]
 
 
 def measure(room, d):
@@ -143,6 +159,7 @@ def sessions(folder):
                 subject, is_bot = e.get("subject", "unknown"), bool(e.get("subject_is_bot"))
         hits = [(e["t"], e["dmg"]) for e in ev if e.get("event") == "hit" and e.get("victim") == "bobby"]
         hop_t = [e["frame_t"] for e in ev if e.get("event") == "hop"]
+        fire_t = [e["frame_t"] for e in ev if e.get("event") == "fire_phase"]
         for room in ROOMS:
             idx = np.nonzero(tags == "room:reflex/" + room)[0]
             if len(idx) < 200:
@@ -164,7 +181,9 @@ def sessions(folder):
                         d["dmg"][min(len(tt) - 1, int(np.searchsorted(tt, ht)))] += dm
                 d["hops"] = [int(np.searchsorted(tt, h)) for h in hop_t if tt[0] <= h <= tt[-1]]
                 key = ("game bot " if is_bot else "player ") + subject
-                res.setdefault(key, {}).setdefault(room, []).append(measure(room, d))
+                sp = [int(np.searchsorted(tt, f_)) for f_ in fire_t if tt[0] <= f_ <= tt[-1]]
+                for name, m_ in halves(room, d, sp[0] if sp else None):
+                    res.setdefault(key, {}).setdefault(name, []).append(m_)
     return res
 
 
@@ -183,11 +202,12 @@ def bobby(run, policy=None, repeats=4, react_ms=None):
     tgt = subj + 1
     res = {}
     plain = env._script_actions
-    for room, secs, wpn in (("slow", 20, E.LG), ("track", 40, E.LG), ("flick", 45, E.RG), ("rocket", 30, E.RL)):
+    for room, secs, wpn in (("slow", 20, E.LG), ("track", 40, E.LG), ("flick", 40, E.RG), ("rocket", 40, E.RL)):
         env.lab_aim_len = secs + 5.0
         env.lab_force = dict(kind=E.AIM, weapon=wpn, where="aim", jump=False)
         env.sc_style = 1 if room == "flick" else 0
         tick = [0]
+        firing = [False]                                         # second half of the room: the target shoots back
         near = room != "flick"                                   # lightning and rockets: the nearer target zone
         z = A["zone_lg"] if (near and "zone_lg" in A) else A["zone"]
 
@@ -205,6 +225,17 @@ def bobby(run, policy=None, repeats=4, react_ms=None):
                 if still_.any():
                     env.sc_dir[idx[still_]] = rng.choice([-1, 1], int(still_.sum()))
                     out[still_, 1] = env.sc_dir[idx[still_]] + 1
+            if firing[0]:                                        # machine gun at the subject, not every bullet on him
+                s_ = env.state
+                me, him = idx, idx - 1
+                to = s_[him, :3] - s_[me, :3]
+                ey = (np.degrees(np.arctan2(to[:, 1], to[:, 0])) - env.yaw[me] + 180.0) % 360.0 - 180.0 + rng.normal(0, 1.2, len(me))
+                ep = -np.degrees(np.arctan2(to[:, 2], np.hypot(to[:, 0], to[:, 1]) + 1e-6)) - env.pitch[me] + rng.normal(0, 1.2, len(me))
+                out[:, 3] = np.abs(E.TURN[None, :] - np.clip(ey, -20, 20)[:, None]).argmin(1)
+                out[:, 4] = np.abs(E.PITCH[None, :] - np.clip(ep, -10, 10)[:, None]).argmin(1)
+                out[:, 5] = 1
+                out[:, 6] = np.where(env.weapon[me] != E.MG, E.MG + 1, 0)
+                env.has[me, E.MG], env.ammo[me, E.MG] = True, 100
             return out
         env._script_actions = script
         env.round_t[:] = 1e9
@@ -223,6 +254,7 @@ def bobby(run, policy=None, repeats=4, react_ms=None):
         hop_t = np.full(len(subj), 1.5)
 
         for t in range(n_fr):
+            firing[0] = room != "slow" and t >= n_fr // 2
             if room == "flick":
                 for k, i in enumerate(subj):
                     if t * DT >= hop_t[k]:
@@ -255,11 +287,13 @@ def bobby(run, policy=None, repeats=4, react_ms=None):
                 rec[int(i)]["shot"].append(bool(env.fire_q[i]))
                 rec[int(i)]["dmg"].append(float(env.fb[i, 0]) * 100.0)
             env.hp[tgt], env.armor[tgt] = 200.0, 0.0             # the target does not die
+            env.hp[subj], env.armor[subj] = 200.0, 0.0           # nor does he
         for i in subj:
             r = rec[int(i)]
             d = dict(pos=np.array(r["pos"]), yaw=np.array(r["yaw"]), pitch=np.array(r["pitch"]), tpos=np.array(r["tpos"]),
                      shot=np.array(r["shot"]), dmg=np.array(r["dmg"]), hops=r["hops"])
-            res.setdefault(room, []).append(measure(room, d))
+            for name, m_ in halves(room, d, n_fr // 2 if room != "slow" else None):
+                res.setdefault(name, []).append(m_)
     env._script_actions = plain
     return "BobbyBones {} ({:.0f} min)".format(run, pol.minutes), res
 
@@ -294,6 +328,17 @@ LINES = (("slow", "own_speed", "Slow target: his own speed (should be near 0)"),
          ("rocket", "aim_below_centre_deg", "Rockets: aims below his middle by (degrees)"))
 
 
+FIRE = (("track", "aim_error_deg", "Strafing target: aim error (degrees)"),
+        ("track", "on_target", "Strafing target: share of time on it"),
+        ("track", "tracking_lag_ms", "Strafing target: view runs behind by (ms)"),
+        ("track", "damage_per_s", "Strafing target: lightning damage a second"),
+        ("flick", "reaction_ms", "Jumping target: view starts moving after (ms)"),
+        ("flick", "time_on_target_ms", "Jumping target: on it after (ms)"),
+        ("flick", "first_shot_hits", "Jumping target: first shot hits"),
+        ("rocket", "rockets_that_hurt", "Rockets: share that hurt the target"),
+        ("rocket", "damage_per_rocket", "Rockets: damage a rocket"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sessions", default=os.path.join(ROOT, "data", "duellive", "sessions"))
@@ -315,7 +360,8 @@ def main():
         table["people, median of {}".format(len(people))] = {
             room: {k: (round(float(np.median([table[w][room][k] for w in people if room in table[w] and table[w][room].get(k) is not None])), 3)
                        if any(room in table[w] and table[w][room].get(k) is not None for w in people) else None)
-                   for _, k, _ in [x for x in LINES if x[0] == room]} for room in ROOMS}
+                   for _, k, _ in [x for x in LINES if x[0] == room.replace("_fire", "")]}
+            for room in ROOMS + tuple(r_ + "_fire" for r_ in ROOMS[1:])}
     bm = os.path.join(ROOT, "docs", "reflex_benchmark.json")       # what his limits are being set to reach
     if os.path.exists(bm):
         table["benchmark"] = json.load(open(bm))["target"]
@@ -323,6 +369,14 @@ def main():
     print("{:<50}".format("") + "".join("{:>26}".format(c[:25]) for c in cols))
     for room, key, label in LINES:
         print("{:<50}".format(label) + "".join("{:>26}".format(str(table[c].get(room, {}).get(key, "-"))) for c in cols))
+    print()
+    print("{:<50}".format("UNDER FIRE (second half), and the change from calm"))
+    for room, key, label in FIRE:
+        cells = []
+        for c in cols:
+            a_, b_ = table[c].get(room, {}).get(key), table[c].get(room + "_fire", {}).get(key)
+            cells.append("-" if a_ is None or b_ is None else "{:g} ({:+.0f}%)".format(b_, 100.0 * (b_ - a_) / a_ if a_ else 0.0))
+        print("{:<50}".format(label) + "".join("{:>26}".format(v) for v in cells))
     print("{:<50}".format("runs (slow / track / flick / rocket)") + "".join(
         "{:>26}".format(" / ".join(str(table[c].get(r, {}).get("runs", 0)) for r in ROOMS)) for c in cols))
     os.makedirs(os.path.join(ROOT, "data", "reflex"), exist_ok=True)
