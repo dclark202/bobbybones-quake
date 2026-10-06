@@ -50,6 +50,7 @@ From `duel_gru_v7` at update 40 of the restart (`policy_end_v7_update40.pt`, 216
 | 12:18 (start) | 2163 | 4.1, -, - | - | 0.078 (99%), 0.003 (100%) | 17 / 17 / 17 / 17 / 17 / 17 %, 58, 0.3% | 0.15 | 328 of 32 x 32 (v7 at 12:09; 12% of the cells visited) | - |
 | 12:46 (update 33) | 2192 | 9.0, 32%, 242 u/s (firing 25%) | 49% / 39% / 42% / 24% | 0.026 (95%), 0 (100%) | 15 / 23 / 5 / 20 / 8 / 30 %, 36, 0.4% | 0.12 | - | 2-5 in a 2 min server test (damage 628 / 415) |
 | 12:52 | 2200 | stopped at update 40 for the six changes below (`policy_before_six_changes_update40.pt`) | | | | | | |
+| 14:05 | 2235 (restarted 12:58 with the six changes) | 8.7, 31%, 230 u/s (firing 25%) | 49% / 40% / 42% / 27% | 0.024 (96%), 0.002 (100%) | 6 / 27 / 7 / 18 / 4 / 39 %, 14, 1.1% | 0.12 | 350 (12%) | 2-27 (damage 2249 / 2135, held MG 80%) |
 
 **12:52 — six changes at once, then no more (owner: "prohibit me from making more changes unless the data really looks bad"; the run ends 19:00 and is reviewed then):**
 1. **The way is worth the item:** the travel reward is the pickup value (0.75 for mega or red, 0.19 for a weapon) spread along the way as it is gained, so a trip never pays more than the item; the 1.0 per second of 12:16 (a red trip was worth five frags) is gone, and so is the fade.
@@ -61,6 +62,8 @@ From `duel_gru_v7` at update 40 of the restart (`policy_end_v7_update40.pt`, 216
 Plugin fix on the way: the server had crashed on the table lookup (`P.files` on a dict); retested 2-5 in 2 min.
 
 **13:30 — free-for-all plugin built (B-105, owner's request, not on the public server yet):** `plugins/ffabot.py`, up to four Bobbys and people in six seats. Test with three Bobbys on `arena1`: no errors over 9,000 frames, each at 257 to 277 u/s, an enemy in sight 33 to 41% of the time, firing 18%, 13 kills in the first 90 s, intentions spread over mega / rockets / lightning (red armor 9% for one of them). Test server on port 27971 for the owner to try.
+
+**14:30 — the owner played v8 (2225 min) on the local free-for-all server:** "quite good: he doesn't pick up items yet but the play is good; a bit too reliant on the railgun; definitely feels human-like, not botty". Three Bobbys among themselves hold the rail 70 to 90% of the time (rail hits 49% in the simulator against 40% for lightning). Pushed to the public server at 14:28: free-for-all with three Bobbys on `arena1` by default, `!map testlab` for the 1v1 rooms.
 
 **What "really bad" means, agreed in advance:** fights per group-minute under 5 or firing under 15% (he avoids fights for the items); void deaths above 0.4 per player-minute; the run stalls (no update for 10 min); or by 19:00 intention trips reached still under 2% with mega under 0.05 per player-minute. Anything else waits for the 19:00 review.
 

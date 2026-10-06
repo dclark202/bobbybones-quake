@@ -94,7 +94,9 @@ def main():
     k10 = int(np.searchsorted(np.cumsum(flat), 0.5 * tot)) + 1
     print("half of his time is spent in {} cells of {} x {} units ({:.0%} of the cells he visited)".format(
         k10, CELL, CELL, k10 / max(1, (heat > 0).sum())))
-    np.save(os.path.splitext(a.out or os.path.join(ROOT, "videos", "{}_{:04d}".format(a.run, int(pol.minutes)), "heat_{}.png".format(a.map)))[0] + ".npy", heat)
+    out = a.out or os.path.join(ROOT, "videos", "{}_{:04d}".format(a.run, int(pol.minutes)), "heat_{}.png".format(a.map))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    np.save(os.path.splitext(out)[0] + ".npy", heat)
     # draw: S pixels per cell, a linear ramp black -> red -> yellow -> white, capped at the 98th busiest cell
     S = 8
     cap = max(1e-9, np.percentile(heat[heat > 0], 98)) if (heat > 0).any() else 1.0
