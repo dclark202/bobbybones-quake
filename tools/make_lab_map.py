@@ -498,12 +498,13 @@ def arena(trigger):
                  (256 units: a plain running jump falls short)
       teleporter from the tunnel's east end to the south-west corner
     Every texture name is one the game's own maps use."""
-    # a disco floor in two tiles with pentagram plates, purple tiled walls, a wooden ceiling, a room lined with skin, a
-    # tower of skulls, gold crates, teal balconies that look like bounce pads, and a different colour of light in every part
-    F1, F2, METAL, STAIR = "gothic_floor/largerblock3b3", "base_floor/clangdark", "sfx/ntrl_techfloor_kc_teal", "gothic_floor/xstairtop4"
-    BRICK, BLK, KILL, IRON = "gothic_wall/purptileb", "gothic_block/blocks18c", "gothic_trim/skullsvertgray02a", "gothic_wall/iron01_e"
+    # (second pass, the owner: half as silly) brick walls again, a quiet two-tone floor with pentagram plates round the
+    # tower, a wooden ceiling, one room lined with skin, a tower of skulls, gold crates, and a tint of colour in the light of
+    # each part. Nothing from the game's "sfx" set on floors: two of those drew as nothing at all in the game.
+    F1, F2, METAL, STAIR = "gothic_floor/largerblock3b3", "gothic_floor/largerblock3b3dim", "base_floor/clangdark", "gothic_floor/xstairtop4"
+    BRICK, BLK, KILL, IRON = "gothic_wall/streetbricks10", "gothic_block/blocks18c", "gothic_trim/skullsvertgray02a", "gothic_wall/iron01_e"
     RUST, DARK, SUPPORT, CEIL = "gothic_trim/pitted_rust2", "gothic_block/dark_block", "gothic_wall/metaltech16gold", "gothic_ceiling/woodceiling1a"
-    PENT, SKIN, BOUNCE, GOLD = "sfx/largerblock3b3_pent", "skin/skin6", "sfx/bounce_largeblock3b", "gothic_wall/metaltech16gold"
+    PENT, SKIN, BOUNCE, GOLD = "gothic_floor/metalbridge06_pent45", "skin/skin6", "gothic_floor/metalbridge06", "gothic_wall/metaltech16gold"
     PENTLIGHT, SKULL = "gothic_light/pentagram_light1_5K", "gothic_light/skulllight01"
     LAVA, SKY, PAD, PORTAL = "liquids/lavahell", "skies/meth_clouds_blue", "sfx/bouncepad01block18b", "sfx/portal_new_static_teal"
     X, Y, H, UP = 1792, 1536, 512, 192
@@ -581,9 +582,9 @@ def arena(trigger):
     box(288, 928, 0, 384, 1024, 96, SUPPORT)                  # crates
     box(700, 1380, UP, 764, 1444, UP + 64, SUPPORT)
     box(1600, 880, UP, 1632, 1040, UP + 56, RUST)             # low wall on the east balcony
-    box(300 - 56, 624 - 56, 0, 300 + 56, 624 + 56, 2, PAD)     # jump pad
+    box(300 - 56, 624 - 56, 0, 300 + 56, 624 + 56, 2, GOLD)    # jump pad (a gold plate)
     trigger("trigger_push", 300 - 48, 624 - 48, 2, 300 + 48, 624 + 48, 18, (630, 624, 340))
-    box(1776, 1344, 0, 1790, 1488, 128, PORTAL)               # teleporter, at the tunnel's east end
+    box(1776, 1344, 0, 1790, 1488, 128, GOLD)                 # teleporter, at the tunnel's east end (a gold plate marks it)
     box(1680, 1330, 0, 1690, 1500, 2, RUST)
     trigger("trigger_teleport", 1728, 1344, 0, 1776, 1488, 128, (320, 320, 40), angle=45)
     for x in range(192, X, 384):
@@ -595,14 +596,15 @@ def arena(trigger):
     for x in range(192, X, 384):                              # lights: warm overall, cold in the tunnel, red at the lava
         for y in range(192, Y, 384):
             col_ = ((1.0, 0.35, 0.9), (0.3, 1.0, 0.9), (1.0, 0.85, 0.3), (0.5, 1.0, 0.4))[((x // 384) + 2 * (y // 384)) % 4]
-            lights.append((x, y, H - 60, 520, col_))             # pink, teal, gold and green, in turn
+            col_ = tuple(round(0.5 + 0.5 * c_, 2) for c_ in col_)   # half way to white
+            lights.append((x, y, H - 60, 520, col_))             # a tint of pink, teal, gold and green, in turn
             lights.append((x, y, 260, 240, (1.0, 0.95, 0.9)))    # and plain light lower down, so players stay easy to see
     for x in (200, 700, 1200, 1650):
-        lights.append((x, 1420, 120, 200, (0.55, 0.3, 1.0)))     # the tunnel: violet
+        lights.append((x, 1420, 120, 200, (0.75, 0.6, 1.0)))     # the tunnel: a little violet
     lights.append((1248, 624, 60, 260, (1.0, 0.45, 0.15)))
-    lights.append((1540, 200, 130, 260, (1.0, 0.25, 0.3)))    # the skin room: red
+    lights.append((1540, 200, 130, 260, (1.0, 0.6, 0.6)))     # the skin room: reddish
     for x in (640, 896, 1152):
-        lights.append((x, -240, 300, 380, (0.4, 1.0, 0.5)))      # the void: a sickly green
+        lights.append((x, -240, 300, 380, (0.7, 1.0, 0.75)))    # the void: a greenish cast
     lights.append((896, -352, 90, 200, (1.0, 0.8, 0.2)))      # the island glows gold
     spots = [[128, 400, 8], [1664, 128, 8], [400, 128, 8], [640, 900, 8], [1300, 820, 8], [200, 1420, 8], [1400, 1420, 8],
              [1650, 640, 8], [200, 1408, UP + 8], [1400, 1408, UP + 8], [1664, 700, UP + 8], [1100, 624, UP + 8],

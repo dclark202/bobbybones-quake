@@ -411,7 +411,7 @@ class duelbot(minqlx.Plugin):
             out.append(r)
         if a[0] == "reflex" and len(a) == 1:
             self.queue, self.room, self.batch = list(out), None, None
-            self.msg("^3Aim reflex test:^7 four short rooms, about three minutes. Stand where you are put and aim "
+            self.msg("^3Aim reflex test:^7 four short rooms, about three and a half minutes. In three of them the target shoots back for the second half. Stand where you are put and aim "
                      "as well as you can; nothing shoots back. !room off stops it.")
             return
         if a[0] != "suite":                                  # a single room starts right away, replacing whatever runs
@@ -450,7 +450,8 @@ class duelbot(minqlx.Plugin):
                 return dict(kind="aim", lab=True, reflex=a[1], name="reflex/" + a[1], script=1, where="aim", jump=False,
                             weapon={"flick": "rg", "rocket": "rl"}.get(a[1], "lg"), near=a[1] != "flick",
                             style=1 if a[1] == "flick" else 0,
-                            secs={"slow": 20, "track": 40, "flick": 45, "rocket": 30}[a[1]])
+                            secs={"slow": 20, "track": 40, "flick": 40, "rocket": 40}[a[1]],
+                            under_fire=a[1] != "slow")    # second half of the room: the target shoots back
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
@@ -999,7 +1000,8 @@ class duelbot(minqlx.Plugin):
                     "track": "Lightning gun. The target strafes and turns round without warning: stay on it.",
                     "flick": "Railgun. The target jumps to a new place every few seconds: hit it as fast as you can.",
                     "rocket": "Rockets. The target strafes and turns round without warning: hit it."}[r["reflex"]] + \
-                " Please stand still: this measures your aim, not your movement."
+                " Please stand still: this measures your aim, not your movement." + \
+                (" After 20 seconds the target shoots back (you cannot die): keep aiming." if r.get("under_fire") else "")
         if k == "aim":
             return "{} only, endless ammo. Hit the target as much as you can.".format(r["weapon"].upper())
         if k == "choice":
@@ -1335,7 +1337,25 @@ class duelbot(minqlx.Plugin):
                     h_ = r["hard"]                           # never moved at a wall; only if it somehow leaves the room
                     if not (h_[0] <= bpos[0] <= h_[2] and h_[1] <= bpos[1] <= h_[3]):
                         self.put(bobby, r["home"], byaw)     # far outside (knocked out): put it back
-                keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
+                under = bool(r.get("under_fire")) and now >= r["t_end"] - r["secs"] / 2.0
+                if under and not r.get("fire_on"):           # second half: the target shoots back with the machine gun
+                    r["fire_on"] = True
+                    bobby.weapons(reset=True, g=True, mg=True)
+                    bobby.ammo(mg=150)
+                    self.record(event="fire_phase", room=r["name"], frame_t=round(now, 3))
+                    human.center_print("^1He shoots back")
+                if under:
+                    if bs.ammo.mg < 50:
+                        bobby.ammo(mg=150)
+                    dv = np.array([hpos[0] - bpos[0], hpos[1] - bpos[1], hpos[2] - bpos[2]], np.float32)
+                    wob = self.rng.normal(0, 1.2, 2)         # not every bullet lands: about as steady as a decent player
+                    tyaw = math.degrees(math.atan2(dv[1], dv[0])) + float(wob[0])
+                    tpit = -math.degrees(math.atan2(dv[2], math.hypot(dv[0], dv[1]))) + float(wob[1])
+                    mvk = [(int(a[0]) - 1) * 127, (int(a[1]) - 1) * 127, 127 if int(a[2]) == 1 else 0]
+                    minqlx.set_bot_input(bobby.id, mvk[0], mvk[1], mvk[2], 1, QLNUM["mg"], tpit, tyaw)
+                    keys = mvk + [1]
+                else:
+                    keys = self.drive(bobby, env, R, 1, a, bpitch, byaw)[4]
         elif r["kind"] == "ladder" and r.get("where") == "peek":
             pk = self.lab["peek"]
             if not r.get("placed"):
