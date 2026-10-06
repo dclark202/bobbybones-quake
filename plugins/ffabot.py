@@ -189,6 +189,7 @@ class ffabot(duelbot):
         if os.path.exists(rooms_json):
             with open(rooms_json) as f:
                 self.lab = json.load(f)
+        os.environ["ROUTE_CACHE"] = D                          # the route grid is cached here (/maps is read-only)
         self.rng = np.random.default_rng(int(time.time()))
         self.item_ent, self.item_was, self.want_w = {}, {}, {}
         nav = "/maps/nav_{}_sim.json".format(mapname)

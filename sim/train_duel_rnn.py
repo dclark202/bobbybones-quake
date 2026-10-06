@@ -29,7 +29,7 @@ DT_MIN = 0.025 / 60.0
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
            teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5,
-           env_module="duel_env", group=2, intent_seek=0.0, item_loss=0.5):
+           env_module="duel_env", group=2, intent_seek=0.0, item_loss=0.5, stack_p=0.0, near_item_p=0.0):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     import importlib
@@ -41,6 +41,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.item_reward = item_reward
     env.item_seek = float(os.environ.get("ITEM_SEEK", "0"))  # reward per second of travel gained toward a big item he can use
     env.intent_seek, env.item_loss = intent_seek, item_loss
+    env.stack_p, env.near_item_p = stack_p, near_item_p
     env.drill_p = drill_p
     env.react_frames = react_frames[0]
     env.acquire_frames = react_frames[1]
@@ -110,6 +111,8 @@ def main():
     ap.add_argument("--lr-minutes", type=float, default=0.0, help="the learning rate decays to a tenth over this many minutes of training "
                     "in all (counted across restarts); 0 = over this run's --minutes, from the full rate again at every restart")
     ap.add_argument("--intent-seek-minutes", type=float, default=0.0, help="that reward fades to a quarter over this time (0 = constant)")
+    ap.add_argument("--stack-p", type=float, default=0.0, help="share of spawns with a random stack (health 100-200, armor 0-150)")
+    ap.add_argument("--near-item-p", type=float, default=0.0, help="share of spawns within 2 s of the mega or the red armor")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
     ap.add_argument("--drill-p", type=float, default=0.0,
@@ -190,7 +193,7 @@ def main():
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
                                         a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w],
-                                        a.intent_seek, a.item_loss),
+                                        a.intent_seek, a.item_loss, a.stack_p, a.near_item_p),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -199,22 +202,27 @@ def main():
     N = len(obs)
     H = a.hidden
 
-    CELL_DIM = 16                                            # the learned map: 16 numbers per 64-unit cell (see E_.N_INTENT)
-    assert tuple(E_.CELL_COLS) == (OBS_DIM - 2, OBS_DIM - 1)
+    CELL_DIM = 16                                            # v8 only: a learned table of 16 numbers per 64-unit cell
+    HAS_CELLS = getattr(E_, "CELL_COLS", None) is not None   # (v9: the map reader's numbers are plain inputs instead)
+    if HAS_CELLS:
+        assert tuple(E_.CELL_COLS) == (OBS_DIM - 2, OBS_DIM - 1)
 
     class Policy(nn.Module):
         def __init__(self):
             super().__init__()
-            self.cell = nn.Embedding(E_.MAX_CELLS, CELL_DIM)
-            nn.init.normal_(self.cell.weight, 0.0, 0.1)
-            self.enc = nn.Sequential(nn.Linear(OBS_DIM - 2 + 2 * CELL_DIM, 256), nn.Tanh(), nn.Linear(256, 256), nn.Tanh())
+            if HAS_CELLS:
+                self.cell = nn.Embedding(E_.MAX_CELLS, CELL_DIM)
+                nn.init.normal_(self.cell.weight, 0.0, 0.1)
+            self.enc = nn.Sequential(nn.Linear(OBS_DIM - 2 + 2 * CELL_DIM if HAS_CELLS else OBS_DIM, 256), nn.Tanh(),
+                                     nn.Linear(256, 256), nn.Tanh())
             self.gru = nn.GRUCell(256, H)
             self.pi = nn.Linear(H, sum(ACTION_DIMS))
             self.v = nn.Linear(H, 1)
 
         def step(self, x, h):
-            ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
-            x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
+            if HAS_CELLS:
+                ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
+                x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
             h = self.gru(self.enc(x), h)
             return self.pi(h), self.v(h).squeeze(-1), h
 
@@ -235,7 +243,8 @@ def main():
 
     def norm(o):
         x = np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
-        x[:, -2:] = o[:, -2:]                                   # cell numbers stay as they are
+        if HAS_CELLS:
+            x[:, -2:] = o[:, -2:]                               # cell numbers stay as they are
         return x
 
     # ---- pro demos: sequences of (inputs, what the player did), imitated alongside the self-play loss
@@ -275,7 +284,7 @@ def main():
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
-                        cells=E_.MAX_CELLS, cell_dim=CELL_DIM),
+                        cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot

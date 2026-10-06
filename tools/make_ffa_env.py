@@ -31,9 +31,9 @@ def rep(a, b, count=1):
 
 
 # ---- constants
-rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_INTENT",
-    "N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players\n"
-    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_INTENT")
+rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT",
+    "N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players\n"
+    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT")
 rep("        return (np.arange(self.n) ^ 1)[:, None]", "        return self.others")
 rep("        return [i ^ 1]", "        return [int(x) for x in self.others[i]]")
 rep("        return j % 2", "        return j % self.G")
@@ -227,11 +227,11 @@ rep('''        up = np.repeat(self.item_up, 2, axis=0)                          
     '''        up = np.repeat(self.item_up, self.G, axis=0)                          # per player (its match)''')
 rep('''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot), self._pad_ear(yaw),
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
-                              self._intent(pos, rot, known, seen_t)], 1)
+                              self._v9(pos, rot), self._intent(pos, rot, known, seen_t)], 1)
         return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
-                              self._intent(pos, rot, known, seen_t)], 1)
+                              self._v9(pos, rot), self._intent(pos, rot, known, seen_t)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -263,8 +263,9 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
             ap = -np.arctan2(t_[:, 2], np.hypot(t_[:, 0], t_[:, 1]) + 1e-6) - pit
             back = np.arctan2(pos[:, 1] - p_old[o, 1], pos[:, 0] - p_old[o, 0]) - np.radians(yaw_old[o])
             blk = np.concatenate([np.ones((n, 1), np.float32), rot(p_old[o] - pos) / 1000.0,
-                                  np.stack([np.sin(ay), np.cos(ay), np.sin(ap), np.cos(back)], 1)], 1)
-            out[:, 8 * j:8 * j + 8] = blk * on[:, None]
+                                  np.stack([np.sin(ay), np.cos(ay), np.sin(ap), np.cos(back)], 1),
+                                  np.eye(NW, dtype=np.float32)[self.weapon[o]][:, [RL, RG, LG]]], 1)   # what he holds (v9)
+            out[:, 11 * j:11 * j + 11] = blk * on[:, None]
         out[:, 16] = acq.sum(1) / 5.0
         out[:, 17] = (G - 2) / 4.0
         return out''')

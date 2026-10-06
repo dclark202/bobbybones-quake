@@ -83,7 +83,7 @@ N_GOAL = 7                                             # goal inputs: on, where 
 # routes (the chosen route keeps its direction, see N_INTENT). They come back with the duel maps (BACKLOG B-101): a
 # widening, as before. The shotgun, grenade launcher and plasma gun stay (owner, 12:50: he must know the game's main
 # weapons on every map, whether this map has them or not).
-OBS_W = np.array([0, 1, 2, 3, 4, 5, 6, 8])                 # the weapons the inputs cover: all but the heavy machine gun
+OBS_W = np.arange(9)                                       # the weapons the inputs cover: all nine (HMG back for v9: 29 of the 62 maps have one)
 N_XITEMS = 4
 N_VIEW, N_UP, N_LONG = 15, 5, 8
 N_EXTRA = 8 + 6 * N_XITEMS + 20 + 3 + (N_VIEW + N_UP + N_LONG) + (len(OBS_W) + 3) + 4 + 11 + 1
@@ -181,7 +181,7 @@ INTENT_HOLD = 3.0
 INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
 ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2, len(INTENTS))  # ..., walk, zoom, lift the mouse, intention
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
-SLOTS = ("MH", "RA", "RL", "RG", "LG", "SG", "GL", "PG")   # nearest item of each kind is an input
+SLOTS = ("MH", "RA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 MEM_COLS = np.array([0, 1] + [2 + int(w) for w in OBS_W])  # the columns of e_got that are inputs (see N_MEM)
 OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + 3 * len(OBS_W) + 6 * len(SLOTS) + N_GOAL
 # Fight inputs (2026-10-05), appended after everything else:
@@ -239,11 +239,16 @@ N_DENSE = len(DENSE_YAW) * len(DENSE_PITCH) if os.environ.get("DENSE_VIEW") == "
 # comes back 1, which intention 6, seconds since chosen 1; and the map cells (v8): the 64-unit cell of the map he
 # stands in and the one the enemy was last known in, as numbers for a learned table (the network keeps 16 learned
 # numbers per cell: what that place is like). 0 = unknown. Always the last two inputs (CELL_COLS).
-N_INTENT = 13 + 2
-MAX_CELLS, CELL_SIZE = 4096, 64.0
-N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_INTENT
-CELL_COLS = (OBS_DIM - 2, OBS_DIM - 1)
+# (v9, 2026-10-06) The two cell numbers are replaced by what the map reader says about the two cells (16 numbers each,
+# sim/map_reader.py, cached per map in data/maps/cells_<map>.npy; zeros without the file). Also new: item respawn
+# sounds (mega, red, a weapon, a small health or armor came back within earshot: 4) and the four nearest spawn
+# points (where he is from each: 12).
+N_INTENT = 13 + 32
+N_V9 = 4 + 12
+MAX_CELLS, CELL_SIZE = 16384, 64.0                        # enough cells for the big maps (v9; the table is a file, not weights)
+N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT
+CELL_COLS = None                                           # no learned cell table in the network any more
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -294,13 +299,7 @@ class RouteField:
         self.lo = self.nodes.min(0) - 64.0
         dims = np.ceil((self.nodes.max(0) + 64.0 - self.lo) / self.CELL).astype(int)
         self.dims = dims
-        cx = [self.lo[k] + (np.arange(dims[k]) + 0.5) * self.CELL for k in range(3)]
-        self.table = np.zeros(tuple(dims), np.int32)
-        nw = self.nodes * w
-        for i in range(dims[0]):                              # one slab at a time
-            pts = np.stack(np.meshgrid([cx[0][i]], cx[1], cx[2], indexing="ij"), -1).reshape(-1, 3) * w
-            d2 = ((pts[:, None, :] - nw[None, :, :]) ** 2).sum(2)
-            self.table[i] = d2.argmin(1).reshape(dims[1], dims[2])
+        self.table = self._grid(nav_path, dims, w)
         self.goals = np.array(goals, np.float32).reshape(-1, 3)
         G = len(self.goals)
         self.T = np.full((G, n), 1e9, np.float32)
@@ -319,6 +318,58 @@ class RouteField:
                         heapq.heappush(pq, (d + c, v))
             for v, d in dist.items():
                 self.T[gi, v] = d
+
+    def _grid(self, nav_path, dims, w):
+        """nearest node for every grid cell. Cached beside the walking map, or in $ROUTE_CACHE (the game server's map
+        folder is read-only): building it took minutes on a big map (2026-10-06, Blood Run froze the server for the
+        duration). Built in two passes: every node claims the cells within 256 units of it, the cells left (outside
+        the walkable space) by brute force in chunks."""
+        n = len(self.nodes)
+        key = "{}x{}x{}_{}_{}".format(dims[0], dims[1], dims[2], n, int(self.CELL))
+        paths = [nav_path + ".grid.npz"]
+        if os.environ.get("ROUTE_CACHE"):
+            paths.insert(0, os.path.join(os.environ["ROUTE_CACHE"], os.path.basename(nav_path) + ".grid.npz"))
+        for p in paths:
+            try:
+                z = np.load(p)
+                if str(z["key"]) == key:
+                    return z["table"]
+            except (OSError, KeyError, ValueError):
+                pass
+        dims = np.asarray(dims, np.int64)
+        cx = [self.lo[k] + (np.arange(dims[k]) + 0.5) * self.CELL for k in range(3)]
+        tf = np.full(int(np.prod(dims)), -1, np.int64)
+        bf = np.full(int(np.prod(dims)), np.inf, np.float32)
+        R = int(256 // self.CELL)
+        off = np.stack(np.meshgrid(*[np.arange(-R, R + 1)] * 3, indexing="ij"), -1).reshape(-1, 3)
+        base = ((self.nodes - self.lo) / self.CELL).astype(np.int64)
+        for s0 in range(0, n, 1024):
+            nd = np.arange(s0, min(n, s0 + 1024))
+            cells = base[nd][:, None, :] + off[None, :, :]
+            ok = ((cells >= 0) & (cells < dims)).all(2)
+            ci = np.clip(cells, 0, dims - 1)
+            centers = np.stack([cx[0][ci[..., 0]], cx[1][ci[..., 1]], cx[2][ci[..., 2]]], -1)
+            d2 = np.where(ok, (((centers - self.nodes[nd][:, None, :]) * w) ** 2).sum(2), np.inf).astype(np.float32).ravel()
+            flat = ((ci[..., 0] * dims[1] + ci[..., 1]) * dims[2] + ci[..., 2]).ravel()
+            np.minimum.at(bf, flat, d2)
+            hit = np.isfinite(d2) & (d2 == bf[flat])
+            tf[flat[hit]] = np.repeat(nd, off.shape[0])[hit]
+        rest = np.nonzero(tf < 0)[0]
+        if len(rest):
+            pts = np.stack(np.unravel_index(rest, tuple(dims)), 1)
+            P = np.stack([cx[0][pts[:, 0]], cx[1][pts[:, 1]], cx[2][pts[:, 2]]], 1) * w
+            nw = self.nodes * w
+            for c0 in range(0, len(rest), 512):
+                d2 = ((P[c0:c0 + 512, None, :] - nw[None, :, :]) ** 2).sum(2)
+                tf[rest[c0:c0 + 512]] = d2.argmin(1)
+        table = tf.reshape(tuple(dims)).astype(np.int32)
+        for p in paths:
+            try:
+                np.savez(p, table=table, key=key)
+                break
+            except OSError:
+                continue
+        return table
 
     def locate(self, pos):
         c = np.clip(((pos - self.lo) / self.CELL).astype(np.int64), 0, self.dims - 1)
@@ -453,6 +504,12 @@ class DuelEnv:
         self.lo, self.hi = [np.asarray(v, np.float32) for v in self.w.bounds()]
         self.cell_n = np.maximum(1, np.ceil((self.hi[:2] - self.lo[:2]) / CELL_SIZE)).astype(np.int64)   # map cells (N_INTENT)
         self.cell_zmid = float(self.lo[2] + self.hi[2]) / 2.0
+        self.cell_table = None                              # the map reader's 16 numbers per cell (see N_INTENT)
+        if nav:
+            ct_ = os.path.join(os.path.dirname(nav), "cells_{}.npy".format(os.path.splitext(os.path.basename(bsp))[0]))
+            if os.path.exists(ct_):
+                self.cell_table = np.load(ct_).astype(np.float32)
+        self.resp_t = np.full(self.n, 99.0, np.float32)[:, None].repeat(4, 1)   # seconds since an item respawn was heard: mega, red, weapon, small
         # Test map ("lab"): fixed rooms described in maps/<map>/rooms.json (tools/make_lab_map.py). On such a map
         # every round is a lab room: an aim room (fixed placement, walking or jumping target) or a movement course.
         # New courses added to the map file are picked up here without code changes.
@@ -510,6 +567,9 @@ class DuelEnv:
         self.ear = np.zeros((self.n, 4), np.float32)        # last sound heard: direction (world, radians), height, loudness, closing
         self.ear_t = np.full(self.n, 99.0, np.float32)      # seconds since
         self.ear_hum = np.full(self.n, -1, np.int64)        # the humming weapon heard with it (RG, LG) or -1
+        self.stack_p = 0.0                                  # v9: share of spawns with a random stack (health 100-200, armor 0-150)
+        self.near_item_p = 0.0                              # v9: share of spawns within 2 s of the mega or the red armor
+        self.intent_paid = np.zeros(self.n, np.float32)     # what the current trip has paid (taken back if abandoned)
         self.item_seek = 0.0                                # reward per second of travel gained toward the nearest big item
         self.seek_phi = np.full(self.n, 15.0, np.float32)   # he could use and that is lying there (see step)
         self.route_item = []
@@ -693,6 +753,11 @@ class DuelEnv:
             self.dmg_life[i ^ 1] = 0.0                  # what the opponent knows about this player's damage resets
         mode = int(self.mode[i // self.G])
         kind = int(self.kind[i // self.G])
+        if self.stack_p > 0 and kind == NORMAL and self.script[i] == 0 and self.rng.random() < self.stack_p:
+            self.hp[i] = float(self.rng.uniform(100.0, 200.0))     # a random stack: the worth of armor is learned in fights
+            self.armor[i] = float(self.rng.uniform(0.0, 150.0))
+        self.intent_paid[i] = 0.0
+        self.resp_t[i] = 99.0
         self.has[i] = False
         self.ammo[i] = 0.0
         if kind in (MOVE, COURSE) or self.script[i] == 1:   # movement round / course / strafing target: unarmed
@@ -1046,6 +1111,17 @@ class DuelEnv:
         self.teach[mi] = np.stack(out, 1)
 
     def _spawn(self, i, avoid, close=None):
+        if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.rng.random() < self.near_item_p:
+            gis = [g_ for g_, lab_ in enumerate(self.route_goal) if lab_ in ("MH", "RA")]
+            if gis:                                          # near the mega or the red: he tastes the stack (v9)
+                g_ = int(self.rng.choice(gis))
+                near = np.nonzero(self.route.T[g_] < 2.0)[0]
+                if len(near):
+                    p = self.route.nodes[int(self.rng.choice(near))]
+                    face = float(self.rng.uniform(-180, 180))
+                    self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), face)
+                    self._fresh(i, face)
+                    return
         p_close = self.close_p if close is None else float(close)
         if avoid is not None and self.spots is not None and self.rng.random() < p_close:
             d = np.linalg.norm(self.spots - avoid, axis=1)
@@ -1261,9 +1337,30 @@ class DuelEnv:
             out[:, 5] = np.minimum(self.item_t[grp, it] / 30.0, 2.0) * valid
         out[:, 6:12] = np.eye(len(INTENTS), dtype=np.float32)[k]
         out[:, 12] = np.minimum(self.intent_t / 10.0, 2.0)
-        out[:, 13] = self._cell(pos, np.ones(n, bool))
-        out[:, 14] = self._cell(known, seen_t < 5.0)
+        if self.cell_table is not None:                     # what the map reader says about his cell and the enemy's
+            out[:, 13:29] = self.cell_table[self._cell(pos, np.ones(n, bool)).astype(np.int64)]
+            out[:, 29:45] = self.cell_table[self._cell(known, seen_t < 5.0).astype(np.int64)] * (seen_t < 5.0)[:, None]
         return out
+
+    def _v9(self, pos, rot):
+        """the inputs of N_V9: item respawns heard, the four nearest spawn points"""
+        n = self.n
+        out = np.zeros((n, N_V9), np.float32)
+        out[:, :4] = np.exp(-self.resp_t)
+        if len(self.spawns):
+            d = np.linalg.norm(self.spawns[None, :, :] - pos[:, None, :], axis=2)
+            order = np.argsort(d, axis=1)[:, :4]
+            for j in range(min(4, len(self.spawns))):
+                out[:, 4 + 3 * j:7 + 3 * j] = np.clip(rot(self.spawns[order[:, j]] - pos) / 1000.0, -3, 3)
+        return out
+
+    def note_respawn(self, k, who=None):
+        """item k came back: the players (who, or every member of the item's match) within earshot hear it"""
+        kind, val, resp, cap, lab = self.item_def[k]
+        cat = 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "wp" else 3
+        idx = np.arange(self.n) if who is None else np.asarray(who)
+        near = np.linalg.norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
+        self.resp_t[idx[near], cat] = 0.0
 
     def intend(self, choice, who):
         """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
@@ -1495,6 +1592,7 @@ class DuelEnv:
             seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
         self.ear_t += DT
+        self.resp_t += DT
         self.it_t += DT                                      # the memory aids (N_MEM) keep their own time here, so the
         self.e_life += DT                                    # game-server plugin, which does not call step(), has them too
         self.life_t += DT
@@ -1597,7 +1695,7 @@ class DuelEnv:
                               self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
-                              self._intent(pos, rot, known, seen_t)], 1)
+                              self._v9(pos, rot), self._intent(pos, rot, known, seen_t)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -1629,8 +1727,9 @@ class DuelEnv:
             ap = -np.arctan2(t_[:, 2], np.hypot(t_[:, 0], t_[:, 1]) + 1e-6) - pit
             back = np.arctan2(pos[:, 1] - p_old[o, 1], pos[:, 0] - p_old[o, 0]) - np.radians(yaw_old[o])
             blk = np.concatenate([np.ones((n, 1), np.float32), rot(p_old[o] - pos) / 1000.0,
-                                  np.stack([np.sin(ay), np.cos(ay), np.sin(ap), np.cos(back)], 1)], 1)
-            out[:, 8 * j:8 * j + 8] = blk * on[:, None]
+                                  np.stack([np.sin(ay), np.cos(ay), np.sin(ap), np.cos(back)], 1),
+                                  np.eye(NW, dtype=np.float32)[self.weapon[o]][:, [RL, RG, LG]]], 1)   # what he holds (v9)
+            out[:, 11 * j:11 * j + 11] = blk * on[:, None]
         out[:, 16] = acq.sum(1) / 5.0
         out[:, 17] = (G - 2) / 4.0
         return out
@@ -1934,7 +2033,7 @@ class DuelEnv:
         if self.key_limits:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
-        prev_int = self.intent.copy()
+        prev_int, prev_done = self.intent.copy(), self.intent_done.copy()
         self.intend(a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64), human)
         self.stats["intent_trips"][0] += int((self.intent_changed & (self.intent > 0)).sum())
         self.stats["intent_trips"][2] += int((self.intent_changed & (prev_int > 0) & ~self.intent_done).sum())
@@ -2209,7 +2308,10 @@ class DuelEnv:
         if self.item_up_t is None:
             self.item_up_t = np.zeros_like(self.item_t)
         self.item_up_t = np.where(self.item_up, self.item_up_t + DT, 0.0).astype(np.float32)
+        was_up_ = self.item_up.copy()
         self.item_up |= self.item_t <= 0
+        for m_, k_ in zip(*np.nonzero(self.item_up & ~was_up_)):      # an item came back: heard within earshot
+            self.note_respawn(int(k_), np.arange(self.n)[np.arange(self.n) // (self._others_arr().shape[1] + 1) == m_])
         for k_, id_ in enumerate(self.big_ids):
             if id_ >= 0:
                 self.stats["big_up"][k_] += int(self.item_up[:, id_].sum())
@@ -2315,7 +2417,12 @@ class DuelEnv:
             gain = self.intent_phi - phi
             pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0) & (np.abs(gain) < 0.4)
             worth = self.item_reward * np.array(INTENT_VALUE, np.float32)[self.intent]      # the whole way is worth the pickup
-            reward += self.intent_seek * worth * gain / self.intent_phi0 * pay - INTENT_SWITCH * (self.intent_changed & (prev_int > 0))
+            claw = self.intent_changed & (prev_int > 0) & ~prev_done                        # a trip given up pays nothing (v9)
+            reward -= self.intent_paid * claw
+            self.intent_paid = np.where(claw | self.intent_done, 0.0, self.intent_paid).astype(np.float32)
+            pay_now = self.intent_seek * worth * gain / self.intent_phi0 * pay
+            reward += pay_now - INTENT_SWITCH * (self.intent_changed & (prev_int > 0))
+            self.intent_paid = (self.intent_paid + pay_now).astype(np.float32)
             self.intent_phi = phi.astype(np.float32)
 
         # deaths, frags, respawns
@@ -2326,6 +2433,8 @@ class DuelEnv:
         for v in dead:
             k = attacker[v]
             reward[v] -= 1.0
+            if self.intent[v] > 0 and not self.intent_done[v]:
+                reward[v] -= float(self.intent_paid[v])      # the trip he died on pays nothing (v9)
             died[v] = True
             if k >= 0 and k != v:
                 reward[k] += 1.0
@@ -2356,6 +2465,8 @@ class DuelEnv:
         for v in out:
             if not died[v]:
                 reward[v] -= 1.0
+                if self.intent[v] > 0 and not self.intent_done[v]:
+                    reward[v] -= float(self.intent_paid[v])
                 died[v] = True
                 self.stats["suicides"] += 1
                 self._spawn(int(v), avoid=s[self.foe[v], :3])

@@ -218,6 +218,12 @@ for j in range(2):
         add("projectiles", "his own {} projectile: velocity {}".format(n_, ax), "", "units/s / 1000", "v7")
     for k_ in ("rocket", "grenade", "plasma"):
         add("projectiles", "his own {} projectile: is a {}".format(n_, k_), "", "0 or 1", "v7")
+# ---- v9 (2026-10-06): item respawns heard, the nearest spawn points
+for k_ in ("the mega health", "the red armor", "a weapon", "a small health or armor"):
+    add("sounds", "{} came back".format(k_), "the respawn sound, within 1200 units", "exp(-seconds)", "v9")
+for j in range(4):
+    for ax in XYZ:
+        add("place", "spawn point {}: {}".format(j + 1, ax), "the four nearest places where players appear", "units / 1000", "v9")
 # ---- the intention and the map cells (2026-10-06, v8)
 add("intention", "chosen way: travel time", "seconds along the floor to the item he has chosen to go for (zero with none chosen)", "seconds / 10, capped at 2", "v8")
 for ax in XYZ:
@@ -227,8 +233,10 @@ add("intention", "chosen item comes back in", "", "seconds / 30, capped at 2", "
 for nm in ("none", "the mega health", "the red armor", "the rocket launcher", "the railgun", "the lightning gun"):
     add("intention", "going for {}".format(nm), "his own choice, read once a second and held", "0 or 1", "v8")
 add("intention", "seconds since chosen", "", "seconds / 10, capped at 2", "v8")
-add("map cells", "his own cell", "the 64-unit map cell (two height layers) he stands in; the network keeps 16 learned numbers per cell", "cell number (a learned table)", "v8")
-add("map cells", "the enemy's last known cell", "where he was last seen or heard, for 5 s; 0 = unknown", "cell number (a learned table)", "v8")
+for k in range(16):
+    add("map reader", "his own cell: reading {}".format(k), "what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps", "about -2 to 2", "v9")
+for k in range(16):
+    add("map reader", "the enemy's last known cell: reading {}".format(k), "the same for where the enemy was last seen or heard (zero after 5 s)", "about -2 to 2", "v9")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now
@@ -240,6 +248,8 @@ for j in ("second", "third"):
     add("more enemies", "{} enemy: direction cos".format(j), "", "cos", "ffa (not trained yet)")
     add("more enemies", "{} enemy: direction up-down".format(j), "", "sin", "ffa (not trained yet)")
     add("more enemies", "{} enemy faces him".format(j), "", "cos", "ffa (not trained yet)")
+    for w_ in ("rockets", "rail", "lightning"):
+        add("more enemies", "{} enemy holds {}".format(j, w_), "only while in view", "0 or 1", "v9")
 add("more enemies", "enemies in view", "", "count / 5", "ffa (not trained yet)")
 add("more enemies", "players beyond two", "", "(players - 2) / 4", "ffa (not trained yet)")
 assert len(rows) == F.OBS_DIM, (len(rows), F.OBS_DIM)

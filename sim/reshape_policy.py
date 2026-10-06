@@ -55,15 +55,17 @@ def main():
     old = names(a.old)
     assert len(set(old)) == len(old) and len(set(new)) == len(new), "input names must be unique"
     assert len(new) == E.OBS_DIM, (len(new), E.OBS_DIM)
-    assert tuple(E.CELL_COLS) == (len(new) - 2, len(new) - 1)
+    has_new_cell = getattr(E, "CELL_COLS", None) is not None
+    if has_new_cell:
+        assert tuple(E.CELL_COLS) == (len(new) - 2, len(new) - 1)
     sd, ck, W, old_body = load(a.src, old, a.cell_dim)
-    body = len(new) - 2
+    body = len(new) - 2 if has_new_cell else len(new)
     srcs = [(W, old_body, ck["obs_mean"], ck["obs_var"], old, "source")]
     if a.also:
         lst2 = names(a.also_old)
         sd2, ck2, W2, body2 = load(a.also, lst2, a.cell_dim)
         srcs.append((W2, body2, ck2["obs_mean"], ck2["obs_var"], lst2, "older"))
-    Wn = torch.zeros(W.shape[0], body + 2 * a.cell_dim, dtype=W.dtype)
+    Wn = torch.zeros(W.shape[0], body + (2 * a.cell_dim if has_new_cell else 0), dtype=W.dtype)
     mean, var = np.zeros(len(new)), np.ones(len(new))
     got = {}
     for j, k in enumerate(new):
@@ -75,7 +77,9 @@ def main():
                 mean[j], var[j] = m_[i], v_[i]
                 got[j] = tag
                 break
-    if "cell.weight" in sd:
+    if not has_new_cell:                                  # the learned table is gone (v9): its weights are dropped
+        sd.pop("cell.weight", None)
+    elif "cell.weight" in sd:
         Wn[:, body:] = sd["enc.0.weight"][:, len(old) - 2:]
     else:
         sd["cell.weight"] = torch.randn(E.MAX_CELLS, a.cell_dim) * 0.1
@@ -87,7 +91,8 @@ def main():
         sd["pi.weight"] = torch.cat([sd["pi.weight"], torch.zeros(extra, sd["pi.weight"].shape[1], dtype=sd["pi.weight"].dtype)], 0)
         sd["pi.bias"] = torch.cat([sd["pi.bias"], torch.zeros(extra, dtype=sd["pi.bias"].dtype)])
     ck["obs_mean"], ck["obs_var"] = mean, var
-    ck["obs_dim"], ck["action_dims"], ck["cells"], ck["cell_dim"] = E.OBS_DIM, new_dims, E.MAX_CELLS, a.cell_dim
+    ck["obs_dim"], ck["action_dims"] = E.OBS_DIM, new_dims
+    ck["cells"], ck["cell_dim"] = (E.MAX_CELLS, a.cell_dim) if has_new_cell else (0, 0)
     ck["reshaped_from"] = os.path.relpath(a.src, ROOT)
     os.makedirs(os.path.dirname(os.path.abspath(a.dst)), exist_ok=True)
     torch.save(ck, a.dst)

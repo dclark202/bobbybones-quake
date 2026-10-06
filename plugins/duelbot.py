@@ -543,6 +543,7 @@ class duelbot(minqlx.Plugin):
         if os.path.exists(rooms_json):
             with open(rooms_json) as f:
                 self.lab = json.load(f)
+        os.environ["ROUTE_CACHE"] = D                          # the route grid is cached here (/maps is read-only)
         self.rng = np.random.default_rng(int(time.time()))
         self.item_ent = {}
         self.ready = True
@@ -773,6 +774,14 @@ class duelbot(minqlx.Plugin):
                 w = want
                 env.cool[i] = max(env.cool[i], (float(env.fire_cd[i]) if nine else 0.0) + E.SWITCH)
         fire = bool(a[5] == 1)
+        if rules2 and hasattr(env, "mouse_hold") and hasattr(E, "MOUSE_HOLD"):
+            # the fire finger as in training: the button changes state at most every 100 ms (MOUSE_HOLD). Without this
+            # the network's frame-by-frame requests reached the game raw and the lightning gun stuttered (2026-10-06)
+            env.mouse_hold[i, 0] += 1
+            if fire != bool(env.fire_last[i]) and env.mouse_hold[i, 0] >= int(E.MOUSE_HOLD[0]):
+                env.mouse_hold[i, 0] = 0
+                env.fire_last[i] = fire
+            fire = bool(env.fire_last[i])
         env.cool[i] = max(0.0, env.cool[i] - E.DT)
         if nine:
             env.fire_cd[i] = max(0.0, env.fire_cd[i] - E.DT)
