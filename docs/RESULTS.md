@@ -42,6 +42,7 @@ From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), n
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|
 | 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |
+| 08:05 | 1920 (stood still 07:30 to 07:56; pad, hearing and hum in) | 5.2, 28%, 227 u/s | 37% / 33% / 36% / 13% | 0.017 (36 s), 0.003 (36 s) | 14.3 s | 0.38 | 2-21 (damage 2004 / 1827, held MG 91%) |
 
 ## 2026-10-05 21:03 — `duel_gru_v6`: `arena1` with items, the limits from the reflex test, memory inputs (until 07:00) (B-87, B-90, B-92 to B-94)
 
@@ -68,7 +69,6 @@ map, the spawn and the meaning of the limits changed.
 | 22:05 | 1947 | 1.7, 10%, 233 u/s | 50% / 42% / 43% / - | 0.03 (389 s), 0 | 25.6 s | 0.22 | **1-14** (damage 1101 / 1331, held MG 87%, rail 3%) |
 | 23:05 | 2008 (spawn weapon sets since 22:23) | 2.5, 9%, 234 u/s | 44% / 44% / 41% / 43% | 0.01 (428 s), 0.001 | 17 s | 0.13 | 0-13 (damage 912 / 1146, held MG 84%) |
 | 00:05 | 2068 | 3.6, 11%, 242 u/s | 48% / 42% / 40% / 27% | 0.03 (782 s), 0.002 | 14.7 s | 0.13 | 0-13 (damage 1009 / 993; Nightmare took the red armor 9 times and the mega 5 times and averaged 136 health + 95 armor, Bobby 99 + 0; 3 of his 13 deaths were falls into the void) |
-| 08:05 | 1920 (stood still 07:30 to 07:56; pad, hearing and hum in) | 5.2, 28%, 227 u/s | 37% / 33% / 36% / 13% | 0.017 (36 s), 0.003 (36 s) | 14.3 s | 0.38 | 2-21 (damage 2004 / 1827, held MG 91%) |
 | 01:05 | 2129 | 1.7, 5%, 223 u/s | 40% / 47% / 51% / - | 0.01 (885 s), 0 | 23.6 s | 0.08 | **9-13** (damage 2036 / 1238, held rail 40%, MG 51%) |
 | 02:05 | 2186 | 2.3, 7%, 230 u/s | 44% / 51% / - / - | 0.01 (1141 s), 0.001 | 23.1 s | 0.06 | 0-16 (damage 948 / 1173, held MG 89%: he fetched no weapon this game; one five-minute game swings a lot) |
 | 03:05 | 2246 | 2.9, 8%, 229 u/s | 52% / 42% / 41% / 58% | 0.02 (1510 s), 0 | 13.5 s | 0.08 | 1-11 (damage 1163 / 953, held MG 71%, rail 21%) |
