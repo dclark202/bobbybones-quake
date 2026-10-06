@@ -413,3 +413,5 @@ index,group,input,meaning,scale,added in
 411,hearing,above or below,height of the sound against his own,"units / 200, between -1.5 and 1.5",v7
 412,hearing,loudness,"1 next to him, 0 at the edge of earshot",0 to 1,v7
 413,hearing,coming or going,positive: the gap is closing,"units/s / 400, between -1.5 and 1.5",v7
+414,hearing,railgun hum,an enemy within 500 units holds a railgun (heard even when he stands still),0 or 1,v7
+415,hearing,lightning gun hum,an enemy within 500 units holds a lightning gun,0 or 1,v7

@@ -204,6 +204,8 @@ add("hearing", "direction of the sound: cos", "", "cos", "v7")
 add("hearing", "above or below", "height of the sound against his own", "units / 200, between -1.5 and 1.5", "v7")
 add("hearing", "loudness", "1 next to him, 0 at the edge of earshot", "0 to 1", "v7")
 add("hearing", "coming or going", "positive: the gap is closing", "units/s / 400, between -1.5 and 1.5", "v7")
+add("hearing", "railgun hum", "an enemy within 500 units holds a railgun (heard even when he stands still)", "0 or 1", "v7")
+add("hearing", "lightning gun hum", "an enemy within 500 units holds a lightning gun", "0 or 1", "v7")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

@@ -199,8 +199,10 @@ N_PAD = 2
 # its maker is coming or going. For the nearest enemy heard (running steps, jumps and landings, shots, within
 # EAR_RANGE; no line of sight needed): just heard 1, fading 1, direction 2 (sin, cos against his view), above or
 # below 1, loudness 1, closing or receding 1: 7. Direction and height are rough (EAR_NOISE degrees, 40 units).
-EAR_RANGE, EAR_NOISE = 1000.0, 10.0
-N_EAR = 7
+# A railgun or a lightning gun in an enemy's hands hums: heard within HUM_RANGE even when he stands still and does not
+# fire, and the hum tells which of the two it is: 2 more inputs.
+EAR_RANGE, EAR_NOISE, HUM_RANGE = 1000.0, 10.0, 500.0
+N_EAR = 7 + 2
 N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -457,6 +459,7 @@ class DuelEnv:
         self.pad_on = True
         self.ear = np.zeros((self.n, 4), np.float32)        # last sound heard: direction (world, radians), height, loudness, closing
         self.ear_t = np.full(self.n, 99.0, np.float32)      # seconds since
+        self.ear_hum = np.full(self.n, -1, np.int64)        # the humming weapon heard with it (RG, LG) or -1
         self.route, self.route_goal = None, []              # the ways to the big items (see N_ROUTE)
         if nav and os.path.exists(nav):
             pos_ = {}
@@ -1017,7 +1020,8 @@ class DuelEnv:
         s, n = self.state, self.n
         oth = self._others_arr()
         d = np.linalg.norm(s[oth, :3] - s[:, None, :3], axis=2)
-        ok = noisy[oth] & (d < EAR_RANGE) & (self.hp[oth] > 0) & (self.hp > 0)[:, None]
+        hum = ((self.weapon == RG) | (self.weapon == LG))[oth] & (d < HUM_RANGE)       # the weapon's hum, always there
+        ok = ((noisy[oth] & (d < EAR_RANGE)) | hum) & (self.hp[oth] > 0) & (self.hp > 0)[:, None]
         d = np.where(ok, d, 1e9)
         k = d.argmin(1)
         ar = np.arange(n)
@@ -1032,6 +1036,7 @@ class DuelEnv:
         close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
         self.ear[got] = np.stack([ang, up, 1.0 - dist / EAR_RANGE, np.clip(close / 400.0, -1.5, 1.5)], 1)
         self.ear_t[got] = 0.0
+        self.ear_hum[got] = np.where(hum[got, k[got]], self.weapon[src], -1)
 
     def _pad_ear(self, yaw):
         """the inputs of N_PAD and N_EAR"""
@@ -1039,8 +1044,9 @@ class DuelEnv:
         on = (self.ear_t < 3.0).astype(np.float32)
         return np.stack([self.pad / (PAD_DEG / 2.0), (self.pad_lift > 0).astype(np.float32),
                          (self.ear_t < 0.06).astype(np.float32), np.exp(-2.0 * self.ear_t),
-                         np.sin(rel) * on, np.cos(rel) * on, self.ear[:, 1] * on, self.ear[:, 2] * on, self.ear[:, 3] * on],
-                        1).astype(np.float32)
+                         np.sin(rel) * on, np.cos(rel) * on, self.ear[:, 1] * on, self.ear[:, 2] * on, self.ear[:, 3] * on,
+                         ((self.ear_hum == RG) & (self.ear_t < 0.5)).astype(np.float32),
+                         ((self.ear_hum == LG) & (self.ear_t < 0.5)).astype(np.float32)], 1).astype(np.float32)
 
     def _mates(self, i):
         """the other players of player i's group"""

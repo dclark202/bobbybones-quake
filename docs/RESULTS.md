@@ -35,6 +35,10 @@ From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), n
   frames with three players moving at random.
 - Both are mirrored in the game-server plugin.
 
+**07:56 — the hum of the railgun and the lightning gun (owner: holding one gives your position away, it is part of the game's balance)**: an enemy holding either is heard within 500 units even when he stands still and does not fire, and the hum tells which of the two it is (2 more inputs, 416 in all). He knows which weapon he holds himself, so whether to carry a humming weapon is left to him.
+
+**What went wrong, 07:30 to 07:56:** after the widening to 414 inputs the run stood still at its second update for 26 minutes: the graphics memory was full (15.9 of 16.4 GB) and training crawled. Nothing was lost but the time. Restarted with smaller training batches (`--minibatches 36`, 240 groups per worker): 14.3 GB, 49,000 steps a second where it had 59,000.
+
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|
 | 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |

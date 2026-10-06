@@ -85,7 +85,7 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - The PC has blue-screened twice under load; long runs should save often (they do, every 10 updates) and be resumed.
 - Write `.cmd` run files to the scratchpad and copy them over: writing over an existing one can fail silently in a chain,
   and the old settings then run (it happened).
-- Long sequences fill GPU memory (256 steps needs `--minibatches 24` on 16 GB); a stalled first update is the sign.
+- Long sequences fill GPU memory (256 steps needs `--minibatches 24` on 16 GB; with 416 inputs and about 8,600 players `--minibatches 36`); a stalled first or second update is the sign. After every widening, check that updates keep coming (`metrics.jsonl` grows about once a minute).
 - Restart a run only right after a checkpoint save (every 10 updates) and keep a copy of it.
 - A background shell is capped at two hours; chain waiters or launch detached.
 - Aborting a warmup countdown in a loop hangs the server; the plugin aborts at most every 30 s and only with a human.
