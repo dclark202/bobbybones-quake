@@ -48,7 +48,7 @@ LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg")      # no grenade launcher: n
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 # the aim-reflex experiment: three short rooms in the aim box that measure a player's hands and eyes, not his game
 # (tools/reflex_report.py reads the session and works out steadiness, tracking lag, reaction and flick speed)
-REFLEX = [["reflex", "still"], ["reflex", "track"], ["reflex", "flick"], ["reflex", "rocket"]]
+REFLEX = [["reflex", "slow"], ["reflex", "track"], ["reflex", "flick"], ["reflex", "rocket"]]
 LAB_SUITE = [["aim", w, t] for w in LAB_WEAPONS for t in LAB_STYLES] + \
     [["move", "*"]]                        # aim rooms and movement courses; items and the fight only on request
 SUITE = [["aim", w, s, "mid"] for w in ("lg", "rg", "rl") for s in ("still", "fast")] + \
@@ -379,14 +379,15 @@ class duelbot(minqlx.Plugin):
                 return dict(kind="aim", lab=True, name="aim/{}/{}".format(a[1], a[2]), weapon=a[1], style=0,
                             script=1, secs=45 if a[2] == "env" else 25, where="env" if a[2] == "env" else "aim",
                             jump=a[2] == "jump")
-            if a[0] == "reflex" and len(a) >= 2 and a[1] in ("still", "track", "flick", "rocket") and "aim" in self.lab:
-                # still: the target stands (steadiness). track: it strafes left and right and turns round at
+            if a[0] == "reflex" and len(a) >= 2 and a[1] in ("slow", "track", "flick", "rocket") and "aim" in self.lab:
+                # slow: the target walks slowly from side to side, turning every 2.5 s (steadiness on an easy target;
+                # a standing one would be hit every time by anyone). track: it strafes left and right and turns round at
                 # random moments (tracking lag, reaction to a change of direction). flick: it stands, and jumps to a
                 # new place every two to three seconds (time to react, flick speed, time to the shot)
                 return dict(kind="aim", lab=True, reflex=a[1], name="reflex/" + a[1], script=1, where="aim", jump=False,
                             weapon={"flick": "rg", "rocket": "rl"}.get(a[1], "lg"), near=a[1] != "flick",
-                            style=0 if a[1] in ("track", "rocket") else 1,
-                            secs={"still": 15, "track": 40, "flick": 45, "rocket": 30}[a[1]])
+                            style=1 if a[1] == "flick" else 0,
+                            secs={"slow": 20, "track": 40, "flick": 45, "rocket": 30}[a[1]])
             if a[0] == "terrain" and len(a) >= 2 and a[1] in self.lab["stations"]:
                 return dict(kind="terrain", lab=True, name="terrain/" + a[1], script=0, secs=60, key=a[1])
             if a[0] == "speed" or (a[0] == "move" and len(a) >= 2 and a[1] in self.lab.get("courses", {})):
@@ -930,7 +931,7 @@ class duelbot(minqlx.Plugin):
         """one line that tells the player what to do and with which weapons"""
         k = r["kind"]
         if k == "aim" and r.get("reflex"):
-            return {"still": "Lightning gun. The target stands still: hold your crosshair on it and keep firing.",
+            return {"slow": "Lightning gun. The target walks slowly from side to side: hold your crosshair on it and keep firing.",
                     "track": "Lightning gun. The target strafes and turns round without warning: stay on it.",
                     "flick": "Railgun. The target jumps to a new place every few seconds: hit it as fast as you can.",
                     "rocket": "Rockets. The target strafes and turns round without warning: hit it."}[r["reflex"]] + \
@@ -1233,6 +1234,10 @@ class duelbot(minqlx.Plugin):
             else:
                 env.round_t[0] += R.DT
                 a = env._script_actions(np.array([1]))[0].copy()
+                if r.get("reflex") == "slow":                # a slow walk from side to side: one frame in three, turning every 2.5 s
+                    a[0], a[1], a[2] = 1, 1, 0
+                    if m["frames"] % 3 == 0:
+                        a[1] = 2 if int((now - r["t_end"] + r["secs"]) / 2.5) % 2 else 0
                 if r.get("reflex") in ("track", "rocket"):   # sideways only: left or right, turning round at random moments
                     a[0] = 1
                     if a[1] == 1:
@@ -1249,7 +1254,7 @@ class duelbot(minqlx.Plugin):
                     r["home"] = hp_
                     r["hop_t"] = now + float(self.rng.uniform(1.8, 3.2))
                     self.record(event="hop", room=r["name"], pos=[round(v, 1) for v in hp_], frame_t=round(now, 3))
-                if r.get("reflex") in ("still", "flick") and math.hypot(bpos[0] - r["home"][0], bpos[1] - r["home"][1]) > 12:
+                if r.get("reflex") == "flick" and math.hypot(bpos[0] - r["home"][0], bpos[1] - r["home"][1]) > 12:
                     self.put(bobby, r["home"], byaw)         # a standing target is not pushed around by the hits
                 if r.get("lab"):
                     # lab targets: random walk in all four directions, with or without jumping (jump is tapped,

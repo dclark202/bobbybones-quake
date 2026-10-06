@@ -1,7 +1,7 @@
 """The aim reflex test: what a player's hands and eyes can do, measured the same way for people and for BobbyBones.
 
 People run `!reflex` on the play-test server (map bobbylab): four short rooms in the aim box, one kind of aim each.
-  still  (15 s, lightning gun): the target stands.              -> steadiness: aim error, hand jitter, hit rate
+  slow   (20 s, lightning gun): the target walks slowly from side to side. -> steadiness: aim error, hand jitter
   track  (40 s, lightning gun): it strafes, turning at random.   -> tracking lag, reaction to a turn, aim error, hit rate
   flick  (45 s, railgun): it jumps to a new place every 2-3 s.   -> reaction time, flick speed, time to the shot, hit rate
   rocket (30 s, rockets): it strafes, turning at random.         -> damage a rocket, rockets that hurt, how far ahead he aims
@@ -27,7 +27,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DT = 0.025
 VIEW_H = 26.0
-ROOMS = ("still", "track", "flick", "rocket")
+ROOMS = ("slow", "track", "flick", "rocket")
 
 
 def wrap(a):
@@ -52,13 +52,13 @@ def measure(room, d):
     own = np.concatenate([[0.0], np.linalg.norm(np.diff(d["pos"][:, :2], axis=0), axis=1)]) / DT
     out = dict(frames=int(len(err)), distance=round(float(np.median(dist))), own_speed=round(float(np.mean(own))))
     shots = int(d["shot"].sum())
-    if room in ("still", "track"):
+    if room in ("slow", "track"):
         k = slice(int(2.0 / DT), None)                        # the first two seconds are for finding the target
         out.update(aim_error_deg=round(float(np.mean(err[k])), 2), on_target=round(float(np.mean(on[k])), 3),
                    damage_per_s=round(float(d["dmg"][k].sum() / max(1, len(err[k])) / DT), 1))
-    if room == "still":
+    if room == "slow":                                        # view movement that the target's movement does not explain
         k = slice(int(2.0 / DT), None)
-        out["jitter_deg_per_frame"] = round(float(np.sqrt(np.mean(vy[k] ** 2 + vp[k] ** 2))), 3)
+        out["jitter_deg_per_frame"] = round(float(np.sqrt(np.mean((vy[k] - sm(vb)[k]) ** 2 + vp[k] ** 2))), 3)
     if room == "track":
         k0 = int(2.0 / DT)
         a, b = vy[k0:], vb[k0:]
@@ -183,15 +183,20 @@ def bobby(run, policy=None, repeats=4):
     tgt = subj + 1
     res = {}
     plain = env._script_actions
-    for room, secs, wpn in (("still", 15, E.LG), ("track", 40, E.LG), ("flick", 45, E.RG), ("rocket", 30, E.RL)):
+    for room, secs, wpn in (("slow", 20, E.LG), ("track", 40, E.LG), ("flick", 45, E.RG), ("rocket", 30, E.RL)):
         env.lab_aim_len = secs + 5.0
         env.lab_force = dict(kind=E.AIM, weapon=wpn, where="aim", jump=False)
-        env.sc_style = 0 if room in ("track", "rocket") else 1
+        env.sc_style = 1 if room == "flick" else 0
+        tick = [0]
         near = room != "flick"                                   # lightning and rockets: the nearer target zone
         z = A["zone_lg"] if (near and "zone_lg" in A) else A["zone"]
 
         def script(idx, room=room):
             out = plain(idx)
+            if room == "slow":                                   # a slow walk from side to side, turning every 2.5 s
+                tick[0] += 1
+                out[:, 0], out[:, 2] = 1, 0
+                out[:, 1] = (2 if int(tick[0] * DT / 2.5) % 2 else 0) if tick[0] % 3 == 0 else 1
             if room in ("track", "rocket"):                      # sideways only, turning at random moments
                 p_ = env.state[idx, :3]                          # (near the edge of its zone it walks back in, as always)
                 inside = (z[0] + 120 <= p_[:, 0]) & (p_[:, 0] <= z[2] - 120) & (z[1] + 120 <= p_[:, 1]) & (p_[:, 1] <= z[3] - 120)
@@ -238,11 +243,11 @@ def bobby(run, policy=None, repeats=4):
                 r["tpos"].append(s[i + 1, :3].copy())
             act, h = pol.act(obs, h)
             act[subj, 0], act[subj, 1], act[subj, 2] = 1, 1, 0   # he stands, as people are asked to: hands and eyes only
-            if room in ("still", "flick"):
+            if room == "flick":
                 pin = env.state[tgt, :3].copy()
             obs, _, done, _ = env.step(act)
             h[done] = 0.0
-            if room in ("still", "flick"):                       # the standing target is not pushed around by the hits
+            if room == "flick":                                  # the standing target is not pushed around by the hits
                 for k_, i in enumerate(tgt):
                     env.w.reset(int(i), tuple(float(v) for v in pin[k_]), (0, 0, 0), float(env.yaw[i]))
                 env.state = env.w.state()
@@ -268,10 +273,10 @@ def mean_of(runs):
     return out
 
 
-LINES = (("still", "own_speed", "Still target: his own speed (should be near 0)"),
-         ("still", "aim_error_deg", "Still target: aim error (degrees)"),
-         ("still", "jitter_deg_per_frame", "Still target: hand jitter (degrees a frame)"),
-         ("still", "on_target", "Still target: share of time on it"),
+LINES = (("slow", "own_speed", "Slow target: his own speed (should be near 0)"),
+         ("slow", "aim_error_deg", "Slow target: aim error (degrees)"),
+         ("slow", "jitter_deg_per_frame", "Slow target: hand jitter (degrees a frame)"),
+         ("slow", "on_target", "Slow target: share of time on it"),
          ("track", "aim_error_deg", "Strafing target: aim error (degrees)"),
          ("track", "on_target", "Strafing target: share of time on it"),
          ("track", "tracking_lag_ms", "Strafing target: view runs behind by (ms)"),
@@ -314,7 +319,7 @@ def main():
     print("{:<50}".format("") + "".join("{:>26}".format(c[:25]) for c in cols))
     for room, key, label in LINES:
         print("{:<50}".format(label) + "".join("{:>26}".format(str(table[c].get(room, {}).get(key, "-"))) for c in cols))
-    print("{:<50}".format("runs (still / track / flick / rocket)") + "".join(
+    print("{:<50}".format("runs (slow / track / flick / rocket)") + "".join(
         "{:>26}".format(" / ".join(str(table[c].get(r, {}).get("runs", 0)) for r in ROOMS)) for c in cols))
     os.makedirs(os.path.join(ROOT, "data", "reflex"), exist_ok=True)
     with open(os.path.join(ROOT, "data", "reflex", "report.json"), "w") as f:

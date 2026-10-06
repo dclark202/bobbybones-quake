@@ -62,7 +62,7 @@ A short test of hands and eyes only, for setting Bobby's aim limits against real
 
 | Room | Weapon | Target | What it measures |
 |---|---|---|---|
-| still, 15 s | lightning gun | stands | steadiness: aim error, hand jitter |
+| slow, 20 s | lightning gun | walks slowly from side to side | steadiness: aim error, hand jitter (a standing target would be hit every time) |
 | track, 40 s | lightning gun | strafes, turns at random moments | how far the view runs behind, how soon a turn is followed, aim error |
 | flick, 45 s | railgun | jumps to a new place every 2 to 3 s | time until the view starts to move, time until it is on the target, turn speed, first-shot hits |
 | rocket, 30 s | rockets | strafes, turns at random moments | damage a rocket, how far ahead of the target the aim is |
