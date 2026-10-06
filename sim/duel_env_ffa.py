@@ -211,8 +211,12 @@ N_EAR = 7 + 2
 #   his own two nearest projectiles in flight: place 3, speed 3, kind 3, each: 18
 HAZ_DIST = (96.0, 224.0)
 N_MORE = 32 + 3 + 3 + 18
+# A denser picture of the view (an experiment, off unless the environment variable DENSE_VIEW is 1): 9 x 5 distances
+# across his view where the standard picture has 5 x 3, for reading cover, doorways and corners. Not in any run yet.
+DENSE_YAW, DENSE_PITCH = np.radians(np.linspace(-48, 48, 9)), np.radians(np.linspace(-30, 30, 5))
+N_DENSE = len(DENSE_YAW) * len(DENSE_PITCH) if os.environ.get("DENSE_VIEW") == "1" else 0
 N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -1095,6 +1099,16 @@ class DuelEnv:
             own[:, 9 * j + 6], own[:, 9 * j + 7], own[:, 9 * j + 8] = ok & (kind == RL), ok & (kind == GL), ok & (kind == PG)
         return np.concatenate([haz, lv, pd, own], 1).astype(np.float32)
 
+    def _dense(self, eye, yaw, pit):
+        """the inputs of N_DENSE (nothing when the experiment is off)"""
+        if not N_DENSE:
+            return np.zeros((self.n, 0), np.float32)
+        zf = np.where(self.zoom, ZOOM, 1.0)[:, None]
+        gy = (yaw[:, None, None] + DENSE_YAW[None, None, :] * zf[:, :, None]).repeat(len(DENSE_PITCH), 1).reshape(self.n, -1)
+        gp = (pit[:, None, None] + DENSE_PITCH[None, :, None] * zf[:, :, None]).repeat(len(DENSE_YAW), 2).reshape(self.n, -1)
+        vd = np.stack([np.cos(gp) * np.cos(gy), np.cos(gp) * np.sin(gy), -np.sin(gp)], 2).astype(np.float32)
+        return self.w.rays_each(eye, vd, 2000.0).astype(np.float32)
+
     def _pad_ear(self, yaw):
         """the inputs of N_PAD and N_EAR"""
         rel = self.ear[:, 0] - yaw
@@ -1481,7 +1495,7 @@ class DuelEnv:
                                                                               yaw, pit, visible),
                               self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
-                              self._more(pos, rot, c, si, visible, opp_vel, seen_t)], 1)
+                              self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):

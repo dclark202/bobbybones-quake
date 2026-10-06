@@ -1,0 +1,264 @@
+{
+ "version": 1,
+ "note": "items and spawns for maps/lockout; z is the floor height (the generator adds 24). Edit with editor.html, then run tools/make_lockout_map.py",
+ "items": [
+  {
+   "id": "i00",
+   "class": "weapon_railgun",
+   "x": 2480,
+   "y": 1424,
+   "z": 416,
+   "label": "Sniper perch (Sniper Tower roof)"
+  },
+  {
+   "id": "i01",
+   "class": "weapon_lightning",
+   "x": 464,
+   "y": 1424,
+   "z": 352,
+   "label": "BR perch (BR Tower roof)"
+  },
+  {
+   "id": "i02",
+   "class": "weapon_rocketlauncher",
+   "x": 1472,
+   "y": 1216,
+   "z": 192,
+   "label": "Centre deck, the hot spot (Halo: the sword)"
+  },
+  {
+   "id": "i03",
+   "class": "weapon_shotgun",
+   "x": 1472,
+   "y": 1120,
+   "z": 0,
+   "label": "Hall under the centre (Halo: the shotgun hallway)"
+  },
+  {
+   "id": "i04",
+   "class": "weapon_plasmagun",
+   "x": 1472,
+   "y": 2060,
+   "z": 192,
+   "label": "Library"
+  },
+  {
+   "id": "i05",
+   "class": "weapon_grenadelauncher",
+   "x": 1408,
+   "y": 120,
+   "z": 0,
+   "label": "South yard, by the lift well door"
+  },
+  {
+   "id": "i06",
+   "class": "item_health_mega",
+   "x": 1168,
+   "y": 1470,
+   "z": 0,
+   "label": "West green chamber"
+  },
+  {
+   "id": "i07",
+   "class": "item_armor_body",
+   "x": 1776,
+   "y": 2240,
+   "z": 192,
+   "label": "Library, north-east corner (red armor)"
+  },
+  {
+   "id": "i08",
+   "class": "item_armor_combat",
+   "x": 2208,
+   "y": 700,
+   "z": 0,
+   "label": "Elbow corridor (yellow armor)"
+  },
+  {
+   "id": "i09",
+   "class": "item_health_large",
+   "x": 2820,
+   "y": 1200,
+   "z": 0,
+   "label": "East yard"
+  },
+  {
+   "id": "i10",
+   "class": "item_health_large",
+   "x": 124,
+   "y": 1200,
+   "z": 0,
+   "label": "West yard"
+  },
+  {
+   "id": "i11",
+   "class": "item_health",
+   "x": 2368,
+   "y": 1100,
+   "z": 0,
+   "label": "Sniper Tower ground floor"
+  },
+  {
+   "id": "i12",
+   "class": "item_health",
+   "x": 576,
+   "y": 1100,
+   "z": 0,
+   "label": "BR Tower ground floor"
+  },
+  {
+   "id": "i13",
+   "class": "item_health",
+   "x": 1408,
+   "y": 360,
+   "z": 0,
+   "label": "Lift well"
+  },
+  {
+   "id": "i14",
+   "class": "item_health",
+   "x": 1472,
+   "y": 1900,
+   "z": 192,
+   "label": "Library door"
+  },
+  {
+   "id": "i15",
+   "class": "item_armor_shard",
+   "x": 1408,
+   "y": 1700,
+   "z": 192,
+   "label": "Bridge: deck to library"
+  },
+  {
+   "id": "i16",
+   "class": "item_armor_shard",
+   "x": 1950,
+   "y": 1920,
+   "z": 192,
+   "label": "Bridge: library to Sniper terrace"
+  },
+  {
+   "id": "i17",
+   "class": "item_armor_shard",
+   "x": 994,
+   "y": 1920,
+   "z": 192,
+   "label": "Bridge: library to BR terrace"
+  },
+  {
+   "id": "i18",
+   "class": "item_armor_shard",
+   "x": 1408,
+   "y": 800,
+   "z": 192,
+   "label": "Lift top"
+  },
+  {
+   "id": "i19",
+   "class": "ammo_slugs",
+   "x": 2540,
+   "y": 1100,
+   "z": 192,
+   "label": "Sniper Tower second floor"
+  },
+  {
+   "id": "i20",
+   "class": "ammo_cells",
+   "x": 404,
+   "y": 1100,
+   "z": 192,
+   "label": "BR Tower second floor"
+  },
+  {
+   "id": "i21",
+   "class": "ammo_rockets",
+   "x": 1180,
+   "y": 1100,
+   "z": 192,
+   "label": "Centre deck, west side"
+  },
+  {
+   "id": "i22",
+   "class": "ammo_rockets",
+   "x": 1760,
+   "y": 1400,
+   "z": 192,
+   "label": "Centre deck, north-east"
+  },
+  {
+   "id": "i23",
+   "class": "ammo_shells",
+   "x": 1300,
+   "y": 1480,
+   "z": 0,
+   "label": "Hall, by the chamber"
+  },
+  {
+   "id": "i24",
+   "class": "ammo_grenades",
+   "x": 1500,
+   "y": 200,
+   "z": 0,
+   "label": "South yard"
+  }
+ ],
+ "spawns": [
+  {
+   "id": "s0",
+   "x": 300,
+   "y": 300,
+   "z": 0,
+   "angle": 45
+  },
+  {
+   "id": "s1",
+   "x": 2644,
+   "y": 300,
+   "z": 0,
+   "angle": 135
+  },
+  {
+   "id": "s2",
+   "x": 300,
+   "y": 2100,
+   "z": 0,
+   "angle": 315
+  },
+  {
+   "id": "s3",
+   "x": 2644,
+   "y": 2100,
+   "z": 0,
+   "angle": 225
+  },
+  {
+   "id": "s4",
+   "x": 1100,
+   "y": 1000,
+   "z": 192,
+   "angle": 0
+  },
+  {
+   "id": "s5",
+   "x": 1850,
+   "y": 1450,
+   "z": 192,
+   "angle": 180
+  },
+  {
+   "id": "s6",
+   "x": 1472,
+   "y": 1060,
+   "z": 0,
+   "angle": 90
+  },
+  {
+   "id": "s7",
+   "x": 1472,
+   "y": 2000,
+   "z": 192,
+   "angle": 270
+  }
+ ]
+}

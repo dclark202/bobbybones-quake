@@ -47,6 +47,8 @@ From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), n
 5. **His own two nearest projectiles** in flight (18).
 - Training batches `--minibatches 40`; 45,000 steps a second, an update every 49 s, checked over 13 updates. Graphics memory 15.5 of 16.4 GB: there is little room left for more inputs at this number of players.
 
+**08:50 — a denser picture of the view, built behind a switch, not in the run (B-99, item 6):** 9 x 5 distances across his view where the standard picture has 5 x 3 (`DENSE_VIEW=1`; off by default, and with it off the simulator is unchanged). Cost measured: a simulator step for 510 players takes 29.9 ms with it against 20.2 ms without (+48%, measured while the run was using the processor), 517 inputs against 472, and the graphics memory has no room for it at the present number of players. Whether it helps is not measured: that needs two training runs side by side, which the graphics card cannot hold while `duel_gru_v7` trains.
+
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|
 | 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |
