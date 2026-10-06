@@ -203,8 +203,16 @@ N_PAD = 2
 # fire, and the hum tells which of the two it is: 2 more inputs.
 EAR_RANGE, EAR_NOISE, HUM_RANGE = 1000.0, 10.0, 500.0
 N_EAR = 7 + 2
+# More of what a player sees and remembers (2026-10-06, after an audit of the inputs):
+#   hazards: 8 directions round him at 96 and at 224 units, is the floor there lava (hurts) 16, a deadly drop 16.
+#     Only inside his field of view, like the floor readings. Before, a deadly drop read like any ledge.
+#   the enemy's last known speed and heading, kept for 5 s after he is lost from view: 3
+#   where the nearest jump pad lands: 3
+#   his own two nearest projectiles in flight: place 3, speed 3, kind 3, each: 18
+HAZ_DIST = (96.0, 224.0)
+N_MORE = 32 + 3 + 3 + 18
 N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -232,7 +240,7 @@ class RouteField:
     Plain numpy (the Anaconda Python's scipy is broken): the nearest graph point comes from a table over a grid."""
     CELL = 32.0
 
-    def __init__(self, nav_path, goals):
+    def __init__(self, nav_path, goals, pads=()):
         import heapq
         g = json.load(open(nav_path))
         self.nodes = np.array(g["nodes"], np.float32)
@@ -245,6 +253,12 @@ class RouteField:
         for a, b, t, kind in g["edges"]:                      # flat walking works both ways
             if kind == "walk" and (b, a) not in have and abs(self.nodes[a][2] - self.nodes[b][2]) < 18:
                 radj[a].append((b, float(np.linalg.norm(self.nodes[a] - self.nodes[b])) / 320.0))
+        for c_, d_ in pads:                                   # jump pads: from the plate to where it throws him
+            dx = np.hypot(self.nodes[:, 0] - c_[0], self.nodes[:, 1] - c_[1])      # (the builder's walkers get thrown off
+            on = np.nonzero((dx < 130) & (np.abs(self.nodes[:, 2] - c_[2]) < 48))[0]  # the plate: link from the floor round it)
+            land = int(np.linalg.norm(self.nodes - np.asarray(d_, np.float32) + np.array([0, 0, 100.0], np.float32), axis=1).argmin())
+            for a_ in on:
+                radj[land].append((int(a_), 1.2 + float(dx[a_]) / 320.0))
         w = np.array([1, 1, 2.0], np.float32)                 # vertical distance counts double
         self.lo = self.nodes.min(0) - 64.0
         dims = np.ceil((self.nodes.max(0) + 64.0 - self.lo) / self.CELL).astype(int)
@@ -398,6 +412,7 @@ class DuelEnv:
         self.tele_in = np.array([c for k, c, d in spots if k == 1], np.float32).reshape(-1, 3)
         self.tele_out = np.array([d for k, c, d in spots if k == 1], np.float32).reshape(-1, 3)
         self.pads = np.array([c for k, c, d in spots if k == 0], np.float32).reshape(-1, 3)
+        self.pad_dest = np.array([d for k, c, d in spots if k == 0], np.float32).reshape(-1, 3)
         va, vp = np.radians([-40, -20, 0, 20, 40]), np.radians([-25, 0, 25])
         self.view_grid = np.array([(y, q) for q in vp for y in va], np.float32)        # yaw, pitch offsets
         self.up_dirs = np.array([[0, 0, 1.0]] + [[math.cos(t) * 0.7071, math.sin(t) * 0.7071, 0.7071]
@@ -454,6 +469,8 @@ class DuelEnv:
         self.life_t = np.zeros(self.n, np.float32)          # seconds since this player's own respawn
         self.first_wp = np.zeros(self.n, bool)              # has picked a weapon up in this life (statistics)
         self.item_up_t = None                               # per item: seconds it has been lying there
+        self.last_vel = np.zeros((self.n, 3), np.float32)   # the enemy's speed and heading when last seen
+        self.walk_last = np.zeros(self.n, bool)             # the walk key as the little finger has it
         self.pad = np.zeros(self.n, np.float32)             # the hand on the mouse pad, degrees from the middle
         self.pad_lift = np.zeros(self.n, np.int64)          # frames the mouse is still in the air
         self.pad_on = True
@@ -469,7 +486,8 @@ class DuelEnv:
                     pos_[lab_] = self.item_pos[k_]
             self.route_goal = [lab_ for lab_ in ROUTE_ITEMS if lab_ in pos_]
             if self.route_goal:
-                self.route = RouteField(nav, [pos_[lab_] for lab_ in self.route_goal])
+                self.route = RouteField(nav, [pos_[lab_] for lab_ in self.route_goal],
+                                        pads=[(c, d) for k, c, d in spots if k == 0])
         self.flinch_on = True
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
@@ -611,6 +629,7 @@ class DuelEnv:
         self.flinch[i], self.focus[i] = 0.0, FOCUS_SECS
         self.life_t[i], self.first_wp[i] = 0.0, False
         self.pad[i], self.pad_lift[i], self.ear_t[i] = 0.0, 0, 99.0
+        self.walk_last[i] = False
         self.e_got[self._mates(i), self._slot(i)] = 0.0     # what the others knew him to have is gone with him
         if self.G == 2:
             self.dmg_life[i ^ 1] = 0.0                  # what the opponent knows about this player's damage resets
@@ -1038,6 +1057,44 @@ class DuelEnv:
         self.ear_t[got] = 0.0
         self.ear_hum[got] = np.where(hum[got, k[got]], self.weapon[src], -1)
 
+    def _more(self, pos, rot, c, si, visible, opp_vel, seen_t):
+        """the inputs of N_MORE"""
+        n = self.n
+        ar = np.arange(n)
+        haz = np.zeros((n, 32), np.float32)
+        if len(self.hurt_zones):
+            ang = np.linspace(0, 2 * np.pi, 8, endpoint=False)
+            see = (np.abs((ang + np.pi) % (2 * np.pi) - np.pi)[None, :] <= self.fov()[0][:, None]) if self.fov_sight else True
+            for r_, dist in enumerate(HAZ_DIST):
+                sx = pos[:, 0:1] + (c[:, None] * np.cos(ang)[None] - si[:, None] * np.sin(ang)[None]) * dist
+                sy = pos[:, 1:2] + (si[:, None] * np.cos(ang)[None] + c[:, None] * np.sin(ang)[None]) * dist
+                starts = np.stack([sx, sy, np.repeat(pos[:, 2:3], 8, 1)], 2).reshape(-1, 3).astype(np.float32)
+                fr = self.w.rays(starts, np.array([[0, 0, -1.0]], np.float32), 1200.0).reshape(n, 8)
+                ez = pos[:, 2:3] - fr * 1200.0               # the floor under that spot
+                for hz in self.hurt_zones:
+                    inxy = (sx >= hz[0]) & (sx <= hz[3]) & (sy >= hz[1]) & (sy <= hz[4])
+                    kill = hz[6] >= 1000
+                    hit = inxy & ((ez <= hz[5]) if kill else ((ez >= hz[2] - 8) & (ez <= hz[5] + 8)))
+                    k0 = 16 * r_ + (8 if kill else 0)
+                    haz[:, k0:k0 + 8] = np.maximum(haz[:, k0:k0 + 8], hit & see)
+        self.last_vel = np.where(visible[:, None], opp_vel, self.last_vel).astype(np.float32)
+        lv = rot(self.last_vel) / 400.0 * (seen_t < 5.0)[:, None]
+        pd = np.zeros((n, 3), np.float32)
+        if len(self.pads):
+            k = np.linalg.norm(self.pads[None] - pos[:, None], axis=2).argmin(1)
+            pd = np.clip(rot(self.pad_dest[k] - pos) / 1000.0, -3, 3)
+        own = np.zeros((n, 18), np.float32)
+        dist = np.where(self.ra, np.linalg.norm(self.rp - pos[:, None, :], axis=2), 1e9)
+        order = np.argsort(dist, axis=1)[:, :2]
+        for j in range(2):
+            idx = order[:, j]
+            ok = dist[ar, idx] < 1e8
+            own[:, 9 * j:9 * j + 3] = np.clip(rot(self.rp[ar, idx] - pos) / 1000.0, -3, 3) * ok[:, None]
+            own[:, 9 * j + 3:9 * j + 6] = rot(self.rv[ar, idx]) / 1000.0 * ok[:, None]
+            kind = self.rw[ar, idx]
+            own[:, 9 * j + 6], own[:, 9 * j + 7], own[:, 9 * j + 8] = ok & (kind == RL), ok & (kind == GL), ok & (kind == PG)
+        return np.concatenate([haz, lv, pd, own], 1).astype(np.float32)
+
     def _pad_ear(self, yaw):
         """the inputs of N_PAD and N_EAR"""
         rel = self.ear[:, 0] - yaw
@@ -1423,7 +1480,8 @@ class DuelEnv:
                               self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
                                                                               yaw, pit, visible),
                               self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
-                              self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw)], 1)   # the group block keeps its place
+                              self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
+                              self._more(pos, rot, c, si, visible, opp_vel, seen_t)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -1727,6 +1785,11 @@ class DuelEnv:
         # little finger: crouch
         c_now, c_want = last[:, 2] == 2, a[:, 2] == 2
         c_new = np.where(act(LITTLE, c_now != c_want), c_want, c_now)
+        if a.shape[1] > 7:                                   # the walk key: the same finger, so not while it has just acted
+            w_want = a[:, 7] == 1
+            w_new = np.where(act(LITTLE, self.walk_last != w_want), w_want, self.walk_last)
+            self.walk_last = np.where(who, w_new, w_want)
+            a[:, 7] = self.walk_last
         # the right hand: fire (index finger) and zoom (middle finger); no shared budget, only the hold per finger
         self.mouse_hold += 1
         f_want = a[:, 5] == 1

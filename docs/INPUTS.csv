@@ -415,3 +415,59 @@ index,group,input,meaning,scale,added in
 413,hearing,coming or going,positive: the gap is closing,"units/s / 400, between -1.5 and 1.5",v7
 414,hearing,railgun hum,an enemy within 500 units holds a railgun (heard even when he stands still),0 or 1,v7
 415,hearing,lightning gun hum,an enemy within 500 units holds a lightning gun,0 or 1,v7
+416,hazards,"lava at 0 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+417,hazards,"lava at 45 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+418,hazards,"lava at 90 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+419,hazards,"lava at 135 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+420,hazards,"lava at 180 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+421,hazards,"lava at 225 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+422,hazards,"lava at 270 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+423,hazards,"lava at 315 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+424,hazards,"deadly drop at 0 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+425,hazards,"deadly drop at 45 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+426,hazards,"deadly drop at 90 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+427,hazards,"deadly drop at 135 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+428,hazards,"deadly drop at 180 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+429,hazards,"deadly drop at 225 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+430,hazards,"deadly drop at 270 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+431,hazards,"deadly drop at 315 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+432,hazards,"lava at 0 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+433,hazards,"lava at 45 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+434,hazards,"lava at 90 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+435,hazards,"lava at 135 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+436,hazards,"lava at 180 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+437,hazards,"lava at 225 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+438,hazards,"lava at 270 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+439,hazards,"lava at 315 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+440,hazards,"deadly drop at 0 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+441,hazards,"deadly drop at 45 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+442,hazards,"deadly drop at 90 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+443,hazards,"deadly drop at 135 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+444,hazards,"deadly drop at 180 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+445,hazards,"deadly drop at 225 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+446,hazards,"deadly drop at 270 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+447,hazards,"deadly drop at 315 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+448,enemy,last known speed: forward,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+449,enemy,last known speed: left,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+450,enemy,last known speed: up,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+451,place,where the nearest jump pad lands: forward,,units / 1000,v7
+452,place,where the nearest jump pad lands: left,,units / 1000,v7
+453,place,where the nearest jump pad lands: up,,units / 1000,v7
+454,projectiles,his own nearest projectile: position forward,,units / 1000,v7
+455,projectiles,his own nearest projectile: position left,,units / 1000,v7
+456,projectiles,his own nearest projectile: position up,,units / 1000,v7
+457,projectiles,his own nearest projectile: velocity forward,,units/s / 1000,v7
+458,projectiles,his own nearest projectile: velocity left,,units/s / 1000,v7
+459,projectiles,his own nearest projectile: velocity up,,units/s / 1000,v7
+460,projectiles,his own nearest projectile: is a rocket,,0 or 1,v7
+461,projectiles,his own nearest projectile: is a grenade,,0 or 1,v7
+462,projectiles,his own nearest projectile: is a plasma,,0 or 1,v7
+463,projectiles,his own second nearest projectile: position forward,,units / 1000,v7
+464,projectiles,his own second nearest projectile: position left,,units / 1000,v7
+465,projectiles,his own second nearest projectile: position up,,units / 1000,v7
+466,projectiles,his own second nearest projectile: velocity forward,,units/s / 1000,v7
+467,projectiles,his own second nearest projectile: velocity left,,units/s / 1000,v7
+468,projectiles,his own second nearest projectile: velocity up,,units/s / 1000,v7
+469,projectiles,his own second nearest projectile: is a rocket,,0 or 1,v7
+470,projectiles,his own second nearest projectile: is a grenade,,0 or 1,v7
+471,projectiles,his own second nearest projectile: is a plasma,,0 or 1,v7

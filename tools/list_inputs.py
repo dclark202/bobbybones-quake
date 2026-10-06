@@ -206,6 +206,22 @@ add("hearing", "loudness", "1 next to him, 0 at the edge of earshot", "0 to 1", 
 add("hearing", "coming or going", "positive: the gap is closing", "units/s / 400, between -1.5 and 1.5", "v7")
 add("hearing", "railgun hum", "an enemy within 500 units holds a railgun (heard even when he stands still)", "0 or 1", "v7")
 add("hearing", "lightning gun hum", "an enemy within 500 units holds a lightning gun", "0 or 1", "v7")
+for dist_ in (96, 224):
+    for what_, why_ in (("lava", "the floor there burns"), ("deadly drop", "nothing there but a fall that kills")):
+        for k in range(8):
+            add("hazards", "{} at {} deg, {} units".format(what_, k * 45, dist_), why_ + "; only inside his field of view", "0 or 1", "v7")
+for ax in XYZ:
+    add("enemy", "last known speed: {}".format(ax), "his speed and heading when last seen, kept for 5 s", "units/s / 400", "v7")
+for ax in XYZ:
+    add("place", "where the nearest jump pad lands: {}".format(ax), "", "units / 1000", "v7")
+for j in range(2):
+    n_ = "nearest" if j == 0 else "second nearest"
+    for ax in XYZ:
+        add("projectiles", "his own {} projectile: position {}".format(n_, ax), "", "units / 1000", "v7")
+    for ax in XYZ:
+        add("projectiles", "his own {} projectile: velocity {}".format(n_, ax), "", "units/s / 1000", "v7")
+    for k_ in ("rocket", "grenade", "plasma"):
+        add("projectiles", "his own {} projectile: is a {}".format(n_, k_), "", "0 or 1", "v7")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

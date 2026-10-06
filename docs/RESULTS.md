@@ -39,6 +39,14 @@ From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), n
 
 **What went wrong, 07:30 to 07:56:** after the widening to 414 inputs the run stood still at its second update for 26 minutes: the graphics memory was full (15.9 of 16.4 GB) and training crawled. Nothing was lost but the time. Restarted with smaller training batches (`--minibatches 36`, 240 groups per worker): 14.3 GB, 49,000 steps a second where it had 59,000.
 
+**08:29 — five gaps from an audit of the inputs (owner: add 1 to 5), 416 -> 472 inputs; checkpoint before: `policy_before_audit_inputs.pt`**
+1. **The walk key is back** (it was switched off on 2026-10-05 when it did nothing): walking is silent, and now that steps are heard that is half of the hearing. It sits on the little finger with crouch. Its output was noise after training without it, so it was reset to "almost always off".
+2. **Hazards in sight:** in 8 directions at 96 and 224 units, is the floor lava, is it a drop that kills (32 inputs, only inside the field of view). A deadly drop used to read like any ledge. Checked: at the edge of the void the drop is flagged ahead, in front of the pit the lava, on open floor nothing.
+3. **The enemy's last known speed and heading**, kept for 5 s after he leaves the view (3).
+4. **Where the nearest jump pad lands** (3), and the pad is now in the routes: mega from the south-west floor 2.3 s, it was 9.8 s round by the stairs (B-98 done).
+5. **His own two nearest projectiles** in flight (18).
+- Training batches `--minibatches 40`; 45,000 steps a second, an update every 49 s, checked over 13 updates. Graphics memory 15.5 of 16.4 GB: there is little room left for more inputs at this number of players.
+
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|
 | 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |
