@@ -326,7 +326,7 @@ class duelbot(minqlx.Plugin):
         else:
             for p in self.players():
                 if is_bot(p) and "Bones" not in p.clean_name:
-                    minqlx.console_command("kick {}".format(p.id))
+                    minqlx.console_command("clientkick {}".format(p.id))
             self.msg("Spar off. Join the game to play him yourself.")
 
     def cmd_rooms(self, player, msg, channel):
@@ -577,12 +577,16 @@ class duelbot(minqlx.Plugin):
     # ------------------------------------------------------------------ players and world
     def cast(self):
         bobby, human, filler = None, None, None
-        for p in self.players():
+        for p in sorted(self.players(), key=lambda q: q.id):
             if p.team == "spectator":
                 continue
             if is_bot(p):
                 if "Bones" in p.clean_name:
-                    bobby = p
+                    if bobby is None:
+                        bobby = p
+                    elif time.time() > self.next_check:      # more than one Bobby (left over from free-for-all): one stays
+                        self.next_check = time.time() + 3
+                        minqlx.console_command("clientkick {}".format(p.id))
                 else:
                     filler = p
             elif human is None:
@@ -836,7 +840,7 @@ class duelbot(minqlx.Plugin):
         if human is not None and filler is not None:
             if now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("kick {}".format(filler.id))
+                minqlx.console_command("clientkick {}".format(filler.id))
             return
         opp = human or filler
         if opp is None:

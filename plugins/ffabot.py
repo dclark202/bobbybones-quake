@@ -360,7 +360,7 @@ class ffabot(duelbot):
             minqlx.console_command("addbot bones 5 free 0 \"BobbyBones {} (BOT)\"".format(k))
         elif len(bobbys) > self.n_bots and now > self.next_check:
             self.next_check = now + 4
-            minqlx.console_command("kick {}".format(bobbys[-1].id))
+            minqlx.console_command("clientkick {}".format(bobbys[-1].id))
         env, E = self.env, self.E
         here = {p.id: p for p in bobbys + people}
         for cid in [c for c in self.seat if c not in here]:

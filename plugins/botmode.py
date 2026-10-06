@@ -55,7 +55,7 @@ class botmode(minqlx.Plugin):
             minqlx.unload_plugin(PLUGIN[cur])
         for p in self.players():
             if is_bot(p):
-                minqlx.console_command("kick {}".format(p.id))
+                minqlx.console_command("clientkick {}".format(p.id))
         if cur != mode:
             self.pending = PLUGIN[mode]
         minqlx.console_command("map {} {}".format(mapname, "ffa" if mode == "ffa" else "duel"))
