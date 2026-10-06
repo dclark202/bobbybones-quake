@@ -29,6 +29,7 @@ map, the spawn and the meaning of the limits changed.
 | 21:06 (start) | 1889 | 0.4, 26%, 267 u/s | 62% / 46% / 44% / - | 0.105 (2.6 s), 0 | 2.8 s | 0.46 | - |
 | 22:05 | 1947 | 1.7, 10%, 233 u/s | 50% / 42% / 43% / - | 0.03 (389 s), 0 | 25.6 s | 0.22 | **1-14** (damage 1101 / 1331, held MG 87%, rail 3%) |
 | 23:05 | 2008 (spawn weapon sets since 22:23) | 2.5, 9%, 234 u/s | 44% / 44% / 41% / 43% | 0.01 (428 s), 0.001 | 17 s | 0.13 | 0-13 (damage 912 / 1146, held MG 84%) |
+| 00:05 | 2068 | 3.6, 11%, 242 u/s | 48% / 42% / 40% / 27% | 0.03 (782 s), 0.002 | 14.7 s | 0.13 | 0-13 (damage 1009 / 993; Nightmare took the red armor 9 times and the mega 5 times and averaged 136 health + 95 armor, Bobby 99 + 0; 3 of his 13 deaths were falls into the void) |
 
 **22:23 — spawn weapons (owner)**: after an hour the two rarely met (in view 10%) and fought almost only with the machine gun (79% of kills; a weapon picked up once in two minutes). Now each player draws his own set at every spawn: machine gun and gauntlet always, plus one of the eight combinations of rail, lightning and rockets with equal weight (none included). Checkpoint before it: `policy_before_weapon_sets.pt`. The map has no ammo boxes: ammo comes only with the weapons lying there (back 5 s after being taken). The Nightmare benchmark stays the real game's duel spawn.
 
