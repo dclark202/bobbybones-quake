@@ -138,7 +138,7 @@ PERCEPT_SIGMA, PERCEPT_TAU = 1.0, 0.15                  # degrees; seconds over 
 # (2026-10-05, B-94) Being shot at costs aim: a hit throws his read of the enemy's direction off by FLINCH_PER_DMG
 # degrees per point of damage (at most FLINCH_MAX at a time), and the error stays larger while the flinch fades
 # (FLINCH_TAU seconds). First values; to be set from players in the reflex test (calm half against the half under fire).
-FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = 0.2, 4.0, 0.3
+FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = 0.12, 3.0, 0.3
 # (2026-10-05, B-93) The tracking delay is an average, not a floor: with an enemy in view he is sharper for a short
 # spell (FOCUS_GAIN frames quicker) while his focus lasts, then slower than the average (FOCUS_LOSS frames) until
 # it has come back. Focus runs down at one second a second with an enemy in view and comes back at FOCUS_REFILL.
@@ -2129,6 +2129,7 @@ class DuelEnv:
                     took = True
                     self.stats["pick_ra" if lab == "RA" else "pick_ar"] += 1
                 elif kind == "wp":
+                    had_wp = bool(self.has[i, val])
                     self.has[i, val] = True
                     self.ammo[i, val] = min(AMMO_MAX[val], self.ammo[i, val] + cap)
                     took = True
@@ -2148,6 +2149,7 @@ class DuelEnv:
                     self.note_pickup(int(i), k_)
                     self.stats["big_wait"][k_] += float(self.item_up_t[m, it])
                     self.stats["big_taken"][k_] += 1
+                new_wp = took and kind == "wp" and not had_wp
                 if took and kind == "wp" and not self.first_wp[i]:
                     self.first_wp[i] = True
                     self.stats["first_wp"] += np.array([float(self.life_t[i]), 1.0])
@@ -2156,7 +2158,9 @@ class DuelEnv:
                     self.hp[i], self.armor[i] = 100.0, 0.0
                     self.stats["lab_items"][0 if lab == "MH" else 1] += 1
                 if took:
-                    reward[i] += self.item_reward * (gain if kind in ("hp", "ar") else 10.0) / 100.0
+                    # health and armor by the points gained; a weapon he did not have counts as 25 points, one he
+                    # has already (ammo) as nothing, so standing on a weapon's spot earns nothing
+                    reward[i] += self.item_reward * (gain if kind in ("hp", "ar") else 25.0 if new_wp else 0.0) / 100.0
                     self.item_up[m, it] = False
                     self.item_t[m, it] = resp
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
