@@ -542,7 +542,7 @@ class duelbot(minqlx.Plugin):
     def act(self, obs):
         P = self.P
         x = np.clip((obs - P["obs_mean"]) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
-        if "cell" in P.files:                                # the learned map (v8): the last two inputs are cell numbers
+        if "cell" in P:                                      # the learned map (v8): the last two inputs are cell numbers
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
             x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
         x = np.tanh(x @ P["w0"].T + P["b0"])
