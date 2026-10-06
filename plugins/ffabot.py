@@ -351,9 +351,8 @@ class ffabot(duelbot):
                     self.msg("^3New BobbyBones loaded^7: {} at {} minutes of training.".format(self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
-        if self.game is not None and self.game.state not in ("warmup", None) and now - self.last_abort > 30:
-            self.last_abort = now                            # everybody plays in warmup, for as long as they like
-            minqlx.console_command("abort")
+        # (no "abort" here: in free-for-all the game starts its own match once players are in; aborting it restarted
+        # the map on every join, which looked like a hanging connection. With no limits set the match never ends.)
         bobbys, people = self.bobbys(), self.people()
         if len(bobbys) < self.n_bots and now > self.next_check:
             self.next_check = now + 4
