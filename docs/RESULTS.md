@@ -27,6 +27,7 @@ map, the spawn and the meaning of the limits changed.
 | Time | Minutes | Fights: frags a min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 5 min |
 |---|---|---|---|---|---|---|---|
 | 21:06 (start) | 1889 | 0.4, 26%, 267 u/s | 62% / 46% / 44% / - | 0.105 (2.6 s), 0 | 2.8 s | 0.46 | - |
+| 22:05 | 1947 | 1.7, 10%, 233 u/s | 50% / 42% / 43% / - | 0.03 (389 s), 0 | 25.6 s | 0.22 | **1-14** (damage 1101 / 1331, held MG 87%, rail 3%) |
 
 Start: as expected much weaker than in the fighting room (he has never had to find a weapon, cross a map or avoid
 a drop): 0.4 frags a minute against 15, the enemy in view 26% of the time, a death in the void every two
