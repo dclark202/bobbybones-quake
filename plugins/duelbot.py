@@ -204,7 +204,8 @@ class duelbot(minqlx.Plugin):
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game, I'm already in it. ^2!duel [minutes]^7 starts a timed duel.",
-            "^3Help me learn:^7 ^2!map testlab^7, then ^2!reflex^7 or ^2!movement^7",
+            "^3Help me learn:^7 ^2!map testlab^7, then ^2!reflex^7 or ^2!movement^7. ^2!match [minutes]^7 scores a game on any map.",
+            "^3Free-for-all:^7 ^2!map arena1^7 (or ^2!mode ffa^7): up to four of me and people, six seats; ^2!bots <n>^7 sets how many.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def cmd_help(self, player, msg, channel):

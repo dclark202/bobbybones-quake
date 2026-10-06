@@ -74,6 +74,7 @@ class ffabot(duelbot):
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game. ^2!bots <1-4>^7 sets how many of me play; people get the other seats (six in all).",
+            "^3Commands:^7 ^2!match [minutes]^7 a scored match (10 min). ^2!map arena1^7 free-for-all, ^2!map testlab^7 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def log(self, msg):
@@ -351,9 +352,14 @@ class ffabot(duelbot):
                     self.msg("^3New BobbyBones loaded^7: {} at {} minutes of training.".format(self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
-        # (no "abort" here: in free-for-all the game starts its own match once players are in; aborting it restarted
-        # the map on every join, which looked like a hanging connection. With no limits set the match never ends.)
         bobbys, people = self.bobbys(), self.people()
+        # Warmup for ever, as on the 1v1 server: with bots only the game starts a match by itself (harmless); once a person
+        # is in the game and loaded, one "abort" brings it back to warmup, and an unready person keeps it there. Never
+        # while someone is still loading: a restart then looks like a hanging connection (2026-10-06).
+        loaded = [p for p in people if p.state is not None and p.state.health > 0]
+        if loaded and self.game is not None and self.game.state not in ("warmup", None) and now - self.last_abort > 60:
+            self.last_abort = now
+            minqlx.console_command("abort")
         if len(bobbys) < self.n_bots and now > self.next_check:
             self.next_check = now + 4
             k = len(bobbys) + 1

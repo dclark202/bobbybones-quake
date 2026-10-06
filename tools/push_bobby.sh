@@ -4,6 +4,7 @@
 #   bash tools/push_bobby.sh <run> [simulator module=duel_env_ffa]          the network only: the running server picks
 #                                                                             it up by itself between rooms
 #   CODE=1 bash tools/push_bobby.sh <run> [module] [map=arena1]             also the newest code and maps (git pull, image
+#                                                                             build, restart in free-for-all with FFA=<n> Bobbys, 3 by default;
 #                                                                             build, restart): needed whenever the simulator,
 #                                                                             the plugin or a map changed since the last push
 set -e
@@ -20,6 +21,7 @@ scp -o BatchMode=yes -q data/public/policy.npz "$HOST":bobbybones-quake/data/due
 echo "network of $RUN copied to the public server"
 if [ -n "$CODE" ]; then
     NAME_QL="$(ssh -o BatchMode=yes "$HOST" "docker inspect qlduel --format '{{index .Config.Cmd 5}}' 2>/dev/null")"
-    ssh -o BatchMode=yes "$HOST" "cd bobbybones-quake && RESTART=1 HOSTNAME_QL=\"${NAME_QL:-BobbyBones - the learning quake bot}\" bash tools/duel_server.sh - $MAP | tail -1"
+    scp -o BatchMode=yes -q data/maps/nav_${MAP}_sim.json "$HOST":bobbybones-quake/data/maps/ 2>/dev/null || true   # the routes need the walking map
+    ssh -o BatchMode=yes "$HOST" "cd bobbybones-quake && PUBLIC=1 FFA=${FFA:-3} RESTART=1 HOSTNAME_QL=\"${NAME_QL:-BobbyBones - the learning quake bot}\" bash tools/duel_server.sh - $MAP | tail -1"
 fi
 ssh -o BatchMode=yes "$HOST" 'sleep 20; tail -1 bobbybones-quake/data/duellive/duelbot.log'

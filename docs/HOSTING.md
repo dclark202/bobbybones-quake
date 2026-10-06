@@ -71,6 +71,8 @@ One server holds one duel at a time; other players spectate and queue (the game'
 
 ## Free-for-all instead of 1v1
 
+Since 2026-10-06 the public server runs free-for-all with three Bobbys on `arena1` by default (`CODE=1 bash tools/push_bobby.sh <run>` restarts it that way; `FFA=<n>` changes the number). Players switch with `!map testlab` (1v1) and `!map arena1` (free-for-all), see `docs/COMMANDS.md`.
+
 ```bash
 FFA=3 bash tools/duel_server.sh duel_gru_v8 arena1 duel_env_ffa     # three Bobbys, three seats for people
 ```
