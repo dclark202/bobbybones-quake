@@ -366,21 +366,41 @@ index,group,input,meaning,scale,added in
 364,memory,enemy's last death known,"he killed him, or heard him die",0 or 1,v6
 365,memory,time since the enemy's last death,,"seconds / 30, capped at 2",v6
 366,self,focus left,"sharp tracking for 2 s with an enemy in view, then slower until it has come back",-0.25 to 1,v6
-367,more enemies,second enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
-368,more enemies,second enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
-369,more enemies,second enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
-370,more enemies,second enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
-371,more enemies,second enemy: direction sin,,sin,ffa (not trained yet)
-372,more enemies,second enemy: direction cos,,cos,ffa (not trained yet)
-373,more enemies,second enemy: direction up-down,,sin,ffa (not trained yet)
-374,more enemies,second enemy faces him,,cos,ffa (not trained yet)
-375,more enemies,third enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
-376,more enemies,third enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
-377,more enemies,third enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
-378,more enemies,third enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
-379,more enemies,third enemy: direction sin,,sin,ffa (not trained yet)
-380,more enemies,third enemy: direction cos,,cos,ffa (not trained yet)
-381,more enemies,third enemy: direction up-down,,sin,ffa (not trained yet)
-382,more enemies,third enemy faces him,,cos,ffa (not trained yet)
-383,more enemies,enemies in view,,count / 5,ffa (not trained yet)
-384,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)
+367,routes,mega health: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+368,routes,mega health: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+369,routes,mega health: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+370,routes,mega health: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+371,routes,red armor: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+372,routes,red armor: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+373,routes,red armor: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+374,routes,red armor: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+375,routes,rocket launcher: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+376,routes,rocket launcher: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+377,routes,rocket launcher: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+378,routes,rocket launcher: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+379,routes,railgun: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+380,routes,railgun: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+381,routes,railgun: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+382,routes,railgun: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+383,routes,lightning gun: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
+384,routes,lightning gun: next step forward,where the way there leads next,"units / 200, between -1 and 1",v7
+385,routes,lightning gun: next step left,where the way there leads next,"units / 200, between -1 and 1",v7
+386,routes,lightning gun: next step up,where the way there leads next,"units / 200, between -1 and 1",v7
+387,more enemies,second enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+388,more enemies,second enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+389,more enemies,second enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+390,more enemies,second enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+391,more enemies,second enemy: direction sin,,sin,ffa (not trained yet)
+392,more enemies,second enemy: direction cos,,cos,ffa (not trained yet)
+393,more enemies,second enemy: direction up-down,,sin,ffa (not trained yet)
+394,more enemies,second enemy faces him,,cos,ffa (not trained yet)
+395,more enemies,third enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+396,more enemies,third enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+397,more enemies,third enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+398,more enemies,third enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+399,more enemies,third enemy: direction sin,,sin,ffa (not trained yet)
+400,more enemies,third enemy: direction cos,,cos,ffa (not trained yet)
+401,more enemies,third enemy: direction up-down,,sin,ffa (not trained yet)
+402,more enemies,third enemy faces him,,cos,ffa (not trained yet)
+403,more enemies,enemies in view,,count / 5,ffa (not trained yet)
+404,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)

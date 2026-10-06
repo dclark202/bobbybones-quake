@@ -188,6 +188,11 @@ add("memory", "time since his own respawn", "", "seconds / 30, capped at 2", "v6
 add("memory", "enemy's last death known", "he killed him, or heard him die", "0 or 1", "v6")
 add("memory", "time since the enemy's last death", "", "seconds / 30, capped at 2", "v6")
 add("self", "focus left", "sharp tracking for 2 s with an enemy in view, then slower until it has come back", "-0.25 to 1", "v6")
+# ---- routes (2026-10-06): the way along the floor, as a player who knows the map has it
+for it_ in ("mega health", "red armor", "rocket launcher", "railgun", "lightning gun"):
+    add("routes", "{}: travel time".format(it_), "along the floor from where he stands (zero on maps without a walking map)", "seconds / 10, capped at 2", "v7")
+    for ax in XYZ:
+        add("routes", "{}: next step {}".format(it_, ax), "where the way there leads next", "units / 200, between -1 and 1", "v7")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now
