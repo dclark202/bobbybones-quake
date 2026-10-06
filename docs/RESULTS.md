@@ -109,7 +109,7 @@ Both are rewards for a single behaviour, against the method chosen on 2026-10-05
 | 09:05 | 1980 (audit inputs and walk key since 08:29) | 5.1, 25%, 212 u/s | 39% / 33% / 36% / 25% | 0.024 (242 s), 0.01 (259 s) | 16.6 s | 0.28 | 3-32 (damage 2785 / 2971, held MG 72%, rail 16%) |
 | 10:05 | 2038 | 4.8, 24%, 183 u/s | 41% / 37% / 34% / 27% | 0.017 (495 s), 0.002 (709 s) | 17.9 s | 0.20 | 3-26 (damage 2679 / 2425, held MG 82%, rail 9%) |
 | 11:05 | 2097 (less flinch, pickup reward 0.6 since 10:27) | 6.4, 25%, 210 u/s | 47% / 39% / 39% / 30% | 0.016 (236 s), 0 | 13.7 s | 0.17 | 4-28 (damage 2950 / 2260, held MG 77%, LG 7%, rail 6%) |
-| 12:05 | 2155 (pickup 1.5, travel reward since 11:35) | 7.7, 31%, 235 u/s | 47% / 41% / 42% / 33% | 0.028 (166 s), 0.002 (194 s) | 9.0 s | 0.16 | benchmark server did not start (the script repeated the 11:05 line); rerun at 12:10, see below |
+| 12:05 | 2155 (pickup 1.5, travel reward since 11:35) | 7.7, 31%, 235 u/s | 47% / 41% / 42% / 33% | 0.028 (166 s), 0.002 (194 s) | 9.0 s | 0.16 | 3-23 (run at 12:10 from the same checkpoint; damage 2367 / 1848, held MG 88%; the 12:05 attempt did not start) |
 
 ## 2026-10-05 21:03 — `duel_gru_v6`: `arena1` with items, the limits from the reflex test, memory inputs (until 07:00) (B-87, B-90, B-92 to B-94)
 
