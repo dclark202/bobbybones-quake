@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("bloodrun", "aerowalk", "lostworld", "campgrounds", "bobbylab", "bobbyyard")
+MAPS = ("bloodrun", "aerowalk", "lostworld", "campgrounds", "testlab", "train-arena")
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 2
@@ -43,7 +43,7 @@ STYLES = ("still", "slow", "fast", "jump")
 ROOM_SECS = {"aim": 60, "choice": 40, "move": 90, "solo": 120, "ladder": 120}
 REP_SECS = 10.0
 GOAL_NAMES = {"MH": "Mega Health", "RA": "Red Armor", "YA": "Yellow Armor"}
-# the test map "bobbylab" (tools/make_lab_map.py): fixed rooms, the suite never changes maps
+# the test map "testlab" (tools/make_lab_map.py): fixed rooms, the suite never changes maps
 LAB_WEAPONS = ("mg", "sg", "rl", "lg", "rg", "pg")      # no grenade launcher: not an aim weapon
 LAB_STYLES = ("walk", "jump", "env")       # target moves in all four directions; "jump" also jumps; "env" = environment box
 # the aim-reflex experiment: three short rooms in the aim box that measure a player's hands and eyes, not his game
@@ -69,7 +69,7 @@ class duelbot(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|lostworld|campgrounds|bobbylab|bobbyyard>")
+        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|lostworld|campgrounds|testlab|train-arena>")
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 0, usage="<weapon|off>")
@@ -228,7 +228,7 @@ class duelbot(minqlx.Plugin):
                 self.arena_end("stopped")
             return
         if not self.lab:
-            player.tell("The arena is on the test map: !map bobbylab first.")
+            player.tell("The arena is on the test map: !map testlab first.")
             return
         here = {k: v for k, v in (("box", "aim"), ("env", "env"), ("yard", "yard")) if v in self.lab}
         if not a or a[0] not in here:
@@ -288,7 +288,7 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab and "aim" not in self.lab:
-            player.tell("This map is the yard with items: a normal duel, or !arena yard [minutes] for a timed one. !map bobbylab has the rooms.")
+            player.tell("This map is the yard with items: a normal duel, or !arena yard [minutes] for a timed one. !map testlab has the rooms.")
             return
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
@@ -331,7 +331,7 @@ class duelbot(minqlx.Plugin):
         specs = (LAB_SUITE if self.lab else SUITE) if a[0] == "suite" else [a]
         if a[0] == "reflex" and len(a) == 1:
             if not (self.lab and "aim" in self.lab):
-                player.tell("The reflex test runs on the test map: ^3!map bobbylab^7, then ^3!reflex")
+                player.tell("The reflex test runs on the test map: ^3!map testlab^7, then ^3!reflex")
                 return
             specs = REFLEX
         if self.lab and a[0] == "moves":                     # every movement course in a row, timed
@@ -463,8 +463,8 @@ class duelbot(minqlx.Plugin):
         self.renv.lab = None                                 # the plugin runs the lab rooms itself (placement, zones, jumping)
         self.goal_labels = [d[4] for d in self.renv.item_def if d[4] in GOAL_NAMES]
         self.lab = None
-        if mapname == "bobbylab":
-            with open("/ql/maps-data/bobbylab/rooms.json") as f:
+        if mapname == "testlab":
+            with open("/ql/maps-data/testlab/rooms.json") as f:
                 self.lab = json.load(f)
         self.rng = np.random.default_rng(int(time.time()))
         self.item_ent = {}
@@ -747,7 +747,7 @@ class duelbot(minqlx.Plugin):
         if bobby is None:
             if now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot bones 5 free 0 BobbyBones")
+                minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
             return
         if human is not None and filler is not None:
             if now > self.next_check:
