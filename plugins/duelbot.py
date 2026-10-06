@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("testlab", "train-arena", "bloodrun", "aerowalk", "campgrounds")      # the only maps a player can pick with !map
+MAPS = ("testlab", "train-arena", "bloodrun", "aerowalk", "lostworld", "campgrounds")      # the only maps a player can pick with !map
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 3
@@ -76,7 +76,8 @@ class duelbot(minqlx.Plugin):
         self.add_hook("vote_called", self.on_vote_called)
         self.add_hook("team_switch_attempt", self.on_team_switch)
         self.add_command("help", self.cmd_help, 0)
-        self.add_command("map", self.cmd_map, 0, usage="<testlab|train-arena|bloodrun|aerowalk|campgrounds>")
+        self.add_command("maps", self.cmd_maps, 0)
+        self.add_command("map", self.cmd_map, 0, usage="<testlab|train-arena|bloodrun|aerowalk|lostworld|campgrounds>")
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 5, usage="<weapon|off>")
@@ -208,6 +209,9 @@ class duelbot(minqlx.Plugin):
     def cmd_help(self, player, msg, channel):
         for line in self.HELP:
             player.tell(line)
+
+    def cmd_maps(self, player, msg, channel):
+        player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests, ^3train-arena^7 is the small duel map.".format(", ".join(MAPS)))
 
     def on_player_loaded(self, player):
         if not is_bot(player):
@@ -344,6 +348,9 @@ class duelbot(minqlx.Plugin):
 
     def cmd_reflex(self, player, msg, channel):
         """!reflex = !room reflex"""
+        if not (self.lab and "aim" in self.lab):
+            player.tell("The reflex test is on the test lab: ^3!map testlab^7, then ^3!reflex")
+            return
         return self.cmd_room(player, ["!room", "reflex"], channel)
 
     def cmd_movement(self, player, msg, channel):
