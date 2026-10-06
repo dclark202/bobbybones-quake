@@ -735,6 +735,11 @@ class duelbot(minqlx.Plugin):
             env.mv[i, 0] = np.clip(env.mv[i, 0], -E.TURN_CAP * zs, E.TURN_CAP * zs)
             jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(env.mv[i]) + E.MOTOR_BASE * zs)
             turn, dpit = float(env.mv[i, 0] + jit[0]), float(env.mv[i, 1] + jit[1])
+        if rules2 and hasattr(env, "pad_turn"):               # the mouse pad: an edge, and lifting the mouse, as in training
+            full = lambda v, t=np.float32: np.full(env.n, v, t)      # noqa: E731
+            t_, p_ = env.pad_turn(full(turn), full(dpit), full(len(a) > 9 and a[9] == 1, bool), full(zs),
+                                  np.arange(env.n) == i)
+            turn, dpit = float(t_[i]), float(p_[i])
         yaw = (yaw + turn + 180.0) % 360.0 - 180.0
         lev = 1.0 if (nine and env.seen_t[i] <= 0.5) else env.level     # newer simulators: no pull while an enemy is in view
         pitch = float(np.clip(pitch * lev + dpit, -89, 89))
@@ -915,6 +920,12 @@ class duelbot(minqlx.Plugin):
                 p.ammo(**{self.drill: 150 if self.drill == "lg" else 25})
         pos, vel, ground, pitch, yaw = self.fill_player(env, E, 0, bobby, bs)
         opos = self.fill_player(env, E, 1, opp, os_)[0]
+        if hasattr(env, "hear"):                             # what he hears of the opponent: running steps and shots
+            st_ = env.state
+            noisy = (st_[:, 6] > 0.5) & (np.hypot(st_[:, 3], st_[:, 4]) > 200.0)
+            noisy[1] |= bool(minqlx.ran_usercmd(opp.id)[1] & 1) and int(os_.weapon) != QLNUM["g"]
+            noisy[0] = False
+            env.hear(noisy)
         for cls, slot in self.sync_world(env, E, (bobby.id, opp.id)):
             self.record(event="pickup", item=cls, by=("bobby", "opp")[slot] if slot >= 0 else "?")
             if hasattr(env, "note_pickup") and slot in (0, 1) and cls in ("item_health_mega", "item_armor_body"):

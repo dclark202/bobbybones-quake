@@ -193,6 +193,17 @@ for it_ in ("mega health", "red armor", "rocket launcher", "railgun", "lightning
     add("routes", "{}: travel time".format(it_), "along the floor from where he stands (zero on maps without a walking map)", "seconds / 10, capped at 2", "v7")
     for ax in XYZ:
         add("routes", "{}: next step {}".format(it_, ax), "where the way there leads next", "units / 200, between -1 and 1", "v7")
+# ---- the mouse pad and hearing (2026-10-06)
+N_BEFORE = len(rows)                                     # (in the group network the "more enemies" block sits here)
+add("own hands", "hand on the mouse pad", "from the left edge to the right edge; 240 degrees of turning across", "-1 to 1", "v7")
+add("own hands", "mouse in the air", "lifted to set it back in the middle: the view does not turn for 125 ms", "0 or 1", "v7")
+add("hearing", "sound just heard", "an enemy's running steps, jump, landing or shot within 1000 units, no line of sight needed", "0 or 1", "v7")
+add("hearing", "sound heard recently", "fades", "exp(-2 x seconds)", "v7")
+add("hearing", "direction of the sound: sin", "against his view, about 10 degrees rough; kept for 3 s", "sin", "v7")
+add("hearing", "direction of the sound: cos", "", "cos", "v7")
+add("hearing", "above or below", "height of the sound against his own", "units / 200, between -1.5 and 1.5", "v7")
+add("hearing", "loudness", "1 next to him, 0 at the edge of earshot", "0 to 1", "v7")
+add("hearing", "coming or going", "positive: the gap is closing", "units/s / 400, between -1.5 and 1.5", "v7")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now
@@ -207,6 +218,10 @@ for j in ("second", "third"):
 add("more enemies", "enemies in view", "", "count / 5", "ffa (not trained yet)")
 add("more enemies", "players beyond two", "", "(players - 2) / 4", "ffa (not trained yet)")
 assert len(rows) == F.OBS_DIM, (len(rows), F.OBS_DIM)
+tail = rows[N_BEFORE:E.OBS_DIM]                           # the group block goes before the pad and hearing inputs
+rows[:] = rows[:N_BEFORE] + rows[E.OBS_DIM:] + tail
+for i_, r_ in enumerate(rows):
+    r_[0] = i_
 
 out = os.path.join(ROOT, "docs", "INPUTS.csv")
 with open(out, "w", newline="", encoding="utf-8") as f:

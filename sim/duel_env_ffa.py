@@ -160,7 +160,7 @@ LOADOUTS = {   # weapons owned at spawn, ammo
     "mg": ((), {MG: 100}),
 }
 # forward, strafe, vertical (none / jump / crouch), turn, pitch, fire, weapon (keep/...), walk
-ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2)     # ..., walk, zoom
+ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2)  # ..., walk, zoom, lift the mouse
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "YA", "GA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6 * len(SLOTS) + N_GOAL   # as in duel_gru_v3
@@ -188,8 +188,21 @@ N_MEM = 4 + 11 + 3 + 1
 # straight line he had before points through walls, and to the red armor of arena1 across a drop that kills.
 ROUTE_ITEMS = ("MH", "RA", "RL", "RG", "LG")
 N_ROUTE = 4 * len(ROUTE_ITEMS)
+# The mouse pad (2026-10-06): the view is turned by a mouse on a pad of finite width. PAD_DEG degrees of turning
+# take the hand from one edge to the other; at the edge it cannot turn further that way: the mouse has to be lifted
+# and set back in the middle, PAD_LIFT frames during which the view does not move. He can also lift it himself in
+# a quiet moment (action "lift"). Set from the owner's sessions: longest one-way turn 219 degrees (99 in 100 under
+# 170), pauses inside long turns 125 ms. Inputs: where the hand is on the pad (-1 to 1), mouse in the air: 2
+PAD_DEG, PAD_LIFT = 240.0, 5
+N_PAD = 2
+# Hearing (2026-10-06): in the game a sound tells where it comes from, whether it is above or below, and whether
+# its maker is coming or going. For the nearest enemy heard (running steps, jumps and landings, shots, within
+# EAR_RANGE; no line of sight needed): just heard 1, fading 1, direction 2 (sin, cos against his view), above or
+# below 1, loudness 1, closing or receding 1: 7. Direction and height are rough (EAR_NOISE degrees, 40 units).
+EAR_RANGE, EAR_NOISE = 1000.0, 10.0
+N_EAR = 7
 N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -439,6 +452,11 @@ class DuelEnv:
         self.life_t = np.zeros(self.n, np.float32)          # seconds since this player's own respawn
         self.first_wp = np.zeros(self.n, bool)              # has picked a weapon up in this life (statistics)
         self.item_up_t = None                               # per item: seconds it has been lying there
+        self.pad = np.zeros(self.n, np.float32)             # the hand on the mouse pad, degrees from the middle
+        self.pad_lift = np.zeros(self.n, np.int64)          # frames the mouse is still in the air
+        self.pad_on = True
+        self.ear = np.zeros((self.n, 4), np.float32)        # last sound heard: direction (world, radians), height, loudness, closing
+        self.ear_t = np.full(self.n, 99.0, np.float32)      # seconds since
         self.route, self.route_goal = None, []              # the ways to the big items (see N_ROUTE)
         if nav and os.path.exists(nav):
             pos_ = {}
@@ -589,6 +607,7 @@ class DuelEnv:
         self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
         self.flinch[i], self.focus[i] = 0.0, FOCUS_SECS
         self.life_t[i], self.first_wp[i] = 0.0, False
+        self.pad[i], self.pad_lift[i], self.ear_t[i] = 0.0, 0, 99.0
         self.e_got[self._mates(i), self._slot(i)] = 0.0     # what the others knew him to have is gone with him
         if self.G == 2:
             self.dmg_life[i ^ 1] = 0.0                  # what the opponent knows about this player's damage resets
@@ -969,6 +988,60 @@ class DuelEnv:
         self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), float(self.spawn_yaw[k]))
         self._fresh(i, float(self.spawn_yaw[k]))
 
+    def _others_arr(self):
+        """for every player, the other players of his group (one column each)"""
+        return self.others
+
+    def pad_turn(self, turn, dpit, lift, zs, who):
+        """the mouse pad (see PAD_DEG): what is left of this frame's view movement. turn, dpit in degrees, lift =
+        he asks to lift the mouse, zs = zoom scale (zoomed, the same hand movement turns the view less), who = the
+        players it applies to"""
+        if not self.pad_on:
+            return turn, dpit
+        half = PAD_DEG / 2.0
+        air = (self.pad_lift > 0) & who
+        self.pad_lift = np.where(air, self.pad_lift - 1, self.pad_lift)
+        self.pad = np.where(air & (self.pad_lift == 0), 0.0, self.pad).astype(np.float32)    # set down in the middle
+        hand = turn / zs                                     # how far the hand would move
+        new = self.pad + np.where(air, 0.0, hand)
+        over = (np.abs(new) > half) & who & ~air
+        new = np.clip(new, -half, half)
+        moved = np.where(who & ~air, (new - self.pad) * zs, np.where(who, 0.0, turn))
+        self.pad = np.where(who, new, self.pad).astype(np.float32)
+        start = who & ~air & (over | (lift & (np.abs(self.pad) > 0.15 * half)))
+        self.pad_lift = np.where(start, PAD_LIFT, self.pad_lift)
+        return moved.astype(np.float32), np.where(air, 0.0, dpit).astype(np.float32)
+
+    def hear(self, noisy):
+        """noisy: players who made a sound this frame. Everybody notes the nearest enemy he hears (see N_EAR)"""
+        s, n = self.state, self.n
+        oth = self._others_arr()
+        d = np.linalg.norm(s[oth, :3] - s[:, None, :3], axis=2)
+        ok = noisy[oth] & (d < EAR_RANGE) & (self.hp[oth] > 0) & (self.hp > 0)[:, None]
+        d = np.where(ok, d, 1e9)
+        k = d.argmin(1)
+        ar = np.arange(n)
+        got = np.nonzero(d[ar, k] < 1e8)[0]
+        if not len(got):
+            return
+        src = oth[got, k[got]]
+        to = s[src, :3] - s[got, :3]
+        dist = d[got, k[got]]
+        ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
+        up = np.clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
+        close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
+        self.ear[got] = np.stack([ang, up, 1.0 - dist / EAR_RANGE, np.clip(close / 400.0, -1.5, 1.5)], 1)
+        self.ear_t[got] = 0.0
+
+    def _pad_ear(self, yaw):
+        """the inputs of N_PAD and N_EAR"""
+        rel = self.ear[:, 0] - yaw
+        on = (self.ear_t < 3.0).astype(np.float32)
+        return np.stack([self.pad / (PAD_DEG / 2.0), (self.pad_lift > 0).astype(np.float32),
+                         (self.ear_t < 0.06).astype(np.float32), np.exp(-2.0 * self.ear_t),
+                         np.sin(rel) * on, np.cos(rel) * on, self.ear[:, 1] * on, self.ear[:, 2] * on, self.ear[:, 3] * on],
+                        1).astype(np.float32)
+
     def _mates(self, i):
         """the other players of player i's group"""
         return [int(x) for x in self.others[i]]
@@ -1243,6 +1316,7 @@ class DuelEnv:
             visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
             seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
+        self.ear_t += DT
         self.it_t += DT                                      # the memory aids (N_MEM) keep their own time here, so the
         self.e_life += DT                                    # game-server plugin, which does not call step(), has them too
         self.life_t += DT
@@ -1343,7 +1417,7 @@ class DuelEnv:
                               self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
                                                                               yaw, pit, visible),
                               self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
-                              self._ffa(pos, eye, rot, yaw, pit)], 1)
+                              self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw)], 1)   # the group block keeps its place
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -1699,6 +1773,7 @@ class DuelEnv:
             jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
             jit[self.script > 0] = 0.0
             turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
+            turn, dpit = self.pad_turn(turn, dpit, (a[:, 9] == 1) if a.shape[1] > 9 else np.zeros(n, bool), zs, self.script == 0)
         else:
             turn, dpit = self.mv[:, 0], self.mv[:, 1]
         # weapon switch (only to weapons owned)
@@ -1801,6 +1876,8 @@ class DuelEnv:
         self.ammo[ar[use], self.weapon[use]] -= 1
         self.fire_q, self.fire_w = shoot, self.weapon.copy()
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
+        self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
+                  ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
         self.note_shots(np.nonzero(shoot & (self.weapon != G))[0])
         if do_fire.any():
             yr, pr = np.radians(self.yaw), np.radians(self.pitch)

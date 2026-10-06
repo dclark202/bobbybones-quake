@@ -22,6 +22,19 @@ From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), n
 - **Benchmark:** ten minutes against Nightmare on `arena1` each hour.
 - First update: enemy in view 39%, firing 20% of the time, void deaths 0.40 per player-minute.
 
+**07:29 — the mouse pad and better hearing (owner; network widened 405 -> 414 inputs, one new action; checkpoint before: `policy_before_pad_and_hearing.pt`)**
+- **Mouse pad:** his view is turned by a mouse on a pad 240 degrees wide. At the edge he cannot turn further that way: the
+  mouse is lifted and set back in the middle, 125 ms without any view movement. He can also lift it himself (new action).
+  Inputs: where the hand is on the pad, mouse in the air. Why: he stood and spun on the spot to look around, which no
+  person can do. Set from the owner's sessions: longest one-way turn 219 degrees (99 in 100 under 170), pauses inside
+  long turns 125 ms. Check: asking for a constant 8 degrees a frame for 5 s gives 1189 degrees where it gave 1600, with
+  the mouse in the air 22% of the time.
+- **Hearing:** the nearest enemy heard within 1000 units (running steps, jumps and landings, shots; no line of sight
+  needed): just heard, fading, direction against his view (about 10 degrees rough), above or below, loudness, coming or
+  going. 7 inputs. Before, a sound gave a rough position for a few kinds of event only. A sound is heard on 29% of
+  frames with three players moving at random.
+- Both are mirrored in the game-server plugin.
+
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|
 | 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |

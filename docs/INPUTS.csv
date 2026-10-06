@@ -404,3 +404,12 @@ index,group,input,meaning,scale,added in
 402,more enemies,third enemy faces him,,cos,ffa (not trained yet)
 403,more enemies,enemies in view,,count / 5,ffa (not trained yet)
 404,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)
+405,own hands,hand on the mouse pad,from the left edge to the right edge; 240 degrees of turning across,-1 to 1,v7
+406,own hands,mouse in the air,lifted to set it back in the middle: the view does not turn for 125 ms,0 or 1,v7
+407,hearing,sound just heard,"an enemy's running steps, jump, landing or shot within 1000 units, no line of sight needed",0 or 1,v7
+408,hearing,sound heard recently,fades,exp(-2 x seconds),v7
+409,hearing,direction of the sound: sin,"against his view, about 10 degrees rough; kept for 3 s",sin,v7
+410,hearing,direction of the sound: cos,,cos,v7
+411,hearing,above or below,height of the sound against his own,"units / 200, between -1.5 and 1.5",v7
+412,hearing,loudness,"1 next to him, 0 at the edge of earshot",0 to 1,v7
+413,hearing,coming or going,positive: the gap is closing,"units/s / 400, between -1.5 and 1.5",v7
