@@ -370,6 +370,10 @@ def main():
     ap.add_argument("--courses", default="")
     ap.add_argument("--tries", type=int, default=4)
     ap.add_argument("--fight", default="", help="'aim', 'env' or 'yard': a self-play fight in that room instead of the courses")
+    ap.add_argument("--highlights", type=float, default=0.0, help="fight: a reel of about this many seconds made of his frags "
+                    "(a few seconds before each, a moment after), cut from --secs of play")
+    ap.add_argument("--trained-limits", action="store_true", help="the aim limits of 2026-10-05 afternoon (direction error "
+                    "0.5 deg, no flinch, no focus bursts): for networks trained before the evening's changes")
     ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa for more than two players)")
     ap.add_argument("--group", type=int, default=2, help="players in the fight (needs --env duel_env_ffa)")
     ap.add_argument("--map", default="testlab", help="arena1: the yard with items (with --fight yard)")
@@ -381,10 +385,13 @@ def main():
         import importlib
         global E
         E = importlib.import_module(a.env)
+    nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(a.map))     # for the route inputs
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n_matches=1, seed=4, loadout="all",
-                    **(dict(group=a.group) if a.group != 2 else {}))
+                    nav=nav_ if os.path.exists(nav_) else None, **(dict(group=a.group) if a.group != 2 else {}))
     if os.environ.get("ARENA_STACK") == "0":
         env.arena_stack = False
+    if a.trained_limits:
+        env.percept_sigma, env.flinch_on, env.focus_on = 0.5, False, False
     env.react_frames = round(pol.react_ms / 25)
     xs = (np.arange(W) + 0.5) / W * 2 - 1
     ys = (np.arange(H) + 0.5) / H * 2 - 1
@@ -406,6 +413,24 @@ def main():
             label = "{} copies of himself, all against all, {}".format(a.group, {"aim": "aim box", "env": "environment box", "yard": "yard"}[a.fight])
         path = os.path.join(out_dir, "fight_{}{}{}.mp4".format(a.fight, "" if a.group == 2 else "_{}".format(a.group),
                                                              "" if a.map == "testlab" else "_items"))
+        if a.highlights > 0:                                 # keep only the seconds around his frags
+            hits = [i for i in range(1, len(frames)) if frames[i]["frags"][0] > frames[i - 1]["frags"][0]]
+            pre, post, keep, last = int(3.2 / E.DT), int(1.0 / E.DT), [], -10 ** 9
+            for n_, i in enumerate(hits):
+                lo = max(i - pre, last + 1, 0)
+                if i - lo < int(1.5 / E.DT):                 # too close to the clip before: part of the same one
+                    lo = last + 1
+                seg = list(range(lo, min(len(frames), i + post)))
+                for j in seg:
+                    frames[j]["clip"] = n_ + 1
+                keep += seg
+                last = seg[-1] if seg else last
+                if len(keep) * E.DT >= a.highlights:
+                    break
+            print("highlights: {} frags in {:.0f} s of play, {} used".format(len(hits), len(frames) * E.DT, len({frames[j]["clip"] for j in keep})), flush=True)
+            frames = [frames[j] for j in keep]
+            label = "BobbyBones: his frags"
+            path = path.replace(".mp4", "_highlights.mp4")
         ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s",
                                "{}x{}".format(W * 2, H * 2), "-r", "40", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p",
                                "-crf", "23", path], stdin=subprocess.PIPE)

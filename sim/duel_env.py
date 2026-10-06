@@ -183,7 +183,12 @@ N_FIGHT = 14 + 4 + 2 + 9 + 3 + 5
 #   seconds since his own respawn 1; the enemy's last death known 1 and how long ago 1: 3
 #   his own focus (see FOCUS_SECS): 1
 N_MEM = 4 + 11 + 3 + 1
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM
+# Routes (2026-10-06): the way to the mega health, the red armor and the three main weapons along the floor, as a
+# player who knows the map has it: seconds of travel 1, and where the next step of the way lies 3, for each. The
+# straight line he had before points through walls, and to the red armor of arena1 across a drop that kills.
+ROUTE_ITEMS = ("MH", "RA", "RL", "RG", "LG")
+N_ROUTE = 4 * len(ROUTE_ITEMS)
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -204,6 +209,59 @@ PACK_AMMO = np.array([5, 5, 50, 50, 5, 5, 50, 50, 0], np.float32)
 
 def _phi(x):
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+class RouteField:
+    """a map's walking graph (sim/build_nav.py) -> seconds to each goal and the next step of the way, from anywhere.
+    Plain numpy (the Anaconda Python's scipy is broken): the nearest graph point comes from a table over a grid."""
+    CELL = 32.0
+
+    def __init__(self, nav_path, goals):
+        import heapq
+        g = json.load(open(nav_path))
+        self.nodes = np.array(g["nodes"], np.float32)
+        n = len(self.nodes)
+        radj, have = [[] for _ in range(n)], set()
+        for a, b, t, kind in g["edges"]:
+            d = float(np.linalg.norm(self.nodes[a] - self.nodes[b]))
+            radj[b].append((a, 0.1 if kind == "tele" else (d / 320.0 if kind == "walk" else max(t, d / 900.0))))
+            have.add((a, b))
+        for a, b, t, kind in g["edges"]:                      # flat walking works both ways
+            if kind == "walk" and (b, a) not in have and abs(self.nodes[a][2] - self.nodes[b][2]) < 18:
+                radj[a].append((b, float(np.linalg.norm(self.nodes[a] - self.nodes[b])) / 320.0))
+        w = np.array([1, 1, 2.0], np.float32)                 # vertical distance counts double
+        self.lo = self.nodes.min(0) - 64.0
+        dims = np.ceil((self.nodes.max(0) + 64.0 - self.lo) / self.CELL).astype(int)
+        self.dims = dims
+        cx = [self.lo[k] + (np.arange(dims[k]) + 0.5) * self.CELL for k in range(3)]
+        self.table = np.zeros(tuple(dims), np.int32)
+        nw = self.nodes * w
+        for i in range(dims[0]):                              # one slab at a time
+            pts = np.stack(np.meshgrid([cx[0][i]], cx[1], cx[2], indexing="ij"), -1).reshape(-1, 3) * w
+            d2 = ((pts[:, None, :] - nw[None, :, :]) ** 2).sum(2)
+            self.table[i] = d2.argmin(1).reshape(dims[1], dims[2])
+        self.goals = np.array(goals, np.float32).reshape(-1, 3)
+        G = len(self.goals)
+        self.T = np.full((G, n), 1e9, np.float32)
+        self.next = np.full((G, n), -1, np.int32)
+        for gi, gp in enumerate(self.goals):
+            b = int(self.locate(gp[None])[0])
+            dist, pq = {b: 0.0}, [(0.0, b)]
+            while pq:
+                d, u = heapq.heappop(pq)
+                if d > dist.get(u, 1e18):
+                    continue
+                for v, c in radj[u]:
+                    if d + c < dist.get(v, 1e18):
+                        dist[v] = d + c
+                        self.next[gi, v] = u
+                        heapq.heappush(pq, (d + c, v))
+            for v, d in dist.items():
+                self.T[gi, v] = d
+
+    def locate(self, pos):
+        c = np.clip(((pos - self.lo) / self.CELL).astype(np.int64), 0, self.dims - 1)
+        return self.table[c[:, 0], c[:, 1], c[:, 2]]
 
 
 class DuelEnv:
@@ -364,6 +422,16 @@ class DuelEnv:
         self.life_t = np.zeros(self.n, np.float32)          # seconds since this player's own respawn
         self.first_wp = np.zeros(self.n, bool)              # has picked a weapon up in this life (statistics)
         self.item_up_t = None                               # per item: seconds it has been lying there
+        self.route, self.route_goal = None, []              # the ways to the big items (see N_ROUTE)
+        if nav and os.path.exists(nav):
+            pos_ = {}
+            for k_, d_ in enumerate(self.item_def):
+                lab_ = d_[4] if d_[4] in ROUTE_ITEMS else (WEAPONS[int(d_[1])].upper() if d_[0] == "wp" else None)
+                if lab_ in ROUTE_ITEMS and lab_ not in pos_:
+                    pos_[lab_] = self.item_pos[k_]
+            self.route_goal = [lab_ for lab_ in ROUTE_ITEMS if lab_ in pos_]
+            if self.route_goal:
+                self.route = RouteField(nav, [pos_[lab_] for lab_ in self.route_goal])
         self.flinch_on = True
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
@@ -909,6 +977,24 @@ class DuelEnv:
         focus = np.clip(self.focus / FOCUS_SECS, -0.25, 1.0)[:, None]
         return np.concatenate([items, self.e_got[ar, self._slot(opp)], life, focus], 1).astype(np.float32)
 
+    def _routes(self, pos, rot):
+        """the inputs of N_ROUTE"""
+        out = np.zeros((self.n, N_ROUTE), np.float32)
+        R = self.route
+        if R is None:
+            return out
+        node = R.locate(pos)
+        off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
+        for gi, lab in enumerate(self.route_goal):
+            k = 4 * ROUTE_ITEMS.index(lab)
+            t = R.T[gi, node]
+            ok = t < 1e8
+            nx = R.next[gi, node]
+            wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[gi][None])
+            out[:, k] = np.minimum((t + off) / 10.0, 2.0) * ok
+            out[:, k + 1:k + 4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
+        return out
+
     def _eye(self, s):
         e = s[:, :3].copy()
         e[:, 2] += np.where(self.duck[:len(e)], VIEW_H_DUCK, VIEW_H)
@@ -1212,7 +1298,7 @@ class DuelEnv:
                               np.eye(NW, dtype=np.float32)[self.weapon], self.has.astype(np.float32),
                               self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
                                                                               yaw, pit, visible),
-                              self._fight(pos, eye, rot, visible), self._mem(opp)], 1)
+                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot)], 1)
         return obs.astype(np.float32)
 
     def _extra(self, pos, vel, eye, fdir, up, rot, c, si, yaw, pit, visible):

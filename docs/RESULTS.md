@@ -5,6 +5,27 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-06 07:00 — `duel_gru_v7`: pickup reward, routes to the items, groups of 2, 3 and 4 (owner's plan after the night)
+
+From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), not from the passive morning one.
+- **Players:** a third of the workers each with groups of 2, 3 and 4, all against all (`--group 2,3,4`; about the same
+  number of players per worker). In a group, someone else's frag costs you nothing, so hiding loses ground.
+- **Pickup reward:** 0.3 per 100 points of health or armor gained (a full mega or red armor 0.3 against 1 for a frag),
+  0.03 for a weapon. To be faded out once items are fought over.
+- **Damage taken weighs half of damage dealt** (`--dmg-taken-w 0.5`); frag +1 and death -1 unchanged.
+- **Spawn:** machine gun and gauntlet only in three spawns of four, one of the seven weapon sets otherwise.
+- **Route inputs (20):** seconds of travel along the floor and the next step of the way to the mega, the red armor,
+  rockets, rail and lightning (`RouteField` over `data/maps/nav_arena1_sim.json`, built by `sim/build_nav.py` with
+  the system Python: the Anaconda scipy is broken, so the lookup is plain numpy). 387 inputs with two players, 405
+  with the group block. The walking map did not find the jump pad to the tower: the way to the mega goes round by
+  the stairs (about 10 s).
+- **Benchmark:** ten minutes against Nightmare on `arena1` each hour.
+- First update: enemy in view 39%, firing 20% of the time, void deaths 0.40 per player-minute.
+
+| Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 10 min |
+|---|---|---|---|---|---|---|---|
+| 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |
+
 ## 2026-10-05 21:03 — `duel_gru_v6`: `arena1` with items, the limits from the reflex test, memory inputs (until 07:00) (B-87, B-90, B-92 to B-94)
 
 From `duel_gru_v5` at 1888 min, widened 348 -> 385 inputs (`policy_start_385_inputs.pt`); a new run name because the
@@ -36,6 +57,19 @@ map, the spawn and the meaning of the limits changed.
 | 04:05 | 2306 | 1.1, 11%, 241 u/s | 47% / 36% / 42% / 12% | 0.04 (1547 s), 0.001 | 2.9 s | 0.02 | 6-16 (damage 1952 / 1482, held MG 70%, rail 18%) |
 | 05:05 | 2369 | 1.2, 4%, 219 u/s | 49% / 39% / 42% / 20% | 0.007 (1715 s), 0.001 | 33.5 s | 0.04 | 0-18 (damage 929 / 1552, speed 119 u/s, held MG 86%) |
 | 06:05 | 2428 | 1.6, 4%, 217 u/s | 51% / 41% / 45% / - | 0.01 (1262 s), 0.001 | 20.6 s | 0.05 | 5-16 (damage 1697 / 1403, speed 172 u/s, held MG 81%) |
+| 07:00 (end) | 2476 | 1.3, 4%, 208 u/s | 52% / 40% / 39% / 30% | 0.006 (1596 s), 0 | 24.7 s | 0.04 | 4-26 in ten minutes (damage 2738 / 2146, held MG 88%) |
+
+**Result of the night (did not work):** ten hours made him worse at fighting on the map. He learned the map's
+dangers (void deaths 0.46 -> 0.04 per player-minute, lava damage 25 -> 1) and to fight with rail and lightning when
+he has them, but the two copies drifted apart: the enemy in view 26% -> 4% of the time, firing 14% -> 3%, key
+changes asked 6.6 -> 1.3 a second. The mega lay 25 minutes between pickups and the red armor was taken a handful
+of times in all. Against Nightmare: 1, 0, 0, 9, 0, 1, 6, 0, 5 frags in five minutes and 4-26 in ten at the end,
+although he usually dealt as much damage as he took: Nightmare carried 136 health and 95 armor on average (red
+armor nine times in one game), he 99 and none. Why: with a death costing what a frag earns and damage taken
+costing what damage dealt earns, staying away is a safe answer on a map with room to hide, and since neither copy
+took the armor, neither ever met a stacked opponent to learn its worth from. The aim limits held: on the reflex
+test he ended at 60% of the time on a strafing target (benchmark 48%), first rail shot 82% (95%), on a new target
+after 350 ms (280 ms).
 
 **22:23 — spawn weapons (owner)**: after an hour the two rarely met (in view 10%) and fought almost only with the machine gun (79% of kills; a weapon picked up once in two minutes). Now each player draws his own set at every spawn: machine gun and gauntlet always, plus one of the eight combinations of rail, lightning and rockets with equal weight (none included). Checkpoint before it: `policy_before_weapon_sets.pt`. The map has no ammo boxes: ammo comes only with the weapons lying there (back 5 s after being taken). The Nightmare benchmark stays the real game's duel spawn.
 

@@ -147,7 +147,8 @@ def main():
     ap.add_argument("--acquire-ms", type=float, default=200, help="delay before an enemy who just came into view is noticed")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa: groups of more than two players)")
-    ap.add_argument("--group", type=int, default=2, help="players per group, all against all (needs --env duel_env_ffa)")
+    ap.add_argument("--group", default="2", help="players per group, all against all (needs --env duel_env_ffa). Several "
+                    "sizes separated by commas (2,3,4): the workers take them in turn, each with about as many players")
     a = ap.parse_args()
 
     import torch
@@ -156,7 +157,8 @@ def main():
     import importlib
     E_ = importlib.import_module(a.env)
     ACTION_DIMS, OBS_DIM, PERSONAS, WEAPONS = E_.ACTION_DIMS, E_.OBS_DIM, E_.PERSONAS, E_.WEAPONS
-    G = a.group
+    groups = [int(x) for x in str(a.group).split(",")]
+    G = groups[0]
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if dev.type == "cpu":
         torch.set_num_threads(6)
@@ -168,17 +170,19 @@ def main():
     if os.path.exists(lab_json):
         course_keys = list(json.load(open(lab_json)).get("courses", {}))
     pipes = []
+    w_group = [groups[w % len(groups)] for w in range(a.workers)]             # group size of each worker
+    w_match = [max(2, (2 * a.matches // g_) // 2 * 2) for g_ in w_group]       # ... and its groups: about 2 x matches players
     for w in range(a.workers):
         m = maps[w % len(maps)]
         p_main, p_work = mp.Pipe()
-        mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), a.matches, 3000 + w,
+        mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), w_match[w], 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
                                         os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
-                                        a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, a.group),
+                                        a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w]),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
@@ -252,17 +256,20 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
-                        env_module=a.env, group=G,
+                        env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk)),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
     # (groups of more than two: every second member)
-    is_odd = (np.arange(N) % G % 2 == 1)
-    per_worker = G * a.matches
+    w_n = [g_ * m_ for g_, m_ in zip(w_group, w_match)]                      # players of each worker
+    w_off = np.concatenate([[0], np.cumsum(w_n)]).astype(int)
+    assert w_off[-1] == N, (w_off[-1], N)
+    is_odd = np.concatenate([np.arange(n_) % g_ % 2 == 1 for n_, g_ in zip(w_n, w_group)])
     league = np.zeros(N, bool)
     for w in range(a.workers):
-        league[w * per_worker + per_worker // 2:(w + 1) * per_worker] = True
+        league[w_off[w] + w_n[w] // 2:w_off[w + 1]] = True
+    n_groups = int(sum(w_match))
     snap_players = torch.from_numpy(league & is_odd).to(dev)          # controlled by the snapshot
     learn = (~snap_players).float()                                    # trained on
     snaps = []                                                         # frozen past policies (state dicts)
@@ -330,8 +337,8 @@ def main():
             b_w[t] = learn * (1.0 - scr)
             b_teach[t] = torch.from_numpy(teach).to(dev)
             an = act.cpu().numpy()
-            for p, c in zip(pipes, np.array_split(an, len(pipes))):
-                p.send(("step", c))
+            for w_, p in enumerate(pipes):
+                p.send(("step", an[w_off[w_]:w_off[w_ + 1]]))
             res = [p.recv() for p in pipes]
             obs = np.concatenate([r[0] for r in res])
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
@@ -341,13 +348,13 @@ def main():
             teach = np.concatenate([r[5] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
-            for r in res:
+            for w_, r in enumerate(res):
                 for k, v in r[3].items():
                     if isinstance(v, list):
                         continue
                     agg[k] = agg.get(k, 0) + v
                 for mk, ek in zip(r[3]["match_of_kill"], r[3]["even_kill"]):
-                    if mk >= a.matches // 2:                             # second half of the worker = league matches
+                    if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
         with torch.no_grad():
             b_val[T] = pol.step(torch.from_numpy(norm(obs)).to(dev), h)[1]
@@ -427,7 +434,8 @@ def main():
                 nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
         total += T * N
-        sim_min = T * DT_MIN * (N // G)
+        sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
+        G = N / n_groups                                                 # mean players per group (for the per-player numbers)
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    frags_per_match_min=round(agg["frags"] / sim_min, 3),
                    suicides_per_match_min=round(agg["suicides"] / sim_min, 3),

@@ -70,14 +70,12 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-`duel_gru_v6` is training until 07:00 on 2026-10-06: self-play on `arena1` with items (two players, duel spawn),
-the aim limits from the reflex test (direction error, flinch, focus bursts) and the memory inputs (RESULTS
-2026-10-05 21:03). Hourly checks; the public server stays on the older network until the owner says to push
-(`tools/push_bobby.sh`).
+`duel_gru_v7` is training until 19:00 on 2026-10-06 on `arena1`: groups of 2, 3 and 4, a pickup reward, damage taken
+at half weight, routes to the items as inputs (RESULTS 2026-10-06 07:00). The night before (`duel_gru_v6`, two
+players, no pickup reward) made him passive: the copies learned to stay apart and never took the items.
 
-Next: B-92 (re-measure against the benchmark after training, more players), B-86 (a share of rounds with three or
-four players once two-player play has settled), B-95 (key budget against measured players), `arena2` for closer
-fights (owner's idea).
+Open ideas: a mouse pad that runs out (against spinning on the spot), fading the pickup reward out once items are
+fought over, B-92 (benchmark after training, more players), B-95 (key budget), `arena2`.
 
 ## Owner decisions
 
