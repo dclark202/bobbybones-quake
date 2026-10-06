@@ -12,6 +12,7 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 | `!nosg` / `!nosg off` | Nobody spawns with a shotgun (it can still be picked up on the map); `off` returns to every weapon |
 | `!reflex` (or `!room reflex`) | On the test map: the aim reflex test. Four short aim rooms, about three and a half minutes; in three of them the target shoots back for the second half (you cannot die); move as you normally would: lightning gun on a target that walks slowly from side to side, lightning gun on a target that strafes and turns at random, railgun on a target that jumps to a new place every few seconds, rockets on the strafing target. Stand still. Results are saved under an anonymous id; `tools/reflex_report.py` compares people with Bobby. Single rooms: `!room reflex slow|track|flick|rocket` |
 | `!arena box` / `!arena env` / `!arena yard` `[minutes]` / `!arena off` | On the test map: fight BobbyBones in the aim box, the environment box or the yard (a small two-level duel arena: balconies, stairs, a ramp, a tower with a catwalk, a jump pad, a teleporter, a tunnel; not in his training yet) under the rules he trains with: full weapon set at spawn, 125 health, nobody leaves the room, five minutes (or the number given). The score and damage are announced at the end |
+| `!duel [minutes]` (or `!match`) | A timed, scored duel: on `testlab` in the environment box, on `arena1` and the duel maps across the whole map as it is (10 minutes by default on the duel maps). `!duel off` stops it |
 | `!spar` / `!spar off` | You become a spectator and BobbyBones plays a Nightmare bot in a real match. `!spar off`, or joining the game, ends it |
 
 ## Free-for-all servers (`plugins/ffabot.py`)
@@ -22,10 +23,17 @@ everybody, in permanent warmup.
 | Command | Who | What it does |
 |---|---|---|
 | `!bots <1-4>` | anyone | how many Bobbys play; people get the other seats (6 - n). Raising it is refused while more people than that are playing; lowering it frees seats. Nobody can push a bot out. |
-| `!map <arena1|testlab|bloodrun|aerowalk|lostworld>` | anyone | change the map (free-for-all factory) |
+| `!match [minutes]` (or `!duel`) | anyone | a scored match for everybody in the game, 10 minutes by default: normal spawn, the items on the map; a table of kills, deaths and damage at the end. `!match off` stops it |
 | `!help`, `!note <text>` | anyone | as on the 1v1 server |
 
-The 1v1 commands (`!duel`, `!reflex`, `!movement`, `!room`) are not on a free-for-all server.
+The 1v1 rooms (`!reflex`, `!movement`, `!room`) are not in free-for-all mode.
+
+## Switching modes (`plugins/botmode.py`, loaded on every server)
+
+| Command | Who | What it does |
+|---|---|---|
+| `!mode ffa [bots]` / `!mode duel` | anyone | switch the running server between free-for-all and 1v1 (the plugin and the game factory change, the map restarts, the bots are replaced) |
+| `!map <name>` | anyone | change the map and take its mode: `arena1` is free-for-all by design; `testlab` and the duel maps are 1v1 (the duel factory keeps two players active) |
 
 ## Test rooms
 

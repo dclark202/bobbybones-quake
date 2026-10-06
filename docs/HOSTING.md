@@ -58,7 +58,7 @@ On the machine:
 
 ```bash
 cd bobbybones-quake
-RESTART=1 HOSTNAME_QL="BobbyBones | duel the learning bot | !rooms" bash tools/duel_server.sh - arena1
+PUBLIC=1 RESTART=1 HOSTNAME_QL="BobbyBones | duel the learning bot | !rooms" bash tools/duel_server.sh - arena1
 ```
 
 - `-` means "use the `policy.npz` already in `data/duellive`" (no PyTorch needed on the machine).
@@ -74,7 +74,8 @@ One server holds one duel at a time; other players spectate and queue (the game'
 ```bash
 FFA=3 bash tools/duel_server.sh duel_gru_v8 arena1 duel_env_ffa     # three Bobbys, three seats for people
 ```
-`FFA=<n>` loads `plugins/ffabot.py` instead of the duel plugin and the `ffa` factory: one six-seat group simulator
+`FFA=<n>` starts in free-for-all; `!mode ffa|duel` and `!map` switch a running server (`plugins/botmode.py`, always
+loaded). `FFA=<n>` loads `plugins/ffabot.py` instead of the duel plugin and the `ffa` factory: one six-seat group simulator
 (the one he trained in), every client gets a seat on joining, all Bobbys think in one network pass per frame. `!bots <n>`
 changes the number of Bobbys while the server runs. Cost per Bobby per frame is about 70 ray casts and one pass of a
 1.5 M-weight network in numpy: four Bobbys fit inside the 25 ms server frame on one core. `PORT=<udp port>` runs a second

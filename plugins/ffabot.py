@@ -48,6 +48,9 @@ class ffabot(duelbot):
         self.add_command("bots", self.cmd_bots, 0, usage="<1-4>")
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(FFA_MAPS)))
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
+        self.add_command("match", self.cmd_match, 0, usage="[minutes|off]")
+        self.add_command("duel", self.cmd_match, 0, usage="[minutes|off]")
+        self.match = None                                    # a timed, scored free-for-all (see cmd_match)
         self.n_bots = max(1, min(MAX_BOTS, int(os.environ.get("BOBBYS") or 2)))
         self.want_map = os.environ.get("LAB_MAP", "arena1").lower()
         self.lab, self.arena, self.drill, self.room, self.queue = None, None, None, None, []
@@ -72,6 +75,43 @@ class ffabot(duelbot):
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game. ^2!bots <1-4>^7 sets how many of me play; people get the other seats (six in all).",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
+
+    def log(self, msg):
+        minqlx.console_print("[ffabot] " + msg + "\n")
+        with open(os.path.join(D, "duelbot.log"), "a") as f:
+            f.write("{} ffa {}\n".format(time.strftime("%H:%M:%S"), msg))
+
+    # ------------------------------------------------------------------ a timed, scored match
+    def cmd_match(self, player, msg, channel):
+        """!match [minutes]: a scored free-for-all for everybody in the game, normal spawn, the items on the map;
+        the table at the end counts kills, deaths and damage since the start. !match off stops it."""
+        a = [m.lower() for m in msg[1:]]
+        if a and a[0] == "off":
+            if self.match:
+                self.match_end("stopped")
+            return
+        mins = float(a[0]) if a and a[0].replace(".", "", 1).isdigit() else 10.0
+        base = {}
+        for p in self.bobbys() + self.people():
+            base[p.id] = (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken)
+        self.match = dict(t_end=time.time() + mins * 60, mins=mins, base=base, warned=False)
+        self.record(event="match_start", minutes=mins, people=len(self.people()), bots=len(self.bobbys()))
+        self.msg("^3Match: {:g} minutes, everybody against everybody.^7 Kills count from now. !match off stops.".format(mins))
+
+    def match_end(self, why="time"):
+        M = self.match
+        self.match = None
+        rows = []
+        for p in self.bobbys() + self.people():
+            b = M["base"].get(p.id, (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken))
+            rows.append(dict(name=p.clean_name if is_bot(p) else "person {}".format(self.seat.get(p.id, "?")), bot=is_bot(p),
+                             seat=self.seat.get(p.id), kills=p.stats.kills - b[0], deaths=p.stats.deaths - b[1],
+                             dmg_dealt=p.stats.damage_dealt - b[2], dmg_taken=p.stats.damage_taken - b[3]))
+        rows.sort(key=lambda r: (-r["kills"], r["deaths"]))
+        self.record(event="match_result", minutes=M["mins"], why=why, table=rows)
+        self.msg("^3Match over ({})^7:".format(why))
+        for i, r in enumerate(rows, 1):
+            self.msg("  {}. {} ^2{}^7 kills, {} deaths, damage {} : {}".format(i, r["name"], r["kills"], r["deaths"], r["dmg_dealt"], r["dmg_taken"]))
 
     # ------------------------------------------------------------------ seats and commands
     def people(self):
@@ -339,6 +379,12 @@ class ffabot(duelbot):
             present[k] = True
             seated.append((k, p, st))
             self.fill_player(env, E, k, p, st)
+        if self.match:
+            if now >= self.match["t_end"]:
+                self.match_end("time")
+            elif not self.match["warned"] and self.match["t_end"] - now < 60:
+                self.match["warned"] = True
+                self.msg("^3One minute left.")
         if not seated:
             return
         # the round clock (as in training: the clock, the score and the memory start over every ROUND_SECS)

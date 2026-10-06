@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("testlab", "arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds")      # the only maps a player can pick with !map
+MAPS = ("testlab", "arena1", "lockout", "bloodrun", "aerowalk", "lostworld", "campgrounds")      # the only maps a player can pick with !map
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 3
@@ -77,7 +77,7 @@ class duelbot(minqlx.Plugin):
         self.add_hook("team_switch_attempt", self.on_team_switch)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("maps", self.cmd_maps, 0)
-        self.add_command("map", self.cmd_map, 0, usage="<testlab|arena1|bloodrun|aerowalk|lostworld|campgrounds>")
+        self.add_command("map", self.cmd_map, 0, usage="<testlab|arena1|lockout|bloodrun|aerowalk|lostworld|campgrounds>")
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 5, usage="<weapon|off>")
@@ -86,7 +86,8 @@ class duelbot(minqlx.Plugin):
         self.add_command("rooms", self.cmd_rooms, 5)
         self.add_command("reflex", self.cmd_reflex, 0)
         self.add_command("movement", self.cmd_movement, 0)
-        self.add_command("duel", self.cmd_duel, 0, usage="[minutes]")
+        self.add_command("duel", self.cmd_duel, 0, usage="[minutes|off]")
+        self.add_command("match", self.cmd_duel, 0, usage="[minutes|off]")
         self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
@@ -216,7 +217,7 @@ class duelbot(minqlx.Plugin):
     def on_player_loaded(self, player):
         if not is_bot(player):
             player.tell("^3I'm BobbyBones, the learning Quake bot.^7 Type ^2!help^7 to get started.")
-            player.tell("How I work, and everything I got wrong: ^5github.com/dclark202/bobbybones-quake")
+            player.tell("See more about the project: ^5github.com/dclark202/bobbybones-quake")
 
     def on_vote_called(self, player, vote, args):
         """no player votes at all: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS)"""
@@ -364,8 +365,17 @@ class duelbot(minqlx.Plugin):
     def cmd_duel(self, player, msg, channel):
         """!duel [minutes] = a timed duel against BobbyBones: in the environment room on the test lab (full weapons),
         on the training arena across the whole map (duel spawn, items on the map)"""
-        if not self.lab:
-            player.tell("Timed duels are on ^3!map testlab^7 and ^3!map arena1")
+        a = [m.lower() for m in msg[1:]]
+        if a and a[0] == "off":
+            if self.arena:
+                self.arena_end("stopped")
+            return
+        if not self.lab:                                     # a duel map: the whole map as it is, scored and timed
+            mins = float(a[0]) if a and a[0].replace(".", "", 1).isdigit() else 10.0
+            self.queue, self.room, self.drill = [], None, None
+            self.arena = dict(where="map", t_end=time.time() + mins * 60, mins=mins, base=dict(self.score), place=False, dmg=[0, 0])
+            self.record(event="arena_start", where="map", minutes=mins)
+            self.msg("^3Duel: {:g} minutes on this map.^7 Normal spawn, the items are on the map. !duel off stops.".format(mins))
             return
         where = "env" if "env" in self.lab else "yard"
         return self.cmd_arena(player, ["!arena", where] + [m for m in msg[1:2]], channel)
@@ -888,13 +898,16 @@ class duelbot(minqlx.Plugin):
             self.alive[p.id] = up
         if in_room:
             return self.room_frame(now, bobby, opp, bs, os_)
-        if self.arena and not self.lab:
+        if self.arena and not self.lab and self.arena["where"] != "map":
             self.arena = None
         if self.arena is None and self.lab and os.environ.get("DUEL_ARENA") in ("box", "env", "yard") and is_bot(opp) \
                 and not getattr(self, "arena_auto_done", False):
             self.arena_auto_done = True                      # benchmark servers: one arena fight against the game's bot
             self.arena_start(os.environ["DUEL_ARENA"], float(os.environ.get("DUEL_ARENA_MIN") or 5))
-        if self.arena:
+        if self.arena and self.arena["where"] == "map":       # a timed, scored duel on a map as it is
+            if now >= self.arena["t_end"]:
+                self.arena_end("time")
+        elif self.arena:
             A = self.arena
             for p_, st_, other_, who_ in ((bobby, bs, os_, "bobby"), (opp, os_, bs, "opp")):
                 if st_.health > 0 and (A["place"] or not self.arena_inside(st_.position)):

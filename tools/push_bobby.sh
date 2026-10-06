@@ -14,7 +14,7 @@ HOST="$(grep '^PUBLIC_HOST=' data/owner.env 2>/dev/null | cut -d= -f2)"
 mkdir -p data/public
 "${PYTHON:-python}" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out data/public/policy.npz
 if [ -n "$CODE" ]; then
-    ssh -o BatchMode=yes "$HOST" 'cd bobbybones-quake && git pull -q && docker build -q -t qlbot . >/dev/null && echo "code and image up to date: $(git log --oneline | head -1)"'
+    ssh -o BatchMode=yes "$HOST" 'cd bobbybones-quake && git checkout -q -- . && git pull -q && docker build -q -t qlbot . >/dev/null && echo "code and image up to date: $(git log --oneline | head -1)"'
 fi
 scp -o BatchMode=yes -q data/public/policy.npz "$HOST":bobbybones-quake/data/duellive/policy.npz
 echo "network of $RUN copied to the public server"
