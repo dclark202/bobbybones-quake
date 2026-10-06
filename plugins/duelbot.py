@@ -33,11 +33,14 @@ D = "/tmp/practice"
 MAPS = ("testlab", "train-arena", "bloodrun", "aerowalk", "campgrounds")      # the only maps a player can pick with !map
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
-SCHEMA = 2
+SCHEMA = 3
 _P = ["x", "y", "z", "vx", "vy", "vz", "pitch", "yaw", "health", "armor", "weapon", "ammo_rl", "ammo_rg", "ammo_lg",
       "fwd", "right", "up", "fire"]
 FRAME_COLS = ["t", "server_ms", "drill"] + ["b_" + c for c in _P] + ["o_" + c for c in _P] + \
-    ["b_sees", "b_seen_ago", "los", "b_aim_err", "o_aim_err", "missiles"]
+    ["b_sees", "b_seen_ago", "los", "b_aim_err", "o_aim_err", "missiles"] + \
+    ["o_buttons", "o_k_fwd", "o_k_side", "o_k_up", "o_k_fire", "o_k_btn", "o_k_wpn"]    # schema 3: the opponent's button bits, and
+# his key changes counted over every command he sent (125 a second), running totals: forward/back, strafe,
+# jump/crouch, fire presses, other buttons, weapon
 BANDS = {"close": (150.0, 300.0), "mid": (350.0, 650.0), "far": (800.0, 1200.0)}
 STYLES = ("still", "slow", "fast", "jump")
 ROOM_SECS = {"aim": 60, "choice": 40, "move": 90, "solo": 120, "ladder": 120}
@@ -175,7 +178,8 @@ class duelbot(minqlx.Plugin):
         row = [round(now, 3), minqlx.item_states()[0], tag or "-",
                *self.player_row(bobby, bs, bcmd), *self.player_row(opp, os_, [oc[3], oc[4], oc[5], oc[1] & 1]),
                int(env.visible[bs_slot]), round(float(env.seen_t[bs_slot]), 2), int(los),
-               self.aim_err(env, bs_slot), self.aim_err(env, o_slot), len(minqlx.missiles())]
+               self.aim_err(env, bs_slot), self.aim_err(env, o_slot), len(minqlx.missiles()), oc[1],
+               *(minqlx.key_counts(opp.id) if hasattr(minqlx, "key_counts") else (0, 0, 0, 0, 0, 0))]
         self.frames_f.write(",".join(str(v) for v in row) + "\n")
         dmg = {}
         for who, st, other in (("bobby", bs, os_), ("opp", os_, bs)):   # damage events from health + armor drops
@@ -1227,7 +1231,7 @@ class duelbot(minqlx.Plugin):
             self.msg("^3Next: {}^7 ({} s). Starts in 5 s; the countdown is not scored.".format(r["name"], r["secs"]))
             self.msg("^5" + self.room_hint(r))
             self.gauntlet_only(human)                         # no guns during the countdown
-            human.center_print("^3{}^7: {}".format(r["name"], self.room_hint(r)))
+            human.center_print("^3Next: {}".format(r["name"]))        # the instructions are in the chat (long lines clip here)
             self.record(event="room_start", room=r["name"], subject=self.subject_id(human), subject_is_bot=is_bot(human))
         r = self.room
         m = r["m"]
@@ -1260,7 +1264,7 @@ class duelbot(minqlx.Plugin):
             if r["kind"] == "move":
                 self.new_goal(human, hpos)
             self.tot = {}
-            human.center_print("^2GO: {}".format(r["name"]))
+            human.center_print("^2GO")
         keys = [0, 0, 0, 0]
         if r.get("ai"):                                      # bot fight: the game's AI drives the body
             if not r.get("placed"):

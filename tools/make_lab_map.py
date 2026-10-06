@@ -457,6 +457,8 @@ def main():
                           bounds=[0, iy, 3072, iy + 2048], secs=120)
     spawns.append((1536, iy + 256, 24, 0))
 
+    rooms["courses"] = courses
+
     # ---- write the maps
     def write(name, R, message):
         ents = ['{\n"classname" "worldspawn"\n"message" "' + message + '"\n"_ambient" "' + str(R.get("ambient", 45)) +
@@ -505,11 +507,14 @@ def arena(trigger):
     VX0, VX1, VY = 512, 1280, -480                            # the void: beyond the south wall between these x
     # floor: a base under everything (lava where it shows), then the walking floor in pieces around the pit
     box(-32, -32, -96, X + 32, Y + 32, -64, DARK)
-    box(-32, -32, -64, X + 32, Y + 32, -32, LAVA)
+    box(-32, -32, -64, X + 32, Y + 32, -32, DARK)
+    box(PIT[0], PIT[1], -32, PIT[2], PIT[3], -24, LAVA)       # lava only in the pit (8 units of it over the base)
     for x0, y0, x1, y1, tex in ((-32, -32, PIT[0], Y + 32, F1), (PIT[2], -32, X + 32, Y + 32, F2),
                                 (PIT[0], -32, PIT[2], PIT[1], F1), (PIT[0], PIT[3], PIT[2], Y + 32, F2)):
         box(x0, y0, -32, x1, y1, 0, tex)
     box(0, 0, H, X, Y, H + 32, CEIL)
+    for k_, (sz, top) in enumerate(((224, 24), (160, 48), (96, 72))):   # a stepped mound in the bare south-west corner
+        box(0, 0, 0, sz, sz, top, (F2, BLK, KILL)[k_])
     box(-32, -32, -64, 0, Y + 32, H + 32, BRICK)              # west, east, north walls
     box(X, -32, -64, X + 32, Y + 32, H + 32, BRICK)
     box(0, Y, -64, X, Y + 32, H + 32, BRICK)
@@ -517,17 +522,18 @@ def arena(trigger):
     box(VX1, -32, 0, X, 0, H + 32, BRICK)
     box(VX0, -32, 256, VX1, 0, H + 32, RUST)                  # the beam over the opening
     # the void: sky all round, nothing below
-    box(VX0 - 32, VY - 32, -800, VX0, -32, H + 32, SKY)
-    box(VX1, VY - 32, -800, VX1 + 32, -32, H + 32, SKY)
-    box(VX0 - 32, VY - 32, -800, VX1 + 32, VY, H + 32, SKY)
-    box(VX0, VY, H, VX1, -32, H + 32, SKY)
+    for z0_, z1_, tex_ in ((-800, -96, DARK), (-96, H + 32, BRICK)):       # brick above, dark rock down the drop
+        box(VX0 - 32, VY - 32, z0_, VX0, -32, z1_, tex_)
+        box(VX1, VY - 32, z0_, VX1 + 32, -32, z1_, tex_)
+        box(VX0 - 32, VY - 32, z0_, VX1 + 32, VY, z1_, tex_)
+    box(VX0, VY, H, VX1, -32, H + 32, CEIL)
     box(VX0 - 32, VY - 32, -832, VX1 + 32, 0, -800, DARK)
     box(VX0, -32, -800, VX1, 0, -96, DARK)                    # the cliff under the floor's edge
     box(832, -416, -32, 960, -288, 0, METAL)                  # the island (red armor), on a column
     box(864, -384, -800, 928, -320, -32, IRON)
     box(1216, -416, -16, 1280, -32, 0, METAL)                 # the walkway round from the east side
     box(960, -416, -16, 1216, -352, 0, METAL)
-    hurt = [[VX0, VY, -760, VX1, -32, -400, 100000], [PIT[0], PIT[1], -40, PIT[2], PIT[3], -8, 20]]
+    hurt = [[VX0, VY, -760, VX1, -32, -400, 100000], [PIT[0], PIT[1], -32, PIT[2], PIT[3], -4, 20]]
     for k, (x0, y0, z0, x1, y1, z1, dps) in enumerate(hurt):
         f = "( {} {} {} ) ( {} {} {} ) ( {} {} {} ) common/trigger 0 0 0 0.5 0.5 0 0 0"
         q = [(x1, y1, z1, x1, y0, z1, x0, y1, z1), (x1, y1, z1, x0, y1, z1, x1, y1, z0), (x1, y1, z1, x1, y1, z0, x1, y0, z1),
@@ -570,10 +576,10 @@ def arena(trigger):
     trigger("trigger_push", 300 - 48, 624 - 48, 2, 300 + 48, 624 + 48, 18, (630, 624, 340))
     box(1776, 1344, 0, 1790, 1488, 128, PORTAL)               # teleporter, at the tunnel's east end
     box(1680, 1330, 0, 1690, 1500, 2, RUST)
-    trigger("trigger_teleport", 1728, 1344, 0, 1776, 1488, 128, (128, 128, 40), angle=45)
+    trigger("trigger_teleport", 1728, 1344, 0, 1776, 1488, 128, (320, 320, 40), angle=45)
     for x in range(192, X, 384):                              # lights: warm overall, cold in the tunnel, red at the lava
         for y in range(192, Y, 384):
-            lights.append((x, y, H - 24, 420, (1.0, 0.93, 0.82)))
+            lights.append((x, y, H - 24, 560, (1.0, 0.93, 0.82)))
     for x in (200, 700, 1200, 1650):
         lights.append((x, 1420, 120, 160, (0.55, 0.7, 1.0)))
     lights.append((1248, 624, 60, 260, (1.0, 0.45, 0.15)))
@@ -581,7 +587,7 @@ def arena(trigger):
     for x in (640, 896, 1152):
         lights.append((x, -240, 300, 380, (0.75, 0.85, 1.0)))
     lights.append((896, -352, 80, 150, (1.0, 0.3, 0.2)))      # the island glows red
-    spots = [[128, 320, 8], [1664, 128, 8], [330, 128, 8], [640, 900, 8], [1300, 820, 8], [200, 1420, 8], [1400, 1420, 8],
+    spots = [[128, 400, 8], [1664, 128, 8], [400, 128, 8], [640, 900, 8], [1300, 820, 8], [200, 1420, 8], [1400, 1420, 8],
              [1650, 640, 8], [200, 1408, UP + 8], [1400, 1408, UP + 8], [1664, 700, UP + 8], [1100, 624, UP + 8],
              [1540, 200, UP + 8]]
     for q in spots[:4] + spots[8:10]:
@@ -595,7 +601,7 @@ def arena(trigger):
                             ("item_health", 128, 700, 24), ("item_health", 1000, 1000, 24),
                             ("item_armor_shard", 1400, 100, UP + 24), ("item_armor_shard", 1680, 300, UP + 24)):
         extra.append('{{\n"classname" "{}"\n"origin" "{} {} {}"\n}}'.format(cls, x_, y_, z_))
-    return dict(map="train-arena", stations={}, courses={}, hurt=hurt, ambient=30,
+    return dict(map="train-arena", stations={}, courses={}, hurt=hurt, ambient=50,
                 yard=dict(bounds=[0, VY, X, Y], z=8, spots=spots, items=True))
 
 

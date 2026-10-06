@@ -50,7 +50,7 @@ def measure(room, d):
     vb = np.concatenate([[0.0], wrap(np.diff(bear))])         # how the direction to the target changes per frame
     sm = lambda v, k=5: np.convolve(v, np.ones(k) / k, mode="same")          # noqa: E731
     own = np.concatenate([[0.0], np.linalg.norm(np.diff(d["pos"][:, :2], axis=0), axis=1)]) / DT
-    out = dict(frames=int(len(err)), distance=round(float(np.median(dist))), own_speed=round(float(np.mean(own))))
+    out = dict(frames=int(len(err)), distance=round(float(np.median(dist))), own_speed=round(float(np.median(own))))
     shots = int(d["shot"].sum())
     if room in ("slow", "track"):
         k = slice(int(2.0 / DT), None)                        # the first two seconds are for finding the target
@@ -115,11 +115,11 @@ def measure(room, d):
                    reached_target=round(len(t_on) / max(1, len(hops)), 3))
     if room == "rocket":
         sh = np.nonzero(d["shot"])[0]
-        lead = ey[sh] * np.sign(sm(vb)[sh])                   # positive: the crosshair is ahead of the target's movement
+        lead = -ey[sh] * np.sign(sm(vb)[sh])                  # positive: the crosshair is ahead of the target's movement
         out.update(damage_per_rocket=round(float(d["dmg"].sum() / max(1, shots)), 1),
                    rockets_that_hurt=round(float((d["dmg"] > 0).sum() / max(1, shots)), 3),
                    lead_deg=round(float(np.median(lead)), 2) if len(sh) else None,
-                   aim_below_centre_deg=round(float(np.median(ep[sh])), 2) if len(sh) else None)
+                   aim_below_centre_deg=round(float(-np.median(ep[sh])), 2) if len(sh) else None)
     out["shots"] = shots
     return out
 

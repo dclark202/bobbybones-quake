@@ -1728,6 +1728,7 @@ static PyMethodDef minqlxMethods[] = {
     {"set_view", PyMinqlx_SetView, METH_VARARGS, "Turn a player's view to pitch, yaw."},
     {"last_usercmd", PyMinqlx_LastUsercmd, METH_VARARGS, "Get a client's last usercmd."},
     {"ran_usercmd", PyMinqlx_RanUsercmd, METH_VARARGS, "Get the last usercmd SV_ClientThink actually ran for a client."},
+    {"key_counts", PyMinqlx_KeyCounts, METH_VARARGS, "Key and button changes counted over every command a client sent."},
     {"set_bot_substeps", PyMinqlx_SetBotSubsteps, METH_VARARGS, "Move a fully controlled bot n times per frame (human physics)."},
     {"item_states", PyMinqlx_ItemStates, METH_NOARGS, "List item entities and whether they are spawned."},
     {"missiles", PyMinqlx_Missiles, METH_NOARGS, "List projectiles in flight (owner, weapon, position, velocity)."},

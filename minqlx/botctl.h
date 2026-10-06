@@ -15,6 +15,7 @@ PyObject* PyMinqlx_ViewAngles(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetView(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_LastUsercmd(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_RanUsercmd(PyObject* self, PyObject* args);
+PyObject* PyMinqlx_KeyCounts(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetBotSubsteps(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ItemStates(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_Missiles(PyObject* self, PyObject* args);

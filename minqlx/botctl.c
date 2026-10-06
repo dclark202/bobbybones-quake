@@ -33,6 +33,10 @@ static bot_override_t overrides[MAX_CLIENTS];
 static long long think_calls[MAX_CLIENTS];
 static int ai_wants_fire[MAX_CLIENTS];
 static usercmd_t ran_cmd[MAX_CLIENTS];
+// key and button changes seen in every command a client sent (125 a second), counted since he connected:
+// forward/back, strafe, jump/crouch, fire presses, other buttons, weapon
+static long long key_counts[MAX_CLIENTS][6];
+#define BOTCTL_SGN(v) ((v) > 0 ? 1 : ((v) < 0 ? -1 : 0))
 
 SV_ClientThink_ptr SV_ClientThink;
 
@@ -111,6 +115,15 @@ void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd) {
     }
 done:
     if (id >= 0 && id < MAX_CLIENTS)
+        {
+            usercmd_t* o = &ran_cmd[id];
+            key_counts[id][0] += BOTCTL_SGN(cmd->forwardmove) != BOTCTL_SGN(o->forwardmove);
+            key_counts[id][1] += BOTCTL_SGN(cmd->rightmove) != BOTCTL_SGN(o->rightmove);
+            key_counts[id][2] += BOTCTL_SGN(cmd->upmove) != BOTCTL_SGN(o->upmove);
+            key_counts[id][3] += (cmd->buttons & 1) && !(o->buttons & 1);
+            key_counts[id][4] += ((cmd->buttons ^ o->buttons) & ~1) != 0;
+            key_counts[id][5] += cmd->weapon != o->weapon;
+        }
         ran_cmd[id] = *cmd;            // the exact command this think runs (cl->lastUsercmd is stale for bots)
     SV_ClientThink(cl, cmd);
 }
@@ -267,6 +280,18 @@ PyObject* PyMinqlx_RanUsercmd(PyObject* self, PyObject* args) {
     }
     return Py_BuildValue("(iiiiiiff)", c->serverTime, c->buttons, (int)c->weapon,
         (int)c->forwardmove, (int)c->rightmove, (int)c->upmove, pitch, yaw);
+}
+
+// key_counts(client_id) -> (forward/back, strafe, jump/crouch, fire presses, other buttons, weapon): changes counted
+// over every command the client sent since he connected
+PyObject* PyMinqlx_KeyCounts(PyObject* self, PyObject* args) {
+    int id;
+    if (!PyArg_ParseTuple(args, "i:key_counts", &id))
+        return NULL;
+    if (!valid_client(id))
+        return NULL;
+    long long* k = key_counts[id];
+    return Py_BuildValue("(LLLLLL)", k[0], k[1], k[2], k[3], k[4], k[5]);
 }
 
 // item_states() -> (level_time, [(entity_num, classname, x, y, z, available, nextthink), ...])

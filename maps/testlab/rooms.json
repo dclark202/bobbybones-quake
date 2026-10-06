@@ -137,5 +137,826 @@
    44048
   ],
   "secs": 120
+ },
+ "courses": {
+  "speed": {
+   "name": "Speed straight",
+   "hint": "Flat straight: build speed and hold it to the far end.",
+   "start": [
+    64.0,
+    6256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     6256.0
+    ],
+    [
+     20376.0,
+     6256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     6256.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 20312
+  },
+  "circle": {
+   "name": "Circle-jump gaps",
+   "hint": "Short platforms: each gap needs one good circle jump from a standing start.",
+   "start": [
+    64.0,
+    12256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     12256.0
+    ],
+    [
+     4448.0,
+     12256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -100,
+   "checkpoints": [
+    [
+     64,
+     12256,
+     8,
+     0
+    ],
+    [
+     840,
+     12256,
+     8,
+     0
+    ],
+    [
+     1632,
+     12256,
+     8,
+     0
+    ],
+    [
+     2440,
+     12256,
+     8,
+     0
+    ],
+    [
+     3264,
+     12256,
+     8,
+     0
+    ],
+    [
+     4104,
+     12256,
+     8,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 4384
+  },
+  "twohop": {
+   "name": "Two-hop gaps",
+   "hint": "Start on the dark pad, circle jump at the first line, strafe jump, take off again at the edge.",
+   "start": [
+    264.0,
+    13256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     13256.0
+    ],
+    [
+     6400.0,
+     13256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -100,
+   "checkpoints": [
+    [
+     264,
+     13256,
+     8,
+     0
+    ],
+    [
+     1368,
+     13256,
+     8,
+     0
+    ],
+    [
+     2496,
+     13256,
+     8,
+     0
+    ],
+    [
+     3648,
+     13256,
+     8,
+     0
+    ],
+    [
+     4816,
+     13256,
+     8,
+     0
+    ],
+    [
+     5800,
+     13256,
+     8,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 6336
+  },
+  "ramps": {
+   "name": "Ramps and stairs",
+   "hint": "Stairs and ramps up and down: keep your speed over them.",
+   "start": [
+    64.0,
+    14256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     14256.0
+    ],
+    [
+     11928.0,
+     14256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     14256.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 11864
+  },
+  "slalom": {
+   "name": "Slalom",
+   "hint": "Walls from alternating sides: weave through without losing speed.",
+   "start": [
+    64.0,
+    16384.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     16384.0
+    ],
+    [
+     10136.0,
+     16384.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     16384.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 10072
+  },
+  "turns": {
+   "name": "Turns",
+   "hint": "A corridor with 45, 90 and 135 degree turns and a hairpin: take them as fast as you can.",
+   "start": [
+    432.0,
+    20400.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     400.0,
+     20400.0
+    ],
+    [
+     1936.0,
+     20400.0
+    ],
+    [
+     2841.096679918781,
+     21305.09667991878
+    ],
+    [
+     4121.096679918781,
+     21305.09667991878
+    ],
+    [
+     4121.096679918781,
+     22585.09667991878
+    ],
+    [
+     5657.096679918781,
+     22585.09667991878
+    ],
+    [
+     4752.0,
+     21680.0
+    ],
+    [
+     6288.0,
+     21680.0
+    ],
+    [
+     6288.0,
+     21040.0
+    ],
+    [
+     4752.0,
+     21040.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     432.0,
+     20400.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 11904
+  },
+  "narrow": {
+   "name": "Narrow path",
+   "hint": "A beam over a pit that gets narrower (96, 64, 48, 32 wide): fast, without falling.",
+   "start": [
+    64.0,
+    24256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     24256.0
+    ],
+    [
+     512.0,
+     24256.0
+    ],
+    [
+     608.0,
+     24208.0
+    ],
+    [
+     2048.0,
+     24208.0
+    ],
+    [
+     2048.0,
+     24256.0
+    ],
+    [
+     2144.0,
+     24304.0
+    ],
+    [
+     3584.0,
+     24304.0
+    ],
+    [
+     3584.0,
+     24256.0
+    ],
+    [
+     3680.0,
+     24208.0
+    ],
+    [
+     5120.0,
+     24208.0
+    ],
+    [
+     5120.0,
+     24256.0
+    ],
+    [
+     5216.0,
+     24304.0
+    ],
+    [
+     6656.0,
+     24304.0
+    ],
+    [
+     7064.0,
+     24256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -100,
+   "checkpoints": [
+    [
+     64,
+     24256,
+     8,
+     0
+    ],
+    [
+     512,
+     24256,
+     8,
+     0
+    ],
+    [
+     2048,
+     24256,
+     8,
+     0
+    ],
+    [
+     3584,
+     24256,
+     8,
+     0
+    ],
+    [
+     5120,
+     24256,
+     8,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 7192
+  },
+  "pillars": {
+   "name": "Pillars",
+   "hint": "Hop from pillar to pillar (64 wide, 222 apart) to the far side.",
+   "start": [
+    64.0,
+    26256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     26256.0
+    ],
+    [
+     448.0,
+     26216.0
+    ],
+    [
+     670.0,
+     26216.0
+    ],
+    [
+     892.0,
+     26216.0
+    ],
+    [
+     1114.0,
+     26296.0
+    ],
+    [
+     1336.0,
+     26296.0
+    ],
+    [
+     1558.0,
+     26296.0
+    ],
+    [
+     1780.0,
+     26216.0
+    ],
+    [
+     2002.0,
+     26216.0
+    ],
+    [
+     2224.0,
+     26216.0
+    ],
+    [
+     2446.0,
+     26296.0
+    ],
+    [
+     2668.0,
+     26296.0
+    ],
+    [
+     2890.0,
+     26296.0
+    ],
+    [
+     3112.0,
+     26216.0
+    ],
+    [
+     3334.0,
+     26216.0
+    ],
+    [
+     3556.0,
+     26216.0
+    ],
+    [
+     3778.0,
+     26296.0
+    ],
+    [
+     4000.0,
+     26296.0
+    ],
+    [
+     4222.0,
+     26296.0
+    ],
+    [
+     4660.0,
+     26256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -100,
+   "checkpoints": [
+    [
+     64,
+     26256,
+     8,
+     0
+    ],
+    [
+     1558,
+     26296,
+     8,
+     0
+    ],
+    [
+     2890,
+     26296,
+     8,
+     0
+    ],
+    [
+     4222,
+     26296,
+     8,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 4670
+  },
+  "rocket": {
+   "name": "Rocket jumps",
+   "hint": "Rocket launcher, endless ammo: rocket-jump up four ledges (160, 224, 280, and 448: that one needs a double rocket jump).",
+   "start": [
+    64.0,
+    28256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     28256.0
+    ],
+    [
+     640.0,
+     28256.0
+    ],
+    [
+     1280.0,
+     28256.0
+    ],
+    [
+     1920.0,
+     28256.0
+    ],
+    [
+     2560.0,
+     28256.0
+    ],
+    [
+     3040.0,
+     28256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": 1104,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     28256.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "rl",
+   "length": 2976
+  },
+  "bends": {
+   "name": "Bends",
+   "hint": "A track with no walls over a pit: carry your speed through the bends.",
+   "start": [
+    128.0,
+    47500.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     128.0,
+     47500.0
+    ],
+    [
+     1280.0,
+     47500.0
+    ],
+    [
+     2004.0,
+     48224.0
+    ],
+    [
+     2516.0,
+     48224.0
+    ],
+    [
+     3964.0,
+     46776.0
+    ],
+    [
+     4476.0,
+     46776.0
+    ],
+    [
+     5924.0,
+     48224.0
+    ],
+    [
+     6436.0,
+     48224.0
+    ],
+    [
+     7160.0,
+     47500.0
+    ],
+    [
+     8184.0,
+     47500.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -100,
+   "checkpoints": [
+    [
+     128,
+     47500,
+     8,
+     0
+    ],
+    [
+     1280.0,
+     47500.0,
+     8,
+     0
+    ],
+    [
+     2516.0,
+     48224.0,
+     8,
+     0
+    ],
+    [
+     4476.0,
+     46776.0,
+     8,
+     0
+    ],
+    [
+     6436.0,
+     48224.0,
+     8,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 9855
+  },
+  "pads": {
+   "name": "Jump pads and teleporter",
+   "hint": "Jump pad up to the ledge, teleporter at its end, jump pad over the wall: keep moving.",
+   "start": [
+    64.0,
+    32256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     32256.0
+    ],
+    [
+     1024.0,
+     32256.0
+    ],
+    [
+     1800.0,
+     32256.0
+    ],
+    [
+     3120.0,
+     32256.0
+    ],
+    [
+     3520.0,
+     32256.0
+    ],
+    [
+     4200.0,
+     32256.0
+    ],
+    [
+     5100.0,
+     32256.0
+    ],
+    [
+     6296.0,
+     32256.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     32256.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 6232
+  },
+  "drops": {
+   "name": "Drops",
+   "hint": "You have 1 health: any fall damage kills and ends the run. Get to the bottom fast; the side ledges split the big drops.",
+   "start": [
+    64.0,
+    34128.0,
+    1288.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     34128.0
+    ],
+    [
+     4696.0,
+     34128.0
+    ]
+   ],
+   "end_r": 120,
+   "end_z": null,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     34128.0,
+     1288.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 4632,
+   "mortal": true
+  },
+  "climb": {
+   "name": "Climb",
+   "hint": "Eighteen ledges, each 40 high: jump up them without losing your rhythm.",
+   "start": [
+    64.0,
+    36256.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     36256.0
+    ],
+    [
+     3608.0,
+     36256.0
+    ]
+   ],
+   "end_r": 200,
+   "end_z": 712,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     36256.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 3544
+  },
+  "dodge": {
+   "name": "Rocket dodge",
+   "hint": "A rocket turret fires at you from the far end: reach the line in front of it taking as little damage as you can.",
+   "start": [
+    64.0,
+    38384.0,
+    8.0
+   ],
+   "yaw": 0,
+   "path": [
+    [
+     64.0,
+     38384.0
+    ],
+    [
+     3000.0,
+     38384.0
+    ]
+   ],
+   "end_r": 400,
+   "end_z": null,
+   "fall_z": -1000000000.0,
+   "checkpoints": [
+    [
+     64.0,
+     38384.0,
+     8.0,
+     0
+    ]
+   ],
+   "weapon": "g",
+   "length": 2936,
+   "turret": [
+    3400,
+    38384,
+    72,
+    180
+   ]
+  }
  }
 }
