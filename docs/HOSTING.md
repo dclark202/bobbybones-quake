@@ -50,6 +50,7 @@ Two things are not in the repository and are copied from the training PC (run th
 python sim/export_duel.py --run duel_gru_v3 --env duel_env_v3 --out data/duellive/policy.npz   # the Bobby to serve
 scp data/duellive/policy.npz root@<ip>:bobbybones-quake/data/duellive/
 scp data/maps/nav_*_sim.json root@<ip>:bobbybones-quake/data/maps/     # only for the movement rooms on the stock maps
+scp data/maps/arena1.bsp data/maps/testlab.bsp root@<ip>:bobbybones-quake/data/maps/   # our own maps, for his senses (again after every map rebuild)
 ```
 
 ## Start the server
@@ -58,7 +59,7 @@ On the machine:
 
 ```bash
 cd bobbybones-quake
-RESTART=1 HOSTNAME_QL="BobbyBones | duel the learning bot | !rooms" bash tools/duel_server.sh - bloodrun
+RESTART=1 HOSTNAME_QL="BobbyBones | duel the learning bot | !rooms" bash tools/duel_server.sh - arena1
 ```
 
 - `-` means "use the `policy.npz` already in `data/duellive`" (no PyTorch needed on the machine).
@@ -69,12 +70,26 @@ RESTART=1 HOSTNAME_QL="BobbyBones | duel the learning bot | !rooms" bash tools/d
 
 One server holds one duel at a time; other players spectate and queue (the game's own duel queue).
 
+## Our own maps and the Steam Workshop
+
+Quake Live clients get custom maps only from the Steam Workshop: the old downloads from the server (HTTP, UDP)
+were removed from the game. A player who joins while the server is on `arena1` or `testlab` without having the
+map is not sent it. So:
+
+1. Upload `maps/arena1/arena1.pk3` and `maps/testlab/testlab.pk3` as Workshop items (the owner's Steam account;
+   one item with both files is fine).
+2. Put the item's ID in the server's `baseq3/workshop.txt`, one ID per line. The server then fetches the item
+   itself and tells joining clients to download it, which they do automatically.
+3. After a map rebuild: update the Workshop item, then restart the server.
+
+Until that is done, only players who were handed the pk3 files can join those two maps.
+
 ## Day to day
 
 | Task | Command |
 |---|---|
 | New Bobby | On the PC: export as above, then `scp data/duellive/policy.npz root@<ip>:bobbybones-quake/data/duellive/`. The running server loads it by itself between rooms and says so in chat |
-| New code or map | On the machine: `git pull && docker build -t qlbot . && RESTART=1 bash tools/duel_server.sh - bloodrun` |
+| New code or map | On the machine: `git pull && docker build -t qlbot . && RESTART=1 bash tools/duel_server.sh - arena1` |
 | Get the data | On the PC: `rsync -av root@<ip>:bobbybones-quake/data/duellive/sessions/ data/public/sessions/` and the same for `suite/` |
 | Stop | `bash tools/duel_server.sh stop` |
 | Send a chat command from outside | `docker exec qlduel python3 /tools/rcon.py "qlx !room off" --wait 2` |

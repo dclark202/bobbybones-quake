@@ -3,7 +3,8 @@
 # Container qlduel, UDP 27970. No password by default (PASSWORD=<word> sets one). The owner's Steam ID lives in
 # data/owner.env (git-ignored): QLX_OWNER=<SteamID64>
 #   bash tools/duel_server.sh <run> [map] [env module]     e.g. bash tools/duel_server.sh duel_gru_v2 bloodrun duel_env_v2
-#   bash tools/duel_server.sh - bloodrun                    use the policy.npz already in data/duellive (no PyTorch needed)
+#   bash tools/duel_server.sh -                             use the policy.npz already in data/duellive (no PyTorch needed)
+# The map defaults to arena1 (his training arena); testlab has the aim and movement tests.
 #   bash tools/duel_server.sh stop
 # Options: PASSWORD=<word>, RESTART=1 (restart after a crash or reboot), HOSTNAME_QL="<name in the server list>"
 # With SPAR=1 no port is opened and a Nightmare bot is the opponent (for measuring); SKILL=4 makes it Hardcore.
@@ -15,7 +16,7 @@ NAME="${NAME:-qlduel}"                 # container name (use another one for a s
 DATA="${DATA:-data/duellive}"          # where the policy and the logs go
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 [ "$1" = "stop" ] && { echo "duel server stopped"; exit 0; }
-RUN="${1:?run name}"; MAP="${2:-bloodrun}"; ENVMOD="${3:-duel_env}"
+RUN="${1:?run name}"; MAP="${2:-arena1}"; ENVMOD="${3:-duel_env}"
 PY="${PYTHON:-python}"
 mkdir -p $DATA
 if [ "$RUN" = "-" ]; then                # "-" = use the policy.npz already in $DATA (a machine without PyTorch)

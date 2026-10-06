@@ -216,6 +216,7 @@ class duelbot(minqlx.Plugin):
     def on_player_loaded(self, player):
         if not is_bot(player):
             player.tell("^3I'm BobbyBones, the learning Quake bot.^7 Type ^2!help^7 to get started.")
+            player.tell("How I work, and everything I got wrong: ^5github.com/dclark202/bobbybones-quake")
 
     def on_vote_called(self, player, vote, args):
         """no player votes at all: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS)"""
