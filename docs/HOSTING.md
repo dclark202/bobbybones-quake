@@ -50,7 +50,6 @@ Two things are not in the repository and are copied from the training PC (run th
 python sim/export_duel.py --run duel_gru_v3 --env duel_env_v3 --out data/duellive/policy.npz   # the Bobby to serve
 scp data/duellive/policy.npz root@<ip>:bobbybones-quake/data/duellive/
 scp data/maps/nav_*_sim.json root@<ip>:bobbybones-quake/data/maps/     # only for the movement rooms on the stock maps
-scp data/maps/arena1.bsp data/maps/testlab.bsp root@<ip>:bobbybones-quake/data/maps/   # our own maps, for his senses (again after every map rebuild)
 ```
 
 ## Start the server
