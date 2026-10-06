@@ -1,6 +1,7 @@
 #!/bin/bash
 redis-server --daemonize yes >/dev/null
 cp -n /ql/baseq3-extra/* /ql/baseq3/ 2>/dev/null
+cp -f /ql/baseq3-extra/workshop.txt /ql/baseq3/workshop.txt 2>/dev/null   # ours replaces the game's empty one
 /tools/watchdog.sh >/dev/null 2>&1 &
 cd /ql
 ./run_server_x64_minqlx.sh \

@@ -27,8 +27,8 @@ time where the player managed 40%, and being shot at cost the player half of tha
 
 ## How to join
 
-1. Subscribe to the two maps on the Steam Workshop: `<Workshop link: testlab>` and `<Workshop link: arena1>`.
-   Quake Live can only fetch custom maps that way.
+1. Nothing to install: the two custom maps download by themselves when you join (Steam Workshop item
+   [3814411166](https://steamcommunity.com/sharedfiles/filedetails/?id=3814411166)).
 2. Start Quake Live and connect: `connect <server address>` in the console.
 3. One player is measured at a time. If someone is already playing, watch and wait for your turn.
 

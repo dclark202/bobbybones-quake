@@ -1,0 +1,3 @@
+# Steam Workshop items the server loads and tells joining players to download, one id per line
+# BobbyBones maps (arena1, testlab)
+3814411166

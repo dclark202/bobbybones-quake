@@ -75,13 +75,16 @@ Quake Live clients get custom maps only from the Steam Workshop: the old downloa
 were removed from the game. A player who joins while the server is on `arena1` or `testlab` without having the
 map is not sent it. So:
 
-1. Upload `maps/arena1/arena1.pk3` and `maps/testlab/testlab.pk3` as Workshop items (the owner's Steam account;
-   one item with both files is fine).
-2. Put the item's ID in the server's `baseq3/workshop.txt`, one ID per line. The server then fetches the item
-   itself and tells joining clients to download it, which they do automatically.
-3. After a map rebuild: update the Workshop item, then restart the server.
+The maps are Workshop item **3814411166** (uploaded 2026-10-05). Its ID is in `server/workshop.txt`, which the
+image copies into the server's `baseq3`: the server fetches the item at start and joining players download it
+automatically.
 
-Until that is done, only players who were handed the pk3 files can join those two maps.
+After a map rebuild:
+1. Copy the new pk3 files into `data/workshop/content/`, put the item's ID in `data/workshop/item.vdf`
+   (`"publishedfileid" "3814411166"`), and upload with SteamCMD: `workshop_build_item <path to item.vdf>`.
+2. On the machine: `git pull && docker build -t qlbot . && RESTART=1 bash tools/duel_server.sh -`.
+The server also mounts the pk3 files from the repo, so the repo and the Workshop item must hold the same build.
+
 
 ## Day to day
 
