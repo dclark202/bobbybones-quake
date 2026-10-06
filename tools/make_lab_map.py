@@ -488,7 +488,7 @@ def arena(trigger):
     """The training arena (map "train-arena", 2026-10-05; the owner's notes worked in the same evening): a small
     two-level arena in the manner of the duel maps. Inside 1792 x 1536.
       ground     an open middle with pillars and cover; a tunnel under the north balcony; a closed room in the
-                 south-east (two doors, rockets inside); a low strip under the east balcony; a lava pit under the
+                 south-east (two doors, the railgun inside); a low strip under the east balcony; a lava pit under the
                  catwalk
       upper      north and east balconies joined at the corner, a catwalk from the east balcony to the tower in the
                  middle, the roof of the south-east room (a short jump from the east balcony)
@@ -498,9 +498,13 @@ def arena(trigger):
                  (256 units: a plain running jump falls short)
       teleporter from the tunnel's east end to the south-west corner
     Every texture name is one the game's own maps use."""
-    F1, F2, METAL, STAIR = "gothic_floor/largerblock3b3", "gothic_floor/largerblock3b3dim", "base_floor/clangdark", "gothic_floor/xstairtop4"
-    BRICK, BLK, KILL, IRON = "gothic_wall/streetbricks10", "gothic_block/blocks18c", "gothic_block/killblock_i", "gothic_wall/iron01_e"
-    RUST, DARK, SUPPORT, CEIL = "gothic_trim/pitted_rust2", "gothic_block/dark_block", "gothic_trim/metalsupport4b", "gothic_block/blocks15"
+    # a disco floor in two tiles with pentagram plates, purple tiled walls, a wooden ceiling, a room lined with skin, a
+    # tower of skulls, gold crates, teal balconies that look like bounce pads, and a different colour of light in every part
+    F1, F2, METAL, STAIR = "gothic_floor/largerblock3b3", "base_floor/clangdark", "sfx/ntrl_techfloor_kc_teal", "gothic_floor/xstairtop4"
+    BRICK, BLK, KILL, IRON = "gothic_wall/purptileb", "gothic_block/blocks18c", "gothic_trim/skullsvertgray02a", "gothic_wall/iron01_e"
+    RUST, DARK, SUPPORT, CEIL = "gothic_trim/pitted_rust2", "gothic_block/dark_block", "gothic_wall/metaltech16gold", "gothic_ceiling/woodceiling1a"
+    PENT, SKIN, BOUNCE, GOLD = "sfx/largerblock3b3_pent", "skin/skin6", "sfx/bounce_largeblock3b", "gothic_wall/metaltech16gold"
+    PENTLIGHT, SKULL = "gothic_light/pentagram_light1_5K", "gothic_light/skulllight01"
     LAVA, SKY, PAD, PORTAL = "liquids/lavahell", "skies/meth_clouds_blue", "sfx/bouncepad01block18b", "sfx/portal_new_static_teal"
     X, Y, H, UP = 1792, 1536, 512, 192
     PIT = (1152, 544, 1344, 704)                              # the lava pit, under the catwalk
@@ -509,12 +513,17 @@ def arena(trigger):
     box(-32, -32, -96, X + 32, Y + 32, -64, DARK)
     box(-32, -32, -64, X + 32, Y + 32, -32, DARK)
     box(PIT[0], PIT[1], -32, PIT[2], PIT[3], -24, LAVA)       # lava only in the pit (8 units of it over the base)
-    for x0, y0, x1, y1, tex in ((-32, -32, PIT[0], Y + 32, F1), (PIT[2], -32, X + 32, Y + 32, F2),
-                                (PIT[0], -32, PIT[2], PIT[1], F1), (PIT[0], PIT[3], PIT[2], Y + 32, F2)):
-        box(x0, y0, -32, x1, y1, 0, tex)
+    xs_ = sorted({-32, 0, 256, 512, 768, 1024, PIT[0], PIT[2], 1536, X, X + 32})     # the floor as a board of tiles around the pit
+    ys_ = sorted({-32, 0, 256, 512, PIT[1], PIT[3], 768, 1024, 1280, Y, Y + 32})
+    for i_, (x0, x1) in enumerate(zip(xs_[:-1], xs_[1:])):
+        for j_, (y0, y1) in enumerate(zip(ys_[:-1], ys_[1:])):
+            if (x0, y0, x1, y1) == PIT:
+                continue
+            near_tower = 512 <= x0 < 1024 and 256 <= y0 < 768
+            box(x0, y0, -32, x1, y1, 0, PENT if (near_tower and (i_ + j_) % 2 == 0) else (F1 if (i_ + j_) % 2 == 0 else F2))
     box(0, 0, H, X, Y, H + 32, CEIL)
     for k_, (sz, top) in enumerate(((224, 24), (160, 48), (96, 72))):   # a stepped mound in the bare south-west corner
-        box(0, 0, 0, sz, sz, top, (F2, BLK, KILL)[k_])
+        box(0, 0, 0, sz, sz, top, (BLK, GOLD, PENT)[k_])
     box(-32, -32, -64, 0, Y + 32, H + 32, BRICK)              # west, east, north walls
     box(X, -32, -64, X + 32, Y + 32, H + 32, BRICK)
     box(0, Y, -64, X, Y + 32, H + 32, BRICK)
@@ -529,8 +538,8 @@ def arena(trigger):
     box(VX0, VY, H, VX1, -32, H + 32, CEIL)
     box(VX0 - 32, VY - 32, -832, VX1 + 32, 0, -800, DARK)
     box(VX0, -32, -800, VX1, 0, -96, DARK)                    # the cliff under the floor's edge
-    box(832, -416, -32, 960, -288, 0, METAL)                  # the island (red armor), on a column
-    box(864, -384, -800, 928, -320, -32, IRON)
+    box(832, -416, -32, 960, -288, 0, GOLD)                   # the island (red armor): gold, on a column of skulls
+    box(864, -384, -800, 928, -320, -32, KILL)
     box(1216, -416, -16, 1280, -32, 0, METAL)                 # the walkway round from the east side
     box(960, -416, -16, 1216, -352, 0, METAL)
     hurt = [[VX0, VY, -760, VX1, -32, -400, 100000], [PIT[0], PIT[1], -32, PIT[2], PIT[3], -4, 20]]
@@ -552,11 +561,11 @@ def arena(trigger):
     box(1536, 768, 0, 1552, 1024, UP - 16, BLK)
     box(1536, 512, 0, 1568, 544, UP - 16, IRON)
     # the south-east room: walls to the roof, a door in the west wall and one in the north wall
-    box(1280, 0, 0, 1296, 128, UP - 16, BLK)
-    box(1280, 256, 0, 1296, 400, UP - 16, BLK)
+    box(1280, 0, 0, 1296, 128, UP - 16, SKIN)
+    box(1280, 256, 0, 1296, 400, UP - 16, SKIN)
     box(1280, 128, 128, 1296, 256, UP - 16, RUST)
-    box(1296, 384, 0, 1472, 400, UP - 16, BLK)
-    box(1600, 384, 0, X, 400, UP - 16, BLK)
+    box(1296, 384, 0, 1472, 400, UP - 16, SKIN)
+    box(1600, 384, 0, X, 400, UP - 16, SKIN)
     box(1472, 384, 128, 1600, 400, UP - 16, RUST)
     box(1280, 0, UP - 16, X, 400, UP, METAL)                  # its roof: a short jump from the east balcony
     for k in range(12):                                       # stairs on the west wall, up to the north balcony
@@ -564,7 +573,7 @@ def arena(trigger):
     ramp(640, 1152, 1024, 1280, 0, UP, 0, METAL)              # ramp in front of the north balcony
     box(1024, 1152, 0, 1152, 1280, UP, BLK)
     box(768, 512, 0, 896, 736, UP, KILL)                      # the tower (mega health)
-    box(896, 576, UP - 16, 1536, 672, UP, METAL)              # catwalk: tower to east balcony, over the lava
+    box(896, 576, UP - 16, 1536, 672, UP, BOUNCE)             # catwalk: tower to east balcony, over the lava
     box(576, 800, 0, 592, 1120, 224, BLK)                     # a long wall that splits the west side
     for x0, y0 in ((416, 320), (1088, 960)):                  # pillars
         box(x0, y0, 0, x0 + 64, y0 + 64, H, IRON)
@@ -577,16 +586,24 @@ def arena(trigger):
     box(1776, 1344, 0, 1790, 1488, 128, PORTAL)               # teleporter, at the tunnel's east end
     box(1680, 1330, 0, 1690, 1500, 2, RUST)
     trigger("trigger_teleport", 1728, 1344, 0, 1776, 1488, 128, (320, 320, 40), angle=45)
+    for x in range(192, X, 384):
+        for y in range(192, Y, 384):
+            box(x - 48, y - 48, H - 2, x + 48, y + 48, H, PENTLIGHT)
+    for y in (300, 700, 1100):
+        box(0, y - 32, 380, 2, y + 32, 444, SKULL)
+        box(X - 2, y - 32, 380, X, y + 32, 444, SKULL)
     for x in range(192, X, 384):                              # lights: warm overall, cold in the tunnel, red at the lava
         for y in range(192, Y, 384):
-            lights.append((x, y, H - 24, 560, (1.0, 0.93, 0.82)))
+            col_ = ((1.0, 0.35, 0.9), (0.3, 1.0, 0.9), (1.0, 0.85, 0.3), (0.5, 1.0, 0.4))[((x // 384) + 2 * (y // 384)) % 4]
+            lights.append((x, y, H - 60, 520, col_))             # pink, teal, gold and green, in turn
+            lights.append((x, y, 260, 240, (1.0, 0.95, 0.9)))    # and plain light lower down, so players stay easy to see
     for x in (200, 700, 1200, 1650):
-        lights.append((x, 1420, 120, 160, (0.55, 0.7, 1.0)))
+        lights.append((x, 1420, 120, 200, (0.55, 0.3, 1.0)))     # the tunnel: violet
     lights.append((1248, 624, 60, 260, (1.0, 0.45, 0.15)))
-    lights.append((1540, 200, 130, 200, (1.0, 0.8, 0.5)))
+    lights.append((1540, 200, 130, 260, (1.0, 0.25, 0.3)))    # the skin room: red
     for x in (640, 896, 1152):
-        lights.append((x, -240, 300, 380, (0.75, 0.85, 1.0)))
-    lights.append((896, -352, 80, 150, (1.0, 0.3, 0.2)))      # the island glows red
+        lights.append((x, -240, 300, 380, (0.4, 1.0, 0.5)))      # the void: a sickly green
+    lights.append((896, -352, 90, 200, (1.0, 0.8, 0.2)))      # the island glows gold
     spots = [[128, 400, 8], [1664, 128, 8], [400, 128, 8], [640, 900, 8], [1300, 820, 8], [200, 1420, 8], [1400, 1420, 8],
              [1650, 640, 8], [200, 1408, UP + 8], [1400, 1408, UP + 8], [1664, 700, UP + 8], [1100, 624, UP + 8],
              [1540, 200, UP + 8]]
@@ -594,8 +611,8 @@ def arena(trigger):
         spawns.append((q[0], q[1], q[2] + 16, 0))
     for cls, x_, y_, z_ in (("item_health_mega", 832, 624, UP + 24),        # on the tower (the jump pad lands there)
                             ("item_armor_body", 896, -352, 24),              # on the island in the void
-                            ("weapon_railgun", 1500, 1408, UP + 24),         # north balcony, east end
-                            ("weapon_rocketlauncher", 1540, 200, 24),        # inside the south-east room
+                            ("weapon_rocketlauncher", 1500, 1408, UP + 24),  # north balcony, east end
+                            ("weapon_railgun", 1540, 200, 24),               # inside the south-east room
                             ("weapon_lightning", 1664, 1000, 24),            # under the east balcony
                             ("item_health_large", 200, 1420, 24),            # in the tunnel, west end
                             ("item_health", 128, 700, 24), ("item_health", 1000, 1000, 24),
