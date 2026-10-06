@@ -106,7 +106,9 @@ def main():
     ap.add_argument("--loadout", default="all")
     ap.add_argument("--item-reward", type=float, default=0.3, help="reward per 100 points of health/armor picked up")
     ap.add_argument("--item-loss", type=float, default=0.5, help="an enemy's mega or red armor costs this share of its pickup reward")
-    ap.add_argument("--intent-seek", type=float, default=1.0, help="reward per second of the chosen way gained (the intention head)")
+    ap.add_argument("--intent-seek", type=float, default=1.0, help="the chosen way pays this share of the item's pickup reward, spread along it")
+    ap.add_argument("--lr-minutes", type=float, default=0.0, help="the learning rate decays to a tenth over this many minutes of training "
+                    "in all (counted across restarts); 0 = over this run's --minutes, from the full rate again at every restart")
     ap.add_argument("--intent-seek-minutes", type=float, default=0.0, help="that reward fades to a quarter over this time (0 = constant)")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
@@ -395,7 +397,7 @@ def main():
             last = dl + gamma * lam * nonterm * last
             adv[t] = last
         ret = adv + b_val[:T]
-        frac = min(1.0, (time.time() - t_start) / (a.minutes * 60))
+        frac = min(1.0, mins / a.lr_minutes) if a.lr_minutes > 0 else min(1.0, (time.time() - t_start) / (a.minutes * 60))
         for g in opt.param_groups:
             g["lr"] = a.lr * (1.0 - 0.9 * frac)
         n_mb = a.minibatches

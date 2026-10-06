@@ -48,6 +48,19 @@ From `duel_gru_v7` at update 40 of the restart (`policy_end_v7_update40.pt`, 216
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lying) | Intentions: none / mega / red / RL / RG / LG, trips a min, reached | Void deaths | Half of his time in (cells) | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|---|
 | 12:18 (start) | 2163 | 4.1, -, - | - | 0.078 (99%), 0.003 (100%) | 17 / 17 / 17 / 17 / 17 / 17 %, 58, 0.3% | 0.15 | 328 of 32 x 32 (v7 at 12:09; 12% of the cells visited) | - |
+| 12:46 (update 33) | 2192 | 9.0, 32%, 242 u/s (firing 25%) | 49% / 39% / 42% / 24% | 0.026 (95%), 0 (100%) | 15 / 23 / 5 / 20 / 8 / 30 %, 36, 0.4% | 0.12 | - | 2-5 in a 2 min server test (damage 628 / 415) |
+| 12:52 | 2200 | stopped at update 40 for the six changes below (`policy_before_six_changes_update40.pt`) | | | | | | |
+
+**12:52 — six changes at once, then no more (owner: "prohibit me from making more changes unless the data really looks bad"; the run ends 19:00 and is reviewed then):**
+1. **The way is worth the item:** the travel reward is the pickup value (0.75 for mega or red, 0.19 for a weapon) spread along the way as it is gained, so a trip never pays more than the item; the 1.0 per second of 12:16 (a red trip was worth five frags) is gone, and so is the fade.
+2. **Shotgun, grenade launcher and plasma gun back** in every input they had (44 inputs: items, held, owned, ammo, in the enemy's hands, memory, shot sound, grenades and plasma in flight): 375 -> 419 (401 with two players). He must know the game's main weapons for the maps to come; the heavy machine gun stays out. Their weights came from `duel_gru_v7` by name (`reshape_policy.py --also`).
+3. **Horizon 12 -> 25 s** (`--gamma 0.999`): item cycles are 25 and 35 s.
+4. **Training sequences 256 -> 384 frames (6.4 -> 9.6 s)**, 48 minibatches: the gradient for remembering a timer or where the enemy went only flows within a sequence.
+5. **A choice holds 3 s** unless the item was taken or he died ("nothing" can be left at any read): 36 changes a minute and 0.4% of trips completed at 12:46.
+6. **Learning rate over cumulative training time** (`--lr-minutes 1440`: a tenth after 24 h in all), not reset to full at every restart (six restarts today, six jolts).
+Plugin fix on the way: the server had crashed on the table lookup (`P.files` on a dict); retested 2-5 in 2 min.
+
+**What "really bad" means, agreed in advance:** fights per group-minute under 5 or firing under 15% (he avoids fights for the items); void deaths above 0.4 per player-minute; the run stalls (no update for 10 min); or by 19:00 intention trips reached still under 2% with mega under 0.05 per player-minute. Anything else waits for the 19:00 review.
 
 ## 2026-10-06 07:00 — `duel_gru_v7`: pickup reward, routes to the items, groups of 2, 3 and 4 (owner's plan after the night)
 

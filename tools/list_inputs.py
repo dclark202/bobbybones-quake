@@ -76,7 +76,8 @@ for j in range(E.N_PROJ):
         add("projectiles", "{} enemy projectile: position {}".format(n_, ax), "within 1500 units and in view (or within 400)", "units / 1000")
     for ax in XYZ:
         add("projectiles", "{} enemy projectile: velocity {}".format(n_, ax), "", "units/s / 1000")
-    add("projectiles", "{} enemy projectile: is a rocket".format(n_), "", "0 or 1")
+    for k_ in ("rocket", "grenade", "plasma"):
+        add("projectiles", "{} enemy projectile: is a {}".format(n_, k_), "", "0 or 1")
 # ---- weapons
 for w in OW:
     add("weapons", "holding {}".format(WN[w]), "", "0 or 1")
@@ -215,7 +216,8 @@ for j in range(2):
         add("projectiles", "his own {} projectile: position {}".format(n_, ax), "", "units / 1000", "v7")
     for ax in XYZ:
         add("projectiles", "his own {} projectile: velocity {}".format(n_, ax), "", "units/s / 1000", "v7")
-    add("projectiles", "his own {} projectile: is a rocket".format(n_), "", "0 or 1", "v7")
+    for k_ in ("rocket", "grenade", "plasma"):
+        add("projectiles", "his own {} projectile: is a {}".format(n_, k_), "", "0 or 1", "v7")
 # ---- the intention and the map cells (2026-10-06, v8)
 add("intention", "chosen way: travel time", "seconds along the floor to the item he has chosen to go for (zero with none chosen)", "seconds / 10, capped at 2", "v8")
 for ax in XYZ:

@@ -71,8 +71,10 @@ minutes against Nightmare at each checkpoint.
 ## Now
 
 `duel_gru_v8` is training until 19:00 on 2026-10-06 on `arena1` (B-100): groups of 2, 3 and 4, an explicit intention
-head (what to go for, read once a second, fed back with the way there), a learned map table, pickup reward 0.75 with a
-loss when an enemy takes the mega or red, 97 fewer inputs (RESULTS 2026-10-06 12:16). The morning's `duel_gru_v7` did
+head (what to go for, read once a second, held 3 s, fed back with the way there), a learned map table, pickup reward
+0.75 with a loss when an enemy takes the mega or red, the way paid as the item's value spread along it, 25 s horizon,
+9.6 s training sequences, 419 inputs (RESULTS 2026-10-06 12:16 and 12:52). Owner's rule: no further changes before the
+19:00 review unless the agreed "really bad" signs appear (RESULTS 12:52). Map knowledge beyond one map: B-104. The morning's `duel_gru_v7` did
 not take items at any pickup reward; the night's `duel_gru_v6` hid.
 
 Open: B-102 (a stacking runner in the league, if the intention collapses to "nothing"), fading the item rewards out
