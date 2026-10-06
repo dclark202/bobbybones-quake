@@ -464,6 +464,9 @@ class DuelEnv:
         self.ear = np.zeros((self.n, 4), np.float32)        # last sound heard: direction (world, radians), height, loudness, closing
         self.ear_t = np.full(self.n, 99.0, np.float32)      # seconds since
         self.ear_hum = np.full(self.n, -1, np.int64)        # the humming weapon heard with it (RG, LG) or -1
+        self.item_seek = 0.0                                # reward per second of travel gained toward the nearest big item
+        self.seek_phi = np.full(self.n, 15.0, np.float32)   # he could use and that is lying there (see step)
+        self.route_item = []
         self.route, self.route_goal = None, []              # the ways to the big items (see N_ROUTE)
         if nav and os.path.exists(nav):
             pos_ = {}
@@ -472,6 +475,8 @@ class DuelEnv:
                 if lab_ in ROUTE_ITEMS and lab_ not in pos_:
                     pos_[lab_] = self.item_pos[k_]
             self.route_goal = [lab_ for lab_ in ROUTE_ITEMS if lab_ in pos_]
+            self.route_item = [next(k_ for k_ in range(self.nI) if np.array_equal(self.item_pos[k_], pos_[lab_]))
+                               for lab_ in self.route_goal]
             if self.route_goal:
                 self.route = RouteField(nav, [pos_[lab_] for lab_ in self.route_goal],
                                         pads=[(c, d) for k, c, d in spots if k == 0])
@@ -2070,6 +2075,22 @@ class DuelEnv:
                     self.item_t[m, it] = resp
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
         self.armor = np.where(self.armor > 100, np.maximum(100.0, self.armor - DT), self.armor)
+        if self.item_seek > 0 and self.route is not None:
+            # Going for the items pays as he goes: seconds of travel gained toward the nearest big item that is lying
+            # there and that he can use (mega below 200 health, red armor below 200 armor, a weapon he does not have).
+            # Only steady movement counts: a jump in the figure (item taken, death, teleporter) pays nothing.
+            R_ = self.route
+            node = R_.locate(s[:, :3])
+            off_ = np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0
+            up_ = self.item_up[np.arange(n) // (self._others_arr().shape[1] + 1)]
+            phi = np.full(n, 15.0, np.float32)
+            for gi, lab_ in enumerate(self.route_goal):
+                use = up_[:, self.route_item[gi]] & ((self.hp < 200) if lab_ == "MH" else (self.armor < 200) if lab_ == "RA"
+                                                    else ~self.has[:, WEAPONS.index(lab_.lower())])
+                phi = np.where(use, np.minimum(phi, R_.T[gi, node] + off_), phi)
+            gain = self.seek_phi - phi
+            reward += self.item_seek * np.where(np.abs(gain) < 0.4, gain, 0.0) * (self.script == 0) * (self.hp > 0)
+            self.seek_phi = phi.astype(np.float32)
 
         # deaths, frags, respawns
         done = np.zeros(n, bool)                            # end of the round (memory and returns reset here only)

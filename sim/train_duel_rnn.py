@@ -39,6 +39,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                   **(dict(group=group) if group != 2 else {}))
     G = group
     env.item_reward = item_reward
+    env.item_seek = float(os.environ.get("ITEM_SEEK", "0"))  # reward per second of travel gained toward a big item he can use
     env.drill_p = drill_p
     env.react_frames = react_frames[0]
     env.acquire_frames = react_frames[1]

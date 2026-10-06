@@ -51,6 +51,11 @@ From the `duel_gru_v5` network again (1888 min; `policy_start_405_inputs.pt`), n
 
 **10:25 — less flinch, more for items (owner: Nightmare ruins him on items):** flinch 0.2 -> 0.12 deg per point of damage (at most 3): under fire his first rail shot had fallen to 30% where the player's was 63%. Pickup reward doubled, 0.3 -> 0.6 per 100 points of health or armor (a full mega or red armor 0.6 against 1 for a frag). A weapon he did not have counts as 25 points (0.15); one he has already counts as nothing, so standing on a weapon's spot earns nothing (before, every pickup of a weapon paid a little, which could be farmed every 5 s). Checkpoint before: `policy_before_more_item_reward.pt`.
 
+**11:35 — items, harder (owner: beat him over the head with it):** forty minutes of the doubled pickup reward moved nothing (mega 0.016 per player-minute, red armor none). Now (checkpoint before: `policy_before_item_seek.pt`):
+- pickup reward 0.6 -> 1.5 per 100 points: a full mega or red armor is worth more than a frag, a 25 health 0.375, a weapon he lacks 0.375;
+- **going for an item pays on the way** (`ITEM_SEEK=0.1`): 0.1 per second of travel gained toward the nearest big item that is lying there and that he can use (mega below 200 health, red armor below 200 armor, a weapon he does not have), by the route along the floor. Moving away costs the same. Jumps in the figure (item taken, death, teleporter, the flight from a jump pad) pay nothing.
+Both are rewards for a single behaviour, against the method chosen on 2026-10-05; the owner's call, to be faded out once items are fought over.
+
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|
 | 07:04 (start) | 1889 | 2.3, 39%, 269 u/s | 40% / 37% / 42% / 47% | 0.088 (2.5 s), 0.001 | 2.3 s | 0.40 | - |
