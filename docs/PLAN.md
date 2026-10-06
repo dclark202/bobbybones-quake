@@ -87,7 +87,7 @@ once items are fought over, B-92 (more players for the benchmark), B-95 (key bud
 3. **Maps for play**: arena1 + aerowalk, bloodrun, lostworld, furiousheights, campgrounds, sinister (owner's pick); the other 55 are reader training and held-out tests.
 4. **Groups**: 2, 3 and 4 on every map (owner 2026-10-06).
 5. **Spawns**: the game's (MG + gauntlet, no armor) in 3 of 4, a weapon set otherwise, drawn only from the weapons that lie on that map; a quarter of spawns with a random stack (health 100 to 200, armor 0 to 150) so the value of armor is learned in fights (owner agreed 2026-10-06).
-6. **Rewards**: as v8 12:52; halve the pickup and way rewards once mega + red exceed 0.3 per player-minute on arena1.
+6. **Rewards**: as v8 12:52, with a **claw-back**: what a trip toward the chosen item has paid is taken back if he switches away or dies before taking it (v8 farmed the approach: mega chosen 26% of the time, reached on 1.7% of trips, abandoned 74%); halve the pickup and way rewards once mega + red exceed 0.3 per player-minute on arena1. **Near-item spawns**: a quarter of training spawns within about 2 s of the mega or the red armor, so he tastes the stack and learns its worth from the fights (owner agreed 2026-10-06). Later: the intention head imitated from pro demos (which big item a pro is heading for).
 7. **Limits**: unchanged; the LG trigger artefact on the server to be fixed first. 384-step sequences, gamma 0.999, lr over 24 h.
 8. **Start** from v8's last checkpoint by name (`reshape_policy`).
 9. **Hourly**: the usual table per map, Nightmare on arena1 and bloodrun, heat maps, one held-out-map probe a night.
