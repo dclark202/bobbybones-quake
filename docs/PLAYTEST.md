@@ -39,7 +39,7 @@ Questions to answer at the end (as notes or in chat):
 Bobby's body becomes the scripted target or opponent and **you** are measured, with the same metrics the
 simulator uses for him. This gives the human bar for each room. All commands: [COMMANDS.md](COMMANDS.md).
 
-1. `!map bobbylab` (the test map: an aim box, an environment box with pillars and cover, and four movement courses).
+1. `!map testlab` (the test map: an aim box, an environment box with pillars and cover, and four movement courses).
 2. `!room suite`: 31 rooms, back to back. `!room off` stops it at any time.
 
 | Rooms | What happens | What to do |
@@ -57,7 +57,7 @@ Your card is saved to `data/duellive/suite/human_<time>.json`; the session with 
 
 ## The aim reflex test (about three minutes)
 
-A short test of hands and eyes only, for setting Bobby's aim limits against real players. `!map bobbylab`, then
+A short test of hands and eyes only, for setting Bobby's aim limits against real players. `!map testlab`, then
 `!reflex`. Stand where you are put; nothing shoots back; two or three runs give a steadier result.
 
 | Room | Weapon | Target | What it measures |

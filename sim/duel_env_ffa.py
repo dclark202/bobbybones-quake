@@ -325,6 +325,9 @@ class DuelEnv:
             if os.path.exists(cand):
                 self.lab = json.load(open(cand))
                 break
+        # places that hurt (lava) or kill (a void), from the map's rooms.json: x0, y0, z0, x1, y1, z1, damage a second
+        # (1000 or more = death). A player is in one when his feet are.
+        self.hurt_zones = np.array((self.lab or {}).get("hurt", []), np.float32).reshape(-1, 7)
         nn2 = group * n_matches
         self.course = np.full(nn2, -1, np.int64)        # movement course a player is running (-1 = none)
         self.prog = np.zeros(nn2, np.float32)           # distance along the course's path
@@ -459,6 +462,7 @@ class DuelEnv:
             self.stats[wn + "_shots_vis"] = 0           # ... while the opponent was in view
             self.stats[wn + "_hits"] = 0
             self.stats[wn + "_frags"] = 0
+        self.stats["hurt_dmg"], self.stats["void_deaths"] = 0.0, 0
         self.stats["direct"] = 0                        # rockets hitting the body
         # per course: attempts, finishes, time (finished attempts), distance, top speed, speed sum, frames, falls, height
         self.stats["course"] = np.zeros((16, 9))
@@ -1581,6 +1585,17 @@ class DuelEnv:
         for v in fallers:
             self._damage(int(v), float(fall[v]))
             self.stats["fall_dmg"] += float(fall[v])
+        for hz in self.hurt_zones:                          # lava and the void
+            feet = s[:, 2] + MINS[2]
+            inz = (s[:, 0] >= hz[0]) & (s[:, 0] <= hz[3]) & (s[:, 1] >= hz[1]) & (s[:, 1] <= hz[4]) &                 (feet >= hz[2]) & (feet < hz[5]) & (self.hp > 0)
+            for v in np.nonzero(inz)[0]:
+                d_ = float(self.hp[v] + self.armor[v] + 1.0) if hz[6] >= 1000 else float(hz[6]) * DT
+                if hz[6] >= 1000:
+                    self.armor[v] = 0.0
+                took_ = self._damage(int(v), d_)
+                st["dmg_taken"][v] += took_ if hz[6] < 1000 else 0.0     # the void costs the death, nothing more
+                self.stats["hurt_dmg"] += d_ if hz[6] < 1000 else 0.0
+                self.stats["void_deaths"] += int(hz[6] >= 1000)
 
         if self.courses and (self.course >= 0).any() and self._course_step(reward):
             self.state = s = self.w.state()

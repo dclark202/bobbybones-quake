@@ -52,6 +52,6 @@ python tools/build_atlas.py --picture                                # pictures 
 - Routes with source `pro` have no spot list yet (some are jumps the route graph does not contain, for example
   Blood Run area 22 to the red armor in 0.6 s).
 - Graph times start at the area's centre, pro times where the player entered the area: they are not the same thing.
-- Campgrounds has no pro seed; `bobbylab` has no atlas (it is a test map).
+- Campgrounds has no pro seed; `testlab` has no atlas (it is a test map).
 - Nothing reads the atlas yet: the network inputs (B-72) and the learned preferences (B-75) come with the next
   training batch.

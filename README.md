@@ -90,7 +90,7 @@ bash tools/duel_server.sh my_run bloodrun                  # private play-test s
 SPAR=1 bash tools/duel_server.sh my_run bloodrun           # the same network against a Nightmare bot
 ```
 
-On the play-test server, chat commands save feedback (`!note`), run the test chamber on you (`!map bobbylab`,
+On the play-test server, chat commands save feedback (`!note`), run the test chamber on you (`!map testlab`,
 `!room suite`) and let you watch him play a Nightmare bot (`!spar`). Full list: [docs/COMMANDS.md](docs/COMMANDS.md).
 
 ## Repo layout
@@ -100,8 +100,8 @@ sim/                 simulator (vendored ioquake3 physics in sim/q3), environmen
 plugins/             minqlx plugins: duelbot (plays the network, test rooms, logs), weapon and item labs
 minqlx/              vendored minqlx + the input hook (see minqlx/UPSTREAM.md)
 tools/               server script, test-map builder, demo downloader and parser
-maps/bobbylab/       the test map (aim box, environment box, movement courses, the yard without items)
-maps/bobbyyard/      the yard with items: the arena of the current goal
+maps/testlab/       the test map (aim box, environment box, movement courses, the yard without items)
+maps/train-arena/      the yard with items: the arena of the current goal
 maps/atlas/          per duel map: areas, items and routes seeded from pro demos
 legacy/              the first approach (a layer on the Nightmare bot); not used
 docs/                PLAN, BACKLOG, RESULTS, LOGS

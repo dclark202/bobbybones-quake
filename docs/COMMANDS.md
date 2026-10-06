@@ -7,7 +7,7 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 | Command | What it does |
 |---|---|
 | `!note <text>` | Saves your comment with the game state at that moment (both positions, health, his weapon, whether he could see you, the room if one is running). Start with a tag: `aim`, `move`, `weapon`, `items`, `position`, `stuck`, `unfair`, `weird`, `good` |
-| `!map <name>` | Changes the map: `bloodrun`, `aerowalk`, `lostworld`, `campgrounds`, `bobbylab` (the test map) or `bobbyyard` (the yard as a small duel map with a mega health, a red armor, rocket launcher, lightning gun and railgun to pick up; duel spawn) |
+| `!map <name>` | Changes the map: `bloodrun`, `aerowalk`, `lostworld`, `campgrounds`, `testlab` (the test map) or `train-arena` (the yard as a small duel map with a mega health, a red armor, rocket launcher, lightning gun and railgun to pick up; duel spawn) |
 | `!drill <weapon>` / `!drill off` | Both players get only that weapon (`rl`, `rg`, `lg`, `mg`, `sg`, `gl`, `pg`, `hmg`); `off` returns to the normal spawn weapons |
 | `!nosg` / `!nosg off` | Nobody spawns with a shotgun (it can still be picked up on the map); `off` returns to every weapon |
 | `!reflex` (or `!room reflex`) | On the test map: the aim reflex test. Four short aim rooms, about three minutes, nothing shoots back: lightning gun on a target that walks slowly from side to side, lightning gun on a target that strafes and turns at random, railgun on a target that jumps to a new place every few seconds, rockets on the strafing target. Stand still. Results are saved under an anonymous id; `tools/reflex_report.py` compares people with Bobby. Single rooms: `!room reflex slow|track|flick|rocket` |
@@ -19,7 +19,7 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 BobbyBones' body becomes the scripted target or opponent and you are measured. Each room counts down 5 s, runs,
 and prints your result in chat. `!rooms` lists the rooms for the current map; `!room off` stops.
 
-**On the test map** (`!map bobbylab` first):
+**On the test map** (`!map testlab` first):
 
 | Command | Room | Length |
 |---|---|---|

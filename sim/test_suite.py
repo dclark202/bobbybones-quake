@@ -266,7 +266,7 @@ def main():
     ap.add_argument("--matches", type=int, default=32)
     ap.add_argument("--maps", default=",".join(MAPS))
     ap.add_argument("--quick", action="store_true")
-    ap.add_argument("--lab", action="store_true", help="the test map's rooms (bobbylab), as on the play-test server")
+    ap.add_argument("--lab", action="store_true", help="the test map's rooms (testlab), as on the play-test server")
     ap.add_argument("--compare", default=None, help="an earlier card (JSON) to show changes against")
     a = ap.parse_args()
     import importlib
@@ -275,7 +275,7 @@ def main():
     pol = Policy(path, seed=11)
     maps = a.maps.split(",")[:1] if a.quick else a.maps.split(",")
     if a.lab:
-        maps = ["bobbylab"]
+        maps = ["testlab"]
     per_room = {}
     t0 = time.time()
     for mp in maps:

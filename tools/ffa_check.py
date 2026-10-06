@@ -15,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
 
 
-def run(module, group, frames, out, bsp="bobbylab", rooms=(2,), sets=None, matches=24):
+def run(module, group, frames, out, bsp="testlab", rooms=(2,), sets=None, matches=24):
     import importlib
     E = importlib.import_module(module)
     kw = dict(group=group) if module.endswith("ffa") else {}
@@ -61,12 +61,12 @@ if __name__ == "__main__":
     outs = []
     for mod in ("duel_env", "duel_env_ffa"):               # one simulator per process
         outs.append(os.path.join(tmp, mod + ".npz"))
-        subprocess.run([sys.executable, __file__, mod, "2", "3000", outs[-1], "bobbylab", "2", "sets"], check=True)
+        subprocess.run([sys.executable, __file__, mod, "2", "3000", outs[-1], "testlab", "2", "sets"], check=True)
     a, b = np.load(outs[0]), np.load(outs[1])
     same = all(np.array_equal(a[k], b[k]) for k in ("obs", "rew", "don"))
     if not same:
         bad = np.nonzero((a["obs"] != b["obs"]).any((1, 2)) | (a["rew"] != b["rew"]).any(1))[0]
         print("first difference at frame", int(bad[0]), "inputs", np.nonzero((a["obs"][bad[0]] != b["obs"][bad[0]]).any(0))[0][:20])
     print("TWO PLAYERS: {}".format("identical to duel_env over 3000 frames" if same else "DIFFERENT"))
-    for g, bsp, room in ((4, "bobbylab", 2), (6, "bobbylab", 2), (4, "bobbyyard", 3), (6, "bobbyyard", 3)):
+    for g, bsp, room in ((4, "testlab", 2), (6, "testlab", 2), (4, "train-arena", 3), (6, "train-arena", 3)):
         subprocess.run([sys.executable, __file__, "duel_env_ffa", str(g), "3000", "-", bsp, str(room)], check=True)

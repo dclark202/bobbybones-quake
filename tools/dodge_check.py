@@ -9,7 +9,7 @@ import test_suite as T
 
 run = sys.argv[1] if len(sys.argv) > 1 else "duel_gru_v5"
 pol = T.Policy("data/sim_runs/{}/policy.pt".format(run), seed=3)
-env = E.DuelEnv("data/maps/bobbylab.bsp", n_matches=32, seed=9, loadout="all")
+env = E.DuelEnv("data/maps/testlab.bsp", n_matches=32, seed=9, loadout="all")
 env.react_frames = round(pol.react_ms / 25)
 env.dmg_taken_w, env.no_walk, env.arena_len = 1.0, True, 60.0
 env.lab_force = dict(kind=E.NORMAL, arena=2)

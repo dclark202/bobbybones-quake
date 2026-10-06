@@ -124,7 +124,7 @@ def main():
                     "(a weapon, a target ahead beside the path, damage paid by the runner's speed)")
     ap.add_argument("--lab-items", type=float, default=0.0, help="test map: chance that a course round is the items room")
     ap.add_argument("--lab-courses", default="speed,slalom,ramps",
-                    help="movement courses of the test map (bobbylab) used when that map is in --map")
+                    help="movement courses of the test map (testlab) used when that map is in --map")
     ap.add_argument("--minibatches", type=int, default=8,
                     help="players are split into this many groups per training pass (more = less GPU memory)")
     ap.add_argument("--gamma", type=float, default=0.998,
@@ -164,7 +164,7 @@ def main():
     os.makedirs(os.path.join(out, "snapshots"), exist_ok=True)
     maps = a.map.split(",")
     course_keys = []
-    lab_json = os.path.join(ROOT, "maps", "bobbylab", "rooms.json")
+    lab_json = os.path.join(ROOT, "maps", "testlab", "rooms.json")
     if os.path.exists(lab_json):
         course_keys = list(json.load(open(lab_json)).get("courses", {}))
     pipes = []

@@ -9,14 +9,14 @@ cd "$ROOT"
 cd data/lab
 Q=../tools/q3map2.exe
 BP="$(pwd -W)"
-for M in bobbylab bobbyyard; do
+for M in testlab train-arena; do
   $Q -game quakelive -fs_basepath "$BP" -fs_game . -meta maps/$M.map 2>&1 | grep -iE "leak|error|degenerate|bad" | head -5 || true
   $Q -game quakelive -fs_basepath "$BP" -fs_game . -vis -fast maps/$M.bsp 2>&1 | grep -iE "error" | head -2 || true
   $Q -game quakelive -fs_basepath "$BP" -fs_game . -light -fast maps/$M.bsp 2>&1 | grep -iE "error" | head -2 || true
   ../tools/mbspc.exe -forcesidesvisible -bsp2aas maps/$M.bsp 2>&1 | grep -iE "error|leak|total reach" | tail -2 || true
 done
 cd "$ROOT"
-for M in bobbylab bobbyyard; do
+for M in testlab train-arena; do
   cp data/lab/maps/$M.bsp data/maps/$M.bsp
   "$PYTHON" -c "
 import zipfile
@@ -25,4 +25,4 @@ z.write('data/lab/maps/$M.bsp', 'maps/$M.bsp')
 z.write('data/lab/maps/$M.aas', 'maps/$M.aas')
 z.close()"
 done
-echo "built maps/bobbylab/bobbylab.pk3 and maps/bobbyyard/bobbyyard.pk3"
+echo "built maps/testlab/testlab.pk3 and maps/train-arena/train-arena.pk3"

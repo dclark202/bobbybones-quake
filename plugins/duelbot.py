@@ -77,6 +77,8 @@ class duelbot(minqlx.Plugin):
                          usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
         self.add_command("rooms", self.cmd_rooms, 0)
         self.add_command("reflex", self.cmd_reflex, 0)
+        self.add_command("movement", self.cmd_movement, 0)
+        self.add_command("duel", self.cmd_duel, 0, usage="[minutes]")
         self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 0, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 0, usage="<box|env|yard|off> [minutes]")
@@ -288,7 +290,7 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab and "aim" not in self.lab:
-            player.tell("This map is the yard with items: a normal duel, or !arena yard [minutes] for a timed one. !map testlab has the rooms.")
+            player.tell("The training arena: play BobbyBones freely, or ^3!duel^7 for a timed five minutes. ^3!map testlab^7 has the test rooms.")
             return
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
@@ -297,6 +299,7 @@ class duelbot(minqlx.Plugin):
             player.tell("!room moves = every movement course in a row, with a table of times at the end")
             player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
+            player.tell("^3!movement^7 = every movement course, timed | ^3!duel^7 = five minutes against BobbyBones in the environment room")
             player.tell("^3!reflex^7 = the aim reflex test: four short aim rooms, three minutes (lightning, rail, rockets)")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
@@ -307,6 +310,22 @@ class duelbot(minqlx.Plugin):
     def cmd_reflex(self, player, msg, channel):
         """!reflex = !room reflex"""
         return self.cmd_room(player, ["!room", "reflex"], channel)
+
+    def cmd_movement(self, player, msg, channel):
+        """!movement = every movement course in a row, timed (the test lab)"""
+        if not (self.lab and self.lab.get("courses")):
+            player.tell("The movement courses are on the test lab: ^3!map testlab^7, then ^3!movement")
+            return
+        return self.cmd_room(player, ["!room", "moves"], channel)
+
+    def cmd_duel(self, player, msg, channel):
+        """!duel [minutes] = a timed duel against BobbyBones: in the environment room on the test lab (full weapons),
+        on the training arena across the whole map (duel spawn, items on the map)"""
+        if not self.lab:
+            player.tell("Timed duels are on ^3!map testlab^7 and ^3!map train-arena")
+            return
+        where = "env" if "env" in self.lab else "yard"
+        return self.cmd_arena(player, ["!arena", where] + [m for m in msg[1:2]], channel)
 
     def subject_id(self, p):
         """an anonymous id for a player: the same person gets the same id on this server, nothing personal is stored"""
@@ -323,6 +342,8 @@ class duelbot(minqlx.Plugin):
             player.tell("The server is still loading the map, try again in a few seconds.")
             return
         if not a:
+            return self.cmd_rooms(player, msg, channel)
+        if self.lab and "aim" not in self.lab and a[0] != "off":      # the training arena has no test rooms
             return self.cmd_rooms(player, msg, channel)
         if a[0] == "off":
             self.queue, self.room = [], None
@@ -463,8 +484,9 @@ class duelbot(minqlx.Plugin):
         self.renv.lab = None                                 # the plugin runs the lab rooms itself (placement, zones, jumping)
         self.goal_labels = [d[4] for d in self.renv.item_def if d[4] in GOAL_NAMES]
         self.lab = None
-        if mapname == "testlab":
-            with open("/ql/maps-data/testlab/rooms.json") as f:
+        rooms_json = "/ql/maps-data/{}/rooms.json".format(mapname)       # our own maps: the test lab, the training arena
+        if os.path.exists(rooms_json):
+            with open(rooms_json) as f:
                 self.lab = json.load(f)
         self.rng = np.random.default_rng(int(time.time()))
         self.item_ent = {}

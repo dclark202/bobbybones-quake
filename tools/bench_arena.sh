@@ -6,7 +6,7 @@ cd "$ROOT"
 export MSYS_NO_PATHCONV=1
 RUN="$1"; WHERE="${2:-env}"; MINS="${3:-5}"
 docker rm -f qltest >/dev/null 2>&1
-TAG=$(NAME=qltest DATA=data/labtest SPAR=1 SKILL=5 ARENA="$WHERE" ARENA_MIN="$MINS" PYTHON="${PYTHON:-python}" bash tools/duel_server.sh "$RUN" bobbylab duel_env 2>&1 | grep -o "minutes [0-9]*")
+TAG=$(NAME=qltest DATA=data/labtest SPAR=1 SKILL=5 ARENA="$WHERE" ARENA_MIN="$MINS" PYTHON="${PYTHON:-python}" bash tools/duel_server.sh "$RUN" testlab duel_env 2>&1 | grep -o "minutes [0-9]*")
 sleep 45
 S=$(ls -d data/labtest/sessions/* | tail -1)
 for i in $(seq 1 $(( MINS * 6 + 30 ))); do

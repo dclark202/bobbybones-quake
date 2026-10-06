@@ -1,6 +1,6 @@
 """The aim reflex test: what a player's hands and eyes can do, measured the same way for people and for BobbyBones.
 
-People run `!reflex` on the play-test server (map bobbylab): four short rooms in the aim box, one kind of aim each.
+People run `!reflex` on the play-test server (map testlab): four short rooms in the aim box, one kind of aim each.
   slow   (20 s, lightning gun): the target walks slowly from side to side. -> steadiness: aim error, hand jitter
   track  (40 s, lightning gun): it strafes, turning at random.   -> tracking lag, reaction to a turn, aim error, hit rate
   flick  (45 s, railgun): it jumps to a new place every 2-3 s.   -> reaction time, flick speed, time to the shot, hit rate
@@ -174,7 +174,7 @@ def bobby(run, policy=None, repeats=4):
     import duel_env as E
     import test_suite as T
     pol = T.Policy(policy or os.path.join(ROOT, "data", "sim_runs", run, "policy.pt"), seed=5)
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "bobbylab.bsp"), n_matches=repeats, seed=21, loadout="all")
+    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "testlab.bsp"), n_matches=repeats, seed=21, loadout="all")
     env.react_frames = round(pol.react_ms / 25)
     env.no_walk, env.inf_ammo = True, True
     A = env.lab["aim"]

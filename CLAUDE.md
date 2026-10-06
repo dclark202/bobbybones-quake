@@ -13,12 +13,12 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.
-- **Goal 1 (2026-10-05)**: human-like play in one small arena, the yard (`bobbyyard`, with items), showing
+- **Goal 1 (2026-10-05)**: human-like play in one small arena, the yard (`train-arena`, with items), showing
   knowledge of the map and efficient movement on it, one against one or all against all up to four players, and
   beating Nightmare there. See `docs/PLAN.md`. Method: tighten the human limits until the right play appears;
   do not add rewards for single behaviors without asking.
 - Maps: the yard first. Blood Run (ZTN), Aerowalk, Lost World (replaced Campgrounds on 2026-10-04) come back once
-  Goal 1 is met consistently. Test map: `bobbylab`.
+  Goal 1 is met consistently. Test map: `testlab`.
 - Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder. Copying the
   test map pk3 into its `baseq3` is allowed (he asked for it); nothing else.
 - No personal data in the repo (Steam IDs, home IP, Windows usernames, passwords). The repo is public.
@@ -41,7 +41,7 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   then regenerate and re-check; do not edit the generated file. Trainer: `--env duel_env_ffa --group N`.
 - **Environments**: `duel_env.py` (current: nine weapons, items, sounds, clock, crouch, walk, fall damage,
   human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO / COURSE, scripted opponents with eight styles, lab
-  mode on the test map: aim rooms and movement courses read from `maps/bobbylab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the
+  mode on the test map: aim rooms and movement courses read from `maps/testlab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the
   inputs or actions of a simulator that a run still needs); a policy must be played and
   evaluated with the module it was trained in. `movement_env.py` is the movement-only task.
 - **Training**: `train_duel_rnn.py` (PPO, GRU 512, league of snapshots, `--resume`). `upgrade_policy.py` widens an
@@ -56,7 +56,7 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
 - **Plugins**: `duelbot.py` plays a trained network (inputs rebuilt with the simulator's own `observe()`), runs
   the test rooms with a human as the subject, hot-reloads `policy.npz`, logs sessions. `weaponlab.py`,
   `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs.
-- **Test map**: `tools/make_lab_map.py` -> `maps/bobbylab/` (pk3 + `rooms.json`), compiled with q3map2 and
+- **Test map**: `tools/make_lab_map.py` -> `maps/testlab/` (pk3 + `rooms.json`), compiled with q3map2 and
   mbspc from `data/tools` (NetRadiant-custom; mbspc needs `-forcesidesvisible`). Bots cannot join a map
   without an `.aas` file.
 - **Map atlas**: `tools/build_atlas.py` -> `maps/atlas/<map>.json` + `.png` (areas, items, several routes per item

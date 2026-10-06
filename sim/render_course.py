@@ -372,7 +372,7 @@ def main():
     ap.add_argument("--fight", default="", help="'aim', 'env' or 'yard': a self-play fight in that room instead of the courses")
     ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa for more than two players)")
     ap.add_argument("--group", type=int, default=2, help="players in the fight (needs --env duel_env_ffa)")
-    ap.add_argument("--map", default="bobbylab", help="bobbyyard: the yard with items (with --fight yard)")
+    ap.add_argument("--map", default="testlab", help="train-arena: the yard with items (with --fight yard)")
     ap.add_argument("--secs", type=float, default=60.0)
     ap.add_argument("--round", type=float, default=20.0, help="fight: seconds per round (new random weapons each round)")
     a = ap.parse_args()
@@ -405,7 +405,7 @@ def main():
         if a.group != 2:
             label = "{} copies of himself, all against all, {}".format(a.group, {"aim": "aim box", "env": "environment box", "yard": "yard"}[a.fight])
         path = os.path.join(out_dir, "fight_{}{}{}.mp4".format(a.fight, "" if a.group == 2 else "_{}".format(a.group),
-                                                             "" if a.map == "bobbylab" else "_items"))
+                                                             "" if a.map == "testlab" else "_items"))
         ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s",
                                "{}x{}".format(W * 2, H * 2), "-r", "40", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p",
                                "-crf", "23", path], stdin=subprocess.PIPE)

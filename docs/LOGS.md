@@ -72,7 +72,7 @@ One JSON per card: `{suite, run, subject, minutes, maps, rooms: {<room name>: {<
 | `solo` | `mega_per_min`, `red_armor_per_min`, `armor_per_min`, `health_per_min`, `fire`, `blind_fire`, `switches_per_min` |
 | `ladder/fighter` | `frags_per_min`, `deaths_per_min`, `damage_dealt_per_min`, `damage_taken_per_min`, `switches_per_min`, `blind_fire` |
 
-Lab-map rooms (`bobbylab`):
+Lab-map rooms (`testlab`):
 
 | Room | Metrics |
 |---|---|

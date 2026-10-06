@@ -1,6 +1,6 @@
-"""Build the test map "bobbylab": one map with every test room, so the suite never changes maps.
+"""Build the test map "testlab": one map with every test room, so the suite never changes maps.
 
-    python tools/make_lab_map.py            # writes data/lab/bobbylab.map and maps/bobbylab/rooms.json
+    python tools/make_lab_map.py            # writes data/lab/testlab.map and maps/testlab/rooms.json
     (then compile, see the end of this file's output)
 
 Areas (flat walls, stock textures):
@@ -103,7 +103,7 @@ def copy_region(world, lo, hi):
 
 def main():
     from qsim import World
-    rooms = dict(map="bobbylab", stations={})
+    rooms = dict(map="testlab", stations={})
     # ---- aim box
     room(0, 0, 0, 1536, 1024, 400)
     box(96, 0, 0, 104, 1024, 1, TRIM)                               # the firing line
@@ -457,100 +457,18 @@ def main():
                           bounds=[0, iy, 3072, iy + 2048], secs=120)
     spawns.append((1536, iy + 256, 24, 0))
 
-    def yard(YY, R=None, items=False):
-        # ================= the yard (2026-10-05): a small duel arena in the manner of the duel maps =================
-        # 1792 x 1536, two levels. Ground: an open middle with pillars, a crate and a low wall; a tunnel under the north
-        # balcony (two doorways) and a low-ceilinged strip under the east balcony for close fights. Upper level (192
-        # up): north and east balconies joined at the corner, a catwalk from the east balcony to a tower in the middle.
-        # Ways up: stairs on the west wall, a ramp in front of the north balcony, a jump pad onto the tower. A
-        # teleporter leads from the tunnel's east end to the south-west corner.
-        R_ = rooms if R is None else R
-        room(0, YY, 0, 1792, YY + 1536, 512)
-        UP = 192
-        box(0, YY + 1280, UP - 16, 1792, YY + 1536, UP, TRIM)                          # north balcony (a slab)
-        for x0_, x1_ in ((0, 384), (512, 1152), (1280, 1792)):                         # its front wall below, two doorways
-            box(x0_, YY + 1280, 0, x1_, YY + 1296, UP - 16, BLOCK)
-        box(800, YY + 1392, 0, 864, YY + 1536, 96, BLOCK)                              # a half wall inside the tunnel
-        box(1536, YY + 512, UP - 16, 1792, YY + 1280, UP, TRIM)                        # east balcony
-        box(1536, YY + 768, 0, 1552, YY + 1024, UP - 16, BLOCK)                        # a wall under its edge
-        box(1536, YY + 512, 0, 1568, YY + 544, UP - 16, BLOCK)                         # corner post
-        for k in range(12):                                                            # stairs on the west wall, up to the north balcony
-            box(0, YY + 896 + k * 32, 0, 192, YY + 896 + (k + 1) * 32, 16 * (k + 1), TRIM)
-        ramp(640, YY + 1152, 1024, YY + 1280, 0, UP, 0)                                # ramp in front of the north balcony
-        box(1024, YY + 1152, 0, 1152, YY + 1280, UP, BLOCK)                            # its landing, joined to the balcony
-        box(768, YY + 512, 0, 896, YY + 736, UP, BLOCK)                                # the tower
-        box(896, YY + 576, UP - 16, 1536, YY + 672, UP, TRIM)                          # catwalk: tower to east balcony
-        box(416, YY + 320, 0, 480, YY + 384, 512, BLOCK)                               # pillars
-        box(1184, YY + 256, 0, 1248, YY + 320, 512, BLOCK)
-        box(1088, YY + 960, 0, 1152, YY + 1024, 512, BLOCK)
-        box(960, YY + 400, 0, 1216, YY + 432, 64, BLOCK)                               # low wall (crouch cover)
-        box(288, YY + 928, 0, 384, YY + 1024, 96, BLOCK)                               # crate
-        box(700, YY + 1380, UP, 764, YY + 1444, UP + 64, BLOCK)                        # crate on the north balcony
-        box(1600, YY + 880, UP, 1632, YY + 1040, UP + 56, BLOCK)                       # low wall on the east balcony
-        box(300 - 56, YY + 624 - 56, 0, 300 + 56, YY + 624 + 56, 2, TRIM)               # jump pad plate
-        trigger("trigger_push", 300 - 48, YY + 624 - 48, 2, 300 + 48, YY + 624 + 48, 18, (630, YY + 624, 340))
-        box(1680, YY + 1330, 0, 1690, YY + 1500, 2, TRIM)                              # line in front of the teleporter
-        trigger("trigger_teleport", 1728, YY + 1344, 0, 1776, YY + 1488, 128, (128, YY + 128, 40), angle=45)
-        R_["yard"] = dict(bounds=[0, YY, 1792, YY + 1536], z=8, spots=[
-            [128, YY + 320, 8], [1664, YY + 128, 8], [896, YY + 128, 8], [640, YY + 900, 8], [1300, YY + 700, 8],
-            [200, YY + 1420, 8], [1400, YY + 1420, 8], [1650, YY + 640, 8],
-            [200, YY + 1408, UP + 8], [1400, YY + 1408, UP + 8], [1664, YY + 700, UP + 8], [832, YY + 624, UP + 8]])
-        for q in R_["yard"]["spots"][:4]:
-            spawns.append((q[0], q[1], q[2] + 16, 0))
-        if items:                                                                  # the duel version: things to fight over
-            for cls, x_, y_, z_ in (("item_health_mega", 832, 624, UP + 24),      # on the tower (the jump pad lands there)
-                                    ("item_armor_body", 200, 1420, 24),           # in the tunnel, west end
-                                    ("weapon_railgun", 1500, 1408, UP + 24),      # north balcony, east end
-                                    ("weapon_rocketlauncher", 1500, 200, 24),     # open ground, south-east
-                                    ("weapon_lightning", 1664, 1000, 24),         # under the east balcony
-                                    ("item_health", 128, 700, 24), ("item_health", 1000, 1000, 24),
-                                    ("item_armor_shard", 640, 200, 24), ("item_armor_shard", 700, 200, 24)):
-                extra.append('{{\n"classname" "{}"\n"origin" "{} {} {}"\n}}'.format(cls, x_, YY + y_, z_))
-            R_["yard"]["items"] = True
-            R_["yard"]["spots"] = [q for q in R_["yard"]["spots"] if not (q[0] == 832 and q[2] > 100)] + [[1100, YY + 624, UP + 8]]
-
-    yard(50000)
-    rooms["courses"] = courses
-    # ---- terrain stations: 3D copies of the real spots
-    # The trick-jump copies (Campgrounds bridge to rail and pillars, Aerowalk and Blood Run red armor) were
-    # removed on 2026-10-04: as test rooms they were not clear enough. copy_region() is kept for later use.
-    stations = []
-    ox = 0
-    for key, mp, lo, hi, info in stations:
-        w = World(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n=2)
-        boxes, size = copy_region(w, lo, hi)
-        base = (ox, 9000, 0)
-        room(base[0], base[1], base[2], base[0] + size[0], base[1] + size[1], base[2] + size[2], floor=TRIM)
-        for b in boxes:
-            box(base[0] + b[0], base[1] + b[1], base[2] + b[2], base[0] + b[3], base[1] + b[4], base[2] + b[5], BLOCK)
-
-        def conv(p):
-            q = [base[0] + p[0] - lo[0], base[1] + p[1] - lo[1]]
-            if len(p) > 2:
-                z = p[2]
-                if z == 0:                                   # 0 = "the floor here": find it on the real map
-                    t = w.trace(np.array([p[0], p[1], hi[2] - 8], np.float32), np.array([p[0], p[1], lo[2]], np.float32))
-                    z = float(t["endpos"][2]) + 24.0
-                q.append(base[2] + z - lo[2])
-            return [round(float(v), 1) for v in q]
-        st = dict(name=info["name"], source=mp, start=conv(info["start"]), yaw=info["yaw"], goal=conv(info["goal"]),
-                  goal_r=info["goal_r"], goal_dz=info["goal_dz"], offset=[base[0] - lo[0], base[1] - lo[1], base[2] - lo[2]])
-        if "via" in info:
-            st["via"] = [conv(v) for v in info["via"]]
-        rooms["stations"][key] = st
-        spawns.append((st["start"][0], st["start"][1], st["start"][2] + 8, info["yaw"]))
-        print("{}: {} boxes, size {}".format(key, len(boxes), size))
-        ox += size[0] + 256
     # ---- write the maps
     def write(name, R, message):
-        ents = ['{\n"classname" "worldspawn"\n"message" "' + message + '"\n"_ambient" "45"\n"_color" "1 1 1"\n'
-                + "\n".join(brushes) + "\n}"]
+        ents = ['{\n"classname" "worldspawn"\n"message" "' + message + '"\n"_ambient" "' + str(R.get("ambient", 45)) +
+                '"\n"_color" "1 1 1"\n' + "\n".join(brushes) + "\n}"]
         for x, y, z, a in spawns:
             ents.append('{{\n"classname" "info_player_deathmatch"\n"origin" "{} {} {}"\n"angle" "{}"\n}}'.format(
                 int(x), int(y), int(z), int(a)))
         ents += extra
-        for x, y, z, v in lights:
-            ents.append('{{\n"classname" "light"\n"origin" "{} {} {}"\n"light" "{}"\n}}'.format(int(x), int(y), int(z), v))
+        for li in lights:
+            x, y, z, v = li[:4]
+            col = '\n"_color" "{} {} {}"'.format(*li[4]) if len(li) > 4 else ""
+            ents.append('{{\n"classname" "light"\n"origin" "{} {} {}"\n"light" "{}"{}\n}}'.format(int(x), int(y), int(z), v, col))
         os.makedirs(os.path.join(ROOT, "data", "lab", "maps"), exist_ok=True)
         os.makedirs(os.path.join(ROOT, "maps", name), exist_ok=True)
         with open(os.path.join(ROOT, "data", "lab", "maps", name + ".map"), "w", newline="\n") as f:
@@ -559,12 +477,126 @@ def main():
             json.dump(R, f, indent=1)
         print("{}: {} brushes, {} lights, {} spawns -> data/lab/maps/{}.map".format(name, len(brushes), len(lights), len(spawns), name))
 
-    write("bobbylab", rooms, "BobbyBones test lab")
-    # the second map: only the yard, with items to fight over (mega health, red armor, rockets, lightning, rail)
+    write("testlab", rooms, "BobbyBones test lab")
     brushes.clear(); lights.clear(); spawns.clear(); extra.clear()
-    rooms2 = dict(map="bobbyyard", stations={}, courses={})
-    yard(0, R=rooms2, items=True)
-    write("bobbyyard", rooms2, "BobbyBones yard")
+    write("train-arena", arena(trigger), "BobbyBones training arena")
+
+
+def arena(trigger):
+    """The training arena (map "train-arena", 2026-10-05; the owner's notes worked in the same evening): a small
+    two-level arena in the manner of the duel maps. Inside 1792 x 1536.
+      ground     an open middle with pillars and cover; a tunnel under the north balcony; a closed room in the
+                 south-east (two doors, rockets inside); a low strip under the east balcony; a lava pit under the
+                 catwalk
+      upper      north and east balconies joined at the corner, a catwalk from the east balcony to the tower in the
+                 middle, the roof of the south-east room (a short jump from the east balcony)
+      ways up    stairs on the west wall, a ramp in front of the north balcony, a jump pad onto the tower
+      the void   the south wall is open in the middle: beyond it is a drop that kills. The red armor stands on an
+                 island in it. A walkway leads there from the east side; a circle jump from the edge is quicker
+                 (256 units: a plain running jump falls short)
+      teleporter from the tunnel's east end to the south-west corner
+    Every texture name is one the game's own maps use."""
+    F1, F2, METAL, STAIR = "gothic_floor/largerblock3b3", "gothic_floor/largerblock3b3dim", "base_floor/clangdark", "gothic_floor/xstairtop4"
+    BRICK, BLK, KILL, IRON = "gothic_wall/streetbricks10", "gothic_block/blocks18c", "gothic_block/killblock_i", "gothic_wall/iron01_e"
+    RUST, DARK, SUPPORT, CEIL = "gothic_trim/pitted_rust2", "gothic_block/dark_block", "gothic_trim/metalsupport4b", "gothic_block/blocks15"
+    LAVA, SKY, PAD, PORTAL = "liquids/lavahell", "skies/meth_clouds_blue", "sfx/bouncepad01block18b", "sfx/portal_new_static_teal"
+    X, Y, H, UP = 1792, 1536, 512, 192
+    PIT = (1152, 544, 1344, 704)                              # the lava pit, under the catwalk
+    VX0, VX1, VY = 512, 1280, -480                            # the void: beyond the south wall between these x
+    # floor: a base under everything (lava where it shows), then the walking floor in pieces around the pit
+    box(-32, -32, -96, X + 32, Y + 32, -64, DARK)
+    box(-32, -32, -64, X + 32, Y + 32, -32, LAVA)
+    for x0, y0, x1, y1, tex in ((-32, -32, PIT[0], Y + 32, F1), (PIT[2], -32, X + 32, Y + 32, F2),
+                                (PIT[0], -32, PIT[2], PIT[1], F1), (PIT[0], PIT[3], PIT[2], Y + 32, F2)):
+        box(x0, y0, -32, x1, y1, 0, tex)
+    box(0, 0, H, X, Y, H + 32, CEIL)
+    box(-32, -32, -64, 0, Y + 32, H + 32, BRICK)              # west, east, north walls
+    box(X, -32, -64, X + 32, Y + 32, H + 32, BRICK)
+    box(0, Y, -64, X, Y + 32, H + 32, BRICK)
+    box(0, -32, 0, VX0, 0, H + 32, BRICK)                     # south wall, open to the void in the middle
+    box(VX1, -32, 0, X, 0, H + 32, BRICK)
+    box(VX0, -32, 256, VX1, 0, H + 32, RUST)                  # the beam over the opening
+    # the void: sky all round, nothing below
+    box(VX0 - 32, VY - 32, -800, VX0, -32, H + 32, SKY)
+    box(VX1, VY - 32, -800, VX1 + 32, -32, H + 32, SKY)
+    box(VX0 - 32, VY - 32, -800, VX1 + 32, VY, H + 32, SKY)
+    box(VX0, VY, H, VX1, -32, H + 32, SKY)
+    box(VX0 - 32, VY - 32, -832, VX1 + 32, 0, -800, DARK)
+    box(VX0, -32, -800, VX1, 0, -96, DARK)                    # the cliff under the floor's edge
+    box(832, -416, -32, 960, -288, 0, METAL)                  # the island (red armor), on a column
+    box(864, -384, -800, 928, -320, -32, IRON)
+    box(1216, -416, -16, 1280, -32, 0, METAL)                 # the walkway round from the east side
+    box(960, -416, -16, 1216, -352, 0, METAL)
+    hurt = [[VX0, VY, -760, VX1, -32, -400, 100000], [PIT[0], PIT[1], -40, PIT[2], PIT[3], -8, 20]]
+    for k, (x0, y0, z0, x1, y1, z1, dps) in enumerate(hurt):
+        f = "( {} {} {} ) ( {} {} {} ) ( {} {} {} ) common/trigger 0 0 0 0.5 0.5 0 0 0"
+        q = [(x1, y1, z1, x1, y0, z1, x0, y1, z1), (x1, y1, z1, x0, y1, z1, x1, y1, z0), (x1, y1, z1, x1, y1, z0, x1, y0, z1),
+             (x0, y0, z0, x1, y0, z0, x0, y1, z0), (x0, y0, z0, x0, y0, z1, x1, y0, z0), (x0, y0, z0, x0, y1, z0, x0, y0, z1)]
+        br = "{\n" + "\n".join(f.format(*[int(v) for v in t]) for t in q) + "\n}"
+        # the void kills at once; lava burns once a second (spawnflag 16 = slow)
+        extra.append('{{\n"classname" "trigger_hurt"\n"dmg" "{}"{}\n{}\n}}'.format(
+            10000 if dps >= 1000 else int(dps), "" if dps >= 1000 else '\n"spawnflags" "16"', br))
+    # north balcony over the tunnel
+    box(0, 1280, UP - 16, X, Y, UP, METAL)
+    for x0_, x1_ in ((0, 384), (512, 1152), (1280, X)):       # the tunnel's front wall, two doorways
+        box(x0_, 1280, 0, x1_, 1296, UP - 16, BLK)
+    box(800, 1392, 0, 864, Y, 96, SUPPORT)                    # a half wall inside the tunnel
+    # east balcony, the strip under it
+    box(1536, 512, UP - 16, X, 1280, UP, METAL)
+    box(1536, 768, 0, 1552, 1024, UP - 16, BLK)
+    box(1536, 512, 0, 1568, 544, UP - 16, IRON)
+    # the south-east room: walls to the roof, a door in the west wall and one in the north wall
+    box(1280, 0, 0, 1296, 128, UP - 16, BLK)
+    box(1280, 256, 0, 1296, 400, UP - 16, BLK)
+    box(1280, 128, 128, 1296, 256, UP - 16, RUST)
+    box(1296, 384, 0, 1472, 400, UP - 16, BLK)
+    box(1600, 384, 0, X, 400, UP - 16, BLK)
+    box(1472, 384, 128, 1600, 400, UP - 16, RUST)
+    box(1280, 0, UP - 16, X, 400, UP, METAL)                  # its roof: a short jump from the east balcony
+    for k in range(12):                                       # stairs on the west wall, up to the north balcony
+        box(0, 896 + k * 32, 0, 192, 896 + (k + 1) * 32, 16 * (k + 1), STAIR)
+    ramp(640, 1152, 1024, 1280, 0, UP, 0, METAL)              # ramp in front of the north balcony
+    box(1024, 1152, 0, 1152, 1280, UP, BLK)
+    box(768, 512, 0, 896, 736, UP, KILL)                      # the tower (mega health)
+    box(896, 576, UP - 16, 1536, 672, UP, METAL)              # catwalk: tower to east balcony, over the lava
+    box(576, 800, 0, 592, 1120, 224, BLK)                     # a long wall that splits the west side
+    for x0, y0 in ((416, 320), (1088, 960)):                  # pillars
+        box(x0, y0, 0, x0 + 64, y0 + 64, H, IRON)
+    box(960, 400, 0, 1216, 432, 64, SUPPORT)                  # low wall (crouch cover)
+    box(288, 928, 0, 384, 1024, 96, SUPPORT)                  # crates
+    box(700, 1380, UP, 764, 1444, UP + 64, SUPPORT)
+    box(1600, 880, UP, 1632, 1040, UP + 56, RUST)             # low wall on the east balcony
+    box(300 - 56, 624 - 56, 0, 300 + 56, 624 + 56, 2, PAD)     # jump pad
+    trigger("trigger_push", 300 - 48, 624 - 48, 2, 300 + 48, 624 + 48, 18, (630, 624, 340))
+    box(1776, 1344, 0, 1790, 1488, 128, PORTAL)               # teleporter, at the tunnel's east end
+    box(1680, 1330, 0, 1690, 1500, 2, RUST)
+    trigger("trigger_teleport", 1728, 1344, 0, 1776, 1488, 128, (128, 128, 40), angle=45)
+    for x in range(192, X, 384):                              # lights: warm overall, cold in the tunnel, red at the lava
+        for y in range(192, Y, 384):
+            lights.append((x, y, H - 24, 420, (1.0, 0.93, 0.82)))
+    for x in (200, 700, 1200, 1650):
+        lights.append((x, 1420, 120, 160, (0.55, 0.7, 1.0)))
+    lights.append((1248, 624, 60, 260, (1.0, 0.45, 0.15)))
+    lights.append((1540, 200, 130, 200, (1.0, 0.8, 0.5)))
+    for x in (640, 896, 1152):
+        lights.append((x, -240, 300, 380, (0.75, 0.85, 1.0)))
+    lights.append((896, -352, 80, 150, (1.0, 0.3, 0.2)))      # the island glows red
+    spots = [[128, 320, 8], [1664, 128, 8], [330, 128, 8], [640, 900, 8], [1300, 820, 8], [200, 1420, 8], [1400, 1420, 8],
+             [1650, 640, 8], [200, 1408, UP + 8], [1400, 1408, UP + 8], [1664, 700, UP + 8], [1100, 624, UP + 8],
+             [1540, 200, UP + 8]]
+    for q in spots[:4] + spots[8:10]:
+        spawns.append((q[0], q[1], q[2] + 16, 0))
+    for cls, x_, y_, z_ in (("item_health_mega", 832, 624, UP + 24),        # on the tower (the jump pad lands there)
+                            ("item_armor_body", 896, -352, 24),              # on the island in the void
+                            ("weapon_railgun", 1500, 1408, UP + 24),         # north balcony, east end
+                            ("weapon_rocketlauncher", 1540, 200, 24),        # inside the south-east room
+                            ("weapon_lightning", 1664, 1000, 24),            # under the east balcony
+                            ("item_health_large", 200, 1420, 24),            # in the tunnel, west end
+                            ("item_health", 128, 700, 24), ("item_health", 1000, 1000, 24),
+                            ("item_armor_shard", 1400, 100, UP + 24), ("item_armor_shard", 1680, 300, UP + 24)):
+        extra.append('{{\n"classname" "{}"\n"origin" "{} {} {}"\n}}'.format(cls, x_, y_, z_))
+    return dict(map="train-arena", stations={}, courses={}, hurt=hurt, ambient=30,
+                yard=dict(bounds=[0, VY, X, Y], z=8, spots=spots, items=True))
 
 
 if __name__ == "__main__":

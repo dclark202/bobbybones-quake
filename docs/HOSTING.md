@@ -1,7 +1,7 @@
 # Hosting a public BobbyBones server
 
 One rented machine near Chicago running **one** Quake Live server that does both jobs: people duel Bobby on the
-stock maps, and run the test chamber on the `bobbylab` map (`!map bobbylab`, `!room suite`). More machines and a
+stock maps, and run the test chamber on the `testlab` map (`!map testlab`, `!room suite`). More machines and a
 second server per machine can be added later the same way.
 
 ## What to rent
@@ -81,7 +81,7 @@ One server holds one duel at a time; other players spectate and queue (the game'
 
 ## Before strangers arrive (not built yet, backlog B-61, B-69)
 
-- **The test map on the players' side.** Quake Live clients need `bobbylab.pk3`. Whether they download it from
+- **The test map on the players' side.** Quake Live clients need `testlab.pk3`. Whether they download it from
   the server is untested (B-65); if not, it has to be published on the Steam Workshop, or the chamber is offered
   on the stock maps only.
 - **Commands are open to everyone.** Anyone can change the map, start rooms or `!spar`. Fine for a first

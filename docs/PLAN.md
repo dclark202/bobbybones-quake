@@ -41,7 +41,7 @@ same commit.
 | 3 | Duel simulator: nine weapons, items and pickups, switch time measured on a real server; sounds, clock, crouch, walk, fall damage; human aim limits | done; unmeasured values listed in B-14, B-37, B-53 |
 | 3 | Self-play with memory (GRU, league, scripted opponent styles) | `duel_gru_v3` done (489 min); `duel_gru_v4` done (775 min, self-play only since 650 min) |
 | 3 | Play-test server: plays a trained network, session logs, notes, test rooms with a human as the subject | done, including networks trained under the newer rules |
-| 3 | Test suite: fixed rooms and scorecards, in the simulator and on the server; test map `bobbylab` | done (aim rooms, nine movement courses, Nightmare fight); first human card recorded |
+| 3 | Test suite: fixed rooms and scorecards, in the simulator and on the server; test map `testlab` | done (aim rooms, nine movement courses, Nightmare fight); first human card recorded |
 | 3 | Human limits: five-finger left hand, right-hand click limits, sight only in the field of view, aim limits | done (`duel_gru_v5`, B-83 to B-85) |
 | 3 | A network that beats Nightmare | in the environment box: yes, 23-11 to 32-10 in five minutes (`duel_gru_v5`). On Blood Run: not yet (`duel_gru_v4` 6-21 in ten minutes) |
 | 3 | Goal 1: the yard with items, map knowledge, up to four players | simulator and map built (B-86, B-87); the owner reviews the map first |
@@ -53,7 +53,7 @@ same commit.
 
 The first target is smaller than "a duel bot on the popular duel maps":
 1. Plays human-like Quake (no key spam, steady aim, looks where it matters).
-2. In one small arena: the yard (map `bobbyyard`, chosen by the owner 2026-10-05; he reviews the map before it
+2. In one small arena: the yard (map `train-arena`, chosen by the owner 2026-10-05; he reviews the map before it
    goes into training).
 3. Shows knowledge of that map and moves efficiently on it.
 4. One against one, or all against all up to four players, whichever brings out the behaviour better.
