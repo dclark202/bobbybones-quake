@@ -5,6 +5,33 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-05 21:03 — `duel_gru_v6`: `arena1` with items, the limits from the reflex test, memory inputs (until 07:00) (B-87, B-90, B-92 to B-94)
+
+From `duel_gru_v5` at 1888 min, widened 348 -> 385 inputs (`policy_start_385_inputs.pt`); a new run name because the
+map, the spawn and the meaning of the limits changed.
+
+- **Training:** only self-play on `arena1` (the whole map), two players, 180 s rounds, against the league of past
+  versions. Spawn: machine gun and gauntlet, normal health; weapons, mega health and red armor are picked up.
+  Lava 20 damage a second, the void kills. Simulator `duel_env_ffa` with two players per group.
+- **Reward:** unchanged (frag +1, death -1, damage 0.005 dealt minus taken); **no reward for pickups**
+  (`--item-reward 0`; the trainer's default of 0.3 never mattered before because the fighting room had no items).
+- **Limits:** tracking delay 75 ms with focus bursts, error on the seen direction 1.0 deg, flinch 0.2 deg per
+  point of damage, hand limits as before.
+- **New inputs (19):** mega and red armor known taken and how long ago; what the enemy is known to have (mega, red
+  armor, weapons seen in his hands); time since his own respawn and since the enemy's last known death; his own
+  focus. The game-server plugin feeds the same.
+- **Measured each hour** (`tools/hourly_arena1.sh`): the training numbers with the map ones (mega and red armor a
+  minute and how long they lay, seconds to the first weapon of a life, deaths in the void, lava damage), five
+  minutes against Nightmare on `arena1`, and the reflex test against the benchmark.
+
+| Time | Minutes | Fights: frags a min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lay) | First weapon after | Void deaths per player-min | vs Nightmare on arena1, 5 min |
+|---|---|---|---|---|---|---|---|
+| 21:06 (start) | 1889 | 0.4, 26%, 267 u/s | 62% / 46% / 44% / - | 0.105 (2.6 s), 0 | 2.8 s | 0.46 | - |
+
+Start: as expected much weaker than in the fighting room (he has never had to find a weapon, cross a map or avoid
+a drop): 0.4 frags a minute against 15, the enemy in view 26% of the time, a death in the void every two
+minutes per player. Machine gun 44% under the new limits (78% under the old).
+
 ## 2026-10-05 21:45 — the benchmark redone from a run where the player moves as he aims; `arena1` (B-91 to B-94)
 
 The owner: telling players to stand still is wrong, good players aim by moving. He ran the test again moving

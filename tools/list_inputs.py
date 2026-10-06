@@ -176,6 +176,18 @@ add("own hands", "zoom finger free", "", "0 or 1", "v5")
 for b_ in ("under 25", "25 to 49", "50 to 74", "75 or more"):
     add("enemy pain", "pain sound: enemy health {}".format(b_), "the sound an enemy makes when hit, heard within 1200 units; for 1.5 s", "0 or 1", "v5")
 add("enemy pain", "pain sound just heard", "fades", "exp(-3 x seconds)", "v5")
+# ---- memory aids (2026-10-05): things a player keeps in his head
+for it_, tm in (("mega health", 35), ("red armor", 25)):
+    add("memory", "{}: known to be taken".format(it_), "he took it, or heard it taken", "0 or 1", "v6")
+    add("memory", "{}: how long ago".format(it_), "against its {} s timer".format(tm), "seconds / {}, capped at 2".format(tm), "v6")
+add("memory", "enemy has the mega health", "heard or seen taken since his last death", "0 or 1", "v6")
+add("memory", "enemy has the red armor", "heard or seen taken since his last death", "0 or 1", "v6")
+for w in W:
+    add("memory", "enemy seen with {}".format(WN[w]), "in his hands at some point since his last death", "0 or 1", "v6")
+add("memory", "time since his own respawn", "", "seconds / 30, capped at 2", "v6")
+add("memory", "enemy's last death known", "he killed him, or heard him die", "0 or 1", "v6")
+add("memory", "time since the enemy's last death", "", "seconds / 30, capped at 2", "v6")
+add("self", "focus left", "sharp tracking for 2 s with an enemy in view, then slower until it has come back", "-0.25 to 1", "v6")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

@@ -70,12 +70,14 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-`duel_gru_v5` is training until 19:00 on 2026-10-05: self-play in the environment box, finger and sight limits,
-rocket weapon sets drawn per player (RESULTS 2026-10-05 09:26). Built and waiting for the review: groups of up to
-six (B-86), the yard with items (B-87), switching the server and benchmarks to the new simulator (B-88).
+`duel_gru_v6` is training until 07:00 on 2026-10-06: self-play on `arena1` with items (two players, duel spawn),
+the aim limits from the reflex test (direction error, flinch, focus bursts) and the memory inputs (RESULTS
+2026-10-05 21:03). Hourly checks; the public server stays on the older network until the owner says to push
+(`tools/push_bobby.sh`).
 
-Order after the review: the yard with items, two players (B-87); then a share of rounds with three or four
-players (B-86); the map-knowledge numbers (B-89) and the proposed inputs (B-90) alongside.
+Next: B-92 (re-measure against the benchmark after training, more players), B-86 (a share of rounds with three or
+four players once two-player play has settled), B-95 (key budget against measured players), `arena2` for closer
+fights (owner's idea).
 
 ## Owner decisions
 

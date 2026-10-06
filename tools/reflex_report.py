@@ -238,6 +238,10 @@ def bobby(run, policy=None, repeats=4, react_ms=None, percept=None, flinch=None)
         env._script_actions = script
         env.round_t[:] = 1e9
         h = pol.zeros(env.n)
+        nin = len(pol.mean)                                      # a network trained with the group simulator has 18 more inputs,
+
+        def pad(o):                                              # all zero with two players
+            return o if o.shape[1] >= nin else np.concatenate([o, np.zeros((len(o), nin - o.shape[1]), np.float32)], 1)
         obs, _, done, _ = env.step(np.zeros((env.n, len(pol.dims)), np.int64))
         for i in tgt:                                            # the target faces the subject: its strafe is sideways to him
             s = env.state
@@ -271,7 +275,7 @@ def bobby(run, policy=None, repeats=4, react_ms=None, percept=None, flinch=None)
                 r = rec[int(i)]
                 r["pos"].append(s[i, :3].copy()), r["yaw"].append(float(env.yaw[i])), r["pitch"].append(float(env.pitch[i]))
                 r["tpos"].append(s[i + 1, :3].copy())
-            act, h = pol.act(obs, h)
+            act, h = pol.act(pad(obs)[:, :nin], h)
             if room == "flick":
                 pin = env.state[tgt, :3].copy()
             obs, _, done, _ = env.step(act)

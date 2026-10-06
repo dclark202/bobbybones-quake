@@ -31,9 +31,11 @@ def rep(a, b, count=1):
 
 
 # ---- constants
-rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT",
+rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM",
     "N_FFA = 2 * 8 + 2                                      # two more enemies in view (8 each), enemies in view, players\n"
-    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_FFA")
+    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_FFA")
+rep("        return [i ^ 1]", "        return [int(x) for x in self.others[i]]")
+rep("        return j % 2", "        return j % self.G")
 
 # ---- constructor
 rep('''                 loadout="full", drill_weapons=(RL, RG, LG), teacher=None):''',
@@ -222,8 +224,8 @@ rep('''        orp, orv, ora, orw = self.rp[opp], self.rv[opp], self.ra[opp], se
         ora, orw = self.ra[oth].reshape(n, -1), self.rw[oth].reshape(n, -1)''')
 rep('''        up = np.repeat(self.item_up, 2, axis=0)                               # per player (its match)''',
     '''        up = np.repeat(self.item_up, self.G, axis=0)                          # per player (its match)''')
-rep('''                              self._fight(pos, eye, rot, visible)], 1)
-        return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._ffa(pos, eye, rot, yaw, pit)], 1)
+rep('''                              self._fight(pos, eye, rot, visible), self._mem(opp)], 1)
+        return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._ffa(pos, eye, rot, yaw, pit)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):

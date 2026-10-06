@@ -347,21 +347,40 @@ index,group,input,meaning,scale,added in
 345,enemy pain,pain sound: enemy health 50 to 74,"the sound an enemy makes when hit, heard within 1200 units; for 1.5 s",0 or 1,v5
 346,enemy pain,pain sound: enemy health 75 or more,"the sound an enemy makes when hit, heard within 1200 units; for 1.5 s",0 or 1,v5
 347,enemy pain,pain sound just heard,fades,exp(-3 x seconds),v5
-348,more enemies,second enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
-349,more enemies,second enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
-350,more enemies,second enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
-351,more enemies,second enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
-352,more enemies,second enemy: direction sin,,sin,ffa (not trained yet)
-353,more enemies,second enemy: direction cos,,cos,ffa (not trained yet)
-354,more enemies,second enemy: direction up-down,,sin,ffa (not trained yet)
-355,more enemies,second enemy faces him,,cos,ffa (not trained yet)
-356,more enemies,third enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
-357,more enemies,third enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
-358,more enemies,third enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
-359,more enemies,third enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
-360,more enemies,third enemy: direction sin,,sin,ffa (not trained yet)
-361,more enemies,third enemy: direction cos,,cos,ffa (not trained yet)
-362,more enemies,third enemy: direction up-down,,sin,ffa (not trained yet)
-363,more enemies,third enemy faces him,,cos,ffa (not trained yet)
-364,more enemies,enemies in view,,count / 5,ffa (not trained yet)
-365,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)
+348,memory,mega health: known to be taken,"he took it, or heard it taken",0 or 1,v6
+349,memory,mega health: how long ago,against its 35 s timer,"seconds / 35, capped at 2",v6
+350,memory,red armor: known to be taken,"he took it, or heard it taken",0 or 1,v6
+351,memory,red armor: how long ago,against its 25 s timer,"seconds / 25, capped at 2",v6
+352,memory,enemy has the mega health,heard or seen taken since his last death,0 or 1,v6
+353,memory,enemy has the red armor,heard or seen taken since his last death,0 or 1,v6
+354,memory,enemy seen with rocket launcher,in his hands at some point since his last death,0 or 1,v6
+355,memory,enemy seen with railgun,in his hands at some point since his last death,0 or 1,v6
+356,memory,enemy seen with lightning gun,in his hands at some point since his last death,0 or 1,v6
+357,memory,enemy seen with machine gun,in his hands at some point since his last death,0 or 1,v6
+358,memory,enemy seen with shotgun,in his hands at some point since his last death,0 or 1,v6
+359,memory,enemy seen with grenade launcher,in his hands at some point since his last death,0 or 1,v6
+360,memory,enemy seen with plasma gun,in his hands at some point since his last death,0 or 1,v6
+361,memory,enemy seen with heavy machine gun,in his hands at some point since his last death,0 or 1,v6
+362,memory,enemy seen with gauntlet,in his hands at some point since his last death,0 or 1,v6
+363,memory,time since his own respawn,,"seconds / 30, capped at 2",v6
+364,memory,enemy's last death known,"he killed him, or heard him die",0 or 1,v6
+365,memory,time since the enemy's last death,,"seconds / 30, capped at 2",v6
+366,self,focus left,"sharp tracking for 2 s with an enemy in view, then slower until it has come back",-0.25 to 1,v6
+367,more enemies,second enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+368,more enemies,second enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+369,more enemies,second enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+370,more enemies,second enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+371,more enemies,second enemy: direction sin,,sin,ffa (not trained yet)
+372,more enemies,second enemy: direction cos,,cos,ffa (not trained yet)
+373,more enemies,second enemy: direction up-down,,sin,ffa (not trained yet)
+374,more enemies,second enemy faces him,,cos,ffa (not trained yet)
+375,more enemies,third enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+376,more enemies,third enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+377,more enemies,third enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+378,more enemies,third enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+379,more enemies,third enemy: direction sin,,sin,ffa (not trained yet)
+380,more enemies,third enemy: direction cos,,cos,ffa (not trained yet)
+381,more enemies,third enemy: direction up-down,,sin,ffa (not trained yet)
+382,more enemies,third enemy faces him,,cos,ffa (not trained yet)
+383,more enemies,enemies in view,,count / 5,ffa (not trained yet)
+384,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)

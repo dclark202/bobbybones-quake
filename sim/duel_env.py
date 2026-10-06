@@ -175,7 +175,15 @@ OBS_BASE = 3 + 1 + 5 + 2 + N_WALL + N_FLOOR + 18 + 9 * N_PROJ + NW + NW + NW + 6
 #   the enemy's pain sound when he is hit within earshot: which of the four (it depends on his health: under 25,
 #     under 50, under 75, above) 4, fading 1. The only clue to the enemy's health; his health itself is never an input. = 5
 N_FIGHT = 14 + 4 + 2 + 9 + 3 + 5
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT
+# Memory aids (2026-10-05, B-90: things a player keeps in his head), appended after the fight inputs:
+#   the mega health and the red armor: known to have been taken (he took it or heard it taken) 1, and how long ago
+#     as a share of its timer (35 s, 25 s) 1, for each: 4
+#   what the enemy is known to have since his last death: mega 1, red armor 1 (heard or seen taken), each weapon
+#     seen in his hands 9: 11
+#   seconds since his own respawn 1; the enemy's last death known 1 and how long ago 1: 3
+#   his own focus (see FOCUS_SECS): 1
+N_MEM = 4 + 11 + 3 + 1
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -349,6 +357,13 @@ class DuelEnv:
         self.percept = np.zeros((self.n, 2), np.float32)  # error on the seen direction to the enemy (yaw, pitch), degrees
         self.percept_sigma = PERCEPT_SIGMA
         self.flinch = np.zeros(self.n, np.float32)        # extra error on that direction after being hit, degrees
+        ng_ = len(self._mates(0)) + 1                       # players per group
+        self.it_t = np.full((self.n, 2), 99.0, np.float32)  # seconds since mega / red armor were last known taken (99 = not known)
+        self.e_got = np.zeros((self.n, ng_, 11), np.float32)    # per other player: what he is known to have (see N_MEM)
+        self.e_life = np.full((self.n, ng_), 99.0, np.float32)  # per other player: seconds since his last known death
+        self.life_t = np.zeros(self.n, np.float32)          # seconds since this player's own respawn
+        self.first_wp = np.zeros(self.n, bool)              # has picked a weapon up in this life (statistics)
+        self.item_up_t = None                               # per item: seconds it has been lying there
         self.flinch_on = True
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
@@ -458,6 +473,9 @@ class DuelEnv:
             self.stats[wn + "_hits"] = 0
             self.stats[wn + "_frags"] = 0
         self.stats["hurt_dmg"], self.stats["void_deaths"] = 0.0, 0
+        # mega / red armor: seconds they lay there before being taken (sum), times taken; first weapon of a life:
+        # seconds after the spawn (sum), count
+        self.stats["big_wait"], self.stats["big_taken"], self.stats["first_wp"] = np.zeros(2), np.zeros(2), np.zeros(2)
         self.stats["direct"] = 0                        # rockets hitting the body
         # per course: attempts, finishes, time (finished attempts), distance, top speed, speed sum, frames, falls, height
         self.stats["course"] = np.zeros((16, 9))
@@ -481,6 +499,8 @@ class DuelEnv:
         self.pain_t[i ^ 1] = 99.0
         self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
         self.flinch[i], self.focus[i] = 0.0, FOCUS_SECS
+        self.life_t[i], self.first_wp[i] = 0.0, False
+        self.e_got[self._mates(i), self._slot(i)] = 0.0     # what the others knew him to have is gone with him
         self.dmg_life[i ^ 1] = 0.0                      # what the opponent knows about this player's damage resets
         mode = int(self.mode[i // 2])
         kind = int(self.kind[i // 2])
@@ -845,6 +865,50 @@ class DuelEnv:
         self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), float(self.spawn_yaw[k]))
         self._fresh(i, float(self.spawn_yaw[k]))
 
+    def _mates(self, i):
+        """the other players of player i's group"""
+        return [i ^ 1]
+
+    def _slot(self, j):
+        """a player's place in his group"""
+        return j % 2
+
+    def note_pickup(self, i, k):
+        """player i took the mega health (k = 0) or the red armor (k = 1): he knows, and so do those in earshot"""
+        s = self.state
+        self.it_t[i, k] = 0.0
+        for j in self._mates(i):
+            if np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT:
+                self.it_t[j, k] = 0.0
+                self.e_got[j, self._slot(i), k] = 1.0
+
+    def note_death(self, v, killer):
+        """player v died: his killer knows, and those in earshot"""
+        s = self.state
+        for j in self._mates(v):
+            if j == killer or np.linalg.norm(s[j, :3] - s[v, :3]) < HEAR_EVT:
+                self.e_life[j, self._slot(v)] = 0.0
+                self.e_got[j, self._slot(v)] = 0.0
+
+    def note_hit(self, v, dmg):
+        """player v took dmg from an enemy: the flinch (used by the game-server plugin; step() does the same itself)"""
+        add = min(FLINCH_MAX, FLINCH_PER_DMG * float(dmg))
+        self.flinch[v] = min(FLINCH_MAX, float(self.flinch[v]) + add)
+        self.percept[v] += (add * self.rng.normal(0, 1, 2)).astype(np.float32)
+
+    def _mem(self, opp):
+        """the inputs of N_MEM"""
+        n = self.n
+        ar = np.arange(n)
+        known = (self.it_t < 90.0).astype(np.float32)
+        items = np.stack([known[:, 0], np.minimum(self.it_t[:, 0] / 35.0, 2.0) * known[:, 0],
+                          known[:, 1], np.minimum(self.it_t[:, 1] / 25.0, 2.0) * known[:, 1]], 1)
+        el = self.e_life[ar, self._slot(opp)]
+        ek = (el < 90.0).astype(np.float32)
+        life = np.stack([np.minimum(self.life_t / 30.0, 2.0), ek, np.minimum(el / 30.0, 2.0) * ek], 1)
+        focus = np.clip(self.focus / FOCUS_SECS, -0.25, 1.0)[:, None]
+        return np.concatenate([items, self.e_got[ar, self._slot(opp)], life, focus], 1).astype(np.float32)
+
     def _eye(self, s):
         e = s[:, :3].copy()
         e[:, 2] += np.where(self.duck[:len(e)], VIEW_H_DUCK, VIEW_H)
@@ -1051,6 +1115,11 @@ class DuelEnv:
             visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
             seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
+        self.it_t += DT                                      # the memory aids (N_MEM) keep their own time here, so the
+        self.e_life += DT                                    # game-server plugin, which does not call step(), has them too
+        self.life_t += DT
+        v_ = np.nonzero(visible)[0]
+        self.e_got[v_, self._slot(opp[v_]), 2 + self.weapon[opp[v_]]] = 1.0     # the weapon seen in the enemy's hands
         if self.percept_sigma > 0:                           # the enemy is seen a little off from where he is
             rho = math.exp(-DT / PERCEPT_TAU)
             self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
@@ -1143,7 +1212,7 @@ class DuelEnv:
                               np.eye(NW, dtype=np.float32)[self.weapon], self.has.astype(np.float32),
                               self.ammo / AMMO_MAX, items, goal, self._extra(pos, vel, eye, fdir, up, rot, c, si,
                                                                               yaw, pit, visible),
-                              self._fight(pos, eye, rot, visible)], 1)
+                              self._fight(pos, eye, rot, visible), self._mem(opp)], 1)
         return obs.astype(np.float32)
 
     def _extra(self, pos, vel, eye, fdir, up, rot, c, si, yaw, pit, visible):
@@ -1691,6 +1760,9 @@ class DuelEnv:
 
         # items: pickups, respawns, decay above 100
         self.item_t = np.maximum(0.0, self.item_t - DT)
+        if self.item_up_t is None:
+            self.item_up_t = np.zeros_like(self.item_t)
+        self.item_up_t = np.where(self.item_up, self.item_up_t + DT, 0.0).astype(np.float32)
         self.item_up |= self.item_t <= 0
         if self.nI:
             dxy = np.linalg.norm(s[:, None, :2] - self.item_pos[None, :, :2], axis=2)
@@ -1730,6 +1802,14 @@ class DuelEnv:
                     self.stats["pick_am"] += 1
                 if took and (lab in ("MH", "RA", "YA", "GA") or kind == "wp"):
                     self._hear(0, np.array([i]), 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "ar" else 3)
+                if took and lab in ("MH", "RA"):
+                    k_ = 0 if lab == "MH" else 1
+                    self.note_pickup(int(i), k_)
+                    self.stats["big_wait"][k_] += float(self.item_up_t[m, it])
+                    self.stats["big_taken"][k_] += 1
+                if took and kind == "wp" and not self.first_wp[i]:
+                    self.first_wp[i] = True
+                    self.stats["first_wp"] += np.array([float(self.life_t[i]), 1.0])
                 if took and self.items_room[i]:              # the items room: each pickup counts, and he can always take the next
                     reward[i] += ITEMS_ROOM_REWARD
                     self.hp[i], self.armor[i] = 100.0, 0.0
@@ -1766,6 +1846,7 @@ class DuelEnv:
             else:
                 self.stats["suicides"] += 1
             events.append(dict(victim=int(v), killer=int(k), weapon=int(kill_w.get(v, -1))))
+            self.note_death(int(v), int(k))
         for v in dead:
             if self.lab is not None:
                 self._lab_respawn(int(v))
@@ -1867,6 +1948,8 @@ class DuelEnv:
                 self._new_goal(b_)
             self.item_up[m] = True
             self.item_t[m] = 0.0
+        if done.any():                                      # a new round: nothing is known
+            self.it_t[done], self.e_got[done], self.e_life[done] = 99.0, 0.0, 99.0
         if len(dead) or len(out) or len(ends):
             self.state = s = self.w.state()
 

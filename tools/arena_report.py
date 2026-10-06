@@ -14,3 +14,5 @@ for l in ls[:: max(1, len(ls) // 5)][-5:] + [ls[-1]]:
     print("   arena", d("arena"))
     print("   keys", d("keys"), "| hit", d("hit_rate"))
     print("   frags", d("frag_share"))
+    if d("yard"):
+        print("   map", d("yard"), "| pickups", d("pickups_per_player_min"))

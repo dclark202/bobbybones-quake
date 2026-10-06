@@ -857,6 +857,8 @@ class duelbot(minqlx.Plugin):
                     if hasattr(self.env, "shot_t"):
                         self.env.shot_t[0] = self.env.trail_t[0] = 99.0
                 self.want_w.clear()
+                if who == "bobby" and hasattr(self.env, "life_t"):      # a new life: time since the spawn, flinch, focus
+                    self.env.life_t[0], self.env.flinch[0], self.env.focus[0] = 0.0, 0.0, self.E.FOCUS_SECS
                 if who == "bobby":
                     if not getattr(self, "rules2", False):
                         self.h[:] = 0                        # older runs: memory per life. Newer: kept for the session
@@ -869,6 +871,8 @@ class duelbot(minqlx.Plugin):
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
                 self.score[other] += 1
+                if hasattr(self.env, "note_death"):          # who knows of this death, and what he then forgets
+                    self.env.note_death(0 if who == "bobby" else 1, 1 if who == "bobby" else 0)
                 if self.room is not None and self.room.get("started"):
                     self.room["m"]["frags" if who == "bobby" else "deaths"] += 1
                 self.record(event="death", who=who, drill=self.drill, room=self.room["name"] if self.room else None,
@@ -913,6 +917,8 @@ class duelbot(minqlx.Plugin):
         opos = self.fill_player(env, E, 1, opp, os_)[0]
         for cls, slot in self.sync_world(env, E, (bobby.id, opp.id)):
             self.record(event="pickup", item=cls, by=("bobby", "opp")[slot] if slot >= 0 else "?")
+            if hasattr(env, "note_pickup") and slot in (0, 1) and cls in ("item_health_mega", "item_armor_body"):
+                env.note_pickup(slot, 0 if cls == "item_health_mega" else 1)     # he took it, or heard it taken
             if getattr(self, "rules2", False) and slot == 1:
                 big = 0 if cls == "item_health_mega" else 1 if cls == "item_armor_body" else \
                     2 if cls in ("item_armor_combat", "item_armor_jacket") else 3 if cls.startswith("weapon_") else None
@@ -971,6 +977,8 @@ class duelbot(minqlx.Plugin):
             self.fb_next = np.array([min(dealt / 100.0, 2.0), min(took / 100.0, 2.0),
                                      math.sin(ang) * (took > 0), math.cos(ang) * (took > 0)], np.float32)
             env.dmg_life[0] += dealt
+            if took > 0 and hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
+                env.note_hit(0, took)                        # being shot at throws his aim off for a moment
             if hasattr(env, "pain_t"):                       # the opponent's pain sound, by his health after the hit
                 env.pain_t += E.DT
                 if dealt > 0 and os_.health > 0 and float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < E.HEAR_EVT:
