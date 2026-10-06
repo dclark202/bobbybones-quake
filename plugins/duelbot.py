@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("bloodrun", "aerowalk", "lostworld", "campgrounds", "testlab", "train-arena")
+MAPS = ("testlab", "train-arena", "bloodrun", "aerowalk", "campgrounds")      # the only maps a player can pick with !map
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 2
@@ -69,19 +69,23 @@ class duelbot(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
-        self.add_command("map", self.cmd_map, 0, usage="<bloodrun|aerowalk|lostworld|campgrounds|testlab|train-arena>")
+        self.add_hook("player_loaded", self.on_player_loaded)
+        self.add_hook("vote_called", self.on_vote_called)
+        self.add_hook("team_switch_attempt", self.on_team_switch)
+        self.add_command("help", self.cmd_help, 0)
+        self.add_command("map", self.cmd_map, 0, usage="<testlab|train-arena|bloodrun|aerowalk|campgrounds>")
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
-        self.add_command("drill", self.cmd_drill, 0, usage="<weapon|off>")
-        self.add_command("room", self.cmd_room, 0,
+        self.add_command("drill", self.cmd_drill, 5, usage="<weapon|off>")
+        self.add_command("room", self.cmd_room, 5,
                          usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
-        self.add_command("rooms", self.cmd_rooms, 0)
+        self.add_command("rooms", self.cmd_rooms, 5)
         self.add_command("reflex", self.cmd_reflex, 0)
         self.add_command("movement", self.cmd_movement, 0)
         self.add_command("duel", self.cmd_duel, 0, usage="[minutes]")
-        self.add_command("spar", self.cmd_spar, 0, usage="<on|off>")
-        self.add_command("nosg", self.cmd_nosg, 0, usage="<on|off>")
-        self.add_command("arena", self.cmd_arena, 0, usage="<box|env|yard|off> [minutes]")
+        self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
+        self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
+        self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
@@ -191,6 +195,33 @@ class duelbot(minqlx.Plugin):
             return minqlx.RET_USAGE
         self.want_map = msg[1].lower()
         minqlx.console_command("map {} duel".format(self.want_map))
+
+    HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
+            "^3Play me:^7 join the game, I'm already in it. ^2!duel [minutes]^7 starts a timed duel.",
+            "^3Help me learn:^7 ^2!map testlab^7, then ^2!reflex^7 or ^2!movement^7",
+            "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
+
+    def cmd_help(self, player, msg, channel):
+        for line in self.HELP:
+            player.tell(line)
+
+    def on_player_loaded(self, player):
+        if not is_bot(player):
+            player.tell("^3I'm BobbyBones, the learning Quake bot.^7 Type ^2!help^7 to get started.")
+
+    def on_vote_called(self, player, vote, args):
+        """no player votes at all: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS)"""
+        player.tell("Voting is off on this server. ^2!map <{}>^7 changes the map.".format("|".join(MAPS)))
+        return minqlx.RET_STOP_ALL
+
+    def on_team_switch(self, player, old, new):
+        """one person plays against Bobby at a time; everyone else spectates and is queued by the game"""
+        if is_bot(player) or new == "spectator":
+            return
+        for p in self.players():
+            if p.id != player.id and not is_bot(p) and p.team in ("free", "red", "blue"):
+                player.tell("^3BobbyBones is playing {}.^7 Spectate: you play when they leave.".format(p.clean_name))
+                return minqlx.RET_STOP_ALL
 
     def cmd_note(self, player, msg, channel):
         """the play-tester's feedback, stamped with the game state at that moment"""
