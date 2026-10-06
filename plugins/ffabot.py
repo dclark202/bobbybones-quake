@@ -507,7 +507,8 @@ class ffabot(duelbot):
             p, st = by_seat[k]
             w, fire, pitch, yaw, keys = self.drive(p, env, E, k, a, float(env.pitch[k]), float(env.yaw[k]))
             self.fired[k] = bool(fire)
-            self.log_row(now, env, E, k, p, st, keys, present, bot_seats, len(people), len(bobbys))
+            if people:                                       # frames are logged only while a person is in the game
+                self.log_row(now, env, E, k, p, st, keys, present, bot_seats, len(people), len(bobbys))
             c = self.acc.setdefault(k, dict(frames=0, visible=0, fire=0, w={}))
             c["frames"] += 1
             c["visible"] += int(env.visible[k])
@@ -519,7 +520,7 @@ class ffabot(duelbot):
         if now > self.next_summary:
             self.next_summary = now + 60
             for k, p, st in seated:
-                if not is_bot(p):
+                if not is_bot(p) or not people:              # per-minute numbers only while a person is in the game
                     continue
                 c = self.acc.get(k, dict(frames=0, visible=0, fire=0, w={}))
                 f = max(1, c["frames"])

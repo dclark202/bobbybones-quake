@@ -61,7 +61,7 @@ Suggested note tags (first word of the text): `aim`, `move`, `weapon`, `items`, 
 ## Free-for-all sessions (`plugins/ffabot.py`, schema 4)
 
 One session per map load, in `data/<server data>/sessions/<date>_<map>_ffa/`. `meta.json` as the 1v1 sessions with
-`kind: ffa`, `seats: 6`. `frames.csv`: one row per Bobby per server frame (25 ms): `t, server_ms, bot, seat`, his own
+`kind: ffa`, `seats: 6`. `frames.csv`: one row per Bobby per server frame (25 ms), written only while at least one person is in the game (bots among themselves are not logged, owner 2026-10-06): `t, server_ms, bot, seat`, his own
 state (`b_*`, the same 18 columns as the 1v1 rows: position, velocity, view, health, armor, weapon, ammo, keys),
 `foe_seat` (the enemy he attends to), `foe_bot`, `b_sees`, `b_seen_ago`, `b_aim_err` (to that enemy; -1 with none),
 `intent` (none / MH / RA / RL / RG / LG), `people`, `bots`. `events.jsonl`: `join` / `leave` (seat, bot), `death`
