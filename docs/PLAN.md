@@ -85,8 +85,8 @@ once items are fought over, B-92 (more players for the benchmark), B-95 (key bud
 1. **Map reader (B-104)**: nav graphs for the 62 maps of `docs/MAPS.md`; per map a raster and computed labels (travel times, line of sight, item distances, surroundings, pro positions); a ~50k-weight conv trained on all 62; its 16 numbers per cell written as the per-map cell table that fills the two existing cell inputs. Frozen in training at first. Held-out check on unseen maps.
 2. **New inputs** (419 -> ~448): item respawn sounds (4), spawn points (12), the other two enemies' weapons (4), HMG back (9). Dense view only as a reduced-scale A/B alongside.
 3. **Maps for play**: arena1 + aerowalk, bloodrun, lostworld, furiousheights, campgrounds, sinister (owner's pick); the other 55 are reader training and held-out tests.
-4. **Groups**: 2, 3 and 4 as now; duel maps 2 and 3 only (open: four on duel maps too).
-5. **Spawns**: the game's (MG + gauntlet, no armor) in 3 of 4, a weapon set otherwise; proposed: a quarter of spawns with a random stack so the value of armor is learned in fights (open: 0 or 25%).
+4. **Groups**: 2, 3 and 4 on every map (owner 2026-10-06).
+5. **Spawns**: the game's (MG + gauntlet, no armor) in 3 of 4, a weapon set otherwise, drawn only from the weapons that lie on that map; a quarter of spawns with a random stack (health 100 to 200, armor 0 to 150) so the value of armor is learned in fights (owner agreed 2026-10-06).
 6. **Rewards**: as v8 12:52; halve the pickup and way rewards once mega + red exceed 0.3 per player-minute on arena1.
 7. **Limits**: unchanged; the LG trigger artefact on the server to be fixed first. 384-step sequences, gamma 0.999, lr over 24 h.
 8. **Start** from v8's last checkpoint by name (`reshape_policy`).
