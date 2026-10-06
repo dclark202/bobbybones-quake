@@ -47,6 +47,12 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   looked up in a learned table (`cell` in the policy, `nn.Embedding`), not values: every policy loader (trainer,
   `test_suite.Policy`, the plugin's `act`, `export_duel.py`) handles them. Inputs that were always zero on `arena1`
   were retired (B-101); `sim/reshape_policy.py` carries a network over by input name (old and new `docs/INPUTS.csv`).
+- **v9 (2026-10-06 evening)**: the learned cell table is gone; the last 32 inputs are the **map reader's** numbers for
+  his cell and the enemy's (`sim/map_reader.py`, trained on the rasters of `tools/map_raster.py` for the 62 maps of
+  `docs/MAPS.md`; tables in `data/maps/cells_<map>.npy`, loaded by the simulator next to the nav file; zeros without
+  the file). `sim/duel_env_v8.py` / `duel_env_ffa_v8.py` are the frozen v8 simulator (the public server's network
+  needs them: export with `--env duel_env_ffa_v8`). Older policies in the reflex report: `REFLEX_ENV=duel_env_v8`.
+  `sim/render_replay.py` renders a video from a server session log.
 - **Environments**: `duel_env.py` (current: nine weapons, items, sounds, clock, crouch, walk, fall damage,
   human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO / COURSE, scripted opponents with eight styles, lab
   mode on the test map: aim rooms and movement courses read from `maps/testlab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the
