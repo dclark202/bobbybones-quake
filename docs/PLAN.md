@@ -31,23 +31,23 @@ same commit.
 3. **Measure against people.** A fixed test chamber scores Bobby and human players in the same rooms; play tests
    and (soon) a public server give the human side. Nightmare is a milestone, not the gate.
 
-## Status (2026-10-05)
+## Status (2026-10-07 evening)
 
-| Stage | What | Status |
-|---|---|---|
-| 1 | Movement simulator (Q3 Pmove + collision, QL settings, jump pads, teleporters) | done, validated |
-| 1 | Movement policy: strafe jumping emerged, transfers live (time ratio 1.01) | done |
-| 2 | Simulator-built nav graphs, one movement policy on three maps | done (live 67-100% of trips) |
-| 3 | Duel simulator: nine weapons, items and pickups, switch time measured on a real server; sounds, clock, crouch, walk, fall damage; human aim limits | done; unmeasured values listed in B-14, B-37, B-53 |
-| 3 | Self-play with memory (GRU, league, scripted opponent styles) | `duel_gru_v3` done (489 min); `duel_gru_v4` done (775 min, self-play only since 650 min) |
-| 3 | Play-test server: plays a trained network, session logs, notes, test rooms with a human as the subject | done, including networks trained under the newer rules |
-| 3 | Test suite: fixed rooms and scorecards, in the simulator and on the server; test map `testlab` | done (aim rooms, nine movement courses, Nightmare fight); first human card recorded |
-| 3 | Human limits: five-finger left hand, right-hand click limits, sight only in the field of view, aim limits | done (`duel_gru_v5`, B-83 to B-85) |
-| 3 | A network that beats Nightmare | in the environment box: yes, 23-11 to 32-10 in five minutes (`duel_gru_v5`). On Blood Run: not yet (`duel_gru_v4` 6-21 in ten minutes) |
-| 3 | Goal 1: the yard with items, map knowledge, up to four players | simulator and map built (B-86, B-87); the owner reviews the map first |
-| 4 | Pro demos | 3,700 downloaded for three maps, Blood Run converted; a night of movement imitation made courses faster, duels no better (RESULTS 2026-10-04 21:12) |
-| 5 | Public servers and community play tests | scoped (HOSTING.md); waits for a decent Bobby and the plugin update |
-| 6 | Opponent profiles, player reports | later |
+| What | Where it stands |
+|---|---|
+| Simulator: movement, nine weapons, items, sounds, human limits on hands, eyes and aim | done and checked against the real game; machine guns scatter since today (value not yet measured on a server, B-107b) |
+| Movement: strafe jumping learned from reward alone, transfers to the real game | done |
+| Self-play training with memory, a league of his older selves | running; 10,080 players a batch, 37,000 steps a second, 8 to 11 GB of graphics memory |
+| Play on a real server: 1v1 and free-for-all with up to four Bobbys | done; public server up (v8), logs pulled to the PC daily |
+| Aim against the owner's reflex card | reaction equal (200 ms); error on a strafing target 3.0 to 3.4 degrees against his 2.5; rockets that hurt 41% against 83% |
+| **Walking to an item he has chosen** | **learned today in v10**: alone on arena1 he takes what he is told to in 75 to 100% of 30-second rounds (0 to 22% this morning), and kept it without the teacher |
+| Taking the mega and the red armor during a fight | not yet: 0.03 and 0.02 a player-minute from a normal spawn on arena1; Nightmare and people take them every time they come back |
+| Using rockets | not yet: he picks the launcher up and does not fire it (4% of his frags) |
+| Beating Nightmare with the game's own spawn | not yet: arena1 13-27 to 21-30 in ten minutes (he deals more damage and loses on frags: the stack); Blood Run and Aerowalk 0 to 2 frags in five minutes |
+| Maps in training | arena1, Aerowalk, Blood Run, Lost World (the bigger three are out until he seeks items) |
+| Pro demos | 3,700 downloaded; a night of movement imitation made courses faster, duels no better; not in use |
+| Attention over the scene in place of fixed input slots | scoped, the cost on the rented server measured and fine (`ATTENTION_POC.md`, B-109); waits |
+| Opponent profiles, player reports | later |
 
 ## Goal 1 (owner, 2026-10-05)
 
@@ -70,18 +70,11 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-**`duel_gru_v10` (2026-10-07 13:28 to 19:00)**: from v9's end, with a walking teacher in item runs (the scripted runner's keys, fading over three hours) and item runs at 30% of the time: v9 showed that he chooses the right item and cannot walk to it (RESULTS 2026-10-07). Stop rule: targets taken a player-minute in item runs above 1.0 by 15:05, or the run ends early at 17:05 if still under 0.5.
+**`duel_gru_v10` ran 2026-10-07 13:28 to 19:00** from v9's end: in item runs (30% of the time, alone on the map, the target given as his intention) he was shown the keys a scripted walker would press, and the help faded to nothing by 16:28. Targets taken a player-minute in those runs went from 0.15 to 4.5 and kept rising after the teacher was gone; the solo test on arena1 went from 16 / 0 / 3 / 16 / 22% (mega / red / RL / RG / LG) to 75 / 88 / 100 / 100 / 100%. His aim did not change. Against Nightmare and for items taken during fights nothing has moved yet (RESULTS 2026-10-07 13:28).
 
-`duel_gru_v9` trains from 2026-10-06 20:42 until 19:00 on the 7th (owner's calls; since the morning of the 7th on arena1, Aerowalk, Blood Run and Lost World, with a scripted item runner in a quarter of the fight rounds, a scattering machine gun and a tenth of the time in solo item runs: RESULTS 2026-10-07) with the map reader
-(see "Next round" below; RESULTS 2026-10-06 evening): intention head seeded by a simple item rule, rocket drills,
-perception noise 0.6 degrees and hand noise 0.10 (tuned up after the reflex comparison with the owner). v8 ended
-17:49: 18-30 against Nightmare at the end, human-like play by the owner's account, items still untouched (the
-approach-farming found and fixed). The public server runs v8 in free-for-all with three Bobbys: no quad, no item
-timers, weapons back in 2 s, a real game when more than half of the people ready up. The morning's `duel_gru_v7` did
-not take items at any pickup reward; the night's `duel_gru_v6` hid.
+How it got there (RESULTS 2026-10-06 evening to 2026-10-07): v9 added a seeded intention, a claw-back, a scripted item runner in the league (B-102), a scattering machine gun and smaller maps, and none of it moved the item numbers; a test of him alone with a fixed goal (`tools/solo_item_check.py`) then showed that he chose the right item and could not walk to it. v8 (18-30 against Nightmare, "feels human" by the owner) is what the public server plays.
 
-Open: B-102 (a stacking runner in the league, if the intention collapses to "nothing"), fading the item rewards out
-once items are fought over, B-92 (more players for the benchmark), B-95 (key budget), B-99 items 6 to 8, `arena2`.
+Next: the proposal below, for the owner's sign-off. Open besides it: B-107b (measure the machine guns' scatter and the shotgun pattern), B-92 (more players for the reflex benchmark), B-95 (key budget), B-109 (attention), Aerowalk's walking graph (no way to the red armor from most spawns), `arena2`.
 
 ## Proposed: `duel_gru_v11` (for the owner's sign-off, 2026-10-07 evening; built and tested, switched off until then)
 
@@ -102,22 +95,13 @@ Unchanged: v10's weights and league, arena1 / Aerowalk / Blood Run / Lost World,
 
 **Risks**: five changes at once, in two groups that touch different heads (the intention and movement; the weapon key), so their effects can still be told apart by their own numbers. The weapon teacher could make him hold rockets where he should not (point-blank is excluded by the rule; the fade leaves the last word to the fights).
 
-## Next round: `duel_gru_v9` (scope agreed 2026-10-06 afternoon; built after the 19:00 review)
-
-1. **Map reader (B-104)**: nav graphs for the 62 maps of `docs/MAPS.md`; per map a raster and computed labels (travel times, line of sight, item distances, surroundings, pro positions); a ~50k-weight conv trained on all 62; its 16 numbers per cell written as the per-map cell table that fills the two existing cell inputs. Frozen in training at first. Held-out check on unseen maps.
-2. **New inputs** (419 -> ~448): item respawn sounds (4), spawn points (12), the other two enemies' weapons (4), HMG back (9). Dense view only as a reduced-scale A/B alongside.
-3. **Maps for play**: arena1 + aerowalk, bloodrun, lostworld, furiousheights, campgrounds, sinister (owner's pick); the other 55 are reader training and held-out tests.
-4. **Groups**: 2, 3 and 4 on every map (owner 2026-10-06).
-5. **Spawns**: the game's (MG + gauntlet, no armor) in 3 of 4, a weapon set otherwise, drawn only from the weapons that lie on that map; a quarter of spawns with a random stack (health 100 to 200, armor 0 to 150) so the value of armor is learned in fights (owner agreed 2026-10-06).
-6. **Rewards**: as v8 12:52, with a **claw-back**: what a trip toward the chosen item has paid is taken back if he switches away or dies before taking it (v8 farmed the approach: mega chosen 26% of the time, reached on 1.7% of trips, abandoned 74%); halve the pickup and way rewards once mega + red exceed 0.3 per player-minute on arena1. **Near-item spawns**: a quarter of training spawns within about 2 s of the mega or the red armor, so he tastes the stack and learns its worth from the fights (owner agreed 2026-10-06). Later: the intention head imitated from pro demos (which big item a pro is heading for).
-7. **Limits**: reaction and tracking caps unchanged; perception noise 1.0 -> 0.6 degrees and hand noise 0.14 -> 0.10 (owner, 2026-10-06 evening, after v8 measured wider than him on a strafing target with the same reaction). The LG trigger artefact on the server fixed. 384-step sequences, gamma 0.999, lr over 24 h. Intention head seeded by a simple item rule for the first four hours (owner: "seeding is fine here"); rocket drills in a tenth of the rounds.
-8. **Start** from v8's last checkpoint by name (`reshape_policy`).
-9. **Hourly**: the usual table per map, Nightmare on arena1 and bloodrun, heat maps, one held-out-map probe a night.
-10. **Public server** stays on v8 until v9 beats it against Nightmare and the owner has played it.
-
 ## Owner decisions
 
-- Maps: Blood Run (ZTN), Aerowalk, Campgrounds only, until told otherwise.
+- Maps (2026-10-07): training on arena1, Aerowalk, Blood Run and Lost World; Campgrounds, Furious Heights and Sinister come back once he goes for items. The public server offers the eight he has trained on.
+- Seeding is fine (2026-10-06, 2026-10-07): a simple rule or a scripted player may show him a behavior at a weight that fades (the intention, the walk, next the weapon choice); what stays must hold without it.
+- Scripted opponents of our own (the item runner) may be in the league; the game's bots stay a benchmark only.
+- One batch of changes, then wait: no changes to a running experiment unless the data is clearly bad; the assistant is to push back.
+- Logs from the public server only while a person plays; pulled to the PC daily and then removed from the server; no names.
 - Human physics only (125 fps); no bot-only frame-rate tricks.
 - Human-like reaction and aim limits; never miss on purpose; no wallhacks. Since 2026-10-04: 200 ms to notice
   an enemy who comes into view, 50 ms tracking delay, flick speed cap, hand noise that grows with turn speed,
