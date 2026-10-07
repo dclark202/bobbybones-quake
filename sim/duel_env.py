@@ -77,6 +77,12 @@ NORMAL, AIM, DRILL, MOVE, SOLO, COURSE = range(6)      # round kinds (SOLO: test
 STYLES = ("random", "still", "slow", "fast", "jump")   # scripted target movement (test rooms use 1-4)
 DRILL_AMMO = np.array([15, 10, 100, 100, 15, 10, 80, 100, 1], np.float32)   # finite ammo in drill and aim rounds
 MOVE_SCALE, MOVE_ARRIVE = 0.2, 0.3                     # movement rounds: reward per second gained toward the goal, arrival
+# Item runs (owner, 2026-10-07: "solo runs on the maps to learn where the things are", as people learn a map; RESULTS
+# 2026-10-07 09:15: alone, with the intention fixed, he took the item in 0 to 29% of 30-second rounds). A share of the
+# playing time (ITEM_RUN_P) he is alone on the map: the target is given to him as his intention (one of the big items
+# that is lying there, drawn at random, the next one when he has it), he is paid for every second of the way gained,
+# loses the same for every second that passes, and gets a bonus on taking it. The game's spawn, real pickups.
+RUN_LEN, RUN_SCALE, RUN_ARRIVE = 60.0, 0.2, 0.5
 N_GOAL = 7                                             # goal inputs: on, where (3), next waypoint (3)
 # inputs added after duel_gru_v3 (appended at the end, so an older network can be widened without losing skills):
 # clock and score 10, more items 8 x 6, sounds 20, map position and identity 6, view / up / long rays 28,
@@ -421,6 +427,7 @@ class DuelEnv:
         self.kind_p = (1.0, 0.0, 0.0, 0.0)              # chance of NORMAL, AIM, DRILL, MOVE at each round start
         self.bot_p = 0.0                                # share of NORMAL rounds where the odd player is a scripted fighter
         self.runner_p = float(os.environ.get("RUNNER_P") or 0.0)   # ... where he is the item runner (script 3, see _runner_keys)
+        self.item_run_p = float(os.environ.get("ITEM_RUN_P") or 0.0)   # share of the playing time in item runs (see RUN_LEN)
         self.aim_weapons = (LG, LG, LG, RG, RG, RL, PG, SG, MG)
         self.sg_spawn = True                            # False: nobody spawns holding a shotgun in normal rounds
         self.script = np.zeros(2 * n_matches, np.int64)  # per player: 0 = policy, 1 = strafing target, 2 = scripted fighter
@@ -429,6 +436,7 @@ class DuelEnv:
         self.sc_fwd = np.zeros(2 * n_matches, np.int64)
         self.sc_jump = np.zeros(2 * n_matches, bool)
         self.sc_stuck = np.zeros(len(self.sc_t), np.int64)  # the runner: frames without getting anywhere
+        self.run_k = np.full(len(self.sc_t), -1, np.int64)  # item run: the intention he is given (0 = none yet), -1 = not in one
         self.sc_persona = np.zeros(2 * n_matches, np.int64)   # scripted fighter style (PERSONAS)
         self.sc_wpn = np.zeros(2 * n_matches, np.int64)
         self.persona_p = np.full(len(PERSONAS), 1.0 / len(PERSONAS))
@@ -749,7 +757,7 @@ class DuelEnv:
         self.resp_t[i] = 99.0
         self.has[i] = False
         self.ammo[i] = 0.0
-        if kind in (MOVE, COURSE) or self.script[i] == 1:   # movement round / course / strafing target: unarmed
+        if (kind in (MOVE, COURSE) and self.run_k[i] < 0) or self.script[i] == 1:   # movement round / course / strafing target: unarmed
             self.weapon[i] = G
         elif mode >= 0:                                 # one weapon (finite ammo) + gauntlet
             self.has[i, mode] = True
@@ -1043,6 +1051,9 @@ class DuelEnv:
     def _lab_respawn(self, v):
         """a death on the lab map: back to the room's own spot, not to a map spawn point"""
         m = v // 2
+        if self.run_k[v] >= 0:                               # an item run: a spawn point of the map, as in a game
+            self._spawn(v, avoid=None)
+            return
         if self.arena[m]:
             self._arena_spawn(v)
         elif self.course[v] >= 0:
@@ -1089,7 +1100,7 @@ class DuelEnv:
         self.teach[mi] = np.stack(out, 1)
 
     def _spawn(self, i, avoid, close=None):
-        if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.rng.random() < self.near_item_p:
+        if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < self.near_item_p:
             gis = [g_ for g_, lab_ in enumerate(self.route_goal) if lab_ in ("MH", "RA")]
             if gis:                                          # near the mega or the red: he tastes the stack (v9)
                 g_ = int(self.rng.choice(gis))
@@ -1919,6 +1930,53 @@ class DuelEnv:
             out[:, 3] = np.where(t1, int(np.abs(TURN).argmin()), out[:, 3])
         return out
 
+    def _seats(self, m):
+        g_ = self._others_arr().shape[1] + 1
+        return np.arange(g_ * m, g_ * m + g_)
+
+    def _item_run_start(self, m):
+        """start an item run for match m in a share of the rounds (see RUN_LEN); returns its seats, or None"""
+        if self.item_run_p <= 0 or self.route is None or self.fixed_kind is not None or getattr(self, "lab_force", None):
+            return None
+        if self.lab is not None:
+            other = float(self.arena_len)
+        else:
+            other = 1.0 / max(1e-9, float((np.asarray(self.kind_p[:3], np.float64) / np.array([self.round_len, 15.0, 15.0])).sum()))
+        p = self.item_run_p
+        if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
+            return None
+        q = self._seats(m)
+        if self.lab is not None:
+            for i in q:
+                self._course_close(int(i), False)
+            self.arena[m] = 0
+            self.course[q], self.items_room[q], self.gun[q] = -1, False, False
+            self.lab_len[m] = RUN_LEN
+        self.kind[m], self.mode[m] = MOVE, -1
+        self.move_len = RUN_LEN
+        self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
+        self.item_up[m], self.item_t[m] = True, 0.0
+        self.run_k[q] = 0
+        for i in q:
+            self.load_sets[int(i)] = ()                     # the game's spawn: machine gun and gauntlet
+            self.state = self.w.state()
+            self._spawn(int(i), avoid=None)
+        self.state = self.w.state()
+        for i in q:
+            self._run_pick(int(i))
+        return q
+
+    def _run_pick(self, i):
+        """item run: the next target of player i, one of the big items lying there that he can walk to"""
+        R = self.route
+        node = int(R.locate(self.w.state()[i:i + 1, :3])[0])
+        m = i // (self._others_arr().shape[1] + 1)
+        ks = [k for k, gi in enumerate(self.intent_gi) if k > 0 and gi >= 0 and k != self.run_k[i] and R.T[gi, node] < 1e8]
+        ok = [k for k in ks if self.item_up[m, self.route_item[self.intent_gi[k]]] and R.T[self.intent_gi[k], node] > 1.0]
+        ok = ok or ks
+        self.run_k[i] = int(self.rng.choice(ok)) if ok else 0
+        self.intent_new[i], self.intent_done[i] = True, True     # the new target is read at once
+
     def _runner_keys(self, idx, r, out, engaged):
         """script 3, the item runner (owner, 2026-10-07): he goes for what the item rule names (intent_rule: the mega
         when hurt, the red armor when bare, else the nearest big weapon he lacks) along the walking graph, and fights
@@ -2042,7 +2100,11 @@ class DuelEnv:
         human = self.script == 0                            # policy-controlled players (for the statistics)
         prev_int, prev_done = self.intent.copy(), self.intent_done.copy()
         self.intent_teach = self.intent_rule()
-        self.intend(a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64), human)
+        ch_ = (a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64)).copy()
+        in_run = self.run_k >= 0
+        ch_[in_run] = self.run_k[in_run]                    # an item run: the target is given, not chosen
+        self.intend(ch_, human)
+        self.intent_live = self.intent_live & ~in_run       # (and the intention head is not trained on those frames)
         self.stats["intent_trips"][0] += int((self.intent_changed & (self.intent > 0)).sum())
         self.stats["intent_trips"][2] += int((self.intent_changed & (prev_int > 0) & ~self.intent_done).sum())
         self.stats["intent_frames"] += np.bincount(self.intent[human], minlength=len(INTENTS))
@@ -2420,12 +2482,27 @@ class DuelEnv:
             gain = self.intent_phi - phi
             pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0) & (np.abs(gain) < 0.4)
             worth = self.item_reward * np.array(INTENT_VALUE, np.float32)[self.intent]      # the whole way is worth the pickup
-            claw = self.intent_changed & (prev_int > 0) & ~prev_done                        # a trip given up pays nothing (v9)
+            claw = self.intent_changed & (prev_int > 0) & ~prev_done & ~in_run              # a trip given up pays nothing (v9)
             reward -= self.intent_paid * claw
             self.intent_paid = np.where(claw | self.intent_done, 0.0, self.intent_paid).astype(np.float32)
             pay_now = self.intent_seek * worth * gain / self.intent_phi0 * pay
-            reward += pay_now - INTENT_SWITCH * (self.intent_changed & (prev_int > 0))
+            reward += pay_now - INTENT_SWITCH * (self.intent_changed & (prev_int > 0) & ~in_run)
             self.intent_paid = (self.intent_paid + pay_now).astype(np.float32)
+            run = in_run & (self.script == 0)
+            if run.any():                                   # item runs: the way gained against the clock, a bonus on taking it
+                alive = run & (self.hp > 0)
+                reward += RUN_SCALE * (np.where(pay, gain, 0.0) - DT) * alive
+                sp_ = np.hypot(s[:, 3], s[:, 4])
+                self.stats["move_frames"] += int(alive.sum())
+                self.stats["move_speed"] += float(sp_[alive].sum())
+                self.stats["move_fast"] += int(((sp_ > 330) & (s[:, 6] < 0.5) & alive).sum())
+                arr = run & self.intent_done & ~prev_done & (self.run_k > 0) & (self.intent == self.run_k)
+                gone = run & ~arr & (self.run_k > 0) & (self.intent == self.run_k) & valid & ~soon & ~self.intent_done
+                for i in np.nonzero(arr | gone | (run & (self.run_k == 0)))[0]:
+                    if arr[i]:
+                        reward[i] += RUN_ARRIVE
+                        self.stats["move_arrive"] += 1
+                    self._run_pick(int(i))
             self.intent_phi = phi.astype(np.float32)
 
         # deaths, frags, respawns
@@ -2496,6 +2573,12 @@ class DuelEnv:
                 self.stats["arena"][0] += float(sum(1 for e in events if am[e["victim"]] and e["killer"] >= 0 and e["killer"] != e["victim"]))
             self.stats["lab_items"][2] += float(self.items_room.sum())
         for m in ends:
+            self.run_k[self._seats(int(m))] = -1
+            q_ = self._item_run_start(int(m))                # an item run in a share of the rounds (RUN_LEN)
+            if q_ is not None:
+                self.round_t[m] = 0.0
+                done[q_] = True
+                continue
             self.round_t[m] = 0.0
             a_, b_ = 2 * m, 2 * m + 1
             if self.lab is not None:
