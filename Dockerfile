@@ -24,6 +24,7 @@ RUN cd /sim && gcc -O2 -shared -fPIC -w -DNDEBUG -fvisibility=hidden -Wl,-Bsymbo
 COPY server /ql/baseq3-extra
 COPY plugins /ql/minqlx-plugins
 COPY maps /ql/maps-data
+COPY docs/MAPS.md /ql/maps-data/MAPS.md
 COPY entrypoint.sh /entrypoint.sh
 COPY tools /tools
 RUN sed -i 's/\r$//' /entrypoint.sh /ql/baseq3-extra/* && chmod +x /entrypoint.sh /ql/run_server_x64_minqlx.sh
