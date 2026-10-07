@@ -511,6 +511,7 @@ class duelbot(minqlx.Plugin):
     # ------------------------------------------------------------------ setup
     def setup(self):
         mapname = (minqlx.get_cvar("mapname") or "").lower()
+        self.set_cvar("g_weaponRespawn", "5")                # the game's 1v1 value (ffabot sets 2 s; a runtime cvar outlives the map)
         bsp = "/tmp/maps/{}.bsp".format(mapname)
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
             os.makedirs("/tmp/maps", exist_ok=True)

@@ -163,6 +163,12 @@ class ffabot(duelbot):
         """the map file, the policy and one six-seat simulator (the only world of this process: the simulator's
         worlds share buffers sized by player count, so duelbot's two-seat ones are never built here)"""
         mapname = (minqlx.get_cvar("mapname") or "").lower()
+        self.set_cvar("g_itemTimers", "0")                   # owner (2026-10-06): no spawn timers on the armors and the mega
+        self.set_cvar("g_weaponRespawn", "2")                # weapons back in 2 s (duelbot.setup puts the 5 s of 1v1 back)
+        try:
+            minqlx.replace_items("item_quad", 0)             # no quad: the simulator has none
+        except ValueError:
+            pass
         bsp = "/tmp/maps/{}.bsp".format(mapname)
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
             os.makedirs("/tmp/maps", exist_ok=True)

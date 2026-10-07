@@ -59,6 +59,7 @@ class botmode(minqlx.Plugin):
                 minqlx.console_command("clientkick {}".format(p.id))
         if cur != mode:
             self.pending = PLUGIN[mode]
+        self.set_cvar("sv_maxclients", "6" if mode == "ffa" else "8")   # latched: takes effect with the map change (6 seats in free-for-all, owner 2026-10-06)
         minqlx.console_command("map {} {}".format(mapname, "ffa" if mode == "ffa" else "duel"))
         self.msg("^3{} switched the server to {} on {}.^7".format(who, "free-for-all" if mode == "ffa" else "1v1", mapname))
         return None

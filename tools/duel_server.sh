@@ -38,9 +38,9 @@ PW="${PASSWORD:-}"                     # no password by default; PASSWORD=<word>
 PORT="${PORT:-27970}"
 LOCKOUT_MOUNT=""; [ "$PUBLIC" = "1" ] || LOCKOUT_MOUNT="-v $ROOT/maps/lockout/lockout.pk3:/ql/baseq3/lockout.pk3:ro"   # the lockout map is not in the Workshop item: a pure server with it would shut out players who lack it
 LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # PUBLIC=1: show in the server list (the rented server); local servers stay unlisted (Windows sets PUBLIC to a folder: an exact 1 is required)
-PLUGINS="botctl, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live
-if [ -n "$FFA" ]; then PLUGINS="botctl, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
+PLUGINS="botctl, botmode, duelbot"; FACTORY=duel; MODE="1v1"; SLOTS=8     # botmode: !mode ffa|duel and !map switch the mode live
+if [ -n "$FFA" ]; then PLUGINS="botctl, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; SLOTS=6; fi   # 6 seats in free-for-all (owner, 2026-10-06)
 docker run -d $RESTART_OPT --name "$NAME" -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" $LOCKOUT_MOUNT qlbot +set net_port "$PORT" $LISTED \
-    +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
+    +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" +set sv_maxclients "$SLOTS" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"
