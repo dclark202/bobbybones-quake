@@ -70,10 +70,12 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-`duel_gru_v9` trains overnight from 2026-10-06 evening on seven maps with the map reader (see "Next round" below;
-RESULTS 2026-10-06 evening). v8 ended 17:49: 18-30 against Nightmare at the end, human-like play by the owner's
-account, items still untouched (the approach-farming found and fixed). The public server runs v8 in free-for-all
-with three Bobbys. The morning's `duel_gru_v7` did
+`duel_gru_v9` trains from 2026-10-06 20:42 until 16:00 on the 7th (owner's call) on seven maps with the map reader
+(see "Next round" below; RESULTS 2026-10-06 evening): intention head seeded by a simple item rule, rocket drills,
+perception noise 0.6 degrees and hand noise 0.10 (tuned up after the reflex comparison with the owner). v8 ended
+17:49: 18-30 against Nightmare at the end, human-like play by the owner's account, items still untouched (the
+approach-farming found and fixed). The public server runs v8 in free-for-all with three Bobbys: no quad, no item
+timers, weapons back in 2 s, a real game when more than half of the people ready up. The morning's `duel_gru_v7` did
 not take items at any pickup reward; the night's `duel_gru_v6` hid.
 
 Open: B-102 (a stacking runner in the league, if the intention collapses to "nothing"), fading the item rewards out
@@ -87,7 +89,7 @@ once items are fought over, B-92 (more players for the benchmark), B-95 (key bud
 4. **Groups**: 2, 3 and 4 on every map (owner 2026-10-06).
 5. **Spawns**: the game's (MG + gauntlet, no armor) in 3 of 4, a weapon set otherwise, drawn only from the weapons that lie on that map; a quarter of spawns with a random stack (health 100 to 200, armor 0 to 150) so the value of armor is learned in fights (owner agreed 2026-10-06).
 6. **Rewards**: as v8 12:52, with a **claw-back**: what a trip toward the chosen item has paid is taken back if he switches away or dies before taking it (v8 farmed the approach: mega chosen 26% of the time, reached on 1.7% of trips, abandoned 74%); halve the pickup and way rewards once mega + red exceed 0.3 per player-minute on arena1. **Near-item spawns**: a quarter of training spawns within about 2 s of the mega or the red armor, so he tastes the stack and learns its worth from the fights (owner agreed 2026-10-06). Later: the intention head imitated from pro demos (which big item a pro is heading for).
-7. **Limits**: unchanged; the LG trigger artefact on the server to be fixed first. 384-step sequences, gamma 0.999, lr over 24 h.
+7. **Limits**: reaction and tracking caps unchanged; perception noise 1.0 -> 0.6 degrees and hand noise 0.14 -> 0.10 (owner, 2026-10-06 evening, after v8 measured wider than him on a strafing target with the same reaction). The LG trigger artefact on the server fixed. 384-step sequences, gamma 0.999, lr over 24 h. Intention head seeded by a simple item rule for the first four hours (owner: "seeding is fine here"); rocket drills in a tenth of the rounds.
 8. **Start** from v8's last checkpoint by name (`reshape_policy`).
 9. **Hourly**: the usual table per map, Nightmare on arena1 and bloodrun, heat maps, one held-out-map probe a night.
 10. **Public server** stays on v8 until v9 beats it against Nightmare and the owner has played it.

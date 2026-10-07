@@ -67,10 +67,12 @@ The popular duel maps (Blood Run, Aerowalk, Lost World) come back once he meets 
 | Test chamber: the same rooms for the bot and for people, on a custom map | done; first human scorecard recorded |
 | Beating the Nightmare bot in the fighting room | done (23-11 to 32-10 in five minutes, 2026-10-05) |
 | Human-like hands and eyes (five fingers, field of view, click limits) | done; he still asks for more key changes than his fingers make |
-| Knowing a map: items, their timers, efficient routes (the yard) | next |
-| Three or four players, all against all | simulator built and checked; not trained yet |
-| The duel maps (Blood Run, Aerowalk, Lost World) | after the yard; a night on Blood Run with pro demos (3,700 downloaded) made movement faster but not duels better |
-| Player reports, opponent profiles, public server | later |
+| Knowing a map: items, their timers, efficient routes (the yard) | in progress: an explicit intention ("go for the mega"), a map reader trained on 62 maps, item sounds; he takes weapons, not yet the mega and the red armor |
+| Three or four players, all against all | training in groups of 2, 3 and 4 since 2026-10-06; on the public server with up to four Bobbys |
+| Beating Nightmare on the yard, ten minutes | 18-30 at the end of v8 (2026-10-06), the first run to trade frags with it |
+| The duel maps (Blood Run, Aerowalk, Lost World, Furious Heights, Campgrounds, Sinister) | in training alongside the yard since 2026-10-06 evening; a night on Blood Run with pro demos (3,700 downloaded) made movement faster but not duels better |
+| Public server | up: "BobbyBones the learning quake bot", free-for-all with three Bobbys, `!map` for the pool, ready up (F3) for a real game |
+| Player reports, opponent profiles | later |
 
 Details, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:
 [docs/PLAN.md](docs/PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md). Log formats: [docs/LOGS.md](docs/LOGS.md).
@@ -86,12 +88,15 @@ sim/build.bat                                             # Windows: build the s
 python sim/train_duel_rnn.py --run my_run --minutes 600    # self-play training (GPU if available)
 python sim/test_suite.py --run my_run                      # scorecard in the test rooms
 docker build -t qlbot .                                    # game server image
-bash tools/duel_server.sh my_run                           # private play-test server on UDP 27970 (map arena1)
+bash tools/duel_server.sh my_run                           # private play-test server on UDP 27970 (map arena1, 1v1)
+FFA=3 bash tools/duel_server.sh my_run arena1 duel_env_ffa  # free-for-all with three Bobbys (up to four; six seats)
 SPAR=1 bash tools/duel_server.sh my_run                    # the same network against a Nightmare bot
 ```
 
-On the play-test server, chat commands save feedback (`!note`), run the test chamber on you (`!map testlab`,
-`!room suite`) and let you watch him play a Nightmare bot (`!spar`). Full list: [docs/COMMANDS.md](docs/COMMANDS.md).
+On the play-test server, chat commands switch the mode and the map (`!mode ffa|duel`, `!map <name>`, `!bots <0-4>`),
+save feedback (`!note`), run the test chamber on you (`!map testlab`, `!room suite`) and let you watch him play a
+Nightmare bot (`!spar`). In free-for-all a real game starts when more than half of the people ready up (F3).
+Full list: [docs/COMMANDS.md](docs/COMMANDS.md). Hosting a public one: [docs/HOSTING.md](docs/HOSTING.md).
 
 ## Repo layout
 
