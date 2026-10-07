@@ -16,6 +16,8 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 
 **Stop rule (agreed with the owner).** Targets taken a player-minute in item runs: above 1.0 at the 15:05 check, it runs to 19:00; still under 0.5 at 17:05, the run is stopped early. To watch as well: the turn labels touch the head he aims with, in frames without an enemy; imitating the mouse at full weight broke his aim on 2026-10-04, so the hit rates are read every hour.
 
+**Rule for the fade (agreed with the owner at 15:50, who had asked whether the teacher should stay longer).** The teacher fades to zero at 16:28 as planned, so that the 17:05 check says whether he keeps the walk by himself. If that check shows under 1.5 targets a player-minute in item runs, or the mega and the red armor no better than 41% and 53% in the solo test, the run is restarted at once with the teacher at a constant weight of 0.15 for the rest of it (`start_v10_keep.py`); otherwise it runs unaided to 19:00.
+
 First four updates: teacher loss 4.36 -> 3.57, targets 0.05 -> 0.24 a player-minute, 36,600 steps a second, 10.5 GB.
 
 | Time | Minutes | Item runs: targets a player-minute, teacher weight and loss | Solo test on arena1: mega / red / RL / RG / LG | Hits rail / LG / MG / rockets | Intentions mega / red, reached | vs Nightmare: arena1 10 min, Blood Run 5, Aerowalk 5 |
