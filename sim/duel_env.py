@@ -2391,8 +2391,8 @@ class DuelEnv:
                     continue                                  # the other player took it this frame
                 kind, val, resp, cap, lab = self.item_def[it]
                 took = False
-                if self.kind[m] != NORMAL and kind in ("wp", "am", "pack"):
-                    continue                                  # aim / drill / movement rounds: no weapons or ammo
+                if self.kind[m] != NORMAL and kind in ("wp", "am", "pack") and self.run_k[i] < 0:
+                    continue                                  # aim / drill / movement rounds: no weapons or ammo (item runs: everything)
                 gain = 0.0
                 if kind == "hp" and self.hp[i] < cap:
                     gain = min(cap, self.hp[i] + val) - self.hp[i]
@@ -2496,7 +2496,7 @@ class DuelEnv:
                 self.stats["move_frames"] += int(alive.sum())
                 self.stats["move_speed"] += float(sp_[alive].sum())
                 self.stats["move_fast"] += int(((sp_ > 330) & (s[:, 6] < 0.5) & alive).sum())
-                arr = run & self.intent_done & ~prev_done & (self.run_k > 0) & (self.intent == self.run_k)
+                arr = run & self.intent_done & (self.run_k > 0) & (self.intent == self.run_k)     # (the pickup may be booked after this block: no "since last frame" test)
                 gone = run & ~arr & (self.run_k > 0) & (self.intent == self.run_k) & valid & ~soon & ~self.intent_done
                 for i in np.nonzero(arr | gone | (run & (self.run_k == 0)))[0]:
                     if arr[i]:
