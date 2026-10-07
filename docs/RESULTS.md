@@ -22,6 +22,7 @@ First four updates: teacher loss 4.36 -> 3.57, targets 0.05 -> 0.24 a player-min
 |---|---|---|---|---|---|---|
 | 13:05 (v9's last) | 3457 | 0.15, none | 16 / 0 / 3 / 16 / 22 % | 61 / 47 / 51 / 36% | 31 / 49 %, 2.8% | 18-28, 1-10, 2-0 |
 | 13:35 | 3490 | 0.24, 0.48, 3.57 | - | 57 / - / 49 / - (first rollouts) | - | - |
+| 14:12 | 3527 | **2.05** (0.41 at 13:40, 0.80 at 13:47, 1.20 at 13:55, 1.58 at 14:04), 0.38, 2.56 | - (odd hours) | 59 / 46 / 51 / 36% (unchanged: the turn labels have not touched his aim) | 27 / 45 %, 8.9% (item runs count in it) | - . Void deaths 0.42 a player-minute (0.12 in v9): he now jumps the gaps and misses some |
 
 ## 2026-10-06 evening — the public server: free-for-all rules, ready-up games, joining fixed (owner's requests while playing v8 with friends)
 
