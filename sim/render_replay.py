@@ -53,6 +53,17 @@ def main():
     cam = np.stack([np.ones_like(gx), -gx * tan_h, -gy * tan_h * R.H / R.W], 2).astype(np.float32)
     cam /= np.linalg.norm(cam, axis=2, keepdims=True)
     cam = cam.reshape(-1, 3)
+    # projectiles in flight (missiles.csv, newer sessions): per frame time -> list of (num, owner, weapon, pos, vel)
+    QLKIND = {5: E.RL, 4: E.GL, 8: E.PG}
+    missiles = {}
+    mpath = os.path.join(a.session, "missiles.csv")
+    if os.path.exists(mpath):
+        for m in csv.DictReader(open(mpath)):
+            if int(m["weapon"]) in QLKIND:
+                missiles.setdefault(float(m["t"]), []).append((int(m["num"]), int(m["owner"]), QLKIND[int(m["weapon"])],
+                                                               np.array([float(m["x"]), float(m["y"]), float(m["z"])], np.float32),
+                                                               np.array([float(m["vx"]), float(m["vy"]), float(m["vz"])], np.float32)))
+    trails, live_prev, booms = {}, {}, []
     frames = []
     f_b, f_o = 0, 0
     di, hi = 0, 0
@@ -83,11 +94,25 @@ def main():
         seen = bool(env._los(eye[None], opp[None] + np.array([0, 0, 8.0], np.float32))[0]) and g("o_health") > 0
         bw, ow = QLNAME.get(int(g("b_weapon")), "mg"), QLNAME.get(int(g("o_weapon")), "mg")
         fwd, side, up, fire = int(np.sign(g("b_fwd"))), int(np.sign(g("b_right"))), g("b_up"), int(g("b_fire"))
+        rockets, live = [], {}
+        for num, own, kind, mp, mv in missiles.get(t, []):
+            tr = trails.setdefault(num, [])
+            vis = bool(np.linalg.norm(mp - eye) < 40 or env.w.trace(eye, mp)["fraction"] >= 0.97)
+            rockets.append((mp, kind, own, mv, list(tr[-14:]), vis))
+            tr.append(mp)
+            live[num] = (mp, kind)
+        booms = [(bp, bk, age + 1) for bp, bk, age in booms if age < 9]
+        for num, (mp, kind) in live_prev.items():                    # a projectile that is gone exploded where it was
+            if num not in live:
+                booms.append((mp, kind, -1))
+                trails.pop(num, None)
+        live_prev = live
         fr = dict(pos=pos, vel=np.array([g("b_vx"), g("b_vy"), g("b_vz")], np.float32), ground=float(abs(g("b_vz")) < 1),
                   yaw=g("b_yaw"), pitch=g("b_pitch"), opp=opp, opp_duck=bool(g("o_up") < 0), seen=seen,
                   hp=(g("b_health"), g("b_armor"), g("o_health"), g("o_armor")), w=(bw, ow), guns="Nightmare, the game's own bot",
                   opp_yaw=g("o_yaw"), opp_pitch=g("o_pitch"), opp_vel=np.array([g("o_vx"), g("o_vy"), g("o_vz")], np.float32),
-                  zoom=False, intent="", rockets=[], booms=[],
+                  zoom=False, intent="", rockets=rockets,
+                  booms=[(bp, bk, age, bool(env.w.trace(eye, bp)["fraction"] >= 0.97)) for bp, bk, age in booms],
                   others=[dict(pos=opp, duck=bool(g("o_up") < 0), yaw=g("o_yaw"), pitch=g("o_pitch"), w=ow, seen=seen,
                                shot=bool(int(g("o_fire"))), hurt=dealt > 0)],
                   items=[], a=np.array([fwd + 1, side + 1, 1 if up > 0 else 2 if up < 0 else 0, 0, 0, fire, 0, 0, 0, 0, 0], np.int64),

@@ -147,12 +147,17 @@ class duelbot(minqlx.Plugin):
             json.dump(meta, f, indent=1)
         self.frames_f = open(os.path.join(self.sess, "frames.csv"), "a")
         self.frames_f.write(",".join(FRAME_COLS) + "\n")
+        self.missiles_f = open(os.path.join(self.sess, "missiles.csv"), "a")      # projectiles in flight, per frame (for replays)
+        self.missiles_f.write("t,num,owner,weapon,x,y,z,vx,vy,vz\n")
         self.log("session {}".format(os.path.basename(self.sess)))
 
     def end_session(self):
         if self.sess:
             self.record(event="end", **self.score)
             self.frames_f.close()
+            if getattr(self, "missiles_f", None):
+                self.missiles_f.close()
+                self.missiles_f = None
         self.sess, self.frames_f, self.sess_opp = None, None, None
 
     def player_row(self, p, st, cmd):
@@ -183,6 +188,10 @@ class duelbot(minqlx.Plugin):
                self.aim_err(env, bs_slot), self.aim_err(env, o_slot), len(minqlx.missiles()), oc[1],
                *(minqlx.key_counts(opp.id) if hasattr(minqlx, "key_counts") else (0, 0, 0, 0, 0, 0))]
         self.frames_f.write(",".join(str(v) for v in row) + "\n")
+        if getattr(self, "missiles_f", None):
+            for num, own, weapon, x, y, z, vx, vy, vz in minqlx.missiles():
+                who = 0 if own == bobby.id else 1 if own == opp.id else -1
+                self.missiles_f.write("{},{},{},{},{:.1f},{:.1f},{:.1f},{:.0f},{:.0f},{:.0f}\n".format(round(now, 3), num, who, weapon, x, y, z, vx, vy, vz))
         dmg = {}
         for who, st, other in (("bobby", bs, os_), ("opp", os_, bs)):   # damage events from health + armor drops
             tot = max(0, st.health) + st.armor
