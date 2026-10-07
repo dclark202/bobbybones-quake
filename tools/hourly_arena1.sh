@@ -8,9 +8,9 @@ date +%H:%M
 python tools/arena_report.py "$RUN" | tail -5
 tail -1 "data/sim_runs/$RUN/metrics.jsonl" | python -c "import sys,json; r=json.loads(sys.stdin.read()); print('   intent', r.get('intent'))"
 PYTHON="$PY" bash tools/bench_arena.sh "$RUN" yard "${BENCH_MIN:-10}" arena1 duel_env_ffa 2>&1 | tail -1
-# the duel maps of the run (owner, 2026-10-07): five minutes against Nightmare on each, two games side by side
-if [ -n "${DUEL_MAPS-bloodrun aerowalk lostworld furiousheights campgrounds sinister}" ]; then
-  set -- ${DUEL_MAPS-bloodrun aerowalk lostworld furiousheights campgrounds sinister}
+# two duel maps beside arena1 (owner, 2026-10-07: three maps in all): five minutes against Nightmare on each, side by side; DUEL_MAPS="..." for others
+if [ -n "${DUEL_MAPS-bloodrun aerowalk}" ]; then
+  set -- ${DUEL_MAPS-bloodrun aerowalk}
   while [ $# -gt 0 ]; do
     BENCH_NAME=qlbench1 BENCH_DATA=data/bench1 PYTHON="$PY" bash tools/bench_arena.sh "$RUN" yard "${DUEL_MIN:-5}" "$1" duel_env_ffa 2>&1 | tail -1 &
     if [ -n "$2" ]; then
