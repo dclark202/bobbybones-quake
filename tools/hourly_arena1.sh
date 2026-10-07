@@ -7,6 +7,9 @@ PY="${PYTHON:-python}"
 date +%H:%M
 python tools/arena_report.py "$RUN" | tail -5
 tail -1 "data/sim_runs/$RUN/metrics.jsonl" | python -c "import sys,json; r=json.loads(sys.stdin.read()); print('   intent', r.get('intent'))"
+# the measured part (Nightmare on three maps, the reflex test, the heat map, the video) every other hour, at the odd ones
+# (owner, 2026-10-07); the even hours print the training numbers only. FULL=1 forces it.
+if [ -z "$FULL" ] && [ $(( 10#$(date +%H) % 2 )) -eq 0 ]; then echo "(training numbers only this hour)"; exit 0; fi
 PYTHON="$PY" bash tools/bench_arena.sh "$RUN" yard "${BENCH_MIN:-10}" arena1 duel_env_ffa 2>&1 | tail -1
 # two duel maps beside arena1 (owner, 2026-10-07: three maps in all): five minutes against Nightmare on each, side by side; DUEL_MAPS="..." for others
 if [ -n "${DUEL_MAPS-bloodrun aerowalk}" ]; then
