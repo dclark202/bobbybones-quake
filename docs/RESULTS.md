@@ -37,6 +37,7 @@ Launched 18:32 (until 07:00 on the 7th): 21 workers, 8372 players, 1.41 M weight
 | Time | Minutes | Fights: frags per group-min, in view, speed | Hit rail / LG / MG / rockets | Mega, red armor per player-min (lying) | Intentions: none / mega / red / RL / RG / LG, trips a min, reached | Void deaths | Half of his time in (cells) | vs Nightmare on arena1, 10 min |
 |---|---|---|---|---|---|---|---|---|
 | 18:35 (start) | 2486 | 12.0 (first sample) | 54% / 50% / - / 12% | 0.17, 0.32 | 2 / 22 / 2 / 5 / 3 / 65 %, 17, 1.5% | - | - | - |
+| 21:15 (8 min after the last relaunch; no 21:05 check: the hourly loop was started after 19:05 and slept for its first slot until the next evening, replaced by `nightly_v9b.sh`) | 2536 | 8.0 | 53% / 44% / 47% / 25% | 0.14, 0.15 (lying 77%, 84% of the time) | 9 / 26 / 44 / 2 / 1 / 18 %, 10.5, 1.3% (abandoned 75%) | 0.013 | - | - |
 
 ## 2026-10-06 12:16 — `duel_gru_v8`: an explicit intention, a learned map, 97 fewer inputs (owner: "try a model change"; until 19:00) (B-100, B-101, B-103)
 
