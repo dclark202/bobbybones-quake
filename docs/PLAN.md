@@ -83,6 +83,25 @@ not take items at any pickup reward; the night's `duel_gru_v6` hid.
 Open: B-102 (a stacking runner in the league, if the intention collapses to "nothing"), fading the item rewards out
 once items are fought over, B-92 (more players for the benchmark), B-95 (key budget), B-99 items 6 to 8, `arena2`.
 
+## Proposed: `duel_gru_v11` (for the owner's sign-off, 2026-10-07 evening; built and tested, switched off until then)
+
+v10 taught him the walk: alone on arena1 he now takes what he is told to in 75 to 100% of 30-second rounds (v9: 0 to 22%), and kept it after the teacher was gone. Two things are still missing, and v11 takes one lever set for each.
+
+**A. He does not go for the mega and the red armor while a fight is on** (from a normal spawn on arena1 in fights: mega 0.03, red 0.02 a player-minute; Nightmare takes them every time they come back).
+1. **Collect, then fight** (`COLLECT_FIGHT_P=0.5`): half of the item runs turn into a fight after 20 seconds; half of the seats, drawn at random, are put back to a plain spawn and the others keep what they gathered. He meets from both sides a fight decided by what was collected. Item runs 20% of the time, no walking teacher.
+2. **The intention holds** for 8 seconds, not 3, and is released at once when the item is gone (`INTENT_HOLD=8`): a trip is no longer dropped by the dice a second later.
+3. **More 1v1**: three workers in five play groups of two (`--group 2,3,2,4,2`), so that on arena1 a life more often outlasts a trip (in groups of three it lasts 8 seconds).
+
+**B. He does not use rockets** (nine launchers picked up in three games against Nightmare, none fired; 4% of his frags, all from the rocket-only drills), although at his accuracy they pay more a second than the machine gun (about 40 against 25).
+4. **The weapon rule as a teacher on the weapon key** (`--weapon-teach 1.0`, fading over six hours): rockets from 100 to 450 units, lightning to 700, the rail beyond 600, else the machine gun, among what he holds with ammo. The same kind of seed as for the intention and the walk. He agrees with it 60 to 70% of the time today (mostly when the machine gun is all he has).
+5. **Mixed drills** (`DRILL_MIX_P=0.7`): in most rocket drills both players also hold the machine gun, half the time in hand, so the choice is practised and not only the aim.
+
+Unchanged: v10's weights and league, arena1 / Aerowalk / Blood Run / Lost World, 10,080 players, the item runner in a quarter of the fight rounds, the item rule on the intention at weight 2, rocket drills 15%, the scattering machine gun.
+
+**Read after the first night**: rockets' share of his frags (4%) and of his shots at close range (0%), the launcher in hand against Nightmare (0%); mega and red from a normal spawn in fights on arena1 (0.03, 0.02); in collect-then-fight rounds, kills by the stacked side against kills by the plain side (if the stack does not win there, nothing will teach its worth); the Nightmare scores (arena1 13-27, Blood Run 1-7, Aerowalk 0-10); the solo test must stay above 75%.
+
+**Risks**: five changes at once, in two groups that touch different heads (the intention and movement; the weapon key), so their effects can still be told apart by their own numbers. The weapon teacher could make him hold rockets where he should not (point-blank is excluded by the rule; the fade leaves the last word to the fights).
+
 ## Next round: `duel_gru_v9` (scope agreed 2026-10-06 afternoon; built after the 19:00 review)
 
 1. **Map reader (B-104)**: nav graphs for the 62 maps of `docs/MAPS.md`; per map a raster and computed labels (travel times, line of sight, item distances, surroundings, pro positions); a ~50k-weight conv trained on all 62; its 16 numbers per cell written as the per-map cell table that fills the two existing cell inputs. Frozen in training at first. Held-out check on unseen maps.
