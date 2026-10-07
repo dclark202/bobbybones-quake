@@ -437,6 +437,7 @@ class DuelEnv:
         self.sc_jump = np.zeros(2 * n_matches, bool)
         self.sc_stuck = np.zeros(len(self.sc_t), np.int64)  # the runner: frames without getting anywhere
         self.run_k = np.full(len(self.sc_t), -1, np.int64)  # item run: the intention he is given (0 = none yet), -1 = not in one
+        self.run_stuck = np.zeros(len(self.sc_t), np.int64) # item run: frames without getting anywhere (for the walking teacher)
         self.sc_persona = np.zeros(2 * n_matches, np.int64)   # scripted fighter style (PERSONAS)
         self.sc_wpn = np.zeros(2 * n_matches, np.int64)
         self.persona_p = np.full(len(PERSONAS), 1.0 / len(PERSONAS))
@@ -1073,9 +1074,48 @@ class DuelEnv:
             self.w.reset(v, (q[0], q[1], q[2] + 2.0), (0, 0, 0), float(q[3]))
             self._fresh(v, float(q[3]))
 
+    def _run_teach(self):
+        """item runs: the keys the scripted runner would press from where he stands, toward the target he was given
+        (forward, strafe, jump, turn), as labels for the trainer's teacher loss (--teach, fading). The owner's call of
+        2026-10-07: after three hours of item runs he took 0.15 targets a player-minute where a player who knows the
+        ways takes about ten; he is shown the walk and the help is then taken away."""
+        R = self.route
+        if R is None:
+            return
+        ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0))[0]
+        if not len(ri):
+            return
+        s = self.state
+        pos = s[ri, :3]
+        node = R.locate(pos)
+        gi = np.array(self.intent_gi)[self.run_k[ri]]
+        ok = gi >= 0
+        g = np.maximum(gi, 0)
+        nx = R.next[g, node]
+        tp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
+        near = np.hypot(tp[:, 0] - pos[:, 0], tp[:, 1] - pos[:, 1]) < 48.0
+        nx2 = np.where(nx >= 0, R.next[g, np.maximum(nx, 0)], -1)
+        tp = np.where((near & (nx2 >= 0))[:, None], R.nodes[np.maximum(nx2, 0)], tp)
+        tp = np.where((near & (nx >= 0) & (nx2 < 0))[:, None], R.goals[g], tp)
+        d = tp - pos
+        hd = np.hypot(d[:, 0], d[:, 1])
+        rel_deg = (np.degrees(np.arctan2(d[:, 1], d[:, 0])) - self.yaw[ri] + 180.0) % 360.0 - 180.0
+        rel = np.radians(rel_deg)
+        fwd = np.where(np.cos(rel) > 0.38, 1, np.where(np.cos(rel) < -0.38, -1, 0))
+        side = np.where(np.sin(rel) > 0.38, -1, np.where(np.sin(rel) < -0.38, 1, 0))
+        slow = np.hypot(s[ri, 3], s[ri, 4]) < 80.0
+        self.run_stuck[ri] = np.where(slow, self.run_stuck[ri] + 1, 0)
+        up = (d[:, 2] > 18.0) & (hd < 260.0)
+        gap = (hd > 150.0) & (d[:, 2] > -40.0) & (nx >= 0) & ~near
+        jump = (s[ri, 6] > 0.5) & (up | gap | (self.run_stuck[ri] > 10))
+        turn = np.clip(rel_deg * 0.5, -20.0, 20.0)
+        lab = np.stack([fwd + 1, side + 1, jump.astype(np.int64), np.abs(TURN[None, :] - turn[:, None]).argmin(1)], 1)
+        self.teach[ri[ok]] = lab[ok]
+
     def _teach_update(self):
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
         self.teach[:] = -1
+        self._run_teach()
         if self.teacher is None:
             return
         mi = np.nonzero((self.goal >= 0) & (self.script == 0))[0]
