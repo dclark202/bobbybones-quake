@@ -21,8 +21,9 @@ if [ -n "${DUEL_MAPS-bloodrun aerowalk lostworld furiousheights campgrounds sini
   done
 fi
 "$PY" tools/reflex_report.py --last --bobby "$RUN" 2>&1 | grep -v "shot after\|size of\|fastest\|aims \|own speed\|jitter\|^runs\|Slow target" | cut -c1-132
-if [ -n "$VIDEO" ]; then
-  ARENA_SETS="mg;rl;rg;lg;rl,rg;rl,lg;rg,lg;rl,rg,lg" ARENA_STACK=0 "$PY" sim/render_course.py --run "$RUN" --env duel_env_ffa --group "${VGROUP:-2}" --map arena1 --fight yard --secs 90 --round 90 --width 640 2>&1 | grep "^fight\|Error" | cut -c1-220
+# a video every other hour (the odd ones), 30 seconds on arena1 (owner, 2026-10-07: rendering takes long); VIDEO=1 forces one, NOVIDEO=1 none
+if [ -z "$NOVIDEO" ] && { [ -n "$VIDEO" ] || [ $(( 10#$(date +%H) % 2 )) -eq 1 ]; }; then
+  ARENA_SETS="mg;rl;rg;lg;rl,rg;rl,lg;rg,lg;rl,rg,lg" ARENA_STACK=0 "$PY" sim/render_course.py --run "$RUN" --env duel_env_ffa --group "${VGROUP:-2}" --map arena1 --fight yard --secs "${VIDEO_SECS:-30}" --round "${VIDEO_SECS:-30}" --width 640 2>&1 | grep "^fight\|Error" | cut -c1-220
 fi
 "$PY" tools/heatmap.py --run "$RUN" --group 3 --minutes 4 2>&1 | grep -v "^  [0-9] min" | cut -c1-160
 tasklist | grep -ci python
