@@ -18,12 +18,14 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 ## Free-for-all servers (`plugins/ffabot.py`)
 
 A server started with `FFA=<n>` runs up to four Bobbys and people together, six seats in all, everybody against
-everybody, in permanent warmup.
+everybody. It waits in warmup (every weapon at spawn) until `!match` or until every person has readied up (F3): then a
+real game runs, machine gun at spawn, with the map's timelimit (15 min; `!match <minutes>` sets it) and goes back to warmup.
+No quad, no spawn timers on the armors and the mega, weapons back in 2 s (2026-10-06).
 
 | Command | Who | What it does |
 |---|---|---|
 | `!bots <0-4>` | anyone | how many Bobbys play; people get the other seats (6 - n; the server holds 8 clients, the rest spectate). Raising it is refused while more people than that are playing; lowering it frees seats. Nobody can push a bot out. |
-| `!match [minutes]` (or `!duel`) | anyone | a scored match for everybody in the game, 10 minutes by default: normal spawn, the items on the map; a table of kills, deaths and damage at the end. `!match off` stops it |
+| `!match [minutes]` (or `!duel`) | anyone | starts a real game for everybody in the game (`allready`), 10 minutes by default, no frag limit: machine gun at spawn, the items on the map; the game's own table of kills, deaths and damage at the end, then warmup again. `!match off` aborts it |
 | `!help`, `!note <text>` | anyone | as on the 1v1 server |
 
 The 1v1 rooms (`!reflex`, `!movement`, `!room`) are not in free-for-all mode.

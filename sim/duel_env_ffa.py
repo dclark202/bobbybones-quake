@@ -131,7 +131,7 @@ P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2], np.int64)
 REACT_FRAMES = 2                                       # 50 ms: tracking an enemy already in view lags by this much.
 ACQUIRE_FRAMES = 8                                     # 200 ms: an enemy who has just come into view is not reacted to before this
 TURN_CAP = 30.0                                        # fastest flick, degrees per frame (1200 deg/s)
-MOTOR_NOISE, MOTOR_BASE = 0.14, 0.05                   # hand noise: this share of the view movement, plus a little, per frame
+MOTOR_NOISE, MOTOR_BASE = 0.10, 0.05                   # hand noise: this share of the view movement, plus a little, per frame (0.14 until 2026-10-06 evening, owner: tune up)
 RELOAD_JITTER, RELOAD_JITTER_MAX = 0.05, 0.12          # slow weapons: random extra delay after the reload (mean, max seconds)
 DMG_TAKEN_W = 2.0                                      # damage taken (any source) weighs this much against damage dealt
 FIRE_TOGGLE_COST = 0.003                               # reward cost each time the fire button changes (holding is free)
@@ -141,7 +141,8 @@ LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loa
 # (2026-10-05) He reads where the enemy is against his crosshair only this well: a slowly drifting error, in degrees,
 # on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
 # gap between crosshair and target by eye, not to a hundredth of a degree.
-PERCEPT_SIGMA, PERCEPT_TAU = 1.0, 0.15                  # degrees; seconds over which the error drifts
+PERCEPT_SIGMA, PERCEPT_TAU = 0.6, 0.15                  # degrees; seconds over which the error drifts (1.0 until 2026-10-06 evening:
+                                                       # v8 measured 3.5 deg aim error on a strafing target against the owner's 2.5; owner: tune up)
 # (2026-10-05, B-94) Being shot at costs aim: a hit throws his read of the enemy's direction off by FLINCH_PER_DMG
 # degrees per point of damage (at most FLINCH_MAX at a time), and the error stays larger while the flinch fades
 # (FLINCH_TAU seconds). First values; to be set from players in the reflex test (calm half against the half under fire).

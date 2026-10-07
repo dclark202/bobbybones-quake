@@ -45,6 +45,8 @@ class ffabot(duelbot):
         self.add_hook("player_disconnect", self.on_disconnect)
         self.add_hook("vote_called", self.on_vote_called)
         self.add_hook("team_switch_attempt", self.on_team_switch)
+        self.add_hook("game_start", self.on_game_start)
+        self.add_hook("game_end", self.on_game_end)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("bots", self.cmd_bots, 0, usage="<0-4>")
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(FFA_MAPS)))
@@ -75,7 +77,7 @@ class ffabot(duelbot):
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game. ^2!bots <0-4>^7 sets how many of me play; people get the other seats (six play, the rest spectate).",
-            "^3Commands:^7 ^2!match [minutes]^7 a scored match (10 min). ^2!map arena1^7 free-for-all, ^2!map testlab^7 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
+            "^3Commands:^7 ^2!match [minutes]^7 starts a real game, machine gun at spawn (10 min). ^2!map arena1^7 free-for-all, ^2!map testlab^7 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def log(self, msg):
@@ -85,27 +87,54 @@ class ffabot(duelbot):
 
     # ------------------------------------------------------------------ a timed, scored match
     def cmd_match(self, player, msg, channel):
-        """!match [minutes]: a scored free-for-all for everybody in the game, normal spawn, the items on the map;
-        the table at the end counts kills, deaths and damage since the start. !match off stops it."""
+        """!match [minutes]: a real game (not warmup, where everybody spawns with every weapon): the game is started
+        for everybody in it, machine gun at spawn, the items on the map, this time limit (10 min), no frag limit.
+        The table at the end is the game's own score. When it ends the server goes back to warmup. !match off aborts it."""
         a = [m.lower() for m in msg[1:]]
         if a and a[0] == "off":
             if self.match:
                 self.match_end("stopped")
+                minqlx.console_command("abort")
             return
-        mins = float(a[0]) if a and a[0].replace(".", "", 1).isdigit() else 10.0
-        base = {}
-        for p in self.bobbys() + self.people():
-            base[p.id] = (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken)
-        self.match = dict(t_end=time.time() + mins * 60, mins=mins, base=base, warned=False)
+        if self.match:
+            player.tell("^3A match is already running.^7 !match off stops it.")
+            return
+        mins = max(1, min(60, int(float(a[0])))) if a and a[0].replace(".", "", 1).isdigit() else 10
+        self.set_cvar("timelimit", str(mins))
+        self.set_cvar("fraglimit", "0")
+        running = self.game is not None and self.game.state == "in_progress"    # bots alone start a game by themselves
+        self.match = dict(t0=time.time(), t_end=time.time() + mins * 60 + 40, mins=mins, base={}, warned=False, started=False,
+                          go_at=time.time() + (4.0 if running else 0.0), sent=False)
         self.record(event="match_start", minutes=mins, people=len(self.people()), bots=len(self.bobbys()))
-        self.msg("^3Match: {:g} minutes, everybody against everybody.^7 Kills count from now. !match off stops.".format(mins))
+        self.msg("^3Match: {} minutes, everybody against everybody, machine gun at spawn.^7 !match off stops it.".format(mins))
+        if running:
+            minqlx.console_command("abort")                  # back to warmup first; the frame loop readies everybody after
+
+    def on_game_start(self, data):
+        if not self.match and self.people():                 # the people readied up themselves (all must, F3): a game all the same
+            try:
+                mins = int(float(minqlx.get_cvar("timelimit") or 0)) or 15
+            except ValueError:
+                mins = 15
+            self.match = dict(t0=time.time(), t_end=0, mins=mins, base={}, warned=False, started=False, go_at=0, sent=True)
+            self.record(event="match_start", minutes=mins, people=len(self.people()), bots=len(self.bobbys()), by="ready")
+            self.msg("^3Game on: {} minutes, machine gun at spawn.^7 !match off stops it.".format(mins))
+        if self.match:                                       # the game's stats start from zero here
+            self.match["started"] = True
+            self.match["t_end"] = time.time() + self.match["mins"] * 60 + 15
+            for p in self.bobbys() + self.people():
+                self.match["base"][p.id] = (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken)
+
+    def on_game_end(self, data):
+        if self.match:
+            self.match_end("time")
 
     def match_end(self, why="time"):
         M = self.match
         self.match = None
         rows = []
         for p in self.bobbys() + self.people():
-            b = M["base"].get(p.id, (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken))
+            b = M["base"].get(p.id, (0, 0, 0, 0) if M.get("started") else (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken))
             rows.append(dict(name=p.clean_name if is_bot(p) else "person {}".format(self.seat.get(p.id, "?")), bot=is_bot(p),
                              seat=self.seat.get(p.id), kills=p.stats.kills - b[0], deaths=p.stats.deaths - b[1],
                              dmg_dealt=p.stats.damage_dealt - b[2], dmg_taken=p.stats.damage_taken - b[3]))
@@ -367,7 +396,7 @@ class ffabot(duelbot):
         # is in the game and loaded, one "abort" brings it back to warmup, and an unready person keeps it there. Never
         # while someone is still loading: a restart then looks like a hanging connection (2026-10-06).
         loaded = [p for p in people if p.state is not None and p.state.health > 0]
-        if loaded and self.game is not None and self.game.state not in ("warmup", None) and now - self.last_abort > 60:
+        if loaded and not self.match and self.game is not None and self.game.state not in ("warmup", None) and now - self.last_abort > 60:
             self.last_abort = now
             minqlx.console_command("abort")
         if len(bobbys) < self.n_bots and now > self.next_check:
@@ -395,11 +424,14 @@ class ffabot(duelbot):
             seated.append((k, p, st))
             self.fill_player(env, E, k, p, st)
         if self.match:
-            if now >= self.match["t_end"]:
+            if not self.match["sent"] and now >= self.match["go_at"]:
+                self.match["sent"] = True
+                minqlx.console_command("allready")           # everybody ready: the game's countdown starts
+            if not self.match["started"] and now - self.match["t0"] > 40:      # the countdown never came
+                self.match_end("did not start")
+            elif now >= self.match["t_end"]:                                   # the game's own end was missed
                 self.match_end("time")
-            elif not self.match["warned"] and self.match["t_end"] - now < 60:
-                self.match["warned"] = True
-                self.msg("^3One minute left.")
+                minqlx.console_command("abort")
         if not seated:
             return
         # the round clock (as in training: the clock, the score and the memory start over every ROUND_SECS)
