@@ -918,8 +918,8 @@ class duelbot(minqlx.Plugin):
                 if in_room and self.room is not None and self.room.get("started"):
                     self.room_loadout(bobby, opp, only=who)
                 else:
-                    if not (self.arena and self.arena["where"] == "map"):
-                        self.give_loadout(p)                 # not in a scored duel on a duel map: the game's own spawn stands there
+                    if not ((self.arena and self.arena["where"] == "map") or (self.real_game and not self.lab)):
+                        self.give_loadout(p)                 # not in a scored duel or an F3 game on a duel map: the game's own spawn stands there
                     if self.arena and self.lab:              # arena: come back inside the room, away from the other one
                         o_ = (opp if who == "bobby" else bobby).state
                         q = self.arena_spot(o_.position if o_ else (0, 0, 0))
