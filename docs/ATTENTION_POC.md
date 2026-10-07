@@ -37,6 +37,21 @@ Answer the hardware question before building anything. A numpy forward pass with
 - **Pass**: four bots under 4 ms on the server for the cross-attention variant. If the self-attention variant does not
   pass, it is dropped here.
 
+**Measured 2026-10-07 09:00** (`tools/attention_timing.py`, random weights, numpy, one thread; milliseconds a frame for all bots together, median and 99th percentile in brackets). The rented server, 2 cores, nobody playing:
+
+| Bots | Today's network | Cross-attention | With a self-attention layer |
+|---|---|---|---|
+| 1 | 0.15 (0.40) | 1.18 (3.45) | 1.51 (3.89) |
+| 2 | 1.02 (3.32) | 2.22 (6.50) | 2.64 (6.90) |
+| 4 | 0.98 (3.34) | 2.29 (6.41) | 3.12 (7.45) |
+| 6 | 1.20 (3.51) | 2.64 (6.84) | 3.78 (9.76) |
+
+The PC, with the training run on every core (so the tails are the training's, not the network's): four bots 0.51 / 1.77 / 2.55 ms, six bots 0.78 / 2.07 / 3.45 ms.
+
+- **Both variants pass** (four bots under 4 ms on the server at the median): 2.3 ms and 3.1 ms against today's 1.0 ms. With the inputs (about 4 ms for six seats on the server) a frame stays inside the 15 ms budget, the 99th percentile included.
+- The cost is about **1.3 ms more whatever the number of bots**: it is the overhead of many small array operations in numpy, not arithmetic (one bot costs 1.2 ms where the estimate from multiply-adds said 0.3). So it can be cut if needed (one head, fewer reshapes, a fused token layer), and more bots are nearly free.
+- Not measured: building the tokens. They are made of numbers the flat inputs compute already, so the input time should hardly move.
+
 ## Step 1: the tokens (one day)
 
 `observe_entities()` in `sim/duel_env.py` beside `observe()`: the self vector, a token array `[players, K, F]`, a mask and
