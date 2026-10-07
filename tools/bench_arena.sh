@@ -11,14 +11,16 @@ RUN="$1"; WHERE="${2:-env}"; MINS="${3:-5}"; MAP="${4:-testlab}"; ENVMOD="${5:-d
 BN="${BENCH_NAME:-qltest}"; BD="${BENCH_DATA:-data/labtest}"
 mkdir -p "$BD/sessions"
 docker rm -f "$BN" >/dev/null 2>&1
+OLD=$(ls -d "$BD"/sessions/* 2>/dev/null | tail -1)      # a result must come from a session made by this game, not the last one
 TAG=$(NAME="$BN" DATA="$BD" SPAR=1 SKILL=5 ARENA="$WHERE" ARENA_MIN="$MINS" PYTHON="${PYTHON:-python}" bash tools/duel_server.sh "$RUN" "$MAP" "$ENVMOD" 2>&1 | grep -o "minutes [0-9]*")
 sleep 45
 S=$(ls -d "$BD"/sessions/* | tail -1)
 for i in $(seq 1 $(( MINS * 6 + 30 ))); do
-  grep -q "arena_result" "$S/events.jsonl" 2>/dev/null && break
+  [ "$S" != "$OLD" ] && grep -q "arena_result" "$S/events.jsonl" 2>/dev/null && break
   sleep 10
   S=$(ls -d "$BD"/sessions/* | tail -1)
 done
+[ "$S" = "$OLD" ] && { echo "ARENA $TAG | $MAP: no game was played (the server made no session)"; docker rm -f "$BN" >/dev/null 2>&1; exit 1; }
 python - "$S" "$TAG" "$MAP" <<'PY'
 import sys, csv, json, collections
 import numpy as np
