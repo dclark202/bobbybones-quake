@@ -1,3 +1,5 @@
 data
 sim/build
 sim/qsim.dll
+maps/**/*.pk3
+maps/lockout

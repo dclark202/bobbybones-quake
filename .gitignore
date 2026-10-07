@@ -17,3 +17,4 @@ tools/demodump/*.exe
 tools/demodump/*.lib
 tools/demodump/*.exp
 videos/
+maps/lockout/lockout.pk3
