@@ -172,6 +172,10 @@ def main():
     groups = [int(x) for x in str(a.group).split(",")]
     G = groups[0]
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if dev.type == "cuda" and os.environ.get("GPU_MEM_FRACTION"):
+        # PyTorch keeps freed blocks and so fills the card whatever the batch needs (15.8 GB with 8372 players and with
+        # 7560 alike, 2026-10-06): this caps what the process may hold, leaving room for the desktop and a game
+        torch.cuda.set_per_process_memory_fraction(float(os.environ["GPU_MEM_FRACTION"]))
     if dev.type == "cpu":
         torch.set_num_threads(6)
     out = os.path.join(ROOT, "data", "sim_runs", a.run)
@@ -341,6 +345,11 @@ def main():
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
         if snaps:                                                        # pick this rollout's opponent
             opp.load_state_dict(snaps[np.random.randint(len(snaps))])
+        # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
+        # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
+        b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_iteach = b_teach = None
+        if dev.type == "cuda":
+            torch.cuda.empty_cache()
         b_obs = torch.zeros(T, N, OBS_DIM, device=dev)
         b_act = torch.zeros(T, N, len(ACTION_DIMS), dtype=torch.long, device=dev)
         b_logp = torch.zeros(T, N, device=dev)
