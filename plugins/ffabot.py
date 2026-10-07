@@ -266,6 +266,14 @@ class ffabot(duelbot):
         return None
 
     # ------------------------------------------------------------------ session logs
+    def record(self, **rec):
+        """what happens in the game is written only while a person is playing (owner, 2026-10-07: "it should only log when
+        humans are actively playing": the bots alone filled the event log with their own deaths and pickups), and not
+        when the disk is nearly full. Joins, leaves, notes and the end of a session are always written."""
+        if rec.get("event") in ("death", "pickup", "minute", "bots") and not (getattr(self, "people_now", False) and getattr(self, "disk_ok", True)):
+            return
+        duelbot.record(self, **rec)
+
     def start_session(self):
         self.end_session()
         mapname = (minqlx.get_cvar("mapname") or "").lower()
@@ -388,6 +396,7 @@ class ffabot(duelbot):
             except OSError:
                 pass
         bobbys, people = self.bobbys(), self.people()
+        self.people_now = bool(people)                       # (record() writes game events only then)
         # Warmup for ever, as on the 1v1 server: with bots only the game starts a match by itself (harmless); once a person
         # is in the game and loaded, one "abort" brings it back to warmup, and an unready person keeps it there. Never
         # while someone is still loading: a restart then looks like a hanging connection (2026-10-06).
@@ -564,6 +573,10 @@ class ffabot(duelbot):
                      for k, p, st in seated}
         if now > self.next_summary:
             self.next_summary = now + 60
+            try:                                             # a floor: no frames or events with under 5 GB free on the disk
+                self.disk_ok = __import__("shutil").disk_usage(D).free > 5e9
+            except OSError:
+                self.disk_ok = True
             for k, p, st in seated:
                 if not is_bot(p) or not people:              # per-minute numbers only while a person is in the game
                     continue
@@ -584,6 +597,8 @@ class ffabot(duelbot):
         return round(math.degrees(math.acos(max(-1.0, min(1.0, c)))), 2)
 
     def log_row(self, now, env, E, k, p, st, keys, present, bot_seats, n_people, n_bots, bot=1):
+        if not getattr(self, "disk_ok", True):
+            return
         foe = int(env.foe[k])
         row = [round(now, 3), minqlx.item_states()[0], bot, k, *self.player_row(p, st, keys), foe, int(foe in bot_seats),
                int(env.visible[k]), round(float(env.seen_t[k]), 2), self.aim_to(env, k, foe) if present[foe] else -1,

@@ -132,3 +132,15 @@ The server also mounts the pk3 files from the repo, so the repo and the Workshop
 |---|---|
 | One machine in Chicago, one server (this document) | about $20 (possibly $10-12 on the smaller plan) |
 | Later: Chicago + Europe + US west, two servers each | about $45-50 |
+
+## Logs: what is written, and where it goes
+
+- The server writes game data only while a person is playing: frame rows for every Bobby and every person (`docs/LOGS.md`), and
+  since 2026-10-07 the events too (deaths, pickups, the minute summaries were written for the bots alone before). With under
+  5 GB free on the disk nothing is written.
+- `tools/pull_sessions.sh`, run every day at 09:30 by the Windows scheduled task "BobbyBones session pull" on the owner's PC
+  (and on the next start if the PC was off): packs every finished session on the server (`tar.gz`, about a fifth of the
+  size), copies the archives to `T:\quake-sessions\public`, compares checksums, and only then removes the session and its
+  archive from the server; it also clears the server images no container uses. The newest session is the live one and is
+  left alone. A line per run goes to `pull.log` in that folder. Everything played by people is kept on the PC.
+
