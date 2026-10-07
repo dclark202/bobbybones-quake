@@ -533,6 +533,12 @@ class ffabot(duelbot):
             if is_bot(p) and st.health <= 0:                 # tap fire to respawn
                 minqlx.set_bot_input(p.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
                 self.fired[k] = False
+        if people:                                           # the people's own frames too (owner, 2026-10-07: to learn aim habits
+            for k, p, st in seated:                          # from): the same columns, bot = 0, the keys as the engine ran them
+                if not is_bot(p) and st.health > 0:
+                    c_ = minqlx.ran_usercmd(p.id)
+                    keys_ = (int(np.sign(c_[3])), int(np.sign(c_[4])), int(np.sign(c_[5])), int(c_[1] & 1))
+                    self.log_row(now, env, E, k, p, st, keys_, present, bot_seats, len(people), len(bobbys), bot=0)
         if not live_bots:
             return
         obs = env.observe()
@@ -577,9 +583,9 @@ class ffabot(duelbot):
         c = float((to * f).sum() / (np.linalg.norm(to) + 1e-6))
         return round(math.degrees(math.acos(max(-1.0, min(1.0, c)))), 2)
 
-    def log_row(self, now, env, E, k, p, st, keys, present, bot_seats, n_people, n_bots):
+    def log_row(self, now, env, E, k, p, st, keys, present, bot_seats, n_people, n_bots, bot=1):
         foe = int(env.foe[k])
-        row = [round(now, 3), minqlx.item_states()[0], 1, k, *self.player_row(p, st, keys), foe, int(foe in bot_seats),
+        row = [round(now, 3), minqlx.item_states()[0], bot, k, *self.player_row(p, st, keys), foe, int(foe in bot_seats),
                int(env.visible[k]), round(float(env.seen_t[k]), 2), self.aim_to(env, k, foe) if present[foe] else -1,
                E.INTENTS[int(env.intent[k])] if hasattr(E, "INTENTS") else "", n_people, n_bots]
         self.frames_f.write(",".join(str(v) for v in row) + "\n")

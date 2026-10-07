@@ -61,7 +61,7 @@ Suggested note tags (first word of the text): `aim`, `move`, `weapon`, `items`, 
 ## Free-for-all sessions (`plugins/ffabot.py`, schema 4)
 
 One session per map load, in `data/<server data>/sessions/<date>_<map>_ffa/`. `meta.json` as the 1v1 sessions with
-`kind: ffa`, `seats: 6`. `frames.csv`: one row per Bobby per server frame (25 ms), written only while at least one person is in the game (bots among themselves are not logged, owner 2026-10-06): `t, server_ms, bot, seat`, his own
+`kind: ffa`, `seats: 6`. `frames.csv`: one row per Bobby **and, since 2026-10-07 evening, per person** per server frame (25 ms; `bot` = 1 or 0), written only while at least one person is in the game (bots among themselves are not logged, owner 2026-10-06). A person's row has the same columns: position, velocity, view angles, health, armor, weapon, the keys and the fire button as the engine ran them (`minqlx.ran_usercmd`), the opponent he is attending to by the simulator's rule (`foe_seat`), whether that one is in view and the angle between his crosshair and him (`b_aim_err`): what is needed to read a player's tracking error, flicks and reaction from play. No names are stored, only the seat. Columns: `t, server_ms, bot, seat`, his own
 state (`b_*`, the same 18 columns as the 1v1 rows: position, velocity, view, health, armor, weapon, ammo, keys),
 `foe_seat` (the enemy he attends to), `foe_bot`, `b_sees`, `b_seen_ago`, `b_aim_err` (to that enemy; -1 with none),
 `intent` (none / MH / RA / RL / RG / LG), `people`, `bots`. `events.jsonl`: `join` / `leave` (seat, bot), `death`
