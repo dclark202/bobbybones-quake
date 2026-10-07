@@ -165,9 +165,10 @@ class ffabot(duelbot):
         mapname = (minqlx.get_cvar("mapname") or "").lower()
         self.set_cvar("g_itemTimers", "0")                   # owner (2026-10-06): no spawn timers on the armors and the mega
         self.set_cvar("g_weaponRespawn", "2")                # weapons back in 2 s (duelbot.setup puts the 5 s of 1v1 back)
-        try:
-            minqlx.replace_items("item_quad", 0)             # no quad: the simulator has none
-        except ValueError:
+        try:                                                 # no quad (owner; the simulator has none): where the map puts the
+            has_mega = any(cls == "item_health_mega" for _, cls, *_ in minqlx.item_states()[1])    # quad instead of the mega
+            minqlx.replace_items("item_quad", 0 if has_mega else "item_health_mega")                 # in free-for-all
+        except ValueError:                                   # (campgrounds), the mega comes back, as in 1v1 and in training
             pass
         bsp = "/tmp/maps/{}.bsp".format(mapname)
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
