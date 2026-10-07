@@ -70,7 +70,7 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-`duel_gru_v9` trains from 2026-10-06 20:42 until 16:00 on the 7th (owner's call) on seven maps with the map reader
+`duel_gru_v9` trains from 2026-10-06 20:42 until 19:00 on the 7th (owner's calls; since the morning of the 7th on arena1, Aerowalk, Blood Run and Lost World, with a scripted item runner in a quarter of the fight rounds, a scattering machine gun and a tenth of the time in solo item runs: RESULTS 2026-10-07) with the map reader
 (see "Next round" below; RESULTS 2026-10-06 evening): intention head seeded by a simple item rule, rocket drills,
 perception noise 0.6 degrees and hand noise 0.10 (tuned up after the reflex comparison with the owner). v8 ended
 17:49: 18-30 against Nightmare at the end, human-like play by the owner's account, items still untouched (the
