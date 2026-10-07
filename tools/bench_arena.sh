@@ -3,20 +3,23 @@
 # rules of !arena (full weapons at spawn, nobody leaves the room), or on arena1 (the whole map, duel spawn, items).
 #   bash tools/bench_arena.sh <run> [env|box|yard] [minutes=5] [map=testlab] [simulator module=duel_env]
 #   bash tools/bench_arena.sh duel_gru_v6 yard 5 arena1 duel_env_ffa
+# BENCH_NAME / BENCH_DATA (default qltest, data/labtest): another container and data folder, for games side by side.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 export MSYS_NO_PATHCONV=1
 RUN="$1"; WHERE="${2:-env}"; MINS="${3:-5}"; MAP="${4:-testlab}"; ENVMOD="${5:-duel_env}"
-docker rm -f qltest >/dev/null 2>&1
-TAG=$(NAME=qltest DATA=data/labtest SPAR=1 SKILL=5 ARENA="$WHERE" ARENA_MIN="$MINS" PYTHON="${PYTHON:-python}" bash tools/duel_server.sh "$RUN" "$MAP" "$ENVMOD" 2>&1 | grep -o "minutes [0-9]*")
+BN="${BENCH_NAME:-qltest}"; BD="${BENCH_DATA:-data/labtest}"
+mkdir -p "$BD/sessions"
+docker rm -f "$BN" >/dev/null 2>&1
+TAG=$(NAME="$BN" DATA="$BD" SPAR=1 SKILL=5 ARENA="$WHERE" ARENA_MIN="$MINS" PYTHON="${PYTHON:-python}" bash tools/duel_server.sh "$RUN" "$MAP" "$ENVMOD" 2>&1 | grep -o "minutes [0-9]*")
 sleep 45
-S=$(ls -d data/labtest/sessions/* | tail -1)
+S=$(ls -d "$BD"/sessions/* | tail -1)
 for i in $(seq 1 $(( MINS * 6 + 30 ))); do
   grep -q "arena_result" "$S/events.jsonl" 2>/dev/null && break
   sleep 10
-  S=$(ls -d data/labtest/sessions/* | tail -1)
+  S=$(ls -d "$BD"/sessions/* | tail -1)
 done
-python - "$S" "$TAG" "$WHERE" <<'PY'
+python - "$S" "$TAG" "$MAP" <<'PY'
 import sys, csv, json, collections
 import numpy as np
 s, tag, where = sys.argv[1:4]
@@ -31,4 +34,4 @@ print("ARENA {} | {} box, {:g} min vs Nightmare | score {}-{} | dmg {}/{} | spee
     tag, where, a["minutes"], a["bobby"], a["opp"], a["dmg_dealt"], a["dmg_taken"], np.hypot(g("b_vx"), g("b_vy")).mean(), see.mean(),
     g("b_aim_err")[see].mean() if see.any() else -1, {k: round(v / len(r), 2) for k, v in c.most_common(4)}))
 PY
-docker rm -f qltest >/dev/null 2>&1
+docker rm -f "$BN" >/dev/null 2>&1

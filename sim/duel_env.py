@@ -180,6 +180,9 @@ INTENT_EVERY, INTENT_SWITCH = 40, 0.02
 # so a whole trip never pays more than the item itself.
 INTENT_HOLD = 3.0
 INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
+CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
+                                                       # trips ending in death the long ones (mega, red) lost money and he chose the
+                                                       # launcher 92% of the time (v9 night, 2026-10-07). Now only a trip given up is clawed back (owner)
 ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2, len(INTENTS))  # ..., walk, zoom, lift the mouse, intention
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
@@ -2372,8 +2375,8 @@ class DuelEnv:
         for v in dead:
             k = attacker[v]
             reward[v] -= 1.0
-            if self.intent[v] > 0 and not self.intent_done[v]:
-                reward[v] -= float(self.intent_paid[v])      # the trip he died on pays nothing (v9)
+            if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
+                reward[v] -= float(self.intent_paid[v])      # the trip he died on pays nothing (v9; off since 2026-10-07)
             died[v] = True
             if k >= 0 and k != v:
                 reward[k] += 1.0
@@ -2404,7 +2407,7 @@ class DuelEnv:
         for v in out:
             if not died[v]:
                 reward[v] -= 1.0
-                if self.intent[v] > 0 and not self.intent_done[v]:
+                if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
                     reward[v] -= float(self.intent_paid[v])
                 died[v] = True
                 self.stats["suicides"] += 1

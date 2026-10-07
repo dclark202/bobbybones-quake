@@ -887,7 +887,8 @@ class duelbot(minqlx.Plugin):
                 if in_room and self.room is not None and self.room.get("started"):
                     self.room_loadout(bobby, opp, only=who)
                 else:
-                    self.give_loadout(p)
+                    if not (self.arena and self.arena["where"] == "map"):
+                        self.give_loadout(p)                 # not in a scored duel on a duel map: the game's own spawn stands there
                     if self.arena and self.lab:              # arena: come back inside the room, away from the other one
                         o_ = (opp if who == "bobby" else bobby).state
                         q = self.arena_spot(o_.position if o_ else (0, 0, 0))
@@ -929,6 +930,12 @@ class duelbot(minqlx.Plugin):
                 and not getattr(self, "arena_auto_done", False):
             self.arena_auto_done = True                      # benchmark servers: one arena fight against the game's bot
             self.arena_start(os.environ["DUEL_ARENA"], float(os.environ.get("DUEL_ARENA_MIN") or 5))
+        if self.arena is None and not self.lab and os.environ.get("DUEL_ARENA") and is_bot(opp) \
+                and not getattr(self, "arena_auto_done", False):
+            self.arena_auto_done = True                      # the same on a duel map: the whole map as it is, the game's spawn
+            mins = float(os.environ.get("DUEL_ARENA_MIN") or 5)
+            self.arena = dict(where="map", t_end=now + mins * 60, mins=mins, base=dict(self.score), place=False, dmg=[0, 0])
+            self.record(event="arena_start", where="map", minutes=mins)    # (the first life still has the handed-out weapons)
         if self.arena and self.arena["where"] == "map":       # a timed, scored duel on a map as it is
             if now >= self.arena["t_end"]:
                 self.arena_end("time")
