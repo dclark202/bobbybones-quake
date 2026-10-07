@@ -10,8 +10,8 @@ import time
 
 import minqlx
 
-FFA_MAPS = ("arena1",)
-DUEL_MAPS = ("testlab", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")      # the maps Bobby has trained on (1v1 by default); duelbot.MAPS keeps the same list
+FFA_MAPS = ("arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")
+DUEL_MAPS = ("testlab",)      # the test map is the only 1v1 one (reflex and movement tests); every other map defaults to free-for-all. duelbot.MAPS has the whole list
 PLUGIN = {"ffa": "ffabot", "duel": "duelbot"}
 
 

@@ -75,6 +75,9 @@ class duelbot(minqlx.Plugin):
         self.add_hook("player_loaded", self.on_player_loaded)
         self.add_hook("vote_called", self.on_vote_called)
         self.add_hook("team_switch_attempt", self.on_team_switch)
+        self.add_hook("client_command", self.on_client_command)
+        self.add_hook("game_start", self.on_game_start)
+        self.add_hook("game_end", self.on_game_end)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("maps", self.cmd_maps, 0)
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(MAPS)))
@@ -98,6 +101,8 @@ class duelbot(minqlx.Plugin):
         self.top_up = 0.0
         self.last = {}                                       # latest snapshot of both players, for notes
         self.ready = False
+        self.real_game = False                               # a game the person started with F3 (the warmup abort below leaves it alone)
+        self.ready_ids = set()
         self.next_check = 0.0
         self.want_map = os.environ.get("LAB_MAP", "bloodrun").lower()
         self.opp_bot = os.environ.get("DUEL_OPP", "") == "bot"
@@ -233,6 +238,30 @@ class duelbot(minqlx.Plugin):
         """no player votes at all: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS)"""
         player.tell("Voting is off on this server. ^2!map <{}>^7 changes the map.".format("|".join(MAPS)))
         return minqlx.RET_STOP_ALL
+
+    def on_client_command(self, player, cmd):
+        """F3 (the game's "readyup") in 1v1: the game starts when the person is ready. The engine would wait for the bot,
+        who never readies up (owner, 2026-10-07)"""
+        if cmd.strip().lower() != "readyup" or is_bot(player) or self.game is None or self.game.state != "warmup":
+            return
+        people = [p for p in self.players() if not is_bot(p) and p.team != "spectator"]
+        if player.id in self.ready_ids:
+            self.ready_ids.discard(player.id)
+        else:
+            self.ready_ids.add(player.id)
+        n = len([q for q in people if q.id in self.ready_ids])
+        if people and n * 2 > len(people):
+            self.ready_ids = set()
+            self.real_game = True
+            self.set_cvar("timelimit", "10")
+            self.msg("^3Game on:^7 1v1 against BobbyBones, 10 minutes.")
+            minqlx.console_command("allready")
+
+    def on_game_start(self, data):
+        self.ready_ids = set()
+
+    def on_game_end(self, data):
+        self.real_game = False
 
     def on_team_switch(self, player, old, new):
         """one person plays against Bobby at a time; everyone else spectates and is queued by the game"""
@@ -848,7 +877,9 @@ class duelbot(minqlx.Plugin):
                 pass
         bobby, human, filler = self.cast()
         real_human = human is not None and not is_bot(human)
-        if real_human and self.game is not None and self.game.state not in ("warmup", None) \
+        if not real_human:
+            self.real_game = False
+        if real_human and not self.real_game and self.game is not None and self.game.state not in ("warmup", None) \
                 and now - self.last_abort > 30:
             self.last_abort = now                            # with a human: stay in warmup (never abort in a tight loop)
             self.log("game state {} - back to warmup".format(self.game.state))
