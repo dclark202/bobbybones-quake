@@ -22,7 +22,7 @@ def is_bot(p):
 
 class botmode(minqlx.Plugin):
     def __init__(self):
-        self.add_command("mode", self.cmd_mode, 0, usage="<ffa|duel> [bots 1-4]", priority=minqlx.PRI_HIGH)
+        self.add_command("mode", self.cmd_mode, 0, usage="<ffa|duel> [bots 0-4]", priority=minqlx.PRI_HIGH)
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(FFA_MAPS + DUEL_MAPS)), priority=minqlx.PRI_HIGH)
         self.add_hook("map", self.on_map, priority=minqlx.PRI_LOW)
         self.last_switch = 0.0
@@ -59,7 +59,6 @@ class botmode(minqlx.Plugin):
                 minqlx.console_command("clientkick {}".format(p.id))
         if cur != mode:
             self.pending = PLUGIN[mode]
-        self.set_cvar("sv_maxclients", "6" if mode == "ffa" else "8")   # latched: takes effect with the map change (6 seats in free-for-all, owner 2026-10-06)
         minqlx.console_command("map {} {}".format(mapname, "ffa" if mode == "ffa" else "duel"))
         self.msg("^3{} switched the server to {} on {}.^7".format(who, "free-for-all" if mode == "ffa" else "1v1", mapname))
         return None
@@ -70,7 +69,7 @@ class botmode(minqlx.Plugin):
         mode = msg[1].lower()
         bots = None
         if len(msg) > 2:
-            if not msg[2].isdigit() or not 1 <= int(msg[2]) <= 4:
+            if not msg[2].isdigit() or not 0 <= int(msg[2]) <= 4:
                 return minqlx.RET_USAGE
             bots = int(msg[2])
         mapname = (minqlx.get_cvar("mapname") or "arena1").lower()

@@ -79,8 +79,8 @@ FFA=3 bash tools/duel_server.sh duel_gru_v8 arena1 duel_env_ffa     # three Bobb
 `FFA=<n>` starts in free-for-all; `!mode ffa|duel` and `!map` switch a running server (`plugins/botmode.py`, always
 loaded). `FFA=<n>` loads `plugins/ffabot.py` instead of the duel plugin and the `ffa` factory: one six-seat group simulator
 (the one he trained in), every client gets a seat on joining, all Bobbys think in one network pass per frame. `!bots <n>`
-changes the number of Bobbys while the server runs. Free-for-all rules (owner, 2026-10-06): six client slots (`sv_maxclients 6`,
-eight in 1v1), no quad (`minqlx.replace_items("item_quad", 0)` after each map load), no spawn timers on the armors and the
+changes the number of Bobbys while the server runs. Free-for-all rules (owner, 2026-10-06): eight client slots as in 1v1 but six seats in the game
+(the seventh and eighth person spectate until a seat frees up), `!bots 0` to `4`, no quad (`minqlx.replace_items("item_quad", 0)` after each map load), no spawn timers on the armors and the
 mega (`g_itemTimers 0`), weapons back in 2 s (`g_weaponRespawn 2`; 1v1 keeps the game's 5 s). Cost per Bobby per frame is about 70 ray casts and one pass of a
 1.5 M-weight network in numpy: four Bobbys fit inside the 25 ms server frame on one core. `PORT=<udp port>` runs a second
 container beside the 1v1 one. Logs: `docs/LOGS.md`, schema 4.

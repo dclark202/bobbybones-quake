@@ -46,13 +46,13 @@ class ffabot(duelbot):
         self.add_hook("vote_called", self.on_vote_called)
         self.add_hook("team_switch_attempt", self.on_team_switch)
         self.add_command("help", self.cmd_help, 0)
-        self.add_command("bots", self.cmd_bots, 0, usage="<1-4>")
+        self.add_command("bots", self.cmd_bots, 0, usage="<0-4>")
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(FFA_MAPS)))
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("match", self.cmd_match, 0, usage="[minutes|off]")
         self.add_command("duel", self.cmd_match, 0, usage="[minutes|off]")
         self.match = None                                    # a timed, scored free-for-all (see cmd_match)
-        self.n_bots = max(1, min(MAX_BOTS, int(os.environ.get("BOBBYS") or 2)))
+        self.n_bots = max(0, min(MAX_BOTS, int(os.environ.get("BOBBYS") or 2)))   # 0 allowed: people only (owner, 2026-10-06)
         self.want_map = os.environ.get("LAB_MAP", "arena1").lower()
         self.lab, self.arena, self.drill, self.room, self.queue = None, None, None, None, []
         self.no_sg = self.no_walk = False
@@ -74,7 +74,7 @@ class ffabot(duelbot):
         self.score = {}
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
-            "^3Play me:^7 join the game. ^2!bots <1-4>^7 sets how many of me play; people get the other seats (six in all).",
+            "^3Play me:^7 join the game. ^2!bots <0-4>^7 sets how many of me play; people get the other seats (six play, the rest spectate).",
             "^3Commands:^7 ^2!match [minutes]^7 a scored match (10 min). ^2!map arena1^7 free-for-all, ^2!map testlab^7 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
@@ -123,7 +123,7 @@ class ffabot(duelbot):
         return sorted([p for p in self.players() if is_bot(p) and "Bones" in p.clean_name], key=lambda p: p.id)
 
     def cmd_bots(self, player, msg, channel):
-        if len(msg) < 2 or not msg[1].isdigit() or not 1 <= int(msg[1]) <= MAX_BOTS:
+        if len(msg) < 2 or not msg[1].isdigit() or not 0 <= int(msg[1]) <= MAX_BOTS:
             return minqlx.RET_USAGE
         n = int(msg[1])
         if len(self.people()) > SEATS - n:
