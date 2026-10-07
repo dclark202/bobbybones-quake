@@ -364,7 +364,9 @@ class ffabot(duelbot):
         if not self.ready:
             if now > self.next_check:
                 self.next_check = now + 2
-                if mapname != self.want_map:
+                if mapname in FFA_MAPS:
+                    self.want_map = mapname                  # the end-of-game map vote (sv_mapPoolFile) picked it: stay
+                elif mapname != self.want_map:
                     self.next_check = now + 10
                     minqlx.console_command("map {} ffa".format(self.want_map))
                     return

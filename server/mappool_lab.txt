@@ -1,3 +1,7 @@
-bloodrun|duel
-aerowalk|duel
-campgrounds|duel
+arena1|ffa
+bloodrun|ffa
+aerowalk|ffa
+lostworld|ffa
+campgrounds|ffa
+sinister|ffa
+furiousheights|ffa
