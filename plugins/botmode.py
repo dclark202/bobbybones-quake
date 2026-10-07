@@ -47,7 +47,9 @@ class botmode(minqlx.Plugin):
         if bots is not None:
             os.environ["BOBBYS"] = str(bots)
         os.environ["LAB_MAP"] = mapname
-        if cur and cur != mode:
+        if cur == mode and minqlx.Plugin._loaded_plugins.get(PLUGIN[cur]) is not None:
+            minqlx.Plugin._loaded_plugins[PLUGIN[cur]].want_map = mapname   # the plugin stays loaded: left on its old map it pulled
+        if cur and cur != mode:                                              # the server straight back (bloodrun -> arena1, 2026-10-06)
             plugin = minqlx.Plugin._loaded_plugins.get(PLUGIN[cur])
             try:
                 plugin.end_session()
