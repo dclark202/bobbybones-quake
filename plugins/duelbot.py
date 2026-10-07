@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("testlab", "arena1", "lockout", "bloodrun", "aerowalk", "lostworld", "campgrounds")      # the only maps a player can pick with !map
+MAPS = ("testlab", "arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")      # the only maps a player can pick with !map: the ones Bobby has trained on (botmode.py keeps a copy)
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 3
@@ -77,7 +77,7 @@ class duelbot(minqlx.Plugin):
         self.add_hook("team_switch_attempt", self.on_team_switch)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("maps", self.cmd_maps, 0)
-        self.add_command("map", self.cmd_map, 0, usage="<testlab|arena1|lockout|bloodrun|aerowalk|lostworld|campgrounds>")
+        self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(MAPS)))
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_command("drill", self.cmd_drill, 5, usage="<weapon|off>")

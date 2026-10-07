@@ -5,6 +5,10 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-07 — Public server: new name, `!map` limited to the trained maps (owner)
+
+The server list name is now "doppz's bot arena | duel & FFA | chicago" (`tools/push_bobby.sh`; takes effect at the next `push_bobby.sh` restart, or live with rcon `set sv_hostname`). `!map` and `!maps` list only `testlab, arena1, bloodrun, aerowalk, lostworld, campgrounds, sinister, furiousheights` (the maps he has seen in training; `duelbot.MAPS` is shared with ffabot, `botmode.DUEL_MAPS` keeps a copy; `lockout` and the other pool maps are no longer pickable). Not yet tested on a server.
+
 ## 2026-10-07 13:28 — `duel_gru_v10`: he is shown the walk (the runner's keys as a fading teacher in item runs), item runs at 30% of the time (owner: "do it, items 1 and 2, start it now as v10")
 
 **Why.** v9 ended at 13:27 (3,483 minutes, `duel_gru_v9/policy_end_v9.pt`). Its last 17 hours changed a great deal around him (a seeded intention, a claw-back, a scripted item runner, a scattering machine gun, smaller maps, item runs) and the item numbers did not move: alone on arena1 with the intention fixed he takes the item in 0 to 22% of 30-second rounds (09:15, 11:05, 13:05), and in item runs 0.10 to 0.17 targets a player-minute for three hours. He chooses the right item and cannot walk to it. The owner: "not showing anything new and starting to look like a waste of compute".

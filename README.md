@@ -71,7 +71,7 @@ The popular duel maps (Blood Run, Aerowalk, Lost World) come back once he meets 
 | Three or four players, all against all | training in groups of 2, 3 and 4 since 2026-10-06; on the public server with up to four Bobbys |
 | Beating Nightmare on the yard, ten minutes | 18-30 at the end of v8 (2026-10-06), the first run to trade frags with it |
 | The duel maps (Blood Run, Aerowalk, Lost World, Furious Heights, Campgrounds, Sinister) | in training alongside the yard since 2026-10-06 evening; a night on Blood Run with pro demos (3,700 downloaded) made movement faster but not duels better |
-| Public server | up: "BobbyBones the learning quake bot", free-for-all with three Bobbys, `!map` for the pool, ready up (F3) for a real game |
+| Public server | up: "doppz's bot arena | duel & FFA | chicago", free-for-all with three Bobbys, `!map` for the eight trained maps, ready up (F3) for a real game |
 | Player reports, opponent profiles | later |
 
 Details, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:

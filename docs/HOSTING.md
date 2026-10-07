@@ -58,7 +58,7 @@ On the machine:
 
 ```bash
 cd bobbybones-quake
-PUBLIC=1 RESTART=1 HOSTNAME_QL="BobbyBones | duel the learning bot | !rooms" bash tools/duel_server.sh - arena1
+PUBLIC=1 RESTART=1 HOSTNAME_QL="doppz's bot arena | duel & FFA | chicago" bash tools/duel_server.sh - arena1
 ```
 
 - `-` means "use the `policy.npz` already in `data/duellive`" (no PyTorch needed on the machine).

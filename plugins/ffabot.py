@@ -29,8 +29,7 @@ duelbot, is_bot, sig, D, QLNUM = _duel.duelbot, _duel.is_bot, _duel.sig, _duel.D
 
 SEATS = 6
 MAX_BOTS = 4
-FFA_MAPS = ("arena1", "testlab", "bloodrun", "aerowalk", "lostworld", "campgrounds") + tuple(
-    l[2:].strip() for l in open("/ql/maps-data/MAPS.md", encoding="utf-8") if l.startswith("- ")) if os.path.exists("/ql/maps-data/MAPS.md") else ("arena1", "testlab", "bloodrun", "aerowalk", "lostworld")       # the whole pool: a map outside this list made frame() reload it for ever (sinister, 2026-10-06)
+FFA_MAPS = _duel.MAPS                                       # the maps Bobby has trained on; a map outside this list makes frame() reload it (sinister, 2026-10-06)
 ROUND_SECS = 180.0                                           # as the training rounds: the clock and the memory start over
 FRAME_COLS = ["t", "server_ms", "bot", "seat"] + ["b_" + c for c in _duel._P] + ["foe_seat", "foe_bot", "b_sees", "b_seen_ago",
                                                                "b_aim_err", "intent", "people", "bots"]

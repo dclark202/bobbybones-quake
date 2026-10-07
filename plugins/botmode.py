@@ -11,8 +11,7 @@ import time
 import minqlx
 
 FFA_MAPS = ("arena1",)
-DUEL_MAPS = ("testlab", "bloodrun", "aerowalk", "lostworld", "campgrounds") + tuple(
-    l[2:].strip() for l in open("/ql/maps-data/MAPS.md", encoding="utf-8") if l.startswith("- ")) if os.path.exists("/ql/maps-data/MAPS.md")     else ("testlab", "bloodrun", "aerowalk", "lostworld", "campgrounds")          # the pool of docs/MAPS.md (1v1 by default)
+DUEL_MAPS = ("testlab", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")      # the maps Bobby has trained on (1v1 by default); duelbot.MAPS keeps the same list
 PLUGIN = {"ffa": "ffabot", "duel": "duelbot"}
 
 
