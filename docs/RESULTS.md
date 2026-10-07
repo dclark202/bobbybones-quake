@@ -38,6 +38,7 @@ Launched 18:32 (until 07:00 on the 7th): 21 workers, 8372 players, 1.41 M weight
 |---|---|---|---|---|---|---|---|---|
 | 18:35 (start) | 2486 | 12.0 (first sample) | 54% / 50% / - / 12% | 0.17, 0.32 | 2 / 22 / 2 / 5 / 3 / 65 %, 17, 1.5% | - | - | - |
 | 21:15 (8 min after the last relaunch; no 21:05 check: the hourly loop was started after 19:05 and slept for its first slot until the next evening, replaced by `nightly_v9b.sh`) | 2536 | 8.0 | 53% / 44% / 47% / 25% | 0.14, 0.15 (lying 77%, 84% of the time) | 9 / 26 / 44 / 2 / 1 / 18 %, 10.5, 1.3% (abandoned 75%) | 0.013 | - | - |
+| 22:05 | 2581 | 13.4, 46%, 261 | 58% / 42% / 45% / 37% | 0.12, 0.13 in training (lying 79%, 85%); in the arena1 probe without near-item spawns: mega 0.06, red 0 | 0 / 30 / 49 / 15 / 3 / 3 %, 11.6, 1.7% (abandoned 73%) | 0.019 | 523 (18%) | **6-31** (damage 3279 : 2050; machine gun in hand 88% of the time) |
 
 ## 2026-10-06 12:16 — `duel_gru_v8`: an explicit intention, a learned map, 97 fewer inputs (owner: "try a model change"; until 19:00) (B-100, B-101, B-103)
 
