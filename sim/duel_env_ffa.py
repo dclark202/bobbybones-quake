@@ -570,6 +570,7 @@ class DuelEnv:
         self.stack_p = 0.0                                  # v9: share of spawns with a random stack (health 100-200, armor 0-150)
         self.near_item_p = 0.0                              # v9: share of spawns within 2 s of the mega or the red armor
         self.intent_paid = np.zeros(self.n, np.float32)     # what the current trip has paid (taken back if abandoned)
+        self.intent_teach = np.zeros(self.n, np.int64)      # what a simple rule would go for (the intention head's teacher)
         self.item_seek = 0.0                                # reward per second of travel gained toward the nearest big item
         self.seek_phi = np.full(self.n, 15.0, np.float32)   # he could use and that is lying there (see step)
         self.route_item = []
@@ -1362,6 +1363,38 @@ class DuelEnv:
         near = np.linalg.norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
         self.resp_t[idx[near], cat] = 0.0
 
+    def intent_rule(self):
+        """a hand-written prior for the intention head, like the game bot's item table (owner, 2026-10-06: "seeding is
+        fine here"): the mega when below 100 health and it is up or about to be, the red armor when below 50 armor,
+        else the nearest big weapon he lacks that is up, else nothing. Imitated with a fading weight, not a reward."""
+        n = self.n
+        out = np.zeros(n, np.int64)
+        R = self.route
+        if R is None:
+            return out
+        node = R.locate(self.state[:, :3])
+        grp = np.arange(n) // (self._others_arr().shape[1] + 1)
+        best_t = np.full(n, 1e9, np.float32)
+        for gi, lab in enumerate(self.route_goal):
+            t = R.T[gi, node]
+            it = self.route_item[gi]
+            soon = self.item_up[grp, it] | (self.item_t[grp, it] < t + 3.0)
+            k = INTENTS.index(lab)
+            if lab == "MH":
+                want = (self.hp < 100.0) & soon
+                out = np.where(want & (out == 0), k, out)
+            elif lab == "RA":
+                want = (self.armor < 50.0) & soon
+                out = np.where(want & (out == 0), k, out)
+        for gi, lab in enumerate(self.route_goal):           # then the nearest big weapon he does not own
+            if lab in ("RL", "RG", "LG"):
+                t = R.T[gi, node]
+                it = self.route_item[gi]
+                want = (out == 0) & ~self.has[:, WEAPONS.index(lab.lower())] & self.item_up[grp, it] & (t < best_t)
+                best_t = np.where(want, t, best_t)
+                out = np.where(want, INTENTS.index(lab), out)
+        return out
+
     def intend(self, choice, who):
         """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
         who = the players it applies to (the game-server plugin passes one). Returns who was read this frame."""
@@ -2034,6 +2067,7 @@ class DuelEnv:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
         prev_int, prev_done = self.intent.copy(), self.intent_done.copy()
+        self.intent_teach = self.intent_rule()
         self.intend(a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64), human)
         self.stats["intent_trips"][0] += int((self.intent_changed & (self.intent > 0)).sum())
         self.stats["intent_trips"][2] += int((self.intent_changed & (prev_int > 0) & ~self.intent_done).sum())

@@ -86,7 +86,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 1)
             delta["match_of_kill"] = [e["killer"] // G for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
-            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy()))
+            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy()))
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -112,6 +112,8 @@ def main():
                     "in all (counted across restarts); 0 = over this run's --minutes, from the full rate again at every restart")
     ap.add_argument("--intent-seek-minutes", type=float, default=0.0, help="that reward fades to a quarter over this time (0 = constant)")
     ap.add_argument("--stack-p", type=float, default=0.0, help="share of spawns with a random stack (health 100-200, armor 0-150)")
+    ap.add_argument("--intent-teach", type=float, default=0.0, help="weight of imitating the simple item rule on the intention head (env.intent_rule)")
+    ap.add_argument("--intent-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
     ap.add_argument("--near-item-p", type=float, default=0.0, help="share of spawns within 2 s of the mega or the red armor")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
@@ -347,6 +349,7 @@ def main():
         b_done = torch.zeros(T, N, device=dev)
         b_w = torch.zeros(T, N, device=dev)
         b_live = torch.zeros(T, N, device=dev)                           # the intention head was read on that frame
+        b_iteach = torch.zeros(T, N, dtype=torch.long, device=dev)       # what the item rule would have chosen
         b_teach = torch.zeros(T, N, 4, dtype=torch.long, device=dev)
         h0 = h.clone()
         raw, agg = [], {}
@@ -377,6 +380,7 @@ def main():
             b_done[t] = d
             live = torch.from_numpy(np.concatenate([r[6] for r in res]).astype(np.float32)).to(dev)
             b_live[t] = live
+            b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
             b_logp[t] = b_logp[t] + lps[-1] * live
             scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
             teach = np.concatenate([r[5] for r in res])
@@ -412,6 +416,8 @@ def main():
         n_mb = a.minibatches
         kick = a.teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.teach_minutes)
         kick_l = torch.zeros(())
+        ik = a.intent_teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.intent_teach_minutes)
+        ik_l = torch.zeros(())
         demo_w = a.demo_coef * (max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.demo_minutes) if a.demo_minutes > 0 else 1.0)
         demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
         if demo_w > 0 and update % 5 == 0:
@@ -448,6 +454,11 @@ def main():
                     lt = sum(ds[j].log_prob(tl[..., j].clamp(min=0)) for j in range(4))
                     kick_l = -(lt * tm).sum() / tm.sum().clamp(min=1.0)
                     loss = loss + kick * kick_l
+                if ik > 0:                                               # the intention head leans on the item rule at first
+                    it_ = b_iteach[:, chunk]
+                    im_ = b_live[:, chunk] * wgt
+                    ik_l = -(ds[-1].log_prob(it_) * im_).sum() / im_.sum().clamp(min=1.0)
+                    loss = loss + ik * ik_l
                 if demo_w > 0:                                           # imitate what pro players did in the same situation
                     d_obs, d_act, d_first = demo_batch()
                     dh = torch.zeros(d_obs.shape[1], H, device=dev)
@@ -531,6 +542,7 @@ def main():
                              changes_per_s=round(float(agg["key_changes"] / max(1.0, G * sim_min * 60)), 2),
                              refused=round(float(agg["key_blocked"] / max(1.0, agg["key_blocked"] + agg["key_changes"])), 3)),
                    teach=[round(kick, 3), round(float(kick_l), 3)],
+                   intent_teach=[round(ik, 3), round(float(ik_l), 3)],
                    items_room=dict(mega_per_2min=round(float(agg["lab_items"][0] / max(1.0, agg["lab_items"][2]) * 4800), 2),
                                    red_armor_per_2min=round(float(agg["lab_items"][1] / max(1.0, agg["lab_items"][2]) * 4800), 2)),
                    demo=dict(weight=round(demo_w, 3), loss=round(float(demo_l), 3), keys_right=round(demo_acc[0], 3),
