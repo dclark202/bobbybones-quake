@@ -83,6 +83,17 @@ MOVE_SCALE, MOVE_ARRIVE = 0.2, 0.3                     # movement rounds: reward
 # that is lying there, drawn at random, the next one when he has it), he is paid for every second of the way gained,
 # loses the same for every second that passes, and gets a bonus on taking it. The game's spawn, real pickups.
 RUN_LEN, RUN_SCALE, RUN_ARRIVE = 60.0, 0.2, 0.5
+# Collect, then fight (the second half of the owner's solo-run idea: "actually see the benefit of picking them up"): a
+# share of the item runs (COLLECT_FIGHT_P) turns into a fight after RUN_COLLECT seconds. Half of the seats, drawn at
+# random, are put back to a plain spawn; the others keep what they gathered. So he meets, from both sides, a fight
+# that was decided by what was collected before it.
+RUN_COLLECT = 20.0
+# The weapon rule (owner, 2026-10-07: "rockets are probably the most used weapon in the game, he needs to be coaxed
+# into using them"; he picked the launcher up nine times in three games against Nightmare and never fired it): what a
+# plain player would hold at this distance from an enemy seen in the last 1.5 s, among the weapons he has with ammo:
+# rockets from W_RULE_RL[0] to W_RULE_RL[1] units, lightning up to its range, the rail beyond, else the machine gun.
+# A label for the trainer's --weapon-teach loss on the weapon key, like the intention seed; not a reward.
+W_RULE_RL, W_RULE_LG, W_RULE_RG = (100.0, 450.0), 700.0, 600.0
 N_GOAL = 7                                             # goal inputs: on, where (3), next waypoint (3)
 # inputs added after duel_gru_v3 (appended at the end, so an older network can be widened without losing skills):
 # clock and score 10, more items 8 x 6, sounds 20, map position and identity 6, view / up / long rays 28,
@@ -188,7 +199,7 @@ INTENT_EVERY, INTENT_SWITCH = 40, 0.02
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
-INTENT_HOLD = 3.0
+INTENT_HOLD = float(os.environ.get("INTENT_HOLD") or 3.0)     # (v11: longer, with a release when the item is gone, see intend)
 INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
 CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
                                                        # trips ending in death the long ones (mega, red) lost money and he chose the
@@ -438,6 +449,12 @@ class DuelEnv:
         self.sc_stuck = np.zeros(len(self.sc_t), np.int64)  # the runner: frames without getting anywhere
         self.run_k = np.full(len(self.sc_t), -1, np.int64)  # item run: the intention he is given (0 = none yet), -1 = not in one
         self.run_stuck = np.zeros(len(self.sc_t), np.int64) # item run: frames without getting anywhere (for the walking teacher)
+        self.collect_fight_p = float(os.environ.get("COLLECT_FIGHT_P") or 0.0)   # share of the item runs that end in a fight (RUN_COLLECT)
+        self.cf_t = np.full(n_matches, -1.0, np.float32)    # seconds until this match's item run turns into a fight (-1: none)
+        self.cf_side = np.zeros(len(self.sc_t), np.int64)   # in that fight: 1 = kept what he gathered, 2 = put back to a plain spawn
+        self.drill_mix_p = float(os.environ.get("DRILL_MIX_P") or 0.0)           # share of the one-weapon drills with the machine gun too
+        self.drill_mix = np.zeros(n_matches, bool)
+        self.intent_gone = np.zeros(len(self.sc_t), bool)   # the chosen item is not there and will not be in time: free to choose again
         self.sc_persona = np.zeros(2 * n_matches, np.int64)   # scripted fighter style (PERSONAS)
         self.sc_wpn = np.zeros(2 * n_matches, np.int64)
         self.persona_p = np.full(len(PERSONAS), 1.0 / len(PERSONAS))
@@ -446,7 +463,7 @@ class DuelEnv:
         # movement teacher: a movement-only policy (sim/train_move.py) whose actions are offered as labels in
         # movement rounds (self.teach: forward, strafe, jump, turn bin; -1 = no label)
         self.teacher = None
-        self.teach = np.full((2 * n_matches, 4), -1, np.int64)
+        self.teach = np.full((2 * n_matches, 5), -1, np.int64)      # (the fifth: the weapon key by the weapon rule, -1 = no label)
         nn_ = 2 * n_matches
         self.duck = np.zeros(nn_, bool)                 # crouched (smaller box, lower eye)
         self.frags_r = np.zeros(nn_, np.float32)        # frags in the current round (the score)
@@ -702,6 +719,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, wrule_frames=0, wrule_agree=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
                           w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0,
                           vs_persona=np.zeros((3, len(PERSONAS))), fall_dmg=0.0, duck_frames=0, walk_frames=0)      # rows: frags against, deaths to, frames
@@ -765,6 +783,11 @@ class DuelEnv:
             self.has[i, G] = True
             self.ammo[i, mode] = DRILL_AMMO[mode]
             self.weapon[i] = mode
+            if self.drill_mix[self._match_of(i)]:
+                self.has[i, MG] = True                      # a mixed drill: the machine gun too, and half the time it is the
+                self.ammo[i, MG] = LOADOUTS["all"][1][MG]   # one in his hand, so that taking the other is his to decide
+                if self.rng.random() < 0.5:
+                    self.weapon[i] = MG
         else:
             owned, ammo = LOADOUTS[self.loadout]
             if self.loadout == "all":
@@ -1110,12 +1133,13 @@ class DuelEnv:
         jump = (s[ri, 6] > 0.5) & (up | gap | (self.run_stuck[ri] > 10))
         turn = np.clip(rel_deg * 0.5, -20.0, 20.0)
         lab = np.stack([fwd + 1, side + 1, jump.astype(np.int64), np.abs(TURN[None, :] - turn[:, None]).argmin(1)], 1)
-        self.teach[ri[ok]] = lab[ok]
+        self.teach[ri[ok], :4] = lab[ok]
 
     def _teach_update(self):
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
         self.teach[:] = -1
         self._run_teach()
+        self._weapon_teach()
         if self.teacher is None:
             return
         mi = np.nonzero((self.goal >= 0) & (self.script == 0))[0]
@@ -1137,7 +1161,7 @@ class DuelEnv:
             out.append((pr.cumsum(1) > self.rng.random((len(mi), 1))).argmax(1))
             j += d
         out[3] = self.t_turn[out[3]]
-        self.teach[mi] = np.stack(out, 1)
+        self.teach[mi, :4] = np.stack(out, 1)
 
     def _spawn(self, i, avoid, close=None):
         if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < self.near_item_p:
@@ -1430,7 +1454,7 @@ class DuelEnv:
         self.int_tick += 1
         live = who & (((self.int_tick + np.arange(n)) % INTENT_EVERY == 0) | self.intent_new)
         choice = np.asarray(choice, np.int64)
-        may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD)     # a choice holds (INTENT_HOLD)
+        may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD) | self.intent_gone     # a choice holds (INTENT_HOLD)
         live = live & may
         changed = live & (choice != self.intent)
         self.intent = np.where(live, choice, self.intent)
@@ -1970,6 +1994,47 @@ class DuelEnv:
             out[:, 3] = np.where(t1, int(np.abs(TURN).argmin()), out[:, 3])
         return out
 
+    def _match_of(self, i):
+        return int(i) // (self._others_arr().shape[1] + 1)
+
+    def _weapon_teach(self):
+        """the fifth teacher label: the weapon key a plain player would press (see W_RULE_RL)"""
+        who = (self.script == 0) & (self.hp > 0) & (self.seen_t < 1.5) & (self.run_k < 0)
+        k_ = self.kind[np.arange(self.n) // (self._others_arr().shape[1] + 1)]
+        who &= (k_ == NORMAL) | ((k_ == DRILL) & self.drill_mix[np.arange(self.n) // (self._others_arr().shape[1] + 1)])
+        ii = np.nonzero(who)[0]
+        if not len(ii):
+            return
+        d = np.linalg.norm(self.known[ii] - self.state[ii, :3], axis=1)
+        ok = self.has[ii] & (self.ammo[ii] > 0)
+        want = np.full(len(ii), MG, np.int64)
+        want = np.where(ok[:, RG] & (d > W_RULE_RG), RG, want)
+        want = np.where(ok[:, LG] & (d < W_RULE_LG), LG, want)
+        want = np.where(ok[:, RL] & (d > W_RULE_RL[0]) & (d < W_RULE_RL[1]), RL, want)
+        want = np.where(ok[np.arange(len(ii)), want], want, self.weapon[ii])      # (no machine-gun ammo: keep what he holds)
+        cur = self.weapon[ii]
+        self.teach[ii, 4] = np.where(want == cur, 0, want + 1)
+        self.stats["wrule_frames"] += len(ii)
+        self.stats["wrule_agree"] += int((want == cur).sum())
+
+    def _collect_to_fight(self, m):
+        """the item run of match m becomes a fight (RUN_COLLECT): half of the seats back to a plain spawn"""
+        q = self._seats(m)
+        plain = self.rng.permutation(q)[:int(len(q) * 0.5)]
+        for i in plain:                                     # (still an item run here: the game's spawn, no stack, a spawn point)
+            self.state = self.w.state()
+            self._spawn(int(i), avoid=None)
+        self.state = self.w.state()
+        self.cf_t[m] = -1.0
+        self.cf_side[q] = 1
+        self.cf_side[plain] = 2
+        self.kind[m] = NORMAL
+        self.run_k[q] = -1
+        if self.lab is not None:
+            self.arena[m] = 3                               # the yard: deaths come back inside it
+        self.intent_new[q], self.intent_done[q] = True, True
+        self.stats["cf_rounds"] += 1
+
     def _seats(self, m):
         g_ = self._others_arr().shape[1] + 1
         return np.arange(g_ * m, g_ * m + g_)
@@ -1997,6 +2062,8 @@ class DuelEnv:
         self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
         self.item_up[m], self.item_t[m] = True, 0.0
         self.run_k[q] = 0
+        self.cf_side[q] = 0
+        self.cf_t[m] = RUN_COLLECT if self.rng.random() < self.collect_fight_p else -1.0
         for i in q:
             self.load_sets[int(i)] = ()                     # the game's spawn: machine gun and gauntlet
             self.state = self.w.state()
@@ -2518,6 +2585,7 @@ class DuelEnv:
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
             it_ = np.array(self.route_item)[g_]
             soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0)
+            self.intent_gone = valid & ~soon & (self.intent > 0)
             self.intent_phi0 = np.where(self.intent_changed, np.maximum(phi, 1.0), self.intent_phi0).astype(np.float32)
             gain = self.intent_phi - phi
             pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0) & (np.abs(gain) < 0.4)
@@ -2553,6 +2621,8 @@ class DuelEnv:
         for v in dead:
             k = attacker[v]
             reward[v] -= 1.0
+            if k >= 0 and k != v and self.cf_side[k] and self.cf_side[v] and self.cf_side[k] != self.cf_side[v]:
+                self.stats["cf_stack_kills" if self.cf_side[k] == 1 else "cf_plain_kills"] += 1
             if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
                 reward[v] -= float(self.intent_paid[v])      # the trip he died on pays nothing (v9; off since 2026-10-07)
             died[v] = True
@@ -2594,6 +2664,11 @@ class DuelEnv:
                     self._new_goal(int(v))
         # short rounds (curriculum): restart both players near each other every ~round_len seconds
         self.round_t += DT
+        cf_ = np.nonzero(self.cf_t > 0)[0]
+        if len(cf_):
+            self.cf_t[cf_] -= DT
+            for m_ in cf_[self.cf_t[cf_] <= 0]:
+                self._collect_to_fight(int(m_))
         klen = np.where(self.kind == NORMAL, self.round_len, np.where(self.kind == MOVE, self.move_len, 15.0))
         if self.fixed_kind is not None:
             klen = np.full(self.M, self.round_len)
@@ -2614,6 +2689,8 @@ class DuelEnv:
             self.stats["lab_items"][2] += float(self.items_room.sum())
         for m in ends:
             self.run_k[self._seats(int(m))] = -1
+            self.cf_side[self._seats(int(m))] = 0
+            self.cf_t[m] = -1.0
             q_ = self._item_run_start(int(m))                # an item run in a share of the rounds (RUN_LEN)
             if q_ is not None:
                 self.round_t[m] = 0.0
@@ -2647,6 +2724,7 @@ class DuelEnv:
                     self.mode[m] = int(self.rng.choice(self.drill_weapons))
             elif kd == DRILL:
                 self.mode[m] = int(self.rng.choice(self.drill_weapons))
+                self.drill_mix[m] = self.rng.random() < self.drill_mix_p
             elif kd == AIM:
                 self.mode[m] = int(self.rng.choice(self.aim_weapons))
                 self.script[b_] = 1

@@ -114,6 +114,8 @@ def main():
     ap.add_argument("--stack-p", type=float, default=0.0, help="share of spawns with a random stack (health 100-200, armor 0-150)")
     ap.add_argument("--intent-teach", type=float, default=0.0, help="weight of imitating the simple item rule on the intention head (env.intent_rule)")
     ap.add_argument("--intent-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
+    ap.add_argument("--weapon-teach", type=float, default=0.0, help="weight of imitating the weapon rule on the weapon key (env._weapon_teach)")
+    ap.add_argument("--weapon-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
     ap.add_argument("--near-item-p", type=float, default=0.0, help="share of spawns within 2 s of the mega or the red armor")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
@@ -359,7 +361,7 @@ def main():
         b_w = torch.zeros(T, N, device=dev)
         b_live = torch.zeros(T, N, device=dev)                           # the intention head was read on that frame
         b_iteach = torch.zeros(T, N, dtype=torch.long, device=dev)       # what the item rule would have chosen
-        b_teach = torch.zeros(T, N, 4, dtype=torch.long, device=dev)
+        b_teach = torch.zeros(T, N, 5, dtype=torch.long, device=dev)
         h0 = h.clone()
         raw, agg = [], {}
         lk = [0, 0]                                                      # league matches: learner kills, snapshot kills
@@ -427,6 +429,8 @@ def main():
         kick_l = torch.zeros(())
         ik = a.intent_teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.intent_teach_minutes)
         ik_l = torch.zeros(())
+        wk = a.weapon_teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.weapon_teach_minutes)
+        wk_l = torch.zeros(())
         demo_w = a.demo_coef * (max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.demo_minutes) if a.demo_minutes > 0 else 1.0)
         demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
         if demo_w > 0 and update % 5 == 0:
@@ -463,6 +467,11 @@ def main():
                     lt = sum(ds[j].log_prob(tl[..., j].clamp(min=0)) for j in range(4))
                     kick_l = -(lt * tm).sum() / tm.sum().clamp(min=1.0)
                     loss = loss + kick * kick_l
+                if wk > 0:                                               # the weapon key leans on the weapon rule (rockets close, ...)
+                    wl_ = b_teach[:, chunk][..., 4]
+                    wm_ = (wl_ >= 0).float() * wgt
+                    wk_l = -(ds[6].log_prob(wl_.clamp(min=0)) * wm_).sum() / wm_.sum().clamp(min=1.0)
+                    loss = loss + wk * wk_l
                 if ik > 0:                                               # the intention head leans on the item rule at first
                     it_ = b_iteach[:, chunk]
                     im_ = b_live[:, chunk] * wgt
@@ -552,6 +561,10 @@ def main():
                              refused=round(float(agg["key_blocked"] / max(1.0, agg["key_blocked"] + agg["key_changes"])), 3)),
                    teach=[round(kick, 3), round(float(kick_l), 3)],
                    intent_teach=[round(ik, 3), round(float(ik_l), 3)],
+                   weapon_teach=[round(wk, 3), round(float(wk_l), 3)],
+                   weapon_rule_agree=round(float(agg.get("wrule_agree", 0) / max(1, agg.get("wrule_frames", 0))), 3),
+                   collect_fight=dict(rounds=int(agg.get("cf_rounds", 0)), stack_kills=int(agg.get("cf_stack_kills", 0)),
+                                      plain_kills=int(agg.get("cf_plain_kills", 0))),
                    items_room=dict(mega_per_2min=round(float(agg["lab_items"][0] / max(1.0, agg["lab_items"][2]) * 4800), 2),
                                    red_armor_per_2min=round(float(agg["lab_items"][1] / max(1.0, agg["lab_items"][2]) * 4800), 2)),
                    demo=dict(weight=round(demo_w, 3), loss=round(float(demo_l), 3), keys_right=round(demo_acc[0], 3),
