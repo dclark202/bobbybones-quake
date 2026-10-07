@@ -70,6 +70,8 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
+**`duel_gru_v10` (2026-10-07 13:28 to 19:00)**: from v9's end, with a walking teacher in item runs (the scripted runner's keys, fading over three hours) and item runs at 30% of the time: v9 showed that he chooses the right item and cannot walk to it (RESULTS 2026-10-07). Stop rule: targets taken a player-minute in item runs above 1.0 by 15:05, or the run ends early at 17:05 if still under 0.5.
+
 `duel_gru_v9` trains from 2026-10-06 20:42 until 19:00 on the 7th (owner's calls; since the morning of the 7th on arena1, Aerowalk, Blood Run and Lost World, with a scripted item runner in a quarter of the fight rounds, a scattering machine gun and a tenth of the time in solo item runs: RESULTS 2026-10-07) with the map reader
 (see "Next round" below; RESULTS 2026-10-06 evening): intention head seeded by a simple item rule, rocket drills,
 perception noise 0.6 degrees and hand noise 0.10 (tuned up after the reflex comparison with the owner). v8 ended
