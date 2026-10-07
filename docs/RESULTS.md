@@ -45,6 +45,7 @@ Launched 18:32 (until 07:00 on the 7th): 21 workers, 8372 players, 1.41 M weight
 | 02:05 (first hour without the seed) | 2820 | 13.8, 49%, 268 | 62% / 46% / 47% / 41% | 0.17, 0.16 in training (lying 79%, 79%); arena1 probe: **mega 0.14** (lying 78%), red 0 | 0 / 17 / 61 / 20 / 2 / 1 %, 9.5, 2.0% (abandoned 65%) | 0.045 | 624 (22%) | **22-36** (damage 4520 : 3196; machine gun 77%, rail 8%) |
 | 03:05 | 2881 | 13.5, 46%, 249 | 61% / 46% / 48% / 45% | 0.15, 0.17 in training (lying 76%, 80%); arena1 probe: mega 0.10 (lying 85%), red 0 | 0 / 5 / 64 / 30 / 1 / 1 %, 9.0, 2.8% (abandoned 54%, died 46%) | 0.042 | 622 (22%) | **15-35** (damage 4272 : 2972; machine gun 79%, rail 7%) |
 | 04:05 | 2942 | 15.4, 53%, 281 | 58% / 46% / 49% / 41% | 0.17, 0.19 in training (lying 75%, 80%); arena1 probe: mega back to 0.04 (lying 94%), red 0 | 0 / 3 / 51 / 45 / 1 / 1 %, 10.1, 2.8% (abandoned 51%, died 49%) | 0.048 | 602 (21%) | **12-41** (damage 4052 : 3533; machine gun 84%, rail 0%): the second hour down |
+| 05:05 | 3003 | 14.2, 50%, 266 | 61% / 48% / 50% / 42% | 0.22, 0.25 in training (lying 80%, 82%); arena1 probe: mega 0.03 (lying 96%), red 0 | 0 / 2 / 27 / 70 / 0 / 0 %, 8.8, 2.7% (abandoned 54%, died 46%) | 0.033 | 583 (21%) | **11-34** (damage 3784 : 2961; machine gun 77%, rail 9%): the third hour down, a trend since the seed ran out at 01:07 (peak 21-30 at 01:05) |
 
 ## 2026-10-06 12:16 — `duel_gru_v8`: an explicit intention, a learned map, 97 fewer inputs (owner: "try a model change"; until 19:00) (B-100, B-101, B-103)
 
