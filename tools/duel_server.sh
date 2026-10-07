@@ -37,10 +37,14 @@ QLX_OWNER=""
 PW="${PASSWORD:-}"                     # no password by default; PASSWORD=<word> sets one
 PORT="${PORT:-27970}"
 LOCKOUT_MOUNT=""; [ "$PUBLIC" = "1" ] || LOCKOUT_MOUNT="-v $ROOT/maps/lockout/lockout.pk3:/ql/baseq3/lockout.pk3:ro"   # the lockout map is not in the Workshop item: a pure server with it would shut out players who lack it
+# the public server takes arena1 and testlab from the Workshop item alone (server/workshop.txt), so that its pak list is exactly
+# what a joining client downloads (2026-10-06: players without the files in baseq3 were dropped on joining); local servers mount the repo's copies
+MAP_MOUNTS="-v $ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro -v $ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro"
+[ "$PUBLIC" = "1" ] && MAP_MOUNTS=""
 LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # PUBLIC=1: show in the server list (the rented server); local servers stay unlisted (Windows sets PUBLIC to a folder: an exact 1 is required)
 PLUGINS="botctl, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live
 if [ -n "$FFA" ]; then PLUGINS="botctl, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
 docker run -d $RESTART_OPT --name "$NAME" -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" \
-    -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" $LOCKOUT_MOUNT qlbot +set net_port "$PORT" $LISTED \
+    -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $LOCKOUT_MOUNT qlbot +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"

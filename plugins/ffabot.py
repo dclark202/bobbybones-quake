@@ -197,7 +197,8 @@ class ffabot(duelbot):
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
             os.makedirs("/tmp/maps", exist_ok=True)
             data = None
-            for pak in ("/ql/baseq3/pak00.pk3", "/ql/baseq3/{}.pk3".format(mapname)):
+            for pak in ["/ql/baseq3/pak00.pk3", "/ql/baseq3/{}.pk3".format(mapname)] + sorted(
+                    __import__("glob").glob("/ql/steamapps/workshop/content/282440/*/{}.pk3".format(mapname))):   # the Workshop item (public server)
                 try:
                     data = __import__("zipfile").ZipFile(pak).read("maps/{}.bsp".format(mapname))
                     break
