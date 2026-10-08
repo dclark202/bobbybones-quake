@@ -1,9 +1,12 @@
 # BobbyBones: plan
 
 Long-term goal: a Quake Live bot that **learns** to play (movement, aim, tactics) and beats people fairly:
-human physics, human-like limits, knowledge only from sight and sound. The current target is Goal 1 below: one
-small arena, played like a person would play it. Judge by how the play looks (videos, play tests), the
-Nightmare score, and numbers for items and movement on that map.
+human physics, human-like limits, knowledge only from sight and sound. The current target (owner, 2026-10-08):
+human-like play on the three duel maps, Blood Run, Aerowalk and Lost World, one against one and all against all with
+up to four to six players: he uses the weapons, picks up the items and plays the map as a good player would; item
+control, weapon choice and positioning are the key. The yard (`arena1`, Goal 1 below) is the map he is checked on and,
+from v13, no longer trains on. Judge by how the play looks (videos, play tests), by duels with error bars against the
+Nightmare stand-in, by real games against Nightmare on a free PC, and by the numbers for items and movement per map.
 
 ## How the docs fit together (keep them in sync)
 
@@ -17,6 +20,7 @@ Nightmare score, and numbers for items and movement on that map.
 | [HOSTING.md](HOSTING.md) | How to rent and start a public server | The hosting setup changes |
 | [INPUTS.csv](INPUTS.csv) | Every input of the network in order, with meaning and scale (written by `tools/list_inputs.py`, checked against the simulator's count) | Inputs are added or changed |
 | [LOGS.md](LOGS.md) | Schema of the recorded data (play-test sessions, training metrics, weapon lab) | A log format changes |
+| [../README.md](../README.md) | The public page: the goal, the fairness rules, how it works, where it stands | The goal, a fairness rule or the status changes (owner, 2026-10-08: keep it current) |
 
 Rules: a result entry names the backlog items it settles (`B-nn`); a backlog item marked done links to the
 result that showed it; the "Now" list below only contains backlog IDs. One change = all three touched in the
@@ -31,23 +35,25 @@ same commit.
 3. **Measure against people.** A fixed test chamber scores Bobby and human players in the same rooms; play tests
    and (soon) a public server give the human side. Nightmare is a milestone, not the gate.
 
-## Status (2026-10-07 evening)
+## Status (2026-10-08 evening)
 
 | What | Where it stands |
 |---|---|
-| Simulator: movement, nine weapons, items, sounds, human limits on hands, eyes and aim | done and checked against the real game; machine guns scatter since today (value not yet measured on a server, B-107b) |
-| Movement: strafe jumping learned from reward alone, transfers to the real game | done |
-| Self-play training with memory, a league of his older selves | running; 10,080 players a batch, 37,000 steps a second, 8 to 11 GB of graphics memory |
-| Play on a real server: 1v1 and free-for-all with up to four Bobbys | done; public server up (v8), logs pulled to the PC daily |
-| Aim against the owner's reflex card | reaction equal (200 ms); error on a strafing target 3.0 to 3.4 degrees against his 2.5; rockets that hurt 41% against 83% |
-| **Walking to an item he has chosen** | **learned today in v10**: alone on arena1 he takes what he is told to in 75 to 100% of 30-second rounds (0 to 22% this morning), and kept it without the teacher |
-| Taking the mega and the red armor during a fight | not yet: 0.03 and 0.02 a player-minute from a normal spawn on arena1; Nightmare and people take them every time they come back |
-| Using rockets | not yet: he picks the launcher up and does not fire it (4% of his frags) |
-| Beating Nightmare with the game's own spawn | not yet: arena1 13-27 to 21-30 in ten minutes (he deals more damage and loses on frags: the stack); Blood Run and Aerowalk 0 to 2 frags in five minutes |
-| Maps in training | arena1, Aerowalk, Blood Run, Lost World (the bigger three are out until he seeks items) |
-| Pro demos | 3,700 downloaded; a night of movement imitation made courses faster, duels no better; not in use |
-| Attention over the scene in place of fixed input slots | scoped, the cost on the rented server measured and fine (`ATTENTION_POC.md`, B-109); waits |
-| Opponent profiles, player reports | later |
+| Simulator: movement, nine weapons, items, sounds, human limits on hands, eyes and aim | done and checked against the real game. Corrected on 2026-10-08: no universal ammo packs (the real game has none), round lengths (they ended at 0.68 of their length), the pay for the way to an item (it could be farmed). Open: machine-gun scatter not measured on a server (B-107b) |
+| The learning loop | reviewed on 2026-10-08 by three readers and with tests: reward, flags, labels, masks and the PPO arithmetic are right. Fixed around it: the input statistics (the direction to the mega and to the red armor reached him at 3 to 6% of size), the left hand's outputs credited on frames they are not read on, the first round of every restart |
+| Play on a real server | 1v1 and free-for-all with up to four Bobbys. The plugins were set against the simulator on 2026-10-08: the 1v1 plugin had never had the map's walking graph, and on the public server every Bobby moved on another Bobby's keys; both fixed, with nine smaller gaps. The routine check is `tools/input_check.py` |
+| Aim | one knob (`AIM_LEVEL`; 3 = the owner's reflex card plus about a tenth, the only level trained). Reflex room: on a strafing target 45% of the time (owner 40%), first rail shot 32% (88%), a rocket 35 damage (54) |
+| Weapons | v12 (playing styles, machine-gun spawn): time without a big weapon 74% -> 54%, his style's weapon in hand 41 to 61%, the machine gun's share of his frags 73% -> 45%; kept after the teachers were gone |
+| Items, alone | told to fetch an item he gets it in 84 to 100% of tries, but for the red armor on Blood Run (3%: the last step is a gap jump) and on Aerowalk (28%: the walking graph has no way to it) |
+| **Items with an enemy about** | **the open problem.** In duels against the stand-in he takes 19% of the red armor's spawns on arena1 (the stand-in 36%) and 1% on Blood Run; in real games Nightmare takes the mega and the armors two to five times as often as he does. His own value estimate puts 100 armor at zero. v13 answers with armor that soaks damage at a third of the price, rounds that start as a race for a big item, and the repaired pay for the way |
+| Movement | he walks (270 to 290 units a second) and jumps in 1 to 2% of frames; the pros are in the air for 35% of their moving time, at 380 to 400. The walking teacher had been labelling "no jump"; from v13 it labels jumps where the pros jump, the jump head gets an exploration bonus and the hand 5 key actions a second |
+| The walking layer (teacher, scripted runner, the "next step" inputs) | the teacher's own pupil reaches every item in 86 to 100% of tries on the three duel maps (Aerowalk's red armor: no way). To be rebuilt so that jump and drop links are taken the way they were made (B-140) |
+| Nightmare, real games of ten minutes (v12, every plugin fix) | arena1 14-27, Blood Run 7-18, Aerowalk 6-13: he deals more damage on all three and loses on the stack |
+| Nightmare stand-in in the simulator | `tools/duel_eval.py`, 100 ten-minute duels a map with error bars; matches the real scores on arena1; not usable on Lost World (the scripted runner hardly moves there, B-141) |
+| Maps in training | up to v12: arena1, Aerowalk, Blood Run, Lost World. From v13: the three duel maps; arena1 held out |
+| Pro demos | 3,266 1v1 demos (505 hours) of the three duel maps, as tables: weapon by distance, item order, positions, where they jump. The pros' ways as a walking teacher were tried and left out (slightly worse than the shortest ways) |
+| Public server | v12 with playing styles and the fixed plugins since 2026-10-08 16:50; three Bobbys on arena1 |
+| Attention over the scene; opponent profiles; player reports | scoped (`ATTENTION_POC.md`, B-109) / later |
 
 ## Goal 1 (owner, 2026-10-05)
 
@@ -70,11 +76,34 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-**`duel_gru_v10` ran 2026-10-07 13:28 to 19:00** from v9's end: in item runs (30% of the time, alone on the map, the target given as his intention) he was shown the keys a scripted walker would press, and the help faded to nothing by 16:28. Targets taken a player-minute in those runs went from 0.15 to 4.5 and kept rising after the teacher was gone; the solo test on arena1 went from 16 / 0 / 3 / 16 / 22% (mega / red / RL / RG / LG) to 75 / 88 / 100 / 100 / 100%. His aim did not change. Against Nightmare and for items taken during fights nothing has moved yet (RESULTS 2026-10-07 13:28).
+**Next run: `duel_gru_v13`**, to start on 2026-10-08 between 21:00 and 22:00 on the owner's go and run overnight; its
+list is the next section. Just before it the input statistics are measured afresh on a short sampling run (B-145).
 
-How it got there (RESULTS 2026-10-06 evening to 2026-10-07): v9 added a seeded intention, a claw-back, a scripted item runner in the league (B-102), a scattering machine gun and smaller maps, and none of it moved the item numbers; a test of him alone with a fixed goal (`tools/solo_item_check.py`) then showed that he chose the right item and could not walk to it. v8 (18-30 against Nightmare, "feels human" by the owner) is what the public server plays.
+Open besides it, in this order: B-140 (the walking layer rebuilt properly), B-146 (damage and frag credit in groups of
+three and four), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-148 (smaller
+gaps of the free-for-all plugin), B-150 (trainer housekeeping), B-107b, B-92, B-109.
 
-Next: the proposal below, for the owner's sign-off. Open besides it: B-107b (measure the machine guns' scatter and the shotgun pattern), B-92 (more players for the reflex benchmark), B-95 (key budget), B-109 (attention), Aerowalk's walking graph (no way to the red armor from most spawns), `arena2`.
+How it got here: RESULTS 2026-10-06 to 2026-10-08 (v9 to v12, the audit, the wiring review).
+
+## Proposed: `duel_gru_v13` (the owner's approvals of 2026-10-08; the exact settings go into RESULTS when it starts)
+
+From `duel_gru_v12b`'s weights (491 inputs), on Blood Run, Aerowalk and Lost World, groups of 2, 3 and 4, full size,
+learning rate 1e-4 (the two arms of 2026-10-08 showed no difference between 2.5e-5 and 1e-4 over two hours).
+
+| Group | What | Switch or flag |
+|---|---|---|
+| Seeds from the pros, fading over four hours | weapon by distance; item order (a weapon first when bare, then the nearest armor or the mega); the spawn routine; yellow armors as goals; jumps where the pros jump | `PRO_WEAPON`, `PRO_ITEMS`, `SPAWN_TEACH`, `PRO_JUMP`, `--teach 0.5`, `--weapon-teach 1.0` |
+| Rewards | damage taken at full price, but what armor soaks at a third; a price per shot by weapon, map, place and belt; the way to an item paid on new ground only; no pay for a style's distance | `--dmg-taken-w 1.0`, `ARMOR_COST=0.33`, `SHOT_COST=0.10`, `STYLE_BAND=0` |
+| Rounds | 15% start as a race for a big item; no rocket drills; no spawns beside the mega or the red armor; rounds of 80 to 160 s; the game's spawn (machine gun) | `CONTEST_P=0.15`, `--kind-p 1,0,0,0`, `--near-item-p 0` |
+| Honest knowledge and limits | items by what he saw or heard; aim level 3; no ammo packs; 5 key actions a second | `ITEM_BELIEF=1`, `AIM_LEVEL=3`, `AMMO_PACKS=0`, `KEY_RATE=5` |
+| Learning | credit horizon 0.98; the hand's outputs credited on the frames they are read on; an exploration bonus on the jump head; fresh input statistics | `--lam 0.98`, `--ent-heads 0,0,0.25,...`, `sim/renorm_policy.py` |
+
+What decides whether it worked, against v12 on the same checks: his share of the red armor's and the mega's spawns in
+duels against the stand-in (arena1 19%, Blood Run 1% now) and in real games; the share of race rounds in which somebody
+takes the item (15 to 18% now); time in the air and speed on the way (2%, 270 to 290 now); the real Nightmare scores
+(14-27, 7-18, 6-13 now); time bare and weapons as in v12 or better. Watched in the first hour: the policy's step with
+the teachers on (a restart at half the rate if the KL stays above 0.05), fire and frags (a teacher must not stop him
+fighting, as on 2026-10-08 00:39), falls.
 
 ## The suite after the audit (owner, 2026-10-08 11:15: agrees with the five problems and the four gaps; "scope how to implement them", "recommend a suite of total changes, and whether now or after the current run")
 
@@ -320,6 +349,20 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
 - Method (2026-10-05): limit what he can do until the right play appears; do not reward single behaviors (speed,
   dodging). Changing the reward is the owner's call.
 - No personal data in the repo.
+- (2026-10-08) Training moves to the three duel maps; the yard is the check map ("people like the actual maps in the
+  game"). Rail lives stay ("pros absolutely do play rail").
+- (2026-10-08) Seeding his behavior with fading teachers and tables from the pro demos is fine ("we apparently need to be
+  more explicit with seeding him with patterns for play"); the pros' ways as a walking teacher stay out until they beat
+  the shortest ways in a test.
+- (2026-10-08) Reward and setup calls for v13: a price per shot by weapon and map ("ammo is a scarce resource ... a learned
+  behavior to be spam happy or need to conserve"); damage soaked by armor at a third; rounds that start as a race for a big
+  item; damage taken at full price; credit horizon 0.98; the key budget at 5 a second ("monitor it as we progress"); no
+  rocket drills; no spawns beside the mega or red; jumping encouraged again, informed by the pros ("jumping is how you
+  strafe jump which IS a goal").
+- (2026-10-08) Aim stays at level 3 of the knob; tuning the levels up and down waits for more people's data.
+- (2026-10-08) During a run: brief hourly lines; the full metrics, video, heat map and summary at its end. No changes
+  mid-run unless the data is clearly bad.
+- (2026-10-08) All docs, the README included, are kept current.
 
 ## How to run (short)
 

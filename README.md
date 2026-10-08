@@ -9,17 +9,19 @@ road, BobbyBones can be tuned to help new players learn the game by adapting to 
 
 ## The current goal
 
-The first target is deliberately small: **one arena, played like a person would play it.**
+**Play the real duel maps the way a good player does.** Blood Run, Aerowalk and Lost World, one against one and
+all against all with up to four to six players:
 
 1. Human-like play: no key spam, steady aim, looking where it matters.
-2. One small custom arena, the yard (two levels, a tunnel, a jump pad, a teleporter, mega health, red armor and
-   three weapons to fight over).
-3. He shows that he knows the map and moves on it efficiently: where the items are, when they come back, how to
-   get there.
-4. One against one, or all against all with up to four players, whichever brings out that behavior better.
-5. He beats the game's Nightmare bot there (reached in the plain fighting room on 2026-10-05).
+2. He uses the weapons the way good players do: rockets close, lightning in the middle, the rail at range.
+3. He controls the items: a weapon first after a spawn, then the armors and the mega, on time and against an
+   opponent who wants them too.
+4. He moves like a player: knows the ways, and jumps to keep his speed.
+5. He beats the game's Nightmare bot on these maps.
 
-The popular duel maps (Blood Run, Aerowalk, Lost World) come back once he meets these consistently.
+The first target (2026-10-05) was one small custom arena, the yard: two levels, a tunnel, a jump pad, a
+teleporter, a mega health, a red armor and three weapons. Since 2026-10-08 he trains on the three duel maps and the
+yard is the map he is checked on without having trained there.
 
 ## Fairness rules
 
@@ -29,11 +31,16 @@ The popular duel maps (Blood Run, Aerowalk, Lost World) come back once he meets 
 - **Human sight.** Walls, floors and items are only seen inside his field of view. He gets no readout of your
   health: only the pain sounds a player hears, and the damage he knows he dealt.
 - **Mouse-like aim.** He turns his view like a mouse (fine tracking and flicks), with a reaction delay, a cap on
-  flick speed, hand shake, and a later read on changes in your movement than on your position.
+  flick speed, hand shake, a flinch when hit, and a later read on changes in your movement than on your position.
+  The limits are one setting, calibrated on a real player's reflex tests: "a good aimer, not a bot".
+- **Human knowledge of the map.** He knows an item is gone or back only if he took it, saw its place or heard it
+  (from the next network on; until then he is told).
 - **Human hands.** The left hand is five fingers on the keys: each finger does one thing at a time and needs
-  time between presses, and the hand as a whole tires (short bursts, then about four key changes a second). The
-  right hand fires and zooms at no more than five clicks a second.
-- **No bot habits.** He trains only against himself. The game's bots are a yardstick, never a teacher.
+  time between presses, and the hand as a whole tires (short bursts, then four key changes a second, five from the
+  next network on: people in our logs do about seven in their busy stretches). The right hand fires and zooms at
+  no more than three clicks a second.
+- **No bot habits.** He trains only against himself and our own scripted runner. The game's bots are a yardstick,
+  never a teacher.
 
 ## How it works
 
@@ -42,37 +49,42 @@ The popular duel maps (Blood Run, Aerowalk, Lost World) come back once he meets 
    senses. Movement was validated frame by frame against the real game; weapon damage, timing, knockback,
    switch time and pickup amounts were measured on a real server and reproduced.
 2. **Training** (`sim/train_duel_rnn.py`). Self-play reinforcement learning (PPO) with a recurrent network
-   (GRU) against a league of its own past versions. The reward is plain: a frag, a death, damage dealt against
-   damage taken. The approach since 2026-10-05: put him in a small arena and tighten the human limits until the
-   right kind of play appears, instead of rewarding each behavior. The simulator also runs groups of up to six
-   players, all against all (`sim/duel_env_ffa.py`).
+   (GRU) against a league of its own past versions, in groups of two to four. The reward is plain at its core: a
+   frag, a death, damage dealt against damage taken, the items picked up. Self-play alone did not find the habits
+   of the game (fetching a weapon, using rockets, taking the armor), so since 2026-10-07 he is also **shown** them
+   for the first hours of a run and then left alone: a walking teacher along the ways of the map, a weapon for the
+   distance and an order for the items taken from 3,266 pro duels (505 hours), a playing style per life (rockets,
+   rail, lightning or general). The teachers only ever press keys; where he looks and when he fires stay his own.
+   The simulator also runs groups of up to six players, all against all (`sim/duel_env_ffa.py`).
 3. **Real game** (`minqlx/`, `plugins/`). A Quake Live dedicated server in Docker with
    [minqlx](https://github.com/MinoMino/minqlx). A C hook on the engine's `SV_ClientThink`
    (`minqlx/botctl.c`) lets a plugin drive a bot's keys and view each frame. `plugins/duelbot.py` rebuilds
    the network's inputs from the live game with the simulator's own code and plays the trained network.
-4. **Testing.** `sim/test_suite.py` scores any checkpoint in fixed test rooms (aim per weapon and target,
+4. **Checking.** Ten-minute duels against the game's Nightmare bot on a real server; a hundred ten-minute duels a
+   map in the simulator against a stand-in for it, with error bars (`tools/duel_eval.py`); his inputs on a real
+   server set beside the simulator's (`tools/input_check.py`); whether the walking teacher can walk its own ways
+   (`tools/teacher_check.py`). `sim/test_suite.py` scores any checkpoint in fixed test rooms (aim per weapon and target,
    weapon choice by range, movement, items, a ladder of scripted opponents). The same rooms run on the
    play-test server with a person as the subject, for a human baseline. Every play-test session is logged
    per frame, with the player's notes. `sim/render_course.py` renders first-person videos of his fights
    straight from the simulator, with the keys he pressed, for judging how the play looks.
 
-## Where it stands
+## Where it stands (2026-10-08)
 
 | | |
 |---|---|
 | Movement simulator matches the real game; learned movement transfers (time ratio 1.01) | done |
-| Strafe jumping learned from reward alone | done |
-| Nine weapons, items and pickups measured on a real server and simulated | done |
-| Self-play training with memory | running: arena fights under finger, sight and aim limits; the play now looks like Quake |
-| Playing the trained network on a real server | done (private play-test server) |
-| Test chamber: the same rooms for the bot and for people, on a custom map | done; first human scorecard recorded |
-| Beating the Nightmare bot in the fighting room | done (23-11 to 32-10 in five minutes, 2026-10-05) |
-| Human-like hands and eyes (five fingers, field of view, click limits) | done; he still asks for more key changes than his fingers make |
-| Knowing a map: items, their timers, efficient routes (the yard) | in progress: an explicit intention ("go for the mega"), a map reader trained on 62 maps, item sounds; he takes weapons, not yet the mega and the red armor |
-| Three or four players, all against all | training in groups of 2, 3 and 4 since 2026-10-06; on the public server with up to four Bobbys |
-| Beating Nightmare on the yard, ten minutes | 18-30 at the end of v8 (2026-10-06), the first run to trade frags with it |
-| The duel maps (Blood Run, Aerowalk, Lost World, Furious Heights, Campgrounds, Sinister) | in training alongside the yard since 2026-10-06 evening; a night on Blood Run with pro demos (3,700 downloaded) made movement faster but not duels better |
-| Public server | up: "doppz's bot arena | duel & FFA | chicago", free-for-all with three Bobbys, `!map` for the eight trained maps, ready up (F3) for a real game |
+| Nine weapons, items and pickups measured on a real server and simulated | done (on 2026-10-08: the simulator had ammo packs the real game does not spawn; removed from the next network on) |
+| Self-play training with memory, groups of two to four | running since 2026-10-06; the latest network is v12 (79 hours of training in all) |
+| Human-like hands, eyes and aim (five fingers, field of view, click limits, one aim setting) | done; his tracking is about a real good player's, his first rail shot and his rockets below it |
+| Weapons | better since v12: time without a big weapon 74% -> 54%, the machine gun's share of his frags 73% -> 45%, rockets, rail and lightning each 15 to 23% |
+| Item control | **the open problem.** Alone he fetches what he wants in 84 to 100% of tries; with an opponent on the map he takes about half as many red armors and megas as our scripted runner and a third to a half of what Nightmare takes |
+| Jumping | lost: he walks (jumps in 1 to 2% of frames; pros are in the air for a third of their moving time). The teacher that showed him the ways had been labelling "no jump"; corrected for the next network |
+| Against the Nightmare bot, ten minutes, the game's own spawn | the yard 14-27, Blood Run 7-18, Aerowalk 6-13 (v12, 2026-10-08): he deals more damage than Nightmare on all three and loses on armor and health |
+| A review of the whole pipeline (2026-10-08) | the learning loop is right; found and fixed around it: the plugin for one-on-one games had never been given the map's walking graph, the Bobbys on the public server moved on each other's keys, the direction to the mega and the red armor reached the network at a twentieth of its size, and the pay for walking to an item could be collected by falling short of it |
+| The duel maps (Blood Run, Aerowalk, Lost World) | in training since 2026-10-06; the only training maps from the next network on |
+| Three or four players, all against all | in training since 2026-10-06; on the public server with three Bobbys |
+| Public server | up: "doppz's bot arena | duel & FFA | chicago", free-for-all with three Bobbys (v12), `!map` for the trained maps, ready up (F3) for a real game |
 | Player reports, opponent profiles | later |
 
 Details, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:

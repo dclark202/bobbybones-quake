@@ -30,6 +30,8 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - `docs/BACKLOG.md`: every work item with an ID (`B-nn`), priority and status.
 - `docs/RESULTS.md`: dated log of every run, live test and measurement, including what did not work.
 - `docs/LOGS.md`: schemas of recorded data. `docs/PLAYTEST.md`: the play-test routine and the test suite.
+- `README.md`: the public page (goal, fairness rules, how it works, where it stands). The owner wants it kept current
+  with the docs (2026-10-08).
 After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, update PLAN if needed.
 
 ## Architecture
