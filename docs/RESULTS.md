@@ -5,6 +5,44 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 — Audit of the model, the training pipeline, the plans and the results (owner's request)
+
+Checked in the code and the logs, not from memory. **Verified:**
+
+1. **The learning rate has been a tenth of its setting since v8.** `--lr-minutes 1440` (v8 on) decays it to a tenth over
+   the *cumulative* minutes of the lineage, which stood at 2,163 when it was introduced: every update of v8 to v12 (about
+   40 hours: the intention, the map reader, items, the stack pay, the styles) ran at 2.5e-5, not 2.5e-4. Seeds (large
+   supervised gradients) still moved him within an hour; reward-only changes did not, and "a reward alone does nothing"
+   (v9, v11) was measured under this handicap. No measure of the policy's step (KL, clip fraction) is logged.
+2. **Credit reaches half a second.** The advantage estimate uses lambda 0.95 at 40 decisions a second: about 20 frames;
+   everything later rests on the value estimate. A walk to a weapon is 3 to 10 s, the fight it decides later still.
+3. **Trading damage pays both sides.** +0.005 a point dealt, -0.0025 a point taken (`--dmg-taken-w 0.5`, set to stop
+   two players avoiding each other on Blood Run): an even exchange at v12's 347 damage a minute pays each about +0.9 a
+   minute, the size of the whole stack pay. Fighting is subsidized; fetching competes with it.
+4. **One respawn in five is put in front of an enemy** (`close_p` floor 0.2: 300 to 700 units away, in line of sight,
+   facing him), the opposite of "a weapon first": with machine-gun spawns that life starts in a fight he should avoid.
+5. **The intention is the item rule.** Its teacher has weight 2.0 and never fades; the goal he names is the rule's by
+   imitation (loss 0.01 to 0.03), so the rule's quality is his item play. In v12 30% of his trips arrive.
+6. **A fairness gap:** the intention inputs "chosen item is up / comes back in" give the true state of whichever item he
+   names, seen or not (the item rule uses it too). The other item inputs are honest (up only while seen; mega and red
+   by what he took or heard). The owner turned item timers off for people.
+7. **The checks are thin and uncontrolled.** Nightmare on a duel map is one five-minute game (v10 0-10 and 0-0, v11 1-4 and
+   0-6: he scores next to nothing there, at 137 to 187 units a second where the pros average 285 to 300); the training
+   numbers pool four maps and all round kinds; no run had a control arm and each changed five to ten things.
+8. Smaller: teacher fades count from the start of the process (a restart resets them); a run does not pin the simulator
+   module it was started with; the first pro-route tables took the step most often taken, which for armors includes
+   waiting for them (armor pickups fell on all three maps in the pupil test; rebuilt from the pros' fastest trips).
+
+**Sound, keep:** the inputs' honesty and the human limits, the intention with the way's next step, keys-only teachers,
+the move to the duel maps (pros have the enemy in view 10 to 15% of the time; he was raised in an arena at 40 to 50%), the
+pro tables and the scorecard beside them. Not a bug: the public server and the benchmark do have the walking graphs and
+map-reader tables for all four maps.
+**Proposed** (BACKLOG B-123 to B-130): a side-by-side test of the learning rate before v13 (two half-size arms from v12's
+weights, three hours), with the policy step logged; close spawns off; the intention inputs by what he knows; per-map
+numbers and a fixed set of opponents in the simulator with many games; then, each with its own control arm, a longer
+credit horizon and even damage trading; a goal model learned from the pros' next pickups in place of the two-line item
+rule; positions against the pros' on the duel maps; no further aim cuts until the game's own accuracy counts say so.
+
 ## 2026-10-08 — Pre-work for `duel_gru_v13`, the seeding experiment (owner: "do the pre-work now"; nothing started)
 
 Built while v12 trains, every switch off by default, the two-player simulator unchanged with them off:

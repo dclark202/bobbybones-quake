@@ -5,10 +5,13 @@ place, counted over their trips that ended in picking it up.
     python tools/pro_routes.py --map bloodrun,aerowalk,lostworld        -> sim/pro_routes/<map>.npz
 
 A trip = the up to ten seconds before a pickup in the light demo sets (sim/demo_dataset.py --lite), cut at a spawn or an
-earlier pickup. Its positions are laid on the walking graph (the node he stands on); every change of node a -> b counts
-for (goal, a). pro_next[goal, a] = the b most often taken, where at least MIN_TRIPS trips passed, the two nodes are a
-walkable step apart, and following the steps from a arrives at the goal; elsewhere -1 (the simulator then takes the
-shortest way). One process on purpose. No player names are read or written.
+earlier pickup. Its positions are laid on the walking graph (the node he stands on). For every node the pros' time from
+there is the fastest fifth of the times that were left when a trip entered it (so waiting for an armor to come back, or
+a fight on the way, does not count: the first version took the step most often taken, and its ways to the armors were
+worse than the shortest ones). pro_next[goal, a] = the node the pros stepped to from a (at least 5 times and 5% of the
+steps from a) from which their time is shortest and shorter than from a, where at least MIN_TRIPS trips passed, the two
+nodes are a step apart, and following the steps arrives at the goal; elsewhere -1 (the simulator then takes the shortest
+way). One process on purpose. No player names are read or written.
 """
 import argparse
 import glob
@@ -38,7 +41,7 @@ def build(mp, limit):
     G, N = len(labels), len(R.nodes)
     kind = dict(RL=0, RG=1, LG=2, MH=3, RA=4, YA=5, YA2=5)       # the pickup kinds found in a demo
     by_kind = {k: [g for g, lab in enumerate(labels) if kind[lab] == k] for k in range(6)}
-    count = {}                                                  # (goal, a) -> {b: n}
+    TA, TB, TR = [[] for _ in range(G)], [[] for _ in range(G)], [[] for _ in range(G)]   # per goal: steps a -> b, seconds left on entering b
     trips = np.zeros(G, np.int64)
     files = sorted(glob.glob(os.path.join(demo_root(), "sets_lite", mp, "*.npz")))
     if limit:
@@ -75,19 +78,36 @@ def build(mp, limit):
             nodes = R.locate(pos[t0:t + 1])
             ch = np.nonzero(nodes[1:] != nodes[:-1])[0]
             trips[g] += 1
-            for c in ch:
-                a, b = int(nodes[c]), int(nodes[c + 1])
-                dct = count.setdefault((g, a), {})
-                dct[b] = dct.get(b, 0) + 1
+            if len(ch):
+                TA[g].append(nodes[ch].astype(np.int32))
+                TB[g].append(nodes[ch + 1].astype(np.int32))
+                TR[g].append(((len(nodes) - 2 - ch) / 40.0).astype(np.float32))
         if fi % 200 == 0:
             print("  {} {}/{} demos, trips {}".format(mp, fi, len(files), dict(zip(labels, trips.tolist()))), flush=True)
     nxt = np.full((G, N), -1, np.int32)
-    for (g, a), dct in count.items():
-        if sum(dct.values()) < MIN_TRIPS:
+    TAU = np.full((G, N), np.inf, np.float32)                   # the pros' time from each node (fastest fifth)
+    for g in range(G):
+        if not TA[g]:
             continue
-        b = max(dct, key=dct.get)
-        if np.linalg.norm(R.nodes[a] - R.nodes[b]) <= STEP_MAX:
-            nxt[g, a] = b
+        a_, b_, r_ = np.concatenate(TA[g]), np.concatenate(TB[g]), np.concatenate(TR[g])
+        order = np.argsort(b_, kind="stable")
+        ub, i0, cn = np.unique(b_[order], return_index=True, return_counts=True)
+        rs = r_[order]
+        for u, i, c in zip(ub, i0, cn):
+            if c >= MIN_TRIPS:
+                TAU[g, u] = np.percentile(rs[i:i + c], 20)
+        out_n = np.bincount(a_, minlength=N)
+        uk, ck = np.unique(a_.astype(np.int64) * N + b_, return_counts=True)
+        best = np.full(N, np.inf)
+        for a, b, c in zip((uk // N).tolist(), (uk % N).tolist(), ck.tolist()):
+            if out_n[a] < MIN_TRIPS or c < max(5, 0.05 * out_n[a]) or not np.isfinite(TAU[g, b]):
+                continue
+            if np.isfinite(TAU[g, a]) and TAU[g, b] >= TAU[g, a]:
+                continue                                        # not nearer in the pros' own time
+            if np.linalg.norm(R.nodes[a] - R.nodes[b]) > STEP_MAX:
+                continue
+            if TAU[g, b] < best[a]:
+                best[a], nxt[g, a] = TAU[g, b], b
     # keep only steps whose chain arrives: follow the pros' step where there is one, the shortest way elsewhere
     kept = np.zeros(G, np.int64)
     for g in range(G):
@@ -127,6 +147,7 @@ def build(mp, limit):
             for a_ in reversed(path):
                 tail += float(np.linalg.norm(R.nodes[a_] - R.nodes[int(nxt[g, a_])])) / 320.0
                 tm[g, a_] = tail
+        tm[g] = np.where((nxt[g] >= 0) & np.isfinite(TAU[g]), TAU[g], tm[g])      # the pros' own time where it is known
     opened = [int(((tm[g] < 1e8) & (R.T[g] >= 1e8)).sum()) for g in range(G)]
     differs = [(int(((nxt[g] >= 0) & (nxt[g] != R.next[g])).sum())) for g in range(G)]
     out = os.path.join(ROOT, "sim", "pro_routes", mp + ".npz")
