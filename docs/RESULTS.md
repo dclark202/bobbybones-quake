@@ -5,6 +5,35 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 16:45 — The walking layer after the review: pads, teleporters, Aerowalk's graph; contested-item rounds built
+
+`tools/teacher_check.py` (the walking teacher's own pupil, 96 tries an item from the spawn points, 30 s), before -> after:
+
+| | Blood Run | Aerowalk | Lost World | arena1 |
+|---|---|---|---|---|
+| mega | 100 -> 100 | 100 -> 100 | 86 -> 93 | 79 -> 91 |
+| red armor | 78 -> 89 | no way in the graph (both) | 78 -> 84 | 100 -> 100 |
+| rocket launcher | 100 -> 100 | 61 -> 100 | 88 -> 90 | 100 -> 100 |
+| railgun | 100 -> 100 | 95 -> 100 | - | 100 -> 100 |
+| lightning gun | 100 -> 100 | 86 -> 100 | 82 -> 89 | 100 -> 100 |
+| yellow armors | 60 -> 81, 100 -> 100 | 76 -> 100 | 83 -> 90, 84 -> 84 | - |
+
+What changed: (1) where the step toward an item goes through a jump pad or a teleporter, the walker and his "next step"
+inputs head for the plate or for the entrance of the teleporter that comes out at the link's end, on the ground only
+(`RouteField.via`); before they aimed at the far point, through the wall or up the tower. (2) Aerowalk's graph has the
+171 jump, drop and teleporter links the walker cannot take taken out (`tools/nav_prune.py --map aerowalk --teleporters`;
+no place loses its way; the way to the rocket launcher is 0.9 s longer from the spawn points; the old file is kept as
+`nav_aerowalk_sim.before_prune.json`). The other three graphs are left whole: taking links out by the tool's test made
+them worse (Blood Run's red armor 89 -> 75, arena1's mega 96 -> 65), because the test (a straight run from the exact
+point) is not the walker's real arrival. Still short: Blood Run's two armors, Lost World throughout, and Aerowalk's red
+armor, which the pros reach by a jump the graph does not have (B-140).
+
+**Contested-item rounds** (`CONTEST_P`, approved for v13, off by default): a share of the normal rounds on a real map
+starts with the mega, the red armor or a yellow armor back in 4 to 8 s, everybody knowing it and starting about that far
+from it. With today's network (the arms' start) somebody takes the item within ten seconds of its return in **15% of
+such rounds on Blood Run (pairs) and 18% on Lost World (groups of three)**: the baseline for v13. The trainer logs it
+(`contest`).
+
 ## 2026-10-08 16:00 — The wiring review (owner: "there may be some lingering problems IN THE CODE that are stopping him from learning")
 
 Three independent readers (the trainer; the real-game plugins against the simulator; the simulator's rewards and

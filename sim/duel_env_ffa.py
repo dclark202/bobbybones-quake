@@ -468,16 +468,23 @@ class RouteField:
     Plain numpy (the Anaconda Python's scipy is broken): the nearest graph point comes from a table over a grid."""
     CELL = 32.0
 
-    def __init__(self, nav_path, goals, pads=()):
+    def __init__(self, nav_path, goals, pads=(), teles=()):
         import heapq
         g = json.load(open(nav_path))
         self.nodes = np.array(g["nodes"], np.float32)
         n = len(self.nodes)
         radj, have = [[] for _ in range(n)], set()
+        enter = {}                                            # a link that is entered somewhere: (from, to) -> that place
+        tin = np.array([c for c, d in teles], np.float32).reshape(-1, 3)
+        tout = np.array([d for c, d in teles], np.float32).reshape(-1, 3)
         for a, b, t, kind in g["edges"]:
             d = float(np.linalg.norm(self.nodes[a] - self.nodes[b]))
             radj[b].append((a, 0.1 if kind == "tele" else (d / 320.0 if kind == "walk" else max(t, d / 900.0))))
             have.add((a, b))
+            if kind == "tele" and len(tin):                   # a teleporter: the entrance of the one that comes out at the link's end
+                j = int(np.linalg.norm(tout - self.nodes[b], axis=1).argmin())
+                if np.linalg.norm(tout[j] - self.nodes[b]) < 150.0:
+                    enter[(a, b)] = tin[j]
         for a, b, t, kind in g["edges"]:                      # flat walking works both ways
             if kind == "walk" and (b, a) not in have and abs(self.nodes[a][2] - self.nodes[b][2]) < 18:
                 radj[a].append((b, float(np.linalg.norm(self.nodes[a] - self.nodes[b])) / 320.0))
@@ -487,6 +494,7 @@ class RouteField:
             land = int(np.linalg.norm(self.nodes - np.asarray(d_, np.float32) + np.array([0, 0, 100.0], np.float32), axis=1).argmin())
             for a_ in on:
                 radj[land].append((int(a_), 1.2 + float(dx[a_]) / 320.0))
+                enter.setdefault((int(a_), land), np.asarray(c_, np.float32))      # a jump pad: its plate
         self.radj = radj
         w = np.array([1, 1, 2.0], np.float32)                 # vertical distance counts double
         self.lo = self.nodes.min(0) - 64.0
@@ -511,6 +519,15 @@ class RouteField:
                         heapq.heappush(pq, (d + c, v))
             for v, d in dist.items():
                 self.T[gi, v] = d
+        # Where the step toward a goal goes through a jump pad or a teleporter, the place to head for is the plate or the
+        # entrance, not the point it takes him to: until 2026-10-08 the walker (the walking teacher, the scripted item
+        # runner) and the "next step" inputs aimed at the far point, through the wall or up the tower.
+        self.via = np.full((G, n, 3), np.nan, np.float32)
+        for gi in range(G):
+            for a_ in np.nonzero(self.next[gi] >= 0)[0]:
+                e_ = enter.get((int(a_), int(self.next[gi, a_])))
+                if e_ is not None:
+                    self.via[gi, a_] = e_
 
     def _grid(self, nav_path, dims, w):
         """nearest node for every grid cell. Cached beside the walking map, or in $ROUTE_CACHE (the game server's map
@@ -840,7 +857,7 @@ class DuelEnv:
                                for lab_ in self.route_goal]
             if self.route_goal:
                 self.route = RouteField(nav, [pos_[lab_] for lab_ in self.route_goal],
-                                        pads=[(c, d) for k, c, d in spots if k == 0])
+                                        pads=[(c, d) for k, c, d in spots if k == 0], teles=[(c, d) for k, c, d in spots if k == 1])
                 self.intent_gi = [-1] + [self.route_goal.index(lab_) if lab_ in self.route_goal else -1 for lab_ in INTENTS[1:]]
                 self.route.walk = self.route.next            # the step to take: the shortest way's, or the pros' (PRO_ROUTES)
                 pr_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_routes", name + ".npz")
@@ -1408,6 +1425,7 @@ class DuelEnv:
         nx2 = np.where(nx >= 0, R.walk[g, np.maximum(nx, 0)], -1)
         tp = np.where((near & (nx2 >= 0))[:, None], R.nodes[np.maximum(nx2, 0)], tp)
         tp = np.where((near & (nx >= 0) & (nx2 < 0))[:, None], R.goals[g], tp)
+        tp = self._enter(R, g, node, nx, near, tp, s[ri, 6] > 0.5)
         d = tp - pos
         hd = np.hypot(d[:, 0], d[:, 1])
         rel_deg = (np.degrees(np.arctan2(d[:, 1], d[:, 0])) - self.yaw[ri] + 180.0) % 360.0 - 180.0
@@ -1424,6 +1442,16 @@ class DuelEnv:
         self.teach[ri[ok], :4] = lab[ok]
         if STACK_TEACH:
             self.teach[ri[n_run:], 3] = -1                   # (in a game the view is his own)
+
+    @staticmethod
+    def _enter(R, g, node, nx, near, tp, ground):
+        """the walker's target when the link from his point, or the one after the next point he has all but reached, goes
+        through a jump pad or a teleporter: its plate or entrance (see RouteField.via). Only on the ground: thrown by the
+        pad he steers for where it takes him, not back to the plate."""
+        v0 = R.via[g, node]
+        v1 = R.via[g, np.maximum(nx, 0)]
+        tp = np.where((ground & near & (nx >= 0) & ~np.isnan(v1[:, 0]))[:, None], v1, tp)
+        return np.where((ground & ~np.isnan(v0[:, 0]))[:, None], v0, tp)
 
     def _teach_update(self):
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
@@ -1776,6 +1804,7 @@ class DuelEnv:
             ok = valid & (t < 1e8)
             nx = R.walk[g, node]
             wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
+            wp = np.where(((self.state[:len(node), 6] > 0.5) & ~np.isnan(R.via[g, node][:, 0]))[:, None], R.via[g, node], wp)   # a jump pad's plate, a teleporter's entrance
             out[:, 0] = np.minimum((t + off) / 10.0, 2.0) * ok
             out[:, 1:4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
@@ -2617,6 +2646,7 @@ class DuelEnv:
         nx2 = np.where(nx >= 0, R.walk[gi, np.maximum(nx, 0)], -1)
         tp = np.where((near & (nx2 >= 0))[:, None], R.nodes[np.maximum(nx2, 0)], tp)   # look one step further when close
         tp = np.where((near & (nx >= 0) & (nx2 < 0))[:, None], R.goals[gi], tp)
+        tp = self._enter(R, gi, node, nx, near, tp, s[ri, 6] > 0.5)
         d = tp - pos
         hd = np.hypot(d[:, 0], d[:, 1])
         rel_deg = (np.degrees(np.arctan2(d[:, 1], d[:, 0])) - self.yaw[ri] + 180.0) % 360.0 - 180.0
