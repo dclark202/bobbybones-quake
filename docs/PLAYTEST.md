@@ -88,6 +88,17 @@ metrics are the same as on the play-test server, so the two cards can be read si
 Differences to keep in mind when comparing: Bobby's numbers are simulator numbers; live targets have endless
 health (kills = damage / 125); your hits are derived from damage and ammo used.
 
+## The checks around a run (simulator and real server, 2026-10-08)
+
+| Check | Command | What it answers |
+|---|---|---|
+| Duels with error bars | `python tools/duel_eval.py --run <run> --opp nightmare --set STYLE_P=0.75 --set INTENT_HOLD=8` (older networks: `--inputs docs/INPUTS_v12.csv`) | 100 ten-minute duels a map against the Nightmare stand-in, the scripted runner or another network; without `STYLE_P` he plays general lives only |
+| Real Nightmare | `EXPORT_ARGS="--set INTENT_HOLD=8" bash tools/bench_arena.sh <run> yard 10 <map> <module>` | ten minutes against the game's bot; **only with nothing else running on the PC** (a busy server once starved Bobby, now it starves Nightmare) |
+| Inputs | `OBSDUMP=1 ... bench_arena.sh ...`, then `python tools/input_check.py --run <run> --env <module> --real data/.../obs_dump.npy` | inputs that are dead in the simulator, and inputs the real game feeds differently |
+| The walking teacher | `python tools/teacher_check.py --map <map> [--goal RA]` | can a pupil who presses what the teacher shows reach every item (90% is the bar) |
+| Items alone | `python tools/solo_item_check.py --run <run> --env <module> --map <map>` | does he fetch what he is told to, alone |
+| Reflexes | `python tools/reflex_report.py --last --bobby <run>` | his aim beside the owner's in the reflex room |
+
 ## After the session
 
 Tell Claude you are done. It reads the session and the card, compares your card with Bobby's, and updates

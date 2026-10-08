@@ -127,7 +127,8 @@ WALK = 64                                              # key strength when walki
 RING, MIDDLE, INDEX, THUMB, LITTLE = range(5)
 FINGER_HOLD = np.array([6, 6, 6, 4, 20], np.int64)     # frames: 150 ms, the thumb (jump) 100 ms, the little finger
                                                        # (crouch) 500 ms: at most one crouch a second
-KEY_RATE, KEY_BURST = 4.0, 10.0
+KEY_RATE, KEY_BURST = float(os.environ.get("KEY_RATE") or 4.0), 10.0     # (owner, 2026-10-08: 5 a second from v13 on; he asked for 6.8 and
+#   got 3.8, and people sustain 6.8 over ten seconds at their 90th percentile: to be watched)
 # (2026-10-05, later) The budget is the hand's stamina: a burst of up to KEY_BURST key actions in quick succession,
 # refilled at KEY_RATE a second, so that after a burst the hand is slow until it has recovered.
 # The left hand also decides only every KEY_EVERY frames (ten times a second): what the keys and the weapon choice
@@ -336,7 +337,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 # ones that were set into the checkpoint, sim/export_duel.py into policy.npz, and the plugins set them before they load
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
-             "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED")
+             "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -349,6 +350,15 @@ ARMOR_COST = float(os.environ.get("ARMOR_COST") or 1.0)
 # the big items lie untaken most of the time (the red armor 70% of the time on arena1 in training), so the race for
 # one hardly ever happened, and nothing was lost by not running it.
 CONTEST_P = float(os.environ.get("CONTEST_P") or 0.0)
+# PRO_JUMP=1 (owner, 2026-10-08: "incentivise him to jump again, but informed by pro play ... jumping is how you strafe
+# jump which IS a goal"): the walking teacher's label for the jump key comes from where the pros are in the air
+# (tools/pro_jumps.py -> sim/pro_jump/<map>.npz: the share of their moving time in the air per cell of 64 units). It
+# labels the key down where that share is over PRO_JUMP_AT while he is on his way at speed, and gives the key no label
+# elsewhere (his own choice). Before, every taught frame that was not a gap or a step carried the label "no jump": the
+# teacher that showed him the ways also taught him to keep his feet on the floor (he jumps in 1 to 2% of frames; the
+# pros are in the air for most of their moving time).
+PRO_JUMP = float(os.environ.get("PRO_JUMP") or 0.0) > 0
+PRO_JUMP_AT = float(os.environ.get("PRO_JUMP_AT") or 0.5)
 CONTEST_T = (4.0, 8.0)
 SHOT_REF_FIRE = 16.0
 SHOT_NEAR_S = 3.0
@@ -474,12 +484,15 @@ class RouteField:
         n = len(self.nodes)
         radj, have = [[] for _ in range(n)], set()
         enter = {}                                            # a link that is entered somewhere: (from, to) -> that place
+        special = set()                                       # the links that are not plain walking (a jump, a drop, a teleporter, a pad)
         tin = np.array([c for c, d in teles], np.float32).reshape(-1, 3)
         tout = np.array([d for c, d in teles], np.float32).reshape(-1, 3)
         for a, b, t, kind in g["edges"]:
             d = float(np.linalg.norm(self.nodes[a] - self.nodes[b]))
             radj[b].append((a, 0.1 if kind == "tele" else (d / 320.0 if kind == "walk" else max(t, d / 900.0))))
             have.add((a, b))
+            if kind != "walk":
+                special.add((a, b))
             if kind == "tele" and len(tin):                   # a teleporter: the entrance of the one that comes out at the link's end
                 j = int(np.linalg.norm(tout - self.nodes[b], axis=1).argmin())
                 if np.linalg.norm(tout[j] - self.nodes[b]) < 150.0:
@@ -494,6 +507,7 @@ class RouteField:
             for a_ in on:
                 radj[land].append((int(a_), 1.2 + float(dx[a_]) / 320.0))
                 enter.setdefault((int(a_), land), np.asarray(c_, np.float32))      # a jump pad: its plate
+                special.add((int(a_), land))
         self.radj = radj
         w = np.array([1, 1, 2.0], np.float32)                 # vertical distance counts double
         self.lo = self.nodes.min(0) - 64.0
@@ -522,11 +536,14 @@ class RouteField:
         # entrance, not the point it takes him to: until 2026-10-08 the walker (the walking teacher, the scripted item
         # runner) and the "next step" inputs aimed at the far point, through the wall or up the tower.
         self.via = np.full((G, n, 3), np.nan, np.float32)
+        self.move = np.zeros((G, n), bool)                    # the step toward the goal from here is not plain walking
         for gi in range(G):
             for a_ in np.nonzero(self.next[gi] >= 0)[0]:
-                e_ = enter.get((int(a_), int(self.next[gi, a_])))
+                k_ = (int(a_), int(self.next[gi, a_]))
+                e_ = enter.get(k_)
                 if e_ is not None:
                     self.via[gi, a_] = e_
+                self.move[gi, a_] = k_ in special
 
     def _grid(self, nav_path, dims, w):
         """nearest node for every grid cell. Cached beside the walking map, or in $ROUTE_CACHE (the game server's map
@@ -858,6 +875,11 @@ class DuelEnv:
                                     self.route.T[g_] = np.where(open_, tm_, self.route.T[g_])
                         self.route.walk = walk_
         self.soak = np.zeros(self.n, np.float32)            # damage his armor took this frame (see ARMOR_COST)
+        self.pro_air = None                                 # PRO_JUMP: the pros' share of moving time in the air, per cell
+        pj_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_jump", os.path.splitext(os.path.basename(bsp))[0] + ".npz")
+        if PRO_JUMP and os.path.exists(pj_):
+            z_ = np.load(pj_)
+            self.pro_air = (z_["air"], z_["lo"], float(z_["zmid"]), float(z_["cell"]))
         self.shot_scarce = np.ones(NW, np.float32)          # SHOT_COST: how scarce each gun's ammo is on this map, and
         self.shot_way = None                                # the seconds to its nearest ammo from every graph point
         if SHOT_COST > 0:
@@ -1400,8 +1422,13 @@ class DuelEnv:
         up = (d[:, 2] > 18.0) & (hd < 260.0)
         gap = (hd > 150.0) & (d[:, 2] > -40.0) & (nx >= 0) & ~near
         jump = (s[ri, 6] > 0.5) & (up | gap | (self.run_stuck[ri] > 10))
+        vert = jump.astype(np.int64)
+        if self.pro_air is not None:                         # the jump key as the pros use it there (see PRO_JUMP)
+            care = R.move[g, node] | ((nx >= 0) & R.move[g, np.maximum(nx, 0)]) | ((nx2 >= 0) & R.move[g, np.maximum(nx2, 0)])
+            hop = self._pro_hop(pos) & (np.hypot(s[ri, 3], s[ri, 4]) > 200.0) & (np.abs(d[:, 2]) < 40.0) & ~care & (R.T[g, node] > 1.0)
+            vert = np.where(jump | hop, 1, np.where(care, 0, -1))    # before a jump, a drop, a pad or a teleporter: feet down; else his own
         turn = np.clip(rel_deg * 0.5, -20.0, 20.0)
-        lab = np.stack([fwd + 1, side + 1, jump.astype(np.int64), np.abs(TURN[None, :] - turn[:, None]).argmin(1)], 1)
+        lab = np.stack([fwd + 1, side + 1, vert, np.abs(TURN[None, :] - turn[:, None]).argmin(1)], 1)
         self.teach[ri[ok], :4] = lab[ok]
         if STACK_TEACH:
             self.teach[ri[n_run:], 3] = -1                   # (in a game the view is his own)
@@ -1415,6 +1442,13 @@ class DuelEnv:
         v1 = R.via[g, np.maximum(nx, 0)]
         tp = np.where((ground & near & (nx >= 0) & ~np.isnan(v1[:, 0]))[:, None], v1, tp)
         return np.where((ground & ~np.isnan(v0[:, 0]))[:, None], v0, tp)
+
+    def _pro_hop(self, pos):
+        """is this a place where the pros are in the air for most of their moving time (see PRO_JUMP)"""
+        air, lo, zmid, cell = self.pro_air
+        cx = np.clip(((pos[:, 0] - lo[0]) / cell).astype(np.int64), 0, air.shape[2] - 1)
+        cy = np.clip(((pos[:, 1] - lo[1]) / cell).astype(np.int64), 0, air.shape[1] - 1)
+        return air[(pos[:, 2] > zmid).astype(np.int64), cy, cx] > PRO_JUMP_AT
 
     def _teach_update(self):
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""

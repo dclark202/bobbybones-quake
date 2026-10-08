@@ -55,6 +55,8 @@ def main():
         it = env.route_item[gi]
         target[0] = k_goal
         tries = arrived = 0
+        air = moving = 0
+        speed = 0.0
         times, stand, falls = [], collections.Counter(), collections.Counter()
         for _ in range(a.tries):
             for i in range(n):                               # a fresh try for everybody: a spawn point, the item lying there
@@ -73,7 +75,7 @@ def main():
                 act[:, 3], act[:, 4] = mid_t, mid_p
                 tl = env.teach
                 has = tl[:, 0] >= 0
-                act[has, :3] = tl[has, :3]
+                act[has, :3] = np.maximum(tl[has, :3], 0)            # (a key the teacher leaves to him: not pressed)
                 turn = tl[:, 3] >= 0
                 act[turn, 3] = tl[turn, 3]
                 act[:, 10] = k_goal
@@ -82,6 +84,11 @@ def main():
                 env.run_k[:] = k_goal
                 s = env.state
                 new = (np.linalg.norm(s[:, :3] - env.item_pos[it][None, :], axis=1) < 48) & ~got
+                sp_ = np.hypot(s[:, 3], s[:, 4])
+                mv_ = ~got & ok0 & (sp_ > 150.0)
+                moving += int(mv_.sum())
+                air += int((mv_ & (s[:, 6] < 0.5)).sum())
+                speed += float(sp_[mv_].sum())
                 when = np.where(new, (t + 1) * E.DT, when)
                 got |= new
                 env.item_up[:, it], env.item_t[:, it] = True, 0.0
@@ -97,9 +104,9 @@ def main():
             arrived += int((got & ok0).sum())
             times += when[got & ok0].tolist()
         no_way = 32 * a.tries - tries
-        print("   {:4s} {:4.0%} arrive ({} of {}), median {:4.1f} s{}".format(
+        print("   {:4s} {:4.0%} arrive ({} of {}), median {:4.1f} s; on the way: speed {:.0f}, in the air {:.0%} of the time{}".format(
             lab, arrived / max(1, tries), arrived, tries, float(np.median(times)) if times else float("nan"),
-            "; {} tries had no way in the graph".format(no_way) if no_way else ""))
+            speed / max(1, moving), air / max(1, moving), "; {} tries had no way in the graph".format(no_way) if no_way else ""))
         if not a.goal:
             continue
 

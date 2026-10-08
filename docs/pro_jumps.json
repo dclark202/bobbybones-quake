@@ -1,0 +1,74 @@
+{
+ "bloodrun": {
+  "demos": 1066,
+  "minutes": 5095,
+  "moving_share": 0.808,
+  "air_share_of_moving": 0.355,
+  "speed_ground": 304,
+  "speed_air": 406,
+  "speed_air_quartiles": [
+   336,
+   399,
+   468,
+   590
+  ],
+  "speed_ground_quartiles": [
+   250,
+   314,
+   341,
+   442
+  ],
+  "air_over_400_share_of_all": 0.144,
+  "jumps_per_minute": 27.8,
+  "cells_known": 990,
+  "cells_mostly_air": 308
+ },
+ "aerowalk": {
+  "demos": 978,
+  "minutes": 7287,
+  "moving_share": 0.813,
+  "air_share_of_moving": 0.336,
+  "speed_ground": 306,
+  "speed_air": 377,
+  "speed_air_quartiles": [
+   320,
+   375,
+   435,
+   545
+  ],
+  "speed_ground_quartiles": [
+   266,
+   318,
+   341,
+   434
+  ],
+  "air_over_400_share_of_all": 0.106,
+  "jumps_per_minute": 29.3,
+  "cells_known": 623,
+  "cells_mostly_air": 248
+ },
+ "lostworld": {
+  "demos": 1222,
+  "minutes": 6109,
+  "moving_share": 0.805,
+  "air_share_of_moving": 0.352,
+  "speed_ground": 301,
+  "speed_air": 382,
+  "speed_air_quartiles": [
+   320,
+   381,
+   446,
+   565
+  ],
+  "speed_ground_quartiles": [
+   251,
+   314,
+   341,
+   438
+  ],
+  "air_over_400_share_of_all": 0.118,
+  "jumps_per_minute": 28.4,
+  "cells_known": 1002,
+  "cells_mostly_air": 422
+ }
+}

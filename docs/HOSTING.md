@@ -104,6 +104,11 @@ The server also mounts the pk3 files from the repo, so the repo and the Workshop
 
 ## Day to day
 
+A network is put on the server with `tools/push_bobby.sh <run> <simulator module> [map]` (`CODE=1` also pulls the code,
+rebuilds the image and restarts). The simulator switches a network was trained with travel in its file: checkpoints
+written since 2026-10-08 carry them, for older runs give them by hand, e.g.
+`CODE=1 FFA=3 EXPORT_ARGS="--set INTENT_HOLD=8" bash tools/push_bobby.sh duel_gru_v12 duel_env_ffa_v12 arena1`.
+
 | Task | Command |
 |---|---|
 | New Bobby | On the PC: export as above, then `scp data/duellive/policy.npz root@<ip>:bobbybones-quake/data/duellive/`. The running server loads it by itself between rooms and says so in chat |

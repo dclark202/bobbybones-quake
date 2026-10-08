@@ -5,6 +5,70 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 17:05 — v12 against Nightmare with every plugin fix; the public server; the two arms; the owner's calls for v13
+
+**The fair numbers.** `duel_gru_v12`, ten minutes a map against the game's Nightmare bot, the three games side by side
+with nothing else running, the plugins as fixed today (walking graph, item timers, styles, memory, fire button, facing
+at respawn, shot timing, respawn sounds, `INTENT_HOLD` 8):
+
+| Map | 14:01, before any fix | 14:37, walking graph and timers | **16:51, all fixes** | Damage dealt / taken | Red, mega, yellow armor: he / Nightmare | Damage lost a life: he / Nightmare |
+|---|---|---|---|---|---|---|
+| arena1 | 6-24 | 13-33 | **14-27** | 3,271 / 2,175 | 3 / 8, 1 / 4, - | 133 / 243 |
+| Blood Run | 0-9 (5 min) | 1-19 | **7-18** | 2,870 / 2,285 | 0 / 2, 3 / 9, 6 / 16 | 153 / 417 |
+| Aerowalk | 0-11 (5 min) | (not valid) | **6-13** | 2,943 / 1,890 | 2 / 1, 4 / 9, 2 / 11 | 181 / 497 |
+
+He deals more damage than Nightmare on all three maps and takes as many weapons (27 to 36 on Blood Run, 40 to 35 on
+Aerowalk); the frags are lost on the stack. On arena1 10 of his 28 deaths are falls into the void on the way to the red
+armor. Styles are drawn now (in the arena1 game: general 10, rockets 9, lightning 8, rail 2 lives).
+
+**Public server**: v12 with all fixes since 16:50 (`CODE=1 FFA=3 EXPORT_ARGS="--set INTENT_HOLD=8" tools/push_bobby.sh
+duel_gru_v12 duel_env_ffa_v12 arena1`; nobody was on it). What the fix of the key mix-up means there, from the archive:
+in a public game of 2026-10-07 with people (v8, three Bobbys, 10.8 minutes) each Bobby changed his forward key 10.4 to
+11.1 times a second and his jump key 9.4 to 9.6 times a second, over half of those one frame apart, and moved at 179 to
+192 units a second; in today's test with the fix 1.4 to 1.9 forward-key changes a second, none one frame apart, at 287 to
+316 units a second. Every public game before today was played by Bobbys with each other's legs.
+
+**The two learning-rate arms** (14:53 to 16:49, 81 updates each; ended early on the owner's word, "if the runs are not
+showing any difference between them we can end early"): no difference.
+
+| | Old rate (2.5e-5) | 1e-4 |
+|---|---|---|
+| Policy step: KL, share of samples clipped | 0.006, 6% | 0.018, 20% |
+| Time bare / big weapons / frags a match-minute | 50% / 0.63 / 3.91 | 50% / 0.62 / 3.94 |
+| Time bare on arena1, Aerowalk, Blood Run, Lost World | 54 / 41 / 41 / 66% | 56 / 40 / 41 / 66% |
+| Against the league's snapshots | 52% | 52% |
+
+So the learning rate was not what held him back over two hours; the three faults of the wiring review are the better
+suspects. v13 takes 1e-4 (weights of `duel_gru_v12b`), with its first updates watched.
+
+**The owner's calls for v13 (16:50)**: all the review's changes approved; the key budget to 5 a second ("monitor it as we
+progress"); no rocket drills ("they seem to have done their part"); no spawns beside the mega or the red armor ("default
+spawns on duel maps only"); "incentivise him to jump again, but informed by pro play/human demos if possible. jumping is
+how you strafe jump which IS a goal of this still"; v13 to start around 21:00 to 22:00 and run overnight.
+
+**Jumping.** The walking teacher itself taught him not to jump: on every taught frame that was not a gap or a step its
+label for the jump key was "none" (v10's item runs, v11's and v12's walking teacher). `PRO_JUMP=1` takes the label from
+the pros instead (`tools/pro_jumps.py`: where they are in the air): a jump where the pros are in the air for more than half
+of their moving time and he is on his way at speed, no label elsewhere. With an exploration bonus on the jump head (0.25,
+as the turn head).
+
+The pros, from all 3,266 demos (`tools/pro_jumps.py`, `docs/pro_jumps.json`, tables in `sim/pro_jump/`):
+
+| | Blood Run | Aerowalk | Lost World | He (v12) |
+|---|---|---|---|---|
+| Moving (over 150 units a second) | 81% of the time | 81% | 81% | |
+| In the air, of the moving time | 36% | 34% | 35% | jump key down in 1 to 2% of frames |
+| Jumps a minute | 28 | 29 | 28 | |
+| Speed on the ground (mean; quartiles) | 304; 250 / 314 / 341 | 306; 266 / 318 / 341 | 301; 251 / 314 / 341 | 270 to 290 overall |
+| Speed in the air (mean; quartiles; 95th) | 406; 336 / 399 / 468; 590 | 377; 320 / 375 / 435; 545 | 382; 320 / 381 / 446; 565 | |
+| Cells of 64 units where they are mostly in the air | 308 of 990 | 248 of 623 | 422 of 1,002 | |
+
+The teacher's own pupil with the new label (`PRO_JUMP=1 tools/teacher_check.py`): in the air for 33 to 61% of its way and
+arriving as before or better (Blood Run: red armor 86%, yellow 88%, the rest 100%; Aerowalk 99 to 100%; Lost World 86
+to 94%, up from 84 to 93%). The first version hopped everywhere the pros do and fell at Blood Run's red armor (45%): the
+label now keeps the feet down before a jump, a drop, a pad or a teleporter. It moves at 300 to 320: hopping alone gains
+no speed; the turning in the air that does is his to find (item runs pay for arriving sooner than walking pace).
+
 ## 2026-10-08 16:45 — The walking layer after the review: pads, teleporters, Aerowalk's graph; contested-item rounds built
 
 `tools/teacher_check.py` (the walking teacher's own pupil, 96 tries an item from the spawn points, 30 s), before -> after:

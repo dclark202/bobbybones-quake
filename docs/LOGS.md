@@ -99,8 +99,27 @@ players every 10 s; the simulator runs 32 subjects per map at once.
 - `metrics.jsonl`: one line per report: `update`, `steps`, `minutes`, `sps`, `frags_per_match_min`,
   `suicides_per_match_min`, per-weapon hit rates and frag shares, `pickups_per_player_min`, `visible`,
   `air_fast`, `jerk`, `vs_snapshot_kill_share`, `league_size`, `entropy`, `close_p`.
-- `policy.pt` (weights, input normalization, action layout, training minutes), `snapshots/` (league).
+  Since 2026-10-08 also: `kl`, `clip_frac`, `lr`, `lam` (the policy's step per update), `by_map` (per map: time bare,
+  big weapons, first weapon, frags, enemy in view, mega and red, weapons a player-minute), `stack`, `style`, `fire_in_view`,
+  `shot_cost_per_player_min`, `shot_price` (the mean factor of the price per shot), `armor_soaked_per_player_min`,
+  `contest` (rounds begun as a race for a big item, and the share a learner took it in). `pickups_per_player_min.wp`
+  counts every touch of a weapon, also one already owned; `wpnew` counts first pickups in a life. The overall pickup rates
+  divide by two players a match whatever the group size (about a third too high for the usual mix); the ones in `by_map`
+  are per true player-minute. `intent.abandoned` counted every change of goal until 2026-10-08, a goal given up since.
+- `policy.pt` (weights, input normalization, action layout, training minutes; since 2026-10-08 `env_vars`, the simulator
+  switches of `PLAY_VARS` the run was trained with, and `round_secs` / `arena_secs`), `snapshots/` (league).
+- `policy.npz` (what a server plays, `sim/export_duel.py`): the same weights and statistics, `env` (the simulator module),
+  `env_vars` (a JSON string; the plugins set them before loading the module) and `round_secs` (when given).
 - `data/sim_runs/<run>.log`: the same lines as text.
+
+## Checks (2026-10-08)
+- `docs/eval_<run>_nightmare.json` and the like (`tools/duel_eval.py`): per map the mean score, the share of the frags with
+  its 95% interval, games won, and per side time bare, first weapon, stack, pickups, enemy in view, firing, speed, own deaths.
+- `docs/shot_prices.json` (`tools/shot_prices.py`), `docs/pro_tables.json` (`tools/pro_tables.py`), `docs/pro_jumps.json`
+  (`tools/pro_jumps.py`): tables, no player names.
+- `data/obscheck/obs_dump.npy`: the inputs he was given in a real game, one row a frame (`OBSDUMP=1 bash tools/bench_arena.sh ...`),
+  read by `tools/input_check.py --real`.
+- Events in the session logs since 2026-10-08: `style` (the playing style drawn for a Bobby's new life).
 
 ## Other
 - `data/weaponlab*/weaponlab.jsonl`: real-server weapon measurements (`plugins/weaponlab.py`): per test, per
