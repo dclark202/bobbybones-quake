@@ -188,5 +188,5 @@ python sim/train_duel_rnn.py --env duel_env_ffa --group 2,3,2,4,2 --map bloodrun
   --near-item-p 0 --teach-trunk 0.05 --kl-heads 10 --fade-start 4834.27
 ```
 
-`--teach-trunk 0.05` is the proposal of section 7 (left out, the list is as approved); `--kl-heads 10` measures the step
+`--teach-trunk 0.05` is the proposal of section 7 (without it the run is the list as approved); `--kl-heads 10` measures the step
 per output every tenth update; `--fade-start` keeps the teachers' fade across a resume.
