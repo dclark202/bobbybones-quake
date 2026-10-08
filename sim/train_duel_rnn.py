@@ -110,6 +110,15 @@ def main():
     ap.add_argument("--intent-seek", type=float, default=1.0, help="the chosen way pays this share of the item's pickup reward, spread along it")
     ap.add_argument("--lr-minutes", type=float, default=0.0, help="the learning rate decays to a tenth over this many minutes of training "
                     "in all (counted across restarts); 0 = over this run's --minutes, from the full rate again at every restart")
+    ap.add_argument("--lr-end", type=float, default=0.1, help="the learning rate ends at this share of --lr (1 = constant). Note: with "
+                    "--lr-minutes on a resumed run the decay counts the minutes of the whole lineage, so a long lineage sits at "
+                    "this share from its first update (v8 to v12 did, at a tenth); --lr-minutes 0 decays over this run only")
+    ap.add_argument("--lam", type=float, default=0.95, help="how far ahead an action gets credit in the advantage estimate: "
+                    "0.95 at 40 decisions a second is about half a second, 0.98 about 1.2 s, 0.99 about 2.3 s")
+    ap.add_argument("--close-floor", type=float, default=0.2, help="the share of respawns put 300 to 700 units in front of an "
+                    "enemy once the near-spawn curriculum has run out (0 = none: every respawn at a spawn point)")
+    ap.add_argument("--fade-start", type=float, default=-1.0, help="the teachers' fades count from this minute of training "
+                    "(default: where this process starts; on a restart pass the first start's, so that the fades go on)")
     ap.add_argument("--intent-seek-minutes", type=float, default=0.0, help="that reward fades to a quarter over this time (0 = constant)")
     ap.add_argument("--stack-p", type=float, default=0.0, help="share of spawns with a random stack (health 100-200, armor 0-150)")
     ap.add_argument("--intent-teach", type=float, default=0.0, help="weight of imitating the simple item rule on the intention head (env.intent_rule)")
@@ -319,18 +328,22 @@ def main():
     scr = torch.zeros(N, device=dev)                                   # scripted players (not trained on)
 
     T = a.steps
-    gamma, lam, clip, ent_coef = a.gamma, 0.95, 0.2, a.ent_coef
+    gamma, lam, clip, ent_coef = a.gamma, a.lam, 0.2, a.ent_coef
     ent_heads = [float(x) for x in a.ent_heads.split(",")] if a.ent_heads else [1.0] * len(ACTION_DIMS)
     ent_heads += [1.0] * (len(ACTION_DIMS) - len(ent_heads))
     t_start, total, update = time.time(), 0, 0
     log = open(os.path.join(out, "metrics.jsonl"), "a")
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
         a.map, N, sum(p.numel() for p in pol.parameters()), dev, a.minutes), flush=True)
+    fade0 = a.fade_start if a.fade_start >= 0 else elapsed0             # the minute of training the teachers' fades count from
+    w_map = [maps[w % len(maps)] for w in range(a.workers)]
+    MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
+                "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames")
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
-        close_p = max(0.2, 1.0 - 0.8 * mins / a.close_minutes)
-        round_len = 15.0 + 105.0 * (1.0 - (close_p - 0.2) / 0.8)
+        close_p = max(a.close_floor, 1.0 - 0.8 * mins / a.close_minutes)
+        round_len = 15.0 + 105.0 * (1.0 - (max(close_p, 0.2) - 0.2) / 0.8)
         dmg_reward = 0.004 * max(0.25, close_p)                         # damage shaping fades with the curriculum
         if a.dmg_reward > 0:                                            # ... unless it is set outright
             dmg_reward = a.dmg_reward
@@ -363,7 +376,7 @@ def main():
         b_iteach = torch.zeros(T, N, dtype=torch.long, device=dev)       # what the item rule would have chosen
         b_teach = torch.zeros(T, N, 5, dtype=torch.long, device=dev)
         h0 = h.clone()
-        raw, agg = [], {}
+        raw, agg, agg_map = [], {}, {}
         lk = [0, 0]                                                      # league matches: learner kills, snapshot kills
         for t in range(T):
             raw.append(obs)
@@ -402,6 +415,9 @@ def main():
                     if isinstance(v, list):
                         continue
                     agg[k] = agg.get(k, 0) + v
+                    if k in MAP_KEYS:
+                        am_ = agg_map.setdefault(w_map[w_], {})
+                        am_[k] = am_.get(k, 0) + v
                 for mk, ek in zip(r[3]["match_of_kill"], r[3]["even_kill"]):
                     if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
@@ -423,18 +439,20 @@ def main():
         ret = adv + b_val[:T]
         frac = min(1.0, mins / a.lr_minutes) if a.lr_minutes > 0 else min(1.0, (time.time() - t_start) / (a.minutes * 60))
         for g in opt.param_groups:
-            g["lr"] = a.lr * (1.0 - 0.9 * frac)
+            g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
+        lr_now = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
         n_mb = a.minibatches
-        kick = a.teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.teach_minutes)
+        kick = a.teach * max(0.0, 1.0 - (mins - fade0) / a.teach_minutes)
         kick_l = torch.zeros(())
-        ik = a.intent_teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.intent_teach_minutes)
+        ik = a.intent_teach * max(0.0, 1.0 - (mins - fade0) / a.intent_teach_minutes)
         ik_l = torch.zeros(())
-        wk = a.weapon_teach * max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.weapon_teach_minutes)
+        wk = a.weapon_teach * max(0.0, 1.0 - (mins - fade0) / a.weapon_teach_minutes)
         wk_l = torch.zeros(())
         demo_w = a.demo_coef * (max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.demo_minutes) if a.demo_minutes > 0 else 1.0)
         demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
         if demo_w > 0 and update % 5 == 0:
             demo_refill()
+        kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
         for epoch in range(3):
             perm = torch.randperm(N, device=dev)
             for chunk in perm.chunk(n_mb):                               # whole sequences per player
@@ -457,6 +475,11 @@ def main():
                 ad = adv[:, chunk]
                 ad = (ad - (ad * wgt).sum() / wsum) / (ad[wgt > 0].std() + 1e-8)
                 ratio = (lp - b_logp[:, chunk]).exp()
+                if epoch == 2:
+                    with torch.no_grad():
+                        kl_sum += float(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)
+                        cf_sum += float((((ratio - 1.0).abs() > clip).float() * wgt).sum() / wsum)
+                        kl_n += 1
                 pg = -(torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
                 vl = (0.5 * (v - ret[:, chunk]).pow(2) * wgt).sum() / wsum
                 en = (ent * wgt).sum() / wsum
@@ -501,6 +524,17 @@ def main():
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
         G = N / n_groups                                                 # mean players per group (for the per-player numbers)
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
+                   kl=round(kl_sum / max(1, kl_n), 5), clip_frac=round(cf_sum / max(1, kl_n), 4), lr=lr_now, lam=lam,
+                   by_map={m_: dict(bare=round(float(v_.get("stack_bare", 0) / max(1, v_.get("stack_frames", 0))), 3),
+                                    big_weapons=round(float(v_.get("stack_big", 0) / max(1, v_.get("stack_frames", 0))), 2),
+                                    over=round(float(v_.get("stack_over", 0) / max(1, v_.get("stack_frames", 0))), 3),
+                                    first_weapon_s=round(float(v_["first_wp"][0] / max(1.0, v_["first_wp"][1])), 1) if "first_wp" in v_ else None,
+                                    weapons_per_player_min=round(float(v_.get("pick_wp", 0) / max(1e-9, v_.get("players", 0) * DT_MIN)), 2),
+                                    mega_red_per_player_min=round(float((v_.get("pick_mega", 0) + v_.get("pick_ra", 0)) / max(1e-9, v_.get("players", 0) * DT_MIN)), 2),
+                                    frags_per_player_min=round(float(v_.get("frags", 0) / max(1e-9, v_.get("players", 0) * DT_MIN)), 2),
+                                    in_view=round(float(v_.get("visible", 0) / max(1, v_.get("players", 0))), 3),
+                                    fire=round(float(v_.get("fire_frames", 0) / max(1, v_.get("play_frames", 0))), 3))
+                           for m_, v_ in agg_map.items()},
                    frags_per_match_min=round(agg["frags"] / sim_min, 3),
                    suicides_per_match_min=round(agg["suicides"] / sim_min, 3),
                    hit_rate={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots"])), 3) for w in WEAPONS},
