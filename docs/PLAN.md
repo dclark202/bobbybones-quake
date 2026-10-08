@@ -100,6 +100,13 @@ Unchanged: v10's weights and league, arena1 / Aerowalk / Blood Run / Lost World,
 
 **Risks**: five changes at once, in two groups that touch different heads (the intention and movement; the weapon key), so their effects can still be told apart by their own numbers. The weapon teacher could make him hold rockets where he should not (point-blank is excluded by the rule; the fade leaves the last word to the fights).
 
+
+**E. Pay for keeping a stack (owner, 2026-10-07 20:10, after his 61 : 10 : 10 game).** In frags a minute at full value:
+health above 100 and armor 0.5 (`STACK_PAY`), the three big weapons 0.5 (`STACK_WPN`, a third each), a cost of 0.25
+while he holds none of them (`STACK_BARE`) and 0.25 while health and armor together are under 50 (`STACK_LOW`). Normal
+games only, not item runs or drills. Watch for hiding: the share of time with the enemy in view and frags a minute must
+not fall. Not built: a cost for starting a fight with fewer than two weapons (it would also punish shooting back).
+
 ## Owner decisions
 
 - Maps (2026-10-07): training on arena1, Aerowalk, Blood Run and Lost World; Campgrounds, Furious Heights and Sinister come back once he goes for items. The public server offers the eight he has trained on.

@@ -213,6 +213,15 @@ INTENT_EVERY, INTENT_SWITCH = 40, 0.02
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
+# Pay for keeping a stack (owner, 2026-10-07: "good players maintain stack; bad players spawn and immediately start
+# fighting"). Paid every second of a normal game while alive, in frags a minute at full value: STACK_PAY for health
+# above 100 and armor (each counted to 100, half each), STACK_WPN for the big weapons in hand (rockets, lightning, rail:
+# a third each). Costs: STACK_BARE while he holds none of the three, STACK_LOW while health and armor together are under
+# 50. All zero by default.
+STACK_PAY = float(os.environ.get("STACK_PAY") or 0.0)
+STACK_WPN = float(os.environ.get("STACK_WPN") or 0.0)
+STACK_BARE = float(os.environ.get("STACK_BARE") or 0.0)
+STACK_LOW = float(os.environ.get("STACK_LOW") or 0.0)
 INTENT_HOLD = float(os.environ.get("INTENT_HOLD") or 3.0)     # (v11: longer, with a release when the item is gone, see intend)
 INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
 CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
@@ -752,7 +761,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, wrule_frames=0, wrule_agree=0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, wrule_frames=0, wrule_agree=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
                           w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0,
                           vs_persona=np.zeros((3, len(PERSONAS))), fall_dmg=0.0, duck_frames=0, walk_frames=0)      # rows: frags against, deaths to, frames
@@ -2732,6 +2741,19 @@ class DuelEnv:
                         self.stats["move_arrive"] += 1
                     self._run_pick(int(i))
             self.intent_phi = phi.astype(np.float32)
+
+        if STACK_PAY or STACK_WPN or STACK_BARE or STACK_LOW:   # pay for the stack he keeps (see STACK_PAY)
+            on = (pkind == NORMAL) & (self.hp > 0) & (self.script == 0) & (self.run_k < 0)
+            big = self.has[:, [RL, LG, RG]].sum(1)
+            over = (np.clip(self.hp - 100.0, 0.0, 100.0) + np.clip(self.armor, 0.0, 100.0)) / 200.0
+            pay = (STACK_PAY * over + STACK_WPN * big / 3.0 - STACK_BARE * (big == 0)
+                   - STACK_LOW * ((self.hp + self.armor) < 50.0)) * (DT / 60.0)
+            reward += np.where(on, pay, 0.0)
+            self.stats["stack_frames"] += int(on.sum())
+            self.stats["stack_over"] += float(over[on].sum())
+            self.stats["stack_big"] += float(big[on].sum())
+            self.stats["stack_bare"] += int((on & (big == 0)).sum())
+            self.stats["stack_low"] += int((on & ((self.hp + self.armor) < 50.0)).sum())
 
         # deaths, frags, respawns
         done = np.zeros(n, bool)                            # end of the round (memory and returns reset here only)

@@ -5,6 +5,30 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-07 20:00 — The owner's game against v10 on the public server (arena1, 10 minutes, him and two Bobbys), and a reward for keeping a stack
+
+Score 61 : 10 : 10 (damage 8,594 : 2,835 : 2,701). Session `20261008-005506_arena1_ffa`; `tools/player_card.py --games`:
+
+| | Owner | v10 (two bots) |
+|---|---|---|
+| Mega, red armor taken (share of spawns) | 12, 15 (70%, 54%) | 0, 0 |
+| Big weapons picked up a minute | 6.5 | 0.8 |
+| First big weapon after a spawn | 4.3 s | 8.1 s, in one life of nine |
+| Weapon in hand | rockets 42%, rail 40%, MG 9%, lightning 8% | MG 97% |
+| Shots fired | lightning 44%, rockets 24%, rail 16%, MG 14% | MG 98% |
+| The game's own accuracy | lightning 43%, rockets 50%, MG 27% | MG 23%, lightning 25% |
+| Aim error while firing | 4.9 deg | 3.1 deg |
+
+What did not work: v10 learned to walk to an item alone and takes none in a game against a person. With MG spawns he
+fights every life with the machine gun.
+
+The owner's read: "good players know to maintain stack; bad players spawn and immediately start fighting ... he isn't
+picking it up through self play, so we have to enforce it." Built (off by default, `STACK_PAY`, `STACK_WPN`, `STACK_BARE`,
+`STACK_LOW` in `sim/duel_env.py`): a pay per second of a normal game for health above 100 and armor, and for the big
+weapons he holds; a cost per second with none of the three, and with health and armor together under 50. Checked against
+its own counts in groups of 2 and 4; the two-player simulator is unchanged with it off. New metric `stack`.
+Also fixed: the player card gave a seat's events to whoever held it first (a bot in warmup, then the owner).
+
 ## 2026-10-07 — Public server: new name, `!map` limited to the trained maps (owner)
 
 The server list name is now "doppz's bot arena | duel & FFA | chicago" (`tools/push_bobby.sh`; takes effect at the next `push_bobby.sh` restart, or live with rcon `set sv_hostname`). `!map` and `!maps` list only `testlab, arena1, bloodrun, aerowalk, lostworld, campgrounds, sinister, furiousheights` (the maps he has seen in training; `duelbot.MAPS` is shared with ffabot, `botmode.DUEL_MAPS` keeps a copy; `lockout` and the other pool maps are no longer pickable). Not yet tested on a server.
