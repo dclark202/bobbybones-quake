@@ -27,6 +27,11 @@ picking it up through self play, so we have to enforce it." Built (off by defaul
 `STACK_LOW` in `sim/duel_env.py`): a pay per second of a normal game for health above 100 and armor, and for the big
 weapons he holds; a cost per second with none of the three, and with health and armor together under 50. Checked against
 its own counts in groups of 2 and 4; the two-player simulator is unchanged with it off. New metric `stack`.
+Owner's changes at 20:20: the bare cost grows with the time without a big weapon, the low cost starts at 70 (one rail shot) in
+proportion to the shortfall; checked frame by frame. The fire button changes at most every 200 ms (2.5 clicks a second,
+measured 2.25 when asked every frame; it was five). Public server: a game started with F3 was thrown back to warmup in the
+same instant (the bots-only abort ran before the start was marked as the people's), so "Game on" showed while everybody
+kept every weapon; no abort in the 30 s after a ready-up start now.
 Also fixed: the player card gave a seat's events to whoever held it first (a bot in warmup, then the owner).
 
 ## 2026-10-07 — Public server: new name, `!map` limited to the trained maps (owner)

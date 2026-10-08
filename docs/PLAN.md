@@ -105,7 +105,7 @@ Unchanged: v10's weights and league, arena1 / Aerowalk / Blood Run / Lost World,
 health above 100 and armor 0.5 (`STACK_PAY`), the three big weapons 0.5 (`STACK_WPN`, a third each), a cost of 0.25
 while he holds none of them (`STACK_BARE`) and 0.25 while health and armor together are under 50 (`STACK_LOW`). Normal
 games only, not item runs or drills. Watch for hiding: the share of time with the enemy in view and frags a minute must
-not fall. Not built: a cost for starting a fight with fewer than two weapons (it would also punish shooting back).
+not fall. Owner, 20:20: the cost for holding none grows with the time gone without (nothing at the spawn, 0.25 after 5 s, up to 1.0 after 20 s); the low cost starts at 70 health plus armor (one rail shot) and grows to 0.5 at zero (`STACK_LOW` 0.5). **F. Fire button:** a change at most every 200 ms, 2.5 clicks a second (was five; owner: he taps the lightning gun, nobody does). Not built: a cost for starting a fight with fewer than two weapons (it would also punish shooting back).
 
 ## Owner decisions
 

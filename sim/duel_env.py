@@ -132,8 +132,10 @@ KEY_RATE, KEY_BURST = 4.0, 10.0
 # should be is read from the network then and held in between. The mouse and the fire button stay at 40 a second.
 KEY_EVERY = 4
 # The right hand on the mouse: index finger = fire, middle finger = zoom (held). The same rule: a finger that has
-# just acted cannot act again for this many frames (a click is a press and a release: at most about six a second).
-MOUSE_HOLD = np.array([4, 6], np.int64)                # fire 100 ms (at most five clicks a second), zoom 150 ms
+# just acted cannot act again for this many frames (a click is a press and a release). Fire: 200 ms, so at most 2.5
+# clicks a second (owner, 2026-10-07: "he is spamming the lightning fire button; you hold it down; 2 or 3 clicks a
+# second max"; it was 100 ms, five clicks a second, until v10). FIRE_HOLD sets the frames.
+MOUSE_HOLD = np.array([int(os.environ.get("FIRE_HOLD") or 8), 6], np.int64)   # fire 200 ms, zoom 150 ms
 # Zoom: the view narrows to ZOOM of its size (100 x 75 degrees -> 40 x 30), and the same hand movement turns the
 # view ZOOM as far: finer aim and less shake in degrees, but slower turning and no view of the surroundings.
 ZOOM = 0.4
@@ -216,12 +218,14 @@ INTENT_EVERY, INTENT_SWITCH = 40, 0.02
 # Pay for keeping a stack (owner, 2026-10-07: "good players maintain stack; bad players spawn and immediately start
 # fighting"). Paid every second of a normal game while alive, in frags a minute at full value: STACK_PAY for health
 # above 100 and armor (each counted to 100, half each), STACK_WPN for the big weapons in hand (rockets, lightning, rail:
-# a third each). Costs: STACK_BARE while he holds none of the three, STACK_LOW while health and armor together are under
-# 50. All zero by default.
+# a third each). Costs: STACK_BARE while he holds none of the three, growing with the time he has gone without (nothing
+# at the spawn, the full rate after STACK_BARE_RAMP seconds, on up to STACK_BARE_MAX times it); STACK_LOW while health
+# and armor together are under STACK_LOW_AT (one rail shot kills), in proportion to how far under. All zero by default.
 STACK_PAY = float(os.environ.get("STACK_PAY") or 0.0)
 STACK_WPN = float(os.environ.get("STACK_WPN") or 0.0)
 STACK_BARE = float(os.environ.get("STACK_BARE") or 0.0)
 STACK_LOW = float(os.environ.get("STACK_LOW") or 0.0)
+STACK_BARE_RAMP, STACK_BARE_MAX, STACK_LOW_AT = 5.0, 4.0, 70.0
 INTENT_HOLD = float(os.environ.get("INTENT_HOLD") or 3.0)     # (v11: longer, with a release when the item is gone, see intend)
 INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
 CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
@@ -744,7 +748,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, wrule_frames=0, wrule_agree=0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, wrule_frames=0, wrule_agree=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
                           w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0,
                           vs_persona=np.zeros((3, len(PERSONAS))), fall_dmg=0.0, duck_frames=0, walk_frames=0)      # rows: frags against, deaths to, frames
@@ -2650,14 +2654,20 @@ class DuelEnv:
             on = (pkind == NORMAL) & (self.hp > 0) & (self.script == 0) & (self.run_k < 0)
             big = self.has[:, [RL, LG, RG]].sum(1)
             over = (np.clip(self.hp - 100.0, 0.0, 100.0) + np.clip(self.armor, 0.0, 100.0)) / 200.0
-            pay = (STACK_PAY * over + STACK_WPN * big / 3.0 - STACK_BARE * (big == 0)
-                   - STACK_LOW * ((self.hp + self.armor) < 50.0)) * (DT / 60.0)
+            if getattr(self, "bare_t", None) is None or len(self.bare_t) != len(self.hp):
+                self.bare_t = np.zeros(len(self.hp), np.float32)       # seconds of this life without a big weapon
+            self.bare_t = np.where(on & (big == 0), self.bare_t + DT, 0.0).astype(np.float32)
+            low = np.clip((STACK_LOW_AT - (self.hp + self.armor)) / STACK_LOW_AT, 0.0, 1.0)
+            pay = (STACK_PAY * over + STACK_WPN * big / 3.0
+                   - STACK_BARE * np.minimum(STACK_BARE_MAX, self.bare_t / STACK_BARE_RAMP)
+                   - STACK_LOW * low) * (DT / 60.0)
             reward += np.where(on, pay, 0.0)
             self.stats["stack_frames"] += int(on.sum())
             self.stats["stack_over"] += float(over[on].sum())
             self.stats["stack_big"] += float(big[on].sum())
             self.stats["stack_bare"] += int((on & (big == 0)).sum())
-            self.stats["stack_low"] += int((on & ((self.hp + self.armor) < 50.0)).sum())
+            self.stats["stack_low"] += int((on & (low > 0)).sum())
+            self.stats["stack_cost"] += float((STACK_BARE * np.minimum(STACK_BARE_MAX, self.bare_t / STACK_BARE_RAMP) + STACK_LOW * low)[on].sum()) * DT / 60.0
 
         # deaths, frags, respawns
         done = np.zeros(n, bool)                            # end of the round (memory and returns reset here only)

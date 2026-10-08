@@ -414,7 +414,11 @@ class ffabot(duelbot):
         # is in the game and loaded, one "abort" brings it back to warmup, and an unready person keeps it there. Never
         # while someone is still loading: a restart then looks like a hanging connection (2026-10-06).
         loaded = [p for p in people if p.state is not None and p.state.health > 0]
-        if loaded and not self.match and self.game is not None and self.game.state == "in_progress" and now - self.last_abort > 60:
+        # Not in the 30 s after the people's own start ("allready"): this frame can run before on_game_start has marked the
+        # game as theirs, and the abort then threw the game they had just started back to warmup, with the "Game on" line
+        # on the screen and everybody still carrying every weapon (owner, 2026-10-07).
+        if (loaded and not self.match and self.game is not None and self.game.state == "in_progress"
+                and now - self.last_abort > 60 and now - self.go_t > 30):
             self.last_abort = now
             minqlx.console_command("abort")
         if len(bobbys) < self.n_bots and now > self.next_check:
