@@ -5,6 +5,53 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 13:15 — The aim audit, aim ability as one knob, the Nightmare stand-in, honest item state (owner: "human good, not bot good"; "on par or slightly above me, 10% over or so ... a knob")
+
+**Aim in real games** (free-for-all logs; people 19 minutes alive, thin; `scratchpad/aim_logs.py`):
+
+| | People | Bobby v10 | Bobby v8 |
+|---|---|---|---|
+| First shot after an enemy appears (median) | 0.50 s | 0.20 s | 0.20 s |
+| Crosshair on him after (median) | 0.50 s | 0.30 s | 0.25 s |
+| Firing, share of the time an enemy is in view | 24% | 53% | 62% |
+| Crosshair within 3 deg / 10 deg while in view | 15 / 45% | 40 / 75% | 47 / 78% |
+| Aim error while firing (median, third quartile) | 5.4, 13.3 deg | 3.1, 5.6 | 2.5, 5.1 |
+
+He is "bot good" in four ways: he notices and shoots at once, he keeps the trigger down, he is locked on whoever is in
+view, and being hit hardly shakes him (reflex room: he kept 78% of his tracking under fire, the owner 51%). His single
+shots are below the owner's (first rail shot 60 to 70% against 88%, rockets that hurt 36 to 47% against 83%), and last
+night's cut (perception 1.2 deg, slow) cost those ten points each while hardly touching the tracking; three seeds a
+setting showed the perception settings alone cannot change that shape.
+**The knob** (`AIM_LEVEL` 1 to 5 in `sim/duel_env.py`, 3 by default; each level 1.25 times the errors and delays of the
+next; `AIM_PRESET=v12|v10` for old networks): level 3 = perception 0.6 deg quick (as before the cut), tracking delay
+100 ms (75), flinch 0.25 deg a point up to 6 deg fading over 0.5 s (0.12, 3, 0.3), up to 200 ms more before an enemy who
+turns up off the crosshair unexpected is noticed (`SURPRISE_MS`, new; in the simulator, the group generator and both
+plugins). Reflex room, v12's weights before adapting, three seeds:
+
+| | Owner | Level 2 | Level 3 | Level 4 |
+|---|---|---|---|---|
+| Tracking: time on target | 40.1% | 41.9% | 44.8% | 54.1% |
+| Lightning damage a second | 57.7 | 62.2 | 65.8 | 77.9 |
+| On a jumping target after | 350 ms | 347 | 348 | 314 |
+| First rail shot | 87.5% | 60.7% | 68.4% | 79.5% |
+| Rockets that hurt | 83.3% | 36.3% | 38.0% | 36.1% |
+| Under fire: time on target / lightning damage | 20.4% / 35.7 | 24.5% / 36.7 | 27.9% / 42.2 | 34.1% / 50.5 |
+| Under fire: first rail shot | 62.5% | 16.5% | 35.0% | 46.3% |
+
+Level 3 is the owner plus 12% on tracking and level with him on reaction; under fire still above him; rail and rockets
+are a matter of practice, not of limits (to come back as rooms in training). Open (the owner's call, a reward): a cost per shot.
+**Nightmare stand-in** (`PERSONAS[8]`, `tools/duel_eval.py`; checks only): the scripted item runner with the weapons
+the game's bot was logged to fire and little jumping. First calibration (32 five-minute games, each network under the
+limits it trained with), score a game: v11 2.4 : 9.5 on arena1 (real, per 10 min: about 6 : 25), v10 7.4 : 9.8 (real 22 : 28):
+the ratios match without tuning (0.25 against 0.26; 0.76 against 0.79). On the duel maps it has nothing valid to be set
+against yet (the entry below).
+**Honest item state** (`ITEM_BELIEF`, off by default; B-125): the item rule and the inputs about his chosen item go by
+what he knows. Test (an obeying pupil, 2,400 frames): of the goal-frames with the item truly gone he still thinks it
+there in 13 to 16% (taken out of earshot, place not seen since); never the other way round. The two-player simulator is
+unchanged with it on or off.
+**The pros' positions** (`tools/pro_positions.py`, `sim/pro_positions/`): in the scorecard. v12 on Blood Run at 5.5 h
+(general lives, small sample): overlap 0.54; 83% of his time on the ground that holds 90% of theirs.
+
 ## 2026-10-08 13:00 — A fault in the real-game control, found and fixed: on a busy PC the bot's commands were dropped (and the duel-map Nightmare numbers were wrong)
 
 Found while setting the Nightmare stand-in against the real scores. In the sparring games on Blood Run and Aerowalk
