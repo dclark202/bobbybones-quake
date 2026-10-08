@@ -24,7 +24,7 @@ mkdir -p $DATA
 if [ "$RUN" = "-" ]; then                # "-" = use the policy.npz already in $DATA (a machine without PyTorch)
     [ -f "$DATA/policy.npz" ] || { echo "no $DATA/policy.npz"; exit 1; }
 else
-    "$PY" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out $DATA/policy.npz
+    "$PY" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out $DATA/policy.npz $EXPORT_ARGS   # EXPORT_ARGS="--set INTENT_HOLD=8": the switches a run before v13 was trained with
 fi
 RESTART_OPT=""; [ -n "$RESTART" ] && RESTART_OPT="--restart unless-stopped"   # RESTART=1: come back after a crash or reboot
 if [ -n "$SPAR" ]; then

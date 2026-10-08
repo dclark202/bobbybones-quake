@@ -67,7 +67,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     WEAPONS = WEAPONS_
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
-    env._teach_update()
+    env.round_t[:] = 1e9                                     # every round starts anew at the first step: until 2026-10-08 the
+    env._teach_update()                                      # first round after a (re)start was played with every weapon at spawn
     remote.send((env.observe(), env.teach.copy()))
     last = {k: np.copy(v) for k, v in env.stats.items()}
     while True:
@@ -86,7 +87,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 1)
             delta["match_of_kill"] = [e["killer"] // G for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
-            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy()))
+            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy(),
+                         env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool)))
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -139,6 +141,10 @@ def main():
                     "vertical, turn, pitch, fire, weapon, walk, zoom); empty = 1 for all")
     ap.add_argument("--ent-coef", type=float, default=0.01, help="exploration bonus (entropy coefficient)")
     ap.add_argument("--arena-len", type=float, default=30.0, help="test map: seconds per arena round")
+    ap.add_argument("--obs-dump", default="", help="write a sample of raw inputs (0.5%% of the rows of the updates --obs-dump-from..to) to this "
+                    "file, for sim/renorm_policy.py --sample")
+    ap.add_argument("--obs-dump-from", type=int, default=8)
+    ap.add_argument("--obs-dump-to", type=int, default=20)
     ap.add_argument("--arena-full", type=float, default=0.5, help="test map: share of arena rounds with the full weapon set")
     ap.add_argument("--dmg-reward", type=float, default=0.0, help="reward per point of damage (0 = the old curriculum value, 0.001 by now)")
     ap.add_argument("--dmg-taken-w", type=float, default=2.0, help="weight of damage taken against damage dealt in the reward")
@@ -180,6 +186,8 @@ def main():
     import importlib
     E_ = importlib.import_module(a.env)
     ACTION_DIMS, OBS_DIM, PERSONAS, WEAPONS = E_.ACTION_DIMS, E_.OBS_DIM, E_.PERSONAS, E_.WEAPONS
+    KEY_HEADS = (0, 1, 2, 6)                                 # forward, strafe, vertical, weapon key: the left hand's outputs
+    OBS_FREEZE = 2e9                                         # frames after which the input statistics stand still (they did anyway)
     groups = [int(x) for x in str(a.group).split(",")]
     G = groups[0]
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -301,6 +309,8 @@ def main():
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
+                        env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
+                        round_secs=120.0, arena_secs=float(a.arena_len),
                         cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0),
                    path)
 
@@ -332,6 +342,7 @@ def main():
     ent_heads = [float(x) for x in a.ent_heads.split(",")] if a.ent_heads else [1.0] * len(ACTION_DIMS)
     ent_heads += [1.0] * (len(ACTION_DIMS) - len(ent_heads))
     t_start, total, update = time.time(), 0, 0
+    dump = []
     log = open(os.path.join(out, "metrics.jsonl"), "a")
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
         a.map, N, sum(p.numel() for p in pol.parameters()), dev, a.minutes), flush=True)
@@ -362,7 +373,7 @@ def main():
             opp.load_state_dict(snaps[np.random.randint(len(snaps))])
         # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
         # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
-        b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_iteach = b_teach = None
+        b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_dec = b_iteach = b_teach = None
         if dev.type == "cuda":
             torch.cuda.empty_cache()
         b_obs = torch.zeros(T, N, OBS_DIM, device=dev)
@@ -373,20 +384,26 @@ def main():
         b_done = torch.zeros(T, N, device=dev)
         b_w = torch.zeros(T, N, device=dev)
         b_live = torch.zeros(T, N, device=dev)                           # the intention head was read on that frame
+        b_dec = torch.zeros(T, N, device=dev)                            # the left hand's outputs (keys, weapon key) were read on that frame
         b_iteach = torch.zeros(T, N, dtype=torch.long, device=dev)       # what the item rule would have chosen
         b_teach = torch.zeros(T, N, 5, dtype=torch.long, device=dev)
         h0 = h.clone()
         raw, agg, agg_map = [], {}, {}
+        keep_raw = obs_count < OBS_FREEZE or (bool(a.obs_dump) and a.obs_dump_from <= update <= a.obs_dump_to)
         lk = [0, 0]                                                      # league matches: learner kills, snapshot kills
         for t in range(T):
-            raw.append(obs)
+            if keep_raw:
+                raw.append(obs if obs_count < OBS_FREEZE else obs[np.random.rand(len(obs)) < 0.005])
             x = torch.from_numpy(norm(obs)).to(dev)
             with torch.no_grad():
                 logits, val, h = pol.step(x, h)
                 ds = dists(logits)
                 act = torch.stack([d.sample() for d in ds], -1)
                 lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
-                logp = sum(lps[:-1])                                     # the intention's part counts only when it was read
+                # the intention's part counts only when it was read, the left hand's (keys, weapon key) only on the one
+                # frame in four it decides on: until 2026-10-08 all four were counted and three were noise
+                logp = sum(lp_ for j_, lp_ in enumerate(lps[:-1]) if j_ not in KEY_HEADS)
+                keylp = sum(lps[j_] for j_ in KEY_HEADS)
                 if snaps:
                     lo, _, h_opp = opp.step(x, h_opp)
                     act_o = torch.stack([d.sample() for d in dists(lo)], -1)
@@ -405,7 +422,9 @@ def main():
             live = torch.from_numpy(np.concatenate([r[6] for r in res]).astype(np.float32)).to(dev)
             b_live[t] = live
             b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
-            b_logp[t] = b_logp[t] + lps[-1] * live
+            dec = torch.from_numpy(np.concatenate([r[8] for r in res]).astype(np.float32)).to(dev)
+            b_dec[t] = dec
+            b_logp[t] = b_logp[t] + lps[-1] * live + keylp * dec
             scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
             teach = np.concatenate([r[5] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
@@ -423,12 +442,19 @@ def main():
                         lk[0 if ek else 1] += 1
         with torch.no_grad():
             b_val[T] = pol.step(torch.from_numpy(norm(obs)).to(dev), h)[1]
-        flat = np.concatenate(raw)
-        bm, bv, bc = flat.mean(0), flat.var(0), len(flat)
-        delta, tot = bm - obs_mean, obs_count + bc
-        obs_mean = obs_mean + delta * bc / tot
-        obs_var = (obs_var * obs_count + bv * bc + delta ** 2 * obs_count * bc / tot) / tot
-        obs_count = tot
+        if obs_count < OBS_FREEZE:
+            flat = np.concatenate(raw)
+            bm, bv, bc = flat.mean(0), flat.var(0), len(flat)
+            delta, tot = bm - obs_mean, obs_count + bc
+            obs_mean = obs_mean + delta * bc / tot
+            obs_var = (obs_var * obs_count + bv * bc + delta ** 2 * obs_count * bc / tot) / tot
+            obs_count = tot
+        elif keep_raw:                                                   # a sample of raw inputs for sim/renorm_policy.py
+            dump.append(np.concatenate(raw).astype(np.float32))
+            if update == a.obs_dump_to:
+                np.save(a.obs_dump, np.concatenate(dump))
+                print("wrote {} rows of raw inputs to {}".format(sum(len(d_) for d_ in dump), a.obs_dump), flush=True)
+                dump = []
         adv = torch.zeros(T, N, device=dev)
         last = torch.zeros(N, device=dev)
         for t in reversed(range(T)):
@@ -468,8 +494,10 @@ def main():
                 ds = dists(lg)
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
-                lp = sum(dd.log_prob(A[..., j]) for j, dd in enumerate(ds[:-1])) + ds[-1].log_prob(A[..., -1]) * lv
-                ent = sum(w_ * dd.entropy() for w_, dd in zip(ent_heads[:-1], ds[:-1])) + ent_heads[-1] * ds[-1].entropy() * lv
+                dc = b_dec[:, chunk]
+                lp = sum(dd.log_prob(A[..., j]) * (dc if j in KEY_HEADS else 1.0) for j, dd in enumerate(ds[:-1])) + ds[-1].log_prob(A[..., -1]) * lv
+                ent = sum(w_ * dd.entropy() * (dc if j in KEY_HEADS else 1.0) for j, (w_, dd) in enumerate(zip(ent_heads[:-1], ds[:-1]))) \
+                    + ent_heads[-1] * ds[-1].entropy() * lv
                 wgt = b_w[:, chunk]
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
@@ -544,7 +572,7 @@ def main():
                    hit_rate={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots"])), 3) for w in WEAPONS},
                    frag_share={w: round(float(agg[w + "_frags"] / max(1, sum(agg[x + "_frags"] for x in WEAPONS))), 2) for w in WEAPONS},
                    pickups_per_player_min={k[5:]: round(float(agg[k] / (G * sim_min)), 2)
-                                           for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_am")},
+                                           for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_wpnew", "pick_am") if k in agg},
                    acc_visible={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots_vis"])), 3) for w in ("rl", "rg", "lg")},
                    aim_err_visible=round(float(agg["aim_err"] / max(1, agg["aim_frames"])), 2),
                    on_target_visible=round(float(agg["on_target"] / max(1, agg["aim_frames"])), 3),

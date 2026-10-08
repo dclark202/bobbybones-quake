@@ -332,6 +332,11 @@ ITEM_BELIEF = float(os.environ.get("ITEM_BELIEF") or 0.0) > 0
 # and the three together held to 0.25 .. 3. With 0.10 and a factor of 1 a shot pays from one hit in ten on. In real games
 # he fired 53% of the time an enemy was in view (people 24%) and 0.2 s after one appeared (0.5 s). 0 = off.
 SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
+# The switches that change what a trained network is given or how its outputs are carried out. The trainer writes the
+# ones that were set into the checkpoint, sim/export_duel.py into policy.npz, and the plugins set them before they load
+# this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
+PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
+             "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -801,6 +806,7 @@ class DuelEnv:
         self.intent = np.zeros(self.n, np.int64)            # the intention (see INTENTS)
         self.intent_t = np.zeros(self.n, np.float32)        # seconds since chosen
         self.intent_phi = np.zeros(self.n, np.float32)      # seconds of the way left, last frame
+        self.intent_best = np.zeros(self.n, np.float32)     # ... and the least it has been on this trip (only new ground pays)
         self.intent_phi0 = np.ones(self.n, np.float32)      # ... and when the choice was made (the whole way)
         self.intent_live = np.zeros(self.n, bool)           # the head was read this frame
         self.intent_changed = np.zeros(self.n, bool)
@@ -859,6 +865,8 @@ class DuelEnv:
         self.key_tok = np.full(nn2, KEY_BURST, np.float32)                 # budget of key changes
         self.key_req = np.tile(np.array([1, 1, 0, 0], np.int64), (nn2, 1)) # the left hand's standing decision: keys, weapon
         self.key_tick = 0
+        self.key_dec = np.ones(nn2, bool)                   # this frame the left hand's outputs were read (see limit_keys)
+        self.round_fac = self.rng.uniform(0.67, 1.33, n_matches).astype(np.float32)   # this round's length, as a share of the nominal one
         self.pain_t = np.full(nn2, 99.0, np.float32)    # seconds since this player last heard the enemy's pain sound
         self.pain_b = np.zeros(nn2, np.int64)           # which one: 0 under 25 health, 1 under 50, 2 under 75, 3 above
         self.arena_stack = True                         # arena rounds: random health and armor, the same for both players
@@ -948,7 +956,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0, shot_n=0, shot_fac=0.0, soak=0.0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0, shot_n=0, shot_fac=0.0, soak=0.0, pick_wpnew=0,
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
                           wrule_frames=0, wrule_agree=0,
@@ -980,6 +988,10 @@ class DuelEnv:
     # ---------------------------------------------------------------- spawning / helpers
     def _fresh(self, i, yaw):
         self.yaw[i], self.pitch[i] = yaw, 0.0
+        if STYLE_P > 0 and self.script[i] == 0:              # a new life: his playing style (here since 2026-10-08: in
+            self.style[i] = int(self.rng.integers(1, len(STYLES))) if self.rng.random() < STYLE_P else 0   # _spawn it missed arena1)
+            if STYLE_W[self.style[i]] >= 0 and int(STYLE_W[self.style[i]]) not in self.map_weapons:
+                self.style[i] = 0                            # (no rail life on a map without a railgun)
         self.mv[i] = 0.0
         self.cmd[i] = 0.0
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
@@ -1432,10 +1444,6 @@ class DuelEnv:
         self.teach[mi, :4] = np.stack(out, 1)
 
     def _spawn(self, i, avoid, close=None):
-        if STYLE_P > 0 and self.script[i] == 0:              # a new life: his playing style
-            self.style[i] = int(self.rng.integers(1, len(STYLES))) if self.rng.random() < STYLE_P else 0
-            if STYLE_W[self.style[i]] >= 0 and int(STYLE_W[self.style[i]]) not in self.map_weapons:
-                self.style[i] = 0                            # (no rail life on a map without a railgun)
         if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < self.near_item_p:
             gis = [g_ for g_, lab_ in enumerate(self.route_goal) if lab_ in ("MH", "RA")]
             if gis:                                          # near the mega or the red: he tastes the stack (v9)
@@ -2593,6 +2601,7 @@ class DuelEnv:
             who = self.script == 0
         self.key_tick += 1                                  # the left hand decides ten times a second (staggered by player)
         dec = ((self.key_tick + np.arange(len(a))) % KEY_EVERY == 0) | ~who
+        self.key_dec = dec.copy()                           # (the trainer credits the keys and the weapon key on these frames only)
         cols = [0, 1, 2, 6]
         self.stats["key_asked"] += int(((a[:, :3] != self.key_last) & who[:, None] & dec[:, None]).sum())
         self.key_req = np.where(dec[:, None], a[:, cols], self.key_req)
@@ -2668,13 +2677,15 @@ class DuelEnv:
         human = self.script == 0                            # policy-controlled players (for the statistics)
         prev_int, prev_done = self.intent.copy(), self.intent_done.copy()
         self.intent_teach = self.intent_rule()
+        self.intent_teach = np.where((np.repeat(self.kind, len(self.hp) // len(self.kind)) != NORMAL) & (self.run_k < 0), 0,
+                                     self.intent_teach)     # a drill or an aim round: nothing to fetch
         ch_ = (a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64)).copy()
         in_run = self.run_k >= 0
         ch_[in_run] = self.run_k[in_run]                    # an item run: the target is given, not chosen
         self.intend(ch_, human)
         self.intent_live = self.intent_live & ~in_run       # (and the intention head is not trained on those frames)
         self.stats["intent_trips"][0] += int((self.intent_changed & (self.intent > 0)).sum())
-        self.stats["intent_trips"][2] += int((self.intent_changed & (prev_int > 0) & ~self.intent_done).sum())
+        self.stats["intent_trips"][2] += int((self.intent_changed & (prev_int > 0) & ~prev_done).sum())
         self.stats["intent_frames"] += np.bincount(self.intent[human], minlength=len(INTENTS))
         pkind = np.repeat(self.kind, self.G)
         walk = (a[:, 7] == 1) & (not self.no_walk)
@@ -3028,6 +3039,7 @@ class DuelEnv:
                     self.ammo[i, val] = min(AMMO_MAX[val], self.ammo[i, val] + cap)
                     took = True
                     self.stats["pick_wp"] += 1
+                    self.stats["pick_wpnew"] += int(not had_wp)
                 elif kind == "am" and self.ammo[i, val] < AMMO_MAX[val]:
                     self.ammo[i, val] = min(AMMO_MAX[val], self.ammo[i, val] + cap)
                     took = True
@@ -3064,7 +3076,7 @@ class DuelEnv:
                         self.stats["intent_reach"] += float(self.intent_t[i])
                     if lab in ("MH", "RA") and self.item_loss > 0:       # the others lose a share: it was theirs to take
                         for o_ in self._mates(i):
-                            if self.hp[o_] > 0:
+                            if self.hp[o_] > 0 and self.run_k[o_] < 0:      # (not in an item run: there everybody is alone)
                                 reward[o_] -= self.item_loss * self.item_reward * gain / 100.0
                     self.item_up[m, it] = False
                     self.item_t[m, it] = resp
@@ -3098,12 +3110,20 @@ class DuelEnv:
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
             it_ = np.array(self.route_item)[g_]
             soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0)
+            gone_before = self.intent_gone.copy()
             self.intent_gone = valid & ~soon & (self.intent > 0)
             self.intent_phi0 = np.where(self.intent_changed, np.maximum(phi, 1.0), self.intent_phi0).astype(np.float32)
-            gain = self.intent_phi - phi
-            pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0) & (np.abs(gain) < 0.4)
+            # Only ground never reached before on this trip pays (the least seconds-to-go so far). Until 2026-10-08 every
+            # frame's change paid unless it was a jump of 0.4 s or more: a fall cost nothing and the walk back was paid
+            # again (at Blood Run's red armor four falls in a minute paid 2.9 times the armor), and backing off from a goal
+            # chosen close by ran the trip's balance far below zero. Now a trip pays at most its item and never less than 0.
+            self.intent_best = np.where(self.intent_changed, phi, self.intent_best).astype(np.float32)
+            gain = np.maximum(0.0, self.intent_best - phi)
+            self.intent_best = np.minimum(self.intent_best, phi).astype(np.float32)
+            pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0)
             worth = self.item_reward * np.array(INTENT_VALUE, np.float32)[self.intent]      # the whole way is worth the pickup
-            claw = self.intent_changed & (prev_int > 0) & ~prev_done & ~in_run              # a trip given up pays nothing (v9)
+            # a trip given up pays nothing (v9); one whose item another player took is not given up
+            claw = self.intent_changed & (prev_int > 0) & ~prev_done & ~in_run & ~gone_before[:len(prev_int)]
             reward -= self.intent_paid * claw
             self.intent_paid = np.where(claw | self.intent_done, 0.0, self.intent_paid).astype(np.float32)
             pay_now = self.intent_seek * worth * gain / self.intent_phi0 * pay
@@ -3183,7 +3203,7 @@ class DuelEnv:
             if self.lab is not None:
                 self._lab_respawn(int(v))
                 continue
-            self._spawn(int(v), avoid=s[self.foe[v], :3], close=True if self.kind[v // self.G] == AIM else None)
+            self._spawn(int(v), avoid=s[self.foe[v], :3], close=True if self.kind[v // self.G] in (AIM, DRILL) else None)
             if self.goal[v] >= 0:
                 self._new_goal(int(v))
         lo, hi = self.w.bounds()
@@ -3208,7 +3228,7 @@ class DuelEnv:
         klen = np.where(self.kind == NORMAL, self.round_len, np.where(self.kind == MOVE, self.move_len, 15.0))
         if self.fixed_kind is not None:
             klen = np.full(self.M, self.round_len)
-        ends = np.nonzero(self.round_t > klen * self.rng.uniform(0.67, 1.33, self.M))[0]
+        ends = np.nonzero(self.round_t > klen * self.round_fac)[0]
         if self.lab is not None:                            # lab rooms have exact lengths
             ends = np.nonzero(self.round_t >= self.lab_len)[0]
             am = np.repeat(self.arena > 0, self.G)
@@ -3224,6 +3244,7 @@ class DuelEnv:
                 self.stats["arena"][0] += float(sum(1 for e in events if am[e["victim"]] and e["killer"] >= 0 and e["killer"] != e["victim"]))
             self.stats["lab_items"][2] += float(self.items_room.sum())
         for m in ends:
+            self.round_fac[m] = self.rng.uniform(0.67, 1.33)
             self.run_k[self._seats(int(m))] = -1
             self.cf_side[self._seats(int(m))] = 0
             self.cf_t[m] = -1.0
@@ -3295,7 +3316,7 @@ class DuelEnv:
                 self._spawn(a_, avoid=self.w.state()[b_, :3], close=True)
             else:
                 self._spawn(a_, avoid=None)
-                self._spawn(b_, avoid=self.w.state()[a_, :3], close=0.0 if kd == MOVE else None)
+                self._spawn(b_, avoid=self.w.state()[a_, :3], close=0.0 if kd == MOVE else True if kd == DRILL else None)
                 for q in P[2:]:
                     self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
                     self._spawn(q, avoid=self.w.state()[q - 1, :3])

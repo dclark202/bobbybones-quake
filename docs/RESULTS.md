@@ -5,6 +5,95 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 16:00 — The wiring review (owner: "there may be some lingering problems IN THE CODE that are stopping him from learning")
+
+Three independent readers (the trainer; the real-game plugins against the simulator; the simulator's rewards and
+teachers) and measured checks. **The learning loop itself is right**: reward, end-of-round flags, labels and masks sit on
+the frames they belong to (tested), the PPO and credit arithmetic is right, and the network computes the same thing in
+the trainer, in the evaluation tools and in the plugin (2.7e-5 in the outputs after 300 frames). The faults are around it.
+
+**What he sees**
+- *The direction to the mega and to the red armor reached the network at 3% and 6% of normal size* (the same inputs for
+  the three weapons at 110 to 135%), with the jump pad and the teleporter. The input statistics are one average over
+  everything ever seen, 1.1e10 frames long: they no longer move and still carry the test map of v4 and v5, twenty times
+  the size of a duel map. Swapping the mega and red-armor directions between two players moves his action by 0.0005
+  nats; the same swap for two weapons by 0.06. He steers to them by the "next step" arrow alone.
+  Fix: `sim/renorm_policy.py` measures every input afresh and rewrites the first layer so that his output is unchanged
+  (7.6e-8 on a sample); 105 of 491 inputs are off by more than a factor of two. To run at the start of v13 on the
+  trainer's own sample (`--obs-dump`); the statistics then stand still (they did anyway; the per-update bookkeeping, 11 GB
+  of memory at the arms' size, is gone).
+
+**What he is paid for**
+- *The pay for the way to his chosen item could be farmed.* Each frame paid the change in seconds-to-go unless it was a
+  jump of 0.4 s or more: a fall cost nothing and the walk back was paid again. At Blood Run's red armor a walker who
+  falls short four times in a minute was paid 2.9 times the armor; backing off from a goal named close by ran the balance
+  to -1.6. Now only ground never reached before on the trip pays: at most the item, never below zero (tested: the same
+  walkers get 0.03 to 0.69 for an item worth 0.75). A trip whose item another player took is no longer clawed back.
+- *Armor is worth nothing to him.* His own value estimate, asked at 2,880 moments a map what 100 more armor is worth:
+  -0.04 frags on arena1, -0.04 on Blood Run, -0.06 on Aerowalk (25 more: +0.01). 100 health: +0.22 to +0.28; all three
+  big weapons: +0.09 to +0.11. What armor soaks is charged as damage taken, which eats what the longer life earns; with
+  damage taken at full price (v13) it would turn negative. `ARMOR_COST` (approved) is needed.
+- *Rounds on the duel maps ended at 0.68 of their length*: the 0.67-1.33 factor was drawn anew every frame (82 s for a
+  nominal 120, item runs 41 s for 60, drills 10 s). Drawn once per round now (item runs 46 to 80 s, normal 82 to 129 s
+  in a test).
+- *Rocket drills (15% of the rounds) started a map apart and out of sight* since close spawns were turned off for today's
+  arms (median 1,126 to 1,423 units, in sight 0 to 3%, 10 s long): they spawn close again (median 440, in sight 98%), and
+  the item rule names nothing in a drill (it named a weapon that cannot be picked up there in 74% of the frames).
+- Smaller: an enemy's mega or red was charged to players in an item run (who are "alone"); in groups of three and four two
+  players hitting one enemy in the same frame give all the pay and the frag to the higher seat (open, B-146).
+
+**How he learns**
+- *The left hand's outputs (movement keys, weapon key) are read one frame in four but were credited on all four*: three
+  quarters of the learning signal for his legs was noise, and it widened every policy step. The simulator now says
+  which frames count (`key_dec`) and the trainer credits those only.
+- *The jump head has collapsed*: 0.025 nats (he jumps in 1 to 2% of frames; fire 0.015, walk 0.000). It has no
+  exploration bonus (`--ent-heads` gives the keys 0). Owner's call (B-147).
+- The first round after every (re)start was played with every weapon at spawn: every round now starts anew at the first
+  step. The style is drawn at every new life on every map (on arena1 it only changed in item runs).
+
+**The walking layer** (the teacher, the scripted item runner, the "next step" arrow): `tools/teacher_check.py` sends a pupil
+who presses exactly what the teacher shows from the spawn points to each item (96 tries, 30 s).
+
+| | Blood Run | Aerowalk | Lost World |
+|---|---|---|---|
+| Arrive at 100% | mega, RL, RG, LG, second yellow | mega | none |
+| Short | red armor 78%, yellow 60% | RL 61%, yellow 76%, LG 86%, RG 95% | 78 to 88% on every item |
+| No way | | red armor (from 99% of the map) | |
+
+The graph's jump, drop and teleporter links were made one way (a standing start, one of twelve directions, with or without
+a jump) and are taken another (running straight at the far point, a jump when it is far and level): the link before Blood
+Run's red armor is a 290-unit run along a walkway that the walker takes as a diagonal jump into the pit; at a teleporter
+he heads for the exit through the wall. Taking the links he cannot take out of Blood Run's graph (216 of them, every item
+still reachable from every spawn) lifts the red armor to 90% and the yellow to 81%. A rebuild with links made at a run
+made the teacher worse (red armor 11%) and was dropped. Open: B-140.
+
+**The real game** (beside the walking graph and the item timers, fixed at 14:30)
+- *Public server: with two or more Bobbys alive each one moved on another Bobby's keys.* The plugin applied the finger
+  rules once per Bobby, and each call wrote that Bobby's raw outputs into the other seats' hands; the fire finger's clock
+  ran once per Bobby. In the logs: 9 to 12 key changes and 10 fire-button changes a second, over half of them one frame
+  apart. Fixed (one call for all): 1.4 to 2.3 and 0.8 to 1.1 a second, none one frame apart, speed 273 -> 300.
+  **Everything people saw of Bobby on the public server had scrambled legs and a stuttering trigger.**
+- 1v1 plugin: no playing style (general lives only); clock, score and memory restarted every 60 s in every benchmark
+  (training: 180 s on arena1); the fire button's hold was half the trained one (its clock advanced twice a frame); at a
+  respawn in the arena benchmark Nightmare was turned to face him and he was not (the enemy outside his view after 67%
+  of his respawns); the game fired in the frame of the command, the simulator one frame later (about 1.7 frames of
+  turning on a rail or rocket shot); item respawns were never heard; his intention was not reset at a spawn nor released
+  when he had taken the item; a "teleport" sound at every respawn. All fixed in `plugins/` except the remaining 0.7 frame
+  of shot timing (needs the attack pressed in the last of the three moves, in `botctl.c`).
+- No simulator switch travelled with a network (`INTENT_HOLD` 8 in training, 3 on the servers; `ITEM_BELIEF` would have
+  been off for the arms and v13). The trainer now writes them into the checkpoint, the export into `policy.npz`
+  (`--set` for older runs), and the plugins set them before loading the simulator.
+- Still open in the free-for-all plugin: `dmg_on` never written, "players beyond two" always 1, the hit direction is the
+  attended enemy's (B-148).
+
+**Hands.** He asks for 6.8 key actions a second and gets 3.8 (the budget is 4 with a burst of 10). People, from 66 minutes
+of recorded play: median 0, 90th percentile 7 in a second, and 6.8 a second sustained over ten seconds at the 90th
+percentile. Owner's call (B-95).
+
+**Log numbers that misled**: "weapons picked up" counts every touch of a weapon already owned (first pickups are now
+counted beside it, `wpnew`); "abandoned" counted every change of goal, also after reaching it (fixed); the overall pickup
+rates divide by two players a match whatever the group (the per-map numbers are right).
+
 ## 2026-10-08 14:55 — "Go pick up the red armor" (owner): the 1v1 plugin never told him where it is; what stops him per map
 
 **A fault in the real-game plugin, found and fixed.** `plugins/duelbot.py` built the simulator he plays through without the

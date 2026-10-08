@@ -582,7 +582,9 @@ class duelbot(minqlx.Plugin):
         self.P = {k: P[k] for k in P.files}
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
-        self.E = E = importlib.import_module(str(self.P["env"]))
+        self.E = E = self.env_module(str(self.P["env"]))
+        # the round after which his clock, score and memory start over, as in training
+        self.round_secs = float(self.P["round_secs"]) if "round_secs" in self.P else (180.0 if mapname == "arena1" else 120.0)
         # with the map's walking graph: without it the inputs about the way to the items, about his chosen item and the
         # map reader's numbers are all zero. It was missing here until 2026-10-08 (the free-for-all plugin had it), so
         # in every 1v1 game on a real server he played without them (he never went near the red armor on arena1).
@@ -745,6 +747,8 @@ class duelbot(minqlx.Plugin):
                     d = np.linalg.norm(env.item_pos - np.array([x, y, z], np.float32), axis=1)
                     k = self.item_ent[key] = int(d.argmin()) if d.min() < 40 else -1
                 if k >= 0:
+                    if up and not env.item_up[0, k] and hasattr(env, "note_respawn") and self.item_was.get(num) is not None:
+                        env.note_respawn(k)                  # it came back: those in earshot hear it
                     env.item_up[0, k] = bool(up)             # and the seconds until it is back, as the simulator counts them
                     env.item_t[0, k] = 0.0 if up else min(60.0, max(0.0, (back_ms - now_ms) / 1000.0))   # (never set until 2026-10-08)
                 if self.item_was.get(num, up) and not up:    # an item was just taken: by the nearer player
@@ -802,10 +806,12 @@ class duelbot(minqlx.Plugin):
         self.want_w[k] = (want, since)
         return want
 
-    def drive(self, p, env, E, i, a, pitch, yaw, only=None):
-        """turn one action row into keys and mouse for the controlled bot in slot i (same rules as the simulator)"""
+    def drive(self, p, env, E, i, a, pitch, yaw, only=None, limited=False):
+        """turn one action row into keys and mouse for the controlled bot in slot i (same rules as the simulator).
+        limited: the finger rules were already applied to this row (the free-for-all plugin: one call for all seats)"""
         rules2 = hasattr(E, "ACQUIRE_FRAMES") and len(a) > 7 and env.script[i] == 0
-        if rules2 and hasattr(env, "limit_keys") and getattr(env, "key_limits", False):    # finger limits, as in training
+        hand = rules2 and hasattr(env, "limit_keys") and getattr(env, "key_limits", False)
+        if hand and not limited:                             # finger limits, as in training
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             env.limit_keys(A, who=np.arange(env.n) == i)
             a = A[i]
@@ -846,9 +852,11 @@ class duelbot(minqlx.Plugin):
                 w = want
                 env.cool[i] = max(env.cool[i], (float(env.fire_cd[i]) if nine else 0.0) + E.SWITCH)
         fire = bool(a[5] == 1)
-        if rules2 and hasattr(env, "mouse_hold") and hasattr(E, "MOUSE_HOLD"):
+        if rules2 and hasattr(env, "mouse_hold") and hasattr(E, "MOUSE_HOLD") and not hand:
             # the fire finger as in training: the button changes state at most every 100 ms (MOUSE_HOLD). Without this
-            # the network's frame-by-frame requests reached the game raw and the lightning gun stuttered (2026-10-06)
+            # the network's frame-by-frame requests reached the game raw and the lightning gun stuttered (2026-10-06).
+            # (Simulators with limit_keys do this there; until 2026-10-08 it was done here as well, so the finger's clock
+            # ran double and the hold was half of the trained one.)
             env.mouse_hold[i, 0] += 1
             if fire != bool(env.fire_last[i]) and env.mouse_hold[i, 0] >= int(E.MOUSE_HOLD[0]):
                 env.mouse_hold[i, 0] = 0
@@ -869,6 +877,9 @@ class duelbot(minqlx.Plugin):
         if nine:
             self.want_w[(id(env), i)] = (w, self.want_w.get((id(env), i), (w, 0))[1])
         press = fire and (ready or not (rules2 and refire[w] >= 0.4))
+        if hasattr(env, "fire_q"):                           # the simulator's shot leaves one frame after the command
+            self.press_q = getattr(self, "press_q", {})
+            press, self.press_q[(id(env), i)] = self.press_q.get((id(env), i), False), press
         minqlx.set_bot_input(p.id, fwd, side, jump, 1 if press else 0, QLNUM[names[w]], pitch, yaw)
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 
@@ -964,8 +975,12 @@ class duelbot(minqlx.Plugin):
                     if hasattr(self.env, "shot_t"):
                         self.env.shot_t[0] = self.env.trail_t[0] = 99.0
                 self.want_w.clear()
+                self.prev_opp = None                         # (a respawn is not a teleport: no such sound)
                 if who == "bobby" and hasattr(self.env, "life_t"):      # a new life: time since the spawn, flinch, focus
                     self.env.life_t[0], self.env.flinch[0], self.env.focus[0] = 0.0, 0.0, self.E.FOCUS_SECS
+                    st_ = self.fresh_life(self.env, self.E, 0)
+                    if st_:
+                        self.record(event="style", style=st_)
                 if who == "bobby":
                     if not getattr(self, "rules2", False):
                         self.h[:] = 0                        # older runs: memory per life. Newer: kept for the session
@@ -1041,6 +1056,8 @@ class duelbot(minqlx.Plugin):
             self.record(event="pickup", item=cls, by=("bobby", "opp")[slot] if slot >= 0 else "?")
             if hasattr(env, "note_pickup") and slot in (0, 1) and cls in ("item_health_mega", "item_armor_body"):
                 env.note_pickup(slot, 0 if cls == "item_health_mega" else 1)     # he took it, or heard it taken
+            if slot == 0:
+                self.took_chosen(env, E, 0, cls)
             if getattr(self, "rules2", False) and slot == 1:
                 big = 0 if cls == "item_health_mega" else 1 if cls == "item_armor_body" else \
                     2 if cls in ("item_armor_combat", "item_armor_jacket") else 3 if cls.startswith("weapon_") else None
@@ -1049,7 +1066,7 @@ class duelbot(minqlx.Plugin):
         taken_items = []
         if self.rules2:
             env.kind[0] = E.NORMAL
-            if now - self.sess_t0 > (60.0 if self.arena else 120.0):  # training rounds: two minutes (arena: one)
+            if now - self.sess_t0 > self.round_secs:                  # the round as in training (see setup)
                 self.sess_t0 = now                                   # clock, score and memory start over
                 self.round_base = (self.score["bobby"], self.score["opp"])
                 self.h[:] = 0
@@ -1058,6 +1075,9 @@ class duelbot(minqlx.Plugin):
             oc_ = minqlx.ran_usercmd(opp.id)
             env.duck[1] = oc_[5] < 0
             env.snd_t += E.DT
+            if hasattr(env, "resp_t"):
+                env.resp_t += E.DT
+            self.intent_release(env, E, [0])
             if hasattr(env, "note_shots"):                           # enemy shots seen or heard, and their trails
                 env.shot_t += E.DT
                 env.trail_t += E.DT
@@ -1232,13 +1252,69 @@ class duelbot(minqlx.Plugin):
                     return True
         return False
 
+    def env_module(self, name):
+        """the simulator module a policy was trained in, with the switches it was trained with (policy.npz env_vars:
+        INTENT_HOLD, ITEM_BELIEF, ...). None of them reached a server until 2026-10-08. They are read when the module is
+        loaded, so they are set first; a module loaded before with other values is loaded again."""
+        ev_ = json.loads(str(self.P["env_vars"])) if "env_vars" in self.P else {}
+        os.environ.update({k_: str(v_) for k_, v_ in ev_.items()})
+        E = importlib.import_module(name)
+        if hasattr(E, "_plugin_env") and E._plugin_env != ev_:
+            E = importlib.reload(E)
+        E._plugin_env = ev_
+        return E
+
+    def fresh_life(self, env, E, k, style=True):
+        """what the simulator resets at a spawn (_fresh, _spawn) and the plugins did not: his intention (read anew at
+        once), his hands and mouse pad, and his playing style for this life (one of the map's, at random)"""
+        if hasattr(env, "intent_new"):
+            env.intent[k], env.intent_t[k], env.intent_new[k], env.intent_done[k] = 0, 0.0, True, False
+        if hasattr(env, "key_tok"):
+            env.key_last[k], env.key_hold[k], env.key_tok[k] = (1, 1, 0), 99, E.KEY_BURST
+            env.key_req[k] = (1, 1, 0, 0)
+        for name, v in (("zoom", False), ("fire_last", False), ("mouse_hold", 99), ("pad", 0.0), ("pad_lift", 0), ("walk_last", False),
+                        ("resp_t", 99.0)):
+            if hasattr(env, name):
+                getattr(env, name)[k] = v
+        getattr(self, "press_q", {}).pop((id(env), k), None)
+        if style and hasattr(E, "STYLES") and hasattr(env, "style"):
+            ok_ = [j for j, w_ in enumerate(E.STYLE_W) if w_ < 0 or int(w_) in env.map_weapons]
+            env.style[k] = int(ok_[np.random.randint(len(ok_))])
+            return E.STYLES[int(env.style[k])]
+        return None
+
+    def intent_release(self, env, E, seats):
+        """what step() does for the intention besides reading it: the chosen item is gone and will not be back before he
+        can be there (the hold ends), as in the simulator"""
+        R_ = getattr(env, "route", None)
+        if R_ is None or not hasattr(env, "intent_gone"):
+            return
+        s = env.state
+        gi_ = np.array(env.intent_gi)[env.intent]
+        valid = gi_ >= 0
+        g_ = np.maximum(gi_, 0)
+        node = R_.locate(s[:, :3])
+        phi = np.where(valid, R_.T[g_, node] + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
+        it_ = np.array(env.route_item)[g_]
+        soon = env.item_up[0, it_] | (env.item_t[0, it_] < phi + 5.0)
+        gone = valid & ~soon & (env.intent > 0)
+        env.intent_gone = np.where(np.isin(np.arange(env.n), seats), gone, False)
+
+    def took_chosen(self, env, E, k, cls):
+        """player k took an item: was it the one he was going for (then the choice is done, as in the simulator)"""
+        d = getattr(E, "ITEM_DEFS", {}).get(cls)
+        if d is None or not hasattr(env, "intent_done"):
+            return
+        lab = d[4] if d[4] else (E.WEAPONS[int(d[1])].upper() if d[0] == "wp" else None)
+        want = E.INTENTS[int(env.intent[k])]
+        if lab is not None and (lab == want or (lab == "YA" and want == "YA2")):
+            env.intent_done[k] = True
+
     def put(self, p, pos, yaw=None, human=False):
         p.position(x=float(pos[0]), y=float(pos[1]), z=float(pos[2]) + 2.0)
         p.velocity(reset=True)
-        if yaw is not None and (human or (is_bot(p) and "bobby" not in p.clean_name.lower())):
-            minqlx.set_view(p.id, 0.0, float(yaw))           # people and the game's own bots: only turn the view
-        elif yaw is not None:
-            minqlx.set_bot_input(p.id, 0, 0, 0, 0, 0, 0.0, float(yaw))
+        if yaw is not None:
+            minqlx.set_view(p.id, 0.0, float(yaw))           # turn the view (Bobby too: his command of this frame starts from it)
 
     def lab_place(self, bobby, human):
         """fixed placement on the lab map: aim box (about 700 units apart) or the environment box"""

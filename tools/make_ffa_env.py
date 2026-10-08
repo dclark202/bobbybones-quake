@@ -385,8 +385,8 @@ rep('''            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, 2, a
                 m = i // 2''', '''            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, self.G, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
                 m = i // self.G''')
-rep('''            self._spawn(int(v), avoid=s[v ^ 1, :3], close=True if self.kind[v // 2] == AIM else None)''',
-    '''            self._spawn(int(v), avoid=s[self.foe[v], :3], close=True if self.kind[v // self.G] == AIM else None)''')
+rep('''            self._spawn(int(v), avoid=s[v ^ 1, :3], close=True if self.kind[v // 2] in (AIM, DRILL) else None)''',
+    '''            self._spawn(int(v), avoid=s[self.foe[v], :3], close=True if self.kind[v // self.G] in (AIM, DRILL) else None)''')
 rep('''                self._spawn(int(v), avoid=s[v ^ 1, :3])''', '''                self._spawn(int(v), avoid=s[self.foe[v], :3])''')
 rep("            am = np.repeat(self.arena > 0, 2)", "            am = np.repeat(self.arena > 0, self.G)")
 rep('''            self.round_t[m] = 0.0
@@ -415,9 +415,9 @@ rep('''                elif u < self.loadout_p[0] + self.loadout_p[1]:
                     for q in P:
                         self.load_sets[q] = ()''')
 rep('''                self._spawn(a_, avoid=None)
-                self._spawn(b_, avoid=self.w.state()[a_, :3], close=0.0 if kd == MOVE else None)''',
+                self._spawn(b_, avoid=self.w.state()[a_, :3], close=0.0 if kd == MOVE else True if kd == DRILL else None)''',
     '''                self._spawn(a_, avoid=None)
-                self._spawn(b_, avoid=self.w.state()[a_, :3], close=0.0 if kd == MOVE else None)
+                self._spawn(b_, avoid=self.w.state()[a_, :3], close=0.0 if kd == MOVE else True if kd == DRILL else None)
                 for q in P[2:]:
                     self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
                     self._spawn(q, avoid=self.w.state()[q - 1, :3])''')

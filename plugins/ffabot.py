@@ -209,7 +209,8 @@ class ffabot(duelbot):
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
         envmod = str(self.P["env"]) if "ffa" in str(self.P["env"]) else "duel_env_ffa"     # the group simulator the policy was trained in
-        self.E = E = importlib.import_module(envmod)
+        self.E = E = self.env_module(envmod)                   # with the switches he was trained with (policy.npz env_vars)
+        self.round_secs = float(self.P["round_secs"]) if "round_secs" in self.P else ROUND_SECS
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.no_walk = bool(self.P["no_walk"]) if "no_walk" in self.P else False
         self.rules2 = hasattr(E, "ACQUIRE_FRAMES")
@@ -464,7 +465,7 @@ class ffabot(duelbot):
         if not seated:
             return
         # the round clock (as in training: the clock, the score and the memory start over every ROUND_SECS)
-        if now - self.sess_t0 > ROUND_SECS:
+        if now - self.sess_t0 > self.round_secs:
             self.sess_t0 = now
             self.h[:] = 0
             self.kills0 = {p.id: p.stats.kills for k, p, st in seated}
@@ -487,13 +488,13 @@ class ffabot(duelbot):
                     env.mv[k], env.cool[k] = 0.0, 0.0
                     self.want_w.pop((id(env), k), None)
                     minqlx.set_bot_substeps(p.id, 3)
-                    if hasattr(E, "STYLES") and hasattr(env, "style"):
-                        # his playing style for this life: one of the map's at random (owner, 2026-10-08: "for now spawn
-                        # at random with each style"; choosing it himself comes with a later network)
-                        ok_ = [j for j, w_ in enumerate(E.STYLE_W) if w_ < 0 or int(w_) in env.map_weapons]
-                        env.style[k] = int(ok_[np.random.randint(len(ok_))])
-                        self.record(event="style", seat=k, style=E.STYLES[int(env.style[k])])
+                    # his playing style for this life: one of the map's at random (owner, 2026-10-08: "for now spawn at
+                    # random with each style"; choosing it himself comes with a later network); intention and hands anew
+                    st_ = self.fresh_life(env, E, k)
+                    if st_:
+                        self.record(event="style", seat=k, style=st_)
                 self.tot.pop(k, None)
+                self.prev.pop(k, None)                       # (a respawn is not a teleport: no such sound)
             if was and not up:
                 env.note_death(k, -1)                        # those in earshot know; the killer is not known here
                 self.record(event="death", seat=k, bot=bot, kills=p.stats.kills, deaths=p.stats.deaths)
@@ -510,7 +511,7 @@ class ffabot(duelbot):
                     env._hear(2, np.array([k]))
                 if np.linalg.norm(pos - po[0]) > 200:
                     env._hear(3, np.array([k]))
-                if not bot and hasattr(env, "note_shots"):   # a person's weapon lost ammo: he fired
+                if hasattr(env, "note_shots"):               # his weapon lost ammo: he fired (Bobbys too: until 2026-10-08 only people's shots were noted)
                     wn_ = E.WEAPONS[int(env.weapon[k])] if int(env.weapon[k]) < len(E.WEAPONS) else "mg"
                     am_ = getattr(st.ammo, wn_, 0) if wn_ != "g" else 0
                     pa_ = self.ammo_prev.get(k)
@@ -534,6 +535,7 @@ class ffabot(duelbot):
         for cls, slot in self.sync_world(env, E, ids):
             self.record(event="pickup", item=cls, seat=slot, bot=bool(slot >= 0 and ids[slot] >= 0 and is_bot(here[ids[slot]])))
             if slot >= 0 and self.rules2:
+                self.took_chosen(env, E, slot, cls)
                 if hasattr(env, "note_pickup") and cls in ("item_health_mega", "item_armor_body"):
                     env.note_pickup(slot, 0 if cls == "item_health_mega" else 1)
                 big = 0 if cls == "item_health_mega" else 1 if cls == "item_armor_body" else \
@@ -542,6 +544,8 @@ class ffabot(duelbot):
                     env._hear(0, np.array([slot]), big)
         if self.rules2:
             env.snd_t += E.DT
+            if hasattr(env, "resp_t"):
+                env.resp_t += E.DT
             if hasattr(env, "shot_t"):
                 env.shot_t += E.DT
                 env.trail_t += E.DT
@@ -587,10 +591,22 @@ class ffabot(duelbot):
             choice = np.zeros(SEATS, np.int64)
             choice[live_bots] = acts[:, 10]
             env.intend(choice, np.isin(np.arange(SEATS), live_bots))
+        self.intent_release(env, E, live_bots)
         by_seat = {k: (p, st) for k, p, st in seated}
+        # The finger rules for all Bobbys in ONE call, as the simulator does. Until 2026-10-08 drive() called them once per
+        # Bobby with his own row copied to every seat: with two or more Bobbys alive each one moved on the keys of the
+        # Bobby handled before him, and the fire finger's clock ran once per Bobby (10.9 key changes a second in the
+        # logs against 1.5 in 1v1).
+        limited = hasattr(E, "ACQUIRE_FRAMES") and acts.shape[1] > 7 and hasattr(env, "limit_keys") and getattr(env, "key_limits", False)
+        if limited:
+            A = np.zeros((SEATS, acts.shape[1]), np.int64)
+            A[:, 0] = A[:, 1] = 1
+            A[live_bots] = acts
+            env.limit_keys(A, who=np.isin(np.arange(SEATS), live_bots))
+            acts = A[live_bots]
         for a, k in zip(acts, live_bots):
             p, st = by_seat[k]
-            w, fire, pitch, yaw, keys = self.drive(p, env, E, k, a, float(env.pitch[k]), float(env.yaw[k]))
+            w, fire, pitch, yaw, keys = self.drive(p, env, E, k, a, float(env.pitch[k]), float(env.yaw[k]), limited=limited)
             self.fired[k] = bool(fire)
             if people or os.environ.get("FFA_LOG_ALWAYS"):       # frames are logged only while a person is in the game (FFA_LOG_ALWAYS=1: tests with bots alone)
                 self.log_row(now, env, E, k, p, st, keys, present, bot_seats, len(people), len(bobbys))
