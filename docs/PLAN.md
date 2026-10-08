@@ -122,6 +122,19 @@ to S4 as teachers fading over four hours, S6 as a column. Groups of 2, 3 and 4 a
    baseline; the bar is "better than v12". Thin data: about three hours of people in all, part of it on arena1.
 4. *The owner plays him* on a duel map and on arena1; a card of each game.
 
+**When (owner, 2026-10-08): a separate experiment after v12, not folded into it.** v12 is the crude version (hand-set
+rules); its end decides what v13 is. Gate at v12's end: two hours after the teachers are gone, time bare has not gone back
+above about 65%, his weapon in hand in a style life has not halved, and he still fights. *Passes:* v13 is the pro seeds as
+scoped here. *Fails* (the gains go with the teacher): the problem is keeping, not the tables; v13 first gets a longer
+fade or a small standing teacher, and the pro tables come after.
+What v12 has shown by its second hour, and what it means for the seeds: (1) only style lives fetch (big weapons held
+0.47-0.69 against 0.25 in general lives, which do not move): the **item order** seed, a weapon first for every bare
+life, matters most; (2) the fight distance does not separate by style, and hardly does among the pros: the band pay
+(`STYLE_BAND`) is dropped for the pros' **weapon-by-distance** table (the weapon for the distance, not the distance for
+the weapon); (3) the first weapon comes after 8 s against the pros' 2.7: the **spawn routine**; (4) the style states
+themselves stay as in v12, rail included. Baseline: v12's final numbers split by map, so that on the three duel maps
+the only change in v13 is the seeds.
+
 **After it:** if layers 1 and 2 pass, the public server's default map becomes a duel map and arena1 stays as a check only.
 Then the pros' ways (S5), the style chosen by himself, and free-for-all habits from the server logs.
 
