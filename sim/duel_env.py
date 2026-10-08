@@ -165,7 +165,7 @@ LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loa
 # (2026-10-05) He reads where the enemy is against his crosshair only this well: a slowly drifting error, in degrees,
 # on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
 # gap between crosshair and target by eye, not to a hundredth of a degree.
-PERCEPT_SIGMA, PERCEPT_TAU = float(os.environ.get("PERCEPT_SIGMA") or 0.6), float(os.environ.get("PERCEPT_TAU") or 0.15)
+PERCEPT_SIGMA, PERCEPT_TAU = float(os.environ.get("PERCEPT_SIGMA") or 1.2), float(os.environ.get("PERCEPT_TAU") or 0.5)
 # degrees; seconds over which the error drifts. 2026-10-06 evening 1.0 -> 0.6 after the reflex room (he was wider than the owner
 # there). 2026-10-07 evening the owner asks for LESS hitscan aim: in real games he is on target 56% of the time an enemy is in view
 # (people 23%, Nightmare 27%) and 2.1 degrees off while firing (people 3.2): the reflex room flatters people. What makes a
@@ -173,7 +173,11 @@ PERCEPT_SIGMA, PERCEPT_TAU = float(os.environ.get("PERCEPT_SIGMA") or 0.6), floa
 # off for half a second, not for a frame) that grows with how fast the target crosses his view. So for v11 (set by the launch
 # file): a larger error that drifts slowly (PERCEPT_TAU 0.5: the memory cannot average it away as it does the 0.15 s one) and
 # PERCEPT_SPEED degrees more for every degree a second the enemy's direction moves, at most PERCEPT_SPEED_MAX.
-PERCEPT_SPEED, PERCEPT_SPEED_MAX = float(os.environ.get("PERCEPT_SPEED") or 0.0), 3.0
+PERCEPT_SPEED, PERCEPT_SPEED_MAX = float(os.environ.get("PERCEPT_SPEED") or 0.012), 3.0
+# Values since 2026-10-07 20:15 (the first "click", owner: "nudge hitscan aim down 1-2 clicks"): 1.2 degrees, 0.5 s, 0.012.
+# v10 under them in the reflex room, not yet adapted: error on a strafing target 3.0 -> 3.8 degrees (the owner 2.45), time on
+# it 58% -> 54% (40%), lightning damage a second 83 -> 75 (58), first rail shot on a jumping target 74% -> 65% (88%).
+# The second click, measured and kept ready: 1.6 / 0.6 / 0.02 -> 5.2 degrees, 44%, 67, 57%. Before: 0.6 / 0.15 / 0.
 # (2026-10-05, B-94) Being shot at costs aim: a hit throws his read of the enemy's direction off by FLINCH_PER_DMG
 # degrees per point of damage (at most FLINCH_MAX at a time), and the error stays larger while the flinch fades
 # (FLINCH_TAU seconds). First values; to be set from players in the reflex test (calm half against the half under fire).
