@@ -137,7 +137,7 @@ KEY_EVERY = 4
 # just acted cannot act again for this many frames (a click is a press and a release). Fire: 200 ms, so at most 2.5
 # clicks a second (owner, 2026-10-07: "he is spamming the lightning fire button; you hold it down; 2 or 3 clicks a
 # second max"; it was 100 ms, five clicks a second, until v10). FIRE_HOLD sets the frames.
-MOUSE_HOLD = np.array([int(os.environ.get("FIRE_HOLD") or 8), 6], np.int64)   # fire 200 ms, zoom 150 ms
+MOUSE_HOLD = np.array([int(os.environ.get("FIRE_HOLD") or 7), 6], np.int64)   # fire 175 ms: 2.9 clicks a second (owner, 2026-10-08: "up the clicks to 3"; 8 frames in v11), zoom 150 ms
 # Zoom: the view narrows to ZOOM of its size (100 x 75 degrees -> 40 x 30), and the same hand movement turns the
 # view ZOOM as far: finer aim and less shake in degrees, but slower turning and no view of the surroundings.
 ZOOM = 0.4
