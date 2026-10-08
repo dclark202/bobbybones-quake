@@ -5,6 +5,88 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 14:55 — "Go pick up the red armor" (owner): the 1v1 plugin never told him where it is; what stops him per map
+
+**A fault in the real-game plugin, found and fixed.** `plugins/duelbot.py` built the simulator he plays through without the
+map's walking graph (`nav=`), from its first version on; the free-for-all plugin (the public server) always had it. So in
+every real 1v1 game, which is every Nightmare benchmark since v8 and every local 1v1 game, these inputs were zero: the
+time to each big item, the direction of the next step to his chosen item, whether it is up and when it is back, and the
+map reader's 32 numbers. Shown by recording his inputs in a real game (`DUEL_OBSDUMP`) and setting them beside the
+simulator's. Fixed in `bace88c`, with the seconds until a taken item is back, which no plugin had ever passed on
+(`env.item_t`). Still open: the 1v1 plugin sets no playing style, so he plays "general" lives only there, his weakest
+(B-139). **Every real Nightmare score before this entry understated him.**
+
+How it showed in the ten-minute arena1 game of 14:01 (before the fix): the red armor lay there 42% of the time (256 s),
+he was alive for 90% of that and never came within 400 units of it; 0.6% of his time south of the yard's edge
+(Nightmare 17%); "red armor" or "mega" was his intention at all 31 death snapshots. Nightmare took the red 14 times and
+the mega 7 times, he none and one: he died after 122 damage a life, Nightmare after 552, with the damage about even.
+
+**The same three games after the fix** (14:37, ten minutes each, side by side, nothing else running):
+
+| Map | Before (14:01) | After | What the log shows |
+|---|---|---|---|
+| arena1 | 6-24 (10 min) | **13-33** | 5.1% of his time south of the edge (simulator 4.8%), the red taken twice; **16 of his 33 deaths are falls into the void** on the way to it: he cuts the corner to the walkway without a jump and misses it by 10 to 30 units |
+| Blood Run | 0-9 (5 min) | 1-19 | damage 2,196 dealt, 2,894 taken; Nightmare took 18 yellow armors, 8 megas, 71 shards; he 5, 4, 14 |
+| Aerowalk | 0-11 (5 min) | 1-1, **not valid** | Nightmare took 8 items in ten minutes and was in his view 2% of the time: the game's bot was idle; to repeat |
+
+A game played at 14:25 for the input recording, with every CPU thread busy, ended 6-0 for him: under load it is now
+Nightmare that plays badly. Real games still only on a free PC.
+
+**The red armor, map by map** (v12; alone = `tools/solo_item_check.py`, told to fetch it; duels = 100 ten-minute games
+against the Nightmare stand-in):
+
+| Map | Alone, told to | His share of its spawns in duels (the stand-in's) | What stops him |
+|---|---|---|---|
+| arena1 | 100% in 6.6 s (91% by his own choice) | 19% (36%) | it stands on an island over the void: about 10 own deaths a game in the simulator's duels as well; with an enemy about half of his trips are dropped, half end in death |
+| Blood Run | **3%**; every other item 100% | 1% (22%) | the last step is a jump over a 190 to 240 unit gap; he covers 96% of the way and falls; he still chooses it 69% of the time |
+| Aerowalk | 28% | 9% (7%) | **the walking graph has a way to it from 1% of its points** (1 of 8 spawn points): his inputs say "no way" |
+| Lost World | 94% | 5% (1%) | in normal rounds he does not go |
+
+Why he drops it with an enemy about, from the code: damage taken costs half of what damage dealt pays (an even trade is
+profit); damage his armor soaks is charged like health lost, so armor earns nothing in a fight but a later death; in
+self-play nobody takes it either (it lies untaken 70% of the time on arena1 in training, 85% in three-player games), and a
+quarter of his training lives start within two seconds of the mega or the red (`near_item_p`), which the real game does
+not have. He loses 1 : 2 to the scripted item runner in training and has not adapted.
+
+**Owner, 14:45: "yes to the changes"** for v13: rounds that start with a big item about to return and both players a like
+way from it (to build), damage soaked by armor charged at a third (`ARMOR_COST`, built, off by default), beside the price
+per shot and the ammo packs removed. And at 14:53: "I'm not surprised he falls into the void, I'm THRILLED that he goes
+to the armor"; a review of whether everything is wired up correctly is under way.
+
+**The lightning gun** (owner: "he's not going to LG at all here?"): not a fault. Told to fetch it he does, 100% in 3.4 s.
+v12's item rule for a general life is mega or red first whenever they are about (nearly always: he has no armor), then
+the nearest weapon; the heat map and every real 1v1 game play general lives only. In lightning lives he holds it 61%.
+
+## 2026-10-08 14:00 — `duel_gru_v12` at its end (4,727 min; `policy_end_v12.pt`)
+
+**Training, start to end** (07:31 to 14:00, 194 updates): time without a big weapon 74% -> 54%; big weapons held 0.32 ->
+0.57; weapons picked up 1.75 -> 2.53 a player-minute; his style's weapon in hand in rocket / rail / lightning lives 4 /
+10 / 10% -> 42 / 41 / 61%; frags by machine gun 73% -> 45% (rockets 17, rail 15, lightning 23%); firing 23% -> 21%; frags
+3.8 -> 4.0 a match-minute; suicides 0.75 -> 0.98 a match-minute. General lives did not move (big weapons 0.29 -> 0.27).
+**The gate for v13 passes**: both teachers were at zero from 11:31 on and every number kept rising (with the caveat of
+the audit: at a tenth of the learning rate things also fade ten times slower).
+
+**Against the Nightmare stand-in** (`tools/duel_eval.py`, 100 ten-minute duels a map, `docs/eval_v12_nightmare.json`):
+
+| Map | Score | His share of the frags (95%) | Won / drawn / lost | Time bare | First weapon | Mega, red (share of spawns) | Own deaths a game |
+|---|---|---|---|---|---|---|---|
+| arena1 | 4.6 : 19.9 | 42% (41-43) | 0 / 0 / 100 | 80% | 2.5 s | 22%, 19% | 12.3 |
+| Blood Run | 3.2 : 7.6 | 34% (31-37) | 18 / 10 / 72 | 38% | 10.7 s | 41%, 1% | 0.8 |
+| Aerowalk | 16.1 : 19.0 | 47% (45-48) | 29 / 10 / 61 | 68% | 8.9 s | 18%, 9% | 0.7 |
+| Lost World | 0.9 : 0.5 | not usable | 37 / 48 / 15 | 74% | 26.6 s | 2%, 5% | 0.0 |
+
+On arena1 the stand-in reproduces the real game again (4.6 : 19.9 against 6-24 before the plugin fix). On Lost World
+neither side plays: the stand-in moves at 113 units a second and takes a weapon every ten minutes, and with nobody
+coming he stands 68% of the time (29% against himself in his own simulator). The check is not usable there (B-141).
+The games of v10 and v11 on the same footing were stopped to free the PC and are to run at 19:00.
+
+**Reflex room** (his own simulator; the owner's run beside it): on a strafing target 45% of the time (owner 40%),
+lightning 68.5 damage a second (57.7), on a jumping target after 431 ms (350), first rail shot hits 32% (88%), a rocket
+does 35 damage (54). Under fire he loses less than the owner (on target 35% against 20%).
+
+**Three Bobbys on a private real server** (v12, three minutes, no person): no errors, speed 273 to 278, standing 5 to 6%,
+about one fall into the void a Bobby-minute. (My own earlier bots-only test logs in `data/ffatest` were cleared for it.)
+
 ## 2026-10-08 13:50 — The price of a shot for every gun (owner: "spam happy or need to conserve"), and ammo packs the real game does not have
 
 **Built (off by default; proposed for v13).** The owner (13:30): "shot cost should also be weapon dependent -- lg, rocket,

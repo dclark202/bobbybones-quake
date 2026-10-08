@@ -112,6 +112,8 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - PPO's entropy bonus drowns small shaping costs: size any cost against it (see RESULTS 2026-10-04).
 - Do not restart the play-test server while the owner is on it; use a second container for tests.
 - Real-server checks (Nightmare sparring) only while no training runs: a server that falls behind distorts everything (until 2026-10-08 it even dropped the bot's commands: RESULTS 2026-10-08 13:00). `DUEL_AIMDUMP=1` (`AIMDUMP=1` for `tools/bench_arena.sh`) records what became of his mouse output per frame. The local image `qlbot` must be rebuilt (`docker build -t qlbot .`) after any change to `sim/`, `plugins/` or `minqlx/`: the sparring scripts do not do it.
+- The plugins feed the network through the simulator's own `observe()` but never call `step()`: whatever only `step()` keeps up to date is stale on a real server unless the plugin sets it (2026-10-08: the 1v1 plugin had no walking graph, no plugin set `item_t`, the 1v1 plugin sets no style). After any change to the inputs, record them in a real game (`OBSDUMP=1` with `tools/bench_arena.sh`) and set them beside the simulator's. With the PC busy it is now the game's Nightmare bot that plays badly (he won 6-0 under load).
+- The first dozen updates after any (re)start are not the real game: the first round is played with every weapon at spawn.
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,
   `sv_warmupReadyPercentage` and `sv_maxclients` are latched (a map change applies them); `allready` cannot start a game

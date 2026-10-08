@@ -332,6 +332,11 @@ ITEM_BELIEF = float(os.environ.get("ITEM_BELIEF") or 0.0) > 0
 # and the three together held to 0.25 .. 3. With 0.10 and a factor of 1 a shot pays from one hit in ten on. In real games
 # he fired 53% of the time an enemy was in view (people 24%) and 0.2 s after one appeared (0.5 s). 0 = off.
 SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
+# ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
+# armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
+# so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
+# What the attacker is paid does not change.
+ARMOR_COST = float(os.environ.get("ARMOR_COST") or 1.0)
 SHOT_REF_FIRE = 16.0
 SHOT_NEAR_S = 3.0
 SHOT_DMG = W_DMG * np.where(np.arange(NW) == SG, SG_PELLETS, 1).astype(np.float32)     # a whole shot's damage
@@ -819,6 +824,7 @@ class DuelEnv:
                                     open_ = (self.route.T[g_] >= 1e8) & (tm_ < 1e8)
                                     self.route.T[g_] = np.where(open_, tm_, self.route.T[g_])
                         self.route.walk = walk_
+        self.soak = np.zeros(self.n, np.float32)            # damage his armor took this frame (see ARMOR_COST)
         self.shot_scarce = np.ones(NW, np.float32)          # SHOT_COST: how scarce each gun's ammo is on this map, and
         self.shot_way = None                                # the seconds to its nearest ammo from every graph point
         if SHOT_COST > 0:
@@ -924,7 +930,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0, shot_n=0, shot_fac=0.0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0, shot_n=0, shot_fac=0.0, soak=0.0,
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
                           wrule_frames=0, wrule_agree=0,
@@ -1952,6 +1958,7 @@ class DuelEnv:
         """armor absorbs 2/3 of the damage while it lasts; returns the total taken (health + armor)"""
         save = min(float(self.armor[v]), math.ceil(dmg * ARMOR_ABSORB))
         self.armor[v] -= save
+        self.soak[v] += save
         self.hp[v] -= dmg - save
         return dmg
 
@@ -2846,6 +2853,10 @@ class DuelEnv:
             self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
         dealt = np.where(attacker[opp_all] == ar, dmg_taken[opp_all], 0.0)
         taken = dmg_taken + fall                            # from the opponent, own splash and falls alike
+        self.stats["soak"] += float(self.soak[self.script == 0].sum())
+        if ARMOR_COST != 1.0:                               # what his armor soaked costs him less (see ARMOR_COST)
+            taken = taken - (1.0 - ARMOR_COST) * self.soak
+        self.soak[:] = 0.0
         if self.gun.any():                                  # run-and-gun: damage pays by how fast the runner is moving
             gsp = np.clip(np.hypot(s[:, 3], s[:, 4]) / 320.0, 0.0, 1.5)
             self.stats["gun"][0] += float(dealt[self.gun].sum())

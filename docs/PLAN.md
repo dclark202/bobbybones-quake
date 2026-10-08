@@ -118,9 +118,8 @@ at a tenth of the learning rate things also fade ten times slower.)
 |---|---|---|
 | now to 14:00 | v12 to its end; the checks and the switches for the five fixes are built | - |
 | 14:00 | v12's full check; v10, v11 and v12 on the new checks; the aim setting chosen from the sweep | the baseline |
-| 14:30 to 17:30 | two half-size arms from v12's weights, with the new aim, close spawns off and items by what he knows; only the learning rate differs (a tenth as now, against 1e-4) | how much the learning rate matters; the winner's weights go on |
-| tonight | v13 in two arms on the three duel maps: the pro seeds (weapon table, item order, spawn routine, yellow armors); the second arm also with even damage trading | the seeds against v12; even trading against the seeds alone |
-| tomorrow afternoon | two arms: credit horizon 0.95 against 0.98 | whether the longer horizon helps |
+| 14:30 to 19:00 (owner: "until 7pm") | two half-size arms from v12's weights (`duel_gru_v12a`, `duel_gru_v12b`), with the aim at level 3, close spawns off and items by what he knows; only the learning rate differs (a tenth as in v8 to v12, against 1e-4 constant) | how much the learning rate matters; the winner's weights and rate go on |
+| tonight, after the owner's review at 19:00 (owner: "v13 can run in one go") | v13, one full-size run on the three duel maps from the winning arm: the pro seeds (weapon table, item order, spawn routine, yellow armors), even damage trading, credit horizon 0.98, the price per shot by weapon and map (`SHOT_COST` 0.10, owner: "ammo is a scarce resource"), and, if he agrees, without the ammo packs the real game does not have (`AMMO_PACKS=0`, B-135) | the seeds against v12, on the stand-in duels and the scorecard per map |
 | tomorrow night | v14: the goal model with "engage", the pull to the pros' positions | item control and positioning |
 The pros' ways stay out until tried alone with a control (they did not pass their test). Each run starts only on the owner's go.
 
@@ -219,7 +218,19 @@ the only change in v13 is the seeds.
 **After it:** if layers 1 and 2 pass, the public server's default map becomes a duel map and arena1 stays as a check only.
 Then the pros' ways (S5), the style chosen by himself, and free-for-all habits from the server logs.
 
-## Proposed: `duel_gru_v12`: playing styles and machine-gun spawns (owner's idea of 2026-10-08; built, waiting for his go)
+## Done: `duel_gru_v12`: playing styles and machine-gun spawns (2026-10-08 07:31 to 14:00; results in RESULTS.md)
+
+**Outcome.** In the simulator the styles took: time without a big weapon 74% -> 54%, his style's weapon in hand 4-10% ->
+41-61%, the machine gun's share of his frags 73% -> 45%, and all of it held for two and a half hours after both teachers
+were gone (the gate for v13 passes). Against the real Nightmare: 6-24 on arena1, 0-11 on Aerowalk and 0-9 on Blood Run,
+and then the reason for much of it: **the 1v1 plugin had never given him the map's walking graph**, so in every real 1v1
+game he did not know the way to any item (RESULTS 2026-10-08 14:55). With it: 13-33 on arena1, the red armor taken
+twice, and 16 of his 33 deaths falls into the void on the way to it; 1-19 on Blood Run. Nightmare still takes the armor
+and the mega many times over (18 yellow armors to his 5 on Blood Run). **Item control decides the games against
+Nightmare, not aim or weapons**; what stops him is different on each map (the table in RESULTS).
+
+What was set up:
+
 
 Every life he is in one of four states, given to him as four inputs (487 inputs now): **general**, or a preferred weapon
 (**rockets, rail, lightning**), a quarter each (`STYLE_P` 0.75). With a preferred weapon: the item rule sends him for it
