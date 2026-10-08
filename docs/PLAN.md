@@ -76,7 +76,13 @@ How it got there (RESULTS 2026-10-06 evening to 2026-10-07): v9 added a seeded i
 
 Next: the proposal below, for the owner's sign-off. Open besides it: B-107b (measure the machine guns' scatter and the shotgun pattern), B-92 (more players for the reflex benchmark), B-95 (key budget), B-109 (attention), Aerowalk's walking graph (no way to the red armor from most spawns), `arena2`.
 
-## Running: `duel_gru_v11` (started 2026-10-07 20:35 on the owner's go, until 06:30)
+## Done: `duel_gru_v11` (2026-10-07 20:35 to 2026-10-08 06:29; results in RESULTS.md)
+
+**Outcome:** rockets 4% -> 18% of frags and weapon choice by distance, both kept without the teacher; aim and fire clicks
+limited as intended; the stack is not solved (time bare 60% -> 57%) and Nightmare on arena1 fell to 4-25. **Proposed next
+(for the owner):** every training spawn a machine-gun spawn, as on the server (today four in ten spawns hand him weapons, so
+his rockets and his wins come from lives where he never had to fetch anything), with the keys-only teacher from the start
+at a moderate weight; Nightmare and the fight check run the same way. Aim stays one click down until that is measured.
 
 v10 taught him the walk: alone on arena1 he now takes what he is told to in 75 to 100% of 30-second rounds (v9: 0 to 22%), and kept it after the teacher was gone. Two things are still missing, and v11 takes one lever set for each.
 

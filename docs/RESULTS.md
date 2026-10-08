@@ -71,6 +71,16 @@ before), pickups are up a quarter (mega 0.34, red 0.38, weapons 1.59 a player-mi
 collect-then-fight rounds wins a little more often (1.17 : 1, was 1.12 : 1), rockets 20% of frags. In the arena1 fight check
 mega 0.12 and red 0.03 a player-minute: small. Nightmare on arena1 7-29.
 
+**06:29, the end** (4,338 min; `policy_end_v11.pt`). Last eight updates: rockets 18% of frags (v10 4%) with both teachers at
+zero for over two hours, weapon rule agreement 0.83 and slowly falling, fire 28% of frames, 4.3 frags a match-minute, time
+bare 57%, big weapons held 0.61, pickups mega 0.34 red 0.41 weapons 1.64 a player-minute, stacked side 1.18 : 1.
+**Worked:** rockets and weapon choice by distance, and they hold without the teacher; the fire-click limit; the aim limits
+bite as measured (3.7 deg, 48% on target, first rail shot 49%). **Did not work:** the stack pay alone (nothing in four
+hours); the first fallback (above); the narrowed teacher moved pickups by a quarter and time bare by two points; in the
+arena1 fight check he takes 0.12 megas and 0.04 red armors a player-minute and almost never the rocket launcher (0.01;
+rail 0.53), so his rockets come from the spawns and drills that hand him one. **Nightmare on arena1 4-25 (v10: 22-28)**:
+softer aim, fewer clicks, and still the machine gun 78% of the time there. The item problem is not solved.
+
 Built for the fallback (off, `STACK_TEACH`): the walking teacher inside normal games, while bare or under 70 with nobody
 in view, toward what the item rule names. Test on arena1 with machine-gun spawns, 12 player-minutes, random aim: a pupil
 who obeys the labels takes 12 weapons and 9 red armors and is bare 67% of the time; one who ignores them 2, 0 and 91%.
