@@ -67,6 +67,16 @@ Built while v12 trains, every switch off by default, the two-player simulator un
   42 / 40%, lightning 34 / 36%, rail 24 / 24% (Blood Run / Aerowalk). The rail is held a quarter of the time by everybody;
   it is the most-held weapon in 9-10% of games (rockets 51-57%, lightning 34-39%). The earlier "1%" counted firing frames.
 - Launcher and weight carry-over are written (`start_v13.py`, `prep_v13.py` in the scratchpad), not run.
+- **The pros' ways** (`PRO_ROUTES`, `tools/pro_routes.py` -> `sim/pro_routes/<map>.npz`; off by default): 4,000 to 10,000
+  trips an item and map; a pro step on a quarter to two thirds of each map; 230 places on Aerowalk from which the walking
+  graph has no way to the red armor now have one. **What did not work: they do not pass the test set for them.** A pupil
+  who obeys the teacher's keys (fixed view, walking; three seeds, 120 to 144 lives a setting), shortest ways against the
+  pros': first weapon after 5.9 / 6.2 s on Blood Run, 12.0 / 12.5 s on Aerowalk, 25.5 / 25.0 s on Lost World; weapons
+  picked up 5 to 19% fewer with the pros' ways on every map. (The first tables, the step most often taken, looked better
+  on Aerowalk in one small sample and halved the armor pickups: trips to an armor include waiting for it; the tables are
+  now built from the pros' fastest trips.) Reading: for a walker the shortest way cannot be beaten; what the pros' ways
+  could add (speed with their movement, safer ground, looking like a player) this test does not measure. Not in v13
+  unless the owner wants them in as they are; to be tried as a single change with a control arm.
 
 ## 2026-10-08 07:31 — `duel_gru_v12`: playing styles and a machine-gun spawn in every life (owner's idea; until 14:00) (B-120, B-116)
 
@@ -83,6 +93,7 @@ Keys-only walking teacher 0.5 fading over 180 min; stack pay 1.0 / 1.0 / 0.5 / 1
 | 08:35 | 70% | 0.37 | 1.94 | 10 / 17 / 22% | 0.24 / 0.36-0.48 | 23%, 3.6 |
 | 09:35 | 61% | 0.47 | 2.19 | 26 / 30 / 45% | 0.25 / 0.47-0.69 | 22%, 3.6 |
 | 10:35 (walking teacher at zero) | 58% | 0.51 | 2.31 | 33 / 34 / 52% | 0.26 / 0.52-0.76 | 22%, 3.6 |
+| 11:05 | 56% | 0.54 | 2.37 | 37 / 36 / 54% | 0.25 / 0.55-0.79 | 22%, 3.7 |
 
 ## 2026-10-08 — Tables from the pro demos, to seed the teachers with (owner: "weapon preference, style, intention can and should be tuned on the pro demos")
 
