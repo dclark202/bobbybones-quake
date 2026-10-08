@@ -5,6 +5,28 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 — Tables from the pro demos, to seed the teachers with (owner: "weapon preference, style, intention can and should be tuned on the pro demos")
+
+`tools/pro_tables.py` -> `docs/pro_tables.json`: 1,066 Blood Run 1v1 demos, 9,946 minutes of play (the only map converted
+so far; no player names in the sets, so "per demo" is one game of one player).
+
+- **Weapon by distance** (frames where he owns rockets, rail and lightning with ammo, enemy in view, firing): rockets 61-66%
+  under 300 units and 50% at 300-400; lightning leads from 400 to 700 (52-56%); the rail leads from about 750 (62% at
+  800-900, 88% beyond 1,000). Fights happen at (quartiles): rockets 231 / 363 / 538, lightning 320 / 475 / 597, rail 510 /
+  686 / 878. Our rule (rockets 60-300, lightning to 700, rail from 500) puts rockets too short and the rail too early.
+- **Styles**: the mean split of a game is rockets 39%, lightning 40%, rail 21%. 24% of games lean to rockets (over half of
+  the firing), 24% to lightning, under 1% to the rail, 52% to none. The distance of the fights hardly follows the leaning
+  (medians 458 / 470 / 519; correlations -0.15, 0.0, 0.22).
+- **Spawn**: a big weapon in 84% of lives, after 2.3 s (median; 5.2 s at the third quartile): rockets 50%, lightning 28%,
+  rail 22%. Without a big weapon 6% of the time alive (Bobby v11: 57%).
+- **What he picks up next**: with no big weapon, a weapon in two cases of three and the yellow armor in one of five (mega or
+  red 9-14%); once armed, armor and health in 86% (yellow 38-46%, red 22-24%, mega 17-22%). Our item rule has it the other
+  way round (mega and red before a weapon) and the intention list has no yellow armor.
+- **Stack**: 62% of the time at 150 or more health plus armor, 16% under 100.
+- **Engagement**: with no big weapon (and not hurt) the enemy is in view 9% of the time and he fires 16%; with three, 15%
+  and 36%. "Backs off when low" is weak here (closing speed differs by under 20 units a second); with rockets in hand he
+  gives ground (-23 to -37 units/s), with the rail he closes (+30 to +45).
+
 ## 2026-10-07 20:35 — `duel_gru_v11`: a pay for keeping a stack, fewer fire clicks, softer hitscan aim, a weapon teacher, items in fights (owner's list, approved; until 06:30)
 
 From v10's weights (3,817 min). Four maps, groups 2,3,2,4,2, 10,080 players, 64 minibatches, GPU 10.5 GB. Changes, as in
