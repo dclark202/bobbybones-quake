@@ -204,17 +204,17 @@ def run(paths, games_only):
                             up=g("b_up"), sees=g("b_sees") > 0, aim=g("b_aim_err"), hp=g("b_health"))
                 keep = in_windows(t, win) if games_only else np.ones(len(t), bool)
                 dur = sum(b - a for a, b in win) if games_only else (t.max() - t.min())
-                for s in np.unique(seat):
-                    m = (seat == s) & keep
+                for s, isbot in sorted(set(zip(seat.tolist(), bot.tolist()))):   # a seat can change hands (a bot in warmup, then a person)
+                    m = (seat == s) & (bot == isbot) & keep
                     if m.sum() < 400:
                         continue
-                    grp = pol if bot[seat == s][0] else "people"
+                    grp = pol if isbot else "people"
                     A = G[grp]
                     A.sessions.add(name)
                     A.frames(t[m], pos[m], allv["vel"][m], allv["weapon"][m], allv["fire"][m], allv["up"][m], allv["sees"][m],
                              allv["aim"][m], foe_pos[m], allv["hp"][m] > 0)
                     t0, t1 = t[m].min(), t[m].max()
-                    mine = [e for e in ev if e.get("seat") == s and t0 <= e.get("t", 0) <= t1 and (not games_only or any(a <= e["t"] <= b for a, b in win))]
+                    mine = [e for e in ev if e.get("seat") == s and bool(e.get("bot")) == bool(isbot) and t0 <= e.get("t", 0) <= t1 and (not games_only or any(a <= e["t"] <= b for a, b in win))]
                     life0 = t0
                     got = False
                     for e in mine:
