@@ -44,6 +44,7 @@ Keys-only walking teacher 0.5 fading over 180 min; stack pay 1.0 / 1.0 / 0.5 / 1
 | 07:50 (update 10) | 80% | 0.24 | 1.88 | - | - | 25%, 3.7 |
 | 08:35 | 70% | 0.37 | 1.94 | 10 / 17 / 22% | 0.24 / 0.36-0.48 | 23%, 3.6 |
 | 09:35 | 61% | 0.47 | 2.19 | 26 / 30 / 45% | 0.25 / 0.47-0.69 | 22%, 3.6 |
+| 10:35 (walking teacher at zero) | 58% | 0.51 | 2.31 | 33 / 34 / 52% | 0.26 / 0.52-0.76 | 22%, 3.6 |
 
 ## 2026-10-08 — Tables from the pro demos, to seed the teachers with (owner: "weapon preference, style, intention can and should be tuned on the pro demos")
 
