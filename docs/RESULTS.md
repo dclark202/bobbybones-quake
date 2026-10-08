@@ -5,6 +5,20 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 07:31 — `duel_gru_v12`: playing styles and a machine-gun spawn in every life (owner's idea; until 14:00) (B-120, B-116)
+
+From v11's final weights (4,338 min) carried to 487 inputs. Every life is general or has a preferred weapon (rockets,
+rail, lightning; a quarter each): the item rule sends him for it first, the weapon teacher names it at every distance
+(weight 1.0 fading over 240 min), damage with it pays half as much again, and half a frag a minute inside its band with
+it in hand. Every life starts with the machine gun only (`ARENA_SETS=mg`, `--loadout-p 0,1,0,0`, no random stacks).
+Keys-only walking teacher 0.5 fading over 180 min; stack pay 1.0 / 1.0 / 0.5 / 1.0; fire button 2.9 clicks a second
+(owner: "up the clicks to 3"); the rest as v11. Brief hourly lines, the full check at the end (owner).
+
+| | Time bare | Big weapons held | Weapons picked up a player-minute | His weapon in hand (rockets / rail / lightning lives) | Big weapons held, general / preferred lives | Fire, frags a match-minute |
+|---|---|---|---|---|---|---|
+| 07:50 (update 10) | 80% | 0.24 | 1.88 | - | - | 25%, 3.7 |
+| 08:35 | 70% | 0.37 | 1.94 | 10 / 17 / 22% | 0.24 / 0.36-0.48 | 23%, 3.6 |
+
 ## 2026-10-08 — Tables from the pro demos, to seed the teachers with (owner: "weapon preference, style, intention can and should be tuned on the pro demos")
 
 `tools/pro_tables.py` -> `docs/pro_tables.json`: 1,066 Blood Run 1v1 demos, 9,946 minutes of play (the only map converted
