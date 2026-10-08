@@ -175,6 +175,7 @@ void  __cdecl My_G_RunFrame(int time) {
         FrameDispatcher();
     }
 
+    Botctl_BeforeFrame(time);       // the controlled bots' commands for this frame (see botctl.c)
     G_RunFrame(time);
     Botctl_AfterFrame();
 }

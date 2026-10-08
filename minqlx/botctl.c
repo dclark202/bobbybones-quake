@@ -30,6 +30,13 @@ typedef struct {
 #define BOTCTL_SVF_BOT 0x00000008   // Q3/QL: bots' commands are queued and moved once per server frame
 
 static bot_override_t overrides[MAX_CLIENTS];
+// Full control with human physics (set_bot_input + set_bot_substeps) is driven by us once per game frame, from
+// Botctl_BeforeFrame, right after the plugins' frame handlers have set this frame's input. Until 2026-10-08 the input
+// rode on the game AI's own command, which the engine sends once per server loop: one frame late, and not at all in
+// the extra game frames a busy server runs to catch up. In those frames the game replayed the bot's last command, so
+// he kept his keys down with a frozen view (measured in the sparring games run beside a training: the view unchanged
+// in half of the frames on Blood Run and Aerowalk, standing against walls for up to 45 s).
+static int self_driving = 0;
 static long long think_calls[MAX_CLIENTS];
 static int ai_wants_fire[MAX_CLIENTS];
 static usercmd_t ran_cmd[MAX_CLIENTS];
@@ -49,6 +56,8 @@ void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd) {
         // state behind g_entities is torn down and must not be read.
         if (o->active && cl->state == CS_ACTIVE && cl->gentity && g_entities && g_entities[id].client) {
             int* delta = g_entities[id].client->ps.delta_angles;
+            if (!o->hybrid && o->substeps > 1 && !self_driving)
+                return;                 // the game AI's command for a bot we drive ourselves: not run (see self_driving)
             if (o->hybrid) {
                 ai_wants_fire[id] = cmd->buttons & 1;
                 // The AI decides *when* to shoot: it traces for line of sight before pressing
@@ -137,6 +146,27 @@ void Botctl_AfterFrame(void) {
     for (int id = 0; id < MAX_CLIENTS; id++) {
         if (overrides[id].cleared_bot_flag && overrides[id].substeps && g_entities[id].inuse && g_entities[id].client)
             g_entities[id].r.svFlags |= BOTCTL_SVF_BOT;
+    }
+}
+
+// Called once per game frame, after the plugins' frame handlers and before the game moves anything: every bot under
+// full control gets this frame's command now (split into its substeps), with the frame's own time.
+void Botctl_BeforeFrame(int time) {
+    if (!g_entities || !svs || !svs->clients || !sv_maxclients)
+        return;
+    for (int id = 0; id < MAX_CLIENTS && id < sv_maxclients->integer; id++) {
+        bot_override_t* o = &overrides[id];
+        if (!o->active || o->hybrid || o->substeps <= 1)
+            continue;
+        client_t* cl = &svs->clients[id];
+        if (cl->state != CS_ACTIVE || !cl->gentity || !g_entities[id].inuse || !g_entities[id].client)
+            continue;
+        usercmd_t cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.serverTime = time;
+        self_driving = 1;
+        My_SV_ClientThink(cl, &cmd);
+        self_driving = 0;
     }
 }
 

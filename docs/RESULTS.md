@@ -5,6 +5,29 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 13:00 — A fault in the real-game control, found and fixed: on a busy PC the bot's commands were dropped (and the duel-map Nightmare numbers were wrong)
+
+Found while setting the Nightmare stand-in against the real scores. In the sparring games on Blood Run and Aerowalk
+(four each, last night) Bobby **stood still 37 to 39% of his time alive**, a movement key down in 76 to 88% of it, in
+spells of up to 45 s at a few places; his view was *exactly* unchanged in 52% of the frames. On arena1: 12% standing,
+no spell over a second. In the simulator the same network stands 10 to 11% and next to never for 3 s; in the
+free-for-all games on the public server there is no such spell either.
+**Cause** (`DUEL_AIMDUMP`, a frame-by-frame record of what became of his mouse output): in the frozen frames the game had
+run no new command for him. His input rode on the game AI's own command, which the engine issues once per server
+loop: one frame late always, and not at all in the extra game frames a server runs to catch up when it falls behind. In
+those frames the game replayed his last command. The sparring games ran beside a training that held every core (two
+containers at once for the duel maps), so the servers were behind half of the time.
+**Fix** (`minqlx/botctl.c`, `hooks.c`): a bot under full control is commanded by us once per game frame, right after the
+plugins have set that frame's input (`Botctl_BeforeFrame`); the game AI's command for him is not run. Same game, same
+load, after the fix: one command every 25 ms in 6,992 of 6,999 frames, standing 11% (no spell over 3 s), mean speed 238
+(140 to 194 before), score 1-5 with more damage dealt than taken (694 : 566). It also takes the hidden frame of delay
+out of his aim on every server.
+**What this changes in earlier entries:** every Nightmare score on Blood Run and Aerowalk measured beside a training (all of
+v11's; v12's so far none) is void, and v11's arena1 scores (measured the same way, a quarter of the frames unchanged) are
+too low by an unknown amount. v10's final 22-28 was measured after its training had ended. The audit's line that he
+scores next to nothing on the duel maps rested on these numbers. Rule from now on: real-server checks run only when no
+training is running, or are read with the share of unchanged frames beside them.
+
 ## 2026-10-08 — Audit of the model, the training pipeline, the plans and the results (owner's request)
 
 Checked in the code and the logs, not from memory. **Verified:**

@@ -111,6 +111,7 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - Docker on Windows: LF line endings (`.gitattributes`).
 - PPO's entropy bonus drowns small shaping costs: size any cost against it (see RESULTS 2026-10-04).
 - Do not restart the play-test server while the owner is on it; use a second container for tests.
+- Real-server checks (Nightmare sparring) only while no training runs: a server that falls behind distorts everything (until 2026-10-08 it even dropped the bot's commands: RESULTS 2026-10-08 13:00). `DUEL_AIMDUMP=1` (`AIMDUMP=1` for `tools/bench_arena.sh`) records what became of his mouse output per frame. The local image `qlbot` must be rebuilt (`docker build -t qlbot .`) after any change to `sim/`, `plugins/` or `minqlx/`: the sparring scripts do not do it.
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,
   `sv_warmupReadyPercentage` and `sv_maxclients` are latched (a map change applies them); `allready` cannot start a game

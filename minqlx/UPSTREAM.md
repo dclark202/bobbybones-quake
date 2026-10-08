@@ -9,3 +9,4 @@ Local changes (BobbyBones):
   `last_usercmd`, `item_states`.
 - `dllmain.c`: pattern-search `SV_ClientThink`. `hooks.c`: install the hook. `python_embed.c`: register the
   new functions. `Makefile`: build `botctl.c`.
+- 2026-10-08: `botctl.c` / `hooks.c`: bots under full control (`set_bot_input` with `set_bot_substeps`) are commanded once per game frame from `Botctl_BeforeFrame` (called in `My_G_RunFrame` after the frame dispatcher); the game AI's own command for such a bot is dropped. Before, the input rode on that command and was lost in a server's catch-up frames.

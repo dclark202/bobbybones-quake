@@ -8,6 +8,7 @@ extern SV_ClientThink_ptr SV_ClientThink;
 void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd);
 
 void Botctl_AfterFrame(void);
+void Botctl_BeforeFrame(int time);
 
 PyObject* PyMinqlx_SetBotInput(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ClearBotInput(PyObject* self, PyObject* args);
