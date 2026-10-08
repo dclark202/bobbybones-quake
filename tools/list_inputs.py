@@ -189,6 +189,8 @@ add("self", "focus left", "sharp tracking for 2 s with an enemy in view, then sl
 # ---- routes (2026-10-06): the way along the floor, as a player who knows the map has it
 for it_ in ("mega health", "red armor", "rocket launcher", "railgun", "lightning gun"):
     add("routes", "{}: travel time".format(it_), "along the floor from where he stands (zero on maps without a walking map)", "seconds / 10, capped at 2", "v7")
+for it_ in ("yellow armor", "second yellow armor"):
+    add("routes", "{}: travel time".format(it_), "along the floor from where he stands (zero where the map has none)", "seconds / 10, capped at 2", "v13")
 # ---- the mouse pad and hearing (2026-10-06)
 N_BEFORE = len(rows)                                     # (in the group network the "more enemies" block sits here)
 add("own hands", "hand on the mouse pad", "from the left edge to the right edge; 240 degrees of turning across", "-1 to 1", "v7")
@@ -239,6 +241,8 @@ for k in range(16):
     add("map reader", "the enemy's last known cell: reading {}".format(k), "the same for where the enemy was last seen or heard (zero after 5 s)", "about -2 to 2", "v9")
 for nm in ("general", "rockets", "rail", "lightning"):   # ---- playing styles (2026-10-08, v12)
     add("style", "playing style: {}".format(nm), "the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of", "0 or 1", "v12")
+for nm in ("the yellow armor", "the second yellow armor"):   # ---- v13
+    add("intention", "going for {}".format(nm), "his own choice, read once a second and held", "0 or 1", "v13")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

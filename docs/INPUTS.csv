@@ -330,159 +330,163 @@ index,group,input,meaning,scale,added in
 328,routes,rocket launcher: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
 329,routes,railgun: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
 330,routes,lightning gun: travel time,along the floor from where he stands (zero on maps without a walking map),"seconds / 10, capped at 2",v7
-331,more enemies,second enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
-332,more enemies,second enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
-333,more enemies,second enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
-334,more enemies,second enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
-335,more enemies,second enemy: direction sin,,sin,ffa (not trained yet)
-336,more enemies,second enemy: direction cos,,cos,ffa (not trained yet)
-337,more enemies,second enemy: direction up-down,,sin,ffa (not trained yet)
-338,more enemies,second enemy faces him,,cos,ffa (not trained yet)
-339,more enemies,second enemy holds rockets,only while in view,0 or 1,v9
-340,more enemies,second enemy holds rail,only while in view,0 or 1,v9
-341,more enemies,second enemy holds lightning,only while in view,0 or 1,v9
-342,more enemies,third enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
-343,more enemies,third enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
-344,more enemies,third enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
-345,more enemies,third enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
-346,more enemies,third enemy: direction sin,,sin,ffa (not trained yet)
-347,more enemies,third enemy: direction cos,,cos,ffa (not trained yet)
-348,more enemies,third enemy: direction up-down,,sin,ffa (not trained yet)
-349,more enemies,third enemy faces him,,cos,ffa (not trained yet)
-350,more enemies,third enemy holds rockets,only while in view,0 or 1,v9
-351,more enemies,third enemy holds rail,only while in view,0 or 1,v9
-352,more enemies,third enemy holds lightning,only while in view,0 or 1,v9
-353,more enemies,enemies in view,,count / 5,ffa (not trained yet)
-354,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)
-355,own hands,hand on the mouse pad,from the left edge to the right edge; 240 degrees of turning across,-1 to 1,v7
-356,own hands,mouse in the air,lifted to set it back in the middle: the view does not turn for 125 ms,0 or 1,v7
-357,hearing,sound just heard,"an enemy's running steps, jump, landing or shot within 1000 units, no line of sight needed",0 or 1,v7
-358,hearing,sound heard recently,fades,exp(-2 x seconds),v7
-359,hearing,direction of the sound: sin,"against his view, about 10 degrees rough; kept for 3 s",sin,v7
-360,hearing,direction of the sound: cos,,cos,v7
-361,hearing,above or below,height of the sound against his own,"units / 200, between -1.5 and 1.5",v7
-362,hearing,loudness,"1 next to him, 0 at the edge of earshot",0 to 1,v7
-363,hearing,coming or going,positive: the gap is closing,"units/s / 400, between -1.5 and 1.5",v7
-364,hearing,railgun hum,an enemy within 500 units holds a railgun (heard even when he stands still),0 or 1,v7
-365,hearing,lightning gun hum,an enemy within 500 units holds a lightning gun,0 or 1,v7
-366,hazards,"lava at 0 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-367,hazards,"lava at 45 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-368,hazards,"lava at 90 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-369,hazards,"lava at 135 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-370,hazards,"lava at 180 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-371,hazards,"lava at 225 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-372,hazards,"lava at 270 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-373,hazards,"lava at 315 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
-374,hazards,"deadly drop at 0 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-375,hazards,"deadly drop at 45 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-376,hazards,"deadly drop at 90 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-377,hazards,"deadly drop at 135 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-378,hazards,"deadly drop at 180 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-379,hazards,"deadly drop at 225 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-380,hazards,"deadly drop at 270 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-381,hazards,"deadly drop at 315 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-382,hazards,"lava at 0 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-383,hazards,"lava at 45 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-384,hazards,"lava at 90 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-385,hazards,"lava at 135 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-386,hazards,"lava at 180 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-387,hazards,"lava at 225 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-388,hazards,"lava at 270 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-389,hazards,"lava at 315 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
-390,hazards,"deadly drop at 0 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-391,hazards,"deadly drop at 45 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-392,hazards,"deadly drop at 90 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-393,hazards,"deadly drop at 135 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-394,hazards,"deadly drop at 180 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-395,hazards,"deadly drop at 225 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-396,hazards,"deadly drop at 270 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-397,hazards,"deadly drop at 315 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
-398,enemy,last known speed: forward,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
-399,enemy,last known speed: left,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
-400,enemy,last known speed: up,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
-401,place,where the nearest jump pad lands: forward,,units / 1000,v7
-402,place,where the nearest jump pad lands: left,,units / 1000,v7
-403,place,where the nearest jump pad lands: up,,units / 1000,v7
-404,projectiles,his own nearest projectile: position forward,,units / 1000,v7
-405,projectiles,his own nearest projectile: position left,,units / 1000,v7
-406,projectiles,his own nearest projectile: position up,,units / 1000,v7
-407,projectiles,his own nearest projectile: velocity forward,,units/s / 1000,v7
-408,projectiles,his own nearest projectile: velocity left,,units/s / 1000,v7
-409,projectiles,his own nearest projectile: velocity up,,units/s / 1000,v7
-410,projectiles,his own nearest projectile: is a rocket,,0 or 1,v7
-411,projectiles,his own nearest projectile: is a grenade,,0 or 1,v7
-412,projectiles,his own nearest projectile: is a plasma,,0 or 1,v7
-413,projectiles,his own second nearest projectile: position forward,,units / 1000,v7
-414,projectiles,his own second nearest projectile: position left,,units / 1000,v7
-415,projectiles,his own second nearest projectile: position up,,units / 1000,v7
-416,projectiles,his own second nearest projectile: velocity forward,,units/s / 1000,v7
-417,projectiles,his own second nearest projectile: velocity left,,units/s / 1000,v7
-418,projectiles,his own second nearest projectile: velocity up,,units/s / 1000,v7
-419,projectiles,his own second nearest projectile: is a rocket,,0 or 1,v7
-420,projectiles,his own second nearest projectile: is a grenade,,0 or 1,v7
-421,projectiles,his own second nearest projectile: is a plasma,,0 or 1,v7
-422,sounds,the mega health came back,"the respawn sound, within 1200 units",exp(-seconds),v9
-423,sounds,the red armor came back,"the respawn sound, within 1200 units",exp(-seconds),v9
-424,sounds,a weapon came back,"the respawn sound, within 1200 units",exp(-seconds),v9
-425,sounds,a small health or armor came back,"the respawn sound, within 1200 units",exp(-seconds),v9
-426,place,spawn point 1: forward,the four nearest places where players appear,units / 1000,v9
-427,place,spawn point 1: left,the four nearest places where players appear,units / 1000,v9
-428,place,spawn point 1: up,the four nearest places where players appear,units / 1000,v9
-429,place,spawn point 2: forward,the four nearest places where players appear,units / 1000,v9
-430,place,spawn point 2: left,the four nearest places where players appear,units / 1000,v9
-431,place,spawn point 2: up,the four nearest places where players appear,units / 1000,v9
-432,place,spawn point 3: forward,the four nearest places where players appear,units / 1000,v9
-433,place,spawn point 3: left,the four nearest places where players appear,units / 1000,v9
-434,place,spawn point 3: up,the four nearest places where players appear,units / 1000,v9
-435,place,spawn point 4: forward,the four nearest places where players appear,units / 1000,v9
-436,place,spawn point 4: left,the four nearest places where players appear,units / 1000,v9
-437,place,spawn point 4: up,the four nearest places where players appear,units / 1000,v9
-438,intention,chosen way: travel time,seconds along the floor to the item he has chosen to go for (zero with none chosen),"seconds / 10, capped at 2",v8
-439,intention,chosen way: next step forward,where the way there leads next,"units / 200, between -1 and 1",v8
-440,intention,chosen way: next step left,where the way there leads next,"units / 200, between -1 and 1",v8
-441,intention,chosen way: next step up,where the way there leads next,"units / 200, between -1 and 1",v8
-442,intention,chosen item is up,,0 or 1,v8
-443,intention,chosen item comes back in,,"seconds / 30, capped at 2",v8
-444,intention,going for none,"his own choice, read once a second and held",0 or 1,v8
-445,intention,going for the mega health,"his own choice, read once a second and held",0 or 1,v8
-446,intention,going for the red armor,"his own choice, read once a second and held",0 or 1,v8
-447,intention,going for the rocket launcher,"his own choice, read once a second and held",0 or 1,v8
-448,intention,going for the railgun,"his own choice, read once a second and held",0 or 1,v8
-449,intention,going for the lightning gun,"his own choice, read once a second and held",0 or 1,v8
-450,intention,seconds since chosen,,"seconds / 10, capped at 2",v8
-451,map reader,his own cell: reading 0,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-452,map reader,his own cell: reading 1,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-453,map reader,his own cell: reading 2,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-454,map reader,his own cell: reading 3,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-455,map reader,his own cell: reading 4,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-456,map reader,his own cell: reading 5,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-457,map reader,his own cell: reading 6,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-458,map reader,his own cell: reading 7,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-459,map reader,his own cell: reading 8,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-460,map reader,his own cell: reading 9,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-461,map reader,his own cell: reading 10,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-462,map reader,his own cell: reading 11,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-463,map reader,his own cell: reading 12,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-464,map reader,his own cell: reading 13,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-465,map reader,his own cell: reading 14,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-466,map reader,his own cell: reading 15,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
-467,map reader,the enemy's last known cell: reading 0,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-468,map reader,the enemy's last known cell: reading 1,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-469,map reader,the enemy's last known cell: reading 2,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-470,map reader,the enemy's last known cell: reading 3,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-471,map reader,the enemy's last known cell: reading 4,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-472,map reader,the enemy's last known cell: reading 5,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-473,map reader,the enemy's last known cell: reading 6,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-474,map reader,the enemy's last known cell: reading 7,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-475,map reader,the enemy's last known cell: reading 8,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-476,map reader,the enemy's last known cell: reading 9,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-477,map reader,the enemy's last known cell: reading 10,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-478,map reader,the enemy's last known cell: reading 11,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-479,map reader,the enemy's last known cell: reading 12,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-480,map reader,the enemy's last known cell: reading 13,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-481,map reader,the enemy's last known cell: reading 14,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-482,map reader,the enemy's last known cell: reading 15,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-483,style,playing style: general,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
-484,style,playing style: rockets,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
-485,style,playing style: rail,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
-486,style,playing style: lightning,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
+331,routes,yellow armor: travel time,along the floor from where he stands (zero where the map has none),"seconds / 10, capped at 2",v13
+332,routes,second yellow armor: travel time,along the floor from where he stands (zero where the map has none),"seconds / 10, capped at 2",v13
+333,more enemies,second enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+334,more enemies,second enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+335,more enemies,second enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+336,more enemies,second enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+337,more enemies,second enemy: direction sin,,sin,ffa (not trained yet)
+338,more enemies,second enemy: direction cos,,cos,ffa (not trained yet)
+339,more enemies,second enemy: direction up-down,,sin,ffa (not trained yet)
+340,more enemies,second enemy faces him,,cos,ffa (not trained yet)
+341,more enemies,second enemy holds rockets,only while in view,0 or 1,v9
+342,more enemies,second enemy holds rail,only while in view,0 or 1,v9
+343,more enemies,second enemy holds lightning,only while in view,0 or 1,v9
+344,more enemies,third enemy in view,"another noticed enemy besides the one he attends to, nearest his crosshair first",0 or 1,ffa (not trained yet)
+345,more enemies,third enemy: position forward,as old as his reaction time,units / 1000,ffa (not trained yet)
+346,more enemies,third enemy: position left,as old as his reaction time,units / 1000,ffa (not trained yet)
+347,more enemies,third enemy: position up,as old as his reaction time,units / 1000,ffa (not trained yet)
+348,more enemies,third enemy: direction sin,,sin,ffa (not trained yet)
+349,more enemies,third enemy: direction cos,,cos,ffa (not trained yet)
+350,more enemies,third enemy: direction up-down,,sin,ffa (not trained yet)
+351,more enemies,third enemy faces him,,cos,ffa (not trained yet)
+352,more enemies,third enemy holds rockets,only while in view,0 or 1,v9
+353,more enemies,third enemy holds rail,only while in view,0 or 1,v9
+354,more enemies,third enemy holds lightning,only while in view,0 or 1,v9
+355,more enemies,enemies in view,,count / 5,ffa (not trained yet)
+356,more enemies,players beyond two,,(players - 2) / 4,ffa (not trained yet)
+357,own hands,hand on the mouse pad,from the left edge to the right edge; 240 degrees of turning across,-1 to 1,v7
+358,own hands,mouse in the air,lifted to set it back in the middle: the view does not turn for 125 ms,0 or 1,v7
+359,hearing,sound just heard,"an enemy's running steps, jump, landing or shot within 1000 units, no line of sight needed",0 or 1,v7
+360,hearing,sound heard recently,fades,exp(-2 x seconds),v7
+361,hearing,direction of the sound: sin,"against his view, about 10 degrees rough; kept for 3 s",sin,v7
+362,hearing,direction of the sound: cos,,cos,v7
+363,hearing,above or below,height of the sound against his own,"units / 200, between -1.5 and 1.5",v7
+364,hearing,loudness,"1 next to him, 0 at the edge of earshot",0 to 1,v7
+365,hearing,coming or going,positive: the gap is closing,"units/s / 400, between -1.5 and 1.5",v7
+366,hearing,railgun hum,an enemy within 500 units holds a railgun (heard even when he stands still),0 or 1,v7
+367,hearing,lightning gun hum,an enemy within 500 units holds a lightning gun,0 or 1,v7
+368,hazards,"lava at 0 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+369,hazards,"lava at 45 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+370,hazards,"lava at 90 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+371,hazards,"lava at 135 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+372,hazards,"lava at 180 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+373,hazards,"lava at 225 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+374,hazards,"lava at 270 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+375,hazards,"lava at 315 deg, 96 units",the floor there burns; only inside his field of view,0 or 1,v7
+376,hazards,"deadly drop at 0 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+377,hazards,"deadly drop at 45 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+378,hazards,"deadly drop at 90 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+379,hazards,"deadly drop at 135 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+380,hazards,"deadly drop at 180 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+381,hazards,"deadly drop at 225 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+382,hazards,"deadly drop at 270 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+383,hazards,"deadly drop at 315 deg, 96 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+384,hazards,"lava at 0 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+385,hazards,"lava at 45 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+386,hazards,"lava at 90 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+387,hazards,"lava at 135 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+388,hazards,"lava at 180 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+389,hazards,"lava at 225 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+390,hazards,"lava at 270 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+391,hazards,"lava at 315 deg, 224 units",the floor there burns; only inside his field of view,0 or 1,v7
+392,hazards,"deadly drop at 0 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+393,hazards,"deadly drop at 45 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+394,hazards,"deadly drop at 90 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+395,hazards,"deadly drop at 135 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+396,hazards,"deadly drop at 180 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+397,hazards,"deadly drop at 225 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+398,hazards,"deadly drop at 270 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+399,hazards,"deadly drop at 315 deg, 224 units",nothing there but a fall that kills; only inside his field of view,0 or 1,v7
+400,enemy,last known speed: forward,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+401,enemy,last known speed: left,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+402,enemy,last known speed: up,"his speed and heading when last seen, kept for 5 s",units/s / 400,v7
+403,place,where the nearest jump pad lands: forward,,units / 1000,v7
+404,place,where the nearest jump pad lands: left,,units / 1000,v7
+405,place,where the nearest jump pad lands: up,,units / 1000,v7
+406,projectiles,his own nearest projectile: position forward,,units / 1000,v7
+407,projectiles,his own nearest projectile: position left,,units / 1000,v7
+408,projectiles,his own nearest projectile: position up,,units / 1000,v7
+409,projectiles,his own nearest projectile: velocity forward,,units/s / 1000,v7
+410,projectiles,his own nearest projectile: velocity left,,units/s / 1000,v7
+411,projectiles,his own nearest projectile: velocity up,,units/s / 1000,v7
+412,projectiles,his own nearest projectile: is a rocket,,0 or 1,v7
+413,projectiles,his own nearest projectile: is a grenade,,0 or 1,v7
+414,projectiles,his own nearest projectile: is a plasma,,0 or 1,v7
+415,projectiles,his own second nearest projectile: position forward,,units / 1000,v7
+416,projectiles,his own second nearest projectile: position left,,units / 1000,v7
+417,projectiles,his own second nearest projectile: position up,,units / 1000,v7
+418,projectiles,his own second nearest projectile: velocity forward,,units/s / 1000,v7
+419,projectiles,his own second nearest projectile: velocity left,,units/s / 1000,v7
+420,projectiles,his own second nearest projectile: velocity up,,units/s / 1000,v7
+421,projectiles,his own second nearest projectile: is a rocket,,0 or 1,v7
+422,projectiles,his own second nearest projectile: is a grenade,,0 or 1,v7
+423,projectiles,his own second nearest projectile: is a plasma,,0 or 1,v7
+424,sounds,the mega health came back,"the respawn sound, within 1200 units",exp(-seconds),v9
+425,sounds,the red armor came back,"the respawn sound, within 1200 units",exp(-seconds),v9
+426,sounds,a weapon came back,"the respawn sound, within 1200 units",exp(-seconds),v9
+427,sounds,a small health or armor came back,"the respawn sound, within 1200 units",exp(-seconds),v9
+428,place,spawn point 1: forward,the four nearest places where players appear,units / 1000,v9
+429,place,spawn point 1: left,the four nearest places where players appear,units / 1000,v9
+430,place,spawn point 1: up,the four nearest places where players appear,units / 1000,v9
+431,place,spawn point 2: forward,the four nearest places where players appear,units / 1000,v9
+432,place,spawn point 2: left,the four nearest places where players appear,units / 1000,v9
+433,place,spawn point 2: up,the four nearest places where players appear,units / 1000,v9
+434,place,spawn point 3: forward,the four nearest places where players appear,units / 1000,v9
+435,place,spawn point 3: left,the four nearest places where players appear,units / 1000,v9
+436,place,spawn point 3: up,the four nearest places where players appear,units / 1000,v9
+437,place,spawn point 4: forward,the four nearest places where players appear,units / 1000,v9
+438,place,spawn point 4: left,the four nearest places where players appear,units / 1000,v9
+439,place,spawn point 4: up,the four nearest places where players appear,units / 1000,v9
+440,intention,chosen way: travel time,seconds along the floor to the item he has chosen to go for (zero with none chosen),"seconds / 10, capped at 2",v8
+441,intention,chosen way: next step forward,where the way there leads next,"units / 200, between -1 and 1",v8
+442,intention,chosen way: next step left,where the way there leads next,"units / 200, between -1 and 1",v8
+443,intention,chosen way: next step up,where the way there leads next,"units / 200, between -1 and 1",v8
+444,intention,chosen item is up,,0 or 1,v8
+445,intention,chosen item comes back in,,"seconds / 30, capped at 2",v8
+446,intention,going for none,"his own choice, read once a second and held",0 or 1,v8
+447,intention,going for the mega health,"his own choice, read once a second and held",0 or 1,v8
+448,intention,going for the red armor,"his own choice, read once a second and held",0 or 1,v8
+449,intention,going for the rocket launcher,"his own choice, read once a second and held",0 or 1,v8
+450,intention,going for the railgun,"his own choice, read once a second and held",0 or 1,v8
+451,intention,going for the lightning gun,"his own choice, read once a second and held",0 or 1,v8
+452,intention,seconds since chosen,,"seconds / 10, capped at 2",v8
+453,map reader,his own cell: reading 0,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+454,map reader,his own cell: reading 1,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+455,map reader,his own cell: reading 2,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+456,map reader,his own cell: reading 3,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+457,map reader,his own cell: reading 4,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+458,map reader,his own cell: reading 5,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+459,map reader,his own cell: reading 6,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+460,map reader,his own cell: reading 7,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+461,map reader,his own cell: reading 8,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+462,map reader,his own cell: reading 9,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+463,map reader,his own cell: reading 10,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+464,map reader,his own cell: reading 11,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+465,map reader,his own cell: reading 12,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+466,map reader,his own cell: reading 13,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+467,map reader,his own cell: reading 14,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+468,map reader,his own cell: reading 15,"what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps",about -2 to 2,v9
+469,map reader,the enemy's last known cell: reading 0,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+470,map reader,the enemy's last known cell: reading 1,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+471,map reader,the enemy's last known cell: reading 2,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+472,map reader,the enemy's last known cell: reading 3,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+473,map reader,the enemy's last known cell: reading 4,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+474,map reader,the enemy's last known cell: reading 5,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+475,map reader,the enemy's last known cell: reading 6,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+476,map reader,the enemy's last known cell: reading 7,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+477,map reader,the enemy's last known cell: reading 8,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+478,map reader,the enemy's last known cell: reading 9,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+479,map reader,the enemy's last known cell: reading 10,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+480,map reader,the enemy's last known cell: reading 11,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+481,map reader,the enemy's last known cell: reading 12,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+482,map reader,the enemy's last known cell: reading 13,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+483,map reader,the enemy's last known cell: reading 14,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+484,map reader,the enemy's last known cell: reading 15,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
+485,style,playing style: general,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
+486,style,playing style: rockets,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
+487,style,playing style: rail,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
+488,style,playing style: lightning,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
+489,intention,going for the yellow armor,"his own choice, read once a second and held",0 or 1,v13
+490,intention,going for the second yellow armor,"his own choice, read once a second and held",0 or 1,v13

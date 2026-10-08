@@ -212,7 +212,7 @@ LOADOUTS = {   # weapons owned at spawn, ammo
 # gun. Changing it costs INTENT_SWITCH. Travel toward the chosen item pays (env.intent_seek per second of the way
 # gained, while the item is up or comes up before he gets there), taking it pays env.item_reward. The choice is an
 # input back to him, with the way to it, so "follow the arrow" is easy and "which arrow" is the decision.
-INTENTS = ("none", "MH", "RA", "RL", "RG", "LG")
+INTENTS = ("none", "MH", "RA", "RL", "RG", "LG", "YA", "YA2")   # (v13: the yellow armors, up to two a map; the pros take them most of all)
 INTENT_EVERY, INTENT_SWITCH = 40, 0.02
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
@@ -252,11 +252,17 @@ STYLE_P = float(os.environ.get("STYLE_P") or 0.0)
 PRO_WEAPON = float(os.environ.get("PRO_WEAPON") or 0.0) > 0
 PRO_WEAPON_TIE = 0.10
 SPAWN_TEACH = float(os.environ.get("SPAWN_TEACH") or 0.0) > 0
+#   PRO_ITEMS=1     the item rule (the intention head's teacher, and the walking teacher's target) in the pros' order:
+#                   with no big weapon the nearest one that is there, rockets when it is within PRO_RL_EDGE seconds of
+#                   the nearest (half of their first weapons are rockets); armed, the nearest of yellow armor, red armor
+#                   and mega that is there and that he can still use; else the nearest big weapon he lacks.
+PRO_ITEMS = float(os.environ.get("PRO_ITEMS") or 0.0) > 0
+PRO_RL_EDGE = 1.5
 STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
 STYLE_BAND = float(os.environ.get("STYLE_BAND") or 0.5)
 STACK_TEACH_QUIET = 1.5
 INTENT_HOLD = float(os.environ.get("INTENT_HOLD") or 3.0)     # (v11: longer, with a release when the item is gone, see intend)
-INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
+INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25, 0.5, 0.5)
 CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
                                                        # trips ending in death the long ones (mega, red) lost money and he chose the
                                                        # launcher 92% of the time (v9 night, 2026-10-07). Now only a trip given up is clawed back (owner)
@@ -287,7 +293,7 @@ N_MEM = 4 + len(MEM_COLS) + 3 + 1
 # Routes (2026-10-06): the way to the mega health, the red armor and the three main weapons along the floor, as a
 # player who knows the map has it: seconds of travel 1, and where the next step of the way lies 3, for each. The
 # straight line he had before points through walls, and to the red armor of arena1 across a drop that kills.
-ROUTE_ITEMS = ("MH", "RA", "RL", "RG", "LG")
+ROUTE_ITEMS = ("MH", "RA", "RL", "RG", "LG", "YA", "YA2")
 N_ROUTE = len(ROUTE_ITEMS)                               # v8: seconds only; the chosen route has its direction
 # The mouse pad (2026-10-06): the view is turned by a mouse on a pad of finite width. PAD_DEG degrees of turning
 # take the hand from one edge to the other; at the edge it cannot turn further that way: the mouse has to be lifted
@@ -324,7 +330,7 @@ N_DENSE = len(DENSE_YAW) * len(DENSE_PITCH) if os.environ.get("DENSE_VIEW") == "
 # sim/map_reader.py, cached per map in data/maps/cells_<map>.npy; zeros without the file). Also new: item respawn
 # sounds (mega, red, a weapon, a small health or armor came back within earshot: 4) and the four nearest spawn
 # points (where he is from each: 12).
-N_INTENT = 13 + 32 + 4                                     # (+ 4 since v12: his playing style, see STYLES)
+N_INTENT = 13 + 32 + 4 + 2                                 # (+ 4 since v12: his playing style, see STYLES; + 2 since v13: going for a yellow armor)
 N_V9 = 4 + 12
 MAX_CELLS, CELL_SIZE = 16384, 64.0                        # enough cells for the big maps (v9; the table is a file, not weights)
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT
@@ -676,6 +682,8 @@ class DuelEnv:
             pos_ = {}
             for k_, d_ in enumerate(self.item_def):
                 lab_ = d_[4] if d_[4] in ROUTE_ITEMS else (WEAPONS[int(d_[1])].upper() if d_[0] == "wp" else None)
+                if lab_ == "YA" and "YA" in pos_ and "YA2" not in pos_:
+                    lab_ = "YA2"                             # the second yellow armor of the map
                 if lab_ in ROUTE_ITEMS and lab_ not in pos_:
                     pos_[lab_] = self.item_pos[k_]
             self.route_goal = [lab_ for lab_ in ROUTE_ITEMS if lab_ in pos_]
@@ -1461,7 +1469,7 @@ class DuelEnv:
         """the inputs of N_INTENT"""
         n = self.n
         out = np.zeros((n, N_INTENT), np.float32)
-        out[np.arange(n), N_INTENT - len(STYLES) + self.style] = 1.0   # his playing style
+        out[np.arange(n), 45 + self.style] = 1.0            # his playing style
         R = self.route
         k = self.intent
         if R is not None:
@@ -1480,7 +1488,9 @@ class DuelEnv:
             it = np.array(self.route_item)[g]
             out[:, 4] = self.item_up[grp, it] * valid
             out[:, 5] = np.minimum(self.item_t[grp, it] / 30.0, 2.0) * valid
-        out[:, 6:12] = np.eye(len(INTENTS), dtype=np.float32)[k]
+        oh_ = np.eye(len(INTENTS), dtype=np.float32)[k]
+        out[:, 6:12] = oh_[:, :6]
+        out[:, 49:51] = oh_[:, 6:8]                         # (the yellow armors, added after the style inputs)
         out[:, 12] = np.minimum(self.intent_t / 10.0, 2.0)
         if self.cell_table is not None:                     # what the map reader says about his cell and the enemy's
             out[:, 13:29] = self.cell_table[self._cell(pos, np.ones(n, bool)).astype(np.int64)]
@@ -1537,6 +1547,28 @@ class DuelEnv:
                 want = (out == 0) & ~self.has[:, WEAPONS.index(lab.lower())] & self.item_up[grp, it] & (t < best_t)
                 best_t = np.where(want, t, best_t)
                 out = np.where(want, INTENTS.index(lab), out)
+        if PRO_ITEMS:                                        # the pros' order (see PRO_ITEMS)
+            out = np.zeros(n, np.int64)
+            bare = self.has[:, [RL, RG, LG]].sum(1) == 0
+            best_t = np.full(n, 1e9, np.float32)
+            for gi, lab in enumerate(self.route_goal):       # armed: armor and health he can still use
+                t = R.T[gi, node]
+                it = self.route_item[gi]
+                soon = (self.item_up[grp, it] | (self.item_t[grp, it] < t + 3.0)) & (t < 1e8)
+                use = (self.armor < 150.0) if lab in ("YA", "YA2") else (self.armor < 175.0) if lab == "RA" else \
+                    (self.hp < 175.0) if lab == "MH" else np.zeros(n, bool)
+                want = ~bare & use & soon & (t < best_t)
+                best_t = np.where(want, t, best_t)
+                out = np.where(want, INTENTS.index(lab), out)
+            best_t = np.full(n, 1e9, np.float32)
+            for gi, lab in enumerate(self.route_goal):       # a big weapon: first of all when bare, else when nothing above
+                if lab in ("RL", "RG", "LG"):
+                    t = R.T[gi, node]
+                    it = self.route_item[gi]
+                    te = t - (PRO_RL_EDGE if lab == "RL" else 0.0)
+                    want = (bare | (out == 0)) & ~self.has[:, WEAPONS.index(lab.lower())] & self.item_up[grp, it] & (t < 1e8) & (te < best_t)
+                    best_t = np.where(want, te, best_t)
+                    out = np.where(want, INTENTS.index(lab), out)
         sw = STYLE_W[self.style]                             # a preferred weapon he lacks comes first
         for gi, lab in enumerate(self.route_goal):
             if lab in ("RL", "RG", "LG"):
@@ -2682,6 +2714,8 @@ class DuelEnv:
                     # has already (ammo) as nothing, so standing on a weapon's spot earns nothing
                     reward[i] += self.item_reward * (gain if kind in ("hp", "ar") else 25.0 if new_wp else 0.0) / 100.0
                     want_ = lab if lab in ("MH", "RA") else WEAPONS[int(val)].upper() if kind == "wp" else ""
+                    if lab == "YA" and it in self.route_item:
+                        want_ = self.route_goal[self.route_item.index(it)]    # YA or YA2
                     if want_ in INTENTS and self.intent[i] == INTENTS.index(want_) and not self.intent_done[i]:
                         self.intent_done[i] = True                       # the trip he chose is complete
                         self.stats["intent_trips"][1] += 1
