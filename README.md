@@ -1,6 +1,7 @@
 # bobbybones-quake
 
-Play against him in Quake Live: join server `doppz's bot arena | duel & FFA | chicago`, or `connect 64.177.125.38:27970`.
+## Play against him in Quake Live
+Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal).
 
 **BobbyBones** is a Quake Live bot that learns to play from scratch. Nothing about how to aim, move or
 fight is hand-coded: a neural network plays millions of fights against itself in a fast simulator of the game,
