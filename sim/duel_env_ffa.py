@@ -321,14 +321,21 @@ PRO_ROUTES = float(os.environ.get("PRO_ROUTES") or 0.0) > 0
 # was taken (he took it, or it was taken within earshot, HEAR_EVT; or he saw its place empty, then counted as taken
 # half its time ago); seeing it there clears that. Not known = thought to be there. The owner plays without item timers.
 ITEM_BELIEF = float(os.environ.get("ITEM_BELIEF") or 0.0) > 0
-# SHOT_COST (owner, 2026-10-08: "ammo is a scarce resource ... that's the right behavior to model"): every machine-gun
-# bullet, heavy machine-gun bullet and lightning cell he fires costs this share of what its hit would earn (SHOT_COST x
-# the damage reward x the weapon's damage), so a shot pays only from that chance to hit on. 0.10 = from one hit in ten.
-# In real games he fired 53% of the time an enemy was in view (people 24%) and 0.2 s after one appeared (0.5 s), at a
-# lower hit rate than the owner's. Rockets, rail, grenades, plasma and the shotgun are left alone (spam and prefire
-# are play there, and their reload already rations them). 0 = off.
+# SHOT_COST (owner, 2026-10-08: "ammo is a scarce resource ... It's a learned behavior to be 'spam happy' or need to
+# conserve ammo"): every shot he fires with a gun that uses ammo has a price: this share of what its hit would earn
+# (SHOT_COST x the damage reward x the shot's full damage), times how scarce that ammo is for him at that moment:
+#   the map    the seconds of fire the map feeds that gun per minute (one pickup of the gun, or the spawn's bullets, and
+#              every box of its ammo once per its time): SHOT_REF_FIRE seconds = x1, half of that = x2 (held to 0.5 .. 2)
+#   the place  the seconds of the way from where he stands to the nearest place that gun's ammo lies (the gun or a box):
+#              SHOT_NEAR_S = x1 (0.5 .. 1.5)
+#   his belt   a whole pickup's worth or more left = x0.5, half of one = x1, the last shots = x1.5
+# and the three together held to 0.25 .. 3. With 0.10 and a factor of 1 a shot pays from one hit in ten on. In real games
+# he fired 53% of the time an enemy was in view (people 24%) and 0.2 s after one appeared (0.5 s). 0 = off.
 SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
-SHOT_COST_W = np.array([MG, LG, HMG], np.int64)
+SHOT_REF_FIRE = 16.0
+SHOT_NEAR_S = 3.0
+SHOT_DMG = W_DMG * np.where(np.arange(NW) == SG, SG_PELLETS, 1).astype(np.float32)     # a whole shot's damage
+SHOT_UNIT = np.array([10, 10, 100, 100, 10, 10, 50, 50, 1], np.float32)                # one pickup's worth (the spawn's bullets)
 BELIEF_SEE = 1500.0                                    # an item's place is seen up to this far (as the item inputs)
 PRO_RL_EDGE = 1.5
 STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
@@ -425,6 +432,13 @@ ITEM_DEFS = {
     "ammo_pack": ("pack", 0, 40, 0, None),
 }
 PACK_AMMO = np.array([5, 5, 50, 50, 5, 5, 50, 50, 0], np.float32)
+# AMMO_PACKS=0: no universal ammo packs. The maps carry them next to the normal ammo boxes (7 on Blood Run, 6 on Aerowalk,
+# 4 on Lost World), but a duel server does not spawn them: plugins/itemlab.py listed every item of the real game on three
+# maps (2026-10-04) and there was none. With them the simulator feeds every gun two to three times the real game's ammo.
+# Default: as it was (every run up to v12 and the learning-rate test of 2026-10-08 had them).
+AMMO_PACKS = (os.environ.get("AMMO_PACKS") or "1") != "0"
+if not AMMO_PACKS:
+    del ITEM_DEFS["ammo_pack"]
 
 
 def _phi(x):
@@ -455,6 +469,7 @@ class RouteField:
             land = int(np.linalg.norm(self.nodes - np.asarray(d_, np.float32) + np.array([0, 0, 100.0], np.float32), axis=1).argmin())
             for a_ in on:
                 radj[land].append((int(a_), 1.2 + float(dx[a_]) / 320.0))
+        self.radj = radj
         w = np.array([1, 1, 2.0], np.float32)                 # vertical distance counts double
         self.lo = self.nodes.min(0) - 64.0
         dims = np.ceil((self.nodes.max(0) + 64.0 - self.lo) / self.CELL).astype(int)
@@ -534,6 +549,24 @@ class RouteField:
     def locate(self, pos):
         c = np.clip(((pos - self.lo) / self.CELL).astype(np.int64), 0, self.dims - 1)
         return self.table[c[:, 0], c[:, 1], c[:, 2]]
+
+    def nearest(self, points):
+        """seconds from every graph point to the nearest of these places (1e9 where there is no way)"""
+        import heapq
+        out = np.full(len(self.nodes), 1e9, np.float32)
+        pq = []
+        for b in sorted({int(b) for b in self.locate(np.asarray(points, np.float32).reshape(-1, 3))}):
+            out[b] = 0.0
+            pq.append((0.0, b))
+        while pq:
+            d, u = heapq.heappop(pq)
+            if d > out[u]:
+                continue
+            for v, c in self.radj[u]:
+                if d + c < out[v]:
+                    out[v] = d + c
+                    heapq.heappush(pq, (d + c, v))
+        return out
 
 
 class DuelEnv:
@@ -804,6 +837,10 @@ class DuelEnv:
                                     open_ = (self.route.T[g_] >= 1e8) & (tm_ < 1e8)
                                     self.route.T[g_] = np.where(open_, tm_, self.route.T[g_])
                         self.route.walk = walk_
+        self.shot_scarce = np.ones(NW, np.float32)          # SHOT_COST: how scarce each gun's ammo is on this map, and
+        self.shot_way = None                                # the seconds to its nearest ammo from every graph point
+        if SHOT_COST > 0:
+            self._shot_supply()
         self.flinch_on = True
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
@@ -905,7 +942,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0, shot_n=0, shot_fac=0.0,
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
                           wrule_frames=0, wrule_agree=0,
@@ -1587,6 +1624,28 @@ class DuelEnv:
             resp = float(self.item_def[it][2])
             bt = self.bel_t[sees, g]
             self.bel_t[sees, g] = np.where(there, 99.0, np.where(bt >= resp, resp / 2.0, bt))
+
+    def _shot_supply(self):
+        """SHOT_COST: how well this map feeds each gun, and where its ammo lies (see SHOT_COST)"""
+        units = np.zeros(NW, np.float32)                     # what the map gives per minute
+        units[MG] = LOADOUTS["mg"][1][MG]                    # the spawn's bullets
+        src = [[] for _ in range(NW)]
+        for k, d in enumerate(self.item_def):
+            if d[0] == "wp":
+                units[d[1]] += d[3]
+                src[d[1]].append(k)
+            elif d[0] == "am":
+                units[d[1]] += d[3] * 60.0 / d[2]
+                src[d[1]].append(k)
+            elif d[0] == "pack":
+                units += PACK_AMMO * 60.0 / d[2]
+                for w_ in range(NW - 1):
+                    src[w_].append(k)
+        self.shot_fire = units * W_REFIRE                    # seconds of fire per minute
+        self.shot_scarce = np.clip(SHOT_REF_FIRE / np.maximum(self.shot_fire, 1e-6), 0.5, 2.0).astype(np.float32)
+        if self.route is not None:
+            far = np.full(len(self.route.nodes), 1e9, np.float32)
+            self.shot_way = np.stack([self.route.nearest(self.item_pos[s_]) if s_ else far for s_ in src])
 
     def note_pickup(self, i, k):
         """player i took the mega health (k = 0) or the red armor (k = 1): he knows, and so do those in earshot"""
@@ -2736,11 +2795,19 @@ class DuelEnv:
         hum_ = (self.script == 0) & (self.hp > 0)
         self.stats["fire_vis"] += int((fire & self.visible & hum_).sum())
         self.stats["vis_frames_h"] += int((self.visible & hum_).sum())
-        if SHOT_COST > 0:                                    # ammo is scarce: a bullet or cell fired has its price (see SHOT_COST)
-            sc_ = use & (self.script == 0) & np.isin(self.weapon, SHOT_COST_W)
-            cost_ = SHOT_COST * self.dmg_reward * W_DMG[self.weapon]
-            reward -= np.where(sc_, cost_, 0.0)
-            self.stats["shot_cost"] += float(cost_[sc_].sum())
+        if SHOT_COST > 0:                                    # ammo is scarce: every shot has its price (see SHOT_COST)
+            sc_ = np.nonzero(use & (self.script == 0))[0]
+            if len(sc_):
+                w_ = self.weapon[sc_]
+                fac_ = self.shot_scarce[w_] * np.clip(1.5 - self.ammo[sc_, w_] / SHOT_UNIT[w_], 0.5, 1.5)
+                if self.shot_way is not None:
+                    fac_ = fac_ * np.clip(self.shot_way[w_, self.route.locate(s[sc_, :3])] / SHOT_NEAR_S, 0.5, 1.5)
+                fac_ = np.clip(fac_, 0.25, 3.0)
+                cost_ = SHOT_COST * self.dmg_reward * SHOT_DMG[w_] * fac_
+                reward[sc_] -= cost_
+                self.stats["shot_cost"] += float(cost_.sum())
+                self.stats["shot_n"] += len(sc_)
+                self.stats["shot_fac"] += float(fac_.sum())
         self.fire_q, self.fire_w = shoot, self.weapon.copy()
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
         self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,

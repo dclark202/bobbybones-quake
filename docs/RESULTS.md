@@ -5,6 +5,52 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 13:50 — The price of a shot for every gun (owner: "spam happy or need to conserve"), and ammo packs the real game does not have
+
+**Built (off by default; proposed for v13).** The owner (13:30): "shot cost should also be weapon dependent -- lg, rocket,
+rail ammo should be scaled by how much is on the map, location, etc. It's a learned behavior to be 'spam happy' or need to
+conserve ammo". `SHOT_COST` now prices every shot of every gun that uses ammo: the share (0.10) of what its hit earns, times
+
+- **the map**: the seconds of fire the map feeds that gun per minute (one pickup of the gun, or the spawn's bullets, and
+  every box of its ammo once per its 40 s); 16 s = x1, half of that = x2 (held to 0.5 to 2);
+- **the place**: the seconds of the way from where he stands to the nearest place that gun's ammo lies; 3 s = x1 (0.5 to 1.5);
+- **his belt**: a whole pickup's worth or more left = x0.5, half of one = x1, the last shots = x1.5;
+
+all together held to 0.25 to 3. He sees all three (his ammo, his place on the map, the map). Scripted players pay nothing.
+
+**Found while pricing: the simulator spawns ammo the real game does not.** The maps carry universal ammo packs next to the
+normal boxes (7 on Blood Run, 6 on Aerowalk, 4 on Lost World). The real duel server spawns none of them: `plugins/itemlab.py`
+walked every item the game had on three maps (2026-10-04) and there is no pack in its list. In the simulator each pack gives
+every gun he owns a box's worth every 40 s, so every run so far had two to three times the real game's ammo (rockets on
+Blood Run: 85 a minute against 32), and with the packs every gun sits at the cheapest price on all three duel maps.
+`AMMO_PACKS=0` removes them; the default is unchanged (v12 and today's learning-rate test have them). Still unmeasured: a
+weapon picked up when already owned (the simulator adds a whole pickup each time), B-136.
+
+**A shot pays from this chance to hit on** (share 0.10, no packs, at the map's median way to that ammo):
+
+| Map | Gun | Fire the map feeds, s/min | Belt full | Half a pickup | Last shots |
+|---|---|---|---|---|---|
+| Blood Run | rockets | 26 | 3% | 6% | 10% |
+| | rail | 26 | 4% | 8% | 13% |
+| | lightning | 9 | 14% | 27% | 30% |
+| | machine gun | 25 | 4% | 7% | 11% |
+| Aerowalk | rockets | 28 | 3% | 3% | 4% |
+| | rail | 15 | 5% | 9% | 14% |
+| | lightning | 13 | 4% | 8% | 11% |
+| | machine gun | 25 | 3% | 4% | 6% |
+| Lost World | rockets | 14 | 9% | 17% | 26% |
+| | lightning | 13 | 7% | 13% | 19% |
+| | machine gun | 18 | 7% | 14% | 21% |
+| the yard | rockets | 8 | 15% | 30% | 30% |
+| | rail | 15 | 6% | 12% | 19% |
+| | lightning | 5 | 10% | 21% | 30% |
+
+Whole table with shotgun, grenades and plasma: `docs/shot_prices.json` (`python tools/shot_prices.py`).
+
+**Checks.** With the switches off the rewards are the same to the bit as before the change (checksums over 1,200 frames on
+two maps); the group simulator is identical at two players (`tools/ffa_check.py`); with the price on, random play pays a mean
+factor of 0.47 on Blood Run, 0.74 on Lost World, 1.71 in the yard.
+
 ## 2026-10-08 13:35 — Public server: the per-frame control fix deployed (owner: "yes")
 
 Tested first in a local free-for-all with three Bobbys and the new control (`FFA_LOG_ALWAYS=1` logs frames with bots

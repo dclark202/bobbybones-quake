@@ -1,0 +1,263 @@
+{
+ "bloodrun": {
+  "rl": {
+   "fire_s_per_min": 26.0,
+   "map": 0.62,
+   "way_s": 3.1,
+   "place": 1.04,
+   "pays_from": [
+    0.032,
+    0.064,
+    0.096
+   ]
+  },
+  "rg": {
+   "fire_s_per_min": 26.2,
+   "map": 0.61,
+   "way_s": 4.1,
+   "place": 1.36,
+   "pays_from": [
+    0.042,
+    0.083,
+    0.125
+   ]
+  },
+  "lg": {
+   "fire_s_per_min": 8.8,
+   "map": 1.83,
+   "way_s": 4.6,
+   "place": 1.5,
+   "pays_from": [
+    0.137,
+    0.274,
+    0.3
+   ]
+  },
+  "mg": {
+   "fire_s_per_min": 25.0,
+   "map": 0.64,
+   "way_s": 3.4,
+   "place": 1.12,
+   "pays_from": [
+    0.036,
+    0.072,
+    0.108
+   ]
+  },
+  "sg": {
+   "fire_s_per_min": 25.0,
+   "map": 0.64,
+   "way_s": 3.0,
+   "place": 1.02,
+   "pays_from": [
+    0.033,
+    0.065,
+    0.098
+   ]
+  },
+  "gl": {
+   "fire_s_per_min": 14.0,
+   "map": 1.14,
+   "way_s": 3.9,
+   "place": 1.3,
+   "pays_from": [
+    0.074,
+    0.149,
+    0.223
+   ]
+  },
+  "pg": {
+   "fire_s_per_min": 12.5,
+   "map": 1.28,
+   "way_s": 3.0,
+   "place": 0.99,
+   "pays_from": [
+    0.064,
+    0.127,
+    0.191
+   ]
+  }
+ },
+ "aerowalk": {
+  "rl": {
+   "fire_s_per_min": 28.0,
+   "map": 0.57,
+   "way_s": 1.3,
+   "place": 0.5,
+   "pays_from": [
+    0.025,
+    0.029,
+    0.043
+   ]
+  },
+  "rg": {
+   "fire_s_per_min": 15.0,
+   "map": 1.07,
+   "way_s": 2.5,
+   "place": 0.85,
+   "pays_from": [
+    0.045,
+    0.091,
+    0.136
+   ]
+  },
+  "lg": {
+   "fire_s_per_min": 12.5,
+   "map": 1.28,
+   "way_s": 1.8,
+   "place": 0.6,
+   "pays_from": [
+    0.038,
+    0.076,
+    0.114
+   ]
+  },
+  "mg": {
+   "fire_s_per_min": 25.0,
+   "map": 0.64,
+   "way_s": 1.9,
+   "place": 0.63,
+   "pays_from": [
+    0.025,
+    0.041,
+    0.061
+   ]
+  },
+  "sg": {
+   "fire_s_per_min": 25.0,
+   "map": 0.64,
+   "way_s": 1.7,
+   "place": 0.58,
+   "pays_from": [
+    0.025,
+    0.037,
+    0.055
+   ]
+  },
+  "gl": {
+   "fire_s_per_min": 8.0,
+   "map": 2.0,
+   "way_s": 1.7,
+   "place": 0.57,
+   "pays_from": [
+    0.057,
+    0.115,
+    0.172
+   ]
+  }
+ },
+ "lostworld": {
+  "rl": {
+   "fire_s_per_min": 14.0,
+   "map": 1.14,
+   "way_s": 4.6,
+   "place": 1.5,
+   "pays_from": [
+    0.086,
+    0.171,
+    0.257
+   ]
+  },
+  "lg": {
+   "fire_s_per_min": 12.5,
+   "map": 1.28,
+   "way_s": 3.0,
+   "place": 1.01,
+   "pays_from": [
+    0.065,
+    0.129,
+    0.194
+   ]
+  },
+  "mg": {
+   "fire_s_per_min": 17.5,
+   "map": 0.91,
+   "way_s": 5.3,
+   "place": 1.5,
+   "pays_from": [
+    0.069,
+    0.137,
+    0.206
+   ]
+  },
+  "sg": {
+   "fire_s_per_min": 17.5,
+   "map": 0.91,
+   "way_s": 3.5,
+   "place": 1.17,
+   "pays_from": [
+    0.053,
+    0.107,
+    0.16
+   ]
+  },
+  "gl": {
+   "fire_s_per_min": 14.0,
+   "map": 1.14,
+   "way_s": 2.9,
+   "place": 0.95,
+   "pays_from": [
+    0.055,
+    0.109,
+    0.164
+   ]
+  },
+  "pg": {
+   "fire_s_per_min": 12.5,
+   "map": 1.28,
+   "way_s": 2.9,
+   "place": 0.98,
+   "pays_from": [
+    0.063,
+    0.126,
+    0.189
+   ]
+  }
+ },
+ "arena1": {
+  "rl": {
+   "fire_s_per_min": 8.0,
+   "map": 2.0,
+   "way_s": 4.8,
+   "place": 1.5,
+   "pays_from": [
+    0.15,
+    0.3,
+    0.3
+   ]
+  },
+  "rg": {
+   "fire_s_per_min": 15.0,
+   "map": 1.07,
+   "way_s": 3.5,
+   "place": 1.16,
+   "pays_from": [
+    0.062,
+    0.124,
+    0.185
+   ]
+  },
+  "lg": {
+   "fire_s_per_min": 5.0,
+   "map": 2.0,
+   "way_s": 3.1,
+   "place": 1.03,
+   "pays_from": [
+    0.103,
+    0.206,
+    0.3
+   ]
+  },
+  "mg": {
+   "fire_s_per_min": 10.0,
+   "map": 1.6,
+   "way_s": null,
+   "place": 1.5,
+   "pays_from": [
+    0.12,
+    0.24,
+    0.3
+   ]
+  }
+ }
+}
