@@ -85,11 +85,18 @@ def main():
         sd["cell.weight"] = torch.randn(E.MAX_CELLS, a.cell_dim) * 0.1
     sd["enc.0.weight"] = Wn
     old_dims, new_dims = tuple(int(x) for x in ck["action_dims"]), tuple(E.ACTION_DIMS)
-    assert new_dims[:len(old_dims)] == old_dims, (old_dims, new_dims)
+    # new heads are appended; the last old head may also have grown (v13: the intention, 6 -> 8 choices): its new
+    # choices start with zero weights and the lowest bias of the old ones, so they are rare until training wants them
+    nh = len(old_dims)
+    assert new_dims[:nh - 1] == old_dims[:-1] and new_dims[nh - 1] >= old_dims[-1], (old_dims, new_dims)
+    grown = new_dims[nh - 1] - old_dims[-1]
     extra = sum(new_dims) - sum(old_dims)
     if extra:
+        low = float(sd["pi.bias"][-old_dims[-1]:].min()) if grown else 0.0
+        add_b = torch.zeros(extra, dtype=sd["pi.bias"].dtype)
+        add_b[:grown] = low
         sd["pi.weight"] = torch.cat([sd["pi.weight"], torch.zeros(extra, sd["pi.weight"].shape[1], dtype=sd["pi.weight"].dtype)], 0)
-        sd["pi.bias"] = torch.cat([sd["pi.bias"], torch.zeros(extra, dtype=sd["pi.bias"].dtype)])
+        sd["pi.bias"] = torch.cat([sd["pi.bias"], add_b])
     ck["obs_mean"], ck["obs_var"] = mean, var
     ck["obs_dim"], ck["action_dims"] = E.OBS_DIM, new_dims
     ck["cells"], ck["cell_dim"] = (E.MAX_CELLS, a.cell_dim) if has_new_cell else (0, 0)
