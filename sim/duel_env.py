@@ -243,6 +243,15 @@ STYLE_W = np.array([-1, RL, RG, LG], np.int64)
 STYLE_LO = np.array([0.0, 60.0, 500.0, 150.0], np.float32)
 STYLE_HI = np.array([0.0, 300.0, 1e9, 700.0], np.float32)
 STYLE_P = float(os.environ.get("STYLE_P") or 0.0)
+# Seeds from the pro demos (owner, 2026-10-08; docs/PLAN.md "seeding his behavior from the pro demos"), off by default:
+#   PRO_WEAPON=1    the weapon teacher names the pros' first choice for the distance among the big weapons he owns
+#                   (sim/pro_seed.json, written from docs/pro_tables.json: per map, else all maps together); holding one
+#                   within PRO_WEAPON_TIE of the first choice is left alone. Replaces the hand-set distances (W_RULE_*).
+#   SPAWN_TEACH=1   the keys-only walking teacher (STACK_TEACH) also with an enemy in view while he holds no big weapon:
+#                   the pros have one 2.7 s after a spawn and fight half as much without (the view stays his own).
+PRO_WEAPON = float(os.environ.get("PRO_WEAPON") or 0.0) > 0
+PRO_WEAPON_TIE = 0.10
+SPAWN_TEACH = float(os.environ.get("SPAWN_TEACH") or 0.0) > 0
 STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
 STYLE_BAND = float(os.environ.get("STYLE_BAND") or 0.5)
 STACK_TEACH_QUIET = 1.5
@@ -520,6 +529,14 @@ class DuelEnv:
         self.fb = np.zeros((nn_, 4), np.float32)        # this frame: damage dealt, damage taken, direction it came from
         self.dmg_life = np.zeros(nn_, np.float32)       # damage dealt to the opponent during his current life
         name = os.path.splitext(os.path.basename(bsp))[0].lower()
+        self.w_table = None                                 # the pros' weapon by distance (PRO_WEAPON): (15, 3) rockets, rail, lightning
+        ps_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_seed.json")
+        if PRO_WEAPON and os.path.exists(ps_):
+            with open(ps_, encoding="utf-8") as f_:
+                tb_ = json.load(f_)
+            tb_ = tb_.get(name) or tb_.get("all")
+            if tb_:
+                self.w_table = np.array(tb_["weapon_by_100_units"], np.float32)
         self.map_id = MAP_IDS.index(name) if name in MAP_IDS else -1
         self.sc_style = 0                               # target movement: 0 random (training), else STYLES index
         self.close_band = (300.0, 700.0)                # distance of "close" spawns (test rooms set their own)
@@ -1166,8 +1183,11 @@ class DuelEnv:
             # Keys only, no label for the view, and only when no enemy was seen or heard for STACK_TEACH_QUIET seconds: the
             # first version (2026-10-08 00:39) also taught where to look whenever nobody was in view, at full weight, and
             # within an hour he had all but stopped shooting (fire 31% -> 7% of frames, frags a match-minute 4.8 -> 1.1).
+            quiet = ~self.visible & (self.seen_t > STACK_TEACH_QUIET)
+            if SPAWN_TEACH:                                  # the spawn routine: to the first weapon whoever is in view
+                quiet = quiet | (self.has[:, [RL, LG, RG]].sum(1) == 0)
             rj = np.nonzero((pk == NORMAL) & (self.run_k < 0) & (self.script == 0) & (self.hp > 0) & need
-                            & ~self.visible & (self.seen_t > STACK_TEACH_QUIET) & (self.intent_teach > 0))[0]
+                            & quiet & (self.intent_teach > 0))[0]
             self.stats["stack_teach_frames"] += len(rj)
             n_run = len(ri)
             ri, kk = np.concatenate([ri, rj]), np.concatenate([kk, self.intent_teach[rj]])
@@ -1233,6 +1253,8 @@ class DuelEnv:
     def _spawn(self, i, avoid, close=None):
         if STYLE_P > 0 and self.script[i] == 0:              # a new life: his playing style
             self.style[i] = int(self.rng.integers(1, len(STYLES))) if self.rng.random() < STYLE_P else 0
+            if STYLE_W[self.style[i]] >= 0 and int(STYLE_W[self.style[i]]) not in self.map_weapons:
+                self.style[i] = 0                            # (no rail life on a map without a railgun)
         if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < self.near_item_p:
             gis = [g_ for g_, lab_ in enumerate(self.route_goal) if lab_ in ("MH", "RA")]
             if gis:                                          # near the mega or the red: he tastes the stack (v9)
@@ -2099,6 +2121,14 @@ class DuelEnv:
         fine = ((want == RG) & (hold == LG) & ok[:, LG] & (d < W_RULE_LG)) | ((want == LG) & (hold == RG) & ok[:, RG] & (d > W_RULE_RG_OK))
         want = np.where(fine, hold, want)
         want = np.where(ok[:, RL] & (d > W_RULE_RL[0]) & (d < W_RULE_RL[1]), RL, want)
+        if self.w_table is not None:                         # the pros' table in place of the distances above
+            big_ = np.array([RL, RG, LG])
+            pr = np.where(ok[:, big_], self.w_table[np.clip((d / 100.0).astype(np.int64), 0, len(self.w_table) - 1)], -1.0)
+            best = pr.argmax(1)
+            want = np.where(pr.max(1) >= 0, big_[best], MG)
+            mine = (hold[:, None] == big_[None, :])
+            p_mine = np.where(mine.any(1), (pr * mine).sum(1), -1.0)
+            want = np.where((p_mine >= 0) & (p_mine >= pr.max(1) - PRO_WEAPON_TIE), hold, want)
         sw = STYLE_W[self.style[ii]]                         # his preferred weapon whenever he has it, at any distance
         want = np.where((sw >= 0) & ok[np.arange(len(ii)), np.maximum(sw, 0)], sw, want)
         want = np.where(ok[np.arange(len(ii)), want], want, self.weapon[ii])      # (no machine-gun ammo: keep what he holds)
