@@ -76,6 +76,54 @@ How it got there (RESULTS 2026-10-06 evening to 2026-10-07): v9 added a seeded i
 
 Next: the proposal below, for the owner's sign-off. Open besides it: B-107b (measure the machine guns' scatter and the shotgun pattern), B-92 (more players for the reflex benchmark), B-95 (key budget), B-109 (attention), Aerowalk's walking graph (no way to the red armor from most spawns), `arena2`.
 
+## The suite after the audit (owner, 2026-10-08 11:15: agrees with the five problems and the four gaps; "scope how to implement them", "recommend a suite of total changes, and whether now or after the current run")
+
+**Timing: after v12 ends (14:00).** Nothing of the suite can run sooner (it has to be built, which happens meanwhile), and
+v12's final weights are the baseline for the new checks. (Its last hours as a test of keeping are weaker than first said:
+at a tenth of the learning rate things also fade ten times slower.)
+
+**The checks (built first; every later change is judged on them):**
+- *Nightmare in the simulator.* Quake Live's bot code is closed; what can be ported is the Quake 3 bot it descends from
+  (botlib and the game-side AI in the ioquake3 source, with the game's own bot files and .aas maps): days of work and
+  still a cousin. Now: a stand-in, our scripted item runner given Nightmare's measured play from 692 minutes of logs
+  (weapon by distance, damage a minute, aim error, item shares, speed), accepted only if it reproduces the real scores
+  we have (v10 22-28 on arena1, v11 4-25; near nothing on the duel maps). For checks only, never a training opponent.
+  100 ten-minute duels a map (about ten minutes of computing for all maps); old networks play through an input adapter.
+  It is also the test for hiding: a player who avoids fights scores no frags against it.
+- The real Nightmare stays the reference: three ten-minute games a map at the end of each run, side by side.
+- Frozen v10 and v12 as opponents; numbers per map from the trainer; the policy's step (KL, clip fraction) logged.
+- The pros' positions per duel map (all, bare or armed, enemy in view or not) and his overlap with them in the scorecard.
+
+**The four gaps:**
+- *Item control: a goal model from the pros.* For every frame of a pro's life the label is what he picked up next within
+  15 s (or "engage" when his next act is the fight, or nothing); inputs that exist on any map (health, armor, weapons,
+  seconds to each item along the floor, seconds since he last took each, enemy seen and how far, seconds alive). A
+  small network, trained on two maps and tested on the third to prove that it carries over; the two-line rule's hit
+  rate on the same data is the bar to beat. In training it replaces the item rule as the intention's teacher (numpy in
+  the workers), and that teacher fades once the learning rate is right. Half a day.
+- *Stacked and nothing to do.* "Engage" is one more intention: the way to where the enemy was last seen or heard (ways
+  between any two nodes are tabled once per map); waiting at an item about to return is already a label of the goal
+  model. The intention grows from 8 to 9. A day with the goal model.
+- *Positioning.* Measured first (above). Then a mild pull: a potential on the pros' share of time per cell in his
+  situation, paid only on moving between cells (it cannot be farmed by standing), sized at a tenth of a frag from a dead
+  corner to a favorite spot; on the maps with pro data only.
+- *Aim* (it may go up). The cut hit the wrong shots: in the reflex room his tracking is still above the owner's (48% on
+  target against 40%) and his first rail shot far below (49% against 88%); in the one real game counted his machine gun
+  and lightning hit less than the owner's. A sweep of the three perception settings in the room against the owner's
+  whole profile (a smaller, quicker error and a larger share that grows with the target's speed), then per weapon
+  against the game's own accuracy counts from people's games as they come in.
+
+**Order:**
+| When | What runs | What it tells |
+|---|---|---|
+| now to 14:00 | v12 to its end; the checks and the switches for the five fixes are built | - |
+| 14:00 | v12's full check; v10, v11 and v12 on the new checks; the aim setting chosen from the sweep | the baseline |
+| 14:30 to 17:30 | two half-size arms from v12's weights, with the new aim, close spawns off and items by what he knows; only the learning rate differs (a tenth as now, against 1e-4) | how much the learning rate matters; the winner's weights go on |
+| tonight | v13 in two arms on the three duel maps: the pro seeds (weapon table, item order, spawn routine, yellow armors); the second arm also with even damage trading | the seeds against v12; even trading against the seeds alone |
+| tomorrow afternoon | two arms: credit horizon 0.95 against 0.98 | whether the longer horizon helps |
+| tomorrow night | v14: the goal model with "engage", the pull to the pros' positions | item control and positioning |
+The pros' ways stay out until tried alone with a control (they did not pass their test). Each run starts only on the owner's go.
+
 ## Plan: seeding his behavior from the pro demos (owner, 2026-10-08; proposal, nothing running)
 
 **Why:** three runs say the same thing. A reward alone moved nothing in 17 hours (v9) and 4 hours (v11); a pattern shown by a
