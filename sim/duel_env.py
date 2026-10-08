@@ -321,6 +321,14 @@ PRO_ROUTES = float(os.environ.get("PRO_ROUTES") or 0.0) > 0
 # was taken (he took it, or it was taken within earshot, HEAR_EVT; or he saw its place empty, then counted as taken
 # half its time ago); seeing it there clears that. Not known = thought to be there. The owner plays without item timers.
 ITEM_BELIEF = float(os.environ.get("ITEM_BELIEF") or 0.0) > 0
+# SHOT_COST (owner, 2026-10-08: "ammo is a scarce resource ... that's the right behavior to model"): every machine-gun
+# bullet, heavy machine-gun bullet and lightning cell he fires costs this share of what its hit would earn (SHOT_COST x
+# the damage reward x the weapon's damage), so a shot pays only from that chance to hit on. 0.10 = from one hit in ten.
+# In real games he fired 53% of the time an enemy was in view (people 24%) and 0.2 s after one appeared (0.5 s), at a
+# lower hit rate than the owner's. Rockets, rail, grenades, plasma and the shotgun are left alone (spam and prefire
+# are play there, and their reload already rations them). 0 = off.
+SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
+SHOT_COST_W = np.array([MG, LG, HMG], np.int64)
 BELIEF_SEE = 1500.0                                    # an item's place is seen up to this far (as the item inputs)
 PRO_RL_EDGE = 1.5
 STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
@@ -879,7 +887,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0,
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
                           wrule_frames=0, wrule_agree=0,
@@ -2641,6 +2649,14 @@ class DuelEnv:
         if getattr(self, "inf_ammo", False):               # test-suite aim rooms: ammo never runs out
             use = use & False
         self.ammo[ar[use], self.weapon[use]] -= 1
+        hum_ = (self.script == 0) & (self.hp > 0)
+        self.stats["fire_vis"] += int((fire & self.visible & hum_).sum())
+        self.stats["vis_frames_h"] += int((self.visible & hum_).sum())
+        if SHOT_COST > 0:                                    # ammo is scarce: a bullet or cell fired has its price (see SHOT_COST)
+            sc_ = use & (self.script == 0) & np.isin(self.weapon, SHOT_COST_W)
+            cost_ = SHOT_COST * self.dmg_reward * W_DMG[self.weapon]
+            reward -= np.where(sc_, cost_, 0.0)
+            self.stats["shot_cost"] += float(cost_[sc_].sum())
         self.fire_q, self.fire_w = shoot, self.weapon.copy()
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
         self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,

@@ -76,7 +76,7 @@ def play(job):
     score = np.zeros(n)
     kills = np.zeros(n)
     c = {k: np.zeros(2) for k in ("alive", "bare", "over150", "vis", "fire", "speed", "wp", "mega", "red", "yellow", "lives", "restarts",
-                                  "standing", "stuck", "own_deaths")}
+                                  "standing", "stuck", "own_deaths", "fire_vis")}
     still = np.zeros(n)                                         # seconds he has been standing (under 50 units a second)
     life, got, was = np.zeros(n), np.zeros(n, bool), np.zeros(n, bool)
     first = [[], []]
@@ -125,6 +125,7 @@ def play(job):
             c["over150"][s_] += (alive & (env.hp + env.armor >= 150))[m].sum()
             c["vis"][s_] += vis[m].sum()
             c["fire"][s_] += (env.fire_last & alive)[m].sum()        # (the button as it is after the finger limits; scripted players too)
+            c["fire_vis"][s_] += (env.fire_last & vis)[m].sum()
             c["speed"][s_] += spd[alive & m].sum()
             c["standing"][s_] += (alive & (spd < 50.0))[m].sum()
             c["stuck"][s_] += (still > 3.0)[m].sum()
@@ -200,6 +201,7 @@ def main():
                             time_bare=round(float(c["bare"][s_] / al), 3), first_weapon_s=round(float(np.nanmedian(first[s_])), 1),
                             stack_150_up=round(float(c["over150"][s_] / al), 3), in_view=round(float(c["vis"][s_] / al), 3),
                             firing=round(float(c["fire"][s_] / al), 3), speed=int(c["speed"][s_] / al),
+                            firing_in_view=round(float(c["fire_vis"][s_] / max(1.0, c["vis"][s_])), 3),
                             standing=round(float(c["standing"][s_] / al), 3), standing_over_3s=round(float(c["stuck"][s_] / al), 3),
                             own_deaths=round(float(c["own_deaths"][s_] / G), 2),
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
@@ -214,9 +216,9 @@ def main():
             o["frag_share_95"][0], o["frag_share_95"][1], o["won"], o["drawn"], o["lost"]))
         for who in ("he", "opponent"):
             w = o[who]
-            print("    {:9s} bare {:.0%} | first weapon {} s | 150+ {:.0%} | weapons {}/min | mega {:.0%}, red {:.0%} of spawns | yellow {}/min | in view {:.0%} | firing {:.0%} | speed {}, standing {:.0%} (over 3 s: {:.0%}) | lives {}/min, own deaths {} a game".format(
+            print("    {:9s} bare {:.0%} | first weapon {} s | 150+ {:.0%} | weapons {}/min | mega {:.0%}, red {:.0%} of spawns | yellow {}/min | in view {:.0%} | firing {:.0%} ({:.0%} of the time in view) | speed {}, standing {:.0%} (over 3 s: {:.0%}) | lives {}/min, own deaths {} a game".format(
                 who, w["time_bare"], w["first_weapon_s"], w["stack_150_up"], w["weapons_per_min"], w["mega_share"], w["red_share"],
-                w["yellow_per_min"], w["in_view"], w["firing"], w["speed"], w["standing"], w["standing_over_3s"], w["lives_per_min"], w["own_deaths"]), flush=True)
+                w["yellow_per_min"], w["in_view"], w["firing"], w["firing_in_view"], w["speed"], w["standing"], w["standing_over_3s"], w["lives_per_min"], w["own_deaths"]), flush=True)
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
             json.dump(dict(run=a.run, policy=path, opp=a.opp, env=a.env, set=envvars, maps=out), f, indent=1)

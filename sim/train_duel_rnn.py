@@ -524,6 +524,8 @@ def main():
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
         G = N / n_groups                                                 # mean players per group (for the per-player numbers)
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
+                   fire_in_view=round(float(agg.get("fire_vis", 0) / max(1, agg.get("vis_frames_h", 0))), 3),
+                   shot_cost_per_player_min=round(float(agg.get("shot_cost", 0.0) / max(1e-9, N * T * DT_MIN)), 3),
                    kl=round(kl_sum / max(1, kl_n), 5), clip_frac=round(cf_sum / max(1, kl_n), 4), lr=lr_now, lam=lam,
                    by_map={m_: dict(bare=round(float(v_.get("stack_bare", 0) / max(1, v_.get("stack_frames", 0))), 3),
                                     big_weapons=round(float(v_.get("stack_big", 0) / max(1, v_.get("stack_frames", 0))), 2),
