@@ -46,6 +46,7 @@ def probe(a, mp, E, pol, pro):
     lo, hi = env.lo.copy(), env.hi.copy()
     dims = (np.ceil((hi[:2] - lo[:2]) / CELL).astype(int) + 1)
     heat = np.zeros((dims[1], dims[0]), np.float64)
+    heat_k = {k: np.zeros((dims[1], dims[0]), np.float64) for k in ("bare", "armed")}
     big_w = [E.RL, E.RG, E.LG]
     n = env.n
     c = dict(alive=0, bare=0, under100=0, over150=0, big=0.0, vis_bare=0, fire_bare=0, fr_bare=0, vis_armed=0, fire_armed=0, fr_armed=0)
@@ -71,6 +72,8 @@ def probe(a, mp, E, pol, pro):
         cy = np.clip(((s[:, 1] - lo[1]) / CELL).astype(int), 0, dims[1] - 1)
         np.add.at(heat, (cy[alive], cx[alive]), 1.0)
         nbig = env.has[:, big_w].sum(1)
+        for k_, m_ in (("bare", alive & (nbig == 0)), ("armed", alive & (nbig > 0))):
+            np.add.at(heat_k[k_], (cy[m_], cx[m_]), 1.0)
         tot = env.hp + env.armor
         new = (alive & ~was) | died                             # (a death and the respawn fall in the same step of the simulator)
         lives += int(new.sum())
@@ -125,6 +128,25 @@ def probe(a, mp, E, pol, pro):
                two_or_more=dict(in_view=round(c["vis_armed"] / max(1, c["fr_armed"]), 3), firing=round(c["fire_armed"] / max(1, c["fr_armed"]), 3)),
                fired_share={E.WEAPONS[k]: round(float(fired[k].sum() / max(1.0, fired.sum())), 3) for k in range(E.NW) if fired[k].sum() > 0},
                pro_weapon_agreement=round(float(agree[0] / max(1.0, agree[1])), 3) if agree[1] else None)
+    pp = os.path.join(ROOT, "sim", "pro_positions", mp + ".npz")          # his ground against the pros' (tools/pro_positions.py)
+    if os.path.exists(pp):
+        P = np.load(pp)
+
+        def core(p_, share=0.9):
+            order = np.argsort(p_.ravel())[::-1]
+            k = int(np.searchsorted(np.cumsum(p_.ravel()[order]), share)) + 1
+            m = np.zeros(p_.size, bool)
+            m[order[:k]] = True
+            return m.reshape(p_.shape)
+        pos_ = {}
+        for key, mine in (("all", heat), ("bare", heat_k["bare"]), ("armed", heat_k["armed"])):
+            theirs = P["heat_" + key]
+            if theirs.shape != mine.shape or mine.sum() < 400 or theirs.sum() < 400:
+                continue
+            p_, q_ = theirs / theirs.sum(), mine / mine.sum()
+            pos_[key] = dict(overlap=round(float(np.minimum(p_, q_).sum()), 3), his_time_on_their_ground=round(float(q_[core(p_)].sum()), 3),
+                             their_time_on_his_ground=round(float(p_[core(q_)].sum()), 3))
+        out["positions_against_pros"] = pos_
     folder = os.path.join(ROOT, "videos", "{}_{:04d}".format(a.run, int(pol.minutes)))
     os.makedirs(folder, exist_ok=True)
     np.savez(os.path.join(folder, "probe_heat_{}.npz".format(mp)), heat=heat, lo=lo[:2], cell=CELL)
@@ -168,6 +190,9 @@ def main():
             ", ".join("{} {:.0%}".format(k, v) for k, v in sorted(o["fired_share"].items(), key=lambda kv: -kv[1])),
             "{:.0%}".format(o["pro_weapon_agreement"]) if o["pro_weapon_agreement"] is not None else "-"))
         print("  frags {} and own deaths {} a player-minute".format(o["frags_per_player_min"], o["own_deaths_per_player_min"]), flush=True)
+        for key, v in (o.get("positions_against_pros") or {}).items():
+            print("  positions against the pros ({}): overlap {:.2f}; {:.0%} of his time on the ground that holds 90% of theirs, {:.0%} of theirs on his".format(
+                key, v["overlap"], v["his_time_on_their_ground"], v["their_time_on_his_ground"]), flush=True)
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
             json.dump(dict(run=a.run, minutes=int(pol.minutes), env=a.env, group=a.group, maps=res), f, indent=1)
