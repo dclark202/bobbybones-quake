@@ -1084,7 +1084,18 @@ class duelbot(minqlx.Plugin):
         a = self.act(ob)
         if len(a) > 10 and hasattr(env, "intend"):           # the intention head (v8), as in training
             env.intend(np.full(env.n, int(a[10]), np.int64), np.arange(env.n) == 0)
+        yaw_in_, pitch_in_ = float(yaw), float(pitch)
         w, fire, pitch, yaw, keys = self.drive(bobby, env, E, 0, a, pitch, yaw, only=self.drill)
+        if os.environ.get("DUEL_AIMDUMP"):                   # debugging: what became of the mouse output, frame by frame
+            self.aim_dump = getattr(self, "aim_dump", [])
+            ru_ = minqlx.ran_usercmd(bobby.id)
+            self.aim_dump.append([now, float(a[3]), float(a[4]), float(a[9]) if len(a) > 9 else -1.0, float(env.mv[0, 0]), float(env.mv[0, 1]),
+                                  float(env.pad[0]) if hasattr(env, "pad") else 0.0, float(env.pad_lift[0]) if hasattr(env, "pad_lift") else 0.0,
+                                  float(env.zoom[0]) if hasattr(env, "zoom") else 0.0, float(env.script[0]), float(getattr(env, "human_aim", False)),
+                                  yaw_in_, float(yaw), pitch_in_, float(pitch), float(ru_[0]), float(ru_[7]), float(ru_[6]), float(bs.health),
+                                  float(self.h.std()) if hasattr(self, "h") else 0.0, float(env.seen_t[0]), float(env.intent[0]) if hasattr(env, "intent") else -1.0])
+            if len(self.aim_dump) % 1000 == 0:
+                np.save("/tmp/practice/aim_dump.npy", np.array(self.aim_dump[-12000:]))
         wname = E.WEAPONS[w]
         self.last = dict(bobby=[round(float(v)) for v in pos], opp=[round(float(v)) for v in opos],
                          bobby_hp=[bs.health, bs.armor], opp_hp=[os_.health, os_.armor], weapon=wname,

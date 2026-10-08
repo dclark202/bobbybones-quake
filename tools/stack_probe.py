@@ -53,6 +53,7 @@ def probe(a, mp, E, pol, pro):
     got = np.zeros(n, bool)
     first_t, lives = [], 0
     was = np.zeros(n, bool)
+    died = np.zeros(n, bool)
     fired = np.zeros((E.NW, len(EDGES)))
     agree = np.zeros(2)
     P = None
@@ -71,7 +72,7 @@ def probe(a, mp, E, pol, pro):
         np.add.at(heat, (cy[alive], cx[alive]), 1.0)
         nbig = env.has[:, big_w].sum(1)
         tot = env.hp + env.armor
-        new = alive & ~was
+        new = (alive & ~was) | died                             # (a death and the respawn fall in the same step of the simulator)
         lives += int(new.sum())
         life = np.where(new, 0.0, life + E.DT)
         got &= ~new
@@ -106,6 +107,9 @@ def probe(a, mp, E, pol, pro):
             agree[1] += int(has_any.sum())
         obs, r, done, info = env.step(act)
         h[done] = 0.0
+        died = np.zeros(n, bool)
+        for e_ in info["events"]:
+            died[int(e_["victim"])] = True
     pm = a.groups * a.group * a.minutes
     al = max(1, c["alive"])
     ft = np.array(first_t) if first_t else np.array([np.nan])
