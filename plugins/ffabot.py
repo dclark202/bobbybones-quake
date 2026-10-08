@@ -188,11 +188,7 @@ class ffabot(duelbot):
         self.set_cvar("g_weaponRespawn", "2")                # weapons back in 2 s (duelbot.setup puts the 5 s of 1v1 back)
         self.set_cvar("timelimit", "10")                     # a real game (started by the people readying up) lasts this long
         self.set_cvar("fraglimit", "0")
-        try:                                                 # no quad (owner; the simulator has none): where the map puts the
-            has_mega = any(cls == "item_health_mega" for _, cls, *_ in minqlx.item_states()[1])    # quad instead of the mega
-            minqlx.replace_items("item_quad", 0 if has_mega else "item_health_mega")                 # in free-for-all
-        except ValueError:                                   # (campgrounds), the mega comes back, as in 1v1 and in training
-            pass
+        self.no_quad()
         bsp = "/tmp/maps/{}.bsp".format(mapname)
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
             os.makedirs("/tmp/maps", exist_ok=True)
@@ -274,6 +270,19 @@ class ffabot(duelbot):
         if rec.get("event") in ("death", "pickup", "minute", "bots") and not (getattr(self, "people_now", False) and getattr(self, "disk_ok", True)):
             return
         duelbot.record(self, **rec)
+
+    def no_quad(self):
+        """no quad in free-for-all (owner; the simulator has none). Where the map puts the quad in the mega's place
+        (campgrounds), the mega comes back, as in 1v1 and in training. The game puts every item back when a real game
+        starts (the restart after the countdown), so this is done at setup, at the start of a game and every few
+        seconds after: it was only done at setup, and the quad was back in every real game (owner, 2026-10-07)."""
+        try:
+            items = minqlx.item_states()[1]
+            if any(cls == "item_quad" for _, cls, *_ in items):
+                has_mega = any(cls == "item_health_mega" for _, cls, *_ in items)
+                minqlx.replace_items("item_quad", 0 if has_mega else "item_health_mega")
+        except Exception:                                    # noqa: BLE001
+            pass
 
     def start_session(self):
         self.end_session()
@@ -398,6 +407,9 @@ class ffabot(duelbot):
                 pass
         bobbys, people = self.bobbys(), self.people()
         self.people_now = bool(people)                       # (record() writes game events only then)
+        if now > getattr(self, "quad_check", 0.0):
+            self.quad_check = now + 3.0
+            self.no_quad()
         # Warmup for ever, as on the 1v1 server: with bots only the game starts a match by itself (harmless); once a person
         # is in the game and loaded, one "abort" brings it back to warmup, and an unready person keeps it there. Never
         # while someone is still loading: a restart then looks like a hanging connection (2026-10-06).

@@ -165,8 +165,15 @@ LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loa
 # (2026-10-05) He reads where the enemy is against his crosshair only this well: a slowly drifting error, in degrees,
 # on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
 # gap between crosshair and target by eye, not to a hundredth of a degree.
-PERCEPT_SIGMA, PERCEPT_TAU = 0.6, 0.15                  # degrees; seconds over which the error drifts (1.0 until 2026-10-06 evening:
-                                                       # v8 measured 3.5 deg aim error on a strafing target against the owner's 2.5; owner: tune up)
+PERCEPT_SIGMA, PERCEPT_TAU = float(os.environ.get("PERCEPT_SIGMA") or 0.6), float(os.environ.get("PERCEPT_TAU") or 0.15)
+# degrees; seconds over which the error drifts. 2026-10-06 evening 1.0 -> 0.6 after the reflex room (he was wider than the owner
+# there). 2026-10-07 evening the owner asks for LESS hitscan aim: in real games he is on target 56% of the time an enemy is in view
+# (people 23%, Nightmare 27%) and 2.1 degrees off while firing (people 3.2): the reflex room flatters people. What makes a
+# person's aim worse in play than in the room is not reaction: it is a slow, wandering offset (he "thinks" the enemy is a little
+# off for half a second, not for a frame) that grows with how fast the target crosses his view. So for v11 (set by the launch
+# file): a larger error that drifts slowly (PERCEPT_TAU 0.5: the memory cannot average it away as it does the 0.15 s one) and
+# PERCEPT_SPEED degrees more for every degree a second the enemy's direction moves, at most PERCEPT_SPEED_MAX.
+PERCEPT_SPEED, PERCEPT_SPEED_MAX = float(os.environ.get("PERCEPT_SPEED") or 0.0), 3.0
 # (2026-10-05, B-94) Being shot at costs aim: a hit throws his read of the enemy's direction off by FLINCH_PER_DMG
 # degrees per point of damage (at most FLINCH_MAX at a time), and the error stays larger while the flinch fades
 # (FLINCH_TAU seconds). First values; to be set from players in the reflex test (calm half against the half under fire).
@@ -590,6 +597,8 @@ class DuelEnv:
         self.arena_full_p = 0.5                         # share of arena rounds with the full weapon set (else two random weapons)
         self.percept = np.zeros((self.n, 2), np.float32)  # error on the seen direction to the enemy (yaw, pitch), degrees
         self.percept_sigma = PERCEPT_SIGMA
+        self.bearing = np.zeros((self.n, 2), np.float32)    # the true direction to the enemy last frame (yaw, pitch; for PERCEPT_SPEED)
+        self.bearing_ok = np.zeros(self.n, bool)
         self.flinch = np.zeros(self.n, np.float32)        # extra error on that direction after being hit, degrees
         ng_ = len(self._mates(0)) + 1                       # players per group
         self.it_t = np.full((self.n, 2), 99.0, np.float32)  # seconds since mega / red armor were last known taken (99 = not known)
@@ -1726,6 +1735,14 @@ class DuelEnv:
             rho = math.exp(-DT / PERCEPT_TAU)
             self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
             sig_ = (self.percept_sigma + self.flinch)[:, None]
+            if PERCEPT_SPEED > 0:                            # a target that crosses the view fast is judged worse
+                tb_ = known - eye
+                br_ = np.stack([np.degrees(np.arctan2(tb_[:, 1], tb_[:, 0])),
+                                np.degrees(np.arctan2(tb_[:, 2], np.hypot(tb_[:, 0], tb_[:, 1]) + 1e-6))], 1).astype(np.float32)
+                dy_ = (br_[:, 0] - self.bearing[:, 0] + 180.0) % 360.0 - 180.0
+                w_ = np.hypot(dy_, br_[:, 1] - self.bearing[:, 1]) / DT * (visible & self.bearing_ok)
+                sig_ = sig_ + np.minimum(PERCEPT_SPEED * w_, PERCEPT_SPEED_MAX)[:, None]
+                self.bearing, self.bearing_ok = br_, visible.copy()
             self.percept = (rho * self.percept + math.sqrt(1.0 - rho * rho) * sig_ *
                             self.rng.normal(0, 1, (n, 2))).astype(np.float32)
             t_ = known - eye
