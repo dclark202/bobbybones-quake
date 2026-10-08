@@ -464,7 +464,7 @@ def main():
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
                     tl = b_teach[:, chunk]
                     tm = (tl[..., 0] >= 0).float() * wgt
-                    lt = sum(ds[j].log_prob(tl[..., j].clamp(min=0)) for j in range(4))
+                    lt = sum(ds[j].log_prob(tl[..., j].clamp(min=0)) * (tl[..., j] >= 0).float() for j in range(4))   # (a head can go unlabelled)
                     kick_l = -(lt * tm).sum() / tm.sum().clamp(min=1.0)
                     loss = loss + kick * kick_l
                 if wk > 0:                                               # the weapon key leans on the weapon rule (rockets close, ...)

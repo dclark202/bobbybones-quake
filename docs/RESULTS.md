@@ -55,6 +55,17 @@ fading over 180 min); the weapon teacher continues at 0.33 over its remaining 11
 of normal games carry the teacher's labels, teacher loss 3.2. Unchanged at four hours otherwise: rockets 17% of frags,
 weapon rule agreement 0.91.
 
+**01:47, what did not work: the fallback as first applied.** In one hour the stack numbers moved for the first time (time bare
+58% -> 48%, big weapons held 0.56 -> 0.84, above 100 0.15 -> 0.24; arena1 fight check mega 0.26, red 0.21 a player-minute,
+from 0.08 and 0.02) and he all but stopped fighting: fire on 7% of the frames (31%), 1.1 frags a match-minute (4.8), enemy
+in view 23% of the time (49%), machine-gun hits 29% (42%), 0.25 frags a minute against the scripted players (1.28), more
+suicides than frags, Nightmare on arena1 2-31. Fire fell to 14% within three updates, too fast for a reward: the teacher
+did it. It labelled the view as well as the keys (the turn head, his mouse) on nearly half of all frames of normal games, at
+weight 1.0 with a loss of 3. Restarted from `policy_before_fallback.pt` (the damaged weights kept as `policy_fallback1.pt`)
+with the teacher narrowed: keys only (no label for the view; the trainer now masks each head by its own label), only after
+1.5 s without seeing or hearing an enemy, weight 0.5 fading over 150 min. Stack sizes stay doubled. If fire and frags fall
+again, the run goes back to the settings of 20:35.
+
 Built for the fallback (off, `STACK_TEACH`): the walking teacher inside normal games, while bare or under 70 with nobody
 in view, toward what the item rule names. Test on arena1 with machine-gun spawns, 12 player-minutes, random aim: a pupil
 who obeys the labels takes 12 weapons and 9 red armors and is bare 67% of the time; one who ignores them 2, 0 and 91%.

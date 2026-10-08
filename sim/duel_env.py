@@ -232,6 +232,7 @@ STACK_BARE_RAMP, STACK_BARE_MAX, STACK_LOW_AT = 5.0, 4.0, 70.0
 # weapons or is under STACK_LOW_AT, and no enemy is in view, the keys that walk to what the item rule names (intent_rule)
 # are the labels of the trainer's teacher loss (--teach, fading), as in the item runs of v10.
 STACK_TEACH = float(os.environ.get("STACK_TEACH") or 0.0) > 0
+STACK_TEACH_QUIET = 1.5
 INTENT_HOLD = float(os.environ.get("INTENT_HOLD") or 3.0)     # (v11: longer, with a release when the item is gone, see intend)
 INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
 CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
@@ -1145,9 +1146,13 @@ class DuelEnv:
         if STACK_TEACH:                                     # ... and in normal games, bare or low, with nobody in view
             pk = np.repeat(self.kind, len(self.hp) // len(self.kind))
             need = (self.has[:, [RL, LG, RG]].sum(1) == 0) | ((self.hp + self.armor) < STACK_LOW_AT)
+            # Keys only, no label for the view, and only when no enemy was seen or heard for STACK_TEACH_QUIET seconds: the
+            # first version (2026-10-08 00:39) also taught where to look whenever nobody was in view, at full weight, and
+            # within an hour he had all but stopped shooting (fire 31% -> 7% of frames, frags a match-minute 4.8 -> 1.1).
             rj = np.nonzero((pk == NORMAL) & (self.run_k < 0) & (self.script == 0) & (self.hp > 0) & need
-                            & ~self.visible & (self.intent_teach > 0))[0]
+                            & ~self.visible & (self.seen_t > STACK_TEACH_QUIET) & (self.intent_teach > 0))[0]
             self.stats["stack_teach_frames"] += len(rj)
+            n_run = len(ri)
             ri, kk = np.concatenate([ri, rj]), np.concatenate([kk, self.intent_teach[rj]])
         if not len(ri):
             return
@@ -1177,6 +1182,8 @@ class DuelEnv:
         turn = np.clip(rel_deg * 0.5, -20.0, 20.0)
         lab = np.stack([fwd + 1, side + 1, jump.astype(np.int64), np.abs(TURN[None, :] - turn[:, None]).argmin(1)], 1)
         self.teach[ri[ok], :4] = lab[ok]
+        if STACK_TEACH:
+            self.teach[ri[n_run:], 3] = -1                   # (in a game the view is his own)
 
     def _teach_update(self):
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
