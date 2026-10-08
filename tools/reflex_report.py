@@ -187,8 +187,9 @@ def bobby(run, policy=None, repeats=4, react_ms=None, percept=None, flinch=None)
     import importlib
     E = importlib.import_module(os.environ.get("REFLEX_ENV", "duel_env"))     # REFLEX_ENV=duel_env_v8: a frozen simulator for an older policy
     import test_suite as T
-    pol = T.Policy(policy or os.path.join(ROOT, "data", "sim_runs", run, "policy.pt"), seed=5)
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "testlab.bsp"), n_matches=repeats, seed=21, loadout="all")
+    sd_ = int(os.environ.get("REFLEX_SEED") or 0)                             # REFLEX_SEED=n: another draw of the same test (for a spread)
+    pol = T.Policy(policy or os.path.join(ROOT, "data", "sim_runs", run, "policy.pt"), seed=5 + sd_)
+    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", "testlab.bsp"), n_matches=repeats, seed=21 + sd_, loadout="all")
     env.react_frames = round((react_ms or pol.react_ms) / 25)
     env.no_walk, env.inf_ammo = True, True
     if percept is not None:
