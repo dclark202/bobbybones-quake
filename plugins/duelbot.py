@@ -78,6 +78,7 @@ class duelbot(minqlx.Plugin):
         self.add_hook("client_command", self.on_client_command)
         self.add_hook("game_start", self.on_game_start)
         self.add_hook("game_end", self.on_game_end)
+        self.add_hook("stats", self.on_stats)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("maps", self.cmd_maps, 0)
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(MAPS)))
@@ -256,6 +257,27 @@ class duelbot(minqlx.Plugin):
             self.set_cvar("timelimit", "10")
             self.msg("^3Game on:^7 1v1 against BobbyBones, 10 minutes.")
             minqlx.console_command("allready")
+
+    def on_stats(self, stats):
+        """the game's own table for a player at the end of a game (or when he leaves): shots, hits, damage, kills and time
+        per weapon, items taken. Exact, where the plugin's hit counts are inferred from health drops. Written without
+        the name and the Steam id: a person is "person" with his seat, a bot keeps its name (owner, 2026-10-07)."""
+        try:
+            if stats.get("TYPE") != "PLAYER_STATS":
+                return
+            d = stats.get("DATA", {})
+            sid = str(d.get("STEAM_ID", "0"))
+            pl = next((p for p in self.players() if str(p.steam_id) == sid), None) if sid not in ("0", "") else None
+            bot = pl is None or is_bot(pl)
+            weapons = {k.lower(): {q: v.get(q, 0) for q in ("S", "H", "DG", "DR", "K", "D", "T", "P")}
+                       for k, v in (d.get("WEAPONS") or {}).items() if v.get("S") or v.get("T") or v.get("P")}
+            seat = getattr(self, "seat", {}).get(pl.id) if pl is not None and isinstance(getattr(self, "seat", None), dict) else None
+            self.record(event="player_stats", bot=bool(bot), who=(d.get("NAME") if bot else "person"), seat=seat,
+                        warmup=bool(d.get("WARMUP")), aborted=bool(d.get("ABORTED")), play_time=d.get("PLAY_TIME"),
+                        kills=d.get("KILLS"), deaths=d.get("DEATHS"), damage=d.get("DAMAGE"), weapons=weapons,
+                        pickups={k.lower(): v for k, v in (d.get("PICKUPS") or {}).items() if v})
+        except Exception as e:                                  # noqa: BLE001
+            minqlx.console_print("[duelbot] stats: {}\n".format(e))
 
     def on_game_start(self, data):
         self.ready_ids = set()

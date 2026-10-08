@@ -46,6 +46,7 @@ class ffabot(duelbot):
         self.add_hook("team_switch_attempt", self.on_team_switch)
         self.add_hook("game_start", self.on_game_start)
         self.add_hook("game_end", self.on_game_end)
+        self.add_hook("stats", self.on_stats)                # the game's own per-weapon table (duelbot.on_stats)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("bots", self.cmd_bots, 0, usage="<0-4>")
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(FFA_MAPS)))

@@ -1,0 +1,903 @@
+{
+ "games_only": false,
+ "groups": {
+  "Bobby v2": {
+   "sessions": 5,
+   "minutes": 28.6,
+   "frags_per_min": 0.49,
+   "deaths_per_min": 1.96,
+   "damage_per_kill": 548.0,
+   "mega_per_min": 0.11,
+   "red_per_min": 0.07,
+   "mega_share_of_spawns": 0.06,
+   "red_share_of_spawns": 0.03,
+   "weapons_per_min": 0.63,
+   "first_weapon_s": 4.6,
+   "lives_with_a_weapon": 0.16,
+   "in_hand": {
+    "rg": 0.39,
+    "rl": 0.23,
+    "lg": 0.22,
+    "mg": 0.15,
+    "0": 0.0
+   },
+   "fired": {
+    "rg": 0.53,
+    "lg": 0.18,
+    "rl": 0.17,
+    "mg": 0.12
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "rg": 0.57,
+     "mg": 0.19,
+     "lg": 0.16,
+     "rl": 0.08
+    },
+    "150-300": {
+     "rg": 0.55,
+     "lg": 0.2,
+     "rl": 0.16,
+     "mg": 0.1
+    },
+    "300-450": {
+     "rg": 0.49,
+     "rl": 0.26,
+     "lg": 0.16,
+     "mg": 0.1
+    },
+    "450-700": {
+     "rg": 0.51,
+     "lg": 0.17,
+     "mg": 0.17,
+     "rl": 0.14
+    },
+    "700+": {
+     "rg": 0.46,
+     "lg": 0.31,
+     "rl": 0.17,
+     "mg": 0.06
+    }
+   },
+   "damage_by_weapon": {
+    "rg": 0.42,
+    "rl": 0.28,
+    "lg": 0.2,
+    "mg": 0.06,
+    "?": 0.03
+   },
+   "speed": 142,
+   "fast_share": 0.05,
+   "jump_share": 0.31,
+   "firing_share": 0.47,
+   "enemy_in_view": 0.25,
+   "aim_error_in_view": 6.0,
+   "aim_error_firing": 5.3,
+   "on_target_share": 0.23,
+   "settle_s": 0.33
+  },
+  "Nightmare": {
+   "sessions": 108,
+   "minutes": 691.9,
+   "frags_per_min": 2.37,
+   "deaths_per_min": 0.95,
+   "damage_per_kill": 140.0,
+   "mega_per_min": 0.73,
+   "red_per_min": 0.7,
+   "mega_share_of_spawns": 0.41,
+   "red_share_of_spawns": 0.28,
+   "weapons_per_min": 1.76,
+   "first_weapon_s": 6.9,
+   "lives_with_a_weapon": 0.7,
+   "in_hand": {
+    "sg": 0.4,
+    "rg": 0.18,
+    "mg": 0.14,
+    "rl": 0.12,
+    "lg": 0.07,
+    "g": 0.07
+   },
+   "fired": {
+    "sg": 0.36,
+    "rg": 0.26,
+    "rl": 0.15,
+    "lg": 0.12,
+    "mg": 0.11,
+    "pg": 0.01
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "sg": 0.43,
+     "rg": 0.24,
+     "lg": 0.14,
+     "rl": 0.12,
+     "mg": 0.05,
+     "g": 0.01
+    },
+    "150-300": {
+     "sg": 0.46,
+     "rg": 0.21,
+     "rl": 0.15,
+     "lg": 0.13,
+     "mg": 0.04,
+     "pg": 0.01
+    },
+    "300-450": {
+     "sg": 0.42,
+     "rg": 0.2,
+     "lg": 0.17,
+     "rl": 0.15,
+     "mg": 0.06,
+     "pg": 0.01
+    },
+    "450-700": {
+     "sg": 0.36,
+     "rg": 0.21,
+     "lg": 0.19,
+     "rl": 0.15,
+     "mg": 0.09,
+     "pg": 0.01
+    },
+    "700+": {
+     "rg": 0.36,
+     "sg": 0.23,
+     "mg": 0.21,
+     "rl": 0.16,
+     "lg": 0.03,
+     "pg": 0.0
+    }
+   },
+   "damage_by_weapon": {
+    "sg": 0.34,
+    "rg": 0.23,
+    "lg": 0.19,
+    "rl": 0.15,
+    "mg": 0.05,
+    "g": 0.02
+   },
+   "speed": 226,
+   "fast_share": 0.04,
+   "jump_share": 0.02,
+   "firing_share": 0.25,
+   "enemy_in_view": 0.32,
+   "aim_error_in_view": 6.4,
+   "aim_error_firing": 4.1,
+   "on_target_share": 0.27,
+   "settle_s": 0.2
+  },
+  "people": {
+   "sessions": 56,
+   "minutes": 183.5,
+   "frags_per_min": 1.65,
+   "deaths_per_min": 0.53,
+   "damage_per_kill": 335.0,
+   "mega_per_min": 0.47,
+   "red_per_min": 0.44,
+   "mega_share_of_spawns": 0.25,
+   "red_share_of_spawns": 0.17,
+   "weapons_per_min": 1.08,
+   "first_weapon_s": 13.1,
+   "lives_with_a_weapon": 0.64,
+   "in_hand": {
+    "rl": 0.56,
+    "rg": 0.13,
+    "mg": 0.1,
+    "g": 0.08,
+    "lg": 0.08,
+    "sg": 0.01
+   },
+   "fired": {
+    "lg": 0.5,
+    "mg": 0.23,
+    "rl": 0.09,
+    "pg": 0.06,
+    "rg": 0.05,
+    "hmg": 0.04
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "rl": 0.28,
+     "lg": 0.18,
+     "mg": 0.14,
+     "pg": 0.13,
+     "hmg": 0.11,
+     "sg": 0.11
+    },
+    "150-300": {
+     "lg": 0.28,
+     "mg": 0.26,
+     "rl": 0.17,
+     "pg": 0.12,
+     "hmg": 0.11,
+     "sg": 0.04
+    },
+    "300-450": {
+     "lg": 0.62,
+     "mg": 0.22,
+     "rl": 0.06,
+     "pg": 0.05,
+     "hmg": 0.04,
+     "rg": 0.01
+    },
+    "450-700": {
+     "lg": 0.64,
+     "mg": 0.24,
+     "rg": 0.04,
+     "rl": 0.04,
+     "pg": 0.03,
+     "hmg": 0.01
+    },
+    "700+": {
+     "rg": 0.4,
+     "lg": 0.26,
+     "mg": 0.19,
+     "rl": 0.11,
+     "pg": 0.03,
+     "gl": 0.01
+    }
+   },
+   "damage_by_weapon": {
+    "lg": 0.33,
+    "rl": 0.28,
+    "rg": 0.18,
+    "mg": 0.07,
+    "sg": 0.06,
+    "pg": 0.05
+   },
+   "speed": 201,
+   "fast_share": 0.33,
+   "jump_share": 0.07,
+   "firing_share": 0.09,
+   "enemy_in_view": 0.28,
+   "aim_error_in_view": 9.2,
+   "aim_error_firing": 3.2,
+   "on_target_share": 0.23,
+   "settle_s": 0.44
+  },
+  "Bobby v3": {
+   "sessions": 31,
+   "minutes": 95.8,
+   "frags_per_min": 0.52,
+   "deaths_per_min": 0.71,
+   "damage_per_kill": 249.0,
+   "mega_per_min": 0.04,
+   "red_per_min": 0.02,
+   "mega_share_of_spawns": 0.02,
+   "red_share_of_spawns": 0.01,
+   "weapons_per_min": 0.22,
+   "first_weapon_s": 10.4,
+   "lives_with_a_weapon": 0.25,
+   "in_hand": {
+    "g": 0.3,
+    "sg": 0.28,
+    "mg": 0.2,
+    "0": 0.07,
+    "rg": 0.05,
+    "rl": 0.05
+   },
+   "fired": {
+    "sg": 0.43,
+    "rl": 0.17,
+    "rg": 0.16,
+    "lg": 0.11,
+    "mg": 0.08,
+    "g": 0.06
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "sg": 0.49,
+     "rl": 0.26,
+     "mg": 0.18,
+     "rg": 0.06
+    },
+    "150-300": {
+     "sg": 0.52,
+     "rl": 0.25,
+     "lg": 0.08,
+     "mg": 0.05,
+     "g": 0.05,
+     "rg": 0.04
+    },
+    "300-450": {
+     "sg": 0.47,
+     "rl": 0.17,
+     "lg": 0.15,
+     "mg": 0.09,
+     "rg": 0.06,
+     "g": 0.06
+    },
+    "450-700": {
+     "sg": 0.27,
+     "rg": 0.27,
+     "lg": 0.19,
+     "rl": 0.12,
+     "mg": 0.08,
+     "g": 0.07
+    },
+    "700+": {
+     "rg": 0.49,
+     "sg": 0.31,
+     "g": 0.08,
+     "lg": 0.06,
+     "mg": 0.04,
+     "rl": 0.02
+    }
+   },
+   "damage_by_weapon": {
+    "sg": 0.38,
+    "rg": 0.2,
+    "rl": 0.19,
+    "lg": 0.1,
+    "mg": 0.08,
+    "?": 0.03
+   },
+   "speed": 150,
+   "fast_share": 0.08,
+   "jump_share": 0.19,
+   "firing_share": 0.09,
+   "enemy_in_view": 0.13,
+   "aim_error_in_view": 19.3,
+   "aim_error_firing": 3.4,
+   "on_target_share": 0.15,
+   "settle_s": 0.2
+  },
+  "Bobby v4": {
+   "sessions": 29,
+   "minutes": 199.9,
+   "frags_per_min": 0.29,
+   "deaths_per_min": 1.76,
+   "damage_per_kill": 668.0,
+   "mega_per_min": 0.15,
+   "red_per_min": 0.01,
+   "mega_share_of_spawns": 0.08,
+   "red_share_of_spawns": 0.0,
+   "weapons_per_min": 0.4,
+   "first_weapon_s": 11.7,
+   "lives_with_a_weapon": 0.17,
+   "in_hand": {
+    "sg": 0.69,
+    "lg": 0.18,
+    "mg": 0.04,
+    "g": 0.04,
+    "rg": 0.02,
+    "rl": 0.01
+   },
+   "fired": {
+    "sg": 0.9,
+    "lg": 0.04,
+    "mg": 0.04,
+    "rl": 0.01,
+    "g": 0.01,
+    "hmg": 0.01
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "sg": 0.88,
+     "mg": 0.09,
+     "lg": 0.03,
+     "hmg": 0.0
+    },
+    "150-300": {
+     "sg": 0.89,
+     "mg": 0.04,
+     "lg": 0.04,
+     "g": 0.01,
+     "hmg": 0.01,
+     "rl": 0.01
+    },
+    "300-450": {
+     "sg": 0.92,
+     "lg": 0.04,
+     "mg": 0.01,
+     "g": 0.01,
+     "rl": 0.01,
+     "hmg": 0.01
+    },
+    "450-700": {
+     "sg": 0.9,
+     "lg": 0.05,
+     "mg": 0.03,
+     "rl": 0.01,
+     "hmg": 0.01,
+     "g": 0.0
+    },
+    "700+": {
+     "sg": 0.9,
+     "lg": 0.06,
+     "mg": 0.04,
+     "hmg": 0.0,
+     "rl": 0.0
+    }
+   },
+   "damage_by_weapon": {
+    "sg": 0.79,
+    "lg": 0.1,
+    "mg": 0.04,
+    "g": 0.04,
+    "rg": 0.02,
+    "hmg": 0.01
+   },
+   "speed": 132,
+   "fast_share": 0.04,
+   "jump_share": 0.05,
+   "firing_share": 0.2,
+   "enemy_in_view": 0.1,
+   "aim_error_in_view": 5.5,
+   "aim_error_firing": 4.3,
+   "on_target_share": 0.29,
+   "settle_s": 0.32
+  },
+  "Bobby v5": {
+   "sessions": 32,
+   "minutes": 101.2,
+   "frags_per_min": 2.48,
+   "deaths_per_min": 2.5,
+   "damage_per_kill": 163.0,
+   "mega_per_min": 0.0,
+   "red_per_min": 0.01,
+   "mega_share_of_spawns": 0.0,
+   "red_share_of_spawns": 0.0,
+   "weapons_per_min": 0.65,
+   "first_weapon_s": 8.2,
+   "lives_with_a_weapon": 0.23,
+   "in_hand": {
+    "rg": 0.68,
+    "mg": 0.15,
+    "g": 0.05,
+    "sg": 0.04,
+    "lg": 0.03,
+    "rl": 0.02
+   },
+   "fired": {
+    "rg": 0.6,
+    "mg": 0.19,
+    "sg": 0.09,
+    "lg": 0.05,
+    "hmg": 0.03,
+    "rl": 0.03
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "rg": 0.41,
+     "sg": 0.26,
+     "mg": 0.23,
+     "lg": 0.03,
+     "hmg": 0.03,
+     "rl": 0.02
+    },
+    "150-300": {
+     "rg": 0.44,
+     "mg": 0.24,
+     "sg": 0.2,
+     "lg": 0.04,
+     "hmg": 0.03,
+     "g": 0.02
+    },
+    "300-450": {
+     "rg": 0.57,
+     "mg": 0.22,
+     "sg": 0.11,
+     "lg": 0.05,
+     "rl": 0.03,
+     "hmg": 0.02
+    },
+    "450-700": {
+     "rg": 0.62,
+     "mg": 0.14,
+     "sg": 0.09,
+     "lg": 0.07,
+     "hmg": 0.04,
+     "rl": 0.04
+    },
+    "700+": {
+     "rg": 0.65,
+     "mg": 0.21,
+     "lg": 0.05,
+     "sg": 0.04,
+     "hmg": 0.03,
+     "rl": 0.03
+    }
+   },
+   "damage_by_weapon": {
+    "rg": 0.68,
+    "mg": 0.15,
+    "lg": 0.06,
+    "sg": 0.04,
+    "hmg": 0.04,
+    "rl": 0.01
+   },
+   "speed": 207,
+   "fast_share": 0.21,
+   "jump_share": 0.07,
+   "firing_share": 0.27,
+   "enemy_in_view": 0.31,
+   "aim_error_in_view": 3.4,
+   "aim_error_firing": 2.3,
+   "on_target_share": 0.46,
+   "settle_s": 0.23
+  },
+  "Bobby v8": {
+   "sessions": 31,
+   "minutes": 174.2,
+   "frags_per_min": 0.49,
+   "deaths_per_min": 4.22,
+   "damage_per_kill": 328.0,
+   "mega_per_min": 0.1,
+   "red_per_min": 0.01,
+   "mega_share_of_spawns": 0.04,
+   "red_share_of_spawns": 0.0,
+   "weapons_per_min": 2.03,
+   "first_weapon_s": 7.3,
+   "lives_with_a_weapon": 0.36,
+   "in_hand": {
+    "mg": 0.52,
+    "rg": 0.37,
+    "lg": 0.09,
+    "sg": 0.01,
+    "rl": 0.01,
+    "pg": 0.0
+   },
+   "fired": {
+    "mg": 0.64,
+    "rg": 0.28,
+    "lg": 0.08,
+    "sg": 0.0,
+    "rl": 0.0,
+    "pg": 0.0
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "mg": 0.62,
+     "rg": 0.28,
+     "lg": 0.09,
+     "pg": 0.0,
+     "sg": 0.0,
+     "rl": 0.0
+    },
+    "150-300": {
+     "rg": 0.41,
+     "mg": 0.4,
+     "lg": 0.18,
+     "sg": 0.01,
+     "gl": 0.0,
+     "pg": 0.0
+    },
+    "300-450": {
+     "mg": 0.53,
+     "rg": 0.38,
+     "lg": 0.09,
+     "sg": 0.0,
+     "pg": 0.0
+    },
+    "450-700": {
+     "mg": 0.54,
+     "rg": 0.38,
+     "lg": 0.08,
+     "sg": 0.0,
+     "g": 0.0,
+     "pg": 0.0
+    },
+    "700+": {
+     "mg": 0.83,
+     "rg": 0.14,
+     "lg": 0.03,
+     "rl": 0.0,
+     "g": 0.0,
+     "sg": 0.0
+    }
+   },
+   "damage_by_weapon": {
+    "mg": 0.67,
+    "rg": 0.21,
+    "lg": 0.1,
+    "?": 0.01,
+    "gl": 0.0,
+    "sg": 0.0
+   },
+   "speed": 226,
+   "fast_share": 0.22,
+   "jump_share": 0.15,
+   "firing_share": 0.32,
+   "enemy_in_view": 0.39,
+   "aim_error_in_view": 3.2,
+   "aim_error_firing": 2.6,
+   "on_target_share": 0.47,
+   "settle_s": 0.22
+  },
+  "Bobby v6": {
+   "sessions": 10,
+   "minutes": 50.3,
+   "frags_per_min": 0.52,
+   "deaths_per_min": 3.14,
+   "damage_per_kill": 571.0,
+   "mega_per_min": 0.02,
+   "red_per_min": 0.02,
+   "mega_share_of_spawns": 0.01,
+   "red_share_of_spawns": 0.01,
+   "weapons_per_min": 0.5,
+   "first_weapon_s": 9.3,
+   "lives_with_a_weapon": 0.13,
+   "in_hand": {
+    "mg": 0.89,
+    "rg": 0.11,
+    "lg": 0.0,
+    "g": 0.0
+   },
+   "fired": {
+    "mg": 0.93,
+    "rg": 0.07
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "mg": 0.91,
+     "rg": 0.09
+    },
+    "150-300": {
+     "mg": 0.87,
+     "rg": 0.13
+    },
+    "300-450": {
+     "mg": 0.91,
+     "rg": 0.09
+    },
+    "450-700": {
+     "mg": 0.9,
+     "rg": 0.1
+    },
+    "700+": {
+     "mg": 0.96,
+     "rg": 0.04
+    }
+   },
+   "damage_by_weapon": {
+    "mg": 0.82,
+    "rg": 0.18,
+    "?": 0.0
+   },
+   "speed": 191,
+   "fast_share": 0.17,
+   "jump_share": 0.1,
+   "firing_share": 0.37,
+   "enemy_in_view": 0.34,
+   "aim_error_in_view": 2.6,
+   "aim_error_firing": 2.3,
+   "on_target_share": 0.56,
+   "settle_s": 0.2
+  },
+  "Bobby v7": {
+   "sessions": 5,
+   "minutes": 45.6,
+   "frags_per_min": 0.33,
+   "deaths_per_min": 2.9,
+   "damage_per_kill": 861.0,
+   "mega_per_min": 0.0,
+   "red_per_min": 0.0,
+   "mega_share_of_spawns": 0.0,
+   "red_share_of_spawns": 0.0,
+   "weapons_per_min": 0.55,
+   "first_weapon_s": 5.9,
+   "lives_with_a_weapon": 0.14,
+   "in_hand": {
+    "mg": 0.9,
+    "rg": 0.07,
+    "lg": 0.02,
+    "g": 0.0
+   },
+   "fired": {
+    "mg": 0.95,
+    "rg": 0.03,
+    "lg": 0.02
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "mg": 0.84,
+     "lg": 0.1,
+     "rg": 0.06
+    },
+    "150-300": {
+     "mg": 0.91,
+     "rg": 0.05,
+     "lg": 0.04
+    },
+    "300-450": {
+     "mg": 0.95,
+     "rg": 0.03,
+     "lg": 0.02
+    },
+    "450-700": {
+     "mg": 0.96,
+     "rg": 0.02,
+     "lg": 0.02
+    },
+    "700+": {
+     "mg": 0.97,
+     "rg": 0.03,
+     "lg": 0.0
+    }
+   },
+   "damage_by_weapon": {
+    "mg": 0.86,
+    "rg": 0.1,
+    "lg": 0.04,
+    "?": 0.0
+   },
+   "speed": 199,
+   "fast_share": 0.19,
+   "jump_share": 0.27,
+   "firing_share": 0.48,
+   "enemy_in_view": 0.37,
+   "aim_error_in_view": 3.0,
+   "aim_error_firing": 2.7,
+   "on_target_share": 0.5,
+   "settle_s": 0.2
+  },
+  "Bobby v9": {
+   "sessions": 27,
+   "minutes": 197.7,
+   "frags_per_min": 1.17,
+   "deaths_per_min": 2.87,
+   "damage_per_kill": 301.0,
+   "mega_per_min": 0.08,
+   "red_per_min": 0.03,
+   "mega_share_of_spawns": 0.04,
+   "red_share_of_spawns": 0.01,
+   "weapons_per_min": 0.77,
+   "first_weapon_s": 10.2,
+   "lives_with_a_weapon": 0.21,
+   "in_hand": {
+    "mg": 0.74,
+    "rg": 0.14,
+    "lg": 0.07,
+    "sg": 0.03,
+    "pg": 0.0,
+    "gl": 0.0
+   },
+   "fired": {
+    "mg": 0.84,
+    "rg": 0.09,
+    "lg": 0.06,
+    "sg": 0.0,
+    "pg": 0.0,
+    "rl": 0.0
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "mg": 0.74,
+     "lg": 0.15,
+     "rg": 0.1,
+     "sg": 0.01,
+     "pg": 0.0
+    },
+    "150-300": {
+     "mg": 0.78,
+     "lg": 0.11,
+     "rg": 0.1,
+     "sg": 0.01,
+     "pg": 0.0
+    },
+    "300-450": {
+     "mg": 0.84,
+     "rg": 0.08,
+     "lg": 0.06,
+     "sg": 0.01,
+     "pg": 0.0
+    },
+    "450-700": {
+     "mg": 0.87,
+     "rg": 0.08,
+     "lg": 0.05,
+     "sg": 0.0,
+     "pg": 0.0,
+     "rl": 0.0
+    },
+    "700+": {
+     "mg": 0.88,
+     "rg": 0.09,
+     "lg": 0.02,
+     "rl": 0.0,
+     "g": 0.0,
+     "sg": 0.0
+    }
+   },
+   "damage_by_weapon": {
+    "mg": 0.77,
+    "rg": 0.14,
+    "lg": 0.07,
+    "?": 0.0,
+    "sg": 0.0,
+    "pg": 0.0
+   },
+   "speed": 239,
+   "fast_share": 0.27,
+   "jump_share": 0.15,
+   "firing_share": 0.32,
+   "enemy_in_view": 0.26,
+   "aim_error_in_view": 2.8,
+   "aim_error_firing": 2.4,
+   "on_target_share": 0.52,
+   "settle_s": 0.2
+  },
+  "Bobby v10": {
+   "sessions": 10,
+   "minutes": 58.3,
+   "frags_per_min": 0.91,
+   "deaths_per_min": 2.26,
+   "damage_per_kill": 358.0,
+   "mega_per_min": 0.12,
+   "red_per_min": 0.03,
+   "mega_share_of_spawns": 0.06,
+   "red_share_of_spawns": 0.01,
+   "weapons_per_min": 0.86,
+   "first_weapon_s": 8.5,
+   "lives_with_a_weapon": 0.24,
+   "in_hand": {
+    "mg": 0.7,
+    "rg": 0.16,
+    "lg": 0.09,
+    "sg": 0.02,
+    "gl": 0.02,
+    "g": 0.0
+   },
+   "fired": {
+    "mg": 0.8,
+    "lg": 0.1,
+    "rg": 0.08,
+    "sg": 0.01,
+    "gl": 0.0,
+    "g": 0.0
+   },
+   "fired_by_distance": {
+    "0-150": {
+     "mg": 0.74,
+     "lg": 0.16,
+     "rg": 0.07,
+     "sg": 0.03
+    },
+    "150-300": {
+     "mg": 0.75,
+     "lg": 0.17,
+     "rg": 0.05,
+     "sg": 0.03,
+     "gl": 0.01
+    },
+    "300-450": {
+     "mg": 0.79,
+     "lg": 0.12,
+     "rg": 0.08,
+     "gl": 0.01,
+     "sg": 0.01
+    },
+    "450-700": {
+     "mg": 0.82,
+     "rg": 0.1,
+     "lg": 0.06,
+     "sg": 0.01,
+     "gl": 0.0,
+     "g": 0.0
+    },
+    "700+": {
+     "mg": 0.84,
+     "rg": 0.09,
+     "lg": 0.07
+    }
+   },
+   "damage_by_weapon": {
+    "mg": 0.74,
+    "rg": 0.14,
+    "lg": 0.1,
+    "sg": 0.01,
+    "?": 0.0,
+    "gl": 0.0
+   },
+   "speed": 217,
+   "fast_share": 0.22,
+   "jump_share": 0.12,
+   "firing_share": 0.22,
+   "enemy_in_view": 0.21,
+   "aim_error_in_view": 2.6,
+   "aim_error_firing": 2.1,
+   "on_target_share": 0.56,
+   "settle_s": 0.2
+  }
+ }
+}

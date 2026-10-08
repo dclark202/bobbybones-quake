@@ -93,7 +93,10 @@ RUN_COLLECT = 20.0
 # plain player would hold at this distance from an enemy seen in the last 1.5 s, among the weapons he has with ammo:
 # rockets from W_RULE_RL[0] to W_RULE_RL[1] units, lightning up to its range, the rail beyond, else the machine gun.
 # A label for the trainer's --weapon-teach loss on the weapon key, like the intention seed; not a reward.
-W_RULE_RL, W_RULE_LG, W_RULE_RG = (100.0, 450.0), 700.0, 600.0
+W_RULE_RL, W_RULE_LG, W_RULE_RG = (60.0, 300.0), 700.0, 700.0
+# (the distances are people's: in 183 minutes of logged play, with every weapon to hand, the weapon fired most was
+# rockets below 150 units (28%), lightning from 150 to 700 (28% rising to 64%, rockets 17% then 6%), the rail beyond
+# 700 (40%); tools/player_card.py. The first guess was rockets 100 to 450, the rail beyond 600.)
 N_GOAL = 7                                             # goal inputs: on, where (3), next waypoint (3)
 # inputs added after duel_gru_v3 (appended at the end, so an older network can be widened without losing skills):
 # clock and score 10, more items 8 x 6, sounds 20, map position and identity 6, view / up / long rays 28,
