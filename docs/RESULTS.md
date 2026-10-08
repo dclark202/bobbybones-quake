@@ -5,6 +5,31 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 — Pre-work for `duel_gru_v13`, the seeding experiment (owner: "do the pre-work now"; nothing started)
+
+Built while v12 trains, every switch off by default, the two-player simulator unchanged with them off:
+
+- **Seeds** (`sim/duel_env.py`): `PRO_WEAPON` (the weapon teacher names the pros' first choice for the distance among the
+  big weapons he owns, per map from `sim/pro_seed.json`; within 10 points of it is left alone), `PRO_ITEMS` (the item rule
+  in the pros' order: bare, the nearest big weapon, rockets when within 1.5 s of the nearest; armed, the nearest of yellow
+  armor, red armor and mega he can still use), `SPAWN_TEACH` (the keys-only walking teacher also with an enemy in view
+  while he has no big weapon). The **yellow armors are intentions** now (up to two a map): 491 inputs, the intention
+  output 6 -> 8; `sim/reshape_policy.py` can grow the last head. `sim/duel_env_v12.py` / `duel_env_ffa_v12.py` are the
+  frozen 487-input simulator of v12 (`ENVMOD=duel_env_ffa_v12 REFLEX_ENV=duel_env_v12` for its checks).
+- **Tests**: a pupil who obeys the teacher's keys with a fixed view on Blood Run picks up 2.5 weapons and 2.1 armors a
+  player-minute and is bare 74% of the time (random play: 0.1 weapons, 99%); the item rule names a weapon in every bare
+  frame and armor or mega in every armed one; a two-minute trainer run on the three duel maps with all seeds on from a
+  v12 checkpoint carried to the new shape ran clean (he already names the yellow armors in a third of his intentions).
+- **Measuring** (`tools/stack_probe.py`): the scorecard per map beside the pros' numbers, with machine-gun spawns. First
+  look at v12 (2.5 h in, general lives, small samples): Blood Run time bare 64% (pros 6%), first weapon after 21 s (2.3),
+  150 or more 40% (62%), the pros' weapon for the distance in 37% of the frames; arena1 time bare 94%.
+- **People's positions** (`tools/position_overlap.py`): 7 sessions, 27 minutes of people alive on arena1 so far (thin).
+  v12 against them: overlap 0.48; 74% of his time is in the cells that hold 90% of people's, 53% of theirs in his.
+- **The style split recounted by time in hand** (enemy in view, owning all three; `docs/pro_styles_in_hand.json`): rockets
+  42 / 40%, lightning 34 / 36%, rail 24 / 24% (Blood Run / Aerowalk). The rail is held a quarter of the time by everybody;
+  it is the most-held weapon in 9-10% of games (rockets 51-57%, lightning 34-39%). The earlier "1%" counted firing frames.
+- Launcher and weight carry-over are written (`start_v13.py`, `prep_v13.py` in the scratchpad), not run.
+
 ## 2026-10-08 07:31 — `duel_gru_v12`: playing styles and a machine-gun spawn in every life (owner's idea; until 14:00) (B-120, B-116)
 
 From v11's final weights (4,338 min) carried to 487 inputs. Every life is general or has a preferred weapon (rockets,

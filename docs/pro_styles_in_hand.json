@@ -1,0 +1,48 @@
+{
+ "bloodrun": {
+  "demos": 505,
+  "mean_in_hand": [
+   0.422,
+   0.238,
+   0.34
+  ],
+  "lean_over_half": [
+   0.246,
+   0.01,
+   0.119
+  ],
+  "lean_most": [
+   0.566,
+   0.091,
+   0.343
+  ],
+  "distance_when_most": [
+   472,
+   524,
+   476
+  ]
+ },
+ "aerowalk": {
+  "demos": 468,
+  "mean_in_hand": [
+   0.4,
+   0.241,
+   0.359
+  ],
+  "lean_over_half": [
+   0.173,
+   0.011,
+   0.128
+  ],
+  "lean_most": [
+   0.511,
+   0.096,
+   0.393
+  ],
+  "distance_when_most": [
+   410,
+   472,
+   409
+  ]
+ }
+}
