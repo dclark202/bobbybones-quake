@@ -482,7 +482,3 @@ index,group,input,meaning,scale,added in
 480,map reader,the enemy's last known cell: reading 13,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
 481,map reader,the enemy's last known cell: reading 14,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
 482,map reader,the enemy's last known cell: reading 15,the same for where the enemy was last seen or heard (zero after 5 s),about -2 to 2,v9
-483,style,playing style: general,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
-484,style,playing style: rockets,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
-485,style,playing style: rail,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
-486,style,playing style: lightning,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12

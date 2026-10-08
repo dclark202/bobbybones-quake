@@ -237,6 +237,8 @@ for k in range(16):
     add("map reader", "his own cell: reading {}".format(k), "what the map reader (sim/map_reader.py) says about the 64-unit cell he stands in, learned from the game's maps", "about -2 to 2", "v9")
 for k in range(16):
     add("map reader", "the enemy's last known cell: reading {}".format(k), "the same for where the enemy was last seen or heard (zero after 5 s)", "about -2 to 2", "v9")
+for nm in ("general", "rockets", "rail", "lightning"):   # ---- playing styles (2026-10-08, v12)
+    add("style", "playing style: {}".format(nm), "the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of", "0 or 1", "v12")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

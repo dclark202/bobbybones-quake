@@ -76,6 +76,19 @@ How it got there (RESULTS 2026-10-06 evening to 2026-10-07): v9 added a seeded i
 
 Next: the proposal below, for the owner's sign-off. Open besides it: B-107b (measure the machine guns' scatter and the shotgun pattern), B-92 (more players for the reflex benchmark), B-95 (key budget), B-109 (attention), Aerowalk's walking graph (no way to the red armor from most spawns), `arena2`.
 
+## Proposed: `duel_gru_v12`: playing styles and machine-gun spawns (owner's idea of 2026-10-08; built, waiting for his go)
+
+Every life he is in one of four states, given to him as four inputs (487 inputs now): **general**, or a preferred weapon
+(**rockets, rail, lightning**), a quarter each (`STYLE_P` 0.75). With a preferred weapon: the item rule sends him for it
+first; the weapon teacher names it at every distance once he has it (general keeps the distance table); damage with it
+pays half as much again (`STYLE_DMG`); and half a frag a minute while the enemy is in view inside its band with it in
+hand (`STYLE_BAND`; rockets 60 to 300, lightning 150 to 700, rail from 500). Together with: a machine-gun spawn in every
+life (`ARENA_SETS=mg`, `--loadout-p 0,1,0,0`, no random stacks), the keys-only walking teacher at 0.5 fading over three
+hours, stack pay at the doubled sizes, from v11's final weights (carried over by `sim/reshape_policy.py`).
+**Choosing the state himself** is the step after: once he has played all four, his own value estimate at the spawn can
+pick (no new output needed), or a new output is added. `sim/duel_env_v11.py` / `duel_env_ffa_v11.py` are the frozen
+483-input simulator for v10 and v11 (the public server: export with `--env duel_env_ffa_v11` from now on).
+
 ## Done: `duel_gru_v11` (2026-10-07 20:35 to 2026-10-08 06:29; results in RESULTS.md)
 
 **Outcome:** rockets 4% -> 18% of frags and weapon choice by distance, both kept without the teacher; aim and fire clicks

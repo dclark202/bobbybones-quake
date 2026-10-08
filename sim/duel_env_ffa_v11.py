@@ -232,19 +232,6 @@ STACK_BARE_RAMP, STACK_BARE_MAX, STACK_LOW_AT = 5.0, 4.0, 70.0
 # weapons or is under STACK_LOW_AT, and no enemy is in view, the keys that walk to what the item rule names (intent_rule)
 # are the labels of the trainer's teacher loss (--teach, fading), as in the item runs of v10.
 STACK_TEACH = float(os.environ.get("STACK_TEACH") or 0.0) > 0
-# Playing styles (owner, 2026-10-08: "some people do genuinely have a preference for weapons"): every life he is in one of
-# four states, given to him as four inputs: general, or a preferred weapon (rockets, rail, lightning). With a preferred
-# weapon he is pushed to fetch it first (the item rule names it), to hold it whenever he has it (the weapon teacher names
-# it at every distance), to hurt with it (damage with it pays STYLE_DMG more) and to fight at its distance (STYLE_BAND
-# frags a minute while the enemy is in view inside the band with it in hand). STYLE_P = the share of lives with a
-# preferred weapon, split evenly; 0 = always general. Who chooses the state is a later step: here it is drawn.
-STYLES = ("general", "rockets", "rail", "lightning")
-STYLE_W = np.array([-1, RL, RG, LG], np.int64)
-STYLE_LO = np.array([0.0, 60.0, 500.0, 150.0], np.float32)
-STYLE_HI = np.array([0.0, 300.0, 1e9, 700.0], np.float32)
-STYLE_P = float(os.environ.get("STYLE_P") or 0.0)
-STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
-STYLE_BAND = float(os.environ.get("STYLE_BAND") or 0.5)
 STACK_TEACH_QUIET = 1.5
 INTENT_HOLD = float(os.environ.get("INTENT_HOLD") or 3.0)     # (v11: longer, with a release when the item is gone, see intend)
 INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25)
@@ -315,7 +302,7 @@ N_DENSE = len(DENSE_YAW) * len(DENSE_PITCH) if os.environ.get("DENSE_VIEW") == "
 # sim/map_reader.py, cached per map in data/maps/cells_<map>.npy; zeros without the file). Also new: item respawn
 # sounds (mega, red, a weapon, a small health or armor came back within earshot: 4) and the four nearest spawn
 # points (where he is from each: 12).
-N_INTENT = 13 + 32 + 4                                     # (+ 4 since v12: his playing style, see STYLES)
+N_INTENT = 13 + 32
 N_V9 = 4 + 12
 MAX_CELLS, CELL_SIZE = 16384, 64.0                        # enough cells for the big maps (v9; the table is a file, not weights)
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
@@ -766,7 +753,6 @@ class DuelEnv:
         self.fire_cd = np.zeros(n, np.float32)          # reload left from the last shot (a switch waits for it)
         self.seen_t = np.full(n, 9.0, np.float32)       # seconds since this player last saw/heard the opponent
         self.known = np.zeros((n, 3), np.float32)       # last known opponent position
-        self.style = np.zeros(n, np.int64)              # his playing style this life (STYLES; the game-server plugin sets it too)
         self.rp = np.zeros((n, K, 3), np.float32)       # projectiles, owned by player i
         self.rv = np.zeros((n, K, 3), np.float32)
         self.ra = np.zeros((n, K), bool)
@@ -786,10 +772,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0,
-                          style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
-                                                          # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
-                          wrule_frames=0, wrule_agree=0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, wrule_frames=0, wrule_agree=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
                           w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0,
                           vs_persona=np.zeros((3, len(PERSONAS))), fall_dmg=0.0, duck_frames=0, walk_frames=0)      # rows: frags against, deaths to, frames
@@ -1267,8 +1250,6 @@ class DuelEnv:
         self.teach[mi, :4] = np.stack(out, 1)
 
     def _spawn(self, i, avoid, close=None):
-        if STYLE_P > 0 and self.script[i] == 0:              # a new life: his playing style
-            self.style[i] = int(self.rng.integers(1, len(STYLES))) if self.rng.random() < STYLE_P else 0
         if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < self.near_item_p:
             gis = [g_ for g_, lab_ in enumerate(self.route_goal) if lab_ in ("MH", "RA")]
             if gis:                                          # near the mega or the red: he tastes the stack (v9)
@@ -1475,7 +1456,6 @@ class DuelEnv:
         """the inputs of N_INTENT"""
         n = self.n
         out = np.zeros((n, N_INTENT), np.float32)
-        out[np.arange(n), N_INTENT - len(STYLES) + self.style] = 1.0   # his playing style
         R = self.route
         k = self.intent
         if R is not None:
@@ -1550,13 +1530,6 @@ class DuelEnv:
                 it = self.route_item[gi]
                 want = (out == 0) & ~self.has[:, WEAPONS.index(lab.lower())] & self.item_up[grp, it] & (t < best_t)
                 best_t = np.where(want, t, best_t)
-                out = np.where(want, INTENTS.index(lab), out)
-        sw = STYLE_W[self.style]                             # a preferred weapon he lacks comes first
-        for gi, lab in enumerate(self.route_goal):
-            if lab in ("RL", "RG", "LG"):
-                w_ = WEAPONS.index(lab.lower())
-                it = self.route_item[gi]
-                want = (sw == w_) & ~self.has[:, w_] & (R.T[gi, node] < 1e8) & (self.item_up[grp, it] | (self.item_t[grp, it] < R.T[gi, node] + 3.0))
                 out = np.where(want, INTENTS.index(lab), out)
         return out
 
@@ -2182,8 +2155,6 @@ class DuelEnv:
         fine = ((want == RG) & (hold == LG) & ok[:, LG] & (d < W_RULE_LG)) | ((want == LG) & (hold == RG) & ok[:, RG] & (d > W_RULE_RG_OK))
         want = np.where(fine, hold, want)
         want = np.where(ok[:, RL] & (d > W_RULE_RL[0]) & (d < W_RULE_RL[1]), RL, want)
-        sw = STYLE_W[self.style[ii]]                         # his preferred weapon whenever he has it, at any distance
-        want = np.where((sw >= 0) & ok[np.arange(len(ii)), np.maximum(sw, 0)], sw, want)
         want = np.where(ok[np.arange(len(ii)), want], want, self.weapon[ii])      # (no machine-gun ammo: keep what he holds)
         cur = self.weapon[ii]
         self.teach[ii, 4] = np.where(want == cur, 0, want + 1)
@@ -2651,23 +2622,6 @@ class DuelEnv:
             self.stats["gun"][0] += float(dealt[self.gun].sum())
             dealt = np.where(self.gun, dealt * gsp, dealt)
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
-        if STYLE_P > 0:                                      # playing styles: his weapon, at its distance (see STYLES)
-            live = (pkind == NORMAL) & (self.script == 0) & (self.hp > 0) & (self.run_k < 0)
-            sw = STYLE_W[self.style]
-            mine = live & (sw >= 0) & (self.weapon == sw)
-            d_ = np.linalg.norm(self.known - s[:, :3], axis=1)
-            seen = live & self.visible
-            inb = mine & seen & (d_ > STYLE_LO[self.style]) & (d_ < STYLE_HI[self.style])
-            reward += STYLE_DMG * self.dmg_reward * np.where(mine, dealt, 0.0) + STYLE_BAND * inb * (DT / 60.0)
-            st_ = self.stats["style"]
-            np.add.at(st_[:, 0], self.style[live], 1)
-            np.add.at(st_[:, 1], self.style[mine], 1)
-            np.add.at(st_[:, 2], self.style[seen], 1)
-            np.add.at(st_[:, 3], self.style[inb], 1)
-            np.add.at(st_[:, 4], self.style[seen], d_[seen])
-            np.add.at(st_[:, 5], self.style[live], dealt[live])
-            np.add.at(st_[:, 6], self.style[mine], dealt[mine])
-            np.add.at(st_[:, 7], self.style[live], self.has[live][:, [RL, RG, LG]].sum(1))
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
         if self.flinch_on and hitby.any():                  # a hit throws the aim off at once, and for a moment after
@@ -2848,11 +2802,7 @@ class DuelEnv:
             if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
                 reward[v] -= float(self.intent_paid[v])      # the trip he died on pays nothing (v9; off since 2026-10-07)
             died[v] = True
-            if STYLE_P > 0 and self.script[v] == 0:
-                self.stats["style"][self.style[v], 9] += 1
             if k >= 0 and k != v:
-                if STYLE_P > 0 and self.script[k] == 0:
-                    self.stats["style"][self.style[k], 8] += 1
                 reward[k] += 1.0
                 self.frags_r[k] += 1
                 self.stats["frags"] += 1

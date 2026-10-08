@@ -53,6 +53,7 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   the file). `sim/duel_env_v8.py` / `duel_env_ffa_v8.py` are the frozen v8 simulator (the public server's network
   needs them: export with `--env duel_env_ffa_v8`). Older policies in the reflex report: `REFLEX_ENV=duel_env_v8`.
   `sim/render_replay.py` renders a video from a server session log.
+- **v12 (2026-10-08)**: four more inputs at the end, his playing style this life (`STYLES` in `duel_env.py`; `env.style`, zero = general). `sim/duel_env_v11.py` / `duel_env_ffa_v11.py` are the frozen 483-input simulator of v10 and v11 (the public server's v10: export with `--env duel_env_ffa_v11`).
 - **Environments**: `duel_env.py` (current: nine weapons, items, sounds, clock, crouch, walk, fall damage,
   human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO / COURSE, scripted opponents with eight styles, lab
   mode on the test map: aim rooms and movement courses read from `maps/testlab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the
