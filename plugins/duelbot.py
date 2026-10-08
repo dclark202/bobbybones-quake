@@ -767,8 +767,13 @@ class duelbot(minqlx.Plugin):
         env.visible = vis
         heard = (~vis) & alive & (dist < E.HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250)
         if hasattr(env, "vis_run"):                          # newer rules: an enemy is noticed only after a moment in view
+            need_ = max(1, env.acquire_frames - env.react_frames)
+            if getattr(E, "SURPRISE_MS", 0) > 0 and hasattr(env, "acq_extra"):    # off the crosshair and unexpected: noticed later (as in training)
+                ecc_ = np.degrees(np.arccos(np.clip((to * fdir).sum(1) / dist, -1.0, 1.0)))
+                env.acq_extra = np.where(vis & (env.vis_run == 0), E.surprise_frames(ecc_, env.seen_t), np.where(vis, env.acq_extra, 0))
+                need_ = need_ + env.acq_extra
             env.vis_run = np.where(vis, env.vis_run + 1, 0)
-            vis = vis & (env.vis_run >= max(1, env.acquire_frames - env.react_frames))
+            vis = vis & (env.vis_run >= need_)
             env.acquired = vis
         env.known[vis] = s[opp[vis], :3]
         if heard.any():

@@ -196,6 +196,10 @@ def bobby(run, policy=None, repeats=4, react_ms=None, percept=None, flinch=None)
         env.percept_sigma = percept
     if flinch is not None:
         E.FLINCH_PER_DMG = flinch
+    if os.environ.get("REFLEX_FLINCH_MAX"):                               # the cap and the fading time of the flinch, for a sweep
+        E.FLINCH_MAX = float(os.environ["REFLEX_FLINCH_MAX"])
+    if os.environ.get("REFLEX_FLINCH_TAU"):
+        E.FLINCH_TAU = float(os.environ["REFLEX_FLINCH_TAU"])
     A = env.lab["aim"]
     rng = np.random.default_rng(3)
     subj = np.arange(0, env.n, 2)

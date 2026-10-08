@@ -150,16 +150,64 @@ ITEMS_ROOM_REWARD = 0.5                                # per pickup in the lab m
 FALL_MED, FALL_FAR = 40.0, 60.0                        # Quake 3 fall damage: 5 above "medium", 10 above "far"
 # scripted fighter styles, good and bad. Columns: turn gain, aim noise (deg), backs off below this distance,
 # advances above this distance, fixed weapon (-1 = rockets close / lightning mid / rail far, -2 = random)
-PERSONAS = ("allround", "sniper", "rusher", "tracker", "dodger", "stander", "jumper", "spammer")
-P_GAIN = np.array([0.4, 0.4, 0.4, 0.45, 0.4, 0.15, 0.3, 0.3], np.float32)
-P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5], np.float32)
-P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200], np.float32)
-P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500], np.float32)
-P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2], np.int64)
+# The ninth, "nightmare", is a stand-in for the game's Nightmare bot in the simulator, for checks only (tools/duel_eval.py;
+# never drawn in training: persona_p gives it no share, and the game's bots are a yardstick, not a teacher): the item
+# runner (script 3) with the weapons the game's bot was logged to fire (692 minutes of sparring: shotgun 36%, rail 26%,
+# rockets 15%, lightning 12%, machine gun 11%; the rail beyond 700 units), little jumping, and an aim whose noise
+# (NM_NOISE, degrees a frame) is set so that its scores against v10 and v11 come out as the real bot's did.
+PERSONAS = ("allround", "sniper", "rusher", "tracker", "dodger", "stander", "jumper", "spammer", "nightmare")
+NIGHTMARE = 8
+P_GAIN = np.array([0.4, 0.4, 0.4, 0.45, 0.4, 0.15, 0.3, 0.3, float(os.environ.get("NM_GAIN") or 0.4)], np.float32)
+P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5, float(os.environ.get("NM_NOISE") or 0.6)], np.float32)
+P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200, 150], np.float32)
+P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500, 600], np.float32)
+P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2, -3], np.int64)
+NM_WEAPONS, NM_WEIGHTS = np.array([SG, RG, RL, LG, MG], np.int64), np.array([0.36, 0.26, 0.15, 0.12, 0.11])
+# ---- Aim ability: one knob (owner, 2026-10-08: "on par or slightly above me, 10% over or so ... this will likely be
+# turned into a parameter 'aim ability' with this as the baseline 3/5, a knob that can be tuned up or down").
+# AIM_LEVEL 1 to 5 (fractions allowed), 3 by default. Level 3 is set from the owner's reflex-room runs and the logged
+# games (docs/RESULTS.md 2026-10-08, aim audit): with these limits the network of that day tracked a strafing target
+# 44% of the time (the owner 40%) and under fire 26% (20%), and noticed an enemy as fast as he does in the room.
+# Each level is AIM_STEP times the errors and delays of the level above it (a first spacing: to be fitted to the
+# spread of people's play as more of it is logged). What a level sets:
+#   percept_sigma / tau / speed   the error in where he sees the enemy (degrees; how long it lingers; more per deg/s)
+#   react_ms, acquire_ms          tracking delay on an enemy in view; delay before one who has just appeared is noticed
+#   surprise_ms                   up to this much more before he is noticed when he turns up off the crosshair (nothing
+#                                 within 10 degrees, all of it from 40 on) and unexpected (half if seen or heard in the
+#                                 last 2 s): in real games people fire 0.5 s after an enemy appears, he fired after 0.2
+#   flinch per damage / max / tau how far a hit throws his aim off, and for how long (the owner keeps half of his
+#                                 tracking under fire; with the first values he kept 78%)
+#   motor_noise / motor_base      hand noise
+# AIM_PRESET=v12 or v10 gives the limits those networks were trained under (for checks of old networks). Any single
+# value can still be set by its own environment variable (PERCEPT_SIGMA, FLINCH_PER_DMG, SURPRISE_MS, ...).
+AIM_STEP = 1.25
+
+
+def aim_settings(level=3.0, preset=""):
+    f = AIM_STEP ** (3.0 - float(level))
+    a = dict(level=float(level), percept_sigma=0.6 * f, percept_tau=0.15, percept_speed=0.0, react_ms=100.0 * f,
+             acquire_ms=200.0 * f, surprise_ms=200.0 * f, flinch_per_dmg=0.25 * f, flinch_max=6.0 * min(f, 1.6),
+             flinch_tau=0.5, motor_noise=0.10 * f, motor_base=0.05 * f)
+    if preset in ("v12", "v11"):
+        a.update(percept_sigma=1.2, percept_tau=0.5, percept_speed=0.012, react_ms=75.0, acquire_ms=200.0, surprise_ms=0.0,
+                 flinch_per_dmg=0.12, flinch_max=3.0, flinch_tau=0.3, motor_noise=0.10, motor_base=0.05)
+    elif preset == "v10":
+        a.update(percept_sigma=0.6, percept_tau=0.15, percept_speed=0.0, react_ms=75.0, acquire_ms=200.0, surprise_ms=0.0,
+                 flinch_per_dmg=0.12, flinch_max=3.0, flinch_tau=0.3, motor_noise=0.10, motor_base=0.05)
+    return a
+
+
+AIM = aim_settings(os.environ.get("AIM_LEVEL") or 3.0, os.environ.get("AIM_PRESET") or "")
+
+
+def _aim(var, key):
+    return float(os.environ[var]) if os.environ.get(var) else float(AIM[key])
+
+
 REACT_FRAMES = 2                                       # 50 ms: tracking an enemy already in view lags by this much.
 ACQUIRE_FRAMES = 8                                     # 200 ms: an enemy who has just come into view is not reacted to before this
 TURN_CAP = 30.0                                        # fastest flick, degrees per frame (1200 deg/s)
-MOTOR_NOISE, MOTOR_BASE = 0.10, 0.05                   # hand noise: this share of the view movement, plus a little, per frame (0.14 until 2026-10-06 evening, owner: tune up)
+MOTOR_NOISE, MOTOR_BASE = _aim("MOTOR_NOISE", "motor_noise"), _aim("MOTOR_BASE", "motor_base")   # (0.10, 0.05 at level 3) hand noise: this share of the view movement, plus a little, per frame (0.14 until 2026-10-06 evening, owner: tune up)
 RELOAD_JITTER, RELOAD_JITTER_MAX = 0.05, 0.12          # slow weapons: random extra delay after the reload (mean, max seconds)
 DMG_TAKEN_W = 2.0                                      # damage taken (any source) weighs this much against damage dealt
 FIRE_TOGGLE_COST = 0.003                               # reward cost each time the fire button changes (holding is free)
@@ -169,7 +217,7 @@ LOAD_GUNS = (0, 1, 2, 4, 5, 6, 7)                      # weapons that random loa
 # (2026-10-05) He reads where the enemy is against his crosshair only this well: a slowly drifting error, in degrees,
 # on the direction to an enemy in view (every input that gives that direction carries it). A person judges the
 # gap between crosshair and target by eye, not to a hundredth of a degree.
-PERCEPT_SIGMA, PERCEPT_TAU = float(os.environ.get("PERCEPT_SIGMA") or 1.2), float(os.environ.get("PERCEPT_TAU") or 0.5)
+PERCEPT_SIGMA, PERCEPT_TAU = _aim("PERCEPT_SIGMA", "percept_sigma"), _aim("PERCEPT_TAU", "percept_tau")   # (by the aim level since 2026-10-08; 1.2, 0.5 in v11 and v12)
 # degrees; seconds over which the error drifts. 2026-10-06 evening 1.0 -> 0.6 after the reflex room (he was wider than the owner
 # there). 2026-10-07 evening the owner asks for LESS hitscan aim: in real games he is on target 56% of the time an enemy is in view
 # (people 23%, Nightmare 27%) and 2.1 degrees off while firing (people 3.2): the reflex room flatters people. What makes a
@@ -177,7 +225,7 @@ PERCEPT_SIGMA, PERCEPT_TAU = float(os.environ.get("PERCEPT_SIGMA") or 1.2), floa
 # off for half a second, not for a frame) that grows with how fast the target crosses his view. So for v11 (set by the launch
 # file): a larger error that drifts slowly (PERCEPT_TAU 0.5: the memory cannot average it away as it does the 0.15 s one) and
 # PERCEPT_SPEED degrees more for every degree a second the enemy's direction moves, at most PERCEPT_SPEED_MAX.
-PERCEPT_SPEED, PERCEPT_SPEED_MAX = float(os.environ.get("PERCEPT_SPEED") or 0.012), 3.0
+PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), 3.0
 # Values since 2026-10-07 20:15 (the first "click", owner: "nudge hitscan aim down 1-2 clicks"): 1.2 degrees, 0.5 s, 0.012.
 # v10 under them in the reflex room, not yet adapted: error on a strafing target 3.0 -> 3.8 degrees (the owner 2.45), time on
 # it 58% -> 54% (40%), lightning damage a second 83 -> 75 (58), first rail shot on a jumping target 74% -> 65% (88%).
@@ -185,7 +233,14 @@ PERCEPT_SPEED, PERCEPT_SPEED_MAX = float(os.environ.get("PERCEPT_SPEED") or 0.01
 # (2026-10-05, B-94) Being shot at costs aim: a hit throws his read of the enemy's direction off by FLINCH_PER_DMG
 # degrees per point of damage (at most FLINCH_MAX at a time), and the error stays larger while the flinch fades
 # (FLINCH_TAU seconds). First values; to be set from players in the reflex test (calm half against the half under fire).
-FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = 0.12, 3.0, 0.3
+FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = _aim("FLINCH_PER_DMG", "flinch_per_dmg"), _aim("FLINCH_MAX", "flinch_max"), _aim("FLINCH_TAU", "flinch_tau")   # (0.12, 3.0, 0.3 until v12)
+SURPRISE_MS = _aim("SURPRISE_MS", "surprise_ms")
+
+
+def surprise_frames(ecc, seen_t):
+    """frames more before an enemy who comes into view is noticed: by how far off the crosshair he is (degrees) and by
+    whether he was seen or heard in the last two seconds (see the aim ability above)"""
+    return np.rint(SURPRISE_MS * np.clip((ecc - 10.0) / 30.0, 0.0, 1.0) * np.where(seen_t < 2.0, 0.5, 1.0) / 25.0).astype(np.int64)
 # (2026-10-05, B-93) The tracking delay is an average, not a floor: with an enemy in view he is sharper for a short
 # spell (FOCUS_GAIN frames quicker) while his focus lasts, then slower than the average (FOCUS_LOSS frames) until
 # it has come back. Focus runs down at one second a second with an enemy in view and comes back at FOCUS_REFILL.
@@ -483,6 +538,7 @@ class DuelEnv:
         self.acquire_frames = ACQUIRE_FRAMES
         self.vis_run = np.zeros(2 * n_matches, np.int64)       # frames the opponent has been in view without a break
         self.acquired = np.zeros(2 * n_matches, bool)          # in view long enough to have been noticed
+        self.acq_extra = np.zeros(2 * n_matches, np.int64)     # frames more this time, by surprise (surprise_frames)
         self.fire_prev = np.zeros(2 * n_matches, bool)
         self.human_aim = True                           # flick cap, hand noise and reload jitter for policy players
         # spawn weapons in normal rounds: share of rounds with 1-2 random weapons each / the real duel spawn
@@ -523,7 +579,7 @@ class DuelEnv:
         self.intent_gone = np.zeros(len(self.sc_t), bool)   # the chosen item is not there and will not be in time: free to choose again
         self.sc_persona = np.zeros(2 * n_matches, np.int64)   # scripted fighter style (PERSONAS)
         self.sc_wpn = np.zeros(2 * n_matches, np.int64)
-        self.persona_p = np.full(len(PERSONAS), 1.0 / len(PERSONAS))
+        self.persona_p = np.array([1.0 / NIGHTMARE] * NIGHTMARE + [0.0] * (len(PERSONAS) - NIGHTMARE))   # (the stand-in is never drawn)
         self.persona_force = None                       # test rooms: always this style
         self.move_len = 40.0                            # seconds per movement round (several goals in a row)
         # movement teacher: a movement-only policy (sim/train_move.py) whose actions are offered as labels in
@@ -2073,9 +2129,12 @@ class DuelEnv:
             self.sc_t[ch] = np.where(self.sc_persona[ch] == 4, rng.uniform(0.15, 0.5, len(ch)),
                                      rng.uniform(0.3, 1.2, len(ch)))          # the dodger changes direction fast
             self.sc_wpn[ch] = rng.choice([RL, RG, LG, SG, PG, MG], len(ch))
+            nm_ = ch[self.sc_persona[ch] == NIGHTMARE]
+            if len(nm_):
+                self.sc_wpn[nm_] = rng.choice(NM_WEAPONS, len(nm_), p=NM_WEIGHTS / NM_WEIGHTS.sum())
             self.sc_dir[ch] = rng.choice([-1, -1, 1, 1, 0], len(ch))
             self.sc_fwd[ch] = rng.choice([-1, 0, 0, 1], len(ch))
-            self.sc_jump[ch] = rng.random(len(ch)) < 0.2
+            self.sc_jump[ch] = (rng.random(len(ch)) < 0.2) & (self.sc_persona[ch] != NIGHTMARE)
         if self.sc_style:                                   # test rooms: a fixed, repeatable target pattern
             ph = (self.round_t[idx // 2] / DT).astype(np.int64)
             if self.sc_style == 1:                           # still
@@ -2132,9 +2191,12 @@ class DuelEnv:
         fx = np.maximum(fixed, 0)
         want = np.where((fixed >= 0) & (am[np.arange(k), fx] > 0), fx, want)
         want = np.where(fixed == -2, self.sc_wpn[idx], want)
+        nmw = self.sc_wpn[idx]                               # the stand-in: its drawn weapon if he has it, the rail far off
+        nmw = np.where((dist > 700) & self.has[idx, RG] & (am[:, RG] > 0), RG, nmw)
+        want = np.where((fixed == -3) & self.has[np.arange(k) * 0 + idx, nmw] & (am[np.arange(k), nmw] > 0), nmw, want)
         cur = self.weapon[idx]
         out[:, 6] = np.where(fighter & (want != cur) & self.has[idx, want], want + 1, 0)
-        tol = np.where(cur == RL, 6.0, 2.5)
+        tol = np.where((cur == RL) | (cur == SG), 6.0, 2.5)
         out[:, 5] = (vis & (np.abs(ey) < tol) & (np.abs(ep) < 4.0)) | (fighter & (per == 7))   # the spammer always fires
         if runner.any() and self.route is not None:
             self._runner_keys(idx, runner, out, vis | chase)
@@ -3008,8 +3070,11 @@ class DuelEnv:
                                                          np.where(self.duck[opp[vh]], TOP_DUCK, TOP)).sum())
             nv = vh[pkind[vh] == NORMAL]
             np.add.at(self.stats["w_dist"], (np.digitize(dist[nv], [300.0, 700.0]), self.weapon[nv]), 1)
+        if SURPRISE_MS > 0:                                  # off the crosshair and unexpected: noticed later
+            ecc_ = np.degrees(np.arccos(np.clip((to * fdir).sum(1) / dist, -1.0, 1.0)))
+            self.acq_extra = np.where(vis & (self.vis_run == 0), surprise_frames(ecc_, self.seen_t), np.where(vis, self.acq_extra, 0))
         self.vis_run = np.where(vis, self.vis_run + 1, 0)
-        acq = vis & (self.vis_run >= max(1, self.acquire_frames - self.react_frames))
+        acq = vis & (self.vis_run >= max(1, self.acquire_frames - self.react_frames) + self.acq_extra)
         self.acquired = acq
         self.known[acq] = s[opp[acq], :3]
         if heard.any():

@@ -53,6 +53,7 @@ rep('''        self.n = 2 * n_matches                          # player i's oppo
         self.vis2 = np.zeros((self.n, G - 1), bool)     # per other player: in view / frames in view / noticed /
         self.vis_run2 = np.zeros((self.n, G - 1), np.int64)     # last known position / seconds since seen or heard
         self.acq2 = np.zeros((self.n, G - 1), bool)
+        self.acq_extra2 = np.zeros((self.n, G - 1), np.int64)   # frames more before he is noticed, by surprise
         self.known2 = np.zeros((self.n, G - 1, 3), np.float32)
         self.seen2 = np.full((self.n, G - 1), 9.0, np.float32)
         self.dmg_on = np.zeros((self.n, G), np.float32)  # damage dealt to each member during his current life
@@ -447,8 +448,12 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
             vis &= (pkind != MOVE) & (pkind != SOLO) & ((pkind != COURSE) | self.gun)   # movement / solo / course: no other player
             heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
             self.vis2[:, k_] = vis
+            if SURPRISE_MS > 0:                              # off the crosshair and unexpected: noticed later
+                ecc_ = np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0)))
+                self.acq_extra2[:, k_] = np.where(vis & (self.vis_run2[:, k_] == 0), surprise_frames(ecc_, self.seen2[:, k_]),
+                                                  np.where(vis, self.acq_extra2[:, k_], 0))
             self.vis_run2[:, k_] = np.where(vis, self.vis_run2[:, k_] + 1, 0)
-            acq = vis & (self.vis_run2[:, k_] >= max(1, self.acquire_frames - self.react_frames))
+            acq = vis & (self.vis_run2[:, k_] >= max(1, self.acquire_frames - self.react_frames) + self.acq_extra2[:, k_])
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
             if heard.any():

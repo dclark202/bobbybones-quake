@@ -356,8 +356,14 @@ class ffabot(duelbot):
                 vis[cand] = env._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
             heard = (~vis) & live[opp] & live & (dist < E.HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250)
             env.vis2[:, k_] = vis
+            need_ = max(1, env.acquire_frames - env.react_frames)
+            if getattr(E, "SURPRISE_MS", 0) > 0 and hasattr(env, "acq_extra2"):   # off the crosshair and unexpected: noticed later (as in training)
+                ecc_ = np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0)))
+                env.acq_extra2[:, k_] = np.where(vis & (env.vis_run2[:, k_] == 0), E.surprise_frames(ecc_, env.seen2[:, k_]),
+                                                 np.where(vis, env.acq_extra2[:, k_], 0))
+                need_ = need_ + env.acq_extra2[:, k_]
             env.vis_run2[:, k_] = np.where(vis, env.vis_run2[:, k_] + 1, 0)
-            acq = vis & (env.vis_run2[:, k_] >= max(1, env.acquire_frames - env.react_frames))
+            acq = vis & (env.vis_run2[:, k_] >= need_)
             env.acq2[:, k_] = acq
             env.known2[acq, k_] = s[opp[acq], :3]
             if heard.any():
