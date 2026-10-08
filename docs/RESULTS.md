@@ -25,24 +25,27 @@ The first updates are a start-up artifact (every seat begins the first round wit
 held 2.34, bare 8%); the steady state is reached after about ten updates. Hourly, from the training log and, at the odd
 hours, the measured check (`chk11_HH05.txt`):
 
-| | v10 end | 21:40 (1 h) |
-|---|---|---|
-| Stack: above 100 (0 to 1), big weapons held, time bare, time under 70 | - | 0.16, 0.54, 59%, 28% |
-| Weapon rule agreement (teacher weight) | 0.61 | 0.85 (0.82) |
-| Frag share rockets / rail / lightning / machine gun | 4 / 17 / 20 / 52% | 13 / 9 / 13 / 63% |
-| Hit rate rail / lightning / machine gun / rockets | 57 / 45 / 50 / 38% | 44 / 43 / 42 / 53% |
-| Pickups a player-minute: mega, red, weapons | 0.34, 0.35, 1.84 | 0.26, 0.28, 1.40 |
-| Collect-then-fight: kills by the stacked : by the fresh | - | 130 : 120 |
-| Item-run arrivals a player-minute | 4 | 3.8 |
-| Nightmare arena1 / Blood Run / Aerowalk (at 20 min) | 22-28 / 0-10 / 0-0 | 8-22 / 0-7 / 0-6 |
-| arena1 fight check: mega, red a player-minute | 0.01, 0.02 | 0.04, 0.01 |
-| Solo test arena1: mega / red / RL / RG / LG | 69 / 97 / 100 / 100 / 100% | 75 / 94 / 97 / 100 / 100% |
-| Reflex room: aim error, time on target, lightning damage a second, first rail shot | 3.0 deg, 58%, 83, 74% | 4.6 deg, 52%, 76, 55% |
+| | v10 end | 21:40 (1 h) | 23:40 (3 h) |
+|---|---|---|---|
+| Stack: above 100 (0 to 1), big weapons held, time bare, time under 70 | - | 0.16, 0.54, 59%, 28% | 0.15, 0.54, 60%, 28% |
+| Weapon rule agreement (teacher weight) | 0.61 | 0.85 (0.82) | 0.91 (0.49) |
+| Frag share rockets / rail / lightning / machine gun | 4 / 17 / 20 / 52% | 13 / 9 / 13 / 63% | 16 / 6 / 12 / 66% |
+| Hit rate rail / lightning / machine gun / rockets | 57 / 45 / 50 / 38% | 44 / 43 / 42 / 53% | 41 / 43 / 42 / 54% |
+| Pickups a player-minute: mega, red, weapons | 0.34, 0.35, 1.84 | 0.26, 0.28, 1.40 | 0.27, 0.30, 1.44 |
+| Collect-then-fight: kills by the stacked : by the fresh | - | 130 : 120 | 1329 : 1268 (last 8 updates) |
+| Item-run arrivals a player-minute | 4 | 3.8 | 4.1 |
+| Nightmare arena1 / Blood Run / Aerowalk (at 20 min) | 22-28 / 0-10 / 0-0 | 8-22 / 0-7 / 0-6 | 6-22 / 0-4 / 0-7 |
+| arena1 fight check: mega, red a player-minute | 0.01, 0.02 | 0.04, 0.01 | 0.08, 0.02 |
+| Solo test arena1: mega / red / RL / RG / LG | 69 / 97 / 100 / 100 / 100% | 75 / 94 / 97 / 100 / 100% | 69 / 94 / 100 / 100 / 100% |
+| Reflex room: aim error, time on target, lightning damage a second, first rail shot | 3.0 deg, 58%, 83, 74% | 4.6 deg, 52%, 76, 55% | 4.4 deg, 51%, 74, 48% |
 
 At one hour: the aim limits bite as measured beforehand (rail and machine gun hit rates down 13 and 8 points); rockets
 went from 4% to 13% of frags and hit more; he follows the weapon table. Nightmare on arena1 fell from 22-28 to 8-22 twenty
 minutes in (softer aim, fewer clicks, not yet adapted). The stack numbers have not moved yet. The stacked side of the
 collect-then-fight rounds does not win more than the fresh side (130 : 120): a stack is not yet worth anything to him.
+
+At three hours nothing about the stack has moved (bare 60%, big weapons 0.54, the stacked side of the collect-then-fight
+rounds no better than the fresh one), and Nightmare on arena1 has not come back (6-22). Rockets 16% of frags.
 
 Built for the fallback (off, `STACK_TEACH`): the walking teacher inside normal games, while bare or under 70 with nobody
 in view, toward what the item rule names. Test on arena1 with machine-gun spawns, 12 player-minutes, random aim: a pupil
