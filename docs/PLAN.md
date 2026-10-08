@@ -122,6 +122,27 @@ to S4 as teachers fading over four hours, S6 as a column. Groups of 2, 3 and 4 a
    baseline; the bar is "better than v12". Thin data: about three hours of people in all, part of it on arena1.
 4. *The owner plays him* on a duel map and on arena1; a card of each game.
 
+### How the pro data goes into v13 (owner, 2026-10-08: "it should reinforce the work we've started with v12"; pro routes in)
+
+v12 set up the frame with hand-made rules: style lives, a weapon rule, an item rule, a walking teacher on the shortest
+way. v13 keeps the frame and puts what the pros do behind each rule; the rewards do not change.
+
+| v12 (hand-made) | v13 (from 505 hours of pro play) | Built |
+|---|---|---|
+| Weapon rule: rockets 60-300, lightning to 700, rail from 500 | the pros' first choice per 100 units, per map (`PRO_WEAPON`) | yes |
+| Item rule: mega, then red, then a weapon; no yellow armor | a weapon first when bare, then the nearest armor or mega; yellow armors as goals (`PRO_ITEMS`) | yes |
+| Walking teacher only when no enemy is about | also from the spawn to the first weapon with an enemy in view (`SPAWN_TEACH`) | yes |
+| Walking teacher along the shortest way | **along the pros' way**: for each goal, the step the pros took from each place on their trips that ended in picking it up (their positions are in the light demo sets), laid on the walking graph; where fewer than 20 pro trips passed, the shortest way | to build (S5, `PRO_ROUTES`) |
+| Style bands and a pay for the distance | no pay for distance; the style still names the weapon to fetch and hold, the pros' table the weapon for the distance in general lives | yes |
+| Four styles, a quarter each | the same, rail included; no rail life on Lost World | yes |
+
+Teachers: the weapon key 1.0, the movement keys 0.5, the intention 2.0, fading to nothing over four hours; then at least
+four hours without them. Start: v12's final weights carried to 491 inputs. Maps: Blood Run, Aerowalk, Lost World.
+**Styles on the public server now:** the plugin draws one of the map's styles for each bot life at random (and logs it).
+**Choosing the style himself (v14):** at each spawn his own value estimate is asked once per style and the style is drawn
+in proportion (the trainer does it for the players that spawned, the plugin the same way); only after v13 has shown that
+all four styles are played and differ.
+
 **When (owner, 2026-10-08): a separate experiment after v12, not folded into it.** v12 is the crude version (hand-set
 rules); its end decides what v13 is. Gate at v12's end: two hours after the teachers are gone, time bare has not gone back
 above about 65%, his weapon in hand in a style life has not halved, and he still fights. *Passes:* v13 is the pro seeds as
