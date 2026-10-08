@@ -583,7 +583,12 @@ class duelbot(minqlx.Plugin):
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
         self.E = E = importlib.import_module(str(self.P["env"]))
-        self.env = E.DuelEnv(bsp, n_matches=1, seed=1)
+        # with the map's walking graph: without it the inputs about the way to the items, about his chosen item and the
+        # map reader's numbers are all zero. It was missing here until 2026-10-08 (the free-for-all plugin had it), so
+        # in every 1v1 game on a real server he played without them (he never went near the red armor on arena1).
+        nav = "/maps/nav_{}_sim.json".format(mapname)
+        os.environ["ROUTE_CACHE"] = D                          # the route grid is cached here (/maps is read-only)
+        self.env = E.DuelEnv(bsp, n_matches=1, seed=1, nav=nav if os.path.exists(nav) else None)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.env.react_frames = round(self.react_ms / 25)    # same reaction delay as in training (newer simulators)
         self.no_walk = bool(self.P["no_walk"]) if "no_walk" in self.P else False    # trained without the walk key
@@ -596,7 +601,6 @@ class duelbot(minqlx.Plugin):
         self.h = np.zeros((1, self.P["whh"].shape[1]), np.float32)
         # the test rooms always use the current simulator's scripted players; slot 0 = human, slot 1 = Bobby
         self.R = R = importlib.import_module("duel_env")
-        nav = "/maps/nav_{}_sim.json".format(mapname)
         self.renv = R.DuelEnv(bsp, n_matches=1, seed=2, nav=nav if os.path.exists(nav) else None)
         self.renv.lab = None                                 # the plugin runs the lab rooms itself (placement, zones, jumping)
         self.goal_labels = [d[4] for d in self.renv.item_def if d[4] in GOAL_NAMES]
@@ -605,7 +609,6 @@ class duelbot(minqlx.Plugin):
         if os.path.exists(rooms_json):
             with open(rooms_json) as f:
                 self.lab = json.load(f)
-        os.environ["ROUTE_CACHE"] = D                          # the route grid is cached here (/maps is read-only)
         self.rng = np.random.default_rng(int(time.time()))
         self.item_ent = {}
         self.ready = True
@@ -734,14 +737,16 @@ class duelbot(minqlx.Plugin):
                     k += 1
         taken = []
         if env.nI:
-            for num, cls, x, y, z, up, _ in minqlx.item_states()[1]:
+            now_ms, items = minqlx.item_states()
+            for num, cls, x, y, z, up, back_ms in items:
                 key = (id(env), num)
                 k = self.item_ent.get(key)
                 if k is None:
                     d = np.linalg.norm(env.item_pos - np.array([x, y, z], np.float32), axis=1)
                     k = self.item_ent[key] = int(d.argmin()) if d.min() < 40 else -1
                 if k >= 0:
-                    env.item_up[0, k] = bool(up)
+                    env.item_up[0, k] = bool(up)             # and the seconds until it is back, as the simulator counts them
+                    env.item_t[0, k] = 0.0 if up else min(60.0, max(0.0, (back_ms - now_ms) / 1000.0))   # (never set until 2026-10-08)
                 if self.item_was.get(num, up) and not up:    # an item was just taken: by the nearer player
                     d = np.linalg.norm(env.state[:, :3] - np.array([x, y, z], np.float32), axis=1)
                     taken.append((cls, int(d.argmin()) if d.min() < 120 else -1))
