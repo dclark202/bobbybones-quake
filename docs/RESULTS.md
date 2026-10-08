@@ -5,6 +5,36 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-07 20:35 — `duel_gru_v11`: a pay for keeping a stack, fewer fire clicks, softer hitscan aim, a weapon teacher, items in fights (owner's list, approved; until 06:30)
+
+From v10's weights (3,817 min). Four maps, groups 2,3,2,4,2, 10,080 players, 64 minibatches, GPU 10.5 GB. Changes, as in
+[PLAN.md](PLAN.md):
+
+1. **Stack pay** (frags a minute, every frame of a normal game): health above 100 and armor up to +0.5; rockets, lightning,
+   rail up to +0.5; none of the three: 0 at the spawn, -0.25 after 5 s, to -1.0 after 20 s; health plus armor under 70: to -0.5 at zero.
+2. **Fire button**: a change at most every 200 ms (2.5 clicks a second; was five).
+3. **Hitscan aim one click down**: perception error 1.2 deg (0.6), lingering 0.5 s (0.15), plus 0.012 deg per deg/s of the
+   enemy's motion across the view (at most 3). Reaction unchanged.
+4. **Weapon teacher** on the weapon key, weight 1.0 fading to nothing over six hours (a seed; after that results decide):
+   rockets 60 to 300 units, lightning to 700, rail from 500; lightning in hand up to 700 or rail in hand from 300 is left alone.
+5. **Rocket drills** 15%, seven in ten with the machine gun too.
+6. **Item runs** 20% without the walking teacher; half become a fight after 20 s (stacked against fresh spawns).
+7. **Intention** held 8 s, released when the item is taken; three workers in five play 1v1.
+
+First update (the starting point):
+
+| | Start |
+|---|---|
+| Stack: health and armor above 100 (0 to 1), big weapons held, time bare, time under 70 | 0.16, 2.34, 8%, 28% |
+| Weapon rule agreement | 0.61 |
+| Frag share rockets / rail / lightning / machine gun | 1% / 4% / 87% / 5% |
+| Hit rate rail / lightning / machine gun / rockets | 52 / 48 / 44 / 28% |
+| Item-run arrivals a player-minute | 6.1 |
+| Against the scripted players, frags : deaths a minute | 3.03 : 3.09 |
+
+Note: in training most spawns come with weapons (`--loadout-p 0.35,0.65`), so "time bare" starts low; the public
+server's machine-gun spawns are the harder case.
+
 ## 2026-10-07 20:00 — The owner's game against v10 on the public server (arena1, 10 minutes, him and two Bobbys), and a reward for keeping a stack
 
 Score 61 : 10 : 10 (damage 8,594 : 2,835 : 2,701). Session `20261008-005506_arena1_ffa`; `tools/player_card.py --games`:

@@ -76,7 +76,7 @@ How it got there (RESULTS 2026-10-06 evening to 2026-10-07): v9 added a seeded i
 
 Next: the proposal below, for the owner's sign-off. Open besides it: B-107b (measure the machine guns' scatter and the shotgun pattern), B-92 (more players for the reflex benchmark), B-95 (key budget), B-109 (attention), Aerowalk's walking graph (no way to the red armor from most spawns), `arena2`.
 
-## Proposed: `duel_gru_v11` (for the owner's sign-off, 2026-10-07 evening; built and tested, switched off until then)
+## Running: `duel_gru_v11` (started 2026-10-07 20:35 on the owner's go, until 06:30)
 
 v10 taught him the walk: alone on arena1 he now takes what he is told to in 75 to 100% of 30-second rounds (v9: 0 to 22%), and kept it after the teacher was gone. Two things are still missing, and v11 takes one lever set for each.
 
@@ -107,7 +107,7 @@ Unchanged: v10's weights and league, arena1 / Aerowalk / Blood Run / Lost World,
 health above 100 and armor 0.5 (`STACK_PAY`), the three big weapons 0.5 (`STACK_WPN`, a third each), a cost of 0.25
 while he holds none of them (`STACK_BARE`) and 0.25 while health and armor together are under 50 (`STACK_LOW`). Normal
 games only, not item runs or drills. Watch for hiding: the share of time with the enemy in view and frags a minute must
-not fall. Owner, 20:20: the cost for holding none grows with the time gone without (nothing at the spawn, 0.25 after 5 s, up to 1.0 after 20 s); the low cost starts at 70 health plus armor (one rail shot) and grows to 0.5 at zero (`STACK_LOW` 0.5). **F. Fire button:** a change at most every 200 ms, 2.5 clicks a second (was five; owner: he taps the lightning gun, nobody does). Not built: a cost for starting a fight with fewer than two weapons (it would also punish shooting back).
+not fall. Owner, 20:20: the cost for holding none grows with the time gone without (nothing at the spawn, 0.25 after 5 s, up to 1.0 after 20 s); the low cost starts at 70 health plus armor (one rail shot) and grows to 0.5 at zero (`STACK_LOW` 0.5). **F. Fire button:** a change at most every 200 ms, 2.5 clicks a second (was five; owner: he taps the lightning gun, nobody does). **Fallback at hour four (owner: "good"), applied once at a checkpoint if all three hold against hour one:** the share of time without a big weapon has not fallen by a quarter, health and armor above 100 have not risen by a quarter, mega and red in the arena1 fight check are still near zero. Then: the four stack sizes doubled, and the walking teacher inside normal games (bare or under 70, no enemy in view: the keys to the nearest thing he lacks, that item as his goal, fading over three hours; to be built and tested, off, during the first hours). The weapon rule is a seed, not a rule (owner: "learnable"): it fades to nothing over six hours and only results decide after that. Not built: a cost for starting a fight with fewer than two weapons (it would also punish shooting back).
 
 ## Owner decisions
 
