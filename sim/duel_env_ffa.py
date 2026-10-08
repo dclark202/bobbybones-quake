@@ -342,6 +342,14 @@ PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
 # What the attacker is paid does not change.
 ARMOR_COST = float(os.environ.get("ARMOR_COST") or 1.0)
+# CONTEST_P (owner, 2026-10-08: "yes", after "go pick up the red armor"): this share of the normal rounds on a real map
+# starts as a race for a big item. The mega, the red armor or a yellow armor is not there and comes back in 4 to 8
+# seconds (CONTEST_T), every player knows it, and everybody starts at a spawn point about that far from it by the
+# walking graph. Whoever gets it fights the next fight with it. No new reward: the situation, dealt often. In self-play
+# the big items lie untaken most of the time (the red armor 70% of the time on arena1 in training), so the race for
+# one hardly ever happened, and nothing was lost by not running it.
+CONTEST_P = float(os.environ.get("CONTEST_P") or 0.0)
+CONTEST_T = (4.0, 8.0)
 SHOT_REF_FIRE = 16.0
 SHOT_NEAR_S = 3.0
 SHOT_DMG = W_DMG * np.where(np.arange(NW) == SG, SG_PELLETS, 1).astype(np.float32)     # a whole shot's damage
@@ -807,6 +815,8 @@ class DuelEnv:
         self.intent_t = np.zeros(self.n, np.float32)        # seconds since chosen
         self.intent_phi = np.zeros(self.n, np.float32)      # seconds of the way left, last frame
         self.intent_best = np.zeros(self.n, np.float32)     # ... and the least it has been on this trip (only new ground pays)
+        self.contest_it = np.full(n_matches, -1, np.int64)  # CONTEST_P: the item this round began as a race for, and the seconds
+        self.contest_t = np.full(n_matches, -1.0, np.float32)   # left in which taking it is counted (statistics only)
         self.intent_phi0 = np.ones(self.n, np.float32)      # ... and when the choice was made (the whole way)
         self.intent_live = np.zeros(self.n, bool)           # the head was read this frame
         self.intent_changed = np.zeros(self.n, bool)
@@ -956,7 +966,7 @@ class DuelEnv:
                           lab_items=np.zeros(3),          # items room: mega pickups, red armor pickups, player-frames
                           switches=0, fire_frames=0, blind_frames=0, play_frames=0, aim_err=0.0, aim_frames=0,
                           on_target=0, move_frames=0, move_arrive=0, move_speed=0.0, move_fast=0,
-                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0, shot_n=0, shot_fac=0.0, soak=0.0, pick_wpnew=0,
+                          cf_rounds=0, cf_stack_kills=0, cf_plain_kills=0, stack_frames=0, stack_over=0.0, stack_big=0.0, stack_bare=0, stack_low=0, stack_cost=0.0, stack_teach_frames=0, fire_vis=0, vis_frames_h=0, shot_cost=0.0, shot_n=0, shot_fac=0.0, soak=0.0, pick_wpnew=0, contest_rounds=0, contest_taken=0,
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
                           wrule_frames=0, wrule_agree=0,
@@ -1476,6 +1486,38 @@ class DuelEnv:
         p = self.spawns[k]
         self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), float(self.spawn_yaw[k]))
         self._fresh(i, float(self.spawn_yaw[k]))
+
+    def _spawn_at(self, i, k):
+        """player i starts at spawn point k"""
+        p = self.spawns[k]
+        self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), float(self.spawn_yaw[k]))
+        self._fresh(i, float(self.spawn_yaw[k]))
+
+    def _contest_start(self, m):
+        """a normal round of match m starts as a race for a big item (see CONTEST_P)"""
+        R = self.route
+        gis = [g_ for g_, lab_ in enumerate(self.route_goal) if lab_ in ("MH", "RA", "YA", "YA2")]
+        if R is None or not gis:
+            return
+        g_ = int(self.rng.choice(gis))
+        it = self.route_item[g_]
+        t0 = float(self.rng.uniform(*CONTEST_T))
+        t_sp = R.T[g_, R.locate(self.spawns)]                # the way from every spawn point, in seconds
+        q = self._seats(m)
+        near = np.argsort(np.abs(t_sp - (t0 + 0.5)) + self.rng.uniform(0.0, 0.75, len(t_sp)))    # about as far as it is away in time
+        near = [int(k) for k in near if t_sp[k] < 1e8][:max(len(q), 3)]
+        if len(near) < len(q):
+            return
+        for i, k in zip(q, self.rng.permutation(near)[:len(q)]):
+            self.state = self.w.state()
+            self._spawn_at(int(i), int(k))
+        resp = float(self.item_def[it][2])
+        self.item_up[m, it], self.item_t[m, it] = False, t0
+        self.bel_t[q, g_] = resp - t0                        # everybody knows when it is back, as if he had heard it taken
+        if self.route_goal[g_] in ("MH", "RA"):
+            self.it_t[q, 0 if self.route_goal[g_] == "MH" else 1] = resp - t0
+        self.contest_it[m], self.contest_t[m] = it, t0 + 10.0
+        self.stats["contest_rounds"] += 1
 
     def _others_arr(self):
         """for every player, the other players of his group (one column each)"""
@@ -2999,6 +3041,7 @@ class DuelEnv:
 
         # items: pickups, respawns, decay above 100
         self.item_t = np.maximum(0.0, self.item_t - DT)
+        self.contest_t = np.where(self.contest_t > 0, self.contest_t - DT, -1.0).astype(np.float32)
         if self.item_up_t is None:
             self.item_up_t = np.zeros_like(self.item_t)
         self.item_up_t = np.where(self.item_up, self.item_up_t + DT, 0.0).astype(np.float32)
@@ -3078,6 +3121,9 @@ class DuelEnv:
                         for o_ in self._mates(i):
                             if self.hp[o_] > 0 and self.run_k[o_] < 0:      # (not in an item run: there everybody is alone)
                                 reward[o_] -= self.item_loss * self.item_reward * gain / 100.0
+                    if self.contest_t[m] > 0 and it == self.contest_it[m]:    # the item the round began as a race for
+                        self.stats["contest_taken"] += int(self.script[i] == 0)
+                        self.contest_t[m] = -1.0
                     self.item_up[m, it] = False
                     self.item_t[m, it] = resp
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
@@ -3243,6 +3289,7 @@ class DuelEnv:
                 self.stats["zoom_frames"] += float(self.zoom[am].sum())
                 self.stats["arena"][0] += float(sum(1 for e in events if am[e["victim"]] and e["killer"] >= 0 and e["killer"] != e["victim"]))
             self.stats["lab_items"][2] += float(self.items_room.sum())
+        contest_m = []
         for m in ends:
             self.round_fac[m] = self.rng.uniform(0.67, 1.33)
             self.run_k[self._seats(int(m))] = -1
@@ -3325,9 +3372,14 @@ class DuelEnv:
                 self._new_goal(b_)
             self.item_up[m] = True
             self.item_t[m] = 0.0
+            self.contest_t[m] = -1.0
+            if CONTEST_P > 0 and kd == NORMAL and self.fixed_kind is None and self.rng.random() < CONTEST_P:
+                contest_m.append(int(m))
         if done.any():                                      # a new round: nothing is known
             self.it_t[done], self.e_got[done], self.e_life[done] = 99.0, 0.0, 99.0
             self.bel_t[done] = 99.0
+        for m_ in contest_m:                                 # ... but for the rounds that start as a race for a big item
+            self._contest_start(m_)
         if len(dead) or len(out) or len(ends):
             self.state = s = self.w.state()
 
