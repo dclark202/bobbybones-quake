@@ -89,15 +89,41 @@ number holds two hours after the fade. Source: `docs/pro_tables.json` (3,266 dem
 | S1 weapon by distance | which weapon is fired at which distance, per map, owning all three | the weapon key: the pros' first choice in each 100-unit bin among what he owns; where the first two are within 10 points either is left alone | agreement with the table; rockets' share under 400 units (54%) |
 | S2 item order | what is picked up next, bare or armed | the intention: a weapon first when bare (rockets when two are about as near), then armor: yellow, red or mega, whichever is up and nearest; **yellow armor becomes an intention** (the output grows from 6 to 7) | time without a big weapon (8%); health plus armor at 150 or more (56% of the time) |
 | S3 spawn routine | a big weapon 2.7 s after the spawn (median), in 82% of lives | the keys-only walking teacher from the spawn to the first weapon, also with an enemy in view (the view stays his) | first weapon after (2.7 s; third quartile 5.3 s) |
-| S4 style mix and bands | half of the games lean to rockets or lightning, 1% to the rail | style lives: general 50%, rockets 20%, lightning 30%, rail none; bands from the quartiles (rockets 230-540, lightning 305-620) | his weapon in hand in a style life |
+| S4 style mix and bands | the split of a game and the distance of the fights per weapon | style lives: general, rockets, lightning and rail (owner: "pros absolutely do play rail, keep it"; none on Lost World, which has no railgun); bands from the quartiles (rockets 230-540, lightning 305-620, rail 440-815) | his weapon in hand in a style life |
 | S5 the pros' ways | positions along the way from each spawn to each weapon and between the items (the atlas, `maps/atlas/<map>.json`, already holds routes seeded from the demos) | the walking teacher follows the atlas route on the three duel maps, the shortest way elsewhere | arrivals a player-minute; time to the first weapon |
 | S6 a pro column | time bare, first weapon, stack, firing by weapons owned | none: a column in the hourly check beside Bobby's | - |
 
 Not seeded: backing off when hurt (weak in the demos), the enemy's health (not in a demo), where he looks, when he fires.
 **Limits:** the demos are 1v1 with duel item timing on three maps; arena1 has none (and no yellow armor), and the habits of
 a three- or four-player game come from the owner's server logs, which are thin still.
-**Order:** run A: S1, S2, S3, S4 and S6 together, from v12's weights, the three duel maps at a larger share. Run B: S5.
-Then: he chooses his style himself; free-for-all habits from the server logs.
+(Correction, same day: the "1% of games lean to the rail" above counted firing frames, and a rail fires once in 1.5 s
+where the lightning gun fires every frame. By that count the rail is undercounted; the style split is to be recounted by
+time in hand and by shots.)
+
+### The experiment (owner, 2026-10-08: "use the three duel maps as the train and it gets validated on arena1; ideally we move him off arena1")
+
+**Train:** Blood Run, Aerowalk and Lost World only, a third each; no arena1 frames at all. From v12's final weights, seeds S1
+to S4 as teachers fading over four hours, S6 as a column. Groups of 2, 3 and 4 as now; machine-gun spawns; overnight length.
+**Validate, three layers, the bars written down before the run:**
+
+1. *On the training maps, two hours after the teachers are gone* (the seed was learned, not just followed): time without
+   a big weapon at most 25% (pros 8%, now about 70% with machine-gun spawns); first weapon within 6 s at the median (pros
+   2.7); 150 or more health plus armor at least 30% of the time (pros 56%); agreement with the pros' weapon table at
+   least 70%; fire and frags not under the v12 floor (he still fights). Nightmare on all three, against v12's scores.
+2. *On arena1, which the run never sees* (does it carry over?): the same numbers there, each within one and a half times
+   its training-map value, and Nightmare on arena1 not below v12's. Honest limit: every network so far was trained on
+   arena1, so this shows whether seeding on the duel maps improves arena1 without practice there, not play on a map he
+   has never seen. For that, one game map he has never trained on is added to the check (sinister, which people have
+   already played on the server; a walking graph has to be built for it).
+3. *Positioning against people on arena1:* the logged frames of people playing the bots on arena1 are pooled into a map of
+   where they stand (cells of 32 units, and the same by weapon in hand); Bobby's map comes from the fight check. One
+   number: the share of his time spent where people spend theirs (overlap of the two maps), plus the distance to the
+   enemy and the mega and red taken per spawn (people 25% and 17%; the owner 70% and 54%). v12 is measured first as the
+   baseline; the bar is "better than v12". Thin data: about three hours of people in all, part of it on arena1.
+4. *The owner plays him* on a duel map and on arena1; a card of each game.
+
+**After it:** if layers 1 and 2 pass, the public server's default map becomes a duel map and arena1 stays as a check only.
+Then the pros' ways (S5), the style chosen by himself, and free-for-all habits from the server logs.
 
 ## Proposed: `duel_gru_v12`: playing styles and machine-gun spawns (owner's idea of 2026-10-08; built, waiting for his go)
 
