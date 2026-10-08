@@ -458,7 +458,9 @@ class ffabot(duelbot):
             was = self.alive.get(p.id)
             if up and not was:
                 if bot:
-                    self.give_loadout(p)                     # maps without items only (give_loadout checks)
+                    if mapname == "testlab":                 # the test map has no weapons lying about; everywhere else the
+                        self.give_loadout(p)                 # game's own spawn stands (he was handed every weapon on the duel
+                                                             # maps, in real games too: owner, 2026-10-07)
                     env.life_t[k], env.flinch[k], env.focus[k] = 0.0, 0.0, E.FOCUS_SECS
                     env.mv[k], env.cool[k] = 0.0, 0.0
                     self.want_w.pop((id(env), k), None)
