@@ -225,6 +225,17 @@ class ffabot(duelbot):
         nav = "/maps/nav_{}_sim.json".format(mapname)
         self.env = env = E.DuelEnv(bsp, n_matches=1, seed=3, nav=nav if os.path.exists(nav) else None, group=SEATS)
         env.react_frames = round(self.react_ms / 25)
+        if hasattr(env, "_ffa"):
+            # "players beyond two": the simulator here has six seats, so the input read 1.0 whoever was present; in training
+            # it was 0, 0.25 or 0.5 (groups of 2, 3 and 4). It follows the players in the game now.
+            ffa_ = env._ffa
+            self.n_present = 2
+
+            def ffa_present(*a_, **k_):
+                out = ffa_(*a_, **k_)
+                out[:, 17] = min(0.5, max(0.0, (self.n_present - 2) / 4.0))
+                return out
+            env._ffa = ffa_present
         if self.rules2:
             env.acquire_frames = round(float(self.P["acquire_ms"]) / 25) if "acquire_ms" in self.P else E.ACQUIRE_FRAMES
             env.lab = None
@@ -495,6 +506,8 @@ class ffabot(duelbot):
                         self.record(event="style", seat=k, style=st_)
                 self.tot.pop(k, None)
                 self.prev.pop(k, None)                       # (a respawn is not a teleport: no such sound)
+                if hasattr(env, "dmg_on"):
+                    env.dmg_on[:, k] = 0.0                   # what the others had done to him is gone with his old life
             if was and not up:
                 env.note_death(k, -1)                        # those in earshot know; the killer is not known here
                 self.record(event="death", seat=k, bot=bot, kills=p.stats.kills, deaths=p.stats.deaths)
@@ -527,6 +540,7 @@ class ffabot(duelbot):
             if prev is not None and prev - tot >= 3 and prev > 0 and up:
                 hurt[k] = int(prev - tot)
             self.tot[k] = tot
+        self.n_present = int(present.sum())
         if hasattr(env, "hear"):
             env.hear(noisy & present)
         ids = [-1] * SEATS
@@ -563,6 +577,8 @@ class ffabot(duelbot):
                 ang = math.atan2(env.state[foe, 1] - env.state[k, 1], env.state[foe, 0] - env.state[k, 0]) - math.radians(float(env.yaw[k]))
                 env.fb[k] = (min(dealt / 100.0, 2.0), min(took / 100.0, 2.0), math.sin(ang) * (took > 0), math.cos(ang) * (took > 0))
                 env.dmg_life[k] += dealt
+                if hasattr(env, "dmg_on"):                   # (the group simulator reads this one; it was never written: the game
+                    env.dmg_on[k, foe] += dealt              # does not say whom he hit, so the enemy he attends to is charged)
                 if took > 0 and hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
                     env.note_hit(k, took)
             if took > 0 and hasattr(env, "pain_t"):
