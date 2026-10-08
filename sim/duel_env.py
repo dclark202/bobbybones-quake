@@ -316,6 +316,12 @@ PRO_ITEMS = float(os.environ.get("PRO_ITEMS") or 0.0) > 0
 #                   step they took next from each place on their trips to it), the shortest way elsewhere: for the
 #                   walking teacher and for the "next step" he is shown of his chosen way.
 PRO_ROUTES = float(os.environ.get("PRO_ROUTES") or 0.0) > 0
+# ITEM_BELIEF=1 (audit of 2026-10-08): what he is told about the item he has chosen ("is up", "comes back in") and what the
+# item rule goes by is what he can know, not the true state: for every thing he can go for, the seconds since he knows it
+# was taken (he took it, or it was taken within earshot, HEAR_EVT; or he saw its place empty, then counted as taken
+# half its time ago); seeing it there clears that. Not known = thought to be there. The owner plays without item timers.
+ITEM_BELIEF = float(os.environ.get("ITEM_BELIEF") or 0.0) > 0
+BELIEF_SEE = 1500.0                                    # an item's place is seen up to this far (as the item inputs)
 PRO_RL_EDGE = 1.5
 STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
 STYLE_BAND = float(os.environ.get("STYLE_BAND") or 0.5)
@@ -705,6 +711,9 @@ class DuelEnv:
         self.flinch = np.zeros(self.n, np.float32)        # extra error on that direction after being hit, degrees
         ng_ = len(self._mates(0)) + 1                       # players per group
         self.it_t = np.full((self.n, 2), 99.0, np.float32)  # seconds since mega / red armor were last known taken (99 = not known)
+        self.bel_t = np.full((self.n, len(ROUTE_ITEMS)), 99.0, np.float32)   # the same for every route goal (ITEM_BELIEF)
+        self.bel_prev = None                                # the goals' true state at the last look (to notice a pickup)
+        self.bel_tick = 0
         self.e_got = np.zeros((self.n, ng_, 11), np.float32)    # per other player: what he is known to have (see N_MEM)
         self.e_life = np.full((self.n, ng_), 99.0, np.float32)  # per other player: seconds since his last known death
         self.life_t = np.zeros(self.n, np.float32)          # seconds since this player's own respawn
@@ -1485,6 +1494,55 @@ class DuelEnv:
         """a player's place in his group"""
         return j % 2
 
+    def _goal_state(self, gi, grp):
+        """for route goal gi and every player: is it there, and the seconds until it is back (by what he knows with
+        ITEM_BELIEF, else the truth)"""
+        it = self.route_item[gi]
+        if not ITEM_BELIEF:
+            return self.item_up[grp, it], self.item_t[grp, it]
+        resp = float(self.item_def[it][2])
+        bt = self.bel_t[:, gi]
+        return bt >= resp, np.maximum(0.0, resp - bt)
+
+    def _belief_update(self):
+        """ITEM_BELIEF: what each player knows about the things he can go for (see ITEM_BELIEF)"""
+        if not self.route_item:
+            return
+        n = self.n
+        eye = self._eye(self.state)
+        yr_, pr_ = np.radians(self.yaw), np.radians(self.pitch)
+        fdir = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
+        gsz = self._others_arr().shape[1] + 1
+        grp = np.arange(n) // gsz
+        items = np.array(self.route_item)
+        up = self.item_up[:, items]                          # (matches, goals): the truth
+        self.bel_t = np.minimum(self.bel_t + DT, 99.0).astype(np.float32)
+        pos = self.state[:, :3]
+        if self.bel_prev is not None and self.bel_prev.shape == up.shape:
+            for m, g in zip(*np.nonzero(self.bel_prev & ~up)):     # taken since the last look: who is in earshot knows
+                q = np.arange(m * gsz, (m + 1) * gsz)
+                near = np.linalg.norm(pos[q] - self.item_pos[items[g]], axis=1) < HEAR_EVT
+                self.bel_t[q[near], g] = 0.0
+        self.bel_prev = up.copy()
+        self.bel_tick += 1
+        if self.bel_tick % 4:                                # the look at the items' places: ten times a second
+            return
+        for g, it in enumerate(items):
+            tov = self.item_pos[it][None, :] - eye
+            dd = np.linalg.norm(tov, axis=1) + 1e-6
+            u = (tov / dd[:, None]).astype(np.float32)
+            ci = np.nonzero(((u * fdir).sum(1) > self.fov()[2][:n]) & (dd < BELIEF_SEE) & (self.hp > 0))[0]
+            if not len(ci):
+                continue
+            fr = self.w.rays_each(eye[ci], u[ci][:, None, :], BELIEF_SEE)[:, 0]
+            sees = ci[fr * BELIEF_SEE >= dd[ci] - 24]
+            if not len(sees):
+                continue
+            there = up[grp[sees], g]
+            resp = float(self.item_def[it][2])
+            bt = self.bel_t[sees, g]
+            self.bel_t[sees, g] = np.where(there, 99.0, np.where(bt >= resp, resp / 2.0, bt))
+
     def note_pickup(self, i, k):
         """player i took the mega health (k = 0) or the red armor (k = 1): he knows, and so do those in earshot"""
         s = self.state
@@ -1562,8 +1620,14 @@ class DuelEnv:
             out[:, 1:4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
             it = np.array(self.route_item)[g]
-            out[:, 4] = self.item_up[grp, it] * valid
-            out[:, 5] = np.minimum(self.item_t[grp, it] / 30.0, 2.0) * valid
+            if ITEM_BELIEF:                                  # by what he knows
+                resp_ = np.array([self.item_def[i_][2] for i_ in self.route_item], np.float32)[g]
+                bt_ = self.bel_t[np.arange(n), g]
+                out[:, 4] = (bt_ >= resp_) * valid
+                out[:, 5] = np.minimum(np.maximum(0.0, resp_ - bt_) / 30.0, 2.0) * valid
+            else:
+                out[:, 4] = self.item_up[grp, it] * valid
+                out[:, 5] = np.minimum(self.item_t[grp, it] / 30.0, 2.0) * valid
         oh_ = np.eye(len(INTENTS), dtype=np.float32)[k]
         out[:, 6:12] = oh_[:, :6]
         out[:, 49:51] = oh_[:, 6:8]                         # (the yellow armors, added after the style inputs)
@@ -1608,7 +1672,8 @@ class DuelEnv:
         for gi, lab in enumerate(self.route_goal):
             t = R.T[gi, node]
             it = self.route_item[gi]
-            soon = self.item_up[grp, it] | (self.item_t[grp, it] < t + 3.0)
+            gu_, gb_ = self._goal_state(gi, grp)
+            soon = gu_ | (gb_ < t + 3.0)
             k = INTENTS.index(lab)
             if lab == "MH":
                 want = (self.hp < 100.0) & soon
@@ -1620,7 +1685,7 @@ class DuelEnv:
             if lab in ("RL", "RG", "LG"):
                 t = R.T[gi, node]
                 it = self.route_item[gi]
-                want = (out == 0) & ~self.has[:, WEAPONS.index(lab.lower())] & self.item_up[grp, it] & (t < best_t)
+                want = (out == 0) & ~self.has[:, WEAPONS.index(lab.lower())] & self._goal_state(gi, grp)[0] & (t < best_t)
                 best_t = np.where(want, t, best_t)
                 out = np.where(want, INTENTS.index(lab), out)
         if PRO_ITEMS:                                        # the pros' order (see PRO_ITEMS)
@@ -1630,7 +1695,8 @@ class DuelEnv:
             for gi, lab in enumerate(self.route_goal):       # armed: armor and health he can still use
                 t = R.T[gi, node]
                 it = self.route_item[gi]
-                soon = (self.item_up[grp, it] | (self.item_t[grp, it] < t + 3.0)) & (t < 1e8)
+                gu_, gb_ = self._goal_state(gi, grp)
+                soon = (gu_ | (gb_ < t + 3.0)) & (t < 1e8)
                 use = (self.armor < 150.0) if lab in ("YA", "YA2") else (self.armor < 175.0) if lab == "RA" else \
                     (self.hp < 175.0) if lab == "MH" else np.zeros(n, bool)
                 want = ~bare & use & soon & (t < best_t)
@@ -1642,7 +1708,7 @@ class DuelEnv:
                     t = R.T[gi, node]
                     it = self.route_item[gi]
                     te = t - (PRO_RL_EDGE if lab == "RL" else 0.0)
-                    want = (bare | (out == 0)) & ~self.has[:, WEAPONS.index(lab.lower())] & self.item_up[grp, it] & (t < 1e8) & (te < best_t)
+                    want = (bare | (out == 0)) & ~self.has[:, WEAPONS.index(lab.lower())] & self._goal_state(gi, grp)[0] & (t < 1e8) & (te < best_t)
                     best_t = np.where(want, te, best_t)
                     out = np.where(want, INTENTS.index(lab), out)
         sw = STYLE_W[self.style]                             # a preferred weapon he lacks comes first
@@ -1650,7 +1716,8 @@ class DuelEnv:
             if lab in ("RL", "RG", "LG"):
                 w_ = WEAPONS.index(lab.lower())
                 it = self.route_item[gi]
-                want = (sw == w_) & ~self.has[:, w_] & (R.T[gi, node] < 1e8) & (self.item_up[grp, it] | (self.item_t[grp, it] < R.T[gi, node] + 3.0))
+                gu_, gb_ = self._goal_state(gi, grp)
+                want = (sw == w_) & ~self.has[:, w_] & (R.T[gi, node] < 1e8) & (gu_ | (gb_ < R.T[gi, node] + 3.0))
                 out = np.where(want, INTENTS.index(lab), out)
         return out
 
@@ -1826,6 +1893,8 @@ class DuelEnv:
         s = self.state
         pos, vel, ground = s[:, :3], s[:, 3:6], s[:, 6]
         n = self.n
+        if ITEM_BELIEF:                                      # what he knows about the things he can go for
+            self._belief_update()
         yaw, pit = np.radians(self.yaw), np.radians(self.pitch)
         c, si = np.cos(yaw), np.sin(yaw)
 
@@ -3041,6 +3110,7 @@ class DuelEnv:
             self.item_t[m] = 0.0
         if done.any():                                      # a new round: nothing is known
             self.it_t[done], self.e_got[done], self.e_life[done] = 99.0, 0.0, 99.0
+            self.bel_t[done] = 99.0
         if len(dead) or len(out) or len(ends):
             self.state = s = self.w.state()
 
