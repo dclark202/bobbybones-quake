@@ -143,6 +143,18 @@ four hours without them. Start: v12's final weights carried to 491 inputs. Maps:
 in proportion (the trainer does it for the players that spawned, the plugin the same way); only after v13 has shown that
 all four styles are played and differ.
 
+**Order of work (approved by the owner 2026-10-08 10:10; to be put before him again when v12 ends at 14:00):**
+1. 14:00: v12 ends; full metrics, video, heat map, summary, and v12's scorecard per map (`tools/stack_probe.py`) as the baseline.
+2. The gate: v12's gains held without the teachers (below).
+3. Build the pros' ways (`PRO_ROUTES`) and test them: a pupil who obeys them reaches the first weapon at least as fast as on the shortest ways.
+4. The owner plays v12; random styles per bot life on the server if he wants that deployed.
+5. v13 starts on his go, overnight.
+6. Validation in the three layers above (the training maps against the pros, arena1 held out, people's positions on arena1).
+
+**Risks:** the spawn routine labels about a third of the frames, nearer to the teacher that broke his fighting in v11 (this
+one never touches the view): fire and frags are watched in the first hour and the teacher is cut back if they fall. The
+pros' ways are 1v1 ways; the fallback to the shortest way and the fade leave him free in a larger game.
+
 **When (owner, 2026-10-08): a separate experiment after v12, not folded into it.** v12 is the crude version (hand-set
 rules); its end decides what v13 is. Gate at v12's end: two hours after the teachers are gone, time bare has not gone back
 above about 65%, his weapon in hand in a style life has not halved, and he still fights. *Passes:* v13 is the pro seeds as
