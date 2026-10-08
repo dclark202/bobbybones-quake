@@ -76,6 +76,29 @@ How it got there (RESULTS 2026-10-06 evening to 2026-10-07): v9 added a seeded i
 
 Next: the proposal below, for the owner's sign-off. Open besides it: B-107b (measure the machine guns' scatter and the shotgun pattern), B-92 (more players for the reflex benchmark), B-95 (key budget), B-109 (attention), Aerowalk's walking graph (no way to the red armor from most spawns), `arena2`.
 
+## Plan: seeding his behavior from the pro demos (owner, 2026-10-08; proposal, nothing running)
+
+**Why:** three runs say the same thing. A reward alone moved nothing in 17 hours (v9) and 4 hours (v11); a pattern shown by a
+fading teacher was learned within three hours each time and kept (the walk in v10, the weapon table in v11).
+**Rules for every seed:** a table fitted from play, not frames imitated; a teacher only on the movement keys, the weapon
+key or the intention, never on the view or the trigger (v11, 00:39); it fades to zero; it counts as learned only if the
+number holds two hours after the fade. Source: `docs/pro_tables.json` (3,266 demos, 505 hours, three maps).
+
+| Seed | From the demos | Teacher | Number that must move (pros) |
+|---|---|---|---|
+| S1 weapon by distance | which weapon is fired at which distance, per map, owning all three | the weapon key: the pros' first choice in each 100-unit bin among what he owns; where the first two are within 10 points either is left alone | agreement with the table; rockets' share under 400 units (54%) |
+| S2 item order | what is picked up next, bare or armed | the intention: a weapon first when bare (rockets when two are about as near), then armor: yellow, red or mega, whichever is up and nearest; **yellow armor becomes an intention** (the output grows from 6 to 7) | time without a big weapon (8%); health plus armor at 150 or more (56% of the time) |
+| S3 spawn routine | a big weapon 2.7 s after the spawn (median), in 82% of lives | the keys-only walking teacher from the spawn to the first weapon, also with an enemy in view (the view stays his) | first weapon after (2.7 s; third quartile 5.3 s) |
+| S4 style mix and bands | half of the games lean to rockets or lightning, 1% to the rail | style lives: general 50%, rockets 20%, lightning 30%, rail none; bands from the quartiles (rockets 230-540, lightning 305-620) | his weapon in hand in a style life |
+| S5 the pros' ways | positions along the way from each spawn to each weapon and between the items (the atlas, `maps/atlas/<map>.json`, already holds routes seeded from the demos) | the walking teacher follows the atlas route on the three duel maps, the shortest way elsewhere | arrivals a player-minute; time to the first weapon |
+| S6 a pro column | time bare, first weapon, stack, firing by weapons owned | none: a column in the hourly check beside Bobby's | - |
+
+Not seeded: backing off when hurt (weak in the demos), the enemy's health (not in a demo), where he looks, when he fires.
+**Limits:** the demos are 1v1 with duel item timing on three maps; arena1 has none (and no yellow armor), and the habits of
+a three- or four-player game come from the owner's server logs, which are thin still.
+**Order:** run A: S1, S2, S3, S4 and S6 together, from v12's weights, the three duel maps at a larger share. Run B: S5.
+Then: he chooses his style himself; free-for-all habits from the server logs.
+
 ## Proposed: `duel_gru_v12`: playing styles and machine-gun spawns (owner's idea of 2026-10-08; built, waiting for his go)
 
 Every life he is in one of four states, given to him as four inputs (487 inputs now): **general**, or a preferred weapon

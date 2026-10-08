@@ -149,7 +149,7 @@ def infer_actions(E, d, i0, i1, wslot):
     return act, held, mv
 
 
-def build_demo(E, env, binf, out):
+def build_demo(E, env, binf, out, lite=False):
     import demo_reader as D
     d = D.load(binf)
     N = len(d["time"])
@@ -165,6 +165,7 @@ def build_demo(E, env, binf, out):
     brk[1:] = (d["clientNum"][1:] != d["clientNum"][:-1]) | ~ok[1:] | ~ok[:-1] | (dtm[1:] != 25)
     names = E.WEAPONS
     obs_out, act_out, first_out, state_out = [], [], [], []
+    lite_out = []
     item_near = {}
     i = 0
     while i < N:
@@ -234,20 +235,29 @@ def build_demo(E, env, binf, out):
                 if acq:
                     env.known[0] = env.state[1, :3]
                 env.seen_t[0] = 0.0 if acq else env.seen_t[0] + DT
-                obs_out.append(env.observe()[0].astype(np.float16))
+                if lite:                                    # the few facts tools/pro_tables.py counts, without the inputs
+                    lite_out.append([env.hp[0], env.armor[0], env.weapon[0], act[k - i][5], float(acq), *pos[k], *env.state[1, :3],
+                                     env.weapon[1], *env.has[0].astype(np.float32), *(env.ammo[0] > 0).astype(np.float32),
+                                     ang[k][1], float(present)])
+                    obs_out.append(0)
+                else:
+                    obs_out.append(env.observe()[0].astype(np.float16))
                 act_out.append(act[k - i])
                 first_out.append(k == i)
                 state_out.append([*pos[k], *vel[k], ang[k][1], ang[k][0], float(d["groundEntityNum"][k] != 1023)])
         i = j
     if len(obs_out) < 400:
         return 0, N
+    if lite:
+        np.savez_compressed(out, lite=np.array(lite_out, np.float32), first=np.array(first_out, bool))
+        return len(obs_out), N
     np.savez_compressed(out, obs=np.array(obs_out), act=np.array(act_out, np.int8), first=np.array(first_out, bool),
                         state=np.array(state_out, np.float32))
     return len(obs_out), N
 
 
 def worker(args):
-    mp, files, out_dir, seed = args
+    mp, files, out_dir, seed, lite = args
     import duel_env as E
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=1, seed=seed,
                     nav=os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp)))
@@ -264,7 +274,7 @@ def worker(args):
         b, js = os.path.join(tmp, "d.bin"), os.path.join(tmp, "d.json")
         try:
             subprocess.run([exe, f, b, js], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
-            n, total = build_demo(E, env, b, out)
+            n, total = build_demo(E, env, b, out, lite)
         except Exception as e:                               # a broken demo must not stop the batch
             n, total = 0, 0
             print("failed {}: {!r}".format(stem[:50], e), flush=True)
@@ -329,6 +339,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 4) - 2))
     ap.add_argument("--check", default=None)
+    ap.add_argument("--lite", action="store_true", help="only the facts tools/pro_tables.py counts (health, armor, weapons, enemy, fire), into sets_lite/<map>: much faster")
     a = ap.parse_args()
     if a.check:
         return check(a.check)
@@ -336,10 +347,10 @@ def main():
     files = sorted(f for f in glob.glob(os.path.join(demo_root(), "demos", a.map, "*.dm_*")) if not f.endswith(".part"))
     if a.limit:
         files = files[:: max(1, len(files) // a.limit)][:a.limit]
-    out_dir = os.path.join(demo_root(), "sets", a.map)
+    out_dir = os.path.join(demo_root(), "sets_lite" if a.lite else "sets", a.map)
     os.makedirs(out_dir, exist_ok=True)
     t0 = time.time()
-    chunks = [(a.map, files[k::a.procs], out_dir, k) for k in range(a.procs)]
+    chunks = [(a.map, files[k::a.procs], out_dir, k, a.lite) for k in range(a.procs)]
     with mp_.Pool(a.procs) as pool:
         res = [x for r in pool.map(worker, chunks) for x in r]
     kept = sum(n for n, _ in res)

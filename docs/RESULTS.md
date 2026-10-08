@@ -21,25 +21,36 @@ Keys-only walking teacher 0.5 fading over 180 min; stack pay 1.0 / 1.0 / 0.5 / 1
 
 ## 2026-10-08 — Tables from the pro demos, to seed the teachers with (owner: "weapon preference, style, intention can and should be tuned on the pro demos")
 
-`tools/pro_tables.py` -> `docs/pro_tables.json`: 1,066 Blood Run 1v1 demos, 9,946 minutes of play (the only map converted
-so far; no player names in the sets, so "per demo" is one game of one player).
+`tools/pro_tables.py` -> `docs/pro_tables.json`, from the light sets of `sim/demo_dataset.py --lite` (new: only the facts
+counted, ten minutes a map on three cores): **3,266 1v1 demos, 505 hours of play** on Blood Run (1,066), Aerowalk (978) and
+Lost World (1,222; no railgun on that map). No player names in the sets, so "per demo" is one game of one player.
 
-- **Weapon by distance** (frames where he owns rockets, rail and lightning with ammo, enemy in view, firing): rockets 61-66%
-  under 300 units and 50% at 300-400; lightning leads from 400 to 700 (52-56%); the rail leads from about 750 (62% at
-  800-900, 88% beyond 1,000). Fights happen at (quartiles): rockets 231 / 363 / 538, lightning 320 / 475 / 597, rail 510 /
-  686 / 878. Our rule (rockets 60-300, lightning to 700, rail from 500) puts rockets too short and the rail too early.
-- **Styles**: the mean split of a game is rockets 39%, lightning 40%, rail 21%. 24% of games lean to rockets (over half of
-  the firing), 24% to lightning, under 1% to the rail, 52% to none. The distance of the fights hardly follows the leaning
-  (medians 458 / 470 / 519; correlations -0.15, 0.0, 0.22).
-- **Spawn**: a big weapon in 84% of lives, after 2.3 s (median; 5.2 s at the third quartile): rockets 50%, lightning 28%,
-  rail 22%. Without a big weapon 6% of the time alive (Bobby v11: 57%).
-- **What he picks up next**: with no big weapon, a weapon in two cases of three and the yellow armor in one of five (mega or
-  red 9-14%); once armed, armor and health in 86% (yellow 38-46%, red 22-24%, mega 17-22%). Our item rule has it the other
-  way round (mega and red before a weapon) and the intention list has no yellow armor.
-- **Stack**: 62% of the time at 150 or more health plus armor, 16% under 100.
-- **Engagement**: with no big weapon (and not hurt) the enemy is in view 9% of the time and he fires 16%; with three, 15%
-  and 36%. "Backs off when low" is weak here (closing speed differs by under 20 units a second); with rockets in hand he
-  gives ground (-23 to -37 units/s), with the rail he closes (+30 to +45).
+| | Blood Run | Aerowalk | Lost World | All |
+|---|---|---|---|---|
+| Fired, owning all three: rockets / lightning / rail under 300 units | 63 / 32 / 6% | 48 / 44 / 8% | - | 54 / 39 / 7% |
+| ... at 400-600 | 32 / 54 / 14% | 31 / 49 / 19% | - | 31 / 52 / 17% |
+| ... at 700-800 | 20 / 40 / 40% | 23 / 29 / 48% | - | 22 / 35 / 44% |
+| ... beyond 900 | 12 / 3 / 84% | 16 / 3 / 81% | - | 14 / 3 / 83% |
+| Distance of his fights, quartiles: rockets | 233 / 363 / 537 | 232 / 352 / 522 | 228 / 355 / 550 | 230 / 356 / 537 |
+| ... lightning | 318 / 474 / 597 | 253 / 392 / 554 | 362 / 542 / 664 | 305 / 478 / 617 |
+| ... rail | 501 / 680 / 875 | 398 / 591 / 766 | - | 439 / 629 / 815 |
+| Games leaning (over half the firing) to rockets / lightning / rail / none | 25 / 26 / 1 / 49% | 17 / 31 / 1 / 51% | - | 21 / 28 / 1 / 50% |
+| Fight distance in those games (median) | 453 / 464 / 516 | 394 / 400 / 426 | - | 429 / 431 / 480 |
+| A big weapon in this share of lives; after (median, third quartile) | 84%; 2.3, 5.2 s | 89%; 1.8, 3.7 s | 72%; 4.9, 10.7 s | 82%; 2.7, 5.3 s |
+| The first one: rockets / lightning / rail | 50 / 28 / 22% | 51 / 19 / 30% | 55 / 45 / - | 52 / 28 / 20% |
+| Time alive without a big weapon | 6% | 7% | 11% | 8% (Bobby v11: 57%) |
+| Next pickup with no big weapon: a weapon / yellow / red / mega | 69 / 22 / 5 / 4% | 86 / 8 / 2 / 4% | 56 / 30 / 7 / 8% | 73 / 18 / 4 / 5% |
+| Next pickup once armed: a weapon / yellow / red / mega | 20 / 38 / 24 / 17% | 36 / 20 / 24 / 20% | 10 / 45 / 28 / 18% | 23 / 33 / 25 / 19% |
+| Health plus armor: under 100 / 150 or more | 15 / 61% | 28 / 42% | 15 / 62% | 19 / 56% |
+| Enemy in view, firing: no big weapon / three | 9, 16% / 14, 36% | 10, 17% / 15, 43% | 10, 13% / 15, 32% (two) | 10, 15% / 15, 40% |
+| Closing speed with rockets / lightning / rail in hand (units/s, + = closes) | -34 / +7 / +40 | -31 / +13 / +38 | -14 / +7 / - | -26 / +9 / +39 |
+
+What holds on every map: rockets close and lightning in the middle, the rail from about 750; half of the games lean to
+rockets or lightning and almost none to the rail; the fight distance barely follows the leaning; a weapon within about
+3 s of a spawn, rockets first in half of the lives; bare, he fetches a weapon and avoids the fight; armed, he takes armor
+(the yellow most of all, which is not among Bobby's intentions); with rockets he gives ground, with the rail he closes.
+Our settings against it: the weapon rule (rockets 60-300, lightning to 700, rail from 500) is too short for rockets and
+too early for the rail; the item rule puts mega and red before a weapon; the style bands are narrower than the pros'.
 
 ## 2026-10-07 20:35 — `duel_gru_v11`: a pay for keeping a stack, fewer fire clicks, softer hitscan aim, a weapon teacher, items in fights (owner's list, approved; until 06:30)
 

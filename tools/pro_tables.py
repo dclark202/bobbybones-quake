@@ -36,13 +36,28 @@ def demo_root():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--map", default="bloodrun")
+    ap.add_argument("--map", default="bloodrun,aerowalk,lostworld", help="one or more maps; with several, an 'all' table too")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--json", default=os.path.join(ROOT, "docs", "pro_tables.json"))
     a = ap.parse_args()
-    files = sorted(glob.glob(os.path.join(demo_root(), "sets", a.map, "*.npz")))
-    if a.limit:
-        files = files[::max(1, len(files) // a.limit)][:a.limit]
+    maps = a.map.split(",")
+    res, every = {}, []
+    for mp in maps:
+        # the light sets (sim/demo_dataset.py --lite) where they exist, else the full ones
+        files = sorted(glob.glob(os.path.join(demo_root(), "sets_lite", mp, "*.npz"))) or sorted(glob.glob(os.path.join(demo_root(), "sets", mp, "*.npz")))
+        if a.limit:
+            files = files[::max(1, len(files) // a.limit)][:a.limit]
+        every += files
+        res[mp] = fit(mp, files)
+    if len(maps) > 1:
+        res["all"] = fit("all", every)
+    with open(a.json, "w", encoding="utf-8") as f:
+        json.dump(res, f, indent=1)
+    for mp, out in res.items():
+        print(mp, json.dumps({k: v for k, v in out.items() if k in ("demos", "minutes", "fire_distance", "styles", "spawn", "next_item")}))
+
+
+def fit(name, files):
     nb = len(EDGES)
     hand = np.zeros((9, nb))                  # in hand, enemy in view, owning all three: weapon x distance bin
     fired = np.zeros((9, nb))
@@ -58,18 +73,29 @@ def main():
     for fi, f in enumerate(files):
         try:
             d = np.load(f)
-            o, act, first = d["obs"], d["act"], d["first"]
+            first = d["first"]
+            if "lite" in d.files:              # hp, armor, weapon, fire, enemy noticed, own xyz, enemy xyz, his weapon, owns x9, ammo x9, yaw, present
+                q = d["lite"]
+                hp, ar = q[:, 0], q[:, 1]
+                alive = hp > 0
+                vis = (q[:, 4] > 0.5) & alive
+                dist = np.linalg.norm(q[:, 8:11] - q[:, 5:8], axis=1)
+                hold = q[:, 2].astype(np.int64)
+                owns, ammo = q[:, 12:21] > 0.5, q[:, 21:30] > 0.5
+                fire = (q[:, 3] > 0) & alive
+            else:
+                o, act = d["obs"], d["act"]
+                hp = o[:, 4].astype(np.float32) * 200.0
+                ar = o[:, 5].astype(np.float32) * 200.0
+                alive = (o[:, 8] < 0.5) & (hp > 0)
+                vis = (o[:, 35] > 0.5) & alive
+                dist = np.linalg.norm(o[:, 37:40].astype(np.float32), axis=1) * 1000.0
+                hold = o[:, 71:80].astype(np.float32).argmax(1)
+                owns = o[:, 80:89] > 0.5
+                ammo = o[:, 89:98].astype(np.float32) > 0.0
+                fire = (act[:, 5] > 0) & alive
         except Exception:                      # noqa: BLE001
             continue
-        hp = o[:, 4].astype(np.float32) * 200.0
-        ar = o[:, 5].astype(np.float32) * 200.0
-        alive = (o[:, 8] < 0.5) & (hp > 0)
-        vis = (o[:, 35] > 0.5) & alive
-        dist = np.linalg.norm(o[:, 37:40].astype(np.float32), axis=1) * 1000.0
-        hold = o[:, 71:80].astype(np.float32).argmax(1)
-        owns = o[:, 80:89] > 0.5
-        ammo = o[:, 89:98].astype(np.float32) > 0.0
-        fire = (act[:, 5] > 0) & alive
         n = len(hp)
         minutes += n / 2400.0
         nbig = owns[:, BIG].sum(1)
@@ -138,12 +164,12 @@ def main():
             sh = np.bincount(hold[m], minlength=3)[:3] / m.sum()
             per_demo.append([float(x) for x in sh] + [float(np.median(dist[vis & fire])) if (vis & fire).any() else 0.0])
         if fi % 100 == 0:
-            print("{}/{} demos, {:.0f} minutes".format(fi, len(files), minutes), flush=True)
+            print("{} {}/{} demos, {:.0f} minutes".format(name, fi, len(files), minutes), flush=True)
 
     def share(x):
         return (x / max(1.0, x.sum())).round(3).tolist()
 
-    out = dict(map=a.map, demos=len(files), minutes=round(minutes, 1), edges=EDGES.tolist(), weapons=W[:3])
+    out = dict(map=name, demos=len(files), minutes=round(minutes, 1), edges=EDGES.tolist(), weapons=W[:3])
     three = hand[:3].sum(0)
     out["in_hand_by_distance"] = {W[k]: (hand[k] / np.maximum(1.0, three)).round(3).tolist() for k in BIG}
     out["in_hand_frames"] = three.astype(int).tolist()
@@ -181,9 +207,7 @@ def main():
         return r
     out["engagement_by_weapons_owned"] = eng_rows(eng, ("no big weapon", "one", "two", "three"))
     out["engagement_by_weapon_in_hand"] = eng_rows(eng_w, W)
-    with open(a.json, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=1)
-    print(json.dumps({k: v for k, v in out.items() if k not in ("edges", "in_hand_frames", "fired_frames")}, indent=1))
+    return out
 
 
 if __name__ == "__main__":
