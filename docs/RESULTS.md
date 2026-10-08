@@ -68,6 +68,29 @@ in the first hour: firing under 8% of frames or frags under 1.2 a match-minute i
 At 1e-4 with the teachers on the steady step is 0.027 with 28% of the samples clipped, on the high side; at 2.5e-5 it is
 0.007 (B-154).
 
+**Added 18:57: what does change it.** The teachers' losses held back from the shared layers (`--teach-trunk`, new in the
+trainer: the teachers read the same outputs, but their gradient into the layers all outputs share is scaled; the output
+layer learns the labels in full). Eight updates at 1e-4, half size:
+
+| | No learning | As planned | **Teachers at 5% into the shared layers** | At 0% |
+|---|---|---|---|---|
+| The policy's step: update 1, update 8 | 0 | 1.07, 0.033 | 0.23, 0.013 | 0.030, 0.020 |
+| ... of it the turn output, update 1 | | 0.41 | 0.056 | 0.015 |
+| Frags a match-minute | 2.9 to 3.1 | 2.2 | **2.9** | 2.6 |
+| Firing, with an enemy in view | 67 to 68% | 54 to 55% | **68%** | 66% |
+| Aim error in view, on target | 13.3 to 13.9, 31% | 15.0 to 15.5, 26 to 27% | **13.5, 31%** | 13.4, 31% |
+| Time bare | 40% | 36% | **35%** | 33% |
+| Fast in the air; speed on his way | 8 to 11%; 273 to 291 | 23 to 25%; 263 to 270 | **22%; 273** | 17%; 286 |
+| Key actions a second: asked, made | 5.0, 4.0 | 10.5, 4.7 | 9.5, 4.7 | 7.9, 4.7 |
+| The teachers' losses left: keys, intention | | 1.2, 0.3 | 2.0, 0.6 | 3.5, 1.0 |
+
+With the shared layers protected the taught habits arrive just the same (time bare, the jump key) and his aim, his
+firing and his frags stay where they were. So the drop at a teacher's start is damage, not his new behavior, and a
+slower rate does not avoid it. **v12 carries the same mark**: on target with an enemy in view was 39 to 41% through v11,
+fell from 37% to 33% in v12's first two updates under its teachers and was 32% at v12's end. Proposed to the owner for
+v13: `--teach-trunk 0.05`, the one change to the approved list (this replaces "as planned at 1e-4" above). The caution:
+eight updates at half size; the labels are learned more slowly, and whether they stall is to be read in the first hour.
+
 **What is in v13's rounds, counted** (the simulator set up as the trainer sets it, ten minutes a map): of the learners'
 playing time about 11% is item runs alone, 13% the fight after a run, 76% normal rounds; of the rounds that begin a third
 are item runs; of the normal rounds 15% begin as a race for a big item (184 of about 1,270 in the trainer's first update;

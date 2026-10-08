@@ -110,7 +110,8 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - Long sequences fill GPU memory (256 steps needs `--minibatches 24` on 16 GB; with 416 inputs and about 8,600 players `--minibatches 36`); a stalled first or second update is the sign. After every widening, check that updates keep coming (`metrics.jsonl` grows about once a minute).
 - Restart a run only right after a checkpoint save (every 10 updates) and keep a copy of it. The teachers' fades count
   from the process start unless `--fade-start <minute>` is given: without it a resume puts them back at full weight.
-- A teacher with new labels moves the whole network in its first updates (RESULTS 2026-10-08 18:45): dry-run a new
+- A teacher with new labels moves the whole network in its first updates and costs aim that does not come back
+  (RESULTS 2026-10-08 18:45; `--teach-trunk` holds the teachers' losses back from the shared layers): dry-run a new
   setup for ten minutes on a scratch copy with `--kl-heads 1` and read the step per output before the real start.
 - A background shell is capped at two hours; chain waiters or launch detached.
 - Aborting a warmup countdown in a loop hangs the server; the plugin aborts at most every 30 s and only with a human.

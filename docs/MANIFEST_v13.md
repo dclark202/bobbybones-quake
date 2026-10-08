@@ -29,7 +29,7 @@ stacks. Rounds last 80 to 160 seconds with respawns inside; his memory and score
 | **Item run, alone** | about 11% | alone on the map for up to 60 s with a target given as his intention (a big item that is there, the next one when he has it); paid for the way gained and for taking it |
 | **The fight after a run** | about 13% | half of the item runs turn into a fight after 20 s: half of the seats are put back to a plain spawn, the others keep what they gathered. He meets, from both sides, a fight decided by what was collected |
 
-(Shares counted in the simulator set up as the trainer sets it: 10 minutes on each map, `t_mix.py`.)
+(Shares counted in the simulator set up as the trainer sets it, ten minutes on each map; RESULTS 2026-10-08 18:45.)
 
 **Who is in the other seats.** In half of the matches every seat is the current network. In the other half the odd
 seats are played by one of his last eight earlier versions (a new one every 20 minutes). The game's bots are never in
@@ -51,7 +51,7 @@ pays half as much again.
 | A shot fired | a tenth of what its hit would pay, times how scarce that ammo is for him (the map, the way to more, his belt; 0.25 to 3): a rocket about 0.05, a rail slug 0.04, a lightning cell 0.003 | **v13** |
 | Picking up | 0.75 per 100 points of health or armor (mega and red armor 0.75, yellow 0.375), a weapon he did not have 0.19 | v9 |
 | The enemy takes the mega or the red armor | half of its pickup, off | v9 |
-| The way to the item he chose | worth its pickup (weapons a quarter, yellow armor half), paid in parts **on new ground only** | fixed for v13 (it could be collected again and again) |
+| The way to the item he chose | worth its pickup (0.75 for the mega or the red armor, 0.375 for a yellow armor, 0.19 for a weapon), paid in parts **on new ground only** | fixed for v13 (it could be collected again and again) |
 | Keeping a stack | a frag a minute at full value for health over 100 and armor, another for the three big weapons; half a frag a minute off while he holds none (growing with the time), a frag a minute off under 70 health and armor | v11 |
 | Damage with his style's weapon | +50% | v12 |
 | Fighting at his style's distance | off (was half a frag a minute) | **v13** |
@@ -100,6 +100,7 @@ The gate as for v12: after the teachers are at zero (four hours in) the numbers 
 | Key budget | 4 a second | 5 a second | he asked for 6.8 and got 3.8; people sustain about 7 |
 | Learning rate | 2.5e-5 | 1e-4 | the nominal rate; the two arms showed no harm |
 | Credit horizon (lambda) | 0.95 | 0.98 | item trips take 5 to 10 s |
+| Teachers and the shared layers | full weight | **5% (proposed, section 7)** | a teacher with new labels broke his aim on its way in |
 
 **Faults fixed in the code since v12 (the wiring review; all in the simulator or trainer v13 runs on).**
 
@@ -121,23 +122,36 @@ update on (the arm restarted at 0.018). **The cause is the item teacher on its n
 yellow armors, at weight 2.0), which reaches the mouse outputs through the layers all outputs share: without it the
 step is 0.008, with the old item rule 0.014 to 0.020. It is not the fresh input statistics and not the new rewards.
 
-A softer start (a warm-up from a tenth of the rate, or the old rate of 2.5e-5) was tried for 17 updates each: **it ends
-in the same place**, so v13 starts as planned at 1e-4.
+A softer start (a warm-up from a tenth of the rate, or the old rate of 2.5e-5; 17 updates each) **ends in the same
+place**: fewer frags, less firing, worse aim. What does change it is **holding the teachers' losses back from the
+shared layers** (`--teach-trunk`, new: the output layer still learns the labels in full, the layers all outputs share
+get 5% of the teachers' pull). After 8 updates at 1e-4:
 
-| After 12 to 17 updates | No learning | 1e-4 as planned | Warm-up | 2.5e-5 |
+| | No learning | As planned | **Teachers at 5% into the shared layers** | At 0% |
 |---|---|---|---|---|
-| Frags a match-minute | 2.9 to 3.1 | 2.0 to 2.2 | 1.9 | 1.9 |
-| Firing, with an enemy in view | 67 to 68% | 55% | 61% | 58% |
-| On target, with an enemy in view | 31% | 26% | 27% | 27% |
-| Time bare | 40% | 38% | 40% | 42% |
-| Fast in the air | 8 to 11% | 23% | 23% | 24% |
-| Key actions a second: asked, made | 5.0, 4.0 | 10.2, 4.7 | 10.5, 4.7 | 10.5, 4.7 |
+| The policy's step: update 1, update 8 | 0 | 1.07, 0.033 | 0.23, 0.013 | 0.030, 0.020 |
+| ... of it the turn output, update 1 | | 0.41 | 0.056 | 0.015 |
+| Frags a match-minute | 2.9 to 3.1 | 2.2 | **2.9** | 2.6 |
+| Firing, with an enemy in view | 67 to 68% | 54 to 55% | **68%** | 66% |
+| Aim error in view, on target | 13.3 to 13.9, 31% | 15.0 to 15.5, 26 to 27% | **13.5, 31%** | 13.4, 31% |
+| Time bare | 40% | 36% | **35%** | 33% |
+| Fast in the air; speed on his way | 8 to 11%; 273 to 291 | 23 to 25%; 263 to 270 | **22%; 273** | 17%; 286 |
+| Key actions a second: asked, made | 5.0, 4.0 | 10.5, 4.7 | 9.5, 4.7 | 7.9, 4.7 |
+| The teachers' losses left: keys, intention | | 1.2, 0.3 | 2.0, 0.6 | 3.5, 1.0 |
 
-What the first half hour of v13 will look like, then: **the jump key comes alive, the left hand is full** (he asks for
-twice what it can do, as in v12's teacher phase: the walking teacher's own keys use a hand's whole budget), **he walks
-to a weapon instead of fighting and fires less**: frags and time on target go down at first. Firing settles at 10 to
-13% of frames. The stop signs: firing under 8% of frames or frags under 1.2 a match-minute (the pattern of the teacher
-that stopped him fighting on 2026-10-08 00:39). Details: RESULTS 2026-10-08 18:45.
+So the drop in aim and fighting at a teacher's start is **damage, not his new behavior**: with the shared layers
+protected the taught habits arrive just the same (time bare, the jump key) and what he knew stays. v12 carries the same
+mark: on target fell from 37% to 33% in its first two updates under its teachers and was 32% at its end.
+
+**Proposed for v13, the one change to the list the owner approved: `--teach-trunk 0.05`.** It is a setting of the
+learning, not a reward. The caution: it rests on eight updates at half size; the labels are learned more slowly (the
+keys' loss 2.0 against 1.2), and if they stall the first hour will show it (time bare and the teachers' losses in the
+hourly lines). Without it v13 starts as in the "as planned" column.
+
+What the first half hour will look like either way: **the jump key comes alive and the left hand is full** (he asks
+for twice what it can do, as in v12's teacher phase: the walking teacher's own keys use a hand's whole budget). The stop
+signs: firing under 8% of frames or frags under 1.2 a match-minute (the pattern of the teacher that stopped him fighting
+on 2026-10-08 00:39). Details: RESULTS 2026-10-08 18:45.
 
 ## 8. What is watched, and what decides
 
@@ -171,5 +185,8 @@ python sim/train_duel_rnn.py --env duel_env_ffa --group 2,3,2,4,2 --map bloodrun
   --lr-minutes 1440 --lr-end 1.0 --lam 0.98 --close-floor 0 --loadout-p 0,1,0,0 --close-minutes 1 --intent-teach 2.0
   --intent-teach-minutes 1000000 --dmg-taken-w 1.0 --ent-coef 0.005 --ent-heads 0,0,0.25,0.25,0.25,0,0.5,0,1,1,0.1
   --dmg-reward 0.005 --item-reward 0.75 --item-loss 0.5 --intent-seek 1.0 --intent-seek-minutes 0 --stack-p 0
-  --near-item-p 0
+  --near-item-p 0 --teach-trunk 0.05 --kl-heads 10 --fade-start 4834.27
 ```
+
+`--teach-trunk 0.05` is the proposal of section 7 (left out, the list is as approved); `--kl-heads 10` measures the step
+per output every tenth update; `--fade-start` keeps the teachers' fade across a resume.

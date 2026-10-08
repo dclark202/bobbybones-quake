@@ -80,7 +80,8 @@ minutes against Nightmare at each checkpoint.
 
 **Next run: `duel_gru_v13`**, to start on the owner's approval of [MANIFEST_v13.md](MANIFEST_v13.md) (he reviews it with
 [REPORT_v12.md](REPORT_v12.md) on 2026-10-08 19:00) and run overnight. Its starting network is ready (fresh input
-statistics, B-145). One open point from the dry runs: the first updates (B-154).
+statistics, B-145). One proposal from the dry runs beyond the approved list: the teachers' losses held back from the
+shared layers (`--teach-trunk 0.05`, B-154), which kept his aim and fighting intact in the first updates.
 
 Open besides it, in this order: B-140 (the walking layer rebuilt properly, with keys a hand can press), B-154 (teachers
 and the shared layers), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-153 (a

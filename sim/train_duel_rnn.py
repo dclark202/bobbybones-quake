@@ -122,8 +122,8 @@ def main():
     ap.add_argument("--teach-trunk", type=float, default=1.0, help="the teachers' losses (walking keys, weapon, intention) reach the "
                     "shared layers at this share of their weight; the output layer learns the labels in full. 1 = as before. A "
                     "teacher with new labels otherwise moves the whole network (RESULTS 2026-10-08 18:45)")
-    ap.add_argument("--kl-heads", type=int, default=0, help="1 = the policy's step per output head in the metrics (kl_heads; one more "
-                    "forward pass over the batch every update)")
+    ap.add_argument("--kl-heads", type=int, default=0, help="N = the policy's step per output head in the metrics of every N-th "
+                    "update and of the first twenty (kl_heads; one more forward pass over the batch in those updates)")
     ap.add_argument("--lr-warm", type=float, default=0.0, help="the learning rate climbs from a tenth to full over this many minutes "
                     "from the teachers' start (--fade-start): new losses and labels move the network a long way in the first updates")
     ap.add_argument("--fade-start", type=float, default=-1.0, help="the teachers' fades count from this minute of training "
@@ -492,7 +492,7 @@ def main():
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
         klh = np.zeros(len(ACTION_DIMS))
         old_h = None
-        if a.kl_heads:                                                   # the log-probability of what he did, per head, before the update
+        if a.kl_heads and (update % a.kl_heads == 0 or update <= 20):    # the log-probability of what he did, per head, before the update
             with torch.no_grad():
                 old_h = torch.zeros(T, N, len(ACTION_DIMS), device=dev)
                 for chunk in torch.arange(N, device=dev).chunk(n_mb):
