@@ -1,5 +1,3 @@
-# bobbybones-quake
-
 ## Play against him in Quake Live
 Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal).
 
