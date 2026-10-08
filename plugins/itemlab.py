@@ -3,6 +3,10 @@
 A controlled bot is stripped to the gauntlet with 50 health and no armor/ammo, placed on each item in turn,
 and its state before and after is logged. Load with QLX_PLUGINS="botctl, itemlab", LAB_MAP=<map>.
 Writes /tmp/practice/itemlab.jsonl (one line per item) and itemlab.log.
+
+ITEMLAB_OWNED=1: the weapons and ammo boxes only, with every weapon owned, four times over: with 3/10 of a pickup's
+ammo, with exactly one pickup's, with one and a half, and one short of the cap ("pre" in each line says which). Shows
+what a weapon gives when already owned and where the caps are. An item that is not there yet is put back in the queue.
 """
 import json
 import os
@@ -12,6 +16,11 @@ import minqlx
 
 D = "/tmp/practice"
 NAMES = ("g", "mg", "sg", "gl", "rl", "lg", "rg", "pg", "hmg")
+OWNED = bool(os.environ.get("ITEMLAB_OWNED"))
+PRE = {"low": dict(mg=30, sg=3, gl=3, rl=3, lg=30, rg=3, pg=15, hmg=15),
+       "one": dict(mg=100, sg=10, gl=10, rl=10, lg=100, rg=10, pg=50, hmg=50),
+       "more": dict(mg=120, sg=15, gl=15, rl=15, lg=120, rg=15, pg=75, hmg=75),
+       "cap": dict(mg=149, sg=24, gl=24, rl=24, lg=149, rg=24, pg=149, hmg=149)}
 
 
 def is_bot(p):
@@ -61,6 +70,8 @@ class itemlab(minqlx.Plugin):
             if now < self.next_check:
                 return
             self.todo = [it for it in minqlx.item_states()[1]]
+            if OWNED:
+                self.todo = [it + (pre,) for pre in PRE for it in self.todo if it[1].startswith(("weapon_", "ammo_"))]
             self.log("{} items on {}".format(len(self.todo), self.want))
         c = self.cur
         if c is None:
@@ -68,12 +79,22 @@ class itemlab(minqlx.Plugin):
                 self.done = True
                 self.log("all items done")
                 return
-            num, cls, x, y, z, up, _ = self.todo.pop(0)
-            b.weapons(reset=True, g=True)
-            b.ammo(**{w: 0 for w in NAMES if w != "g"})
+            it = self.todo.pop(0)
+            num, cls, x, y, z, up, _ = it[:7]
+            pre = it[7] if len(it) > 7 else ""
+            if pre:
+                up = {e[0]: e[5] for e in minqlx.item_states()[1]}.get(num, 0)
+                if not up:                                   # taken in the pass before: later
+                    self.todo.append(it)
+                    return
+                b.weapons(**{w: True for w in NAMES})
+                b.ammo(**PRE[pre])
+            else:
+                b.weapons(reset=True, g=True)
+                b.ammo(**{w: 0 for w in NAMES if w != "g"})
             b.health = 50
             b.armor = 0
-            self.cur = dict(num=num, cls=cls, pos=(x, y, z), frame=0, up=bool(up))
+            self.cur = dict(num=num, cls=cls, pos=(x, y, z), frame=0, up=bool(up), pre=pre)
             return
         c["frame"] += 1
         if c["frame"] == 3:
@@ -82,6 +103,8 @@ class itemlab(minqlx.Plugin):
             b.velocity(reset=True)
         elif c["frame"] == 20:
             rec = dict(map=self.want, item=c["cls"], was_up=c["up"], before=c["before"], after=self.snap(st))
+            if c.get("pre"):
+                rec["pre"] = c["pre"]
             with open(os.path.join(D, "itemlab.jsonl"), "a") as f:
                 f.write(json.dumps(rec) + "\n")
             self.cur = None

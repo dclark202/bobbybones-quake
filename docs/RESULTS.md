@@ -23,8 +23,13 @@ normal boxes (7 on Blood Run, 6 on Aerowalk, 4 on Lost World). The real duel ser
 walked every item the game had on three maps (2026-10-04) and there is no pack in its list. In the simulator each pack gives
 every gun he owns a box's worth every 40 s, so every run so far had two to three times the real game's ammo (rockets on
 Blood Run: 85 a minute against 32), and with the packs every gun sits at the cheapest price on all three duel maps.
-`AMMO_PACKS=0` removes them; the default is unchanged (v12 and today's learning-rate test have them). Still unmeasured: a
-weapon picked up when already owned (the simulator adds a whole pickup each time), B-136.
+`AMMO_PACKS=0` removes them; the default is unchanged (v12 and today's learning-rate test have them).
+
+**Measured at 13:55 on a real server** (`plugins/itemlab.py` with `ITEMLAB_OWNED=1`, Blood Run, every weapon owned, four
+levels of ammo; `data/itemlab2/`): the game has 17 weapon and ammo items there and no pack. A weapon picked up when already
+owned adds its whole pickup again (rockets 3 to 13, 10 to 20, 15 to 25; lightning 30 to 130), a box adds its amount, and the
+caps are 25 (rockets, slugs, shells, grenades) and 150 (bullets, cells, lightning): all as the simulator has it (B-136 closed;
+Quake Live differs from Quake 3 here, which only fills up to one pickup).
 
 **A shot pays from this chance to hit on** (share 0.10, no packs, at the map's median way to that ammo):
 
