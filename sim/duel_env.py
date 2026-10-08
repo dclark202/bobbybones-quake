@@ -257,6 +257,10 @@ SPAWN_TEACH = float(os.environ.get("SPAWN_TEACH") or 0.0) > 0
 #                   the nearest (half of their first weapons are rockets); armed, the nearest of yellow armor, red armor
 #                   and mega that is there and that he can still use; else the nearest big weapon he lacks.
 PRO_ITEMS = float(os.environ.get("PRO_ITEMS") or 0.0) > 0
+#   PRO_ROUTES=1    the way to a goal is the pros' where they went (sim/pro_routes/<map>.npz of tools/pro_routes.py: the
+#                   step they took next from each place on their trips to it), the shortest way elsewhere: for the
+#                   walking teacher and for the "next step" he is shown of his chosen way.
+PRO_ROUTES = float(os.environ.get("PRO_ROUTES") or 0.0) > 0
 PRO_RL_EDGE = 1.5
 STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
 STYLE_BAND = float(os.environ.get("STYLE_BAND") or 0.5)
@@ -693,6 +697,22 @@ class DuelEnv:
                 self.route = RouteField(nav, [pos_[lab_] for lab_ in self.route_goal],
                                         pads=[(c, d) for k, c, d in spots if k == 0])
                 self.intent_gi = [-1] + [self.route_goal.index(lab_) if lab_ in self.route_goal else -1 for lab_ in INTENTS[1:]]
+                self.route.walk = self.route.next            # the step to take: the shortest way's, or the pros' (PRO_ROUTES)
+                pr_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_routes", name + ".npz")
+                if PRO_ROUTES and os.path.exists(pr_):
+                    pd_ = np.load(pr_)
+                    labs_ = [str(x) for x in pd_["labels"]]
+                    if int(pd_["nodes"]) == len(self.route.nodes):
+                        walk_ = np.array(self.route.next).copy()
+                        for g_, lab_ in enumerate(self.route_goal):
+                            if lab_ in labs_:
+                                pn_ = pd_["next"][labs_.index(lab_)]
+                                walk_[g_] = np.where(pn_ >= 0, pn_, walk_[g_])
+                                if "time" in pd_.files:      # places the walking graph has no way from (a jump it lacks)
+                                    tm_ = pd_["time"][labs_.index(lab_)]
+                                    open_ = (self.route.T[g_] >= 1e8) & (tm_ < 1e8)
+                                    self.route.T[g_] = np.where(open_, tm_, self.route.T[g_])
+                        self.route.walk = walk_
         self.flinch_on = True
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
@@ -1207,10 +1227,10 @@ class DuelEnv:
         gi = np.array(self.intent_gi)[kk]
         ok = gi >= 0
         g = np.maximum(gi, 0)
-        nx = R.next[g, node]
+        nx = R.walk[g, node]
         tp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
         near = np.hypot(tp[:, 0] - pos[:, 0], tp[:, 1] - pos[:, 1]) < 48.0
-        nx2 = np.where(nx >= 0, R.next[g, np.maximum(nx, 0)], -1)
+        nx2 = np.where(nx >= 0, R.walk[g, np.maximum(nx, 0)], -1)
         tp = np.where((near & (nx2 >= 0))[:, None], R.nodes[np.maximum(nx2, 0)], tp)
         tp = np.where((near & (nx >= 0) & (nx2 < 0))[:, None], R.goals[g], tp)
         d = tp - pos
@@ -1480,7 +1500,7 @@ class DuelEnv:
             off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
             t = R.T[g, node]
             ok = valid & (t < 1e8)
-            nx = R.next[g, node]
+            nx = R.walk[g, node]
             wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
             out[:, 0] = np.minimum((t + off) / 10.0, 2.0) * ok
             out[:, 1:4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
@@ -2252,10 +2272,10 @@ class DuelEnv:
         T = np.where(lab[None, :] == k[:, None], R.T[:, node].T, 1e9)
         gi = T.argmin(1)
         go = (k > 0) & (T[np.arange(len(ri)), gi] < 1e8)
-        nx = R.next[gi, node]
+        nx = R.walk[gi, node]
         tp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[gi])
         near = np.hypot(tp[:, 0] - pos[:, 0], tp[:, 1] - pos[:, 1]) < 48.0
-        nx2 = np.where(nx >= 0, R.next[gi, np.maximum(nx, 0)], -1)
+        nx2 = np.where(nx >= 0, R.walk[gi, np.maximum(nx, 0)], -1)
         tp = np.where((near & (nx2 >= 0))[:, None], R.nodes[np.maximum(nx2, 0)], tp)   # look one step further when close
         tp = np.where((near & (nx >= 0) & (nx2 < 0))[:, None], R.goals[gi], tp)
         d = tp - pos

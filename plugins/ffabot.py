@@ -267,7 +267,7 @@ class ffabot(duelbot):
         """what happens in the game is written only while a person is playing (owner, 2026-10-07: "it should only log when
         humans are actively playing": the bots alone filled the event log with their own deaths and pickups), and not
         when the disk is nearly full. Joins, leaves, notes and the end of a session are always written."""
-        if rec.get("event") in ("death", "pickup", "minute", "bots") and not (getattr(self, "people_now", False) and getattr(self, "disk_ok", True)):
+        if rec.get("event") in ("death", "pickup", "minute", "bots", "style") and not (getattr(self, "people_now", False) and getattr(self, "disk_ok", True)):
             return
         duelbot.record(self, **rec)
 
@@ -481,6 +481,12 @@ class ffabot(duelbot):
                     env.mv[k], env.cool[k] = 0.0, 0.0
                     self.want_w.pop((id(env), k), None)
                     minqlx.set_bot_substeps(p.id, 3)
+                    if hasattr(E, "STYLES") and hasattr(env, "style"):
+                        # his playing style for this life: one of the map's at random (owner, 2026-10-08: "for now spawn
+                        # at random with each style"; choosing it himself comes with a later network)
+                        ok_ = [j for j, w_ in enumerate(E.STYLE_W) if w_ < 0 or int(w_) in env.map_weapons]
+                        env.style[k] = int(ok_[np.random.randint(len(ok_))])
+                        self.record(event="style", seat=k, style=E.STYLES[int(env.style[k])])
                 self.tot.pop(k, None)
             if was and not up:
                 env.note_death(k, -1)                        # those in earshot know; the killer is not known here
