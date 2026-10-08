@@ -592,7 +592,7 @@ class ffabot(duelbot):
             p, st = by_seat[k]
             w, fire, pitch, yaw, keys = self.drive(p, env, E, k, a, float(env.pitch[k]), float(env.yaw[k]))
             self.fired[k] = bool(fire)
-            if people:                                       # frames are logged only while a person is in the game
+            if people or os.environ.get("FFA_LOG_ALWAYS"):       # frames are logged only while a person is in the game (FFA_LOG_ALWAYS=1: tests with bots alone)
                 self.log_row(now, env, E, k, p, st, keys, present, bot_seats, len(people), len(bobbys))
             c = self.acc.setdefault(k, dict(frames=0, visible=0, fire=0, w={}))
             c["frames"] += 1
