@@ -93,7 +93,9 @@ RUN_COLLECT = 20.0
 # plain player would hold at this distance from an enemy seen in the last 1.5 s, among the weapons he has with ammo:
 # rockets from W_RULE_RL[0] to W_RULE_RL[1] units, lightning up to its range, the rail beyond, else the machine gun.
 # A label for the trainer's --weapon-teach loss on the weapon key, like the intention seed; not a reward.
-W_RULE_RL, W_RULE_LG, W_RULE_RG = (60.0, 300.0), 700.0, 700.0
+W_RULE_RL, W_RULE_LG, W_RULE_RG = (60.0, 300.0), 700.0, 500.0
+W_RULE_RG_OK = 300.0   # owner (2026-10-07): lightning and rail overlap by a lot. The rail is the choice from 500 on, the lightning
+                       # gun up to 700; with the lightning gun in hand up to 700, or the rail in hand from 300 on, he is left alone
 # (the distances are people's: in 183 minutes of logged play, with every weapon to hand, the weapon fired most was
 # rockets below 150 units (28%), lightning from 150 to 700 (28% rising to 64%, rockets 17% then 6%), the rail beyond
 # 700 (40%); tools/player_card.py. The first guess was rockets 100 to 450, the rail beyond 600.)
@@ -2128,8 +2130,11 @@ class DuelEnv:
         d = np.linalg.norm(self.known[ii] - self.state[ii, :3], axis=1)
         ok = self.has[ii] & (self.ammo[ii] > 0)
         want = np.full(len(ii), MG, np.int64)
-        want = np.where(ok[:, RG] & (d > W_RULE_RG), RG, want)
         want = np.where(ok[:, LG] & (d < W_RULE_LG), LG, want)
+        want = np.where(ok[:, RG] & (d > W_RULE_RG), RG, want)
+        hold = self.weapon[ii]                               # the overlap: either of the two is fine where both reach
+        fine = ((want == RG) & (hold == LG) & ok[:, LG] & (d < W_RULE_LG)) | ((want == LG) & (hold == RG) & ok[:, RG] & (d > W_RULE_RG_OK))
+        want = np.where(fine, hold, want)
         want = np.where(ok[:, RL] & (d > W_RULE_RL[0]) & (d < W_RULE_RL[1]), RL, want)
         want = np.where(ok[np.arange(len(ii)), want], want, self.weapon[ii])      # (no machine-gun ammo: keep what he holds)
         cur = self.weapon[ii]
