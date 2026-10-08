@@ -58,6 +58,8 @@ def main():
         air = moving = 0
         speed = 0.0
         times, stand, falls = [], collections.Counter(), collections.Counter()
+        k0 = (float(env.stats["key_asked"]), float(env.stats["key_changes"]))
+        played = 0.0
         for _ in range(a.tries):
             for i in range(n):                               # a fresh try for everybody: a spawn point, the item lying there
                 env.state = env.w.state()
@@ -81,6 +83,7 @@ def main():
                 act[:, 10] = k_goal
                 s0 = env.state.copy()
                 env.step(act)
+                played += n * E.DT
                 env.run_k[:] = k_goal
                 s = env.state
                 new = (np.linalg.norm(s[:, :3] - env.item_pos[it][None, :], axis=1) < 48) & ~got
@@ -104,9 +107,12 @@ def main():
             arrived += int((got & ok0).sum())
             times += when[got & ok0].tolist()
         no_way = 32 * a.tries - tries
-        print("   {:4s} {:4.0%} arrive ({} of {}), median {:4.1f} s; on the way: speed {:.0f}, in the air {:.0%} of the time{}".format(
-            lab, arrived / max(1, tries), arrived, tries, float(np.median(times)) if times else float("nan"),
-            speed / max(1, moving), air / max(1, moving), "; {} tries had no way in the graph".format(no_way) if no_way else ""))
+        print("   {:4s} {:4.0%} arrive ({} of {}), median {:4.1f} s; on the way: speed {:.0f}, in the air {:.0%} of the time; "
+              "key actions a second: the teacher asks {:.1f}, the hand makes {:.1f}{}".format(
+                  lab, arrived / max(1, tries), arrived, tries, float(np.median(times)) if times else float("nan"),
+                  speed / max(1, moving), air / max(1, moving), (float(env.stats["key_asked"]) - k0[0]) / max(1e-9, played),
+                  (float(env.stats["key_changes"]) - k0[1]) / max(1e-9, played),
+                  "; {} tries had no way in the graph".format(no_way) if no_way else ""))
         if not a.goal:
             continue
 

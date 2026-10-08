@@ -366,7 +366,9 @@ rep('''        opp_all = ar ^ 1
             near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
             self.pain_t[lis_[near_]] = 0.0
             self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
-        dealt = np.where(attacker[opp_all] == ar, dmg_taken[opp_all], 0.0)''',
+        dealt = np.zeros(n, np.float32)                     # per attacker (see _book)
+        for (i_, v_), d_ in st["by"].items():
+            dealt[i_] += d_''',
     '''        hurt = np.nonzero((dmg_taken > 0) & (self.hp > 0))[0]              # pain sounds: the others hear them within earshot
         if len(hurt):
             lis_ = self.others[hurt].reshape(-1)
@@ -375,8 +377,9 @@ rep('''        opp_all = ar ^ 1
             self.pain_t[lis_[near_]] = 0.0
             self.pain_src[lis_[near_]] = hurt[near_]
             self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
-        dealt_to = np.where(attacker[self.grp] == ar[:, None], dmg_taken[self.grp], 0.0)    # per member of the group
-        dealt_to[ar, self.slot] = 0.0
+        dealt_to = np.zeros((n, self.G), np.float32)         # per attacker and member of the group (see _book)
+        for (i_, v_), d_ in st["by"].items():
+            dealt_to[i_, self.slot[v_]] += d_
         dealt = dealt_to.sum(1)
         self.dmg_on += dealt_to
         opp_all = np.where((attacker >= 0) & (attacker != ar), attacker, self.foe)     # a hit is felt from the attacker's side''')

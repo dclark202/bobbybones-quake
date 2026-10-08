@@ -20,7 +20,9 @@ Nightmare stand-in, by real games against Nightmare on a free PC, and by the num
 | [HOSTING.md](HOSTING.md) | How to rent and start a public server | The hosting setup changes |
 | [INPUTS.csv](INPUTS.csv) | Every input of the network in order, with meaning and scale (written by `tools/list_inputs.py`, checked against the simulator's count) | Inputs are added or changed |
 | [LOGS.md](LOGS.md) | Schema of the recorded data (play-test sessions, training metrics, weapon lab) | A log format changes |
-| [../README.md](../README.md) | The public page: the goal, the fairness rules, how it works, where it stands | The goal, a fairness rule or the status changes (owner, 2026-10-08: keep it current) |
+| [../README.md](../README.md) | The public page: the goal, the fairness rules, how it works, what he can do, what is in progress and planned (no dated status: owner, 2026-10-08) | The goal, a fairness rule or what he can do changes |
+| [REPORT_v12.md](REPORT_v12.md) | The full report of the network on the public server | (a report per network the owner reviews) |
+| [MANIFEST_v13.md](MANIFEST_v13.md) | The next run in full: what is in its rounds, what it is paid for and shown, what changed | Before a run starts, for the owner's approval |
 
 Rules: a result entry names the backlog items it settles (`B-nn`); a backlog item marked done links to the
 result that showed it; the "Now" list below only contains backlog IDs. One change = all three touched in the
@@ -76,12 +78,14 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-**Next run: `duel_gru_v13`**, to start on 2026-10-08 between 21:00 and 22:00 on the owner's go and run overnight; its
-list is the next section. Just before it the input statistics are measured afresh on a short sampling run (B-145).
+**Next run: `duel_gru_v13`**, to start on the owner's approval of [MANIFEST_v13.md](MANIFEST_v13.md) (he reviews it with
+[REPORT_v12.md](REPORT_v12.md) on 2026-10-08 19:00) and run overnight. Its starting network is ready (fresh input
+statistics, B-145). One open point from the dry runs: the first updates (B-154).
 
-Open besides it, in this order: B-140 (the walking layer rebuilt properly), B-146 (damage and frag credit in groups of
-three and four), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-148 (smaller
-gaps of the free-for-all plugin), B-150 (trainer housekeeping), B-107b, B-92, B-109.
+Open besides it, in this order: B-140 (the walking layer rebuilt properly, with keys a hand can press), B-154 (teachers
+and the shared layers), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-153 (a
+spinning helper thread on the game servers), B-148 (smaller gaps of the free-for-all plugin), B-150 (trainer
+housekeeping), B-107b, B-92, B-109.
 
 How it got here: RESULTS 2026-10-06 to 2026-10-08 (v9 to v12, the audit, the wiring review).
 

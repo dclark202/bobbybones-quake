@@ -99,7 +99,9 @@ players every 10 s; the simulator runs 32 subjects per map at once.
 - `metrics.jsonl`: one line per report: `update`, `steps`, `minutes`, `sps`, `frags_per_match_min`,
   `suicides_per_match_min`, per-weapon hit rates and frag shares, `pickups_per_player_min`, `visible`,
   `air_fast`, `jerk`, `vs_snapshot_kill_share`, `league_size`, `entropy`, `close_p`.
-  Since 2026-10-08 also: `kl`, `clip_frac`, `lr`, `lam` (the policy's step per update), `by_map` (per map: time bare,
+  Since 2026-10-08 also: `kl`, `clip_frac`, `lr`, `lam` (the policy's step per update; with `--kl-heads 1` also
+  `kl_heads`, the step per output: forward, strafe, vertical, turn, pitch, fire, weapon, walk, zoom, lift, intention),
+  `by_map` (per map: time bare,
   big weapons, first weapon, frags, enemy in view, mega and red, weapons a player-minute), `stack`, `style`, `fire_in_view`,
   `shot_cost_per_player_min`, `shot_price` (the mean factor of the price per shot), `armor_soaked_per_player_min`,
   `contest` (rounds begun as a race for a big item, and the share a learner took it in). `pickups_per_player_min.wp`

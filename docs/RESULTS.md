@@ -5,6 +5,114 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 18:45 — Before v13: its starting network, its first updates in dry runs (the item teacher shakes the mouse outputs), credit per attacker, the public server's state
+
+For the owner's review of 19:00 (he: "we're not starting v13 yet ... full report of v12, full training manifest of v13
+... status of bots on the live public server"): [REPORT_v12.md](REPORT_v12.md), [MANIFEST_v13.md](MANIFEST_v13.md).
+Nothing was started.
+
+**The starting network** (`data/sim_runs/duel_gru_v13`, from `duel_gru_v12b`, 4,834 min, with its last eight
+snapshots). Input statistics measured afresh (B-145): a twelve-minute run of v13's own rounds with no learning
+(`--lr 1e-9`, `--obs-dump`: 26,379 frames), then `sim/renorm_policy.py` on the network and the snapshots. 374 of the
+491 inputs vary on the three duel maps; 133 were rewritten (off by more than two), 16 left alone (off, but with values at
+the old clip, where a rewrite would change his output), 8 had never varied (spread 1, zero weights). The size at which
+inputs had been reaching the network: the nearest red armor 0.03 and 0.04 (left, forward), the mega 0.04 and 0.05, a
+teleporter's entrance 0.04 and its exit 0.06 to 0.07, a jump pad 0.07 to 0.08, the third enemy 0.03 to 0.11, his own
+projectiles 0.07 to 0.12, "the mega came back" and "the red armor came back" 0.13, the second and third enemy's weapon
+0.13. First layer before and after on the sample: largest difference 7.9e-8 (typical size 1.25). The old files are kept
+(`.before_renorm`). With no learning the same rounds give: fire with an enemy in view 67 to 68%, 2.9 to 3.1 frags a
+match-minute, aim error 13.3 to 13.9 degrees, on target 31% (the reference for the rows below).
+
+**The first updates, in dry runs** (v13's exact settings at half size on scratch copies, deleted afterwards; new in the
+trainer for this: `--kl-heads 1`, the policy's step per output). The policy's step (KL) per update, and where it comes
+from:
+
+| Dry run | Update 1 | 2 | 3 | 5 | last (which) | In update 1: turn, pitch |
+|---|---|---|---|---|---|---|
+| No learning (rate 1e-9) | 0 | 0 | 0 | 0 | 0 | |
+| **v13 as planned, 1e-4** | **1.07** | 0.48 | 0.11 | 0.05 | 0.027 (12) | 0.41, 0.14 |
+| ... without the walking and weapon teachers | 0.52 | 0.35 | 0.12 | 0.06 | | 0.28, 0.12 |
+| ... and the network before the input rewrite | 0.51 | 0.36 | 0.12 | | 0.08 (4) | 0.27, 0.12 |
+| ... and the old rewards (no shot price, armor at full price, no races, damage taken at half) | 0.51 | 0.39 | 0.14 | | 0.09 (4) | 0.27, 0.12 |
+| ... and the item teacher on the **old** item rule | 0.014 | 0.015 | 0.020 | | 0.019 (4) | 0.007, 0.004 |
+| ... and **no item teacher** | 0.008 | 0.008 | 0.008 | | 0.007 (4) | 0.004, 0.002 |
+| v13 with a warm-up (a tenth of the rate, full after 20 min) | 0.21 | 0.23 | 0.21 | 0.16 | 0.027 (17) | 0.09, 0.04 |
+| v13 at the old rate, 2.5e-5 | 0.61 | 0.21 | 0.23 | 0.07 | 0.007 (17) | 0.21, 0.08 |
+
+So the large first step is **the item teacher on its new labels** (the pros' order, with the yellow armors, at weight 2.0:
+a loss of 5 nats at first, a hundred times the game's own signal), and it reaches the mouse outputs through the layers all
+outputs share: without it the step is 0.008, with the old rule 0.014 to 0.020. It is not the fresh input statistics, not
+the new rewards, and only half of it is the walking teacher (whose part is the jump key, 0.20 of the 1.07, wanted). Not
+a fault of the measure: with no learning it reads zero.
+
+Does a softer start end somewhere else? After 12 to 17 updates:
+
+| | No learning | 1e-4 as planned (12) | Warm-up (17) | 2.5e-5 (17) |
+|---|---|---|---|---|
+| Frags a match-minute | 2.9 to 3.1 | 2.0 to 2.2 | 1.9 | 1.9 |
+| Firing, with an enemy in view | 67 to 68% | 55% | 61% | 58% |
+| Aim error in view, on target | 13.3 to 13.9 degrees, 31% | 15.5, 26% | 15.0, 27% | 15.2, 27% |
+| Time bare | 40% | 38% | 40% | 42% |
+| Fast in the air; speed on his way | 8 to 11%; 273 to 291 | 23%; 270 | 23%; 262 | 24%; 264 |
+| Key actions a second: asked, made | 5.0, 4.0 | 10.2, 4.7 | 10.5, 4.7 | 10.5, 4.7 |
+| The teachers' losses: keys, intention | | 1.28, 0.22 | 1.50, 0.30 | 1.80, 0.38 |
+| The policy's step; samples clipped | 0 | 0.027; 28% | 0.027; 28% | 0.007; 9% |
+
+**No.** The three starts are in the same place after a quarter of an hour: the size of the first step makes no
+difference that shows, and the full rate learns the labels fastest. What all three show is what the settings do in the
+first half hour: the jump key is alive (fast in the air 9% -> 23%), **the left hand is full** (he asks for twice what
+it can do, as in v12's teacher phase), he walks to a weapon instead of fighting and fires less (the price of a shot):
+frags 3.0 -> 2.0 a match-minute, on target 31% -> 27%. Firing has settled at 10 to 13% of frames from update 6 on (17% with no
+learning; the teacher of 00:39 took it to 7% and frags to 1.1). **For the start: as planned at 1e-4; a warm-up is not needed.** Watched
+in the first hour: firing under 8% of frames or frags under 1.2 a match-minute is the 00:39 pattern and a reason to stop.
+At 1e-4 with the teachers on the steady step is 0.027 with 28% of the samples clipped, on the high side; at 2.5e-5 it is
+0.007 (B-154).
+
+**What is in v13's rounds, counted** (the simulator set up as the trainer sets it, ten minutes a map): of the learners'
+playing time about 11% is item runs alone, 13% the fight after a run, 76% normal rounds; of the rounds that begin a third
+are item runs; of the normal rounds 15% begin as a race for a big item (184 of about 1,270 in the trainer's first update;
+none for Aerowalk's red armor, which has no way in the graph) and a quarter to a third have the scripted runner in a seat;
+rounds last 71 to 150 s (10th to 90th percentile; item runs shorter); nobody starts with a big weapon; lives by style a
+quarter each, on Lost World (no railgun) half general.
+
+**The walking teacher's keys** (`tools/teacher_check.py` now prints them): on Blood Run its labels ask for 7 to 10 key
+actions a second and a hand at 5 a second makes 5.0 to 5.3: the teacher's own pupil uses the whole budget (he arrives all
+the same: 83 to 100%). It is the same with and without the pros' jump label, and it is what v12's start showed too (his
+requests went from 6.9 to 10 a second in three updates and came down to 6.6 only after the teacher was gone). The labels
+are not made for a hand: no hold on the eight-way key choice, the jump key let go in the air. For the walking layer's
+rebuild (B-140); "asked" counts a refused request again at every decision, ten times a second.
+
+**Damage and frag credit per attacker (B-146, done).** A victim had one attacker a frame, the last to hit him, who was
+paid for everything the victim took in it and for the frag. Now the damage is booked per attacker and the frag goes to
+the hit that took the health below zero (`_book` in `sim/duel_env.py`; the generator's anchor with it). Test: three
+players, two rails on the third in one frame: each shooter +0.40 (before: one +0.80, the other nothing), the frag to the
+one whose rail killed, the same with the seats turned. `tools/ffa_check.py`: two players identical. How much it was
+(v12b's network, three minutes of self-play): 0.9% of the victim-frames with a hit have two attackers; 0.7% (three
+players, Aerowalk) and 0.8% (four, Blood Run) of the damage pay and 1.0% and 1.4% of the frags went to the wrong player.
+Small, and biased by seat. In two-player games the only change: the shooter is no longer paid for what the victim's own
+splash did in the frame he hit him. Still the owner's call from B-146: the cost of an enemy's mega or red armor is
+charged to every other member of a group.
+
+**v12 against the stand-in with styles, under today's simulator** (`docs/eval_v12_nightmare_styles.json`; 100 ten-minute
+duels a map with `STYLE_P=0.75 INTENT_HOLD=8`): arena1 -0.9 : 17.4 (35% of the frags, 34 to 37; 13.2 own deaths a
+game), Blood Run 4.8 : 18.6 (25%, 24 to 27), Aerowalk 17.4 : 20.1 (47%, 45 to 49; won 37, drawn 3, lost 60). His share of
+the red armor's spawns 19%, 0%, 9% (the stand-in's 34%, 48%, 6%); of the mega's 21%, 24%, 21% (2%, 64%, 65%). The
+stand-in is stronger than at 14:00 on Blood Run (it takes pads and teleporters properly since 16:45: its share of the red
+armor 22% -> 48%), so these, not the 14:00 numbers, are what v13 is measured against. The games of v10 and v11 on the same
+footing have not been played.
+
+**The public server at 18:07**: up since 16:50 with `duel_gru_v12` (4,727 min, 487 inputs), free-for-all, three Bobbys
+on arena1, repo at `189b278`, no errors in the plugin's log; **nobody has played on this build** (the session's frame log
+is empty: frames are kept only while a person plays). Load: one thread of the game process at 100% of a core since the
+start and the main thread at 26 to 29%, of two cores. The busy thread is the numeric library's helper (OpenBLAS is loaded
+twice, by numpy and scipy; it spins between the network's matrix products, which come 40 times a second). It does not
+hold up the game, but it wastes a core there and, on the PC, a helper per core for every game server started (three
+side by side in the Nightmare checks). To fix with `OPENBLAS_NUM_THREADS=1` in the image (B-153); it needs a rebuild and a
+restart, so not done without the owner's word.
+
+**README** (owner: "'Where it stands (2026-10-08)' shouldn't be in the repo. Just a brief overview of what he's capable
+of and what is still in progress/planned"): the dated table is gone; "What he can do", "In progress", "Planned".
+
 ## 2026-10-08 17:05 — v12 against Nightmare with every plugin fix; the public server; the two arms; the owner's calls for v13
 
 **The fair numbers.** `duel_gru_v12`, ten minutes a map against the game's Nightmare bot, the three games side by side

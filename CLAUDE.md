@@ -30,7 +30,10 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - `docs/BACKLOG.md`: every work item with an ID (`B-nn`), priority and status.
 - `docs/RESULTS.md`: dated log of every run, live test and measurement, including what did not work.
 - `docs/LOGS.md`: schemas of recorded data. `docs/PLAYTEST.md`: the play-test routine and the test suite.
-- `README.md`: the public page (goal, fairness rules, how it works, where it stands). The owner wants it kept current
+- `docs/REPORT_v<n>.md`, `docs/MANIFEST_v<n>.md`: the full report of a network and the full list of the next run (what is
+  in its rounds, what it is paid for and shown, what changed), written for the owner's approval before a run starts.
+- `README.md`: the public page (goal, fairness rules, how it works, what he can do, in progress, planned; no dated
+  status table: owner, 2026-10-08). The owner wants it kept current
   with the docs (2026-10-08).
 After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, update PLAN if needed.
 
@@ -105,7 +108,10 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - Write `.cmd` run files to the scratchpad and copy them over: writing over an existing one can fail silently in a chain,
   and the old settings then run (it happened).
 - Long sequences fill GPU memory (256 steps needs `--minibatches 24` on 16 GB; with 416 inputs and about 8,600 players `--minibatches 36`); a stalled first or second update is the sign. After every widening, check that updates keep coming (`metrics.jsonl` grows about once a minute).
-- Restart a run only right after a checkpoint save (every 10 updates) and keep a copy of it.
+- Restart a run only right after a checkpoint save (every 10 updates) and keep a copy of it. The teachers' fades count
+  from the process start unless `--fade-start <minute>` is given: without it a resume puts them back at full weight.
+- A teacher with new labels moves the whole network in its first updates (RESULTS 2026-10-08 18:45): dry-run a new
+  setup for ten minutes on a scratch copy with `--kl-heads 1` and read the step per output before the real start.
 - A background shell is capped at two hours; chain waiters or launch detached.
 - Aborting a warmup countdown in a loop hangs the server; the plugin aborts at most every 30 s and only with a human.
 - Quake Live locks `sv_fps` at 40; a higher tick rate is not possible.

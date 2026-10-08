@@ -69,25 +69,35 @@ yard is the map he is checked on without having trained there.
    per frame, with the player's notes. `sim/render_course.py` renders first-person videos of his fights
    straight from the simulator, with the keys he pressed, for judging how the play looks.
 
-## Where it stands (2026-10-08)
+## What he can do
 
-| | |
-|---|---|
-| Movement simulator matches the real game; learned movement transfers (time ratio 1.01) | done |
-| Nine weapons, items and pickups measured on a real server and simulated | done (on 2026-10-08: the simulator had ammo packs the real game does not spawn; removed from the next network on) |
-| Self-play training with memory, groups of two to four | running since 2026-10-06; the latest network is v12 (79 hours of training in all) |
-| Human-like hands, eyes and aim (five fingers, field of view, click limits, one aim setting) | done; his tracking is about a real good player's, his first rail shot and his rockets below it |
-| Weapons | better since v12: time without a big weapon 74% -> 54%, the machine gun's share of his frags 73% -> 45%, rockets, rail and lightning each 15 to 23% |
-| Item control | **the open problem.** Alone he fetches what he wants in 84 to 100% of tries; with an opponent on the map he takes about half as many red armors and megas as our scripted runner and a third to a half of what Nightmare takes |
-| Jumping | lost: he walks (jumps in 1 to 2% of frames; pros are in the air for a third of their moving time). The teacher that showed him the ways had been labelling "no jump"; corrected for the next network |
-| Against the Nightmare bot, ten minutes, the game's own spawn | the yard 14-27, Blood Run 7-18, Aerowalk 6-13 (v12, 2026-10-08): he deals more damage than Nightmare on all three and loses on armor and health |
-| A review of the whole pipeline (2026-10-08) | the learning loop is right; found and fixed around it: the plugin for one-on-one games had never been given the map's walking graph, the Bobbys on the public server moved on each other's keys, the direction to the mega and the red armor reached the network at a twentieth of its size, and the pay for walking to an item could be collected by falling short of it |
-| The duel maps (Blood Run, Aerowalk, Lost World) | in training since 2026-10-06; the only training maps from the next network on |
-| Three or four players, all against all | in training since 2026-10-06; on the public server with three Bobbys |
-| Public server | up: "doppz's bot arena | duel & FFA | chicago", free-for-all with three Bobbys (v12), `!map` for the trained maps, ready up (F3) for a real game |
-| Player reports, opponent profiles | later |
+- **Plays real Quake Live.** He joins a server like any player: duels, or free-for-all with several of him and you,
+  on Blood Run, Aerowalk, Lost World and a custom arena.
+- **Aims like a strong player, under a player's limits.** He tracks a dodging target about as well as a good human
+  does, with a reaction time, a flick limit, hand shake and a flinch when hit. Nothing about aiming was coded.
+- **Uses the arsenal.** He goes for a weapon after a spawn and fights with rockets, lightning and the rail; each
+  life he has a preferred weapon or none, as people do.
+- **Knows the maps.** Alone he finds his way to nearly every weapon, armor and mega on them, through jump pads and
+  teleporters.
+- **Out-damages the game's hardest bot.** In ten-minute duels against Nightmare he deals more damage than he takes on
+  every map tested.
+- **Moves with a hand, not a script.** Five fingers on the keys, a few key presses a second, three clicks a second.
 
-Details, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:
+## In progress
+
+- **Item control against an opponent**: taking the armors and the mega on time when somebody else wants them too.
+  This is what still decides his games against Nightmare, and the focus of the current training.
+- **Strafe jumping on the duel maps.** It emerged by itself in the movement simulator and carried over to the real
+  game; in full games he still walks more than he should.
+- **Rockets and the first rail shot**, which are below a good player's.
+
+## Planned
+
+- More maps, and free-for-all with up to six players.
+- An opponent that adapts to your level, to help new players learn the game.
+- Player reports and profiles of how opponents play.
+
+The measurements behind all of this, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:
 [docs/PLAN.md](docs/PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md). Log formats: [docs/LOGS.md](docs/LOGS.md).
 Play him and help set his limits: [docs/COMMUNITY.md](docs/COMMUNITY.md). What the network is given: [docs/INPUTS.csv](docs/INPUTS.csv). Server commands: [docs/COMMANDS.md](docs/COMMANDS.md). Play-test routine: [docs/PLAYTEST.md](docs/PLAYTEST.md).
 

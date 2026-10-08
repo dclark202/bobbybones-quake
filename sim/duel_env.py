@@ -2319,9 +2319,20 @@ class DuelEnv:
         self.stats["dmg_h"] += float(dmg) * (self.script[i] == 0)
         self.stats["dmg_from_script"] += float(dmg) * (self.script[v] == 0 and self.script[i] != 0)
         st["attacker"][v] = i
-        st["kill_w"][v] = wpn
+        self._book(st, i, v, dmg, wpn)
         st["kicked"] = True
         self.stats["dmg"] += dmg
+
+    def _book(self, st, i, v, dmg, wpn):
+        """player i did dmg to player v: booked per attacker (until 2026-10-08 a victim had one attacker per frame, the
+        last to hit, who was paid for everything the victim took in it and for the frag); the frag is his whose hit
+        took the health below zero"""
+        k_ = (int(i), int(v))
+        st["by"][k_] = st["by"].get(k_, 0.0) + float(dmg)
+        if st["killer"][v] < 0:
+            st["kill_w"][v] = wpn
+            if self.hp[v] <= 0:
+                st["killer"][v] = i
 
     def _explode(self, i, wpn, ep, direct_on, hit_dir, s, st):
         """projectile of player i (weapon wpn) explodes at ep; direct_on = player hit directly or None"""
@@ -2360,7 +2371,7 @@ class DuelEnv:
             st["dmg_taken"][v] += self._damage(v, take)
             if v != i:
                 st["attacker"][v] = i
-                st["kill_w"][v] = wpn
+                self._book(st, i, v, take, wpn)
                 self.stats["dmg_h"] += float(take) * (self.script[i] == 0)
                 self.stats["dmg_from_script"] += float(take) * (self.script[v] == 0 and self.script[i] != 0)
                 self.stats["dmg"] += take
@@ -2371,6 +2382,8 @@ class DuelEnv:
                 self.stats["self_dmg"] += take
                 if st["attacker"][v] < 0:
                     st["attacker"][v] = v
+                if self.hp[v] <= 0 and st["killer"][v] < 0:
+                    st["killer"][v] = v
 
     # ---------------------------------------------------------------- scripted players
     def _script_actions(self, idx):
@@ -2796,7 +2809,8 @@ class DuelEnv:
                 self.stats["move_arrive"] += 1
                 self._new_goal(int(i))
         self.stats["jerk"] += float(jerk.sum())
-        st = dict(dmg_taken=np.zeros(n, np.float32), attacker=np.full(n, -1), kill_w={}, kicked=False)
+        st = dict(dmg_taken=np.zeros(n, np.float32), attacker=np.full(n, -1), kill_w={}, kicked=False,
+                  by={}, killer=np.full(n, -1))               # damage per (attacker, victim) this frame; who took him below zero
         for v in fallers:
             self._damage(int(v), float(fall[v]))
             self.stats["fall_dmg"] += float(fall[v])
@@ -2968,7 +2982,9 @@ class DuelEnv:
             near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
             self.pain_t[lis_[near_]] = 0.0
             self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
-        dealt = np.where(attacker[opp_all] == ar, dmg_taken[opp_all], 0.0)
+        dealt = np.zeros(n, np.float32)                     # per attacker (see _book)
+        for (i_, v_), d_ in st["by"].items():
+            dealt[i_] += d_
         taken = dmg_taken + fall                            # from the opponent, own splash and falls alike
         self.stats["soak"] += float(self.soak[self.script == 0].sum())
         if ARMOR_COST != 1.0:                               # what his armor soaked costs him less (see ARMOR_COST)
@@ -3184,7 +3200,7 @@ class DuelEnv:
         events = []
         dead = np.nonzero(self.hp <= 0)[0]
         for v in dead:
-            k = attacker[v]
+            k = st["killer"][v] if st["killer"][v] >= 0 else attacker[v]
             reward[v] -= 1.0
             if k >= 0 and k != v and self.cf_side[k] and self.cf_side[v] and self.cf_side[k] != self.cf_side[v]:
                 self.stats["cf_stack_kills" if self.cf_side[k] == 1 else "cf_plain_kills"] += 1

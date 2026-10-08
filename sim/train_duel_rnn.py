@@ -119,6 +119,13 @@ def main():
                     "0.95 at 40 decisions a second is about half a second, 0.98 about 1.2 s, 0.99 about 2.3 s")
     ap.add_argument("--close-floor", type=float, default=0.2, help="the share of respawns put 300 to 700 units in front of an "
                     "enemy once the near-spawn curriculum has run out (0 = none: every respawn at a spawn point)")
+    ap.add_argument("--teach-trunk", type=float, default=1.0, help="the teachers' losses (walking keys, weapon, intention) reach the "
+                    "shared layers at this share of their weight; the output layer learns the labels in full. 1 = as before. A "
+                    "teacher with new labels otherwise moves the whole network (RESULTS 2026-10-08 18:45)")
+    ap.add_argument("--kl-heads", type=int, default=0, help="1 = the policy's step per output head in the metrics (kl_heads; one more "
+                    "forward pass over the batch every update)")
+    ap.add_argument("--lr-warm", type=float, default=0.0, help="the learning rate climbs from a tenth to full over this many minutes "
+                    "from the teachers' start (--fade-start): new losses and labels move the network a long way in the first updates")
     ap.add_argument("--fade-start", type=float, default=-1.0, help="the teachers' fades count from this minute of training "
                     "(default: where this process starts; on a restart pass the first start's, so that the fades go on)")
     ap.add_argument("--intent-seek-minutes", type=float, default=0.0, help="that reward fades to a quarter over this time (0 = constant)")
@@ -467,6 +474,10 @@ def main():
         for g in opt.param_groups:
             g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
         lr_now = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
+        if a.lr_warm > 0:
+            lr_now *= min(1.0, 0.1 + 0.9 * max(0.0, mins - fade0) / a.lr_warm)
+            for g in opt.param_groups:
+                g["lr"] = lr_now
         n_mb = a.minibatches
         kick = a.teach * max(0.0, 1.0 - (mins - fade0) / a.teach_minutes)
         kick_l = torch.zeros(())
@@ -479,19 +490,39 @@ def main():
         if demo_w > 0 and update % 5 == 0:
             demo_refill()
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
+        klh = np.zeros(len(ACTION_DIMS))
+        old_h = None
+        if a.kl_heads:                                                   # the log-probability of what he did, per head, before the update
+            with torch.no_grad():
+                old_h = torch.zeros(T, N, len(ACTION_DIMS), device=dev)
+                for chunk in torch.arange(N, device=dev).chunk(n_mb):
+                    hh = h0[chunk]
+                    lgs = []
+                    for t in range(T):
+                        lg, v, hh = pol.step(b_obs[t, chunk], hh)
+                        lgs.append(lg)
+                        hh = hh * (1.0 - b_done[t, chunk])[:, None]
+                    for j, dd in enumerate(dists(torch.stack(lgs))):
+                        old_h[:, chunk, j] = dd.log_prob(b_act[:, chunk, j])
         for epoch in range(3):
             perm = torch.randperm(N, device=dev)
             for chunk in perm.chunk(n_mb):                               # whole sequences per player
                 hh = h0[chunk]
-                lgs, vals = [], []
+                lgs, vals, hs = [], [], []
                 for t in range(T):
                     lg, v, hh = pol.step(b_obs[t, chunk], hh)
                     lgs.append(lg)
                     vals.append(v)
+                    if a.teach_trunk < 1.0:
+                        hs.append(hh)
                     hh = hh * (1.0 - b_done[t, chunk])[:, None]
                 lg = torch.stack(lgs)
                 v = torch.stack(vals)
                 ds = dists(lg)
+                dst = ds                                                 # what the teachers' losses read
+                if a.teach_trunk < 1.0 and (kick > 0 or wk > 0 or ik > 0):
+                    hs_ = torch.stack(hs)                                # the same outputs, the shared layers held back
+                    dst = dists(pol.pi(a.teach_trunk * hs_ + (1.0 - a.teach_trunk) * hs_.detach()))
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
@@ -508,6 +539,10 @@ def main():
                         kl_sum += float(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)
                         cf_sum += float((((ratio - 1.0).abs() > clip).float() * wgt).sum() / wsum)
                         kl_n += 1
+                        if old_h is not None:
+                            for j, dd in enumerate(ds):
+                                mk_ = dc if j in KEY_HEADS else (lv if j == len(ds) - 1 else 1.0)
+                                klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * wgt).sum() / wsum)
                 pg = -(torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
                 vl = (0.5 * (v - ret[:, chunk]).pow(2) * wgt).sum() / wsum
                 en = (ent * wgt).sum() / wsum
@@ -515,18 +550,18 @@ def main():
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
                     tl = b_teach[:, chunk]
                     tm = (tl[..., 0] >= 0).float() * wgt
-                    lt = sum(ds[j].log_prob(tl[..., j].clamp(min=0)) * (tl[..., j] >= 0).float() for j in range(4))   # (a head can go unlabelled)
+                    lt = sum(dst[j].log_prob(tl[..., j].clamp(min=0)) * (tl[..., j] >= 0).float() for j in range(4))   # (a head can go unlabelled)
                     kick_l = -(lt * tm).sum() / tm.sum().clamp(min=1.0)
                     loss = loss + kick * kick_l
                 if wk > 0:                                               # the weapon key leans on the weapon rule (rockets close, ...)
                     wl_ = b_teach[:, chunk][..., 4]
                     wm_ = (wl_ >= 0).float() * wgt
-                    wk_l = -(ds[6].log_prob(wl_.clamp(min=0)) * wm_).sum() / wm_.sum().clamp(min=1.0)
+                    wk_l = -(dst[6].log_prob(wl_.clamp(min=0)) * wm_).sum() / wm_.sum().clamp(min=1.0)
                     loss = loss + wk * wk_l
                 if ik > 0:                                               # the intention head leans on the item rule at first
                     it_ = b_iteach[:, chunk]
                     im_ = b_live[:, chunk] * wgt
-                    ik_l = -(ds[-1].log_prob(it_) * im_).sum() / im_.sum().clamp(min=1.0)
+                    ik_l = -(dst[-1].log_prob(it_) * im_).sum() / im_.sum().clamp(min=1.0)
                     loss = loss + ik * ik_l
                 if demo_w > 0:                                           # imitate what pro players did in the same situation
                     d_obs, d_act, d_first = demo_batch()
@@ -559,6 +594,7 @@ def main():
                    contest=dict(rounds=int(agg.get("contest_rounds", 0)),      # rounds begun as a race for a big item, and the
                                 taken=round(float(agg.get("contest_taken", 0) / max(1, agg.get("contest_rounds", 0))), 2)),   # share a learner took it in
                    kl=round(kl_sum / max(1, kl_n), 5), clip_frac=round(cf_sum / max(1, kl_n), 4), lr=lr_now, lam=lam,
+                   kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,
                    by_map={m_: dict(bare=round(float(v_.get("stack_bare", 0) / max(1, v_.get("stack_frames", 0))), 3),
                                     big_weapons=round(float(v_.get("stack_big", 0) / max(1, v_.get("stack_frames", 0))), 2),
                                     over=round(float(v_.get("stack_over", 0) / max(1, v_.get("stack_frames", 0))), 3),
