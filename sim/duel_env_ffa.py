@@ -197,11 +197,11 @@ def aim_settings(level=3.0, preset=""):
     return a
 
 
-AIM = aim_settings(os.environ.get("AIM_LEVEL") or 3.0, os.environ.get("AIM_PRESET") or "")
+AIM_SET = aim_settings(os.environ.get("AIM_LEVEL") or 3.0, os.environ.get("AIM_PRESET") or "")   # (not "AIM": that is a round kind)
 
 
 def _aim(var, key):
-    return float(os.environ[var]) if os.environ.get(var) else float(AIM[key])
+    return float(os.environ[var]) if os.environ.get(var) else float(AIM_SET[key])
 
 
 REACT_FRAMES = 2                                       # 50 ms: tracking an enemy already in view lags by this much.
