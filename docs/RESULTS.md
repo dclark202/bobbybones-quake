@@ -5,6 +5,13 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 13:35 — Public server: the per-frame control fix deployed (owner: "yes")
+
+Tested first in a local free-for-all with three Bobbys and the new control (`FFA_LOG_ALWAYS=1` logs frames with bots
+alone): 2.5 minutes, no error, speed 256 to 269, standing 5 to 6% (longest 0.9 s), firing 26 to 31% of the time. Then
+`CODE=1 FFA=3 tools/push_bobby.sh duel_gru_v10 duel_env_ffa_v11 arena1`: the server is up on arena1 with v10 (483 inputs,
+the frozen v11 simulator: its limits as before). Nobody had played since last night.
+
 ## 2026-10-08 13:15 — The aim audit, aim ability as one knob, the Nightmare stand-in, honest item state (owner: "human good, not bot good"; "on par or slightly above me, 10% over or so ... a knob")
 
 **Aim in real games** (free-for-all logs; people 19 minutes alive, thin; `scratchpad/aim_logs.py`):
