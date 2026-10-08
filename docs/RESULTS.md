@@ -47,6 +47,14 @@ collect-then-fight rounds does not win more than the fresh side (130 : 120): a s
 At three hours nothing about the stack has moved (bare 60%, big weapons 0.54, the stacked side of the collect-then-fight
 rounds no better than the fresh one), and Nightmare on arena1 has not come back (6-22). Rockets 16% of frags.
 
+**00:39, the hour-four fallback applied** (pre-approved). At four hours: time bare 58% (hour one 60%), health and armor above
+100 0.152 (0.152), big weapons held 0.56 (0.54); fight check mega 0.08, red 0.02 a player-minute. All three conditions
+held, so the run was restarted from the 00:37 checkpoint (kept as `policy_before_fallback.pt`, 4,058 min) with the four
+stack sizes doubled (1.0, 1.0, 0.5, 1.0) and the walking teacher inside normal games (`STACK_TEACH=1`, `--teach 1.0`
+fading over 180 min); the weapon teacher continues at 0.33 over its remaining 115 min. First updates: 20% of the frames
+of normal games carry the teacher's labels, teacher loss 3.2. Unchanged at four hours otherwise: rockets 17% of frags,
+weapon rule agreement 0.91.
+
 Built for the fallback (off, `STACK_TEACH`): the walking teacher inside normal games, while bare or under 70 with nobody
 in view, toward what the item rule names. Test on arena1 with machine-gun spawns, 12 player-minutes, random aim: a pupil
 who obeys the labels takes 12 weapons and 9 red armors and is bare 67% of the time; one who ignores them 2, 0 and 91%.
