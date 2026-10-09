@@ -2,6 +2,7 @@
 
     python tools/fetch_demos.py                      # bloodrun, aerowalk, campgrounds
     python tools/fetch_demos.py --gap 8 --maps 6,1,9
+    python tools/fetch_demos.py --maps 22,2 --limit 150     # the newest 150 of each (Sinister, Furious Heights)
 
 Source: demos.quakelive.ru (public JSON API; files on files.quakelive.ru). One request at a time with a
 pause between downloads; already-downloaded files are skipped, so it can be stopped and resumed.
@@ -19,7 +20,8 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = "https://demos.quakelive.ru/api/demos?type=Duel&map_id={}&per_page=100&page={}"
 FILES = "https://files.quakelive.ru/{}"
-MAPS = {6: "bloodrun", 1: "aerowalk", 20: "lostworld", 9: "campgrounds"}
+MAPS = {6: "bloodrun", 1: "aerowalk", 20: "lostworld", 9: "campgrounds", 22: "sinister", 2: "furiousheights",
+        5: "battleforged", 17: "hektik", 11: "cure", 23: "toxicity"}      # the site's map ids (its /api/maps)
 def demo_root():
     """where demos and the training data made from them live: the folder named in data/demo_root.txt (one line,
     for a big separate drive), else data/"""
@@ -44,6 +46,7 @@ def main():
     ap.add_argument("--maps", default="6,1,9")
     ap.add_argument("--gap", type=float, default=8.0, help="seconds between downloads (plus jitter)")
     ap.add_argument("--ext", default=".dm_91")
+    ap.add_argument("--limit", type=int, default=0, help="at most this many demos a map, the newest first (0 = all)")
     a = ap.parse_args()
     out = os.path.join(demo_root(), "demos")
     os.makedirs(out, exist_ok=True)
@@ -53,12 +56,13 @@ def main():
         known = {json.loads(l)["file"] for l in open(index_f)}
     todo = []
     for mid in (int(x) for x in a.maps.split(",")):
-        page, last = 1, 1
-        while page <= last:
+        page, last, n_map = 1, 1, 0
+        while page <= last and not (a.limit and n_map >= a.limit):
             d = json.loads(get(API.format(mid, page)))
             last = d["last_page"]
             for demo in d["data"]:
-                if demo["file"].endswith(a.ext):
+                if demo["file"].endswith(a.ext) and not (a.limit and n_map >= a.limit):
+                    n_map += 1
                     todo.append((MAPS.get(mid, str(mid)), demo))
                     if demo["file"] not in known:
                         with open(index_f, "a") as f:

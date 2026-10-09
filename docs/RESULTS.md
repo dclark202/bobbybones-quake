@@ -5,6 +5,98 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 15:30 — v14's preparation; v13 against the game's Nightmare bot; the owner's calls on maps
+
+**The owner's calls this afternoon.** Pro demos for Sinister and Furious Heights ("Yes, download"); Battleforged into
+the training set and Campgrounds out to validation ("Yep do it": the archive has 283 Battleforged duels in today's
+format and 10 of Campgrounds); four validation maps: Campgrounds, Hektik, Toxicity, Cure (Silence out for its door,
+Dismemberment because he does not know it); "Yes do the fixes for toxicity and cure"; real games against Nightmare now
+("it's OK with me"), and in v14 only before and after the run; the README in his order (done, adbbc5e).
+
+**v13 against the game's Nightmare bot, real games** (14:36 to 15:09; ten minutes each, three local servers side by side,
+nothing else on the PC; [REPORT_v13.md](REPORT_v13.md) has the table): Blood Run **14-4, 11-6, 10-3**; Lost World **8-5,
+6-4, 9-5**; Aerowalk 0-0, 3-1, 12-12. v12 the day before: Blood Run 7-18, Aerowalk 6-13. On Blood Run he took 41 of the
+43 red armors and 36 of the 45 megas. Aerowalk: in two games Nightmare stood still (on the red armor's spot for a whole
+game: 24 red armors, speed zero); he never went there and saw it 1 to 2% of the time (B-179). The first real-server run
+of the new plugin code (the frozen `duel_env_ffa_v13`, the speed history, the powerup line): no frame errors.
+
+**The strafe-jumping teacher** (`sim/train_move.py --v14`; runs `move_v14a` to `move_v14d`):
+- From scratch on six maps (`move_v14a`): after 30 minutes 90% of its trips and 68% of its moving time above running
+  speed, where the network of 2026-10-03 was after five. Dropped.
+- Continued from the old network (`move_v14b`, then `move_v14c` with Battleforged): 95% within 20 minutes, but
+  Battleforged stayed at 70%. Cause: the walking map has teleporter links that start 360 to 410 units from the entrance
+  at a cost of 0.1 s, so its "next point" was the far exit and it ran at a wall; and Battleforged's entrances are raised.
+  Fixed in `sim/movement_env.py` (v14 mode): a teleporter link costs the walk to its entrance, one that starts more than
+  160 units away is left out, links shut by a solid piece are left out, and a teleporter step is shown as its entrance.
+- `move_v14d` (continued with the fix, 17 minutes): **98% of its trips**, 84% of its moving time above running speed:
+  Blood Run and Aerowalk 99.5%, Battleforged 99.4%, Furious Heights 98.9%, Sinister 98.4%, Campgrounds 97%, Lost World
+  94%.
+- As a teacher (a pupil pressing only its labels through today's hands, every v14 switch on): Blood Run 357 units a
+  second and 8.4 items a minute, Battleforged 349 and 8.7, Furious Heights 330 and 5.6, Sinister 323 and 8.4, Lost World
+  323 and 6.7 (the pupil clips the lava: 40 damage a minute). The walking teacher alone on Blood Run: 304 and 6.8.
+  On Aerowalk the pupil stalls where neither teacher has a label (the pros' jump to the red armor); he himself does not.
+
+**How hard the teacher may push** (dry runs on scratch copies of the starting network, v14's settings):
+
+| Teacher's weight | Policy step of the first update (the view's part) | Largest later step | On target in view | Item runs at the end |
+|---|---|---|---|---|
+| none | 0.020 (0.008) | 0.014 | 31% | 5.9 items a minute |
+| 0.03 | 0.032 (0.015) | 0.022 | 32% | 4.9 |
+| 0.05 | 0.038 (0.019) | 0.027 | 31% | 4.8 |
+| 0.5 | **0.601 (0.439)** | 0.095 | 32% | 3.7 after 9 minutes |
+| rising to 0.3 in 20 minutes | 0.021 | 0.087 | 31% | 4.2 after 29 minutes |
+| **rising to 0.3 in 60 minutes** (25 minutes of it) | 0.020 | 0.025 | 32% | 6.2 -> 4.5 -> 5.3; fast in the air 9% -> 11% |
+
+The trainer has `--teach-warm` for it. His aim did not move in any of them; the item runs dip with every weight while his
+keys change (key requests refused 45% -> 65%: the teacher learned with free hands). The teacher's loss starts at 22 (the
+walking keys' was 1.6): he gives its actions almost no probability today.
+
+**Pro demos**: 150 each of Sinister, Furious Heights and Battleforged (`tools/fetch_demos.py --maps 22,2 --limit 150`,
+then `--maps 5`; one at a time), converted (21 to 22 hours of play each), and from them the pros' ways, positions and
+jump tables; `docs/pro_tables.json` now counts 3,712 duels on the six training maps and `sim/pro_seed.json` (written by
+the new `tools/pro_seed.py`) has a weapon table for five of them (Lost World has no rail: the maps together). The pros on
+the new maps are in the air 44 to 45% of their moving time at 408 to 418 units a second (Blood Run 36% at 406). The
+archive by recent duels (of each map's newest 100, those in today's format since 2024): Furious Heights, Hektik, Silence,
+Battleforged 100; Blood Run 98, Lost World 96, Sinister 95, Aerowalk 92, Toxicity 78, Cure 75, Dismemberment 64, Delirium
+24, Vertical Vengeance 20, Campgrounds 1.
+
+**The validation maps Toxicity and Cure** (scan, then fixes):
+- Silence: an automatic double door on a walked way (out; automatic doors are open in the simulator from now on).
+  Dismemberment: no door, sound (stand-in stuck 6%), left out by the owner. Cure: a panel that a shot button lowers, set
+  in a wall; nothing passes there either way.
+- Toxicity: the stand-in stood 36% of its time at the acid pool (its stepping stone is a solid piece the walking map was
+  built without). Cure: 15%, in the pool on its way to the mega.
+- Fixes: `sim/build_nav.py --v14` (the game's step height and wading, solid pieces, swimming) and both walking maps built
+  again, then pruned; the walker swims up and dives; in the duel simulator's walking graph, as for the teacher, a
+  teleporter link costs the walk to its entrance and far ones are left out (Cure's way to the mega "teleported" out of
+  the pool from 370 units away); jump links over lava or slime are left out.
+- After: Cure stuck 7%, moving at 257; Toxicity 19%, at 216 (one spot on its way to the rail, B-181).
+
+**The stand-in on all ten maps with the final code**: 242 to 285 units a second (Toxicity 216), stuck 3 to 8% (Sinister
+14%, Toxicity 19%). With every switch off both simulator modules still replay v13's fixed-seed runs exactly;
+`tools/ffa_check.py` passes with the switches on.
+
+**The starting line of v14's duel curve** (v13's network widened to 509 inputs, in the corrected simulator, 32 ten-minute
+duels a map against the stand-in):
+
+| Map | Role | Score | His share of the frags (95%) | Won / drawn / lost | Time bare: he / it | Mega, red: his share of the spawns (its) | Its own deaths a game |
+|---|---|---|---|---|---|---|---|
+| Blood Run | trained | 11.0 : 4.2 | 71% (67%-75%) | 30 / 1 / 1 | 5% / 14% | 48% (44%), 28% (39%) | 0.5 |
+| Aerowalk | trained | 22.9 : 4.8 | 82% (79%-84%) | 32 / 0 / 0 | 4% / 13% | 64% (23%), 1% (15%) | 0.3 |
+| Lost World | trained | 10.1 : -1.8 | 92% (89%-94%) | 32 / 0 / 0 | 3% / 25% | 52% (29%), 31% (42%) | 2.8 |
+| Sinister | trained, new | 10.4 : 3.7 | 73% (69%-77%) | 31 / 1 / 0 | 5% / 16% | 46% (35%), 25% (30%) | 0.3 |
+| Furious Heights | trained, new | 5.0 : 5.7 | 46% (42%-51%) | 12 / 4 / 16 | 9% / 19% | 24% (44%), 19% (44%) | 0.2 |
+| Battleforged | trained, new | 4.5 : 2.5 | 63% (56%-69%) | 24 / 2 / 6 | 4% / 6% | 47% (40%), 0% (55%) | 0.2 |
+| Campgrounds | held out | 3.4 : 7.1 | 33% (26%-42%) | 9 / 2 / 21 | 19% / 5% | 36% (50%), 0% (60%) | 0.1 |
+| Hektik | held out | 7.8 : 8.2 | 48% (43%-52%) | 14 / 3 / 15 | 8% / 7% | 39% (55%), 3% (65%) | 0.6 |
+| Toxicity | held out | 4.2 : 3.0 | 66% (63%-70%) | 21 / 1 / 10 | 12% / 38% | 25% (0%), 0% (14%) | 0.5 |
+| Cure | held out | 7.6 : 7.1 | 45% (42%-48%) | 12 / 4 / 16 | 18% / 17% | 0% (0%), 3% (37%) | 3.5 |
+
+**What did not work / is not done**: the teacher from scratch; the first statistics run for the new settings (cut short
+by the PC's load, then the rewrite was not exact on the old maps' sample: `sim/renorm_policy.py` now checks both
+samples); Toxicity's stand-in is not sound yet; Aerowalk's real games say little; the reflex test on a duel map (B-176);
+the walking maps of the six training maps are not rebuilt (B-173).
+
 ## 2026-10-09 12:20 — `duel_gru_v13` ended (owner); its end checks; v14's pieces built and in `sim/`
 
 **The end.** Owner at 11:28: "end v13 at the next decent checkpoint. then run the full metrics suite, and finish building

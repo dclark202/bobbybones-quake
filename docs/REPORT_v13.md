@@ -12,6 +12,8 @@ stopped on the owner's word after fourteen hours ("end v13 at the next decent ch
 - **He beats the Nightmare stand-in on the maps he trained on.** Blood Run 30% of the frags and no game won -> 72% and 97
   of 100 games; Aerowalk 52% -> 80%, 100 of 100. On arena1, which he did not train on, 38% -> 39% (25 of 100 won).
   v12 had 25%, 47% and 35%, and won 37 games of 300.
+- **He beats the game's Nightmare bot in real games** on Blood Run (14-4, 11-6, 10-3) and Lost World (8-5, 6-4, 9-5);
+  v12 lost 7-18 on Blood Run. On Aerowalk one game was a 12-12 draw and in two Nightmare stood still.
 - **Not delivered: rockets and speed.** Rockets fell from 34% of his frags under the weapon teacher to 19%; he moves at
   294 units a second and is fast in the air 9% of the time. Both have a cause that is now known (below) and a plan.
 - **The aim room no longer measures him**: on the test map he tracks a strafing target 27% of the time where v12 did
@@ -104,7 +106,7 @@ the time they see each other; when weak he backs off on Blood Run (-26) and hard
 - On Aerowalk the walking map has no way to the red armor: the stand-in names it 64% of the time, takes it at 14% of
   its spawns (he at 3%) and spends half its time unable to go anywhere. His 80% there is against an opponent half asleep.
 - Lost World has no duel check: the stand-in is stuck 46% of the time there (it hops on the spot at the teleporter).
-- No real game against Nightmare was played for this report (see the end): those are the numbers to trust most.
+- The real games against Nightmare (below) are the numbers to trust most.
 
 ## The first four hours: the teachers' dip
 
@@ -218,10 +220,28 @@ duel map from now on (B-176); until then his aim is read from his games. The own
 minutes of 1v1 against himself, eight games each; half of his time is spent on 16 to 17% of the cells he visits) and a
 45-second first-person fight on each of the three trained maps.
 
-## Not measured
+## Against Nightmare, real games (2026-10-09 14:36 to 15:09)
 
-Real games against Nightmare. The local test servers they need were not started (the launch was refused by the session's
-permission check); the owner's own duel on the public server comes first anyway.
+Ten minutes a game, the game's own spawn, three local servers side by side on an otherwise quiet PC, three rounds.
+
+| Map | Game 1 | Game 2 | Game 3 | Damage dealt / taken | Red armors: he / Nightmare | Megas: he / Nightmare |
+|---|---|---|---|---|---|---|
+| Blood Run | **14-4** | **11-6** | **10-3** | 3,605 / 3,188; 3,238 / 3,312; 2,696 / 2,899 | 15 / 1; 14 / 0; 12 / 1 | 11 / 3; 11 / 5; 14 / 1 |
+| Lost World | **8-5** | **6-4** | **9-5** | 2,662 / 2,845; 2,326 / 3,015; 2,646 / 3,301 | 10 / 8; 12 / 7; 15 / 6 | 13 / 0; 11 / 1; 14 / 0 |
+| Aerowalk | 0-0 | 3-1 | 12-12 | 0 / 15; 624 / 307; 3,819 / 2,738 | 0 / 24; 0 / 1; 1 / 0 | 17 / 0; 17 / 0; 9 / 7 |
+
+v12 on the same servers the day before: Blood Run 7-18, Aerowalk 6-13.
+
+- **Blood Run and Lost World: six games, six wins.** The damage is about even or against him; he wins on the stack. He
+  takes nearly every red armor on Blood Run (41 of 43) and nearly every mega on both maps.
+- **Aerowalk is not a test yet.** In the first game Nightmare went to the red armor after ten seconds and stood on its
+  spot for the rest of the game (it took all 24 of them, its speed was zero); in the second it stood still most of the
+  time (26 units a second). He never went up there, saw it 1 to 2% of the time and did not go looking: he does not hunt
+  an opponent he neither sees nor hears, and he does not take Aerowalk's red armor (the walking map has no way to it;
+  1 of 72 in three games). In the one game Nightmare played, the score was 12-12 with the damage his way.
+- The stand-in was the pessimist on Blood Run (72% of the frags there, 76% in these games) and no guide on Aerowalk.
+- His weapons in these games: the rail 38 to 43% of the time on Blood Run with lightning 26 to 36% and rockets 11 to 18%;
+  lightning 53 to 78% on Lost World; his speed 263 to 298.
 
 ## Verdict
 

@@ -17,10 +17,11 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   knowledge of the map and efficient movement on it, one against one or all against all up to four players, and
   beating Nightmare there. See `docs/PLAN.md`. Method: tighten the human limits until the right play appears;
   do not add rewards for single behaviors without asking.
-- Maps (owner, 2026-10-09): from v14 on the game's own duel maps only: Blood Run, Aerowalk, Lost World, Campgrounds,
-  Sinister, Furious Heights; Battleforged and Hektik are held out for checks; Cure and Toxicity later. The yard
-  (`arena1`) is dropped entirely (v13
-  already trained on the three duel maps with arena1 held out). Test map: `testlab`.
+- Maps (owner, 2026-10-09): from v14 on the game's own duel maps only. Trained: Blood Run, Aerowalk, Lost World,
+  Sinister, Furious Heights, Battleforged. Held out for checks: Campgrounds (the demo archive has 10 duels of it in
+  today's format), Hektik, Toxicity, Cure. Maps with a door stay out (Silence); he does not know Dismemberment. The yard
+  (`arena1`) is dropped entirely. Test map: `testlab`. Real games against the game's Nightmare bot: before and after a
+  run, never a pause in the middle of one.
 - Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder. Copying the
   test map pk3 into its `baseq3` is allowed (he asked for it); nothing else.
 - No powerups anywhere (owner, 2026-10-09: no quad, no "protection", on any server or in training) and a map's
@@ -85,6 +86,15 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   no enemy in view). `sim/train_move.py --v14` trains the strafe-jumping teacher (lava, the game's step height, fall
   damage priced); `sim/export_policy.py` writes its flag. The plugins keep `env.sp_hist` themselves (`fill_player`).
   The reflex room on the test map does not measure a network whose input statistics were taken on the duel maps (B-176).
+  The teacher is `move_v14d` (continued from the network of 2026-10-03 on seven maps; in v14 mode its walking map leaves
+  out teleporter links that start far from the entrance, and a teleporter step is shown as its entrance); the trainer's
+  `--teach-warm` lets a teacher's weight rise from nothing (a new teacher at full weight moved the policy 0.60 in one
+  update). A new map: `python sim/build_nav.py --map <m> --v14` (system Python: it needs scipy), then
+  `tools/nav_prune.py --map <m>` with the v14 switches set, then the stand-in check; pro demos with
+  `tools/fetch_demos.py --maps <site id> --limit 150`, `sim/demo_dataset.py --lite`, `tools/pro_routes.py`,
+  `pro_positions.py`, `pro_jumps.py`, `pro_tables.py` (all training maps at once) and `tools/pro_seed.py`. Under
+  `WALK_FIX` the walker swims and dives, a teleporter link costs the walk to its entrance, and jump links over lava or
+  slime are left out; automatic doors count as open (`qsim.add_solids`).
 - **After the wiring review (2026-10-08)**: the trainer credits the left hand's outputs (movement keys, weapon key) only on the frames the simulator reads them (`env.key_dec`, one in four) and keeps the input statistics frozen; `sim/renorm_policy.py` gives a network fresh input statistics without changing its output (run it when the maps or inputs change; sample from `train_duel_rnn.py --obs-dump`). Checkpoints carry `env_vars` (the simulator switches of `PLAY_VARS`) and the round lengths; `sim/export_duel.py` writes them into `policy.npz` (`--set NAME=VALUE` for runs before v13, e.g. `EXPORT_ARGS="--set INTENT_HOLD=8"` for the server scripts) and the plugins set them before loading the simulator. Checks: `tools/input_check.py` (dead inputs; the real game's inputs beside the simulator's), `tools/teacher_check.py` (can the walking teacher's own pupil reach every item), `tools/nav_prune.py` (takes the jump and drop links the walker cannot take out of a map's graph), `tools/shot_prices.py`.
 - **The map audit (2026-10-09)**: the game's maps set beside the simulator (RESULTS that day): `plugins/maplab.py` lists the
   real game's items per map and mode (`data/maplab/`; `tools/duel_items.py` -> `plugins/duel_items.json`), `plugins/poollab.py`
@@ -159,6 +169,9 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - Real-server checks (Nightmare sparring) only while no training runs: a server that falls behind distorts everything (until 2026-10-08 it even dropped the bot's commands: RESULTS 2026-10-08 13:00). `DUEL_AIMDUMP=1` (`AIMDUMP=1` for `tools/bench_arena.sh`) records what became of his mouse output per frame. The local image `qlbot` must be rebuilt (`docker build -t qlbot .`) after any change to `sim/`, `plugins/` or `minqlx/`: the sparring scripts do not do it.
 - The plugins feed the network through the simulator's own `observe()` but never call `step()`: whatever only `step()` keeps up to date is stale on a real server unless the plugin sets it (2026-10-08: the 1v1 plugin had no walking graph, no plugin set `item_t`, the 1v1 plugin sets no style). After any change to the inputs, record them in a real game (`OBSDUMP=1` with `tools/bench_arena.sh`) and set them beside the simulator's. With the PC busy it is now the game's Nightmare bot that plays badly (he won 6-0 under load).
 - In a free-for-all plugin everything per-seat that the simulator does in one call for all players must be one call there too: `limit_keys` was called once per Bobby and each call overwrote the other seats' hands (2026-10-08: every Bobby on the public server moved on another Bobby's keys).
+- A scratch test script must import the repo's `sim/`, not a staging copy: on 2026-10-09 half an hour of stand-in checks
+  ran old code and "confirmed" that two fixes did nothing. A write to a file in `sim/` failed once with "Invalid argument"
+  (Errno 22) and left the file as it was: check after a patch that the change is there.
 - A reviewer's eye on the reward: anything paid per frame for progress must be paid on a running best, or a setback and its recovery is a pump (the trip pay, 2026-10-08).
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,

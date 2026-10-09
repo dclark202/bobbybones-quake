@@ -176,6 +176,9 @@ def main():
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
     ap.add_argument("--teach", type=float, default=0.5, help="weight of the teacher loss at the start of this run")
     ap.add_argument("--teach-minutes", type=float, default=240, help="the teacher loss fades to zero over this time")
+    ap.add_argument("--teach-warm", type=float, default=0.0, help="minutes over which that weight first rises from nothing: a new "
+                    "teacher at full weight moves the whole policy in its first update (0.60 at 0.5 with the strafe-jumping "
+                    "teacher, 2026-10-09; the run before started at 0.021), while its loss is still large")
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
                     help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
     ap.add_argument("--bot-p", type=float, default=0.5, help="share of normal rounds against the scripted fighter")
@@ -480,6 +483,8 @@ def main():
                 g["lr"] = lr_now
         n_mb = a.minibatches
         kick = a.teach * max(0.0, 1.0 - (mins - fade0) / a.teach_minutes)
+        if a.teach_warm > 0:
+            kick *= min(1.0, max(0.0, mins - fade0) / a.teach_warm)
         kick_l = torch.zeros(())
         ik = a.intent_teach * max(0.0, 1.0 - (mins - fade0) / a.intent_teach_minutes)
         ik_l = torch.zeros(())

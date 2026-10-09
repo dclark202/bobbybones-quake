@@ -111,16 +111,18 @@ def main():
     reach = np.abs(X - fresh[None, :]).max(0)
     want = np.maximum(np.maximum(X.std(0), reach / 10.0), 0.02)  # with this spread nothing in the sample meets the clip
     at_clip = (np.abs((X - m_old[None, :]) / sd_old[None, :]) > 10).any(0)
+    X0 = np.load(a.woke).astype(np.float64) if a.woke else None  # ... nor anything in the sample of what he knew: the rewrite has
+    if X0 is not None:                                           # to be exact there too (2026-10-09: a value of the old maps met
+        assert X0.shape[1] == len(m_old)                         # the new clip and the first layer moved by 0.04)
+        want = np.maximum(want, np.abs(X0 - fresh[None, :]).max(0) / 10.0)
+        at_clip |= (np.abs((X0 - m_old[None, :]) / sd_old[None, :]) > 10).any(0)
     off = (sd_old / want > 2.0) | (sd_old / want < 0.5)
     live = varies & off & ~at_clip                               # the inputs rewritten
     m_new[live] = fresh[live]
     sd_new[live] = want[live]
     never = ~varies & (sd_old < 1e-3)                            # constant here and never seen to vary: as a new input
     woke = np.zeros(len(m_old), bool)
-    X0 = None
     if a.woke:
-        X0 = np.load(a.woke).astype(np.float64)
-        assert X0.shape[1] == len(m_old)
         woke = (X0.std(0) < 1e-6) & varies
         if a.woke_names:
             nm_ = [r["input"] for r in csv.DictReader(open(os.path.join(ROOT, "docs", "INPUTS.csv"), encoding="utf-8"))]

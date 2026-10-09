@@ -70,5 +70,77 @@
   "jumps_per_minute": 28.4,
   "cells_known": 1002,
   "cells_mostly_air": 422
+ },
+ "sinister": {
+  "demos": 147,
+  "minutes": 1259,
+  "moving_share": 0.824,
+  "air_share_of_moving": 0.442,
+  "speed_ground": 307,
+  "speed_air": 408,
+  "speed_air_quartiles": [
+   338,
+   407,
+   474,
+   590
+  ],
+  "speed_ground_quartiles": [
+   246,
+   319,
+   348,
+   454
+  ],
+  "air_over_400_share_of_all": 0.194,
+  "jumps_per_minute": 34.6,
+  "cells_known": 1042,
+  "cells_mostly_air": 494
+ },
+ "furiousheights": {
+  "demos": 150,
+  "minutes": 1317,
+  "moving_share": 0.847,
+  "air_share_of_moving": 0.448,
+  "speed_ground": 310,
+  "speed_air": 418,
+  "speed_air_quartiles": [
+   346,
+   414,
+   484,
+   606
+  ],
+  "speed_ground_quartiles": [
+   258,
+   320,
+   350,
+   454
+  ],
+  "air_over_400_share_of_all": 0.212,
+  "jumps_per_minute": 37.6,
+  "cells_known": 778,
+  "cells_mostly_air": 325
+ },
+ "battleforged": {
+  "demos": 149,
+  "minutes": 1301,
+  "moving_share": 0.825,
+  "air_share_of_moving": 0.435,
+  "speed_ground": 310,
+  "speed_air": 408,
+  "speed_air_quartiles": [
+   337,
+   405,
+   474,
+   597
+  ],
+  "speed_ground_quartiles": [
+   260,
+   320,
+   347,
+   452
+  ],
+  "air_over_400_share_of_all": 0.188,
+  "jumps_per_minute": 32.9,
+  "cells_known": 683,
+  "cells_mostly_air": 234
  }
 }

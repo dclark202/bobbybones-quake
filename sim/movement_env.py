@@ -44,14 +44,42 @@ GOAL_CLASSES = ("weapon_", "item_armor_body", "item_armor_combat", "item_armor_j
                 "item_health_large", "item_quad")
 FALL_COST = 0.05                                            # v14: seconds a point of fall damage costs (a far fall, 10 points: half a second)
 HAZARD = 8 | 16                                             # lava, slime (the map's contents flags)
+TELE_FAR = 160.0                                            # v14: a teleporter link starts within this of its entrance
 N_WALL, N_FLOOR = 16, 8
 OBS_DIM = 3 + 1 + 12 + 4 + 3 + 1 + N_WALL + N_FLOOR
+
+
+def shut_teleports(world, nav_path):
+    """the walking map's teleporter links that cannot be taken: the straight line from the link's start to the teleporter's
+    entrance is shut by one of the map's solid pieces (the map was walked without them; Battleforged, 2026-10-09: the
+    movement network stood before three such faces in 30% of its tries). The same rule as duel_env's WALK_FIX."""
+    if not getattr(world, "solids", None):
+        return None
+    g = json.load(open(nav_path))
+    nd = np.array(g["nodes"], np.float32)
+    sp = world.trigger_spots()
+    tin = np.array([c for k, c, d in sp if k == 1], np.float32).reshape(-1, 3)
+    tout = np.array([d for k, c, d in sp if k == 1], np.float32).reshape(-1, 3)
+    drop = set()
+    for a, b, t, kind in g["edges"]:
+        if kind == "tele" and len(tin):
+            j = int(np.linalg.norm(tout - nd[b], axis=1).argmin())
+            if np.linalg.norm(tout[j] - nd[b]) < 150.0 and world.trace(nd[a], tin[j])["fraction"] < 0.97:
+                drop.add((int(a), int(b)))
+    return drop
+
+
+def teleports(world):
+    """the map's teleporters: (entrances, exits)"""
+    sp = world.trigger_spots()
+    return (np.array([c for k, c, d in sp if k == 1], np.float32).reshape(-1, 3),
+            np.array([d for k, c, d in sp if k == 1], np.float32).reshape(-1, 3))
 
 
 class NavField:
     """nav graph -> time-to-goal for every node and goal, next hops, fast position lookup"""
 
-    def __init__(self, nav_path, goals, world=None, hazard=False, starts=None):
+    def __init__(self, nav_path, goals, world=None, hazard=False, starts=None, drop=None, tele=None):
         g = json.load(open(nav_path))
         self.nodes = np.array(g["nodes"], np.float32)
         n = len(self.nodes)
@@ -69,10 +97,22 @@ class NavField:
                 self.spawnable &= ~wet
         radj = [[] for _ in range(n)]
         have = set()
-        edges = [e for e in g["edges"] if self.valid[e[0]] and self.valid[e[1]]]
+        enter = {}                                            # v14: a teleporter link -> its entrance
+        edges = [e for e in g["edges"] if self.valid[e[0]] and self.valid[e[1]] and not (drop and (e[0], e[1]) in drop)]
         for a, b, t, kind in edges:
             d = float(np.linalg.norm(self.nodes[a] - self.nodes[b]))
             cost = 0.1 if kind == "tele" else (d / RUN if kind == "walk" else max(t, d / 900.0))
+            if kind == "tele" and tele is not None and len(tele[0]):
+                # v14: a teleporter link costs the walk to its entrance, and one that starts far from the entrance is left
+                # out (the walking map has links from 360 to 410 units away at 0.1 s: the way then "teleported" from
+                # there, and the network, shown the far exit as its next point, ran at a wall; Battleforged, 2026-10-09)
+                j = int(np.linalg.norm(tele[1] - self.nodes[b], axis=1).argmin())
+                if np.linalg.norm(tele[1][j] - self.nodes[b]) < 150.0:
+                    d_in = float(np.linalg.norm(tele[0][j] - self.nodes[a]))
+                    if d_in > TELE_FAR:
+                        continue
+                    cost = 0.1 + d_in / RUN
+                    enter[(a, b)] = tele[0][j]
             radj[b].append((a, cost, kind))
             have.add((a, b))
         for a, b, t, kind in edges:                           # flat walking works both ways
@@ -85,6 +125,7 @@ class NavField:
         self.T = np.full((G, n), 1e9, np.float32)
         self.next = np.full((G, n), -1, np.int32)
         self.next_kind = np.zeros((G, n), np.int8)            # 0 walk, 1 air, 2 teleport
+        self.via = np.full((G, n, 3), np.nan, np.float32) if enter else None    # v14: where to step in, for a teleporter step
         for gi, gp in enumerate(self.goals):
             b, _ = self.locate(gp[None])
             b = int(b[0])
@@ -100,6 +141,8 @@ class NavField:
                         dist[v] = nd
                         self.next[gi, v] = u
                         self.next_kind[gi, v] = {"walk": 0, "air": 1, "tele": 2}[kind]
+                        if self.via is not None:
+                            self.via[gi, v] = enter.get((v, u), np.nan)
                         heapq.heappush(pq, (nd, v))
             for v, d in dist.items():
                 self.T[gi, v] = d
@@ -153,7 +196,9 @@ class MoveEnv:
                  if e.get("classname", "").startswith(GOAL_CLASSES) and "origin" in e
                  and not (self.v14 and e["classname"] == "item_quad")]
         starts = [e["origin"] for e in self.w.spawns()]
-        self.field = NavField(nav_path, goals, world=self.w, hazard=self.v14, starts=starts if self.v14 else None)
+        self.field = NavField(nav_path, goals, world=self.w, hazard=self.v14, starts=starts if self.v14 else None,
+                              drop=shut_teleports(self.w, nav_path) if self.v14 else None,
+                              tele=teleports(self.w) if self.v14 else None)
         self.fall_dmg = np.zeros(n, np.float32)
         self.spawn_nodes = np.nonzero(self.field.spawnable)[0]
         self.goal_pos = self.field.goals
@@ -221,8 +266,12 @@ class MoveEnv:
             nx = f.next[self.goal, cur]
             ok = nx >= 0
             kinds.append(np.where(ok, f.next_kind[self.goal, cur], 0).astype(np.float32))
+            via = f.via[self.goal, cur] if getattr(f, "via", None) is not None else None
             cur = np.where(ok, nx, cur)
-            wps.append(rot(f.nodes[cur] - pos) / 512.0)
+            wp = f.nodes[cur]
+            if via is not None:                               # v14: a step through a teleporter is shown as its entrance, not
+                wp = np.where((ok & ~np.isnan(via[:, 0]))[:, None], via, wp)       # as the far place it takes him to
+            wps.append(rot(wp - pos) / 512.0)
         goal = rot(self.goal_pos[self.goal] - pos) / 2000.0
         # wall rays turn with the view so the first one always points forward
         wd = self.wall_dirs

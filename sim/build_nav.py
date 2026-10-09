@@ -79,9 +79,17 @@ def main():
     ap.add_argument("--map", default="aerowalk")
     ap.add_argument("--grid", type=float, default=48.0)
     ap.add_argument("--batch", type=int, default=4096)
+    ap.add_argument("--v14", action="store_true", help="the game's step height and wading, the map's solid pieces (stepping stones, "
+                                                       "platforms), and swimming: a walker that starts in water swims up, and every "
+                                                       "try gets more time (2026-10-09: Toxicity's acid stone, Cure's pool)")
+    ap.add_argument("--out", default="", help="write here instead of data/maps/nav_<map>_sim.json")
     a = ap.parse_args()
     t0 = time.time()
     w = World(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n=a.batch)
+    if a.v14:
+        from qsim import QL_STEP, QL_WADE
+        w.set_params2(QL_WADE, QL_STEP)
+        print("  solid pieces:", [s_[0] for s_ in w.add_solids()], flush=True)
     nodes = spots(w, a.grid)
     kd = cKDTree(nodes)
     print("{}: {} standing spots ({:.0f}s)".format(a.map, len(nodes), time.time() - t0), flush=True)
@@ -99,7 +107,7 @@ def main():
         st = nodes[[p[0] for p in pb]]
         en = nodes[[p[1] for p in pb]]
         yaw = np.degrees(np.arctan2(en[:, 1] - st[:, 1], en[:, 0] - st[:, 0]))
-        P, G = rollout(w, st, yaw, lambda f, n: np.tile(np.array([[127, 0, 0]], np.int8), (n, 1)), 16)
+        P, G = rollout(w, st, yaw, lambda f, n: np.tile(np.array([[127, 0, 0]], np.int8), (n, 1)), 28 if a.v14 else 16)
         d = np.linalg.norm(P[:, :, :2] - en[None, :, :2], axis=2)
         ok = (d < 16) & (np.abs(P[:, :, 2] - en[None, :, 2]) < 20)
         first = np.where(ok.any(0), ok.argmax(0), -1)
@@ -112,17 +120,19 @@ def main():
     # run / run+jump in 12 directions: drops, jumps, jump pads, teleporters
     dirs = np.arange(0, 360, 30, dtype=np.float32)
     jobs = [(i, y, mode) for i in range(len(nodes)) for y in dirs for mode in (0, 1)]
-    F = 48
+    F = 96 if a.v14 else 48
+    wet_node = ((w.contents_n(nodes + np.array([0, 0, 2.0], np.float32)) & 32) != 0) if a.v14 else np.zeros(len(nodes), bool)
     for b0 in range(0, len(jobs), a.batch):
         jb = jobs[b0:b0 + a.batch]
         st = nodes[[j[0] for j in jb]]
         yaw = np.array([j[1] for j in jb], np.float32)
         jump = np.array([j[2] for j in jb])
+        wet = wet_node[[j[0] for j in jb]]                     # (v14) waist-deep or deeper at the start: he swims up
 
-        def moves(f, n, jump=jump):
+        def moves(f, n, jump=jump, wet=wet):
             m = np.zeros((n, 3), np.int8)
             m[:, 0] = 127
-            m[:, 2] = np.where((jump == 1) & (f >= 4) & (f <= 6), 127, 0)
+            m[:, 2] = np.where((jump == 1) & (wet | ((f >= 4) & (f <= 6))), 127, 0)
             return m
         P, G = rollout(w, st, yaw, moves, F)
         for k, (i, y, mode) in enumerate(jb):
@@ -149,7 +159,7 @@ def main():
         kinds[k] = kinds.get(k, 0) + 1
     out = dict(nodes=[[round(float(v), 1) for v in p] for p in nodes],
                edges=[[i, j, round(t, 3), k] for (i, j), (t, k) in edges.items()], source="sim/build_nav.py")
-    path = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(a.map))
+    path = a.out or os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(a.map))
     json.dump(out, open(path, "w"))
     print("wrote {}: {} nodes, links {} ({:.0f}s)".format(path, len(nodes), kinds, time.time() - t0), flush=True)
 

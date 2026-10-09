@@ -10,8 +10,8 @@ the limits a person has (see the fairness rules).
 
 Where he is now: he plays duels and free-for-all on Blood Run, Aerowalk and Lost World. He collects weapons, armor and
 the mega, keeps a stack, and beats a scripted item-running opponent that has the aim of the game's hardest bot on the
-maps he trained on (72 to 80% of the frags over 100 ten-minute duels a map). He does not strafe jump yet and fires few
-rockets. Every run and measurement, including what did not work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest
+maps he trained on (72 to 80% of the frags over 100 ten-minute duels a map), and beats the game's own Nightmare bot
+in real ten-minute duels on Blood Run and Lost World (six of six). He does not strafe jump yet and fires few rockets. Every run and measurement, including what did not work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest
 full report is [docs/REPORT_v13.md](docs/REPORT_v13.md).
 
 The goal is a bot that beats strong players fairly, with learned movement, weapon choice, item control and positioning,
@@ -104,8 +104,8 @@ In progress (the next run, [docs/MANIFEST_v14.md](docs/MANIFEST_v14.md)):
   speed and direction of travel.
 - Rockets: inputs for the lead of a shot, a very low price per rocket, and shots with no enemy in view judged by where
   they land (near where the enemy must be, or on his likely way).
-- Six of the game's duel maps (Campgrounds, Sinister and Furious Heights added) and two held out to test him on maps he
-  has never seen (Battleforged, Hektik).
+- Six of the game's duel maps (Sinister, Furious Heights and Battleforged added) and four held out to test him on maps
+  he has never seen (Campgrounds, Hektik, Toxicity, Cure).
 - The simulator corrected against the game's maps: lava that hurts, shots through bars and grates, items where the game
   puts them.
 

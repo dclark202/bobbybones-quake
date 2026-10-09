@@ -436,6 +436,7 @@ LAVA = float(os.environ.get("LAVA") or 0.0) > 0
 #                 point" is never one of them. (e) With SOLIDS, a teleporter link whose straight line to the entrance is
 #                 shut (from behind the teleporter's solid face) is left out.
 WALK_FIX = float(os.environ.get("WALK_FIX") or 0.0) > 0
+TELE_FAR = 160.0                                       # (WALK_FIX) a teleporter link starts within this of its entrance
 #   QL_MOVE=1     two numbers of Quake Live's movement that the simulator had from Quake 3: with the feet in water he
 #                 moves at 0.933 of running speed (measured 298.7 units a second on Furious Heights and Hektik; the
 #                 simulator 267), and a step may be 22 units high (the game's pmove_StepHeight; Quake 3's 18).
@@ -623,10 +624,12 @@ class RouteField:
     Plain numpy (the Anaconda Python's scipy is broken): the nearest graph point comes from a table over a grid."""
     CELL = 32.0
 
-    def __init__(self, nav_path, goals, pads=(), teles=(), avoid=None, starts=None, drop=None):
+    def __init__(self, nav_path, goals, pads=(), teles=(), avoid=None, starts=None, drop=None, tele_far=None):
         """avoid: a flag per point of the walking map; no way leads into or out of a flagged point (lava, see LAVA).
         starts: the map's spawn points; the points none of them reaches are dead as well (WALK_FIX). drop: links to
-        leave out, as (from, to)."""
+        leave out, as (from, to). tele_far: a teleporter link costs the walk to its entrance, and one that starts
+        further than this from the entrance is left out (WALK_FIX: the walking map has such links from 360 to 410
+        units away at 0.1 s; the way then "teleported" out of Cure's pool and the walker swam at its wall)."""
         import heapq
         g = json.load(open(nav_path))
         self.nodes = np.array(g["nodes"], np.float32)
@@ -634,6 +637,21 @@ class RouteField:
         self.dead = np.zeros(n, bool) if avoid is None else np.asarray(avoid, bool).copy()
         if drop:
             g["edges"] = [e for e in g["edges"] if (e[0], e[1]) not in drop]
+        tele_walk = {}
+        if tele_far is not None and len(teles):
+            tin0 = np.array([c for c, d in teles], np.float32).reshape(-1, 3)
+            tout0 = np.array([d for c, d in teles], np.float32).reshape(-1, 3)
+            keep = []
+            for e in g["edges"]:
+                if e[3] == "tele":
+                    j = int(np.linalg.norm(tout0 - self.nodes[e[1]], axis=1).argmin())
+                    if np.linalg.norm(tout0[j] - self.nodes[e[1]]) < 150.0:
+                        d_in = float(np.linalg.norm(tin0[j] - self.nodes[e[0]]))
+                        if d_in > tele_far:
+                            continue
+                        tele_walk[(e[0], e[1])] = d_in / 320.0
+                keep.append(e)
+            g["edges"] = keep
         if starts is not None and len(starts):
             live_e = [e for e in g["edges"] if not (self.dead[e[0]] or self.dead[e[1]])]
             fwd = [[] for _ in range(n)]
@@ -668,7 +686,7 @@ class RouteField:
             g["edges"] = [e for e in g["edges"] if not (avoid[e[0]] or avoid[e[1]])]
         for a, b, t, kind in g["edges"]:
             d = float(np.linalg.norm(self.nodes[a] - self.nodes[b]))
-            radj[b].append((a, 0.1 if kind == "tele" else (d / 320.0 if kind == "walk" else max(t, d / 900.0))))
+            radj[b].append((a, 0.1 + tele_walk.get((a, b), 0.0) if kind == "tele" else (d / 320.0 if kind == "walk" else max(t, d / 900.0))))
             have.add((a, b))
             if kind != "walk":
                 special.add((a, b))
@@ -1158,6 +1176,7 @@ class DuelEnv:
                 more_ = dict(avoid=avoid_) if avoid_ is not None else {}
                 if WALK_FIX:
                     more_["starts"] = self.spawns
+                    more_["tele_far"] = TELE_FAR
                     if getattr(self.w, "solids", None):      # teleporter links whose straight line to the entrance is shut
                         g_ = json.load(open(nav))
                         nd_ = np.array(g_["nodes"], np.float32)
@@ -1170,6 +1189,22 @@ class DuelEnv:
                                 if np.linalg.norm(tout_[j_] - nd_[b_]) < 150.0 and self.w.trace(nd_[a_], tin_[j_])["fraction"] < 0.97:
                                     drop_.add((int(a_), int(b_)))
                         more_["drop"] = drop_
+                    if LAVA:                                 # jumps and drops whose line passes over lava or slime: left out. A scripted
+                        g_ = json.load(open(nav))            # walker lands in it (on Lost World the stand-in died in the lava 2.6 times a
+                        nd_ = np.array(g_["nodes"], np.float32)       # game; at Toxicity's acid stone it stood 27% of its time)
+                        air_ = [(a_, b_) for a_, b_, t_, kind_ in g_["edges"] if kind_ == "air"]
+                        if air_:
+                            A_, B_ = nd_[[e_[0] for e_ in air_]], nd_[[e_[1] for e_ in air_]]
+                            over_ = np.zeros(len(air_), bool)
+                            for f_ in (0.2, 0.35, 0.5, 0.65, 0.8):
+                                P_ = (A_ + (B_ - A_) * f_).astype(np.float32)
+                                P_[:, 2] = np.maximum(A_[:, 2], B_[:, 2]) + 8.0
+                                fr_ = self.w.rays(P_, np.array([[0, 0, -1.0]], np.float32), 600.0)[:, 0]
+                                end_ = P_.copy()
+                                end_[:, 2] -= fr_ * 600.0 - 4.0
+                                over_ |= (fr_ < 1.0) & ((self.w.contents_n(end_) & (C_LAVA | C_SLIME)) != 0)
+                            self.over_hazard = int(over_.sum())
+                            more_["drop"] = set(more_.get("drop", ())) | {e_ for e_, o_ in zip(air_, over_) if o_}
                 self.route = RouteField(nav, [self.item_pos[k_] for k_ in self.route_item],
                                         pads=[(c, d) for k, c, d in spots if k == 0], teles=[(c, d) for k, c, d in spots if k == 1],
                                         **more_)
@@ -1275,7 +1310,8 @@ class DuelEnv:
                 tg = [e["origin"] for e in self.w.entities
                       if e.get("classname", "").startswith(M.GOAL_CLASSES) and "origin" in e
                       and not (T.v14 and e["classname"] == "item_quad")]
-                T.field = M.NavField(nav, tg, world=self.w, hazard=True, starts=self.spawns) if T.v14 else M.NavField(nav, tg, world=self.w)
+                T.field = (M.NavField(nav, tg, world=self.w, hazard=True, starts=self.spawns, drop=M.shut_teleports(self.w, nav), tele=M.teleports(self.w))
+                           if T.v14 else M.NavField(nav, tg, world=self.w))
                 T.goal_pos = T.field.goals
                 ta = np.linspace(0, 2 * np.pi, M.N_WALL, endpoint=False)
                 T.wall_dirs = np.stack([np.cos(ta), np.sin(ta), np.zeros_like(ta)], 1).astype(np.float32)
@@ -1289,6 +1325,7 @@ class DuelEnv:
         self.pitch = np.zeros(n, np.float32)
         self.mv = np.zeros((n, 2), np.float32)          # mouse velocity (yaw, pitch) in degrees per frame
         self.sp_hist = np.zeros((n, 4), np.float32)     # his speed over the ground one to four frames ago (see N_V14; a plugin keeps it itself)
+        self.wet = np.zeros(n, np.int8)                 # how deep he stands in water, slime or lava: feet 1, waist 2, head 3 (LAVA)
         self.cmd = np.zeros((n, 2), np.float32)         # last turn command (for the jerk cost)
         self.hp = np.full(n, SPAWN_HP, np.float32)
         self.armor = np.zeros(n, np.float32)
@@ -1772,7 +1809,8 @@ class DuelEnv:
         nx2 = np.where(nx >= 0, R.walk[g, np.maximum(nx, 0)], -1)
         tp = np.where((near & (nx2 >= 0))[:, None], R.nodes[np.maximum(nx2, 0)], tp)
         tp = np.where((near & (nx >= 0) & (nx2 < 0))[:, None], R.goals[g], tp)
-        tp = self._enter(R, g, node, nx, near, tp, s[ri, 6] > 0.5, pos if WALK_FIX else None, s[ri, 5])
+        tp = self._enter(R, g, node, nx, near, tp, s[ri, 6] > 0.5, pos if WALK_FIX else None, s[ri, 5],
+                         (self.wet[ri] >= 2) if WALK_FIX else None)
         is_via = WALK_FIX & ~np.isnan(R.via[g, node][:, 0])
         to_drop = np.zeros(len(ri), bool)
         if DROPS and STACK_TEACH:
@@ -1790,7 +1828,11 @@ class DuelEnv:
         up = (d[:, 2] > 18.0) & (hd < 260.0) & ~to_drop & ~is_via
         gap = (hd > 150.0) & (d[:, 2] > -40.0) & (nx >= 0) & ~near & ~to_drop
         jump = (s[ri, 6] > 0.5) & (up | gap | (self.run_stuck[ri] > 10))
+        if WALK_FIX:
+            jump = jump | ((self.wet[ri] >= 2) & (d[:, 2] > -24.0))    # (in water he swims up, as the scripted walker)
         vert = jump.astype(np.int64)
+        if WALK_FIX:                                         # (under water, where the way leads down: he dives)
+            vert = np.where((self.wet[ri] >= 2) & (d[:, 2] < -24.0), 2, vert)
         if self.pro_air is not None:                         # the jump key as the pros use it there (see PRO_JUMP)
             care = R.move[g, node] | ((nx >= 0) & R.move[g, np.maximum(nx, 0)]) | ((nx2 >= 0) & R.move[g, np.maximum(nx2, 0)])
             hop = self._pro_hop(pos) & (np.hypot(s[ri, 3], s[ri, 4]) > 200.0) & (np.abs(d[:, 2]) < 40.0) & ~care & (R.T[g, node] > 1.0)
@@ -1804,7 +1846,7 @@ class DuelEnv:
             self.teach[ri, 3] = -1                           # ... and in an item run too: the keys for the view he has
 
     @staticmethod
-    def _enter(R, g, node, nx, near, tp, ground, pos=None, vz=None):
+    def _enter(R, g, node, nx, near, tp, ground, pos=None, vz=None, swim=None):
         """the walker's target when the link from his point, or the one after the next point he has all but reached, goes
         through a jump pad or a teleporter: its plate or entrance (see RouteField.via). Only on the ground: thrown by the
         pad he steers for where it takes him, not back to the plate."""
@@ -1814,6 +1856,8 @@ class DuelEnv:
             with np.errstate(invalid="ignore"):              # only thrown by a pad (fast upward, or well above its plate) is he "in flight"
                 beside = (vz < 290.0) & ((pos[:, 2] - np.where(np.isnan(v0[:, 2]), v1[:, 2], v0[:, 2])) < 64.0)
             ground = ground | beside
+        if swim is not None:                                 # ... and swimming he is not in flight either (a teleporter under water)
+            ground = ground | swim
         tp = np.where((ground & near & (nx >= 0) & ~np.isnan(v1[:, 0]))[:, None], v1, tp)
         return np.where((ground & ~np.isnan(v0[:, 0]))[:, None], v0, tp)
 
@@ -3291,7 +3335,8 @@ class DuelEnv:
         nx2 = np.where(nx >= 0, R.walk[gi, np.maximum(nx, 0)], -1)
         tp = np.where((near & (nx2 >= 0))[:, None], R.nodes[np.maximum(nx2, 0)], tp)   # look one step further when close
         tp = np.where((near & (nx >= 0) & (nx2 < 0))[:, None], R.goals[gi], tp)
-        tp = self._enter(R, gi, node, nx, near, tp, s[ri, 6] > 0.5, pos if WALK_FIX else None, s[ri, 5])
+        tp = self._enter(R, gi, node, nx, near, tp, s[ri, 6] > 0.5, pos if WALK_FIX else None, s[ri, 5],
+                         (self.wet[ri] >= 2) if WALK_FIX else None)
         is_via = WALK_FIX & ~np.isnan(R.via[gi, node][:, 0])
         d = tp - pos
         hd = np.hypot(d[:, 0], d[:, 1])
@@ -3304,9 +3349,12 @@ class DuelEnv:
         up = (d[:, 2] > 18.0) & (hd < 260.0) & ~is_via       # a step up, a ledge (an entrance is not one)
         gap = (hd > 150.0) & (d[:, 2] > -40.0) & (nx >= 0) & ~near     # a long edge of the graph on the level: a jump
         jump = (s[ri, 6] > 0.5) & (up | gap | (self.sc_stuck[ri] > 10))
+        if WALK_FIX:                                         # in water to the waist or deeper he swims up, unless his way leads down
+            jump = jump | ((self.wet[ri] >= 2) & (d[:, 2] > -24.0))    # (Cure's pool, 2026-10-09: the walker stood on its floor)
         out[rl, 0] = np.where(go, fwd + 1, out[rl, 0])
         out[rl, 1] = np.where(go, side + 1, out[rl, 1])
-        out[rl, 2] = np.where(go, jump, out[rl, 2])
+        dive = (self.wet[ri] >= 2) & (d[:, 2] < -24.0) if WALK_FIX else np.zeros(len(ri), bool)    # ... and down where it leads down
+        out[rl, 2] = np.where(go, np.where(dive, 2, jump), out[rl, 2])
         turn = np.clip(rel_deg * 0.5, -20.0, 20.0)           # nobody in view: he looks where he is going
         look = go & ~engaged[rl]
         out[rl, 3] = np.where(look, np.abs(TURN[None, :] - turn[:, None]).argmin(1), out[rl, 3])
@@ -3535,6 +3583,8 @@ class DuelEnv:
                 cc_ = self.w.contents_n(pts_.reshape(-1, 3)).reshape(len(live_), 3)
                 liq_ = (cc_ & (C_LAVA | C_SLIME | C_WATER)) != 0
                 depth_ = liq_[:, 0].astype(np.int64) + (liq_[:, 0] & liq_[:, 1]) + (liq_[:, 0] & liq_[:, 1] & liq_[:, 2])
+                self.wet[:] = 0
+                self.wet[live_] = depth_
                 dmg_ = depth_ * (LAVA_DMG * ((cc_[:, 0] & C_LAVA) != 0) + SLIME_DMG * ((cc_[:, 0] & C_SLIME) != 0))
                 for k_ in np.nonzero((dmg_ > 0) & (self.lava_t[live_] <= 0))[0]:
                     v = int(live_[k_])

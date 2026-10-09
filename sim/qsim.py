@@ -127,14 +127,16 @@ class World:
         self.lib.qsim_params2(float(wade_scale), float(step_size))
 
     def add_solids(self):
-        """the map's solid pieces that are brush models of their own (func_static, func_bobbing at rest, doors shut)
-        become part of the collision, as in the game. Returns their (classname, model, origin)."""
+        """the map's solid pieces that are brush models of their own (func_static, func_bobbing at rest, doors that a
+        button opens: shut) become part of the collision, as in the game. Returns their (classname, model, origin)."""
         self.lib.qsim_clear_solids()
         self.solids = []
         for e in self.entities:
             cls = e.get("classname", "")
             if not cls.startswith("func_") or cls in ("func_timer", "func_group") or not e.get("model", "").startswith("*"):
                 continue
+            if cls == "func_door" and not e.get("targetname"):      # a door nothing has to trigger opens for whoever comes
+                continue                                            # near: a way, not a wall (Silence's double door)
             org = np.asarray(e.get("origin", (0.0, 0.0, 0.0)), np.float32)
             if self.lib.qsim_add_solid(int(e["model"][1:]), org) >= 0:
                 self.solids.append((cls, e["model"], tuple(float(v) for v in org)))

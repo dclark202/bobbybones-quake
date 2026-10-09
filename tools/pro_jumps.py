@@ -108,8 +108,10 @@ def main():
     ap.add_argument("--every", type=int, default=1, help="use every n-th frame (1 = all; jumps a minute need 1)")
     ap.add_argument("--max-files", type=int, default=0)
     a = ap.parse_args()
-    out = {mp: build(mp, a.every, a.max_files) for mp in a.map.split(",")}
-    json.dump(out, open(os.path.join(ROOT, "docs", "pro_jumps.json"), "w"), indent=1)
+    js = os.path.join(ROOT, "docs", "pro_jumps.json")
+    out = json.load(open(js)) if os.path.exists(js) else {}      # the maps not named keep what the file has
+    out.update({mp: build(mp, a.every, a.max_files) for mp in a.map.split(",")})
+    json.dump(out, open(js, "w"), indent=1)
 
 
 if __name__ == "__main__":
