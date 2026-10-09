@@ -71,7 +71,7 @@ One server holds one duel at a time; other players spectate and queue (the game'
 
 ## Free-for-all instead of 1v1
 
-Since 2026-10-06 the public server runs free-for-all with three Bobbys on `arena1` by default (`CODE=1 bash tools/push_bobby.sh <run>` restarts it that way; `FFA=<n>` changes the number). Players switch with `!map testlab` (1v1) and `!map arena1` (free-for-all), see `docs/COMMANDS.md`.
+The public server runs free-for-all by default: since 2026-10-09 with two Bobbys on Aerowalk (owner; from 2026-10-06 it was three on `arena1`). `CODE=1 bash tools/push_bobby.sh <run>` restarts it that way; `FFA=<n>` and a third argument change the number and the map, and it copies the walking maps and map tables of every map the server offers (they are not in git). Players switch with `!map testlab` (1v1) and `!map arena1` (free-for-all), see `docs/COMMANDS.md`.
 
 ```bash
 FFA=3 bash tools/duel_server.sh duel_gru_v8 arena1 duel_env_ffa     # three Bobbys, three seats for people
