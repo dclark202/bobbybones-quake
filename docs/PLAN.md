@@ -88,6 +88,12 @@ control; speed is a bonus.
 At eight hours ([MIDRUN_v13.md](MIDRUN_v13.md)): improving on items, weapons and the duels against the stand-in (Blood
 Run 30% -> 58% of the frags, Aerowalk 52% -> 71%); rockets slipping and no strafe jumping since the teachers ended.
 
+**Next: `duel_gru_v14`** (the owner's calls of 2026-10-09, RESULTS 09:05; its manifest after his duel against v13):
+strafe jumping from a teacher in his item runs, a pay for speed from 320 to 480 and four inputs for his own movement
+(B-163 to B-165); lead reading for rockets and plasma (B-166); what a shot costs, by weapon and by where it lands when no
+enemy is in view (B-167); the weapon teacher on at a low weight to the end and silent on shotgun, plasma and grenades
+(B-168, B-169); six maps (B-170).
+
 Open besides it, in this order: B-160 (position: fighting from below), B-140 (the walking layer rebuilt properly, with
 keys a hand can press), B-161 (backing away when weak), B-162 (the yard in or out of training), B-154 (teachers and the
 shared layers: the right share), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-153 (a
@@ -324,6 +330,11 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
 
 ## Owner decisions
 
+- Maps (2026-10-09): v14 trains on Blood Run, Aerowalk, Lost World, Campgrounds, Sinister and Furious Heights; Cure, Toxicity, Hektik and Battleforged later.
+- Strafe jumping (2026-10-09): "absolutely crucial to the game, he needs to learn it asap". A teacher that strafe-jumps may name keys and view in movement rounds on the duel maps; a pay for speed from 320 to 480, flat above, aggressive at first.
+- Shots with no enemy in view (2026-10-09): firing rockets, plasma and grenades at where he thinks the enemy is, or is about to be, is how they are used and is not penalized; "firing them at nonsense (or not rocket jumping) should be discouraged"; a small allowance for pre-firing a beam. Rockets keep a very low shot price; plasma and grenades have none.
+- Lead reading (2026-10-09): he is given where a rocket has to be aimed to meet a moving enemy ("a major part of the game").
+- Shotgun, plasma, grenades (2026-10-09): not a priority and no lives that start with them; the weapon teacher is neutral while he holds one; watched.
 - Maps (2026-10-07): training on arena1, Aerowalk, Blood Run and Lost World; Campgrounds, Furious Heights and Sinister come back once he goes for items. The public server offers the eight he has trained on.
 - Seeding is fine (2026-10-06, 2026-10-07): a simple rule or a scripted player may show him a behavior at a weight that fades (the intention, the walk, next the weapon choice); what stays must hold without it.
 - Scripted opponents of our own (the item runner) may be in the league; the game's bots stay a benchmark only.

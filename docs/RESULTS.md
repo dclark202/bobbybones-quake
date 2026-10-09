@@ -5,6 +5,78 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 09:05 — the owner's calls for v14, the hand check, a movement trial beside the run
+
+The owner read the mid-run report ("This looks fantastic"; the run may be stopped once it has been flat for three hours)
+and asked for ways to get his speed up, his rockets up and the shotgun, plasma gun and grenades back. Raises B-163 to
+B-170. v13 itself was not touched.
+
+**What was found** (the code, `docs/pro_tables.json`, the game's weapon statistics of his two games against v12):
+
+- **Speed.** A correction to what he was told first: v13 does have movement rounds on the duel maps. 20% of the playing
+  time is item runs (alone, the target given, 0.2 a second of the way gained against 0.2 a second of the clock, which is 3
+  a minute at 400 units a second, and 0.5 on arrival). He runs them at 308 and is fast in the air 9% of the time. So pay
+  alone does not get him there. What went on 2026-10-05, with the finger limits, was the teacher that strafe-jumps: the
+  item runs' teacher walks. The pace pay of v13 (0.02 a player-minute) starts above 320, where only the whole skill gets.
+- **The hand check** (no training; scratchpad `hand_check.py`, 20 runs of 60 s with 128 players): the movement network of
+  2026-10-03 (`multimap_v1`, trained without hand rules) asked what it would do in the duel simulator's movement rounds,
+  its likeliest action carried out through the hand rules named.
+
+  | | Blood Run: speed, fast in the air, over 400, top speed | Aerowalk |
+  |---|---|---|
+  | No hand rules | 409, 44%, 42%, 628 | 388, 34%, 34%, 553 |
+  | **Today's hands** (fingers, 10 reads and 8 actions a second, mouse inertia, noise, pad) | **365, 29%, 18%, 590** | **356, 17%, 10%, 497** |
+  | No finger rules, today's mouse | 392, 40%, 34%, 631 | 362, 23%, 15%, 521 |
+  | Today's fingers, the view turning exactly as asked | 367, 31%, 20%, 586 | 357, 17%, 9%, 490 |
+  | Left hand read 40 / 20 times a second | 364 / 366 | 345 / 349 |
+  | No hold per finger / no budget | 365 / 368 | 355 / 359 |
+  | No view inertia / no hand noise | 367 / 366 | 357 / 355 |
+
+  **Today's hands can strafe jump**: a network never trained under them moves at 365 and 356 through them (the owner 348 to
+  355, the pros about 335, v13 308). The finger rules cost about a tenth of the speed; no single rule gives it back.
+- **A trial beside the run** (owner: "If you can do a trial of the movement runs while the current run is finishing do
+  it"): `move_trial_a`, 08:43 to 09:04, a copy of v13's save of update 360, movement rounds only on Blood Run and Aerowalk
+  (a goal among mega, red and yellow armor, nobody else, paid for the time gained), today's hands, `multimap_v1` as the
+  teacher of keys and view at weight 0.5 into the shared layers, 512 players at 7,200 frames a second on a tenth of the
+  GPU's memory. Speed 188 -> 320, fast in the air 17%, arrivals 0.06 -> 9.6 a minute in 21 minutes (9.2 million frames),
+  still climbing slowly; fall damage 28 a minute against v13's 9 (the teacher was never charged for a fall). The first
+  update moved the policy 7.3 nats (the turn 3.8, the jump 1.0): at this weight the teacher rewrites him, so in a real run
+  it goes through `--teach-trunk`. The live run's updates were 2.1 to 2.3 minutes apart instead of 1.9 meanwhile. Stopped
+  on the owner's word ("seems to be working, we can stop that and fold it into v14").
+- **Rockets.** The simulator has splash, halved own splash and knockback (splash throws upward); his rockets land as often
+  as the owner's in the simulator (45 to 51%; v12 against the owner 7 of 44). The gap is how many and when: 1.0 to 2.6 a
+  minute in the duels against the stand-in (the owner 9.2 on Aerowalk); with an enemy within 300 units he holds rockets 8
+  to 21% of the time, lightning 34 to 41%, the rail 45 to 51% (the pros 55 to 63%, 29 to 36%, 6 to 9%; over all of their
+  30,274 minutes rockets are in their hands 56% of the time). Three causes: his lightning hits 44 to 50% in the simulator
+  (v12: 38% there, 22 to 25% against the owner), so there it is the better weapon; every shot fired with no enemy seen for
+  a second costs 0.003 a frame (`BLIND_FIRE_COST`, every weapon: his blind-fire share is 0.0%) on top of the shot price (a
+  rocket 10 damage points), while the pros with the launcher in hand fire 22 to 40% of the time and see the enemy 6 to 16%
+  of it; and what the weapon teacher taught did not pay for itself (34% of his frags under it, 20% six hours later).
+- **Shotgun, plasma, grenades.** On the maps, in the simulator, among his inputs; 0.0% of his frags. The weapon teacher
+  knows four answers (rockets, lightning, rail, machine gun): with an enemy about and one of the three in hand its label
+  was "switch", in every run since v10. The stack pay counts only the big three. The pros hold plasma 5.3%, grenades 4.9%
+  and the shotgun 2.4% of the time, and fire grenades 63 to 65% of the time they hold them with the enemy in view 2 to 10%.
+- **Maps** (entity scan of the game's files, duel entities): Campgrounds and Furious Heights have no moving part; Sinister's
+  four bobbing parts and those of Toxicity, Hektik and Battleforged are the teleporters' faces; Cure has a door between
+  "RA Pit" and "High RL" that lowers for 5 s when a button near "MH Stage" is shot (not seen in the game yet). All have the
+  map file, a walking map and the map reader's table; `multimap_v1` knows Blood Run, Aerowalk and Campgrounds only.
+
+**The owner's calls** (08:25 to 09:05), for v14, to be written up as its manifest after his duel against v13:
+
+- Speed: the strafe-jumping teacher in movement rounds on the duel maps ("figuring out routes between items, practicing
+  jumps"), a pay for speed from 320 to 480 and flat above ("it can be aggressive at first ... he needs to learn it asap"),
+  four inputs (speed, the angle between view and movement, speed gained). B-163, B-164, B-165.
+- Rockets: "He needs to have lead reading ... a major part of the game": six inputs for rockets and plasma (B-166). The
+  shot price stays for rockets "to a point ... the cost can be very low"; plasma and grenades get "no opportunity cost".
+  Shots with no enemy in view: not penalized when fired "where he thinks the enemy is", with a wide radius (a led shot
+  lands beyond 300 units) and on the enemy's likely path ("a larger deal than you're making it"); a small allowance for
+  pre-firing beams; "firing them at nonsense (or not rocket jumping) should be discouraged" (B-167). The weapon teacher
+  stays on at a low weight, neutral while he holds shotgun, plasma or grenades ("he can experiment with them") (B-168).
+- Shotgun, plasma, grenades: no lives that start with them, not a priority; watched (B-169).
+- Maps: Lost World, Campgrounds, Sinister and Furious Heights with Blood Run and Aerowalk; later Cure, Toxicity, Hektik
+  and Battleforged (B-170).
+- He duels v13 around 16:00 and adds to the plan after it.
+
 ## 2026-10-09 05:20 — `duel_gru_v13` at eight hours: the mid-run report (owner: "ready at 7am")
 
 [MIDRUN_v13.md](MIDRUN_v13.md) has the tables. In short, at update 255 (473 min, 987 million frames), no stop sign at
