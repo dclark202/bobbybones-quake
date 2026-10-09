@@ -1732,6 +1732,7 @@ static PyMethodDef minqlxMethods[] = {
     {"set_bot_substeps", PyMinqlx_SetBotSubsteps, METH_VARARGS, "Move a fully controlled bot n times per frame (human physics)."},
     {"item_states", PyMinqlx_ItemStates, METH_NOARGS, "List item entities and whether they are spawned."},
     {"missiles", PyMinqlx_Missiles, METH_NOARGS, "List projectiles in flight (owner, weapon, position, velocity)."},
+    {"spawn_map_item", PyMinqlx_SpawnMapItem, METH_VARARGS, "Put an item on the map that comes back after it is taken (classname, x, y, z)."},
     {"set_bot_move", PyMinqlx_SetBotMove, METH_VARARGS, "Hybrid control: AI aims/shoots, caller steers movement."},
     {"set_bot_aim", PyMinqlx_SetBotAim, METH_VARARGS, "Hybrid aim override used whenever the AI decides to shoot."},
     {"ai_wants_fire", PyMinqlx_AiWantsFire, METH_VARARGS, "Whether the bot AI pressed attack this frame (line of sight)."},

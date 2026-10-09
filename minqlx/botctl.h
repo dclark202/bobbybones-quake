@@ -20,6 +20,7 @@ PyObject* PyMinqlx_KeyCounts(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetBotSubsteps(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_ItemStates(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_Missiles(PyObject* self, PyObject* args);
+PyObject* PyMinqlx_SpawnMapItem(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetBotMove(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_SetBotAim(PyObject* self, PyObject* args);
 PyObject* PyMinqlx_AiWantsFire(PyObject* self, PyObject* args);

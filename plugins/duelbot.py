@@ -566,10 +566,18 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
 
     # ------------------------------------------------------------------ setup
+    FACTORY = "duel"                                         # (ffabot: "ffa")
+
     def no_powerups(self, say=False):
-        """no quad, no battle suit, no other powerup on any map (see plugins/powerups.py)"""
+        """no quad, no battle suit, no other powerup on any map, and the items of a duel in every mode (see
+        plugins/powerups.py)"""
         try:
             done = _pu.strip()
+            if self.FACTORY != "duel":
+                lay = _pu.duel_layout((minqlx.get_cvar("mapname") or "").lower())
+                if lay and (lay[0] or lay[1]):
+                    done.append("the items of a duel: {} removed, {} put there".format(*lay))
+                    self.item_ent, self.item_was = {}, {}   # entity numbers changed hands: match them to his items afresh
             if done or say:
                 cls = [c for _, c, *_ in minqlx.item_states()[1]]
                 self.log("powerups on {}: {} (the game's switch {}, {} items, mega {}, powerups left {})".format(

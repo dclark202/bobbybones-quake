@@ -38,6 +38,8 @@ PARK = np.array([-6000.0, -6000.0, -6000.0, 0, 0, 0, 1.0, 0.0], np.float32)
 
 
 class ffabot(duelbot):
+    FACTORY = "ffa"
+
     def __init__(self):                                      # not duelbot's: no duel rooms, no 1v1 commands
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)

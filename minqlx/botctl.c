@@ -342,6 +342,37 @@ PyObject* PyMinqlx_ItemStates(PyObject* self, PyObject* args) {
     return res;
 }
 
+// spawn_map_item(classname, x, y, z) -> entity number. An item put on the map that behaves like one of the map's own:
+// it falls to the floor, and after it is taken it comes back on the game's own timer for its kind. LaunchItem makes a
+// *dropped* item (taken once, and gone after 30 s): the dropped flag and its timer are cleared. Used to give a
+// free-for-all game the duel layout of a map (owner, 2026-10-09; plugins/powerups.py).
+PyObject* PyMinqlx_SpawnMapItem(PyObject* self, PyObject* args) {
+    const char* cls;
+    float x, y, z;
+    if (!PyArg_ParseTuple(args, "sfff:spawn_map_item", &cls, &x, &y, &z))
+        return NULL;
+    int id = 0;
+    for (int i = 1; i < bg_numItems; i++) {
+        if (bg_itemlist[i].classname && strcmp(bg_itemlist[i].classname, cls) == 0) {
+            id = i;
+            break;
+        }
+    }
+    if (!id) {
+        PyErr_Format(PyExc_ValueError, "no such item: %s", cls);
+        return NULL;
+    }
+    vec3_t origin = {x, y, z};
+    vec3_t velocity = {0, 0, 0};
+    gentity_t* ent = LaunchItem(bg_itemlist + id, origin, velocity);
+    if (!ent)
+        Py_RETURN_NONE;
+    ent->flags &= ~FL_DROPPED_ITEM;
+    ent->nextthink = 0;
+    ent->think = 0;
+    return PyLong_FromLong((long)(ent - g_entities));
+}
+
 // missiles() -> [(entity_num, owner, weapon, x, y, z, vx, vy, vz), ...] for projectiles in flight
 PyObject* PyMinqlx_Missiles(PyObject* self, PyObject* args) {
     PyObject* list = PyList_New(0);
