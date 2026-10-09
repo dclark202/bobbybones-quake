@@ -55,7 +55,7 @@ same commit.
 | Nightmare stand-in in the simulator | `tools/duel_eval.py`, 100 ten-minute duels a map with error bars; matches the real scores on arena1; not usable on Lost World (the scripted runner hardly moves there, B-141) |
 | Maps in training | up to v12: arena1, Aerowalk, Blood Run, Lost World. From v13: the three duel maps; arena1 held out |
 | Pro demos | 3,266 1v1 demos (505 hours) of the three duel maps, as tables: weapon by distance, item order, positions, where they jump. The pros' ways as a walking teacher were tried and left out (slightly worse than the shortest ways) |
-| Public server | v12 with playing styles and the fixed plugins since 2026-10-08 16:50; three Bobbys on arena1 |
+| Public server | v12 with playing styles and the fixed plugins since 2026-10-08 16:50; since 2026-10-09 free-for-all on Aerowalk with two Bobbys (owner); v13 goes on when its training has ended |
 | Attention over the scene; opponent profiles; player reports | scoped (`ATTENTION_POC.md`, B-109) / later |
 
 ## Goal 1 (owner, 2026-10-05)

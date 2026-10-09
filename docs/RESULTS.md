@@ -5,6 +5,20 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 09:16 — public server: Aerowalk, free-for-all, two Bobbys (owner); its Aerowalk walking map was two days old
+
+Owner: "Change default number of bots to 2", "default map to aerowalk" ("aerowalk FFA, not duel"), "Update aerowalk walking
+map", "Update anything else you think is needed". Done with nobody on the server; it still plays `duel_gru_v12` (v13 goes
+there when its training has ended: "you can push v13 to the public server right away, no local server").
+
+- The server's walking map of Aerowalk was of 2026-10-07; the PC's is of 2026-10-08 16:38. `tools/push_bobby.sh` copied
+  only the start map's walking map on a push (arena1), and `data/` is not in git. It now copies the walking maps and the
+  map reader's tables of every map the server offers, and defaults to Aerowalk and two Bobbys. The other map files matched.
+- Code and image brought to the head (`5bafb7b`): the plugins read dropped weapons (a dropped weapon within 40 units of a
+  map item was taken for that item until 2026-10-08), and the numeric library runs on one thread (B-153). The container
+  used 129% of the server's two cores with nobody on it before (three Bobbys) and 29 to 32% after (two Bobbys).
+- Sessions pulled to `data/public/sessions` (five folders).
+
 ## 2026-10-09 09:05 — the owner's calls for v14, the hand check, a movement trial beside the run
 
 The owner read the mid-run report ("This looks fantastic"; the run may be stopped once it has been flat for three hours)
