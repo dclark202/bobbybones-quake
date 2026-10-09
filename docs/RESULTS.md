@@ -5,6 +5,111 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 21:26 — `duel_gru_v13` started: dropped weapons (measured in the real game), the ground at his feet, the hand at 8, pay for knowing where the enemy is and for pace, a keys-only walking teacher
+
+**The owner's calls after his two games against v12** (20:20 to 20:50; the games: the entry of 20:05):
+
+- "Key budget 8 a second ... yes 8 is fine. As long as we don't see him spamming the shit out things again, they need to be
+  deliberate."
+- The ground at his own feet in every direction: "absolutely. this is not a fairness problem, good players know how to move
+  around the map without looking. That can be baked into him, ideally it should be 'learned' but the end result is the same."
+- Pay for knowing where the enemy is (his idea): "Yes. He needs to be rewarded for knowing the enemy position."
+- Pay for pace: "yes". Strafe jumping "needs to be a priority now", "but that might be a bit ambitious still".
+- The walking teacher as keys only: "YES as long as it is KEYS TOWARD THE GOAL given the current view he has, meaning he can
+  look freely around and is not being given a rule that forces him to look a certain way."
+- Dropped weapons: "I think we need to build the dropped weapons properly and wait to start until it's ready. It's that
+  important I think. So go ahead and build it now, then start the training once it's ready."
+- The run: "he can go all the way until 4pm tomorrow if need be", stopped early "if you think either a) something had gone
+  wrong and needs to be addressed or b) he's saturated the knowledge we can give him in his current state"; a mid-training
+  report with heat maps and simulated duels against the Nightmare stand-in at 07:00; the full report at the end, with
+  recommendations for what to try next; hourly check-ins; the PC "around 80-85% utilized on average".
+- His order of things: "He currently plays like a pretty bad novice who knows how to aim better than they know how to play
+  quake. That's fine ... The absolute worst thing we could see in training now is for the item pickups and weapon use to
+  collapse again. If anything he should be using more rockets as time goes on. Top priority: continue developing game sense
+  for items, position, control and weapons."
+- Not added: a cost for aiming upward (my advice: it punishes the symptom; B-160 for the next run).
+
+**"He seems to be always actively backing away from me"** (owner). The logs agree, and it goes by his strength: his speed
+toward the owner while he had him in view was -70 units a second with health plus armor under 60 (both games), -55 at 60
+to 125 on Aerowalk (+48 on arena1), +25 over 125. He was weak nearly all the time he was seen. v12 was also paid for keeping
+his style's distance (off in v13). Damage taken at full price, new in v13, pushes the same way: `closing` in the metrics
+shows it by strength (B-161).
+
+**Dropped weapons in the real game** (`plugins/droplab.py`, a controlled bot on a private local server, Blood Run,
+free-for-all; 64 cases in `docs/dropped_weapons.json`):
+
+| | |
+|---|---|
+| Slain with the game's kill command, in the warmup and in a running game (36 cases) | nothing falls: it is a death by his own hand |
+| Killed by another player's rocket, a rocket launcher, railgun, lightning gun, shotgun, grenade launcher or plasma gun in hand | that weapon falls |
+| ... the machine gun or the gauntlet in hand (also while he owns a rocket launcher) | nothing |
+| ... the weapon in hand without ammo | nothing |
+| How long it lies | 30 s (the game's own removal time 29.5 s half a second after the kill; watched: 29.5 s) |
+| Where | thrown the way he faced: 60 to 70 units on after half a second, at rest 80 to 150 units from where he died |
+| What it gives | one pickup's ammo whatever the dead player had (3 or 17 rockets left: the taker gets 10; lightning with 37 or 130 cells: 100; rail 10, shotgun 10, grenades 10, plasma 50), added to what the taker has up to the cap (5 rockets -> 15, 24 -> 25) |
+
+The first measurement was wrong and is kept in the file: I slew the bot with the kill command and nothing fell, in the
+warmup and in a running game alike; only a kill by another player drops the weapon.
+
+**In the simulator** (`DROPS=1`): on a kill by another player the weapon in hand (not the machine gun or gauntlet, not
+without ammo) lands 140 units the way he faced, short of a wall, on the floor below; none into lava, a pit or off the map;
+it lies 30 s; a touch gives the weapon and one pickup's ammo up to the cap; a weapon the taker did not have pays like any
+other (0.19) and completes a trip to that weapon. Eight new inputs (499 in all): the nearest one he can see (in his view,
+within 1,500 units, a clear line), where, that it is there, rockets / lightning / rail, the share of its time left. The
+walking teacher goes straight for a big weapon he lacks that lies in plain sight within 500 units. Both plugins pass the
+game's dropped weapons on to what he sees (and no longer take one lying within 40 units of a map item for that item).
+Tests (`t_drops.py`): the drop 140 units on with 29.9 s left; the shooter's inputs show it and a player looking away sees
+nothing; the teacher's keys point at it; stepping on it gives the launcher with 10 rockets and +0.1875, with 20 rockets
+already 25 and nothing; machine gun, no ammo, dead without a killer: nothing; gone between 29 and 30.5 s. The group
+simulator is identical to the two-player one with every switch on.
+
+**The ground at his feet** (`GROUND_SENSE=1`): without it the eight floor readings are blank in 78% of readings (random
+views, a third of them 35 degrees up or down), with it never; turning the view by 90 degrees reads the same spots the
+same; where the old reading was in view the new one is identical; 494 lava and drop flags appear that lay outside his
+view. The five floor readings beside and behind him had been a constant -1 for as long as he has had a field of view, with
+weights that five days of a constant input left there (mean size 0.035): they start from zero weight, their constant's
+part folded into the bias (`sim/renorm_policy.py --woke`; the first layer unchanged to 5e-8 on what he knew).
+
+**The left hand** (`KEY_RATE=8`): the owner's own key presses put through Bobby's budget: at 4 a second 41 to 44% refused,
+at 5, 27 to 30%, at 7, 6 to 7%, at 8, 2 to 3%. His hand made 6.6 to 7.1 actions a second over a whole game (strafe keys
+alone 3.7 to 4.0), 5.6 while above 400 units a second.
+
+**Pay for knowing where the enemy is** (`KNOW_PAY=0.5`): tested: facing each other 0.00833 a second (0.5 a minute), back
+to back 0.0036, 0.0021, 0.0007, then nothing; in a group of three half of that for one enemy of two.
+**Pay for pace** (`PACE_PAY=0.1`): tested: nothing at walking pace; shoved to 520 units a second it accrues while he gains
+new ground on his way; a trip given up gives it back (with the 0.02 for changing his mind).
+**The walking teacher as keys only** (`TEACH_KEYS_ONLY=1`): its own pupil with a view that never turns (the worst case)
+arrives in 89 to 100% of tries on Blood Run but the red armor (58%), 97 to 100% on Aerowalk, 73 to 91% on Lost World; at 8
+key actions a second it makes 6.5 to 7.8 (asks 7.2 to 9.6).
+
+**The starting network**: `duel_gru_v12b` widened to 499 inputs (zero weights), statistics measured afresh on twelve
+minutes of v13's final rounds (26,284 frames): the eight new inputs (a dropped weapon is in his view about 5% of the
+time), the left hand's stamina and eleven others rewritten, the first layer unchanged to 6e-8.
+
+**Dry run of the final settings** (12 minutes, 16 processes, a scratch copy):
+
+| Update | Policy step, clipped | Frags a match-minute | Firing, enemy in view | On target | Time bare | Big weapons held | Frags by rockets / lightning / rail / machine gun | Dropped weapons taken | Keys asked, made | Fast in the air |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0.26, 56% | 1.1 | 72% | 34% | 78% | 0.24 | 10 / 22 / 19 / 48% | 31% | 3.6, 3.8 | 9% |
+| 2 | 0.038, 30% | 2.5 | 69% | 31% | 52% | 0.54 | 18 / 29 / 19 / 34% | 42% | 6.5, 6.0 | 16% |
+| 3 | 0.033, 27% | 2.4 | 66% | 31% | 46% | 0.73 | 23 / 33 / 20 / 24% | 50% | 7.2, 6.4 | 18% |
+| 5 | 0.019, 20% | 2.7 | 64% | 31% | 35% | 0.95 | 26 / 32 / 19 / 23% | 66% | 7.7, 6.5 | 23% |
+| 9 | 0.011, 13% | 2.9 | 65% | 31% | 33% | 0.98 | 28 / 32 / 20 / 21% | 66% | 8.7, 6.9 | 21% |
+
+(Update 1 has every round beginning at once: bare 78% is that.) Against the dry runs of 18:45: the policy's step is a
+quarter (the teachers held back from the shared layers), his aim and his fighting hold (on target 31%, the no-learning
+level; frags 2.9), and within nine updates the machine gun's share of his frags falls from 48% to 21% with rockets at 28%:
+0.7 to 0.8 weapons fall a player-minute, two thirds are taken, and six in ten of those are new to the taker. He knows
+where his enemy is 0.36 to 0.39 of the time by the measure of the pay; toward an enemy in view he moves at -6 to +1 units a
+second when weak, +35 to +49 in between, +64 to +72 when strong. Speed on his way 264 to 268, above 320 in 22 to 25% of it
+(43% before the teacher's keys came in: the walking teacher slows him, as it did in v12).
+
+**Started 21:26** (`launch_v13.py start 16`, detached): 21 simulator processes, 10,080 players, 384 frames an update, 35,500 frames a second in its first updates (v12: 32,200), an update every 1.8 minutes; to 16:00 on 2026-10-09 at the latest. Two sizing runs before it: 21 processes of 240 matches 37,500 frames a second, 30 processes of 160 matches 37,000, 16 processes 34,000: the simulators are not what limits it. The settings: MANIFEST_v13.md, section 9. One
+trainer does not load the PC to the 80 to 85% the owner named: its simulators work for 50 seconds at 43 to 48% of the 20 cores, then the network trains on the graphics card for 55 seconds at 10%: 27% on average, the card at 11.6 of 16 GB (the 85 to 100% of earlier runs was the idle local
+server's threads, entry of 19:30). The spare cores go to hourly duels against the stand-in from the latest save.
+
+`docs/INPUTS_v12b.csv` is the 491-input list of the two arms' networks.
+
 ## 2026-10-08 20:05 — The owner's two games against v12 on the public server (arena1, Aerowalk): his notes, and what the logs say
 
 Ten minutes each, a real game after ready-up (machine-gun spawn), v12 with the fixed plugins. On arena1 three Bobbys for

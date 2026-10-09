@@ -1,17 +1,35 @@
-# `duel_gru_v13`: training manifest (proposed 2026-10-08; **not started**, waits for the owner's approval)
+# `duel_gru_v13`: training manifest (approved by the owner on 2026-10-08, with what he added after playing v12 himself)
 
 What the run is made of: the network it starts from, what is in its rounds, what it is paid for, what it is shown,
 and what has changed since `duel_gru_v12` ([REPORT_v12.md](REPORT_v12.md)). The exact command is at the end.
+
+## 0. Added after the owner's two games against v12 (2026-10-08, 20:20 to 20:50)
+
+He played ten minutes on arena1 and ten on Aerowalk (RESULTS 2026-10-08 20:05) and called these, each in his words:
+
+| | What | His word |
+|---|---|---|
+| **Dropped weapons** | a player killed by another leaves the weapon he held, as in the game (measured on a real server first); eight new inputs show him the nearest one in view; the start waited for it | "a pretty big oversight ... build the dropped weapons properly and wait to start until it's ready" |
+| **The ground at his feet** | the floor, ledges, lava and deadly drops round him are known in every direction, not only where he looks (all six of his falls on arena1 came while he moved in a direction outside his view) | "absolutely. this is not a fairness problem, good players know how to move around the map without looking" |
+| **The left hand at 8** | key actions a second when tired (it was to be 5; the owner's own hand made 6.6 to 7.1 over a whole game) | "yes 8 is fine. As long as we don't see him spamming ... they need to be deliberate" |
+| **Pay for knowing where the enemy is** | half a frag a minute at full knowledge | "He needs to be rewarded for knowing the enemy position" |
+| **Pay for pace** | for moving above running speed on the way to his chosen item | "basically no strafe jumping. This needs to be a priority now" |
+| **The walking teacher names keys only** | the keys toward the goal for the view he has; no label for the view anywhere | "YES as long as it is KEYS TOWARD THE GOAL given the current view he has, meaning he can look freely around" |
+
+His order of things for this run: "Top priority: continue developing game sense for items, position, control and
+weapons ... The absolute worst thing we could see in training now is for the item pickups and weapon use to collapse
+again. If anything he should be using more rockets as time goes on." Speed and strafe jumping: wanted, "but that might be
+a bit ambitious still". Not added: a cost for aiming upward or fighting from below (held for the next run).
 
 ## 1. Start, size, length
 
 | | |
 |---|---|
-| Starts from | `duel_gru_v12b` (v12 plus two hours at a learning rate of 1e-4), 491 inputs, with its last eight league snapshots; 4,834 minutes of training in the lineage |
-| Input statistics | measured afresh on v13's own rounds (`sim/renorm_policy.py`): 133 of 491 inputs rewritten, his play unchanged to 8e-8 |
-| Network | 491 inputs -> 256 -> 256 -> memory of 512 (GRU) -> 11 outputs; unchanged |
-| Size | 21 simulator processes, 10,080 players at once, 384 frames (9.6 s) an update, an update about every two minutes |
-| Length | overnight, from the owner's go to 07:00 (nine to ten hours: about 290 updates, 8,000 hours of play) |
+| Starts from | `duel_gru_v12b` (v12 plus two hours at a learning rate of 1e-4), widened from 491 to 499 inputs (the eight for dropped weapons), with its last eight league snapshots; 4,834 minutes of training in the lineage |
+| Input statistics | measured afresh on v13's own rounds (`sim/renorm_policy.py`), his play unchanged to 8e-8; the eight new inputs and the five floor inputs that the ground sense brings to life start from zero weight |
+| Network | 499 inputs -> 256 -> 256 -> memory of 512 (GRU) -> 11 outputs |
+| Size | 21 simulator processes, 10,080 players at once, 384 frames (9.6 s) an update; sized to keep the PC at 80 to 85% (owner) |
+| Length | from the start on the evening of 2026-10-08 to 16:00 on 2026-10-09 at the latest (owner: "he can go all the way until 4pm tomorrow if need be"); stopped earlier if something has gone wrong or he has stopped learning; a mid-run report at 07:00 |
 | Maps | **Blood Run, Aerowalk, Lost World**, a third of the players each. arena1 is not trained on: it is the check map |
 | Groups | duels 62% of the players, three players 19%, four players 19%, all against all |
 
@@ -19,7 +37,7 @@ and what has changed since `duel_gru_v12` ([REPORT_v12.md](REPORT_v12.md)). The 
 
 Every round is a game on a real map with the game's own start: **125 health, no armor, the machine gun with 100
 bullets, a spawn point away from the enemies, every item in place**. No drills, no spawns beside an item, no random
-stacks. Rounds last 80 to 160 seconds with respawns inside; his memory and score start over with each round.
+stacks. A player killed by another leaves the weapon he held on the floor for 30 seconds (new). Rounds last 80 to 160 seconds with respawns inside; his memory and score start over with each round.
 
 | Kind of round | Share of his playing time | What happens |
 |---|---|---|
@@ -49,20 +67,22 @@ pays half as much again.
 | Damage taken, health | -0.005 a point | **v13** (was half of that) |
 | Damage taken, soaked by armor | a third of that | **v13** (was charged like health) |
 | A shot fired | a tenth of what its hit would pay, times how scarce that ammo is for him (the map, the way to more, his belt; 0.25 to 3): a rocket about 0.05, a rail slug 0.04, a lightning cell 0.003 | **v13** |
-| Picking up | 0.75 per 100 points of health or armor (mega and red armor 0.75, yellow 0.375), a weapon he did not have 0.19 | v9 |
+| Picking up | 0.75 per 100 points of health or armor (mega and red armor 0.75, yellow 0.375), a weapon he did not have 0.19 (a dropped one too) | v9 |
 | The enemy takes the mega or the red armor | half of its pickup, off | v9 |
 | The way to the item he chose | worth its pickup (0.75 for the mega or the red armor, 0.375 for a yellow armor, 0.19 for a weapon), paid in parts **on new ground only** | fixed for v13 (it could be collected again and again) |
 | Keeping a stack | a frag a minute at full value for health over 100 and armor, another for the three big weapons; half a frag a minute off while he holds none (growing with the time), a frag a minute off under 70 health and armor | v11 |
 | Damage with his style's weapon | +50% | v12 |
 | Fighting at his style's distance | off (was half a frag a minute) | **v13** |
 | Changing his intention | -0.02 | v8 |
+| Knowing where the enemy is | half a frag a minute at full knowledge: in full while he sees him, half on hearing him or just after losing him, gone three seconds later (in a group: the mean over his enemies) | **v13** |
+| Pace on his way | 0.1 a second for every 320 units a second above running speed (held to one), on the way to his chosen item, on new ground, with nobody seen or heard for 1.5 s; a trip given up gives it back | **v13** |
 | Exploration bonus | turn, pitch, weapon, zoom, lift, intention as before; **the jump key 0.25** (was none) | **v13** |
 
 ## 4. What he is shown (teachers; they only ever name keys, never where he looks or when he fires)
 
 | Teacher | Weight | What it names | From the pros |
 |---|---|---|---|
-| Walking teacher (keys) | 0.5, fading to zero over 4 hours | the keys along the shortest way to the item the item rule names: in item runs; in normal games while he has no big weapon or is under 70, and no enemy is in view; **new: also with an enemy in view while he has no big weapon** (`SPAWN_TEACH`) | the pros have a weapon 2.7 s after a spawn |
+| Walking teacher (keys) | 0.5, fading to zero over 4 hours | **new: keys for the view he has, no label for the view anywhere; straight to a big weapon a dead player left in plain sight within 500 units.** The keys along the shortest way to the item the item rule names: in item runs; in normal games while he has no big weapon or is under 70, and no enemy is in view; **new: also with an enemy in view while he has no big weapon** (`SPAWN_TEACH`) | the pros have a weapon 2.7 s after a spawn |
 | ... its jump label | (same) | **new: the jump key down where the pros are in the air for more than half of their moving time** and he is on his way at speed; feet down before a jump, a drop, a pad or a teleporter; no label elsewhere (until now: "no jump" everywhere) | `tools/pro_jumps.py`, 3,266 demos |
 | Weapon teacher | 1.0, fading over 4 hours | the weapon for the distance among those he owns; in a preferred life, that weapon | **new: the pros' first choice by distance** (`PRO_WEAPON`), not hand-set distances |
 | Item rule (on the intention) | 2.0, constant | what to go for | **new: the pros' order** (`PRO_ITEMS`): with no big weapon the nearest one (rockets when nearly as near); armed, the nearest of yellow armor, red armor and mega that he can use; else a weapon he lacks. **The yellow armors are goals now** (the pros take them most of all) |
@@ -76,7 +96,8 @@ The gate as for v12: after the teachers are at zero (four hours in) the numbers 
 | Physics, senses | 125 fps human physics; sight in a 110-degree field with line of sight, sound within 800 units, pain sounds |
 | Aim | level 3 of the one knob (the owner's reflex card plus about a tenth); reaction 100 ms, 200 ms to pick up a new target |
 | Item knowledge | **new in training since v12b: what he saw or heard** (`ITEM_BELIEF`), not the true state |
-| Left hand | five fingers; decisions ten times a second; **5 key actions a second** when tired (was 4) |
+| Left hand | five fingers, each 150 ms between presses; decisions ten times a second; **8 key actions a second** when tired (was 4) |
+| The ground round his feet | **new: known in every direction** (the floor 96 units away in eight directions; lava and deadly drops at 96 and 224 units). Walls, the far view, items and enemies stay view-only |
 | Right hand | fire and zoom at no more than 2.9 clicks a second |
 | Ammunition | **new: no ammo packs** (the real maps have none): weapons and their boxes only |
 
@@ -97,7 +118,12 @@ The gate as for v12: after the teachers are at zero (four hours in) the numbers 
 | Item rule, weapon rule | hand-set | the pros' order and the pros' weapon by distance | "be more explicit with seeding him with patterns for play" |
 | Yellow armors | not goals | goals | the pros take them most of all |
 | Jump key | teacher said "no jump"; no exploration bonus | teacher names jumps where the pros jump; bonus 0.25 | "incentivise him to jump again, but informed by pro play" |
-| Key budget | 4 a second | 5 a second | he asked for 6.8 and got 3.8; people sustain about 7 |
+| Key budget | 4 a second | 8 a second | the owner's own hand made 6.6 to 7.1 key actions a second over a whole game; at 5, 27 to 30% of his presses would have been refused |
+| Dropped weapons | none in the simulator | as in the game, with eight inputs | "a very common and convenient way to get a weapon on spawn" |
+| The ground at his feet | only inside his view | in every direction | all six of his falls on arena1 came while he moved outside his view |
+| Knowing where the enemy is | no pay | half a frag a minute | he turned his view half as much as the owner when nobody was about |
+| Pace | paid in item runs only | paid on every trip with nobody about | he moves at 313 to 322, the owner at 348 to 355 |
+| Walking teacher's view label | in item runs | none | "he can look freely around" |
 | Learning rate | 2.5e-5 | 1e-4 | the nominal rate; the two arms showed no harm |
 | Credit horizon (lambda) | 0.95 | 0.98 | item trips take 5 to 10 s |
 | Teachers and the shared layers | full weight | **5% (approved 19:30, section 7)** | a teacher with new labels broke his aim on its way in |
@@ -155,9 +181,15 @@ on 2026-10-08 00:39). Details: RESULTS 2026-10-08 18:45.
 
 ## 8. What is watched, and what decides
 
-**First hour** (brief lines): the policy's step, firing and frags (a teacher must not stop him fighting), falls, key
-requests against keys made at 5 a second, time in the air, the race rounds taken, the price of a shot, damage soaked.
-A stop and restart only if the data is clearly bad.
+**Every hour** (brief lines, in the owner's order): item pickups and weapon use first (weapons picked up, mega, red and
+yellow armor, time bare, big weapons held, the share of frags by rockets, rail, lightning and machine gun), then the fight
+(frags, firing, on target, knowing where the enemy is, closing in or backing off by his strength), then movement (speed on
+his way, time above running speed, key actions made against the 8 allowed), the teachers' losses and the policy's step.
+
+**Stop signs** (the owner: stop early if something has gone wrong, or if he has stopped learning): weapon pickups or big
+weapons held down by 30% from the start; the machine gun's share of frags up by 15 points; firing under 8% of frames or
+frags under 1.2 a match-minute; the policy's step over 0.05 for an hour. A crash is resumed from the last save; anything
+else is stopped and written up, not redesigned overnight.
 
 **At the end**, against v12 on the same checks:
 
@@ -176,10 +208,11 @@ A stop and restart only if the data is clearly bad.
 ARENA_ROOMS=yard ARENA_SETS=mg ARENA_STACK=0 RUNNER_P=0.25 ITEM_RUN_P=0.20 COLLECT_FIGHT_P=0.5 DRILL_MIX_P=0.7
 INTENT_HOLD=8 STACK_PAY=1.0 STACK_WPN=1.0 STACK_BARE=0.5 STACK_LOW=1.0 STACK_TEACH=1 STYLE_P=0.75 STYLE_DMG=0.5
 STYLE_BAND=0 PRO_WEAPON=1 PRO_ITEMS=1 SPAWN_TEACH=1 ITEM_BELIEF=1 SHOT_COST=0.10 AMMO_PACKS=0 ARMOR_COST=0.33
-CONTEST_P=0.15 AIM_LEVEL=3 KEY_RATE=5 PRO_JUMP=1 GPU_MEM_FRACTION=0.80
+CONTEST_P=0.15 AIM_LEVEL=3 PRO_JUMP=1 KEY_RATE=8 GROUND_SENSE=1 KNOW_PAY=0.5 PACE_PAY=0.1 TEACH_KEYS_ONLY=1 DROPS=1
+GPU_MEM_FRACTION=0.80
 
 python sim/train_duel_rnn.py --env duel_env_ffa --group 2,3,2,4,2 --map bloodrun,aerowalk,lostworld --workers 21
-  --matches 240 --steps 384 --run duel_gru_v13 --resume --minutes <to 07:00> --gamma 0.999 --react-ms 100
+  --matches 240 --steps 384 --run duel_gru_v13 --resume --minutes <to 16:00> --gamma 0.999 --react-ms 100
   --acquire-ms 200 --kind-p 1,0,0,0 --drill-weapons rl --lab-p 0,0,1 --arena-len 180 --bot-p 0 --teacher none
   --teach 0.5 --teach-minutes 240 --weapon-teach 1.0 --weapon-teach-minutes 240 --minibatches 64 --lr 1e-4
   --lr-minutes 1440 --lr-end 1.0 --lam 0.98 --close-floor 0 --loadout-p 0,1,0,0 --close-minutes 1 --intent-teach 2.0
