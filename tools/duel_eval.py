@@ -83,6 +83,12 @@ def play(job):
     hp0, ar0, has0 = env.hp.copy(), env.armor.copy(), env.has[:, big].copy()
     frames = int(minutes * 60 / E.DT)
     wrap = max(1, int(round_secs / E.DT))
+    # the simulator's own counters (they count the learner's side): damage, shots, hits and frags by weapon, the weapon in
+    # hand by distance, his speed toward an enemy in view by strength, how well he knows where the enemy is, dropped weapons
+    SK = [k for k in ["dmg_h", "dmg_from_script", "w_dist", "close_v", "close_n", "know", "know_frames", "drops", "pick_drop",
+                      "pick_drop_new", "self_dmg", "fall_dmg"]
+          + [w + x for w in E.WEAPONS for x in ("_frags", "_shots", "_hits")] if k in env.stats]
+    st0 = {k: np.array(env.stats[k], np.float64).copy() for k in SK}
     side = np.arange(n) % 2
     for t in range(frames):
         a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
@@ -143,7 +149,8 @@ def play(job):
             if opp_pol is not None:
                 h2[:] = 0.0
     return dict(score=score.reshape(-1, 2).tolist(), kills=kills.reshape(-1, 2).tolist(), c={k: v.tolist() for k, v in c.items()},
-                first=first, minutes=minutes, games=games)
+                first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS),
+                st={k: (np.array(env.stats[k], np.float64) - st0[k]).tolist() for k in SK})
 
 
 def main():
@@ -207,6 +214,29 @@ def main():
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
                             mega_share=round(float(c["mega"][s_] / (pm * 60 / 35.0)), 3), red_share=round(float(c["red"][s_] / (pm * 60 / 25.0)), 3),
                             yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2))
+        st = {k: np.sum([np.array(r["st"][k]) for r in res], 0) for k in res[0].get("st", {})}
+        if st:                                               # the learner's side, from the simulator's counters
+            W_ = res[0]["weapons"]
+            big4 = [w for w in ("rl", "lg", "rg", "mg") if w + "_frags" in st]
+            fr = max(1.0, float(sum(st[w + "_frags"] for w in W_ if w + "_frags" in st)))
+            row["he"].update(
+                dmg_dealt=round(float(st["dmg_h"]) / G, 0) if "dmg_h" in st else None,
+                dmg_taken_from_him=round(float(st["dmg_from_script"]) / G, 0) if "dmg_from_script" in st else None,
+                frags_by={w: round(float(st[w + "_frags"]) / fr, 2) for w in big4},
+                hit_rate={w: round(float(st[w + "_hits"]) / max(1.0, float(st[w + "_shots"])), 3) for w in big4 if w + "_shots" in st},
+                shots_per_min={w: round(float(st[w + "_shots"]) / pm, 1) for w in big4 if w + "_shots" in st})
+            if "w_dist" in st:
+                wd = np.array(st["w_dist"])
+                row["he"]["in_hand_by_distance"] = {b: {w: round(float(wd[j, W_.index(w)] / max(1.0, wd[j].sum())), 2) for w in big4}
+                                                    for j, b in enumerate(("close", "mid", "far"))}
+            if "close_v" in st:
+                row["he"]["closing"] = [int(v_ / max(1.0, n_)) for v_, n_ in zip(np.atleast_1d(st["close_v"]), np.atleast_1d(st["close_n"]))]
+                row["he"]["in_view_by_strength"] = [round(float(n_ / max(1.0, np.sum(st["close_n"]))), 2) for n_ in np.atleast_1d(st["close_n"])]
+            if "know" in st:
+                row["he"]["know"] = round(float(st["know"]) / max(1.0, float(st["know_frames"])), 3)
+            if "drops" in st:
+                row["he"]["dropped_weapons"] = dict(fell_per_game=round(float(st["drops"]) / G, 1), taken_per_game=round(float(st["pick_drop"]) / G, 1),
+                                                    new_to_taker=round(float(st["pick_drop_new"]) / max(1.0, float(st["pick_drop"])), 2))
         out[mp] = dict(games=G, minutes=a.minutes, frag_share=round(share(kl), 3), frag_share_95=[round(float(np.percentile(boot, 2.5)), 3), round(float(np.percentile(boot, 97.5)), 3)],
                        won=int((sc[:, 0] > sc[:, 1]).sum()), drawn=int((sc[:, 0] == sc[:, 1]).sum()), lost=int((sc[:, 0] < sc[:, 1]).sum()),
                        restarts=int(c["restarts"][0]), **row)
