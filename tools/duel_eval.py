@@ -76,7 +76,7 @@ def play(job):
     score = np.zeros(n)
     kills = np.zeros(n)
     c = {k: np.zeros(2) for k in ("alive", "bare", "over150", "vis", "fire", "speed", "wp", "mega", "red", "yellow", "lives", "restarts",
-                                  "standing", "stuck", "own_deaths", "fire_vis")}
+                                  "standing", "stuck", "own_deaths", "fire_vis", "both", "lower", "higher", "vis_lower", "vis_higher")}
     still = np.zeros(n)                                         # seconds he has been standing (under 50 units a second)
     life, got, was = np.zeros(n), np.zeros(n, bool), np.zeros(n, bool)
     first = [[], []]
@@ -124,8 +124,16 @@ def play(job):
         vis = env.visible & alive
         spd = np.hypot(env.state[:, 3], env.state[:, 4])
         still = np.where(alive & (spd < 50.0) & ~died, still + E.DT, 0.0)
+        other = np.arange(len(alive)) ^ 1                         # who stands higher (B-160: he fights from below)
+        both = alive & alive[other]
+        up = env.state[:, 2] - env.state[other, 2]
         for s_ in (0, 1):
             m = side == s_
+            c["both"][s_] += both[m].sum()
+            c["lower"][s_] += (both & (up < -48.0))[m].sum()
+            c["higher"][s_] += (both & (up > 48.0))[m].sum()
+            c["vis_lower"][s_] += (vis & both & (up < -48.0))[m].sum()
+            c["vis_higher"][s_] += (vis & both & (up > 48.0))[m].sum()
             c["alive"][s_] += alive[m].sum()
             c["bare"][s_] += (alive & (nbig == 0))[m].sum()
             c["over150"][s_] += (alive & (env.hp + env.armor >= 150))[m].sum()
@@ -211,6 +219,8 @@ def main():
                             firing_in_view=round(float(c["fire_vis"][s_] / max(1.0, c["vis"][s_])), 3),
                             standing=round(float(c["standing"][s_] / al), 3), standing_over_3s=round(float(c["stuck"][s_] / al), 3),
                             own_deaths=round(float(c["own_deaths"][s_] / G), 2),
+                            lower=round(float(c["lower"][s_] / max(1.0, c["both"][s_])), 3), higher=round(float(c["higher"][s_] / max(1.0, c["both"][s_])), 3),   # of the time both live: lower or higher by 48 units or more
+                            lower_in_view=round(float(c["vis_lower"][s_] / max(1.0, c["vis"][s_])), 3), higher_in_view=round(float(c["vis_higher"][s_] / max(1.0, c["vis"][s_])), 3),
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
                             mega_share=round(float(c["mega"][s_] / (pm * 60 / 35.0)), 3), red_share=round(float(c["red"][s_] / (pm * 60 / 25.0)), 3),
                             yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2))

@@ -483,6 +483,12 @@ TEACH_FREE = float(os.environ.get("TEACH_FREE") or 0.0) > 0
 SPEED_PAY = float(os.environ.get("SPEED_PAY") or 0.0)
 SPEED_PAY_RUN = float(os.environ.get("SPEED_PAY_RUN") or SPEED_PAY)       # ... its number in item runs (the same unless given)
 SPEED_LO, SPEED_HI = 320.0, 480.0
+#   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
+#                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
+#                 for less: by HIGH_PAY (0.25 = a quarter) at HIGH_Z units of height between the two, in proportion
+#                 below that. Own splash and falls are not changed. 0 = off.
+HIGH_PAY = float(os.environ.get("HIGH_PAY") or 0.0)
+HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
 #   RUN_TEACHER=1 item runs: the strafe-jumping movement network (the trainer's --teacher) shows keys, jump and view toward
 #                 his target, in place of the walking teacher's keys (those stay where the network has no way).
 #   STACK_KEYS=0  no key labels in normal games (v13: the walking teacher's keys for a bare or low player with nobody about).
@@ -1359,6 +1365,8 @@ class DuelEnv:
                           know=0.0, know_frames=0, pace_pay=0.0, pace_frames=0, trip_frames=0, trip_speed=0.0,
                           drops=0, pick_drop=0, pick_drop_new=0, drop_teach_frames=0,
                           close_v=np.zeros(3), close_n=np.zeros(3),     # his speed toward an enemy in view, by health plus armor: under 60, to 125, over
+                          high=np.zeros(3), high_dmg=np.zeros(3),       # B-160: frames with his enemy in view, and damage dealt, standing lower by 48 units or more, level, higher
+                          high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
@@ -2238,6 +2246,29 @@ class DuelEnv:
         b_ = np.where(st_ < 60.0, 0, np.where(st_ <= 125.0, 1, 2))
         np.add.at(self.stats["close_v"], b_, own)
         np.add.at(self.stats["close_n"], b_, 1)
+        dz_ = to[vh, 2] + self._eye(s)[vh, 2] - s[vh, 2]     # the enemy's feet above his own (B-160)
+        np.add.at(self.stats["high"], np.where(dz_ > 48.0, 0, np.where(dz_ < -48.0, 2, 1)), 1)
+
+    def _high(self, by, s, n):
+        """who stood higher at each hit (B-160): counted always. With HIGH_PAY a hit from above is worth more and one from
+        below less, to the one who dealt it and to the one who took it: returns the damage points that adds for each
+        player as the one who dealt and as the one who took (None when the switch is off). The damage he is shown is
+        not changed."""
+        plus = np.zeros(n, np.float32) if HIGH_PAY > 0 else None
+        minus = np.zeros(n, np.float32) if HIGH_PAY > 0 else None
+        for (i_, v_), d_ in by.items():
+            if i_ == v_:
+                continue                                    # his own splash
+            up_ = float(s[i_, 2] - s[v_, 2])                 # the one who dealt it stood this much higher
+            if self.script[i_] == 0:
+                self.stats["high_dmg"][0 if up_ < -48.0 else 2 if up_ > 48.0 else 1] += d_
+            if plus is not None:
+                f_ = HIGH_PAY * min(1.0, max(-1.0, up_ / HIGH_Z)) * d_
+                plus[i_] += f_
+                minus[v_] += f_
+                if self.script[i_] == 0:
+                    self.stats["high_pay"] += f_ * self.dmg_reward
+        return None if plus is None else (plus, minus)
 
     def _mates(self, i):
         """the other players of player i's group"""
@@ -3769,6 +3800,7 @@ class DuelEnv:
         dealt = dealt_to.sum(1)
         self.dmg_on += dealt_to
         opp_all = np.where((attacker >= 0) & (attacker != ar), attacker, self.foe)     # a hit is felt from the attacker's side
+        high_ = self._high(st["by"], s, n)                  # (B-160) who stood higher at each hit; with HIGH_PAY what that adds for the two
         taken = dmg_taken + fall                            # from the opponent, own splash and falls alike
         self.stats["soak"] += float(self.soak[self.script == 0].sum())
         if ARMOR_COST != 1.0:                               # what his armor soaked costs him less (see ARMOR_COST)
@@ -3779,6 +3811,8 @@ class DuelEnv:
             self.stats["gun"][0] += float(dealt[self.gun].sum())
             dealt = np.where(self.gun, dealt * gsp, dealt)
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
+        if high_ is not None:                                # (HIGH_PAY) a hit from above is worth more to both, one from below less
+            reward += self.dmg_reward * (high_[0] - self.dmg_taken_w * high_[1])
         if STYLE_P > 0:                                      # playing styles: his weapon, at its distance (see STYLES)
             live = (pkind == NORMAL) & (self.script == 0) & (self.hp > 0) & (self.run_k < 0)
             sw = STYLE_W[self.style]

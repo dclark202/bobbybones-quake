@@ -75,6 +75,9 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   `tools/eval_loop.py` (started detached beside a run) plays ten-minute duels against the Nightmare stand-in from the latest
   save over and over, at low priority, into `<run>/evals.jsonl`: the duel curve of a run. One trainer uses about 27% of the
   CPU (its simulators wait on the network half the time); more simulator processes do not make it faster.
+- **Who stands higher (B-160, 2026-10-09)**: counters always on (trainer `v14.height`; `tools/duel_eval.py` `lower`, `higher`);
+  `HIGH_PAY` (off by default) makes a hit from above worth more to both sides. Whatever is paid by the damage must not be
+  added to `dealt`: his feedback inputs (`self.fb`) are made of it.
 - **v14 (2026-10-09; built, not trained yet)**: 509 inputs (the last ten, `N_V14`: his speed, the angle from his view to
   the way he moves, speed gained in 100 ms; six for the lead of a rocket or a plasma ball). `sim/duel_env_v13.py` /
   `duel_env_ffa_v13.py` are the frozen 499-input simulator of v13 (the public server's v13: export with

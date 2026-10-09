@@ -61,6 +61,7 @@ class ffabot(duelbot):
         self.go_t = 0.0
         self.n_bots = max(0, min(MAX_BOTS, int(os.environ.get("BOBBYS") or 2)))   # 0 allowed: people only (owner, 2026-10-06)
         self.want_map = os.environ.get("LAB_MAP", "aerowalk").lower()
+        self.boot_t = time.time()                            # when this plugin was loaded (see frame: the start map)
         self.lab, self.arena, self.drill, self.room, self.queue = None, None, None, None, []
         self.no_sg = self.no_walk = False
         self.ready = False
@@ -403,12 +404,12 @@ class ffabot(duelbot):
         if not self.ready:
             if now > self.next_check:
                 self.next_check = now + 2
-                if mapname in FFA_MAPS:
+                if mapname in FFA_MAPS and now - self.boot_t > 60:
                     self.want_map = mapname                  # the end-of-game map vote (sv_mapPoolFile) picked it: stay
-                elif mapname != self.want_map:
-                    self.next_check = now + 10
-                    _pu.load_map(self.want_map, "ffa")
-                    return
+                elif mapname != self.want_map:               # also in the first minute: at a server's start the game hops to
+                    self.next_check = now + 10               # a random map of its own pool right after the first one (every
+                    _pu.load_map(self.want_map, "ffa")       # start), and when that map was one of ours the server stayed on
+                    return                                   # it (2026-10-09: Lost World in place of Aerowalk)
                 self.setup()
             return
         if mapname not in FFA_MAPS:

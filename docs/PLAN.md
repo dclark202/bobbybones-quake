@@ -87,7 +87,8 @@ the rocket numbers as proposed. The run starts "later tonight" on his go.
 **The owner against v13 (2026-10-09, Aerowalk)**: "Best bot I've ever played against in terms of enjoyableness." He won his
 ten-minute game 9 to 4 (damage 3,461 to 3,128). What he saw is in the record (RESULTS 17:15): no strafe jumping (3% of
 Bobby's time over 400 units a second, his own 18%), the low ground (Bobby lower 61% of the time, higher 15%: B-160, not in
-v14 as it stands), few rockets (13 fired in ten minutes, his own 155). He plays more that evening, then gives the go.
+v14 as it stands: counters are in and a switch, `HIGH_PAY`, is built and off, RESULTS 18:30), few rockets (13 fired in ten
+minutes, his own 155). He plays more that evening, then gives the go.
 
 **The public server (for his friends, 2026-10-09)**: nothing keeps a player out. Built and waiting for the restart that
 night (B-183): the ten duel maps in `!map` (free-for-all, a map's duel items, six playing at most), a line about `!bots`

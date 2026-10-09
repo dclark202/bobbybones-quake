@@ -5,6 +5,74 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 18:30 — Before v14's start: the new pay for speed in a dry run; who stands higher, measured (B-160), and a switch prepared
+
+**The pay for speed at 0.1 / 0.3 in a dry run** (12 minutes on a scratch copy, `duel_gru_v14dh`, half size, the final
+setup). 10 updates, the policy's step 0.016 to 0.025 an update (0.018 to 0.029 at 0.06 / 0.15), nothing crashed. The pay per
+player-minute about doubles (games 0.030, item runs 0.06 to 0.29, counted over all players). Item runs:
+6.3 items a minute at the start, 5.1 at the lowest as the teacher's weight comes up, 6.0 at the end;
+290 units a second; fast in the air 8% to 12%. Lava costs 4 to 9 damage a player-minute, as before.
+
+**Who stands higher: the record.** Lower or higher means by 48 units or more, of the time both live.
+
+| | Bobby lower | Bobby higher | His median height | The other's |
+|---|---|---|---|---|
+| The owner, Aerowalk (one game, RESULTS 17:15) | 61% | 15% | 144 | 320 |
+| The game's Nightmare bot, Aerowalk (three real games) | 67% | 15% | 144 | 360 |
+| ... Lost World | 46% | 28% | 216 | 220 |
+| ... Blood Run | 31% | 41% | 314 | 280 |
+
+Against the stand-in in the simulator (the start check of v14: its start network, which is v13, 32 ten-minute duels a
+map; the frag shares are within 5 points of the check of 15:30, which was the same network in other games):
+
+| Map | Frags | Lower | Higher | Lower, enemy in view | Higher, enemy in view | Red armors of those that came |
+|---|---|---|---|---|---|---|
+| Blood Run | 71% | 24% | 47% | 14% | 15% | 28% |
+| Aerowalk | 80% | 42% | 37% | 24% | 20% | 3% |
+| Lost World | 90% | 39% | 41% | 16% | 15% | 30% |
+| Sinister | 74% | 27% | 32% | 18% | 24% | 25% |
+| Furious Heights | 42% | 22% | 48% | 20% | 16% | 16% |
+| Battleforged | 62% | 33% | 51% | 21% | 7% | 0% |
+| Campgrounds (held out) | 35% | 19% | 51% | 11% | 16% | 0% |
+| Hektik (held out) | 51% | 32% | 49% | 26% | 14% | 4% |
+| Toxicity (held out) | 64% | 38% | 27% | 25% | 20% | 0% |
+| Cure (held out) | 47% | 50% | 29% | 33% | 19% | 3% |
+
+In self-play (the new counters, dry run below): of the damage a player deals, 11% to 14% is dealt from below and 11% to 15% from
+above, the rest level.
+
+What it means: it is not a habit of every map. Against the stand-in he is the higher one more often on seven of the ten
+maps; the lower one on Cure, Toxicity and Aerowalk. On Aerowalk he lives on the bottom floor, between the mega and the
+yellow armor, and does not take the red armor up top (3% of those that came), and an opponent who holds the top keeps him
+below: 61 to 67% of the time against the owner and the game's bot, 42% against the stand-in, which does not hold it. And
+as he plays now (rail and lightning), standing higher earns almost nothing in the simulator: rockets are what make
+height count, and he fires few.
+
+**Built.** Counters, always on: the trainer logs `v14.height` (with his enemy in view: lower, level, higher; the damage
+he deals by where he stands; what the switch paid); `tools/duel_eval.py` gives `lower`, `higher`, `lower_in_view` and
+`higher_in_view` for both sides, so every check of the evaluation loop shows it per map. A switch, off by default:
+`HIGH_PAY` (at 0.25 a hit from above is worth a quarter more to the one who deals it and costs the one who takes it a
+quarter more, a hit from below a quarter less, at 128 units of height between them and in proportion below that).
+With the switch off both simulator modules repeat the fixed-seed run of before exactly (v14's switches, Aerowalk, 600
+steps); with it on only the pay differs. A first version also changed the damage he is shown as feedback: that check
+found it, and the bonus is now paid beside the damage line. Dry run with it on (`duel_gru_v14di`, 9 minutes): steps
+0.017 to 0.027, the bonus nets -0.001 to 0.006 a player-minute (between two players it sums to nothing; what changes
+is which hits are worth more).
+
+**Proposed to the owner, not decided**: leave `HIGH_PAY` off at the start. v14 already changes the two things that make
+height matter (rockets, and the pros' way to Aerowalk's red armor, practiced in item runs), and the counters show per
+map and per hour whether he comes up. If rockets are up by the mid-run report and Aerowalk is not, switch it on at 0.25
+right after a save. Or on from the start, if he prefers.
+
+**A server did not always come up on its start map (B-185, fixed).** Docker Hub answered again at 17:50; the local image
+was rebuilt and started with the real start script: the plugins load and the new commands answer. But the server,
+started on Aerowalk, was on Lost World. At every start the game loads the start map and then hops to a random map of its
+own pool of 173 (in every local start in the logs, yesterday's too). The plugin pulls it back, except when the random
+map is one of the maps it offers: it took that for the vote at a game's end and stayed. That is about one start in 19
+with the ten maps offered now (one in 35 with the six before). `plugins/ffabot.py` now holds its start map for the
+first minute after it is loaded. Tested on a local server: a change to Lost World in the first minute (sent by rcon in
+the game's place) is undone, the same change a minute later is kept, as a vote's must be.
+
 ## 2026-10-09 17:15 — The owner's first game against v13; the public server made ready for his friends; an rcon client can freeze a server
 
 **The owner on v13 (Aerowalk, the public server).** "legit impressed. Really good play. Best bot I've ever played against

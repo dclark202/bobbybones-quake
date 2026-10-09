@@ -616,7 +616,12 @@ def main():
                             prefire_frames=int(agg.get("prefire_frames", 0)), blind_charged_frames=int(agg.get("blind_bill", 0)),
                             speed_pay_per_player_min=round(float(agg.get("speed_pay", 0.0) / max(1e-9, N * T * DT_MIN)), 4),             # (SPEED_PAY: on his way in games)
                             speed_pay_run_per_player_min=round(float(agg.get("speed_pay_run", 0.0) / max(1e-9, N * T * DT_MIN)), 4),     # ... in item runs
-                            teacher_frames=round(float(agg.get("move_teach_frames", 0) / max(1, N * T)), 4)),                            # (RUN_TEACHER) the share of all frames it labels
+                            teacher_frames=round(float(agg.get("move_teach_frames", 0) / max(1, N * T)), 4),                             # (RUN_TEACHER) the share of all frames it labels
+                            height=dict(in_view={k_: round(float(np.atleast_1d(agg.get("high", np.zeros(3)))[i_] / max(1.0, float(np.sum(agg.get("high", 0.0))))), 3)       # B-160: with his enemy in view he stands lower by 48 units or more, level, higher
+                                                 for i_, k_ in enumerate(("lower", "level", "higher"))},
+                                        damage_from={k_: round(float(np.atleast_1d(agg.get("high_dmg", np.zeros(3)))[i_] / max(1.0, float(np.sum(agg.get("high_dmg", 0.0))))), 3)  # ... the damage he deals, by where he stands
+                                                     for i_, k_ in enumerate(("lower", "level", "higher"))},
+                                        pay_per_player_min=round(float(agg.get("high_pay", 0.0)) / max(1e-9, N * T * DT_MIN), 4))),                 # (HIGH_PAY) what height added to his pay
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,
