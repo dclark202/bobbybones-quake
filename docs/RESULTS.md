@@ -5,6 +5,32 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 19:30 — An idle local game server held 7 to 8 of the PC's 20 threads for a day; the owner: "--teach-trunk yes"
+
+**The owner (19:30): "--teach-trunk yes"**: v13 runs with the teachers' losses at 5% into the shared layers (B-154). He
+is playing v12 on the public server; the game is recorded (the session's frame log grows).
+
+**Found at 19:27**, before anything else was to be measured: the local play-test container `qlduel` (free-for-all,
+three Bobbys, v10 on campgrounds, started 2026-10-07 19:48; nobody has played on it: its frame log is empty) used **7.7
+of the PC's 20 threads, averaged over its 24 hours** (`docker stats` 819% at 19:27; nine threads over 20% of a core).
+It is the numeric library's helper threads (B-153; seen at 18:07 on the public server as one thread of two): one per
+core, spinning between the network's matrix products, 40 times a second for as long as Bobbys are on a map. What that
+means for the day's work:
+
+- `duel_gru_v11` (from 20:35), `duel_gru_v12`, the two arms and every dry run trained with over a third of the PC taken
+  (21 simulator processes on what was left of 20 threads). v13's speed will show what it cost (v12: 32,200 frames a
+  second).
+- **No real Nightmare game of today was played on a free PC**, the "fair numbers" of 16:51 included: this server ran
+  beside them, and each of the three game servers of such a check spins its own helpers. Since the control fix of 13:00 a
+  busy PC no longer drops his commands, but it is the condition under which the game's Nightmare bot played badly (6-0
+  for him at 14:25). The numbers of 16:51 (14-27, 7-18, 6-13) stand as measured, with this caveat, and are to be
+  repeated.
+
+Done: `tools/duel_server.sh` starts every server with one thread for the numeric library (`OPENBLAS_NUM_THREADS=1`:
+local, sparring and, from its next deploy, the public one), and the image sets it too (it takes effect when the image is
+next built). The local container was stopped at 19:29 (`docker start qlduel` brings it back as it was). Not done: the
+three Nightmare games again, which wait until the owner is off the PC; the public server is left as it is while he plays.
+
 ## 2026-10-08 18:45 — Before v13: its starting network, its first updates in dry runs (the item teacher shakes the mouse outputs), credit per attacker, the public server's state
 
 For the owner's review of 19:00 (he: "we're not starting v13 yet ... full report of v12, full training manifest of v13

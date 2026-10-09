@@ -80,8 +80,9 @@ minutes against Nightmare at each checkpoint.
 
 **Next run: `duel_gru_v13`**, to start on the owner's approval of [MANIFEST_v13.md](MANIFEST_v13.md) (he reviews it with
 [REPORT_v12.md](REPORT_v12.md) on 2026-10-08 19:00) and run overnight. Its starting network is ready (fresh input
-statistics, B-145). One proposal from the dry runs beyond the approved list: the teachers' losses held back from the
-shared layers (`--teach-trunk 0.05`, B-154), which kept his aim and fighting intact in the first updates.
+statistics, B-145). Approved with it (19:30): the teachers' losses held back from the shared layers (`--teach-trunk
+0.05`, B-154), which kept his aim and fighting intact in the first updates. Also to do: the three Nightmare games again
+on a PC that is really free (B-153).
 
 Open besides it, in this order: B-140 (the walking layer rebuilt properly, with keys a hand can press), B-154 (teachers
 and the shared layers), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-153 (a
@@ -368,6 +369,9 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
 - (2026-10-08) During a run: brief hourly lines; the full metrics, video, heat map and summary at its end. No changes
   mid-run unless the data is clearly bad.
 - (2026-10-08) All docs, the README included, are kept current.
+- (2026-10-08 19:30) v13 with the teachers' losses held back from the shared layers (`--teach-trunk 0.05`): "yes".
+- (2026-10-08) Before a run starts he reviews a full report of the last network, a full manifest of the next run and the
+  state of the public server, and gives the go himself.
 
 ## How to run (short)
 

@@ -100,7 +100,7 @@ The gate as for v12: after the teachers are at zero (four hours in) the numbers 
 | Key budget | 4 a second | 5 a second | he asked for 6.8 and got 3.8; people sustain about 7 |
 | Learning rate | 2.5e-5 | 1e-4 | the nominal rate; the two arms showed no harm |
 | Credit horizon (lambda) | 0.95 | 0.98 | item trips take 5 to 10 s |
-| Teachers and the shared layers | full weight | **5% (proposed, section 7)** | a teacher with new labels broke his aim on its way in |
+| Teachers and the shared layers | full weight | **5% (approved 19:30, section 7)** | a teacher with new labels broke his aim on its way in |
 
 **Faults fixed in the code since v12 (the wiring review; all in the simulator or trainer v13 runs on).**
 
@@ -143,10 +143,10 @@ So the drop in aim and fighting at a teacher's start is **damage, not his new be
 protected the taught habits arrive just the same (time bare, the jump key) and what he knew stays. v12 carries the same
 mark: on target fell from 37% to 33% in its first two updates under its teachers and was 32% at its end.
 
-**Proposed for v13, the one change to the list the owner approved: `--teach-trunk 0.05`.** It is a setting of the
-learning, not a reward. The caution: it rests on eight updates at half size; the labels are learned more slowly (the
+**Approved by the owner (19:30, "--teach-trunk yes"): `--teach-trunk 0.05`,** the one change to the list of 16:50. It
+is a setting of the learning, not a reward. The caution: it rests on eight updates at half size; the labels are learned more slowly (the
 keys' loss 2.0 against 1.2), and if they stall the first hour will show it (time bare and the teachers' losses in the
-hourly lines). Without it v13 starts as in the "as planned" column.
+hourly lines).
 
 What the first half hour will look like either way: **the jump key comes alive and the left hand is full** (he asks
 for twice what it can do, as in v12's teacher phase: the walking teacher's own keys use a hand's whole budget). The stop
@@ -188,5 +188,5 @@ python sim/train_duel_rnn.py --env duel_env_ffa --group 2,3,2,4,2 --map bloodrun
   --near-item-p 0 --teach-trunk 0.05 --kl-heads 10 --fade-start 4834.27
 ```
 
-`--teach-trunk 0.05` is the proposal of section 7 (without it the run is the list as approved); `--kl-heads 10` measures the step
+`--teach-trunk 0.05` is section 7's change (approved 19:30); `--kl-heads 10` measures the step
 per output every tenth update; `--fade-start` keeps the teachers' fade across a resume.

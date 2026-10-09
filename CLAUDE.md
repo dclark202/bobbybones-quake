@@ -121,6 +121,10 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - Docker on Windows: LF line endings (`.gitattributes`).
 - PPO's entropy bonus drowns small shaping costs: size any cost against it (see RESULTS 2026-10-04).
 - Do not restart the play-test server while the owner is on it; use a second container for tests.
+- Before any real-server check or run: `docker ps`, `docker stats --no-stream`. A game server with Bobbys on a map works
+  whether or not a person is on it, and until 2026-10-08 its numeric library spun a helper thread per core: a forgotten
+  local server held 7 to 8 of the PC's 20 threads for a day (RESULTS 2026-10-08 19:30). `tools/duel_server.sh` and the
+  image now set `OPENBLAS_NUM_THREADS=1`; stop servers nobody uses (`docker stop`, not `rm`: `docker start` restores).
 - Real-server checks (Nightmare sparring) only while no training runs: a server that falls behind distorts everything (until 2026-10-08 it even dropped the bot's commands: RESULTS 2026-10-08 13:00). `DUEL_AIMDUMP=1` (`AIMDUMP=1` for `tools/bench_arena.sh`) records what became of his mouse output per frame. The local image `qlbot` must be rebuilt (`docker build -t qlbot .`) after any change to `sim/`, `plugins/` or `minqlx/`: the sparring scripts do not do it.
 - The plugins feed the network through the simulator's own `observe()` but never call `step()`: whatever only `step()` keeps up to date is stale on a real server unless the plugin sets it (2026-10-08: the 1v1 plugin had no walking graph, no plugin set `item_t`, the 1v1 plugin sets no style). After any change to the inputs, record them in a real game (`OBSDUMP=1` with `tools/bench_arena.sh`) and set them beside the simulator's. With the PC busy it is now the game's Nightmare bot that plays badly (he won 6-0 under load).
 - In a free-for-all plugin everything per-seat that the simulator does in one call for all players must be one call there too: `limit_keys` was called once per Bobby and each call overwrote the other seats' hands (2026-10-08: every Bobby on the public server moved on another Bobby's keys).

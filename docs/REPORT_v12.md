@@ -57,7 +57,8 @@ Both teachers were at zero from 12:05 on and every number kept rising: what they
 
 ## Against Nightmare, real games
 
-Ten minutes a map, three games side by side on a free PC, the game's own spawn. The first two columns are before the
+Ten minutes a map, three games side by side, the game's own spawn. (Found at 19:27: the PC was not free. An idle local
+game server held 7 to 8 of its 20 threads all day, RESULTS 2026-10-08 19:30; the games are to be repeated.) The first two columns are before the
 plugin faults were fixed (see the last section): **every real Nightmare score before 2026-10-08 16:51 understated him**.
 
 | Map | 14:01, before any fix | 14:37, walking graph and timers | **16:51, all fixes** | Damage dealt / taken | Red, mega, yellow armor: he / Nightmare | Damage lost a life: he / Nightmare |

@@ -27,8 +27,11 @@ else
     "$PY" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out $DATA/policy.npz $EXPORT_ARGS   # EXPORT_ARGS="--set INTENT_HOLD=8": the switches a run before v13 was trained with
 fi
 RESTART_OPT=""; [ -n "$RESTART" ] && RESTART_OPT="--restart unless-stopped"   # RESTART=1: come back after a crash or reboot
+# One thread for the numeric library: its helpers spin between the network's matrix products (40 a second), one per core.
+# A local server with three Bobbys held 7 to 8 of the PC's 20 threads for a day with nobody on it (2026-10-08, B-153).
+ONE_THREAD="-e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e MKL_NUM_THREADS=1"
 if [ -n "$SPAR" ]; then
-    docker run -d --name "$NAME" -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" \
+    docker run -d --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" \
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" -v "$ROOT/maps/lockout/lockout.pk3:/ql/baseq3/lockout.pk3:ro" qlbot +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs the game bot, skill ${SKILL:-5}, on $MAP)"; exit 0
 fi
@@ -44,7 +47,7 @@ MAP_MOUNTS="-v $ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro -v $ROOT
 LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # PUBLIC=1: show in the server list (the rented server); local servers stay unlisted (Windows sets PUBLIC to a folder: an exact 1 is required)
 PLUGINS="botctl, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live
 if [ -n "$FFA" ]; then PLUGINS="botctl, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
-docker run -d $RESTART_OPT --name "$NAME" -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $LOCKOUT_MOUNT qlbot +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"

@@ -29,5 +29,8 @@ COPY entrypoint.sh /entrypoint.sh
 COPY tools /tools
 RUN sed -i 's/\r$//' /entrypoint.sh /ql/baseq3-extra/* && chmod +x /entrypoint.sh /ql/run_server_x64_minqlx.sh
 
+# One thread for the numeric library: its helper threads spin between the network's matrix products, one per core
+# (2026-10-08: an idle local server held 7 to 8 of 20 threads for a day). tools/duel_server.sh sets the same at start.
+ENV OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 EXPOSE 27960/udp 28960/tcp
 ENTRYPOINT ["/entrypoint.sh"]
