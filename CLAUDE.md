@@ -18,7 +18,8 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   beating Nightmare there. See `docs/PLAN.md`. Method: tighten the human limits until the right play appears;
   do not add rewards for single behaviors without asking.
 - Maps (owner, 2026-10-09): from v14 on the game's own duel maps only: Blood Run, Aerowalk, Lost World, Campgrounds,
-  Sinister, Furious Heights; later Cure, Toxicity, Hektik, Battleforged. The yard (`arena1`) is dropped entirely (v13
+  Sinister, Furious Heights; Battleforged and Hektik are held out for checks; Cure and Toxicity later. The yard
+  (`arena1`) is dropped entirely (v13
   already trained on the three duel maps with arena1 held out). Test map: `testlab`.
 - Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder. Copying the
   test map pk3 into its `baseq3` is allowed (he asked for it); nothing else.

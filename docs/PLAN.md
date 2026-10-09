@@ -330,7 +330,7 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
 
 ## Owner decisions
 
-- Maps (2026-10-09): v14 trains on Blood Run, Aerowalk, Lost World, Campgrounds, Sinister and Furious Heights; Cure, Toxicity, Hektik and Battleforged later. arena1 is dropped entirely ("just focusing on the in game duel maps"): no training and no checks on it from v14 on; the map he has never seen, for checks, becomes one of the later duel maps.
+- Maps (2026-10-09): v14 trains on Blood Run, Aerowalk, Lost World, Campgrounds, Sinister and Furious Heights; Cure, Toxicity, Hektik and Battleforged later. arena1 is dropped entirely ("just focusing on the in game duel maps"): no training and no checks on it from v14 on; the maps he has never seen, for checks, are Battleforged and Hektik (owner, 2026-10-09: "Held out maps: battleforged, hektik"); they stay out of training while they serve as that.
 - Strafe jumping (2026-10-09): "absolutely crucial to the game, he needs to learn it asap". A teacher that strafe-jumps may name keys and view in movement rounds on the duel maps; a pay for speed from 320 to 480, flat above, aggressive at first.
 - Shots with no enemy in view (2026-10-09): firing rockets, plasma and grenades at where he thinks the enemy is, or is about to be, is how they are used and is not penalized; "firing them at nonsense (or not rocket jumping) should be discouraged"; a small allowance for pre-firing a beam. Rockets keep a very low shot price; plasma and grenades have none.
 - Lead reading (2026-10-09): he is given where a rocket has to be aimed to meet a moving enemy ("a major part of the game").
