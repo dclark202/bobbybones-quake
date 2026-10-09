@@ -5,6 +5,76 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 10:15 — the game's maps set beside the simulator: twelve mismatches, the stand-in, the servers' items
+
+The owner, with v14's maps named (train: Blood Run, Aerowalk, Lost World, Campgrounds, Sinister, Furious Heights; held
+out: Battleforged, Hektik; arena1 dropped): "Give the maps another once over ... make sure the train environment matches
+the quake live versions correctly and flag any mismatches". Three sources per map: the map file (entities, brushes), what
+the simulator makes of it, and the real game (two short private servers: `plugins/maplab.py` lists every item in duel and
+free-for-all, `plugins/poollab.py` measures lava and water). v13 was not touched. Raises B-171 to B-175.
+
+**Mismatches found** (all confirmed in the code and, where it says so, in the game):
+
+| # | What | Where | Evidence |
+|---|---|---|---|
+| 1 | Shots, missiles, splash and sight stop at player-clip brushes (bars, grates, railings: not drawn, open to shots in the game). Every trace of `sim/sim_api.c` used the player's mask | all | of the game's clear lines between places within 1500 units the simulator closes 0.6 to 4.8% (Aerowalk most: the owner's "wall between grenades and mega health; there's bars in it") |
+| 2 | Lava does nothing: places that hurt came only from a lab map's `rooms.json` | Lost World (59 points of its walking map, 4.6%, stand in lava), Battleforged (30, 1.8%) | the game: feet in lava 30 points at once and again every 0.7 to 0.8 s (100 health gone in 1.55 s), to the waist 60 (0.83 s); the simulator: wading at 267, no damage. v13 trained on Lost World so |
+| 3 | 11 items too many, a second red and a second yellow armor among them, stacked on the real ones: the old Quake 3 key `notfree` was not read | Campgrounds (and Cure) | the game 33 items in a duel, the simulator 44 |
+| 4 | The walker (scripted item runner and walking teacher's labels) hops on the spot at a teleporter whose trigger's middle is over 18 units above him (he jumps for "a step up", and in the air his target becomes the exit), and never steps off a ledge whose landing lies under the edge ("reached" was judged on the plan alone) | Lost World, Sinister, Furious Heights, Battleforged | the stand-in alone: stuck 46%, 47%, 22%, 13% of the time (table below) |
+| 5 | No way to the red armor in the walking map: it lies across a gap of 288 units, 56 up | Aerowalk | a way from 1.7% of the map's live points; the stand-in names it 64% of the time and takes 0.27 a minute: v13's 76% of the frags there is against an opponent without it |
+| 6 | Only the first item of a kind is a goal of his ways and intentions | second rocket launchers on Aerowalk, Sinister, Furious Heights, Battleforged, Hektik | the route code |
+| 7 | With the feet in water he moves at 267 units a second; the game 298.7 | Sinister (6% of the walking map), Furious Heights (5%), Hektik (2%) | measured in the game |
+| 8 | Items float at the map file's point; the game drops them to the floor. The plugins match the game's items to his within 40 units | Sinister (a median 43 units high), Hektik (8 items 30 to 40) | the game's item list |
+| 9 | Solid pieces that are brush models of their own are not in the collision | Battleforged: a platform 24 high beside the mega | 12 points of the walking map inside it |
+| 10 | The walking maps hold places no spawn point reaches (on top of the clip above a map) | Aerowalk 28% of its points, Battleforged 24%, Sinister 16%, others 3 to 8% | reachability over the links |
+| 11 | Step height 18 (Quake 3); the game reports `pmove_StepHeight` 22 | all | the cvar; not measured on a step |
+| 12 | Free-for-all in the game has the quad on six of the eight (and invisibility on Battleforged), and other items than a duel (Hektik: 18 of its 37; Battleforged: no grenade launcher; Furious Heights: a rocket launcher elsewhere) | servers only: the simulator has a map's duel items for every group size and no powerups | the game's item lists |
+
+Clean: the duel item lists match the game exactly on seven of eight maps (all but Campgrounds); no doors, lifts or hurt
+triggers on the eight; every pad and teleporter of the map files is in the simulator, Sinister's `target_push` ones too.
+Cure (not in the plan) has a door opened by a shot button. Game cvars read: `sv_fps` 40, gravity 800, speed 320, knockback
+1000, weapon respawn 5 s, ammo 40 s, no ammo packs, jump 275, auto-hop, no air control, wade scale 0.75, swim scale 0.5.
+
+**The stand-in, both seats, five minutes a map** (as v13 has it -> the staged simulator with every fix on):
+
+| Map | Speed | Stuck | Big weapons, red armor, mega a player-minute |
+|---|---|---|---|
+| Blood Run | 274 | 4% | 2.64, 0.64, 2.05 |
+| Aerowalk | 266 | 2% (no way 49%: the red armor) | 3.35, 0.27, 2.52 |
+| Campgrounds | 262 | 5% | 2.05, 1.02, 1.58 |
+| Furious Heights | 217 -> 273 | 22% -> 6% | 1.57 -> 1.93, 0.76 -> 0.94, 1.32 -> 1.53 |
+| Hektik | 213 | 12% | 3.24, 0.19, 3.30 |
+| Battleforged | 198 -> 237 | 13% -> 4% | 1.37 -> 1.72, 0.23 -> 0.75, 1.39 -> 1.17 |
+| Sinister | 139 -> 245 | 47% -> 11% | 0.62 -> 1.80, 0.21 -> 0.70, 0.57 -> 1.29 |
+| Lost World | 105 -> 260 | 46% -> 5% | 0.38 -> 1.82, 0.06 -> 0.95, 0.34 -> 1.78 |
+
+**Games a map** (12 checks of v13): one game's frag share spreads by 13 points on Blood Run and 8 on Aerowalk; checks an
+hour apart differ by what sampling predicts. 32 games: one check within 4.6 points on the noisiest map (2.9 on the
+others), two networks told apart from 9 points; 64 games: 3.2, from 6.5. So 32 a map per check and 64 at a run's end.
+
+**The owner: "Fix all 12 ... Make the fixes now while v13 run is finishing"; "FFA maps on the public server, testing,
+etc. SHOULD NEVER HAVE QUAD ... (and protection) always off"; "use the 'duel weapon locations' for all of the maps ...
+Even for the public FFA matches".**
+
+- **Servers (done, tested, pushed; live with the next deploy).** `plugins/powerups.py`: the game's own switch
+  `g_spawnItemPowerup 0` before every map load and in `entrypoint.sh` (measured: quad and invisibility gone), every
+  powerup a plugin sees removed, and `duel_layout()`: a free-for-all game gets the map's duel items (the real game's lists
+  in `plugins/duel_items.json`, `tools/duel_items.py`): what a duel lacks is removed, what it has is put there with the new
+  `minqlx.spawn_map_item` (an item that comes back after it is taken). On a local free-for-all server: Furious Heights 1
+  removed and 2 put, Blood Run 2 and 2, Lost World 1 and 1, Campgrounds its mega (taken and back on the game's 35 s,
+  twice); each ends with exactly its duel list and no powerup. `plugins/itemwatch.py` writes the item entities down.
+- **Simulator (staged and tested beside the run; not in `sim/` yet).** v13's trainer, its evaluation loop and its end checks
+  read `sim/`, and the library is loaded by the trainer, so the fixes sit in a staging copy until v13 is done. Each is behind
+  a switch that is off by default; with all off the staged simulator and group simulator are identical to the repo's
+  (obs, pay, places over 600 steps). `SHOT_MASK` (1), `LAVA` (2: the game's damage, the hazard inputs, no way through
+  lava), the `notfree` key (3), `WALK_FIX` (4, 10: the two repairs, nothing named that has no way, dead points left out of
+  the ways and of "the nearest point"), `PRO_WAYS` (5: the pros' ways where the walking map has none; Aerowalk's red
+  armor 1.7% -> 100% of live points), `QL_MOVE` (7, 11: wading 299.0 against the game's 298.7; step 22), `ITEM_DROP` (8:
+  on all eight maps every item within 2 units of where it rests in the game; Campgrounds 33 = 33), `SOLIDS` (9). The
+  library gains traces and rays with a mask, many point contents in one call, solid pieces, two parameters.
+- **Open**: 6 (the nearest item of a kind), the walking maps rebuilt with the new physics, one stuck spot each for the
+  stand-in on Sinister, Lost World and Hektik, the step height measured on a real step.
+
 ## 2026-10-09 09:16 — public server: Aerowalk, free-for-all, two Bobbys (owner); its Aerowalk walking map was two days old
 
 Owner: "Change default number of bots to 2", "default map to aerowalk" ("aerowalk FFA, not duel"), "Update aerowalk walking

@@ -23,6 +23,9 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   already trained on the three duel maps with arena1 held out). Test map: `testlab`.
 - Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder. Copying the
   test map pk3 into its `baseq3` is allowed (he asked for it); nothing else.
+- No powerups anywhere (owner, 2026-10-09: no quad, no "protection", on any server or in training) and a map's
+  **duel** items in every mode, free-for-all too: `plugins/powerups.py` does both on the servers; the simulator has
+  always had a map's duel items and no powerups.
 - No personal data in the repo (Steam IDs, home IP, Windows usernames, passwords). The repo is public.
 - The owner prefers concise answers and doable batches. Do not start a training run without his go-ahead when he
   has asked to test first.
@@ -72,6 +75,12 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   save over and over, at low priority, into `<run>/evals.jsonl`: the duel curve of a run. One trainer uses about 27% of the
   CPU (its simulators wait on the network half the time); more simulator processes do not make it faster.
 - **After the wiring review (2026-10-08)**: the trainer credits the left hand's outputs (movement keys, weapon key) only on the frames the simulator reads them (`env.key_dec`, one in four) and keeps the input statistics frozen; `sim/renorm_policy.py` gives a network fresh input statistics without changing its output (run it when the maps or inputs change; sample from `train_duel_rnn.py --obs-dump`). Checkpoints carry `env_vars` (the simulator switches of `PLAY_VARS`) and the round lengths; `sim/export_duel.py` writes them into `policy.npz` (`--set NAME=VALUE` for runs before v13, e.g. `EXPORT_ARGS="--set INTENT_HOLD=8"` for the server scripts) and the plugins set them before loading the simulator. Checks: `tools/input_check.py` (dead inputs; the real game's inputs beside the simulator's), `tools/teacher_check.py` (can the walking teacher's own pupil reach every item), `tools/nav_prune.py` (takes the jump and drop links the walker cannot take out of a map's graph), `tools/shot_prices.py`.
+- **The map audit (2026-10-09)**: the game's maps set beside the simulator (RESULTS that day): `plugins/maplab.py` lists the
+  real game's items per map and mode (`data/maplab/`; `tools/duel_items.py` -> `plugins/duel_items.json`), `plugins/poollab.py`
+  measures lava and water, `plugins/itemwatch.py` writes a running game's items down. The fixes are switches in `duel_env.py`,
+  all off by default (`SHOT_MASK`, `LAVA`, `WALK_FIX`, `PRO_WAYS`, `QL_MOVE`, `ITEM_DROP`, `SOLIDS`; the `notfree` key in
+  `qsim.py`); the library (`sim_api.c`) has traces with a mask, many point contents, solid pieces. Until they are in `sim/`
+  (BACKLOG B-171) they live in the scratchpad's staging copy with the patch scripts that make them.
 - **Environments**: `duel_env.py` (current: nine weapons, items, sounds, clock, crouch, walk, fall damage,
   human-aim limits, round kinds NORMAL / AIM / DRILL / MOVE / SOLO / COURSE, scripted opponents with eight styles, lab
   mode on the test map: aim rooms and movement courses read from `maps/testlab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the

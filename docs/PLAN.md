@@ -93,6 +93,9 @@ strafe jumping from a teacher in his item runs, a pay for speed from 320 to 480 
 (B-163 to B-165); lead reading for rockets and plasma (B-166); what a shot costs, by weapon and by where it lands when no
 enemy is in view (B-167); the weapon teacher on at a low weight to the end and silent on shotgun, plasma and grenades
 (B-168, B-169); six maps of the game, arena1 dropped (B-170, B-162).
+Before it trains: the simulator set right against the game's maps (the audit of 2026-10-09, RESULTS 10:15: shots through
+clip brushes, lava, Campgrounds' items, the walker at teleporters and drops, Aerowalk's red armor, wading, floating
+items, solid pieces: B-171 to B-175), and on the servers no powerups and a map's duel items in every mode (done).
 
 Open besides it, in this order: B-160 (position: fighting from below), B-140 (the walking layer rebuilt properly, with
 keys a hand can press), B-161 (backing away when weak), B-154 (teachers and the
@@ -330,6 +333,10 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
 
 ## Owner decisions
 
+- No powerups, ever (2026-10-09): "FFA maps on the public server, testing, etc. SHOULD NEVER HAVE QUAD ... Make sure it (and protection) are always off, and do not train bobby to do anything with it"; the invisibility on Battleforged too.
+- The items of a duel are the only ones (2026-10-09): "use the 'duel weapon locations' for all of the maps ... Even for the public FFA matches and training FFA matches ... Those should be the 'only ones that exist' in our world". On Campgrounds in free-for-all that means the mega where the game puts the quad.
+- The simulator has to match the game's maps (2026-10-09): "Fix all 12" of the audit's mismatches, shots through bars and grates among them ("windows or holes in the floor that can be shot through. Make sure those are accurate").
+- The duel check: 32 games a map are enough ("Doesn't matter to me"); the stand-in has to be shown to play on a map before a number from it is trusted.
 - Maps (2026-10-09): v14 trains on Blood Run, Aerowalk, Lost World, Campgrounds, Sinister and Furious Heights; Cure, Toxicity, Hektik and Battleforged later. arena1 is dropped entirely ("just focusing on the in game duel maps"): no training and no checks on it from v14 on; the maps he has never seen, for checks, are Battleforged and Hektik (owner, 2026-10-09: "Held out maps: battleforged, hektik"); they stay out of training while they serve as that.
 - Strafe jumping (2026-10-09): "absolutely crucial to the game, he needs to learn it asap". A teacher that strafe-jumps may name keys and view in movement rounds on the duel maps; a pay for speed from 320 to 480, flat above, aggressive at first.
 - Shots with no enemy in view (2026-10-09): firing rockets, plasma and grenades at where he thinks the enemy is, or is about to be, is how they are used and is not penalized; "firing them at nonsense (or not rocket jumping) should be discouraged"; a small allowance for pre-firing a beam. Rockets keep a very low shot price; plasma and grenades have none.
