@@ -5,6 +5,55 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-08 20:05 — The owner's two games against v12 on the public server (arena1, Aerowalk): his notes, and what the logs say
+
+Ten minutes each, a real game after ready-up (machine-gun spawn), v12 with the fixed plugins. On arena1 three Bobbys for
+the first 85 seconds, then one; on Aerowalk one. Sessions `20261008-215047_arena1_ffa` and `20261009-004245_aerowalk_ffa`
+(every frame logged; no names).
+
+| | arena1: he / Bobby | Aerowalk: he / Bobby |
+|---|---|---|
+| Frags, deaths | 44, 6 / 5, 53 | 22, 2 / 2, 22 |
+| Damage dealt | 7,039 / 2,807 | 3,854 / 2,062 |
+| Red armor, mega, yellow armor | 16, 13, - / 0, 0, - | 10, 10, 7 / 2, 3, 2 |
+| Health plus armor, mean | 180 / 90 | 227 / 114 |
+| A life of Bobby's lasts (median) | 8.2 s (54 lives) | 22.1 s (23 lives) |
+| Speed while moving; in the air; over 400 units a second | 355, 51%, 27% / 322, 18%, 3% | 348, 48%, 27% / 313, 30%, 5% |
+| Left hand, finger actions a second (with weapon keys) | 7.1 / 4.7 | 6.6 / 4.0 |
+| Where he looks against where he moves: within 20 degrees; over 55 | 42%, 34% / 15%, 58% | 47%, 29% / 19%, 56% |
+| Turning with nobody about, degrees a second (median) | 58 / 30 | 58 / 25 |
+| While Bobby sees him: Bobby lower by 48 units or more, higher | 37%, 17% | 60%, 9% |
+| Bobby's aim error with him in view | 8.8 degrees | - |
+
+**The owner's notes** ("Honestly I'm more impressed than the numbers may reveal"; "on the right track for sure"), each
+with what the logs and the code say:
+
+- *"He picks up weapons and uses them."* A big weapon in hand in 41% of his lives on arena1 and 70% on Aerowalk, the first
+  after 2.4 and 3.0 s.
+- *"He has MG most of the time because he dies a lot."* Yes. On arena1 85% of his time lay in the first ten seconds of a
+  life. The machine gun is in his hand 82% of the first 5 s of a life, 51% of 5 to 10 s, 29% of 10 to 20 s, never after
+  20 s (Aerowalk: 78, 54, 47, 16%).
+- *"Died to the environment on arena1 A LOT ... I'm not sure the map for him rendered properly."* 9 of his 53 deaths were
+  not the owner's; 6 are long falls, 5 of them from one place, the yard's edge by the walkway to the red armor. The map is
+  the right one: the file the game runs (the Workshop item), the file his senses use on the server and the file he trained
+  on are identical (same checksum). The cause is in what he is given: **he sees the floor, ledges, lava and deadly drops
+  only inside his 110-degree field of view**, and in all 6 falls the way he was moving lay outside it, with the owner in
+  view a second before in 5: he looks at the enemy, moves sideways or backwards, and does not know the ground there. He
+  moves that way 56 to 58% of the time (the owner 29 to 34%, who knows the map).
+- *"Is not fast ... basically no strafe jumping. This needs to be a priority now."* Table above. One cause measured here:
+  the owner's own left hand makes 6.6 to 7.1 key actions a second over a whole game; put through Bobby's hand budget, 41 to
+  44% of the owner's key presses would have been refused at 4 a second (v12), 27 to 30% at 5 (v13 as planned), 6 to 7% at
+  7, 2 to 3% at 8. Bobby used all of his (4.0 to 4.7 made).
+- *"He walks in a straight line toward a thing he wants ... not look around."* He turns half as much as the owner when
+  nobody is about (median 25 to 30 degrees a second against 58). The walking teacher's item runs teach him to look along
+  the way; nothing so far gave looking around a use (from v13 he must see an item's place to know it is there).
+- *"Does he know about DROPPED weapons?"* No. The simulator has none: a dead player leaves nothing, and no input shows one.
+- *"Aiming UPWARD is almost always a bad idea, so is picking a fight with someone who has the high ground."* On Aerowalk he
+  was the lower one 60% of the time he had the owner in view and the higher one 9% (arena1 37% and 17%); he looked up by
+  more than 15 degrees 35% of that time.
+
+Proposals for v13 from this are before the owner (the reply of 20:10); what he decides goes into the manifest.
+
 ## 2026-10-08 19:30 — An idle local game server held 7 to 8 of the PC's 20 threads for a day; the owner: "--teach-trunk yes"
 
 **The owner (19:30): "--teach-trunk yes"**: v13 runs with the teachers' losses at 5% into the shared layers (B-154). He
