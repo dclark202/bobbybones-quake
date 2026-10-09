@@ -1,146 +1,155 @@
 ## Play against him in Quake Live
 Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal).
 
-**BobbyBones** is a Quake Live bot that learns to play from scratch. Nothing about how to aim, move or
-fight is hand-coded: a neural network plays millions of fights against itself in a fast simulator of the game,
-is checked on a real Quake Live server, and is play-tested by people. The long-term goal is a bot that can beat
-strong players fairly and shows learned behavior such as strafe jumping, weapon choice and item control. Down the
-road, BobbyBones can be tuned to help new players learn the game by adapting to the skill level of his opponent.
+## What is it
 
-## The current goal
+BobbyBones is a Quake Live bot trained by reinforcement learning. A recurrent neural network plays against copies of
+itself in a simulator built on Quake 3's own movement and collision code; the trained network then plays on a real
+Quake Live server through a server plugin. Nothing about aiming, moving or fighting is scripted, and he plays under
+the limits a person has (see the fairness rules).
 
-**Play the real duel maps the way a good player does.** Blood Run, Aerowalk and Lost World, one against one and
-all against all with up to four to six players:
+Where he is now: he plays duels and free-for-all on Blood Run, Aerowalk and Lost World. He collects weapons, armor and
+the mega, keeps a stack, and beats a scripted item-running opponent that has the aim of the game's hardest bot on the
+maps he trained on (72 to 80% of the frags over 100 ten-minute duels a map). He does not strafe jump yet and fires few
+rockets. Every run and measurement, including what did not work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest
+full report is [docs/REPORT_v13.md](docs/REPORT_v13.md).
 
-1. Human-like play: no key spam, steady aim, looking where it matters.
-2. He uses the weapons the way good players do: rockets close, lightning in the middle, the rail at range.
-3. He controls the items: a weapon first after a spawn, then the armors and the mega, on time and against an
-   opponent who wants them too.
-4. He moves like a player: knows the ways, and jumps to keep his speed.
-5. He beats the game's Nightmare bot on these maps.
-
-The first target (2026-10-05) was one small custom arena, the yard: two levels, a tunnel, a jump pad, a
-teleporter, a mega health, a red armor and three weapons. Since 2026-10-08 he trains on the three duel maps and the
-yard is the map he is checked on without having trained there.
+The goal is a bot that beats strong players fairly, with learned movement, weapon choice, item control and positioning,
+and later one that adapts to the level of the player in front of him.
 
 ## Fairness rules
 
-- **Human physics.** He moves with the same 125 fps physics a human client gets. No bot-only frame-rate tricks.
-- **Human senses.** He knows where you are only when you are in his field of view with a clear line of sight,
-  or roughly when you are heard nearby. No wallhacks.
-- **Human sight.** Walls and items are only seen inside his field of view; the ground at his own feet he knows without
-  looking, as a player who knows the map does. He gets no readout of your
-  health: only the pain sounds a player hears, and the damage he knows he dealt.
-- **Mouse-like aim.** He turns his view like a mouse (fine tracking and flicks), with a reaction delay, a cap on
-  flick speed, hand shake, a flinch when hit, and a later read on changes in your movement than on your position.
-  The limits are one setting, calibrated on a real player's reflex tests: "a good aimer, not a bot".
-- **Human knowledge of the map.** He knows an item is gone or back only if he took it, saw its place or heard it
-  (from the next network on; until then he is told).
-- **Human hands.** The left hand is five fingers on the keys: each finger does one thing at a time and needs
-  time between presses, and the hand as a whole tires (short bursts, then four key actions a second; eight from the
-  next network on, measured on a player's own hand: 6.6 to 7.1 a second over a whole game). The right hand fires and zooms at
-  no more than three clicks a second.
-- **No bot habits.** He trains only against himself and our own scripted runner. The game's bots are a yardstick,
-  never a teacher.
+- **Physics.** The same 125 fps movement a human client has.
+- **Sight and hearing.** He knows where an enemy is only inside his field of view (100 by 75 degrees) with a clear line
+  of sight, or roughly, from the sounds a player would hear. Walls and items are seen inside the field of view only. He
+  gets no readout of the enemy's health.
+- **Reaction.** What he sees of the enemy is 100 ms old; a change in the enemy's movement reaches him after 200 ms.
+- **Aim.** The view is turned like a mouse: a turn speed per frame with inertia, a cap on flick speed, hand noise that
+  grows with speed, a flinch when hit. The limits are one setting, calibrated on a player's reflex tests.
+- **Hands.** Five fingers on the movement keys, each with a minimum time between presses and eight key actions a second
+  in all (a player's hand measured 6.6 to 7.1); three clicks a second on the mouse.
+- **Knowledge.** He knows an item is taken or back only if he took it, saw its place or heard it.
+- **Training partners.** Himself and our own scripted players. The game's bots are a yardstick, never a teacher.
 
 ## How it works
 
-1. **Simulator** (`sim/`). Quake 3's movement and collision code (ioquake3 `bg_pmove`, `cm_*`) compiled into a
-   library with Quake Live's settings, plus a duel layer in Python: nine weapons, items, dropped weapons, armor, respawns,
-   senses. Movement was validated frame by frame against the real game; weapon damage, timing, knockback,
-   switch time and pickup amounts were measured on a real server and reproduced.
-2. **Training** (`sim/train_duel_rnn.py`). Self-play reinforcement learning (PPO) with a recurrent network
-   (GRU) against a league of its own past versions, in groups of two to four. The reward is plain at its core: a
-   frag, a death, damage dealt against damage taken, the items picked up. Self-play alone did not find the habits
-   of the game (fetching a weapon, using rockets, taking the armor), so since 2026-10-07 he is also **shown** them
-   for the first hours of a run and then left alone: a walking teacher along the ways of the map, a weapon for the
-   distance and an order for the items taken from 3,266 pro duels (505 hours), a playing style per life (rockets,
-   rail, lightning or general). The teachers only ever press keys; where he looks and when he fires stay his own.
-   The simulator also runs groups of up to six players, all against all (`sim/duel_env_ffa.py`).
-3. **Real game** (`minqlx/`, `plugins/`). A Quake Live dedicated server in Docker with
-   [minqlx](https://github.com/MinoMino/minqlx). A C hook on the engine's `SV_ClientThink`
-   (`minqlx/botctl.c`) lets a plugin drive a bot's keys and view each frame. `plugins/duelbot.py` rebuilds
-   the network's inputs from the live game with the simulator's own code and plays the trained network.
-4. **Checking.** Ten-minute duels against the game's Nightmare bot on a real server; a hundred ten-minute duels a
-   map in the simulator against a stand-in for it, with error bars (`tools/duel_eval.py`); his inputs on a real
-   server set beside the simulator's (`tools/input_check.py`); whether the walking teacher can walk its own ways
-   (`tools/teacher_check.py`). `sim/test_suite.py` scores any checkpoint in fixed test rooms (aim per weapon and target,
-   weapon choice by range, movement, items, a ladder of scripted opponents). The same rooms run on the
-   play-test server with a person as the subject, for a human baseline. Every play-test session is logged
-   per frame, with the player's notes. `sim/render_course.py` renders first-person videos of his fights
-   straight from the simulator, with the keys he pressed, for judging how the play looks.
+### The network
 
-## What he can do
+| | |
+|---|---|
+| Inputs | 509 numbers every 25 ms ([docs/INPUTS.csv](docs/INPUTS.csv)): his own state and velocity, 16 wall rays and 8 floor rays, the enemy as last seen, projectiles in flight, weapons and ammo, the items and what he knows of their timers, sounds, clock and score, hints from a walking graph of the map (seconds to each big item, the next step of the way), 32 numbers from a small "map reader" network for his cell and the enemy's, the item he has chosen to go for |
+| Body | two dense layers of 256 (tanh), a GRU of 512, a linear layer per output and a value head: 1.4 million weights |
+| Outputs | forward / back, strafe, jump / crouch, turn speed (23 steps from 0.03 to 60 degrees a frame), pitch speed (15 steps), fire, weapon key, walk, zoom, lift the mouse, and the item he is going for (read once a second) |
 
-- **Plays real Quake Live.** He joins a server like any player: duels, or free-for-all with several of him and you,
-  on Blood Run, Aerowalk, Lost World and a custom arena.
-- **Aims like a strong player, under a player's limits.** He tracks a dodging target about as well as a good human
-  does, with a reaction time, a flick limit, hand shake and a flinch when hit. Nothing about aiming was coded.
-- **Uses the arsenal.** He goes for a weapon after a spawn and fights with rockets, lightning and the rail; each
-  life he has a preferred weapon or none, as people do.
-- **Knows the maps.** Alone he finds his way to nearly every weapon, armor and mega on them, through jump pads and
-  teleporters.
-- **Plays the item game.** He keeps health and armor stacked, takes the mega and the armors on time, picks up the
-  weapons the dead leave behind, and wins his trained maps against a scripted opponent with the hardest bot's aim.
-- **Out-damages the game's hardest bot.** In ten-minute duels against Nightmare he deals more damage than he takes on
-  every map tested.
-- **Moves with a hand, not a script.** Five fingers on the keys, a few key presses a second, three clicks a second.
+It decides 40 times a second, the tick rate of a Quake Live server.
 
-## In progress
+### The training environment
 
-- **Strafe jumping on the duel maps.** It emerged by itself in the movement simulator and carried over to the real
-  game; in full games he still walks. The next training shows it to him in item runs and pays for speed.
-- **Rockets**: leading a moving target, and firing where the enemy is about to be. He fires far fewer than a good
-  player and leans on the lightning gun and the rail.
-- **More of the game's duel maps**: Campgrounds, Sinister and Furious Heights next to Blood Run, Aerowalk and Lost
-  World, with two more held back to test him on maps he has never seen.
-- **The simulator set right against the game's maps**: lava that hurts, shots through bars and grates, items where the
-  game puts them.
+- **Physics** (`sim/sim_api.c`, `sim/q3/`): ioquake3's player movement (`bg_pmove.c`, `bg_slidemove.c`) and collision
+  (`cm_*.c`) compiled into one library (`qsim.dll`, `libqsim.so`) with Quake Live's settings (jump velocity, auto-hop,
+  step height, wading). It loads the game's own map files and steps thousands of players at once: decisions every 25 ms,
+  physics in steps of 8, 8 and 9 ms. Movement was checked frame by frame against the real game.
+- **The game** (`sim/duel_env.py`, numpy): nine weapons with damage, reload, knockback, projectile speed and splash as
+  measured on a real server; items and their respawn times; dropped weapons; armor; fall damage; lava; jump pads and
+  teleporters; sounds; line of sight; and the human limits above. `sim/duel_env_ffa.py` (generated by
+  `tools/make_ffa_env.py`) is the same for two to six players, all against all.
+- **Maps**: a walking graph per map (`sim/build_nav.py`) gives travel times and the next step toward each item; scripted
+  players walk it (an item runner to train against, and a stand-in for the game's Nightmare bot to check against).
+- **Speed**: about 34,000 player-frames a second on one PC (20 threads, one 16 GB GPU).
 
-## Planned
+A second, movement-only task (`sim/movement_env.py`, `sim/train_move.py`) rewards nothing but time saved between two
+items. Strafe jumping emerges there within minutes; that network is used as a teacher (below).
 
+### Training
+
+- PPO with a recurrent policy on sequences of 384 frames, about 5,000 games at once: duels for 62% of the players,
+  groups of three and four for the rest. Opponents are himself and a league of his own earlier snapshots.
+- Rounds: full games from the game's spawn (machine gun only), some against the scripted item runner, some starting as
+  a race for a big item; and item runs, alone on the map from item to item.
+- Reward: frags and deaths, damage dealt and taken, weapons and items picked up, progress toward the item he chose, a
+  small price per shot.
+- Teachers: imitation losses whose weight fades. The item to go for (the order pros take them in), the weapon for the
+  distance (a table from 3,266 pro duels, 505 hours), the walking keys toward an item, and from the next run the
+  movement network's keys and view in item runs. Their gradients are kept mostly out of the shared layers, so a new
+  teacher does not disturb his aim.
+- A run is 14 to 24 hours on one PC: about 1.7 billion player-frames, or 12,000 hours of play.
+
+### The interface with Quake Live
+
+- A Docker image with the Quake Live dedicated server and [minqlx](https://github.com/MinoMino/minqlx). A C patch
+  (`minqlx/botctl.c`) hooks the engine's `SV_ClientThink`: a plugin sets a bot client's keys and view angles for every
+  server frame and runs its physics in 125 fps steps; it also reads view angles, item states and missiles.
+- `plugins/duelbot.py` (duel) and `plugins/ffabot.py` (free-for-all, up to four Bobbys and six seats) copy the game's
+  state into the simulator's data structures each frame, build the inputs with the simulator's own `observe()`, run the
+  network in numpy (`policy.npz`, written by `sim/export_duel.py`), apply the same hand and mouse limits, and send the
+  command.
+- `plugins/powerups.py`: no powerups, and a map's duel items in every mode.
+- Every session is logged per frame ([docs/LOGS.md](docs/LOGS.md)). Chat commands: [docs/COMMANDS.md](docs/COMMANDS.md).
+
+### Checking
+
+- `tools/duel_eval.py`: ten-minute duels in the simulator against the stand-in, with confidence intervals;
+  `tools/eval_loop.py` repeats them beside a run for a duel curve.
+- Real games against the game's Nightmare bot on a private server.
+- `tools/reflex_report.py`: aim tests, the same for people and for him. `tools/stack_probe.py`: his play counted the
+  way the pro demos were counted. `tools/heatmap.py`: where he spends his time. `sim/render_course.py`: first-person
+  videos from the simulator. `tools/input_check.py`: his inputs on a real server beside the simulator's.
+- People play him on the public server; their notes and sessions go into the next run.
+
+## In progress and planned
+
+In progress (the next run, [docs/MANIFEST_v14.md](docs/MANIFEST_v14.md)):
+
+- Strafe jumping: the movement network as a teacher in item runs, pay for covering his way fast, inputs for his own
+  speed and direction of travel.
+- Rockets: inputs for the lead of a shot, a very low price per rocket, and shots with no enemy in view judged by where
+  they land (near where the enemy must be, or on his likely way).
+- Six of the game's duel maps (Campgrounds, Sinister and Furious Heights added) and two held out to test him on maps he
+  has never seen (Battleforged, Hektik).
+- The simulator corrected against the game's maps: lava that hurts, shots through bars and grates, items where the game
+  puts them.
+
+Planned:
+
+- Position play: fighting from above, backing off when weak; plasma and grenades for closing off ways.
 - More maps, and free-for-all with up to six players.
-- An opponent that adapts to your level, to help new players learn the game.
-- Player reports and profiles of how opponents play.
+- An opponent that adapts to the player's level.
+- Player reports: how an opponent plays, from the logs.
 
-The measurements behind all of this, including what did not work: [docs/RESULTS.md](docs/RESULTS.md). Plan and open work:
-[docs/PLAN.md](docs/PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md). Log formats: [docs/LOGS.md](docs/LOGS.md).
-Play him and help set his limits: [docs/COMMUNITY.md](docs/COMMUNITY.md). What the network is given: [docs/INPUTS.csv](docs/INPUTS.csv). Server commands: [docs/COMMANDS.md](docs/COMMANDS.md). Play-test routine: [docs/PLAYTEST.md](docs/PLAYTEST.md).
+Plan and open work: [docs/PLAN.md](docs/PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md). Play him and help set his limits:
+[docs/COMMUNITY.md](docs/COMMUNITY.md).
 
-## Running it
+## Run it yourself locally
 
-You need a Quake Live install for the map files (extracted to `data/maps/`, never committed), Python with
-PyTorch, a C compiler for the simulator, and Docker for the game server.
+You need a Quake Live install for the map files (extracted to `data/maps/`, never committed), Python with PyTorch, a C
+compiler for the simulator, and Docker for the game server.
 
 ```bash
-sim/build.bat                                             # Windows: build the simulator library
+sim/build.bat                                              # Windows: build the simulator library
 python sim/train_duel_rnn.py --run my_run --minutes 600    # self-play training (GPU if available)
-python sim/test_suite.py --run my_run                      # scorecard in the test rooms
+python tools/duel_eval.py --run my_run --opp nightmare --map bloodrun --games 32   # duels against the stand-in
 docker build -t qlbot .                                    # game server image
-bash tools/duel_server.sh my_run                           # private play-test server on UDP 27970 (map arena1, 1v1)
-FFA=3 bash tools/duel_server.sh my_run arena1 duel_env_ffa  # free-for-all with three Bobbys (up to four; six seats)
-SPAR=1 bash tools/duel_server.sh my_run                    # the same network against a Nightmare bot
+bash tools/duel_server.sh my_run bloodrun                  # private play-test server on UDP 27970, one against one
+FFA=3 bash tools/duel_server.sh my_run aerowalk duel_env_ffa   # free-for-all with three Bobbys (six seats)
+SPAR=1 bash tools/duel_server.sh my_run bloodrun           # the same network against the game's Nightmare bot
 ```
 
-On the play-test server, chat commands switch the mode and the map (`!mode ffa|duel`, `!map <name>`, `!bots <0-4>`),
-save feedback (`!note`), run the test chamber on you (`!map testlab`, `!room suite`) and let you watch him play a
-Nightmare bot (`!spar`). In free-for-all a real game starts when more than half of the people ready up (F3).
-Full list: [docs/COMMANDS.md](docs/COMMANDS.md). Hosting a public one: [docs/HOSTING.md](docs/HOSTING.md).
+On the server, chat commands switch the mode and the map (`!mode ffa|duel`, `!map <name>`, `!bots <0-4>`) and save
+feedback (`!note`). Full list: [docs/COMMANDS.md](docs/COMMANDS.md). Hosting a public one: [docs/HOSTING.md](docs/HOSTING.md).
+The settings of each run are in its manifest (`docs/MANIFEST_v<n>.md`).
 
-## Repo layout
+## Repo structure
 
 ```
-sim/                 simulator (vendored ioquake3 physics in sim/q3), environments, trainers, test suite
-plugins/             minqlx plugins: duelbot (plays the network, test rooms, logs), weapon and item labs
-minqlx/              vendored minqlx + the input hook (see minqlx/UPSTREAM.md)
-tools/               server script, test-map builder, demo downloader and parser
-maps/testlab/       the test map (aim box, environment box, movement courses, the yard without items)
-maps/arena1/      the yard with items: the arena of the current goal
-maps/atlas/          per duel map: areas, items and routes seeded from pro demos
-legacy/              the first approach (a layer on the Nightmare bot); not used
-docs/                PLAN, BACKLOG, RESULTS, LOGS
-Dockerfile           Quake Live dedicated server image
-data/                (git-ignored) maps, training runs, recordings, play-test sessions
+sim/          the simulator (vendored ioquake3 code in sim/q3), the game layer, trainers, exporters
+plugins/      minqlx plugins: duelbot and ffabot (play the network, log sessions), powerups, measurement tools
+minqlx/       vendored minqlx with the input hook (minqlx/UPSTREAM.md)
+tools/        server scripts, evaluation, pro-demo download and tables, map tools
+maps/         the test map, the custom arena, per-map atlases
+docs/         PLAN, BACKLOG, RESULTS, reports and manifests per run, log formats, commands
+legacy/       the first approach (a layer on the game's Nightmare bot); not used
+Dockerfile    the Quake Live dedicated server image
+data/         (git-ignored) the game's maps, training runs, recordings, play-test sessions
 ```
 
 ## License
