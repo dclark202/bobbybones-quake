@@ -1,0 +1,206 @@
+{
+ "run": "duel_gru_v13",
+ "minutes": 5675,
+ "env": "duel_env_ffa",
+ "group": 2,
+ "maps": {
+  "arena1": {
+   "map": "arena1",
+   "player_minutes": 64.0,
+   "time_bare": 0.242,
+   "big_weapons_held": 0.98,
+   "first_weapon_s": [
+    3.2,
+    5.1,
+    7.2
+   ],
+   "lives_with_a_weapon": 0.841,
+   "stack_under_100": 0.537,
+   "stack_150_up": 0.049,
+   "pickups_per_player_min": {
+    "wp": 3.23,
+    "mega": 0.3,
+    "ra": 0.02,
+    "ar": 0.0
+   },
+   "frags_per_player_min": 1.88,
+   "own_deaths_per_player_min": 0.14,
+   "bare": {
+    "in_view": 0.352,
+    "firing": 0.339
+   },
+   "two_or_more": {
+    "in_view": 0.185,
+    "firing": 0.134
+   },
+   "fired_share": {
+    "rl": 0.199,
+    "rg": 0.184,
+    "lg": 0.183,
+    "mg": 0.434
+   },
+   "pro_weapon_agreement": 0.872
+  },
+  "bloodrun": {
+   "map": "bloodrun",
+   "player_minutes": 64.0,
+   "time_bare": 0.128,
+   "big_weapons_held": 1.45,
+   "first_weapon_s": [
+    1.9,
+    4.5,
+    6.3
+   ],
+   "lives_with_a_weapon": 0.966,
+   "stack_under_100": 0.213,
+   "stack_150_up": 0.446,
+   "pickups_per_player_min": {
+    "wp": 4.09,
+    "mega": 0.88,
+    "ra": 0.83,
+    "ar": 2.86
+   },
+   "frags_per_player_min": 1.02,
+   "own_deaths_per_player_min": 0.12,
+   "bare": {
+    "in_view": 0.113,
+    "firing": 0.114
+   },
+   "two_or_more": {
+    "in_view": 0.201,
+    "firing": 0.159
+   },
+   "fired_share": {
+    "rl": 0.18,
+    "rg": 0.355,
+    "lg": 0.325,
+    "mg": 0.14
+   },
+   "pro_weapon_agreement": 0.65,
+   "positions_against_pros": {
+    "all": {
+     "overlap": 0.635,
+     "his_time_on_their_ground": 0.866,
+     "their_time_on_his_ground": 0.668
+    },
+    "bare": {
+     "overlap": 0.508,
+     "his_time_on_their_ground": 0.798,
+     "their_time_on_his_ground": 0.505
+    },
+    "armed": {
+     "overlap": 0.606,
+     "his_time_on_their_ground": 0.866,
+     "their_time_on_his_ground": 0.629
+    }
+   }
+  },
+  "aerowalk": {
+   "map": "aerowalk",
+   "player_minutes": 64.0,
+   "time_bare": 0.123,
+   "big_weapons_held": 1.9,
+   "first_weapon_s": [
+    1.8,
+    2.9,
+    3.8
+   ],
+   "lives_with_a_weapon": 0.985,
+   "stack_under_100": 0.303,
+   "stack_150_up": 0.236,
+   "pickups_per_player_min": {
+    "wp": 8.33,
+    "mega": 0.91,
+    "ra": 0.23,
+    "ar": 2.42
+   },
+   "frags_per_player_min": 1.86,
+   "own_deaths_per_player_min": 0.02,
+   "bare": {
+    "in_view": 0.076,
+    "firing": 0.06
+   },
+   "two_or_more": {
+    "in_view": 0.172,
+    "firing": 0.14
+   },
+   "fired_share": {
+    "rl": 0.133,
+    "rg": 0.236,
+    "lg": 0.567,
+    "mg": 0.063
+   },
+   "pro_weapon_agreement": 0.828,
+   "positions_against_pros": {
+    "all": {
+     "overlap": 0.636,
+     "his_time_on_their_ground": 0.805,
+     "their_time_on_his_ground": 0.712
+    },
+    "bare": {
+     "overlap": 0.525,
+     "his_time_on_their_ground": 0.716,
+     "their_time_on_his_ground": 0.592
+    },
+    "armed": {
+     "overlap": 0.59,
+     "his_time_on_their_ground": 0.795,
+     "their_time_on_his_ground": 0.648
+    }
+   }
+  },
+  "lostworld": {
+   "map": "lostworld",
+   "player_minutes": 64.0,
+   "time_bare": 0.16,
+   "big_weapons_held": 1.12,
+   "first_weapon_s": [
+    4.4,
+    5.3,
+    8.0
+   ],
+   "lives_with_a_weapon": 0.944,
+   "stack_under_100": 0.127,
+   "stack_150_up": 0.49,
+   "pickups_per_player_min": {
+    "wp": 2.14,
+    "mega": 0.77,
+    "ra": 1.08,
+    "ar": 2.61
+   },
+   "frags_per_player_min": 0.8,
+   "own_deaths_per_player_min": 0.08,
+   "bare": {
+    "in_view": 0.06,
+    "firing": 0.052
+   },
+   "two_or_more": {
+    "in_view": 0.147,
+    "firing": 0.12
+   },
+   "fired_share": {
+    "rl": 0.431,
+    "lg": 0.439,
+    "mg": 0.129
+   },
+   "pro_weapon_agreement": 0.801,
+   "positions_against_pros": {
+    "all": {
+     "overlap": 0.655,
+     "his_time_on_their_ground": 0.828,
+     "their_time_on_his_ground": 0.718
+    },
+    "bare": {
+     "overlap": 0.501,
+     "his_time_on_their_ground": 0.754,
+     "their_time_on_his_ground": 0.547
+    },
+    "armed": {
+     "overlap": 0.624,
+     "his_time_on_their_ground": 0.834,
+     "their_time_on_his_ground": 0.656
+    }
+   }
+  }
+ }
+}

@@ -83,6 +83,8 @@ def main():
                 big |= np.stack([mh, ra], 1)
                 if name in ("MH", "RA"):
                     now = mh if name == "MH" else ra
+                elif name.startswith("YA"):                  # a yellow armor: armor gained on that armor's own spot
+                    now = (env.armor[me] - ar0 > 20) & ~ra & (np.linalg.norm(env.state[me, :3] - R.goals[gi], axis=1) < 80)
                 elif name != "free":
                     w = E.WEAPONS.index(name.lower())
                     now = env.has[me][:, w] & ~has0[:, w]

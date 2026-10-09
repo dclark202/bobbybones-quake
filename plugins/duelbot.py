@@ -736,6 +736,9 @@ class duelbot(minqlx.Plugin):
         ground = 1.0 if (abs(vel[2]) < 1 and floor) else 0.0
         va = minqlx.view_angles(p.id)
         pitch, yaw = float(va[0]), float(va[1])
+        if hasattr(env, "sp_hist"):                          # (v14) his speed over the ground one to four frames ago:
+            env.sp_hist[i, 1:] = env.sp_hist[i, :-1].copy()  # the simulator's step() keeps it, a plugin has to
+            env.sp_hist[i, 0] = float(np.hypot(env.state[i, 3], env.state[i, 4]))
         env.state[i] = [*pos, *vel, ground, yaw]
         env.yaw[i], env.pitch[i] = yaw, pitch
         env.hp[i], env.armor[i] = st.health, st.armor
@@ -1338,10 +1341,10 @@ class duelbot(minqlx.Plugin):
         if R_ is None or not hasattr(env, "intent_gone"):
             return
         s = env.state
-        gi_ = np.array(env.intent_gi)[env.intent]
+        node = R_.locate(s[:, :3])
+        gi_ = env._trip_goal(env.intent, node) if hasattr(env, "_trip_goal") else np.array(env.intent_gi)[env.intent]
         valid = gi_ >= 0
         g_ = np.maximum(gi_, 0)
-        node = R_.locate(s[:, :3])
         phi = np.where(valid, R_.T[g_, node] + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
         it_ = np.array(env.route_item)[g_]
         soon = env.item_up[0, it_] | (env.item_t[0, it_] < phi + 5.0)

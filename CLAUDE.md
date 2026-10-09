@@ -74,6 +74,17 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   `tools/eval_loop.py` (started detached beside a run) plays ten-minute duels against the Nightmare stand-in from the latest
   save over and over, at low priority, into `<run>/evals.jsonl`: the duel curve of a run. One trainer uses about 27% of the
   CPU (its simulators wait on the network half the time); more simulator processes do not make it faster.
+- **v14 (2026-10-09; built, not trained yet)**: 509 inputs (the last ten, `N_V14`: his speed, the angle from his view to
+  the way he moves, speed gained in 100 ms; six for the lead of a rocket or a plasma ball). `sim/duel_env_v13.py` /
+  `duel_env_ffa_v13.py` are the frozen 499-input simulator of v13 (the public server's v13: export with
+  `--env duel_env_ffa_v13` from the next deploy with new code on). Switches, all off by default (with all off the simulator
+  is v13's, checked by fixed-seed replays): the map fixes `SHOT_MASK`, `LAVA`, `WALK_FIX`, `PRO_WAYS`, `NEAREST`, `QL_MOVE`,
+  `ITEM_DROP`, `SOLIDS`; `SHOT_W` (shot price by weapon), `TEACH_FREE` (weapon teacher silent on shotgun, grenades, plasma),
+  `SPEED_PAY` / `SPEED_PAY_RUN` (per stretch of new ground by speed, 320 to 480), `RUN_TEACHER` (the movement network's
+  labels in item runs; the trainer's `--teacher <run>`), `STACK_KEYS=0` (no key labels in games), `BLIND_RULE` (shots with
+  no enemy in view). `sim/train_move.py --v14` trains the strafe-jumping teacher (lava, the game's step height, fall
+  damage priced); `sim/export_policy.py` writes its flag. The plugins keep `env.sp_hist` themselves (`fill_player`).
+  The reflex room on the test map does not measure a network whose input statistics were taken on the duel maps (B-176).
 - **After the wiring review (2026-10-08)**: the trainer credits the left hand's outputs (movement keys, weapon key) only on the frames the simulator reads them (`env.key_dec`, one in four) and keeps the input statistics frozen; `sim/renorm_policy.py` gives a network fresh input statistics without changing its output (run it when the maps or inputs change; sample from `train_duel_rnn.py --obs-dump`). Checkpoints carry `env_vars` (the simulator switches of `PLAY_VARS`) and the round lengths; `sim/export_duel.py` writes them into `policy.npz` (`--set NAME=VALUE` for runs before v13, e.g. `EXPORT_ARGS="--set INTENT_HOLD=8"` for the server scripts) and the plugins set them before loading the simulator. Checks: `tools/input_check.py` (dead inputs; the real game's inputs beside the simulator's), `tools/teacher_check.py` (can the walking teacher's own pupil reach every item), `tools/nav_prune.py` (takes the jump and drop links the walker cannot take out of a map's graph), `tools/shot_prices.py`.
 - **The map audit (2026-10-09)**: the game's maps set beside the simulator (RESULTS that day): `plugins/maplab.py` lists the
   real game's items per map and mode (`data/maplab/`; `tools/duel_items.py` -> `plugins/duel_items.json`), `plugins/poollab.py`

@@ -80,17 +80,22 @@ yard is the map he is checked on without having trained there.
   life he has a preferred weapon or none, as people do.
 - **Knows the maps.** Alone he finds his way to nearly every weapon, armor and mega on them, through jump pads and
   teleporters.
+- **Plays the item game.** He keeps health and armor stacked, takes the mega and the armors on time, picks up the
+  weapons the dead leave behind, and wins his trained maps against a scripted opponent with the hardest bot's aim.
 - **Out-damages the game's hardest bot.** In ten-minute duels against Nightmare he deals more damage than he takes on
   every map tested.
 - **Moves with a hand, not a script.** Five fingers on the keys, a few key presses a second, three clicks a second.
 
 ## In progress
 
-- **Item control against an opponent**: taking the armors and the mega on time when somebody else wants them too.
-  This is what still decides his games against Nightmare, and the focus of the current training.
 - **Strafe jumping on the duel maps.** It emerged by itself in the movement simulator and carried over to the real
-  game; in full games he still walks more than he should.
-- **Rockets and the first rail shot**, which are below a good player's.
+  game; in full games he still walks. The next training shows it to him in item runs and pays for speed.
+- **Rockets**: leading a moving target, and firing where the enemy is about to be. He fires far fewer than a good
+  player and leans on the lightning gun and the rail.
+- **More of the game's duel maps**: Campgrounds, Sinister and Furious Heights next to Blood Run, Aerowalk and Lost
+  World, with two more held back to test him on maps he has never seen.
+- **The simulator set right against the game's maps**: lava that hurts, shots through bars and grates, items where the
+  game puts them.
 
 ## Planned
 

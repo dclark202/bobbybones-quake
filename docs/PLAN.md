@@ -79,16 +79,15 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-**Running: `duel_gru_v13`** ([MANIFEST_v13.md](MANIFEST_v13.md)), started on the evening of 2026-10-08 with what the owner
-added after playing v12 himself (dropped weapons, the ground at his feet, the hand at 8, pay for knowing where the enemy
-is and for pace, a keys-only walking teacher: B-152, B-155 to B-159) and the teachers' losses held back from the shared
-layers (B-154). To 16:00 on 2026-10-09 at the latest; a mid-run report at 07:00; the full report with recommendations at
-its end. The owner's order of things: item pickups and weapon use must not collapse, rockets up; then position and
-control; speed is a bonus.
-At eight hours ([MIDRUN_v13.md](MIDRUN_v13.md)): improving on items, weapons and the duels against the stand-in (Blood
-Run 30% -> 58% of the frags, Aerowalk 52% -> 71%); rockets slipping and no strafe jumping since the teachers ended.
+**Nothing is training.** `duel_gru_v13` ([MANIFEST_v13.md](MANIFEST_v13.md)) ran from 2026-10-08 21:26 to 2026-10-09 11:35
+(stopped by the owner after fourteen hours) and is on the public server; report: [REPORT_v13.md](REPORT_v13.md). Against
+the stand-in at the end: Blood Run 72% of the frags (97 of 100 games won), Aerowalk 80% (100 of 100), arena1 39%; items
+and weapons held and grew; rockets (19% of his frags) and speed (294 units a second) not delivered. The owner duels him
+on the public server and then gives the go for v14.
 
-**Next: `duel_gru_v14`** (the owner's calls of 2026-10-09, RESULTS 09:05; its manifest after his duel against v13):
+**Next: `duel_gru_v14`** ([MANIFEST_v14.md](MANIFEST_v14.md); the owner's calls of 2026-10-09, RESULTS 09:05; its pieces are
+built and in `sim/` behind switches, RESULTS 12:20; open before the start: the strafe-jumping teacher's quality B-177,
+the reflex test on a duel map B-176, real Nightmare games B-178, and what the owner's duel adds):
 strafe jumping from a teacher in his item runs, a pay for speed from 320 to 480 and four inputs for his own movement
 (B-163 to B-165); lead reading for rockets and plasma (B-166); what a shot costs, by weapon and by where it lands when no
 enemy is in view (B-167); the weapon teacher on at a low weight to the end and silent on shotgun, plasma and grenades

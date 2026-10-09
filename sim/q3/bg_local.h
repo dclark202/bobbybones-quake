@@ -24,7 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define	MIN_WALK_NORMAL	0.7f		// can't walk on very steep slopes
 
-#define	STEPSIZE		18
+extern	float	pm_stepSize;		// sim: a parameter (Quake 3: 18; Quake Live's pmove_StepHeight: 22)
+#define	STEPSIZE		pm_stepSize
 
 #define	JUMP_VELOCITY	270
 

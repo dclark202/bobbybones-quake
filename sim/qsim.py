@@ -44,7 +44,22 @@ def _lib():
     lib.qsim_world_bounds.argtypes = [F32]
     lib.qsim_knockback.argtypes = [ctypes.c_int, F32, ctypes.c_int]
     lib.qsim_add_trigger.argtypes = [ctypes.c_int, ctypes.c_int, F32, ctypes.c_float]
+    if hasattr(lib, "qsim_version"):                         # the library of 2026-10-09: masks, many contents, solid pieces
+        I32 = np.ctypeslib.ndpointer(np.int32, flags="C_CONTIGUOUS")
+        lib.qsim_rays_m.argtypes = [ctypes.c_int, F32, ctypes.c_int, F32, ctypes.c_float, ctypes.c_int, F32]
+        lib.qsim_rays_each_m.argtypes = [ctypes.c_int, F32, ctypes.c_int, F32, ctypes.c_float, ctypes.c_int, F32]
+        lib.qsim_trace_m.argtypes = [F32, F32, F32, F32, ctypes.c_int, F32]
+        lib.qsim_lines_m.argtypes = [ctypes.c_int, F32, F32, ctypes.c_int, F32]
+        lib.qsim_contents_n.argtypes = [ctypes.c_int, F32, I32]
+        lib.qsim_add_solid.argtypes = [ctypes.c_int, F32]
+        lib.qsim_params2.argtypes = [ctypes.c_float, ctypes.c_float]
     return lib
+
+
+SOLID = 1                                                    # CONTENTS_SOLID: what stops a shot, a missile and the eye in the game
+LAVA, SLIME, WATER = 8, 16, 32                               # liquid contents (qsim_contents)
+QL_WADE, QL_STEP = 0.8, 22.0                                 # Quake Live: wading (fitted: 298.7 u/s with the feet in water,
+#                                                              measured 2026-10-09 with plugins/poollab.py) and pmove_StepHeight
 
 
 def parse_entities(text):
@@ -65,10 +80,15 @@ class World:
             raise RuntimeError("qsim: " + self.lib.qsim_error().decode())
         self.n = self.lib.qsim_create(n)
         self.set_params(**(params or QL_PARAMS))
-        # only what exists in a duel (QL maps tag entities with gametype / not_gametype)
+        # only what exists in a duel (QL maps tag entities with gametype / not_gametype; the maps taken over from Quake 3
+        # also carry its keys: `notfree` = not in the modes without teams, a duel among them. Until 2026-10-09 that key
+        # was not read: Campgrounds had 11 items too many, a second red and a second yellow armor among them)
         self.entities = [e for e in parse_entities(self.lib.qsim_entity_string().decode("latin1"))
                          if "duel" not in e.get("not_gametype", "") and
-                         ("gametype" not in e or "duel" in e["gametype"])]
+                         ("gametype" not in e or "duel" in e["gametype"]) and
+                         e.get("notfree", "0").strip() in ("", "0")]
+        self.new = hasattr(self.lib, "qsim_version")         # the library of 2026-10-09
+        self.solids = []
         self._out = np.zeros((self.n, 8), np.float32)
         self.triggers = self._add_triggers()
 
@@ -102,6 +122,24 @@ class World:
     def set_params(self, jump_velocity, auto_hop, chain_jump, chain_velocity, chain_ms):
         self.lib.qsim_params(jump_velocity, auto_hop, chain_jump, chain_velocity, chain_ms)
 
+    def set_params2(self, wade_scale=0.5, step_size=18.0):
+        """wading scale and step height (Quake 3: 0.5 and 18; Quake Live: QL_WADE and QL_STEP)"""
+        self.lib.qsim_params2(float(wade_scale), float(step_size))
+
+    def add_solids(self):
+        """the map's solid pieces that are brush models of their own (func_static, func_bobbing at rest, doors shut)
+        become part of the collision, as in the game. Returns their (classname, model, origin)."""
+        self.lib.qsim_clear_solids()
+        self.solids = []
+        for e in self.entities:
+            cls = e.get("classname", "")
+            if not cls.startswith("func_") or cls in ("func_timer", "func_group") or not e.get("model", "").startswith("*"):
+                continue
+            org = np.asarray(e.get("origin", (0.0, 0.0, 0.0)), np.float32)
+            if self.lib.qsim_add_solid(int(e["model"][1:]), org) >= 0:
+                self.solids.append((cls, e["model"], tuple(float(v) for v in org)))
+        return self.solids
+
     def spawns(self):
         return [e for e in self.entities if e.get("classname") == "info_player_deathmatch"]
 
@@ -122,31 +160,59 @@ class World:
         self.lib.qsim_get(self.n, self._out)
         return self._out.copy()
 
-    def rays(self, origins, dirs, maxdist):
+    def rays(self, origins, dirs, maxdist, mask=None):
+        """mask None: what stops a player (solid and player-clip brushes); SOLID: what stops a shot and the eye"""
         origins = np.ascontiguousarray(origins, np.float32)
         dirs = np.ascontiguousarray(dirs, np.float32)
         out = np.zeros((len(origins), len(dirs)), np.float32)
-        self.lib.qsim_rays(len(origins), origins, len(dirs), dirs, float(maxdist), out)
+        if mask is None:
+            self.lib.qsim_rays(len(origins), origins, len(dirs), dirs, float(maxdist), out)
+        else:
+            self.lib.qsim_rays_m(len(origins), origins, len(dirs), dirs, float(maxdist), int(mask), out)
         return out
 
-    def rays_each(self, origins, dirs, maxdist):
+    def rays_each(self, origins, dirs, maxdist, mask=None):
         """origins n x 3, dirs n x k x 3 (per-origin directions) -> n x k hit fractions"""
         origins = np.ascontiguousarray(origins, np.float32)
         dirs = np.ascontiguousarray(dirs, np.float32)
         out = np.zeros(dirs.shape[:2], np.float32)
-        self.lib.qsim_rays_each(len(origins), origins, dirs.shape[1], dirs, float(maxdist), out)
+        if mask is None:
+            self.lib.qsim_rays_each(len(origins), origins, dirs.shape[1], dirs, float(maxdist), out)
+        else:
+            self.lib.qsim_rays_each_m(len(origins), origins, dirs.shape[1], dirs, float(maxdist), int(mask), out)
+        return out
+
+    def lines(self, starts, ends, mask=SOLID):
+        """n point traces start -> end -> n hit fractions (1 = a clear line)"""
+        starts = np.ascontiguousarray(starts, np.float32).reshape(-1, 3)
+        ends = np.ascontiguousarray(ends, np.float32).reshape(-1, 3)
+        out = np.zeros(len(starts), np.float32)
+        self.lib.qsim_lines_m(len(starts), starts, ends, int(mask), out)
+        return out
+
+    def contents_n(self, points):
+        """the contents at n points (LAVA, SLIME, WATER, ...)"""
+        points = np.ascontiguousarray(points, np.float32).reshape(-1, 3)
+        out = np.zeros(len(points), np.int32)
+        self.lib.qsim_contents_n(len(points), points, out)
         return out
 
     PLAYER_MINS = np.array([-15, -15, -24], np.float32)
     PLAYER_MAXS = np.array([15, 15, 32], np.float32)
 
-    def trace(self, start, end, mins=None, maxs=None):
-        """box trace -> dict(fraction, endpos, normal, startsolid, allsolid); default box = a point"""
+    def trace(self, start, end, mins=None, maxs=None, mask=None):
+        """box trace -> dict(fraction, endpos, normal, startsolid, allsolid); default box = a point.
+        mask None: what stops a player; SOLID: what stops a shot, a missile and the eye"""
         out = np.zeros(9, np.float32)
         z = np.zeros(3, np.float32)
-        self.lib.qsim_trace(np.asarray(start, np.float32), np.asarray(end, np.float32),
-                            z if mins is None else np.asarray(mins, np.float32),
-                            z if maxs is None else np.asarray(maxs, np.float32), out)
+        if mask is None:
+            self.lib.qsim_trace(np.asarray(start, np.float32), np.asarray(end, np.float32),
+                                z if mins is None else np.asarray(mins, np.float32),
+                                z if maxs is None else np.asarray(maxs, np.float32), out)
+        else:
+            self.lib.qsim_trace_m(np.asarray(start, np.float32), np.asarray(end, np.float32),
+                                  z if mins is None else np.asarray(mins, np.float32),
+                                  z if maxs is None else np.asarray(maxs, np.float32), int(mask), out)
         return dict(fraction=float(out[0]), endpos=out[1:4].copy(), normal=out[4:7].copy(),
                     startsolid=bool(out[7]), allsolid=bool(out[8]))
 

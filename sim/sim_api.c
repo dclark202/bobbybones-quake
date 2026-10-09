@@ -24,6 +24,7 @@
 #endif
 
 extern float pm_jumpVelocity, pm_chainJumpVelocity;
+extern float pm_wadeScale, pm_stepSize;
 extern int pm_autoHop, pm_chainJump, pm_chainJumpMs;
 
 /* ---------------- engine stubs the vendored code expects ---------------- */
@@ -84,11 +85,70 @@ void BotDrawDebugPolygons(void (*drawPoly)(int color, int numPoints, float *poin
     (void)drawPoly; (void)value;
 }
 
+/* ---------------- solid pieces of the map that are brush models of their own (func_static and the like) ----------
+   The game links them as solid entities; here they are added by the caller (qsim_add_solid) and every trace takes them
+   in. With none added, world_trace is the plain trace against the world it replaces. */
+#define MAX_SIM_SOLIDS 64
+typedef struct { clipHandle_t model; vec3_t origin; vec3_t absmin, absmax; } sim_solid_t;
+static sim_solid_t solids[MAX_SIM_SOLIDS];
+static int nsolids;
+static const vec3_t no_angles = {0, 0, 0};
+
+static void world_trace(trace_t *results, const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+                        int contentMask) {
+    int j, k;
+    CM_BoxTrace(results, start, end, mins, maxs, 0, contentMask, qfalse);
+    for (j = 0; j < nsolids; j++) {
+        sim_solid_t *s = &solids[j];
+        trace_t tr;
+        qboolean apart = qfalse, old;
+        for (k = 0; k < 3; k++) {                             /* the move's box against the piece's box */
+            float lo = (start[k] < end[k] ? start[k] : end[k]) + (mins ? mins[k] : 0) - 1.0f;
+            float hi = (start[k] > end[k] ? start[k] : end[k]) + (maxs ? maxs[k] : 0) + 1.0f;
+            if (lo > s->absmax[k] || hi < s->absmin[k]) { apart = qtrue; break; }
+        }
+        if (apart) continue;
+        CM_TransformedBoxTrace(&tr, start, end, mins, maxs, s->model, contentMask, s->origin, no_angles, qfalse);
+        if (tr.allsolid) results->allsolid = qtrue;
+        else if (tr.startsolid) results->startsolid = qtrue;
+        if (tr.fraction < results->fraction) {
+            old = results->startsolid;
+            *results = tr;
+            results->startsolid |= old;
+        }
+    }
+}
+
+/* add a solid piece: inline model number (from "*N") and the entity's origin; -1 when the table is full */
+API int qsim_add_solid(int model_num, const float *origin) {
+    sim_solid_t *s;
+    vec3_t mins, maxs;
+    if (nsolids >= MAX_SIM_SOLIDS) return -1;
+    s = &solids[nsolids];
+    s->model = CM_InlineModel(model_num);
+    VectorCopy(origin, s->origin);
+    CM_ModelBounds(s->model, mins, maxs);
+    VectorAdd(mins, origin, s->absmin);
+    VectorAdd(maxs, origin, s->absmax);
+    return nsolids++;
+}
+
+API void qsim_clear_solids(void) { nsolids = 0; }
+
+/* wading scale (PM_WalkMove with the feet or the waist in a liquid) and step height. Defaults: Quake 3's 0.5 and 18. */
+API void qsim_params2(float wade_scale, float step_size) {
+    pm_wadeScale = wade_scale;
+    pm_stepSize = step_size;
+}
+
+/* 2 = this library has the functions of 2026-10-09 (masks, many contents, solid pieces, params2) */
+API int qsim_version(void) { return 2; }
+
 /* ---------------- world callbacks for Pmove ---------------- */
 static void sim_trace(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs,
                       const vec3_t end, int passEntityNum, int contentMask) {
     (void)passEntityNum;
-    CM_BoxTrace(results, start, end, mins, maxs, 0, contentMask, qfalse);
+    world_trace(results, start, end, mins, maxs, contentMask);
 }
 static int sim_pointcontents(const vec3_t point, int passEntityNum) {
     (void)passEntityNum;
@@ -285,7 +345,39 @@ API void qsim_rays(int n, const float *origins, int k, const float *dirs, float 
         for (j = 0; j < k; j++) {
             vec3_t end;
             VectorMA(o, maxdist, dirs + j * 3, end);
-            CM_BoxTrace(&tr, o, end, mins, maxs, 0, MASK_PLAYERSOLID, qfalse);
+            world_trace(&tr, o, end, mins, maxs, MASK_PLAYERSOLID);
+            out[i * k + j] = tr.fraction;
+        }
+    }
+}
+
+/* qsim_rays with a content mask of the caller's choice: 1 (CONTENTS_SOLID) is what stops a shot, a missile and the eye
+   in the game (MASK_SHOT without the bodies); MASK_PLAYERSOLID also stops at player-clip brushes, which are not drawn */
+API void qsim_rays_m(int n, const float *origins, int k, const float *dirs, float maxdist, int mask, float *out) {
+    static const vec3_t mins = {-1, -1, -1}, maxs = {1, 1, 1};
+    int i, j;
+    trace_t tr;
+    for (i = 0; i < n; i++) {
+        const float *o = origins + i * 3;
+        for (j = 0; j < k; j++) {
+            vec3_t end;
+            VectorMA(o, maxdist, dirs + j * 3, end);
+            world_trace(&tr, o, end, mins, maxs, mask);
+            out[i * k + j] = tr.fraction;
+        }
+    }
+}
+
+API void qsim_rays_each_m(int n, const float *origins, int k, const float *dirs, float maxdist, int mask, float *out) {
+    static const vec3_t mins = {-1, -1, -1}, maxs = {1, 1, 1};
+    int i, j;
+    trace_t tr;
+    for (i = 0; i < n; i++) {
+        const float *o = origins + i * 3;
+        for (j = 0; j < k; j++) {
+            vec3_t end;
+            VectorMA(o, maxdist, dirs + (i * k + j) * 3, end);
+            world_trace(&tr, o, end, mins, maxs, mask);
             out[i * k + j] = tr.fraction;
         }
     }
@@ -301,7 +393,7 @@ API void qsim_rays_each(int n, const float *origins, int k, const float *dirs, f
         for (j = 0; j < k; j++) {
             vec3_t end;
             VectorMA(o, maxdist, dirs + (i * k + j) * 3, end);
-            CM_BoxTrace(&tr, o, end, mins, maxs, 0, MASK_PLAYERSOLID, qfalse);
+            world_trace(&tr, o, end, mins, maxs, MASK_PLAYERSOLID);
             out[i * k + j] = tr.fraction;
         }
     }
@@ -310,12 +402,40 @@ API void qsim_rays_each(int n, const float *origins, int k, const float *dirs, f
 /* box trace: out = fraction, endpos xyz, plane normal xyz, startsolid, allsolid (9 floats) */
 API void qsim_trace(const float *start, const float *end, const float *mins, const float *maxs, float *out) {
     trace_t tr;
-    CM_BoxTrace(&tr, start, end, mins, maxs, 0, MASK_PLAYERSOLID, qfalse);
+    world_trace(&tr, start, end, mins, maxs, MASK_PLAYERSOLID);
     out[0] = tr.fraction;
     VectorCopy(tr.endpos, out + 1);
     VectorCopy(tr.plane.normal, out + 4);
     out[7] = (float)tr.startsolid;
     out[8] = (float)tr.allsolid;
+}
+
+/* qsim_trace with a content mask of the caller's choice (see qsim_rays_m) */
+API void qsim_trace_m(const float *start, const float *end, const float *mins, const float *maxs, int mask, float *out) {
+    trace_t tr;
+    world_trace(&tr, start, end, mins, maxs, mask);
+    out[0] = tr.fraction;
+    VectorCopy(tr.endpos, out + 1);
+    VectorCopy(tr.plane.normal, out + 4);
+    out[7] = (float)tr.startsolid;
+    out[8] = (float)tr.allsolid;
+}
+
+/* n point traces start -> end with one mask: out = n fractions (lines of sight and of fire, many at once) */
+API void qsim_lines_m(int n, const float *starts, const float *ends, int mask, float *out) {
+    static const vec3_t zero = {0, 0, 0};
+    int i;
+    trace_t tr;
+    for (i = 0; i < n; i++) {
+        world_trace(&tr, starts + i * 3, ends + i * 3, zero, zero, mask);
+        out[i] = tr.fraction;
+    }
+}
+
+/* the contents at n points (CONTENTS_LAVA 8, CONTENTS_SLIME 16, CONTENTS_WATER 32, ...) */
+API void qsim_contents_n(int n, const float *points, int *out) {
+    int i;
+    for (i = 0; i < n; i++) out[i] = CM_PointContents(points + i * 3, 0);
 }
 
 /* bounds of the world model: out = mins xyz, maxs xyz */

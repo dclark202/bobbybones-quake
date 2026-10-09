@@ -250,6 +250,20 @@ add("dropped weapon", "a dropped weapon is in view", DROP_WHAT, "0 or 1", "v13")
 for nm in ("a rocket launcher", "a lightning gun", "a railgun"):
     add("dropped weapon", "the dropped weapon is {}".format(nm), "none of the three: another weapon", "0 or 1", "v13")
 add("dropped weapon", "the dropped weapon's time left", "the share of its 30 seconds", "0 to 1", "v13")
+MOVE_WHAT = "the angle from his view to the way he is moving; zero under 50 units a second"
+for nm, what, sc in (("his speed over the ground", "", "units/s / 400, capped at 3"),      # ---- his own movement, read out for strafe jumping (2026-10-09, v14)
+                     ("the way he moves against his view: sin", MOVE_WHAT, "sin"), ("the way he moves against his view: cos", MOVE_WHAT, "cos"),
+                     ("speed gained in the last 100 ms", "", "units/s / 100, between -1 and 1")):
+    add("his movement", nm, what, sc, "v14")
+LEAD_WHAT = ("where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement "
+             "(a reaction time old); zero with another weapon in hand or no enemy in view")
+for nm, sc in (("meeting point: crosshair error left-right, coarse", "degrees / 30, capped at 1"),      # ---- the lead of a shot (v14)
+               ("meeting point: crosshair error left-right, fine", "degrees / 2, capped at 1"),
+               ("meeting point: crosshair error up-down, coarse", "degrees / 15, capped at 1"),
+               ("meeting point: crosshair error up-down, fine", "degrees / 2, capped at 1"),
+               ("the shot's flight time", "seconds / 1.5, capped at 2"),
+               ("the floor under the meeting point lies below it by", "degrees / 15, capped at 1 (1: no floor near)")):
+    add("lead", nm, LEAD_WHAT, sc, "v14")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

@@ -498,13 +498,3 @@ index,group,input,meaning,scale,added in
 496,dropped weapon,the dropped weapon is a lightning gun,none of the three: another weapon,0 or 1,v13
 497,dropped weapon,the dropped weapon is a railgun,none of the three: another weapon,0 or 1,v13
 498,dropped weapon,the dropped weapon's time left,the share of its 30 seconds,0 to 1,v13
-499,his movement,his speed over the ground,,"units/s / 400, capped at 3",v14
-500,his movement,the way he moves against his view: sin,the angle from his view to the way he is moving; zero under 50 units a second,sin,v14
-501,his movement,the way he moves against his view: cos,the angle from his view to the way he is moving; zero under 50 units a second,cos,v14
-502,his movement,speed gained in the last 100 ms,,"units/s / 100, between -1 and 1",v14
-503,lead,"meeting point: crosshair error left-right, coarse","where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","degrees / 30, capped at 1",v14
-504,lead,"meeting point: crosshair error left-right, fine","where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","degrees / 2, capped at 1",v14
-505,lead,"meeting point: crosshair error up-down, coarse","where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","degrees / 15, capped at 1",v14
-506,lead,"meeting point: crosshair error up-down, fine","where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","degrees / 2, capped at 1",v14
-507,lead,the shot's flight time,"where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","seconds / 1.5, capped at 2",v14
-508,lead,the floor under the meeting point lies below it by,"where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","degrees / 15, capped at 1 (1: no floor near)",v14

@@ -1,0 +1,339 @@
+{
+ "run": "duel_gru_v13",
+ "policy": "data/sim_runs/duel_gru_v13/policy_end_v13.pt",
+ "opp": "nightmare",
+ "env": "duel_env_ffa",
+ "set": {
+  "AIM_LEVEL": "3",
+  "ITEM_BELIEF": "1",
+  "STYLE_P": "0.75",
+  "INTENT_HOLD": "8",
+  "KEY_RATE": "8",
+  "AMMO_PACKS": "0",
+  "GROUND_SENSE": "1",
+  "DROPS": "1"
+ },
+ "maps": {
+  "arena1": {
+   "games": 100,
+   "minutes": 10.0,
+   "frag_share": 0.394,
+   "frag_share_95": [
+    0.377,
+    0.411
+   ],
+   "won": 25,
+   "drawn": 4,
+   "lost": 71,
+   "restarts": 0,
+   "he": {
+    "score": 9.85,
+    "kills": 13.64,
+    "time_bare": 0.231,
+    "first_weapon_s": 4.6,
+    "stack_150_up": 0.047,
+    "in_view": 0.257,
+    "firing": 0.194,
+    "speed": 241,
+    "firing_in_view": 0.629,
+    "standing": 0.153,
+    "standing_over_3s": 0.042,
+    "own_deaths": 3.79,
+    "weapons_per_min": 2.73,
+    "mega_share": 0.221,
+    "red_share": 0.007,
+    "yellow_per_min": 0.0,
+    "lives_per_min": 2.58,
+    "dmg_dealt": 2791.0,
+    "dmg_taken_from_him": 3433.0,
+    "frags_by": {
+     "rl": 0.1,
+     "lg": 0.34,
+     "rg": 0.34,
+     "mg": 0.22
+    },
+    "hit_rate": {
+     "rl": 0.187,
+     "lg": 0.299,
+     "rg": 0.389,
+     "mg": 0.253
+    },
+    "shots_per_min": {
+     "rl": 3.0,
+     "lg": 44.6,
+     "rg": 3.3,
+     "mg": 50.5
+    },
+    "in_hand_by_distance": {
+     "close": {
+      "rl": 0.22,
+      "lg": 0.21,
+      "rg": 0.34,
+      "mg": 0.23
+     },
+     "mid": {
+      "rl": 0.18,
+      "lg": 0.2,
+      "rg": 0.26,
+      "mg": 0.36
+     },
+     "far": {
+      "rl": 0.16,
+      "lg": 0.21,
+      "rg": 0.23,
+      "mg": 0.39
+     }
+    },
+    "closing": [
+     -1,
+     39,
+     3
+    ],
+    "in_view_by_strength": [
+     0.4,
+     0.56,
+     0.04
+    ],
+    "know": 0.0,
+    "dropped_weapons": {
+     "fell_per_game": 24.1,
+     "taken_per_game": 11.1,
+     "new_to_taker": 0.58
+    }
+   },
+   "opponent": {
+    "score": 14.54,
+    "kills": 20.99,
+    "time_bare": 0.284,
+    "first_weapon_s": 3.8,
+    "stack_150_up": 0.189,
+    "in_view": 0.253,
+    "firing": 0.132,
+    "speed": 252,
+    "firing_in_view": 0.503,
+    "standing": 0.058,
+    "standing_over_3s": 0.0,
+    "own_deaths": 6.45,
+    "weapons_per_min": 2.65,
+    "mega_share": 0.02,
+    "red_share": 0.458,
+    "yellow_per_min": 0.0,
+    "lives_per_min": 2.11
+   }
+  },
+  "bloodrun": {
+   "games": 100,
+   "minutes": 10.0,
+   "frag_share": 0.725,
+   "frag_share_95": [
+    0.704,
+    0.748
+   ],
+   "won": 97,
+   "drawn": 2,
+   "lost": 1,
+   "restarts": 0,
+   "he": {
+    "score": 11.82,
+    "kills": 12.02,
+    "time_bare": 0.048,
+    "first_weapon_s": 4.8,
+    "stack_150_up": 0.679,
+    "in_view": 0.154,
+    "firing": 0.117,
+    "speed": 286,
+    "firing_in_view": 0.675,
+    "standing": 0.049,
+    "standing_over_3s": 0.003,
+    "own_deaths": 0.2,
+    "weapons_per_min": 1.2,
+    "mega_share": 0.498,
+    "red_share": 0.298,
+    "yellow_per_min": 2.9,
+    "lives_per_min": 0.58,
+    "dmg_dealt": 2843.0,
+    "dmg_taken_from_him": 2765.0,
+    "frags_by": {
+     "rl": 0.21,
+     "lg": 0.39,
+     "rg": 0.36,
+     "mg": 0.04
+    },
+    "hit_rate": {
+     "rl": 0.518,
+     "lg": 0.453,
+     "rg": 0.446,
+     "mg": 0.39
+    },
+    "shots_per_min": {
+     "rl": 1.9,
+     "lg": 35.8,
+     "rg": 3.3,
+     "mg": 4.7
+    },
+    "in_hand_by_distance": {
+     "close": {
+      "rl": 0.22,
+      "lg": 0.26,
+      "rg": 0.46,
+      "mg": 0.05
+     },
+     "mid": {
+      "rl": 0.17,
+      "lg": 0.31,
+      "rg": 0.46,
+      "mg": 0.06
+     },
+     "far": {
+      "rl": 0.12,
+      "lg": 0.33,
+      "rg": 0.5,
+      "mg": 0.06
+     }
+    },
+    "closing": [
+     -26,
+     22,
+     68
+    ],
+    "in_view_by_strength": [
+     0.08,
+     0.19,
+     0.73
+    ],
+    "know": 0.0,
+    "dropped_weapons": {
+     "fell_per_game": 12.7,
+     "taken_per_game": 8.7,
+     "new_to_taker": 0.34
+    }
+   },
+   "opponent": {
+    "score": 3.98,
+    "kills": 4.56,
+    "time_bare": 0.174,
+    "first_weapon_s": 5.4,
+    "stack_150_up": 0.323,
+    "in_view": 0.166,
+    "firing": 0.085,
+    "speed": 266,
+    "firing_in_view": 0.497,
+    "standing": 0.079,
+    "standing_over_3s": 0.006,
+    "own_deaths": 0.58,
+    "weapons_per_min": 2.54,
+    "mega_share": 0.396,
+    "red_share": 0.308,
+    "yellow_per_min": 0.19,
+    "lives_per_min": 1.36
+   }
+  },
+  "aerowalk": {
+   "games": 100,
+   "minutes": 10.0,
+   "frag_share": 0.797,
+   "frag_share_95": [
+    0.78,
+    0.814
+   ],
+   "won": 100,
+   "drawn": 0,
+   "lost": 0,
+   "restarts": 0,
+   "he": {
+    "score": 23.17,
+    "kills": 23.23,
+    "time_bare": 0.035,
+    "first_weapon_s": 2.9,
+    "stack_150_up": 0.571,
+    "in_view": 0.169,
+    "firing": 0.13,
+    "speed": 278,
+    "firing_in_view": 0.676,
+    "standing": 0.048,
+    "standing_over_3s": 0.002,
+    "own_deaths": 0.06,
+    "weapons_per_min": 1.83,
+    "mega_share": 0.646,
+    "red_share": 0.031,
+    "yellow_per_min": 2.16,
+    "lives_per_min": 0.7,
+    "dmg_dealt": 4022.0,
+    "dmg_taken_from_him": 3114.0,
+    "frags_by": {
+     "rl": 0.08,
+     "lg": 0.54,
+     "rg": 0.38,
+     "mg": 0.01
+    },
+    "hit_rate": {
+     "rl": 0.572,
+     "lg": 0.516,
+     "rg": 0.532,
+     "mg": 0.429
+    },
+    "shots_per_min": {
+     "rl": 0.9,
+     "lg": 63.3,
+     "rg": 4.0,
+     "mg": 1.1
+    },
+    "in_hand_by_distance": {
+     "close": {
+      "rl": 0.08,
+      "lg": 0.39,
+      "rg": 0.53,
+      "mg": 0.01
+     },
+     "mid": {
+      "rl": 0.07,
+      "lg": 0.44,
+      "rg": 0.48,
+      "mg": 0.01
+     },
+     "far": {
+      "rl": 0.03,
+      "lg": 0.54,
+      "rg": 0.36,
+      "mg": 0.06
+     }
+    },
+    "closing": [
+     -3,
+     20,
+     32
+    ],
+    "in_view_by_strength": [
+     0.13,
+     0.28,
+     0.59
+    ],
+    "know": 0.0,
+    "dropped_weapons": {
+     "fell_per_game": 22.4,
+     "taken_per_game": 16.5,
+     "new_to_taker": 0.21
+    }
+   },
+   "opponent": {
+    "score": 5.69,
+    "kills": 5.92,
+    "time_bare": 0.226,
+    "first_weapon_s": 3.0,
+    "stack_150_up": 0.156,
+    "in_view": 0.176,
+    "firing": 0.075,
+    "speed": 249,
+    "firing_in_view": 0.415,
+    "standing": 0.133,
+    "standing_over_3s": 0.003,
+    "own_deaths": 0.23,
+    "weapons_per_min": 3.57,
+    "mega_share": 0.231,
+    "red_share": 0.145,
+    "yellow_per_min": 0.02,
+    "lives_per_min": 2.45
+   }
+  }
+ }
+}

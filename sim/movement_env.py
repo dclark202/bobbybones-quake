@@ -42,6 +42,8 @@ TURN_BINS = np.array([-30, -15, -6, -2, 0, 2, 6, 15, 30], np.float32)
 ACTION_DIMS = (3, 3, 2, len(TURN_BINS))
 GOAL_CLASSES = ("weapon_", "item_armor_body", "item_armor_combat", "item_armor_jacket", "item_health_mega",
                 "item_health_large", "item_quad")
+FALL_COST = 0.05                                            # v14: seconds a point of fall damage costs (a far fall, 10 points: half a second)
+HAZARD = 8 | 16                                             # lava, slime (the map's contents flags)
 N_WALL, N_FLOOR = 16, 8
 OBS_DIM = 3 + 1 + 12 + 4 + 3 + 1 + N_WALL + N_FLOOR
 
@@ -49,7 +51,7 @@ OBS_DIM = 3 + 1 + 12 + 4 + 3 + 1 + N_WALL + N_FLOOR
 class NavField:
     """nav graph -> time-to-goal for every node and goal, next hops, fast position lookup"""
 
-    def __init__(self, nav_path, goals, world=None):
+    def __init__(self, nav_path, goals, world=None, hazard=False, starts=None):
         g = json.load(open(nav_path))
         self.nodes = np.array(g["nodes"], np.float32)
         n = len(self.nodes)
@@ -61,6 +63,10 @@ class NavField:
             self.valid = np.array([world.cluster(p) >= 0 for p in self.nodes])
             floor = world.rays(self.nodes, np.array([[0, 0, -1.0]], np.float32), 64.0)[:, 0] < 1
             self.spawnable = self.valid & floor
+            if hazard:                                        # v14: no point with its feet in lava or slime
+                wet = (world.contents_n(self.nodes + np.array([0, 0, -23.0], np.float32)) & HAZARD) != 0
+                self.valid &= ~wet
+                self.spawnable &= ~wet
         radj = [[] for _ in range(n)]
         have = set()
         edges = [e for e in g["edges"] if self.valid[e[0]] and self.valid[e[1]]]
@@ -98,6 +104,22 @@ class NavField:
             for v, d in dist.items():
                 self.T[gi, v] = d
         self.reach = self.T < 1e8
+        if starts is not None and len(starts):                # v14: a try starts only where the spawn points lead
+            fwd = [[] for _ in range(n)]
+            for b_ in range(n):
+                for a_, c_, k_ in radj[b_]:
+                    fwd[a_].append(b_)
+            seen = np.zeros(n, bool)
+            todo = [int(x) for x in np.unique(self.locate(np.asarray(starts, np.float32))[0])]
+            seen[todo] = True
+            while todo:
+                u = todo.pop()
+                for v in fwd[u]:
+                    if not seen[v]:
+                        seen[v] = True
+                        todo.append(v)
+            self.live = seen
+            self.spawnable &= seen
 
     def locate(self, pos):
         d, k = self._kd.query(pos * np.array([1, 1, 2.0], np.float32))
@@ -111,10 +133,15 @@ class NavField:
 
 class MoveEnv:
     def __init__(self, bsp, nav_path, n=512, seed=0, max_goal_time=8.0, min_goal_time=0.8, substeps=(8, 8, 9),
-                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0):
+                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False):
         """substeps: physics steps (ms) per 25 ms decision. (8, 8, 9) = a 125 fps human: the frame-rate
         dependent ground-strafe boost that 40 Hz bots get (25,) is not available, as for real players."""
         self.w = World(bsp, n=n)
+        self.v14 = bool(v14)
+        if self.v14:                                           # the game's own step height and wading, its solid pieces
+            from qsim import QL_STEP, QL_WADE
+            self.w.set_params2(QL_WADE, QL_STEP)
+            self.w.add_solids()
         self.substeps = tuple(substeps)
         self.stall_limit = stall_limit
         # robustness for transfer to the real game: noisy senses and the odd one-frame-late command
@@ -123,8 +150,11 @@ class MoveEnv:
         self.n = n
         self.rng = np.random.default_rng(seed)
         goals = [e["origin"] for e in self.w.entities
-                 if e.get("classname", "").startswith(GOAL_CLASSES) and "origin" in e]
-        self.field = NavField(nav_path, goals, world=self.w)
+                 if e.get("classname", "").startswith(GOAL_CLASSES) and "origin" in e
+                 and not (self.v14 and e["classname"] == "item_quad")]
+        starts = [e["origin"] for e in self.w.spawns()]
+        self.field = NavField(nav_path, goals, world=self.w, hazard=self.v14, starts=starts if self.v14 else None)
+        self.fall_dmg = np.zeros(n, np.float32)
         self.spawn_nodes = np.nonzero(self.field.spawnable)[0]
         self.goal_pos = self.field.goals
         self.max_goal_time, self.min_goal_time = max_goal_time, min_goal_time
@@ -212,7 +242,11 @@ class MoveEnv:
                         si[:, None] * self.floor_off[None, :, 0] + c[:, None] * self.floor_off[None, :, 1]], 2)
         starts = np.concatenate([pos[:, None, :2] + off, np.repeat(pos[:, None, 2:3], N_FLOOR, 1)], 2)
         down = np.array([[0, 0, -1.0]], np.float32)
-        fr = self.w.rays(starts.reshape(-1, 3).astype(np.float32), down, 256.0)
+        st = starts.reshape(-1, 3).astype(np.float32)
+        fr = self.w.rays(st, down, 256.0).reshape(-1)
+        if getattr(self, "v14", False):                        # lava or slime where the ray ends: no floor there
+            end = st + np.array([0, 0, -1.0], np.float32)[None, :] * (fr * 256.0 - 4.0)[:, None]
+            fr = np.where((self.w.contents_n(end) & HAZARD) != 0, 1.0, fr)
         return fr.reshape(self.n, N_FLOOR)
 
     def step(self, actions):
@@ -233,6 +267,7 @@ class MoveEnv:
             yaw = y0 + turn * (done_ms / 25.0)
             self.w.step(moves, np.stack([np.zeros(self.n, np.float32), yaw.astype(np.float32)], 1), ms)
         self.yaw = (y0 + turn + 180.0) % 360.0 - 180.0
+        prev = self.state
         self.state = s = self.w.state()
         self.yaw = s[:, 7].copy()                              # teleporters snap the view
         pos = s[:, :3]
@@ -244,18 +279,26 @@ class MoveEnv:
         gp = self.goal_pos[self.goal]
         arrived = (np.hypot(gp[:, 0] - pos[:, 0], gp[:, 1] - pos[:, 1]) < 40) & (np.abs(gp[:, 2] - pos[:, 2]) < 64)
         fell = pos[:, 2] < self.zmin
+        hard = np.zeros(self.n, np.float32)
+        if self.v14:
+            fell = fell | ((self.w.contents_n(pos + np.array([0, 0, -23.0], np.float32)) & HAZARD) != 0)
+            delta = prev[:, 5] ** 2 * 0.0001                   # Quake 3's fall damage, from the speed of the landing
+            hard = np.where((prev[:, 6] < 0.5) & (s[:, 6] > 0.5) & (prev[:, 5] < 0),
+                            np.where(delta > 60.0, 10.0, np.where(delta > 40.0, 5.0, 0.0)), 0.0).astype(np.float32)
+            self.fall_dmg += hard
         improved = phi < self.best_phi - 0.05
         self.best_phi = np.minimum(self.best_phi, phi)
         self.stall = np.where(improved, 0.0, self.stall + DT)
         timeout = (self.t > self.limit) | (self.stall > self.stall_limit)
-        reward = reward + arrived * 1.0 - fell * 1.0
+        reward = reward + arrived * 1.0 - fell * 1.0 - FALL_COST * hard
         done = arrived | fell | timeout
         speed = np.hypot(s[:, 3], s[:, 4])
         info = dict(speed=speed, ground=s[:, 6].copy())
         ep = []
         for i in np.nonzero(done)[0]:
             ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), t=float(self.t[i]),
-                           est=float(self.start_phi[i]), goal=int(self.goal[i])))
+                           est=float(self.start_phi[i]), goal=int(self.goal[i]), fall_dmg=float(self.fall_dmg[i])))
+            self.fall_dmg[i] = 0.0
             self._reset(int(i))
         if len(ep):
             self.state = self.w.state()

@@ -17,14 +17,14 @@ import time
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+ROOT = os.environ.get("QLBOT_ROOT") or os.path.dirname(HERE)      # (QLBOT_ROOT: the repo, when this file is run from a copy)
 
 
-def worker(remote, bsp, nav, n, seed, substeps):
+def worker(remote, bsp, nav, n, seed, substeps, v14=False):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from movement_env import MoveEnv
-    env = MoveEnv(bsp, nav, n=n, seed=seed, substeps=substeps)
+    env = MoveEnv(bsp, nav, n=n, seed=seed, substeps=substeps, v14=v14)
     mapname = os.path.basename(bsp)[:-4]
     remote.send(env.observe())
     while True:
@@ -59,6 +59,8 @@ def main():
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--substeps", default="8,8,9", help="physics ms per 25 ms decision; 8,8,9 = 125 fps human, 25 = 40 Hz bot")
     ap.add_argument("--curr-threshold", type=float, default=0.6, help="success rate that unlocks longer trips")
+    ap.add_argument("--v14", action="store_true", help="Quake Live's step height and wading, lava and slime, a price for fall "
+                                                       "damage, starts where the spawn points lead (see movement_env.MoveEnv)")
     a = ap.parse_args()
 
     import torch
@@ -83,7 +85,7 @@ def main():
         substeps = tuple(int(x) for x in a.substeps.split(","))
         m = maps[w % len(maps)]
         pr = mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), nav_for(m),
-                                             a.envs, 1000 + w, substeps), daemon=True)
+                                             a.envs, 1000 + w, substeps, a.v14), daemon=True)
         pr.start()
         pipes.append(p_main)
         procs.append(pr)
@@ -212,6 +214,9 @@ def main():
                    t_over_est=round(ratio_t, 3), fast_pct=round(100.0 * n_fast / max(1, n_moving), 2),
                    vmax=round(vmax), air=round(float(np.mean(air)), 3), reward=round(float(b_rew.mean()), 4),
                    entropy=round(float(ent), 3), curriculum=curriculum,
+                   fall_dmg=round(float(np.mean([e.get("fall_dmg", 0.0) for e in recent] or [0.0])), 2),
+                   per_map_t={m: round(float(np.median([e["t"] / max(e["est"], 0.1) for e in arr if e.get("map") == m] or [0])), 3)
+                              for m in maps},
                    per_map={m: round(float(np.mean([e["arrived"] for e in recent if e.get("map") == m] or [0])), 3)
                             for m in maps})
         log.write(json.dumps(rec) + "\n")
@@ -227,11 +232,11 @@ def main():
                 p.recv()
         if update % 20 == 0:
             torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
-                            curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS,
+                            curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14,
                             substeps=a.substeps),
                        os.path.join(out, "policy.pt"))
     torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
-                    curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS,
+                    curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14,
                             substeps=a.substeps),
                os.path.join(out, "policy.pt"))
     for p in pipes:

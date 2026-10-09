@@ -601,6 +601,17 @@ def main():
                    pace=dict(pay_per_player_min=round(float(agg.get("pace_pay", 0.0) / max(1e-9, N * T * DT_MIN)), 4),     # (PACE_PAY)
                              trip_speed=int(agg.get("trip_speed", 0.0) / max(1, agg.get("trip_frames", 0))),               # on his way, nobody about
                              over_320=round(float(agg.get("pace_frames", 0) / max(1, agg.get("trip_frames", 0))), 3)),
+                   v14=dict(in_hand={w_: round(float(np.atleast_1d(agg.get("hand_w", np.zeros(len(WEAPONS))))[i_]              # the share of his playing time with each weapon in hand
+                                                     / max(1.0, float(np.sum(agg.get("hand_w", 0.0))))), 3) for i_, w_ in enumerate(WEAPONS)},
+                            blind_fire={w_: round(float(np.atleast_1d(agg.get("blind_w", np.zeros(len(WEAPONS))))[i_]          # ... of that time, firing it with no enemy seen for a second
+                                                        / max(1.0, float(np.atleast_1d(agg.get("hand_w", np.zeros(len(WEAPONS))))[i_]))), 3) for i_, w_ in enumerate(WEAPONS)},
+                            blind_rockets=dict(per_player_min=round(float(agg.get("blind_rl", 0) / max(1e-9, N * T * DT_MIN)), 3),          # (BLIND_RULE)
+                                               how={k_: round(float(np.atleast_1d(agg.get("blind_rl_how", np.zeros(4)))[i_] / max(1, agg.get("blind_rl", 0))), 3)
+                                                    for i_, k_ in enumerate(("wasted", "jump", "near", "way"))}),
+                            prefire_frames=int(agg.get("prefire_frames", 0)), blind_charged_frames=int(agg.get("blind_bill", 0)),
+                            speed_pay_per_player_min=round(float(agg.get("speed_pay", 0.0) / max(1e-9, N * T * DT_MIN)), 4),             # (SPEED_PAY: on his way in games)
+                            speed_pay_run_per_player_min=round(float(agg.get("speed_pay_run", 0.0) / max(1e-9, N * T * DT_MIN)), 4),     # ... in item runs
+                            teacher_frames=round(float(agg.get("move_teach_frames", 0) / max(1, N * T)), 4)),                            # (RUN_TEACHER) the share of all frames it labels
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,

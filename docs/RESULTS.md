@@ -5,6 +5,99 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 12:20 — `duel_gru_v13` ended (owner); its end checks; v14's pieces built and in `sim/`
+
+**The end.** Owner at 11:28: "end v13 at the next decent checkpoint. then run the full metrics suite, and finish building
+the v14 things"; "send him to the public server". Trainer and evaluation loop stopped at 11:35 on the save of update 450
+(11:28:46; `policy_end_v13.pt`, the lineage's minute 5,675; 846 minutes of this run, 1.74 billion player-frames). The
+three-flat-hours rule had not fired (hour 14 was +2.3 points on Blood Run). Full report: [REPORT_v13.md](REPORT_v13.md).
+
+**Public server**: v13 since 11:40 with the code of 531f3f0 (`CODE=1 tools/push_bobby.sh duel_gru_v13 duel_env_ffa`):
+free-for-all on Aerowalk, two Bobbys, 499 inputs. Its log: "powerups on aerowalk: none found (the game's switch 0, 29
+items, mega there, powerups left 0)"; no frame errors; 34% of one core. Nobody was on it. **From the next deploy with
+new code on, v13 is exported with `duel_env_ffa_v13`** (the main module now has 509 inputs).
+
+**End check, 100 ten-minute duels a map against the stand-in** (`docs/eval_v13_nightmare.json`; v12's end check beside it):
+
+| Map | Score | His share of the frags (95%) | Won / drawn / lost | v12 |
+|---|---|---|---|---|
+| Blood Run | 11.8 : 4.0 | 72% (70-75) | 97 / 2 / 1 | 25%, 0 won |
+| Aerowalk | 23.2 : 5.7 | 80% (78-81) | 100 / 0 / 0 | 47%, 37 won |
+| arena1 (not trained) | 9.8 : 14.5 | 39% (38-41) | 25 / 4 / 71 | 35%, 0 won |
+
+On his two maps he is at 150 or more health and armor 57 to 68% of the time (the stand-in 16 to 32%), takes the yellow
+armors 2.2 to 2.9 times a minute (it 0.0 to 0.2), and a kill of his costs 606 and 526 damage (a kill of the stand-in 237
+and 173). Rockets: 0.9 to 1.9 shots a minute, 8 to 21% of his frags; close up he holds the rail 46 to 53% of the time.
+
+**Beside the pros** (`tools/stack_probe.py`, `docs/stack_v13.json`; self-play, the game's spawn): time bare 13 / 12 / 16%
+on Blood Run / Aerowalk / Lost World (pros 6 / 7 / 10%; v12 was at 54%), first big weapon after 4.5 / 2.9 / 5.3 s
+(median; pros 2.3 / 1.8 / 4.9), 150 or more 45 / 24 / 49% (pros 62 / 42 / 62%), the pros' weapon for the distance in hand
+65 / 83 / 80% of the time, 80 to 87% of his time on the ground that holds 90% of the pros'.
+
+**Alone, told to fetch an item** (`tools/solo_item_check.py`): Blood Run's red armor 100% in 8.3 s (v12: 3%; the jump
+he fell from), Lost World's 100%, Aerowalk's 18% (no way in the walking map), every mega and big weapon 97 to 100%.
+The tool crashed on the yellow armors (it took every intention for a weapon): fixed.
+
+**The reflex room does not measure him any more.** v13 there: on a strafing target 27% of the time (v12 measured again
+today: 47%; the owner 40%), lightning 35 damage a second (68; 58), a rocket 16 damage (36; 54), first rail shot 57% (25%;
+88%), hand jitter on a slow target 2.0 degrees a frame (the owner 0.6). In his games his hit rates rose (lightning 45 to
+52%, rockets 52 to 57% against the stand-in; on target in training 31% -> 34%). Cause, checked
+(his inputs in the room beside the statistics he trained with): twelve inputs more than 5 deviations out, seven more than
+10, where v12 has one. The test map is so large that "where the nearest red armor / mega / teleporter / jump pad is"
+reads 30 to 43 (a duel map: 0 to 2; 47 to 88 deviations), and his own cell's map reading is zero there (23 deviations).
+v13's statistics were measured afresh on the duel maps; v12's came from generations that trained in the room. The test
+has to be run on a duel map (B-176).
+
+**Not done: real games against Nightmare.** The local servers they need were not started: the launch was refused by the
+session's permission check. The owner's own duel on the public server is the first real reading (B-178).
+
+**v14's own pieces, built today in a staging copy, tested, and moved into `sim/`** (every one a switch that is off by
+default; v13's simulator is frozen as `duel_env_v13.py` / `duel_env_ffa_v13.py` and both the frozen modules and the new
+ones with the switches off replay v13's fixed-seed runs exactly, inputs, pay and positions; `tools/ffa_check.py` passes
+with the switches off and on):
+- The twelve audit fixes of 10:15 (`SHOT_MASK`, `LAVA`, `WALK_FIX`, `PRO_WAYS`, `NEAREST`, `QL_MOVE`, `ITEM_DROP`,
+  `SOLIDS`; the `notfree` key always), the library rebuilt.
+- `SHOT_W` (the shot's price by weapon): 32 rockets cost 0.53 at the old price and 0.11 at a fifth; plasma nothing.
+- `TEACH_FREE`: the weapon teacher's label is silent with shotgun, grenades or plasma in hand, and where its answer
+  would be "machine gun" while he owns one of them; with rockets, lightning or rail owned it still names them.
+- `SPEED_PAY` / `SPEED_PAY_RUN`: pay for covering new ground on his way fast, nothing at 320 units a second, full from
+  480. **Changed from the draft**: paid per stretch of new ground and not per second, so a zigzag or a detour at speed
+  earns nothing more (per second, a player gaining ground at 60% of running pace would have collected two thirds more
+  for the same trip). The old movement network through today's hands (355 units a second in item runs on Blood Run)
+  earns 0.53 a player-minute at 0.06, against 7.3 from the runs themselves.
+- `RUN_TEACHER`: the movement network's keys, jump and view as labels in item runs; `STACK_KEYS=0`: no key labels in games.
+  End to end, a pupil pressing only the labels, through today's hands, every v14 switch on, Blood Run: the walking
+  teacher alone 304 units a second and 6.8 items a minute; the old movement network 356, 30% of the time fast in the air,
+  8.3 items a minute.
+- Ten inputs (499 -> 509): four for his movement (speed, the angle from his view to the way he moves as sine and cosine,
+  speed gained in 100 ms; exact against the state) and six for the lead of a rocket or a plasma ball (the meeting
+  point's distance from the crosshair left-right on 30 degrees and 2, up-down on 15 and 2, the flight time, the floor
+  under the meeting point). Against the book for a target crossing at 320: plasma 9.9 degrees where the book says 9.2,
+  rockets beyond the coarse scale's old 15 degrees (the book: 18.7 at any distance), so it is 30. The plugins keep his
+  speed history themselves (`fill_player`).
+- `BLIND_RULE`: plasma and grenades free; a rocket with no enemy in view is free as a rocket jump, within 600 units of
+  where he thinks the enemy is, or on a way the enemy is likely to take from there (toward him or a big item, at a point
+  he can have reached by the time it lands; travel times from any point worked out when first asked and kept), else 6
+  points of damage; machine gun, shotgun, lightning, rail keep 0.003 a frame, except in the first 1.5 s with the
+  crosshair within 150 units of where the enemy must be. Constructed cases on Aerowalk judged as meant (a rocket on the
+  enemy's way to the lightning gun 3.5 s along it: free with news 4 s old, wasted with news 1.2 s old).
+- The trainer logs the new counters (`v14` in `metrics.jsonl`: time with each weapon in hand, blind fire by weapon, blind
+  rockets by verdict, pre-fire frames, the speed pay, the teacher's share of frames).
+
+**The strafe-jumping teacher for the six maps** (`move_v14a`; started 11:56 for 150 minutes; `sim/train_move.py --v14`):
+the game's step height and wading, the maps' solid pieces, lava and slime end a try like a fall out of the map and read
+as a pit in its floor rays, fall damage costs 0.05 s a point, tries start where the spawn points lead, no quad as a
+goal. Free hands, as the network of 2026-10-03 (**not** "under today's hands" as the draft said: porting the finger
+and mouse rules is a second copy of that code; the old network's labels through today's hands give 356). Why a new one:
+the old one, on the three maps it never saw, is on the move 42 to 61% of the time. At 20 minutes: 88% of trips reached,
+48% of its moving time above running speed; as a teacher at that point it was still slower than the walking teacher
+(255 units a second on Blood Run, 28 lava damage a minute on Lost World). To be measured again at its end.
+
+**What did not work / not done**: the reflex room as a measure (above); real Nightmare games (above); the new teacher is
+not yet good enough to teach from; the walking maps are not rebuilt (B-173); no pro tables for Sinister and Furious
+Heights (their demos are not fetched); nothing of the new code has run on a game server (it is not deployed; a local
+image built from it compiles).
+
 ## 2026-10-09 10:15 — the game's maps set beside the simulator: twelve mismatches, the stand-in, the servers' items
 
 The owner, with v14's maps named (train: Blood Run, Aerowalk, Lost World, Campgrounds, Sinister, Furious Heights; held
