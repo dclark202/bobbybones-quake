@@ -262,6 +262,8 @@ def fight(env, pol, where, secs, round_len):
                   zoom=bool(getattr(env, "zoom", np.zeros(2, bool))[0]),
                   intent=E.INTENTS[int(env.intent[0])] if hasattr(E, "INTENTS") else "",
                   rockets=[])
+        if getattr(env, "lab", None) is None:                # a real map: a normal game
+            fr["guns"] = "the game's spawn (machine gun)"
         eye0 = env._eye(s)[:1]
 
         def sees(pt):
