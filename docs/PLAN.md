@@ -79,6 +79,10 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
+**v14's settings are decided (owner, 2026-10-09 after his review of [MANIFEST_v14.md](MANIFEST_v14.md))**: the teacher at
+0.3 rising over the first hour and gone after eight; item runs 30% of his time; no key labels in games; pay for speed
+0.06 in games and 0.15 in item runs; the rocket numbers as proposed. The run starts "later tonight" on his go.
+
 **Maps for v14 (owner, 2026-10-09 afternoon)**: trained Blood Run, Aerowalk, Lost World, Sinister, Furious Heights,
 Battleforged; held out Campgrounds, Hektik, Toxicity, Cure. Real games against Nightmare before and after a run only.
 

@@ -1,20 +1,23 @@
-# `duel_gru_v14`: the manifest for the owner's review (2026-10-09, 16:00; not started)
+# `duel_gru_v14`: the manifest, decided by the owner on 2026-10-09 (not started: "later tonight", on his go)
 
 What the owner called on 2026-10-09, what is built and how it was tested, the run as it would be started, and what is
 his to decide. The run starts only on his go, after his duel against v13.
 Sources: [RESULTS.md](RESULTS.md) entries of 2026-10-09 (09:05 the calls; 10:15 the map audit; 12:20 v13's end; 15:30 the
 preparation and the real games), [REPORT_v13.md](REPORT_v13.md), [BACKLOG.md](BACKLOG.md) B-163 to B-182.
 
-## 0. Decisions for the owner, most important first
+## 0. The owner's decisions (2026-10-09, after his review)
 
-| # | Decision | Proposed | What the tests say |
+"1. 0.3 is good  2. 30% is good  3. no key labels good  4. yes  5. yes  6. tbd: We will start the run later tonight."
+So rows 1 to 5 stand as proposed; the run's length and report hours are set at the start.
+
+| # | Decision | Decided | What the tests say |
 |---|---|---|---|
 | 1 | **How hard the strafe-jumping teacher pushes** | weight 0.3, rising from nothing over the first hour, gone after eight hours | At 0.5 from the first frame his policy moves 0.60 in one update, nearly all of it on the view (v13 started at 0.021). Rising over an hour, every update stays at 0.012 to 0.029, about the size of an update with no teacher at all (two runs of it, 25 and 12 minutes). His aim was the same in every test (on target 31 to 32% of the time in view). His item runs dip while his keys change (6.2 -> 4.5 -> 5.3 items a minute in 25 minutes) and his time fast in the air starts to rise (9% -> 11%). The other ways: 0.05 flat (slower), 0.5 flat (yesterday's trial: 188 -> 320 units a second in 21 minutes, with the big first step) |
 | 2 | **Share of item runs** | 30% of his time (v13: 20%) | more of them is more movement practice and less fighting |
 | 3 | **No key labels in games** | none | v13 had the walking teacher's keys in games for four hours ("forward along the way"); strafe jumping has to replace exactly that. His view and fire in games stay his own either way |
 | 4 | **Size of the pay for speed** | 0.06 in games, 0.15 in item runs (per second at 480 straight along the way) | at that size a strafe-jumping player earns 1.0 to 1.4 a minute in item runs beside about 7 from the runs themselves. "Aggressive" would be two to three times this |
 | 5 | **Rocket numbers** | price a fifth of today's; free within 600 units of where he thinks the enemy is or on the enemy's likely way; a wasted blind rocket 6 damage points; hitscan pre-fire 150 units for 1.5 s; weapon teacher 0.2 to the end | section 3 |
-| 6 | **Run length, report hours** | as v13: to the next afternoon, an hourly brief, a mid-run report | - |
+| 6 | **Run length, report hours** | to be set at the start (proposed as v13: to the next afternoon, an hourly brief, a mid-run report) | - |
 
 Decided today and built in: the maps and the validation maps (section 1), the teacher, the pay for speed, lead reading,
 the shot rules, the map fixes; real games against Nightmare before and after the run, none in the middle.

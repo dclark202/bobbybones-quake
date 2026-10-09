@@ -97,6 +97,10 @@ duels a map against the stand-in):
 | Toxicity | held out | 4.2 : 3.0 | 66% (63%-70%) | 21 / 1 / 10 | 12% / 38% | 25% (0%), 0% (14%) | 0.5 |
 | Cure | held out | 7.6 : 7.1 | 45% (42%-48%) | 12 / 4 / 16 | 18% / 17% | 0% (0%), 3% (37%) | 3.5 |
 
+**The owner's decisions after his review** (about 16:00): the teacher at 0.3 ("0.3 is good"), item runs 30%, no key labels
+in games, the pay for speed and the rocket numbers as proposed; run length to be set: "We will start the run later
+tonight."
+
 **What did not work / is not done**: the teacher from scratch; the first statistics run for the new settings (cut short
 by the PC's load, then the rewrite was not exact on the old maps' sample: `sim/renorm_policy.py` now checks both
 samples); Toxicity's stand-in is not sound yet; Aerowalk's real games say little; the reflex test on a duel map (B-176);
