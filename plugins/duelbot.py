@@ -28,6 +28,12 @@ import zipfile
 import minqlx
 import numpy as np
 
+try:                                                        # no powerups on any server: the shared helpers (plugins/powerups.py)
+    _pu = importlib.import_module(__package__ + ".powerups")
+except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    _pu = importlib.import_module("powerups")
+
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
 MAPS = ("testlab", "arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")      # the only maps a player can pick with !map: the ones Bobby has trained on (botmode.py keeps a copy)
@@ -215,7 +221,7 @@ class duelbot(minqlx.Plugin):
         if len(msg) < 2 or msg[1].lower() not in MAPS:
             return minqlx.RET_USAGE
         self.want_map = msg[1].lower()
-        minqlx.console_command("map {} duel".format(self.want_map))
+        _pu.load_map(self.want_map, "duel")
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game, I'm already in it. ^2!duel [minutes]^7 starts a timed duel.",
@@ -560,9 +566,23 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
 
     # ------------------------------------------------------------------ setup
+    def no_powerups(self, say=False):
+        """no quad, no battle suit, no other powerup on any map (see plugins/powerups.py)"""
+        try:
+            done = _pu.strip()
+            if done or say:
+                cls = [c for _, c, *_ in minqlx.item_states()[1]]
+                self.log("powerups on {}: {} (the game's switch {}, {} items, mega {}, powerups left {})".format(
+                    (minqlx.get_cvar("mapname") or "").lower(), ", ".join(done) if done else "none found",
+                    minqlx.get_cvar("g_spawnItemPowerup"), len(cls), "there" if "item_health_mega" in cls else "NOT there",
+                    sum(1 for c in cls if c in _pu.POWERUPS)))
+        except Exception as e:                               # noqa: BLE001
+            self.log("powerups: {!r}".format(e))
+
     def setup(self):
         mapname = (minqlx.get_cvar("mapname") or "").lower()
         self.set_cvar("g_weaponRespawn", "5")                # the game's 1v1 value (ffabot sets 2 s; a runtime cvar outlives the map)
+        self.no_powerups(say=True)
         bsp = "/tmp/maps/{}.bsp".format(mapname)
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
             os.makedirs("/tmp/maps", exist_ok=True)
@@ -916,15 +936,18 @@ class duelbot(minqlx.Plugin):
                 self.next_check = now + 2
                 if (minqlx.get_cvar("mapname") or "").lower() != self.want_map:
                     self.next_check = now + 10
-                    minqlx.console_command("map {} duel".format(self.want_map))
+                    _pu.load_map(self.want_map, "duel")
                     return
                 self.setup()
             return
         if (minqlx.get_cvar("mapname") or "").lower() not in MAPS:       # the game rotated to another map
             if now > self.next_check:
                 self.next_check = now + 10
-                minqlx.console_command("map {} duel".format(self.want_map))
+                _pu.load_map(self.want_map, "duel")
             return
+        if now > getattr(self, "powerup_check", 0.0):          # the game puts every item back when a real game starts
+            self.powerup_check = now + 3.0
+            self.no_powerups()
         if now > self.reload_check and self.room is None and not self.queue:
             self.reload_check = now + 5                      # a newer policy.npz is picked up without a restart
             try:

@@ -5,10 +5,18 @@ free-for-all map by design; testlab and the duel maps are 1v1, the duel factory 
 Load first: QLX_PLUGINS="botctl, botmode, duelbot" (or ffabot). The switch unloads the one plugin, kicks the bots,
 changes the map with the other factory and loads the other plugin, which adds its own bots.
 """
+import importlib
 import os
+import sys
 import time
 
 import minqlx
+
+try:                                                        # no powerups on any server: the shared helpers (plugins/powerups.py)
+    _pu = importlib.import_module(__package__ + ".powerups")
+except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    _pu = importlib.import_module("powerups")
 
 FFA_MAPS = ("arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")
 DUEL_MAPS = ("testlab",)      # the test map is the only 1v1 one (reflex and movement tests); every other map defaults to free-for-all. duelbot.MAPS has the whole list
@@ -60,7 +68,7 @@ class botmode(minqlx.Plugin):
                 minqlx.console_command("clientkick {}".format(p.id))
         if cur != mode:
             self.pending = PLUGIN[mode]
-        minqlx.console_command("map {} {}".format(mapname, "ffa" if mode == "ffa" else "duel"))
+        _pu.load_map(mapname, "ffa" if mode == "ffa" else "duel")
         self.msg("^3{} switched the server to {} on {}.^7".format(who, "free-for-all" if mode == "ffa" else "1v1", mapname))
         return None
 

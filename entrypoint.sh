@@ -3,6 +3,9 @@ redis-server --daemonize yes >/dev/null
 cp -n /ql/baseq3-extra/* /ql/baseq3/ 2>/dev/null
 cp -f /ql/baseq3-extra/workshop.txt /ql/baseq3/workshop.txt 2>/dev/null   # ours replaces the game's empty one
 /tools/watchdog.sh >/dev/null 2>&1 &
+# No powerups on any server (owner, 2026-10-09; plugins/powerups.py): the game's own switch is off for the first map too.
+# Campgrounds in free-for-all is the one map whose quad the plugin turns into its mega: there it stays on.
+PU=0; [ "${FACTORY:-duel}" = "ffa" ] && [ "${LAB_MAP:-bloodrun}" = "campgrounds" ] && PU=1
 cd /ql
 ./run_server_x64_minqlx.sh \
     +set net_ip 0.0.0.0 \
@@ -18,6 +21,7 @@ cd /ql
     +set zmq_rcon_password "lab" \
     +set bot_enable 1 \
     +set bot_nochat 1 \
+    +set g_spawnItemPowerup "$PU" \
     +exec lab.cfg \
     "$@" \
     +map "${LAB_MAP:-bloodrun}" "${FACTORY:-duel}" 2>&1 | tee -a /tmp/practice/server.log

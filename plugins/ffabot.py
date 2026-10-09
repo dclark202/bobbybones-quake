@@ -26,6 +26,7 @@ except Exception:                                           # noqa: BLE001 - loa
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _duel = importlib.import_module("duelbot")
 duelbot, is_bot, sig, D, QLNUM = _duel.duelbot, _duel.is_bot, _duel.sig, _duel.D, _duel.QLNUM
+_pu = _duel._pu                                              # no powerups on any server (plugins/powerups.py)
 
 SEATS = 6
 MAX_BOTS = 4
@@ -156,7 +157,7 @@ class ffabot(duelbot):
         if len(msg) < 2 or msg[1].lower() not in FFA_MAPS:
             return minqlx.RET_USAGE
         self.want_map = msg[1].lower()
-        minqlx.console_command("map {} ffa".format(self.want_map))
+        _pu.load_map(self.want_map, "ffa")
 
     def on_team_switch(self, player, old, new):
         """people take the seats the bots leave: SEATS - n_bots; a bot is never pushed out"""
@@ -188,7 +189,11 @@ class ffabot(duelbot):
         self.set_cvar("g_weaponRespawn", "2")                # weapons back in 2 s (duelbot.setup puts the 5 s of 1v1 back)
         self.set_cvar("timelimit", "10")                     # a real game (started by the people readying up) lasts this long
         self.set_cvar("fraglimit", "0")
-        self.no_quad()
+        if _pu.reload_needed(mapname, "ffa"):                # the game loaded Campgrounds by itself with no quad to turn into the mega
+            self.log("{}: loaded again with its quad, for the mega".format(mapname))
+            _pu.load_map(mapname, "ffa")
+            return
+        self.no_powerups(say=True)
         bsp = "/tmp/maps/{}.bsp".format(mapname)
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
             os.makedirs("/tmp/maps", exist_ok=True)
@@ -288,13 +293,7 @@ class ffabot(duelbot):
         (campgrounds), the mega comes back, as in 1v1 and in training. The game puts every item back when a real game
         starts (the restart after the countdown), so this is done at setup, at the start of a game and every few
         seconds after: it was only done at setup, and the quad was back in every real game (owner, 2026-10-07)."""
-        try:
-            items = minqlx.item_states()[1]
-            if any(cls == "item_quad" for _, cls, *_ in items):
-                has_mega = any(cls == "item_health_mega" for _, cls, *_ in items)
-                minqlx.replace_items("item_quad", 0 if has_mega else "item_health_mega")
-        except Exception:                                    # noqa: BLE001
-            pass
+        self.no_powerups()                                   # (every powerup since 2026-10-09: plugins/powerups.py)
 
     def start_session(self):
         self.end_session()
@@ -404,14 +403,14 @@ class ffabot(duelbot):
                     self.want_map = mapname                  # the end-of-game map vote (sv_mapPoolFile) picked it: stay
                 elif mapname != self.want_map:
                     self.next_check = now + 10
-                    minqlx.console_command("map {} ffa".format(self.want_map))
+                    _pu.load_map(self.want_map, "ffa")
                     return
                 self.setup()
             return
         if mapname not in FFA_MAPS:
             if now > self.next_check:
                 self.next_check = now + 10
-                minqlx.console_command("map {} ffa".format(self.want_map))
+                _pu.load_map(self.want_map, "ffa")
             return
         if now > self.reload_check:
             self.reload_check = now + 5                      # a newer policy.npz is picked up without a restart
