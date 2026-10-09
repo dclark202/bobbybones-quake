@@ -89,6 +89,7 @@ B-170. v13 itself was not touched.
 - Shotgun, plasma, grenades: no lives that start with them, not a priority; watched (B-169).
 - Maps: Lost World, Campgrounds, Sinister and Furious Heights with Blood Run and Aerowalk; later Cure, Toxicity, Hektik
   and Battleforged (B-170).
+  09:25: "For v14 we're dropping arena1 entirely and just focusing on the in game duel maps" (B-162).
 - He duels v13 around 16:00 and adds to the plan after it.
 
 ## 2026-10-09 05:20 — `duel_gru_v13` at eight hours: the mid-run report (owner: "ready at 7am")

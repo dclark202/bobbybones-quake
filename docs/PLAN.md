@@ -92,10 +92,10 @@ Run 30% -> 58% of the frags, Aerowalk 52% -> 71%); rockets slipping and no straf
 strafe jumping from a teacher in his item runs, a pay for speed from 320 to 480 and four inputs for his own movement
 (B-163 to B-165); lead reading for rockets and plasma (B-166); what a shot costs, by weapon and by where it lands when no
 enemy is in view (B-167); the weapon teacher on at a low weight to the end and silent on shotgun, plasma and grenades
-(B-168, B-169); six maps (B-170).
+(B-168, B-169); six maps of the game, arena1 dropped (B-170, B-162).
 
 Open besides it, in this order: B-160 (position: fighting from below), B-140 (the walking layer rebuilt properly, with
-keys a hand can press), B-161 (backing away when weak), B-162 (the yard in or out of training), B-154 (teachers and the
+keys a hand can press), B-161 (backing away when weak), B-154 (teachers and the
 shared layers: the right share), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-153 (a
 spinning helper thread on the game servers), B-148 (smaller gaps of the free-for-all plugin), B-150 (trainer
 housekeeping), B-107b, B-92, B-109.
@@ -330,7 +330,7 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
 
 ## Owner decisions
 
-- Maps (2026-10-09): v14 trains on Blood Run, Aerowalk, Lost World, Campgrounds, Sinister and Furious Heights; Cure, Toxicity, Hektik and Battleforged later.
+- Maps (2026-10-09): v14 trains on Blood Run, Aerowalk, Lost World, Campgrounds, Sinister and Furious Heights; Cure, Toxicity, Hektik and Battleforged later. arena1 is dropped entirely ("just focusing on the in game duel maps"): no training and no checks on it from v14 on; the map he has never seen, for checks, becomes one of the later duel maps.
 - Strafe jumping (2026-10-09): "absolutely crucial to the game, he needs to learn it asap". A teacher that strafe-jumps may name keys and view in movement rounds on the duel maps; a pay for speed from 320 to 480, flat above, aggressive at first.
 - Shots with no enemy in view (2026-10-09): firing rockets, plasma and grenades at where he thinks the enemy is, or is about to be, is how they are used and is not penalized; "firing them at nonsense (or not rocket jumping) should be discouraged"; a small allowance for pre-firing a beam. Rockets keep a very low shot price; plasma and grenades have none.
 - Lead reading (2026-10-09): he is given where a rocket has to be aimed to meet a moving enemy ("a major part of the game").
