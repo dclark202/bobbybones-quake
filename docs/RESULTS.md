@@ -23,13 +23,13 @@ means for the day's work:
 - **No real Nightmare game of today was played on a free PC**, the "fair numbers" of 16:51 included: this server ran
   beside them, and each of the three game servers of such a check spins its own helpers. Since the control fix of 13:00 a
   busy PC no longer drops his commands, but it is the condition under which the game's Nightmare bot played badly (6-0
-  for him at 14:25). The numbers of 16:51 (14-27, 7-18, 6-13) stand as measured, with this caveat, and are to be
-  repeated.
+  for him at 14:25). The numbers of 16:51 (14-27, 7-18, 6-13) stand as measured, with this caveat. The owner (19:40): "We
+  don't need to redo any of the nightmare games, but it's good that you found that play test bug and fixed it."
 
 Done: `tools/duel_server.sh` starts every server with one thread for the numeric library (`OPENBLAS_NUM_THREADS=1`:
 local, sparring and, from its next deploy, the public one), and the image sets it too (it takes effect when the image is
-next built). The local container was stopped at 19:29 (`docker start qlduel` brings it back as it was). Not done: the
-three Nightmare games again, which wait until the owner is off the PC; the public server is left as it is while he plays.
+next built). The local container was stopped at 19:29 (`docker start qlduel` brings it back as it was). The public
+server is left as it is while he plays; it gets the setting with its next deploy.
 
 ## 2026-10-08 18:45 — Before v13: its starting network, its first updates in dry runs (the item teacher shakes the mouse outputs), credit per attacker, the public server's state
 
