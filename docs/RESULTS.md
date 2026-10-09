@@ -19,6 +19,11 @@ nothing else on the PC; [REPORT_v13.md](REPORT_v13.md) has the table): Blood Run
 43 red armors and 36 of the 45 megas. Aerowalk: in two games Nightmare stood still (on the red armor's spot for a whole
 game: 24 red armors, speed zero); he never went there and saw it 1 to 2% of the time (B-179). The first real-server run
 of the new plugin code (the frozen `duel_env_ffa_v13`, the speed history, the powerup line): no frame errors.
+His inputs in the first Blood Run game, set beside the simulator's (`tools/input_check.py --real`, 12,000 frames): the
+dropped-weapon inputs are alive on a real server (one in view 6% of the time, a rocket launcher or a rail); no input of
+v13's is dead or stuck there that is alive in the simulator. What differs is the opponent: Nightmare uses the shotgun and
+grenades, he picks up what it drops (he owned a grenade launcher half the time and held a shotgun 13% of it, which he
+never does in the simulator).
 
 **The strafe-jumping teacher** (`sim/train_move.py --v14`; runs `move_v14a` to `move_v14d`):
 - From scratch on six maps (`move_v14a`): after 30 minutes 90% of its trips and 68% of its moving time above running
