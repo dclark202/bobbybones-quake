@@ -5,6 +5,87 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 17:15 — The owner's first game against v13; the public server made ready for his friends; an rcon client can freeze a server
+
+**The owner on v13 (Aerowalk, the public server).** "legit impressed. Really good play. Best bot I've ever played against
+in terms of enjoyableness." What he saw: "No strafe jumping at all"; "Still takes some weird positions (stays in the
+grenade well in aerowalk for instance) or fights from the low ground"; "Should use rockets more". He plays more this
+evening and then gives the go for v14.
+
+**The record of his timed game** (session `20261009-164012_aerowalk_ffa`, copied to `data/public/sessions/`: free-for-all
+mode with one Bobby, ten minutes, 16:08 to 16:18):
+
+| | The owner | Bobby (v13) |
+|---|---|---|
+| Frags | 9 | 4 |
+| Damage dealt | 3,461 | 3,128 |
+| Rockets: shots, hit rate, damage | 155, 34%, 2,014 (5 frags) | 13, 8%, 36 |
+| Lightning | 491, 27%, 810 (3 frags) | 431, 35%, 912 |
+| Rail | 15, 47%, 560 (1 frag) | 64, 41%, 2,080 (all 4 frags) |
+| In hand | rockets 66%, rail 12%, lightning 10% | rail 62%, lightning 26%, machine gun 6%, rockets 6% |
+| Mega, red armor, yellow armor taken | 5, 10, 3 | 11, 0, 17 |
+| Speed; time over 400 units a second | 276; 18% | 282; 3% |
+| Height, median | 320 | 144 |
+
+Bobby stood lower than the owner by 48 units or more 61% of the time both were alive, and higher 15% (while he saw him:
+lower 42%, level 49%, higher 9%); 60% of his time was on the bottom floor. He was within 220 units of the grenade
+launcher 7% of his time and of the shotgun in the pit 5% (the owner 3% and 0.4%), rarely standing (5% of his time under
+30 units a second). He picked the rocket launcher up 19 times and fired 13 rockets.
+
+What it means: the three things the owner saw are in the record. Strafe jumping and rockets are what v14 is built for.
+The low ground (B-160) and Aerowalk's red armor (never taken) are not in v14 as it stands: B-160 is his call before the
+start.
+
+**The pay for speed, raised by the owner.** ".1/.3? And if it's too high/low you can adjust as the training progresses."
+`SPEED_PAY=0.1` in games, `SPEED_PAY_RUN=0.3` in item runs (0.06 and 0.15 before). At 0.3 a strafe-jumping player earns
+about 2.0 to 2.8 a minute in item runs beside about 7 from the runs themselves (scaled from the 1.0 to 1.4 measured at
+0.15). A change during the run is made right after a save and logged here.
+
+**The public server before his friends come (16:30, read only).** Nothing keeps a player out: pure with the game's two
+paks and the Workshop item only, no password, listed, 8 client slots, answers a query from outside, v13 with 499
+inputs, no error in its log.
+
+**Built for the restart tonight** (owner: "Don't restart the server for any of these, we'll restart it tonight"; B-183):
+
+- `!map` offers the ten duel maps he trained on or is checked on (Blood Run, Aerowalk, Lost World, Sinister, Furious
+  Heights, Battleforged, Campgrounds, Hektik, Toxicity, Cure) and the test map; arena1 is off the list. All ten come up
+  in free-for-all with a map's duel items and six playing at most, Bobbys counted (owner, 17:00: "make sure it's the duel
+  version of the weapon spawns, but the mode for the server should be ffa for the maps, max 6 people in the game").
+  `!maps` works in free-for-all too; the pool of the vote at a game's end is the same ten.
+- Toxicity and Cure had no duel item list on the server. Listed from the real game in both modes (`plugins/maplab.py`):
+  Toxicity has the same 27 items in both; Cure has 44 in a duel and 45 in free-for-all (a rocket launcher and the plasma
+  gun change places, one rocket launcher fewer, two machine-gun boxes and a health more). `plugins/duel_items.json` now
+  has all ten maps. The simulator's items on Toxicity, Cure and Hektik are the game's duel items exactly (27, 44 and 32,
+  every one within 8 units, with `AMMO_PACKS=0`).
+- The welcome has a second line: in free-for-all `!bots <0-4>`, `!map`, `!maps`, `!mode duel`; in 1v1 `!map`, `!maps`,
+  `!mode ffa`.
+- `plugins/banlist.py`, for the owner only (the Steam ID in `data/owner.env`): `!players`, `!kick`, `!ban <number|name>
+  [why]`, `!bans`, `!unban <number>`. Bans are kept by Steam ID in `bans.txt` in the server's data folder (outside the
+  image and the repo; they survive a new image) and refused at connect. Checked against a stand-in for minqlx (ban,
+  refusal, a restart, unban, the owner cannot ban himself, bots are not listed, a name that fits two is refused) and
+  loaded on a real local server, where its commands answer.
+- `tools/push_bobby.sh` copies the walking maps and map tables of the ten maps.
+- On a local server with these plugins (free-for-all, two Bobbys, v13; the plugins mounted over the image's, because
+  Docker Hub's sign-in answered 504 and no image could be built): Toxicity, Cure, Hektik, Battleforged and Campgrounds
+  load, the duel layout is put (Cure 5 removed and 4 put, Hektik 17 and 13, Battleforged 0 and 2, Campgrounds 0 and 1),
+  and the Bobbys play on Toxicity, Cure and Hektik (190 to 275 units a second, 90 to 130 places visited in 80 s, armor
+  and health picked up, they see and shoot each other); no error in the plugin's log.
+
+**What went wrong in the test: an rcon client can freeze a game server (B-184).** On the first pass the server stopped
+for good after `!map cure` sent through rcon. Its main thread was blocked inside a console print (the Python stack,
+with `py-spy`: `ffabot.log`, then the game's own print, then `poll`). The game sends its whole console to every rcon
+client with a blocking send, and the client (`tools/rcon.py --wait 2`) left in the middle of the map load's prints.
+One of nine rcon calls did it; the same calls a second time did not. Players' chat commands do not go through rcon, so
+this is not a danger from play; it is one from our own tools. Two changes:
+
+- `tools/rcon.py` leaves only once nothing has come for a second; a map change is given a wait that covers the load.
+- `tools/watchdog.sh` watched the CPU time of the whole process, and the frozen server's helper threads kept using a
+  little (5 ticks in 20 s; the main thread 0), so it never fired. It now watches the main thread, which on an idle
+  server with no bots and nobody on still uses 21 to 22 ticks in 30 s. Tested on a local server: left alone for 200 s of normal play, and a server frozen on purpose was killed after three checks (100 s).
+
+Not done: the local image is not rebuilt (Docker Hub). The deploy tonight builds on the server and needs Docker Hub to
+answer, or the base image in the server's cache.
+
 ## 2026-10-09 15:30 — v14's preparation; v13 against the game's Nightmare bot; the owner's calls on maps
 
 **The owner's calls this afternoon.** Pro demos for Sinister and Furious Heights ("Yes, download"); Battleforged into

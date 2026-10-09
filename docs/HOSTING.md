@@ -58,7 +58,7 @@ On the machine:
 
 ```bash
 cd bobbybones-quake
-PUBLIC=1 RESTART=1 HOSTNAME_QL="doppz's bot arena | duel & FFA | chicago" bash tools/duel_server.sh - arena1
+PUBLIC=1 RESTART=1 FFA=2 HOSTNAME_QL="doppz's bot arena | duel & FFA | chicago" bash tools/duel_server.sh - aerowalk
 ```
 
 - `-` means "use the `policy.npz` already in `data/duellive`" (no PyTorch needed on the machine).
@@ -71,10 +71,10 @@ One server holds one duel at a time; other players spectate and queue (the game'
 
 ## Free-for-all instead of 1v1
 
-The public server runs free-for-all by default: since 2026-10-09 with two Bobbys on Aerowalk (owner; from 2026-10-06 it was three on `arena1`). `CODE=1 bash tools/push_bobby.sh <run>` restarts it that way; `FFA=<n>` and a third argument change the number and the map, and it copies the walking maps and map tables of every map the server offers (they are not in git). Players switch with `!map testlab` (1v1) and `!map arena1` (free-for-all), see `docs/COMMANDS.md`.
+The public server runs free-for-all by default: since 2026-10-09 with two Bobbys on Aerowalk (owner; from 2026-10-06 it was three on `arena1`). `CODE=1 bash tools/push_bobby.sh <run>` restarts it that way; `FFA=<n>` and a third argument change the number and the map, and it copies the walking maps and map tables of every map the server offers (they are not in git). Players change the map with `!map <name>` (the ten duel maps he trained on or is checked on, in free-for-all with the items of a duel; `!map testlab` is 1v1) and the mode with `!mode ffa|duel`, see `docs/COMMANDS.md`. The owner kicks and bans from the game chat (`!kick`, `!ban`; `plugins/banlist.py`, the bans in `data/duellive/bans.txt` on the server).
 
 ```bash
-FFA=3 bash tools/duel_server.sh duel_gru_v8 arena1 duel_env_ffa     # three Bobbys, three seats for people
+FFA=3 bash tools/duel_server.sh duel_gru_v13 aerowalk duel_env_ffa_v13     # three Bobbys, three seats for people
 ```
 `FFA=<n>` starts in free-for-all; `!mode ffa|duel` and `!map` switch a running server (`plugins/botmode.py`, always
 loaded). `FFA=<n>` loads `plugins/ffabot.py` instead of the duel plugin and the `ffa` factory: one six-seat group simulator
@@ -112,7 +112,8 @@ written since 2026-10-08 carry them, for older runs give them by hand, e.g.
 | Task | Command |
 |---|---|
 | New Bobby | On the PC: export as above, then `scp data/duellive/policy.npz root@<ip>:bobbybones-quake/data/duellive/`. The running server loads it by itself between rooms and says so in chat |
-| New code or map | On the machine: `git pull && docker build -t qlbot . && RESTART=1 bash tools/duel_server.sh - arena1` |
+| New code or map | On the PC: `CODE=1 bash tools/push_bobby.sh <run> <simulator module>` (git pull, image build and restart on the machine, the walking maps and map tables of the ten maps copied) |
+| A hung server | `tools/watchdog.sh` (started in the container) kills the game when its main thread has used no CPU time for 90 s; with `RESTART=1` the container comes back by itself |
 | Get the data | On the PC: `rsync -av root@<ip>:bobbybones-quake/data/duellive/sessions/ data/public/sessions/` and the same for `suite/` |
 | Stop | `bash tools/duel_server.sh stop` |
 | Send a chat command from outside | `docker exec qlduel python3 /tools/rcon.py "qlx !room off" --wait 2` |

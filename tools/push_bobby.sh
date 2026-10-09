@@ -25,7 +25,8 @@ if [ -n "$CODE" ]; then
     NAME_QL="${HOSTNAME_QL:-$DEFAULT_QL}"                         # the name in the server list (HOSTNAME_QL=... to change it)
     # the routes need the walking maps, and data/ is not in git: the maps the server offers, each as the PC has it now
     # (2026-10-09: only the start map's was copied, and Aerowalk's on the server was two days older than the one he trained on)
-    for m_ in "$MAP" arena1 bloodrun aerowalk lostworld campgrounds sinister furiousheights; do
+    # (2026-10-09 evening: the ten duel maps of the !map list; the map file itself the plugin takes from the game's own pak)
+    for m_ in "$MAP" bloodrun aerowalk lostworld sinister furiousheights battleforged campgrounds hektik toxicity cure; do
         scp -o BatchMode=yes -q data/maps/nav_${m_}_sim.json data/maps/cells_${m_}.npy "$HOST":bobbybones-quake/data/maps/ 2>/dev/null || true
     done
     ssh -o BatchMode=yes "$HOST" "cd bobbybones-quake && PUBLIC=1 FFA=${FFA:-2} RESTART=1 HOSTNAME_QL=\"$NAME_QL\" bash tools/duel_server.sh - $MAP | tail -1"

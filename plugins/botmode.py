@@ -1,6 +1,6 @@
 """Switch a BobbyBones server between 1v1 (plugins/duelbot.py, the duel factory) and free-for-all (plugins/ffabot.py,
-the ffa factory) while it runs: !mode ffa|duel [bots], and !map <name>, which picks the map's own mode (arena1 is a
-free-for-all map by design; testlab and the duel maps are 1v1, the duel factory keeps two players active).
+the ffa factory) while it runs: !mode ffa|duel [bots], and !map <name>, which picks the map's own mode (the duel maps
+come up in free-for-all, !mode duel makes them 1v1; testlab is always 1v1, the duel factory keeps two players active).
 
 Load first: QLX_PLUGINS="botctl, botmode, duelbot" (or ffabot). The switch unloads the one plugin, kicks the bots,
 changes the map with the other factory and loads the other plugin, which adds its own bots.
@@ -18,7 +18,7 @@ except Exception:                                           # noqa: BLE001 - loa
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _pu = importlib.import_module("powerups")
 
-FFA_MAPS = ("arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")
+FFA_MAPS = ("bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")
 DUEL_MAPS = ("testlab",)      # the test map is the only 1v1 one (reflex and movement tests); every other map defaults to free-for-all. duelbot.MAPS has the whole list
 PLUGIN = {"ffa": "ffabot", "duel": "duelbot"}
 
@@ -81,7 +81,7 @@ class botmode(minqlx.Plugin):
             if not msg[2].isdigit() or not 0 <= int(msg[2]) <= 4:
                 return minqlx.RET_USAGE
             bots = int(msg[2])
-        mapname = (minqlx.get_cvar("mapname") or "arena1").lower()
+        mapname = (minqlx.get_cvar("mapname") or "aerowalk").lower()
         if mode == self.current() and bots is None:
             player.tell("The server is already in {} mode.".format("free-for-all" if mode == "ffa" else "1v1"))
             return minqlx.RET_STOP_ALL

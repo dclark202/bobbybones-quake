@@ -36,7 +36,7 @@ except Exception:                                           # noqa: BLE001 - loa
 
 sys.path.insert(0, "/sim")
 D = "/tmp/practice"
-MAPS = ("testlab", "arena1", "bloodrun", "aerowalk", "lostworld", "campgrounds", "sinister", "furiousheights")      # the only maps a player can pick with !map: the ones Bobby has trained on (botmode.py keeps a copy)
+MAPS = ("testlab", "bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")      # the only maps a player can pick with !map (owner, 2026-10-09): the duel maps he trained on or is checked on (botmode.py keeps a copy)
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 3
@@ -226,7 +226,7 @@ class duelbot(minqlx.Plugin):
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game, I'm already in it. ^2!duel [minutes]^7 starts a timed duel.",
             "^3Help me learn:^7 ^2!map testlab^7, then ^2!reflex^7 or ^2!movement^7. ^2!match [minutes]^7 scores a game on any map.",
-            "^3Free-for-all:^7 ^2!map arena1^7 (or ^2!mode ffa^7): up to four of me and people, six seats; ^2!bots <n>^7 sets how many.",
+            "^3Maps and modes:^7 ^2!maps^7 lists the maps, ^2!map <name>^7 changes it. ^2!mode ffa^7: up to four of me and people, six seats; ^2!bots <0-4>^7 sets how many of me play. ^2!mode duel^7: one against one.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def cmd_help(self, player, msg, channel):
@@ -234,11 +234,15 @@ class duelbot(minqlx.Plugin):
             player.tell(line)
 
     def cmd_maps(self, player, msg, channel):
-        player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests, ^3arena1^7 is the small duel map.".format(", ".join(MAPS)))
+        player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests; the others are the game's duel maps.".format(", ".join(MAPS)))
+
+    # the second line a person reads on joining (owner, 2026-10-09: a word about !bots); ffabot.py has its own
+    WELCOME = "^2!map <name>^7 changes the map (^2!maps^7 lists them). ^2!mode ffa^7 is free-for-all with up to four of me."
 
     def on_player_loaded(self, player):
         if not is_bot(player):
             player.tell("^3I'm BobbyBones, the learning Quake bot.^7 Type ^2!help^7 to get started.")
+            player.tell(self.WELCOME)
             player.tell("See more about the project: ^5github.com/dclark202/bobbybones-quake")
 
     def on_vote_called(self, player, vote, args):

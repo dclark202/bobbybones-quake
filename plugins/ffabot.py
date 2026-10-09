@@ -53,13 +53,14 @@ class ffabot(duelbot):
         self.add_command("help", self.cmd_help, 0)
         self.add_command("bots", self.cmd_bots, 0, usage="<0-4>")
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(FFA_MAPS)))
+        self.add_command("maps", self.cmd_maps, 0)
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         self.add_hook("client_command", self.on_client_command)
         self.match = None                                    # the running game (see on_game_start)
         self.ready_ids = set()                               # people who pressed F3 in this warmup
         self.go_t = 0.0
         self.n_bots = max(0, min(MAX_BOTS, int(os.environ.get("BOBBYS") or 2)))   # 0 allowed: people only (owner, 2026-10-06)
-        self.want_map = os.environ.get("LAB_MAP", "arena1").lower()
+        self.want_map = os.environ.get("LAB_MAP", "aerowalk").lower()
         self.lab, self.arena, self.drill, self.room, self.queue = None, None, None, None, []
         self.no_sg = self.no_walk = False
         self.ready = False
@@ -79,9 +80,10 @@ class ffabot(duelbot):
         self.next_summary = time.time() + 60
         self.score = {}
 
+    WELCOME = "^2!bots <0-4>^7 sets how many of me play. ^2!map <name>^7 changes the map (^2!maps^7 lists them), ^2!mode duel^7 is one against one."
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game. ^2!bots <0-4>^7 sets how many of me play; people get the other seats (six play, the rest spectate).",
-            "^3Commands:^7 ^2F3^7 readies you up: when more than half of the people are ready a real game starts (10 min, machine gun at spawn). ^2!map arena1^7 free-for-all, ^2!map testlab^7 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
+            "^3Commands:^7 ^2F3^7 readies you up: when more than half of the people are ready a real game starts (10 min, machine gun at spawn). ^2!map <name>^7 changes the map (^2!maps^7 lists them), ^2!map testlab^7 is 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def log(self, msg):

@@ -1,6 +1,9 @@
 #!/bin/bash
-# Kill the server if it is truly hung: its CPU time stops advancing (a live server always burns a little
-# CPU running frames, even idle or between maps). The container then restarts and re-sets itself up.
+# Kill the server if it is truly hung: its main thread's CPU time stops advancing (a live server always burns a little
+# CPU running frames, even idle or between maps: 21 ticks in 30 s with no bots and nobody on). The container then
+# restarts and re-sets itself up. The main thread's time, not the whole process's: with the main thread blocked for good
+# (2026-10-09: in a console print, on an rcon client that left during a map load) the game's helper threads still
+# used 5 ticks in 20 s and the hang went unseen.
 sleep 120
 last=""; stuck=0
 while true; do
@@ -12,7 +15,7 @@ while true; do
         echo "$(date -u) restart requested (new candidate)" >> /tmp/practice/watchdog.log
         kill -9 "$pid"; last=""; stuck=0; continue
     fi
-    t=$(awk '{print $14 + $15}' /proc/$pid/stat 2>/dev/null)
+    t=$(awk '{print $14 + $15}' /proc/$pid/task/$pid/stat 2>/dev/null)
     if [ -n "$last" ] && [ "$t" = "$last" ]; then
         stuck=$((stuck + 1))
         echo "$(date -u) server CPU time not advancing ($stuck)" >> /tmp/practice/watchdog.log

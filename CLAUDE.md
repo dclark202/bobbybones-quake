@@ -118,7 +118,10 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   `set_bot_substeps` (human physics), `ran_usercmd`, `view_angles`, `set_view`, `item_states`, `missiles`.
 - **Plugins**: `duelbot.py` plays a trained network (inputs rebuilt with the simulator's own `observe()`), runs
   the test rooms with a human as the subject, hot-reloads `policy.npz`, logs sessions. `weaponlab.py`,
-  `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs.
+  `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs. `botmode.py` switches mode and map
+  (`!map` offers the ten duel maps of v14 and `testlab`; they come up in free-for-all with a map's duel items: a new map
+  needs its list in `plugins/duel_items.json`, from `plugins/maplab.py` and `tools/duel_items.py`). `banlist.py`: the
+  owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo).
 - **Test map**: `tools/make_lab_map.py` -> `maps/testlab/` (pk3 + `rooms.json`), compiled with q3map2 and
   mbspc from `data/tools` (NetRadiant-custom; mbspc needs `-forcesidesvisible`). Bots cannot join a map
   without an `.aas` file.
@@ -160,6 +163,12 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - The QL client uses UDP 27960, so servers use 27970. An idle server runs no frames until someone joins.
 - minqlx has no damage event; hits are inferred from health drops. Warmup emits no kill stats.
 - Docker on Windows: LF line endings (`.gitattributes`).
+- An rcon client that leaves while the server prints (a map load) can freeze the game server for good (2026-10-09: the
+  console goes to every rcon client with a blocking send). `tools/rcon.py` leaves only in a quiet moment; give a map
+  change `--wait 30`; on the public server use rcon only when it is needed. The watchdog now watches the main thread.
+- Plugin changes can be tried without an image build: mount `plugins/` over `/ql/minqlx-plugins` and `tools/` over
+  `/tools` (read-only) in a private container. Events are written only with people in the game (`FFA_LOG_ALWAYS=1`
+  writes the frames without them).
 - PPO's entropy bonus drowns small shaping costs: size any cost against it (see RESULTS 2026-10-04).
 - Do not restart the play-test server while the owner is on it; use a second container for tests.
 - Before any real-server check or run: `docker ps`, `docker stats --no-stream`. A game server with Bobbys on a map works

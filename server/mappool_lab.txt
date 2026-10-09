@@ -1,7 +1,10 @@
-arena1|ffa
 bloodrun|ffa
 aerowalk|ffa
 lostworld|ffa
-campgrounds|ffa
 sinister|ffa
 furiousheights|ffa
+battleforged|ffa
+campgrounds|ffa
+hektik|ffa
+toxicity|ffa
+cure|ffa
