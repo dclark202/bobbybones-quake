@@ -78,13 +78,16 @@ minutes against Nightmare at each checkpoint.
 
 ## Now
 
-**Next run: `duel_gru_v13`**, to start on the owner's approval of [MANIFEST_v13.md](MANIFEST_v13.md) (he reviews it with
-[REPORT_v12.md](REPORT_v12.md) on 2026-10-08 19:00) and run overnight. Its starting network is ready (fresh input
-statistics, B-145). Approved with it (19:30): the teachers' losses held back from the shared layers (`--teach-trunk
-0.05`, B-154), which kept his aim and fighting intact in the first updates.
+**Running: `duel_gru_v13`** ([MANIFEST_v13.md](MANIFEST_v13.md)), started on the evening of 2026-10-08 with what the owner
+added after playing v12 himself (dropped weapons, the ground at his feet, the hand at 8, pay for knowing where the enemy
+is and for pace, a keys-only walking teacher: B-152, B-155 to B-159) and the teachers' losses held back from the shared
+layers (B-154). To 16:00 on 2026-10-09 at the latest; a mid-run report at 07:00; the full report with recommendations at
+its end. The owner's order of things: item pickups and weapon use must not collapse, rockets up; then position and
+control; speed is a bonus.
 
-Open besides it, in this order: B-140 (the walking layer rebuilt properly, with keys a hand can press), B-154 (teachers
-and the shared layers), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-153 (a
+Open besides it, in this order: B-160 (position: fighting from below), B-140 (the walking layer rebuilt properly, with
+keys a hand can press), B-161 (backing away when weak), B-162 (the yard in or out of training), B-154 (teachers and the
+shared layers: the right share), B-149 (the last 0.7 frame of shot timing), B-141 (the scripted runner on Lost World), B-153 (a
 spinning helper thread on the game servers), B-148 (smaller gaps of the free-for-all plugin), B-150 (trainer
 housekeeping), B-107b, B-92, B-109.
 
@@ -369,6 +372,16 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
   mid-run unless the data is clearly bad.
 - (2026-10-08) All docs, the README included, are kept current.
 - (2026-10-08 19:30) v13 with the teachers' losses held back from the shared layers (`--teach-trunk 0.05`): "yes".
+- (2026-10-08, after his two games against v12) "He plays like a human ... a pretty bad novice who knows how to aim better
+  than they know how to play quake. That's fine." Top priority: game sense for items, position, control and weapons; "the
+  absolute worst thing we could see in training now is for the item pickups and weapon use to collapse again. If anything
+  he should be using more rockets as time goes on." Strafe jumping: a priority, "but that might be a bit ambitious still".
+- (2026-10-08) Into v13 on his word: dropped weapons (the start waited for them), the ground at his feet in every
+  direction ("not a fairness problem"), the hand at 8 key actions a second ("they need to be deliberate"), pay for knowing
+  where the enemy is, pay for pace, a walking teacher of keys only. Not now: a cost for aiming upward.
+- (2026-10-08) A run may go to 16:00 the next day; stop it early if something has gone wrong or he has stopped learning. A
+  mid-run report when he wakes (07:00), the full report at the end with recommendations for what to try next, hourly
+  check-ins, the PC at about 80 to 85%.
 - (2026-10-08) Before a run starts he reviews a full report of the last network, a full manifest of the next run and the
   state of the public server, and gives the go himself.
 

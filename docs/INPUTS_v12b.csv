@@ -490,11 +490,3 @@ index,group,input,meaning,scale,added in
 488,style,playing style: lightning,"the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of",0 or 1,v12
 489,intention,going for the yellow armor,"his own choice, read once a second and held",0 or 1,v13
 490,intention,going for the second yellow armor,"his own choice, read once a second and held",0 or 1,v13
-491,dropped weapon,nearest dropped weapon in view: forward,the nearest weapon a dead player left that he can see (it lies 30 seconds where it fell); zero without one,units / 1000,v13
-492,dropped weapon,nearest dropped weapon in view: left,the nearest weapon a dead player left that he can see (it lies 30 seconds where it fell); zero without one,units / 1000,v13
-493,dropped weapon,nearest dropped weapon in view: up,the nearest weapon a dead player left that he can see (it lies 30 seconds where it fell); zero without one,units / 1000,v13
-494,dropped weapon,a dropped weapon is in view,the nearest weapon a dead player left that he can see (it lies 30 seconds where it fell); zero without one,0 or 1,v13
-495,dropped weapon,the dropped weapon is a rocket launcher,none of the three: another weapon,0 or 1,v13
-496,dropped weapon,the dropped weapon is a lightning gun,none of the three: another weapon,0 or 1,v13
-497,dropped weapon,the dropped weapon is a railgun,none of the three: another weapon,0 or 1,v13
-498,dropped weapon,the dropped weapon's time left,the share of its 30 seconds,0 to 1,v13

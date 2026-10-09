@@ -594,6 +594,15 @@ def main():
                    contest=dict(rounds=int(agg.get("contest_rounds", 0)),      # rounds begun as a race for a big item, and the
                                 taken=round(float(agg.get("contest_taken", 0) / max(1, agg.get("contest_rounds", 0))), 2)),   # share a learner took it in
                    kl=round(kl_sum / max(1, kl_n), 5), clip_frac=round(cf_sum / max(1, kl_n), 4), lr=lr_now, lam=lam,
+                   know=round(float(agg.get("know", 0.0) / max(1, agg.get("know_frames", 0))), 3),      # how well he knows where his enemy is, 0 to 1 (KNOW_PAY)
+                   drops=dict(per_player_min=round(float(agg.get("drops", 0) / max(1e-9, N * T * DT_MIN)), 3),            # weapons dead players left (DROPS)
+                              taken=round(float(agg.get("pick_drop", 0) / max(1, agg.get("drops", 0))), 3),              # the share somebody took
+                              new=round(float(agg.get("pick_drop_new", 0) / max(1, agg.get("pick_drop", 0))), 3)),       # ... of those, a weapon he did not have
+                   pace=dict(pay_per_player_min=round(float(agg.get("pace_pay", 0.0) / max(1e-9, N * T * DT_MIN)), 4),     # (PACE_PAY)
+                             trip_speed=int(agg.get("trip_speed", 0.0) / max(1, agg.get("trip_frames", 0))),               # on his way, nobody about
+                             over_320=round(float(agg.get("pace_frames", 0) / max(1, agg.get("trip_frames", 0))), 3)),
+                   closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
+                                                                    np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,
                    by_map={m_: dict(bare=round(float(v_.get("stack_bare", 0) / max(1, v_.get("stack_frames", 0))), 3),
                                     big_weapons=round(float(v_.get("stack_big", 0) / max(1, v_.get("stack_frames", 0))), 2),

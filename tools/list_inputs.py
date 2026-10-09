@@ -243,6 +243,13 @@ for nm in ("general", "rockets", "rail", "lightning"):   # ---- playing styles (
     add("style", "playing style: {}".format(nm), "the state he is in this life: no preference, or a preferred weapon he is pushed to fetch, hold and fight at the distance of", "0 or 1", "v12")
 for nm in ("the yellow armor", "the second yellow armor"):   # ---- v13
     add("intention", "going for {}".format(nm), "his own choice, read once a second and held", "0 or 1", "v13")
+DROP_WHAT = "the nearest weapon a dead player left that he can see (it lies 30 seconds where it fell); zero without one"
+for ax in XYZ:                                           # ---- weapons that dead players leave (2026-10-08, v13)
+    add("dropped weapon", "nearest dropped weapon in view: {}".format(ax), DROP_WHAT, "units / 1000", "v13")
+add("dropped weapon", "a dropped weapon is in view", DROP_WHAT, "0 or 1", "v13")
+for nm in ("a rocket launcher", "a lightning gun", "a railgun"):
+    add("dropped weapon", "the dropped weapon is {}".format(nm), "none of the three: another weapon", "0 or 1", "v13")
+add("dropped weapon", "the dropped weapon's time left", "the share of its 30 seconds", "0 to 1", "v13")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

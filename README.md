@@ -28,7 +28,8 @@ yard is the map he is checked on without having trained there.
 - **Human physics.** He moves with the same 125 fps physics a human client gets. No bot-only frame-rate tricks.
 - **Human senses.** He knows where you are only when you are in his field of view with a clear line of sight,
   or roughly when you are heard nearby. No wallhacks.
-- **Human sight.** Walls, floors and items are only seen inside his field of view. He gets no readout of your
+- **Human sight.** Walls and items are only seen inside his field of view; the ground at his own feet he knows without
+  looking, as a player who knows the map does. He gets no readout of your
   health: only the pain sounds a player hears, and the damage he knows he dealt.
 - **Mouse-like aim.** He turns his view like a mouse (fine tracking and flicks), with a reaction delay, a cap on
   flick speed, hand shake, a flinch when hit, and a later read on changes in your movement than on your position.
@@ -36,8 +37,8 @@ yard is the map he is checked on without having trained there.
 - **Human knowledge of the map.** He knows an item is gone or back only if he took it, saw its place or heard it
   (from the next network on; until then he is told).
 - **Human hands.** The left hand is five fingers on the keys: each finger does one thing at a time and needs
-  time between presses, and the hand as a whole tires (short bursts, then four key changes a second, five from the
-  next network on: people in our logs do about seven in their busy stretches). The right hand fires and zooms at
+  time between presses, and the hand as a whole tires (short bursts, then four key actions a second; eight from the
+  next network on, measured on a player's own hand: 6.6 to 7.1 a second over a whole game). The right hand fires and zooms at
   no more than three clicks a second.
 - **No bot habits.** He trains only against himself and our own scripted runner. The game's bots are a yardstick,
   never a teacher.
@@ -45,7 +46,7 @@ yard is the map he is checked on without having trained there.
 ## How it works
 
 1. **Simulator** (`sim/`). Quake 3's movement and collision code (ioquake3 `bg_pmove`, `cm_*`) compiled into a
-   library with Quake Live's settings, plus a duel layer in Python: nine weapons, items, armor, respawns,
+   library with Quake Live's settings, plus a duel layer in Python: nine weapons, items, dropped weapons, armor, respawns,
    senses. Movement was validated frame by frame against the real game; weapon damage, timing, knockback,
    switch time and pickup amounts were measured on a real server and reproduced.
 2. **Training** (`sim/train_duel_rnn.py`). Self-play reinforcement learning (PPO) with a recurrent network

@@ -14,6 +14,12 @@ Inputs that do not vary in the sample are left as they are, except those whose s
 the clip the first time they changed): those get spread 1 and zero weights, like a new input. The league snapshots are
 fed the learner's statistics, so they are rewritten with it (--also).
 
+--woke OLD.npy: a setting can bring inputs to life that never varied while he trained (GROUND_SENSE, 2026-10-08: the floor
+readings beside and behind him were blank for as long as he has had a field of view). Their weights are whatever five
+days of a constant input left there. Inputs that are constant in OLD.npy (a sample under the old settings) and vary in the
+sample start like new inputs: zero weights, what the constant gave the first layer folded into its bias, fresh
+statistics. So he plays exactly as before on what he knew, and learns the rest. --only-woke touches nothing else.
+
     python sim/renorm_policy.py --src data/sim_runs/RUN/policy.pt --dst data/sim_runs/RUN/policy.pt
         --also "data/sim_runs/RUN/snapshots/snap_*.pt" --sample obs_sample.npy
             (raw inputs from the trainer itself: train_duel_rnn.py --obs-dump, the exact mix of maps and rounds)
@@ -80,6 +86,11 @@ def main():
     ap.add_argument("--minutes", type=float, default=3.0)
     ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator setting for the sample, as in training")
     ap.add_argument("--dry", action="store_true", help="print what would change and write nothing")
+    ap.add_argument("--woke", default="", help="a sample under the settings he trained with: inputs constant there and varying in "
+                    "the sample start as new inputs (zero weights, the constant's part in the bias)")
+    ap.add_argument("--only-woke", action="store_true", help="rewrite nothing but those")
+    ap.add_argument("--woke-names", default="", help="only inputs whose name starts with one of these (comma-separated): a sample "
+                    "played differently from the old one brings other inputs to life that have nothing to do with the setting")
     a = ap.parse_args()
     os.environ.update(dict(x.split("=", 1) for x in a.set))
     import torch
@@ -105,6 +116,23 @@ def main():
     m_new[live] = fresh[live]
     sd_new[live] = want[live]
     never = ~varies & (sd_old < 1e-3)                            # constant here and never seen to vary: as a new input
+    woke = np.zeros(len(m_old), bool)
+    X0 = None
+    if a.woke:
+        X0 = np.load(a.woke).astype(np.float64)
+        assert X0.shape[1] == len(m_old)
+        woke = (X0.std(0) < 1e-6) & varies
+        if a.woke_names:
+            nm_ = [r["input"] for r in csv.DictReader(open(os.path.join(ROOT, "docs", "INPUTS.csv"), encoding="utf-8"))]
+            assert len(nm_) == len(m_old), "docs/INPUTS.csv does not list this network's inputs"
+            woke &= np.array([x.startswith(tuple(a.woke_names.split(","))) for x in nm_])
+        if a.only_woke:
+            live[:] = False
+            never[:] = False
+            m_new, sd_new = m_old.copy(), sd_old.copy()          # (the statistics of the others stay as they are)
+        live &= ~woke
+        never &= ~woke
+        m_new[woke], sd_new[woke] = fresh[woke], want[woke]
     m_new[never], sd_new[never] = X[0, never], 1.0
     names = None
     for f in ("INPUTS.csv", "INPUTS_v12.csv", "INPUTS_v11.csv"):
@@ -122,7 +150,10 @@ def main():
     print("the inputs that change most (saved spread -> new; the factor is the size at which they reached the network, 1 = right):")
     for j in order[:30]:
         print("   {:3d} {:46s} {:8.3f} -> {:6.3f}   x{:.2f}".format(j, (names[j] if names else "")[:46], sd_old[j], sd_new[j], sd_new[j] / sd_old[j]))
-    left = [j for j in np.nonzero(varies & off & at_clip)[0]]
+    if woke.any():
+        print("woken (constant under the old settings, varying now; zero weights, the constant folded into the bias): {}".format(
+            [(int(j), (names[j] if names else "")[:28], "was {:g}".format(X0[0, j])) for j in np.nonzero(woke)[0]]))
+    left = [j for j in np.nonzero(varies & off & at_clip & ~woke)[0]] if not a.only_woke else []
     if left:
         print("left alone (off, but at the old clip in the sample):", [(int(j), (names[j] if names else "")[:30], round(float(sd_old[j] / want[j]), 2)) for j in left[:12]])
 
@@ -137,6 +168,10 @@ def main():
         W2 = W.copy()
         W2[:, live] = W[:, live] * (sd_new[live] / sd_old[live])[None, :]
         W2[:, never] = 0.0
+        if woke.any():
+            zc = np.clip((X0[0] - m_old) / sd_old, -10, 10)     # what the constant gave the first layer
+            b2 = b2 + (W[:, woke] * zc[woke][None, :]).sum(1)
+            W2[:, woke] = 0.0
         sd["enc.0.weight"] = torch.from_numpy(W2).to(sd["enc.0.weight"].dtype)
         sd["enc.0.bias"] = torch.from_numpy(b2).to(sd["enc.0.bias"].dtype)
         if "obs_mean" in c:
@@ -146,7 +181,7 @@ def main():
 
     def first_layer(c, mean, sd):
         m = c["model"] if "model" in c else c
-        x = np.clip((X[::5] - mean) / sd, -10, 10)
+        x = np.clip(((X0 if X0 is not None else X)[::5] - mean) / sd, -10, 10)     # (with --woke: on what he knew, the old sample)
         return x @ m["enc.0.weight"].double().numpy().T + m["enc.0.bias"].double().numpy()
 
     new = rewrite(a.src)

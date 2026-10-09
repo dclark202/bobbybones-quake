@@ -738,9 +738,20 @@ class duelbot(minqlx.Plugin):
                         env.rw[slot, k] = kinds[weapon]
                     k += 1
         taken = []
+        drops = []
+        dropped = {}
+        if hasattr(E, "DROP_MAX"):
+            dropped = {"weapon_rocketlauncher": E.RL, "weapon_railgun": E.RG, "weapon_lightning": E.LG, "weapon_shotgun": E.SG,
+                       "weapon_grenadelauncher": E.GL, "weapon_plasmagun": E.PG, "weapon_hmg": E.HMG}
         if env.nI:
             now_ms, items = minqlx.item_states()
             for num, cls, x, y, z, up, back_ms in items:
+                if up and cls.startswith("weapon_") and 0 < back_ms - now_ms <= 30500:
+                    # A weapon a dead player left: the game removes it 30 s after it fell (a map item that is there has no
+                    # such time). Until 2026-10-08 one lying within 40 units of a map item was taken for that item.
+                    if cls in dropped:
+                        drops.append((dropped[cls], (x, y, z), (back_ms - now_ms) / 1000.0))
+                    continue
                 key = (id(env), num)
                 k = self.item_ent.get(key)
                 if k is None:
@@ -755,6 +766,12 @@ class duelbot(minqlx.Plugin):
                     d = np.linalg.norm(env.state[:, :3] - np.array([x, y, z], np.float32), axis=1)
                     taken.append((cls, int(d.argmin()) if d.min() < 120 else -1))
                 self.item_was[num] = up
+        if hasattr(env, "drop_w"):                           # what he is shown of them (the simulator's N_DROP inputs)
+            env.drop_w[0] = -1
+            for j, (w_, p_, t_) in enumerate(drops[:env.drop_w.shape[1]]):
+                env.drop_pos[0, j] = p_
+                env.drop_w[0, j] = w_
+                env.drop_t[0, j] = t_
         return taken
 
     @staticmethod

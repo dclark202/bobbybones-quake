@@ -101,7 +101,10 @@ players every 10 s; the simulator runs 32 subjects per map at once.
   `air_fast`, `jerk`, `vs_snapshot_kill_share`, `league_size`, `entropy`, `close_p`.
   Since 2026-10-08 also: `kl`, `clip_frac`, `lr`, `lam` (the policy's step per update; with `--kl-heads 1` also
   `kl_heads`, the step per output: forward, strafe, vertical, turn, pitch, fire, weapon, walk, zoom, lift, intention),
-  `by_map` (per map: time bare,
+  `know` (how well he knows where his enemy is, 0 to 1), `pace` (pay a player-minute, speed on his way with nobody
+  about, the share of that time above 320), `closing` (his speed toward an enemy in view at health plus armor under
+  60, to 125, over: minus = backing away), `drops` (weapons dead players left a player-minute, the share taken, the
+  share of those that were new to the taker), `by_map` (per map: time bare,
   big weapons, first weapon, frags, enemy in view, mega and red, weapons a player-minute), `stack`, `style`, `fire_in_view`,
   `shot_cost_per_player_min`, `shot_price` (the mean factor of the price per shot), `armor_soaked_per_player_min`,
   `contest` (rounds begun as a race for a big item, and the share a learner took it in). `pickups_per_player_min.wp`
@@ -124,6 +127,10 @@ players every 10 s; the simulator runs 32 subjects per map at once.
 - Events in the session logs since 2026-10-08: `style` (the playing style drawn for a Bobby's new life).
 
 ## Other
+- `data/droplab/droplab*.jsonl` (`plugins/droplab.py`; the summary in `docs/dropped_weapons.json`): what a dying player's
+  weapon leaves behind in the real game, one line per case: `held`, `ammo`, `also_owned`, `kill` (the game's kill
+  command or a rocket of another player's), `state`, `dropped` (class, place, `removed_in_ms`, where it came to rest),
+  the taker's weapons and ammo `before` and `after`, `lay_s`.
 - `data/weaponlab*/weaponlab.jsonl`: real-server weapon measurements (`plugins/weaponlab.py`): per test, per
   frame health, armor, position and velocity of shooter and target.
 - `data/movetest*/movetest.jsonl`, `movetest_frames.jsonl`: live movement trips of a simulator policy.

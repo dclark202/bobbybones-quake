@@ -31,12 +31,14 @@ def rep(a, b, count=1):
 
 
 # ---- constants
-rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT",
+rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP",
     "N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players\n"
-    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT")
+    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP")
 rep("        return (np.arange(self.n) ^ 1)[:, None]", "        return self.others")
 rep("        return [i ^ 1]", "        return [int(x) for x in self.others[i]]")
 rep("        return j % 2", "        return j % self.G")
+rep("        return np.where(self.acquired, 1.0, 0.5 * np.clip(1.0 - self.seen_t / KNOW_FADE, 0.0, 1.0))",
+    "        return np.where(self.acq2, 1.0, 0.5 * np.clip(1.0 - self.seen2 / KNOW_FADE, 0.0, 1.0)).mean(1)")
 
 # ---- constructor
 rep('''                 loadout="full", drill_weapons=(RL, RG, LG), teacher=None):''',
@@ -228,11 +230,11 @@ rep('''        up = np.repeat(self.item_up, 2, axis=0)                          
     '''        up = np.repeat(self.item_up, self.G, axis=0)                          # per player (its match)''')
 rep('''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot), self._pad_ear(yaw),
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
-                              self._v9(pos, rot), self._intent(pos, rot, known, seen_t)], 1)
+                              self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir)], 1)
         return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
-                              self._v9(pos, rot), self._intent(pos, rot, known, seen_t)], 1)
+                              self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -490,6 +492,7 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
                                                          np.where(self.duck[opp[vh]], TOP_DUCK, TOP)).sum())
             nv = vh[pkind[vh] == NORMAL]
             np.add.at(self.stats["w_dist"], (np.digitize(dist[nv], [300.0, 700.0]), self.weapon[nv]), 1)
+            self._note_close(vh, s, to, dist)
 ''' + s[b:]
 
 left = re.findall(r".*(?:\^ 1|// 2\b|repeat\(self\.[a-z_ >0]*, 2\b|2 \* m\b).*", s)
