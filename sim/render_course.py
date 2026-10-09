@@ -398,6 +398,12 @@ def main():
                     nav=nav_ if os.path.exists(nav_) else None, **(dict(group=a.group) if a.group != 2 else {}))
     if os.environ.get("ARENA_STACK") == "0":
         env.arena_stack = False
+    real = getattr(env, "lab", None) is None                 # a real map (bloodrun, aerowalk, ...): a normal game, the game's own spawn
+    if real and a.fight:
+        env.kind_p, env.loadout_p = (1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0)
+        env.stack_p = env.near_item_p = env.close_p = env.bot_p = 0.0
+        env.runner_p = env.item_run_p = 0.0
+        env.round_len = a.round
     if a.trained_limits:
         env.percept_sigma, env.flinch_on, env.focus_on = 0.5, False, False
     env.react_frames = round(pol.react_ms / 25)
@@ -416,11 +422,11 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     if a.fight:
         frames = fight(env, pol, {"aim": 1, "env": 2, "yard": 3}[a.fight], a.secs, a.round)
-        label = "fight against himself, {}".format({"aim": "aim box", "env": "environment box", "yard": "yard"}[a.fight])
+        label = "fight against himself, {}".format(a.map if real else {"aim": "aim box", "env": "environment box", "yard": "yard"}[a.fight])
         if a.group != 2:
             label = "{} copies of himself, all against all, {}".format(a.group, {"aim": "aim box", "env": "environment box", "yard": "yard"}[a.fight])
-        path = os.path.join(out_dir, "fight_{}{}{}.mp4".format(a.fight, "" if a.group == 2 else "_{}".format(a.group),
-                                                             "" if a.map == "testlab" else "_items"))
+        path = os.path.join(out_dir, "fight_{}{}{}.mp4".format(a.map if real else a.fight, "" if a.group == 2 else "_{}".format(a.group),
+                                                             "" if a.map == "testlab" or real else "_items"))
         if a.highlights > 0:                                 # keep only the seconds around his frags
             hits = [i for i in range(1, len(frames)) if frames[i]["frags"][0] > frames[i - 1]["frags"][0]]
             pre, post, keep, last = int(3.2 / E.DT), int(1.0 / E.DT), [], -10 ** 9

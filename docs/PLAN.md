@@ -22,6 +22,7 @@ Nightmare stand-in, by real games against Nightmare on a free PC, and by the num
 | [LOGS.md](LOGS.md) | Schema of the recorded data (play-test sessions, training metrics, weapon lab) | A log format changes |
 | [../README.md](../README.md) | The public page: the goal, the fairness rules, how it works, what he can do, what is in progress and planned (no dated status: owner, 2026-10-08) | The goal, a fairness rule or what he can do changes |
 | [REPORT_v12.md](REPORT_v12.md) | The full report of the network on the public server | (a report per network the owner reviews) |
+| [MIDRUN_v13.md](MIDRUN_v13.md) | The run in progress at eight hours: hour by hour, the duel curve, what is not going as asked | (a mid-run report when the owner asks for one) |
 | [MANIFEST_v13.md](MANIFEST_v13.md) | The next run in full: what is in its rounds, what it is paid for and shown, what changed | Before a run starts, for the owner's approval |
 
 Rules: a result entry names the backlog items it settles (`B-nn`); a backlog item marked done links to the
@@ -84,6 +85,8 @@ is and for pace, a keys-only walking teacher: B-152, B-155 to B-159) and the tea
 layers (B-154). To 16:00 on 2026-10-09 at the latest; a mid-run report at 07:00; the full report with recommendations at
 its end. The owner's order of things: item pickups and weapon use must not collapse, rockets up; then position and
 control; speed is a bonus.
+At eight hours ([MIDRUN_v13.md](MIDRUN_v13.md)): improving on items, weapons and the duels against the stand-in (Blood
+Run 30% -> 58% of the frags, Aerowalk 52% -> 71%); rockets slipping and no strafe jumping since the teachers ended.
 
 Open besides it, in this order: B-160 (position: fighting from below), B-140 (the walking layer rebuilt properly, with
 keys a hand can press), B-161 (backing away when weak), B-162 (the yard in or out of training), B-154 (teachers and the

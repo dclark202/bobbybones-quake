@@ -5,6 +5,36 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 05:20 — `duel_gru_v13` at eight hours: the mid-run report (owner: "ready at 7am")
+
+[MIDRUN_v13.md](MIDRUN_v13.md) has the tables. In short, at update 255 (473 min, 987 million frames), no stop sign at
+any hourly check:
+
+- **Self-play, start -> now**: time bare 37% -> 17%, big weapons held 0.87 -> 1.35, weapons 2.43 -> 3.72, mega 0.50 ->
+  0.69, red armor 0.21 -> 0.58 a player-minute, trips that arrive 36% -> 51%, frags 2.66 -> 3.09 a match-minute, the
+  machine gun's share of his frags 23% -> 7%, on target 31% -> 33%, races for a big item taken by a learner 17% -> 48%,
+  against the scripted runner 0.59 -> 1.29 frags a minute, speed on his way 265 -> 290.
+- **Against the Nightmare stand-in** (`tools/eval_loop.py`: 48 ten-minute duels a map from the latest save, every 18
+  minutes; 25 checks): Blood Run 30% of the frags and no game won -> 58% (55 to 62) and 31 of 48; Aerowalk 52% and 27
+  games -> 71% (69 to 73) and 48 of 48; his share of Blood Run's red armor 0% -> 26%, of the megas 29% and 31% -> 45% and
+  64%. arena1 (not trained) 38% -> 37 to 40%, its red armor never taken, its falls gone (own deaths 14.7 -> 2 to 3 a game).
+- **The first four hours were a dip, and it was the teachers.** With the walking and weapon teachers on, he fell below
+  the starting network in these duels (Blood Run 18 to 25%, Aerowalk 41 to 49%, 4 to 19 games won) while every self-play
+  number rose: he had stopped hunting the stand-in (his speed toward it when stronger +108 -> +57 on Blood Run, +63 -> +14
+  on Aerowalk; half the lightning and machine-gun shots), and it stacked. From the hour the teachers were gone (01:26) the
+  stack turned into kills. A duel check beside the training numbers showed this; the training numbers alone did not.
+- **Not as asked**: rockets (34% of his frags under the weapon teacher, 22% now; 11% in the Aerowalk duels, lightning
+  52%); no strafe jumping (fast in the air 21 to 26% under the jump label, 9% now; the pace pay amounts to 0.02 a
+  player-minute); the pay for knowing where the enemy is has not moved its measure (0.37 -> 0.39).
+- **What worked as built**: dropped weapons (two thirds taken from the first hour); the ground at his feet (arena1's falls
+  gone at the first save); the teachers held back from the shared layers (on target never dipped); the hand at 8 (5.6
+  actions a second made and asked without a teacher, 7.5 made and 10 asked with it).
+
+Recommendation given: let it run. New for this: `tools/duel_eval.py` records damage, shots, hits and frags by weapon, the
+weapon in hand by distance, his speed toward the enemy by strength and dropped weapons; `sim/render_course.py --fight`
+renders a duel on a real map. Heat maps (the three duel maps, arena1) and two fight videos from the save of update 240
+were sent to the owner.
+
 ## 2026-10-08 21:26 — `duel_gru_v13` started: dropped weapons (measured in the real game), the ground at his feet, the hand at 8, pay for knowing where the enemy is and for pace, a keys-only walking teacher
 
 **The owner's calls after his two games against v12** (20:20 to 20:50; the games: the entry of 20:05):
