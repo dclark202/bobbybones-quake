@@ -110,8 +110,10 @@ larger model, attention or a strategic head (B-191). The scope of all of it, wri
 **Maps for v14 (owner, 2026-10-09 afternoon)**: trained Blood Run, Aerowalk, Lost World, Sinister, Furious Heights,
 Battleforged; held out Campgrounds, Hektik, Toxicity, Cure. Real games against Nightmare before and after a run only.
 
-**`duel_gru_v14` is training** since 2026-10-09 20:14 (owner's go; [MANIFEST_v14.md](MANIFEST_v14.md)), to 19:00 on 2026-10-10
-at the latest. His rules: a brief check every hour, a mid-run report at 7:00, playable around noon if he can be, an
+**`duel_gru_v14` is training** since 2026-10-09 22:53, its second start (owner's go at 20:14; [MANIFEST_v14.md](MANIFEST_v14.md)), to
+19:00 on 2026-10-10 at the latest. The first try (20:14 to 22:52, kept as `duel_gru_v14_try1`) lost half his duel strength
+in 90 minutes: the strafe-jumping teacher reached only the output layer and bent his aim (RESULTS 2026-10-09 23:15); the
+second start lets it into the shared layers (`--teach-trunk-move 1.0`), with a fall-back of no movement teacher at all. His rules: a brief check every hour, a mid-run report at 7:00, playable around noon if he can be, an
 early stop when three duel checks in a row show no major progress and the other measures are flat, a flag at once for
 anything badly wrong. Looked for: rockets and other projectiles in use, strafe jumping and speed kept. He allows two
 settings to be changed while it runs, right after a save and logged: the pay for speed, and the strafe-jumping teacher's

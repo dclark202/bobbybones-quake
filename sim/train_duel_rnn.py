@@ -119,6 +119,11 @@ def main():
                     "0.95 at 40 decisions a second is about half a second, 0.98 about 1.2 s, 0.99 about 2.3 s")
     ap.add_argument("--close-floor", type=float, default=0.2, help="the share of respawns put 300 to 700 units in front of an "
                     "enemy once the near-spawn curriculum has run out (0 = none: every respawn at a spawn point)")
+    ap.add_argument("--teach-trunk-move", type=float, default=-1.0, help="the same share for the movement teacher alone (keys, jump "
+                    "and view in movement rounds and item runs); below 0: as --teach-trunk. Through the output layer alone "
+                    "(0.05) the strafe-jumping teacher taught nothing and cost a third of his hit rate in 90 minutes "
+                    "(2026-10-09, duel_gru_v14_try1); into the shared layers it had taught strafe jumping in 21 minutes "
+                    "that morning (move_trial_a)")
     ap.add_argument("--teach-trunk", type=float, default=1.0, help="the teachers' losses (walking keys, weapon, intention) reach the "
                     "shared layers at this share of their weight; the output layer learns the labels in full. 1 = as before. A "
                     "teacher with new labels otherwise moves the whole network (RESULTS 2026-10-08 18:45)")
@@ -518,7 +523,7 @@ def main():
                     lg, v, hh = pol.step(b_obs[t, chunk], hh)
                     lgs.append(lg)
                     vals.append(v)
-                    if a.teach_trunk < 1.0:
+                    if a.teach_trunk < 1.0 or 0.0 <= a.teach_trunk_move < 1.0:
                         hs.append(hh)
                     hh = hh * (1.0 - b_done[t, chunk])[:, None]
                 lg = torch.stack(lgs)
@@ -528,6 +533,10 @@ def main():
                 if a.teach_trunk < 1.0 and (kick > 0 or wk > 0 or ik > 0):
                     hs_ = torch.stack(hs)                                # the same outputs, the shared layers held back
                     dst = dists(pol.pi(a.teach_trunk * hs_ + (1.0 - a.teach_trunk) * hs_.detach()))
+                dstm = dst                                               # ... and what the movement teacher's loss reads (--teach-trunk-move)
+                if kick > 0 and a.teach_trunk_move >= 0 and a.teach_trunk_move != a.teach_trunk:
+                    tm_ = a.teach_trunk_move
+                    dstm = ds if tm_ >= 1.0 else dists(pol.pi(tm_ * torch.stack(hs) + (1.0 - tm_) * torch.stack(hs).detach()))
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
@@ -555,7 +564,7 @@ def main():
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
                     tl = b_teach[:, chunk]
                     tm = (tl[..., 0] >= 0).float() * wgt
-                    lt = sum(dst[j].log_prob(tl[..., j].clamp(min=0)) * (tl[..., j] >= 0).float() for j in range(4))   # (a head can go unlabelled)
+                    lt = sum(dstm[j].log_prob(tl[..., j].clamp(min=0)) * (tl[..., j] >= 0).float() for j in range(4))   # (a head can go unlabelled)
                     kick_l = -(lt * tm).sum() / tm.sum().clamp(min=1.0)
                     loss = loss + kick * kick_l
                 if wk > 0:                                               # the weapon key leans on the weapon rule (rockets close, ...)

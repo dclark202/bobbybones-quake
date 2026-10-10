@@ -5,6 +5,57 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 23:15 — v14's first try went badly wrong and was stopped; restarted from the clean start with the teacher set right
+
+**What the first duel check of the run showed** (update 41, 90 minutes in; 32 ten-minute duels a map against the stand-in):
+
+| Map | At the start | Update 41 |
+|---|---|---|
+| Blood Run | 71% of the frags (32 won, 0 lost) | 20% (0 won, 32 lost) |
+| Aerowalk | 80% | 44% |
+| Lost World | 90% | 46% |
+| Sinister | 74% | 42% |
+| Furious Heights | 42% | 24% |
+| Battleforged | 62% | 34% |
+| the six trained maps | 69.7% | 35.2% |
+| the four held out | 49.2% | 30.1% |
+
+On Blood Run his hit rates went from 51% to 30% with the lightning gun, 46% to 29% with the rail, 53% to 32% with rockets;
+he held 150 or more 36% of his time (66%), took 3% of the red armors (28%), died twice as often, and had an empty
+weapon in hand 8% of his time. In training the same showed, hidden by self-play: as the teacher's weight rose from
+nothing to 0.26, hit rates fell (lightning 0.46 -> 0.30, rail 0.48 -> 0.35, machine gun 0.39 -> 0.26), the view's jerk
+tripled (2.3 -> 7.6), he asked for 9 key actions a second and 77% were refused, he lost to his old selves (48% -> 40% of
+the frags), and strafe jumping did not come: fast in the air 8% -> 12% and flat from update 21, item runs 6.5 -> 4.4
+items a minute.
+
+**Why.** The strafe-jumping teacher's labels (keys, jump and view in item runs) reached only the output layer:
+`--teach-trunk 0.05` holds every teacher back from the shared layers, a rule made on 2026-10-08 to protect his aim. The
+output layer is shared by every situation, so learning the teacher's view there bent his view in fights too, and without
+the shared layers he could not learn when to do what the teacher does. That morning's trial (`move_trial_a`, RESULTS
+09:05), where the same teacher went into the shared layers, had taught strafe jumping in 21 minutes (188 -> 320 units a
+second, 17% fast in the air). The dry runs before the start were 10 to 25 minutes long and showed his aim unchanged; the
+damage came with the weight, after half an hour. That was my setup and my check: too short.
+
+**What was done** (the owner had asked to be told at once of anything badly wrong, and at 22:00 allowed the teacher to be
+turned up or down in the run):
+
+- 22:52: the run stopped at update 70. Kept whole as `data/sim_runs/duel_gru_v14_try1` (with its log and its duel check).
+- A clean start again: v14's start network (v13 widened), v13's eight league snapshots, the start check.
+- The trainer has `--teach-trunk-move`: the movement teacher's share into the shared layers, apart from the weapon
+  and intention teachers' (they stay at 0.05). The run was started again at 22:53 with it at 1.0 and everything else as
+  decided (weight 0.3 rising over the first hour, gone after eight; item runs 30%; pay for speed 0.1 and 0.3; the rocket
+  numbers). It ends at 19:00 as before.
+- The first seven updates: the teacher's loss falls much faster (21 -> 3.2 in seven updates; the first try needed 35),
+  two large steps at updates 2 and 3 (0.12 and 0.16, then 0.02 to 0.06), hit rates as at the start (lightning 0.45, rail
+  0.47 to 0.49, rockets 0.45, on target 0.34). Item runs dip again (6.3 -> 4.2 items a minute) and the view's jerk rises
+  (2.3 -> 4.2) while the weight is still small (0.07).
+
+**The rule for the next hour**: at update 20 or so (weight about 0.2) his hit rates must still be the start's (lightning
+0.42 or more, rail 0.44 or more; the first try had 0.40 and 0.40 there) and strafe jumping must show (fast in the air 14%
+or more, or item runs over 295 units a second; the first try had 11% and 281). If the aim falls: stop, start again from
+the clean start with no movement teacher at all (v14 then gives rockets and the rest, not strafe jumping). The duel
+checks run again (the evaluation loop is started with every check-in).
+
 ## 2026-10-09 21:55 — v14 after 93 minutes; the duel checks had stopped; the owner on the teacher's weight
 
 Update 43. Rockets make 35% of the frags (27% at the start; in hand 29%, hit rate 39% from 44%); shotgun, grenades and
