@@ -12,6 +12,10 @@ layers (`--teach-trunk 0.05`), lost half his duel strength in 90 minutes and tau
 `duel_gru_v14_try1`. The run was started again from the same start with the movement teacher alone let into the shared
 layers (`--teach-trunk-move 1.0`), everything else as below.
 
+**Changed in the run, 2026-10-10** (the two settings the owner left to be adjusted, each right after a save, the save
+kept): at 01:18 the teacher's weight held at 0.3 to the end (it was set to fade to nothing over eight hours; RESULTS
+01:30); at 02:50 the teacher's weight 0.3 -> 0.5 and the pay for speed in games 0.1 -> 0.3 (RESULTS 03:00).
+
 "1. 0.3 is good  2. 30% is good  3. no key labels good  4. yes  5. yes  6. tbd: We will start the run later tonight."
 So rows 1 to 5 stood as proposed; that evening he raised row 4 (".1/.3? And if it's too high/low you can adjust as the
 training progresses"). The run's length and report hours are set at the start.

@@ -5,6 +5,64 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-10 03:00 — v14 at three hours: half-way to the teacher in item runs, none of it in his games yet; the teacher to 0.5, the pay for speed in games to 0.3
+
+**The network itself in item runs, map by map** (64 player-minutes a map, every round an item run), beside a player who
+presses only the teacher's labels. Each cell: units a second, time fast in the air, items reached a minute.
+
+| Map | The start network | The save of 02:05 (190 minutes in) | The teacher's labels alone |
+|---|---|---|---|
+| Blood Run | 316, 12%, 8.3 | 336, 24%, 5.7 | 359, 31%, 8.2 |
+| Aerowalk | 264, 5%, 4.4 | 267, 16%, 4.3 | (it labels 36% of his frames there) |
+| Lost World | 306, 7%, 7.2 | 306, 13%, 5.4 | 328, 20%, 7.0 |
+| Sinister | 260, 5%, 4.7 | 304, 12%, 7.1 | 320, 18%, 8.6 |
+| Furious Heights | 285, 11%, 3.9 | 313, 21%, 4.1 | 339, 28%, 6.1 |
+| Battleforged | 308, 8%, 9.3 | 334, 16%, 7.9 | 352, 23%, 9.1 |
+
+He is about half the way to the teacher in time fast in the air on every map and faster on five. But he reaches fewer
+items than the start network on Blood Run, Lost World and Battleforged: a faster run that misses more. On Lost World he
+has taken over a fault of the teacher's: lava damage in item runs 18 -> 41 a player-minute (the teacher's labels alone:
+43). On Aerowalk the strafe-jumping network has no way in its own walking map for most goals and labels a third of his
+frames; the walking teacher has the rest.
+
+**A correction.** The table of 01:30 gave 4.9 items a minute at the start of item runs: that was the mean of the first
+ten updates, the dip already in it. The first two updates had 6.3 and 6.6. He is at 5.4 to 5.5 now: still under the
+start, rising by 0.1 in 20 minutes. (The same for the speed there: 303 and 293 in the first two updates, not 283.)
+
+**How far his choices are from the teacher's** (cross-entropy on the frames the teacher labels, in the places he himself
+gets to; Blood Run, Lost World and Sinister alike): the start network 19 to 21 nats, now 2.0; the teacher's own spread,
+under which no pupil of sampled labels can get, 1.0. Of the 1.0 left: the view 0.53, the side keys 0.29, forward 0.15,
+jump 0.06. His first choice is the teacher's for forward 92% of the time, side 84%, jump 97%, the view 56%. In the
+trainer the teacher's loss stood at 1.86 to 1.94 from 01:10 to 02:20 at weight 0.3 and at about 1.8 in the last ten
+updates: it falls very slowly.
+
+**Aim.** Against the stand-in, who has not changed (the duel checks, six maps): lightning 49.9% at the start, 47.4% at 47
+minutes, 46.7% at 182; rail 40.3% -> 40.5%; rockets 50.1% -> 48.4%; machine gun 41.8% -> 39.9%. In self-play lightning
+44.4% -> 43%, rail 47.7% -> 46.2%, on target 33.5% -> 32.4%, rockets 43.9% -> 44.7%, and he takes 53% of the frags
+against his old selves; his targets there are more often fast in the air (9% -> 12.5% of all his time), which is part of
+it. A small loss with the lightning gun, most of it in the first 47 minutes.
+
+**Duel checks** (his share of the frags on the six trained maps): 69.7% at the start, 50.9% at 47 minutes, 55.7% at 91,
+55.5% at 142, 53.7% at 182; the four held out 49.2% -> 46.5%. Three checks without progress. The run goes on: the other
+measures are not flat, and the cause found at 01:30 (the rocket in his hand at every distance) is the owner's to decide.
+
+**None of the item-run skill shows in his games yet.** On a trip in a game with nobody about he does 289 units a second
+(284 at the start) and is over 320 for 41% of the time (39%); in the duel checks 284 (275). The pay for speed came to
+0.036 a player-minute in games and 0.18 in item runs: beside 0.19 a player-minute of shot prices, nothing.
+
+**Changed at the save of 02:50**, one restart (both are settings the owner left to me: the pay, "if it's too high/low you
+can adjust as the training progresses"; the teacher, "if you think the strafe jumping teacher isn't strong enough you
+can also bump it up"):
+
+- the strafe-jumping teacher's weight 0.3 -> 0.5: his choices are a nat from the teacher's and at 0.3 the loss fell
+  by about 0.1 an hour;
+- the pay for speed in games 0.1 -> 0.3, the number of the item runs.
+
+The save is kept as `policy_before_teach05_pay03.pt`. The rule: if the mean of eight updates falls under 41.5% for
+lightning, 44.7% for the rail or 31.2% on target, or a duel check has lightning under 45% against the stand-in, the
+teacher goes back to 0.3 from that save. If within two hours the teacher's loss is not at 1.6 or less (it was 1.8) and
+time fast in the air does not rise faster than before, 0.5 teaches no more than 0.3 and it goes back at a save.
+
 ## 2026-10-10 01:30 — v14's second start after two and a half hours: aim holds, speed comes slowly, rockets cost duels; the scripted opponents
 
 **The run** (second start, 22:53; update 60 at 01:18, the teacher at 0.26 at its peak after an hour).
@@ -14,9 +72,9 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 | Hit rate: lightning, rail | 45%, 48% | 44%, 47% | 30%, 35% |
 | On target, enemy in view | 33% | 33% | 28% |
 | Frags against his old selves | 49% | 50 to 55% | 52% (40% at update 41) |
-| Item runs: units a second | 283 | 310 | 286 |
+| Item runs: units a second | 303 and 293 in the first two updates (283 over the first ten) | 310 | 286 |
 | Item runs: fast in the air | 10% | 16.5% | 12% |
-| Item runs: items a minute | 4.9 | 5.2 (4.1 at the lowest, update 17) | 4.4 |
+| Item runs: items a minute | 6.3 and 6.6 in the first two updates (4.9 over the first ten: corrected 03:00) | 5.2 (4.1 at the lowest, update 17) | 4.4 |
 | The teacher's loss | 4.6 | 2.0 | 2.8 |
 | Megas, red armors a player-minute | 0.59, 0.58 | 0.61, 0.61 | 0.60, 0.46 |
 
