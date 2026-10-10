@@ -553,6 +553,7 @@ HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
 TRICKS = float(os.environ.get("TRICKS") or 0.0) > 0
 HOLD_HUNT, HOLD_HUNT_P = 10.0, 0.6                         # the holder after a frag: seconds he looks for him, and how often
 WATCH_SECS = 25.0                                         # the watcher keeps a post this long
+LOB_PG_NEAR, LOB_PG_FAR = 150.0, 1000.0                    # ... and in a fight it holds the plasma gun at these distances
 LOB_AHEAD, LOB_PG_ETA, LOB_GL_ETA = 3.2, 1.0, (1.6, 3.0)   # the lobber: seconds of the other one's way he looks along; he fires plasma at an
 #   exit when the other one is under LOB_PG_ETA from coming out of it, a grenade when LOB_GL_ETA away (its fuse is 2.5 s)
 TRICK_P = np.zeros(3)                                     # of the item runner's rounds, the shares with the holder, the lobber, the watcher
@@ -3540,6 +3541,9 @@ class DuelEnv:
         nmw = self.sc_wpn[idx]                               # the stand-in: its drawn weapon if he has it, the rail far off
         nmw = np.where((dist > 700) & self.has[idx, RG] & (am[:, RG] > 0), RG, nmw)
         want = np.where((fixed == -3) & self.has[np.arange(k) * 0 + idx, nmw] & (am[np.arange(k), nmw] > 0), nmw, want)
+        if TRICKS:                                           # the lobber fights with what it throws: plasma on an enemy in view from
+            want = np.where((self.script[idx] == 3) & (per == LOBBER) & (dist > LOB_PG_NEAR) & (dist < LOB_PG_FAR)   # 150 to 1,000 units
+                            & (am[:, PG] > 0), PG, want)     # (2026-10-10: its grenades and plasma made 0 to 25% of its frags; he has to meet them)
         cur = self.weapon[idx]
         out[:, 6] = np.where(fighter & (want != cur) & self.has[idx, want], want + 1, 0)
         tol = np.where((cur == RL) | (cur == SG), 6.0, 2.5)
