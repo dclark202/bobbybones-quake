@@ -1,0 +1,56 @@
+{
+ "map": "campgrounds",
+ "demos": 5,
+ "player_minutes": 46,
+ "jumps_seen": 1652,
+ "over_a_hole_or_up": 150,
+ "jumps": [
+  {
+   "id": 1,
+   "n": 6,
+   "per_hour": 7.8,
+   "demos": 4,
+   "take_off": [
+    -1346,
+    -154,
+    540
+   ],
+   "landing": [
+    -1384,
+    264,
+    538
+   ],
+   "near_take_off": "GL (257)",
+   "near_landing": "YA (205)",
+   "length": 430,
+   "rise": -2,
+   "hole": 513,
+   "speed": [
+    495,
+    579,
+    666
+   ],
+   "air_s": 0.71,
+   "speed_needed": 580,
+   "walker_s": 1.8,
+   "serves": {},
+   "walker": "slower",
+   "nodes_from": [
+    103,
+    104,
+    132,
+    133
+   ],
+   "nodes_to": [
+    113,
+    114,
+    142,
+    143
+   ],
+   "node_a": 133,
+   "node_b": 113
+  }
+ ],
+ "a_walker_cannot_or_a_second_slower": 21,
+ "a_walker_just_makes": 105
+}

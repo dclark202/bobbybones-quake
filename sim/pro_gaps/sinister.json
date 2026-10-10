@@ -1833,8 +1833,186 @@
    ],
    "node_a": 1665,
    "node_b": 1265
+  },
+  {
+   "id": 37,
+   "n": 120,
+   "per_hour": 5.6,
+   "demos": 85,
+   "take_off": [
+    180,
+    964,
+    355
+   ],
+   "landing": [
+    227,
+    1083,
+    403
+   ],
+   "near_take_off": "SG (437)",
+   "near_landing": "RA (449)",
+   "length": 131,
+   "rise": 49,
+   "hole": -1,
+   "speed": [
+    370,
+    454,
+    530
+   ],
+   "air_s": 0.3,
+   "speed_needed": 369,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    324,
+    395,
+    398,
+    400,
+    402,
+    460,
+    462,
+    464,
+    466,
+    468,
+    530,
+    533,
+    536,
+    539,
+    542
+   ],
+   "nodes_to": [
+    400,
+    402,
+    404,
+    406,
+    468,
+    470,
+    539,
+    542,
+    545,
+    549,
+    619,
+    622,
+    626
+   ],
+   "node_a": 395,
+   "node_b": 545
+  },
+  {
+   "id": 38,
+   "n": 115,
+   "per_hour": 5.4,
+   "demos": 77,
+   "take_off": [
+    139,
+    798,
+    313
+   ],
+   "landing": [
+    188,
+    952,
+    359
+   ],
+   "near_take_off": "SG (295)",
+   "near_landing": "SG (424)",
+   "length": 166,
+   "rise": 46,
+   "hole": -1,
+   "speed": [
+    347,
+    434,
+    504
+   ],
+   "air_s": 0.38,
+   "speed_needed": 383,
+   "walker_s": 0.7,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    321,
+    323,
+    324,
+    385,
+    388,
+    390,
+    392,
+    395,
+    456,
+    458,
+    460,
+    519,
+    523,
+    530
+   ],
+   "nodes_to": [
+    325,
+    395,
+    398,
+    400,
+    402,
+    462,
+    464,
+    466,
+    536,
+    539
+   ],
+   "node_a": 388,
+   "node_b": 464
+  },
+  {
+   "id": 39,
+   "n": 67,
+   "per_hour": 3.1,
+   "demos": 52,
+   "take_off": [
+    612,
+    865,
+    0
+   ],
+   "landing": [
+    728,
+    767,
+    46
+   ],
+   "near_take_off": "LG (106)",
+   "near_landing": "LG (258)",
+   "length": 161,
+   "rise": 45,
+   "hole": -1,
+   "speed": [
+    324,
+    367,
+    423
+   ],
+   "air_s": 0.4,
+   "speed_needed": 357,
+   "walker_s": 0.6,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    956,
+    958,
+    991,
+    992,
+    1042,
+    1044,
+    1046,
+    1118,
+    1120,
+    1189,
+    1190
+   ],
+   "nodes_to": [
+    1185,
+    1237,
+    1238
+   ],
+   "node_a": 1046,
+   "node_b": 1185
   }
  ],
  "a_walker_cannot_or_a_second_slower": 814,
- "a_walker_just_makes": 2770
+ "a_walker_just_makes": 2770,
+ "up_a_ledge_beside_a_way": 525
 }

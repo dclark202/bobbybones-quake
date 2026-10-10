@@ -8,7 +8,8 @@ more, or it lands 40 or more higher than it began, and the walking map (sim/buil
 standing) has no way from its take-off to its landing, or one that takes a second longer than the flight ("cannot",
 "slower"); and, seen 30 times or more, the gaps of 200 units or more over a hole of 100 that the walking map crosses
 nearly as fast: by a jump of its own from the very edge ("just makes it": Blood Run's red armor) or by "a way beside
-it". Jumps with
+it"; and the jumps "up a ledge" of 30 units or more where the walking map has stairs or a way round (not in use unless
+an entry says "use": true: Blood Run's stairs to the yellow armor). Jumps with
 the same take-off and landing places are one entry: where from, where to, how long and how high, the speed over the
 ground at take-off (a tenth, the middle, nine tenths of the pros'), the speed it needs (length over seconds in the air
 of the slowest tenth that made it), the seconds in the air, the walker's seconds for the same, how often, and how many
@@ -142,11 +143,13 @@ def build(mp, limit):
     edge = ~hard & (A[:, 10] >= 100.0) & (A[:, 6] >= 200.0)     # a real gap that a walker's jump just makes (from the very edge)
     res["a_walker_cannot_or_a_second_slower"] = int(hard.sum())
     res["a_walker_just_makes"] = int(edge.sum())
-    keep = hard | edge
-    A, na, nb, tw, hard = A[keep], na[keep], nb[keep], tw[keep], hard[keep]
+    up = ~hard & ~edge & (A[:, 7] >= 30.0)                       # up a ledge or onto stairs where a walker's way is nearly as fast
+    res["up_a_ledge_beside_a_way"] = int(up.sum())
+    keep = hard | edge | up
+    A, na, nb, tw, hard, up = A[keep], na[keep], nb[keep], tw[keep], hard[keep], up[keep]
     # one entry per take-off and landing place
-    key = [tuple(int(v) for v in np.concatenate([np.floor(r[0:2] / CELL), [np.floor(r[2] / 64.0)], np.floor(r[3:5] / CELL), [np.floor(r[5] / 64.0)]])) + (bool(h),)
-           for r, h in zip(A, hard)]
+    key = [tuple(int(v) for v in np.concatenate([np.floor(r[0:2] / CELL), [np.floor(r[2] / 64.0)], np.floor(r[3:5] / CELL), [np.floor(r[5] / 64.0)]])) + (2 if h else (0 if u else 1),)
+           for r, h, u in zip(A, hard, up)]
     groups = {}
     for i, k_ in enumerate(key):
         groups.setdefault(k_, []).append(i)
@@ -160,7 +163,7 @@ def build(mp, limit):
                 break
         else:
             merged.append(c)
-    merged.sort(key=lambda c: -len(c["idx"]))
+    merged.sort(key=lambda c: (c["hard"] == 0, -len(c["idx"])))   # (the jumps up a ledge after the others: the others keep their numbers)
     ipos = np.asarray(env.item_pos, np.float32).reshape(-1, 3)
     g_ = json.load(open(os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))))
     air_e = np.array([(e[0], e[1]) for e in g_["edges"] if e[3] == "air"], np.int64).reshape(-1, 2)   # the walker's own jumps and drops
@@ -172,7 +175,7 @@ def build(mp, limit):
         return "{} ({:.0f})".format(names[big[int(dd.argmin())]], float(dd.min())) if dd.min() < 500 else ""
     for c in merged:
         v = np.array(c["idx"])
-        if len(v) < (5 if c["hard"] else 30):
+        if len(v) < (5 if c["hard"] == 2 else 30):
             continue
         a_med, b_med = np.median(A[v, 0:3], axis=0), np.median(A[v, 3:6], axis=0)
         an, bn = np.bincount(na[v]).argmax(), np.bincount(nb[v]).argmax()
@@ -193,7 +196,7 @@ def build(mp, limit):
             speed=[round(float(x)) for x in np.percentile(A[v, 8], (10, 50, 90))], air_s=round(ta, 2),
             speed_needed=round(float(np.percentile(A[v, 6] / np.maximum(A[v, 9], 0.2), 10))),      # length over time in the air: the slowest tenth that made it
             walker_s=None if twm >= 1e8 else round(twm, 1), serves=serves,
-            walker="cannot" if twm >= 1e8 else ("slower" if c["hard"] else ("just makes it" if direct else "a way beside it")),
+            walker="cannot" if twm >= 1e8 else ("slower" if c["hard"] == 2 else "up a ledge" if c["hard"] == 0 else ("just makes it" if direct else "a way beside it")),
             nodes_from=[int(x) for x in np.unique(na[v])[:40]], nodes_to=[int(x) for x in np.unique(nb[v])[:40]],
             node_a=int(an), node_b=int(bn)))
     return res
