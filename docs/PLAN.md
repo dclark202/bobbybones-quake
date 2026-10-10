@@ -90,7 +90,7 @@ Bobby's time over 400 units a second, his own 18%), the low ground (Bobby lower 
 v14: the owner wants it watched every hour and not paid for yet, "the most possible behavior to be learned through
 practice"; counters are in, the switch `HIGH_PAY` stays off, RESULTS 18:30), few rockets (13 fired in ten minutes, his own 155). He plays more that evening, then gives the go.
 
-**The public server (for his friends, 2026-10-09)**: restarted at 19:10 on the owner's word with the evening's changes
+**The public server (for his friends, 2026-10-09)**: restarted at 19:04 on the owner's word with the evening's changes
 (B-183): the ten duel maps in `!map` (free-for-all, a map's duel items, six playing at most), a line about `!bots` in the
 welcome, the owner's `!kick` and `!ban` (`plugins/banlist.py`), the start map held at a start, the watchdog on the main
 thread.
