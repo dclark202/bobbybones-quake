@@ -35,6 +35,7 @@ except Exception:                                           # scipy missing or b
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qsim import World  # noqa: E402
+import jump_links as JL  # noqa: E402
 
 RUN = 320.0
 DT = 0.025
@@ -79,7 +80,7 @@ def teleports(world):
 class NavField:
     """nav graph -> time-to-goal for every node and goal, next hops, fast position lookup"""
 
-    def __init__(self, nav_path, goals, world=None, hazard=False, starts=None, drop=None, tele=None):
+    def __init__(self, nav_path, goals, world=None, hazard=False, starts=None, drop=None, tele=None, jumps=None):
         g = json.load(open(nav_path))
         self.nodes = np.array(g["nodes"], np.float32)
         n = len(self.nodes)
@@ -120,11 +121,17 @@ class NavField:
                 radj[a].append((b, float(np.linalg.norm(self.nodes[a] - self.nodes[b])) / RUN, "walk"))
         self.kd_idx = np.nonzero(self.valid)[0]
         self._kd = cKDTree(self.nodes[self.kd_idx] * np.array([1, 1, 2.0], np.float32))   # vertical counts double
+        self.jumps = list(jumps or [])                        # v15: the pros' jumps as links (sim/jump_links.py)
+        jl = {}                                               # (from, to) -> the jump's index
+        for a, b, t, k in (JL.links(self.jumps, self.nodes, lambda p: self.locate(p)[0], ok=self.valid) if self.jumps else ()):
+            radj[b].append((a, t, "jump"))
+            jl[(a, b)] = k
         self.goals = np.array(goals, np.float32)
         G = len(goals)
         self.T = np.full((G, n), 1e9, np.float32)
         self.next = np.full((G, n), -1, np.int32)
-        self.next_kind = np.zeros((G, n), np.int8)            # 0 walk, 1 air, 2 teleport
+        self.next_kind = np.zeros((G, n), np.int8)            # 0 walk, 1 air, 2 teleport, 3 one of the pros' jumps
+        self.jlink = np.full((G, n), -1, np.int32)            # the jump the step from a point is (-1: a plain step)
         self.via = np.full((G, n, 3), np.nan, np.float32) if enter else None    # v14: where to step in, for a teleporter step
         for gi, gp in enumerate(self.goals):
             b, _ = self.locate(gp[None])
@@ -140,13 +147,18 @@ class NavField:
                     if nd < dist.get(v, 1e18):
                         dist[v] = nd
                         self.next[gi, v] = u
-                        self.next_kind[gi, v] = {"walk": 0, "air": 1, "tele": 2}[kind]
+                        self.next_kind[gi, v] = {"walk": 0, "air": 1, "tele": 2, "jump": 3}[kind]
+                        self.jlink[gi, v] = jl.get((v, u), -1) if kind == "jump" else -1
                         if self.via is not None:
                             self.via[gi, v] = enter.get((v, u), np.nan)
                         heapq.heappush(pq, (nd, v))
             for v, d in dist.items():
                 self.T[gi, v] = d
         self.reach = self.T < 1e8
+        self.jd = self.ji = None                              # per goal and point: the way to the first jump ahead, and which
+        if self.jumps:
+            la = [JL.look_ahead(self.next[gi], self.jlink[gi], self.nodes) for gi in range(G)]
+            self.jd, self.ji = np.stack([x[0] for x in la]), np.stack([x[1] for x in la])
         if starts is not None and len(starts):                # v14: a try starts only where the spawn points lead
             fwd = [[] for _ in range(n)]
             for b_ in range(n):
@@ -176,7 +188,7 @@ class NavField:
 
 class MoveEnv:
     def __init__(self, bsp, nav_path, n=512, seed=0, max_goal_time=8.0, min_goal_time=0.8, substeps=(8, 8, 9),
-                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False):
+                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5):
         """substeps: physics steps (ms) per 25 ms decision. (8, 8, 9) = a 125 fps human: the frame-rate
         dependent ground-strafe boost that 40 Hz bots get (25,) is not available, as for real players."""
         self.w = World(bsp, n=n)
@@ -196,9 +208,26 @@ class MoveEnv:
                  if e.get("classname", "").startswith(GOAL_CLASSES) and "origin" in e
                  and not (self.v14 and e["classname"] == "item_quad")]
         starts = [e["origin"] for e in self.w.spawns()]
+        # v15 (jumps): the pros' jumps of this map are links of the walking map, five more inputs tell of a jump ahead
+        # (zeros on a map without a list), and a share of the tries (jump_p) begins a second or two before a take-off
+        self.jump_obs = bool(jumps)
+        self.jumps = JL.load(os.path.splitext(os.path.basename(bsp))[0]) if jumps else []
         self.field = NavField(nav_path, goals, world=self.w, hazard=self.v14, starts=starts if self.v14 else None,
                               drop=shut_teleports(self.w, nav_path) if self.v14 else None,
-                              tele=teleports(self.w) if self.v14 else None)
+                              tele=teleports(self.w) if self.v14 else None, jumps=self.jumps)
+        self.jump_p = float(jump_p) if self.jumps else 0.0
+        self.try_by_k = {}                                     # jump -> [(goal, the points a try can begin at)]
+        for g_ in range(len(self.field.goals) if self.jumps else 0):
+            for k_ in range(len(self.jumps)):
+                st_ = np.nonzero((self.field.ji[g_] == k_) & (self.field.jd[g_] > 250.0) & (self.field.jd[g_] < 1100.0)
+                                 & self.field.spawnable)[0]
+                if len(st_):
+                    self.try_by_k.setdefault(k_, []).append((g_, st_))
+        self.jump_a = np.array([j["a"] for j in self.jumps], np.float32).reshape(-1, 3)
+        self.jump_b = np.array([j["b"] for j in self.jumps], np.float32).reshape(-1, 3)
+        self.try_k = np.full(n, -1, np.int32)                  # the jump this try is for (-1: a plain try)
+        self.crossed = np.zeros(n, bool)
+        self.at_edge = np.zeros(n, bool)
         self.fall_dmg = np.zeros(n, np.float32)
         self.spawn_nodes = np.nonzero(self.field.spawnable)[0]
         self.goal_pos = self.field.goals
@@ -223,15 +252,24 @@ class MoveEnv:
 
     def _reset(self, i):
         f = self.field
-        for _ in range(50):
-            g = int(self.rng.integers(len(self.goal_pos)))
-            node = int(self.spawn_nodes[self.rng.integers(len(self.spawn_nodes))])
+        self.try_k[i], self.crossed[i], self.at_edge[i] = -1, False, False
+        if self.jump_p and self.try_by_k and self.rng.random() < self.jump_p:
+            ks = list(self.try_by_k)                           # (every jump as often as any other)
+            k = int(ks[self.rng.integers(len(ks))])
+            g, st = self.try_by_k[k][int(self.rng.integers(len(self.try_by_k[k])))]
+            node = int(st[self.rng.integers(len(st))])
             T = f.T[g, node]
-            if self.min_goal_time <= T <= self.max_goal_time and f.next[g, node] >= 0:
-                break
+            self.try_k[i] = k
+        else:
+            for _ in range(50):
+                g = int(self.rng.integers(len(self.goal_pos)))
+                node = int(self.spawn_nodes[self.rng.integers(len(self.spawn_nodes))])
+                T = f.T[g, node]
+                if self.min_goal_time <= T <= self.max_goal_time and f.next[g, node] >= 0:
+                    break
         nxt = f.nodes[f.next[g, node]]
         p = f.nodes[node]
-        face = math.degrees(math.atan2(nxt[1] - p[1], nxt[0] - p[0])) + float(self.rng.uniform(-90, 90))
+        face = math.degrees(math.atan2(nxt[1] - p[1], nxt[0] - p[0])) + float(self.rng.uniform(-90, 90) if self.try_k[i] < 0 else self.rng.uniform(-40, 40))
         self.w.reset(i, (p[0], p[1], p[2] + 2.0), (0, 0, 0), face)
         self.goal[i], self.yaw[i], self.t[i] = g, face, 0.0
         self.phi[i] = T
@@ -282,6 +320,12 @@ class MoveEnv:
         floors = self._floor_rays(pos, c, si)
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], np.concatenate(wps, 1), np.stack(kinds, 1) / 2.0,
                               goal, (self.phi / 10.0)[:, None], walls, floors], 1)
+        if getattr(self, "jump_obs", False):                   # v15: the jump ahead on his way (sim/jump_links.py)
+            if getattr(f, "ji", None) is not None:
+                jo = JL.inputs(f.jumps, f.jd[self.goal, idx], f.ji[self.goal, idx], np.linalg.norm(f.nodes[idx] - pos, axis=1))
+            else:
+                jo = np.zeros((len(pos), JL.N_JUMP), np.float32)
+            obs = np.concatenate([obs, jo], 1)
         if self.obs_noise:
             obs = obs + self.rng.normal(0, self.obs_noise, obs.shape)
         return obs.astype(np.float32)
@@ -335,18 +379,30 @@ class MoveEnv:
             hard = np.where((prev[:, 6] < 0.5) & (s[:, 6] > 0.5) & (prev[:, 5] < 0),
                             np.where(delta > 60.0, 10.0, np.where(delta > 40.0, 5.0, 0.0)), 0.0).astype(np.float32)
             self.fall_dmg += hard
+        over = np.zeros(self.n, bool)
+        if self.jump_p:                                        # a try for a jump: over it (+1, once), or fallen short (the try ends)
+            on = np.nonzero((self.try_k >= 0) & ~self.crossed)[0]
+            if len(on):
+                A_, B_, p_ = self.jump_a[self.try_k[on]], self.jump_b[self.try_k[on]], pos[on]
+                self.at_edge[on] |= np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0
+                ov = (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (s[on, 6] > 0.5)
+                over[on[ov]] = True
+                self.crossed[on[ov]] = True
+                fell = fell.copy()
+                fell[on[self.at_edge[on] & ~ov & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)]] = True
         improved = phi < self.best_phi - 0.05
         self.best_phi = np.minimum(self.best_phi, phi)
         self.stall = np.where(improved, 0.0, self.stall + DT)
         timeout = (self.t > self.limit) | (self.stall > self.stall_limit)
-        reward = reward + arrived * 1.0 - fell * 1.0 - FALL_COST * hard
+        reward = reward + arrived * 1.0 - fell * 1.0 - FALL_COST * hard + over * 1.0
         done = arrived | fell | timeout
         speed = np.hypot(s[:, 3], s[:, 4])
         info = dict(speed=speed, ground=s[:, 6].copy())
         ep = []
         for i in np.nonzero(done)[0]:
             ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), t=float(self.t[i]),
-                           est=float(self.start_phi[i]), goal=int(self.goal[i]), fall_dmg=float(self.fall_dmg[i])))
+                           est=float(self.start_phi[i]), goal=int(self.goal[i]), fall_dmg=float(self.fall_dmg[i]),
+                           jump=int(self.try_k[i]), crossed=bool(self.crossed[i])))
             self.fall_dmg[i] = 0.0
             self._reset(int(i))
         if len(ep):
