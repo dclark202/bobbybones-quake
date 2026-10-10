@@ -684,6 +684,8 @@ def main():
                                                   move_only=m_ in move_maps)
                                          for m_, v_ in agg_map.items() if v_.get("move_frames", 0) > 0},
                             start_gun_per_player_min=round(float(agg.get("start_gun", 0) / max(1e-9, NP * T * DT_MIN)), 3),
+                            start_gun_by={w_: int(np.atleast_1d(agg.get("start_gun_w", np.zeros(len(WEAPONS))))[i_])                     # ... by the weapon in hand (START_GUN_W)
+                                          for i_, w_ in enumerate(WEAPONS) if np.atleast_1d(agg.get("start_gun_w", np.zeros(len(WEAPONS))))[i_] > 0},
                             in_hand_games={w_: round(float(np.atleast_1d(agg.get("hand_g", np.zeros(len(WEAPONS))))[i_]                # the share of his time in games (not in
                                                            / max(1.0, float(np.sum(agg.get("hand_g", 0.0))))), 4) for i_, w_ in enumerate(WEAPONS)}),   # one-weapon rounds) with each weapon in hand               # (START_GUN_P) lives begun with grenades or plasma in hand
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view

@@ -530,6 +530,10 @@ TEACH_BEST = float(os.environ.get("TEACH_BEST") or 0.0) > 0
 #                 is clear (the game's CanDamage), not only the line to his middle
 GL_QL = float(os.environ.get("GL_QL") or 0.0) > 0
 START_GUN_P = float(os.environ.get("START_GUN_P") or 0.0)
+#   START_GUN_W   "rl:0.5,pg:0.25,gl:0.25": which weapons those lives begin with and their shares, among the ones the map
+#                 has (owner, 2026-10-10 17:35: rockets too, "50%/25%/25% rockets/plasma/grenades"). Unset: grenades and
+#                 plasma evenly, as before.
+START_GUN_W = {p_.split(":")[0].strip(): float(p_.split(":")[1]) for p_ in (os.environ.get("START_GUN_W") or "").split(",") if ":" in p_}
 JUMP_TRY_SLACK = 4.0
 # v14's own changes (the owner's calls of 2026-10-09, docs/MANIFEST_v14.md), each off by default:
 #   SHOT_W        the shot's price by weapon, as multipliers of SHOT_COST, e.g. "rl:0.2,gl:0,pg:0" (rockets: "there should be
@@ -1592,7 +1596,8 @@ class DuelEnv:
                           high=np.zeros(3), high_dmg=np.zeros(3),       # B-160: frames with his enemy in view, and damage dealt, standing lower by 48 units or more, level, higher
                           sc_frags_w=np.zeros(NW),                      # frags made by scripted players, by weapon
                           jump_tries=np.zeros(64), jump_over=np.zeros(64), jump_short=np.zeros(64),   # JUMPS: per jump of this map
-                          jump_frames=0, start_gun=0,          # frames in jump runs; lives begun with grenades or plasma (START_GUN_P)
+                          jump_frames=0, start_gun=0,          # frames in jump runs; lives begun with a weapon in hand (START_GUN_P)
+                          start_gun_w=np.zeros(len(WEAPONS)),  # ... by weapon
                           lob=np.zeros(3),                              # TRICKS, the lobber: frames firing at a place: plasma, grenades; at an exit
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
 
@@ -1694,12 +1699,19 @@ class DuelEnv:
             # (always starting on rockets, he switched to the shotgun once and never tried the others)
             self.weapon[i] = int(self.rng.choice(owned)) if owned else MG
             gun_ = [w_ for w_ in (GL, PG) if w_ in self.map_weapons] if START_GUN_P > 0 else []
+            if START_GUN_W and START_GUN_P > 0:              # (see START_GUN_W: the weapons named, by their shares)
+                gun_ = [w_ for w_ in range(len(WEAPONS)) if START_GUN_W.get(WEAPONS[w_], 0.0) > 0 and w_ in self.map_weapons]
             if gun_ and kind == NORMAL and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < START_GUN_P:
-                w_ = int(gun_[int(self.rng.integers(len(gun_)))])   # (see START_GUN_P; only a weapon the map has)
+                if START_GUN_W:
+                    gw_ = np.array([START_GUN_W[WEAPONS[w_]] for w_ in gun_], np.float64)
+                    w_ = int(gun_[int(self.rng.choice(len(gun_), p=gw_ / gw_.sum()))])
+                else:
+                    w_ = int(gun_[int(self.rng.integers(len(gun_)))])   # (see START_GUN_P; only a weapon the map has)
                 self.has[i, w_] = True
                 self.ammo[i, w_] = max(float(self.ammo[i, w_]), float(LOADOUTS["all"][1][w_]))
                 self.weapon[i] = w_
                 self.stats["start_gun"] += 1
+                self.stats["start_gun_w"][w_] += 1
             if self.script[i] == 2:                     # the scripted fighter does not run dry
                 self.ammo[i] = np.minimum(AMMO_MAX, self.ammo[i] * 3)
         if self.script[i] == 3 and self.sc_persona[i] == HOLDER and self.hold_ahead[i]:   # ahead from the first second, once
