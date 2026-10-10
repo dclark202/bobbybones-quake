@@ -9,7 +9,8 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - He wants genuine learned behavior (strafe jumping, weapon choice, item control, positioning), not hand-coded
   rules or knob tuning. Long-term focus: smooth, fast movement and good position and weapon choices, not just aim.
 - **Fair**: human physics (125 fps), human senses (sight with line of sight, sound), mouse-like aim with
-  human limits (reaction, flick speed, hand noise). Never miss on purpose to hit a number.
+  human limits (reaction, flick speed, hand noise). Never miss on purpose to hit a number. Enemy projectiles too (owner,
+  2026-10-10): "he should only know what's in view or what he can hear"; suspecting a rocket is for him to learn.
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.

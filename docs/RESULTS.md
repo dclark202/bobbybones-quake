@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-10](results/2026-10-10.md)
 
+- 15:45 — v14's end is on the public server; the owner's answers on v15: from v14's end, tries for the 36 jumps built first, projectiles only in view or heard for good
 - 15:30 — v15 audited and ready for the owner's go: v14's end against v13 on six maps; the side arms; the teacher under his hands, tested map by map; tries at 108 of 144 jumps; movement-only practice on the four other maps
 - 12:20 — v14 ended on its save of 10:57; why the teacher failed (its hands are not his); what he saw of projectiles; grenades measured in the game
 - 11:15 — v14's third start: the second clean check, the teacher on at 10:57; the owner's go for v15 and what was built for it in a morning

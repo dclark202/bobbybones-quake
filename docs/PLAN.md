@@ -25,7 +25,7 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 
 | What | Where it stands |
 |---|---|
-| On the public server | `duel_gru_v13` ([runs/REPORT_v13.md](runs/REPORT_v13.md)): free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard since 2026-10-09. Against people so far: 19 frags made, 130 taken (three players) |
+| On the public server | `duel_gru_v14`'s end ([runs/REPORT_v14.md](runs/REPORT_v14.md)) since 2026-10-10 15:39: free-for-all, two Bobbys with their own names and voices, the ten duel maps in the vote, a leaderboard since 2026-10-09. Against people so far (v13): 19 frags made, 130 taken (three players) |
 | In training | nothing: `duel_gru_v14` ended 2026-10-10 11:52 on its save of 10:57 ([runs/REPORT_v14.md](runs/REPORT_v14.md): level with v13 on v13's three maps, ahead on the three new ones, 77% against the stand-in where v13 had 70%); `duel_gru_v15` is audited and waits for the owner's go ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md)) |
 | The checks of a run | every save plays the last best network head to head (the owner's standing rule, 2026-10-10) and 32 ten-minute duels a map against the Nightmare stand-in; real games against the game's Nightmare bot before and after a run; play tests |
 | The simulator | movement, nine weapons, items, sounds, the human limits on hands, eyes and aim; set right against the game's maps on 2026-10-09 (twelve mismatches). Its targets are easier to hit with a rail than people are (B-199) |
@@ -166,6 +166,13 @@ The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)
   and the grenade measurement are in v15. Rockets: "try parallel arms ... if nothing is obviously working we'll delay
   it". Hektik's, Cure's and Toxicity's jumps are to be listed too ("it might contaminate the purity of the held out map,
   but it's important that he understands how to move around these maps efficiently").
+- (2026-10-10 15:38) v15 starts from v14's end; no teacher's labels on Toxicity nor in Lost World's item runs; movement-only
+  practice on the four other maps at 7.6% of his time, watched; the one-weapon rounds with grenades and plasma "should be
+  temporary just to introduce him to these weapons, monitor and turn them down once he starts to understand them"; the
+  36 jumps without tries are built before the start ("Build first"); run length to be asked when the rest is settled.
+  Enemy projectiles: "he should only know what's in view or what he can hear. He's allowed to \"suspect\" rockets, but
+  that maybe is learned behavior instead": the old rule that showed anything within 400 units is gone for good.
+- (2026-10-10 15:28) v14's end goes on the public server with the bots' names and voices.
 - (2026-10-10) The priority list for the next models: strafe jumping and keeping speed; rockets; plasma and grenades
   (the shotgun less); then game awareness. Every plan addresses these and any odd behaviour seen in a run or in duels.
 

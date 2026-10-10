@@ -16,11 +16,12 @@ itself in a simulator built on Quake 3's own movement and collision code; the tr
 Quake Live server through a server plugin. Nothing about aiming, moving or fighting is scripted, and he plays under
 the limits a person has (see the fairness rules).
 
-Where he is now: he plays duels and free-for-all on Blood Run, Aerowalk and Lost World. He collects weapons, armor and
+Where he is now: he plays duels and free-for-all on six of the game's duel maps (Blood Run, Aerowalk, Lost World, Sinister,
+Furious Heights, Battleforged). He collects weapons, armor and
 the mega, keeps a stack, and beats a scripted item-running opponent that has the aim of the game's hardest bot on the
-maps he trained on (72 to 80% of the frags over 100 ten-minute duels a map), and beats the game's own Nightmare bot
-in real ten-minute duels on Blood Run and Lost World (six of six). He does not strafe jump yet and fires few rockets. Every run and measurement, including what did not work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest
-full report is [docs/runs/REPORT_v13.md](docs/runs/REPORT_v13.md).
+maps he trained on (60 to 89% of the frags over 32 ten-minute duels a map), and beats the game's own Nightmare bot
+in real ten-minute duels on Blood Run and Lost World (three of four, one drawn). He does not strafe jump yet and fires few rockets. Every run and measurement, including what did not work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest
+full report is [docs/runs/REPORT_v14.md](docs/runs/REPORT_v14.md).
 
 The goal is a bot that beats strong players fairly, with learned movement, weapon choice, item control and positioning,
 and later one that adapts to the level of the player in front of him.

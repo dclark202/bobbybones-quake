@@ -18,6 +18,7 @@ not started**: it begins from v14's end with everything below.
 | 12:05 | Blood Run's stairs to the yellow armor (26): "we will add this". Demos of Toxicity and Campgrounds: yes. Rockets: "try parallel arms while getting everything else ready ... if nothing is obviously working we'll delay it for now". The lobber's timing and a fresh grenade measurement: "wait for it. include in v15" |
 | 12:30 | Hektik and Cure: demos and jump maps too. "It might contaminate the purity of the held out map, but it's important that he understands how to move around these maps efficiently" |
 | 13:08 | "He should get movement only practice on all 10 maps" |
+| 15:38 | the answers to section 12: start from "v14 end"; the teacher's maps "OK"; movement-only time "OK - but monitor"; the one-weapon rounds "should be temporary just to introduce him to these weapons, monitor and turn them down once he starts to understand them"; the 36 jumps without tries: "Build first"; length and reports "TBD - ask me after we've settled the rest"; projectiles: "he should only know what's in view or what he can hear. He's allowed to \"suspect\" rockets, but that maybe is learned behavior instead" |
 | standing | the last best network is in the league and first in every check; under 45% of the frags against it at two checks in a row: stop and tell him. Priorities: strafe jumping and keeping speed; rockets; plasma and grenades, the shotgun less; game awareness |
 
 ## 1. What changes from v14
@@ -235,7 +236,7 @@ minute at the start>
 rollout, 70 minibatches (156 sequences each, as v14's 157). `--fade-start` is the lineage's minute at the start
 (5,839), kept in `fade_start.txt` for every resume.
 
-## 12. For you to decide
+## 12. For you to decide (answered 15:38: section 0; open: the length and the report hours, asked when the 36 jumps have tries)
 
 1. **The start**: v14's end (my advice at 14:15: level with v13 on v13's three maps, ahead on the three new ones, and
    trained in the corrected simulator), with v13 kept in the league. The folder is prepared so.
