@@ -548,6 +548,8 @@ HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
 TRICKS = float(os.environ.get("TRICKS") or 0.0) > 0
 HOLD_HUNT, HOLD_HUNT_P = 10.0, 0.6                         # the holder after a frag: seconds he looks for him, and how often
 WATCH_SECS = 25.0                                         # the watcher keeps a post this long
+LOB_AHEAD, LOB_PG_ETA, LOB_GL_ETA = 3.2, 1.0, (1.6, 3.0)   # the lobber: seconds of the other one's way he looks along; he fires plasma at an
+#   exit when the other one is under LOB_PG_ETA from coming out of it, a grenade when LOB_GL_ETA away (its fuse is 2.5 s)
 TRICK_P = np.zeros(3)                                     # of the item runner's rounds, the shares with the holder, the lobber, the watcher
 for part_ in (os.environ.get("TRICK_P") or "").split(","):
     if ":" in part_:
@@ -3719,16 +3721,16 @@ class DuelEnv:
             o = int(self._others_arr()[i, 0])
             if self.hp[o] <= 0:
                 continue
-            P, exit_ = None, False
+            P, exit_, eta = None, False, 0.0
             g = self.intent_gi[int(self.intent[o])] if self.intent[o] > 0 else -1
             if g >= 0:
-                a = int(R.locate(s[o:o + 1, :3])[0])
-                for _ in range(8):
+                a0 = a = int(R.locate(s[o:o + 1, :3])[0])
+                for _ in range(40):
                     b = int(R.walk[g, a])
-                    if b < 0:
+                    if b < 0 or R.T[g, a0] - R.T[g, b] > LOB_AHEAD:
                         break
                     if not np.isnan(R.via[g, a][0]):         # this step goes through a teleporter or a pad: he comes out at b
-                        P, exit_ = R.nodes[b] + up, True
+                        P, exit_, eta = R.nodes[b] + up, True, float(R.T[g, a0] - R.T[g, b])   # ... in about this many seconds
                         break
                     a = b
             if P is None and self.seen_t[i] < 4.0:
@@ -3741,8 +3743,12 @@ class DuelEnv:
             if dist > 1800.0 or dist < 200.0:
                 continue
             if self.has[i, PG] and self.ammo[i, PG] > 0 and self.w.trace(eye, P.astype(np.float32), mask=self.sight)["fraction"] >= 0.97:
+                if exit_ and eta > LOB_PG_ETA:               # (too early: the balls would be gone before he comes out)
+                    continue
                 wpn, pit = PG, -np.degrees(np.arctan2(to[2], D))
             elif D < 900.0 and self.has[i, GL] and self.ammo[i, GL] > 0:
+                if exit_ and not (LOB_GL_ETA[0] <= eta <= LOB_GL_ETA[1]):   # (a grenade goes off 2.5 s after it is fired)
+                    continue
                 v_, g_ = float(P_SPEED[GL]), 800.0
                 disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[2] * v_ * v_)
                 if disc < 0:
