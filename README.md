@@ -45,7 +45,7 @@ and later one that adapts to the level of the player in front of him.
 
 | | |
 |---|---|
-| Inputs | 509 numbers every 25 ms ([docs/INPUTS.csv](docs/INPUTS.csv)): his own state and velocity, 16 wall rays and 8 floor rays, the enemy as last seen, projectiles in flight, weapons and ammo, the items and what he knows of their timers, sounds, clock and score, hints from a walking graph of the map (seconds to each big item, the next step of the way), 32 numbers from a small "map reader" network for his cell and the enemy's, the item he has chosen to go for |
+| Inputs | 574 numbers every 25 ms ([docs/INPUTS.csv](docs/INPUTS.csv)): his own state and velocity, 16 wall rays and 8 floor rays, the enemy as last seen, projectiles in flight, weapons and ammo, the items and what he knows of their timers, sounds, clock and score, hints from a walking graph of the map (seconds to each big item, the next step of the way), 32 numbers from a small "map reader" network for his cell and the enemy's, the item he has chosen to go for |
 | Body | two dense layers of 256 (tanh), a GRU of 512, a linear layer per output and a value head: 1.4 million weights |
 | Outputs | forward / back, strafe, jump / crouch, turn speed (23 steps from 0.03 to 60 degrees a frame), pitch speed (15 steps), fire, weapon key, walk, zoom, lift the mouse, and the item he is going for (read once a second) |
 
@@ -106,20 +106,21 @@ items. Strafe jumping emerges there within minutes; that network is used as a te
 
 ## In progress and planned
 
-In progress (the next run, [docs/runs/MANIFEST_v14.md](docs/runs/MANIFEST_v14.md)):
+In progress (the next run, [docs/runs/MANIFEST_v15.md](docs/runs/MANIFEST_v15.md)):
 
-- Strafe jumping: the movement network as a teacher in item runs, pay for covering his way fast, inputs for his own
-  speed and direction of travel.
-- Rockets: inputs for the lead of a shot, a very low price per rocket, and shots with no enemy in view judged by where
-  they land (near where the enemy must be, or on his likely way).
-- Six of the game's duel maps (Sinister, Furious Heights and Battleforged added) and four held out to test him on maps
-  he has never seen (Campgrounds, Hektik, Toxicity, Cure).
-- The simulator corrected against the game's maps: lava that hurts, shots through bars and grates, items where the game
-  puts them.
+- Strafe jumping: a movement network trained under his own finger limits as a teacher, and practice rounds that begin
+  before the jumps professional players make (144 jumps on ten maps, listed from their demos:
+  [docs/design/jumps/](docs/design/jumps/)).
+- Movement practice without fights on four more maps (Campgrounds, Hektik, Toxicity, Cure).
+- Projectiles as a player sees them: the six nearest rockets, grenades and plasma balls inside his view with a clear
+  line of sight, each with its kind, a grenade's fuse and how close it will pass.
+- Grenades and plasma: their flight and splash set to measurements from the game, lives that begin with one in hand,
+  scripted opponents that fight with them.
 
 Planned:
 
 - Position play: fighting from above, backing off when weak; plasma and grenades for closing off ways.
+- Rockets: he holds them a fifth of the time; a lower price for the shot and rocket-only rounds did not change it.
 - More maps, and free-for-all with up to six players.
 - An opponent that adapts to the player's level.
 - Player reports: how an opponent plays, from the logs.

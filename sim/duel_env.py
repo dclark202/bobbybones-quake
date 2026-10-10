@@ -36,6 +36,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qsim import World  # noqa: E402
+import jump_links as JL  # noqa: E402
 
 DT = 0.025
 _T = [0.03, 0.1, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60]
@@ -156,13 +157,22 @@ FALL_MED, FALL_FAR = 40.0, 60.0                        # Quake 3 fall damage: 5 
 # runner (script 3) with the weapons the game's bot was logged to fire (692 minutes of sparring: shotgun 36%, rail 26%,
 # rockets 15%, lightning 12%, machine gun 11%; the rail beyond 700 units), little jumping, and an aim whose noise
 # (NM_NOISE, degrees a frame) is set so that its scores against v10 and v11 come out as the real bot's did.
-PERSONAS = ("allround", "sniper", "rusher", "tracker", "dodger", "stander", "jumper", "spammer", "nightmare")
+PERSONAS = ("allround", "sniper", "rusher", "tracker", "dodger", "stander", "jumper", "spammer", "nightmare",
+            "holder", "lobber", "watcher")
 NIGHTMARE = 8
-P_GAIN = np.array([0.4, 0.4, 0.4, 0.45, 0.4, 0.15, 0.3, 0.3, float(os.environ.get("NM_GAIN") or 0.4)], np.float32)
-P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5, float(os.environ.get("NM_NOISE") or 0.6)], np.float32)
-P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200, 150], np.float32)
-P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500, 600], np.float32)
-P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2, -3], np.int64)
+# The last three (owner, 2026-10-09; docs/SCOPE_v15.md A1) are item runners (script 3) that do to him what people do:
+#   holder   takes the mega and the red armor on their clocks whatever he has, and comes for him after a frag (B-188)
+#   lobber   grenades and plasma into the place he is about to come out of (B-189)
+#   watcher  stands where his way to an item can be seen, with the rail (B-190)
+# Never drawn unless persona_p gives them a share.
+HOLDER, LOBBER, WATCHER = 9, 10, 11
+HOLD_EARLY = 3.0                                          # the holder leaves for an item so as to be there this early
+P_GAIN = np.array([0.4, 0.4, 0.4, 0.45, 0.4, 0.15, 0.3, 0.3, float(os.environ.get("NM_GAIN") or 0.4), 0.4, 0.4, 0.4], np.float32)
+P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5, float(os.environ.get("NM_NOISE") or 0.6),
+                    float(os.environ.get("NM_NOISE") or 0.6), 0.5, 0.3], np.float32)
+P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200, 150, 150, 300, 700], np.float32)
+P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500, 600, 600, 700, 1200], np.float32)
+P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2, -3, -1, -1, RG], np.int64)
 NM_WEAPONS, NM_WEIGHTS = np.array([SG, RG, RL, LG, MG], np.int64), np.array([0.36, 0.26, 0.15, 0.12, 0.11])
 # ---- Aim ability: one knob (owner, 2026-10-08: "on par or slightly above me, 10% over or so ... this will likely be
 # turned into a parameter 'aim ability' with this as the baseline 3/5, a knob that can be tuned up or down").
@@ -338,7 +348,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
-             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST")
+             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -400,6 +410,21 @@ N_DROP = 8
 #   rocket at his feet). Worked out from what he knows of the enemy (as old as his reaction time, the enemy's movement
 #   200 ms old): a straight line on the ground, a thrown body's arc in the air, the projectile's speed (P_SPEED).
 N_V14 = 10
+# v15 (2026-10-10, docs/design/SCOPE_v15.md), the last N_V15 inputs: the jump ahead on his way (jump_links.N_JUMP: that
+# there is one, the speed it needs, the way to its take-off, its length, its rise; in a jump run, zero elsewhere), and for
+# the grenade launcher in his hand what the lead inputs are for rockets and plasma: how far his view is from the one that
+# lands a grenade where he believes the enemy is (the low arc: yaw and pitch, coarse and fine), the seconds of its
+# flight, and that it reaches. The enemy counts while in view and for GL_KNOWN seconds after.
+# ... and (PROJ_SEE, owner 2026-10-10: every projectile in his field of vision, none through a wall, and what each
+# one is and does) the enemy projectiles as a player sees them: inside his view cone, within PROJ_FAR units, the line
+# from his eyes to it clear. The old inputs then show the nearest two he sees (they showed the nearest two in flight,
+# through walls inside the cone, and anything within 400 units in any direction); four more follow here (place 3,
+# speed 3, kind 3), and each of the six gets three more: a grenade's fuse left (1 = just fired), the seconds until it
+# passes closest to him (over 2), and how close that is in splash radii (over 3; under a third: inside its blast).
+N_PROJ_MORE, PROJ_FAR = 4, 1500.0
+N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE)
+GL_KNOWN = 3.0
+PROJ_SEE = float(os.environ.get("PROJ_SEE") or 0.0) > 0
 LEAD_SPEED = np.zeros(NW, np.float32)
 LEAD_SPEED[RL], LEAD_SPEED[PG] = P_SPEED[RL], P_SPEED[PG]
 # TEACH_KEYS_ONLY=1 (owner, 2026-10-08: "KEYS TOWARD THE GOAL given the current view he has, meaning he can look freely
@@ -468,6 +493,37 @@ NEAREST = float(os.environ.get("NEAREST") or 0.0) > 0
 #                 arrive, and lost Aerowalk to v13 12% to 88% within 17 minutes of every start of v14 (RESULTS
 #                 2026-10-10 09:30). His inputs still show the pros' way: he may choose it himself. Off by default.
 RULE_WALK = float(os.environ.get("RULE_WALK") or 0.0) > 0
+# v15 (2026-10-10), both off by default:
+#   JUMPS=1       the pros' jumps that a walker cannot make (tools/pro_gaps.py -> sim/pro_gaps/<map>.json) are links of a
+#                 second set of ways (route_j), which are his in a jump run: a share of the playing time (JUMP_RUN_P, beside
+#                 ITEM_RUN_P) in which he is alone on the map, begins a second or two of way before a take-off and goes
+#                 for the item behind it, paid as in an item run; a try ends with the item, with a fall short of the
+#                 landing, or after twice the way's seconds and JUMP_TRY_SLACK. Per jump: tries, over, fallen short. In
+#                 games his ways stay a walker's (a jump is opened there when he is measured to make it: not built yet).
+#   START_GUN_P   the share of his lives in games that begin with the grenade launcher or the plasma gun in his hand, with
+#                 a pickup's ammunition (owner, 2026-10-10: "they are a real limitation to his play"; in every run before
+#                 he held either 0.0% of the time and never found out what they do)
+JUMPS = float(os.environ.get("JUMPS") or 0.0) > 0
+#   JUMP_ALL=1    tries also at the jumps that lie on no item's fastest way (62 of the 144 in use, 2026-10-10): for each a
+#                 second set of his ways in which that one jump costs nothing, so the way to the two items nearest behind
+#                 its landing takes it. The try is as any other (in every jump run the movement teacher is asked for the
+#                 landing until he is over it, as in its own tries, then for the item).
+JUMP_ALL = float(os.environ.get("JUMP_ALL") or 0.0) > 0
+#   JUMP_OPEN     "aerowalk:1;bloodrun:1,26": per map, the jumps (their numbers in its list) that his ways take in games and
+#                 item runs too: the inputs of his way, its pay, the item rule and the item runs' targets follow the
+#                 walking map with those jumps (route_o). Scripted players keep the walking map's ways. A jump is opened
+#                 when he is measured to make it in jump runs (tools/jump_check.py, the trainer's v15.jumps).
+JUMP_OPEN = os.environ.get("JUMP_OPEN") or ""
+#   TEACH_BEST=1  the movement teacher's labels are its likeliest choice per output, not a sample of its choices (B-201: a
+#                 pupil of sampled labels learned its spread with it; tools/label_check.py --best says what they are worth)
+TEACH_BEST = float(os.environ.get("TEACH_BEST") or 0.0) > 0
+#   GL_QL=1       grenades and splash as measured in the game on 2026-10-10 (plugins/weaponlab.py set 4, data/weaponlab5): a
+#                 bounce keeps the rest of its frame (the grenade came to rest 10 to 40% short of the game's), and splash
+#                 reaches a player when the line from the blast to his middle or to one of four points 15 units beside it
+#                 is clear (the game's CanDamage), not only the line to his middle
+GL_QL = float(os.environ.get("GL_QL") or 0.0) > 0
+START_GUN_P = float(os.environ.get("START_GUN_P") or 0.0)
+JUMP_TRY_SLACK = 4.0
 # v14's own changes (the owner's calls of 2026-10-09, docs/MANIFEST_v14.md), each off by default:
 #   SHOT_W        the shot's price by weapon, as multipliers of SHOT_COST, e.g. "rl:0.2,gl:0,pg:0" (rockets: "there should be
 #                 an opportunity cost ... the cost can be very low"; plasma and grenades: "no opportunity cost").
@@ -496,6 +552,22 @@ SPEED_LO, SPEED_HI = 320.0, 480.0
 #                 below that. Own splash and falls are not changed. 0 = off.
 HIGH_PAY = float(os.environ.get("HIGH_PAY") or 0.0)
 HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
+#   TRICKS=1      the scripted opponents of docs/SCOPE_v15.md (the personas holder, lobber, watcher) get what they need:
+#                 ways to places that are not items (the spawn points, posts to watch an item from). Off: none of it is
+#                 built, and those personas play as the plain item runner.
+TRICKS = float(os.environ.get("TRICKS") or 0.0) > 0
+HOLD_HUNT, HOLD_HUNT_P = 10.0, 0.6                         # the holder after a frag: seconds he looks for him, and how often
+WATCH_SECS = 25.0                                         # the watcher keeps a post this long
+LOB_PG_NEAR, LOB_PG_FAR = 150.0, 1000.0                    # ... and in a fight it holds the plasma gun at these distances
+LOB_AHEAD, LOB_PG_ETA, LOB_GL_ETA = 3.2, 1.0, (1.6, 3.0)   # the lobber: seconds of the other one's way he looks along; he fires plasma at an
+#   exit when the other one is under LOB_PG_ETA from coming out of it, a grenade when LOB_GL_ETA away (its fuse is 2.5 s)
+TRICK_P = np.zeros(3)                                     # of the item runner's rounds, the shares with the holder, the lobber, the watcher
+for part_ in (os.environ.get("TRICK_P") or "").split(","):
+    if ":" in part_:
+        TRICK_P[("holder", "lobber", "watcher").index(part_.split(":")[0].strip())] = float(part_.split(":")[1])
+if os.environ.get("TRICK_NOISE"):                         # their aim: degrees of noise a frame (the stand-in's 0.6 by default)
+    P_NOISE[HOLDER:WATCHER + 1] = float(os.environ["TRICK_NOISE"])
+HOLD_STACK = float(os.environ.get("HOLD_STACK") or 0.0)   # the share of his rounds the holder starts ahead (100 armor, the big weapons)
 #   RUN_TEACHER=1 item runs: the strafe-jumping movement network (the trainer's --teacher) shows keys, jump and view toward
 #                 his target, in place of the walking teacher's keys (those stay where the network has no way).
 #   STACK_KEYS=0  no key labels in normal games (v13: the walking teacher's keys for a bare or low player with nobody about).
@@ -600,7 +672,7 @@ N_DENSE = len(DENSE_YAW) * len(DENSE_PITCH) if os.environ.get("DENSE_VIEW") == "
 N_INTENT = 13 + 32 + 4 + 2                                 # (+ 4 since v12: his playing style, see STYLES; + 2 since v13: going for a yellow armor)
 N_V9 = 4 + 12
 MAX_CELLS, CELL_SIZE = 16384, 64.0                        # enough cells for the big maps (v9; the table is a file, not weights)
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15
 CELL_COLS = None                                           # no learned cell table in the network any more
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
@@ -746,6 +818,7 @@ class RouteField:
         # runner) and the "next step" inputs aimed at the far point, through the wall or up the tower.
         self.via = np.full((G, n, 3), np.nan, np.float32)
         self.move = np.zeros((G, n), bool)                    # the step toward the goal from here is not plain walking
+        self._enter, self._special = enter, special           # (kept for linked())
         for gi in range(G):
             for a_ in np.nonzero(self.next[gi] >= 0)[0]:
                 k_ = (int(a_), int(self.next[gi, a_]))
@@ -753,6 +826,54 @@ class RouteField:
                 if e_ is not None:
                     self.via[gi, a_] = e_
                 self.move[gi, a_] = k_ in special
+
+    def linked(self, links, jumps):
+        """a copy of this field whose ways also take the pros' jumps (sim/jump_links.py; links: from, to, seconds, jump).
+        Its T, next, via and move are worked out again from the walking map and the links; jlink is the jump a point's
+        next step is (-1: a plain step), jd and ji the first jump ahead on the way from every point (the units of way to
+        its take-off, which jump)."""
+        import copy
+        import heapq
+        X = copy.copy(self)
+        n, G = len(self.nodes), len(self.goals)
+        radj, jl = [list(l_) for l_ in self.radj], {}
+        for a, b, t, k in links:
+            radj[b].append((int(a), float(t)))
+            jl[(int(a), int(b))] = int(k)
+        X.radj, X.jumps, X._fwd, X._from = radj, list(jumps), None, {}
+        X.T = np.full((G, n), 1e9, np.float32)
+        X.next = np.full((G, n), -1, np.int32)
+        for gi, gp in enumerate(self.goals):
+            b = int(self.locate(gp[None])[0])
+            dist, pq = {b: 0.0}, [(0.0, b)]
+            while pq:
+                d, u = heapq.heappop(pq)
+                if d > dist.get(u, 1e18):
+                    continue
+                for v, c in radj[u]:
+                    if d + c < dist.get(v, 1e18):
+                        dist[v] = d + c
+                        X.next[gi, v] = u
+                        heapq.heappush(pq, (d + c, v))
+            for v, d in dist.items():
+                X.T[gi, v] = d
+        X.via = np.full((G, n, 3), np.nan, np.float32)
+        X.move = np.zeros((G, n), bool)
+        X.jlink = np.full((G, n), -1, np.int32)
+        for gi in range(G):
+            for a_ in np.nonzero(X.next[gi] >= 0)[0]:
+                k_ = (int(a_), int(X.next[gi, a_]))
+                if k_ in jl:
+                    X.jlink[gi, a_], X.move[gi, a_] = jl[k_], True
+                    continue
+                e_ = self._enter.get(k_)
+                if e_ is not None:
+                    X.via[gi, a_] = e_
+                X.move[gi, a_] = k_ in self._special
+        la = [JL.look_ahead(X.next[gi], X.jlink[gi], self.nodes) for gi in range(G)]
+        X.jd, X.ji = np.stack([x[0] for x in la]), np.stack([x[1] for x in la])
+        X.pro_step = np.zeros((G, n), bool)
+        return X
 
     def add_ways(self, gi, tm, nx):
         """the pros' way to goal gi where the walking map has none (PRO_WAYS). tm, nx: their seconds to it and their next
@@ -957,6 +1078,12 @@ class DuelEnv:
         self.sc_fwd = np.zeros(2 * n_matches, np.int64)
         self.sc_jump = np.zeros(2 * n_matches, bool)
         self.sc_stuck = np.zeros(len(self.sc_t), np.int64)  # the runner: frames without getting anywhere
+        self.hunt_t = np.zeros(len(self.sc_t), np.float32)  # TRICKS, the holder: seconds left of coming for him after a frag
+        self.x_goal = np.full(len(self.sc_t), -1, np.int64)  # ... a place that is not an item he walks to (index into xpts)
+        self.watch_t = np.zeros(len(self.sc_t), np.float32)  # ... the watcher: seconds left at this post
+        self.sc_look = np.zeros(len(self.sc_t), bool)       # ... he looks at what he remembers though nobody is in view
+        self.hold_ahead = np.zeros(len(self.sc_t), bool)    # ... the holder starts this round ahead (HOLD_STACK); used up at his first spawn
+        self.route_x, self.xpts, self.x_watch = None, None, {}
         self.run_k = np.full(len(self.sc_t), -1, np.int64)  # item run: the intention he is given (0 = none yet), -1 = not in one
         self.run_stuck = np.zeros(len(self.sc_t), np.int64) # item run: frames without getting anywhere (for the walking teacher)
         self.collect_fight_p = float(os.environ.get("COLLECT_FIGHT_P") or 0.0)   # share of the item runs that end in a fight (RUN_COLLECT)
@@ -1210,6 +1337,8 @@ class DuelEnv:
                 pr_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_routes", name + ".npz")
                 self.route.T_walk = self.route.T             # the ways of the walking map alone (a scripted player's)
                 self.route.pro_step = np.zeros(self.route.T.shape, bool)   # points whose next step is the pros', not a walk
+                if TRICKS:
+                    self._trick_points(nav, [(c, d) for k, c, d in spots if k == 0], [(c, d) for k, c, d in spots if k == 1], more_)
                 if PRO_WAYS and os.path.exists(pr_):
                     pd_ = np.load(pr_)
                     labs_ = [str(x) for x in pd_["labels"]]
@@ -1232,6 +1361,69 @@ class DuelEnv:
                                     open_ = (self.route.T[g_] >= 1e8) & (tm_ < 1e8)
                                     self.route.T[g_] = np.where(open_, tm_, self.route.T[g_])
                         self.route.walk = walk_
+        self.jumps, self.route_j, self.jump_tries = [], None, {}     # JUMPS: the pros' jumps, his ways with them, jump -> [(goal, start points, ways)]
+        self.jfields = []                                   # ... the sets of ways of a jump run's players (0: route_j; JUMP_ALL: one more a jump)
+        self.jrun_f = np.zeros(self.n, np.int64)            # ... which of them his try has
+        self.jump_run_p = float(os.environ.get("JUMP_RUN_P") or 0.0)  # share of the playing time in jump runs
+        self.jrun = np.zeros(self.n, bool)                  # in a jump run
+        self.jrun_k = np.zeros(self.n, np.int64)            # ... the jump his try is for
+        self.jrun_t = np.zeros(self.n, np.float32)          # ... the seconds the try has left
+        self.jrun_edge = np.zeros(self.n, bool)             # ... he has been at its take-off
+        self.jrun_over = np.zeros(self.n, bool)             # ... he is over it
+        self.jrun_new = np.zeros(self.n, bool)              # ... the try began this frame
+        self.jrun_it = np.full(self.n, -1, np.int64)        # ... the item that is its target
+        self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
+        self._replaced = False                              # a try began inside this step: the state is read again at its end
+        self.count_even = False                             # the jump counters count the even seats only (the trainer: those are always his)
+        self.teach_runs = "all"                             # the key labels of this map's runs (the trainer's --teacher-skip): "all";
+        #   "jump": none in item runs, the movement teacher's in jump runs; "none": none (a map its pupil fails on)
+        self.jump_a = self.jump_b = np.zeros((0, 3), np.float32)
+        self.route_o = None                                  # JUMP_OPEN: his ways outside jump runs, with the jumps that are open
+        open_ = {}
+        for part_ in JUMP_OPEN.split(";"):
+            if ":" in part_:
+                open_[part_.split(":")[0].strip()] = {int(x_) for x_ in part_.split(":")[1].split(",") if x_.strip()}
+        open_ = self.jump_open = open_.get(os.path.splitext(os.path.basename(bsp))[0], set())
+        if (JUMPS or open_) and self.route is not None:
+            self.jumps = JL.load(os.path.splitext(os.path.basename(bsp))[0], also=open_)
+            if self.jumps:
+                R_ = self.route
+                lk_ = JL.links(self.jumps, R_.nodes, R_.locate, ok=~R_.dead)
+                if open_:
+                    O_ = self.route_o = R_.linked([l_ for l_ in lk_ if self.jumps[l_[3]]["id"] in open_], self.jumps)
+                    O_.walk, O_.T_walk = O_.next, R_.T_walk
+            if self.jumps and JUMPS:
+                J_ = self.route_j = R_.linked(lk_, self.jumps)
+                J_.walk, J_.T_walk = J_.next, R_.T_walk
+                self.jump_a = np.array([j_["a"] for j_ in self.jumps], np.float32).reshape(-1, 3)
+                self.jump_b = np.array([j_["b"] for j_ in self.jumps], np.float32).reshape(-1, 3)
+                for g_, lab_ in enumerate(self.route_goal):
+                    same_ = self.intent_more.get(INTENTS.index(lab_), np.array([g_], np.int64))
+                    best_ = J_.T[g_] <= J_.T[same_].min(0) + 1e-6       # (the item of its kind his way leads to from there)
+                    for k_ in range(len(self.jumps)):
+                        st_ = np.nonzero((J_.ji[g_] == k_) & (J_.jd[g_] > JL.run_up(self.jumps[k_]["need"])) & (J_.jd[g_] < 1300.0)
+                                         & ~R_.dead & best_)[0]
+                        if len(st_):
+                            self.jump_tries.setdefault(k_, []).append((g_, st_, 0))
+                self.jfields = [J_]
+                for k_ in (range(len(self.jumps)) if JUMP_ALL else ()):      # (see JUMP_ALL: the jumps on no item's way)
+                    if k_ in self.jump_tries or not any(l_[3] == k_ for l_ in lk_):
+                        continue
+                    X_ = R_.linked([(a_, b_, 0.1 if q_ == k_ else t_, q_) for a_, b_, t_, q_ in lk_], self.jumps)
+                    X_.walk, X_.T_walk = X_.next, R_.T_walk
+                    nb_ = int(R_.locate(self.jump_b[k_][None])[0])
+                    found_ = []
+                    for g_, lab_ in enumerate(self.route_goal):
+                        same_ = self.intent_more.get(INTENTS.index(lab_), np.array([g_], np.int64))
+                        best_ = X_.T[g_] <= X_.T[same_].min(0) + 1e-6
+                        st_ = np.nonzero((X_.ji[g_] == k_) & (X_.jd[g_] > JL.run_up(self.jumps[k_]["need"])) & (X_.jd[g_] < 1300.0)
+                                         & ~R_.dead & best_)[0]
+                        if len(st_) and X_.T[g_, nb_] < 1e8:
+                            found_.append((float(X_.T[g_, nb_]), g_, st_))
+                    for _, g_, st_ in sorted(found_, key=lambda f_: f_[0])[:2]:     # (the two items nearest behind the landing)
+                        self.jump_tries.setdefault(k_, []).append((g_, st_, len(self.jfields)))
+                    if k_ in self.jump_tries:
+                        self.jfields.append(X_)
         self.soak = np.zeros(self.n, np.float32)            # damage his armor took this frame (see ARMOR_COST)
         self.pro_air = None                                 # PRO_JUMP: the pros' share of moving time in the air, per cell
         pj_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_jump", os.path.splitext(os.path.basename(bsp))[0] + ".npz")
@@ -1308,6 +1500,9 @@ class DuelEnv:
                 T.field = (M.NavField(nav, tg, world=self.w, hazard=True, starts=self.spawns, drop=M.shut_teleports(self.w, nav), tele=M.teleports(self.w))
                            if T.v14 else M.NavField(nav, tg, world=self.w))
                 T.goal_pos = T.field.goals
+                T.jump_obs = bool(ck["jumps"]) if "jumps" in ck.files else False   # trained with the five inputs of a jump ahead
+                T.hand = bool(ck["hand"]) if "hand" in ck.files else False         # ... under his finger limits, with the five inputs of the hand
+                self.t_field, self.t_field_j, self.t_nav = T.field, None, (nav, tg)   # (its field with the pros' jumps: _move_teach)
                 ta = np.linspace(0, 2 * np.pi, M.N_WALL, endpoint=False)
                 T.wall_dirs = np.stack([np.cos(ta), np.sin(ta), np.zeros_like(ta)], 1).astype(np.float32)
                 tf = np.linspace(0, 2 * np.pi, M.N_FLOOR, endpoint=False)
@@ -1355,6 +1550,10 @@ class DuelEnv:
                           drops=0, pick_drop=0, pick_drop_new=0, drop_teach_frames=0,
                           close_v=np.zeros(3), close_n=np.zeros(3),     # his speed toward an enemy in view, by health plus armor: under 60, to 125, over
                           high=np.zeros(3), high_dmg=np.zeros(3),       # B-160: frames with his enemy in view, and damage dealt, standing lower by 48 units or more, level, higher
+                          sc_frags_w=np.zeros(NW),                      # frags made by scripted players, by weapon
+                          jump_tries=np.zeros(64), jump_over=np.zeros(64), jump_short=np.zeros(64),   # JUMPS: per jump of this map
+                          jump_frames=0, start_gun=0,          # frames in jump runs; lives begun with grenades or plasma (START_GUN_P)
+                          lob=np.zeros(3),                              # TRICKS, the lobber: frames firing at a place: plasma, grenades; at an exit
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
@@ -1362,6 +1561,7 @@ class DuelEnv:
                           wrule_frames=0, wrule_agree=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
                           w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0,
+                          hand_g=np.zeros(NW),                            # ... in games alone (not in one-weapon rounds)
                           hand_w=np.zeros(NW), blind_w=np.zeros(NW),      # frames with each weapon in hand; frames firing it with no enemy seen for a second
                           speed_pay=0.0, speed_pay_run=0.0, speed_frames=0, move_teach_frames=0,
                           blind_rl=0, blind_rl_how=np.zeros(4), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way
@@ -1453,8 +1653,26 @@ class DuelEnv:
             # spawn holding a random owned weapon, so normal fights are experienced with every weapon
             # (always starting on rockets, he switched to the shotgun once and never tried the others)
             self.weapon[i] = int(self.rng.choice(owned)) if owned else MG
+            gun_ = [w_ for w_ in (GL, PG) if w_ in self.map_weapons] if START_GUN_P > 0 else []
+            if gun_ and kind == NORMAL and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < START_GUN_P:
+                w_ = int(gun_[int(self.rng.integers(len(gun_)))])   # (see START_GUN_P; only a weapon the map has)
+                self.has[i, w_] = True
+                self.ammo[i, w_] = max(float(self.ammo[i, w_]), float(LOADOUTS["all"][1][w_]))
+                self.weapon[i] = w_
+                self.stats["start_gun"] += 1
             if self.script[i] == 2:                     # the scripted fighter does not run dry
                 self.ammo[i] = np.minimum(AMMO_MAX, self.ammo[i] * 3)
+        if self.script[i] == 3 and self.sc_persona[i] == HOLDER and self.hold_ahead[i]:   # ahead from the first second, once
+            self.hold_ahead[i] = False
+            self.armor[i] = 100.0
+            for w_ in (RL, LG, RG):
+                self.has[i, w_] = True
+                self.ammo[i, w_] = max(self.ammo[i, w_], AMMO_MAX[w_] * 0.4)
+        if self.script[i] == 3 and self.sc_persona[i] in (LOBBER, WATCHER):   # their tools, every life
+            for w_ in ((GL, PG) if self.sc_persona[i] == LOBBER else (RG,)):
+                self.has[i, w_] = True
+                self.ammo[i, w_] = AMMO_MAX[w_]
+        self.hunt_t[i], self.x_goal[i], self.watch_t[i], self.sc_look[i] = 0.0, -1, 0.0, False
         self.seen_t[i] = 9.0
         self.vis_run[i] = 0
         self.acquired[i] = False
@@ -1635,6 +1853,9 @@ class DuelEnv:
             if self.arena[m] == 3 and self.route is not None and not f and rng.random() < self.runner_p:
                 self.script[b_] = 3                          # the yard: the item runner in a share of the rounds
                 self.sc_persona[b_] = 0
+                if TRICKS and TRICK_P.sum() > 0 and rng.random() < TRICK_P.sum():   # ... or one of the three in his place
+                    self.sc_persona[b_] = (HOLDER, LOBBER, WATCHER)[int(rng.choice(3, p=TRICK_P / TRICK_P.sum()))]
+                    self.hold_ahead[b_] = self.sc_persona[b_] == HOLDER and rng.random() < HOLD_STACK
             stack = (25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0)
             self.arena_hp[m], self.arena_ar[m] = float(rng.choice(stack)), float(rng.choice(stack))
             self.state = self.w.state()
@@ -1753,7 +1974,7 @@ class DuelEnv:
         R = self.route
         if R is None:
             return
-        ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0))[0]
+        ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0) & ~self.jrun)[0]   # (a jump is not a walker's: no keys in a jump run)
         kk = self.run_k[ri]
         if STACK_TEACH:                                     # ... and in normal games, bare or low, with nobody in view
             pk = np.repeat(self.kind, len(self.hp) // len(self.kind))
@@ -1778,6 +1999,10 @@ class DuelEnv:
         node = R.locate(pos)
         gi = self._trip_goal(kk, node)
         ok = (gi >= 0) & ~R.pro_step[np.maximum(gi, 0), node]   # (no keys for a step that is the pros': not a walk)
+        if self.route_o is not None:                         # (JUMP_OPEN: nor where his own way takes a jump within 400 units)
+            O_ = self.route_o
+            go_ = self._trip_goal(kk, node, O_)
+            ok &= ~((go_ >= 0) & (O_.ji[np.maximum(go_, 0), node] >= 0) & (O_.jd[np.maximum(go_, 0), node] < 400.0))
         g = np.maximum(gi, 0)
         nx = R.walk[g, node]
         tp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
@@ -1850,8 +2075,10 @@ class DuelEnv:
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
         self.teach[:] = -1
         self._run_teach()
+        if self.teach_runs != "all":                         # (no walking keys either where the movement teacher is kept out)
+            self.teach[(self.run_k > 0) & (self.script == 0), :4] = -1
         self._weapon_teach()
-        if RUN_TEACHER and self.teacher is not None and self.route is not None:
+        if RUN_TEACHER and self.teacher is not None and self.route is not None and self.teach_runs != "none":
             self._move_teach()
         if self.teacher is None:
             return
@@ -1860,6 +2087,7 @@ class DuelEnv:
             return
         T, s = self.teacher, self.state
         T.n, T.state, T.yaw = len(mi), s[mi], self.yaw[mi]
+        self._teacher_hand(T, mi)
         T.goal = self.t_goal[self.goal[mi]]
         T.phi = T.field.potential(T.goal, s[mi, :3])[0]
         w0, b0, w1, b1, wp, bp, mean, var = self.teacher_w
@@ -1871,15 +2099,27 @@ class DuelEnv:
             l = lg[:, j:j + d]
             pr = np.exp(l - l.max(1, keepdims=True))
             pr /= pr.sum(1, keepdims=True)
-            out.append((pr.cumsum(1) > self.rng.random((len(mi), 1))).argmax(1))
+            out.append(l.argmax(1) if TEACH_BEST else (pr.cumsum(1) > self.rng.random((len(mi), 1))).argmax(1))
             j += d
         out[3] = self.t_turn[out[3]]
         self.teach[mi, :4] = np.stack(out, 1)
+
+    def _teacher_hand(self, T, ii):
+        """a movement network trained under the finger limits (train_move.py --hand) is shown the hand of the players
+        it labels: the keys they hold, their budget of key actions, the frames until their keys are read next"""
+        if not getattr(T, "hand", False):
+            return
+        kl = self.key_last[ii]
+        T.key_last = np.stack([kl[:, 0], kl[:, 1], (kl[:, 2] == 1).astype(np.int64)], 1)
+        T.key_tok = self.key_tok[ii]
+        T.key_wait = ((-(self.key_tick + 1 + np.asarray(ii))) % KEY_EVERY).astype(np.float32)
 
     def _move_teach(self):
         """item runs: what the strafe-jumping movement network would do toward his target (keys, jump and view), sampled
         from its policy, in place of the walking teacher's keys (see RUN_TEACHER)"""
         ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0))[0]
+        if self.teach_runs == "jump":
+            ri = ri[self.jrun[ri]]
         if not len(ri):
             return
         T, s = self.teacher, self.state
@@ -1888,9 +2128,51 @@ class DuelEnv:
             d = T.goal_pos[None, :, :] - ip[:, None, :]
             hd = np.hypot(d[:, :, 0], d[:, :, 1]) + 1e6 * (np.abs(d[:, :, 2]) > 128.0)
             self.t_route = np.where(hd.min(1) < 48.0, hd.argmin(1), -1).astype(np.int32)
-        gi = self._trip_goal(self.run_k[ri], self.route.locate(s[ri, :3]))
+        if self.jrun[ri].any():                              # the players of a jump run: the network's ways with the pros' jumps
+            if not getattr(T, "jump_obs", False):
+                ri = ri[~self.jrun[ri]]                      # (a network that was not trained on them has nothing to say there)
+            else:
+                import movement_env as M
+                if self.t_field_j is None:
+                    self.t_field_j = M.NavField(self.t_nav[0], list(self.t_nav[1]) + [j_["b"] for j_ in self.jumps],
+                                                world=self.w, hazard=True, starts=self.spawns,       # (the landings are goals too, as in its task)
+                                                drop=M.shut_teleports(self.w, self.t_nav[0]), tele=M.teleports(self.w), jumps=self.jumps)
+                rj = ri[self.jrun[ri]]
+                ri = ri[~self.jrun[ri]]
+                gp_ = T.goal_pos
+                T.field, T.goal_pos = self.t_field_j, self.t_field_j.goals
+                try:
+                    for f_ in (np.unique(self.jrun_f[rj]) if len(self.jfields) > 1 else (0,)):
+                        self._move_labels(rj[self.jrun_f[rj] == f_] if len(self.jfields) > 1 else rj, self.jfields[int(f_)], land=True)
+                finally:
+                    T.field, T.goal_pos = self.t_field, gp_
+        if len(ri) and self.route_o is not None and getattr(T, "jump_obs", False):   # (JUMP_OPEN: its ways with the open jumps)
+            import movement_env as M
+            if getattr(self, "t_field_o", None) is None:
+                self.t_field_o = M.NavField(self.t_nav[0], self.t_nav[1], world=self.w, hazard=True, starts=self.spawns,
+                                            drop=M.shut_teleports(self.w, self.t_nav[0]), tele=M.teleports(self.w),
+                                            jumps=[j_ for j_ in self.jumps if j_["id"] in self.jump_open])
+            T.field = self.t_field_o
+            try:
+                self._move_labels(ri, self.route_o)
+            finally:
+                T.field = self.t_field
+        elif len(ri):
+            self._move_labels(ri, self.route)
+
+    def _move_labels(self, ri, R, land=False):
+        """the movement network's labels for players ri, whose ways are R's (the walking map's, or with the pros' jumps).
+        land (a jump run): its goal is the landing of his try's jump until he is over it, as in its own tries, then the item
+        (asked for the item from the start, its own ways went round some jumps: Blood Run 7, over 0 of 89 with its labels)"""
+        T, s = self.teacher, self.state
+        if not len(ri):
+            return
+        gi = self._trip_goal(self.run_k[ri], R.locate(s[ri, :3]), R)
         tg = np.where(gi >= 0, self.t_route[np.maximum(gi, 0)], -1)
+        if land:
+            tg = np.where(self.jrun_over[ri], tg, len(self.t_nav[1]) + self.jrun_k[ri])
         T.n, T.state, T.yaw = len(ri), s[ri], self.yaw[ri]
+        self._teacher_hand(T, ri)
         T.goal = np.maximum(tg, 0).astype(np.int32)
         T.phi = T.field.potential(T.goal, s[ri, :3])[0]
         ok = (tg >= 0) & (T.phi < 1e8)                       # (no way in its own walking map: the walking teacher's keys stay)
@@ -1904,7 +2186,7 @@ class DuelEnv:
             l_ = lg[:, j:j + d_]
             pr = np.exp(l_ - l_.max(1, keepdims=True))
             pr /= pr.sum(1, keepdims=True)
-            out.append((pr.cumsum(1) > self.rng.random((len(ri), 1))).argmax(1))
+            out.append(l_.argmax(1) if TEACH_BEST else (pr.cumsum(1) > self.rng.random((len(ri), 1))).argmax(1))
             j += d_
         out[3] = self.t_turn[out[3]]
         self.teach[ri[ok], :4] = np.stack(out, 1)[ok]
@@ -1975,6 +2257,11 @@ class DuelEnv:
             self.it_t[q, 0 if self.route_goal[g_] == "MH" else 1] = resp - t0
         self.contest_it[m], self.contest_t[m] = it, t0 + 10.0
         self.stats["contest_rounds"] += 1
+
+    def _counted(self, i):
+        """is player i (or each of an array of players) counted in the jump counters (see count_even)"""
+        g_ = self._others_arr().shape[1] + 1
+        return (np.asarray(i) % g_ % 2 == 0) | (not self.count_even)
 
     def _others_arr(self):
         """for every player, the other players of his group (one column each)"""
@@ -2248,15 +2535,33 @@ class DuelEnv:
         """a player's place in his group"""
         return j % 2
 
-    def _trip_goal(self, intent, node):
+    def _trip_goal(self, intent, node, R=None):
         """the route goal each player's intention means from the point he stands at: where a kind has several items
-        (NEAREST) the one the shortest way leads to; -1 for no intention or a thing the map has not"""
+        (NEAREST) the one the shortest way leads to; -1 for no intention or a thing the map has not. R: the ways that
+        count (a jump run's; the walking map's if not given)"""
         gi = np.array(self.intent_gi)[intent]
+        T_ = (self.route if R is None else R).T
         for k_, gs_ in self.intent_more.items():
             w_ = np.nonzero(np.asarray(intent) == k_)[0]
             if len(w_):
-                gi[w_] = gs_[self.route.T[gs_][:, np.asarray(node)[w_]].argmin(0)]
+                gi[w_] = gs_[T_[gs_][:, np.asarray(node)[w_]].argmin(0)]
         return gi
+
+    def _alt(self):
+        """the players whose ways are not the walking map's, with their ways: those of a jump run (every jump in use), and
+        the other learners where jumps are open in games (JUMP_OPEN). [(a flag per player, the route field)]"""
+        out = []
+        if self.route_j is not None and self.jrun.any():
+            if len(self.jfields) > 1:                        # (JUMP_ALL: a try at a jump on no item's way has its own ways)
+                for f_ in np.unique(self.jrun_f[self.jrun]):
+                    out.append((self.jrun & (self.jrun_f == f_), self.jfields[int(f_)]))
+            else:
+                out.append((self.jrun, self.route_j))
+        if self.route_o is not None:
+            m_ = (self.script == 0) & ~self.jrun
+            if m_.any():
+                out.append((m_, self.route_o))
+        return out
 
     def _goal_state(self, gi, grp):
         """for route goal gi and every player: is it there, and the seconds until it is back (by what he knows with
@@ -2373,8 +2678,11 @@ class DuelEnv:
             return out
         node = R.locate(pos)
         off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
+        alt = self._alt()
         for gi, lab in enumerate(self.route_goal):
             t = R.T[gi, node]
+            for m_, X_ in alt:
+                t = np.where(m_, X_.T[gi, node], t)
             v_, c_ = np.minimum((t + off) / 10.0, 2.0) * (t < 1e8), ROUTE_ITEMS.index(lab)
             if self.route_goal.index(lab) == gi:
                 out[:, c_] = v_
@@ -2399,14 +2707,20 @@ class DuelEnv:
         if R is not None:
             node = R.locate(pos)
             gi = self._trip_goal(k, node)
+            alt = self._alt()
+            for m_, X_ in alt:                               # (a jump run, or jumps open in games: the ways with those jumps)
+                gi[m_] = self._trip_goal(k[m_], node[m_], X_)
             valid = gi >= 0
             g = np.maximum(gi, 0)
             off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
             t = R.T[g, node]
-            ok = valid & (t < 1e8)
             nx = R.walk[g, node]
+            via_ = R.via[g, node]
+            for m_, X_ in alt:
+                t, nx, via_ = np.where(m_, X_.T[g, node], t), np.where(m_, X_.next[g, node], nx), np.where(m_[:, None], X_.via[g, node], via_)
+            ok = valid & (t < 1e8)
             wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
-            wp = np.where(((self.state[:len(node), 6] > 0.5) & ~np.isnan(R.via[g, node][:, 0]))[:, None], R.via[g, node], wp)   # a jump pad's plate, a teleporter's entrance
+            wp = np.where(((self.state[:len(node), 6] > 0.5) & ~np.isnan(via_[:, 0]))[:, None], via_, wp)   # a jump pad's plate, a teleporter's entrance
             out[:, 0] = np.minimum((t + off) / 10.0, 2.0) * ok
             out[:, 1:4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
@@ -2461,6 +2775,8 @@ class DuelEnv:
         Tn = R.T[:, node]                                    # seconds to every goal from where each player stands
         if PRO_WAYS:                                         # a scripted player walks: only the walking map's ways count for him
             Tn = R.T_walk[:, node] if RULE_WALK else np.where((self.script > 0)[None, :], R.T_walk[:, node], Tn)   # (RULE_WALK: for him too)
+        if self.route_o is not None:                         # (JUMP_OPEN: the jumps that are open count for him)
+            Tn = np.where(((self.script == 0) & ~self.jrun)[None, :], self.route_o.T[:, node], Tn)
         grp = np.arange(n) // (self._others_arr().shape[1] + 1)
         best_t = np.full(n, 1e9, np.float32)
         for gi, lab in enumerate(self.route_goal):
@@ -2515,6 +2831,19 @@ class DuelEnv:
                 gu_, gb_ = self._goal_state(gi, grp)
                 want = (sw == w_) & ~self.has[:, w_] & (Tn[gi] < 1e8) & (gu_ | (gb_ < Tn[gi] + 3.0))
                 out = np.where(want, INTENTS.index(lab), out)
+        hold = (self.script == 3) & (self.sc_persona == HOLDER)
+        if hold.any():                                       # the holder: the mega and the red armor on their clocks, whatever he has
+            best = np.full(n, 1e9, np.float32)
+            pick = np.zeros(n, np.int64)
+            for gi, lab in enumerate(self.route_goal):
+                if lab in ("MH", "RA"):
+                    t = Tn[gi]
+                    gu_, gb_ = self._goal_state(gi, grp)
+                    eta = np.where(gu_, 0.0, gb_)            # seconds until it is there, as far as he knows
+                    go = hold & (t < 1e8) & (eta < t + HOLD_EARLY) & (eta < best)
+                    best = np.where(go, eta, best)
+                    pick = np.where(go, INTENTS.index(lab), pick)
+            out = np.where(pick > 0, pick, out)
         return out
 
     def intend(self, choice, who):
@@ -2807,6 +3136,9 @@ class DuelEnv:
             rk[:, 9 * j + 6] = ok & (kind == RL)
             rk[:, 9 * j + 7] = ok & (kind == GL)
             rk[:, 9 * j + 8] = ok & (kind == PG)
+        self._pm = None                                      # (N_V15's part of the projectiles, for _v15)
+        if PROJ_SEE:                                         # only what he sees, the nearest six of it
+            rk, self._pm = self._proj(pos, eye, fdir, rot, vel)
         # items: where the nearest one of each big kind is (map knowledge), and whether it is up, but only
         # while looking at it from within 1500 units (no timers given: remembering them is the player's job)
         up = np.repeat(self.item_up, 2, axis=0)                               # per player (its match)
@@ -2853,8 +3185,73 @@ class DuelEnv:
                               self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot), self._pad_ear(yaw),
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
                               self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir),
-                              self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp)], 1)
+                              self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
+                              self._v15(pos, yaw, pit, eye, known, seen_t, visible)], 1)
         return obs.astype(np.float32)
+
+    def _proj(self, pos, eye, fdir, rot, vel):
+        """the enemy projectiles he sees (PROJ_SEE): inside his view cone, within PROJ_FAR, the line from his eyes clear.
+        -> the old inputs for the nearest two (place, speed, kind), and N_V15's part: the same for the next four, then
+        for all six a grenade's fuse left, the seconds to its closest pass, that distance in splash radii"""
+        n, S6 = len(pos), N_PROJ + N_PROJ_MORE
+        oth = self._others_arr()
+        P, V = self.rp[oth].reshape(n, -1, 3), self.rv[oth].reshape(n, -1, 3)
+        A, W, G = self.ra[oth].reshape(n, -1), self.rw[oth].reshape(n, -1), self.rage[oth].reshape(n, -1)
+        to = P - eye[:, None, :]
+        dist = np.linalg.norm(to, axis=2) + 1e-6
+        see = A & (dist < PROJ_FAR) & ((to * fdir[:, None, :]).sum(2) / dist > self.fov()[2][:, None])
+        ii, kk = np.nonzero(see)
+        if len(ii):
+            clear = (self.w.lines(eye[ii], P[ii, kk]) if self.sight is None else self.w.lines(eye[ii], P[ii, kk], mask=self.sight)) >= 0.999
+            see[ii[~clear], kk[~clear]] = False
+        d = np.where(see, dist, 1e9)
+        order = np.argsort(d, axis=1)[:, :S6]
+        ar = np.arange(n)
+        base, more = np.zeros((n, S6, 9), np.float32), np.zeros((n, S6, 3), np.float32)
+        rad = np.ones(NW, np.float32)
+        rad[RL], rad[GL], rad[PG] = P_RADIUS[RL], P_RADIUS[GL], P_RADIUS[PG]
+        for j in range(order.shape[1]):
+            idx = order[:, j]
+            ok = d[ar, idx] < 1e8
+            p_, v_, w_ = P[ar, idx], V[ar, idx], W[ar, idx]
+            base[:, j, 0:3] = rot(p_ - pos) / 1000.0 * ok[:, None]
+            base[:, j, 3:6] = rot(v_) / 1000.0 * ok[:, None]
+            base[:, j, 6], base[:, j, 7], base[:, j, 8] = ok & (w_ == RL), ok & (w_ == GL), ok & (w_ == PG)
+            rel, rv_ = p_ - pos, v_ - vel                    # (as if both kept their speed: a grenade's bounce is not foreseen)
+            t_ = np.clip(-(rel * rv_).sum(1) / np.maximum((rv_ * rv_).sum(1), 1.0), 0.0, 2.0)
+            near = np.linalg.norm(rel + rv_ * t_[:, None], axis=1)
+            more[:, j, 0] = np.where(w_ == GL, np.clip((P_FUSE[GL] - G[ar, idx]) / P_FUSE[GL], 0.0, 1.0), 0.0) * ok
+            more[:, j, 1] = t_ / 2.0 * ok
+            more[:, j, 2] = np.clip(near / rad[w_], 0.0, 3.0) / 3.0 * ok
+        return base[:, :N_PROJ].reshape(n, -1), np.concatenate([base[:, N_PROJ:].reshape(n, -1), more.reshape(n, -1)], 1)
+
+    def _v15(self, pos, yaw, pit, eye, known, seen_t, visible):
+        """the inputs of N_V15: the jump ahead on his way in a jump run (see JUMPS), and with the grenade launcher in his
+        hand how far his view is from the one that lands a grenade where he believes the enemy is"""
+        out = np.zeros((len(pos), N_V15), np.float32)
+        for m_, J in self._alt():
+            ii = np.nonzero(m_)[0]
+            node = J.locate(pos[ii])
+            gi = self._trip_goal(self.intent[ii], node, J)
+            g = np.maximum(gi, 0)
+            out[ii, :JL.N_JUMP] = JL.inputs(self.jumps, J.jd[g, node], np.where(gi >= 0, J.ji[g, node], -1),
+                                           np.linalg.norm(J.nodes[node] - pos[ii], axis=1))
+        on = (self.weapon == GL) & (self.hp > 0) & (visible | (seen_t < GL_KNOWN))
+        if on.any():
+            to = known - np.array([0, 0, 20.0], np.float32) - eye       # (the floor at his feet, about)
+            D = np.hypot(to[:, 0], to[:, 1]) + 1e-6
+            v_, g_ = float(P_SPEED[GL]), 800.0
+            disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[:, 2] * v_ * v_)
+            reach = on & (disc >= 0.0)
+            th = np.arctan2(v_ * v_ - np.sqrt(np.maximum(disc, 0.0)), g_ * D)   # the low arc; the game lofts a grenade by 0.2
+            ey = np.degrees((np.arctan2(to[:, 1], to[:, 0]) - yaw + np.pi) % (2 * np.pi) - np.pi)
+            ep = np.degrees(-(th - 0.2 * np.cos(th)) - pit)
+            tf = D / np.maximum(v_ * np.cos(th), 1.0)
+            out[:, JL.N_JUMP:JL.N_JUMP + 6] = np.stack([np.clip(ey / 30.0, -1, 1), np.clip(ey / 2.0, -1, 1), np.clip(ep / 15.0, -1, 1),
+                                           np.clip(ep / 2.0, -1, 1), np.clip(tf / 1.5, 0, 2), np.ones(len(pos))], 1) * reach[:, None]
+        if getattr(self, "_pm", None) is not None:           # the projectiles he sees beyond the nearest two, and what each is about to do
+            out[:, JL.N_JUMP + 6:] = self._pm
+        return out
 
     def _v14(self, vel, yaw, pit, eye, known, opp_vel, visible, opp):
         """the inputs of N_V14: his own movement read out for strafe jumping (4), and where a rocket or a plasma ball fired
@@ -3002,7 +3399,9 @@ class DuelEnv:
             near = np.clip(e2, c + MINS, hi_)
             d = float(np.linalg.norm(e2 - near))
             R = P_RADIUS[wpn]
-            if d < R and self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999:
+            if d < R and (self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999
+                          or (GL_QL and any(self.w.trace(ep, c + np.array([ox_, oy_, 0.0], np.float32), mask=self.sight)["fraction"] >= 0.999
+                                            for ox_, oy_ in ((15.0, 15.0), (15.0, -15.0), (-15.0, 15.0), (-15.0, -15.0))))):
                 f_ = 1.0 - d / R
                 kdir = c - e2
                 kdir[2] += 24.0                           # as in Quake 3: splash pushes upward
@@ -3081,12 +3480,12 @@ class DuelEnv:
         rush = fighter & (per == 2) & (dist < 400)             # the rusher aims rockets at the feet
         ep = np.where(rush, -np.degrees(np.arctan2(to[:, 2] - 24.0, np.hypot(to[:, 0], to[:, 1]) + 1e-6))
                       - self.pitch[idx], ep)
-        chase = fighter & (self.seen_t[idx] < 2.0)
+        chase = fighter & ((self.seen_t[idx] < 2.0) | self.sc_look[idx])
         turn = np.where(vis | chase, np.clip(ey * P_GAIN[per], -10, 10), np.clip(wander * 0.15, -6, 6))
         turn = np.where(fighter, turn + rng.normal(0, 1.0, k) * P_NOISE[per], np.clip(wander * 0.1, -3, 3))
         if self.sc_style:
             turn = np.where(fighter, turn, 0.0)             # test-room targets keep their facing (straight strafes)
-        dpit = np.where(vis, np.clip(ep * 0.4, -6, 6), -self.pitch[idx] * 0.2)
+        dpit = np.where(vis | self.sc_look[idx], np.clip(ep * 0.4, -6, 6), -self.pitch[idx] * 0.2)
         out = np.zeros((k, len(ACTION_DIMS)), np.int64)
         ffwd = np.where(vis, np.where(dist > P_FAR[per], 1, np.where(dist < P_NEAR[per], -1, self.sc_fwd[idx])), 1)
         hurt = (per == 4) & (self.hp[idx] + self.armor[idx] < 80)
@@ -3109,12 +3508,17 @@ class DuelEnv:
         nmw = self.sc_wpn[idx]                               # the stand-in: its drawn weapon if he has it, the rail far off
         nmw = np.where((dist > 700) & self.has[idx, RG] & (am[:, RG] > 0), RG, nmw)
         want = np.where((fixed == -3) & self.has[np.arange(k) * 0 + idx, nmw] & (am[np.arange(k), nmw] > 0), nmw, want)
+        if TRICKS:                                           # the lobber fights with what it throws: plasma on an enemy in view from
+            want = np.where((self.script[idx] == 3) & (per == LOBBER) & (dist > LOB_PG_NEAR) & (dist < LOB_PG_FAR)   # 150 to 1,000 units
+                            & (am[:, PG] > 0), PG, want)     # (2026-10-10: its grenades and plasma made 0 to 25% of its frags; he has to meet them)
         cur = self.weapon[idx]
         out[:, 6] = np.where(fighter & (want != cur) & self.has[idx, want], want + 1, 0)
         tol = np.where((cur == RL) | (cur == SG), 6.0, 2.5)
         out[:, 5] = (vis & (np.abs(ey) < tol) & (np.abs(ep) < 4.0)) | (fighter & (per == 7))   # the spammer always fires
         if runner.any() and self.route is not None:
             self._runner_keys(idx, runner, out, vis | chase)
+            if TRICKS:
+                self._lob(idx, out, vis)
         if self.lab is not None:
             t1 = self.script[idx] == 1
             z = self.lab_zone[idx // 2]
@@ -3221,15 +3625,17 @@ class DuelEnv:
 
     def _item_run_start(self, m):
         """start an item run for match m in a share of the rounds (see RUN_LEN); returns its seats, or None"""
-        if self.item_run_p <= 0 or self.route is None or self.fixed_kind is not None or getattr(self, "lab_force", None):
+        pj = self.jump_run_p if self.jump_tries else 0.0     # (jump runs: a share of the playing time beside the item runs')
+        if self.item_run_p + pj <= 0 or self.route is None or self.fixed_kind is not None or getattr(self, "lab_force", None):
             return None
         if self.lab is not None:
             other = float(self.arena_len)
         else:
             other = 1.0 / max(1e-9, float((np.asarray(self.kind_p[:3], np.float64) / np.array([self.round_len, 15.0, 15.0])).sum()))
-        p = self.item_run_p
+        p = self.item_run_p + pj
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
             return None
+        jump = pj > 0 and self.rng.random() < pj / p
         q = self._seats(m)
         if self.lab is not None:
             for i in q:
@@ -3243,15 +3649,47 @@ class DuelEnv:
         self.item_up[m], self.item_t[m] = True, 0.0
         self.run_k[q] = 0
         self.cf_side[q] = 0
-        self.cf_t[m] = RUN_COLLECT if self.rng.random() < self.collect_fight_p else -1.0
+        self.cf_t[m] = RUN_COLLECT if (not jump and self.rng.random() < self.collect_fight_p) else -1.0
+        self.jrun[q] = jump
         for i in q:
             self.load_sets[int(i)] = ()                     # the game's spawn: machine gun and gauntlet
             self.state = self.w.state()
-            self._spawn(int(i), avoid=None)
+            if jump:
+                self._jump_place(int(i))
+            else:
+                self._spawn(int(i), avoid=None)
         self.state = self.w.state()
-        for i in q:
+        for i in (() if jump else q):
             self._run_pick(int(i))
         return q
+
+    def _jump_place(self, i):
+        """a jump run: player i begins a try a second or two of way before the take-off of one of the pros' jumps (every
+        jump as often as any other), with the item behind it as his target; the item is put back if it was taken"""
+        ks = list(self.jump_tries)
+        k = int(ks[int(self.rng.integers(len(ks)))])
+        g, st, f = self.jump_tries[k][int(self.rng.integers(len(self.jump_tries[k])))]
+        J = self.jfields[f]
+        self.jrun_f[i] = f
+        node = int(st[int(self.rng.integers(len(st)))])
+        nx = int(J.next[g, node])
+        p, q = J.nodes[node], (J.nodes[nx] if nx >= 0 else J.goals[g])
+        face = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])) + float(self.rng.uniform(-40, 40))
+        self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), face)
+        self._fresh(i, face)
+        m = self._match_of(i)
+        self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
+        if g < self.bel_t.shape[1]:
+            self.bel_t[i, g] = 99.0                         # ... and he knows it is there
+        if self.route_goal[g] in ("MH", "RA"):
+            self.it_t[i, 0 if self.route_goal[g] == "MH" else 1] = 99.0
+        self.jrun_it[i], self.jrun_paid[i], self._replaced = self.route_item[g], 0.0, True
+        self.run_k[i] = INTENTS.index(self.route_goal[g])
+        self.intent_new[i], self.intent_done[i] = True, True     # the target is read at once
+        self.jrun_k[i], self.jrun_t[i] = k, 2.0 * float(J.T[g, node]) + JUMP_TRY_SLACK
+        self.jrun_edge[i], self.jrun_over[i], self.jrun_new[i] = False, False, True
+        if self._counted(i):
+            self.stats["jump_tries"][min(k, 63)] += 1
 
     def _run_pick(self, i):
         """item run: the next target of player i, one of the big items lying there that he can walk to"""
@@ -3260,6 +3698,8 @@ class DuelEnv:
         m = i // (self._others_arr().shape[1] + 1)
         gk = {k: int(self._trip_goal(np.array([k]), np.array([node]))[0]) for k in range(1, len(INTENTS))}
         Tr = R.T_walk if (RULE_WALK and PRO_WAYS) else R.T    # (RULE_WALK: a target he can walk to, not one behind a pros' step)
+        if self.route_o is not None:
+            Tr = self.route_o.T                              # (JUMP_OPEN: ... or reach by a jump that is open)
         ks = [k for k, gi in gk.items() if gi >= 0 and k != self.run_k[i] and Tr[gi, node] < 1e8]
         ok = [k for k in ks if self.item_up[m, self.route_item[gk[k]]] and Tr[gk[k], node] > 1.0]
         ok = ok or ks
@@ -3271,17 +3711,37 @@ class DuelEnv:
         when hurt, the red armor when bare, else the nearest big weapon he lacks) along the walking graph, and fights
         like the all-round scripted fighter when an enemy is in view, still moving along his way. He starts with the
         game's spawn and takes what he walks over. Not rewarded and not imitated: he is in a share of the rounds
-        (RUNNER_P) so that the learner meets an opponent who turns up with the stack."""
+        (RUNNER_P) so that the learner meets an opponent who turns up with the stack.
+        TRICKS: the holder, the lobber and the watcher are runners too; where _trick_goals names a place that is not an
+        item (a spawn point, a post) they walk there by the same rules."""
         R, s = self.route, self.state
         rl = np.nonzero(r)[0]
         ri = idx[rl]
-        pos = s[ri, :3]
-        node = R.locate(pos)
+        node = R.locate(s[ri, :3])
         lab = np.array([INTENTS.index(l) if l in INTENTS else -1 for l in self.route_goal], np.int64)
         k = self.intent_teach[ri]
         T = np.where(lab[None, :] == k[:, None], R.T_walk[:, node].T, 1e9)   # (he walks: the walking map's ways)
         gi = T.argmin(1)
         go = (k > 0) & (T[np.arange(len(ri)), gi] < 1e8)
+        xg = np.full(len(ri), -1, np.int64)
+        if TRICKS and self.route_x is not None:
+            xg = self._trick_goals(ri, rl, engaged[rl], k)
+        self._walk_keys(R, ri[xg == -1], rl[xg == -1], gi[xg == -1], go[xg == -1], out, engaged)
+        if (xg >= 0).any():
+            X = self.route_x
+            xs = xg >= 0
+            ok = X.T_walk[xg[xs], X.locate(s[ri[xs], :3])] < 1e8
+            self._walk_keys(X, ri[xs], rl[xs], xg[xs], ok, out, engaged)
+        st = rl[(xg == -2) & ~engaged[rl]]                   # at his post, nobody in view: he stands
+        out[st, 0], out[st, 1], out[st, 2] = 1, 1, 0
+
+    def _walk_keys(self, R, ri, rl, gi, go, out, engaged):
+        """the keys of walkers ri (rows rl of out) along the ways of R to its goal gi"""
+        if not len(ri):
+            return
+        s = self.state
+        pos = s[ri, :3]
+        node = R.locate(pos)
         nx = R.walk[gi, node]
         tp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[gi])
         near = np.hypot(tp[:, 0] - pos[:, 0], tp[:, 1] - pos[:, 1]) < 48.0
@@ -3313,6 +3773,146 @@ class DuelEnv:
         turn = np.clip(rel_deg * 0.5, -20.0, 20.0)           # nobody in view: he looks where he is going
         look = go & ~engaged[rl]
         out[rl, 3] = np.where(look, np.abs(TURN[None, :] - turn[:, None]).argmin(1), out[rl, 3])
+
+    def _lob(self, idx, out, vis):
+        """TRICKS, the lobber (B-189): with nobody in view he fires where the other one is about to come out: the far end
+        of a teleporter or a jump pad within the next steps of the other one's way to the item he is heading for, else
+        the place he last saw him (for 4 s). Plasma where he has a line to the place, a grenade's arc where he has none
+        and it is within 900 units. He keeps walking his own way meanwhile."""
+        s, R = self.state, self.route
+        up = np.array([0, 0, 24.0], np.float32)
+        for j in np.nonzero((self.script[idx] == 3) & (self.sc_persona[idx] == LOBBER) & ~vis & (self.hp[idx] > 0))[0]:
+            i = int(idx[j])
+            o = int(self._others_arr()[i, 0])
+            if self.hp[o] <= 0:
+                continue
+            P, exit_, eta = None, False, 0.0
+            g = self.intent_gi[int(self.intent[o])] if self.intent[o] > 0 else -1
+            if g >= 0:
+                a0 = a = int(R.locate(s[o:o + 1, :3])[0])
+                for _ in range(40):
+                    b = int(R.walk[g, a])
+                    if b < 0 or R.T[g, a0] - R.T[g, b] > LOB_AHEAD:
+                        break
+                    if not np.isnan(R.via[g, a][0]):         # this step goes through a teleporter or a pad: he comes out at b
+                        P, exit_, eta = R.nodes[b] + up, True, float(R.T[g, a0] - R.T[g, b])   # ... in about this many seconds
+                        break
+                    a = b
+            if P is None and self.seen_t[i] < 4.0:
+                P = self.known[i] + up
+            if P is None:
+                continue
+            eye = (s[i, :3] + np.array([0, 0, VIEW_H], np.float32)).astype(np.float32)
+            to = (P - eye).astype(np.float64)
+            D, dist = float(np.hypot(to[0], to[1])), float(np.linalg.norm(to))
+            if dist > 1800.0 or dist < 200.0:
+                continue
+            if self.has[i, PG] and self.ammo[i, PG] > 0 and self.w.trace(eye, P.astype(np.float32), mask=self.sight)["fraction"] >= 0.97:
+                if exit_ and eta > LOB_PG_ETA:               # (too early: the balls would be gone before he comes out)
+                    continue
+                wpn, pit = PG, -np.degrees(np.arctan2(to[2], D))
+            elif D < 900.0 and self.has[i, GL] and self.ammo[i, GL] > 0:
+                if exit_ and not (LOB_GL_ETA[0] <= eta <= LOB_GL_ETA[1]):   # (a grenade goes off 2.5 s after it is fired)
+                    continue
+                v_, g_ = float(P_SPEED[GL]), 800.0
+                disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[2] * v_ * v_)
+                if disc < 0:
+                    continue
+                th = np.arctan2(v_ * v_ - np.sqrt(disc), g_ * D)         # the low arc; the game lofts a grenade by 0.2
+                wpn, pit = GL, -np.degrees(th - 0.2 * np.cos(th))
+            else:
+                continue
+            ey = (np.degrees(np.arctan2(to[1], to[0])) - self.yaw[i] + 180.0) % 360.0 - 180.0
+            ep = pit - self.pitch[i]
+            out[j, 3] = int(np.abs(TURN - np.clip(ey * 0.5, -20.0, 20.0)).argmin())
+            out[j, 4] = int(np.abs(PITCH - np.clip(ep * 0.4, -6.0, 6.0)).argmin())
+            out[j, 6] = 0 if self.weapon[i] == wpn else wpn + 1
+            out[j, 5] = int(self.weapon[i] == wpn and abs(ey) < 5.0 and abs(ep) < 4.0)
+            if out[j, 5]:
+                self.stats["lob"][0 if wpn == PG else 1] += 1
+                self.stats["lob"][2] += int(exit_)
+
+    def _trick_points(self, nav, pads, teles, more_):
+        """TRICKS: the places a scripted opponent walks to that are not items, and the ways to them (a second route field):
+        the map's spawn points (the holder comes for him after a frag), then for every item two posts to watch its
+        approach from (the watcher): points 450 to 1400 units away that see the item and the most of the ground round
+        it, the higher the better."""
+        R = self.route
+        pts = [np.asarray(p, np.float32) for p in self.spawns]
+        self.x_spawns = len(pts)
+        self.x_watch = {}
+        live = np.nonzero(~R.dead)[0]
+        rng = np.random.default_rng(7)
+        eye = np.array([0, 0, VIEW_H], np.float32)
+        up30 = np.array([0, 0, 30.0], np.float32)
+        for gi, gp in enumerate(R.goals):
+            d = np.linalg.norm(R.nodes[live] - gp, axis=1)
+            cand = live[(d > 450.0) & (d < 1400.0) & (R.T_walk[gi, live] < 1e8)]
+            near = live[d < 320.0]
+            if not len(cand) or not len(near):
+                continue
+            cand = rng.choice(cand, min(60, len(cand)), replace=False)
+            near = rng.choice(near, min(24, len(near)), replace=False)
+            B = np.concatenate([R.nodes[near] + up30, (gp + up30)[None]]).astype(np.float32)
+            score = np.zeros(len(cand))
+            for a_, c_ in enumerate(cand):
+                see = self._los(np.repeat((R.nodes[c_] + eye)[None], len(B), 0).astype(np.float32), B)
+                score[a_] = (see[:-1].mean() + 0.003 * float(np.clip(R.nodes[c_][2] - gp[2], -100.0, 300.0))) * see[-1]
+            posts = []
+            for b_ in np.argsort(-score)[:6]:
+                if score[b_] > 0.4 and all(np.linalg.norm(R.nodes[cand[b_]] - pts[q_]) > 250.0 for q_ in posts) and len(posts) < 2:
+                    posts.append(len(pts))
+                    pts.append(R.nodes[cand[b_]].copy())
+            if posts:
+                self.x_watch[gi] = posts
+        self.xpts = np.array(pts, np.float32)
+        self.route_x = RouteField(nav, self.xpts, pads=pads, teles=teles, **more_)
+        self.route_x.walk, self.route_x.T_walk = self.route_x.next, self.route_x.T
+
+    def _trick_goals(self, ri, rl, engaged, k):
+        """TRICKS: for the runners ri, the place that is not an item each one walks to (an index into xpts), -1 for none
+        (he follows the item rule), -2 for a watcher standing at his post.
+        The holder, after a frag (hunt_t): once the other one lives again, the spawn point nearest to him, until he sees
+        him or the time is up, and not while the mega or the red armor is due. The watcher: a post for the item the other
+        one is heading for (his intention), kept WATCH_SECS; arrived, he stands and looks at the item."""
+        X, R, s = self.route_x, self.route, self.state
+        out = np.full(len(ri), -1, np.int64)
+        opp = self._others_arr()[ri, 0]                      # the other one (these opponents are for duels)
+        per = self.sc_persona[ri]
+        big = np.isin(k, [INTENTS.index(l) for l in ("MH", "RA") if l in INTENTS])
+        # the holder
+        h = per == HOLDER
+        self.hunt_t[ri] = np.where(h, np.maximum(0.0, self.hunt_t[ri] - DT), 0.0)
+        self.hunt_t[ri[h & engaged]] = 0.0
+        start = h & (self.hunt_t[ri] > 0) & (self.x_goal[ri] < 0) & (self.hp[opp] > 0)
+        if start.any():
+            sp = np.linalg.norm(self.xpts[None, :self.x_spawns] - s[opp[start], None, :3], axis=2).argmin(1)
+            self.x_goal[ri[start]] = sp
+        self.x_goal[ri[h & (self.hunt_t[ri] <= 0)]] = -1
+        hunt = h & (self.x_goal[ri] >= 0) & ~big
+        out[hunt] = self.x_goal[ri[hunt]]
+        # the watcher
+        w = per == WATCHER
+        if w.any() and self.x_watch:
+            self.watch_t[ri] = np.where(w, self.watch_t[ri] - DT, 0.0)
+            for j in np.nonzero(w & ((self.watch_t[ri] <= 0) | (self.x_goal[ri] < 0)))[0]:
+                g_ = self.intent_gi[int(self.intent[opp[j]])] if self.intent[opp[j]] > 0 else -1
+                posts = self.x_watch.get(int(g_)) or (self.x_watch[self.rng.choice(list(self.x_watch))] if self.x_watch else None)
+                self.x_goal[ri[j]] = int(self.rng.choice(posts)) if posts else -1
+                self.watch_t[ri[j]] = WATCH_SECS
+            ww = w & (self.x_goal[ri] >= 0) & self.has[ri, RG]       # (without the rail he is a runner until he has one)
+            node = X.locate(s[ri, :3])
+            at = ww & (X.T_walk[np.maximum(self.x_goal[ri], 0), node] < 0.25)
+            out[ww] = self.x_goal[ri[ww]]
+            out[at] = -2
+            self.sc_look[ri] = at & ~engaged
+            for j in np.nonzero(at & ~engaged)[0]:               # he looks at the item his post watches
+                g_ = next((g for g, ps in self.x_watch.items() if int(self.x_goal[ri[j]]) in ps), None)
+                if g_ is not None:
+                    self.known[ri[j]] = R.goals[g_]
+        far = (out >= 0) & (X.T_walk[np.maximum(out, 0), X.locate(s[ri, :3])] >= 1e8)
+        out[far] = -1                                        # no way there from where he is: the item rule
+        return out
 
     # ---------------------------------------------------------------- step
     def limit_keys(self, a, who=None):
@@ -3488,6 +4088,7 @@ class DuelEnv:
         fight = human & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         self.stats["switches"] += int((sw & fight).sum())
         self.stats["hand_w"] += np.bincount(self.weapon[fight & (self.hp > 0)], minlength=NW)
+        self.stats["hand_g"] += np.bincount(self.weapon[fight & (pkind == NORMAL) & (self.hp > 0)], minlength=NW)
         self.stats["blind_w"] += np.bincount(self.weapon[blind & fight], minlength=NW)
         self.stats["fire_frames"] += int((fire & fight).sum())
         self.stats["blind_frames"] += int((blind & fight).sum())
@@ -3697,6 +4298,10 @@ class DuelEnv:
                         vq[:] = 0.0                         # resting on the floor until the fuse runs out
                     self.rv[i, k] = vq
                     self.rp[i, k] = hitpt[q] + nrm * 0.5
+                    if GL_QL:                               # the rest of the frame, on its new way (not through a second surface)
+                        rest_ = vq * (DT * (1.0 - float(fr[q])))
+                        f2_ = self.w.trace(self.rp[i, k], self.rp[i, k] + rest_, mask=self.sight)["fraction"]
+                        self.rp[i, k] = self.rp[i, k] + rest_ * max(0.0, f2_ - 0.01)
         if st["kicked"]:
             self.state = s = self.w.state()                  # knockback changed velocities
         dmg_taken, attacker, kill_w = st["dmg_taken"], st["attacker"], st["kill_w"]
@@ -3806,7 +4411,8 @@ class DuelEnv:
                     self.stats["pick_am"] += 1
                 if took and (lab in ("MH", "RA", "YA", "GA") or kind == "wp"):
                     self._hear(0, np.array([i]), 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "ar" else 3)
-                if took and lab in ("MH", "RA"):
+                own_ = bool(self.jrun[i]) and it == self.jrun_it[i]    # (a jump run: his target stays for the other seats' tries)
+                if took and lab in ("MH", "RA") and not own_:
                     k_ = 0 if lab == "MH" else 1
                     self.note_pickup(int(i), k_)
                     self.stats["big_wait"][k_] += float(self.item_up_t[m, it])
@@ -3837,8 +4443,9 @@ class DuelEnv:
                     if self.contest_t[m] > 0 and it == self.contest_it[m]:    # the item the round began as a race for
                         self.stats["contest_taken"] += int(self.script[i] == 0)
                         self.contest_t[m] = -1.0
-                    self.item_up[m, it] = False
-                    self.item_t[m, it] = resp
+                    if not own_:
+                        self.item_up[m, it] = False
+                        self.item_t[m, it] = resp
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
         self.armor = np.where(self.armor > 100, np.maximum(100.0, self.armor - DT), self.armor)
         if self.item_seek > 0 and self.route is not None:
@@ -3863,9 +4470,15 @@ class DuelEnv:
             R_ = self.route
             node = R_.locate(s[:, :3])
             gi_ = self._trip_goal(self.intent, node)
+            alt_ = self._alt()
+            for m_, X_ in alt_:                              # (a jump run, or jumps open in games: the ways with those jumps)
+                gi_[m_] = self._trip_goal(self.intent[m_], node[m_], X_)
             valid = gi_ >= 0
             g_ = np.maximum(gi_, 0)
-            phi = np.where(valid, R_.T[g_, node] + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
+            t_ = R_.T[g_, node]
+            for m_, X_ in alt_:
+                t_ = np.where(m_, X_.T[g_, node], t_)
+            phi = np.where(valid, t_ + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
             it_ = np.array(self.route_item)[g_]
             soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0)
@@ -3921,11 +4534,35 @@ class DuelEnv:
                 self.stats["move_fast"] += int(((sp_ > 330) & (s[:, 6] < 0.5) & alive).sum())
                 arr = run & self.intent_done & (self.run_k > 0) & (self.intent == self.run_k)     # (the pickup may be booked after this block: no "since last frame" test)
                 gone = run & ~arr & (self.run_k > 0) & (self.intent == self.run_k) & valid & ~soon & ~self.intent_done
+                self.jrun_new[:] = False
+                jr = np.nonzero(alive & self.jrun)[0]       # jump runs: over the gap, fallen short of it, or out of time
+                if len(jr):
+                    self.stats["jump_frames"] += len(jr)
+                    self.jrun_t[jr] -= DT
+                    kk_ = self.jrun_k[jr]
+                    A_, B_, p_ = self.jump_a[kk_], self.jump_b[kk_], s[jr, :3]
+                    self.jrun_paid[jr] += (pay_now[jr] + RUN_SCALE * np.where(pay[jr], gain[jr], 0.0)).astype(np.float32)
+                    self.jrun_edge[jr] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
+                    landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
+                    ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
+                    self.jrun_over[jr[ov_]] = True
+                    np.add.at(self.stats["jump_over"], np.minimum(kk_[ov_ & self._counted(jr)], 63), 1)
+                    at_gap_ = np.hypot(p_[:, 0] - B_[:, 0], p_[:, 1] - B_[:, 1]) < np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1]) + 150.0
+                    short_ = self.jrun_edge[jr] & ~self.jrun_over[jr] & at_gap_ & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)
+                    np.add.at(self.stats["jump_short"], np.minimum(kk_[short_ & self._counted(jr)], 63), 1)
+                    for i in jr[(short_ | (self.jrun_t[jr] <= 0)) & ~arr[jr]]:
+                        reward[i] -= float(self.jrun_paid[i])    # a try that ends without the item gives back what its way paid
+                        self._jump_place(int(i))
                 for i in np.nonzero(arr | gone | (run & (self.run_k == 0)))[0]:
+                    if self.jrun_new[i]:
+                        continue
                     if arr[i]:
                         reward[i] += RUN_ARRIVE
                         self.stats["move_arrive"] += 1
-                    self._run_pick(int(i))
+                    if self.jrun[i]:
+                        self._jump_place(int(i))            # the next try
+                    else:
+                        self._run_pick(int(i))
             self.intent_phi = phi.astype(np.float32)
 
         if STACK_PAY or STACK_WPN or STACK_BARE or STACK_LOW:   # pay for the stack he keeps (see STACK_PAY)
@@ -3988,7 +4625,10 @@ class DuelEnv:
                     self.stats["target_kills"] += 1
                 if self.script[k] >= 2:
                     self.stats["bot_frags"] += 1
+                    self.stats["sc_frags_w"][int(kill_w.get(v, 0))] += 1
                     self.stats["vs_persona"][1, self.sc_persona[k]] += 1
+                    if self.script[k] == 3 and self.sc_persona[k] == HOLDER and self.rng.random() < HOLD_HUNT_P:
+                        self.hunt_t[k], self.x_goal[k] = HOLD_HUNT, -1
             else:
                 self.stats["suicides"] += 1
             events.append(dict(victim=int(v), killer=int(k), weapon=int(kill_w.get(v, -1))))
@@ -3996,6 +4636,9 @@ class DuelEnv:
         for v in dead:
             if self.lab is not None:
                 self._lab_respawn(int(v))
+                continue
+            if self.jrun[v]:                                # (a jump run: the next try)
+                self._jump_place(int(v))
                 continue
             self._spawn(int(v), avoid=s[v ^ 1, :3], close=True if self.kind[v // 2] in (AIM, DRILL) else None)
             if self.goal[v] >= 0:
@@ -4010,6 +4653,8 @@ class DuelEnv:
                 died[v] = True
                 self.stats["suicides"] += 1
                 self._spawn(int(v), avoid=s[v ^ 1, :3])
+                if self.jrun[v]:                            # (a jump run: the next try)
+                    self._jump_place(int(v))
                 if self.goal[v] >= 0:
                     self._new_goal(int(v))
         # short rounds (curriculum): restart both players near each other every ~round_len seconds
@@ -4042,6 +4687,7 @@ class DuelEnv:
             self.round_fac[m] = self.rng.uniform(0.67, 1.33)
             self.drop_w[m] = -1
             self.run_k[self._seats(int(m))] = -1
+            self.jrun[self._seats(int(m))] = False
             self.cf_side[self._seats(int(m))] = 0
             self.cf_t[m] = -1.0
             q_ = self._item_run_start(int(m))                # an item run in a share of the rounds (RUN_LEN)
@@ -4084,6 +4730,9 @@ class DuelEnv:
             elif kd == NORMAL and self.route is not None and self.rng.random() < self.runner_p:
                 self.script[b_] = 3                          # the item runner, with the all-round fighter's aim
                 self.sc_persona[b_] = 0
+                if TRICKS and TRICK_P.sum() > 0 and self.rng.random() < TRICK_P.sum():   # ... or one of the three in his place
+                    self.sc_persona[b_] = (HOLDER, LOBBER, WATCHER)[int(self.rng.choice(3, p=TRICK_P / TRICK_P.sum()))]   # (until 2026-10-10
+                    self.hold_ahead[b_] = self.sc_persona[b_] == HOLDER and self.rng.random() < HOLD_STACK              # only in the yard's rounds)
             elif kd == NORMAL and self.rng.random() < self.bot_p:
                 self.script[b_] = 2
             if self.script[b_] == 2:
@@ -4124,8 +4773,9 @@ class DuelEnv:
             self.bel_t[done] = 99.0
         for m_ in contest_m:                                 # ... but for the rounds that start as a race for a big item
             self._contest_start(m_)
-        if len(dead) or len(out) or len(ends):
+        if len(dead) or len(out) or len(ends) or self._replaced:
             self.state = s = self.w.state()
+            self._replaced = False
 
         # senses: sight (line of sight + field of view) and hearing (rough position)
         eye = self._eye(s)

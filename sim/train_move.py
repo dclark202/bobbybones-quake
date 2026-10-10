@@ -20,11 +20,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.environ.get("QLBOT_ROOT") or os.path.dirname(HERE)      # (QLBOT_ROOT: the repo, when this file is run from a copy)
 
 
-def worker(remote, bsp, nav, n, seed, substeps, v14=False):
+def worker(remote, bsp, nav, n, seed, substeps, v14=False, jumps=False, jump_p=0.5, hand=False):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from movement_env import MoveEnv
-    env = MoveEnv(bsp, nav, n=n, seed=seed, substeps=substeps, v14=v14)
+    env = MoveEnv(bsp, nav, n=n, seed=seed, substeps=substeps, v14=v14, jumps=jumps, jump_p=jump_p, hand=hand)
     mapname = os.path.basename(bsp)[:-4]
     remote.send(env.observe())
     while True:
@@ -36,7 +36,8 @@ def worker(remote, bsp, nav, n, seed, substeps, v14=False):
             for ep in info["episodes"]:
                 ep["map"] = mapname
             stats = dict(n_moving=int(moving.sum()), n_fast=int((sp[moving] > 330).sum()),
-                         vmax=float(sp.max()), air=float(1 - gr.mean()), episodes=info["episodes"])
+                         vmax=float(sp.max()), air=float(1 - gr.mean()), episodes=info["episodes"],
+                         key_dec=info.get("key_dec"))              # (hand: the frames on which the keys are read next)
             remote.send((obs, rew, done, stats))
         elif cmd == "curriculum":
             env.max_goal_time = data
@@ -61,12 +62,25 @@ def main():
     ap.add_argument("--curr-threshold", type=float, default=0.6, help="success rate that unlocks longer trips")
     ap.add_argument("--v14", action="store_true", help="Quake Live's step height and wading, lava and slime, a price for fall "
                                                        "damage, starts where the spawn points lead (see movement_env.MoveEnv)")
+    ap.add_argument("--jumps", action="store_true", help="v15: the pros' jumps (sim/pro_gaps/<map>.json) are links of the walking "
+                                                         "map, five more inputs tell of a jump ahead, and a share of the "
+                                                         "tries begins before a take-off (see movement_env.MoveEnv)")
+    ap.add_argument("--jump-p", type=float, default=0.5, help="the share of tries that begin before one of the pros' jumps")
+    ap.add_argument("--low", action="store_true", help="run at low priority (beside a training run)")
+    ap.add_argument("--hand", action="store_true", help="v15: his finger limits on the keys (read ten times a second, a finger at most "
+                                                        "every 150 ms, KEY_RATE key actions a second) and five inputs of what the hand "
+                                                        "holds; the key outputs are credited only on the frames they are read")
     a = ap.parse_args()
+    if a.low and os.name == "nt":
+        import ctypes
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x00004000)
 
     import torch
     import torch.nn as nn
     sys.path.insert(0, HERE)
-    from movement_env import ACTION_DIMS, OBS_DIM
+    import movement_env
+    from movement_env import ACTION_DIMS
+    OBS_DIM = movement_env.OBS_DIM + (movement_env.JL.N_JUMP if a.jumps else 0) + (movement_env.N_HAND if a.hand else 0)
     torch.set_num_threads(6)
     maps = a.map.split(",")
 
@@ -85,7 +99,7 @@ def main():
         substeps = tuple(int(x) for x in a.substeps.split(","))
         m = maps[w % len(maps)]
         pr = mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), nav_for(m),
-                                             a.envs, 1000 + w, substeps, a.v14), daemon=True)
+                                             a.envs, 1000 + w, substeps, a.v14, a.jumps, a.jump_p, a.hand), daemon=True)
         pr.start()
         pipes.append(p_main)
         procs.append(pr)
@@ -109,7 +123,15 @@ def main():
     curriculum = 3.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck = torch.load(os.path.join(out, "policy.pt"), weights_only=False)
-        pol.load_state_dict(ck["model"])
+        sd = ck["model"]
+        more = OBS_DIM - sd["body.0.weight"].shape[1]
+        if more > 0:                                          # a network from before the inputs of a jump ahead: they start at nothing
+            for k_ in ("body.0.weight", "v.0.weight"):
+                sd[k_] = torch.cat([sd[k_], torch.zeros(sd[k_].shape[0], more)], 1)
+            ck["obs_mean"] = np.concatenate([ck["obs_mean"], np.zeros(more)])
+            ck["obs_var"] = np.concatenate([ck["obs_var"], np.ones(more)])
+            print("carried over: {} more inputs, at zero weight".format(more), flush=True)
+        pol.load_state_dict(sd)
         obs_mean, obs_var, obs_count = ck["obs_mean"], ck["obs_var"], ck["obs_count"]
         curriculum = ck.get("curriculum", curriculum)
     for p in pipes:
@@ -133,6 +155,7 @@ def main():
         b_val = np.zeros((T + 1, N), np.float32)
         b_rew = np.zeros((T, N), np.float32)
         b_done = np.zeros((T, N), np.float32)
+        b_dec = np.ones((T, N), np.float32)                    # (hand) the keys chosen at this step are read
         raw = []
         n_moving = n_fast = 0
         vmax, air = 0.0, []
@@ -142,9 +165,12 @@ def main():
             with torch.no_grad():
                 ds = pol.dist(x)
                 act = torch.stack([d.sample() for d in ds], -1)
-                logp = sum(d.log_prob(act[:, i]) for i, d in enumerate(ds))
+                # (hand) the keys are read at the next step only for the players whose wait is over: the last input says so
+                kd = torch.from_numpy((obs[:, -1] == 0).astype(np.float32)) if a.hand else torch.ones(len(obs))
+                logp = sum(d.log_prob(act[:, i]) * (kd if i < 3 else 1.0) for i, d in enumerate(ds))
                 val = pol.v(x).squeeze(-1)
             b_obs[t], b_act[t], b_logp[t], b_val[t] = x.numpy(), act.numpy(), logp.numpy(), val.numpy()
+            b_dec[t] = kd.numpy()
             chunks = np.array_split(act.numpy(), len(pipes))
             for p, c in zip(pipes, chunks):
                 p.send(("step", c))
@@ -182,6 +208,7 @@ def main():
         LP = torch.from_numpy(b_logp.reshape(-1))
         ADV = torch.from_numpy(adv.reshape(-1))
         RET = torch.from_numpy(ret.reshape(-1))
+        DEC = torch.from_numpy(b_dec.reshape(-1))
         frac = min(1.0, (time.time() - t_start) / (a.minutes * 60))
         for g in opt.param_groups:
             g["lr"] = a.lr * (1.0 - 0.9 * frac)
@@ -191,7 +218,7 @@ def main():
             for i in range(0, T * N, mb):
                 idx = perm[i:i + mb]
                 ds = pol.dist(O[idx])
-                lp = sum(d.log_prob(A[idx, j]) for j, d in enumerate(ds))
+                lp = sum(d.log_prob(A[idx, j]) * (DEC[idx] if j < 3 else 1.0) for j, d in enumerate(ds))
                 ent = sum(d.entropy() for d in ds).mean()
                 ratio = (lp - LP[idx]).exp()
                 ad = ADV[idx]
@@ -204,13 +231,14 @@ def main():
                 nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
         total += T * N
-        recent = recent[-4000:]
+        recent = recent[-(12000 if a.jumps else 4000):]
         arr = [e for e in recent if e["arrived"]]
         succ = len(arr) / max(1, len(recent))
         ratio_t = float(np.median([e["t"] / max(e["est"], 0.1) for e in arr])) if arr else float("nan")
         rec = dict(update=update, steps=total, minutes=round((time.time() - t_start) / 60, 2),
                    sps=int(total / (time.time() - t_start)), success=round(succ, 3),
                    fell=round(np.mean([e["fell"] for e in recent]) if recent else 0, 3),
+                   lava=round(float(np.mean([e.get("lava", False) for e in recent])) if recent else 0, 3),
                    t_over_est=round(ratio_t, 3), fast_pct=round(100.0 * n_fast / max(1, n_moving), 2),
                    vmax=round(vmax), air=round(float(np.mean(air)), 3), reward=round(float(b_rew.mean()), 4),
                    entropy=round(float(ent), 3), curriculum=curriculum,
@@ -219,11 +247,20 @@ def main():
                               for m in maps},
                    per_map={m: round(float(np.mean([e["arrived"] for e in recent if e.get("map") == m] or [0])), 3)
                             for m in maps})
+        if a.jumps:                                            # the tries for the pros' jumps: the share that got over, all and per map and jump
+            tr = [e for e in recent if e.get("jump", -1) >= 0]
+            rec["jump_tries"] = len(tr)
+            rec["jump_over"] = round(float(np.mean([e["crossed"] for e in tr] or [0])), 3)
+            pj = {}
+            for e in tr:
+                pj.setdefault("{}:{}".format(e.get("map"), e["jump"]), []).append(e["crossed"])
+            rec["per_jump"] = {k_: [round(float(np.mean(v_)), 2), len(v_)] for k_, v_ in sorted(pj.items())}
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:
-            print("upd {update} steps {steps:,} ({sps:,}/s) success {success:.0%} fell {fell:.0%} "
-                  "t/est {t_over_est} fast% {fast_pct} vmax {vmax} air {air} curr {curriculum}s {per_map}".format(**rec), flush=True)
+            print("upd {update} steps {steps:,} ({sps:,}/s) success {success:.0%} fell {fell:.0%} lava {lava:.1%} "
+                  "t/est {t_over_est} fast% {fast_pct} vmax {vmax} air {air} curr {curriculum}s {per_map}".format(**rec)
+                  + (" | jumps over {:.0%} of {}".format(rec["jump_over"], rec["jump_tries"]) if a.jumps else ""), flush=True)
         if succ > a.curr_threshold and len(recent) > 2000 and curriculum < 15:
             curriculum = min(15.0, curriculum + 2.0)
             recent = []
@@ -232,12 +269,12 @@ def main():
                 p.recv()
         if update % 20 == 0:
             torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
-                            curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14,
-                            substeps=a.substeps),
+                            curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14, jumps=a.jumps,
+                            hand=a.hand, substeps=a.substeps),
                        os.path.join(out, "policy.pt"))
     torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
-                    curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14,
-                            substeps=a.substeps),
+                    curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14, jumps=a.jumps,
+                            hand=a.hand, substeps=a.substeps),
                os.path.join(out, "policy.pt"))
     for p in pipes:
         p.send(("close", None))

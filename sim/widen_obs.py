@@ -26,7 +26,8 @@ def main():
     import importlib
     E = importlib.import_module(a.env)
     d = os.path.join(ROOT, "data", "sim_runs", a.run)
-    files = [os.path.join(d, "policy.pt")] + sorted(glob.glob(os.path.join(d, "snapshots", "snap_*.pt")))
+    files = ([os.path.join(d, "policy.pt")] + sorted(glob.glob(os.path.join(d, "snapshots", "snap_*.pt")))
+             + sorted(glob.glob(os.path.join(d, "snapshots", "anchor_*.pt"))))       # (the standing opponents of --anchor-p too)
     n = 0
     for f in files:
         ck = torch.load(f, weights_only=False, map_location="cpu")

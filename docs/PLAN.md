@@ -26,7 +26,7 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 | What | Where it stands |
 |---|---|
 | On the public server | `duel_gru_v13` ([runs/REPORT_v13.md](runs/REPORT_v13.md)): free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard since 2026-10-09. Against people so far: 19 frags made, 130 taken (three players) |
-| In training | nothing for the main line: `duel_gru_v14` ended 2026-10-10 11:52 on its save of 10:57 ([runs/MIDRUN_v14c.md](runs/MIDRUN_v14c.md)); `duel_gru_v15` is being prepared ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md)). Two side arms of v14 at half size (the teacher left on; rockets) |
+| In training | nothing: `duel_gru_v14` ended 2026-10-10 11:52 on its save of 10:57 ([runs/REPORT_v14.md](runs/REPORT_v14.md): level with v13 on v13's three maps, ahead on the three new ones, 77% against the stand-in where v13 had 70%); `duel_gru_v15` is audited and waits for the owner's go ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md)) |
 | The checks of a run | every save plays the last best network head to head (the owner's standing rule, 2026-10-10) and 32 ten-minute duels a map against the Nightmare stand-in; real games against the game's Nightmare bot before and after a run; play tests |
 | The simulator | movement, nine weapons, items, sounds, the human limits on hands, eyes and aim; set right against the game's maps on 2026-10-09 (twelve mismatches). Its targets are easier to hit with a rail than people are (B-199) |
 | Items and weapons (v13) | time without a big weapon 18%, red armor 0.63 a player-minute; 70% of the frags against the stand-in on the six maps; the game's Nightmare bot beaten on Blood Run (14-4, 11-6, 10-3) and Lost World (8-5, 6-4, 9-5) |
@@ -40,17 +40,18 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 ## Now
 
 **`duel_gru_v14` is ended** (owner, 2026-10-10 11:51: "calling the run mixed in success"): its end network is the save
-of 10:57 from before the strafe-jumping teacher (`policy_end_v14.pt`): 77% of the frags against the stand-in on the six
-maps (v13: 70%), 60% on the four held out (49%), level with v13 head to head. With the teacher it then lost to v13 on all
-three maps of the check within an hour (44 to 45%). Report: [runs/MIDRUN_v14c.md](runs/MIDRUN_v14c.md); the log of
-2026-10-10 12:20. Two side arms of it run at half size while v15 is prepared (`duel_gru_v14_armT`: the teacher left on;
-`duel_gru_v14_armR`: rockets at a fifth of the price and rocket-only rounds); neither is v15's start.
+of 10:57 from before the strafe-jumping teacher (`policy_end_v14.pt`). Against v13 on six maps: level on v13's three
+(53%, 49%, 53% of the frags), ahead on the three new ones (56%, 79%, 71%); against the stand-in 77% on the six maps
+(v13: 70%) and 60% on the four others (49%). No faster, rockets flat, grenades and plasma never in hand. Report:
+[runs/REPORT_v14.md](runs/REPORT_v14.md). Its two side arms (the old teacher left on; rockets at a fifth of the price)
+were stopped in the afternoon: the first went on losing to v13, the second changed nothing.
 
-**`duel_gru_v15` is being prepared** on the branch `v15` (owner, 10:38: "Start on anything you can with preparing for v15
-now while v14 is running ... Ideally I would like v15 to start tonight"): jump runs on the pros' jumps with a teacher
-trained on them, grenades and plasma (lives that begin with them, one-weapon rounds, the lobber, the watcher and the
-holder among his opponents). What is built and what is not: [runs/MANIFEST_v15.md](runs/MANIFEST_v15.md). It starts on
-his go.
+**`duel_gru_v15` is audited and waits for the owner's go** ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md); the log of
+2026-10-10 15:30): from v14's end; jump runs on the pros' jumps (144 in use on ten maps, tries at 108) with a teacher
+trained under his finger limits and kept off the maps where its pupil fails (Toxicity; Lost World's item runs);
+movement-only practice on Campgrounds, Hektik, Toxicity and Cure; enemy projectiles as a player sees them; grenades as
+measured in the game; the lobber, the watcher and the holder among his opponents; lives that begin with grenades or
+plasma in hand. Rockets are not in it (B-210).
 
 **The owner's priority list for the next models (2026-10-10)**: (1) strafe jumping and keeping speed; (2) rockets; (3)
 plasma and grenades, the shotgun to a lesser extent; (4) "game awareness": not through a teleporter the enemy watches,

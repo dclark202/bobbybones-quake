@@ -52,18 +52,18 @@ index,group,input,meaning,scale,added in
 50,enemy,"crosshair error up-down, fine",,"degrees / 2, capped at 1",v3
 51,enemy,crosshair on him,a shot along the view would hit,0 or 1,v3
 52,enemy,apparent size,how big he looks (nearer = bigger),"degrees / 10, capped at 1",v3
-53,projectiles,nearest enemy projectile: position forward,within 1500 units and in view (or within 400),units / 1000,v3
-54,projectiles,nearest enemy projectile: position left,within 1500 units and in view (or within 400),units / 1000,v3
-55,projectiles,nearest enemy projectile: position up,within 1500 units and in view (or within 400),units / 1000,v3
+53,projectiles,nearest enemy projectile: position forward,"within 1,500 units, inside his view cone, the line from his eyes clear (v15, PROJ_SEE; before it: through walls inside the cone, and within 400 units in any direction)",units / 1000,v3
+54,projectiles,nearest enemy projectile: position left,"within 1,500 units, inside his view cone, the line from his eyes clear (v15, PROJ_SEE; before it: through walls inside the cone, and within 400 units in any direction)",units / 1000,v3
+55,projectiles,nearest enemy projectile: position up,"within 1,500 units, inside his view cone, the line from his eyes clear (v15, PROJ_SEE; before it: through walls inside the cone, and within 400 units in any direction)",units / 1000,v3
 56,projectiles,nearest enemy projectile: velocity forward,,units/s / 1000,v3
 57,projectiles,nearest enemy projectile: velocity left,,units/s / 1000,v3
 58,projectiles,nearest enemy projectile: velocity up,,units/s / 1000,v3
 59,projectiles,nearest enemy projectile: is a rocket,,0 or 1,v3
 60,projectiles,nearest enemy projectile: is a grenade,,0 or 1,v3
 61,projectiles,nearest enemy projectile: is a plasma,,0 or 1,v3
-62,projectiles,second nearest enemy projectile: position forward,within 1500 units and in view (or within 400),units / 1000,v3
-63,projectiles,second nearest enemy projectile: position left,within 1500 units and in view (or within 400),units / 1000,v3
-64,projectiles,second nearest enemy projectile: position up,within 1500 units and in view (or within 400),units / 1000,v3
+62,projectiles,second nearest enemy projectile: position forward,"within 1,500 units, inside his view cone, the line from his eyes clear (v15, PROJ_SEE; before it: through walls inside the cone, and within 400 units in any direction)",units / 1000,v3
+63,projectiles,second nearest enemy projectile: position left,"within 1,500 units, inside his view cone, the line from his eyes clear (v15, PROJ_SEE; before it: through walls inside the cone, and within 400 units in any direction)",units / 1000,v3
+64,projectiles,second nearest enemy projectile: position up,"within 1,500 units, inside his view cone, the line from his eyes clear (v15, PROJ_SEE; before it: through walls inside the cone, and within 400 units in any direction)",units / 1000,v3
 65,projectiles,second nearest enemy projectile: velocity forward,,units/s / 1000,v3
 66,projectiles,second nearest enemy projectile: velocity left,,units/s / 1000,v3
 67,projectiles,second nearest enemy projectile: velocity up,,units/s / 1000,v3
@@ -508,3 +508,68 @@ index,group,input,meaning,scale,added in
 506,lead,"meeting point: crosshair error up-down, fine","where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","degrees / 2, capped at 1",v14
 507,lead,the shot's flight time,"where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","seconds / 1.5, capped at 2",v14
 508,lead,the floor under the meeting point lies below it by,"where a rocket or a plasma ball fired now would meet the enemy he sees, from what he knows of the enemy's movement (a reaction time old); zero with another weapon in hand or no enemy in view","degrees / 15, capped at 1 (1: no floor near)",v14
+509,jump ahead,a jump is ahead on his way,"the first of the pros' jumps on his way (sim/jump_links.py): in a jump run, or a jump that is open in his games (JUMP_OPEN); zero without one within 1,500 units of way",0 or 1,v15
+510,jump ahead,the speed the jump needs,"the first of the pros' jumps on his way (sim/jump_links.py): in a jump run, or a jump that is open in his games (JUMP_OPEN); zero without one within 1,500 units of way",units/s / 600,v15
+511,jump ahead,the way to the jump's take-off,"the first of the pros' jumps on his way (sim/jump_links.py): in a jump run, or a jump that is open in his games (JUMP_OPEN); zero without one within 1,500 units of way","units / 1000, capped at 1.5",v15
+512,jump ahead,the jump's length,"the first of the pros' jumps on his way (sim/jump_links.py): in a jump run, or a jump that is open in his games (JUMP_OPEN); zero without one within 1,500 units of way",units / 600,v15
+513,jump ahead,the jump's rise,"the first of the pros' jumps on his way (sim/jump_links.py): in a jump run, or a jump that is open in his games (JUMP_OPEN); zero without one within 1,500 units of way","units / 100, between -3 and 1",v15
+514,grenade arc,"grenade arc: view error left-right, coarse",with the grenade launcher in his hand and the enemy seen in the last 3 seconds: his view against the one that lands a grenade at the enemy's feet (the low arc); zero otherwise,"degrees / 30, capped at 1",v15
+515,grenade arc,"grenade arc: view error left-right, fine",with the grenade launcher in his hand and the enemy seen in the last 3 seconds: his view against the one that lands a grenade at the enemy's feet (the low arc); zero otherwise,"degrees / 2, capped at 1",v15
+516,grenade arc,"grenade arc: view error up-down, coarse",with the grenade launcher in his hand and the enemy seen in the last 3 seconds: his view against the one that lands a grenade at the enemy's feet (the low arc); zero otherwise,"degrees / 15, capped at 1",v15
+517,grenade arc,"grenade arc: view error up-down, fine",with the grenade launcher in his hand and the enemy seen in the last 3 seconds: his view against the one that lands a grenade at the enemy's feet (the low arc); zero otherwise,"degrees / 2, capped at 1",v15
+518,grenade arc,the grenade's flight time,with the grenade launcher in his hand and the enemy seen in the last 3 seconds: his view against the one that lands a grenade at the enemy's feet (the low arc); zero otherwise,"seconds / 1.5, capped at 2",v15
+519,grenade arc,the grenade reaches,with the grenade launcher in his hand and the enemy seen in the last 3 seconds: his view against the one that lands a grenade at the enemy's feet (the low arc); zero otherwise,0 or 1,v15
+520,projectiles,third nearest enemy projectile: position forward,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+521,projectiles,third nearest enemy projectile: position left,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+522,projectiles,third nearest enemy projectile: position up,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+523,projectiles,third nearest enemy projectile: velocity forward,,units/s / 1000,v15
+524,projectiles,third nearest enemy projectile: velocity left,,units/s / 1000,v15
+525,projectiles,third nearest enemy projectile: velocity up,,units/s / 1000,v15
+526,projectiles,third nearest enemy projectile: is a rocket,,0 or 1,v15
+527,projectiles,third nearest enemy projectile: is a grenade,,0 or 1,v15
+528,projectiles,third nearest enemy projectile: is a plasma,,0 or 1,v15
+529,projectiles,fourth nearest enemy projectile: position forward,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+530,projectiles,fourth nearest enemy projectile: position left,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+531,projectiles,fourth nearest enemy projectile: position up,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+532,projectiles,fourth nearest enemy projectile: velocity forward,,units/s / 1000,v15
+533,projectiles,fourth nearest enemy projectile: velocity left,,units/s / 1000,v15
+534,projectiles,fourth nearest enemy projectile: velocity up,,units/s / 1000,v15
+535,projectiles,fourth nearest enemy projectile: is a rocket,,0 or 1,v15
+536,projectiles,fourth nearest enemy projectile: is a grenade,,0 or 1,v15
+537,projectiles,fourth nearest enemy projectile: is a plasma,,0 or 1,v15
+538,projectiles,fifth nearest enemy projectile: position forward,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+539,projectiles,fifth nearest enemy projectile: position left,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+540,projectiles,fifth nearest enemy projectile: position up,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+541,projectiles,fifth nearest enemy projectile: velocity forward,,units/s / 1000,v15
+542,projectiles,fifth nearest enemy projectile: velocity left,,units/s / 1000,v15
+543,projectiles,fifth nearest enemy projectile: velocity up,,units/s / 1000,v15
+544,projectiles,fifth nearest enemy projectile: is a rocket,,0 or 1,v15
+545,projectiles,fifth nearest enemy projectile: is a grenade,,0 or 1,v15
+546,projectiles,fifth nearest enemy projectile: is a plasma,,0 or 1,v15
+547,projectiles,sixth nearest enemy projectile: position forward,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+548,projectiles,sixth nearest enemy projectile: position left,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+549,projectiles,sixth nearest enemy projectile: position up,"an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest first; the nearest two are the inputs of old",units / 1000,v15
+550,projectiles,sixth nearest enemy projectile: velocity forward,,units/s / 1000,v15
+551,projectiles,sixth nearest enemy projectile: velocity left,,units/s / 1000,v15
+552,projectiles,sixth nearest enemy projectile: velocity up,,units/s / 1000,v15
+553,projectiles,sixth nearest enemy projectile: is a rocket,,0 or 1,v15
+554,projectiles,sixth nearest enemy projectile: is a grenade,,0 or 1,v15
+555,projectiles,sixth nearest enemy projectile: is a plasma,,0 or 1,v15
+556,projectiles,nearest enemy projectile: a grenade's fuse left,the share of its 2.5 seconds; zero for a rocket or plasma,0 to 1,v15
+557,projectiles,nearest enemy projectile: seconds until it passes closest to him,as if both kept their speed,"seconds / 2, capped at 1",v15
+558,projectiles,nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15
+559,projectiles,second nearest enemy projectile: a grenade's fuse left,the share of its 2.5 seconds; zero for a rocket or plasma,0 to 1,v15
+560,projectiles,second nearest enemy projectile: seconds until it passes closest to him,as if both kept their speed,"seconds / 2, capped at 1",v15
+561,projectiles,second nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15
+562,projectiles,third nearest enemy projectile: a grenade's fuse left,the share of its 2.5 seconds; zero for a rocket or plasma,0 to 1,v15
+563,projectiles,third nearest enemy projectile: seconds until it passes closest to him,as if both kept their speed,"seconds / 2, capped at 1",v15
+564,projectiles,third nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15
+565,projectiles,fourth nearest enemy projectile: a grenade's fuse left,the share of its 2.5 seconds; zero for a rocket or plasma,0 to 1,v15
+566,projectiles,fourth nearest enemy projectile: seconds until it passes closest to him,as if both kept their speed,"seconds / 2, capped at 1",v15
+567,projectiles,fourth nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15
+568,projectiles,fifth nearest enemy projectile: a grenade's fuse left,the share of its 2.5 seconds; zero for a rocket or plasma,0 to 1,v15
+569,projectiles,fifth nearest enemy projectile: seconds until it passes closest to him,as if both kept their speed,"seconds / 2, capped at 1",v15
+570,projectiles,fifth nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15
+571,projectiles,sixth nearest enemy projectile: a grenade's fuse left,the share of its 2.5 seconds; zero for a rocket or plasma,0 to 1,v15
+572,projectiles,sixth nearest enemy projectile: seconds until it passes closest to him,as if both kept their speed,"seconds / 2, capped at 1",v15
+573,projectiles,sixth nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15

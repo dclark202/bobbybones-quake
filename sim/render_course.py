@@ -404,7 +404,7 @@ def main():
     if real and a.fight:
         env.kind_p, env.loadout_p = (1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0)
         env.stack_p = env.near_item_p = env.close_p = env.bot_p = 0.0
-        env.runner_p = env.item_run_p = 0.0
+        env.runner_p = env.item_run_p = env.jump_run_p = 0.0
         env.round_len = a.round
     if a.trained_limits:
         env.percept_sigma, env.flinch_on, env.focus_on = 0.5, False, False

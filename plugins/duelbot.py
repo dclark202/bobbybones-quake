@@ -786,6 +786,13 @@ class duelbot(minqlx.Plugin):
         if hasattr(E, "NW"):
             kinds = {5: E.RL, 4: E.GL, 8: E.PG}
         ms = minqlx.missiles()
+        born = getattr(self, "missile_born", None)           # entity number -> when it was first seen (a grenade's age: the game's
+        if born is None:                                     # list has no fuse; the simulator's inputs want it, see PROJ_SEE)
+            born = self.missile_born = {}
+        now_ = time.time()
+        live_ = {m_[0] for m_ in ms}
+        for num_ in [n_ for n_ in born if n_ not in live_]:
+            del born[num_]
         for slot, owner in enumerate(ids):
             k = 0
             for num, own, weapon, x, y, z, vx, vy, vz in ms:
@@ -795,6 +802,8 @@ class duelbot(minqlx.Plugin):
                     env.ra[slot, k] = True
                     if hasattr(env, "rw"):
                         env.rw[slot, k] = kinds[weapon]
+                    if hasattr(env, "rage"):
+                        env.rage[slot, k] = now_ - born.setdefault(num, now_)
                     k += 1
         taken = []
         drops = []

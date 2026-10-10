@@ -33,6 +33,7 @@ def collect(a):
     env.arena_sets = [(E.MG,)]
     env.loadout_p = (0.0, 1.0, 0.0, 0.0)
     env.stack_p = env.near_item_p = env.close_p = env.item_run_p = env.bot_p = 0.0
+    env.jump_run_p = 0.0
     env.kind_p = (1.0, 0.0, 0.0, 0.0)
     env.runner_p = 1.0 if a.opp == "runner" else 0.0
     if getattr(env, "lab", None) is not None:

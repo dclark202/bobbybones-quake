@@ -22,6 +22,9 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   today's format), Hektik, Toxicity, Cure. Maps with a door stay out (Silence); he does not know Dismemberment. The yard
   (`arena1`) is dropped entirely. Test map: `testlab`. Real games against the game's Nightmare bot: before and after a
   run, never a pause in the middle of one.
+  From v15 (owner, 2026-10-10: "He should get movement only practice on all 10 maps"; "it's important that he understands how
+  to move around these maps efficiently") the four held-out maps have movement-only practice (item runs and jump runs, no games:
+  the trainer's `--move-maps`); they stay in the checks against the stand-in.
 - Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder. Copying the
   test map pk3 into its `baseq3` is allowed (he asked for it); nothing else.
 - No powerups anywhere (owner, 2026-10-09: no quad, no "protection", on any server or in training) and a map's
@@ -93,7 +96,7 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
 - **Who stands higher (B-160, 2026-10-09)**: counters always on (trainer `v14.height`; `tools/duel_eval.py` `lower`, `higher`);
   `HIGH_PAY` (off by default) makes a hit from above worth more to both sides. Whatever is paid by the damage must not be
   added to `dealt`: his feedback inputs (`self.fb`) are made of it.
-- **v14 (2026-10-09; built, not trained yet)**: 509 inputs (the last ten, `N_V14`: his speed, the angle from his view to
+- **v14 (2026-10-09; ended 2026-10-10 on its save of 10:57, `policy_end_v14.pt`: `docs/runs/REPORT_v14.md`)**: 509 inputs (the last ten, `N_V14`: his speed, the angle from his view to
   the way he moves, speed gained in 100 ms; six for the lead of a rocket or a plasma ball). `sim/duel_env_v13.py` /
   `duel_env_ffa_v13.py` are the frozen 499-input simulator of v13 (the public server's v13: export with
   `--env duel_env_ffa_v13` from the next deploy with new code on). Switches, all off by default (with all off the simulator
@@ -113,6 +116,22 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
   `pro_positions.py`, `pro_jumps.py`, `pro_tables.py` (all training maps at once) and `tools/pro_seed.py`. Under
   `WALK_FIX` the walker swims and dives, a teleporter link costs the walk to its entrance, and jump links over lava or
   slime are left out; automatic doors count as open (`qsim.add_solids`).
+- **v15 (2026-10-10; built, started on the owner's go)**: 574 inputs (the last 65, `N_V15`: five for a jump ahead on his
+  way, six for a grenade's arc with the launcher in hand, 36 for four more enemy projectiles, 18 for the six projectiles'
+  fuse, closest pass and closeness in splash radii). `sim/duel_env_v14.py` / `duel_env_ffa_v14.py` are the frozen 509-input
+  simulator of v14 (resume or check a v14 network with `--env duel_env_ffa_v14`, `tools/duel_eval.py --inputs
+  docs/INPUTS_v14.csv`). Switches, all off by default (with all off the simulator is v14's in fixed runs): `JUMPS` +
+  `JUMP_RUN_P` (jump runs on the pros' jumps: `sim/jump_links.py`, the lists `sim/pro_gaps/<map>.json` from
+  `tools/pro_gaps.py`, pictures by `tools/draw_gaps.py` in the system Python; a `"use": true/false` on an entry is the
+  owner's), `JUMP_ALL` (tries at the jumps on no item's way: a second set of his ways in which that jump is free),
+  `JUMP_OPEN` (a `PLAY_VAR`: jumps his ways take in games), `PROJ_SEE` (a `PLAY_VAR`: enemy projectiles as a player sees
+  them), `GL_QL` (a grenade's bounce and splash as measured in the game), `TRICKS` / `TRICK_P` (the holder, the lobber,
+  the watcher among the scripted opponents), `START_GUN_P`, `TEACH_BEST`. Trainer: `--teacher-skip` (maps without the
+  movement teacher's labels), `--move-maps` / `--move-matches` (a simulator a map of item runs and jump runs only: no
+  games, no league seats; its counters by map only, `v15.runs_by_map`). The movement teacher is trained under his finger
+  limits (`sim/train_move.py --v14 --jumps --hand`; `MOVE_LAVA_COST` prices a try that ends in lava) and gives labels on
+  a map only after its pupil test there (`tools/label_check.py`: a player who presses exactly its labels with his
+  hands; lava damage, items a minute, jumps over). `tools/jump_check.py`: him alone in jump runs.
 - **After the wiring review (2026-10-08)**: the trainer credits the left hand's outputs (movement keys, weapon key) only on the frames the simulator reads them (`env.key_dec`, one in four) and keeps the input statistics frozen; `sim/renorm_policy.py` gives a network fresh input statistics without changing its output (run it when the maps or inputs change; sample from `train_duel_rnn.py --obs-dump`). Checkpoints carry `env_vars` (the simulator switches of `PLAY_VARS`) and the round lengths; `sim/export_duel.py` writes them into `policy.npz` (`--set NAME=VALUE` for runs before v13, e.g. `EXPORT_ARGS="--set INTENT_HOLD=8"` for the server scripts) and the plugins set them before loading the simulator. Checks: `tools/input_check.py` (dead inputs; the real game's inputs beside the simulator's), `tools/teacher_check.py` (can the walking teacher's own pupil reach every item), `tools/nav_prune.py` (takes the jump and drop links the walker cannot take out of a map's graph), `tools/shot_prices.py`.
 - **The map audit (2026-10-09)**: the game's maps set beside the simulator (RESULTS that day): `plugins/maplab.py` lists the
   real game's items per map and mode (`data/maplab/`; `tools/duel_items.py` -> `plugins/duel_items.json`), `plugins/poollab.py`
@@ -217,6 +236,14 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
   time, did not arrive, and lost the map to v13 12% to 88% within 17 minutes of every start of v14. `RULE_WALK=1`: the
   rule and the item runs count a walker's ways only (`tools`: scratch probes of 2026-10-10; B-204 teaches the jump).
   A map's numbers must be read per map: the six-map mean against the stand-in did not move while Aerowalk fell 24 points.
+- A teacher must have the pupil's hands (2026-10-10): the movement network of v14 was trained with any key on any frame
+  (17 key changes a second against his 8) and cost him a map within an hour. Test a teacher's labels alone before a run
+  (`tools/label_check.py`), map by map. In a jump run the teacher is asked for the jump's landing until he is over it:
+  asked for the item behind it, its own ways went round some jumps.
+- The PC's load as Windows reports it (`Win32_Processor.LoadPercentage`, the number the owner's 80 to 85% is about) reads
+  far above the share of processor time: two half-size trainers were 35% of the time and 86 to 90% of the load. Size
+  side jobs by the load.
+- `tools/list_inputs.py` writes `docs/INPUTS.csv` whatever its arguments.
 - A reviewer's eye on the reward: anything paid per frame for progress must be paid on a running best, or a setback and its recovery is a pump (the trip pay, 2026-10-08).
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,

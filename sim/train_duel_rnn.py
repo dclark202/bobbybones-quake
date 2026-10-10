@@ -29,7 +29,7 @@ DT_MIN = 0.025 / 60.0
 
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
            teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5,
-           env_module="duel_env", group=2, intent_seek=0.0, item_loss=0.5, stack_p=0.0, near_item_p=0.0):
+           env_module="duel_env", group=2, intent_seek=0.0, item_loss=0.5, stack_p=0.0, near_item_p=0.0, move_only=False):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     import importlib
@@ -67,6 +67,17 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     WEAPONS = WEAPONS_
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
+    if hasattr(env, "teach_runs"):                           # (--teacher-skip: the key labels of this map's runs)
+        m_ = os.path.splitext(os.path.basename(bsp))[0]
+        skip_ = (os.environ.get("TEACHER_SKIP") or "").split(",")
+        env.teach_runs = "none" if m_ in skip_ else ("jump" if m_ + ":item" in skip_ else "all")
+    if hasattr(env, "count_even"):
+        env.count_even = not move_only                       # the jump counters: his seats only (in a move-only simulator every seat)
+    if move_only:                                            # a map he only learns to move on (--move-maps): every round an item
+        pj_ = env.jump_run_p if getattr(env, "jump_tries", None) else 0.0   # run or a jump run, in the shares they have in the run
+        assert env.item_run_p > 0 and env.route is not None, "--move-maps needs ITEM_RUN_P and the map's walking map"
+        env.item_run_p = env.item_run_p / (env.item_run_p + pj_)
+        env.jump_run_p, env.collect_fight_p = 1.0 - env.item_run_p, 0.0
     env.round_t[:] = 1e9                                     # every round starts anew at the first step: until 2026-10-08 the
     env._teach_update()                                      # first round after a (re)start was played with every weapon at spawn
     remote.send((env.observe(), env.teach.copy()))
@@ -182,6 +193,12 @@ def main():
     ap.add_argument("--demo-heads", default="1,1,1,1,1,0.5,0.5,1",
                     help="weight of each action head in the demo loss: forward, strafe, vertical, turn, pitch, fire, weapon, walk")
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
+    ap.add_argument("--teacher-skip", default="", help="'toxicity,lostworld:item': a map alone = no key labels in its runs; map:item "
+                    "= none in its item runs, the movement teacher's in its jump runs. Maps on which the movement teacher gives no labels: where its "
+                    "pupil test fails (tools/label_check.py), e.g. lava he walks into with its labels alone")
+    ap.add_argument("--move-maps", default="", help="maps (comma list) he only learns to move on: one more simulator per map "
+                    "named, with item runs and jump runs only (no games, no league seats)")
+    ap.add_argument("--move-matches", type=int, default=0, help="... its size in pairs of players (0 = half of --matches)")
     ap.add_argument("--teach", type=float, default=0.5, help="weight of the teacher loss at the start of this run")
     ap.add_argument("--teach-minutes", type=float, default=240, help="the teacher loss fades to zero over this time")
     ap.add_argument("--teach-warm", type=float, default=0.0, help="minutes over which that weight first rises from nothing: a new "
@@ -218,6 +235,7 @@ def main():
     out = os.path.join(ROOT, "data", "sim_runs", a.run)
     os.makedirs(os.path.join(out, "snapshots"), exist_ok=True)
     maps = a.map.split(",")
+    os.environ["TEACHER_SKIP"] = a.teacher_skip              # (read by the simulators: the key labels of a map's runs)
     course_keys = []
     lab_json = os.path.join(ROOT, "maps", "testlab", "rooms.json")
     if os.path.exists(lab_json):
@@ -225,21 +243,29 @@ def main():
     pipes = []
     w_group = [groups[w % len(groups)] for w in range(a.workers)]             # group size of each worker
     w_match = [max(2, (2 * a.matches // g_) // 2 * 2) for g_ in w_group]       # ... and its groups: about 2 x matches players
-    for w in range(a.workers):
-        m = maps[w % len(maps)]
+    w_map = [maps[w % len(maps)] for w in range(a.workers)]
+    move_maps = [m_ for m_ in a.move_maps.split(",") if m_]                    # (--move-maps) one more worker a map: runs only
+    w_group += [2] * len(move_maps)
+    w_match += [max(2, (a.move_matches or a.matches // 2) // 2 * 2)] * len(move_maps)
+    w_map += move_maps
+    w_move = [w >= a.workers for w in range(len(w_map))]
+    for w in range(len(w_map)):
+        m = w_map[w]
         p_main, p_work = mp.Pipe()
         mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), w_match[w], 3000 + w,
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
-                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
+                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if (a.teacher and m not in a.teacher_skip.split(",")) else None,   # (the worker reads TEACH_RUNS_<map>)
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
                                         a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w],
-                                        a.intent_seek, a.item_loss, a.stack_p, a.near_item_p),
+                                        a.intent_seek, a.item_loss, a.stack_p, a.near_item_p, w_move[w]),
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
+    if a.teacher_skip:
+        print("no key labels in the runs of: {}".format(a.teacher_skip), flush=True)
     obs = np.concatenate([f[0] for f in first])
     teach = np.concatenate([f[1] for f in first])
     N = len(obs)
@@ -339,9 +365,10 @@ def main():
     assert w_off[-1] == N, (w_off[-1], N)
     is_odd = np.concatenate([np.arange(n_) % g_ % 2 == 1 for n_, g_ in zip(w_n, w_group)])
     league = np.zeros(N, bool)
-    for w in range(a.workers):
+    for w in range(a.workers):                                             # (not in a move-only simulator: all its players are his)
         league[w_off[w] + w_n[w] // 2:w_off[w + 1]] = True
-    n_groups = int(sum(w_match))
+    n_groups = int(sum(w_match[:a.workers]))                               # the games' groups and players: what the game numbers
+    NP = int(w_off[a.workers])                                             # are counted over (a move-only simulator has its own, by map)
     snap_players = torch.from_numpy(league & is_odd).to(dev)          # controlled by the snapshot
     learn = (~snap_players).float()                                    # trained on
     snaps = []                                                         # frozen past policies (state dicts)
@@ -371,9 +398,10 @@ def main():
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
         a.map, N, sum(p.numel() for p in pol.parameters()), dev, a.minutes), flush=True)
     fade0 = a.fade_start if a.fade_start >= 0 else elapsed0             # the minute of training the teachers' fades count from
-    w_map = [maps[w % len(maps)] for w in range(a.workers)]
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
-                "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames")
+                "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
+                "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
+                "hurt_dmg")
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
@@ -458,7 +486,8 @@ def main():
                 for k, v in r[3].items():
                     if isinstance(v, list):
                         continue
-                    agg[k] = agg.get(k, 0) + v
+                    if not w_move[w_]:                                   # (a move-only simulator: by map only)
+                        agg[k] = agg.get(k, 0) + v
                     if k in MAP_KEYS:
                         am_ = agg_map.setdefault(w_map[w_], {})
                         am_[k] = am_.get(k, 0) + v
@@ -609,38 +638,54 @@ def main():
                 opt.step()
         total += T * N
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
-        G = N / n_groups                                                 # mean players per group (for the per-player numbers)
+        G = NP / n_groups                                                # mean players per group (for the per-player numbers)
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    fire_in_view=round(float(agg.get("fire_vis", 0) / max(1, agg.get("vis_frames_h", 0))), 3),
-                   shot_cost_per_player_min=round(float(agg.get("shot_cost", 0.0) / max(1e-9, N * T * DT_MIN)), 3),
+                   shot_cost_per_player_min=round(float(agg.get("shot_cost", 0.0) / max(1e-9, NP * T * DT_MIN)), 3),
                    shot_price=round(float(agg.get("shot_fac", 0.0) / max(1, agg.get("shot_n", 0))), 2),
-                   armor_soaked_per_player_min=round(float(agg.get("soak", 0.0) / max(1e-9, N * T * DT_MIN)), 1),
+                   armor_soaked_per_player_min=round(float(agg.get("soak", 0.0) / max(1e-9, NP * T * DT_MIN)), 1),
                    contest=dict(rounds=int(agg.get("contest_rounds", 0)),      # rounds begun as a race for a big item, and the
                                 taken=round(float(agg.get("contest_taken", 0) / max(1, agg.get("contest_rounds", 0))), 2)),   # share a learner took it in
                    kl=round(kl_sum / max(1, kl_n), 5), clip_frac=round(cf_sum / max(1, kl_n), 4), lr=lr_now, lam=lam,
                    know=round(float(agg.get("know", 0.0) / max(1, agg.get("know_frames", 0))), 3),      # how well he knows where his enemy is, 0 to 1 (KNOW_PAY)
-                   drops=dict(per_player_min=round(float(agg.get("drops", 0) / max(1e-9, N * T * DT_MIN)), 3),            # weapons dead players left (DROPS)
+                   drops=dict(per_player_min=round(float(agg.get("drops", 0) / max(1e-9, NP * T * DT_MIN)), 3),            # weapons dead players left (DROPS)
                               taken=round(float(agg.get("pick_drop", 0) / max(1, agg.get("drops", 0))), 3),              # the share somebody took
                               new=round(float(agg.get("pick_drop_new", 0) / max(1, agg.get("pick_drop", 0))), 3)),       # ... of those, a weapon he did not have
-                   pace=dict(pay_per_player_min=round(float(agg.get("pace_pay", 0.0) / max(1e-9, N * T * DT_MIN)), 4),     # (PACE_PAY)
+                   pace=dict(pay_per_player_min=round(float(agg.get("pace_pay", 0.0) / max(1e-9, NP * T * DT_MIN)), 4),     # (PACE_PAY)
                              trip_speed=int(agg.get("trip_speed", 0.0) / max(1, agg.get("trip_frames", 0))),               # on his way, nobody about
                              over_320=round(float(agg.get("pace_frames", 0) / max(1, agg.get("trip_frames", 0))), 3)),
                    v14=dict(in_hand={w_: round(float(np.atleast_1d(agg.get("hand_w", np.zeros(len(WEAPONS))))[i_]              # the share of his playing time with each weapon in hand
                                                      / max(1.0, float(np.sum(agg.get("hand_w", 0.0))))), 3) for i_, w_ in enumerate(WEAPONS)},
                             blind_fire={w_: round(float(np.atleast_1d(agg.get("blind_w", np.zeros(len(WEAPONS))))[i_]          # ... of that time, firing it with no enemy seen for a second
                                                         / max(1.0, float(np.atleast_1d(agg.get("hand_w", np.zeros(len(WEAPONS))))[i_]))), 3) for i_, w_ in enumerate(WEAPONS)},
-                            blind_rockets=dict(per_player_min=round(float(agg.get("blind_rl", 0) / max(1e-9, N * T * DT_MIN)), 3),          # (BLIND_RULE)
+                            blind_rockets=dict(per_player_min=round(float(agg.get("blind_rl", 0) / max(1e-9, NP * T * DT_MIN)), 3),          # (BLIND_RULE)
                                                how={k_: round(float(np.atleast_1d(agg.get("blind_rl_how", np.zeros(4)))[i_] / max(1, agg.get("blind_rl", 0))), 3)
                                                     for i_, k_ in enumerate(("wasted", "jump", "near", "way"))}),
                             prefire_frames=int(agg.get("prefire_frames", 0)), blind_charged_frames=int(agg.get("blind_bill", 0)),
-                            speed_pay_per_player_min=round(float(agg.get("speed_pay", 0.0) / max(1e-9, N * T * DT_MIN)), 4),             # (SPEED_PAY: on his way in games)
-                            speed_pay_run_per_player_min=round(float(agg.get("speed_pay_run", 0.0) / max(1e-9, N * T * DT_MIN)), 4),     # ... in item runs
-                            teacher_frames=round(float(agg.get("move_teach_frames", 0) / max(1, N * T)), 4),                             # (RUN_TEACHER) the share of all frames it labels
+                            speed_pay_per_player_min=round(float(agg.get("speed_pay", 0.0) / max(1e-9, NP * T * DT_MIN)), 4),             # (SPEED_PAY: on his way in games)
+                            speed_pay_run_per_player_min=round(float(agg.get("speed_pay_run", 0.0) / max(1e-9, NP * T * DT_MIN)), 4),     # ... in item runs
+                            teacher_frames=round(float(agg.get("move_teach_frames", 0) / max(1, NP * T)), 4),                             # (RUN_TEACHER) the share of all frames it labels
                             height=dict(in_view={k_: round(float(np.atleast_1d(agg.get("high", np.zeros(3)))[i_] / max(1.0, float(np.sum(agg.get("high", 0.0))))), 3)       # B-160: with his enemy in view he stands lower by 48 units or more, level, higher
                                                  for i_, k_ in enumerate(("lower", "level", "higher"))},
                                         damage_from={k_: round(float(np.atleast_1d(agg.get("high_dmg", np.zeros(3)))[i_] / max(1.0, float(np.sum(agg.get("high_dmg", 0.0))))), 3)  # ... the damage he deals, by where he stands
                                                      for i_, k_ in enumerate(("lower", "level", "higher"))},
-                                        pay_per_player_min=round(float(agg.get("high_pay", 0.0)) / max(1e-9, N * T * DT_MIN), 4))),                 # (HIGH_PAY) what height added to his pay
+                                        pay_per_player_min=round(float(agg.get("high_pay", 0.0)) / max(1e-9, NP * T * DT_MIN), 4))),                 # (HIGH_PAY) what height added to his pay
+                   v15=dict(jump_run_frames=round(float(agg.get("jump_frames", 0) / max(1, NP * T)), 4),                                   # (JUMPS) the share of all frames in jump runs
+                            jump_tries=int(np.sum(agg.get("jump_tries", 0))),                                                             # ... tries begun, the share that got over, that fell short
+                            jump_over=round(float(np.sum(agg.get("jump_over", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
+                            jump_short=round(float(np.sum(agg.get("jump_short", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
+                            jumps={m_: [[int(t_), round(float(o_ / max(1.0, t_)), 2)] for t_, o_ in                                       # ... per map and jump (its place in the map's list): tries, over
+                                        zip(np.atleast_1d(v_.get("jump_tries", np.zeros(1))), np.atleast_1d(v_.get("jump_over", np.zeros(1))))][:int(np.max(np.nonzero(np.atleast_1d(v_.get("jump_tries", np.zeros(1))))[0], initial=-1)) + 1]
+                                   for m_, v_ in agg_map.items() if float(np.sum(v_.get("jump_tries", 0))) > 0},
+                            runs_by_map={m_: dict(items_per_min=round(float(v_.get("move_arrive", 0) / max(1, v_.get("move_frames", 0)) * 2400), 2),   # item runs and jump runs
+                                                  speed=int(round(float(v_.get("move_speed", 0)) / max(1, v_.get("move_frames", 0)))),                       # by map: items a minute,
+                                                  fast_air=round(float(v_.get("move_fast", 0) / max(1, v_.get("move_frames", 0))), 3),                      # speed, time fast in the air,
+                                                  lava_per_min=round(float(v_.get("hurt_dmg", 0.0) / max(1, v_.get("players", 0)) * 2400), 1),             # lava and slime damage (all his time there)
+                                                  move_only=m_ in move_maps)
+                                         for m_, v_ in agg_map.items() if v_.get("move_frames", 0) > 0},
+                            start_gun_per_player_min=round(float(agg.get("start_gun", 0) / max(1e-9, NP * T * DT_MIN)), 3),
+                            in_hand_games={w_: round(float(np.atleast_1d(agg.get("hand_g", np.zeros(len(WEAPONS))))[i_]                # the share of his time in games (not in
+                                                           / max(1.0, float(np.sum(agg.get("hand_g", 0.0))))), 4) for i_, w_ in enumerate(WEAPONS)}),   # one-weapon rounds) with each weapon in hand               # (START_GUN_P) lives begun with grenades or plasma in hand
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,

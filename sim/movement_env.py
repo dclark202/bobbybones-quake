@@ -35,6 +35,7 @@ except Exception:                                           # scipy missing or b
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qsim import World  # noqa: E402
+import jump_links as JL  # noqa: E402
 
 RUN = 320.0
 DT = 0.025
@@ -43,9 +44,17 @@ ACTION_DIMS = (3, 3, 2, len(TURN_BINS))
 GOAL_CLASSES = ("weapon_", "item_armor_body", "item_armor_combat", "item_armor_jacket", "item_health_mega",
                 "item_health_large", "item_quad")
 FALL_COST = 0.05                                            # v14: seconds a point of fall damage costs (a far fall, 10 points: half a second)
+LAVA_COST = float(os.environ.get("MOVE_LAVA_COST") or 1.0)  # v15: what a try that ends in lava or slime costs (an arrival pays 1)
 HAZARD = 8 | 16                                             # lava, slime (the map's contents flags)
 TELE_FAR = 160.0                                            # v14: a teleporter link starts within this of its entrance
 N_WALL, N_FLOOR = 16, 8
+# v15 (hand): the left hand he plays with (duel_env.limit_keys; the same numbers): ring finger = strafe left, middle =
+# forward and back (no direct reversal), index = strafe right, thumb = jump
+RING, MIDDLE, INDEX, THUMB = range(4)
+FINGER_HOLD = np.array([6, 6, 6, 4], np.int64)              # frames a finger waits after it has acted
+KEY_EVERY, KEY_BURST = 4, 10.0                              # the keys are read every 4 frames; a burst of ten key actions
+KEY_RATE = float(os.environ.get("KEY_RATE") or 8.0)         # ... refilled at this many a second (v14: 8)
+N_HAND = 5                                                  # inputs: the keys held (forward, strafe, jump), the hand's budget, frames to the next reading
 OBS_DIM = 3 + 1 + 12 + 4 + 3 + 1 + N_WALL + N_FLOOR
 
 
@@ -79,7 +88,7 @@ def teleports(world):
 class NavField:
     """nav graph -> time-to-goal for every node and goal, next hops, fast position lookup"""
 
-    def __init__(self, nav_path, goals, world=None, hazard=False, starts=None, drop=None, tele=None):
+    def __init__(self, nav_path, goals, world=None, hazard=False, starts=None, drop=None, tele=None, jumps=None):
         g = json.load(open(nav_path))
         self.nodes = np.array(g["nodes"], np.float32)
         n = len(self.nodes)
@@ -120,11 +129,17 @@ class NavField:
                 radj[a].append((b, float(np.linalg.norm(self.nodes[a] - self.nodes[b])) / RUN, "walk"))
         self.kd_idx = np.nonzero(self.valid)[0]
         self._kd = cKDTree(self.nodes[self.kd_idx] * np.array([1, 1, 2.0], np.float32))   # vertical counts double
+        self.jumps = list(jumps or [])                        # v15: the pros' jumps as links (sim/jump_links.py)
+        jl = {}                                               # (from, to) -> the jump's index
+        for a, b, t, k in (JL.links(self.jumps, self.nodes, lambda p: self.locate(p)[0], ok=self.valid) if self.jumps else ()):
+            radj[b].append((a, t, "jump"))
+            jl[(a, b)] = k
         self.goals = np.array(goals, np.float32)
         G = len(goals)
         self.T = np.full((G, n), 1e9, np.float32)
         self.next = np.full((G, n), -1, np.int32)
-        self.next_kind = np.zeros((G, n), np.int8)            # 0 walk, 1 air, 2 teleport
+        self.next_kind = np.zeros((G, n), np.int8)            # 0 walk, 1 air, 2 teleport, 3 one of the pros' jumps
+        self.jlink = np.full((G, n), -1, np.int32)            # the jump the step from a point is (-1: a plain step)
         self.via = np.full((G, n, 3), np.nan, np.float32) if enter else None    # v14: where to step in, for a teleporter step
         for gi, gp in enumerate(self.goals):
             b, _ = self.locate(gp[None])
@@ -140,13 +155,18 @@ class NavField:
                     if nd < dist.get(v, 1e18):
                         dist[v] = nd
                         self.next[gi, v] = u
-                        self.next_kind[gi, v] = {"walk": 0, "air": 1, "tele": 2}[kind]
+                        self.next_kind[gi, v] = {"walk": 0, "air": 1, "tele": 2, "jump": 3}[kind]
+                        self.jlink[gi, v] = jl.get((v, u), -1) if kind == "jump" else -1
                         if self.via is not None:
                             self.via[gi, v] = enter.get((v, u), np.nan)
                         heapq.heappush(pq, (nd, v))
             for v, d in dist.items():
                 self.T[gi, v] = d
         self.reach = self.T < 1e8
+        self.jd = self.ji = None                              # per goal and point: the way to the first jump ahead, and which
+        if self.jumps:
+            la = [JL.look_ahead(self.next[gi], self.jlink[gi], self.nodes) for gi in range(G)]
+            self.jd, self.ji = np.stack([x[0] for x in la]), np.stack([x[1] for x in la])
         if starts is not None and len(starts):                # v14: a try starts only where the spawn points lead
             fwd = [[] for _ in range(n)]
             for b_ in range(n):
@@ -176,7 +196,7 @@ class NavField:
 
 class MoveEnv:
     def __init__(self, bsp, nav_path, n=512, seed=0, max_goal_time=8.0, min_goal_time=0.8, substeps=(8, 8, 9),
-                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False):
+                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5, hand=False):
         """substeps: physics steps (ms) per 25 ms decision. (8, 8, 9) = a 125 fps human: the frame-rate
         dependent ground-strafe boost that 40 Hz bots get (25,) is not available, as for real players."""
         self.w = World(bsp, n=n)
@@ -196,9 +216,36 @@ class MoveEnv:
                  if e.get("classname", "").startswith(GOAL_CLASSES) and "origin" in e
                  and not (self.v14 and e["classname"] == "item_quad")]
         starts = [e["origin"] for e in self.w.spawns()]
+        # v15 (jumps): the pros' jumps of this map are links of the walking map, five more inputs tell of a jump ahead
+        # (zeros on a map without a list), and a share of the tries (jump_p) begins a second or two before a take-off
+        self.jump_obs = bool(jumps)
+        self.jumps = JL.load(os.path.splitext(os.path.basename(bsp))[0]) if jumps else []
+        self.n_items = len(goals)                              # (a plain try's goal is an item; a jump's landing is a goal too, so
+        goals = goals + [j_["b"] for j_ in self.jumps]         # that every jump has tries: many lie on no item's shortest way)
         self.field = NavField(nav_path, goals, world=self.w, hazard=self.v14, starts=starts if self.v14 else None,
                               drop=shut_teleports(self.w, nav_path) if self.v14 else None,
-                              tele=teleports(self.w) if self.v14 else None)
+                              tele=teleports(self.w) if self.v14 else None, jumps=self.jumps)
+        self.jump_p = float(jump_p) if self.jumps else 0.0
+        self.try_by_k = {}                                     # jump -> [(goal, the points a try can begin at)]
+        for g_ in range(len(self.field.goals) if self.jumps else 0):
+            for k_ in range(len(self.jumps)):
+                st_ = np.nonzero((self.field.ji[g_] == k_) & (self.field.jd[g_] > JL.run_up(self.jumps[k_]["need"]))
+                                 & (self.field.jd[g_] < 1300.0) & self.field.spawnable)[0]
+                if len(st_):
+                    self.try_by_k.setdefault(k_, []).append((g_, st_))
+        self.jump_a = np.array([j["a"] for j in self.jumps], np.float32).reshape(-1, 3)
+        self.jump_b = np.array([j["b"] for j in self.jumps], np.float32).reshape(-1, 3)
+        self.hand = bool(hand)                                 # v15: his finger limits on the keys, and five inputs of what the hand holds
+        self.key_last = np.tile(np.array([1, 1, 0], np.int64), (n, 1))     # the keys as they are held: forward, strafe, jump
+        self.key_req = self.key_last.copy()                    # ... as last asked for
+        self.key_hold = np.full((n, 4), 99, np.int64)          # frames since each finger acted
+        self.key_tok = np.full(n, KEY_BURST, np.float32)
+        self.key_tick = 0
+        self.key_dec = np.ones(n, bool)                        # the keys were read this frame
+        self.key_wait = ((-(1 + np.arange(n))) % KEY_EVERY).astype(np.float32)   # frames until they are read next (0: at the next step)
+        self.try_k = np.full(n, -1, np.int32)                  # the jump this try is for (-1: a plain try)
+        self.crossed = np.zeros(n, bool)
+        self.at_edge = np.zeros(n, bool)
         self.fall_dmg = np.zeros(n, np.float32)
         self.spawn_nodes = np.nonzero(self.field.spawnable)[0]
         self.goal_pos = self.field.goals
@@ -223,15 +270,25 @@ class MoveEnv:
 
     def _reset(self, i):
         f = self.field
-        for _ in range(50):
-            g = int(self.rng.integers(len(self.goal_pos)))
-            node = int(self.spawn_nodes[self.rng.integers(len(self.spawn_nodes))])
+        self.try_k[i], self.crossed[i], self.at_edge[i] = -1, False, False
+        self.key_last[i], self.key_req[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), (1, 1, 0), 99, KEY_BURST
+        if self.jump_p and self.try_by_k and self.rng.random() < self.jump_p:
+            ks = list(self.try_by_k)                           # (every jump as often as any other)
+            k = int(ks[self.rng.integers(len(ks))])
+            g, st = self.try_by_k[k][int(self.rng.integers(len(self.try_by_k[k])))]
+            node = int(st[self.rng.integers(len(st))])
             T = f.T[g, node]
-            if self.min_goal_time <= T <= self.max_goal_time and f.next[g, node] >= 0:
-                break
+            self.try_k[i] = k
+        else:
+            for _ in range(50):
+                g = int(self.rng.integers(getattr(self, "n_items", len(self.goal_pos))))
+                node = int(self.spawn_nodes[self.rng.integers(len(self.spawn_nodes))])
+                T = f.T[g, node]
+                if self.min_goal_time <= T <= self.max_goal_time and f.next[g, node] >= 0:
+                    break
         nxt = f.nodes[f.next[g, node]]
         p = f.nodes[node]
-        face = math.degrees(math.atan2(nxt[1] - p[1], nxt[0] - p[0])) + float(self.rng.uniform(-90, 90))
+        face = math.degrees(math.atan2(nxt[1] - p[1], nxt[0] - p[0])) + float(self.rng.uniform(-90, 90) if self.try_k[i] < 0 else self.rng.uniform(-40, 40))
         self.w.reset(i, (p[0], p[1], p[2] + 2.0), (0, 0, 0), face)
         self.goal[i], self.yaw[i], self.t[i] = g, face, 0.0
         self.phi[i] = T
@@ -245,6 +302,8 @@ class MoveEnv:
         self.w.reset(i, (pos[0], pos[1], pos[2] + 2.0), (0, 0, 0), yaw)
         T, _ = self.field.potential(np.array([goal_idx]), np.array([pos], np.float32))
         self.goal[i], self.yaw[i], self.t[i] = goal_idx, yaw, 0.0
+        if hasattr(self, "try_k"):
+            self.try_k[i], self.crossed[i], self.at_edge[i] = -1, False, False
         self.phi[i] = self.best_phi[i] = self.start_phi[i] = T[0]
         self.stall[i] = 0.0
         self.limit[i] = 30.0
@@ -282,6 +341,17 @@ class MoveEnv:
         floors = self._floor_rays(pos, c, si)
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], np.concatenate(wps, 1), np.stack(kinds, 1) / 2.0,
                               goal, (self.phi / 10.0)[:, None], walls, floors], 1)
+        if getattr(self, "jump_obs", False):                   # v15: the jump ahead on his way (sim/jump_links.py)
+            if getattr(f, "ji", None) is not None:
+                jo = JL.inputs(f.jumps, f.jd[self.goal, idx], f.ji[self.goal, idx], np.linalg.norm(f.nodes[idx] - pos, axis=1))
+            else:
+                jo = np.zeros((len(pos), JL.N_JUMP), np.float32)
+            obs = np.concatenate([obs, jo], 1)
+        if getattr(self, "hand", False):                       # v15: what his hand holds and can do
+            ho = np.concatenate([(self.key_last[:, :2] - 1).astype(np.float32), self.key_last[:, 2:3].astype(np.float32),
+                                 (self.key_tok / KEY_BURST)[:, None],
+                                 (self.key_wait / KEY_EVERY)[:, None].astype(np.float32)], 1)
+            obs = np.concatenate([obs, ho], 1)
         if self.obs_noise:
             obs = obs + self.rng.normal(0, self.obs_noise, obs.shape)
         return obs.astype(np.float32)
@@ -298,12 +368,48 @@ class MoveEnv:
             fr = np.where((self.w.contents_n(end) & HAZARD) != 0, 1.0, fr)
         return fr.reshape(self.n, N_FLOOR)
 
+    def limit_keys(self, a):
+        """his left hand (see duel_env.limit_keys): the keys asked for become the keys one hand can hold"""
+        n = self.n
+        self.key_tick += 1
+        dec = ((self.key_tick + np.arange(n)) % KEY_EVERY) == 0
+        self.key_dec = dec
+        self.key_req = np.where(dec[:, None], a[:, :3], self.key_req)
+        want = self.key_req
+        self.key_tok = np.minimum(KEY_BURST, self.key_tok + KEY_RATE * DT).astype(np.float32)
+        self.key_hold += 1
+        ready = self.key_hold >= FINGER_HOLD[None, :]
+        last = self.key_last
+
+        def act(finger, wants):
+            ok = wants & ready[:, finger] & (self.key_tok >= 1.0)
+            self.key_tok[ok] -= 1.0
+            self.key_hold[ok, finger] = 0
+            ready[ok, finger] = False
+            return ok
+        j_now, j_want = last[:, 2] == 1, want[:, 2] == 1
+        j_new = np.where(act(THUMB, j_now != j_want), j_want, j_now)
+        d_now, d_want = last[:, 1] == 2, want[:, 1] == 2
+        d_new = np.where(act(INDEX, d_now != d_want), d_want, d_now)
+        l_now, l_want = last[:, 1] == 0, want[:, 1] == 0
+        l_new = np.where(act(RING, l_now != l_want), l_want, l_now)
+        f_now, f_want = last[:, 0], want[:, 0].copy()
+        f_want = np.where((f_now != 1) & (f_want != 1) & (f_now != f_want), 1, f_want)     # a reversal first lets go
+        f_new = np.where(act(MIDDLE, f_now != f_want), f_want, f_now)
+        strafe = np.where(l_new & ~d_new, 0, np.where(d_new & ~l_new, 2, 1))               # both down cancel out
+        self.key_last = np.stack([f_new, strafe, j_new.astype(np.int64)], 1)
+        self.key_wait = ((-(self.key_tick + 1 + np.arange(n))) % KEY_EVERY).astype(np.float32)
+        return self.key_last
+
     def step(self, actions):
         a = np.asarray(actions)
         if self.delay_p and self.prev_actions is not None:
             late = self.rng.random(self.n) < self.delay_p
             a = np.where(late[:, None], self.prev_actions, a)
         self.prev_actions = a.copy()
+        if self.hand:
+            a = a.copy()
+            a[:, :3] = self.limit_keys(a)
         fwd = (a[:, 0].astype(np.int32) - 1) * 127
         side = (a[:, 1].astype(np.int32) - 1) * 127
         jump = a[:, 2].astype(np.int32) * 127
@@ -329,24 +435,40 @@ class MoveEnv:
         arrived = (np.hypot(gp[:, 0] - pos[:, 0], gp[:, 1] - pos[:, 1]) < 40) & (np.abs(gp[:, 2] - pos[:, 2]) < 64)
         fell = pos[:, 2] < self.zmin
         hard = np.zeros(self.n, np.float32)
+        wet = np.zeros(self.n, bool)
         if self.v14:
-            fell = fell | ((self.w.contents_n(pos + np.array([0, 0, -23.0], np.float32)) & HAZARD) != 0)
+            wet = (self.w.contents_n(pos + np.array([0, 0, -23.0], np.float32)) & HAZARD) != 0
+            fell = fell | wet
             delta = prev[:, 5] ** 2 * 0.0001                   # Quake 3's fall damage, from the speed of the landing
             hard = np.where((prev[:, 6] < 0.5) & (s[:, 6] > 0.5) & (prev[:, 5] < 0),
                             np.where(delta > 60.0, 10.0, np.where(delta > 40.0, 5.0, 0.0)), 0.0).astype(np.float32)
             self.fall_dmg += hard
+        over = np.zeros(self.n, bool)
+        if self.jump_p:                                        # a try for a jump: over it (+1, once), or fallen short (the try ends)
+            on = np.nonzero((self.try_k >= 0) & ~self.crossed)[0]
+            if len(on):
+                A_, B_, p_ = self.jump_a[self.try_k[on]], self.jump_b[self.try_k[on]], pos[on]
+                self.at_edge[on] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
+                landed = (s[on, 6] > 0.5) | ((prev[on, 5] < 0.0) & (s[on, 5] > 0.0))    # on the floor, or touched it and jumped again inside the frame
+                ov = self.at_edge[on] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed | arrived[on])
+                over[on[ov]] = True
+                self.crossed[on[ov]] = True
+                fell = fell.copy()
+                at_gap = np.hypot(p_[:, 0] - B_[:, 0], p_[:, 1] - B_[:, 1]) < np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1]) + 150.0
+                fell[on[self.at_edge[on] & ~ov & at_gap & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)]] = True
         improved = phi < self.best_phi - 0.05
         self.best_phi = np.minimum(self.best_phi, phi)
         self.stall = np.where(improved, 0.0, self.stall + DT)
         timeout = (self.t > self.limit) | (self.stall > self.stall_limit)
-        reward = reward + arrived * 1.0 - fell * 1.0 - FALL_COST * hard
+        reward = reward + arrived * 1.0 - fell * 1.0 - (LAVA_COST - 1.0) * wet - FALL_COST * hard + over * 1.0
         done = arrived | fell | timeout
         speed = np.hypot(s[:, 3], s[:, 4])
-        info = dict(speed=speed, ground=s[:, 6].copy())
+        info = dict(speed=speed, ground=s[:, 6].copy(), key_dec=self.key_dec.copy() if self.hand else None)
         ep = []
         for i in np.nonzero(done)[0]:
-            ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), t=float(self.t[i]),
-                           est=float(self.start_phi[i]), goal=int(self.goal[i]), fall_dmg=float(self.fall_dmg[i])))
+            ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), lava=bool(wet[i]), t=float(self.t[i]),
+                           est=float(self.start_phi[i]), goal=int(self.goal[i]), fall_dmg=float(self.fall_dmg[i]),
+                           jump=int(self.try_k[i]), crossed=bool(self.crossed[i])))
             self.fall_dmg[i] = 0.0
             self._reset(int(i))
         if len(ep):

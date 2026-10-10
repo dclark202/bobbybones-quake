@@ -73,7 +73,7 @@ add("enemy", "apparent size", "how big he looks (nearer = bigger)", "degrees / 1
 for j in range(E.N_PROJ):
     n_ = "nearest" if j == 0 else "second nearest"
     for ax in XYZ:
-        add("projectiles", "{} enemy projectile: position {}".format(n_, ax), "within 1500 units and in view (or within 400)", "units / 1000")
+        add("projectiles", "{} enemy projectile: position {}".format(n_, ax), "within 1,500 units, inside his view cone, the line from his eyes clear (v15, PROJ_SEE; before it: through walls inside the cone, and within 400 units in any direction)", "units / 1000")
     for ax in XYZ:
         add("projectiles", "{} enemy projectile: velocity {}".format(n_, ax), "", "units/s / 1000")
     for k_ in ("rocket", "grenade", "plasma"):
@@ -264,6 +264,34 @@ for nm, sc in (("meeting point: crosshair error left-right, coarse", "degrees / 
                ("the shot's flight time", "seconds / 1.5, capped at 2"),
                ("the floor under the meeting point lies below it by", "degrees / 15, capped at 1 (1: no floor near)")):
     add("lead", nm, LEAD_WHAT, sc, "v14")
+JUMP_WHAT = ("the first of the pros' jumps on his way (sim/jump_links.py): in a jump run, or a jump that is open in his games (JUMP_OPEN); "
+             "zero without one within 1,500 units of way")
+for nm, sc in (("a jump is ahead on his way", "0 or 1"), ("the speed the jump needs", "units/s / 600"),      # ---- a jump ahead (2026-10-10, v15)
+               ("the way to the jump's take-off", "units / 1000, capped at 1.5"), ("the jump's length", "units / 600"),
+               ("the jump's rise", "units / 100, between -3 and 1")):
+    add("jump ahead", nm, JUMP_WHAT, sc, "v15")
+ARC_WHAT = ("with the grenade launcher in his hand and the enemy seen in the last 3 seconds: his view against the one that lands a grenade "
+            "at the enemy's feet (the low arc); zero otherwise")
+for nm, sc in (("grenade arc: view error left-right, coarse", "degrees / 30, capped at 1"),                  # ---- a grenade's arc (v15)
+               ("grenade arc: view error left-right, fine", "degrees / 2, capped at 1"),
+               ("grenade arc: view error up-down, coarse", "degrees / 15, capped at 1"),
+               ("grenade arc: view error up-down, fine", "degrees / 2, capped at 1"),
+               ("the grenade's flight time", "seconds / 1.5, capped at 2"), ("the grenade reaches", "0 or 1")):
+    add("grenade arc", nm, ARC_WHAT, sc, "v15")
+PROJ_WHAT = ("an enemy projectile he sees (PROJ_SEE: inside his view cone, within 1,500 units, the line from his eyes clear), nearest "
+             "first; the nearest two are the inputs of old")
+for j in ("third", "fourth", "fifth", "sixth"):          # ---- the projectiles he sees beyond the nearest two (v15)
+    for ax in XYZ:
+        add("projectiles", "{} nearest enemy projectile: position {}".format(j, ax), PROJ_WHAT, "units / 1000", "v15")
+    for ax in XYZ:
+        add("projectiles", "{} nearest enemy projectile: velocity {}".format(j, ax), "", "units/s / 1000", "v15")
+    for kd in ("a rocket", "a grenade", "a plasma"):
+        add("projectiles", "{} nearest enemy projectile: is {}".format(j, kd), "", "0 or 1", "v15")
+for j in ("nearest", "second nearest", "third nearest", "fourth nearest", "fifth nearest", "sixth nearest"):
+    add("projectiles", "{} enemy projectile: a grenade's fuse left".format(j), "the share of its 2.5 seconds; zero for a rocket or plasma", "0 to 1", "v15")
+    add("projectiles", "{} enemy projectile: seconds until it passes closest to him".format(j), "as if both kept their speed", "seconds / 2, capped at 1", "v15")
+    add("projectiles", "{} enemy projectile: how close it passes".format(j), "in its splash radii (rocket 120 units, grenade 150, plasma 20)",
+        "radii / 3, capped at 1 (under a third: inside its blast)", "v15")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now
