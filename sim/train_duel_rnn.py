@@ -182,6 +182,8 @@ def main():
     ap.add_argument("--demo-heads", default="1,1,1,1,1,0.5,0.5,1",
                     help="weight of each action head in the demo loss: forward, strafe, vertical, turn, pitch, fire, weapon, walk")
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
+    ap.add_argument("--teacher-skip", default="", help="maps (comma list) on which the movement teacher gives no labels: where its "
+                    "pupil test fails (tools/label_check.py), e.g. lava he walks into with its labels alone")
     ap.add_argument("--teach", type=float, default=0.5, help="weight of the teacher loss at the start of this run")
     ap.add_argument("--teach-minutes", type=float, default=240, help="the teacher loss fades to zero over this time")
     ap.add_argument("--teach-warm", type=float, default=0.0, help="minutes over which that weight first rises from nothing: a new "
@@ -232,7 +234,7 @@ def main():
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
-                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if a.teacher else None,
+                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if (a.teacher and m not in a.teacher_skip.split(",")) else None,
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
                                         a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w],
