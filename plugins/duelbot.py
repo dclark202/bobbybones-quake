@@ -70,9 +70,10 @@ def is_bot(p):
     return str(p.steam_id).startswith("9007199")
 
 
-# the bots' own names (owner, 2026-10-09), each with "(BOT)" after it: the one of a 1v1 server is the first. All four are
-# the same network; plugins/ladder.py keeps one row for them and plugins/banter.py gives each a voice.
-BOT_NAMES = ("BobbyBones", "Mr Skeleton", "Dr Evil", "The Juggernaut")
+# the bots' own names (owner, 2026-10-09), each with "(BOT)" after it, in the order they join: the one of a 1v1 server
+# is the first. All four are the same network; plugins/ladder.py keeps one row for them and plugins/banter.py gives each
+# a voice.
+BOT_NAMES = ("BobbyBones", "Mr Skeleton", "THE JUGGERNAUT", "Dr Evil")
 
 
 def is_bobby(p):

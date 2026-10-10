@@ -3,8 +3,8 @@ something sort of fun and maybe somewhat silly, use the colors in the chat. They
 during the game, if they think they did something really good. Pros usually have a smiley face bind or some other thing
 they use to show respect, 'I goofed', etc.").
 
-Each of the four bots has a voice of its own (the names are duelbot.BOT_NAMES): BobbyBones the pupil, Mr Skeleton the
-bone jokes, Dr Evil the plan, The Juggernaut in capitals.
+Each of the four bots has a voice of its own (the names are duelbot.BOT_NAMES, in the order they join): BobbyBones the
+pupil, Mr Skeleton the bone jokes, THE JUGGERNAUT in capitals, Dr Evil the plan.
 
 - At a game's end every bot says a line, by where it finished (first, in the middle, last), a second or two apart.
 - During a game, and only with a person playing: after three frags without dying (pleased with itself), after dying by
@@ -24,7 +24,7 @@ import time
 
 import minqlx
 
-NAMES = ("BobbyBones", "Mr Skeleton", "Dr Evil", "The Juggernaut")     # (duelbot.BOT_NAMES; kept in step by hand)
+NAMES = ("BobbyBones", "Mr Skeleton", "THE JUGGERNAUT", "Dr Evil")     # (duelbot.BOT_NAMES; kept in step by hand)
 EACH, ALL, CHANCE = 75.0, 20.0, 0.7
 FAR = 1500.0                                                           # a rail frag from this far is worth a smile
 
@@ -50,6 +50,15 @@ LINES = (
         respect=("^3{name}^7 you gave me chills. I have no skin", "humerus. very humerus, ^3{name}^7", "^3{name}^7 you rattle me"),
         rail=("^5right through the ribs^7 :)", "^5x-ray vision^7 :)"),
         ),
+    dict(   # THE JUGGERNAUT: capitals
+        first=("^2GG^7. NOTHING STOPS ^1THE JUGGERNAUT^7", "^2GG^7!! I AM ^3UNSTOPPABLE^7 (TODAY)", "^2GG^7. ^1JUGGERNAUT^7 SMASH. POLITELY."),
+        mid=("^2GG^7. THE JUGGERNAUT WAS ^3SLIGHTLY^7 STOPPED", "^2GG^7. I WAS JUST WARMING UP", "^2GG^7. MOSTLY UNSTOPPABLE"),
+        last=("^2GG^7. OK. SOMETHING STOPPED THE JUGGERNAUT", "^2GG^7. THE JUGGERNAUT NEEDS A ^3NAP^7", "^2GG^7. I WAS STOPPED. ^1A LOT^7."),
+        streak=("^1UNSTOPPABLE^7 :)", "CAN'T STOP. WON'T STOP.", "^3MOMENTUM^7!!"),
+        oops=("THE FLOOR STOPPED THE JUGGERNAUT", "^1OOPS^7. THAT DOES NOT COUNT", "I TRIPPED. ^3MIGHTILY^7."),
+        respect=("^3{name}^7 STOPPED THE JUGGERNAUT. RESPECT.", "NICE SHOT ^3{name}^7. NOW HOLD STILL.", "^3{name}^7!! AGAIN?!"),
+        rail=("^5BOOM^7 :)", "^5FROM DOWNTOWN^7 :)"),
+        ),
     dict(   # Dr Evil: the plan
         first=("^2gg^7. all according to ^1plan^7", "^2gg^7! one... ^3MILLION^7... frags. roughly.", "^2gg^7. my ^1evil^7 is paying off"),
         mid=("^2gg^7. the plan needs ^3minor^7 revisions", "^2gg^7. I blame my henchmen", "^2gg^7. phase two will go better"),
@@ -58,15 +67,6 @@ LINES = (
         oops=("^1that^7 was not in the plan", "a ^3minor^7 setback", "who put that there??"),
         respect=("^3{name}^7... I could use someone like you", "well played ^3{name}^7. ^1too^7 well.", "^3{name}^7, you make a fine nemesis"),
         rail=("^5the laser^7. finally. :)", "^5precisely^7 :)"),
-        ),
-    dict(   # The Juggernaut: capitals
-        first=("^2GG^7. NOTHING STOPS ^1THE JUGGERNAUT^7", "^2GG^7!! I AM ^3UNSTOPPABLE^7 (TODAY)", "^2GG^7. ^1JUGGERNAUT^7 SMASH. POLITELY."),
-        mid=("^2GG^7. THE JUGGERNAUT WAS ^3SLIGHTLY^7 STOPPED", "^2GG^7. I WAS JUST WARMING UP", "^2GG^7. MOSTLY UNSTOPPABLE"),
-        last=("^2GG^7. OK. SOMETHING STOPPED THE JUGGERNAUT", "^2GG^7. THE JUGGERNAUT NEEDS A ^3NAP^7", "^2GG^7. I WAS STOPPED. ^1A LOT^7."),
-        streak=("^1UNSTOPPABLE^7 :)", "CAN'T STOP. WON'T STOP.", "^3MOMENTUM^7!!"),
-        oops=("THE FLOOR STOPPED THE JUGGERNAUT", "^1OOPS^7. THAT DOES NOT COUNT", "I TRIPPED. ^3MIGHTILY^7."),
-        respect=("^3{name}^7 STOPPED THE JUGGERNAUT. RESPECT.", "NICE SHOT ^3{name}^7. NOW HOLD STILL.", "^3{name}^7!! AGAIN?!"),
-        rail=("^5BOOM^7 :)", "^5FROM DOWNTOWN^7 :)"),
         ),
 )
 

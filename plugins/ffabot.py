@@ -446,12 +446,13 @@ class ffabot(duelbot):
             minqlx.console_command("abort")
         if len(bobbys) < self.n_bots and now > self.next_check:
             self.next_check = now + 4
-            taken = " ".join(p.clean_name for p in bobbys)       # each has a name of his own (owner, 2026-10-09): the first one free
+            taken = " ".join(p.clean_name for p in bobbys)       # each has a name of his own, and they join in the names' order (owner, 2026-10-09)
             name = next((n for n in BOT_NAMES if n not in taken), "BobbyBones {}".format(len(bobbys) + 1))
             minqlx.console_command("addbot bones 5 free 0 \"{} (BOT)\"".format(name))
         elif len(bobbys) > self.n_bots and now > self.next_check:
             self.next_check = now + 4
-            minqlx.console_command("clientkick {}".format(bobbys[-1].id))
+            last = max(bobbys, key=lambda p: max([k for k, n in enumerate(BOT_NAMES) if n in p.clean_name] or [99]))
+            minqlx.console_command("clientkick {}".format(last.id))  # the last in the names' order leaves first
         env, E = self.env, self.E
         here = {p.id: p for p in bobbys + people}
         for cid in [c for c in self.seat if c not in here]:

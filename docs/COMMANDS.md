@@ -101,7 +101,8 @@ range (the files come with the daily `tools/pull_sessions.sh`).
 
 ## The bots' names and what they say (`plugins/banter.py`)
 
-A free-for-all server's bots are BobbyBones, Mr Skeleton, Dr Evil and The Juggernaut, each with (BOT) after the name.
+A free-for-all server's bots are BobbyBones, Mr Skeleton, THE JUGGERNAUT and Dr Evil, each with (BOT) after the name;
+they join in that order and leave in the reverse.
 All four are the same network and share one row on the leaderboard. Each has a voice of its own in chat: a line at a
 game's end by where it finished, and now and then one during a game, only with a person playing: after three frags
 without dying, after dying by its own hand or the map, after the same person has fragged it three times without an
