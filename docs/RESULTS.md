@@ -5,6 +5,88 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-10 01:30 — v14's second start after two and a half hours: aim holds, speed comes slowly, rockets cost duels; the scripted opponents
+
+**The run** (second start, 22:53; update 60 at 01:18, the teacher at 0.26 at its peak after an hour).
+
+| | Start | 60 updates | The first try at 60 updates |
+|---|---|---|---|
+| Hit rate: lightning, rail | 45%, 48% | 44%, 47% | 30%, 35% |
+| On target, enemy in view | 33% | 33% | 28% |
+| Frags against his old selves | 49% | 50 to 55% | 40% |
+| Item runs: units a second | 283 | 310 | 286 |
+| Item runs: fast in the air | 10% | 16.5% | 12% |
+| Item runs: items a minute | 4.9 | 5.2 (4.1 at the lowest, update 17) | 4.4 |
+| The teacher's loss | 4.6 | 2.0 | 3.1 |
+| Megas, red armors a player-minute | 0.59, 0.58 | 0.61, 0.61 | 0.60, 0.46 |
+
+So the teacher in the shared layers does not cost his aim, and strafe jumping comes, slowly: the gain follows the
+dose (weight times the share of item runs times minutes), on the same curve as the movement-only trial of 2026-10-09.
+
+**The teacher's weight is held from 01:18** (the owner, 22:00: "If you think the strafe jumping teacher isn't strong
+enough you can also bump it up"): it was set to fade from 0.26 to nothing by 06:53, which would have ended the gain at
+about a fifth of the teacher's own speed gain. Right after the save of update 60 (kept as `policy_u0060_before_hold.pt`)
+the run was resumed with `--teach-minutes 100000`: the weight stays at 0.3. If his hit rates fall (lightning under 42.5%
+or rail under 45%), it goes back to the fade from that save.
+
+**The duel checks fell, and this time it is not his aim.** Against the stand-in, 32 ten-minute duels a map:
+
+| Map | Start | 47 minutes in | 91 minutes in |
+|---|---|---|---|
+| Blood Run | 71% (32-0) | 44% (8-18) | 47% (11-17) |
+| Aerowalk | 80% (32-0) | 52% (16-11) | 52% (15-11) |
+| Lost World | 90% (32-0) | 67% (31-0) | 75% (31-0) |
+| Sinister | 74% (32-0) | 54% (18-11) | 56% (19-7) |
+| Furious Heights | 42% (8-20) | 41% (7-18) | 45% (10-19) |
+| Battleforged | 62% (24-6) | 47% (13-16) | 59% (19-8) |
+| the six trained | 69.7% | 50.9% | 55.7% |
+| Campgrounds, Hektik, Toxicity, Cure | 35, 51, 64, 47% | 44, 35, 65, 42% | 48, 35, 66, 43% |
+
+His hit rates in these duels are the start's (Blood Run: rockets 53% -> 52%, lightning 51% -> 44%, rail 46% -> 43%;
+Aerowalk: lightning 52% -> 50%, rail 54% -> 55%). What changed within 47 minutes is the weapon in his hand: rockets at
+every distance. Beyond 700 units he held the rail 53% and rockets 13% of the time on Blood Run at the start, 33% and 32%
+now; on Aerowalk the rail 49% and rockets 3%, now 22% and 35%. He fires 45 to 60% fewer lightning cells and half to a
+quarter of the rail shots, deals 20 to 47% less damage a game, and dies by his own hand or the map two to eight times as
+often (Aerowalk 0.06 -> 0.47 a game, Hektik 0.16 -> 0.88). Rockets make 38 to 45% of his frags. In self-play nothing of
+this shows: both sides do it (frags a minute, pickups and the frags against his old selves are flat).
+
+Where it comes from: v14's rocket numbers, which the owner decided on my proposal: rockets at a fifth of the shot price
+of every other weapon at every distance, and the weapon teacher at 0.2 to the run's end with the pros' table, in which
+the rocket launcher is the weapon in hand at most distances. Rockets are what he asked for; rockets far off against an
+opponent with a rail are the cost. Not changed: the rocket numbers are his. For him at 7:00: keep them and let him
+learn the distances (91 minutes in the checks are 5 points up on 47); or the low price only inside rocket range; or a
+weaker weapon teacher; a change of this kind showed in his play within 47 minutes, so it can be tried in the morning.
+
+**The scripted opponents** ([SCOPE_v15.md](SCOPE_v15.md) A1; built in a copy of the simulator, `S\stage`, the run's simulator
+untouched; with the switch off the copy repeats the repo's fixed runs exactly). All three are item runners with the
+stand-in's aim:
+
+- the holder: the mega and the red armor on their clocks whatever he has; after a frag he walks to where the other one
+  came back to life, six times in ten;
+- the watcher: a post 450 to 1400 units from an item that sees it and the ground round it, the higher the better (two
+  posts an item, found per map); he walks there with the rail, stands, and looks at the item the other one is heading for;
+- the lobber: with nobody in view, plasma or a grenade's arc into the far end of a teleporter or jump pad on the other
+  one's way, else to where he last saw him.
+
+v13 against each, his share of the frags in 12 ten-minute duels a map:
+
+| Map | The stand-in | Holder | Watcher | Lobber |
+|---|---|---|---|---|
+| Blood Run | 71% | 52% | 62% | 60% |
+| Aerowalk | 80% | 58% | 55% | 75% |
+| Lost World | 93% | 86% | 79% | 85% |
+| Sinister | 69% | 70% | 64% | 71% |
+| Furious Heights | 46% | 10% (0-12) | 41% | 47% |
+| Battleforged | 63% | 32% | 51% | 51% |
+| mean | 70% | 51% | 59% | 65% |
+
+The holder takes 39 to 67% of the megas and holds 150 or more 85% of his time on Furious Heights and Battleforged. 95
+to 100% of the watcher's frags are rail shots from his posts on five of the six maps (78% on Lost World), and against
+him v13 is the lower one 46 to 67% of the time on four maps. The lobber's fire at places is not yet what kills: grenades
+and plasma make 2 to 17% of his frags; it needs timing (fire when the other one is a second from the exit). Also there:
+shares to draw them into training rounds (`TRICK_P`), their aim (`TRICK_NOISE`), a holder who starts a round ahead
+(`HOLD_STACK`). They go into `sim/` after v14 has ended, with the fixed-run check again.
+
 ## 2026-10-09 23:15 — v14's first try went badly wrong and was stopped; restarted from the clean start with the teacher set right
 
 **What the first duel check of the run showed** (update 41, 90 minutes in; 32 ten-minute duels a map against the stand-in):
