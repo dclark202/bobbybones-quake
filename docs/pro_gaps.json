@@ -1,0 +1,65 @@
+{
+ "aerowalk": {
+  "demos": 250,
+  "player_minutes": 2252,
+  "jumps_seen": 106665,
+  "over_a_hole_or_up": 6886,
+  "kept": 2527,
+  "just_made": 2460,
+  "entries": 38
+ },
+ "bloodrun": {
+  "demos": 250,
+  "player_minutes": 2313,
+  "jumps_seen": 80080,
+  "over_a_hole_or_up": 7224,
+  "kept": 824,
+  "just_made": 2056,
+  "entries": 31
+ },
+ "lostworld": {
+  "demos": 250,
+  "player_minutes": 2329,
+  "jumps_seen": 85361,
+  "over_a_hole_or_up": 8488,
+  "kept": 205,
+  "just_made": 3003,
+  "entries": 47
+ },
+ "sinister": {
+  "demos": 147,
+  "player_minutes": 1278,
+  "jumps_seen": 45819,
+  "over_a_hole_or_up": 4218,
+  "kept": 814,
+  "just_made": 2770,
+  "entries": 39
+ },
+ "furiousheights": {
+  "demos": 150,
+  "player_minutes": 1338,
+  "jumps_seen": 53972,
+  "over_a_hole_or_up": 5727,
+  "kept": 619,
+  "just_made": 4173,
+  "entries": 45
+ },
+ "battleforged": {
+  "demos": 149,
+  "player_minutes": 1347,
+  "jumps_seen": 58422,
+  "over_a_hole_or_up": 2902,
+  "kept": 462,
+  "just_made": 215,
+  "entries": 22
+ },
+ "campgrounds": {
+  "demos": 5,
+  "player_minutes": 46,
+  "jumps_seen": 1652,
+  "over_a_hole_or_up": 150,
+  "kept": 21,
+  "just_made": 105,
+  "entries": 22
+ }
+}

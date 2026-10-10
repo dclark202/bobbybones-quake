@@ -1,0 +1,2497 @@
+{
+ "map": "lostworld",
+ "demos": 250,
+ "player_minutes": 2329,
+ "jumps_seen": 85361,
+ "over_a_hole_or_up": 8488,
+ "jumps": [
+  {
+   "id": 1,
+   "n": 455,
+   "per_hour": 11.7,
+   "demos": 200,
+   "take_off": [
+    337,
+    373,
+    476
+   ],
+   "landing": [
+    692,
+    317,
+    408
+   ],
+   "near_take_off": "RA (499)",
+   "near_landing": "YA (264)",
+   "length": 372,
+   "rise": -68,
+   "hole": 191,
+   "speed": [
+    314,
+    375,
+    471
+   ],
+   "air_s": 0.88,
+   "speed_needed": 356,
+   "walker_s": 1.2,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    442,
+    444,
+    446,
+    447,
+    484,
+    487,
+    489,
+    490,
+    535,
+    539,
+    542,
+    544,
+    546
+   ],
+   "nodes_to": [
+    797,
+    799,
+    801,
+    841,
+    842,
+    843,
+    844,
+    845,
+    846,
+    883,
+    884,
+    885,
+    925,
+    927,
+    961,
+    963,
+    1003,
+    1005
+   ],
+   "node_a": 539,
+   "node_b": 885
+  },
+  {
+   "id": 2,
+   "n": 283,
+   "per_hour": 7.3,
+   "demos": 153,
+   "take_off": [
+    97,
+    128,
+    464
+   ],
+   "landing": [
+    303,
+    291,
+    476
+   ],
+   "near_take_off": "RL (322)",
+   "near_landing": "RA (476)",
+   "length": 268,
+   "rise": 12,
+   "hole": 250,
+   "speed": [
+    324,
+    380,
+    438
+   ],
+   "air_s": 0.65,
+   "speed_needed": 361,
+   "walker_s": 0.9,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    292,
+    294,
+    297,
+    299,
+    302,
+    333,
+    335,
+    337,
+    340,
+    342,
+    345
+   ],
+   "nodes_to": [
+    381,
+    408,
+    410,
+    442,
+    444,
+    484,
+    487,
+    535,
+    539
+   ],
+   "node_a": 297,
+   "node_b": 484
+  },
+  {
+   "id": 3,
+   "n": 218,
+   "per_hour": 5.6,
+   "demos": 128,
+   "take_off": [
+    600,
+    -43,
+    464
+   ],
+   "landing": [
+    333,
+    -156,
+    465
+   ],
+   "near_take_off": "YA (463)",
+   "near_landing": "RL (271)",
+   "length": 296,
+   "rise": 2,
+   "hole": 247,
+   "speed": [
+    340,
+    387,
+    449
+   ],
+   "air_s": 0.7,
+   "speed_needed": 386,
+   "walker_s": 1.1,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    662,
+    715,
+    781,
+    782,
+    785,
+    788,
+    833,
+    835,
+    837
+   ],
+   "nodes_to": [
+    365,
+    425,
+    427,
+    429,
+    462,
+    464,
+    466,
+    506,
+    508,
+    511,
+    563,
+    567,
+    614,
+    618
+   ],
+   "node_a": 788,
+   "node_b": 511
+  },
+  {
+   "id": 4,
+   "n": 205,
+   "per_hour": 5.3,
+   "demos": 123,
+   "take_off": [
+    571,
+    1217,
+    472
+   ],
+   "landing": [
+    857,
+    1283,
+    473
+   ],
+   "near_take_off": "PG (445)",
+   "near_landing": "PG (168)",
+   "length": 293,
+   "rise": 0,
+   "hole": 295,
+   "speed": [
+    357,
+    385,
+    435
+   ],
+   "air_s": 0.68,
+   "speed_needed": 408,
+   "walker_s": 1.0,
+   "serves": {},
+   "walker": "a way beside it",
+   "nodes_from": [
+    762,
+    764,
+    766,
+    768,
+    769,
+    827,
+    869
+   ],
+   "nodes_to": [
+    953,
+    989,
+    1033,
+    1036,
+    1092,
+    1095,
+    1096,
+    1150,
+    1151,
+    1152
+   ],
+   "node_a": 768,
+   "node_b": 1036
+  },
+  {
+   "id": 5,
+   "n": 149,
+   "per_hour": 3.8,
+   "demos": 90,
+   "take_off": [
+    850,
+    1099,
+    472
+   ],
+   "landing": [
+    583,
+    968,
+    473
+   ],
+   "near_take_off": "PG (213)",
+   "near_landing": "",
+   "length": 300,
+   "rise": 0,
+   "hole": 127,
+   "speed": [
+    346,
+    375,
+    419
+   ],
+   "air_s": 0.7,
+   "speed_needed": 406,
+   "walker_s": 1.4,
+   "serves": {},
+   "walker": "a way beside it",
+   "nodes_from": [
+    1032,
+    1033,
+    1091
+   ],
+   "nodes_to": [
+    756,
+    758,
+    760
+   ],
+   "node_a": 1032,
+   "node_b": 758
+  },
+  {
+   "id": 6,
+   "n": 140,
+   "per_hour": 3.6,
+   "demos": 102,
+   "take_off": [
+    210,
+    326,
+    475
+   ],
+   "landing": [
+    100,
+    68,
+    465
+   ],
+   "near_take_off": "",
+   "near_landing": "RL (262)",
+   "length": 297,
+   "rise": -8,
+   "hole": 250,
+   "speed": [
+    321,
+    363,
+    426
+   ],
+   "air_s": 0.73,
+   "speed_needed": 355,
+   "walker_s": 1.0,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    350,
+    379,
+    381,
+    383,
+    384,
+    408,
+    410,
+    412,
+    413,
+    442,
+    444,
+    446,
+    447,
+    484,
+    487,
+    539
+   ],
+   "nodes_to": [
+    246,
+    249,
+    252,
+    255,
+    287,
+    288,
+    290,
+    292,
+    294,
+    297,
+    330,
+    331,
+    333,
+    335,
+    337,
+    340,
+    366
+   ],
+   "node_a": 381,
+   "node_b": 335
+  },
+  {
+   "id": 7,
+   "n": 129,
+   "per_hour": 3.3,
+   "demos": 101,
+   "take_off": [
+    27,
+    155,
+    220
+   ],
+   "landing": [
+    347,
+    78,
+    221
+   ],
+   "near_take_off": "GL (387)",
+   "near_landing": "RA (226)",
+   "length": 324,
+   "rise": 2,
+   "hole": 347,
+   "speed": [
+    354,
+    438,
+    516
+   ],
+   "air_s": 0.68,
+   "speed_needed": 410,
+   "walker_s": 1.1,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    218,
+    220,
+    248,
+    251,
+    254,
+    260,
+    296,
+    298,
+    301,
+    339,
+    372,
+    374
+   ],
+   "nodes_to": [
+    436,
+    472,
+    475,
+    517,
+    519,
+    522,
+    525,
+    572
+   ],
+   "node_a": 254,
+   "node_b": 519
+  },
+  {
+   "id": 8,
+   "n": 122,
+   "per_hour": 3.1,
+   "demos": 90,
+   "take_off": [
+    333,
+    434,
+    476
+   ],
+   "landing": [
+    844,
+    295,
+    347
+   ],
+   "near_take_off": "",
+   "near_landing": "YA (103)",
+   "length": 526,
+   "rise": -130,
+   "hole": 130,
+   "speed": [
+    438,
+    488,
+    550
+   ],
+   "air_s": 1.0,
+   "speed_needed": 488,
+   "walker_s": 1.8,
+   "serves": {},
+   "walker": "a way beside it",
+   "nodes_from": [
+    489,
+    490,
+    539,
+    542,
+    544,
+    546,
+    547,
+    595
+   ],
+   "nodes_to": [
+    925,
+    961,
+    963,
+    1003,
+    1005,
+    1056,
+    1058,
+    1060,
+    1115
+   ],
+   "node_a": 544,
+   "node_b": 1003
+  },
+  {
+   "id": 9,
+   "n": 105,
+   "per_hour": 2.7,
+   "demos": 79,
+   "take_off": [
+    -174,
+    179,
+    216
+   ],
+   "landing": [
+    319,
+    145,
+    32
+   ],
+   "near_take_off": "YA (337)",
+   "near_landing": "RA (60)",
+   "length": 495,
+   "rise": -184,
+   "hole": 159,
+   "speed": [
+    340,
+    375,
+    415
+   ],
+   "air_s": 1.1,
+   "speed_needed": 417,
+   "walker_s": 4.2,
+   "serves": {
+    "RA": 2.8
+   },
+   "walker": "slower",
+   "nodes_from": [
+    149,
+    150,
+    158,
+    159,
+    168,
+    169
+   ],
+   "nodes_to": [
+    474,
+    521,
+    524
+   ],
+   "node_a": 158,
+   "node_b": 474
+  },
+  {
+   "id": 10,
+   "n": 95,
+   "per_hour": 2.4,
+   "demos": 73,
+   "take_off": [
+    425,
+    -136,
+    466
+   ],
+   "landing": [
+    619,
+    185,
+    408
+   ],
+   "near_take_off": "RL (366)",
+   "near_landing": "YA (331)",
+   "length": 372,
+   "rise": -56,
+   "hole": 191,
+   "speed": [
+    327,
+    381,
+    437
+   ],
+   "air_s": 0.85,
+   "speed_needed": 395,
+   "walker_s": 1.4,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    427,
+    466,
+    508,
+    511,
+    567,
+    618,
+    660,
+    662,
+    666,
+    715
+   ],
+   "nodes_to": [
+    733,
+    790,
+    792,
+    794,
+    796,
+    797,
+    837,
+    838,
+    839,
+    840,
+    841,
+    842,
+    883
+   ],
+   "node_a": 618,
+   "node_b": 794
+  },
+  {
+   "id": 11,
+   "n": 94,
+   "per_hour": 2.4,
+   "demos": 76,
+   "take_off": [
+    341,
+    115,
+    220
+   ],
+   "landing": [
+    26,
+    163,
+    220
+   ],
+   "near_take_off": "RA (212)",
+   "near_landing": "GL (384)",
+   "length": 325,
+   "rise": 0,
+   "hole": 347,
+   "speed": [
+    321,
+    445,
+    535
+   ],
+   "air_s": 0.68,
+   "speed_needed": 368,
+   "walker_s": 1.0,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    402,
+    403,
+    436,
+    437,
+    439,
+    472,
+    475,
+    477,
+    517,
+    519,
+    522,
+    525,
+    572,
+    574,
+    580
+   ],
+   "nodes_to": [
+    185,
+    187,
+    214,
+    216,
+    218,
+    248,
+    251,
+    254,
+    296,
+    298,
+    301,
+    339,
+    341,
+    344,
+    372,
+    374
+   ],
+   "node_a": 522,
+   "node_b": 296
+  },
+  {
+   "id": 12,
+   "n": 88,
+   "per_hour": 2.3,
+   "demos": 62,
+   "take_off": [
+    869,
+    1177,
+    472
+   ],
+   "landing": [
+    582,
+    1205,
+    472
+   ],
+   "near_take_off": "PG (157)",
+   "near_landing": "PG (435)",
+   "length": 291,
+   "rise": 0,
+   "hole": 295,
+   "speed": [
+    341,
+    381,
+    441
+   ],
+   "air_s": 0.7,
+   "speed_needed": 398,
+   "walker_s": 1.2,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    1032,
+    1033,
+    1091,
+    1092,
+    1096,
+    1151
+   ],
+   "nodes_to": [
+    764,
+    766,
+    768,
+    769,
+    827,
+    869
+   ],
+   "node_a": 1033,
+   "node_b": 768
+  },
+  {
+   "id": 13,
+   "n": 81,
+   "per_hour": 2.1,
+   "demos": 68,
+   "take_off": [
+    348,
+    289,
+    476
+   ],
+   "landing": [
+    859,
+    286,
+    346
+   ],
+   "near_take_off": "RA (471)",
+   "near_landing": "YA (86)",
+   "length": 513,
+   "rise": -132,
+   "hole": 129,
+   "speed": [
+    384,
+    450,
+    509
+   ],
+   "air_s": 1.0,
+   "speed_needed": 463,
+   "walker_s": 1.8,
+   "serves": {},
+   "walker": "a way beside it",
+   "nodes_from": [
+    484,
+    487,
+    535,
+    539
+   ],
+   "nodes_to": [
+    927,
+    961,
+    963,
+    1003,
+    1005,
+    1056,
+    1058,
+    1060,
+    1119
+   ],
+   "node_a": 535,
+   "node_b": 1056
+  },
+  {
+   "id": 14,
+   "n": 67,
+   "per_hour": 1.7,
+   "demos": 59,
+   "take_off": [
+    333,
+    330,
+    476
+   ],
+   "landing": [
+    588,
+    74,
+    411
+   ],
+   "near_take_off": "RA (483)",
+   "near_landing": "YA (396)",
+   "length": 374,
+   "rise": -64,
+   "hole": 194,
+   "speed": [
+    324,
+    387,
+    512
+   ],
+   "air_s": 0.88,
+   "speed_needed": 371,
+   "walker_s": 1.5,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    442,
+    444,
+    446,
+    447,
+    484,
+    487,
+    489,
+    490,
+    535,
+    539,
+    542,
+    544
+   ],
+   "nodes_to": [
+    788,
+    790,
+    792,
+    794,
+    838,
+    839,
+    840
+   ],
+   "node_a": 535,
+   "node_b": 790
+  },
+  {
+   "id": 15,
+   "n": 58,
+   "per_hour": 1.5,
+   "demos": 51,
+   "take_off": [
+    169,
+    183,
+    220
+   ],
+   "landing": [
+    420,
+    56,
+    218
+   ],
+   "near_take_off": "RA (283)",
+   "near_landing": "RA (238)",
+   "length": 296,
+   "rise": -3,
+   "hole": 344,
+   "speed": [
+    327,
+    374,
+    438
+   ],
+   "air_s": 0.7,
+   "speed_needed": 373,
+   "walker_s": 1.0,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    296,
+    339,
+    341,
+    344,
+    372,
+    374,
+    376,
+    402,
+    436
+   ],
+   "nodes_to": [
+    515,
+    519,
+    522,
+    571,
+    572,
+    574,
+    577,
+    622,
+    624,
+    626,
+    674,
+    723
+   ],
+   "node_a": 372,
+   "node_b": 626
+  },
+  {
+   "id": 16,
+   "n": 58,
+   "per_hour": 1.5,
+   "demos": 48,
+   "take_off": [
+    280,
+    461,
+    472
+   ],
+   "landing": [
+    633,
+    342,
+    408
+   ],
+   "near_take_off": "",
+   "near_landing": "YA (325)",
+   "length": 385,
+   "rise": -64,
+   "hole": 191,
+   "speed": [
+    326,
+    387,
+    477
+   ],
+   "air_s": 0.88,
+   "speed_needed": 349,
+   "walker_s": 1.3,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    383,
+    384,
+    413,
+    414,
+    415,
+    444,
+    446,
+    447,
+    448,
+    489,
+    490,
+    491,
+    492,
+    542,
+    544,
+    546,
+    547
+   ],
+   "nodes_to": [
+    736,
+    744,
+    746,
+    797,
+    799,
+    801,
+    803,
+    804,
+    843,
+    844,
+    845,
+    846,
+    884,
+    885,
+    925
+   ],
+   "node_a": 447,
+   "node_b": 801
+  },
+  {
+   "id": 17,
+   "n": 56,
+   "per_hour": 1.4,
+   "demos": 44,
+   "take_off": [
+    575,
+    386,
+    424
+   ],
+   "landing": [
+    371,
+    460,
+    476
+   ],
+   "near_take_off": "YA (396)",
+   "near_landing": "",
+   "length": 214,
+   "rise": 52,
+   "hole": 207,
+   "speed": [
+    329,
+    422,
+    462
+   ],
+   "air_s": 0.47,
+   "speed_needed": 352,
+   "walker_s": 0.8,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    744,
+    746,
+    801,
+    803,
+    843,
+    844
+   ],
+   "nodes_to": [
+    539,
+    542,
+    544,
+    546,
+    594,
+    648
+   ],
+   "node_a": 744,
+   "node_b": 544
+  },
+  {
+   "id": 18,
+   "n": 46,
+   "per_hour": 1.2,
+   "demos": 41,
+   "take_off": [
+    440,
+    73,
+    218
+   ],
+   "landing": [
+    170,
+    170,
+    221
+   ],
+   "near_take_off": "RA (235)",
+   "near_landing": "RA (283)",
+   "length": 297,
+   "rise": 4,
+   "hole": 345,
+   "speed": [
+    333,
+    394,
+    516
+   ],
+   "air_s": 0.68,
+   "speed_needed": 367,
+   "walker_s": 1.0,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    517,
+    519,
+    522,
+    525,
+    570,
+    571,
+    572,
+    574,
+    624,
+    626,
+    629,
+    674,
+    677,
+    721,
+    723
+   ],
+   "nodes_to": [
+    296,
+    298,
+    339,
+    372,
+    374,
+    376,
+    402,
+    403,
+    405,
+    436
+   ],
+   "node_a": 626,
+   "node_b": 372
+  },
+  {
+   "id": 19,
+   "n": 44,
+   "per_hour": 1.1,
+   "demos": 39,
+   "take_off": [
+    58,
+    -183,
+    465
+   ],
+   "landing": [
+    547,
+    -7,
+    216
+   ],
+   "near_take_off": "RL (16)",
+   "near_landing": "RA (323)",
+   "length": 531,
+   "rise": -248,
+   "hole": 328,
+   "speed": [
+    316,
+    354,
+    378
+   ],
+   "air_s": 1.2,
+   "speed_needed": 380,
+   "walker_s": 1.8,
+   "serves": {},
+   "walker": "a way beside it",
+   "nodes_from": [
+    207,
+    208,
+    239,
+    240,
+    241,
+    283,
+    284,
+    285,
+    286,
+    328,
+    329
+   ],
+   "nodes_to": [
+    622,
+    624,
+    670,
+    672,
+    719,
+    721,
+    723,
+    784,
+    787,
+    836
+   ],
+   "node_a": 284,
+   "node_b": 719
+  },
+  {
+   "id": 20,
+   "n": 42,
+   "per_hour": 1.1,
+   "demos": 33,
+   "take_off": [
+    571,
+    1028,
+    472
+   ],
+   "landing": [
+    834,
+    1134,
+    472
+   ],
+   "near_take_off": "PG (490)",
+   "near_landing": "PG (207)",
+   "length": 288,
+   "rise": 0,
+   "hole": 127,
+   "speed": [
+    336,
+    373,
+    426
+   ],
+   "air_s": 0.68,
+   "speed_needed": 389,
+   "walker_s": 2.0,
+   "serves": {},
+   "walker": "slower",
+   "nodes_from": [
+    756,
+    758,
+    760,
+    762,
+    764
+   ],
+   "nodes_to": [
+    1032,
+    1033,
+    1091,
+    1092
+   ],
+   "node_a": 760,
+   "node_b": 1032
+  },
+  {
+   "id": 21,
+   "n": 36,
+   "per_hour": 0.9,
+   "demos": 33,
+   "take_off": [
+    240,
+    205,
+    219
+   ],
+   "landing": [
+    -22,
+    93,
+    220
+   ],
+   "near_take_off": "RA (239)",
+   "near_landing": "RL (378)",
+   "length": 296,
+   "rise": 1,
+   "hole": 345,
+   "speed": [
+    323,
+    422,
+    526
+   ],
+   "air_s": 0.68,
+   "speed_needed": 367,
+   "walker_s": 1.0,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    341,
+    372,
+    374,
+    376,
+    402,
+    403,
+    405,
+    436,
+    437,
+    439,
+    480
+   ],
+   "nodes_to": [
+    181,
+    183,
+    185,
+    187,
+    214,
+    216,
+    218,
+    248,
+    251,
+    254,
+    296
+   ],
+   "node_a": 437,
+   "node_b": 214
+  },
+  {
+   "id": 22,
+   "n": 31,
+   "per_hour": 0.8,
+   "demos": 17,
+   "take_off": [
+    698,
+    325,
+    408
+   ],
+   "landing": [
+    477,
+    504,
+    410
+   ],
+   "near_take_off": "YA (261)",
+   "near_landing": "",
+   "length": 278,
+   "rise": 3,
+   "hole": 191,
+   "speed": [
+    303,
+    372,
+    422
+   ],
+   "air_s": 0.7,
+   "speed_needed": 329,
+   "walker_s": 0.9,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    744,
+    843,
+    844,
+    845,
+    884,
+    885,
+    925
+   ],
+   "nodes_to": [
+    594,
+    648,
+    696,
+    748
+   ],
+   "node_a": 885,
+   "node_b": 648
+  },
+  {
+   "id": 23,
+   "n": 31,
+   "per_hour": 0.8,
+   "demos": 30,
+   "take_off": [
+    211,
+    162,
+    220
+   ],
+   "landing": [
+    -134,
+    174,
+    217
+   ],
+   "near_take_off": "RA (256)",
+   "near_landing": "YA (364)",
+   "length": 360,
+   "rise": -4,
+   "hole": 344,
+   "speed": [
+    443,
+    524,
+    564
+   ],
+   "air_s": 0.7,
+   "speed_needed": 465,
+   "walker_s": 1.2,
+   "serves": {},
+   "walker": "just makes it",
+   "nodes_from": [
+    372,
+    402,
+    403,
+    436,
+    475,
+    522
+   ],
+   "nodes_to": [
+    145,
+    149,
+    150,
+    158,
+    159,
+    168,
+    169,
+    183,
+    185,
+    191,
+    216,
+    220,
+    222
+   ],
+   "node_a": 372,
+   "node_b": 168
+  },
+  {
+   "id": 24,
+   "n": 21,
+   "per_hour": 0.5,
+   "demos": 20,
+   "take_off": [
+    345,
+    431,
+    478
+   ],
+   "landing": [
+    866,
+    279,
+    344
+   ],
+   "near_take_off": "",
+   "near_landing": "YA (77)",
+   "length": 547,
+   "rise": -133,
+   "hole": 127,
+   "speed": [
+    436,
+    496,
+    525
+   ],
+   "air_s": 1.0,
+   "speed_needed": 528,
+   "walker_s": 2.0,
+   "serves": {},
+   "walker": "slower",
+   "nodes_from": [
+    484,
+    539,
+    542,
+    544
+   ],
+   "nodes_to": [
+    1005,
+    1056,
+    1115,
+    1160
+   ],
+   "node_a": 544,
+   "node_b": 1056
+  },
+  {
+   "id": 25,
+   "n": 6,
+   "per_hour": 0.2,
+   "demos": 6,
+   "take_off": [
+    428,
+    -357,
+    309
+   ],
+   "landing": [
+    398,
+    -16,
+    219
+   ],
+   "near_take_off": "RL (425)",
+   "near_landing": "RA (279)",
+   "length": 347,
+   "rise": -90,
+   "hole": 362,
+   "speed": [
+    292,
+    321,
+    366
+   ],
+   "air_s": 0.93,
+   "speed_needed": 349,
+   "walker_s": null,
+   "serves": {
+    "MH": "no other way",
+    "RA": "no other way",
+    "RL": "no other way",
+    "LG": "no other way",
+    "YA": "no other way",
+    "YA2": "no other way"
+   },
+   "walker": "cannot",
+   "nodes_from": [
+    557,
+    558,
+    607,
+    608,
+    609
+   ],
+   "nodes_to": [
+    515,
+    570,
+    571,
+    622
+   ],
+   "node_a": 557,
+   "node_b": 515
+  },
+  {
+   "id": 26,
+   "n": 5,
+   "per_hour": 0.1,
+   "demos": 5,
+   "take_off": [
+    432,
+    -363,
+    308
+   ],
+   "landing": [
+    571,
+    -46,
+    216
+   ],
+   "near_take_off": "RL (431)",
+   "near_landing": "RA (360)",
+   "length": 361,
+   "rise": -92,
+   "hole": 359,
+   "speed": [
+    320,
+    354,
+    382
+   ],
+   "air_s": 0.95,
+   "speed_needed": 370,
+   "walker_s": null,
+   "serves": {
+    "MH": "no other way",
+    "RA": "no other way",
+    "RL": "no other way",
+    "LG": "no other way",
+    "YA": "no other way",
+    "YA2": "no other way"
+   },
+   "walker": "cannot",
+   "nodes_from": [
+    557,
+    607,
+    608,
+    609
+   ],
+   "nodes_to": [
+    719,
+    721,
+    784,
+    787
+   ],
+   "node_a": 608,
+   "node_b": 719
+  },
+  {
+   "id": 27,
+   "n": 1160,
+   "per_hour": 29.9,
+   "demos": 237,
+   "take_off": [
+    862,
+    -3,
+    216
+   ],
+   "landing": [
+    1014,
+    -16,
+    264
+   ],
+   "near_take_off": "MH (230)",
+   "near_landing": "MH (75)",
+   "length": 157,
+   "rise": 48,
+   "hole": -1,
+   "speed": [
+    321,
+    382,
+    542
+   ],
+   "air_s": 0.4,
+   "speed_needed": 341,
+   "walker_s": 0.6,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    877,
+    916,
+    918,
+    957,
+    958,
+    959,
+    993,
+    994,
+    995,
+    997,
+    1041,
+    1043,
+    1045,
+    1047,
+    1049,
+    1100,
+    1102,
+    1104,
+    1106
+   ],
+   "nodes_to": [
+    1190,
+    1191,
+    1200,
+    1206
+   ],
+   "node_a": 994,
+   "node_b": 1190
+  },
+  {
+   "id": 28,
+   "n": 887,
+   "per_hour": 22.9,
+   "demos": 236,
+   "take_off": [
+    -664,
+    442,
+    344
+   ],
+   "landing": [
+    -505,
+    442,
+    390
+   ],
+   "near_take_off": "LG (82)",
+   "near_landing": "YA (149)",
+   "length": 159,
+   "rise": 45,
+   "hole": -1,
+   "speed": [
+    342,
+    378,
+    434
+   ],
+   "air_s": 0.4,
+   "speed_needed": 382,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    24,
+    43,
+    44,
+    45,
+    54,
+    55,
+    62,
+    63
+   ],
+   "nodes_to": [
+    45,
+    71,
+    78,
+    79
+   ],
+   "node_a": 44,
+   "node_b": 78
+  },
+  {
+   "id": 29,
+   "n": 548,
+   "per_hour": 14.1,
+   "demos": 209,
+   "take_off": [
+    -381,
+    474,
+    408
+   ],
+   "landing": [
+    -377,
+    606,
+    455
+   ],
+   "near_take_off": "YA (91)",
+   "near_landing": "YA (228)",
+   "length": 134,
+   "rise": 46,
+   "hole": -1,
+   "speed": [
+    335,
+    375,
+    431
+   ],
+   "air_s": 0.32,
+   "speed_needed": 374,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    86,
+    105,
+    106,
+    107,
+    108,
+    131,
+    132,
+    133
+   ],
+   "nodes_to": [
+    109,
+    110,
+    135,
+    136
+   ],
+   "node_a": 132,
+   "node_b": 109
+  },
+  {
+   "id": 30,
+   "n": 493,
+   "per_hour": 12.7,
+   "demos": 185,
+   "take_off": [
+    886,
+    300,
+    344
+   ],
+   "landing": [
+    762,
+    319,
+    391
+   ],
+   "near_take_off": "YA (73)",
+   "near_landing": "YA (196)",
+   "length": 127,
+   "rise": 46,
+   "hole": -1,
+   "speed": [
+    322,
+    363,
+    415
+   ],
+   "air_s": 0.32,
+   "speed_needed": 352,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    1003,
+    1005,
+    1056,
+    1058,
+    1060,
+    1062,
+    1064,
+    1115,
+    1117,
+    1119
+   ],
+   "nodes_to": [
+    925,
+    927,
+    961
+   ],
+   "node_a": 1058,
+   "node_b": 925
+  },
+  {
+   "id": 31,
+   "n": 232,
+   "per_hour": 6.0,
+   "demos": 144,
+   "take_off": [
+    834,
+    706,
+    177
+   ],
+   "landing": [
+    950,
+    761,
+    222
+   ],
+   "near_take_off": "YA (496)",
+   "near_landing": "",
+   "length": 127,
+   "rise": 44,
+   "hole": 0,
+   "speed": [
+    357,
+    470,
+    549
+   ],
+   "air_s": 0.28,
+   "speed_needed": 369,
+   "walker_s": 0.8,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    937,
+    1013,
+    1014,
+    1016,
+    1018,
+    1020,
+    1073,
+    1075,
+    1130
+   ],
+   "nodes_to": [
+    1169,
+    1170,
+    1172,
+    1174,
+    1176
+   ],
+   "node_a": 1016,
+   "node_b": 1172
+  },
+  {
+   "id": 32,
+   "n": 190,
+   "per_hour": 4.9,
+   "demos": 108,
+   "take_off": [
+    757,
+    1198,
+    176
+   ],
+   "landing": [
+    891,
+    1256,
+    220
+   ],
+   "near_take_off": "PG (388)",
+   "near_landing": "PG (274)",
+   "length": 147,
+   "rise": 43,
+   "hole": -1,
+   "speed": [
+    312,
+    366,
+    439
+   ],
+   "air_s": 0.43,
+   "speed_needed": 307,
+   "walker_s": 0.4,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    865,
+    904,
+    908,
+    947,
+    949,
+    951,
+    952,
+    983,
+    985,
+    1030
+   ],
+   "nodes_to": [
+    1034,
+    1035
+   ],
+   "node_a": 951,
+   "node_b": 1035
+  },
+  {
+   "id": 33,
+   "n": 185,
+   "per_hour": 4.8,
+   "demos": 125,
+   "take_off": [
+    892,
+    123,
+    216
+   ],
+   "landing": [
+    1012,
+    -3,
+    264
+   ],
+   "near_take_off": "YA (179)",
+   "near_landing": "MH (77)",
+   "length": 181,
+   "rise": 48,
+   "hole": -1,
+   "speed": [
+    340,
+    386,
+    466
+   ],
+   "air_s": 0.45,
+   "speed_needed": 373,
+   "walker_s": 0.8,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    998,
+    999,
+    1000,
+    1049,
+    1051,
+    1053,
+    1108,
+    1110
+   ],
+   "nodes_to": [
+    1190,
+    1191
+   ],
+   "node_a": 1051,
+   "node_b": 1190
+  },
+  {
+   "id": 34,
+   "n": 175,
+   "per_hour": 4.5,
+   "demos": 104,
+   "take_off": [
+    543,
+    397,
+    425
+   ],
+   "landing": [
+    370,
+    447,
+    476
+   ],
+   "near_take_off": "YA (429)",
+   "near_landing": "",
+   "length": 181,
+   "rise": 52,
+   "hole": 208,
+   "speed": [
+    355,
+    414,
+    482
+   ],
+   "air_s": 0.43,
+   "speed_needed": 395,
+   "walker_s": 0.8,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    744,
+    746,
+    801
+   ],
+   "nodes_to": [
+    539,
+    542,
+    544,
+    546
+   ],
+   "node_a": 744,
+   "node_b": 544
+  },
+  {
+   "id": 35,
+   "n": 168,
+   "per_hour": 4.3,
+   "demos": 114,
+   "take_off": [
+    573,
+    855,
+    408
+   ],
+   "landing": [
+    443,
+    862,
+    455
+   ],
+   "near_take_off": "",
+   "near_landing": "",
+   "length": 133,
+   "rise": 46,
+   "hole": -1,
+   "speed": [
+    337,
+    377,
+    435
+   ],
+   "air_s": 0.32,
+   "speed_needed": 377,
+   "walker_s": 0.4,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    752,
+    754,
+    808,
+    810,
+    852
+   ],
+   "nodes_to": [
+    654,
+    655
+   ],
+   "node_a": 752,
+   "node_b": 654
+  },
+  {
+   "id": 36,
+   "n": 162,
+   "per_hour": 4.2,
+   "demos": 105,
+   "take_off": [
+    817,
+    933,
+    344
+   ],
+   "landing": [
+    708,
+    931,
+    394
+   ],
+   "near_take_off": "PG (378)",
+   "near_landing": "PG (436)",
+   "length": 112,
+   "rise": 48,
+   "hole": -1,
+   "speed": [
+    309,
+    358,
+    404
+   ],
+   "air_s": 0.3,
+   "speed_needed": 317,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    944,
+    976,
+    978,
+    980,
+    1025,
+    1027,
+    1029,
+    1084,
+    1088
+   ],
+   "nodes_to": [
+    814,
+    856,
+    897,
+    899
+   ],
+   "node_a": 1025,
+   "node_b": 899
+  },
+  {
+   "id": 37,
+   "n": 126,
+   "per_hour": 3.2,
+   "demos": 94,
+   "take_off": [
+    801,
+    1058,
+    176
+   ],
+   "landing": [
+    949,
+    963,
+    218
+   ],
+   "near_take_off": "PG (399)",
+   "near_landing": "PG (370)",
+   "length": 187,
+   "rise": 41,
+   "hole": -1,
+   "speed": [
+    333,
+    375,
+    406
+   ],
+   "air_s": 0.45,
+   "speed_needed": 359,
+   "walker_s": 0.8,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    941,
+    943,
+    945,
+    947,
+    979,
+    981,
+    983,
+    1026,
+    1028,
+    1030
+   ],
+   "nodes_to": [
+    1180,
+    1182,
+    1184
+   ],
+   "node_a": 981,
+   "node_b": 1182
+  },
+  {
+   "id": 38,
+   "n": 121,
+   "per_hour": 3.1,
+   "demos": 84,
+   "take_off": [
+    1309,
+    353,
+    177
+   ],
+   "landing": [
+    1468,
+    355,
+    223
+   ],
+   "near_take_off": "SG (10)",
+   "near_landing": "SG (165)",
+   "length": 159,
+   "rise": 45,
+   "hole": 0,
+   "speed": [
+    358,
+    474,
+    553
+   ],
+   "air_s": 0.35,
+   "speed_needed": 373,
+   "walker_s": 0.3,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    1251,
+    1253,
+    1258,
+    1259,
+    1260,
+    1265
+   ],
+   "nodes_to": [
+    1268,
+    1269
+   ],
+   "node_a": 1259,
+   "node_b": 1268
+  },
+  {
+   "id": 39,
+   "n": 105,
+   "per_hour": 2.7,
+   "demos": 80,
+   "take_off": [
+    941,
+    90,
+    408
+   ],
+   "landing": [
+    889,
+    -21,
+    454
+   ],
+   "near_take_off": "YA (173)",
+   "near_landing": "MH (281)",
+   "length": 120,
+   "rise": 45,
+   "hole": -1,
+   "speed": [
+    337,
+    381,
+    453
+   ],
+   "air_s": 0.3,
+   "speed_needed": 379,
+   "walker_s": 0.4,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    1048,
+    1050,
+    1107,
+    1109,
+    1157,
+    1193
+   ],
+   "nodes_to": [
+    1044,
+    1103
+   ],
+   "node_a": 1107,
+   "node_b": 1044
+  },
+  {
+   "id": 40,
+   "n": 71,
+   "per_hour": 1.8,
+   "demos": 59,
+   "take_off": [
+    -399,
+    -71,
+    216
+   ],
+   "landing": [
+    -517,
+    -66,
+    262
+   ],
+   "near_take_off": "YA (492)",
+   "near_landing": "YA (495)",
+   "length": 119,
+   "rise": 45,
+   "hole": -1,
+   "speed": [
+    353,
+    382,
+    440
+   ],
+   "air_s": 0.3,
+   "speed_needed": 370,
+   "walker_s": 0.3,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    94,
+    95,
+    96
+   ],
+   "nodes_to": [
+    77
+   ],
+   "node_a": 95,
+   "node_b": 77
+  },
+  {
+   "id": 41,
+   "n": 62,
+   "per_hour": 1.6,
+   "demos": 56,
+   "take_off": [
+    639,
+    141,
+    408
+   ],
+   "landing": [
+    634,
+    -7,
+    454
+   ],
+   "near_take_off": "YA (324)",
+   "near_landing": "YA (413)",
+   "length": 149,
+   "rise": 45,
+   "hole": -1,
+   "speed": [
+    317,
+    364,
+    436
+   ],
+   "air_s": 0.38,
+   "speed_needed": 337,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    790,
+    792,
+    794,
+    796,
+    838,
+    839,
+    840,
+    841,
+    842,
+    883,
+    923
+   ],
+   "nodes_to": [
+    788,
+    837,
+    880
+   ],
+   "node_a": 840,
+   "node_b": 837
+  },
+  {
+   "id": 42,
+   "n": 62,
+   "per_hour": 1.6,
+   "demos": 51,
+   "take_off": [
+    844,
+    772,
+    176
+   ],
+   "landing": [
+    866,
+    584,
+    220
+   ],
+   "near_take_off": "",
+   "near_landing": "YA (363)",
+   "length": 195,
+   "rise": 43,
+   "hole": -1,
+   "speed": [
+    369,
+    467,
+    544
+   ],
+   "air_s": 0.43,
+   "speed_needed": 424,
+   "walker_s": 0.6,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    971,
+    972,
+    973,
+    1014,
+    1016,
+    1018,
+    1020,
+    1075,
+    1077,
+    1079,
+    1132,
+    1134
+   ],
+   "nodes_to": [
+    1010,
+    1012,
+    1067,
+    1069,
+    1126,
+    1128
+   ],
+   "node_a": 1016,
+   "node_b": 1012
+  },
+  {
+   "id": 43,
+   "n": 59,
+   "per_hour": 1.5,
+   "demos": 49,
+   "take_off": [
+    -351,
+    -86,
+    216
+   ],
+   "landing": [
+    -437,
+    -241,
+    260
+   ],
+   "near_take_off": "RL (490)",
+   "near_landing": "",
+   "length": 184,
+   "rise": 43,
+   "hole": -1,
+   "speed": [
+    335,
+    385,
+    465
+   ],
+   "air_s": 0.45,
+   "speed_needed": 371,
+   "walker_s": 0.6,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    93,
+    94,
+    95,
+    96,
+    119,
+    120,
+    121,
+    122
+   ],
+   "nodes_to": [
+    65,
+    74,
+    80,
+    81,
+    82,
+    83,
+    89,
+    91,
+    92,
+    116
+   ],
+   "node_a": 121,
+   "node_b": 92
+  },
+  {
+   "id": 44,
+   "n": 47,
+   "per_hour": 1.2,
+   "demos": 43,
+   "take_off": [
+    726,
+    887,
+    177
+   ],
+   "landing": [
+    689,
+    721,
+    222
+   ],
+   "near_take_off": "",
+   "near_landing": "",
+   "length": 177,
+   "rise": 43,
+   "hole": 0,
+   "speed": [
+    369,
+    418,
+    504
+   ],
+   "air_s": 0.38,
+   "speed_needed": 412,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    851,
+    853,
+    895,
+    896,
+    937,
+    938,
+    939,
+    974,
+    975,
+    1022
+   ],
+   "nodes_to": [
+    892,
+    935
+   ],
+   "node_a": 938,
+   "node_b": 892
+  },
+  {
+   "id": 45,
+   "n": 40,
+   "per_hour": 1.0,
+   "demos": 36,
+   "take_off": [
+    -626,
+    -287,
+    304
+   ],
+   "landing": [
+    -712,
+    -122,
+    347
+   ],
+   "near_take_off": "",
+   "near_landing": "",
+   "length": 206,
+   "rise": 43,
+   "hole": -9,
+   "speed": [
+    341,
+    380,
+    409
+   ],
+   "air_s": 0.5,
+   "speed_needed": 398,
+   "walker_s": 0.7,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    29,
+    49,
+    57,
+    58,
+    66
+   ],
+   "nodes_to": [
+    13,
+    14,
+    15,
+    31,
+    32,
+    33,
+    34
+   ],
+   "node_a": 58,
+   "node_b": 32
+  },
+  {
+   "id": 46,
+   "n": 35,
+   "per_hour": 0.9,
+   "demos": 33,
+   "take_off": [
+    829,
+    875,
+    176
+   ],
+   "landing": [
+    950,
+    908,
+    222
+   ],
+   "near_take_off": "PG (495)",
+   "near_landing": "PG (409)",
+   "length": 159,
+   "rise": 44,
+   "hole": -1,
+   "speed": [
+    327,
+    376,
+    424
+   ],
+   "air_s": 0.4,
+   "speed_needed": 354,
+   "walker_s": 0.6,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    939,
+    973,
+    975,
+    1018,
+    1020,
+    1022,
+    1024,
+    1079,
+    1083,
+    1085,
+    1134
+   ],
+   "nodes_to": [
+    1174,
+    1176,
+    1178,
+    1180,
+    1182
+   ],
+   "node_a": 1024,
+   "node_b": 1180
+  },
+  {
+   "id": 47,
+   "n": 34,
+   "per_hour": 0.9,
+   "demos": 31,
+   "take_off": [
+    661,
+    1088,
+    344
+   ],
+   "landing": [
+    635,
+    953,
+    391
+   ],
+   "near_take_off": "PG (401)",
+   "near_landing": "PG (478)",
+   "length": 141,
+   "rise": 45,
+   "hole": -1,
+   "speed": [
+    316,
+    371,
+    416
+   ],
+   "air_s": 0.36,
+   "speed_needed": 346,
+   "walker_s": 0.5,
+   "serves": {},
+   "walker": "up a ledge",
+   "nodes_from": [
+    818,
+    820,
+    860,
+    862,
+    901,
+    903,
+    905,
+    944,
+    946,
+    948
+   ],
+   "nodes_to": [
+    814,
+    856,
+    899
+   ],
+   "node_a": 862,
+   "node_b": 856
+  }
+ ],
+ "a_walker_cannot_or_a_second_slower": 205,
+ "a_walker_just_makes": 3003,
+ "up_a_ledge_beside_a_way": 5081
+}

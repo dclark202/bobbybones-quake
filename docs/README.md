@@ -12,7 +12,7 @@ Put in order on 2026-10-10 (owner: "take a pass at cleaning up the docs ... crea
 | [results/](results/) | The results log itself, one file a day, newest entry first: what was tried and measured, what did **not** work included | Every run, live test, measurement or decision |
 | [runs/](runs/) | A run's own documents: `MANIFEST_v<n>.md` (the run in full, for the owner's go), `MIDRUN_v<n>.md` (a report while it trains), `REPORT_v<n>.md` (the full report of its network) | Before, during and after a run |
 | [guides/](guides/) | How to use and read things: the play-test routine and the test suite (PLAYTEST), the server's chat commands (COMMANDS), renting and starting a server (HOSTING), the community page (COMMUNITY), the formats of recorded data (LOGS), the map atlas (ATLAS) | The thing they describe changes |
-| [design/](design/) | Proposals not tied to one run: what is scoped for later (SCOPE_v15, ATTENTION_POC) | A proposal is written or decided |
+| [design/](design/) | Proposals not tied to one run: what is scoped for later (SCOPE_v15, ATTENTION_POC); `jumps/`: the pros' jumps a walker cannot make, a picture and a table per map (`tools/pro_gaps.py`, `tools/draw_gaps.py`) | A proposal is written or decided |
 | [archive/](archive/) | What is no longer in force, kept whole: closed backlog items, the plan as it stood | Something is closed or replaced |
 | `INPUTS*.csv`, `*.json`, [MAPS.md](MAPS.md) | Data that tools write and read by path: the network's inputs (today's and those of older networks), the pros' tables, measured values, the list of maps | A tool writes them. They stay in `docs/` until the tools' paths are moved with them (B-203) |
 

@@ -43,7 +43,15 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 [MANIFEST_v14.md](runs/MANIFEST_v14.md), section 0), to 19:00 at the latest, with a mid-run report around noon: from v13 again, v13
 kept in the league and played first in every check (under 45% of the frags against it twice in a row: stop), weapons
 as v13 had them, the strafe-jumping teacher switched on after two clean checks. The second start is kept as
-`duel_gru_v14_try2`.
+`duel_gru_v14_try2`. The first 80 minutes lost Aerowalk to v13 12% to 88% (the item rule named a red armor only a jump
+reaches; fixed at 09:32, level since); the teacher is on since 10:57 with grenade and plasma shots free. Mid-run report:
+[runs/MIDRUN_v14c.md](runs/MIDRUN_v14c.md).
+
+**`duel_gru_v15` is being prepared** on the branch `v15` (owner, 10:38: "Start on anything you can with preparing for v15
+now while v14 is running ... Ideally I would like v15 to start tonight"): jump runs on the pros' jumps with a teacher
+trained on them, grenades and plasma (lives that begin with them, one-weapon rounds, the lobber, the watcher and the
+holder among his opponents). What is built and what is not: [runs/MANIFEST_v15.md](runs/MANIFEST_v15.md). It starts on
+his go.
 
 **The owner's priority list for the next models (2026-10-10)**: (1) strafe jumping and keeping speed; (2) rockets; (3)
 plasma and grenades, the shotgun to a lesser extent; (4) "game awareness": not through a teleporter the enemy watches,
@@ -148,6 +156,9 @@ The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)
   jump training (a gap course and the named jumps of the real maps; the teacher may train on Campgrounds' and Toxicity's
   jumps), grenades and plasma (the free shots go back in with the teacher's restart of v14's third start), and attention
   for strategy. Also to learn in time: stairs with jump held, and a jump at a ledge that hooks onto it.
+- (2026-10-10 10:38) v15 is jumps and grenades and plasma ("Definite yes to jumps and plasma/grenades"), with the shares of
+  his rounds as proposed ("I agree with all of those changes": [runs/MANIFEST_v15.md](runs/MANIFEST_v15.md), section 1);
+  attention "I really want, but it seems there needs to be more build out": the run after.
 - (2026-10-10) The priority list for the next models: strafe jumping and keeping speed; rockets; plasma and grenades
   (the shotgun less); then game awareness. Every plan addresses these and any odd behaviour seen in a run or in duels.
 
