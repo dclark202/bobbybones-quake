@@ -4,7 +4,7 @@ The run of [MANIFEST_v14.md](MANIFEST_v14.md). First start 2026-10-09 20:14, sto
 `duel_gru_v14_try1` (it went wrong, see below); second start 22:53 from the same starting network,
 still training (it ends itself at 19:00). Numbers are the mean of ten updates; the duels are 32 ten-minute games a map from a save, against the Nightmare
 stand-in every 45 minutes and, since this morning, against v13 itself. "Start" and "v13" are the starting network (v13
-with v14's ten new inputs) under v14's settings. The night's log: [RESULTS.md](RESULTS.md), 2026-10-09 23:15 to
+with v14's ten new inputs) under v14's settings. The night's log: [RESULTS.md](../RESULTS.md), 2026-10-09 23:15 to
 2026-10-10 06:30.
 
 ## In short
@@ -294,7 +294,7 @@ labels. Each cell: units a second, time fast in the air, items reached a minute.
   same. Nothing in the plugin stands in the way of v14 on the public server.
 - **Warmup**: with no game on, every player holds every weapon with full ammunition, a state he has never trained in
   (B-196). On the public server 6 of 149 counted frags so far.
-- **The scripted opponents** (holder, watcher, lobber: [SCOPE_v15.md](SCOPE_v15.md) A1) are built in a copy of the
+- **The scripted opponents** (holder, watcher, lobber: [SCOPE_v15.md](../design/SCOPE_v15.md) A1) are built in a copy of the
   simulator and measured against v13 (RESULTS 01:30): he takes 51% of the frags from the holder, 59% from the watcher,
   65% from the lobber, 70% from the stand-in. They go into the simulator after v14.
 - **The leaderboard** (public server, v13, since 19:50): 149 counted frags with three people; Bobby made 19 and took
@@ -357,7 +357,7 @@ going; it can be stopped or changed at the next save on your word.
    wrong, and how far a pupil of sampled labels gets (half the way).
 5. The grenade launcher and the plasma gun: no price and no silence of a teacher has put them in his hand; they need
    rounds of their own, or the opponents that make them pay (the lobber).
-6. The scripted opponents into the simulator, and the slower deciding head ([SCOPE_v15.md](SCOPE_v15.md)).
+6. The scripted opponents into the simulator, and the slower deciding head ([SCOPE_v15.md](../design/SCOPE_v15.md)).
 7. An empty weapon in his hand 7 to 10% of the time (B-192), and the warmup's full weapon set (B-196).
 8. The stand-in beside the game's own Nightmare bot once more after this run: if real games do not punish rockets
    the way the script does, the script needs mending, not he.

@@ -2,7 +2,7 @@
 
 Written 2026-10-09 while `duel_gru_v14` trains, at the owner's request ("Scope out changes after the v14 run has been set
 up"). Nothing here is built or decided. Sources: his notes after his games against v13
-([RESULTS.md](RESULTS.md) 2026-10-09 20:05), [BACKLOG.md](BACKLOG.md) B-188 to B-192.
+([RESULTS.md](../RESULTS.md) 2026-10-09 20:05), [BACKLOG.md](../BACKLOG.md) B-188 to B-192.
 
 ## Where he is
 

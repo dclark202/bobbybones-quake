@@ -1,4 +1,4 @@
-"""Step 0 of docs/ATTENTION_POC.md: what would attention over the scene cost at play time? Random weights, numpy only,
+"""Step 0 of docs/design/ATTENTION_POC.md: what would attention over the scene cost at play time? Random weights, numpy only,
 the same arithmetic the play plugin does for today's network (plugins/ffabot.py act_batch), timed for 1 to 6 bots.
 
     python tools/attention_timing.py [--frames 3000]

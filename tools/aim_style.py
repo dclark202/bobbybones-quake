@@ -1,4 +1,4 @@
-"""Aim style of the subject in play-test aim rooms, from a session's per-frame log (docs/LOGS.md).
+"""Aim style of the subject in play-test aim rooms, from a session's per-frame log (docs/guides/LOGS.md).
 
     python tools/aim_style.py data/duellive/sessions/<session>
 

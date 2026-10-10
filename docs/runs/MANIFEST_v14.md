@@ -2,8 +2,8 @@
 
 What the owner called on 2026-10-09, what is built and how it was tested, the run as it would be started, and what is
 his to decide. The run starts only on his go, after his duel against v13.
-Sources: [RESULTS.md](RESULTS.md) entries of 2026-10-09 (09:05 the calls; 10:15 the map audit; 12:20 v13's end; 15:30 the
-preparation and the real games), [REPORT_v13.md](REPORT_v13.md), [BACKLOG.md](BACKLOG.md) B-163 to B-182.
+Sources: [RESULTS.md](../RESULTS.md) entries of 2026-10-09 (09:05 the calls; 10:15 the map audit; 12:20 v13's end; 15:30 the
+preparation and the real games), [REPORT_v13.md](REPORT_v13.md), [BACKLOG.md](../BACKLOG.md) B-163 to B-182.
 
 ## 0. The owner's decisions (2026-10-09, after his review)
 

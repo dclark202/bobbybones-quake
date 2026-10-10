@@ -1,5 +1,5 @@
 """One card for everybody: the same numbers for people, for the game's Nightmare bot and for BobbyBones, read from the
-session logs of the play-test and public servers (docs/LOGS.md, schemas 1 to 4). What a player takes, holds, fires
+session logs of the play-test and public servers (docs/guides/LOGS.md, schemas 1 to 4). What a player takes, holds, fires
 and how he aims in real games, so that Bobby's numbers can be put beside a person's (owner, 2026-10-07: baselines
 for tuning him to play like people, not only hitscan aim).
 

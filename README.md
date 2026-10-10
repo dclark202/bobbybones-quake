@@ -7,7 +7,7 @@ Bobbys included, the rest watch. Chat commands: `!bots <0-4>` sets how many Bobb
 Toxicity, Cure), `!mode duel` makes it one against one, F3 readies you up for a timed ten-minute game, `!note <text>`
 leaves a comment for the log. A leaderboard local to the server counts every frag between a person and Bobby, warmup
 included: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours. All commands:
-[docs/COMMANDS.md](docs/COMMANDS.md).
+[docs/guides/COMMANDS.md](docs/guides/COMMANDS.md).
 
 ## What is it
 
@@ -20,7 +20,7 @@ Where he is now: he plays duels and free-for-all on Blood Run, Aerowalk and Lost
 the mega, keeps a stack, and beats a scripted item-running opponent that has the aim of the game's hardest bot on the
 maps he trained on (72 to 80% of the frags over 100 ten-minute duels a map), and beats the game's own Nightmare bot
 in real ten-minute duels on Blood Run and Lost World (six of six). He does not strafe jump yet and fires few rockets. Every run and measurement, including what did not work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest
-full report is [docs/REPORT_v13.md](docs/REPORT_v13.md).
+full report is [docs/runs/REPORT_v13.md](docs/runs/REPORT_v13.md).
 
 The goal is a bot that beats strong players fairly, with learned movement, weapon choice, item control and positioning,
 and later one that adapts to the level of the player in front of him.
@@ -92,7 +92,7 @@ items. Strafe jumping emerges there within minutes; that network is used as a te
   network in numpy (`policy.npz`, written by `sim/export_duel.py`), apply the same hand and mouse limits, and send the
   command.
 - `plugins/powerups.py`: no powerups, and a map's duel items in every mode.
-- Every session is logged per frame ([docs/LOGS.md](docs/LOGS.md)). Chat commands: [docs/COMMANDS.md](docs/COMMANDS.md).
+- Every session is logged per frame ([docs/guides/LOGS.md](docs/guides/LOGS.md)). Chat commands: [docs/guides/COMMANDS.md](docs/guides/COMMANDS.md).
 
 ### Checking
 
@@ -106,7 +106,7 @@ items. Strafe jumping emerges there within minutes; that network is used as a te
 
 ## In progress and planned
 
-In progress (the next run, [docs/MANIFEST_v14.md](docs/MANIFEST_v14.md)):
+In progress (the next run, [docs/runs/MANIFEST_v14.md](docs/runs/MANIFEST_v14.md)):
 
 - Strafe jumping: the movement network as a teacher in item runs, pay for covering his way fast, inputs for his own
   speed and direction of travel.
@@ -125,7 +125,7 @@ Planned:
 - Player reports: how an opponent plays, from the logs.
 
 Plan and open work: [docs/PLAN.md](docs/PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md). Play him and help set his limits:
-[docs/COMMUNITY.md](docs/COMMUNITY.md).
+[docs/guides/COMMUNITY.md](docs/guides/COMMUNITY.md).
 
 ## Run it yourself locally
 
@@ -143,7 +143,7 @@ SPAR=1 bash tools/duel_server.sh my_run bloodrun           # the same network ag
 ```
 
 On the server, chat commands switch the mode and the map (`!mode ffa|duel`, `!map <name>`, `!bots <0-4>`) and save
-feedback (`!note`). Full list: [docs/COMMANDS.md](docs/COMMANDS.md). Hosting a public one: [docs/HOSTING.md](docs/HOSTING.md).
+feedback (`!note`). Full list: [docs/guides/COMMANDS.md](docs/guides/COMMANDS.md). Hosting a public one: [docs/guides/HOSTING.md](docs/guides/HOSTING.md).
 The settings of each run are in its manifest (`docs/MANIFEST_v<n>.md`).
 
 ## Repo structure

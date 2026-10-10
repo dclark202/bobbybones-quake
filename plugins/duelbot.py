@@ -8,7 +8,7 @@ training: the opponent is only known when in view with line of sight (after the 
 roughly when heard nearby. Both players spawn with the loadout the policy trained with.
 
 Test rooms (!room ...): Bobby's body becomes the scripted target / fighter of the simulator's rooms and the
-human is measured with the same metrics, giving a human baseline card (docs/LOGS.md).
+human is measured with the same metrics, giving a human baseline card (docs/guides/LOGS.md).
 
 Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
 there. The server is held in warmup on the three maps.
@@ -154,7 +154,7 @@ class duelbot(minqlx.Plugin):
         with open(path, "a") as f:
             f.write(json.dumps(rec) + "\n")
 
-    # ------------------------------------------------------------------ session logs (schema: docs/LOGS.md)
+    # ------------------------------------------------------------------ session logs (schema: docs/guides/LOGS.md)
     def start_session(self, opp):
         self.end_session()
         kind = "spar" if is_bot(opp) else "human"

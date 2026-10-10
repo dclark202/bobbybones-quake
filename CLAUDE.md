@@ -27,21 +27,36 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - No powerups anywhere (owner, 2026-10-09: no quad, no "protection", on any server or in training) and a map's
   **duel** items in every mode, free-for-all too: `plugins/powerups.py` does both on the servers; the simulator has
   always had a map's duel items and no powerups.
+- **His priority list for the next models (2026-10-10)**: strafe jumping and keeping speed; rockets; plasma and
+  grenades, the shotgun less; then game awareness (not through a teleporter the enemy watches, not always the same
+  path: it needs more model build-out and comes when the first two or three are there). Every plan addresses these
+  and any odd behaviour seen in a run or in duels.
+- **The control in every run (2026-10-10)**: the last best network stays in the league (`--anchor-p`) and every
+  checked save plays it head to head, beside the stand-in; a network is promoted only if it beats the control.
 - No personal data in the repo (Steam IDs, home IP, Windows usernames, passwords). The repo is public.
 - The owner prefers concise answers and doable batches. Do not start a training run without his go-ahead when he
   has asked to test first.
 
-## Docs (keep in sync, one commit)
-- `docs/PLAN.md`: approach, status, the "Now" list (backlog IDs only), owner decisions.
-- `docs/BACKLOG.md`: every work item with an ID (`B-nn`), priority and status.
-- `docs/RESULTS.md`: dated log of every run, live test and measurement, including what did not work.
-- `docs/LOGS.md`: schemas of recorded data. `docs/PLAYTEST.md`: the play-test routine and the test suite.
-- `docs/REPORT_v<n>.md`, `docs/MANIFEST_v<n>.md`: the full report of a network and the full list of the next run (what is
-  in its rounds, what it is paid for and shown, what changed), written for the owner's approval before a run starts.
+## Docs (keep in sync, one commit; the routine is `docs/README.md`)
+- `docs/PLAN.md`: the goal, the approach, today's status table, the "Now" list (the owner's priority list and backlog
+  numbers only), owner decisions. History does not go into it: the plan as it stood is in `docs/archive/`.
+- `docs/BACKLOG.md`: the open work by number (`B-nn`), grouped by the owner's priority list; a closed item moves with
+  its row to `docs/archive/BACKLOG_closed.md`. A new item takes the highest number in both files plus one.
+- `docs/RESULTS.md` is the index of the results log; the log is one file a day in `docs/results/<date>.md`, newest
+  first, what did not work included. Add an entry with `python tools/add_result.py entry.md` (first line
+  `## <date> <time> — <the finding>`; links written as from `docs/results/`). "RESULTS 2026-10-08 18:45" anywhere
+  means the entry of that time in `docs/results/2026-10-08.md`.
+- `docs/runs/`: a run's own documents, `MANIFEST_v<n>.md` (the run in full, for the owner's go before a start; changes
+  during the run go into its section 0), `MIDRUN_v<n>.md`, `REPORT_v<n>.md` (the full report, ending with what to try next).
+- `docs/guides/` (PLAYTEST, COMMANDS, HOSTING, COMMUNITY, LOGS: the schemas of recorded data, ATLAS), `docs/design/`
+  (proposals not tied to a run: SCOPE_v15, ATTENTION_POC), `docs/archive/`.
+- `docs/INPUTS*.csv`, `docs/*.json`, `docs/MAPS.md`: data that tools and the Dockerfile read by path; they stay there
+  until every path moves with them (B-203).
 - `README.md`: the public page (goal, fairness rules, how it works, what he can do, in progress, planned; no dated
   status table: owner, 2026-10-08). The owner wants it kept current
   with the docs (2026-10-08).
-After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, update PLAN if needed.
+After any run, test or decision: an entry in the log, the backlog, the plan if its status or "Now" changed, then
+`python tools/docs_check.py` (links, the log's index, backlog numbers) before the commit.
 
 ## Architecture
 - **Simulator** (`sim/`): `sim_api.c` + vendored ioquake3 movement and collision (`sim/q3`) -> `qsim.dll`
@@ -136,7 +151,7 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   mbspc from `data/tools` (NetRadiant-custom; mbspc needs `-forcesidesvisible`). Bots cannot join a map
   without an `.aas` file.
 - **Map atlas**: `tools/build_atlas.py` -> `maps/atlas/<map>.json` + `.png` (areas, items, several routes per item
-  seeded from pro demos; `docs/ATLAS.md`). Matplotlib is broken in the Anaconda Python: draw with `--picture` in the system Python.
+  seeded from pro demos; `docs/guides/ATLAS.md`). Matplotlib is broken in the Anaconda Python: draw with `--picture` in the system Python.
 - **Pro demos**: `tools/fetch_demos.py` downloads, `sim/demo_dataset.py` converts (inputs + inferred keys), the trainer
   imitates with `--demo-dir/--demo-coef/--demo-heads`. Demos and sets live in the folder named in `data/demo_root.txt`.
   Imitating mouse or trigger at full weight destroys aim (RESULTS 2026-10-04 21:12): movement heads only.

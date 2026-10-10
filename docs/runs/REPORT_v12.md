@@ -1,6 +1,6 @@
 # `duel_gru_v12`: full report (2026-10-08)
 
-The network on the public server since 2026-10-08 16:50. Everything here is from [RESULTS.md](RESULTS.md) (entries of
+The network on the public server since 2026-10-08 16:50. Everything here is from [RESULTS.md](../RESULTS.md) (entries of
 2026-10-08), set in one place for the owner's review before `duel_gru_v13` ([MANIFEST_v13.md](MANIFEST_v13.md)).
 
 ## In short

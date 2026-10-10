@@ -2,7 +2,7 @@
 
 The run of 2026-10-08 21:26 to 2026-10-09 11:35 ([MANIFEST_v13.md](MANIFEST_v13.md); mid-run: [MIDRUN_v13.md](MIDRUN_v13.md)),
 stopped on the owner's word after fourteen hours ("end v13 at the next decent checkpoint"). Numbers are from
-[RESULTS.md](RESULTS.md) (entries of 2026-10-08 21:26 and 2026-10-09). What comes next is in [MANIFEST_v14.md](MANIFEST_v14.md).
+[RESULTS.md](../RESULTS.md) (entries of 2026-10-08 21:26 and 2026-10-09). What comes next is in [MANIFEST_v14.md](MANIFEST_v14.md).
 
 ## In short
 
