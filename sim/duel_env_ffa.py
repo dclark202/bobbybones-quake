@@ -1549,6 +1549,7 @@ class DuelEnv:
                           wrule_frames=0, wrule_agree=0,
                           frags_vs_bot=0, bot_frags=0, target_kills=0, bot_frames=0, aim_round_frames=0,
                           w_dist=np.zeros((3, NW)), dmg_h=0.0, dmg_from_script=0.0,
+                          hand_g=np.zeros(NW),                            # ... in games alone (not in one-weapon rounds)
                           hand_w=np.zeros(NW), blind_w=np.zeros(NW),      # frames with each weapon in hand; frames firing it with no enemy seen for a second
                           speed_pay=0.0, speed_pay_run=0.0, speed_frames=0, move_teach_frames=0,
                           blind_rl=0, blind_rl_how=np.zeros(4), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way
@@ -4114,6 +4115,7 @@ class DuelEnv:
         fight = human & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         self.stats["switches"] += int((sw & fight).sum())
         self.stats["hand_w"] += np.bincount(self.weapon[fight & (self.hp > 0)], minlength=NW)
+        self.stats["hand_g"] += np.bincount(self.weapon[fight & (pkind == NORMAL) & (self.hp > 0)], minlength=NW)
         self.stats["blind_w"] += np.bincount(self.weapon[blind & fight], minlength=NW)
         self.stats["fire_frames"] += int((fire & fight).sum())
         self.stats["blind_frames"] += int((blind & fight).sum())
@@ -4768,6 +4770,9 @@ class DuelEnv:
             elif kd == NORMAL and self.route is not None and self.rng.random() < self.runner_p:
                 self.script[b_] = 3                          # the item runner, with the all-round fighter's aim
                 self.sc_persona[b_] = 0
+                if TRICKS and TRICK_P.sum() > 0 and self.rng.random() < TRICK_P.sum():   # ... or one of the three in his place
+                    self.sc_persona[b_] = (HOLDER, LOBBER, WATCHER)[int(self.rng.choice(3, p=TRICK_P / TRICK_P.sum()))]   # (until 2026-10-10
+                    self.hold_ahead[b_] = self.sc_persona[b_] == HOLDER and self.rng.random() < HOLD_STACK              # only in the yard's rounds)
             elif kd == NORMAL and self.G == 2 and self.rng.random() < self.bot_p:
                 self.script[b_] = 2
             if self.script[b_] == 2:

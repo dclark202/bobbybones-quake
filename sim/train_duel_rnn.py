@@ -651,7 +651,9 @@ def main():
                             jumps={m_: [[int(t_), round(float(o_ / max(1.0, t_)), 2)] for t_, o_ in                                       # ... per map and jump (its place in the map's list): tries, over
                                         zip(np.atleast_1d(v_.get("jump_tries", np.zeros(1))), np.atleast_1d(v_.get("jump_over", np.zeros(1))))][:int(np.max(np.nonzero(np.atleast_1d(v_.get("jump_tries", np.zeros(1))))[0], initial=-1)) + 1]
                                    for m_, v_ in agg_map.items() if float(np.sum(v_.get("jump_tries", 0))) > 0},
-                            start_gun_per_player_min=round(float(agg.get("start_gun", 0) / max(1e-9, N * T * DT_MIN)), 3)),               # (START_GUN_P) lives begun with grenades or plasma in hand
+                            start_gun_per_player_min=round(float(agg.get("start_gun", 0) / max(1e-9, N * T * DT_MIN)), 3),
+                            in_hand_games={w_: round(float(np.atleast_1d(agg.get("hand_g", np.zeros(len(WEAPONS))))[i_]                # the share of his time in games (not in
+                                                           / max(1.0, float(np.sum(agg.get("hand_g", 0.0))))), 4) for i_, w_ in enumerate(WEAPONS)}),   # one-weapon rounds) with each weapon in hand               # (START_GUN_P) lives begun with grenades or plasma in hand
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,
