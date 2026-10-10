@@ -47,6 +47,13 @@ FALL_COST = 0.05                                            # v14: seconds a poi
 HAZARD = 8 | 16                                             # lava, slime (the map's contents flags)
 TELE_FAR = 160.0                                            # v14: a teleporter link starts within this of its entrance
 N_WALL, N_FLOOR = 16, 8
+# v15 (hand): the left hand he plays with (duel_env.limit_keys; the same numbers): ring finger = strafe left, middle =
+# forward and back (no direct reversal), index = strafe right, thumb = jump
+RING, MIDDLE, INDEX, THUMB = range(4)
+FINGER_HOLD = np.array([6, 6, 6, 4], np.int64)              # frames a finger waits after it has acted
+KEY_EVERY, KEY_BURST = 4, 10.0                              # the keys are read every 4 frames; a burst of ten key actions
+KEY_RATE = float(os.environ.get("KEY_RATE") or 8.0)         # ... refilled at this many a second (v14: 8)
+N_HAND = 5                                                  # inputs: the keys held (forward, strafe, jump), the hand's budget, frames to the next reading
 OBS_DIM = 3 + 1 + 12 + 4 + 3 + 1 + N_WALL + N_FLOOR
 
 
@@ -188,7 +195,7 @@ class NavField:
 
 class MoveEnv:
     def __init__(self, bsp, nav_path, n=512, seed=0, max_goal_time=8.0, min_goal_time=0.8, substeps=(8, 8, 9),
-                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5):
+                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5, hand=False):
         """substeps: physics steps (ms) per 25 ms decision. (8, 8, 9) = a 125 fps human: the frame-rate
         dependent ground-strafe boost that 40 Hz bots get (25,) is not available, as for real players."""
         self.w = World(bsp, n=n)
@@ -227,6 +234,14 @@ class MoveEnv:
                     self.try_by_k.setdefault(k_, []).append((g_, st_))
         self.jump_a = np.array([j["a"] for j in self.jumps], np.float32).reshape(-1, 3)
         self.jump_b = np.array([j["b"] for j in self.jumps], np.float32).reshape(-1, 3)
+        self.hand = bool(hand)                                 # v15: his finger limits on the keys, and five inputs of what the hand holds
+        self.key_last = np.tile(np.array([1, 1, 0], np.int64), (n, 1))     # the keys as they are held: forward, strafe, jump
+        self.key_req = self.key_last.copy()                    # ... as last asked for
+        self.key_hold = np.full((n, 4), 99, np.int64)          # frames since each finger acted
+        self.key_tok = np.full(n, KEY_BURST, np.float32)
+        self.key_tick = 0
+        self.key_dec = np.ones(n, bool)                        # the keys were read this frame
+        self.key_wait = ((-(1 + np.arange(n))) % KEY_EVERY).astype(np.float32)   # frames until they are read next (0: at the next step)
         self.try_k = np.full(n, -1, np.int32)                  # the jump this try is for (-1: a plain try)
         self.crossed = np.zeros(n, bool)
         self.at_edge = np.zeros(n, bool)
@@ -255,6 +270,7 @@ class MoveEnv:
     def _reset(self, i):
         f = self.field
         self.try_k[i], self.crossed[i], self.at_edge[i] = -1, False, False
+        self.key_last[i], self.key_req[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), (1, 1, 0), 99, KEY_BURST
         if self.jump_p and self.try_by_k and self.rng.random() < self.jump_p:
             ks = list(self.try_by_k)                           # (every jump as often as any other)
             k = int(ks[self.rng.integers(len(ks))])
@@ -328,6 +344,11 @@ class MoveEnv:
             else:
                 jo = np.zeros((len(pos), JL.N_JUMP), np.float32)
             obs = np.concatenate([obs, jo], 1)
+        if getattr(self, "hand", False):                       # v15: what his hand holds and can do
+            ho = np.concatenate([(self.key_last[:, :2] - 1).astype(np.float32), self.key_last[:, 2:3].astype(np.float32),
+                                 (self.key_tok / KEY_BURST)[:, None],
+                                 (self.key_wait / KEY_EVERY)[:, None].astype(np.float32)], 1)
+            obs = np.concatenate([obs, ho], 1)
         if self.obs_noise:
             obs = obs + self.rng.normal(0, self.obs_noise, obs.shape)
         return obs.astype(np.float32)
@@ -344,12 +365,48 @@ class MoveEnv:
             fr = np.where((self.w.contents_n(end) & HAZARD) != 0, 1.0, fr)
         return fr.reshape(self.n, N_FLOOR)
 
+    def limit_keys(self, a):
+        """his left hand (see duel_env.limit_keys): the keys asked for become the keys one hand can hold"""
+        n = self.n
+        self.key_tick += 1
+        dec = ((self.key_tick + np.arange(n)) % KEY_EVERY) == 0
+        self.key_dec = dec
+        self.key_req = np.where(dec[:, None], a[:, :3], self.key_req)
+        want = self.key_req
+        self.key_tok = np.minimum(KEY_BURST, self.key_tok + KEY_RATE * DT).astype(np.float32)
+        self.key_hold += 1
+        ready = self.key_hold >= FINGER_HOLD[None, :]
+        last = self.key_last
+
+        def act(finger, wants):
+            ok = wants & ready[:, finger] & (self.key_tok >= 1.0)
+            self.key_tok[ok] -= 1.0
+            self.key_hold[ok, finger] = 0
+            ready[ok, finger] = False
+            return ok
+        j_now, j_want = last[:, 2] == 1, want[:, 2] == 1
+        j_new = np.where(act(THUMB, j_now != j_want), j_want, j_now)
+        d_now, d_want = last[:, 1] == 2, want[:, 1] == 2
+        d_new = np.where(act(INDEX, d_now != d_want), d_want, d_now)
+        l_now, l_want = last[:, 1] == 0, want[:, 1] == 0
+        l_new = np.where(act(RING, l_now != l_want), l_want, l_now)
+        f_now, f_want = last[:, 0], want[:, 0].copy()
+        f_want = np.where((f_now != 1) & (f_want != 1) & (f_now != f_want), 1, f_want)     # a reversal first lets go
+        f_new = np.where(act(MIDDLE, f_now != f_want), f_want, f_now)
+        strafe = np.where(l_new & ~d_new, 0, np.where(d_new & ~l_new, 2, 1))               # both down cancel out
+        self.key_last = np.stack([f_new, strafe, j_new.astype(np.int64)], 1)
+        self.key_wait = ((-(self.key_tick + 1 + np.arange(n))) % KEY_EVERY).astype(np.float32)
+        return self.key_last
+
     def step(self, actions):
         a = np.asarray(actions)
         if self.delay_p and self.prev_actions is not None:
             late = self.rng.random(self.n) < self.delay_p
             a = np.where(late[:, None], self.prev_actions, a)
         self.prev_actions = a.copy()
+        if self.hand:
+            a = a.copy()
+            a[:, :3] = self.limit_keys(a)
         fwd = (a[:, 0].astype(np.int32) - 1) * 127
         side = (a[:, 1].astype(np.int32) - 1) * 127
         jump = a[:, 2].astype(np.int32) * 127
@@ -399,7 +456,7 @@ class MoveEnv:
         reward = reward + arrived * 1.0 - fell * 1.0 - FALL_COST * hard + over * 1.0
         done = arrived | fell | timeout
         speed = np.hypot(s[:, 3], s[:, 4])
-        info = dict(speed=speed, ground=s[:, 6].copy())
+        info = dict(speed=speed, ground=s[:, 6].copy(), key_dec=self.key_dec.copy() if self.hand else None)
         ep = []
         for i in np.nonzero(done)[0]:
             ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), t=float(self.t[i]),

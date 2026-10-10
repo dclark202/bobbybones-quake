@@ -348,7 +348,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
-             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST")
+             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -415,8 +415,16 @@ N_V14 = 10
 # the grenade launcher in his hand what the lead inputs are for rockets and plasma: how far his view is from the one that
 # lands a grenade where he believes the enemy is (the low arc: yaw and pitch, coarse and fine), the seconds of its
 # flight, and that it reaches. The enemy counts while in view and for GL_KNOWN seconds after.
-N_V15 = JL.N_JUMP + 6
+# ... and (PROJ_SEE, owner 2026-10-10: every projectile in his field of vision, none through a wall, and what each
+# one is and does) the enemy projectiles as a player sees them: inside his view cone, within PROJ_FAR units, the line
+# from his eyes to it clear. The old inputs then show the nearest two he sees (they showed the nearest two in flight,
+# through walls inside the cone, and anything within 400 units in any direction); four more follow here (place 3,
+# speed 3, kind 3), and each of the six gets three more: a grenade's fuse left (1 = just fired), the seconds until it
+# passes closest to him (over 2), and how close that is in splash radii (over 3; under a third: inside its blast).
+N_PROJ_MORE, PROJ_FAR = 4, 1500.0
+N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE)
 GL_KNOWN = 3.0
+PROJ_SEE = float(os.environ.get("PROJ_SEE") or 0.0) > 0
 LEAD_SPEED = np.zeros(NW, np.float32)
 LEAD_SPEED[RL], LEAD_SPEED[PG] = P_SPEED[RL], P_SPEED[PG]
 # TEACH_KEYS_ONLY=1 (owner, 2026-10-08: "KEYS TOWARD THE GOAL given the current view he has, meaning he can look freely
@@ -3052,6 +3060,9 @@ class DuelEnv:
             rk[:, 9 * j + 6] = ok & (kind == RL)
             rk[:, 9 * j + 7] = ok & (kind == GL)
             rk[:, 9 * j + 8] = ok & (kind == PG)
+        self._pm = None                                      # (N_V15's part of the projectiles, for _v15)
+        if PROJ_SEE:                                         # only what he sees, the nearest six of it
+            rk, self._pm = self._proj(pos, eye, fdir, rot, vel)
         # items: where the nearest one of each big kind is (map knowledge), and whether it is up, but only
         # while looking at it from within 1500 units (no timers given: remembering them is the player's job)
         up = np.repeat(self.item_up, self.G, axis=0)                          # per player (its match)
@@ -3139,6 +3150,42 @@ class DuelEnv:
         out[:, 17] = (G - 2) / 4.0
         return out
 
+    def _proj(self, pos, eye, fdir, rot, vel):
+        """the enemy projectiles he sees (PROJ_SEE): inside his view cone, within PROJ_FAR, the line from his eyes clear.
+        -> the old inputs for the nearest two (place, speed, kind), and N_V15's part: the same for the next four, then
+        for all six a grenade's fuse left, the seconds to its closest pass, that distance in splash radii"""
+        n, S6 = len(pos), N_PROJ + N_PROJ_MORE
+        oth = self._others_arr()
+        P, V = self.rp[oth].reshape(n, -1, 3), self.rv[oth].reshape(n, -1, 3)
+        A, W, G = self.ra[oth].reshape(n, -1), self.rw[oth].reshape(n, -1), self.rage[oth].reshape(n, -1)
+        to = P - eye[:, None, :]
+        dist = np.linalg.norm(to, axis=2) + 1e-6
+        see = A & (dist < PROJ_FAR) & ((to * fdir[:, None, :]).sum(2) / dist > self.fov()[2][:, None])
+        ii, kk = np.nonzero(see)
+        if len(ii):
+            clear = (self.w.lines(eye[ii], P[ii, kk]) if self.sight is None else self.w.lines(eye[ii], P[ii, kk], mask=self.sight)) >= 0.999
+            see[ii[~clear], kk[~clear]] = False
+        d = np.where(see, dist, 1e9)
+        order = np.argsort(d, axis=1)[:, :S6]
+        ar = np.arange(n)
+        base, more = np.zeros((n, S6, 9), np.float32), np.zeros((n, S6, 3), np.float32)
+        rad = np.ones(NW, np.float32)
+        rad[RL], rad[GL], rad[PG] = P_RADIUS[RL], P_RADIUS[GL], P_RADIUS[PG]
+        for j in range(order.shape[1]):
+            idx = order[:, j]
+            ok = d[ar, idx] < 1e8
+            p_, v_, w_ = P[ar, idx], V[ar, idx], W[ar, idx]
+            base[:, j, 0:3] = rot(p_ - pos) / 1000.0 * ok[:, None]
+            base[:, j, 3:6] = rot(v_) / 1000.0 * ok[:, None]
+            base[:, j, 6], base[:, j, 7], base[:, j, 8] = ok & (w_ == RL), ok & (w_ == GL), ok & (w_ == PG)
+            rel, rv_ = p_ - pos, v_ - vel                    # (as if both kept their speed: a grenade's bounce is not foreseen)
+            t_ = np.clip(-(rel * rv_).sum(1) / np.maximum((rv_ * rv_).sum(1), 1.0), 0.0, 2.0)
+            near = np.linalg.norm(rel + rv_ * t_[:, None], axis=1)
+            more[:, j, 0] = np.where(w_ == GL, np.clip((P_FUSE[GL] - G[ar, idx]) / P_FUSE[GL], 0.0, 1.0), 0.0) * ok
+            more[:, j, 1] = t_ / 2.0 * ok
+            more[:, j, 2] = np.clip(near / rad[w_], 0.0, 3.0) / 3.0 * ok
+        return base[:, :N_PROJ].reshape(n, -1), np.concatenate([base[:, N_PROJ:].reshape(n, -1), more.reshape(n, -1)], 1)
+
     def _v15(self, pos, yaw, pit, eye, known, seen_t, visible):
         """the inputs of N_V15: the jump ahead on his way in a jump run (see JUMPS), and with the grenade launcher in his
         hand how far his view is from the one that lands a grenade where he believes the enemy is"""
@@ -3162,8 +3209,10 @@ class DuelEnv:
             ey = np.degrees((np.arctan2(to[:, 1], to[:, 0]) - yaw + np.pi) % (2 * np.pi) - np.pi)
             ep = np.degrees(-(th - 0.2 * np.cos(th)) - pit)
             tf = D / np.maximum(v_ * np.cos(th), 1.0)
-            out[:, JL.N_JUMP:] = np.stack([np.clip(ey / 30.0, -1, 1), np.clip(ey / 2.0, -1, 1), np.clip(ep / 15.0, -1, 1),
+            out[:, JL.N_JUMP:JL.N_JUMP + 6] = np.stack([np.clip(ey / 30.0, -1, 1), np.clip(ey / 2.0, -1, 1), np.clip(ep / 15.0, -1, 1),
                                            np.clip(ep / 2.0, -1, 1), np.clip(tf / 1.5, 0, 2), np.ones(len(pos))], 1) * reach[:, None]
+        if getattr(self, "_pm", None) is not None:           # the projectiles he sees beyond the nearest two, and what each is about to do
+            out[:, JL.N_JUMP + 6:] = self._pm
         return out
 
     def _v14(self, vel, yaw, pit, eye, known, opp_vel, visible, opp):
