@@ -244,6 +244,8 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
   far above the share of processor time: two half-size trainers were 35% of the time and 86 to 90% of the load. Size
   side jobs by the load.
 - `tools/list_inputs.py` writes `docs/INPUTS.csv` whatever its arguments.
+- After merging a branch, push plainly: `git pull --rebase` on a merge commit replays the branch and conflicts (2026-10-10;
+  `git rebase --abort` put everything back, the owner's uncommitted files too). Fetch and look first.
 - A reviewer's eye on the reward: anything paid per frame for progress must be paid on a running best, or a setback and its recovery is a pump (the trip pay, 2026-10-08).
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,
