@@ -48,6 +48,7 @@ def play(job):
     env.stack_p = env.near_item_p = 0.0
     env.close_p = 0.0
     env.item_run_p = 0.0
+    env.jump_run_p = 0.0                                      # (v15: no jump runs in a check either)
     env.kind_p = (1.0, 0.0, 0.0, 0.0)
     env.bot_p = 0.0
     scripted = opp_kind in ("nightmare", "runner", "holder", "lobber", "watcher")

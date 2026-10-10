@@ -21,5 +21,5 @@ np.savez(a.out, w0=sd["body.0.weight"], b0=sd["body.0.bias"], w1=sd["body.2.weig
          wp=sd["pi.weight"], bp=sd["pi.bias"], obs_mean=ck["obs_mean"], obs_var=ck["obs_var"],
          action_dims=np.array(ck["action_dims"]), substeps=np.array([int(x) for x in str(ck.get("substeps", "25")).split(",")]),
          run=np.array(a.run), v14=np.array(bool(ck.get("v14", False))),     # (v14: trained with lava and the game's step height)
-         jumps=np.array(bool(ck.get("jumps", False))))                      # (v15: with the pros' jumps and the five inputs of a jump ahead)
+         jumps=np.array(bool(ck.get("jumps", False))), hand=np.array(bool(ck.get("hand", False))))   # (hand: under his finger limits, five inputs of the hand)                      # (v15: with the pros' jumps and the five inputs of a jump ahead)
 print("wrote", a.out)

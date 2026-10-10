@@ -25,16 +25,17 @@ def run_up(need):
     return float(np.clip((need - 320.0) * 4.5, 250.0, 900.0))
 
 
-def load(mapname, path=None):
+def load(mapname, path=None, also=()):
     """the jumps of a map that are in use: [dict(id, a (take-off), b (landing), t, need, length, rise)]. An entry's
-    "use" (true or false, set by hand) overrides the count rule."""
+    "use" (true or false, set by hand) overrides the count rule; also: numbers of entries to take whatever the rule says
+    (the jumps open in games, JUMP_OPEN)."""
     p = path or os.path.join(HERE, "pro_gaps", mapname + ".json")
     if not os.path.exists(p):
         return []
     out = []
     for j in json.load(open(p)).get("jumps", []):
         use = j.get("use")
-        if use is False or (use is None and j["n"] < MIN_N.get(j.get("walker"), 10 ** 9)):
+        if int(j.get("id", -1)) not in also and (use is False or (use is None and j["n"] < MIN_N.get(j.get("walker"), 10 ** 9))):
             continue
         out.append(dict(id=int(j.get("id", len(out) + 1)), a=np.array(j["take_off"], np.float32), b=np.array(j["landing"], np.float32),
                         t=float(j["air_s"]), need=float(j["speed_needed"]), length=float(j["length"]), rise=float(j["rise"]),
@@ -53,8 +54,10 @@ def links(jumps, nodes, locate, ok=None, reach=44.0):
         if ok is not None:
             near &= ok
         idx = np.nonzero(near)[0]
-        if not len(idx):
-            idx = np.array([int(np.asarray(locate(j["a"][None])).reshape(-1)[0])])
+        # no link where the walking map has no live spot at the take-off, or none at the landing (a ledge that only such
+        # a jump reaches is not part of it: Sinister 11 and 12; the link then ran from the floor 171 units below)
+        if not len(idx) or np.hypot(*(nodes[b, :2] - j["b"][:2])) > 64.0 or abs(float(nodes[b, 2] - j["b"][2])) > 40.0:
+            continue
         for a in idx:
             if int(a) != b and (ok is None or (ok[a] and ok[b])):
                 out.append((int(a), b, float(j["t"]), k))
@@ -80,7 +83,7 @@ def look_ahead(nxt, jlink, nodes, reach=REACH, hops=64):
         if not live.any():
             break
         step = np.linalg.norm(nodes[np.maximum(nx, 0)] - nodes[cur], axis=1)
-        dist = np.where(live, dist + np.minimum(step, 400.0), dist)       # (a teleporter's step is no distance to run)
+        dist = np.where(live, dist + np.minimum(step, 400.0), dist)       # (a teleporter's or a pad's step: 400 at most)
         cur = np.where(live, nx, cur)
         live &= dist <= reach
     return fd, fi

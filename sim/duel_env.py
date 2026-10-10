@@ -348,7 +348,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
-             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE")
+             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -504,6 +504,14 @@ RULE_WALK = float(os.environ.get("RULE_WALK") or 0.0) > 0
 #                 a pickup's ammunition (owner, 2026-10-10: "they are a real limitation to his play"; in every run before
 #                 he held either 0.0% of the time and never found out what they do)
 JUMPS = float(os.environ.get("JUMPS") or 0.0) > 0
+#   JUMP_OPEN     "aerowalk:1;bloodrun:1,26": per map, the jumps (their numbers in its list) that his ways take in games and
+#                 item runs too: the inputs of his way, its pay, the item rule and the item runs' targets follow the
+#                 walking map with those jumps (route_o). Scripted players keep the walking map's ways. A jump is opened
+#                 when he is measured to make it in jump runs (tools/jump_check.py, the trainer's v15.jumps).
+JUMP_OPEN = os.environ.get("JUMP_OPEN") or ""
+#   TEACH_BEST=1  the movement teacher's labels are its likeliest choice per output, not a sample of its choices (B-201: a
+#                 pupil of sampled labels learned its spread with it; tools/label_check.py --best says what they are worth)
+TEACH_BEST = float(os.environ.get("TEACH_BEST") or 0.0) > 0
 START_GUN_P = float(os.environ.get("START_GUN_P") or 0.0)
 JUMP_TRY_SLACK = 4.0
 # v14's own changes (the owner's calls of 2026-10-09, docs/MANIFEST_v14.md), each off by default:
@@ -1348,12 +1356,26 @@ class DuelEnv:
         self.jrun_edge = np.zeros(self.n, bool)             # ... he has been at its take-off
         self.jrun_over = np.zeros(self.n, bool)             # ... he is over it
         self.jrun_new = np.zeros(self.n, bool)              # ... the try began this frame
+        self.jrun_it = np.full(self.n, -1, np.int64)        # ... the item that is its target
+        self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
+        self._replaced = False                              # a try began inside this step: the state is read again at its end
         self.jump_a = self.jump_b = np.zeros((0, 3), np.float32)
-        if JUMPS and self.route is not None:
-            self.jumps = JL.load(os.path.splitext(os.path.basename(bsp))[0])
+        self.route_o = None                                  # JUMP_OPEN: his ways outside jump runs, with the jumps that are open
+        open_ = {}
+        for part_ in JUMP_OPEN.split(";"):
+            if ":" in part_:
+                open_[part_.split(":")[0].strip()] = {int(x_) for x_ in part_.split(":")[1].split(",") if x_.strip()}
+        open_ = self.jump_open = open_.get(os.path.splitext(os.path.basename(bsp))[0], set())
+        if (JUMPS or open_) and self.route is not None:
+            self.jumps = JL.load(os.path.splitext(os.path.basename(bsp))[0], also=open_)
             if self.jumps:
                 R_ = self.route
-                J_ = self.route_j = R_.linked(JL.links(self.jumps, R_.nodes, R_.locate, ok=~R_.dead), self.jumps)
+                lk_ = JL.links(self.jumps, R_.nodes, R_.locate, ok=~R_.dead)
+                if open_:
+                    O_ = self.route_o = R_.linked([l_ for l_ in lk_ if self.jumps[l_[3]]["id"] in open_], self.jumps)
+                    O_.walk, O_.T_walk = O_.next, R_.T_walk
+            if self.jumps and JUMPS:
+                J_ = self.route_j = R_.linked(lk_, self.jumps)
                 J_.walk, J_.T_walk = J_.next, R_.T_walk
                 self.jump_a = np.array([j_["a"] for j_ in self.jumps], np.float32).reshape(-1, 3)
                 self.jump_b = np.array([j_["b"] for j_ in self.jumps], np.float32).reshape(-1, 3)
@@ -1361,7 +1383,8 @@ class DuelEnv:
                     same_ = self.intent_more.get(INTENTS.index(lab_), np.array([g_], np.int64))
                     best_ = J_.T[g_] <= J_.T[same_].min(0) + 1e-6       # (the item of its kind his way leads to from there)
                     for k_ in range(len(self.jumps)):
-                        st_ = np.nonzero((J_.ji[g_] == k_) & (J_.jd[g_] > 250.0) & (J_.jd[g_] < 1100.0) & ~R_.dead & best_)[0]
+                        st_ = np.nonzero((J_.ji[g_] == k_) & (J_.jd[g_] > JL.run_up(self.jumps[k_]["need"])) & (J_.jd[g_] < 1300.0)
+                                         & ~R_.dead & best_)[0]
                         if len(st_):
                             self.jump_tries.setdefault(k_, []).append((g_, st_))
         self.soak = np.zeros(self.n, np.float32)            # damage his armor took this frame (see ARMOR_COST)
@@ -1441,6 +1464,7 @@ class DuelEnv:
                            if T.v14 else M.NavField(nav, tg, world=self.w))
                 T.goal_pos = T.field.goals
                 T.jump_obs = bool(ck["jumps"]) if "jumps" in ck.files else False   # trained with the five inputs of a jump ahead
+                T.hand = bool(ck["hand"]) if "hand" in ck.files else False         # ... under his finger limits, with the five inputs of the hand
                 self.t_field, self.t_field_j, self.t_nav = T.field, None, (nav, tg)   # (its field with the pros' jumps: _move_teach)
                 ta = np.linspace(0, 2 * np.pi, M.N_WALL, endpoint=False)
                 T.wall_dirs = np.stack([np.cos(ta), np.sin(ta), np.zeros_like(ta)], 1).astype(np.float32)
@@ -1591,8 +1615,9 @@ class DuelEnv:
             # spawn holding a random owned weapon, so normal fights are experienced with every weapon
             # (always starting on rockets, he switched to the shotgun once and never tried the others)
             self.weapon[i] = int(self.rng.choice(owned)) if owned else MG
-            if START_GUN_P > 0 and kind == NORMAL and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < START_GUN_P:
-                w_ = GL if self.rng.random() < 0.5 else PG  # (see START_GUN_P)
+            gun_ = [w_ for w_ in (GL, PG) if w_ in self.map_weapons] if START_GUN_P > 0 else []
+            if gun_ and kind == NORMAL and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < START_GUN_P:
+                w_ = int(gun_[int(self.rng.integers(len(gun_)))])   # (see START_GUN_P; only a weapon the map has)
                 self.has[i, w_] = True
                 self.ammo[i, w_] = max(float(self.ammo[i, w_]), float(LOADOUTS["all"][1][w_]))
                 self.weapon[i] = w_
@@ -1936,6 +1961,10 @@ class DuelEnv:
         node = R.locate(pos)
         gi = self._trip_goal(kk, node)
         ok = (gi >= 0) & ~R.pro_step[np.maximum(gi, 0), node]   # (no keys for a step that is the pros': not a walk)
+        if self.route_o is not None:                         # (JUMP_OPEN: nor where his own way takes a jump within 400 units)
+            O_ = self.route_o
+            go_ = self._trip_goal(kk, node, O_)
+            ok &= ~((go_ >= 0) & (O_.ji[np.maximum(go_, 0), node] >= 0) & (O_.jd[np.maximum(go_, 0), node] < 400.0))
         g = np.maximum(gi, 0)
         nx = R.walk[g, node]
         tp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
@@ -2018,6 +2047,7 @@ class DuelEnv:
             return
         T, s = self.teacher, self.state
         T.n, T.state, T.yaw = len(mi), s[mi], self.yaw[mi]
+        self._teacher_hand(T, mi)
         T.goal = self.t_goal[self.goal[mi]]
         T.phi = T.field.potential(T.goal, s[mi, :3])[0]
         w0, b0, w1, b1, wp, bp, mean, var = self.teacher_w
@@ -2029,10 +2059,20 @@ class DuelEnv:
             l = lg[:, j:j + d]
             pr = np.exp(l - l.max(1, keepdims=True))
             pr /= pr.sum(1, keepdims=True)
-            out.append((pr.cumsum(1) > self.rng.random((len(mi), 1))).argmax(1))
+            out.append(l.argmax(1) if TEACH_BEST else (pr.cumsum(1) > self.rng.random((len(mi), 1))).argmax(1))
             j += d
         out[3] = self.t_turn[out[3]]
         self.teach[mi, :4] = np.stack(out, 1)
+
+    def _teacher_hand(self, T, ii):
+        """a movement network trained under the finger limits (train_move.py --hand) is shown the hand of the players
+        it labels: the keys they hold, their budget of key actions, the frames until their keys are read next"""
+        if not getattr(T, "hand", False):
+            return
+        kl = self.key_last[ii]
+        T.key_last = np.stack([kl[:, 0], kl[:, 1], (kl[:, 2] == 1).astype(np.int64)], 1)
+        T.key_tok = self.key_tok[ii]
+        T.key_wait = ((-(self.key_tick + 1 + np.asarray(ii))) % KEY_EVERY).astype(np.float32)
 
     def _move_teach(self):
         """item runs: what the strafe-jumping movement network would do toward his target (keys, jump and view), sampled
@@ -2061,7 +2101,18 @@ class DuelEnv:
                     self._move_labels(rj, self.route_j)
                 finally:
                     T.field = self.t_field
-        if len(ri):
+        if len(ri) and self.route_o is not None and getattr(T, "jump_obs", False):   # (JUMP_OPEN: its ways with the open jumps)
+            import movement_env as M
+            if getattr(self, "t_field_o", None) is None:
+                self.t_field_o = M.NavField(self.t_nav[0], self.t_nav[1], world=self.w, hazard=True, starts=self.spawns,
+                                            drop=M.shut_teleports(self.w, self.t_nav[0]), tele=M.teleports(self.w),
+                                            jumps=[j_ for j_ in self.jumps if j_["id"] in self.jump_open])
+            T.field = self.t_field_o
+            try:
+                self._move_labels(ri, self.route_o)
+            finally:
+                T.field = self.t_field
+        elif len(ri):
             self._move_labels(ri, self.route)
 
     def _move_labels(self, ri, R):
@@ -2070,6 +2121,7 @@ class DuelEnv:
         gi = self._trip_goal(self.run_k[ri], R.locate(s[ri, :3]), R)
         tg = np.where(gi >= 0, self.t_route[np.maximum(gi, 0)], -1)
         T.n, T.state, T.yaw = len(ri), s[ri], self.yaw[ri]
+        self._teacher_hand(T, ri)
         T.goal = np.maximum(tg, 0).astype(np.int32)
         T.phi = T.field.potential(T.goal, s[ri, :3])[0]
         ok = (tg >= 0) & (T.phi < 1e8)                       # (no way in its own walking map: the walking teacher's keys stay)
@@ -2083,7 +2135,7 @@ class DuelEnv:
             l_ = lg[:, j:j + d_]
             pr = np.exp(l_ - l_.max(1, keepdims=True))
             pr /= pr.sum(1, keepdims=True)
-            out.append((pr.cumsum(1) > self.rng.random((len(ri), 1))).argmax(1))
+            out.append(l_.argmax(1) if TEACH_BEST else (pr.cumsum(1) > self.rng.random((len(ri), 1))).argmax(1))
             j += d_
         out[3] = self.t_turn[out[3]]
         self.teach[ri[ok], :4] = np.stack(out, 1)[ok]
@@ -2439,9 +2491,17 @@ class DuelEnv:
                 gi[w_] = gs_[T_[gs_][:, np.asarray(node)[w_]].argmin(0)]
         return gi
 
-    def _jr(self):
-        """the players whose ways are a jump run's (None: nobody)"""
-        return self.jrun if (self.route_j is not None and self.jrun.any()) else None
+    def _alt(self):
+        """the players whose ways are not the walking map's, with their ways: those of a jump run (every jump in use), and
+        the other learners where jumps are open in games (JUMP_OPEN). [(a flag per player, the route field)]"""
+        out = []
+        if self.route_j is not None and self.jrun.any():
+            out.append((self.jrun, self.route_j))
+        if self.route_o is not None:
+            m_ = (self.script == 0) & ~self.jrun
+            if m_.any():
+                out.append((m_, self.route_o))
+        return out
 
     def _goal_state(self, gi, grp):
         """for route goal gi and every player: is it there, and the seconds until it is back (by what he knows with
@@ -2558,11 +2618,11 @@ class DuelEnv:
             return out
         node = R.locate(pos)
         off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
-        jr = self._jr()
+        alt = self._alt()
         for gi, lab in enumerate(self.route_goal):
             t = R.T[gi, node]
-            if jr is not None:
-                t = np.where(jr, self.route_j.T[gi, node], t)
+            for m_, X_ in alt:
+                t = np.where(m_, X_.T[gi, node], t)
             v_, c_ = np.minimum((t + off) / 10.0, 2.0) * (t < 1e8), ROUTE_ITEMS.index(lab)
             if self.route_goal.index(lab) == gi:
                 out[:, c_] = v_
@@ -2587,18 +2647,17 @@ class DuelEnv:
         if R is not None:
             node = R.locate(pos)
             gi = self._trip_goal(k, node)
-            jr = self._jr()
-            if jr is not None:                               # (a jump run: the ways with the pros' jumps)
-                gi[jr] = self._trip_goal(k[jr], node[jr], self.route_j)
+            alt = self._alt()
+            for m_, X_ in alt:                               # (a jump run, or jumps open in games: the ways with those jumps)
+                gi[m_] = self._trip_goal(k[m_], node[m_], X_)
             valid = gi >= 0
             g = np.maximum(gi, 0)
             off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
             t = R.T[g, node]
             nx = R.walk[g, node]
             via_ = R.via[g, node]
-            if jr is not None:
-                J_ = self.route_j
-                t, nx, via_ = np.where(jr, J_.T[g, node], t), np.where(jr, J_.next[g, node], nx), np.where(jr[:, None], J_.via[g, node], via_)
+            for m_, X_ in alt:
+                t, nx, via_ = np.where(m_, X_.T[g, node], t), np.where(m_, X_.next[g, node], nx), np.where(m_[:, None], X_.via[g, node], via_)
             ok = valid & (t < 1e8)
             wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
             wp = np.where(((self.state[:len(node), 6] > 0.5) & ~np.isnan(via_[:, 0]))[:, None], via_, wp)   # a jump pad's plate, a teleporter's entrance
@@ -2656,6 +2715,8 @@ class DuelEnv:
         Tn = R.T[:, node]                                    # seconds to every goal from where each player stands
         if PRO_WAYS:                                         # a scripted player walks: only the walking map's ways count for him
             Tn = R.T_walk[:, node] if RULE_WALK else np.where((self.script > 0)[None, :], R.T_walk[:, node], Tn)   # (RULE_WALK: for him too)
+        if self.route_o is not None:                         # (JUMP_OPEN: the jumps that are open count for him)
+            Tn = np.where(((self.script == 0) & ~self.jrun)[None, :], self.route_o.T[:, node], Tn)
         grp = np.arange(n) // (self._others_arr().shape[1] + 1)
         best_t = np.full(n, 1e9, np.float32)
         for gi, lab in enumerate(self.route_goal):
@@ -3108,9 +3169,8 @@ class DuelEnv:
         """the inputs of N_V15: the jump ahead on his way in a jump run (see JUMPS), and with the grenade launcher in his
         hand how far his view is from the one that lands a grenade where he believes the enemy is"""
         out = np.zeros((len(pos), N_V15), np.float32)
-        jr = self._jr()
-        if jr is not None:
-            J, ii = self.route_j, np.nonzero(jr)[0]
+        for m_, J in self._alt():
+            ii = np.nonzero(m_)[0]
             node = J.locate(pos[ii])
             gi = self._trip_goal(self.intent[ii], node, J)
             g = np.maximum(gi, 0)
@@ -3553,6 +3613,11 @@ class DuelEnv:
         self._fresh(i, face)
         m = self._match_of(i)
         self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
+        if g < self.bel_t.shape[1]:
+            self.bel_t[i, g] = 99.0                         # ... and he knows it is there
+        if self.route_goal[g] in ("MH", "RA"):
+            self.it_t[i, 0 if self.route_goal[g] == "MH" else 1] = 99.0
+        self.jrun_it[i], self.jrun_paid[i], self._replaced = self.route_item[g], 0.0, True
         self.run_k[i] = INTENTS.index(self.route_goal[g])
         self.intent_new[i], self.intent_done[i] = True, True     # the target is read at once
         self.jrun_k[i], self.jrun_t[i] = k, 2.0 * float(J.T[g, node]) + JUMP_TRY_SLACK
@@ -3566,6 +3631,8 @@ class DuelEnv:
         m = i // (self._others_arr().shape[1] + 1)
         gk = {k: int(self._trip_goal(np.array([k]), np.array([node]))[0]) for k in range(1, len(INTENTS))}
         Tr = R.T_walk if (RULE_WALK and PRO_WAYS) else R.T    # (RULE_WALK: a target he can walk to, not one behind a pros' step)
+        if self.route_o is not None:
+            Tr = self.route_o.T                              # (JUMP_OPEN: ... or reach by a jump that is open)
         ks = [k for k, gi in gk.items() if gi >= 0 and k != self.run_k[i] and Tr[gi, node] < 1e8]
         ok = [k for k in ks if self.item_up[m, self.route_item[gk[k]]] and Tr[gk[k], node] > 1.0]
         ok = ok or ks
@@ -4268,7 +4335,8 @@ class DuelEnv:
                     self.stats["pick_am"] += 1
                 if took and (lab in ("MH", "RA", "YA", "GA") or kind == "wp"):
                     self._hear(0, np.array([i]), 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "ar" else 3)
-                if took and lab in ("MH", "RA"):
+                own_ = bool(self.jrun[i]) and it == self.jrun_it[i]    # (a jump run: his target stays for the other seats' tries)
+                if took and lab in ("MH", "RA") and not own_:
                     k_ = 0 if lab == "MH" else 1
                     self.note_pickup(int(i), k_)
                     self.stats["big_wait"][k_] += float(self.item_up_t[m, it])
@@ -4299,8 +4367,9 @@ class DuelEnv:
                     if self.contest_t[m] > 0 and it == self.contest_it[m]:    # the item the round began as a race for
                         self.stats["contest_taken"] += int(self.script[i] == 0)
                         self.contest_t[m] = -1.0
-                    self.item_up[m, it] = False
-                    self.item_t[m, it] = resp
+                    if not own_:
+                        self.item_up[m, it] = False
+                        self.item_t[m, it] = resp
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
         self.armor = np.where(self.armor > 100, np.maximum(100.0, self.armor - DT), self.armor)
         if self.item_seek > 0 and self.route is not None:
@@ -4325,12 +4394,14 @@ class DuelEnv:
             R_ = self.route
             node = R_.locate(s[:, :3])
             gi_ = self._trip_goal(self.intent, node)
-            jr_ = self._jr()
-            if jr_ is not None:                              # (a jump run: the ways with the pros' jumps)
-                gi_[jr_] = self._trip_goal(self.intent[jr_], node[jr_], self.route_j)
+            alt_ = self._alt()
+            for m_, X_ in alt_:                              # (a jump run, or jumps open in games: the ways with those jumps)
+                gi_[m_] = self._trip_goal(self.intent[m_], node[m_], X_)
             valid = gi_ >= 0
             g_ = np.maximum(gi_, 0)
-            t_ = R_.T[g_, node] if jr_ is None else np.where(jr_, self.route_j.T[g_, node], R_.T[g_, node])
+            t_ = R_.T[g_, node]
+            for m_, X_ in alt_:
+                t_ = np.where(m_, X_.T[g_, node], t_)
             phi = np.where(valid, t_ + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
             it_ = np.array(self.route_item)[g_]
@@ -4394,13 +4465,17 @@ class DuelEnv:
                     self.jrun_t[jr] -= DT
                     kk_ = self.jrun_k[jr]
                     A_, B_, p_ = self.jump_a[kk_], self.jump_b[kk_], s[jr, :3]
-                    self.jrun_edge[jr] |= np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0
-                    ov_ = ~self.jrun_over[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (s[jr, 6] > 0.5)
+                    self.jrun_paid[jr] += (pay_now[jr] + RUN_SCALE * np.where(pay[jr], gain[jr], 0.0)).astype(np.float32)
+                    self.jrun_edge[jr] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
+                    landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
+                    ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
                     self.jrun_over[jr[ov_]] = True
                     np.add.at(self.stats["jump_over"], np.minimum(kk_[ov_], 63), 1)
-                    short_ = self.jrun_edge[jr] & ~self.jrun_over[jr] & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)
+                    at_gap_ = np.hypot(p_[:, 0] - B_[:, 0], p_[:, 1] - B_[:, 1]) < np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1]) + 150.0
+                    short_ = self.jrun_edge[jr] & ~self.jrun_over[jr] & at_gap_ & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)
                     np.add.at(self.stats["jump_short"], np.minimum(kk_[short_], 63), 1)
                     for i in jr[(short_ | (self.jrun_t[jr] <= 0)) & ~arr[jr]]:
+                        reward[i] -= float(self.jrun_paid[i])    # a try that ends without the item gives back what its way paid
                         self._jump_place(int(i))
                 for i in np.nonzero(arr | gone | (run & (self.run_k == 0)))[0]:
                     if self.jrun_new[i]:
@@ -4502,6 +4577,8 @@ class DuelEnv:
                 died[v] = True
                 self.stats["suicides"] += 1
                 self._spawn(int(v), avoid=s[v ^ 1, :3])
+                if self.jrun[v]:                            # (a jump run: the next try)
+                    self._jump_place(int(v))
                 if self.goal[v] >= 0:
                     self._new_goal(int(v))
         # short rounds (curriculum): restart both players near each other every ~round_len seconds
@@ -4617,8 +4694,9 @@ class DuelEnv:
             self.bel_t[done] = 99.0
         for m_ in contest_m:                                 # ... but for the rounds that start as a race for a big item
             self._contest_start(m_)
-        if len(dead) or len(out) or len(ends):
+        if len(dead) or len(out) or len(ends) or self._replaced:
             self.state = s = self.w.state()
+            self._replaced = False
 
         # senses: sight (line of sight + field of view) and hearing (rough position)
         eye = self._eye(s)

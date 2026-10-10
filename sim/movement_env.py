@@ -301,6 +301,8 @@ class MoveEnv:
         self.w.reset(i, (pos[0], pos[1], pos[2] + 2.0), (0, 0, 0), yaw)
         T, _ = self.field.potential(np.array([goal_idx]), np.array([pos], np.float32))
         self.goal[i], self.yaw[i], self.t[i] = goal_idx, yaw, 0.0
+        if hasattr(self, "try_k"):
+            self.try_k[i], self.crossed[i], self.at_edge[i] = -1, False, False
         self.phi[i] = self.best_phi[i] = self.start_phi[i] = T[0]
         self.stall[i] = 0.0
         self.limit[i] = 30.0
@@ -443,12 +445,14 @@ class MoveEnv:
             on = np.nonzero((self.try_k >= 0) & ~self.crossed)[0]
             if len(on):
                 A_, B_, p_ = self.jump_a[self.try_k[on]], self.jump_b[self.try_k[on]], pos[on]
-                self.at_edge[on] |= np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0
-                ov = (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (s[on, 6] > 0.5)
+                self.at_edge[on] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
+                landed = (s[on, 6] > 0.5) | ((prev[on, 5] < 0.0) & (s[on, 5] > 0.0))    # on the floor, or touched it and jumped again inside the frame
+                ov = self.at_edge[on] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed | arrived[on])
                 over[on[ov]] = True
                 self.crossed[on[ov]] = True
                 fell = fell.copy()
-                fell[on[self.at_edge[on] & ~ov & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)]] = True
+                at_gap = np.hypot(p_[:, 0] - B_[:, 0], p_[:, 1] - B_[:, 1]) < np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1]) + 150.0
+                fell[on[self.at_edge[on] & ~ov & at_gap & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)]] = True
         improved = phi < self.best_phi - 0.05
         self.best_phi = np.minimum(self.best_phi, phi)
         self.stall = np.where(improved, 0.0, self.stall + DT)
