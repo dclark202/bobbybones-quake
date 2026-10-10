@@ -61,5 +61,14 @@
   "kept": 21,
   "just_made": 105,
   "entries": 22
+ },
+ "toxicity": {
+  "demos": 87,
+  "player_minutes": 755,
+  "jumps_seen": 34330,
+  "over_a_hole_or_up": 3976,
+  "kept": 971,
+  "just_made": 509,
+  "entries": 37
  }
 }
