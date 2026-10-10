@@ -124,7 +124,10 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs. `botmode.py` switches mode and map
   (`!map` offers the ten duel maps of v14 and `testlab`; they come up in free-for-all with a map's duel items: a new map
   needs its list in `plugins/duel_items.json`, from `plugins/maplab.py` and `tools/duel_items.py`). `banlist.py`: the
-  owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo).
+  owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo). `ladder.py`: the
+  leaderboard, local to a server (every frag between a person and Bobby, warmup included; Glicko-1 per frag in
+  `ratings.py`; who made a frag is read from the kills and deaths counters each frame; `tools/elo.py` reads its files).
+  A chat line must not have a percent sign before a letter: the game takes it for a printf format.
 - **Test map**: `tools/make_lab_map.py` -> `maps/testlab/` (pk3 + `rooms.json`), compiled with q3map2 and
   mbspc from `data/tools` (NetRadiant-custom; mbspc needs `-forcesidesvisible`). Bots cannot join a map
   without an `.aas` file.

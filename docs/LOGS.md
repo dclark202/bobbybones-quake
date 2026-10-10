@@ -69,6 +69,19 @@ state (`b_*`, the same 18 columns as the 1v1 rows: position, velocity, view, hea
 `minute` per Bobby (share of frames with an enemy in sight, firing, weapon shares, the game's kills, deaths, damage
 dealt and taken, how many people and bots), `end`. No names or Steam IDs.
 
+## The leaderboard (`plugins/ladder.py`)
+
+Two files in a server's data folder (`data/duellive/` on the public server), copied to the session archive by the daily
+`tools/pull_sessions.sh` and never removed from the server:
+
+- `frags.jsonl`: one line per counted frag (a person and BobbyBones, either way): `t`, `map`, `state` (`warmup`,
+  `in_progress`, ...), `mode` (`ffa` or `duel`), `net` (the run of the network that played), `killer`, `victim` (a
+  person's anonymous key, the same salted hash as the subject ids of the test rooms, or `bobby:<run>`), `r` (the two
+  ratings after it). No names, no Steam IDs.
+- `ratings.json`: `players`: key -> `name` (the name the player was last seen with: the board shows it; this is the
+  one place a person's name is kept, and it stays on the server and in the git-ignored archive), `r`, `rd`, `won`,
+  `lost` (frags made and taken against Bobby; for Bobby against people), `t`, `since`, `bot`.
+
 ## Test suite cards
 One JSON per card: `{suite, run, subject, minutes, maps, rooms: {<room name>: {<metric>: value}}}`.
 - Policy cards: `data/sim_runs/<run>/suite/card_<minutes>.json` and `.md` (`sim/test_suite.py`).

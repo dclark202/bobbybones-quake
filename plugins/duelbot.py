@@ -232,6 +232,9 @@ class duelbot(minqlx.Plugin):
     def cmd_help(self, player, msg, channel):
         for line in self.HELP:
             player.tell(line)
+        lad = minqlx.Plugin._loaded_plugins.get("ladder")    # the leaderboard, where it is loaded (plugins/ladder.py)
+        if lad is not None:
+            player.tell(lad.HELP)
 
     def cmd_maps(self, player, msg, channel):
         player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests; the others are the game's duel maps.".format(", ".join(MAPS)))
@@ -243,6 +246,9 @@ class duelbot(minqlx.Plugin):
         if not is_bot(player):
             player.tell("^3I'm BobbyBones, the learning Quake bot.^7 Type ^2!help^7 to get started.")
             player.tell(self.WELCOME)
+            lad = minqlx.Plugin._loaded_plugins.get("ladder")
+            if lad is not None:                              # owner, 2026-10-09: "see how I rank on the leaderboard"
+                player.tell(lad.WELCOME)
             player.tell("See more about the project: ^5github.com/dclark202/bobbybones-quake")
 
     def on_vote_called(self, player, vote, args):

@@ -76,6 +76,29 @@ the 5 s countdown, and you cannot die in a test room except in the fights.
 
 What each room measures: [LOGS.md](LOGS.md). The play-test routine: [PLAYTEST.md](PLAYTEST.md).
 
+## The leaderboard (`plugins/ladder.py`, loaded on every play-test server)
+
+Every frag between a person and BobbyBones counts, either way, in warmup and in games, in free-for-all and in 1v1.
+Frags between two people, between two Bobbys, by the game's own bots, deaths by one's own hand or the map, and the test
+rooms (where Bobby's body is a scripted target) do not. It is local to the server.
+
+| Command | What it does |
+|---|---|
+| `!bobby` | BobbyBones' rating and rank, his frags made and taken against people, and the ratings of his earlier networks |
+| `!top` | the board: the first eight, and always Bobby's line and your own |
+| `!elo` / `!elo <name>` | your rating and rank, or how many frags are missing until you are ranked; somebody else's by a part of his name |
+| `!ladder` | (the owner) what the plugin has read since it was loaded: deaths seen, paired with a killer, counted, left out |
+
+The rating is Glicko-1 with one update per frag (`plugins/ratings.py`): a number and how unsure it is. Everybody starts
+at 1500. A difference of 100 points means 64% of the frags between the two, 200 points 76%, 400 points 91%. A frag
+counts as a quarter of a game, because frags come in streaks. A person is ranked from 20 frags with Bobby. Every
+person meets only Bobby here, so a person's number says how he does against Bobby, and Bobby's says how he does against
+the people who come. A new network of Bobby has its own row and starts at the last one's number, unsure enough that it
+is his number that moves, not the people's, when he has got better or worse.
+
+On the PC: `python tools/elo.py` prints the board and, per network and person, the frags made and taken with a 95%
+range (the files come with the daily `tools/pull_sessions.sh`).
+
 ## The owner's commands (`plugins/banlist.py`, loaded on every play-test server)
 
 Only for the server's owner: the Steam ID in `data/owner.env` (`QLX_OWNER=<SteamID64>`, git-ignored) on the machine the

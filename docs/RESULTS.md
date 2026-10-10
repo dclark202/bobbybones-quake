@@ -5,6 +5,43 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 20:15 — A leaderboard for the server, built (not live before the restart for v14)
+
+The owner: "can we put an elo rating on the server, to test how bobby performs against different players?", then "Yes
+build the elo rating. keep it local to this server, and base it on all interactions with the bots from humans (meaning
+warmup is included). Then add it to the welcome message 'see how I rank on the leaderboard ...' ... with a command to
+see Bobby's rating and rank specifically. Build it now, we'll add it tomorrow when I restart the server for v14."
+
+**What counts.** Every frag between a person and BobbyBones, either way, in warmup and in games, in both modes. Not:
+frags between two people, between two Bobbys, by the game's own bots, deaths by one's own hand or the map, the test
+rooms. Timed games alone would not do: the server's log has five of them in four days; frags come by the hundred.
+
+**How.** `plugins/ladder.py` reads the game's kills and deaths counters every frame: the player whose deaths went up and
+the player whose kills went up in the same frame (the game sends no kill events in warmup). `plugins/ratings.py`:
+Glicko-1 with an update at every frag, a number and how unsure it is; everybody starts at 1500; a frag counts as a
+quarter of a game, because frags come in streaks (at a full game per frag a new player's first frag moved him 175
+points and a new network's 117). Bobby has one row per network; a new one starts at the last one's number with a wide
+range, so that his number moves when he has changed, not the people's. A person is ranked from 20 frags. Every person
+meets only Bobby, so a person's number says how he does against Bobby and Bobby's how he does against the people who
+come; what compares two networks is his number on the same people, and `tools/elo.py` gives per network and person the
+frags made and taken with a 95% range. Chat: `!bobby` (his rating and rank), `!top`, `!elo`; the welcome has "See how I
+rank on the leaderboard: !bobby ...". Files in the server's data folder: `frags.jsonl` (keys only) and `ratings.json`
+(the one place a name is kept: the board shows it); the daily pull copies both.
+
+**Tests.**
+- The arithmetic on made-up frags: three people with real edges of +250, 0 and -250 points over Bobby come out at +269,
+  +8 and -233 after 400 frags each. A network 150 points better then comes out 155 higher after 450 frags, and the
+  people's numbers move by 26 at most.
+- The plugin against a stand-in for the game: a frag each way, both Bobbys on one row, the two killing each other in one
+  frame, and everything that must not count (two people, two Bobbys, the game's bot, an own death, a test room, two frags
+  by different players in a frame, the counters going back at a game's start, another person in the same slot); no
+  Steam ID in either file; a new network takes its own row from the old number.
+- On a real local server (free-for-all, two Bobbys, the second counted as a person for the test): in four minutes 18
+  deaths seen, 18 paired with a killer, none left out; the table and the frag log are written and survive a map change;
+  the commands answer; no error. `tools/elo.py` worked out the same table from the frag log (difference 0.0).
+- Found there: the game garbled a line ("56% his" came out as "56 29s"): a percent sign before a letter is taken for a
+  printf format. The lines are written so that it cannot happen.
+
 ## 2026-10-09 19:10 — The owner's call on height; the public server restarted with the evening's changes
 
 **Height (B-160): no pay.** The owner: "Keep the height as an hourly check, don't act on it yet, but report it as something to monitor. I don't think we need to reward/penalize him for it quite yet, this seems to be the most possible behavior to be learned through practice."

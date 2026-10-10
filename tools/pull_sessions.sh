@@ -14,6 +14,8 @@ R=bobbybones-quake/data/duellive
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=20"
 {
 echo "== $(date '+%Y-%m-%d %H:%M:%S')"
+# 0. the leaderboard (plugins/ladder.py): today's table and the frag log are copied, never removed (tools/elo.py reads them)
+scp -o BatchMode=yes -q "$HOST:$R/ratings.json" "$HOST:$R/frags.jsonl" "$DEST/" 2>/dev/null && cp "$DEST/ratings.json" "$DEST/ratings_$(date +%Y%m%d).json" && echo "leaderboard copied: $(grep -c . "$DEST/frags.jsonl") frags"
 # 1. pack every session but the newest one; list the archives with their checksums
 $SSH "$HOST" "cd $R && mkdir -p archive && live=\$(ls sessions | tail -1) && for s in \$(ls sessions); do [ \"\$s\" = \"\$live\" ] && continue; [ -f archive/\$s.tar.gz ] || tar czf archive/\$s.tar.gz -C sessions \$s; done; cd archive && ls *.tar.gz >/dev/null 2>&1 && sha256sum *.tar.gz" > "$DEST/.remote.sha" || { echo "the server did not answer"; exit 1; }
 n=$(grep -c . "$DEST/.remote.sha")
