@@ -1,4 +1,4 @@
-# `duel_gru_v14`: mid-run report (2026-10-10, data to 05:50, seven and a half hours into the second start)
+# `duel_gru_v14`: mid-run report (2026-10-10, data to 06:39, seven and a half hours into the second start)
 
 The run of [MANIFEST_v14.md](MANIFEST_v14.md). First start 2026-10-09 20:14, stopped at 22:52 and kept as
 `duel_gru_v14_try1` (it went wrong, see below); second start 22:53 from the same starting network,
@@ -12,14 +12,15 @@ with v14's ten new inputs) under v14's settings. The night's log: [RESULTS.md](R
 - **To be told at once: as a duelist v14 is weaker than v13, by a wide margin.** Head to head he takes 36% of
   the frags from v13 on the six maps and wins 41 games of 192. He loses on the three maps v13 knows (Blood Run
   33%, Aerowalk 14% and not one game, Lost World 26%) and holds his own on two it never trained on (Furious Heights
-  57%, Battleforged 48%). Against the stand-in he went from 70% of the frags to 58%. Training did not show it: all
+  57%, Battleforged 48%). Against the stand-in he went from 70% of the frags to 59%. Training did not show it: all
   night he took 53% of the frags from his own last eight snapshots. It happened in the first three hours; the save
   of 02:05 loses to v13 exactly as the save of 03:59 does.
 - **Two causes, both in how this run is set up; neither is his aim or his movement.**
   1. *The weapon in his hand.* The same v14 network with v13's network pressing only the weapon key takes 72% from the
      stand-in (v13: 70%); v13 with v14 on that key 51%. v14 holds the weapons as the weapon teacher says (the pros'
      table, and in three lives of four the style's weapon at every distance); v13, whose teacher was gone after four
-     hours, fights with the rail at any distance, point-blank too, and that wins in the simulator.
+     hours, fights with the rail at any distance, point-blank too, and that wins in the simulator (its rail hits 57%
+     within 400 units, however fast the target crosses his view).
   2. *The league.* His old selves are the last eight snapshots, two hours and forty minutes of himself. v13 was out of
      it by 01:35. Since then he has met only players who hold their weapons as he does. With v13's weapon key he
      still loses to v13 (45% of the frags on Blood Run, 25% on Aerowalk, where v13 keeps him off the items).
@@ -43,7 +44,7 @@ with v14's ten new inputs) under v14's settings. The night's log: [RESULTS.md](R
 | | |
 |---|---|
 | From | v13's final network, widened from 499 to 509 inputs (his speed, the way he moves against his view, speed gained in 100 ms; six for the lead of a rocket or a plasma ball) |
-| Trained | second start 2026-10-09 22:53, 406 minutes of training by 05:50, about 645 million player-frames (4,500 hours of play) at 26,000 frames a second |
+| Trained | second start 2026-10-09 22:53, 455 minutes of training by 06:39, about 713 million player-frames (5,000 hours of play) at 26,000 frames a second |
 | Maps, groups | Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged; duels three matches in five, groups of three and four one in five each; Campgrounds, Hektik, Toxicity, Cure never trained on |
 | Rounds | normal games 70% (a quarter of them against the scripted item runner), item runs 30% (half of them end in a fight) |
 | League | a quarter of the players are a frozen snapshot of himself: a new one every 20 minutes, the last eight kept |
@@ -54,34 +55,34 @@ with v14's ten new inputs) under v14's settings. The night's log: [RESULTS.md](R
 
 ## Self-play, every two hours
 
-| | start | 2 h | 4 h | 6 h | now (6.8 h) |
+| | start | 2 h | 4 h | 6 h | now (7.6 h) |
 |---|---|---|---|---|---|
 | the teacher's weight | 0.06 | 0.23 | 0.46 | 0.30 | 0.30 |
-| the teacher's loss | 4.64 | 2.03 | 1.84 | 1.63 | 1.78 |
+| the teacher's loss | 4.64 | 2.03 | 1.84 | 1.63 | 1.72 |
 | hit rate: lightning | 45% | 44% | 44% | 44% | 44% |
-| hit rate: rail | 48% | 46% | 46% | 47% | 47% |
-| hit rate: rockets | 45% | 45% | 44% | 44% | 44% |
+| hit rate: rail | 48% | 46% | 46% | 47% | 46% |
+| hit rate: rockets | 45% | 45% | 44% | 44% | 45% |
 | on target, enemy in view | 33% | 33% | 32% | 32% | 32% |
-| frags against old selves | 49% | 51% | 52% | 53% | 53% |
+| frags against old selves | 49% | 51% | 52% | 53% | 54% |
 | frags by rockets | 27% | 32% | 34% | 34% | 35% |
 | rockets in hand | 26% | 30% | 30% | 32% | 32% |
 | shotgun in hand | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
 | grenades in hand | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
 | plasma in hand | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
 | blind rockets a player-minute | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
-| item runs: units a second | 298 | 304 | 309 | 311 | 313 |
+| item runs: units a second | 298 | 304 | 309 | 311 | 315 |
 | item runs: fast in the air | 9% | 15% | 17% | 18% | 18% |
-| item runs: items a minute | 6.5 | 5.2 | 5.4 | 5.8 | 6.0 |
-| key actions asked a second | 6.0 | 6.4 | 6.4 | 6.3 | 6.3 |
-| key actions refused | 58% | 64% | 63% | 63% | 64% |
-| the view's jerk | 3.8 | 4.5 | 4.8 | 4.3 | 4.2 |
+| item runs: items a minute | 6.5 | 5.2 | 5.4 | 5.8 | 6.1 |
+| key actions asked a second | 6.0 | 6.4 | 6.4 | 6.3 | 6.2 |
+| key actions refused | 58% | 64% | 63% | 63% | 63% |
+| the view's jerk | 3.8 | 4.5 | 4.8 | 4.3 | 4.0 |
 | megas a player-minute | 0.59 | 0.64 | 0.68 | 0.61 | 0.66 |
-| red armors a player-minute | 0.58 | 0.60 | 0.62 | 0.65 | 0.64 |
+| red armors a player-minute | 0.58 | 0.60 | 0.62 | 0.65 | 0.66 |
 | time without a big weapon | 18% | 18% | 21% | 17% | 17% |
-| frags a match-minute | 2.71 | 2.61 | 2.40 | 2.50 | 2.48 |
+| frags a match-minute | 2.71 | 2.61 | 2.40 | 2.50 | 2.55 |
 | damage dealt from above | 14% | 14% | 14% | 15% | 15% |
 | damage dealt from below | 13% | 13% | 13% | 13% | 13% |
-| lava damage a player-minute | 7.4 | 8.9 | 8.3 | 7.7 | 8.2 |
+| lava damage a player-minute | 7.4 | 8.9 | 8.3 | 7.7 | 7.7 |
 | the policy's step an update | 0.049 | 0.009 | 0.011 | 0.010 | 0.010 |
 
 Items a minute in item runs fell from 6.5 to 4.2 in the first quarter of an hour under the new teacher and have come
@@ -92,22 +93,22 @@ back to about 6: he runs faster there and still reaches fewer items than the sta
 **Against the Nightmare stand-in** (a script with the game bot's weapons and aim; the same seeds every time, so two
 checks of one network give the same numbers). His share of the frags, games won and lost of 32.
 
-| Map | start (18:01) | 47 min in (00:18) | 91 min in (01:08) | 142 min in (01:52) | 182 min in (02:36) | 228 min in (03:19) | 267 min in (04:03) | 311 min in (04:51) |
-|---|---|---|---|---|---|---|---|---|
-| Blood Run | 71% (32-0) | 44% (8-18) | 47% (11-17) | 50% (15-12) | 46% (12-16) | 51% (15-13) | 50% (14-13) | 44% (9-18) |
-| Aerowalk | 80% (32-0) | 52% (16-11) | 52% (15-11) | 53% (20-9) | 54% (15-13) | 53% (19-10) | 53% (20-7) | 58% (25-4) |
-| Lost World | 90% (32-0) | 67% (31-0) | 75% (31-0) | 71% (30-2) | 65% (29-2) | 70% (29-2) | 70% (30-1) | 76% (31-0) |
-| Sinister | 74% (32-0) | 54% (18-11) | 56% (19-7) | 60% (25-5) | 56% (20-8) | 58% (22-5) | 57% (22-5) | 63% (26-3) |
-| Furious Heights | 42% (8-20) | 41% (7-18) | 45% (10-19) | 44% (8-19) | 41% (9-21) | 40% (6-22) | 40% (4-27) | 45% (13-18) |
-| Battleforged | 62% (24-6) | 47% (13-16) | 59% (19-8) | 55% (18-13) | 60% (20-10) | 55% (19-9) | 57% (20-9) | 63% (22-5) |
-| Campgrounds* | 35% (9-21) | 44% (7-23) | 48% (12-17) | 52% (14-18) | 46% (13-17) | 44% (6-23) | 45% (7-21) | 48% (17-14) |
-| Hektik* | 51% (16-14) | 35% (2-30) | 35% (0-30) | 33% (2-29) | 37% (1-29) | 33% (0-32) | 32% (1-30) | 33% (1-31) |
-| Toxicity* | 64% (17-9) | 65% (24-6) | 66% (24-8) | 65% (17-11) | 64% (19-11) | 65% (15-16) | 63% (21-8) | 62% (16-13) |
-| Cure* | 47% (16-13) | 42% (18-9) | 43% (17-14) | 41% (10-14) | 40% (17-11) | 39% (10-19) | 40% (14-15) | 43% (18-9) |
-| the six trained | 69.7% | 50.9% | 55.7% | 55.5% | 53.7% | 54.4% | 54.7% | 58.2% |
-| the four held out (*) | 49.2% | 46.7% | 48.1% | 47.5% | 46.5% | 45.3% | 44.9% | 46.4% |
+| Map | start (18:01) | 47 min in (00:18) | 91 min in (01:08) | 142 min in (01:52) | 182 min in (02:36) | 228 min in (03:19) | 267 min in (04:03) | 311 min in (04:51) | 404 min in (06:24) |
+|---|---|---|---|---|---|---|---|---|---|
+| Blood Run | 71% (32-0) | 44% (8-18) | 47% (11-17) | 50% (15-12) | 46% (12-16) | 51% (15-13) | 50% (14-13) | 44% (9-18) | 52% (16-14) |
+| Aerowalk | 80% (32-0) | 52% (16-11) | 52% (15-11) | 53% (20-9) | 54% (15-13) | 53% (19-10) | 53% (20-7) | 58% (25-4) | 58% (23-5) |
+| Lost World | 90% (32-0) | 67% (31-0) | 75% (31-0) | 71% (30-2) | 65% (29-2) | 70% (29-2) | 70% (30-1) | 76% (31-0) | 72% (31-0) |
+| Sinister | 74% (32-0) | 54% (18-11) | 56% (19-7) | 60% (25-5) | 56% (20-8) | 58% (22-5) | 57% (22-5) | 63% (26-3) | 62% (26-5) |
+| Furious Heights | 42% (8-20) | 41% (7-18) | 45% (10-19) | 44% (8-19) | 41% (9-21) | 40% (6-22) | 40% (4-27) | 45% (13-18) | 44% (9-21) |
+| Battleforged | 62% (24-6) | 47% (13-16) | 59% (19-8) | 55% (18-13) | 60% (20-10) | 55% (19-9) | 57% (20-9) | 63% (22-5) | 65% (25-5) |
+| Campgrounds* | 35% (9-21) | 44% (7-23) | 48% (12-17) | 52% (14-18) | 46% (13-17) | 44% (6-23) | 45% (7-21) | 48% (17-14) | 45% (9-18) |
+| Hektik* | 51% (16-14) | 35% (2-30) | 35% (0-30) | 33% (2-29) | 37% (1-29) | 33% (0-32) | 32% (1-30) | 33% (1-31) | 35% (1-29) |
+| Toxicity* | 64% (17-9) | 65% (24-6) | 66% (24-8) | 65% (17-11) | 64% (19-11) | 65% (15-16) | 63% (21-8) | 62% (16-13) | 63% (17-12) |
+| Cure* | 47% (16-13) | 42% (18-9) | 43% (17-14) | 41% (10-14) | 40% (17-11) | 39% (10-19) | 40% (14-15) | 43% (18-9) | 42% (17-10) |
+| the six trained | 69.7% | 50.9% | 55.7% | 55.5% | 53.7% | 54.4% | 54.7% | 58.2% | 58.9% |
+| the four held out (*) | 49.2% | 46.7% | 48.1% | 47.5% | 46.5% | 45.3% | 44.9% | 46.4% | 46.1% |
 
-It fell within the first 47 minutes and has moved between 54% and 58% since.
+It fell to 51% within the first 47 minutes and has moved between 54% and 59% since.
 
 **One output costs these duels.** The same check played by two networks at once: one decides everything, the other only
 presses the weapon key (each sees the same inputs and keeps its own memory). v14 is the save of 03:59, the last column
@@ -156,7 +157,8 @@ Heights, two maps v13 never saw. On Aerowalk v13 keeps him off the items: v14 ho
 77%; megas 13% against 60%. He dies by his own hand or the map more often than v13 (Blood Run 1.2 times a game against
 0.5). The save of 02:05 does what the save of 03:59 does: the ground was lost in the first three hours, not since. And
 the weapon key is half of it at most: with v13 on that key he comes from 33% to 45% on Blood Run and from 14% to 25% on
-Aerowalk.
+Aerowalk. The check loop now plays every save against v13 on these two maps; the save of
+05:48: Blood Run 34% (3-28), Aerowalk 15% (0-32).
 
 ## The weapon in his hand
 
@@ -194,10 +196,25 @@ It is not: over all maps rockets lead under 400 units (53% to 46%), lightning fr
 700, 65% at 800, 87 to 95% from 1,000). And I put the lost duels down to rockets far off alone; the tables above are
 the fuller answer.
 
+**v13's rail, measured** (against the stand-in, 12 eight-minute games a map; a hit is 60 points off the enemy or a
+frag in that frame or the next):
+
+| | Under 200 units | 200 to 400 | 400 to 700 | 700 to 1,000 | The enemy crossing his view at under 30 degrees a second | 30 to 90 | 90 to 180 |
+|---|---|---|---|---|---|---|---|
+| Aerowalk: share of his rail shots | 22% | 43% | 28% | 6% | 40% | 42% | 14% |
+| Aerowalk: hit | 57% | 57% | 48% | 41% | 48% | 58% | 57% |
+| Blood Run: share of his rail shots | 21% | 29% | 40% | 8% | 52% | 34% | 8% |
+| Blood Run: hit | 57% | 53% | 44% | 33% | 46% | 50% | 56% |
+
+Half to two thirds of v13's rail shots are fired within 400 units and more than half of those hit; and the rail does
+not get harder for him when the target crosses his view faster. v14 hits the same with it (61% and 49% under 400 units
+on Aerowalk) and fires it a third as often.
+
 **What the simulator cannot say**: whether the pros' way with the weapons is weaker play, or whether rail at every
-distance wins here only because his rail (46 to 48% of its shots hit in self-play; by distance it is not measured yet)
-is better up close than any person's. The project's own method ("tighten the human limits until the right play appears")
-points at the second. Real games will say: the game's Nightmare bot after the run, and people.
+distance wins here only because that rail is better up close than a hand's. The owner knows what a rail does at
+point-blank range in a person's hand; if it is not 57% on a target crossing at 90 degrees a second, the aim limits do
+not bite on a flick, and the project's own method ("tighten the human limits until the right play appears") says where
+to look (B-199). Real games will say the rest: the game's Nightmare bot after the run, and people.
 
 ## Strafe jumping
 
@@ -332,8 +349,8 @@ going; it can be stopped or changed at the next save on your word.
 
 1. The control in the league and in every check (1 above): "promote only if it beats the control" needs the control
    in the loop, not only at a run's end.
-2. Why the rail at point-blank range wins in the simulator: his rail's hit rate by distance beside the pros', and the
-   aim limits tightened where no hand does what his does. If rail at any distance stops being the best play, the
+2. Why the rail at point-blank range wins in the simulator: his rail hits 53 to 57% within 400 units, whatever the
+   target's speed across his view; the pros' numbers beside it, and the aim limits tightened where no hand does that. If rail at any distance stops being the best play, the
    weapons sort themselves and no teacher has to hold them in place.
 3. The style's weapon inside its own distances (2b).
 4. Strafe jumping as its own phase (3c), with this night's measurements: where the teacher is silent, where it is
