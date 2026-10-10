@@ -70,5 +70,23 @@
   "kept": 971,
   "just_made": 509,
   "entries": 37
+ },
+ "hektik": {
+  "demos": 144,
+  "player_minutes": 1231,
+  "jumps_seen": 50807,
+  "over_a_hole_or_up": 3850,
+  "kept": 874,
+  "just_made": 2199,
+  "entries": 23
+ },
+ "cure": {
+  "demos": 129,
+  "player_minutes": 1106,
+  "jumps_seen": 43931,
+  "over_a_hole_or_up": 3920,
+  "kept": 883,
+  "just_made": 1623,
+  "entries": 29
  }
 }

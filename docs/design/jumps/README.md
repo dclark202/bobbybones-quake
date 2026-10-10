@@ -161,6 +161,47 @@ Speed needed: running jump up to 340 units a second, circle jump up to 440, stra
 | 17 | YA to past YA | circle jump | 3.9 |
 | 18 | past GL to GL, heading north-west | circle jump | 3.9 |
 
+## Cure
+
+![Cure](cure.png)
+
+| # | Name | Jump type | Times an hour |
+|---|---|---|---|
+| 1 | past MH to MH | circle jump | 34.8 |
+| 2 | MH to past MH | circle jump | 16.5 |
+| 3 | open floor to past MH | circle jump | 11.0 |
+| 4 | past MH to open floor | strafe jumps (run-up) | 10.4 |
+| 5 | PG to YA | strafe jumps (run-up), 193 down | 7.1 |
+| 7 | PG to past YA | circle jump, 65 down | 6.5 |
+| 8 | past MH to past SG | strafe jumps (run-up) | 4.9 |
+| 9 | past RL to RG, heading west | circle jump, 129 down | 3.1 |
+| 11 | past RL to RG, heading south | circle jump | 2.5 |
+| 12 | past SG to past MH | strafe jumps (run-up) | 2.1 |
+| 13 | open floor to RL | circle jump, 192 down | 1.8 |
+| 14 | open floor to MH | strafe jumps (run-up), 256 down | 1.7 |
+| 15 | past GL to past RG | circle jump | 1.7 |
+
+## Hektik
+
+![Hektik](hektik.png)
+
+| # | Name | Jump type | Times an hour |
+|---|---|---|---|
+| 1 | GL to RA | circle jump | 27.0 |
+| 2 | RL to RL, heading north | running jump | 24.4 |
+| 3 | past LG to RA | circle jump | 19.3 |
+| 4 | RA to past LG | circle jump | 14.5 |
+| 5 | past GL to past LG | circle jump | 9.6 |
+| 7 | RA to GL, heading north-west | circle jump | 5.5 |
+| 8 | RA to GL, heading west | circle jump | 4.5 |
+| 9 | YA to RL | circle jump | 2.7 |
+| 10 | past RL to past LG | circle jump | 2.1 |
+| 11 | LG to LG, heading south-east | circle jump | 2.0 |
+| 12 | LG to past RA | circle jump | 1.9 |
+| 13 | past RL to RL | circle jump | 1.9 |
+| 14 | past GL to past GL, heading west | circle jump | 1.6 |
+| 15 | RA to past GL | circle jump, 225 down | 1.1 |
+
 ## Toxicity
 
 ![Toxicity](toxicity.png)
