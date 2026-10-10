@@ -13,11 +13,11 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 |---|---|---|---|
 | Hit rate: lightning, rail | 45%, 48% | 44%, 47% | 30%, 35% |
 | On target, enemy in view | 33% | 33% | 28% |
-| Frags against his old selves | 49% | 50 to 55% | 40% |
+| Frags against his old selves | 49% | 50 to 55% | 52% (40% at update 41) |
 | Item runs: units a second | 283 | 310 | 286 |
 | Item runs: fast in the air | 10% | 16.5% | 12% |
 | Item runs: items a minute | 4.9 | 5.2 (4.1 at the lowest, update 17) | 4.4 |
-| The teacher's loss | 4.6 | 2.0 | 3.1 |
+| The teacher's loss | 4.6 | 2.0 | 2.8 |
 | Megas, red armors a player-minute | 0.59, 0.58 | 0.61, 0.61 | 0.60, 0.46 |
 
 So the teacher in the shared layers does not cost his aim, and strafe jumping comes, slowly: the gain follows the
