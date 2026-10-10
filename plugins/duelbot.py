@@ -70,6 +70,16 @@ def is_bot(p):
     return str(p.steam_id).startswith("9007199")
 
 
+# the bots' own names (owner, 2026-10-09), each with "(BOT)" after it: the one of a 1v1 server is the first. All four are
+# the same network; plugins/ladder.py keeps one row for them and plugins/banter.py gives each a voice.
+BOT_NAMES = ("BobbyBones", "Mr Skeleton", "Dr Evil", "The Juggernaut")
+
+
+def is_bobby(p):
+    """one of ours, not a person and not one of the game's own bots (a spar)"""
+    return is_bot(p) and any(n in p.clean_name for n in BOT_NAMES)
+
+
 def sig(x):
     return 1.0 / (1.0 + np.exp(-x))
 
@@ -239,6 +249,8 @@ class duelbot(minqlx.Plugin):
     def cmd_maps(self, player, msg, channel):
         player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests; the others are the game's duel maps.".format(", ".join(MAPS)))
 
+    BOT_NAMES = BOT_NAMES                                 # (read by plugins/ladder.py)
+
     # the second line a person reads on joining (owner, 2026-10-09: a word about !bots); ffabot.py has its own
     WELCOME = "^2!map <name>^7 changes the map (^2!maps^7 lists them). ^2!mode ffa^7 is free-for-all with up to four of me."
 
@@ -402,7 +414,7 @@ class duelbot(minqlx.Plugin):
             self.msg("Spar: BobbyBones against a Nightmare bot. Join the game or type !spar off to stop.")
         else:
             for p in self.players():
-                if is_bot(p) and "Bones" not in p.clean_name:
+                if is_bot(p) and not is_bobby(p):
                     minqlx.console_command("clientkick {}".format(p.id))
             self.msg("Spar off. Join the game to play him yourself.")
 
@@ -688,7 +700,7 @@ class duelbot(minqlx.Plugin):
             if p.team == "spectator":
                 continue
             if is_bot(p):
-                if "Bones" in p.clean_name:
+                if is_bobby(p):
                     if bobby is None:
                         bobby = p
                     elif time.time() > self.next_check:      # more than one Bobby (left over from free-for-all): one stays

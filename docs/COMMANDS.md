@@ -99,6 +99,15 @@ is his number that moves, not the people's, when he has got better or worse.
 On the PC: `python tools/elo.py` prints the board and, per network and person, the frags made and taken with a 95%
 range (the files come with the daily `tools/pull_sessions.sh`).
 
+## The bots' names and what they say (`plugins/banter.py`)
+
+A free-for-all server's bots are BobbyBones, Mr Skeleton, Dr Evil and The Juggernaut, each with (BOT) after the name.
+All four are the same network and share one row on the leaderboard. Each has a voice of its own in chat: a line at a
+game's end by where it finished, and now and then one during a game, only with a person playing: after three frags
+without dying, after dying by its own hand or the map, after the same person has fragged it three times without an
+answer (by name), after a rail frag from far away. A bot speaks at most once in 75 seconds, the bots together at most
+once in 20. `!banter` (the owner) makes each say a line now.
+
 ## The owner's commands (`plugins/banlist.py`, loaded on every play-test server)
 
 Only for the server's owner: the Steam ID in `data/owner.env` (`QLX_OWNER=<SteamID64>`, git-ignored) on the machine the

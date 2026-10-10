@@ -26,6 +26,7 @@ except Exception:                                           # noqa: BLE001 - loa
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _duel = importlib.import_module("duelbot")
 duelbot, is_bot, sig, D, QLNUM = _duel.duelbot, _duel.is_bot, _duel.sig, _duel.D, _duel.QLNUM
+is_bobby, BOT_NAMES = _duel.is_bobby, _duel.BOT_NAMES
 _pu = _duel._pu                                              # no powerups on any server (plugins/powerups.py)
 
 SEATS = 6
@@ -144,7 +145,7 @@ class ffabot(duelbot):
         return [p for p in self.players() if not is_bot(p) and p.team != "spectator"]
 
     def bobbys(self):
-        return sorted([p for p in self.players() if is_bot(p) and "Bones" in p.clean_name], key=lambda p: p.id)
+        return sorted([p for p in self.players() if is_bobby(p)], key=lambda p: p.id)
 
     def cmd_bots(self, player, msg, channel):
         if len(msg) < 2 or not msg[1].isdigit() or not 0 <= int(msg[1]) <= MAX_BOTS:
@@ -445,8 +446,9 @@ class ffabot(duelbot):
             minqlx.console_command("abort")
         if len(bobbys) < self.n_bots and now > self.next_check:
             self.next_check = now + 4
-            k = len(bobbys) + 1
-            minqlx.console_command("addbot bones 5 free 0 \"BobbyBones {} (BOT)\"".format(k))
+            taken = " ".join(p.clean_name for p in bobbys)       # each has a name of his own (owner, 2026-10-09): the first one free
+            name = next((n for n in BOT_NAMES if n not in taken), "BobbyBones {}".format(len(bobbys) + 1))
+            minqlx.console_command("addbot bones 5 free 0 \"{} (BOT)\"".format(name))
         elif len(bobbys) > self.n_bots and now > self.next_check:
             self.next_check = now + 4
             minqlx.console_command("clientkick {}".format(bobbys[-1].id))

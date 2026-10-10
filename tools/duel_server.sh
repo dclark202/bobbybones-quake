@@ -45,8 +45,8 @@ LOCKOUT_MOUNT=""; [ "$PUBLIC" = "1" ] || LOCKOUT_MOUNT="-v $ROOT/maps/lockout/lo
 MAP_MOUNTS="-v $ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro -v $ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro"
 [ "$PUBLIC" = "1" ] && MAP_MOUNTS=""
 LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # PUBLIC=1: show in the server list (the rented server); local servers stay unlisted (Windows sets PUBLIC to a folder: an exact 1 is required)
-PLUGINS="botctl, banlist, ladder, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live; banlist: the owner's !kick and !ban; ladder: the leaderboard
-if [ -n "$FFA" ]; then PLUGINS="botctl, banlist, ladder, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
+PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live; banlist: the owner's !kick and !ban; ladder: the leaderboard
+if [ -n "$FFA" ]; then PLUGINS="botctl, banlist, ladder, banter, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
 docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $LOCKOUT_MOUNT qlbot +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null

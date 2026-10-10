@@ -127,7 +127,9 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo). `ladder.py`: the
   leaderboard, local to a server (every frag between a person and Bobby, warmup included; Glicko-1 per frag in
   `ratings.py`; who made a frag is read from the kills and deaths counters each frame; `tools/elo.py` reads its files).
-  A chat line must not have a percent sign before a letter: the game takes it for a printf format.
+  A chat line must not have a percent sign before a letter: the game takes it for a printf format. `banter.py`: what
+  the bots say (a line at a game's end, a few during a game); the four bots' names are `duelbot.BOT_NAMES`, and a Bobby
+  is known by `duelbot.is_bobby`, not by "Bones" in a name.
 - **Test map**: `tools/make_lab_map.py` -> `maps/testlab/` (pk3 + `rooms.json`), compiled with q3map2 and
   mbspc from `data/tools` (NetRadiant-custom; mbspc needs `-forcesidesvisible`). Bots cannot join a map
   without an `.aas` file.

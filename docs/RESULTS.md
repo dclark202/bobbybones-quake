@@ -5,6 +5,26 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 20:50 — The bots get names and voices (built, not on the public server yet)
+
+The owner: "Can we give bots 1--4 individual names? BobbyBones, Mr Skeleton, Dr Evil, The Juggernaut. Still with (BOT)
+at the end ... And have them all say 'GG' at the end of the game. Not just 'GG' -- something sort of fun and maybe
+somewhat silly, use the colors in the chat. They can also write messages in the chat during the game, if they think
+they did something really good." One row on the leaderboard for all four ("Yes keep one leaderboard entry for
+BobbyBones").
+
+Built (B-193): the names in `plugins/duelbot.py` (`BOT_NAMES`; a Bobby is known by `is_bobby`, no longer by "Bones" in
+his name), `plugins/banter.py` with a voice for each (80 lines: the pupil, the bone jokes, the plan, the capitals), the
+leaderboard telling it who fragged whom. Checked against a stand-in for the game (every line safe to say, the lines by
+place at a game's end, the limits during a game, a person's name made safe, one leaderboard row) and on a local server
+with four bots: the four names are there, each said a line in chat as itself, the leaderboard paired 16 deaths and
+counted none (all four are the one network), no error. It goes on the public server with the next restart, on his word.
+
+Also from him that evening, noted: "several fights where it seemed Bobby misjudged that he had ammo when he was out"
+(B-192) and "watched him walk over a string of armor shard and not get all of them" (B-194). And: the three scripted
+opponents of [SCOPE_v15.md](SCOPE_v15.md) (the holder, the spammer, the watcher) are to be built overnight ("probably a
+good use of time overnight"), in a copy of the simulator, the running one untouched.
+
 ## 2026-10-09 20:35 — A friend of the owner's against three Bobbys; "fighting without ammo"; the leaderboard's first rows
 
 **The game** (session `20261010-011707_bloodrun_ffa`, copied to `data/public/sessions/`; Blood Run, free-for-all, a timed

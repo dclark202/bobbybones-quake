@@ -56,6 +56,7 @@ class ladder(minqlx.Plugin):
         self.next_save = 0.0
         self.seen = dict(deaths=0, own=0, paired=0, counted=0, unsure=0)   # since the plugin was loaded (see cmd_ladder)
         self.salt = None
+        self.listeners = []                                  # called with (killer or None, victim) for every death read (plugins/banter.py)
         self.add_hook("frame", self.on_frame)
         self.add_hook("map", self.on_map)
         self.add_hook("unload", self.on_unload)
@@ -88,12 +89,13 @@ class ladder(minqlx.Plugin):
             self.salt = open(path).read().strip()
         return hashlib.sha1((self.salt + str(p.steam_id)).encode()).hexdigest()[:10]
 
-    def who(self, p, bobby):
-        """(key, name) of a player who counts, or None: a person, or Bobby himself"""
+    def who(self, p, bobby, names=("BobbyBones",)):
+        """(key, name) of a player who counts, or None: a person, or Bobby himself. All of the server's bots (their names:
+        duelbot.BOT_NAMES) are the one network and share his row."""
         if is_bot(p):
-            if "BobbyBones" not in p.clean_name:
+            if not any(n in p.clean_name for n in names):
                 return None                                  # one of the game's own bots (a spar)
-            if TEST and "BobbyBones 2" in p.clean_name:
+            if TEST and len(names) > 1 and names[1] in p.clean_name:
                 return "test000002", "test player"
             return bobby, "BobbyBones ({})".format(_ra.label(bobby[len(_ra.BOT):]))
         return self.key(p), p.clean_name[:24]
@@ -124,6 +126,8 @@ class ladder(minqlx.Plugin):
         self.seen["deaths"] += len(died)
         if not died or not scored:                           # nobody died, or by his own hand or the map
             self.seen["own"] += len(died)
+            for p in died:
+                self.tell_listeners(None, p)
             return
         if len(died) == 1 and len(scored) == 1 and died[0].id != scored[0].id:
             pairs = [(scored[0], died[0])]
@@ -134,8 +138,10 @@ class ladder(minqlx.Plugin):
             return
         self.seen["paired"] += len(pairs)
         bobby = _ra.BOT + str(pl.P["run"])
+        names = getattr(pl, "BOT_NAMES", ("BobbyBones",))
         for killer, victim in pairs:
-            a, b = self.who(killer, bobby), self.who(victim, bobby)
+            self.tell_listeners(killer, victim)
+            a, b = self.who(killer, bobby, names), self.who(victim, bobby, names)
             if a is None or b is None or (a[0] == bobby) == (b[0] == bobby):
                 continue                                     # a frag between two people, or between two Bobbys
             now = time.time()
@@ -152,6 +158,13 @@ class ladder(minqlx.Plugin):
         if time.time() > self.next_save:
             self.next_save = time.time() + 20
             self.table.save()
+
+    def tell_listeners(self, killer, victim):
+        for fn in self.listeners:
+            try:
+                fn(killer, victim)
+            except Exception:                                # noqa: BLE001 - a listener's fault is not the ladder's
+                pass
 
     def on_map(self, mapname, factory):
         self.prev = {}
