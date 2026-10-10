@@ -48,6 +48,10 @@ SETS = {
         [("sw_{}_{}".format(a, b), spec(b, hold=70, frames=80, pin=True, pre=a))
          for a, b in (("mg", "rg"), ("rl", "rg"), ("rg", "lg"), ("lg", "rl"), ("rg", "mg"), ("mg", "rl"))] +
         [("base_{}".format(b), spec(b, hold=70, frames=80, pin=True)) for b in ("rg", "lg", "rl", "mg")]),
+    # grenades: the missile's own path (speed, arc, bounce, fuse), at fixed pitches along the flat stretch; the target far away
+    "4": dict(
+        [("glp_{}".format(p_), spec("gl", dist=1300, aim="pitch", off=p_, frames=130)) for p_ in (0, -20, -45, 20, 45, 70)] +
+        [("gl_self", spec("gl", aim="self", frames=130)), ("gl_150", spec("gl", dist=150, frames=130))]),
 }
 TESTS = SETS[os.environ.get("WEAPONLAB_SET", "1")]
 
@@ -88,6 +92,8 @@ class weaponlab(minqlx.Plugin):
         eye = (sp[0], sp[1], sp[2] + 26.0)
         if sp_["aim"] == "self":
             pitch, yaw = 89.0, LINE_YAW
+        elif sp_["aim"] == "pitch":                             # a fixed pitch along the line (negative: up)
+            pitch, yaw = float(sp_["off"]), LINE_YAW
         else:
             if sp_["aim"] == "floor":
                 off = float(sp_["off"])
@@ -152,6 +158,7 @@ class weaponlab(minqlx.Plugin):
             row += [st.health, st.armor, *[round(v, 2) for v in st.position], *[round(v, 2) for v in st.velocity]]
         c["rows"].append(row)
         row.append(int(minqlx.player_state(c["shooter"]).weapon))
+        c.setdefault("missiles", []).append([[int(m_[0]), int(m_[2])] + [round(float(v_), 1) for v_ in m_[3:9]] for m_ in minqlx.missiles()])
         if sp_["pin"]:                                          # keep the target in the line of fire
             tgt = self.player(c["target"])
             if tgt is not None:
@@ -161,7 +168,7 @@ class weaponlab(minqlx.Plugin):
             rec = dict(test=c["name"], rep=c["rep"], dist=c["dist"], pitch=round(c["pitch"], 3), yaw=round(c["yaw"], 3),
                        spec=sp_,
                        cols="frame s_hp s_armor s_x s_y s_z s_vx s_vy s_vz t_hp t_armor t_x t_y t_z t_vx t_vy t_vz s_weapon",
-                       rows=c["rows"])
+                       rows=c["rows"], missile_cols="entity weapon x y z vx vy vz (a list a frame)", missiles=c.get("missiles", []))
             with open(os.path.join(D, "weaponlab.jsonl"), "a") as fh:
                 fh.write(json.dumps(rec) + "\n")
             self.log("{} rep {}: target hp {} -> {}, shooter hp {} -> {}".format(

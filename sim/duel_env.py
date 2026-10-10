@@ -512,6 +512,11 @@ JUMP_OPEN = os.environ.get("JUMP_OPEN") or ""
 #   TEACH_BEST=1  the movement teacher's labels are its likeliest choice per output, not a sample of its choices (B-201: a
 #                 pupil of sampled labels learned its spread with it; tools/label_check.py --best says what they are worth)
 TEACH_BEST = float(os.environ.get("TEACH_BEST") or 0.0) > 0
+#   GL_QL=1       grenades and splash as measured in the game on 2026-10-10 (plugins/weaponlab.py set 4, data/weaponlab5): a
+#                 bounce keeps the rest of its frame (the grenade came to rest 10 to 40% short of the game's), and splash
+#                 reaches a player when the line from the blast to his middle or to one of four points 15 units beside it
+#                 is clear (the game's CanDamage), not only the line to his middle
+GL_QL = float(os.environ.get("GL_QL") or 0.0) > 0
 START_GUN_P = float(os.environ.get("START_GUN_P") or 0.0)
 JUMP_TRY_SLACK = 4.0
 # v14's own changes (the owner's calls of 2026-10-09, docs/MANIFEST_v14.md), each off by default:
@@ -3341,7 +3346,9 @@ class DuelEnv:
             near = np.clip(e2, c + MINS, hi_)
             d = float(np.linalg.norm(e2 - near))
             R = P_RADIUS[wpn]
-            if d < R and self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999:
+            if d < R and (self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999
+                          or (GL_QL and any(self.w.trace(ep, c + np.array([ox_, oy_, 0.0], np.float32), mask=self.sight)["fraction"] >= 0.999
+                                            for ox_, oy_ in ((15.0, 15.0), (15.0, -15.0), (-15.0, 15.0), (-15.0, -15.0))))):
                 f_ = 1.0 - d / R
                 kdir = c - e2
                 kdir[2] += 24.0                           # as in Quake 3: splash pushes upward
@@ -4232,6 +4239,10 @@ class DuelEnv:
                         vq[:] = 0.0                         # resting on the floor until the fuse runs out
                     self.rv[i, k] = vq
                     self.rp[i, k] = hitpt[q] + nrm * 0.5
+                    if GL_QL:                               # the rest of the frame, on its new way (not through a second surface)
+                        rest_ = vq * (DT * (1.0 - float(fr[q])))
+                        f2_ = self.w.trace(self.rp[i, k], self.rp[i, k] + rest_, mask=self.sight)["fraction"]
+                        self.rp[i, k] = self.rp[i, k] + rest_ * max(0.0, f2_ - 0.01)
         if st["kicked"]:
             self.state = s = self.w.state()                  # knockback changed velocities
         dmg_taken, attacker, kill_w = st["dmg_taken"], st["attacker"], st["kill_w"]
