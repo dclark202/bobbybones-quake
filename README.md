@@ -5,7 +5,9 @@ The server runs free-for-all on the game's duel maps with each map's duel items 
 Bobbys included, the rest watch. Chat commands: `!bots <0-4>` sets how many Bobbys play, `!map <name>` changes the map
 (`!maps` lists them: Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged, Campgrounds, Hektik,
 Toxicity, Cure), `!mode duel` makes it one against one, F3 readies you up for a timed ten-minute game, `!note <text>`
-leaves a comment for the log. All of them: [docs/COMMANDS.md](docs/COMMANDS.md).
+leaves a comment for the log. A leaderboard local to the server counts every frag between a person and Bobby, warmup
+included: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours. All commands:
+[docs/COMMANDS.md](docs/COMMANDS.md).
 
 ## What is it
 

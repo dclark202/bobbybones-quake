@@ -93,8 +93,12 @@ practice"; counters are in, the switch `HIGH_PAY` stays off, RESULTS 18:30), few
 **The public server (for his friends, 2026-10-09)**: restarted at 19:04 on the owner's word with the evening's changes
 (B-183): the ten duel maps in `!map` (free-for-all, a map's duel items, six playing at most), a line about `!bots` in the
 welcome, the owner's `!kick` and `!ban` (`plugins/banlist.py`), the start map held at a start, the watchdog on the main
-thread. A leaderboard local to the server is built (B-186: every frag between a person and Bobby counts, warmup
-included; `!bobby`, `!top`, `!elo`) and goes live with the restart for v14.
+thread. A leaderboard local to the server (B-186: every frag between a person and Bobby counts, warmup
+included; `!bobby`, `!top`, `!elo`) is live since 19:50, and the vote at a game's end offers the ten maps only (B-187).
+
+**Playing from behind (B-188, new)**: the owner beat v13 24 to 0 on Blood Run that evening: he held the red armor and the
+mega, and Bobby, born with a machine gun against 242 points, kept taking the fights. Nothing in v14 is aimed at it; to
+be weighed after v14.
 
 **Maps for v14 (owner, 2026-10-09 afternoon)**: trained Blood Run, Aerowalk, Lost World, Sinister, Furious Heights,
 Battleforged; held out Campgrounds, Hektik, Toxicity, Cure. Real games against Nightmare before and after a run only.

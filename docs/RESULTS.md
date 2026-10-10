@@ -5,6 +5,48 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 19:55 — v13 loses a game 24 to 0 on Blood Run; the vote's maps; the leaderboard is live
+
+**"he just got smoked btw"** (the owner). The record (session `20261010-003515_bloodrun_ffa`, copied to
+`data/public/sessions/`; a timed ten-minute game, one Bobby, 19:35 to 19:45):
+
+| | The person | Bobby (v13) |
+|---|---|---|
+| Frags | 24 | 0 |
+| Damage dealt | 4,521 | 1,183 |
+| Red armors, megas, yellow armors taken | 13, 9, 10 | 2, 5, 19 |
+| Rockets: shots, hit rate, damage | 77, 32%, 1,627 (8 frags) | 26, 12%, 99 |
+| Rail | 28, 50%, 1,120 (4 frags) | 26, 35%, 720 |
+| Lightning | 262, 32%, 492 (6 frags) | 80, 18%, 84 |
+| Machine gun | - | 305, 18%, 280 |
+| In hand | rockets 53%, grenades 20%, rail 16% | machine gun 34%, rail 33%, rockets 26%, lightning 7% |
+| Time over 400 units a second | 22% | 4% |
+
+His 24 lives (`S\lives.py`): 18 seconds long in the middle, 8 under 10 seconds. In 8 he never held anything but the
+machine gun he is born with, in 11 he never had more than 25 armor; the most health plus armor he reached in a life was
+132 in the middle. The person had 242 health plus armor in the middle when he made a frag (never under 109). Bobby saw
+him in the last two seconds of a life 71% of the time and fired in every life. Height was not it here: at the frags he
+stood lower twice and higher five times (both alive: lower 38%, higher 38%).
+
+What it means: the person took the red armor and the mega and kept them for the whole game, and Bobby, born with a
+machine gun against 242 points, went on taking the fights (he was not ambushed: he saw them coming) in place of
+staying away and building up. His copies in self-play and the stand-in do not hold a map like that (the stand-in gets
+42% of Blood Run's red armors; this person got 13 of 15), so he has never had to play from behind. Nothing in v14 is
+aimed at this; it is a new item (B-188), for the owner to weigh after v14. Against the same kind of control on
+Aerowalk in the afternoon he lost 4 to 9 with nearly even damage.
+
+**The vote at a game's end offered maps that are not on the list** (the owner: "End of round voting has maps that
+shouldn't be playable, it should be the duel maps we've talked about only"). The game reads its map pool before it runs
+`lab.cfg`, where the pool's file was named: it had its own list of 173 maps the whole time ("loaded 173 maps into the map
+pool" at every start in the logs). The pool's file is now given on the command line (`entrypoint.sh`): "loaded 10 maps
+into the map pool", and the hop the game makes at a start goes to one of the ten as well (B-187).
+
+**The public server reloaded on his word, with the leaderboard** (19:50, 50 seconds; one person was on it, the owner had
+asked for it). After it: the five plugins load (the leaderboard among them) with no error, the pool has ten maps, the
+server went to Aerowalk, hopped to Hektik and came back, two Bobbys play v13, it answers from outside. The leaderboard
+starts empty: the first frag between a person and Bobby makes the first rows. The README's play section has its
+commands.
+
 ## 2026-10-09 19:30 — A leaderboard for the server, built (not live before the restart for v14)
 
 The owner: "can we put an elo rating on the server, to test how bobby performs against different players?", then "Yes
