@@ -1393,6 +1393,8 @@ class DuelEnv:
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
         self._replaced = False                              # a try began inside this step: the state is read again at its end
         self.count_even = False                             # the jump counters count the even seats only (the trainer: those are always his)
+        self.teach_runs = "all"                             # the key labels of this map's runs (the trainer's --teacher-skip): "all";
+        #   "jump": none in item runs, the movement teacher's in jump runs; "none": none (a map its pupil fails on)
         self.jump_a = self.jump_b = np.zeros((0, 3), np.float32)
         self.route_o = None                                  # JUMP_OPEN: his ways outside jump runs, with the jumps that are open
         open_ = {}
@@ -2110,8 +2112,10 @@ class DuelEnv:
         """labels from the movement teacher for players on a movement goal (sampled from its policy)"""
         self.teach[:] = -1
         self._run_teach()
+        if self.teach_runs != "all":                         # (no walking keys either where the movement teacher is kept out)
+            self.teach[(self.run_k > 0) & (self.script == 0), :4] = -1
         self._weapon_teach()
-        if RUN_TEACHER and self.teacher is not None and self.route is not None:
+        if RUN_TEACHER and self.teacher is not None and self.route is not None and self.teach_runs != "none":
             self._move_teach()
         if self.teacher is None:
             return
@@ -2151,6 +2155,8 @@ class DuelEnv:
         """item runs: what the strafe-jumping movement network would do toward his target (keys, jump and view), sampled
         from its policy, in place of the walking teacher's keys (see RUN_TEACHER)"""
         ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0))[0]
+        if self.teach_runs == "jump":
+            ri = ri[self.jrun[ri]]
         if not len(ri):
             return
         T, s = self.teacher, self.state

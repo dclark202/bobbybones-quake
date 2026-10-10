@@ -67,6 +67,10 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     WEAPONS = WEAPONS_
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
+    if hasattr(env, "teach_runs"):                           # (--teacher-skip: the key labels of this map's runs)
+        m_ = os.path.splitext(os.path.basename(bsp))[0]
+        skip_ = (os.environ.get("TEACHER_SKIP") or "").split(",")
+        env.teach_runs = "none" if m_ in skip_ else ("jump" if m_ + ":item" in skip_ else "all")
     if hasattr(env, "count_even"):
         env.count_even = not move_only                       # the jump counters: his seats only (in a move-only simulator every seat)
     if move_only:                                            # a map he only learns to move on (--move-maps): every round an item
@@ -189,7 +193,8 @@ def main():
     ap.add_argument("--demo-heads", default="1,1,1,1,1,0.5,0.5,1",
                     help="weight of each action head in the demo loss: forward, strafe, vertical, turn, pitch, fire, weapon, walk")
     ap.add_argument("--teacher", default="multimap_v1", help="movement policy run used as a teacher in movement rounds ('' = none)")
-    ap.add_argument("--teacher-skip", default="", help="maps (comma list) on which the movement teacher gives no labels: where its "
+    ap.add_argument("--teacher-skip", default="", help="'toxicity,lostworld:item': a map alone = no key labels in its runs; map:item "
+                    "= none in its item runs, the movement teacher's in its jump runs. Maps on which the movement teacher gives no labels: where its "
                     "pupil test fails (tools/label_check.py), e.g. lava he walks into with its labels alone")
     ap.add_argument("--move-maps", default="", help="maps (comma list) he only learns to move on: one more simulator per map "
                     "named, with item runs and jump runs only (no games, no league seats)")
@@ -230,6 +235,7 @@ def main():
     out = os.path.join(ROOT, "data", "sim_runs", a.run)
     os.makedirs(os.path.join(out, "snapshots"), exist_ok=True)
     maps = a.map.split(",")
+    os.environ["TEACHER_SKIP"] = a.teacher_skip              # (read by the simulators: the key labels of a map's runs)
     course_keys = []
     lab_json = os.path.join(ROOT, "maps", "testlab", "rooms.json")
     if os.path.exists(lab_json):
@@ -250,7 +256,7 @@ def main():
                                         os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
-                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if (a.teacher and m not in a.teacher_skip.split(",")) else None,
+                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if (a.teacher and m not in a.teacher_skip.split(",")) else None,   # (the worker reads TEACH_RUNS_<map>)
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
                                         a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w],
@@ -258,6 +264,8 @@ def main():
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
+    if a.teacher_skip:
+        print("no key labels in the runs of: {}".format(a.teacher_skip), flush=True)
     obs = np.concatenate([f[0] for f in first])
     teach = np.concatenate([f[1] for f in first])
     N = len(obs)
