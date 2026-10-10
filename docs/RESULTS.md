@@ -5,6 +5,32 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 20:15 — `duel_gru_v14` started
+
+**The owner's go and his rules for the run.** "Let's start with v14 now. For feedback, I would like hourly checkins (they
+can be brief), with a midway report arriving at 7am for me to read when I wake up. Ideally I would like him to be ready
+to play against around noon tomorrow, but you can let the training go to 7pm if he's still improving (I doubt it will
+take this long and based on what's going on I might decide to end it earlier anyway.) If anything looks horribly wrong
+in training flag it. We're looking for rockets/projectile usage, strafe jumping/maintaining speed." And: "you can
+similarly do early stopping if it seems to plateau. 3 duel sessions without any major progress, and flat metrics
+otherwise".
+
+Where he sees v13: "currently we have a bot that 'plays quake'. It could beat probably 20% of the people that regularly
+play on the FFA server ... someone who actually knows how to play the game will win every time. That's fine right now.
+We've got something to work with and can continue to expand." The slower deciding head (B-191) is "absolutely the right
+idea ... If it goes well and he learns to strafe jump this is the next step": to be brought up again after v14.
+
+**The start.** 20:14:33, set to end at 19:00 on 2026-10-10 at the latest (1,365 minutes); 10,060 players in 24 simulator
+processes on the six maps; everything as in [MANIFEST_v14.md](MANIFEST_v14.md) (the teacher's weight 0.3 rising over the
+first hour, item runs 30% of his time, pay for speed 0.1 and 0.3, the rocket numbers, no pay for height). The evaluation
+loop runs beside it (32 ten-minute duels a map against the stand-in on the six maps and the four held out, with who
+stands higher).
+
+**The first six updates** (2.4 minutes each): no error. The policy's step 0.024, 0.026, 0.050, 0.046, 0.043, 0.032 an
+update (v13's first three were 0.289, 0.046, 0.037; its run's mean 0.009), most of it on the view. Aim holds: on target
+32 to 35% of the time in view, hit rates rockets 39 to 46%, lightning 44 to 46%, rail 47 to 48%. Item runs go from 6.3 to
+5.0 to 5.2 items a minute as the teacher's weight comes up, as in the dry runs; fast in the air 8 to 12%.
+
 ## 2026-10-09 20:05 — The owner after his games against v13: what he saw, and where it goes after v14
 
 His words, nothing to build now:

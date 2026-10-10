@@ -109,7 +109,12 @@ larger model, attention or a strategic head (B-191).
 **Maps for v14 (owner, 2026-10-09 afternoon)**: trained Blood Run, Aerowalk, Lost World, Sinister, Furious Heights,
 Battleforged; held out Campgrounds, Hektik, Toxicity, Cure. Real games against Nightmare before and after a run only.
 
-**Nothing is training.** `duel_gru_v13` ([MANIFEST_v13.md](MANIFEST_v13.md)) ran from 2026-10-08 21:26 to 2026-10-09 11:35
+**`duel_gru_v14` is training** since 2026-10-09 20:14 (owner's go; [MANIFEST_v14.md](MANIFEST_v14.md)), to 19:00 on 2026-10-10
+at the latest. His rules: a brief check every hour, a mid-run report at 7:00, playable around noon if he can be, an
+early stop when three duel checks in a row show no major progress and the other measures are flat, a flag at once for
+anything badly wrong. Looked for: rockets and other projectiles in use, strafe jumping and speed kept.
+
+**Before it:** `duel_gru_v13` ([MANIFEST_v13.md](MANIFEST_v13.md)) ran from 2026-10-08 21:26 to 2026-10-09 11:35
 (stopped by the owner after fourteen hours) and is on the public server; report: [REPORT_v13.md](REPORT_v13.md). Against
 the stand-in at the end: Blood Run 72% of the frags (97 of 100 games won), Aerowalk 80% (100 of 100), arena1 39%; items
 and weapons held and grew; rockets (19% of his frags) and speed (294 units a second) not delivered. The owner duels him
