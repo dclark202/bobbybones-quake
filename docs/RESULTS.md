@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-10](results/2026-10-10.md)
 
+- 17:15 — `duel_gru_v15` started (owner's go), to noon tomorrow
 - 16:10 — Tries at 137 of the 144 jumps (owner: "Build first"); the teacher silent where its own way goes round a jump; "taught the general path", not the execution
 - 15:45 — v14's end is on the public server; the owner's answers on v15: from v14's end, tries for the 36 jumps built first, projectiles only in view or heard for good
 - 15:30 — v15 audited and ready for the owner's go: v14's end against v13 on six maps; the side arms; the teacher under his hands, tested map by map; tries at 108 of 144 jumps; movement-only practice on the four other maps

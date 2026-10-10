@@ -1,4 +1,4 @@
-# `duel_gru_v15`: the manifest (2026-10-10, for the owner's go; not started)
+# `duel_gru_v15`: the manifest (2026-10-10; started 17:10 on the owner's go, to noon of 2026-10-11)
 
 What v15 has in its rounds, what he is shown and paid, what changes from v14, how each new thing was tested, what is
 known not to be right yet, and what is the owner's to decide. The run starts only on his word. The network it starts
@@ -6,8 +6,8 @@ from: [REPORT_v14.md](REPORT_v14.md). The day's log: [2026-10-10](../results/202
 [../design/jumps/](../design/jumps/).
 
 **Which run is which.** v13 is on the public server. v14 is the run of last night and this morning (three starts; the
-third began at 08:06 and was ended at 11:52); "v14" or "v14's end" is its save of 10:57. **v15 is the next run and has
-not started**: it begins from v14's end with everything below.
+third began at 08:06 and was ended at 11:52); "v14" or "v14's end" is its save of 10:57. **v15 is the run that began on 2026-10-10 at
+17:10** from v14's end with everything below.
 
 ## 0. The owner's decisions (2026-10-10)
 
@@ -20,6 +20,8 @@ not started**: it begins from v14's end with everything below.
 | 13:08 | "He should get movement only practice on all 10 maps" |
 | 15:38 | the answers to section 12: start from "v14 end"; the teacher's maps "OK"; movement-only time "OK - but monitor"; the one-weapon rounds "should be temporary just to introduce him to these weapons, monitor and turn them down once he starts to understand them"; the 36 jumps without tries: "Build first"; length and reports "TBD - ask me after we've settled the rest"; projectiles: "he should only know what's in view or what he can hear. He's allowed to \"suspect\" rockets, but that maybe is learned behavior instead" |
 | 15:52 | "the jumps don't need to be 'exact' for repeating, he should be taught the general path, there's many ways to execute them" |
+| 17:05 | **the go**: "you can start it now. Let it run until noon tomorrow. With mid way reports delivered at 10pm and 7am. Monitor and flag anything that doesn't look right, you can stop early if the metrics stop increasing, at your discretion. No need to send hourly reports between 10 and 7; just one summary of the night run from that period and a very brief \"Check <hour>: <changes>\"". "Keep the jumps without tries." Attention for v16 is begun in downtime |
+| 17:17 | what the run is judged by: "maintaining speed/strafe jumping/circle jumping"; "rockets/plasma/grenades usage"; "decision making" ("really should be targeted for v16"). "If either of the first two don't succeed for this run we'll really need to reassess". (v15 has nothing new for rockets: told him at once) |
 | standing | the last best network is in the league and first in every check; under 45% of the frags against it at two checks in a row: stop and tell him. Priorities: strafe jumping and keeping speed; rockets; plasma and grenades, the shotgun less; game awareness |
 
 ## 1. What changes from v14
@@ -250,7 +252,7 @@ minute at the start>
 rollout, 70 minibatches (156 sequences each, as v14's 157). `--fade-start` is the lineage's minute at the start
 (5,839), kept in `fade_start.txt` for every resume.
 
-## 12. For you to decide (answered 15:38: section 0; point 6 is built: section 3; open: the length and the report hours)
+## 12. For you to decide (answered 15:38 and 17:05: section 0; point 6 is built: section 3)
 
 1. **The start**: v14's end (my advice at 14:15: level with v13 on v13's three maps, ahead on the three new ones, and
    trained in the corrected simulator), with v13 kept in the league. The folder is prepared so.
