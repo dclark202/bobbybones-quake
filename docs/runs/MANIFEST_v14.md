@@ -25,6 +25,12 @@ starting network and differs from what is written below in four things:
 
 Everything else as below: the six maps, the simulator set right, item runs 30% of the rounds, no key labels in games.
 
+**Changed in the third start, 09:32 (RESULTS 2026-10-10 09:40)**: `RULE_WALK=1`. The item rule and the draw of an item
+run's target count only the ways a walker can take. With the pros' ways in the walking graph (row 5's map fixes) the
+rule had named Aerowalk's red armor, which only a circle jump reaches, a quarter of the time, and he lost that map to
+v13 12% to 88% within 17 minutes of training. The stop rule fired at the second check; the run was continued from its
+save of 09:29 with the switch on.
+
 **Changed in the run (2026-10-09 22:53, RESULTS 23:15)**: the first try, with every teacher held back from the shared
 layers (`--teach-trunk 0.05`), lost half his duel strength in 90 minutes and taught no strafe jumping; it is kept as
 `duel_gru_v14_try1`. The run was started again from the same start with the movement teacher alone let into the shared

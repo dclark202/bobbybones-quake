@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-10](results/2026-10-10.md)
 
+- 09:40 — The third start lost Aerowalk to v13 within 17 minutes: the item rule sent him for a red armor he cannot reach. Fixed (`RULE_WALK`), the run goes on
 - 08:30 — The docs put in order: folders by kind, the log one file a day, the backlog by the owner's priorities, a check before a commit
 - 08:15 — v14's second start stopped and its third started (owner's go); real games of the second start's end; the rail on a real server
 - 06:30 — v14 is weaker than v13 as a duelist: the weapon in his hand and a league without the control; the mid-run report

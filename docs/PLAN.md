@@ -62,7 +62,7 @@ the league (the third start, above).
 The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)):
 
 - The run in progress: B-197, B-195.
-- 1, strafe jumping and keeping speed: B-200, B-201.
+- 1, strafe jumping and keeping speed: B-204 (the items behind a jump), B-200, B-201.
 - 2, rockets: B-198, B-199.
 - 3, plasma, grenades, the shotgun: B-189, B-169.
 - 4, game awareness: B-191 (the slower deciding head: to be brought to the owner when v14 has ended), B-190, B-188, B-202.

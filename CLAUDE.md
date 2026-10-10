@@ -98,7 +98,7 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
   `duel_env_ffa_v13.py` are the frozen 499-input simulator of v13 (the public server's v13: export with
   `--env duel_env_ffa_v13` from the next deploy with new code on). Switches, all off by default (with all off the simulator
   is v13's, checked by fixed-seed replays): the map fixes `SHOT_MASK`, `LAVA`, `WALK_FIX`, `PRO_WAYS`, `NEAREST`, `QL_MOVE`,
-  `ITEM_DROP`, `SOLIDS`; `SHOT_W` (shot price by weapon), `TEACH_FREE` (weapon teacher silent on shotgun, grenades, plasma),
+  `ITEM_DROP`, `SOLIDS`; `RULE_WALK` (2026-10-10: the item rule and item runs count a walker's ways only); `SHOT_W` (shot price by weapon), `TEACH_FREE` (weapon teacher silent on shotgun, grenades, plasma),
   `SPEED_PAY` / `SPEED_PAY_RUN` (per stretch of new ground by speed, 320 to 480), `RUN_TEACHER` (the movement network's
   labels in item runs; the trainer's `--teacher <run>`), `STACK_KEYS=0` (no key labels in games), `BLIND_RULE` (shots with
   no enemy in view). `sim/train_move.py --v14` trains the strafe-jumping teacher (lava, the game's step height, fall
@@ -212,6 +212,11 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
   games to 41 (2026-10-10). `tools/duel_eval.py --opp policy:<file>` plays two networks against each other.
 - The weapon teacher's label in a styled life (`STYLE_P`, three lives in four, drawn on the servers too) is the style's
   weapon at every distance; only a general life gets the pros' table. A teacher kept to a run's end makes him hold it so.
+- A teacher must not name what he cannot reach: with the pros' ways in the walking graph (`PRO_WAYS`) the item rule
+  (weight 2.0 to a run's end) named Aerowalk's red armor, which only a circle jump reaches; he went a quarter of the
+  time, did not arrive, and lost the map to v13 12% to 88% within 17 minutes of every start of v14. `RULE_WALK=1`: the
+  rule and the item runs count a walker's ways only (`tools`: scratch probes of 2026-10-10; B-204 teaches the jump).
+  A map's numbers must be read per map: the six-map mean against the stand-in did not move while Aerowalk fell 24 points.
 - A reviewer's eye on the reward: anything paid per frame for progress must be paid on a running best, or a setback and its recovery is a pump (the trip pay, 2026-10-08).
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,

@@ -461,6 +461,13 @@ PRO_WAYS = float(os.environ.get("PRO_WAYS") or 0.0) > 0
 #                 stands. Until now only the first of a kind in the map file was a goal: the second launcher of Aerowalk,
 #                 Sinister, Furious Heights, Battleforged and Hektik was never one.
 NEAREST = float(os.environ.get("NEAREST") or 0.0) > 0
+#   RULE_WALK=1   the item rule (the intention head's teacher) and the draw of an item run's target count only the ways a
+#                 walker can take, for him as for a scripted player: an item that only a pros' step leads to (PRO_WAYS:
+#                 Aerowalk's red armor, a jump no walker makes; a walker gets there from 1% of the map's points) is not
+#                 named and not drawn. With PRO_WAYS alone the rule named it a quarter of the time, he went and did not
+#                 arrive, and lost Aerowalk to v13 12% to 88% within 17 minutes of every start of v14 (RESULTS
+#                 2026-10-10 09:30). His inputs still show the pros' way: he may choose it himself. Off by default.
+RULE_WALK = float(os.environ.get("RULE_WALK") or 0.0) > 0
 # v14's own changes (the owner's calls of 2026-10-09, docs/MANIFEST_v14.md), each off by default:
 #   SHOT_W        the shot's price by weapon, as multipliers of SHOT_COST, e.g. "rl:0.2,gl:0,pg:0" (rockets: "there should be
 #                 an opportunity cost ... the cost can be very low"; plasma and grenades: "no opportunity cost").
@@ -2490,7 +2497,7 @@ class DuelEnv:
         node = R.locate(self.state[:, :3])
         Tn = R.T[:, node]                                    # seconds to every goal from where each player stands
         if PRO_WAYS:                                         # a scripted player walks: only the walking map's ways count for him
-            Tn = np.where((self.script > 0)[None, :], R.T_walk[:, node], Tn)
+            Tn = R.T_walk[:, node] if RULE_WALK else np.where((self.script > 0)[None, :], R.T_walk[:, node], Tn)   # (RULE_WALK: for him too)
         grp = np.arange(n) // (self._others_arr().shape[1] + 1)
         best_t = np.full(n, 1e9, np.float32)
         for gi, lab in enumerate(self.route_goal):
@@ -3336,8 +3343,9 @@ class DuelEnv:
         node = int(R.locate(self.w.state()[i:i + 1, :3])[0])
         m = i // (self._others_arr().shape[1] + 1)
         gk = {k: int(self._trip_goal(np.array([k]), np.array([node]))[0]) for k in range(1, len(INTENTS))}
-        ks = [k for k, gi in gk.items() if gi >= 0 and k != self.run_k[i] and R.T[gi, node] < 1e8]
-        ok = [k for k in ks if self.item_up[m, self.route_item[gk[k]]] and R.T[gk[k], node] > 1.0]
+        Tr = R.T_walk if (RULE_WALK and PRO_WAYS) else R.T    # (RULE_WALK: a target he can walk to, not one behind a pros' step)
+        ks = [k for k, gi in gk.items() if gi >= 0 and k != self.run_k[i] and Tr[gi, node] < 1e8]
+        ok = [k for k in ks if self.item_up[m, self.route_item[gk[k]]] and Tr[gk[k], node] > 1.0]
         ok = ok or ks
         self.run_k[i] = int(self.rng.choice(ok)) if ok else 0
         self.intent_new[i], self.intent_done[i] = True, True     # the new target is read at once
