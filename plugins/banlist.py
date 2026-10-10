@@ -70,7 +70,13 @@ class banlist(minqlx.Plugin):
 
     def cmd_players(self, player, msg, channel):
         for p in self.players():
-            player.tell("{:2d}  {}{}".format(p.id, p.clean_name, "  (bot)" if is_bot(p) else ""))
+            look = ""
+            if is_bot(p):
+                try:
+                    look = "  (bot, {})".format(p.model)
+                except Exception:                            # noqa: BLE001
+                    look = "  (bot)"
+            player.tell("{:2d}  {}{}".format(p.id, p.clean_name, look))
         return minqlx.RET_STOP_ALL
 
     def cmd_kick(self, player, msg, channel):

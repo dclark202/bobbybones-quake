@@ -20,7 +20,11 @@ place at a game's end, the limits during a game, a person's name made safe, one 
 with four bots: the four names are there, each said a line in chat as itself, the leaderboard paired 16 deaths and
 counted none (all four are the one network), no error. It goes on the public server with the next restart, on his word.
 A change from him right after: "change 'The Juggernaut' to be all caps 'THE JUGGERNAUT' and make him bot 3 (dr evil is
-bot 4). They should always join in that order": done, and the last in the order is the first to leave.
+bot 4). They should always join in that order": done, and the last in the order is the first to leave. And: "The
+juggernaut and dr evil can get different avatars from bones in game too ... Your choice": THE JUGGERNAUT is added with
+the game's TankJr body, Dr Evil with Xaero's; the two skeletons stay skeletons (a red skin for Mr Skeleton did not take:
+the game does not let a bot's skin be set afterwards). On a local server all four play the same in their bodies (256 to
+279 units a second, the same pickups and firing).
 
 Also from him that evening, noted: "several fights where it seemed Bobby misjudged that he had ammo when he was out"
 (B-192) and "watched him walk over a string of armor shard and not get all of them" (B-194). And: the three scripted

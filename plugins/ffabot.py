@@ -26,7 +26,7 @@ except Exception:                                           # noqa: BLE001 - loa
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _duel = importlib.import_module("duelbot")
 duelbot, is_bot, sig, D, QLNUM = _duel.duelbot, _duel.is_bot, _duel.sig, _duel.D, _duel.QLNUM
-is_bobby, BOT_NAMES = _duel.is_bobby, _duel.BOT_NAMES
+is_bobby, BOT_NAMES, BOT_BODY, BOT_SKIN = _duel.is_bobby, _duel.BOT_NAMES, _duel.BOT_BODY, _duel.BOT_SKIN
 _pu = _duel._pu                                              # no powerups on any server (plugins/powerups.py)
 
 SEATS = 6
@@ -183,6 +183,7 @@ class ffabot(duelbot):
     def on_map(self, mapname, factory):
         self.end_session()
         self.ready = False
+        self.skin_tried = {}
         self.ready_ids = set()
         self.seat, self.alive, self.prev, self.ammo_prev, self.tot, self.acc = {}, {}, {}, {}, {}, {}
 
@@ -429,6 +430,19 @@ class ffabot(duelbot):
             except OSError:
                 pass
         bobbys, people = self.bobbys(), self.people()
+        if now > getattr(self, "skin_check", 0.0):           # a skin of his own (BOT_SKIN), tried twice once he has joined
+            self.skin_check = now + 5.0
+            tried = self.__dict__.setdefault("skin_tried", {})
+            for p in bobbys:
+                want = next((m for n, m in BOT_SKIN.items() if n in p.clean_name), None)
+                try:
+                    if want and p.model != want and tried.get(p.id, 0) < 2:
+                        tried[p.id] = tried.get(p.id, 0) + 1
+                        p.model = want
+                        p.headmodel = want
+                except Exception as e:                       # noqa: BLE001 - a look is never worth a frame
+                    tried[p.id] = 2
+                    self.log("skin of {}: {}".format(p.clean_name, e))
         self.people_now = bool(people)                       # (record() writes game events only then)
         if now > getattr(self, "quad_check", 0.0):
             self.quad_check = now + 3.0
@@ -448,7 +462,7 @@ class ffabot(duelbot):
             self.next_check = now + 4
             taken = " ".join(p.clean_name for p in bobbys)       # each has a name of his own, and they join in the names' order (owner, 2026-10-09)
             name = next((n for n in BOT_NAMES if n not in taken), "BobbyBones {}".format(len(bobbys) + 1))
-            minqlx.console_command("addbot bones 5 free 0 \"{} (BOT)\"".format(name))
+            minqlx.console_command("addbot {} 5 free 0 \"{} (BOT)\"".format(BOT_BODY.get(name, "bones"), name))
         elif len(bobbys) > self.n_bots and now > self.next_check:
             self.next_check = now + 4
             last = max(bobbys, key=lambda p: max([k for k, n in enumerate(BOT_NAMES) if n in p.clean_name] or [99]))

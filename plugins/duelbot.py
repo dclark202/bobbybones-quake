@@ -74,6 +74,11 @@ def is_bot(p):
 # is the first. All four are the same network; plugins/ladder.py keeps one row for them and plugins/banter.py gives each
 # a voice.
 BOT_NAMES = ("BobbyBones", "Mr Skeleton", "THE JUGGERNAUT", "Dr Evil")
+# ... and their looks (owner: "The juggernaut and dr evil can get different avatars from bones in game too ... Your choice"):
+# the game's own bot whose body each one is added with (the plugin moves it either way; the game's box for a player is the
+# same for every model). BobbyBones and Mr Skeleton are the skeleton, THE JUGGERNAUT the big one, Dr Evil the bald one.
+BOT_BODY = {"BobbyBones": "bones", "Mr Skeleton": "bones", "THE JUGGERNAUT": "tankjr", "Dr Evil": "xaero"}
+BOT_SKIN = {"Mr Skeleton": "bones/red"}                    # a skin of his own, where the game lets a bot's be set
 
 
 def is_bobby(p):
