@@ -142,6 +142,9 @@ def main():
     ap.add_argument("--near-item-p", type=float, default=0.0, help="share of spawns within 2 s of the mega or the red armor")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
+    ap.add_argument("--anchor-p", type=float, default=0.0,
+                    help="the share of rollouts whose league players are an anchor's (snapshots/anchor_*.pt: networks that never "
+                         "leave the league, e.g. the run's starting network) and not one of the last eight snapshots'")
     ap.add_argument("--drill-p", type=float, default=0.0,
                     help="share of rounds where both players have one weapon only")
     ap.add_argument("--drill-weapons", default="rl,rg,lg,rl,rg,lg,sg,gl,pg,hmg,mg", help="weapons used in drill rounds (equal chance)")
@@ -346,6 +349,12 @@ def main():
         import glob
         for f in sorted(glob.glob(os.path.join(out, "snapshots", "snap_*.pt")))[-8:]:
             snaps.append(torch.load(f, weights_only=False, map_location=dev)["model"])
+    anchors, vs_anchor = [], False                                     # ... and opponents that never leave it (--anchor-p)
+    if a.anchor_p > 0:
+        import glob
+        for f in sorted(glob.glob(os.path.join(out, "snapshots", "anchor_*.pt"))):
+            anchors.append(torch.load(f, weights_only=False, map_location=dev)["model"])
+        print("league anchors: {} (in {:.0%} of the rollouts)".format(len(anchors), a.anchor_p), flush=True)
     opp = copy.deepcopy(pol).eval()
     last_snap = time.time()
     h = torch.zeros(N, H, device=dev)
@@ -385,7 +394,8 @@ def main():
             snaps = snaps[-8:]
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
         if snaps:                                                        # pick this rollout's opponent
-            opp.load_state_dict(snaps[np.random.randint(len(snaps))])
+            vs_anchor = bool(anchors) and np.random.random() < a.anchor_p
+            opp.load_state_dict(anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))])
         # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
         # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
         b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_dec = b_iteach = b_teach = None
@@ -732,7 +742,8 @@ def main():
                    visible=round(agg["visible"] / max(1, agg["players"]), 3),
                    air_fast=round(agg["air_fast"] / max(1, agg["players"]), 3),
                    jerk=round(agg["jerk"] / max(1, agg["players"]), 2),
-                   vs_snapshot_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps else None,
+                   vs_snapshot_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and not vs_anchor else None,
+                   vs_anchor_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and vs_anchor else None,
                    league_size=len(snaps), entropy=round(float(en), 3), close_p=round(close_p, 2))
         log.write(json.dumps(rec) + "\n")
         log.flush()

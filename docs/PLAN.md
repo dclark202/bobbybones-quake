@@ -120,7 +120,19 @@ anything badly wrong. Looked for: rockets and other projectiles in use, strafe j
 settings to be changed while it runs, right after a save and logged: the pay for speed, and the strafe-jumping teacher's
 weight ("If you think the strafe jumping teacher isn't strong enough you can also bump it up (or down if it's too strong)").
 
-**Mid-run, 2026-10-10 07:00 ([MIDRUN_v14.md](MIDRUN_v14.md))**: as a duelist v14 is weaker than v13: head to head 36% of the
+**The third start of `duel_gru_v14` is training** since 2026-10-10 08:06 (owner's go at 07:46; RESULTS 08:15; the list in
+[MANIFEST_v14.md](MANIFEST_v14.md), section 0), to 19:00 at the latest, with a mid-run report around noon: from v13 again, v13
+kept in the league and played first in every check (under 45% of the frags against it twice in a row: stop), weapons
+as v13 had them, the strafe-jumping teacher switched on after two clean checks. The second start is kept as
+`duel_gru_v14_try2`.
+
+**The owner's priority list for the next models (2026-10-10)**: (1) strafe jumping and keeping speed; (2) rockets; (3)
+plasma and grenades, the shotgun to a lesser extent; (4) "game awareness": not through a teleporter the enemy watches,
+not always the same path, which "needs more model build out" and is "arguably the most important long term" but comes
+when the first two or three are there. "Any plan going forward needs to address those, together with any weird
+behavior that is showing up mid run/in duels."
+
+**Mid-run of the second start, 2026-10-10 07:00 ([MIDRUN_v14.md](MIDRUN_v14.md))**: as a duelist v14 is weaker than v13: head to head 36% of the
 frags on the six maps and 41 games won of 192; against the stand-in 70% -> 58%. Two causes in the run's setup: the weapon
 in his hand (he holds what the weapon teacher names, in a styled life at every distance; v13 holds the rail at every
 distance and that wins in the simulator) and a league of his own last eight snapshots, without the control (B-197).
@@ -453,6 +465,10 @@ not fall. Owner, 20:20: the cost for holding none grows with the time gone witho
   check-ins, the PC at about 80 to 85%.
 - (2026-10-08) Before a run starts he reviews a full report of the last network, a full manifest of the next run and the
   state of the public server, and gives the go himself.
+- (2026-10-10) The control in every run: the last best network stays in the league and every checked save plays it head
+  to head ("this should be standard going forward, continue to check against the last best version + new iterations").
+- (2026-10-10) The priority list for the next models: strafe jumping and keeping speed; rockets; plasma and grenades
+  (the shotgun less); then game awareness. Every plan addresses these and any odd behaviour seen in a run or in duels.
 
 ## How to run (short)
 

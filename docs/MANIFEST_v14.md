@@ -7,6 +7,24 @@ preparation and the real games), [REPORT_v13.md](REPORT_v13.md), [BACKLOG.md](BA
 
 ## 0. The owner's decisions (2026-10-09, after his review)
 
+**The third start (2026-10-10 08:06, the owner's go at 07:46)**. The second start made him weaker than v13 as a duelist
+([MIDRUN_v14.md](MIDRUN_v14.md)) and was stopped at 07:42 (kept as `duel_gru_v14_try2`). The third begins from the same
+starting network and differs from what is written below in four things:
+
+1. **The control.** v13 (the starting network) plays the league's players in a quarter of the rollouts (`--anchor-p 0.25`,
+   `snapshots/anchor_v13.pt`) and every checked save plays it head to head on Blood Run and Aerowalk before the
+   stand-in's maps. Under 45% of the frags against it at two checks in a row: the run stops and the owner is told. The
+   owner: "this should be standard going forward, continue to check against the last best version + new iterations".
+2. **Weapons as v13 had them at its end** (rows of section 3 and 4 do not apply): no weapon teacher (`--weapon-teach 0`),
+   every shot at its full price (`SHOT_W` unset), no rule for rockets with no enemy in view (`BLIND_RULE=0`). The owner:
+   "acceptable for now, he does need to learn how to use rockets more though. so let's continue to monitor this".
+3. **The strafe-jumping teacher in two phases**: off for the first two checks (about 90 minutes), then as in the second
+   start (0.3 in item runs, rising over an hour, into the shared layers). The owner: "he needs to learn to strafe jump
+   to get places though".
+4. **The pay for speed** is 0.3 in games as in item runs (raised in the second start).
+
+Everything else as below: the six maps, the simulator set right, item runs 30% of the rounds, no key labels in games.
+
 **Changed in the run (2026-10-09 22:53, RESULTS 23:15)**: the first try, with every teacher held back from the shared
 layers (`--teach-trunk 0.05`), lost half his duel strength in 90 minutes and taught no strafe jumping; it is kept as
 `duel_gru_v14_try1`. The run was started again from the same start with the movement teacher alone let into the shared

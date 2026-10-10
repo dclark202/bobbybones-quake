@@ -110,7 +110,9 @@ After any run, test or decision: add a RESULTS entry, update BACKLOG statuses, u
   mode on the test map: aim rooms and movement courses read from `maps/testlab/rooms.json`). `duel_env_v3.py` and `duel_env_v2.py` are frozen copies for older runs (freeze a copy before changing the
   inputs or actions of a simulator that a run still needs); a policy must be played and
   evaluated with the module it was trained in. `movement_env.py` is the movement-only task.
-- **Training**: `train_duel_rnn.py` (PPO, GRU 512, league of snapshots, `--resume`). `upgrade_policy.py` widens an
+- **Training**: `train_duel_rnn.py` (PPO, GRU 512, league of snapshots, `--resume`; `--anchor-p X` with
+  `snapshots/anchor_*.pt`: networks that never leave the league, the owner's standing rule of 2026-10-10: the last best
+  network in every run's league and in every check). `upgrade_policy.py` widens an
   older network to new inputs and actions (new inputs are appended at the end, zero weights). GPU PyTorch lives
   in the Anaconda Python (`C:\Users\<user>\anaconda3\python.exe`); do not import torch inside simulator workers
   (it crashed numpy). Long runs are launched detached (`Start-Process cmd.exe`) from a `.cmd` file written with

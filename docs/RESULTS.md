@@ -5,6 +5,58 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-10 08:15 — v14's second start stopped and its third started (owner's go); real games of the second start's end; the rail on a real server
+
+**The owner at 07:10, after the mid-run report**: "So it didn't go so good. That's ok, we'll try again." To the five
+points proposed (07:30) he said yes to each at 07:46: (1) start again from v13; (2) v13 in the league and in every
+check: "this should be standard going forward, continue to check against the last best version + new iterations"; (3)
+weapons as v13 had them: "acceptable for now, he does need to learn how to use rockets more though. so let's continue to
+monitor this"; (4) the strafe-jumping teacher after two clean checks: "he needs to learn to strafe jump to get places
+though"; (5) the rest as v14. A mid-run report around noon, the run to 19:00 unless it should stop earlier. And his
+priority list for the next models: strafe jumping and keeping speed; rockets; plasma and grenades, the shotgun less;
+then "game awareness" (not through a teleporter the enemy watches, not always the same path), which "needs more model
+build out" and comes when the first two or three are there. "Any plan going forward needs to address those, together
+with any weird behavior that is showing up mid run/in duels."
+
+**The second start** was stopped at its save of 07:42 (518 minutes of training) and is kept whole as
+`data/sim_runs/duel_gru_v14_try2` (its end: `policy_end_second_start.pt`). Its last check against v13 (the save of
+07:20): Blood Run 36% of the frags (2 games won, 30 lost), Aerowalk 17% (0-32).
+
+**Its end against the game's Nightmare bot** (real games, ten minutes, the game's own spawn, three local servers side by
+side on a quiet PC, two rounds):
+
+| Map | Score | Damage dealt / taken | His speed | The weapon in his hand | v13 on 2026-10-09 |
+|---|---|---|---|---|---|
+| Blood Run | **10-10**, **9-11** | 3,153 / 3,239; 2,736 / 3,657 | 286, 281 | rg: 0.42, lg: 0.22, rl: 0.2, mg: 0.12; rl: 0.38, rg: 0.21, lg: 0.2, mg: 0.16 | 14-4, 11-6, 10-3 |
+| Aerowalk | **8-21**, **5-22** | 3,427 / 2,898; 3,128 / 2,207 | 257, 258 | rl: 0.5, lg: 0.21, mg: 0.14, rg: 0.08; rl: 0.47, lg: 0.21, mg: 0.16, rg: 0.08 | 0-0, 3-1, 12-12 (Nightmare stood still in two) |
+| Lost World | **5-7**, **6-1** | 2,365 / 2,992; 1,747 / 2,138 | 272, 272 | lg: 0.39, rl: 0.34, mg: 0.24, dead: 0.02; lg: 0.64, rl: 0.26, mg: 0.09, dead: 0.0 | 8-5, 6-4, 9-5 |
+
+The game's own bot says what the stand-in and v13 said. Where v13 won three of three on Blood Run he draws and loses;
+on Aerowalk he loses 8-21 and 5-22 while dealing more damage than he takes, the rocket launcher in his hand half of
+the time and the rail 8%; on Lost World a loss and a win. (The 1v1 plugin gives no playing styles: these are general
+lives.)
+
+**The rail on a real server** (six sessions of the public server with people, v13; a rail shot is its ammunition going
+down by one, a hit is another player losing 60 points or more within three frames):
+
+| | Rail shots | Hit | Fired within 400 units | Hit there | Hit beyond |
+|---|---|---|---|---|---|
+| People (three) | 244 | 32% | 19% of their shots | 30% (46 shots) | 32% |
+| Bobby (v13) | 289 | 35% | 42% of his shots | 38% (121 shots) | 33% |
+
+In the simulator the same v13 hits 48 to 53% of his rail shots against the stand-in (57% within 400 units) and 46 to
+48% in self-play. So his rail is about a person's where people are the targets; it is the simulator's targets, the
+script and himself, that are easier to hit than people, and that is what makes the rail at every distance pay there
+(B-199 reads differently now: the targets' dodging before his hand).
+
+**The third start** (08:06; settings in [MANIFEST_v14.md](MANIFEST_v14.md), "the third start"): from the starting network
+again; v13 in a quarter of the league's rollouts (`--anchor-p 0.25`, new in the trainer; `snapshots/anchor_v13.pt`) and
+played first in every check (Blood Run and Aerowalk, 32 duels each), then the stand-in's ten maps; no weapon teacher,
+no price cut for rockets, grenades and plasma, no rule for rockets with no enemy in view; no strafe-jumping teacher in
+the first phase (two checks, about 90 minutes), then 0.3 in item runs as in the second start; pay for speed 0.3 in
+games and item runs; six maps, the simulator set right, item runs 30%. The rule: under 45% of the frags against v13 at
+two checks in a row, the run stops and the owner is told.
+
 ## 2026-10-10 06:30 — v14 is weaker than v13 as a duelist: the weapon in his hand and a league without the control; the mid-run report
 
 Everything with its tables: [MIDRUN_v14.md](MIDRUN_v14.md). The findings:
