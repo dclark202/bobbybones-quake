@@ -5,7 +5,7 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
-## 2026-10-09 20:15 — A leaderboard for the server, built (not live before the restart for v14)
+## 2026-10-09 19:30 — A leaderboard for the server, built (not live before the restart for v14)
 
 The owner: "can we put an elo rating on the server, to test how bobby performs against different players?", then "Yes
 build the elo rating. keep it local to this server, and base it on all interactions with the bots from humans (meaning
