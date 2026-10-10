@@ -23,6 +23,7 @@ Nightmare stand-in, by real games against Nightmare on a free PC, and by the num
 | [../README.md](../README.md) | The public page: the goal, the fairness rules, how it works, what he can do, what is in progress and planned (no dated status: owner, 2026-10-08) | The goal, a fairness rule or what he can do changes |
 | [REPORT_v12.md](REPORT_v12.md) | The full report of the network on the public server | (a report per network the owner reviews) |
 | [MIDRUN_v13.md](MIDRUN_v13.md) | The run in progress at eight hours: hour by hour, the duel curve, what is not going as asked | (a mid-run report when the owner asks for one) |
+| [MIDRUN_v14.md](MIDRUN_v14.md) | v14 at seven and a half hours: weaker than v13 head to head, the weapon in his hand, the league without the control, strafe jumping half-learned; the owner's decisions | (a mid-run report when the owner asks for one) |
 | [MANIFEST_v13.md](MANIFEST_v13.md) | The next run in full: what is in its rounds, what it is paid for and shown, what changed | Before a run starts, for the owner's approval |
 
 Rules: a result entry names the backlog items it settles (`B-nn`); a backlog item marked done links to the
@@ -118,6 +119,14 @@ early stop when three duel checks in a row show no major progress and the other 
 anything badly wrong. Looked for: rockets and other projectiles in use, strafe jumping and speed kept. He allows two
 settings to be changed while it runs, right after a save and logged: the pay for speed, and the strafe-jumping teacher's
 weight ("If you think the strafe jumping teacher isn't strong enough you can also bump it up (or down if it's too strong)").
+
+**Mid-run, 2026-10-10 07:00 ([MIDRUN_v14.md](MIDRUN_v14.md))**: as a duelist v14 is weaker than v13: head to head 36% of the
+frags on the six maps and 41 games won of 192; against the stand-in 70% -> 58%. Two causes in the run's setup: the weapon
+in his hand (he holds what the weapon teacher names, in a styled life at every distance; v13 holds the rail at every
+distance and that wins in the simulator) and a league of his own last eight snapshots, without the control (B-197).
+Rockets make 35% of his frags; shotgun, grenades and plasma 0.0% in hand; strafe jumping is half-learned in item runs
+and hardly there in his games. Waiting for the owner: v13 kept in the league, the style's weapon inside its own
+distances (B-198); both are built in a copy and neither is in the run.
 
 **Before it:** `duel_gru_v13` ([MANIFEST_v13.md](MANIFEST_v13.md)) ran from 2026-10-08 21:26 to 2026-10-09 11:35
 (stopped by the owner after fourteen hours) and is on the public server; report: [REPORT_v13.md](REPORT_v13.md). Against

@@ -5,6 +5,47 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-10 06:30 — v14 is weaker than v13 as a duelist: the weapon in his hand and a league without the control; the mid-run report
+
+Everything with its tables: [MIDRUN_v14.md](MIDRUN_v14.md). The findings:
+
+**Head to head against v13** (the starting network; 32 ten-minute duels a map; v14's save of 03:59): Blood Run 33% of
+the frags (2 games won, 29 lost), Aerowalk 14% (0-32), Lost World 26% (0-30), Sinister 41% (7-20), Furious Heights 57%
+(20-9), Battleforged 48% (12-17): 36% over the six maps, 41 games won of 192. He loses on the three maps v13 trained on
+and holds his own on two it never saw. v13 against itself on Aerowalk: 49% (the method's check). v14's save of 02:05:
+Blood Run 34% (2-29), Aerowalk 13% (0-32): the ground was lost in the first three hours, not since. In training he took
+53% of the frags from his own snapshots all night: the league is the last eight snapshots, one every 20 minutes, two
+hours and forty minutes of himself, and v13 was out of it by 01:35. The control was in no check of mine until 05:17.
+
+**The weapon key** (the duel check played by two networks: one decides everything, the other presses only the weapon
+key; against the stand-in, six maps): v13 69.7%, v14 58.2%, v14 with v13 on the key 71.6%, v13 with v14 on the key 50.9%.
+So against the script the key is the whole loss, and the rest of him is better than v13 (Furious Heights 58% against
+42%, Battleforged 82% against 62%). Against v13 itself it is half at most: with v13 on the key he takes 45% on Blood
+Run and 25% on Aerowalk. Without playing styles: v13 70.5%, v14 56.7%, so the styles are not the whole of it.
+
+**Who holds what** (owning all three big weapons, the enemy in view): v13 holds the rail in every style at every
+distance (70% of the time under 400 units on Blood Run, 76% on Aerowalk; rockets 2% and 1%). v14 holds what the weapon
+teacher names about six times in ten: in a general life the pros' table (rockets under 400 units, lightning from 400 to
+700, rail beyond), in a styled life the style's weapon at every distance (rockets 58%, 56%, 39% by distance in a
+rockets life on Blood Run). v13's weapon teacher was gone after four hours; v14's stays at 0.2 to the end.
+
+**Wrong at 01:30**: "the pros' table, in which the rocket launcher is the weapon in hand at most distances". Over all
+maps rockets lead under 400 units, lightning from 400 to 700, the rail beyond; and the lost duels are not far rockets
+alone.
+
+**The run**: the teacher back at 0.3 since the save of 04:48 (two hours at 0.5: no faster learning in the trainer's
+numbers; map by map he kept gaining slowly: Blood Run 336 -> 339 units a second in item runs, 24% -> 25% fast in the
+air, 5.7 -> 6.7 items a minute). Since then lightning 43.7%, rail 46.6%, on target 31.7%; item runs 313 units a second,
+18% fast in the air, 5.9 items a minute; trips in games 290. Not stopped early: the duel checks met the owner's rule at
+04:03, the other measures were not flat, the check of 04:51 rose to 58.2%, and against v13 nothing was lost after 02:05.
+
+**Built for the owner's decision, none of it in the run or the repository** (scratchpad, `stage_w`): `STYLE_RANGE=1`
+(the style's weapon is the teacher's label only inside its own distances) and `SHOT_NEAR=rl:500` (the low rocket price
+only with the enemy within 500 units), with both off the copy repeats the repo's fixed runs exactly in both modules;
+`--anchor-p` for the trainer (in that share of the rollouts the league's players are a network from
+`snapshots/anchor_*.pt`, e.g. v13). The evaluation loop now plays every checked save against v13 on Blood Run and
+Aerowalk (`evals_h2h.jsonl`) and names its checks by the minute of training.
+
 ## 2026-10-10 03:45 — v14 on a real server: its ten new inputs are right, he moves there as v13 did; how much of the lesson reaches his games
 
 **v14's new inputs on a real server** (not checked before: only v13's were, 2026-10-09 15:30). A private local server

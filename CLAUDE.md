@@ -189,6 +189,12 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - A scratch test script must import the repo's `sim/`, not a staging copy: on 2026-10-09 half an hour of stand-in checks
   ran old code and "confirmed" that two fixes did nothing. A write to a file in `sim/` failed once with "Invalid argument"
   (Errno 22) and left the file as it was: check after a patch that the change is there.
+- The control belongs in a run's checks from its first hour: the league is the last eight snapshots at one every 20
+  minutes (two hours and forty minutes of himself), so "53% against his old selves" says nothing about the network he
+  started from. v14 beat its snapshots all night, held 55 to 58% against the stand-in, and lost to v13 head to head 137
+  games to 41 (2026-10-10). `tools/duel_eval.py --opp policy:<file>` plays two networks against each other.
+- The weapon teacher's label in a styled life (`STYLE_P`, three lives in four, drawn on the servers too) is the style's
+  weapon at every distance; only a general life gets the pros' table. A teacher kept to a run's end makes him hold it so.
 - A reviewer's eye on the reward: anything paid per frame for progress must be paid on a running best, or a setback and its recovery is a pump (the trip pay, 2026-10-08).
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,
