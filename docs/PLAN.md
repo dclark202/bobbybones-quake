@@ -65,7 +65,7 @@ The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)
 - 1, strafe jumping and keeping speed: B-204 (the items behind a jump), B-200, B-201.
 - 2, rockets: B-198, B-199.
 - 3, plasma, grenades, the shotgun: B-189, B-169.
-- 4, game awareness: B-191 (the slower deciding head: to be brought to the owner when v14 has ended), B-190, B-188, B-202.
+- 4, game awareness: B-191 (scoped for him on 2026-10-10: [design/SCOPE_v15.md](design/SCOPE_v15.md), part 3), B-190, B-188, B-202.
 - Odd behaviour seen in runs and duels: B-192, B-194, B-196.
 
 ## Owner decisions
@@ -144,6 +144,10 @@ The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)
   state of the public server, and gives the go himself.
 - (2026-10-10) The control in every run: the last best network stays in the league and every checked save plays it head
   to head ("this should be standard going forward, continue to check against the last best version + new iterations").
+- (2026-10-10) For the next run he is "inclined to fold in" three things, scoped in [design/SCOPE_v15.md](design/SCOPE_v15.md):
+  jump training (a gap course and the named jumps of the real maps; the teacher may train on Campgrounds' and Toxicity's
+  jumps), grenades and plasma (the free shots go back in with the teacher's restart of v14's third start), and attention
+  for strategy. Also to learn in time: stairs with jump held, and a jump at a ledge that hooks onto it.
 - (2026-10-10) The priority list for the next models: strafe jumping and keeping speed; rockets; plasma and grenades
   (the shotgun less); then game awareness. Every plan addresses these and any odd behaviour seen in a run or in duels.
 

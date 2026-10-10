@@ -1,118 +1,90 @@
-# After v14: the scope of what comes next
+# v15: the scope (jumps, grenades and plasma, decisions)
 
-Written 2026-10-09 while `duel_gru_v14` trains, at the owner's request ("Scope out changes after the v14 run has been set
-up"). Nothing here is built or decided. Sources: his notes after his games against v13
-([RESULTS.md](../RESULTS.md) 2026-10-09 20:05), [BACKLOG.md](../BACKLOG.md) B-188 to B-192.
+Written 2026-10-10 for the owner, who is "inclined to fold them into the next run": what each of the three would change
+in the simulator, the maps and tools, the network, the trainer, the checks and the servers. Nothing here is built
+unless it says so. It replaces the note of 2026-10-09 (in the git history), whose parts on scripted opponents and on a
+head that decides are carried over. His priority list ([PLAN.md](../PLAN.md)): strafe jumping and keeping speed;
+rockets; plasma and grenades; then game awareness. Backlog: B-204, B-200, B-201 (jumps); B-189, B-202 (grenades and
+plasma, opponents); B-191, B-190, B-188 (decisions).
 
-## Where he is
+## 1. Jumps: a gap course and the named jumps of the real maps
 
-The owner, 2026-10-09: "currently we have a bot that 'plays quake'. It could beat probably 20% of the people that
-regularly play on the FFA server ... someone who actually knows how to play the game will win every time." What a
-player who knows the game does to him, in the records of that day:
+**What is there.** The test map has graded movement courses already (`tools/make_lab_map.py`: circle-jump gaps,
+two-hop gaps, ramps and stairs, pillars, pads, drops, a climb) and a tool that copies a region of a real map into it. A
+strafe-jumping teacher (`move_v14d`, a movement-only network) that reaches 359 units a second on Blood Run. The pros'
+ways in the walking graph. Measured on 2026-10-10: Aerowalk's red armor is taken from 325 units away at 470 to 480
+units a second, Blood Run's long gap from 420 units at 510; a walker's jump carries about 170.
 
-| What | The record |
+**What is missing.** The walking graph is built by running and jumping from a standing start, so a gap that needs
+speed is not a link in it: the teacher has no way across and labels nothing there, and the item rule either sends him
+where he cannot go (Aerowalk's red armor until `RULE_WALK`) or never sends him.
+
+| | Change |
 |---|---|
-| Holds the red armor and the mega; Bobby keeps taking fights from behind (B-188) | Blood Run 0 to 24: the owner had 242 health plus armor at his frags, Bobby's lives lasted 18 s |
-| Grenades and plasma, at teleporter exits and from above (B-189) | 6 of 24 and 10 of 23 frags in two games; Bobby held neither for a frame |
-| Reads his routes (B-190) | he wanted Blood Run's red armor 16% of his time and took it twice |
-| Stays above and out of sight, picks the fights | a friend's free-for-all: 23 to 5 head to head, seen 6 to 11% of the time |
-| Moves faster | over 400 units a second 20% of the time, Bobby 3% |
-| An empty weapon in hand (B-192) | 3% to 15% of his time in ten-minute games |
+| The list | `tools/pro_gaps.py`: every airborne link the pros take that a walker cannot, or that saves a second or more: take-off zone, landing zone, the speed they have, how often. Per map, as a table the owner strikes from and adds to. His list is the start: the bridge to the rail and the pillars on Campgrounds, the red armors of Aerowalk and Blood Run, the stairs to the yellow armor on Blood Run, the upper floor of Furious Heights, the red armor to the health bubbles on Sinister, the two boxes from the red armor to the mega on Toxicity. Campgrounds has ten demos: its jumps are set by hand from his names |
+| The walking graph | `sim/build_nav.py`: a pass for speed links (a run-up, then a jump at 400 to 550 units a second), each with the speed it needs. The route field keeps three times a link: a walker's, a jumper's, the pros' |
+| The test map | the named jumps copied in beside the graded gaps, each as a course with a start, a landing and a time. Two more kinds from the owner (2026-10-10): stairs taken with jump held, and a jump at a ledge that hooks onto it. Both are measured in the game first (`plugins/movetest.py`) and set beside the simulator (`QL_MOVE` has the game's step height; the rest is not checked) |
+| The teacher | `sim/train_move.py`: goals across speed links, on the six maps, Campgrounds, Toxicity (owner, 2026-10-10: yes) and the test map's courses; lava priced so that Lost World's fault goes; Aerowalk's missing ways mended. A night on the processors. Its check per jump: does a player pressing only its labels arrive |
+| Bobby's rounds | item runs that begin one step before a jump (a share of the item runs), with the teacher's labels; the teacher's labels by its best choice and not a sample if the pupil test says so (B-201) |
+| Bobby's inputs | for the step ahead on his way: that it needs speed, the speed it needs, how far the take-off is, the gap's length and height: five inputs |
+| The item rule | names an item behind a jump again when his own arrival rate there passes a mark in the pre-run check, map by map (`RULE_WALK` by item) |
+| Checks | per jump: the teacher's pupil, Bobby alone, Bobby in a game; the same jumps on the real server as a card the owner can run too. Kept from v14: speed on his way in games, time fast in the air |
 
-v14 is aimed at the fifth row and at rockets. The rest is this note.
+Held-out maps: with their jumps in the teacher's training, Campgrounds and Toxicity stay out of Bobby's duel training
+and remain checks of his play there, no longer of his movement.
 
-## What v14 decides
+Risk: the simulator against the game at edges, stairs and ledges (measure first); a teacher with new labels moves the
+whole network (a dry run as long as its weight takes to rise, the control in every check).
 
-- He strafe jumps and fires rockets: the next step is decisions (parts B and A below), in that order of the owner's
-  interest ("this is the next step, and really where it gets interesting").
-- He does not strafe jump: movement stays first; of this note only part A's scripted opponents and B-192 would go
-  beside it.
+## 2. Grenades and plasma
 
-## A. Opponents that punish what he does
+**Why they are 0.0% of his time in every run.** Nobody uses them on him and he on nobody. Shots with no enemy in
+view are priced, so firing into an exit is punished. He sees enemy grenades and plasma in view (36 inputs) and can lead
+a plasma ball (six inputs), and has nothing for a grenade's arc. He never holds one long enough to find out.
 
-His copies never do to him what people do: they hold no map, fire no grenades or plasma, wait at no exit. Two ways to
-put such opponents into his games, the cheap one first.
+| | Change |
+|---|---|
+| Prices | grenade and plasma shots free and the rule for fire with no enemy in view (`SHOT_W=gl:0,pg:0`, `BLIND_RULE=1`): back in v14's third start with the teacher's restart (owner, 2026-10-10: yes) |
+| Opponents | the three scripted players into the simulator (built in a copy and measured, B-202): the lobber fires plasma and grenades into the far end of a teleporter or jump pad on his way, the watcher holds a post with the rail, the holder keeps the mega and the red armor. A share of the rounds that have the scripted item runner today. The lobber's timing first: its grenades and plasma make 2 to 17% of its frags |
+| Rounds | one-weapon rounds with the grenade launcher and with the plasma gun (the trainer has them: `--kind-p`, `--drill-weapons`), a few per cent of the rounds, against the watcher on its post and the runner on its ways; some lives of normal games that begin with one of the two in hand. Skill before choice; no teacher on the weapon key in games (v14's second start) |
+| Inputs | a grenade's arc: where one fired now comes down and where it is when it goes off, as the six lead inputs do for rockets and plasma: six inputs |
+| The simulator | grenades measured again on a real server (`plugins/weaponlab.py`): bounce, fuse, speed, the push at one's own feet (650 units a second in the simulator, 277 measured: B-19) |
+| The yardstick | `tools/pro_tables.py`: when the pros fire grenades and plasma: enemy in view or not, distance, height, at a teleporter's exit or a pad's landing. A table to set his use beside; a teacher only if the rounds above do not bring it |
+| Checks | time in hand, shots and frags by both weapons, frags on an enemy not in view, damage he takes from them (does he still walk into an exit under fire: B-189) |
 
-**A1. Scripted tricks** (days, no new training method). The simulator has scripted opponents with styles and the
-Nightmare stand-in. New styles, each a few dozen lines:
+The shotgun "to a lesser extent": it comes with the one-weapon rounds; nothing else is planned for it.
 
-- the holder: takes the red armor and the mega on their clocks and comes for him after a frag (B-188);
-- the spammer: grenades or plasma into the exit of a teleporter, a door or a stair he is heading for, and down from
-  above (B-189); needs the stand-in to fire arcs, which the lead inputs' arithmetic already has;
-- the watcher: stands where his usual way to an item can be seen and waits (B-190).
+Risk: the simulator's grenade is not the game's; one-weapon rounds teach habits of their own (keep them few).
 
-Mixed into 10 to 20% of his games. What it costs: the time to write and check them; the danger is that he learns the
-script and not the idea, which is why they are only the start.
+## 3. Decisions: what "attention for strategy" is made of
 
-**A2. Trained exploiters** (the league training of AlphaStar, small). An exploiter is a copy of his network that plays
-only against the frozen current Bobby and is paid only for beating him, under the same human limits. It keeps what he
-can already do and looks for whatever beats him most cheaply; nobody has to think of the trick. Then its snapshots go
-into his own league (20 to 30% of his games), he trains, and a new exploiter is made against the new him.
+Today he has a goal for the next item, chosen once a second from eight, and reflexes 40 times a second with a memory
+of under ten seconds. Nothing between: no "he is on my way", no "not this way again", no "stay away while he has 240".
 
-- What the trainer needs: an opponent pool given from outside (it has a league of its own snapshots), one side that
-  does not learn, and the mix of pools per game. A few days.
-- What it costs to run: the GPU carries one full run. An exploiter at a quarter of the size for three or four hours
-  between or beside his runs.
-- The danger: an exploiter finds the cheapest thing, and that can be a flaw of the simulator and not of his play. Every
-  exploit is looked at (a video) before it is fed back; the ones that are flaws get fixed in the simulator.
-- The measure it gives for free: how long a fresh exploiter needs to reach 70% of the frags against him. A number for
-  "how readable is he" that should rise from run to run.
+| Piece | What it is | Change | Fits the next run |
+|---|---|---|---|
+| A. More decisions on the head he has | hunt (the way to where the enemy was last seen or is likely to be), stay away (the way that keeps distance and cover), hold (a place: the pros' positions are in `sim/pro_positions`) beside the eight items | three more choices on the intention output, about twelve inputs (the three ways), pay as for the item ways; some rounds of ten minutes, or decisions have nothing to pay for | yes |
+| B. A predictor from the pros, offline | can a summary of the game (item clocks as he believes them, both stacks, where the enemy was last seen and how long ago, score, clock) predict a pro's next goal in 3,700 demos | a tool and a small network on the processors, no training run | yes, beside it |
+| C. A second, slower network | runs once or twice a second on that summary, remembers minutes, makes the decision of A; the fast network carries it out | a second network in the trainer, the plugins and the export; it starts from B with the fast network held still | no: two to three weeks before a first run |
+| D. Attention over things | each item, enemy, missile and exit as a small vector instead of a fixed slot, pooled by attention: "missiles near the exit on my way", "the enemy was last seen on this way", any map, any number of players | `observe_entities()` beside the flat inputs; the network changes shape, so the weights are carried over by copying the old network's play (distillation) and not by input name. Timed on the rented server: four bots 2.3 ms a frame against 1.0 ms now, inside the budget | no: with C |
 
-## B. A head that decides (B-191)
+C and D are where "strategy" would live, and they are a different network: the first run with them will likely play
+worse than the one before it for a while. A and B cost a run's preparation and say whether the summary carries what
+a decision needs before C is built.
 
-Today: the last output, the intention, picks one of eight (nothing, the mega, the red armor, two yellow armors, three
-weapons) once a second; the inputs then show the way there, and progress along it is paid. Everything else, 40 times a
-second, is one recurrent network that is trained on windows of under ten seconds. So he has a goal for the next item
-and reflexes, and nothing between: no "stay away while he has 240", no "he is on my way", no "not this way again".
+## What folding all three into v15 comes to
 
-**B1. More decisions on the head he has** (the smallest step, no new architecture). The intention gets three more
-choices beside the items: hunt (the way to where the enemy was last seen or is likely to be), stay away (the way that
-keeps distance and cover), hold (a place: the pros' positions are in `sim/pro_positions`). The mechanism is the one of
-the item ways. One more input block and three outputs: the kind of widening done for v13 and v14.
-
-**B2. A second, slower network** (the model expansion). It runs once or twice a second and reads a summary of the
-game, not the frame: the item clocks as he believes them, both players' health, armor, weapons and ammo, where he is
-and where the enemy was last seen and how long ago (as map cells), the score and the clock, what the last fights cost.
-Its memory covers minutes: at one or two steps a second a window of 256 steps is two to four minutes, where the fast
-network's is six to ten seconds. It outputs the decision of B1; the fast network carries it out, as it carries out the
-intention now.
-
-**B3. Attention over things** in place of fixed input slots: one small vector per item (kind, clock, distance, the way's
-length), per enemy (last place, time since, what he holds), per missile and dropped weapon in view, pooled by attention.
-It serves both networks, takes any number of players and items, and is where "this exit is being spammed" can be read
-(missiles near a place on his way).
-
-**How it would be trained.**
-
-1. Offline first, no risk: from the pros' demos (150 or more a map, already converted), can the summary of B2 predict a
-   pro's next goal? If it cannot, the summary lacks something, and we know before a single training run.
-2. The slow network starts from that predictor, then learns by self-play on the game's own pay, counted over its
-   one-second steps, with the fast network held still at first (a new teacher moved the whole network in its first
-   updates twice; the same care here).
-3. Then both together, with the exploiters of A2 in the league: decisions only get better against opponents that
-   punish bad ones.
-
-**What it costs.** The attention block runs 40 times a second for about 10,000 players in training: 30 to 40 things, 64
-numbers each, one or two layers, or the trainer slows down more than the third it can afford. The server computes the
-network in numpy; attention is a few matrix products more. B1 is a run's preparation like v14's. B2 and B3 are two to
-three weeks of building and checking before a first run, and the first run will likely play worse than the one before
-it for a while.
-
-## C. Small things that can go beside either
-
-- B-192: the empty weapon. The weapon teacher's label when the weapon in hand is empty; some rounds of ten minutes or
-  with lean ammo.
-- B-190's measures: how often a trip repeats the last way, what he does when the enemy was last seen on it.
-- Maps: Toxicity (he died by the map 9 times in one game there) and Cure into training once v14 has shown what the
-  held-out maps give.
-
-## A proposal for the order (the owner's to change)
-
-| Run | If v14 gives strafe jumping and rockets | If it does not |
+| | In v15 | Not in v15 |
 |---|---|---|
-| v15 | B1 (hunt, stay away, hold), A1 (the three scripted styles), B-192; beside it, offline: B2's predictor on the pros' demos | movement again, with A1 and B-192 beside it |
-| v16 | B2 and B3 (the slow network, attention), A2 (exploiters) | B1 |
+| Jumps | all of part 1 | |
+| Grenades and plasma | all of part 2 | |
+| Decisions | A (hunt, stay away, hold) and B (the offline predictor) | C and D (the slow network, attention): v16 |
+| The network | one widening: about 23 inputs (509 -> about 532) and three choices on the intention output | a new architecture |
+| Before the run | the list of jumps for the owner; the game measured (stairs, ledge, grenades); the walking graphs rebuilt; the teacher trained and checked jump by jump; the scripted opponents in the simulator; the widening with its fixed-run checks; the manifest | |
+| Work | about a week of building and measuring before the start, most of it in part 1 | |
+| Kept from v14's third start | the control in the league and first in every check, per map; the item rule naming only what he can reach; weapons untaught | |
 
-Decisions he would have to make before v15: which of A1's styles; whether hunt, stay away and hold are the right three
-decisions; how much of his time goes to scripted opponents; whether a run that plays worse for a while (v16) is
-acceptable before the reviewer's visit.
+**For the owner to decide**: whether v15 waits for all of it or starts with parts 1 and 2 while A is built (my
+advice: parts 1 and 2 first, A in the run after: three new things in one run cannot be told apart when something
+moves, which is v14's lesson); the share of rounds for the scripted opponents and the one-weapon rounds; which jumps
+of the list; whether ten-minute rounds come in with A.
