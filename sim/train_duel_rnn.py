@@ -373,7 +373,8 @@ def main():
     fade0 = a.fade_start if a.fade_start >= 0 else elapsed0             # the minute of training the teachers' fades count from
     w_map = [maps[w % len(maps)] for w in range(a.workers)]
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
-                "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames")
+                "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
+                "jump_tries", "jump_over", "jump_short", "jump_frames")
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
@@ -641,6 +642,14 @@ def main():
                                         damage_from={k_: round(float(np.atleast_1d(agg.get("high_dmg", np.zeros(3)))[i_] / max(1.0, float(np.sum(agg.get("high_dmg", 0.0))))), 3)  # ... the damage he deals, by where he stands
                                                      for i_, k_ in enumerate(("lower", "level", "higher"))},
                                         pay_per_player_min=round(float(agg.get("high_pay", 0.0)) / max(1e-9, N * T * DT_MIN), 4))),                 # (HIGH_PAY) what height added to his pay
+                   v15=dict(jump_run_frames=round(float(agg.get("jump_frames", 0) / max(1, N * T)), 4),                                   # (JUMPS) the share of all frames in jump runs
+                            jump_tries=int(np.sum(agg.get("jump_tries", 0))),                                                             # ... tries begun, the share that got over, that fell short
+                            jump_over=round(float(np.sum(agg.get("jump_over", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
+                            jump_short=round(float(np.sum(agg.get("jump_short", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
+                            jumps={m_: [[int(t_), round(float(o_ / max(1.0, t_)), 2)] for t_, o_ in                                       # ... per map and jump (its place in the map's list): tries, over
+                                        zip(np.atleast_1d(v_.get("jump_tries", np.zeros(1))), np.atleast_1d(v_.get("jump_over", np.zeros(1))))][:int(np.max(np.nonzero(np.atleast_1d(v_.get("jump_tries", np.zeros(1))))[0], initial=-1)) + 1]
+                                   for m_, v_ in agg_map.items() if float(np.sum(v_.get("jump_tries", 0))) > 0},
+                            start_gun_per_player_min=round(float(agg.get("start_gun", 0) / max(1e-9, N * T * DT_MIN)), 3)),               # (START_GUN_P) lives begun with grenades or plasma in hand
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,
