@@ -5,6 +5,21 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 19:10 — The owner's call on height; the public server restarted with the evening's changes
+
+**Height (B-160): no pay.** The owner: "Keep the height as an hourly check, don't act on it yet, but report it as something to monitor. I don't think we need to reward/penalize him for it quite yet, this seems to be the most possible behavior to be learned through practice."
+So `HIGH_PAY` stays off in v14. Every hourly brief carries it: per map, how often he is the lower and the higher one
+against the stand-in (the evaluation loop), and in training the share of his damage dealt from above and from below.
+The starting line is in the entry of 18:30.
+
+**The public server, restarted on his word** ("you can restart the public server now"). Nobody was on it (two connected,
+both Bobbys; the last person had left eight minutes before). `CODE=1 bash tools/push_bobby.sh duel_gru_v13
+duel_env_ffa_v13`: the code of today's last commit, a new image, v13's network, the walking maps and map tables of the
+ten maps, a restart in free-for-all on Aerowalk with two Bobbys. It took 55 seconds. Checked after it: the four plugins load (the ban plugin among them) with no error, the owner's Steam ID is set for it, the server went to Aerowalk, hopped to a random map as the game does and came back to Aerowalk (the fix of 18:30), two Bobbys play v13 with 499 inputs, the duel item lists and the map pool have ten maps, the walking maps and map tables of all ten are today's, and it answers from outside under its name with two of eight slots taken.
+
+**Visitors before the restart** (session `20261009-211812_lostworld_ffa`, copied to `data/public/sessions/`; Lost World, warmup free-for-all with two Bobbys, 17:51 to 18:09): four people came, up to three at once. One stayed 18 minutes (3 frags, 31 deaths; plasma and grenades mostly); three stayed one to two minutes (one of them 6 frags to 3 deaths in 96 seconds with rockets at 47% and lightning at 41%). The two Bobbys made 54 frags and died 43 times in those 18 minutes, each other included. In warmup, where everybody has every weapon, they held the lightning gun 92 to 98% of the time and rockets 2 to 4%.
+The README's play section now has what a player finds there and the chat commands.
+
 ## 2026-10-09 18:30 — Before v14's start: the new pay for speed in a dry run; who stands higher, measured (B-160), and a switch prepared
 
 **The pay for speed at 0.1 / 0.3 in a dry run** (12 minutes on a scratch copy, `duel_gru_v14dh`, half size, the final

@@ -1,6 +1,12 @@
 ## Play against him in Quake Live
 Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal).
 
+The server runs free-for-all on the game's duel maps with each map's duel items and no powerups; six play at a time,
+Bobbys included, the rest watch. Chat commands: `!bots <0-4>` sets how many Bobbys play, `!map <name>` changes the map
+(`!maps` lists them: Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged, Campgrounds, Hektik,
+Toxicity, Cure), `!mode duel` makes it one against one, F3 readies you up for a timed ten-minute game, `!note <text>`
+leaves a comment for the log. All of them: [docs/COMMANDS.md](docs/COMMANDS.md).
+
 ## What is it
 
 BobbyBones is a Quake Live bot trained by reinforcement learning. A recurrent neural network plays against copies of

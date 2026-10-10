@@ -87,12 +87,13 @@ the rocket numbers as proposed. The run starts "later tonight" on his go.
 **The owner against v13 (2026-10-09, Aerowalk)**: "Best bot I've ever played against in terms of enjoyableness." He won his
 ten-minute game 9 to 4 (damage 3,461 to 3,128). What he saw is in the record (RESULTS 17:15): no strafe jumping (3% of
 Bobby's time over 400 units a second, his own 18%), the low ground (Bobby lower 61% of the time, higher 15%: B-160, not in
-v14 as it stands: counters are in and a switch, `HIGH_PAY`, is built and off, RESULTS 18:30), few rockets (13 fired in ten
-minutes, his own 155). He plays more that evening, then gives the go.
+v14: the owner wants it watched every hour and not paid for yet, "the most possible behavior to be learned through
+practice"; counters are in, the switch `HIGH_PAY` stays off, RESULTS 18:30), few rockets (13 fired in ten minutes, his own 155). He plays more that evening, then gives the go.
 
-**The public server (for his friends, 2026-10-09)**: nothing keeps a player out. Built and waiting for the restart that
-night (B-183): the ten duel maps in `!map` (free-for-all, a map's duel items, six playing at most), a line about `!bots`
-in the welcome, the owner's `!kick` and `!ban` (`plugins/banlist.py`).
+**The public server (for his friends, 2026-10-09)**: restarted at 19:10 on the owner's word with the evening's changes
+(B-183): the ten duel maps in `!map` (free-for-all, a map's duel items, six playing at most), a line about `!bots` in the
+welcome, the owner's `!kick` and `!ban` (`plugins/banlist.py`), the start map held at a start, the watchdog on the main
+thread.
 
 **Maps for v14 (owner, 2026-10-09 afternoon)**: trained Blood Run, Aerowalk, Lost World, Sinister, Furious Heights,
 Battleforged; held out Campgrounds, Hektik, Toxicity, Cure. Real games against Nightmare before and after a run only.
