@@ -100,6 +100,12 @@ included; `!bobby`, `!top`, `!elo`) is live since 19:50, and the vote at a game'
 mega, and Bobby, born with a machine gun against 242 points, kept taking the fights. Nothing in v14 is aimed at it; to
 be weighed after v14.
 
+**After v14 (owner, 2026-10-09 evening, after his games)**: v13 is "the best model yet ... a bit slow and dopish but that's
+the spot he needed to get to". Next in his order: watch v14 for shotgun, plasma and grenade use, then reading grenades
+and plasma (B-189: he runs into spam at a teleporter's exit); routes anybody can read and paths the enemy blocks (B-190);
+playing from behind (B-188). Longer term, to think about and not to build yet: strategy, which he expects to need a
+larger model, attention or a strategic head (B-191).
+
 **Maps for v14 (owner, 2026-10-09 afternoon)**: trained Blood Run, Aerowalk, Lost World, Sinister, Furious Heights,
 Battleforged; held out Campgrounds, Hektik, Toxicity, Cure. Real games against Nightmare before and after a run only.
 

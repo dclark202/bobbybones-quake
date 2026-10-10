@@ -5,6 +5,33 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 20:05 — The owner after his games against v13: what he saw, and where it goes after v14
+
+His words, nothing to build now:
+
+- On the 24 to 0: "somewhat unfair because it seems that he doesn't understand grenades or plasma. It's a real concern,
+  but let's see how his sg/plasma/grenades usage does with v14 and then address it afterwards."
+- "He falls for every trick in the book lol. I can spam tp exits with nades or plasma and he runs right into it. Without
+  strafe jumping he's going to lose every single match to someone even as good as me on larger maps, because I can
+  dominate him on positioning. This is known so don't read this too negatively."
+- "a longer term concern of mine is how do we get him to develop 'strategy' -- I think that will need a genuine model
+  expansion, perhaps attention or some kind of strategic head. Nothing to implement now, but now that he is getting to
+  the point where this becomes an option it's worth thinking about".
+- "The item routes are there but maybe a bit too obvious. He tries for red repeatedly and has trouble with the jump so I
+  can just watch him run the loop." ... "routing, knowing when an enemy is going to be blocking your path, not taking
+  the same path over and over, those will be more important as we go on."
+- "But overall this is the best model yet. He's not just a monster aimer, he's a bit slow and dopish but that's the spot
+  he needed to get to to start speeding up and making better decisions."
+
+Beside the record of the Blood Run game (19:55): the owner held grenades 20% of his time and made 4 frags with them and
+2 with plasma (99 grenades, 241 plasma balls); Bobby held neither for a frame. Bobby wanted the red armor 16% of his time
+and took it twice; the owner took it 13 times.
+
+Where it goes: v14 is watched for his use of shotgun, plasma and grenades (their price is nothing or next to nothing
+there, and the weapon teacher is silent on them), then B-189 (reading grenades and plasma: the spam at a teleporter's
+exit), B-190 (routes anybody can read), B-188 (playing from behind). Strategy by a larger model is B-191: to think
+about, not to build.
+
 ## 2026-10-09 19:55 — v13 loses a game 24 to 0 on Blood Run; the vote's maps; the leaderboard is live
 
 **"he just got smoked btw"** (the owner). The record (session `20261010-003515_bloodrun_ffa`, copied to
