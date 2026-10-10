@@ -212,6 +212,8 @@ class MoveEnv:
         # (zeros on a map without a list), and a share of the tries (jump_p) begins a second or two before a take-off
         self.jump_obs = bool(jumps)
         self.jumps = JL.load(os.path.splitext(os.path.basename(bsp))[0]) if jumps else []
+        self.n_items = len(goals)                              # (a plain try's goal is an item; a jump's landing is a goal too, so
+        goals = goals + [j_["b"] for j_ in self.jumps]         # that every jump has tries: many lie on no item's shortest way)
         self.field = NavField(nav_path, goals, world=self.w, hazard=self.v14, starts=starts if self.v14 else None,
                               drop=shut_teleports(self.w, nav_path) if self.v14 else None,
                               tele=teleports(self.w) if self.v14 else None, jumps=self.jumps)
@@ -219,8 +221,8 @@ class MoveEnv:
         self.try_by_k = {}                                     # jump -> [(goal, the points a try can begin at)]
         for g_ in range(len(self.field.goals) if self.jumps else 0):
             for k_ in range(len(self.jumps)):
-                st_ = np.nonzero((self.field.ji[g_] == k_) & (self.field.jd[g_] > 250.0) & (self.field.jd[g_] < 1100.0)
-                                 & self.field.spawnable)[0]
+                st_ = np.nonzero((self.field.ji[g_] == k_) & (self.field.jd[g_] > JL.run_up(self.jumps[k_]["need"]))
+                                 & (self.field.jd[g_] < 1300.0) & self.field.spawnable)[0]
                 if len(st_):
                     self.try_by_k.setdefault(k_, []).append((g_, st_))
         self.jump_a = np.array([j["a"] for j in self.jumps], np.float32).reshape(-1, 3)
@@ -262,7 +264,7 @@ class MoveEnv:
             self.try_k[i] = k
         else:
             for _ in range(50):
-                g = int(self.rng.integers(len(self.goal_pos)))
+                g = int(self.rng.integers(getattr(self, "n_items", len(self.goal_pos))))
                 node = int(self.spawn_nodes[self.rng.integers(len(self.spawn_nodes))])
                 T = f.T[g, node]
                 if self.min_goal_time <= T <= self.max_goal_time and f.next[g, node] >= 0:

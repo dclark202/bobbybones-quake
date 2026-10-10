@@ -18,6 +18,13 @@ N_JUMP = 5                                                    # inputs: a jump a
 REACH = 1500.0                                                # a jump is "ahead" within this many units of way
 
 
+def run_up(need):
+    """the least way before a take-off at which a try for a jump may begin, by the speed the jump needs: from standing a
+    circle jump gives about 400 units a second after 200 units and every hop after it some 40 more, so a jump that needs
+    425 wants two hops of run-up (about 470 units) and one that needs 500 or more four (900)"""
+    return float(np.clip((need - 320.0) * 4.5, 250.0, 900.0))
+
+
 def load(mapname, path=None):
     """the jumps of a map that are in use: [dict(id, a (take-off), b (landing), t, need, length, rise)]. An entry's
     "use" (true or false, set by hand) overrides the count rule."""

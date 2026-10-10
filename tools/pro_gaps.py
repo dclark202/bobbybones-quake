@@ -13,7 +13,8 @@ an entry says "use": true: Blood Run's stairs to the yellow armor). Jumps with
 the same take-off and landing places are one entry: where from, where to, how long and how high, the speed over the
 ground at take-off (a tenth, the middle, nine tenths of the pros'), the speed it needs (length over seconds in the air
 of the slowest tenth that made it), the seconds in the air, the walker's seconds for the same, how often, and how many
-seconds sooner each big item is reached by it. Jump pads, rocket jumps and two hops read as one are left out.
+seconds sooner each big item is reached by it. An entry's "use" (true or false, set by hand in the file: it overrides
+sim/jump_links.py's rule of how often a jump must be seen) is kept when the list is written again. Jump pads, rocket jumps and two hops read as one are left out.
 No player names are read or written.
 """
 import argparse
@@ -46,6 +47,9 @@ def floor_under(w, pts, reach=400.0):
         p = np.ascontiguousarray(pts[c:c + 4096], np.float32)
         out[c:c + 4096] = w.rays_each(p, np.repeat(down, len(p), 0), reach)[:, 0] * reach
     return out
+
+
+MIN_SEEN = [5, 30]                                             # an entry is listed when seen this often: a walker cannot or is slower; the rest
 
 
 def build(mp, limit):
@@ -175,7 +179,7 @@ def build(mp, limit):
         return "{} ({:.0f})".format(names[big[int(dd.argmin())]], float(dd.min())) if dd.min() < 500 else ""
     for c in merged:
         v = np.array(c["idx"])
-        if len(v) < (5 if c["hard"] == 2 else 30):
+        if len(v) < (MIN_SEEN[0] if c["hard"] == 2 else MIN_SEEN[1]):
             continue
         a_med, b_med = np.median(A[v, 0:3], axis=0), np.median(A[v, 3:6], axis=0)
         an, bn = np.bincount(na[v]).argmax(), np.bincount(nb[v]).argmax()
@@ -207,10 +211,13 @@ def main():
     ap.add_argument("--map", default="bloodrun,aerowalk,lostworld")
     ap.add_argument("--limit", type=int, default=250, help="demos a map (spread evenly over the set)")
     ap.add_argument("--low", action="store_true", help="run at low priority")
+    ap.add_argument("--min-seen", default="5,30", help="list an entry seen this often: one a walker cannot make or is slower at, "
+                                                       "and the others (a map with few demos: 2,3)")
     a = ap.parse_args()
     if a.low and os.name == "nt":
         import ctypes
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x00004000)
+    MIN_SEEN[:] = [int(x) for x in a.min_seen.split(",")]
     for k_, v_ in V14.items():
         os.environ.setdefault(k_, v_)
     js = os.path.join(ROOT, "docs", "pro_gaps.json")
@@ -219,6 +226,13 @@ def main():
         res = build(mp, a.limit)
         out = os.path.join(ROOT, "sim", "pro_gaps", mp + ".json")
         os.makedirs(os.path.dirname(out), exist_ok=True)
+        if os.path.exists(out):                                 # an entry's "use", set by hand, stays with its jump
+            for o in json.load(open(out)).get("jumps", []):
+                for j in res["jumps"] if "use" in o else ():
+                    if (np.linalg.norm(np.array(o["take_off"]) - np.array(j["take_off"])) < 110.0
+                            and np.linalg.norm(np.array(o["landing"]) - np.array(j["landing"])) < 110.0 and o.get("walker") == j["walker"]):
+                        j["use"] = o["use"]
+                        break
         json.dump(res, open(out, "w"), indent=1)
         summary[mp] = dict(demos=res["demos"], player_minutes=res["player_minutes"], jumps_seen=res["jumps_seen"],
                            over_a_hole_or_up=res["over_a_hole_or_up"], kept=res.get("a_walker_cannot_or_a_second_slower", 0),
