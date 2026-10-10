@@ -156,13 +156,22 @@ FALL_MED, FALL_FAR = 40.0, 60.0                        # Quake 3 fall damage: 5 
 # runner (script 3) with the weapons the game's bot was logged to fire (692 minutes of sparring: shotgun 36%, rail 26%,
 # rockets 15%, lightning 12%, machine gun 11%; the rail beyond 700 units), little jumping, and an aim whose noise
 # (NM_NOISE, degrees a frame) is set so that its scores against v10 and v11 come out as the real bot's did.
-PERSONAS = ("allround", "sniper", "rusher", "tracker", "dodger", "stander", "jumper", "spammer", "nightmare")
+PERSONAS = ("allround", "sniper", "rusher", "tracker", "dodger", "stander", "jumper", "spammer", "nightmare",
+            "holder", "lobber", "watcher")
 NIGHTMARE = 8
-P_GAIN = np.array([0.4, 0.4, 0.4, 0.45, 0.4, 0.15, 0.3, 0.3, float(os.environ.get("NM_GAIN") or 0.4)], np.float32)
-P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5, float(os.environ.get("NM_NOISE") or 0.6)], np.float32)
-P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200, 150], np.float32)
-P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500, 600], np.float32)
-P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2, -3], np.int64)
+# The last three (owner, 2026-10-09; docs/SCOPE_v15.md A1) are item runners (script 3) that do to him what people do:
+#   holder   takes the mega and the red armor on their clocks whatever he has, and comes for him after a frag (B-188)
+#   lobber   grenades and plasma into the place he is about to come out of (B-189)
+#   watcher  stands where his way to an item can be seen, with the rail (B-190)
+# Never drawn unless persona_p gives them a share.
+HOLDER, LOBBER, WATCHER = 9, 10, 11
+HOLD_EARLY = 3.0                                          # the holder leaves for an item so as to be there this early
+P_GAIN = np.array([0.4, 0.4, 0.4, 0.45, 0.4, 0.15, 0.3, 0.3, float(os.environ.get("NM_GAIN") or 0.4), 0.4, 0.4, 0.4], np.float32)
+P_NOISE = np.array([0.3, 0.3, 0.5, 0.3, 0.3, 0.6, 1.5, 1.5, float(os.environ.get("NM_NOISE") or 0.6),
+                    float(os.environ.get("NM_NOISE") or 0.6), 0.5, 0.3], np.float32)
+P_NEAR = np.array([200, 700, 0, 250, 300, 0, 0, 200, 150, 150, 300, 700], np.float32)
+P_FAR = np.array([500, 1200, 0, 550, 600, 1e9, 0, 500, 600, 600, 700, 1200], np.float32)
+P_WEAPON = np.array([-1, RG, RL, LG, -1, -1, -1, -2, -3, -1, -1, RG], np.int64)
 NM_WEAPONS, NM_WEIGHTS = np.array([SG, RG, RL, LG, MG], np.int64), np.array([0.36, 0.26, 0.15, 0.12, 0.11])
 # ---- Aim ability: one knob (owner, 2026-10-08: "on par or slightly above me, 10% over or so ... this will likely be
 # turned into a parameter 'aim ability' with this as the baseline 3/5, a knob that can be tuned up or down").
@@ -496,6 +505,19 @@ SPEED_LO, SPEED_HI = 320.0, 480.0
 #                 below that. Own splash and falls are not changed. 0 = off.
 HIGH_PAY = float(os.environ.get("HIGH_PAY") or 0.0)
 HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
+#   TRICKS=1      the scripted opponents of docs/SCOPE_v15.md (the personas holder, lobber, watcher) get what they need:
+#                 ways to places that are not items (the spawn points, posts to watch an item from). Off: none of it is
+#                 built, and those personas play as the plain item runner.
+TRICKS = float(os.environ.get("TRICKS") or 0.0) > 0
+HOLD_HUNT, HOLD_HUNT_P = 10.0, 0.6                         # the holder after a frag: seconds he looks for him, and how often
+WATCH_SECS = 25.0                                         # the watcher keeps a post this long
+TRICK_P = np.zeros(3)                                     # of the item runner's rounds, the shares with the holder, the lobber, the watcher
+for part_ in (os.environ.get("TRICK_P") or "").split(","):
+    if ":" in part_:
+        TRICK_P[("holder", "lobber", "watcher").index(part_.split(":")[0].strip())] = float(part_.split(":")[1])
+if os.environ.get("TRICK_NOISE"):                         # their aim: degrees of noise a frame (the stand-in's 0.6 by default)
+    P_NOISE[HOLDER:WATCHER + 1] = float(os.environ["TRICK_NOISE"])
+HOLD_STACK = float(os.environ.get("HOLD_STACK") or 0.0)   # the share of his rounds the holder starts ahead (100 armor, the big weapons)
 #   RUN_TEACHER=1 item runs: the strafe-jumping movement network (the trainer's --teacher) shows keys, jump and view toward
 #                 his target, in place of the walking teacher's keys (those stay where the network has no way).
 #   STACK_KEYS=0  no key labels in normal games (v13: the walking teacher's keys for a bare or low player with nobody about).
@@ -957,6 +979,12 @@ class DuelEnv:
         self.sc_fwd = np.zeros(2 * n_matches, np.int64)
         self.sc_jump = np.zeros(2 * n_matches, bool)
         self.sc_stuck = np.zeros(len(self.sc_t), np.int64)  # the runner: frames without getting anywhere
+        self.hunt_t = np.zeros(len(self.sc_t), np.float32)  # TRICKS, the holder: seconds left of coming for him after a frag
+        self.x_goal = np.full(len(self.sc_t), -1, np.int64)  # ... a place that is not an item he walks to (index into xpts)
+        self.watch_t = np.zeros(len(self.sc_t), np.float32)  # ... the watcher: seconds left at this post
+        self.sc_look = np.zeros(len(self.sc_t), bool)       # ... he looks at what he remembers though nobody is in view
+        self.hold_ahead = np.zeros(len(self.sc_t), bool)    # ... the holder starts this round ahead (HOLD_STACK); used up at his first spawn
+        self.route_x, self.xpts, self.x_watch = None, None, {}
         self.run_k = np.full(len(self.sc_t), -1, np.int64)  # item run: the intention he is given (0 = none yet), -1 = not in one
         self.run_stuck = np.zeros(len(self.sc_t), np.int64) # item run: frames without getting anywhere (for the walking teacher)
         self.collect_fight_p = float(os.environ.get("COLLECT_FIGHT_P") or 0.0)   # share of the item runs that end in a fight (RUN_COLLECT)
@@ -1210,6 +1238,8 @@ class DuelEnv:
                 pr_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_routes", name + ".npz")
                 self.route.T_walk = self.route.T             # the ways of the walking map alone (a scripted player's)
                 self.route.pro_step = np.zeros(self.route.T.shape, bool)   # points whose next step is the pros', not a walk
+                if TRICKS:
+                    self._trick_points(nav, [(c, d) for k, c, d in spots if k == 0], [(c, d) for k, c, d in spots if k == 1], more_)
                 if PRO_WAYS and os.path.exists(pr_):
                     pd_ = np.load(pr_)
                     labs_ = [str(x) for x in pd_["labels"]]
@@ -1355,6 +1385,8 @@ class DuelEnv:
                           drops=0, pick_drop=0, pick_drop_new=0, drop_teach_frames=0,
                           close_v=np.zeros(3), close_n=np.zeros(3),     # his speed toward an enemy in view, by health plus armor: under 60, to 125, over
                           high=np.zeros(3), high_dmg=np.zeros(3),       # B-160: frames with his enemy in view, and damage dealt, standing lower by 48 units or more, level, higher
+                          sc_frags_w=np.zeros(NW),                      # frags made by scripted players, by weapon
+                          lob=np.zeros(3),                              # TRICKS, the lobber: frames firing at a place: plasma, grenades; at an exit
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
@@ -1455,6 +1487,17 @@ class DuelEnv:
             self.weapon[i] = int(self.rng.choice(owned)) if owned else MG
             if self.script[i] == 2:                     # the scripted fighter does not run dry
                 self.ammo[i] = np.minimum(AMMO_MAX, self.ammo[i] * 3)
+        if self.script[i] == 3 and self.sc_persona[i] == HOLDER and self.hold_ahead[i]:   # ahead from the first second, once
+            self.hold_ahead[i] = False
+            self.armor[i] = 100.0
+            for w_ in (RL, LG, RG):
+                self.has[i, w_] = True
+                self.ammo[i, w_] = max(self.ammo[i, w_], AMMO_MAX[w_] * 0.4)
+        if self.script[i] == 3 and self.sc_persona[i] in (LOBBER, WATCHER):   # their tools, every life
+            for w_ in ((GL, PG) if self.sc_persona[i] == LOBBER else (RG,)):
+                self.has[i, w_] = True
+                self.ammo[i, w_] = AMMO_MAX[w_]
+        self.hunt_t[i], self.x_goal[i], self.watch_t[i], self.sc_look[i] = 0.0, -1, 0.0, False
         self.seen_t[i] = 9.0
         self.vis_run[i] = 0
         self.acquired[i] = False
@@ -1635,6 +1678,9 @@ class DuelEnv:
             if self.arena[m] == 3 and self.route is not None and not f and rng.random() < self.runner_p:
                 self.script[b_] = 3                          # the yard: the item runner in a share of the rounds
                 self.sc_persona[b_] = 0
+                if TRICKS and TRICK_P.sum() > 0 and rng.random() < TRICK_P.sum():   # ... or one of the three in his place
+                    self.sc_persona[b_] = (HOLDER, LOBBER, WATCHER)[int(rng.choice(3, p=TRICK_P / TRICK_P.sum()))]
+                    self.hold_ahead[b_] = self.sc_persona[b_] == HOLDER and rng.random() < HOLD_STACK
             stack = (25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0)
             self.arena_hp[m], self.arena_ar[m] = float(rng.choice(stack)), float(rng.choice(stack))
             self.state = self.w.state()
@@ -2515,6 +2561,19 @@ class DuelEnv:
                 gu_, gb_ = self._goal_state(gi, grp)
                 want = (sw == w_) & ~self.has[:, w_] & (Tn[gi] < 1e8) & (gu_ | (gb_ < Tn[gi] + 3.0))
                 out = np.where(want, INTENTS.index(lab), out)
+        hold = (self.script == 3) & (self.sc_persona == HOLDER)
+        if hold.any():                                       # the holder: the mega and the red armor on their clocks, whatever he has
+            best = np.full(n, 1e9, np.float32)
+            pick = np.zeros(n, np.int64)
+            for gi, lab in enumerate(self.route_goal):
+                if lab in ("MH", "RA"):
+                    t = Tn[gi]
+                    gu_, gb_ = self._goal_state(gi, grp)
+                    eta = np.where(gu_, 0.0, gb_)            # seconds until it is there, as far as he knows
+                    go = hold & (t < 1e8) & (eta < t + HOLD_EARLY) & (eta < best)
+                    best = np.where(go, eta, best)
+                    pick = np.where(go, INTENTS.index(lab), pick)
+            out = np.where(pick > 0, pick, out)
         return out
 
     def intend(self, choice, who):
@@ -3081,12 +3140,12 @@ class DuelEnv:
         rush = fighter & (per == 2) & (dist < 400)             # the rusher aims rockets at the feet
         ep = np.where(rush, -np.degrees(np.arctan2(to[:, 2] - 24.0, np.hypot(to[:, 0], to[:, 1]) + 1e-6))
                       - self.pitch[idx], ep)
-        chase = fighter & (self.seen_t[idx] < 2.0)
+        chase = fighter & ((self.seen_t[idx] < 2.0) | self.sc_look[idx])
         turn = np.where(vis | chase, np.clip(ey * P_GAIN[per], -10, 10), np.clip(wander * 0.15, -6, 6))
         turn = np.where(fighter, turn + rng.normal(0, 1.0, k) * P_NOISE[per], np.clip(wander * 0.1, -3, 3))
         if self.sc_style:
             turn = np.where(fighter, turn, 0.0)             # test-room targets keep their facing (straight strafes)
-        dpit = np.where(vis, np.clip(ep * 0.4, -6, 6), -self.pitch[idx] * 0.2)
+        dpit = np.where(vis | self.sc_look[idx], np.clip(ep * 0.4, -6, 6), -self.pitch[idx] * 0.2)
         out = np.zeros((k, len(ACTION_DIMS)), np.int64)
         ffwd = np.where(vis, np.where(dist > P_FAR[per], 1, np.where(dist < P_NEAR[per], -1, self.sc_fwd[idx])), 1)
         hurt = (per == 4) & (self.hp[idx] + self.armor[idx] < 80)
@@ -3115,6 +3174,8 @@ class DuelEnv:
         out[:, 5] = (vis & (np.abs(ey) < tol) & (np.abs(ep) < 4.0)) | (fighter & (per == 7))   # the spammer always fires
         if runner.any() and self.route is not None:
             self._runner_keys(idx, runner, out, vis | chase)
+            if TRICKS:
+                self._lob(idx, out, vis)
         if self.lab is not None:
             t1 = self.script[idx] == 1
             z = self.lab_zone[idx // 2]
@@ -3271,17 +3332,37 @@ class DuelEnv:
         when hurt, the red armor when bare, else the nearest big weapon he lacks) along the walking graph, and fights
         like the all-round scripted fighter when an enemy is in view, still moving along his way. He starts with the
         game's spawn and takes what he walks over. Not rewarded and not imitated: he is in a share of the rounds
-        (RUNNER_P) so that the learner meets an opponent who turns up with the stack."""
+        (RUNNER_P) so that the learner meets an opponent who turns up with the stack.
+        TRICKS: the holder, the lobber and the watcher are runners too; where _trick_goals names a place that is not an
+        item (a spawn point, a post) they walk there by the same rules."""
         R, s = self.route, self.state
         rl = np.nonzero(r)[0]
         ri = idx[rl]
-        pos = s[ri, :3]
-        node = R.locate(pos)
+        node = R.locate(s[ri, :3])
         lab = np.array([INTENTS.index(l) if l in INTENTS else -1 for l in self.route_goal], np.int64)
         k = self.intent_teach[ri]
         T = np.where(lab[None, :] == k[:, None], R.T_walk[:, node].T, 1e9)   # (he walks: the walking map's ways)
         gi = T.argmin(1)
         go = (k > 0) & (T[np.arange(len(ri)), gi] < 1e8)
+        xg = np.full(len(ri), -1, np.int64)
+        if TRICKS and self.route_x is not None:
+            xg = self._trick_goals(ri, rl, engaged[rl], k)
+        self._walk_keys(R, ri[xg == -1], rl[xg == -1], gi[xg == -1], go[xg == -1], out, engaged)
+        if (xg >= 0).any():
+            X = self.route_x
+            xs = xg >= 0
+            ok = X.T_walk[xg[xs], X.locate(s[ri[xs], :3])] < 1e8
+            self._walk_keys(X, ri[xs], rl[xs], xg[xs], ok, out, engaged)
+        st = rl[(xg == -2) & ~engaged[rl]]                   # at his post, nobody in view: he stands
+        out[st, 0], out[st, 1], out[st, 2] = 1, 1, 0
+
+    def _walk_keys(self, R, ri, rl, gi, go, out, engaged):
+        """the keys of walkers ri (rows rl of out) along the ways of R to its goal gi"""
+        if not len(ri):
+            return
+        s = self.state
+        pos = s[ri, :3]
+        node = R.locate(pos)
         nx = R.walk[gi, node]
         tp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[gi])
         near = np.hypot(tp[:, 0] - pos[:, 0], tp[:, 1] - pos[:, 1]) < 48.0
@@ -3313,6 +3394,142 @@ class DuelEnv:
         turn = np.clip(rel_deg * 0.5, -20.0, 20.0)           # nobody in view: he looks where he is going
         look = go & ~engaged[rl]
         out[rl, 3] = np.where(look, np.abs(TURN[None, :] - turn[:, None]).argmin(1), out[rl, 3])
+
+    def _lob(self, idx, out, vis):
+        """TRICKS, the lobber (B-189): with nobody in view he fires where the other one is about to come out: the far end
+        of a teleporter or a jump pad within the next steps of the other one's way to the item he is heading for, else
+        the place he last saw him (for 4 s). Plasma where he has a line to the place, a grenade's arc where he has none
+        and it is within 900 units. He keeps walking his own way meanwhile."""
+        s, R = self.state, self.route
+        up = np.array([0, 0, 24.0], np.float32)
+        for j in np.nonzero((self.script[idx] == 3) & (self.sc_persona[idx] == LOBBER) & ~vis & (self.hp[idx] > 0))[0]:
+            i = int(idx[j])
+            o = int(self._others_arr()[i, 0])
+            if self.hp[o] <= 0:
+                continue
+            P, exit_ = None, False
+            g = self.intent_gi[int(self.intent[o])] if self.intent[o] > 0 else -1
+            if g >= 0:
+                a = int(R.locate(s[o:o + 1, :3])[0])
+                for _ in range(8):
+                    b = int(R.walk[g, a])
+                    if b < 0:
+                        break
+                    if not np.isnan(R.via[g, a][0]):         # this step goes through a teleporter or a pad: he comes out at b
+                        P, exit_ = R.nodes[b] + up, True
+                        break
+                    a = b
+            if P is None and self.seen_t[i] < 4.0:
+                P = self.known[i] + up
+            if P is None:
+                continue
+            eye = (s[i, :3] + np.array([0, 0, VIEW_H], np.float32)).astype(np.float32)
+            to = (P - eye).astype(np.float64)
+            D, dist = float(np.hypot(to[0], to[1])), float(np.linalg.norm(to))
+            if dist > 1800.0 or dist < 200.0:
+                continue
+            if self.has[i, PG] and self.ammo[i, PG] > 0 and self.w.trace(eye, P.astype(np.float32), mask=self.sight)["fraction"] >= 0.97:
+                wpn, pit = PG, -np.degrees(np.arctan2(to[2], D))
+            elif D < 900.0 and self.has[i, GL] and self.ammo[i, GL] > 0:
+                v_, g_ = float(P_SPEED[GL]), 800.0
+                disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[2] * v_ * v_)
+                if disc < 0:
+                    continue
+                th = np.arctan2(v_ * v_ - np.sqrt(disc), g_ * D)         # the low arc; the game lofts a grenade by 0.2
+                wpn, pit = GL, -np.degrees(th - 0.2 * np.cos(th))
+            else:
+                continue
+            ey = (np.degrees(np.arctan2(to[1], to[0])) - self.yaw[i] + 180.0) % 360.0 - 180.0
+            ep = pit - self.pitch[i]
+            out[j, 3] = int(np.abs(TURN - np.clip(ey * 0.5, -20.0, 20.0)).argmin())
+            out[j, 4] = int(np.abs(PITCH - np.clip(ep * 0.4, -6.0, 6.0)).argmin())
+            out[j, 6] = 0 if self.weapon[i] == wpn else wpn + 1
+            out[j, 5] = int(self.weapon[i] == wpn and abs(ey) < 5.0 and abs(ep) < 4.0)
+            if out[j, 5]:
+                self.stats["lob"][0 if wpn == PG else 1] += 1
+                self.stats["lob"][2] += int(exit_)
+
+    def _trick_points(self, nav, pads, teles, more_):
+        """TRICKS: the places a scripted opponent walks to that are not items, and the ways to them (a second route field):
+        the map's spawn points (the holder comes for him after a frag), then for every item two posts to watch its
+        approach from (the watcher): points 450 to 1400 units away that see the item and the most of the ground round
+        it, the higher the better."""
+        R = self.route
+        pts = [np.asarray(p, np.float32) for p in self.spawns]
+        self.x_spawns = len(pts)
+        self.x_watch = {}
+        live = np.nonzero(~R.dead)[0]
+        rng = np.random.default_rng(7)
+        eye = np.array([0, 0, VIEW_H], np.float32)
+        up30 = np.array([0, 0, 30.0], np.float32)
+        for gi, gp in enumerate(R.goals):
+            d = np.linalg.norm(R.nodes[live] - gp, axis=1)
+            cand = live[(d > 450.0) & (d < 1400.0) & (R.T_walk[gi, live] < 1e8)]
+            near = live[d < 320.0]
+            if not len(cand) or not len(near):
+                continue
+            cand = rng.choice(cand, min(60, len(cand)), replace=False)
+            near = rng.choice(near, min(24, len(near)), replace=False)
+            B = np.concatenate([R.nodes[near] + up30, (gp + up30)[None]]).astype(np.float32)
+            score = np.zeros(len(cand))
+            for a_, c_ in enumerate(cand):
+                see = self._los(np.repeat((R.nodes[c_] + eye)[None], len(B), 0).astype(np.float32), B)
+                score[a_] = (see[:-1].mean() + 0.003 * float(np.clip(R.nodes[c_][2] - gp[2], -100.0, 300.0))) * see[-1]
+            posts = []
+            for b_ in np.argsort(-score)[:6]:
+                if score[b_] > 0.4 and all(np.linalg.norm(R.nodes[cand[b_]] - pts[q_]) > 250.0 for q_ in posts) and len(posts) < 2:
+                    posts.append(len(pts))
+                    pts.append(R.nodes[cand[b_]].copy())
+            if posts:
+                self.x_watch[gi] = posts
+        self.xpts = np.array(pts, np.float32)
+        self.route_x = RouteField(nav, self.xpts, pads=pads, teles=teles, **more_)
+        self.route_x.walk, self.route_x.T_walk = self.route_x.next, self.route_x.T
+
+    def _trick_goals(self, ri, rl, engaged, k):
+        """TRICKS: for the runners ri, the place that is not an item each one walks to (an index into xpts), -1 for none
+        (he follows the item rule), -2 for a watcher standing at his post.
+        The holder, after a frag (hunt_t): once the other one lives again, the spawn point nearest to him, until he sees
+        him or the time is up, and not while the mega or the red armor is due. The watcher: a post for the item the other
+        one is heading for (his intention), kept WATCH_SECS; arrived, he stands and looks at the item."""
+        X, R, s = self.route_x, self.route, self.state
+        out = np.full(len(ri), -1, np.int64)
+        opp = self._others_arr()[ri, 0]                      # the other one (these opponents are for duels)
+        per = self.sc_persona[ri]
+        big = np.isin(k, [INTENTS.index(l) for l in ("MH", "RA") if l in INTENTS])
+        # the holder
+        h = per == HOLDER
+        self.hunt_t[ri] = np.where(h, np.maximum(0.0, self.hunt_t[ri] - DT), 0.0)
+        self.hunt_t[ri[h & engaged]] = 0.0
+        start = h & (self.hunt_t[ri] > 0) & (self.x_goal[ri] < 0) & (self.hp[opp] > 0)
+        if start.any():
+            sp = np.linalg.norm(self.xpts[None, :self.x_spawns] - s[opp[start], None, :3], axis=2).argmin(1)
+            self.x_goal[ri[start]] = sp
+        self.x_goal[ri[h & (self.hunt_t[ri] <= 0)]] = -1
+        hunt = h & (self.x_goal[ri] >= 0) & ~big
+        out[hunt] = self.x_goal[ri[hunt]]
+        # the watcher
+        w = per == WATCHER
+        if w.any() and self.x_watch:
+            self.watch_t[ri] = np.where(w, self.watch_t[ri] - DT, 0.0)
+            for j in np.nonzero(w & ((self.watch_t[ri] <= 0) | (self.x_goal[ri] < 0)))[0]:
+                g_ = self.intent_gi[int(self.intent[opp[j]])] if self.intent[opp[j]] > 0 else -1
+                posts = self.x_watch.get(int(g_)) or (self.x_watch[self.rng.choice(list(self.x_watch))] if self.x_watch else None)
+                self.x_goal[ri[j]] = int(self.rng.choice(posts)) if posts else -1
+                self.watch_t[ri[j]] = WATCH_SECS
+            ww = w & (self.x_goal[ri] >= 0) & self.has[ri, RG]       # (without the rail he is a runner until he has one)
+            node = X.locate(s[ri, :3])
+            at = ww & (X.T_walk[np.maximum(self.x_goal[ri], 0), node] < 0.25)
+            out[ww] = self.x_goal[ri[ww]]
+            out[at] = -2
+            self.sc_look[ri] = at & ~engaged
+            for j in np.nonzero(at & ~engaged)[0]:               # he looks at the item his post watches
+                g_ = next((g for g, ps in self.x_watch.items() if int(self.x_goal[ri[j]]) in ps), None)
+                if g_ is not None:
+                    self.known[ri[j]] = R.goals[g_]
+        far = (out >= 0) & (X.T_walk[np.maximum(out, 0), X.locate(s[ri, :3])] >= 1e8)
+        out[far] = -1                                        # no way there from where he is: the item rule
+        return out
 
     # ---------------------------------------------------------------- step
     def limit_keys(self, a, who=None):
@@ -3988,7 +4205,10 @@ class DuelEnv:
                     self.stats["target_kills"] += 1
                 if self.script[k] >= 2:
                     self.stats["bot_frags"] += 1
+                    self.stats["sc_frags_w"][int(kill_w.get(v, 0))] += 1
                     self.stats["vs_persona"][1, self.sc_persona[k]] += 1
+                    if self.script[k] == 3 and self.sc_persona[k] == HOLDER and self.rng.random() < HOLD_HUNT_P:
+                        self.hunt_t[k], self.x_goal[k] = HOLD_HUNT, -1
             else:
                 self.stats["suicides"] += 1
             events.append(dict(victim=int(v), killer=int(k), weapon=int(kill_w.get(v, -1))))

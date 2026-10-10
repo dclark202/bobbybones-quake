@@ -50,7 +50,7 @@ def play(job):
     env.item_run_p = 0.0
     env.kind_p = (1.0, 0.0, 0.0, 0.0)
     env.bot_p = 0.0
-    scripted = opp_kind in ("nightmare", "runner")
+    scripted = opp_kind in ("nightmare", "runner", "holder", "lobber", "watcher")
     env.runner_p = 1.0 if scripted else 0.0
     if getattr(env, "lab", None) is not None:
         env.lab_force = dict(kind=E.NORMAL, arena=3)
@@ -63,7 +63,7 @@ def play(job):
     ev, od = np.arange(0, n, 2), np.arange(1, n, 2)
     if scripted:
         env.script[od] = 3
-        env.sc_persona[od] = E.NIGHTMARE if opp_kind == "nightmare" else 0
+        env.sc_persona[od] = E.NIGHTMARE if opp_kind == "nightmare" else E.PERSONAS.index(opp_kind) if opp_kind in E.PERSONAS else 0
     else:
         env.script[od] = 0
     env.script[ev] = 0
@@ -86,7 +86,7 @@ def play(job):
     # the simulator's own counters (they count the learner's side): damage, shots, hits and frags by weapon, the weapon in
     # hand by distance, his speed toward an enemy in view by strength, how well he knows where the enemy is, dropped weapons
     SK = [k for k in ["dmg_h", "dmg_from_script", "w_dist", "close_v", "close_n", "know", "know_frames", "drops", "pick_drop",
-                      "pick_drop_new", "self_dmg", "fall_dmg"]
+                      "pick_drop_new", "self_dmg", "fall_dmg", "lob", "sc_frags_w"]
           + [w + x for w in E.WEAPONS for x in ("_frags", "_shots", "_hits")] if k in env.stats]
     st0 = {k: np.array(env.stats[k], np.float64).copy() for k in SK}
     side = np.arange(n) % 2
@@ -229,6 +229,10 @@ def main():
                             mega_share=round(float(c["mega"][s_] / (pm * 60 / 35.0)), 3), red_share=round(float(c["red"][s_] / (pm * 60 / 25.0)), 3),
                             yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2))
         st = {k: np.sum([np.array(r["st"][k]) for r in res], 0) for k in res[0].get("st", {})}
+        if "sc_frags_w" in st:                               # (staging) the scripted opponent's frags by weapon
+            row["opponent"]["frags_w"] = {w: float(x) for w, x in zip(res[0]["weapons"], np.array(st["sc_frags_w"])) if x > 0}
+        if "lob" in st:                                      # (staging) the lobber's frames firing at a place: plasma, grenades; at an exit
+            row["opponent"]["lob"] = [float(x) for x in np.array(st["lob"])]
         if st:                                               # the learner's side, from the simulator's counters
             W_ = res[0]["weapons"]
             big4 = [w for w in ("rl", "lg", "rg", "mg") if w + "_frags" in st]
