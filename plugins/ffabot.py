@@ -623,6 +623,11 @@ class ffabot(duelbot):
         if not live_bots:
             return
         obs = env.observe()
+        if os.environ.get("FFA_OBSDUMP"):                    # debugging: keep the first live Bobby's inputs, to set beside the
+            self.obs_dump = getattr(self, "obs_dump", [])    # simulator's (tools/input_check.py --real)
+            self.obs_dump.append(obs[live_bots[0]].copy())
+            if len(self.obs_dump) % 2000 == 0:
+                np.save("/tmp/practice/obs_dump.npy", np.array(self.obs_dump[-12000:]))
         acts = self.act_batch(obs[live_bots], live_bots)
         if acts.shape[1] > 10 and hasattr(env, "intend"):
             choice = np.zeros(SEATS, np.int64)

@@ -5,7 +5,49 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
-## 2026-10-10 03:00 — v14 at three hours: half-way to the teacher in item runs, none of it in his games yet; the teacher to 0.5, the pay for speed in games to 0.3
+## 2026-10-10 03:45 — v14 on a real server: its ten new inputs are right, he moves there as v13 did; how much of the lesson reaches his games
+
+**v14's new inputs on a real server** (not checked before: only v13's were, 2026-10-09 15:30). A private local server
+as the public one will run it (the free-for-all plugin with the bots' plugins, two v14 Bobbys alone on Blood Run, no
+game bot, no port), one Bobby's inputs kept for 12,000 frames (`FFA_OBSDUMP=1`, new in `plugins/ffabot.py`) and set
+beside the simulator's (`tools/input_check.py --real`): his speed (mean 0.73 against 0.74, the same quartiles), the way
+he moves against his view, the speed gained in 100 ms and the six inputs for the lead of a rocket or a plasma ball
+(alive 4.9% of the time against 5.3%, the same spread) are the simulator's. No frame errors with the save of 03:15.
+
+What differs there is the game's state, not the plugin: with no person on it a server stays in warmup, where every
+player holds every weapon with full ammunition. Nine inputs never change there, and he has never been in that state in
+training (in the simulator he owns a grenade launcher 4% of the time). On the public server 4 of the first 58 counted
+frags were made in warmup (B-196).
+
+**On a real server he moves as v13 did** (Blood Run): v14 against itself 292 units a second, 298 with nobody about,
+over 360 for 10% of his time, fast in the air 12%; v13 in the night's two public Blood Run sessions 294 and 299, 290
+and 293 with nobody about, over 360 for 8 and 9%, fast in the air 11%.
+
+**How much of the item-run lesson reaches his games** (the simulator, self-play games; the frames where he is on his
+way to the item he chose with nobody seen or heard for 1.5 s, which are 40 to 60% of his time and which the teacher
+never labels). Each cell: units a second, time fast in the air, how far his choices are from the teacher's (nats).
+
+| Map | The start network | The save of 02:05 | In item runs, the same save |
+|---|---|---|---|
+| Blood Run | 300, 9.7%, 21.7 | 307, 12.6%, 6.2 | 336, 24%, 2.0 |
+| Sinister | 283, 7.7%, 21.7 | 288, 9.1%, 5.2 | 304, 12%, 2.1 |
+| Battleforged | 296, 5.8%, 21.2 | 310, 10.6%, 6.0 | 334, 16%, 2.0 |
+
+So "none of it shows in his games" (03:00) was too strong: a quarter to a half of the gain in time fast in the air is
+there, and his choices on those trips have come from 21 nats to 5 or 6 from the teacher's, against 2.0 where the
+teacher labels him.
+
+**Half an hour after the change of 02:50** (13 updates): no harm, no gain. Lightning 43.1%, rail 45.9%, on target 32.0%
+(before: 43.2%, 46.6%, 32.3%); the teacher's loss 1.89 (1.80); item runs 308 units a second, 17% fast in the air, 5.5
+items a minute; trips in games 291. The duel check of the last save before the change: 54.4% on the six trained maps,
+45.3% on the four held out: four checks without progress.
+
+**For the owner**: the strafe-jumping teacher on his trips in games too would label the frames where the gap is. On
+record against it: on 2026-10-08 a teacher of the view in games whenever nobody was in view, at full weight, all but
+stopped his shooting within an hour (fire 31% -> 7% of frames). It would have to be the quiet frames only, at low
+weight, and tried on a copy first. Not built: his call.
+
+## 2026-10-10 03:00 — v14 at three hours: half-way to the teacher in item runs, little of it in his games yet; the teacher to 0.5, the pay for speed in games to 0.3
 
 **The network itself in item runs, map by map** (64 player-minutes a map, every round an item run), beside a player who
 presses only the teacher's labels. Each cell: units a second, time fast in the air, items reached a minute.
@@ -46,7 +88,7 @@ it. A small loss with the lightning gun, most of it in the first 47 minutes.
 55.5% at 142, 53.7% at 182; the four held out 49.2% -> 46.5%. Three checks without progress. The run goes on: the other
 measures are not flat, and the cause found at 01:30 (the rocket in his hand at every distance) is the owner's to decide.
 
-**None of the item-run skill shows in his games yet.** On a trip in a game with nobody about he does 289 units a second
+**Little of the item-run skill shows in his games yet** (measured closer at 03:45: a quarter to a half of it). On a trip in a game with nobody about he does 289 units a second
 (284 at the start) and is over 320 for 41% of the time (39%); in the duel checks 284 (275). The pay for speed came to
 0.036 a player-minute in games and 0.18 in item runs: beside 0.19 a player-minute of shot prices, nothing.
 
