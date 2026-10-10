@@ -5,6 +5,44 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 20:50 — A friend of the owner's against three Bobbys; "fighting without ammo"; the leaderboard's first rows
+
+**The game** (session `20261010-011707_bloodrun_ffa`, copied to `data/public/sessions/`; Blood Run, free-for-all, a timed
+ten minutes, one person and three Bobbys, v13):
+
+| | Frags | Deaths | Damage dealt | Rockets: shots, hit rate, frags | Lightning | Rail | In hand |
+|---|---|---|---|---|---|---|---|
+| The person | 23 | 6 | 3,817 | 93, 37%, 5 | 26% | 41% | grenades 35%, rockets 31%, plasma 12% |
+| Bobby 2 | 20 | 18 | 3,947 | 48, 44%, 7 | 36% | 54% | rockets 29%, lightning 29%, machine gun 21%, rail 21% |
+| Bobby 1 | 17 | 21 | 3,904 | 45, 33%, 5 | 34% | 42% | lightning 42%, machine gun 24%, rockets 20% |
+| Bobby 3 | 12 | 30 | 3,313 | 46, 35%, 5 | 33% | 35% | machine gun 35%, lightning 28%, rockets 24% |
+
+What it shows:
+
+- **Head to head it was 23 to 5.** All 23 of the person's frags were Bobbys; the Bobbys made 5 of their 49 frags on him
+  and 44 on each other. Each Bobby had him as its target 26 to 40% of the time and saw him 6 to 11% of the time, at 880
+  to 980 units in the middle. He stayed above (his height 378 in the middle, half his time over 400; the Bobbys' 133 to
+  280) and chose his fights while the three fought each other below.
+- **Grenades and plasma again**: 158 grenades and 278 plasma balls, 10 of his 23 frags; he took the grenade launcher 34
+  times and the red armor 10 times (the Bobbys 2 or 3 each). B-189.
+- **The Bobbys do fire rockets when the fights are close**: 45 to 48 each at 33 to 44%, 5 to 7 frags each, against 13 and
+  26 rockets at 8 and 12% in the one-on-one games against the owner.
+- **His note in chat: "fighting without ammo".** It is in the frames: the Bobbys had a weapon with nothing left in it in
+  hand 3.2% of their time alive in this game (lightning 2.0%, rockets 1.2%) and pressed fire on it 0.7% of the time. In
+  the owner's Aerowalk game of the afternoon it was 15% of his time (the rail 10%, the lightning gun 5%), 12% of all his
+  firing. The simulator has the same rule as the game (no change of weapon by itself when one runs dry), so it is his
+  own slowness in putting an empty weapon away, which ten-minute games show and two-minute rounds do not (B-192).
+  `tools/duel_eval.py` counts it from now on (`empty_in_hand`, `firing_empty`): 2.1% of his time in a first short check.
+- He was over 400 units a second 20% of his time, the Bobbys 3%.
+
+**The owner's game on Toxicity** (a map v13 never trained on; one Bobby, ten minutes): 25 to 1, and Bobby died 34 times, 9
+of them by his own hand or the map. He held the machine gun 54% of his time.
+
+**The leaderboard's first rows** (live since 19:50; `python tools/elo.py data/public`): 58 counted frags. The owner 27
+made and 2 taken (93%, rating 1,749), the friend 24 and 5 (83%, 1,525), Bobby (v13) 7 made and 51 taken (1,223). The
+table worked out again from the frag log is the file's (difference 0.0), and the vote at a game's end took the server to
+Cure, one of the ten.
+
 ## 2026-10-09 20:15 — `duel_gru_v14` started
 
 **The owner's go and his rules for the run.** "Let's start with v14 now. For feedback, I would like hourly checkins (they

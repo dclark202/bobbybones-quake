@@ -76,7 +76,7 @@ def play(job):
     score = np.zeros(n)
     kills = np.zeros(n)
     c = {k: np.zeros(2) for k in ("alive", "bare", "over150", "vis", "fire", "speed", "wp", "mega", "red", "yellow", "lives", "restarts",
-                                  "standing", "stuck", "own_deaths", "fire_vis", "both", "lower", "higher", "vis_lower", "vis_higher")}
+                                  "standing", "stuck", "own_deaths", "fire_vis", "both", "lower", "higher", "vis_lower", "vis_higher", "empty", "empty_fire")}
     still = np.zeros(n)                                         # seconds he has been standing (under 50 units a second)
     life, got, was = np.zeros(n), np.zeros(n, bool), np.zeros(n, bool)
     first = [[], []]
@@ -140,6 +140,9 @@ def play(job):
             c["vis"][s_] += vis[m].sum()
             c["fire"][s_] += (env.fire_last & alive)[m].sum()        # (the button as it is after the finger limits; scripted players too)
             c["fire_vis"][s_] += (env.fire_last & vis)[m].sum()
+            dry = alive & (env.weapon != E.G) & (env.ammo[np.arange(len(alive)), env.weapon] <= 0)    # a weapon with nothing left in hand ("fighting without ammo", a player's note of 2026-10-09)
+            c["empty"][s_] += dry[m].sum()
+            c["empty_fire"][s_] += (dry & env.fire_last)[m].sum()
             c["speed"][s_] += spd[alive & m].sum()
             c["standing"][s_] += (alive & (spd < 50.0))[m].sum()
             c["stuck"][s_] += (still > 3.0)[m].sum()
@@ -219,6 +222,7 @@ def main():
                             firing_in_view=round(float(c["fire_vis"][s_] / max(1.0, c["vis"][s_])), 3),
                             standing=round(float(c["standing"][s_] / al), 3), standing_over_3s=round(float(c["stuck"][s_] / al), 3),
                             own_deaths=round(float(c["own_deaths"][s_] / G), 2),
+                            empty_in_hand=round(float(c["empty"][s_] / al), 4), firing_empty=round(float(c["empty_fire"][s_] / max(1.0, c["fire"][s_])), 4),   # of his time alive; of his firing
                             lower=round(float(c["lower"][s_] / max(1.0, c["both"][s_])), 3), higher=round(float(c["higher"][s_] / max(1.0, c["both"][s_])), 3),   # of the time both live: lower or higher by 48 units or more
                             lower_in_view=round(float(c["vis_lower"][s_] / max(1.0, c["vis"][s_])), 3), higher_in_view=round(float(c["vis_higher"][s_] / max(1.0, c["vis"][s_])), 3),
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
