@@ -113,7 +113,9 @@ Battleforged; held out Campgrounds, Hektik, Toxicity, Cure. Real games against N
 **`duel_gru_v14` is training** since 2026-10-09 20:14 (owner's go; [MANIFEST_v14.md](MANIFEST_v14.md)), to 19:00 on 2026-10-10
 at the latest. His rules: a brief check every hour, a mid-run report at 7:00, playable around noon if he can be, an
 early stop when three duel checks in a row show no major progress and the other measures are flat, a flag at once for
-anything badly wrong. Looked for: rockets and other projectiles in use, strafe jumping and speed kept.
+anything badly wrong. Looked for: rockets and other projectiles in use, strafe jumping and speed kept. He allows two
+settings to be changed while it runs, right after a save and logged: the pay for speed, and the strafe-jumping teacher's
+weight ("If you think the strafe jumping teacher isn't strong enough you can also bump it up (or down if it's too strong)").
 
 **Before it:** `duel_gru_v13` ([MANIFEST_v13.md](MANIFEST_v13.md)) ran from 2026-10-08 21:26 to 2026-10-09 11:35
 (stopped by the owner after fourteen hours) and is on the public server; report: [REPORT_v13.md](REPORT_v13.md). Against

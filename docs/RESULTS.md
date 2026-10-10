@@ -5,6 +5,21 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
+## 2026-10-09 21:55 — v14 after 93 minutes; the duel checks had stopped; the owner on the teacher's weight
+
+Update 43. Rockets make 35% of the frags (27% at the start; in hand 29%, hit rate 39% from 44%); shotgun, grenades and
+plasma are in hand 0.0% of the time. No strafe jumping yet: item runs fell from 5.5 to 4.6 items a minute (4.4 at the
+lowest, update 31), their speed is flat at 284, fast in the air 8% -> 12%. He copies the teacher's keys better (its loss
+9.4 -> 3.2) and asks for 9 key actions a second where the hand gives 7.7 (74% refused, 56% at the start); the view's jerk
+has tripled. Aim holds (31 to 33% on target), megas hold (0.59 a player-minute), red armors 0.59 -> 0.47, lava 7 -> 10.
+
+The evaluation loop, started at 17:34 straight from the PowerShell tool, had gone without a word some time after its
+start check: no duel check ran in the run's first 90 minutes. Started again at 21:47 by the chain the trainer is started
+with (`S\start_evalloop.py`, which is now run at every check).
+
+The owner, 22:00: "If you think the strafe jumping teacher isn't strong enough you can also bump it up (or down if it's
+too strong), not saying it's there yet but if you notice it I approve you doing that."
+
 ## 2026-10-09 20:50 — The bots get names and voices (built, not on the public server yet)
 
 The owner: "Can we give bots 1--4 individual names? BobbyBones, Mr Skeleton, Dr Evil, The Juggernaut. Still with (BOT)
