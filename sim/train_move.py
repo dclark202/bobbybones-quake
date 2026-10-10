@@ -238,6 +238,7 @@ def main():
         rec = dict(update=update, steps=total, minutes=round((time.time() - t_start) / 60, 2),
                    sps=int(total / (time.time() - t_start)), success=round(succ, 3),
                    fell=round(np.mean([e["fell"] for e in recent]) if recent else 0, 3),
+                   lava=round(float(np.mean([e.get("lava", False) for e in recent])) if recent else 0, 3),
                    t_over_est=round(ratio_t, 3), fast_pct=round(100.0 * n_fast / max(1, n_moving), 2),
                    vmax=round(vmax), air=round(float(np.mean(air)), 3), reward=round(float(b_rew.mean()), 4),
                    entropy=round(float(ent), 3), curriculum=curriculum,
@@ -257,7 +258,7 @@ def main():
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:
-            print("upd {update} steps {steps:,} ({sps:,}/s) success {success:.0%} fell {fell:.0%} "
+            print("upd {update} steps {steps:,} ({sps:,}/s) success {success:.0%} fell {fell:.0%} lava {lava:.1%} "
                   "t/est {t_over_est} fast% {fast_pct} vmax {vmax} air {air} curr {curriculum}s {per_map}".format(**rec)
                   + (" | jumps over {:.0%} of {}".format(rec["jump_over"], rec["jump_tries"]) if a.jumps else ""), flush=True)
         if succ > a.curr_threshold and len(recent) > 2000 and curriculum < 15:

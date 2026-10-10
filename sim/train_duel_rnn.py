@@ -67,6 +67,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     env.sg_spawn = os.environ.get("NO_SG_SPAWN") != "1"   # set NO_SG_SPAWN=1: the shotgun only comes from pickups
     WEAPONS = WEAPONS_
     env.drill_weapons = tuple(WEAPONS.index(w) for w in drill_weapons.split(","))
+    if hasattr(env, "count_even"):
+        env.count_even = not move_only                       # the jump counters: his seats only (in a move-only simulator every seat)
     if move_only:                                            # a map he only learns to move on (--move-maps): every round an item
         pj_ = env.jump_run_p if getattr(env, "jump_tries", None) else 0.0   # run or a jump run, in the shares they have in the run
         assert env.item_run_p > 0 and env.route is not None, "--move-maps needs ITEM_RUN_P and the map's walking map"

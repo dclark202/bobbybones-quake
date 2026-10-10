@@ -1385,6 +1385,7 @@ class DuelEnv:
         self.jrun_it = np.full(self.n, -1, np.int64)        # ... the item that is its target
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
         self._replaced = False                              # a try began inside this step: the state is read again at its end
+        self.count_even = False                             # the jump counters count the even seats only (the trainer: those are always his)
         self.jump_a = self.jump_b = np.zeros((0, 3), np.float32)
         self.route_o = None                                  # JUMP_OPEN: his ways outside jump runs, with the jumps that are open
         open_ = {}
@@ -2252,6 +2253,11 @@ class DuelEnv:
             self.it_t[q, 0 if self.route_goal[g_] == "MH" else 1] = resp - t0
         self.contest_it[m], self.contest_t[m] = it, t0 + 10.0
         self.stats["contest_rounds"] += 1
+
+    def _counted(self, i):
+        """is player i (or each of an array of players) counted in the jump counters (see count_even)"""
+        g_ = self._others_arr().shape[1] + 1
+        return (np.asarray(i) % g_ % 2 == 0) | (not self.count_even)
 
     def _others_arr(self):
         """for every player, the other players of his group (one column each)"""
@@ -3720,7 +3726,8 @@ class DuelEnv:
         self.intent_new[i], self.intent_done[i] = True, True     # the target is read at once
         self.jrun_k[i], self.jrun_t[i] = k, 2.0 * float(J.T[g, node]) + JUMP_TRY_SLACK
         self.jrun_edge[i], self.jrun_over[i], self.jrun_new[i] = False, False, True
-        self.stats["jump_tries"][min(k, 63)] += 1
+        if self._counted(i):
+            self.stats["jump_tries"][min(k, 63)] += 1
 
     def _run_pick(self, i):
         """item run: the next target of player i, one of the big items lying there that he can walk to"""
@@ -4589,10 +4596,10 @@ class DuelEnv:
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
                     self.jrun_over[jr[ov_]] = True
-                    np.add.at(self.stats["jump_over"], np.minimum(kk_[ov_], 63), 1)
+                    np.add.at(self.stats["jump_over"], np.minimum(kk_[ov_ & self._counted(jr)], 63), 1)
                     at_gap_ = np.hypot(p_[:, 0] - B_[:, 0], p_[:, 1] - B_[:, 1]) < np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1]) + 150.0
                     short_ = self.jrun_edge[jr] & ~self.jrun_over[jr] & at_gap_ & (p_[:, 2] < np.minimum(A_[:, 2], B_[:, 2]) - 90.0)
-                    np.add.at(self.stats["jump_short"], np.minimum(kk_[short_], 63), 1)
+                    np.add.at(self.stats["jump_short"], np.minimum(kk_[short_ & self._counted(jr)], 63), 1)
                     for i in jr[(short_ | (self.jrun_t[jr] <= 0)) & ~arr[jr]]:
                         reward[i] -= float(self.jrun_paid[i])    # a try that ends without the item gives back what its way paid
                         self._jump_place(int(i))

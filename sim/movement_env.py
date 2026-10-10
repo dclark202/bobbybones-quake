@@ -44,6 +44,7 @@ ACTION_DIMS = (3, 3, 2, len(TURN_BINS))
 GOAL_CLASSES = ("weapon_", "item_armor_body", "item_armor_combat", "item_armor_jacket", "item_health_mega",
                 "item_health_large", "item_quad")
 FALL_COST = 0.05                                            # v14: seconds a point of fall damage costs (a far fall, 10 points: half a second)
+LAVA_COST = float(os.environ.get("MOVE_LAVA_COST") or 1.0)  # v15: what a try that ends in lava or slime costs (an arrival pays 1)
 HAZARD = 8 | 16                                             # lava, slime (the map's contents flags)
 TELE_FAR = 160.0                                            # v14: a teleporter link starts within this of its entrance
 N_WALL, N_FLOOR = 16, 8
@@ -434,8 +435,10 @@ class MoveEnv:
         arrived = (np.hypot(gp[:, 0] - pos[:, 0], gp[:, 1] - pos[:, 1]) < 40) & (np.abs(gp[:, 2] - pos[:, 2]) < 64)
         fell = pos[:, 2] < self.zmin
         hard = np.zeros(self.n, np.float32)
+        wet = np.zeros(self.n, bool)
         if self.v14:
-            fell = fell | ((self.w.contents_n(pos + np.array([0, 0, -23.0], np.float32)) & HAZARD) != 0)
+            wet = (self.w.contents_n(pos + np.array([0, 0, -23.0], np.float32)) & HAZARD) != 0
+            fell = fell | wet
             delta = prev[:, 5] ** 2 * 0.0001                   # Quake 3's fall damage, from the speed of the landing
             hard = np.where((prev[:, 6] < 0.5) & (s[:, 6] > 0.5) & (prev[:, 5] < 0),
                             np.where(delta > 60.0, 10.0, np.where(delta > 40.0, 5.0, 0.0)), 0.0).astype(np.float32)
@@ -457,13 +460,13 @@ class MoveEnv:
         self.best_phi = np.minimum(self.best_phi, phi)
         self.stall = np.where(improved, 0.0, self.stall + DT)
         timeout = (self.t > self.limit) | (self.stall > self.stall_limit)
-        reward = reward + arrived * 1.0 - fell * 1.0 - FALL_COST * hard + over * 1.0
+        reward = reward + arrived * 1.0 - fell * 1.0 - (LAVA_COST - 1.0) * wet - FALL_COST * hard + over * 1.0
         done = arrived | fell | timeout
         speed = np.hypot(s[:, 3], s[:, 4])
         info = dict(speed=speed, ground=s[:, 6].copy(), key_dec=self.key_dec.copy() if self.hand else None)
         ep = []
         for i in np.nonzero(done)[0]:
-            ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), t=float(self.t[i]),
+            ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), lava=bool(wet[i]), t=float(self.t[i]),
                            est=float(self.start_phi[i]), goal=int(self.goal[i]), fall_dmg=float(self.fall_dmg[i]),
                            jump=int(self.try_k[i]), crossed=bool(self.crossed[i])))
             self.fall_dmg[i] = 0.0
