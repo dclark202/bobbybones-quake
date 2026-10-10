@@ -19,6 +19,7 @@ not started**: it begins from v14's end with everything below.
 | 12:30 | Hektik and Cure: demos and jump maps too. "It might contaminate the purity of the held out map, but it's important that he understands how to move around these maps efficiently" |
 | 13:08 | "He should get movement only practice on all 10 maps" |
 | 15:38 | the answers to section 12: start from "v14 end"; the teacher's maps "OK"; movement-only time "OK - but monitor"; the one-weapon rounds "should be temporary just to introduce him to these weapons, monitor and turn them down once he starts to understand them"; the 36 jumps without tries: "Build first"; length and reports "TBD - ask me after we've settled the rest"; projectiles: "he should only know what's in view or what he can hear. He's allowed to \"suspect\" rockets, but that maybe is learned behavior instead" |
+| 15:52 | "the jumps don't need to be 'exact' for repeating, he should be taught the general path, there's many ways to execute them" |
 | standing | the last best network is in the league and first in every check; under 45% of the frags against it at two checks in a row: stop and tell him. Priorities: strafe jumping and keeping speed; rockets; plasma and grenades, the shotgun less; game awareness |
 
 ## 1. What changes from v14
@@ -28,7 +29,7 @@ v14 here is the third start as it ran to 10:57 (no teacher; every shot at its fu
 | # | | v14 | v15 | Switch |
 |---|---|---|---|---|
 | 1 | **The strafe-jumping teacher** | `move_v14d`: trained with any key on any frame (17 key changes a second); labels in item runs. It cost him Lost World within an hour | `move_v15i`: trained under his finger limits (keys read ten times a second, a finger at most every 150 ms, 8 key actions a second), on the pros' jumps of ten maps, a try that ends in lava priced at three arrivals. Labels in item runs and jump runs, **only on maps where a player who presses exactly its labels passes** (section 4): everywhere but Toxicity and Lost World's item runs | `--teacher`, `--teacher-skip`, `RUN_TEACHER=1` |
-| 2 | **Jump runs** | none | 10% of his time on the six maps: alone, he begins a second or two of way before the take-off of one of the pros' jumps, the item behind it is his target. Tries at 108 of the 144 jumps in use | `JUMPS=1`, `JUMP_RUN_P=0.10`, `JUMP_ALL=1` |
+| 2 | **Jump runs** | none | 10% of his time on the six maps: alone, he begins a second or two of way before the take-off of one of the pros' jumps, the item behind it is his target. Tries at 137 of the 144 jumps in use | `JUMPS=1`, `JUMP_RUN_P=0.10`, `JUMP_ALL=1` |
 | 3 | **Movement-only practice on the four other maps** | none | Campgrounds, Hektik, Toxicity, Cure: a simulator each of item runs and jump runs, no games; 7.6% of his time | `--move-maps`, `--move-matches 105` |
 | 4 | **Enemy projectiles as a player sees them** | the two nearest; shown through walls if inside his view cone; anything within 400 units in any direction | the six nearest inside his view cone with a clear line from his eyes; each with its kind, a grenade's fuse left, the seconds until it passes closest and how close in its splash radii | `PROJ_SEE=1` |
 | 5 | **Grenades and splash as measured in the game** | a grenade lost the rest of a frame at every bounce and came to rest 5 to 10% short; splash reached a player by one line to his middle | a bounce keeps its frame; splash tries his middle and four points beside it, as the game does (rockets too) | `GL_QL=1` |
@@ -64,26 +65,37 @@ The pros' jumps, from their duels (`tools/pro_gaps.py`): every jump over a hole 
 make, is a second or more slower at, or just makes from the very edge. In use: seen 20 times or more (30 for "just makes
 it"), or marked by hand.
 
-| Map | Demos | Jumps in use | A walker cannot / is slower / just makes it | The pros make them, an hour | Speed needed (least, middle, most) | He gets tries at |
-|---|---|---|---|---|---|---|
-| Blood Run | 250 | 11 | 0 / 3 / 7, and the stairs to yellow by hand | 57 | 329, 392, 451 | 8 |
-| Aerowalk | 250 | 15 | 1 / 8 / 6 | 102 | 322, 368, 479 | 13 |
-| Lost World | 250 | 19 | 0 / 3 / 16 | 53 | 329, 371, 528 | 16 |
-| Sinister | 147 | 24 | 0 / 10 / 14 | 105 | 342, 378, 505 | 20 |
-| Furious Heights | 150 | 20 | 0 / 4 / 16 | 96 | 310, 362, 514 | 16 |
-| Battleforged | 149 | 5 | 0 / 4 / 1 | 20 | 356, 420, 564 | 4 |
-| Campgrounds | 6 | 12, by hand | 0 / 4 / 8 | - | 388, 416, 608 | 4 |
-| Hektik | 144 | 14 | 0 / 4 / 10 | 118 | 340, 378, 425 | 13 |
-| Toxicity | 87 | 11 | 0 / 9 / 2 | 85 | 320, 386, 416 | 6 |
-| Cure | 129 | 13 | 0 / 8 / 5 | 104 | 374, 432, 515 | 8 |
-| **All** | | **144** | | | | **108** |
+| Map | Demos | Jumps in use | A walker cannot / is slower / just makes it | Speed needed (least, middle, most) | He gets tries at | The teacher labels | Its pupil over, at those | v14's end over, himself |
+|---|---|---|---|---|---|---|---|---|
+| Blood Run | 250 | 11 | 0 / 3 / 7, and the stairs to yellow by hand | 329, 392, 451 | 11 | 10 | 86% | 42% |
+| Aerowalk | 250 | 15 | 1 / 8 / 6 | 322, 368, 479 | 15 | 13 | 61% | 14% |
+| Lost World | 250 | 19 | 0 / 3 / 16 | 329, 371, 528 | 19 | 19 | 74% | 37% |
+| Sinister | 147 | 24 | 0 / 10 / 14 | 342, 378, 505 | 22 | 15 | 72% | 28% |
+| Furious Heights | 150 | 20 | 0 / 4 / 16 | 310, 362, 514 | 20 | 19 | 53% | 21% |
+| Battleforged | 149 | 5 | 0 / 4 / 1 | 356, 420, 564 | 5 | 4 | 64% | 15% |
+| Campgrounds | 6 | 12, by hand | 0 / 4 / 8 | 388, 416, 608 | 12 | 9 | 38% | 19% |
+| Hektik | 144 | 14 | 0 / 4 / 10 | 340, 378, 425 | 14 | 11 | 70% | 44% |
+| Toxicity | 87 | 11 | 0 / 9 / 2 | 320, 386, 416 | 8 | 6 | 65% | 6% |
+| Cure | 129 | 13 | 0 / 8 / 5 | 374, 432, 515 | 11 | 11 | 48% | 8% |
+| **All** | | **144** | | | **137** | **117** | | **23%** |
 
 - Campgrounds has six demos on the site; its twelve jumps are marked by hand (the bridge to the rail is entry 9).
   Blood Run's stairs to the yellow armor (26) is in.
-- **He gets tries at 108 of the 144.** A try needs a way to an item that takes the jump, with a run-up before it. 82
-  had one; for 26 more the jump is made free in a second set of his ways so that the way to the item behind its landing
-  takes it (`JUMP_ALL`). The 36 left lead away from every item or have no room for a run-up; the teacher practises all
-  of them (in its task a landing is a goal).
+- **He gets tries at 137 of the 144** (owner, 15:38: "Build first"). A try begins a run-up of way before the take-off and
+  its target is an item behind the landing. 82 jumps lie on an item's fastest way. For 55 more his ways are made to take
+  the jump: first by making the jump free on the way to the two items behind its landing; where that finds no start, by
+  leading him to the landing first and from there to the nearest item, beginning as far back as the map allows. Seven
+  have none: the walking map has no standing place at their take-off or their landing (ledges and boxes only a jump
+  reaches: Sinister 11 and 12, Toxicity 5, 12 and 13, Cure 11 and 15). Every jump is tried as often as any other.
+- **The path, not the execution** (owner, 15:52: "the jumps don't need to be 'exact' for repeating, he should be taught
+  the general path, there's many ways to execute them"). He is paid for the way gained toward the item, never for a
+  spot; the circles round the pros' take-off (120 units) and landing (110) count "over" for the log and tell when a try has
+  ended in the gap.
+- **The teacher's labels in jump runs** (`tools/jump_labels.py`, `sim/jump_labels.json`): asked for the landing, the
+  teacher's own way goes round 20 of the jumps from where his tries begin (a player pressing its labels alone comes to
+  the take-off in under half of the tries). There it gives no labels and he learns the try by the pay alone. At the other
+  117 its labels stay, also where its pupil goes for the jump and seldom lands it (16 jumps under 15%, Aerowalk's
+  red-armor gap among them: 8%): they show the way.
 - Not opened in his games yet: in games his ways stay a walker's. A jump is opened (`JUMP_OPEN`, built) when he is
   measured to make it in jump runs.
 
@@ -106,18 +118,18 @@ tries arrive, in 0.91 of a walker's time; 1.3% end in lava; 69% of its jump trie
 
 **Its pupil, map by map** (`tools/label_check.py`: a player alone who presses exactly its labels with his hands):
 
-| Map | Item runs: items a minute | Speed | Fast in the air | Lava or slime damage a minute | Jump runs: over | Lava | Its labels in v15 |
+| Map | Item runs: items a minute | Speed | Fast in the air | Lava or slime damage a minute | Jump runs: over, at the jumps it labels | Lava | Its labels in v15 |
 |---|---|---|---|---|---|---|---|
-| Blood Run | 8.9 | 374 | 44% | 0 | 91% | 0 | item runs, jump runs |
-| Aerowalk | 13.3 | 326 | 26% | 0 | 58% (the red armor's gap: 18%) | 0 | item runs, jump runs |
-| Lost World | 7.4 | 340 | 32% | **63** | 76% | 10 | **jump runs only** |
-| Sinister | 9.4 | 338 | 32% | 0 | 60% | 0 | item runs, jump runs |
+| Blood Run | 8.9 | 374 | 44% | 0 | 86% | 0 | item runs, jump runs |
+| Aerowalk | 13.3 | 326 | 26% | 0 | 61% (the red armor's gap: 8%) | 0 | item runs, jump runs |
+| Lost World | 7.4 | 340 | 32% | **63** | 74% | 4 to 10 | **jump runs only** |
+| Sinister | 9.4 | 338 | 32% | 0 | 72% | 0 | item runs, jump runs |
 | Furious Heights | 6.6 | 345 | 39% | 0 | 53% | 0 | item runs, jump runs |
 | Battleforged | 9.2 | 364 | 37% | 0 | 64% | 0 | item runs, jump runs |
-| Campgrounds | 4.8 | 370 | 44% | 0 | 22% (the bridge to the rail: 0 of 80) | 0 | item runs, jump runs |
-| Hektik | 10.9 | 354 | 39% | 0 | 66% | 0 | item runs, jump runs |
-| Toxicity | 9.7 | 295 | 31% | **204** | 53% | **127** | **none** |
-| Cure | 8.6 | 309 | 30% | 0 | 62% | 0 | item runs, jump runs |
+| Campgrounds | 4.8 | 370 | 44% | 0 | 38% (the bridge to the rail: 0%) | 0 | item runs, jump runs |
+| Hektik | 10.9 | 354 | 39% | 0 | 70% | 0 | item runs, jump runs |
+| Toxicity | 9.7 | 295 | 31% | **204** | 65% | **127** | **none** |
+| Cure | 8.6 | 309 | 30% | 0 | 48% | 0 | item runs, jump runs |
 | *v14's end himself, the six maps* | 7.5 | 301 | 10% | | | | |
 | *v14's end himself, Lost World* | 6.8 | 306 | 9% | 22 | 41% | 8 | |
 | *v14's teacher, Lost World* | 7.3 | 327 | | 46 | | | |
@@ -191,11 +203,13 @@ the edge and falling earns nothing.
 | Projectile sight | section 5 |
 | Grenades | section 5 |
 | The teacher | section 4 |
+| The tries built on the owner's "Build first" (16:00) | his own rate over all 137 jumps before any training: 23% (Toxicity 6%, Hektik 44%); the teacher's pupil 38 to 86% at the jumps it labels; switched off the simulator is still main's of the morning in fixed runs; the trainer at full size from the repo: three updates in six minutes, 27,400 frames a second, tries at all 137 jumps in every update, the policy's step 0.04, 0.05 and 0.10 with the teacher rising over two hours (v14's teacher start: 0.17 twice) |
 | v14's end against Nightmare in real games | 14:55 to 15:17, two ten-minute games a map on a quiet PC: Blood Run 11-4 and 17-8, Lost World 4-4 and 7-2, Aerowalk 1-0 and 5-1 (the game's bot stands still there). v13 had 14-4, 11-6, 10-3; 8-5, 6-4, 9-5. [REPORT_v14.md](REPORT_v14.md) |
 
 ## 10. Known, not right yet
 
-- **36 of the 144 jumps have no tries for him** (section 3); a way with two of the pros' jumps is judged by the first.
+- **7 of the 144 jumps have no tries for him**, and the teacher gives no labels at 20 (section 3); a way with two of the
+  pros' jumps is judged by the first.
 - **His view stops at 85 degrees down, the game's at 87.9** (B-207): a grenade at his own feet lands 107 units away in
   the simulator, 42 in the game.
 - **One-weapon rounds exist in duels only**: 3.4% of his time, not the 8% first proposed.
@@ -236,7 +250,7 @@ minute at the start>
 rollout, 70 minibatches (156 sequences each, as v14's 157). `--fade-start` is the lineage's minute at the start
 (5,839), kept in `fade_start.txt` for every resume.
 
-## 12. For you to decide (answered 15:38: section 0; open: the length and the report hours, asked when the 36 jumps have tries)
+## 12. For you to decide (answered 15:38: section 0; point 6 is built: section 3; open: the length and the report hours)
 
 1. **The start**: v14's end (my advice at 14:15: level with v13 on v13's three maps, ahead on the three new ones, and
    trained in the corrected simulator), with v13 kept in the league. The folder is prepared so.

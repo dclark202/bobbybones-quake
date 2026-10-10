@@ -1,0 +1,890 @@
+{
+ "teacher": "move_v15i",
+ "min_edge": 0.5,
+ "min_tries": 15,
+ "steps": 2400,
+ "off": {
+  "bloodrun": [
+   2
+  ],
+  "aerowalk": [
+   16,
+   17
+  ],
+  "lostworld": [],
+  "sinister": [
+   8,
+   13,
+   16,
+   21,
+   26,
+   28,
+   29
+  ],
+  "furiousheights": [
+   20
+  ],
+  "battleforged": [
+   6
+  ],
+  "campgrounds": [
+   5,
+   13,
+   17
+  ],
+  "hektik": [
+   2,
+   8,
+   11
+  ],
+  "toxicity": [
+   6,
+   10
+  ],
+  "cure": []
+ },
+ "rates": {
+  "bloodrun": {
+   "1": {
+    "tries": 83,
+    "at_take_off": 0.88,
+    "over": 0.771,
+    "short": 0.084
+   },
+   "2": {
+    "tries": 76,
+    "at_take_off": 0.487,
+    "over": 0.0,
+    "short": 0.0
+   },
+   "3": {
+    "tries": 89,
+    "at_take_off": 0.933,
+    "over": 0.888,
+    "short": 0.0
+   },
+   "5": {
+    "tries": 68,
+    "at_take_off": 0.926,
+    "over": 0.897,
+    "short": 0.015
+   },
+   "7": {
+    "tries": 68,
+    "at_take_off": 0.941,
+    "over": 0.941,
+    "short": 0.0
+   },
+   "8": {
+    "tries": 88,
+    "at_take_off": 0.966,
+    "over": 0.92,
+    "short": 0.023
+   },
+   "9": {
+    "tries": 69,
+    "at_take_off": 0.971,
+    "over": 0.899,
+    "short": 0.058
+   },
+   "11": {
+    "tries": 77,
+    "at_take_off": 0.87,
+    "over": 0.468,
+    "short": 0.0
+   },
+   "13": {
+    "tries": 71,
+    "at_take_off": 0.986,
+    "over": 0.972,
+    "short": 0.014
+   },
+   "14": {
+    "tries": 66,
+    "at_take_off": 0.985,
+    "over": 0.939,
+    "short": 0.0
+   },
+   "26": {
+    "tries": 76,
+    "at_take_off": 0.934,
+    "over": 0.921,
+    "short": 0.0
+   }
+  },
+  "aerowalk": {
+   "1": {
+    "tries": 49,
+    "at_take_off": 0.939,
+    "over": 0.082,
+    "short": 0.796
+   },
+   "2": {
+    "tries": 53,
+    "at_take_off": 0.981,
+    "over": 0.528,
+    "short": 0.396
+   },
+   "3": {
+    "tries": 58,
+    "at_take_off": 0.914,
+    "over": 0.897,
+    "short": 0.0
+   },
+   "4": {
+    "tries": 57,
+    "at_take_off": 1.0,
+    "over": 0.0,
+    "short": 0.0
+   },
+   "5": {
+    "tries": 60,
+    "at_take_off": 0.95,
+    "over": 0.833,
+    "short": 0.117
+   },
+   "6": {
+    "tries": 56,
+    "at_take_off": 0.857,
+    "over": 0.679,
+    "short": 0.161
+   },
+   "7": {
+    "tries": 54,
+    "at_take_off": 0.981,
+    "over": 0.593,
+    "short": 0.389
+   },
+   "10": {
+    "tries": 53,
+    "at_take_off": 0.943,
+    "over": 0.736,
+    "short": 0.189
+   },
+   "16": {
+    "tries": 40,
+    "at_take_off": 0.125,
+    "over": 0.125,
+    "short": 0.0
+   },
+   "17": {
+    "tries": 64,
+    "at_take_off": 0.328,
+    "over": 0.297,
+    "short": 0.0
+   },
+   "18": {
+    "tries": 37,
+    "at_take_off": 1.0,
+    "over": 0.838,
+    "short": 0.054
+   },
+   "20": {
+    "tries": 72,
+    "at_take_off": 0.958,
+    "over": 0.806,
+    "short": 0.0
+   },
+   "21": {
+    "tries": 49,
+    "at_take_off": 0.959,
+    "over": 0.776,
+    "short": 0.143
+   },
+   "22": {
+    "tries": 56,
+    "at_take_off": 1.0,
+    "over": 0.607,
+    "short": 0.375
+   },
+   "23": {
+    "tries": 51,
+    "at_take_off": 0.941,
+    "over": 0.49,
+    "short": 0.333
+   }
+  },
+  "lostworld": {
+   "1": {
+    "tries": 37,
+    "at_take_off": 0.973,
+    "over": 0.892,
+    "short": 0.027
+   },
+   "2": {
+    "tries": 34,
+    "at_take_off": 0.971,
+    "over": 0.912,
+    "short": 0.0
+   },
+   "3": {
+    "tries": 25,
+    "at_take_off": 0.96,
+    "over": 0.84,
+    "short": 0.08
+   },
+   "6": {
+    "tries": 48,
+    "at_take_off": 0.938,
+    "over": 0.896,
+    "short": 0.0
+   },
+   "7": {
+    "tries": 41,
+    "at_take_off": 0.927,
+    "over": 0.805,
+    "short": 0.073
+   },
+   "9": {
+    "tries": 50,
+    "at_take_off": 0.82,
+    "over": 0.0,
+    "short": 0.22
+   },
+   "10": {
+    "tries": 41,
+    "at_take_off": 0.902,
+    "over": 0.854,
+    "short": 0.049
+   },
+   "11": {
+    "tries": 42,
+    "at_take_off": 0.952,
+    "over": 0.786,
+    "short": 0.119
+   },
+   "12": {
+    "tries": 40,
+    "at_take_off": 1.0,
+    "over": 0.4,
+    "short": 0.55
+   },
+   "14": {
+    "tries": 49,
+    "at_take_off": 0.98,
+    "over": 0.796,
+    "short": 0.102
+   },
+   "15": {
+    "tries": 40,
+    "at_take_off": 0.95,
+    "over": 0.85,
+    "short": 0.075
+   },
+   "16": {
+    "tries": 35,
+    "at_take_off": 0.943,
+    "over": 0.886,
+    "short": 0.0
+   },
+   "17": {
+    "tries": 41,
+    "at_take_off": 0.951,
+    "over": 0.707,
+    "short": 0.244
+   },
+   "18": {
+    "tries": 38,
+    "at_take_off": 0.868,
+    "over": 0.789,
+    "short": 0.026
+   },
+   "20": {
+    "tries": 39,
+    "at_take_off": 0.897,
+    "over": 0.667,
+    "short": 0.231
+   },
+   "21": {
+    "tries": 41,
+    "at_take_off": 0.927,
+    "over": 0.732,
+    "short": 0.146
+   },
+   "22": {
+    "tries": 44,
+    "at_take_off": 0.955,
+    "over": 0.841,
+    "short": 0.068
+   },
+   "23": {
+    "tries": 30,
+    "at_take_off": 0.9,
+    "over": 0.9,
+    "short": 0.0
+   },
+   "24": {
+    "tries": 43,
+    "at_take_off": 0.93,
+    "over": 0.814,
+    "short": 0.093
+   }
+  },
+  "sinister": {
+   "1": {
+    "tries": 38,
+    "at_take_off": 1.0,
+    "over": 0.737,
+    "short": 0.263
+   },
+   "2": {
+    "tries": 41,
+    "at_take_off": 0.805,
+    "over": 0.707,
+    "short": 0.049
+   },
+   "4": {
+    "tries": 40,
+    "at_take_off": 0.95,
+    "over": 0.85,
+    "short": 0.075
+   },
+   "7": {
+    "tries": 45,
+    "at_take_off": 0.889,
+    "over": 0.889,
+    "short": 0.0
+   },
+   "8": {
+    "tries": 41,
+    "at_take_off": 0.341,
+    "over": 0.049,
+    "short": 0.049
+   },
+   "10": {
+    "tries": 29,
+    "at_take_off": 0.931,
+    "over": 0.759,
+    "short": 0.103
+   },
+   "13": {
+    "tries": 41,
+    "at_take_off": 0.146,
+    "over": 0.146,
+    "short": 0.0
+   },
+   "14": {
+    "tries": 34,
+    "at_take_off": 0.941,
+    "over": 0.882,
+    "short": 0.059
+   },
+   "16": {
+    "tries": 52,
+    "at_take_off": 0.0,
+    "over": 0.0,
+    "short": 0.0
+   },
+   "17": {
+    "tries": 36,
+    "at_take_off": 0.778,
+    "over": 0.278,
+    "short": 0.5
+   },
+   "18": {
+    "tries": 44,
+    "at_take_off": 0.841,
+    "over": 0.614,
+    "short": 0.182
+   },
+   "19": {
+    "tries": 43,
+    "at_take_off": 0.907,
+    "over": 0.814,
+    "short": 0.023
+   },
+   "20": {
+    "tries": 39,
+    "at_take_off": 0.923,
+    "over": 0.821,
+    "short": 0.077
+   },
+   "21": {
+    "tries": 40,
+    "at_take_off": 0.25,
+    "over": 0.15,
+    "short": 0.1
+   },
+   "22": {
+    "tries": 44,
+    "at_take_off": 0.955,
+    "over": 0.955,
+    "short": 0.0
+   },
+   "24": {
+    "tries": 36,
+    "at_take_off": 0.944,
+    "over": 0.75,
+    "short": 0.167
+   },
+   "25": {
+    "tries": 41,
+    "at_take_off": 1.0,
+    "over": 0.732,
+    "short": 0.244
+   },
+   "26": {
+    "tries": 40,
+    "at_take_off": 0.0,
+    "over": 0.0,
+    "short": 0.0
+   },
+   "27": {
+    "tries": 35,
+    "at_take_off": 0.8,
+    "over": 0.457,
+    "short": 0.286
+   },
+   "28": {
+    "tries": 28,
+    "at_take_off": 0.321,
+    "over": 0.214,
+    "short": 0.071
+   },
+   "29": {
+    "tries": 46,
+    "at_take_off": 0.109,
+    "over": 0.0,
+    "short": 0.109
+   },
+   "30": {
+    "tries": 47,
+    "at_take_off": 0.915,
+    "over": 0.511,
+    "short": 0.404
+   }
+  },
+  "furiousheights": {
+   "2": {
+    "tries": 52,
+    "at_take_off": 1.0,
+    "over": 0.135,
+    "short": 0.212
+   },
+   "5": {
+    "tries": 44,
+    "at_take_off": 0.909,
+    "over": 0.886,
+    "short": 0.0
+   },
+   "6": {
+    "tries": 47,
+    "at_take_off": 0.851,
+    "over": 0.106,
+    "short": 0.681
+   },
+   "7": {
+    "tries": 45,
+    "at_take_off": 0.933,
+    "over": 0.044,
+    "short": 0.889
+   },
+   "8": {
+    "tries": 32,
+    "at_take_off": 0.75,
+    "over": 0.562,
+    "short": 0.188
+   },
+   "11": {
+    "tries": 41,
+    "at_take_off": 0.902,
+    "over": 0.732,
+    "short": 0.146
+   },
+   "14": {
+    "tries": 47,
+    "at_take_off": 0.936,
+    "over": 0.83,
+    "short": 0.085
+   },
+   "16": {
+    "tries": 48,
+    "at_take_off": 1.0,
+    "over": 0.958,
+    "short": 0.021
+   },
+   "18": {
+    "tries": 47,
+    "at_take_off": 0.979,
+    "over": 0.872,
+    "short": 0.085
+   },
+   "19": {
+    "tries": 49,
+    "at_take_off": 0.673,
+    "over": 0.531,
+    "short": 0.143
+   },
+   "20": {
+    "tries": 42,
+    "at_take_off": 0.0,
+    "over": 0.0,
+    "short": 0.0
+   },
+   "21": {
+    "tries": 37,
+    "at_take_off": 0.892,
+    "over": 0.622,
+    "short": 0.216
+   },
+   "22": {
+    "tries": 34,
+    "at_take_off": 1.0,
+    "over": 0.941,
+    "short": 0.0
+   },
+   "23": {
+    "tries": 53,
+    "at_take_off": 0.981,
+    "over": 0.755,
+    "short": 0.17
+   },
+   "24": {
+    "tries": 56,
+    "at_take_off": 0.875,
+    "over": 0.679,
+    "short": 0.143
+   },
+   "25": {
+    "tries": 39,
+    "at_take_off": 0.949,
+    "over": 0.256,
+    "short": 0.692
+   },
+   "26": {
+    "tries": 55,
+    "at_take_off": 0.927,
+    "over": 0.382,
+    "short": 0.527
+   },
+   "27": {
+    "tries": 41,
+    "at_take_off": 0.902,
+    "over": 0.049,
+    "short": 0.366
+   },
+   "28": {
+    "tries": 51,
+    "at_take_off": 0.863,
+    "over": 0.784,
+    "short": 0.078
+   },
+   "29": {
+    "tries": 61,
+    "at_take_off": 0.885,
+    "over": 0.082,
+    "short": 0.803
+   }
+  },
+  "battleforged": {
+   "1": {
+    "tries": 140,
+    "at_take_off": 0.964,
+    "over": 0.85,
+    "short": 0.093
+   },
+   "2": {
+    "tries": 135,
+    "at_take_off": 0.948,
+    "over": 0.526,
+    "short": 0.407
+   },
+   "3": {
+    "tries": 155,
+    "at_take_off": 0.877,
+    "over": 0.381,
+    "short": 0.458
+   },
+   "5": {
+    "tries": 154,
+    "at_take_off": 0.942,
+    "over": 0.799,
+    "short": 0.091
+   },
+   "6": {
+    "tries": 122,
+    "at_take_off": 0.057,
+    "over": 0.033,
+    "short": 0.025
+   }
+  },
+  "campgrounds": {
+   "1": {
+    "tries": 54,
+    "at_take_off": 0.926,
+    "over": 0.926,
+    "short": 0.0
+   },
+   "3": {
+    "tries": 59,
+    "at_take_off": 0.983,
+    "over": 0.847,
+    "short": 0.085
+   },
+   "4": {
+    "tries": 51,
+    "at_take_off": 0.863,
+    "over": 0.137,
+    "short": 0.725
+   },
+   "5": {
+    "tries": 52,
+    "at_take_off": 0.269,
+    "over": 0.019,
+    "short": 0.25
+   },
+   "6": {
+    "tries": 66,
+    "at_take_off": 0.985,
+    "over": 0.167,
+    "short": 0.803
+   },
+   "9": {
+    "tries": 62,
+    "at_take_off": 0.952,
+    "over": 0.0,
+    "short": 0.887
+   },
+   "10": {
+    "tries": 59,
+    "at_take_off": 0.746,
+    "over": 0.017,
+    "short": 0.729
+   },
+   "13": {
+    "tries": 64,
+    "at_take_off": 0.438,
+    "over": 0.359,
+    "short": 0.062
+   },
+   "14": {
+    "tries": 70,
+    "at_take_off": 0.757,
+    "over": 0.1,
+    "short": 0.657
+   },
+   "15": {
+    "tries": 51,
+    "at_take_off": 1.0,
+    "over": 0.647,
+    "short": 0.333
+   },
+   "17": {
+    "tries": 56,
+    "at_take_off": 0.018,
+    "over": 0.0,
+    "short": 0.018
+   },
+   "18": {
+    "tries": 52,
+    "at_take_off": 0.981,
+    "over": 0.769,
+    "short": 0.212
+   }
+  },
+  "hektik": {
+   "1": {
+    "tries": 74,
+    "at_take_off": 0.973,
+    "over": 0.838,
+    "short": 0.122
+   },
+   "2": {
+    "tries": 61,
+    "at_take_off": 0.016,
+    "over": 0.0,
+    "short": 0.016
+   },
+   "3": {
+    "tries": 90,
+    "at_take_off": 0.967,
+    "over": 0.533,
+    "short": 0.389
+   },
+   "4": {
+    "tries": 63,
+    "at_take_off": 0.952,
+    "over": 0.54,
+    "short": 0.413
+   },
+   "5": {
+    "tries": 73,
+    "at_take_off": 0.89,
+    "over": 0.89,
+    "short": 0.0
+   },
+   "7": {
+    "tries": 60,
+    "at_take_off": 0.917,
+    "over": 0.583,
+    "short": 0.317
+   },
+   "8": {
+    "tries": 71,
+    "at_take_off": 0.07,
+    "over": 0.0,
+    "short": 0.0
+   },
+   "9": {
+    "tries": 75,
+    "at_take_off": 0.987,
+    "over": 0.827,
+    "short": 0.16
+   },
+   "10": {
+    "tries": 79,
+    "at_take_off": 0.785,
+    "over": 0.747,
+    "short": 0.025
+   },
+   "11": {
+    "tries": 67,
+    "at_take_off": 0.418,
+    "over": 0.388,
+    "short": 0.03
+   },
+   "12": {
+    "tries": 70,
+    "at_take_off": 0.943,
+    "over": 0.886,
+    "short": 0.014
+   },
+   "13": {
+    "tries": 68,
+    "at_take_off": 0.956,
+    "over": 0.912,
+    "short": 0.015
+   },
+   "14": {
+    "tries": 73,
+    "at_take_off": 1.0,
+    "over": 0.932,
+    "short": 0.055
+   },
+   "15": {
+    "tries": 82,
+    "at_take_off": 0.793,
+    "over": 0.122,
+    "short": 0.634
+   }
+  },
+  "toxicity": {
+   "1": {
+    "tries": 124,
+    "at_take_off": 0.952,
+    "over": 0.75,
+    "short": 0.185
+   },
+   "2": {
+    "tries": 133,
+    "at_take_off": 0.977,
+    "over": 0.955,
+    "short": 0.008
+   },
+   "3": {
+    "tries": 134,
+    "at_take_off": 0.888,
+    "over": 0.799,
+    "short": 0.052
+   },
+   "4": {
+    "tries": 133,
+    "at_take_off": 0.88,
+    "over": 0.541,
+    "short": 0.301
+   },
+   "6": {
+    "tries": 127,
+    "at_take_off": 0.386,
+    "over": 0.0,
+    "short": 0.378
+   },
+   "7": {
+    "tries": 114,
+    "at_take_off": 1.0,
+    "over": 0.035,
+    "short": 0.965
+   },
+   "8": {
+    "tries": 136,
+    "at_take_off": 0.904,
+    "over": 0.743,
+    "short": 0.147
+   },
+   "10": {
+    "tries": 145,
+    "at_take_off": 0.0,
+    "over": 0.0,
+    "short": 0.0
+   }
+  },
+  "cure": {
+   "1": {
+    "tries": 74,
+    "at_take_off": 0.743,
+    "over": 0.5,
+    "short": 0.23
+   },
+   "2": {
+    "tries": 74,
+    "at_take_off": 0.986,
+    "over": 0.041,
+    "short": 0.27
+   },
+   "3": {
+    "tries": 84,
+    "at_take_off": 0.929,
+    "over": 0.524,
+    "short": 0.393
+   },
+   "4": {
+    "tries": 93,
+    "at_take_off": 1.0,
+    "over": 0.28,
+    "short": 0.667
+   },
+   "5": {
+    "tries": 85,
+    "at_take_off": 0.918,
+    "over": 0.835,
+    "short": 0.024
+   },
+   "7": {
+    "tries": 88,
+    "at_take_off": 0.773,
+    "over": 0.602,
+    "short": 0.148
+   },
+   "8": {
+    "tries": 96,
+    "at_take_off": 1.0,
+    "over": 0.042,
+    "short": 0.938
+   },
+   "9": {
+    "tries": 74,
+    "at_take_off": 0.932,
+    "over": 0.676,
+    "short": 0.135
+   },
+   "12": {
+    "tries": 76,
+    "at_take_off": 0.829,
+    "over": 0.171,
+    "short": 0.658
+   },
+   "13": {
+    "tries": 90,
+    "at_take_off": 0.967,
+    "over": 0.922,
+    "short": 0.011
+   },
+   "14": {
+    "tries": 73,
+    "at_take_off": 0.945,
+    "over": 0.644,
+    "short": 0.274
+   }
+  }
+ }
+}

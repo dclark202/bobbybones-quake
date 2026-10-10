@@ -47,7 +47,7 @@ of 10:57 from before the strafe-jumping teacher (`policy_end_v14.pt`). Against v
 were stopped in the afternoon: the first went on losing to v13, the second changed nothing.
 
 **`duel_gru_v15` is audited and waits for the owner's go** ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md); the log of
-2026-10-10 15:30): from v14's end; jump runs on the pros' jumps (144 in use on ten maps, tries at 108) with a teacher
+2026-10-10 15:30): from v14's end; jump runs on the pros' jumps (144 in use on ten maps, tries at 137) with a teacher
 trained under his finger limits and kept off the maps where its pupil fails (Toxicity; Lost World's item runs);
 movement-only practice on Campgrounds, Hektik, Toxicity and Cure; enemy projectiles as a player sees them; grenades as
 measured in the game; the lobber, the watcher and the holder among his opponents; lives that begin with grenades or

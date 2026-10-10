@@ -11,6 +11,8 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - **Fair**: human physics (125 fps), human senses (sight with line of sight, sound), mouse-like aim with
   human limits (reaction, flick speed, hand noise). Never miss on purpose to hit a number. Enemy projectiles too (owner,
   2026-10-10): "he should only know what's in view or what he can hear"; suspecting a rocket is for him to learn.
+- Jumps (owner, 2026-10-10): "the jumps don't need to be 'exact' for repeating, he should be taught the general path,
+  there's many ways to execute them": pay and labels are for the way, the pros' take-off and landing places only count.
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.
@@ -124,7 +126,8 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
   docs/INPUTS_v14.csv`). Switches, all off by default (with all off the simulator is v14's in fixed runs): `JUMPS` +
   `JUMP_RUN_P` (jump runs on the pros' jumps: `sim/jump_links.py`, the lists `sim/pro_gaps/<map>.json` from
   `tools/pro_gaps.py`, pictures by `tools/draw_gaps.py` in the system Python; a `"use": true/false` on an entry is the
-  owner's), `JUMP_ALL` (tries at the jumps on no item's way: a second set of his ways in which that jump is free),
+  owner's), `JUMP_ALL` (tries at the jumps on no item's way: his ways made to take the jump, or to its landing first; the teacher is
+  silent at the jumps named in `sim/jump_labels.json`, written by `tools/jump_labels.py`: where its own way goes round),
   `JUMP_OPEN` (a `PLAY_VAR`: jumps his ways take in games), `PROJ_SEE` (a `PLAY_VAR`: enemy projectiles as a player sees
   them), `GL_QL` (a grenade's bounce and splash as measured in the game), `TRICKS` / `TRICK_P` (the holder, the lobber,
   the watcher among the scripted opponents), `START_GUN_P`, `TEACH_BEST`. Trainer: `--teacher-skip` (maps without the
