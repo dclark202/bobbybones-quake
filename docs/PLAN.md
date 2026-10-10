@@ -26,7 +26,7 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 | What | Where it stands |
 |---|---|
 | On the public server | `duel_gru_v13` ([runs/REPORT_v13.md](runs/REPORT_v13.md)): free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard since 2026-10-09. Against people so far: 19 frags made, 130 taken (three players) |
-| In training | `duel_gru_v14`, third start, 2026-10-10 08:06 to 19:00 at the latest ([runs/MANIFEST_v14.md](runs/MANIFEST_v14.md)). The second start lost to v13 head to head (36% of the frags) and was stopped ([runs/MIDRUN_v14.md](runs/MIDRUN_v14.md)) |
+| In training | nothing for the main line: `duel_gru_v14` ended 2026-10-10 11:52 on its save of 10:57 ([runs/MIDRUN_v14c.md](runs/MIDRUN_v14c.md)); `duel_gru_v15` is being prepared ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md)). Two side arms of v14 at half size (the teacher left on; rockets) |
 | The checks of a run | every save plays the last best network head to head (the owner's standing rule, 2026-10-10) and 32 ten-minute duels a map against the Nightmare stand-in; real games against the game's Nightmare bot before and after a run; play tests |
 | The simulator | movement, nine weapons, items, sounds, the human limits on hands, eyes and aim; set right against the game's maps on 2026-10-09 (twelve mismatches). Its targets are easier to hit with a rail than people are (B-199) |
 | Items and weapons (v13) | time without a big weapon 18%, red armor 0.63 a player-minute; 70% of the frags against the stand-in on the six maps; the game's Nightmare bot beaten on Blood Run (14-4, 11-6, 10-3) and Lost World (8-5, 6-4, 9-5) |
@@ -39,13 +39,12 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 
 ## Now
 
-**The third start of `duel_gru_v14` is training** since 2026-10-10 08:06 (owner's go at 07:46; RESULTS 08:15; the list in
-[MANIFEST_v14.md](runs/MANIFEST_v14.md), section 0), to 19:00 at the latest, with a mid-run report around noon: from v13 again, v13
-kept in the league and played first in every check (under 45% of the frags against it twice in a row: stop), weapons
-as v13 had them, the strafe-jumping teacher switched on after two clean checks. The second start is kept as
-`duel_gru_v14_try2`. The first 80 minutes lost Aerowalk to v13 12% to 88% (the item rule named a red armor only a jump
-reaches; fixed at 09:32, level since); the teacher is on since 10:57 with grenade and plasma shots free. Mid-run report:
-[runs/MIDRUN_v14c.md](runs/MIDRUN_v14c.md).
+**`duel_gru_v14` is ended** (owner, 2026-10-10 11:51: "calling the run mixed in success"): its end network is the save
+of 10:57 from before the strafe-jumping teacher (`policy_end_v14.pt`): 77% of the frags against the stand-in on the six
+maps (v13: 70%), 60% on the four held out (49%), level with v13 head to head. With the teacher it then lost to v13 on all
+three maps of the check within an hour (44 to 45%). Report: [runs/MIDRUN_v14c.md](runs/MIDRUN_v14c.md); the log of
+2026-10-10 12:20. Two side arms of it run at half size while v15 is prepared (`duel_gru_v14_armT`: the teacher left on;
+`duel_gru_v14_armR`: rockets at a fifth of the price and rocket-only rounds); neither is v15's start.
 
 **`duel_gru_v15` is being prepared** on the branch `v15` (owner, 10:38: "Start on anything you can with preparing for v15
 now while v14 is running ... Ideally I would like v15 to start tonight"): jump runs on the pros' jumps with a teacher
@@ -159,6 +158,13 @@ The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)
 - (2026-10-10 10:38) v15 is jumps and grenades and plasma ("Definite yes to jumps and plasma/grenades"), with the shares of
   his rounds as proposed ("I agree with all of those changes": [runs/MANIFEST_v15.md](runs/MANIFEST_v15.md), section 1);
   attention "I really want, but it seems there needs to be more build out": the run after.
+- (2026-10-10 noon) v14 ends on its best save; v15 after "the next few hours auditing the new things", with a full
+  manifest, "later today or this evening". For projectiles he must "see all projectiles that he should be able to ...
+  within his field of vision", not "by wallhacks", "distinguish projectiles and understand their splash damage, timer
+  (grenades)", and be "*slightly* encouraged to use plasma and grenades. It should be ~5-10% max". The lobber's timing
+  and the grenade measurement are in v15. Rockets: "try parallel arms ... if nothing is obviously working we'll delay
+  it". Hektik's, Cure's and Toxicity's jumps are to be listed too ("it might contaminate the purity of the held out map,
+  but it's important that he understands how to move around these maps efficiently").
 - (2026-10-10) The priority list for the next models: strafe jumping and keeping speed; rockets; plasma and grenades
   (the shotgun less); then game awareness. Every plan addresses these and any odd behaviour seen in a run or in duels.
 

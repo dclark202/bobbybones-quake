@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-10](results/2026-10-10.md)
 
+- 12:20 — v14 ended on its save of 10:57; why the teacher failed (its hands are not his); what he saw of projectiles; grenades measured in the game
 - 11:15 — v14's third start: the second clean check, the teacher on at 10:57; the owner's go for v15 and what was built for it in a morning
 - 10:25 — Aerowalk is level with v13 again 41 minutes after the fix; how the pros reach the two red armors; the owner on jump training, grenades and plasma
 - 09:40 — The third start lost Aerowalk to v13 within 17 minutes: the item rule sent him for a red armor he cannot reach. Fixed (`RULE_WALK`), the run goes on
