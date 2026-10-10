@@ -5,7 +5,7 @@ entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B
 [PLAN.md](PLAN.md); log formats are in [LOGS.md](LOGS.md). Numbers are from local runs; raw data lives in
 the git-ignored `data/` folder (paths given so results can be re-checked).
 
-## 2026-10-09 20:50 — A friend of the owner's against three Bobbys; "fighting without ammo"; the leaderboard's first rows
+## 2026-10-09 20:35 — A friend of the owner's against three Bobbys; "fighting without ammo"; the leaderboard's first rows
 
 **The game** (session `20261010-011707_bloodrun_ffa`, copied to `data/public/sessions/`; Blood Run, free-for-all, a timed
 ten minutes, one person and three Bobbys, v13):
