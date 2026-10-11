@@ -1,0 +1,2229 @@
+{
+ "map": "lostworld",
+ "shots": {
+  "rockets": 66122,
+  "grenades": 9663,
+  "plasma": 34283
+ },
+ "weight": {
+  "rockets": 1.0,
+  "grenades": 1.0,
+  "plasma": 0.2
+ },
+ "at_own_feet": {
+  "shots": 16951,
+  "share": 13.3,
+  "under_units": 150.0,
+  "places": [
+   {
+    "pos": [
+     530,
+     38,
+     228
+    ],
+    "shots": {
+     "rockets": 2660,
+     "grenades": 0,
+     "plasma": 9
+    },
+    "share": 15.7,
+    "near": {
+     "item": "RA",
+     "units": 297,
+     "height": 208
+    }
+   },
+   {
+    "pos": [
+     459,
+     413,
+     228
+    ],
+    "shots": {
+     "rockets": 2520,
+     "grenades": 5,
+     "plasma": 7
+    },
+    "share": 14.9,
+    "near": {
+     "item": "RA",
+     "units": 328,
+     "height": 208
+    }
+   },
+   {
+    "pos": [
+     -340,
+     194,
+     228
+    ],
+    "shots": {
+     "rockets": 2332,
+     "grenades": 1,
+     "plasma": 23
+    },
+    "share": 13.9,
+    "near": {
+     "item": "YA2",
+     "units": 260,
+     "height": -173
+    }
+   },
+   {
+    "pos": [
+     1095,
+     -8,
+     285
+    ],
+    "shots": {
+     "rockets": 1974,
+     "grenades": 3,
+     "plasma": 345
+    },
+    "share": 13.7,
+    "near": {
+     "item": "MH",
+     "units": 22,
+     "height": 19
+    }
+   },
+   {
+    "pos": [
+     332,
+     127,
+     43
+    ],
+    "shots": {
+     "rockets": 1259,
+     "grenades": 2,
+     "plasma": 13
+    },
+    "share": 7.5,
+    "near": {
+     "item": "RA",
+     "units": 65,
+     "height": 23
+    }
+   },
+   {
+    "pos": [
+     604,
+     320,
+     45
+    ],
+    "shots": {
+     "rockets": 890,
+     "grenades": 5,
+     "plasma": 29
+    },
+    "share": 5.5,
+    "near": {
+     "item": "RA",
+     "units": 278,
+     "height": 25
+    }
+   },
+   {
+    "pos": [
+     270,
+     85,
+     -118
+    ],
+    "shots": {
+     "rockets": 492,
+     "grenades": 10,
+     "plasma": 10
+    },
+    "share": 3.0,
+    "near": {
+     "item": "RA",
+     "units": 192,
+     "height": -138
+    }
+   },
+   {
+    "pos": [
+     456,
+     -92,
+     40
+    ],
+    "shots": {
+     "rockets": 254,
+     "grenades": 0,
+     "plasma": 3
+    },
+    "share": 1.5,
+    "near": {
+     "item": "RA",
+     "units": 283,
+     "height": 20
+    }
+   }
+  ]
+ },
+ "radius": 128.0,
+ "in_places_share": 76.8,
+ "places": [
+  {
+   "id": 1,
+   "pos": [
+    30,
+    692,
+    471
+   ],
+   "radius": 128.0,
+   "share": 8.82,
+   "shots": {
+    "rockets": 5632,
+    "grenades": 1133,
+    "plasma": 2619
+   },
+   "near": {
+    "item": "YA2",
+    "units": 508,
+    "height": 70
+   },
+   "distance_median": 820,
+   "met_share": 20.9,
+   "hit_share": 12.2,
+   "fired_from": [
+    {
+     "pos": [
+      912,
+      260,
+      348
+     ],
+     "share": 13.8,
+     "near": {
+      "item": "YA",
+      "units": 29,
+      "height": 12
+     }
+    },
+    {
+     "pos": [
+      665,
+      293,
+      412
+     ],
+     "share": 19.9,
+     "near": {
+      "item": "YA",
+      "units": 285,
+      "height": 76
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 4344,
+    "sightings_10s": 4264,
+    "outcome": 0.098,
+    "frags_a_sighting": 0.231,
+    "deaths_a_sighting": 0.133,
+    "outcome_expected": 0.092,
+    "outcome_over_expected": 0.007,
+    "closing_speed": 25.1,
+    "push_share": 14.8,
+    "in_view_seconds": 3824.3,
+    "weapon_shares": {
+     "rockets": 47.0,
+     "lightning": 28.1,
+     "machine gun": 11.4,
+     "plasma": 11.2,
+     "shotgun": 1.4,
+     "gauntlet": 0.5
+    },
+    "firing_share": 51.4,
+    "fire_shares": {
+     "lightning": 40.6,
+     "rockets": 22.3,
+     "plasma": 18.4,
+     "machine gun": 18.1
+    },
+    "height": {
+     "higher": 16.4,
+     "level": 80.8,
+     "lower": 2.9
+    },
+    "distance_median": 666
+   }
+  },
+  {
+   "id": 2,
+   "pos": [
+    519,
+    641,
+    197
+   ],
+   "radius": 128.0,
+   "share": 7.44,
+   "shots": {
+    "rockets": 5229,
+    "grenades": 678,
+    "plasma": 1202
+   },
+   "near": {
+    "item": "RA",
+    "units": 519,
+    "height": 177
+   },
+   "distance_median": 595,
+   "met_share": 24.6,
+   "hit_share": 16.4,
+   "fired_from": [
+    {
+     "pos": [
+      111,
+      -119,
+      465
+     ],
+     "share": 25.6,
+     "near": {
+      "item": "RL",
+      "units": 87,
+      "height": 9
+     }
+    },
+    {
+     "pos": [
+      362,
+      317,
+      479
+     ],
+     "share": 10.6,
+     "near": {
+      "item": "RA",
+      "units": 480,
+      "height": 459
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2960,
+    "sightings_10s": 2892,
+    "outcome": 0.095,
+    "frags_a_sighting": 0.261,
+    "deaths_a_sighting": 0.166,
+    "outcome_expected": 0.081,
+    "outcome_over_expected": 0.014,
+    "closing_speed": -8.7,
+    "push_share": 9.9,
+    "in_view_seconds": 1717.9,
+    "weapon_shares": {
+     "rockets": 51.5,
+     "lightning": 21.6,
+     "shotgun": 11.4,
+     "plasma": 6.7,
+     "machine gun": 3.6,
+     "gauntlet": 3.4,
+     "grenades": 1.8
+    },
+    "firing_share": 40.7,
+    "fire_shares": {
+     "lightning": 42.0,
+     "rockets": 30.8,
+     "plasma": 13.5,
+     "machine gun": 6.3,
+     "shotgun": 6.0,
+     "grenades": 1.2
+    },
+    "height": {
+     "higher": 2.5,
+     "level": 72.7,
+     "lower": 24.8
+    },
+    "distance_median": 377
+   }
+  },
+  {
+   "id": 3,
+   "pos": [
+    102,
+    997,
+    456
+   ],
+   "radius": 128.0,
+   "share": 6.47,
+   "shots": {
+    "rockets": 4193,
+    "grenades": 414,
+    "plasma": 3693
+   },
+   "near": {
+    "item": "YA2",
+    "units": 773,
+    "height": 55
+   },
+   "distance_median": 1074,
+   "met_share": 13.4,
+   "hit_share": 9.0,
+   "fired_from": [
+    {
+     "pos": [
+      65,
+      -157,
+      469
+     ],
+     "share": 30.6,
+     "near": {
+      "item": "RL",
+      "units": 38,
+      "height": 13
+     }
+    },
+    {
+     "pos": [
+      62,
+      531,
+      478
+     ],
+     "share": 16.8,
+     "near": {
+      "item": "YA2",
+      "units": 461,
+      "height": 77
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2138,
+    "sightings_10s": 2097,
+    "outcome": 0.042,
+    "frags_a_sighting": 0.183,
+    "deaths_a_sighting": 0.141,
+    "outcome_expected": 0.039,
+    "outcome_over_expected": 0.003,
+    "closing_speed": 10.2,
+    "push_share": 12.3,
+    "in_view_seconds": 1757.2,
+    "weapon_shares": {
+     "rockets": 57.6,
+     "lightning": 14.4,
+     "plasma": 13.1,
+     "machine gun": 10.6,
+     "shotgun": 3.1,
+     "gauntlet": 0.7,
+     "grenades": 0.6
+    },
+    "firing_share": 46.6,
+    "fire_shares": {
+     "rockets": 32.6,
+     "lightning": 25.8,
+     "plasma": 23.4,
+     "machine gun": 16.1,
+     "shotgun": 1.8
+    },
+    "height": {
+     "higher": 4.9,
+     "level": 92.6,
+     "lower": 2.5
+    },
+    "distance_median": 413
+   }
+  },
+  {
+   "id": 4,
+   "pos": [
+    -379,
+    197,
+    199
+   ],
+   "radius": 128.0,
+   "share": 5.9,
+   "shots": {
+    "rockets": 3679,
+    "grenades": 740,
+    "plasma": 2288
+   },
+   "near": {
+    "item": "YA2",
+    "units": 276,
+    "height": -202
+   },
+   "distance_median": 1043,
+   "met_share": 9.4,
+   "hit_share": 6.9,
+   "fired_from": [
+    {
+     "pos": [
+      671,
+      295,
+      416
+     ],
+     "share": 13.8,
+     "near": {
+      "item": "YA",
+      "units": 281,
+      "height": 80
+     }
+    },
+    {
+     "pos": [
+      1045,
+      -27,
+      261
+     ],
+     "share": 10.0,
+     "near": {
+      "item": "MH",
+      "units": 45,
+      "height": -5
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1638,
+    "sightings_10s": 1601,
+    "outcome": 0.007,
+    "frags_a_sighting": 0.177,
+    "deaths_a_sighting": 0.17,
+    "outcome_expected": 0.041,
+    "outcome_over_expected": -0.034,
+    "closing_speed": 53.3,
+    "push_share": 24.4,
+    "in_view_seconds": 1490.2,
+    "weapon_shares": {
+     "rockets": 38.1,
+     "lightning": 23.0,
+     "machine gun": 21.5,
+     "plasma": 12.9,
+     "shotgun": 2.6,
+     "gauntlet": 1.6
+    },
+    "firing_share": 53.4,
+    "fire_shares": {
+     "lightning": 34.3,
+     "machine gun": 29.7,
+     "plasma": 19.2,
+     "rockets": 15.6,
+     "shotgun": 1.0
+    },
+    "height": {
+     "higher": 1.9,
+     "level": 66.6,
+     "lower": 31.4
+    },
+    "distance_median": 735
+   }
+  },
+  {
+   "id": 5,
+   "pos": [
+    754,
+    -215,
+    472
+   ],
+   "radius": 128.0,
+   "share": 5.09,
+   "shots": {
+    "rockets": 3604,
+    "grenades": 354,
+    "plasma": 1241
+   },
+   "near": {
+    "item": "MH",
+    "units": 440,
+    "height": 206
+   },
+   "distance_median": 799,
+   "met_share": 15.1,
+   "hit_share": 11.7,
+   "fired_from": [
+    {
+     "pos": [
+      -3,
+      745,
+      472
+     ],
+     "share": 9.1,
+     "near": {
+      "item": "YA2",
+      "units": 517,
+      "height": 71
+     }
+    },
+    {
+     "pos": [
+      627,
+      293,
+      424
+     ],
+     "share": 12.2,
+     "near": {
+      "item": "YA",
+      "units": 324,
+      "height": 88
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 3086,
+    "sightings_10s": 3041,
+    "outcome": 0.045,
+    "frags_a_sighting": 0.173,
+    "deaths_a_sighting": 0.128,
+    "outcome_expected": 0.038,
+    "outcome_over_expected": 0.008,
+    "closing_speed": 34.9,
+    "push_share": 13.0,
+    "in_view_seconds": 3004.9,
+    "weapon_shares": {
+     "rockets": 37.5,
+     "lightning": 28.2,
+     "machine gun": 16.0,
+     "plasma": 11.2,
+     "shotgun": 5.9,
+     "grenades": 0.8,
+     "gauntlet": 0.5
+    },
+    "firing_share": 55.2,
+    "fire_shares": {
+     "lightning": 41.4,
+     "machine gun": 23.8,
+     "plasma": 16.8,
+     "rockets": 15.6,
+     "shotgun": 2.2
+    },
+    "height": {
+     "higher": 20.8,
+     "level": 76.8,
+     "lower": 2.3
+    },
+    "distance_median": 710
+   }
+  },
+  {
+   "id": 6,
+   "pos": [
+    -56,
+    856,
+    466
+   ],
+   "radius": 128.0,
+   "share": 4.71,
+   "shots": {
+    "rockets": 2874,
+    "grenades": 234,
+    "plasma": 3923
+   },
+   "near": {
+    "item": "YA2",
+    "units": 568,
+    "height": 65
+   },
+   "distance_median": 1136,
+   "met_share": 23.3,
+   "hit_share": 10.8,
+   "fired_from": [
+    {
+     "pos": [
+      418,
+      -177,
+      471
+     ],
+     "share": 20.6,
+     "near": {
+      "item": "RL",
+      "units": 355,
+      "height": 15
+     }
+    },
+    {
+     "pos": [
+      630,
+      -140,
+      474
+     ],
+     "share": 22.1,
+     "near": {
+      "item": "YA",
+      "units": 513,
+      "height": 138
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2824,
+    "sightings_10s": 2775,
+    "outcome": -0.002,
+    "frags_a_sighting": 0.139,
+    "deaths_a_sighting": 0.142,
+    "outcome_expected": 0.071,
+    "outcome_over_expected": -0.073,
+    "closing_speed": -14.6,
+    "push_share": 10.5,
+    "in_view_seconds": 1824.8,
+    "weapon_shares": {
+     "rockets": 61.2,
+     "plasma": 14.6,
+     "lightning": 10.2,
+     "machine gun": 10.0,
+     "shotgun": 2.7,
+     "grenades": 0.7,
+     "gauntlet": 0.6
+    },
+    "firing_share": 45.9,
+    "fire_shares": {
+     "rockets": 37.1,
+     "plasma": 26.6,
+     "lightning": 17.9,
+     "machine gun": 16.4,
+     "shotgun": 1.5
+    },
+    "height": {
+     "higher": 4.8,
+     "level": 91.7,
+     "lower": 3.6
+    },
+    "distance_median": 392
+   }
+  },
+  {
+   "id": 7,
+   "pos": [
+    852,
+    40,
+    193
+   ],
+   "radius": 128.0,
+   "share": 4.65,
+   "shots": {
+    "rockets": 3176,
+    "grenades": 584,
+    "plasma": 414
+   },
+   "near": {
+    "item": "MH",
+    "units": 254,
+    "height": -73
+   },
+   "distance_median": 764,
+   "met_share": 20.1,
+   "hit_share": 17.0,
+   "fired_from": [
+    {
+     "pos": [
+      85,
+      -69,
+      466
+     ],
+     "share": 35.2,
+     "near": {
+      "item": "RL",
+      "units": 125,
+      "height": 10
+     }
+    },
+    {
+     "pos": [
+      870,
+      519,
+      225
+     ],
+     "share": 10.0,
+     "near": {
+      "item": "YA",
+      "units": 300,
+      "height": -111
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2412,
+    "sightings_10s": 2359,
+    "outcome": 0.107,
+    "frags_a_sighting": 0.235,
+    "deaths_a_sighting": 0.128,
+    "outcome_expected": 0.08,
+    "outcome_over_expected": 0.026,
+    "closing_speed": 16.8,
+    "push_share": 10.1,
+    "in_view_seconds": 3046.2,
+    "weapon_shares": {
+     "rockets": 55.3,
+     "lightning": 20.4,
+     "plasma": 8.6,
+     "shotgun": 8.2,
+     "machine gun": 6.3,
+     "gauntlet": 0.8,
+     "grenades": 0.6
+    },
+    "firing_share": 47.0,
+    "fire_shares": {
+     "lightning": 36.4,
+     "rockets": 31.5,
+     "plasma": 16.4,
+     "machine gun": 11.6,
+     "shotgun": 3.9
+    },
+    "height": {
+     "higher": 3.5,
+     "level": 83.2,
+     "lower": 13.3
+    },
+    "distance_median": 350
+   }
+  },
+  {
+   "id": 8,
+   "pos": [
+    929,
+    276,
+    326
+   ],
+   "radius": 128.0,
+   "share": 4.52,
+   "shots": {
+    "rockets": 2535,
+    "grenades": 787,
+    "plasma": 2075
+   },
+   "near": {
+    "item": "YA",
+    "units": 31,
+    "height": -10
+   },
+   "distance_median": 818,
+   "met_share": 21.9,
+   "hit_share": 14.0,
+   "fired_from": [
+    {
+     "pos": [
+      791,
+      1246,
+      446
+     ],
+     "share": 19.8,
+     "near": {
+      "item": "PG",
+      "units": 226,
+      "height": -18
+     }
+    },
+    {
+     "pos": [
+      858,
+      887,
+      354
+     ],
+     "share": 13.0,
+     "near": {
+      "item": "PG",
+      "units": 395,
+      "height": -110
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 3695,
+    "sightings_10s": 3641,
+    "outcome": 0.065,
+    "frags_a_sighting": 0.183,
+    "deaths_a_sighting": 0.119,
+    "outcome_expected": 0.07,
+    "outcome_over_expected": -0.006,
+    "closing_speed": 5.7,
+    "push_share": 8.1,
+    "in_view_seconds": 3631.3,
+    "weapon_shares": {
+     "rockets": 44.3,
+     "lightning": 31.0,
+     "plasma": 10.4,
+     "machine gun": 9.5,
+     "shotgun": 3.5,
+     "gauntlet": 0.7,
+     "grenades": 0.5
+    },
+    "firing_share": 52.1,
+    "fire_shares": {
+     "lightning": 50.0,
+     "rockets": 18.1,
+     "plasma": 16.6,
+     "machine gun": 13.2,
+     "shotgun": 1.9
+    },
+    "height": {
+     "higher": 2.2,
+     "level": 45.1,
+     "lower": 52.7
+    },
+    "distance_median": 606
+   }
+  },
+  {
+   "id": 9,
+   "pos": [
+    1133,
+    -2,
+    363
+   ],
+   "radius": 128.0,
+   "share": 3.73,
+   "shots": {
+    "rockets": 2726,
+    "grenades": 195,
+    "plasma": 798
+   },
+   "near": {
+    "item": "MH",
+    "units": 108,
+    "height": 97
+   },
+   "distance_median": 421,
+   "met_share": 13.9,
+   "hit_share": 18.5,
+   "fired_from": [
+    {
+     "pos": [
+      883,
+      -25,
+      228
+     ],
+     "share": 33.8,
+     "near": {
+      "item": "MH",
+      "units": 209,
+      "height": -38
+     }
+    },
+    {
+     "pos": [
+      1040,
+      124,
+      412
+     ],
+     "share": 11.6,
+     "near": {
+      "item": "YA",
+      "units": 179,
+      "height": 76
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1466,
+    "sightings_10s": 1425,
+    "outcome": 0.041,
+    "frags_a_sighting": 0.259,
+    "deaths_a_sighting": 0.218,
+    "outcome_expected": 0.037,
+    "outcome_over_expected": 0.004,
+    "closing_speed": 41.9,
+    "push_share": 15.0,
+    "in_view_seconds": 1285.6,
+    "weapon_shares": {
+     "rockets": 63.8,
+     "lightning": 11.2,
+     "shotgun": 9.0,
+     "plasma": 7.2,
+     "machine gun": 7.2,
+     "gauntlet": 0.9,
+     "grenades": 0.7
+    },
+    "firing_share": 37.6,
+    "fire_shares": {
+     "rockets": 38.3,
+     "lightning": 25.7,
+     "plasma": 16.6,
+     "machine gun": 14.6,
+     "shotgun": 4.4
+    },
+    "height": {
+     "higher": 68.2,
+     "level": 25.7,
+     "lower": 6.1
+    },
+    "distance_median": 378
+   }
+  },
+  {
+   "id": 10,
+   "pos": [
+    368,
+    179,
+    4
+   ],
+   "radius": 128.0,
+   "share": 3.24,
+   "shots": {
+    "rockets": 2580,
+    "grenades": 62,
+    "plasma": 172
+   },
+   "near": {
+    "item": "RA",
+    "units": 16,
+    "height": -16
+   },
+   "distance_median": 565,
+   "met_share": 43.3,
+   "hit_share": 23.2,
+   "fired_from": [
+    {
+     "pos": [
+      176,
+      -97,
+      465
+     ],
+     "share": 54.3,
+     "near": {
+      "item": "RL",
+      "units": 147,
+      "height": 9
+     }
+    },
+    {
+     "pos": [
+      357,
+      -17,
+      220
+     ],
+     "share": 8.1,
+     "near": {
+      "item": "RA",
+      "units": 278,
+      "height": 200
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2058,
+    "sightings_10s": 2001,
+    "outcome": 0.023,
+    "frags_a_sighting": 0.16,
+    "deaths_a_sighting": 0.137,
+    "outcome_expected": 0.064,
+    "outcome_over_expected": -0.04,
+    "closing_speed": -48.8,
+    "push_share": 0.8,
+    "in_view_seconds": 1502.8,
+    "weapon_shares": {
+     "rockets": 69.7,
+     "lightning": 14.8,
+     "shotgun": 6.5,
+     "machine gun": 3.6,
+     "plasma": 3.3,
+     "gauntlet": 1.4,
+     "grenades": 0.6
+    },
+    "firing_share": 36.9,
+    "fire_shares": {
+     "rockets": 49.3,
+     "lightning": 32.6,
+     "plasma": 7.1,
+     "machine gun": 5.9,
+     "shotgun": 4.7
+    },
+    "height": {
+     "higher": 11.7,
+     "level": 39.9,
+     "lower": 48.4
+    },
+    "distance_median": 298
+   }
+  },
+  {
+   "id": 11,
+   "pos": [
+    633,
+    -9,
+    203
+   ],
+   "radius": 128.0,
+   "share": 3.09,
+   "shots": {
+    "rockets": 2336,
+    "grenades": 145,
+    "plasma": 382
+   },
+   "near": {
+    "item": "RA",
+    "units": 371,
+    "height": 183
+   },
+   "distance_median": 479,
+   "met_share": 23.4,
+   "hit_share": 17.1,
+   "fired_from": [
+    {
+     "pos": [
+      948,
+      311,
+      217
+     ],
+     "share": 17.9,
+     "near": {
+      "item": "YA",
+      "units": 135,
+      "height": -119
+     }
+    },
+    {
+     "pos": [
+      900,
+      126,
+      220
+     ],
+     "share": 8.0,
+     "near": {
+      "item": "YA",
+      "units": 173,
+      "height": -116
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2988,
+    "sightings_10s": 2926,
+    "outcome": 0.13,
+    "frags_a_sighting": 0.248,
+    "deaths_a_sighting": 0.119,
+    "outcome_expected": 0.102,
+    "outcome_over_expected": 0.028,
+    "closing_speed": 1.7,
+    "push_share": 6.6,
+    "in_view_seconds": 3242.5,
+    "weapon_shares": {
+     "rockets": 49.2,
+     "lightning": 38.2,
+     "shotgun": 4.7,
+     "plasma": 4.5,
+     "machine gun": 2.5,
+     "grenades": 0.5
+    },
+    "firing_share": 51.8,
+    "fire_shares": {
+     "lightning": 64.2,
+     "rockets": 22.4,
+     "plasma": 7.2,
+     "machine gun": 3.9,
+     "shotgun": 2.2
+    },
+    "height": {
+     "higher": 1.0,
+     "level": 60.7,
+     "lower": 38.3
+    },
+    "distance_median": 491
+   }
+  },
+  {
+   "id": 12,
+   "pos": [
+    -163,
+    174,
+    224
+   ],
+   "radius": 128.0,
+   "share": 2.72,
+   "shots": {
+    "rockets": 1960,
+    "grenades": 186,
+    "plasma": 511
+   },
+   "near": {
+    "item": "YA2",
+    "units": 344,
+    "height": -177
+   },
+   "distance_median": 627,
+   "met_share": 13.0,
+   "hit_share": 8.1,
+   "fired_from": [
+    {
+     "pos": [
+      363,
+      131,
+      29
+     ],
+     "share": 21.3,
+     "near": {
+      "item": "RA",
+      "units": 46,
+      "height": 9
+     }
+    },
+    {
+     "pos": [
+      -10,
+      -57,
+      465
+     ],
+     "share": 11.4,
+     "near": {
+      "item": "RL",
+      "units": 155,
+      "height": 9
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1627,
+    "sightings_10s": 1584,
+    "outcome": 0.023,
+    "frags_a_sighting": 0.187,
+    "deaths_a_sighting": 0.164,
+    "outcome_expected": 0.057,
+    "outcome_over_expected": -0.033,
+    "closing_speed": -5.7,
+    "push_share": 10.6,
+    "in_view_seconds": 2441.6,
+    "weapon_shares": {
+     "rockets": 42.1,
+     "lightning": 32.5,
+     "machine gun": 13.5,
+     "plasma": 8.7,
+     "shotgun": 1.9,
+     "gauntlet": 0.8,
+     "grenades": 0.5
+    },
+    "firing_share": 52.2,
+    "fire_shares": {
+     "lightning": 50.1,
+     "machine gun": 20.7,
+     "rockets": 15.0,
+     "plasma": 13.4,
+     "shotgun": 0.7
+    },
+    "height": {
+     "higher": 5.6,
+     "level": 49.0,
+     "lower": 45.5
+    },
+    "distance_median": 707
+   }
+  },
+  {
+   "id": 13,
+   "pos": [
+    734,
+    332,
+    398
+   ],
+   "radius": 128.0,
+   "share": 2.45,
+   "shots": {
+    "rockets": 1760,
+    "grenades": 89,
+    "plasma": 863
+   },
+   "near": {
+    "item": "YA",
+    "units": 228,
+    "height": 62
+   },
+   "distance_median": 560,
+   "met_share": 26.3,
+   "hit_share": 12.3,
+   "fired_from": [
+    {
+     "pos": [
+      640,
+      -156,
+      473
+     ],
+     "share": 26.0,
+     "near": {
+      "item": "MH",
+      "units": 513,
+      "height": 207
+     }
+    },
+    {
+     "pos": [
+      245,
+      -172,
+      473
+     ],
+     "share": 9.1,
+     "near": {
+      "item": "RL",
+      "units": 182,
+      "height": 17
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 3501,
+    "sightings_10s": 3441,
+    "outcome": 0.144,
+    "frags_a_sighting": 0.26,
+    "deaths_a_sighting": 0.115,
+    "outcome_expected": 0.087,
+    "outcome_over_expected": 0.058,
+    "closing_speed": 19.1,
+    "push_share": 12.3,
+    "in_view_seconds": 3834.0,
+    "weapon_shares": {
+     "lightning": 42.4,
+     "rockets": 34.4,
+     "machine gun": 12.5,
+     "plasma": 6.8,
+     "shotgun": 2.5,
+     "grenades": 0.7,
+     "gauntlet": 0.6
+    },
+    "firing_share": 62.1,
+    "fire_shares": {
+     "lightning": 60.8,
+     "machine gun": 17.5,
+     "rockets": 11.9,
+     "plasma": 8.7,
+     "shotgun": 1.0
+    },
+    "height": {
+     "higher": 25.2,
+     "level": 15.9,
+     "lower": 58.9
+    },
+    "distance_median": 601
+   }
+  },
+  {
+   "id": 14,
+   "pos": [
+    777,
+    1282,
+    378
+   ],
+   "radius": 128.0,
+   "share": 2.06,
+   "shots": {
+    "rockets": 1622,
+    "grenades": 1,
+    "plasma": 383
+   },
+   "near": {
+    "item": "PG",
+    "units": 259,
+    "height": -86
+   },
+   "distance_median": 930,
+   "met_share": 13.8,
+   "hit_share": 9.0,
+   "fired_from": [
+    {
+     "pos": [
+      926,
+      303,
+      345
+     ],
+     "share": 56.3,
+     "near": {
+      "item": "YA",
+      "units": 57,
+      "height": 9
+     }
+    },
+    {
+     "pos": [
+      897,
+      514,
+      352
+     ],
+     "share": 19.0,
+     "near": {
+      "item": "YA",
+      "units": 270,
+      "height": 16
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1368,
+    "sightings_10s": 1327,
+    "outcome": 0.008,
+    "frags_a_sighting": 0.153,
+    "deaths_a_sighting": 0.145,
+    "outcome_expected": 0.046,
+    "outcome_over_expected": -0.038,
+    "closing_speed": 52.2,
+    "push_share": 15.9,
+    "in_view_seconds": 906.9,
+    "weapon_shares": {
+     "rockets": 39.7,
+     "lightning": 30.9,
+     "plasma": 14.6,
+     "shotgun": 6.8,
+     "machine gun": 5.9,
+     "grenades": 1.1,
+     "gauntlet": 0.9
+    },
+    "firing_share": 52.7,
+    "fire_shares": {
+     "lightning": 48.3,
+     "plasma": 22.5,
+     "rockets": 20.0,
+     "machine gun": 5.8,
+     "shotgun": 2.9
+    },
+    "height": {
+     "higher": 48.5,
+     "level": 29.4,
+     "lower": 22.1
+    },
+    "distance_median": 460
+   }
+  },
+  {
+   "id": 15,
+   "pos": [
+    -386,
+    734,
+    452
+   ],
+   "radius": 128.0,
+   "share": 1.75,
+   "shots": {
+    "rockets": 1243,
+    "grenades": 150,
+    "plasma": 271
+   },
+   "near": {
+    "item": "YA2",
+    "units": 353,
+    "height": 51
+   },
+   "distance_median": 483,
+   "met_share": 11.7,
+   "hit_share": 12.6,
+   "fired_from": [
+    {
+     "pos": [
+      57,
+      792,
+      482
+     ],
+     "share": 70.0,
+     "near": {
+      "item": "YA2",
+      "units": 594,
+      "height": 81
+     }
+    },
+    {
+     "pos": [
+      269,
+      970,
+      477
+     ],
+     "share": 16.3,
+     "near": {
+      "item": "PG",
+      "units": 791,
+      "height": 13
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1478,
+    "sightings_10s": 1448,
+    "outcome": 0.041,
+    "frags_a_sighting": 0.234,
+    "deaths_a_sighting": 0.193,
+    "outcome_expected": 0.083,
+    "outcome_over_expected": -0.041,
+    "closing_speed": -6.8,
+    "push_share": 9.6,
+    "in_view_seconds": 1361.2,
+    "weapon_shares": {
+     "rockets": 54.7,
+     "lightning": 24.8,
+     "plasma": 11.6,
+     "shotgun": 3.8,
+     "machine gun": 3.5,
+     "gauntlet": 1.0,
+     "grenades": 0.6
+    },
+    "firing_share": 50.4,
+    "fire_shares": {
+     "lightning": 45.3,
+     "rockets": 29.7,
+     "plasma": 20.1,
+     "machine gun": 2.9,
+     "shotgun": 1.7
+    },
+    "height": {
+     "higher": 36.7,
+     "level": 60.2,
+     "lower": 3.1
+    },
+    "distance_median": 332
+   }
+  },
+  {
+   "id": 16,
+   "pos": [
+    974,
+    445,
+    330
+   ],
+   "radius": 128.0,
+   "share": 1.63,
+   "shots": {
+    "rockets": 1021,
+    "grenades": 165,
+    "plasma": 794
+   },
+   "near": {
+    "item": "YA",
+    "units": 201,
+    "height": -6
+   },
+   "distance_median": 974,
+   "met_share": 17.4,
+   "hit_share": 10.9,
+   "fired_from": [
+    {
+     "pos": [
+      630,
+      244,
+      418
+     ],
+     "share": 23.0,
+     "near": {
+      "item": "YA",
+      "units": 317,
+      "height": 82
+     }
+    },
+    {
+     "pos": [
+      83,
+      -64,
+      474
+     ],
+     "share": 26.2,
+     "near": {
+      "item": "RL",
+      "units": 130,
+      "height": 18
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1823,
+    "sightings_10s": 1789,
+    "outcome": 0.007,
+    "frags_a_sighting": 0.169,
+    "deaths_a_sighting": 0.162,
+    "outcome_expected": 0.009,
+    "outcome_over_expected": -0.001,
+    "closing_speed": -0.9,
+    "push_share": 6.7,
+    "in_view_seconds": 1602.3,
+    "weapon_shares": {
+     "rockets": 41.6,
+     "lightning": 34.0,
+     "plasma": 11.4,
+     "machine gun": 8.6,
+     "shotgun": 3.2,
+     "gauntlet": 0.8
+    },
+    "firing_share": 56.2,
+    "fire_shares": {
+     "lightning": 52.4,
+     "rockets": 18.8,
+     "plasma": 17.0,
+     "machine gun": 10.3,
+     "shotgun": 1.4
+    },
+    "height": {
+     "higher": 2.3,
+     "level": 52.5,
+     "lower": 45.2
+    },
+    "distance_median": 473
+   }
+  },
+  {
+   "id": 17,
+   "pos": [
+    428,
+    51,
+    189
+   ],
+   "radius": 128.0,
+   "share": 1.46,
+   "shots": {
+    "rockets": 1077,
+    "grenades": 94,
+    "plasma": 178
+   },
+   "near": {
+    "item": "RA",
+    "units": 219,
+    "height": 169
+   },
+   "distance_median": 520,
+   "met_share": 26.4,
+   "hit_share": 12.4,
+   "fired_from": [
+    {
+     "pos": [
+      1056,
+      -19,
+      264
+     ],
+     "share": 45.8,
+     "near": {
+      "item": "MH",
+      "units": 32,
+      "height": -2
+     }
+    },
+    {
+     "pos": [
+      890,
+      51,
+      224
+     ],
+     "share": 18.1,
+     "near": {
+      "item": "MH",
+      "units": 213,
+      "height": -42
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2121,
+    "sightings_10s": 2086,
+    "outcome": 0.11,
+    "frags_a_sighting": 0.228,
+    "deaths_a_sighting": 0.118,
+    "outcome_expected": 0.077,
+    "outcome_over_expected": 0.034,
+    "closing_speed": -18.0,
+    "push_share": 5.0,
+    "in_view_seconds": 3043.0,
+    "weapon_shares": {
+     "rockets": 46.8,
+     "lightning": 41.9,
+     "shotgun": 4.8,
+     "plasma": 3.1,
+     "machine gun": 2.3,
+     "grenades": 0.7
+    },
+    "firing_share": 56.0,
+    "fire_shares": {
+     "lightning": 67.5,
+     "rockets": 22.2,
+     "plasma": 4.9,
+     "machine gun": 3.4,
+     "shotgun": 1.8
+    },
+    "height": {
+     "higher": 10.1,
+     "level": 55.9,
+     "lower": 34.0
+    },
+    "distance_median": 458
+   }
+  },
+  {
+   "id": 18,
+   "pos": [
+    924,
+    -172,
+    456
+   ],
+   "radius": 128.0,
+   "share": 1.4,
+   "shots": {
+    "rockets": 783,
+    "grenades": 214,
+    "plasma": 781
+   },
+   "near": {
+    "item": "MH",
+    "units": 295,
+    "height": 190
+   },
+   "distance_median": 880,
+   "met_share": 13.1,
+   "hit_share": 7.9,
+   "fired_from": [
+    {
+     "pos": [
+      76,
+      -166,
+      468
+     ],
+     "share": 40.0,
+     "near": {
+      "item": "RL",
+      "units": 31,
+      "height": 12
+     }
+    },
+    {
+     "pos": [
+      284,
+      -190,
+      478
+     ],
+     "share": 15.2,
+     "near": {
+      "item": "RL",
+      "units": 221,
+      "height": 22
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 769,
+    "sightings_10s": 752,
+    "outcome": 0.1,
+    "frags_a_sighting": 0.323,
+    "deaths_a_sighting": 0.223,
+    "outcome_expected": 0.05,
+    "outcome_over_expected": 0.05,
+    "closing_speed": 14.1,
+    "push_share": 8.6,
+    "in_view_seconds": 674.8,
+    "weapon_shares": {
+     "rockets": 54.3,
+     "lightning": 14.9,
+     "machine gun": 12.3,
+     "shotgun": 8.8,
+     "plasma": 8.2,
+     "grenades": 0.8,
+     "gauntlet": 0.5
+    },
+    "firing_share": 46.4,
+    "fire_shares": {
+     "rockets": 31.9,
+     "lightning": 27.5,
+     "machine gun": 21.2,
+     "plasma": 14.8,
+     "shotgun": 4.1
+    },
+    "height": {
+     "higher": 15.2,
+     "level": 82.0,
+     "lower": 2.9
+    },
+    "distance_median": 334
+   }
+  },
+  {
+   "id": 19,
+   "pos": [
+    1019,
+    -51,
+    228
+   ],
+   "radius": 128.0,
+   "share": 1.4,
+   "shots": {
+    "rockets": 592,
+    "grenades": 386,
+    "plasma": 899
+   },
+   "near": {
+    "item": "MH",
+    "units": 87,
+    "height": -38
+   },
+   "distance_median": 994,
+   "met_share": 21.8,
+   "hit_share": 16.9,
+   "fired_from": [
+    {
+     "pos": [
+      1070,
+      74,
+      412
+     ],
+     "share": 18.6,
+     "near": {
+      "item": "MH",
+      "units": 173,
+      "height": 146
+     }
+    },
+    {
+     "pos": [
+      73,
+      17,
+      466
+     ],
+     "share": 9.4,
+     "near": {
+      "item": "RL",
+      "units": 210,
+      "height": 10
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2251,
+    "sightings_10s": 2208,
+    "outcome": 0.106,
+    "frags_a_sighting": 0.245,
+    "deaths_a_sighting": 0.139,
+    "outcome_expected": 0.069,
+    "outcome_over_expected": 0.037,
+    "closing_speed": 43.0,
+    "push_share": 16.9,
+    "in_view_seconds": 2739.7,
+    "weapon_shares": {
+     "rockets": 58.9,
+     "lightning": 13.6,
+     "plasma": 9.0,
+     "shotgun": 8.8,
+     "machine gun": 8.0,
+     "gauntlet": 1.0,
+     "grenades": 0.8
+    },
+    "firing_share": 41.5,
+    "fire_shares": {
+     "rockets": 33.1,
+     "lightning": 27.1,
+     "plasma": 19.1,
+     "machine gun": 15.9,
+     "shotgun": 4.5
+    },
+    "height": {
+     "higher": 39.4,
+     "level": 53.6,
+     "lower": 7.0
+    },
+    "distance_median": 428
+   }
+  },
+  {
+   "id": 20,
+   "pos": [
+    125,
+    539,
+    457
+   ],
+   "radius": 128.0,
+   "share": 1.0,
+   "shots": {
+    "rockets": 548,
+    "grenades": 225,
+    "plasma": 264
+   },
+   "near": {
+    "item": "YA2",
+    "units": 519,
+    "height": 56
+   },
+   "distance_median": 540,
+   "met_share": 19.8,
+   "hit_share": 13.2,
+   "fired_from": [
+    {
+     "pos": [
+      -11,
+      819,
+      480
+     ],
+     "share": 24.0,
+     "near": {
+      "item": "YA2",
+      "units": 568,
+      "height": 79
+     }
+    },
+    {
+     "pos": [
+      93,
+      980,
+      475
+     ],
+     "share": 13.6,
+     "near": {
+      "item": "YA2",
+      "units": 757,
+      "height": 74
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 2465,
+    "sightings_10s": 2425,
+    "outcome": 0.149,
+    "frags_a_sighting": 0.258,
+    "deaths_a_sighting": 0.109,
+    "outcome_expected": 0.1,
+    "outcome_over_expected": 0.049,
+    "closing_speed": 11.8,
+    "push_share": 12.2,
+    "in_view_seconds": 4742.7,
+    "weapon_shares": {
+     "lightning": 48.7,
+     "rockets": 32.4,
+     "machine gun": 9.6,
+     "plasma": 7.8,
+     "shotgun": 0.9
+    },
+    "firing_share": 65.1,
+    "fire_shares": {
+     "lightning": 66.1,
+     "machine gun": 12.8,
+     "rockets": 10.9,
+     "plasma": 9.8
+    },
+    "height": {
+     "higher": 35.4,
+     "level": 62.5,
+     "lower": 2.1
+    },
+    "distance_median": 662
+   }
+  },
+  {
+   "id": 21,
+   "pos": [
+    275,
+    962,
+    449
+   ],
+   "radius": 128.0,
+   "share": 0.95,
+   "shots": {
+    "rockets": 686,
+    "grenades": 86,
+    "plasma": 68
+   },
+   "near": {
+    "item": "PG",
+    "units": 789,
+    "height": -15
+   },
+   "distance_median": 537,
+   "met_share": 10.0,
+   "hit_share": 10.7,
+   "fired_from": [
+    {
+     "pos": [
+      -315,
+      745,
+      475
+     ],
+     "share": 51.6,
+     "near": {
+      "item": "YA2",
+      "units": 372,
+      "height": 74
+     }
+    },
+    {
+     "pos": [
+      -114,
+      786,
+      483
+     ],
+     "share": 30.7,
+     "near": {
+      "item": "YA2",
+      "units": 482,
+      "height": 82
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 881,
+    "sightings_10s": 859,
+    "outcome": 0.003,
+    "frags_a_sighting": 0.19,
+    "deaths_a_sighting": 0.186,
+    "outcome_expected": 0.057,
+    "outcome_over_expected": -0.053,
+    "closing_speed": -0.9,
+    "push_share": 11.5,
+    "in_view_seconds": 717.8,
+    "weapon_shares": {
+     "rockets": 57.4,
+     "lightning": 19.4,
+     "plasma": 11.0,
+     "shotgun": 5.1,
+     "machine gun": 4.5,
+     "gauntlet": 2.0
+    },
+    "firing_share": 48.1,
+    "fire_shares": {
+     "lightning": 36.0,
+     "rockets": 33.0,
+     "plasma": 20.3,
+     "machine gun": 7.5,
+     "shotgun": 2.7
+    },
+    "height": {
+     "higher": 16.6,
+     "level": 79.0,
+     "lower": 4.4
+    },
+    "distance_median": 276
+   }
+  },
+  {
+   "id": 22,
+   "pos": [
+    359,
+    643,
+    228
+   ],
+   "radius": 128.0,
+   "share": 0.83,
+   "shots": {
+    "rockets": 217,
+    "grenades": 116,
+    "plasma": 1748
+   },
+   "near": {
+    "item": "RA",
+    "units": 511,
+    "height": 208
+   },
+   "distance_median": 550,
+   "met_share": 22.3,
+   "hit_share": 9.3,
+   "fired_from": [
+    {
+     "pos": [
+      954,
+      657,
+      212
+     ],
+     "share": 55.3,
+     "near": {
+      "item": "YA",
+      "units": 428,
+      "height": -124
+     }
+    },
+    {
+     "pos": [
+      746,
+      655,
+      214
+     ],
+     "share": 20.4,
+     "near": {
+      "item": "YA",
+      "units": 466,
+      "height": -122
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1263,
+    "sightings_10s": 1237,
+    "outcome": 0.089,
+    "frags_a_sighting": 0.264,
+    "deaths_a_sighting": 0.175,
+    "outcome_expected": 0.098,
+    "outcome_over_expected": -0.009,
+    "closing_speed": -4.1,
+    "push_share": 11.2,
+    "in_view_seconds": 510.5,
+    "weapon_shares": {
+     "rockets": 56.7,
+     "lightning": 18.8,
+     "shotgun": 9.1,
+     "plasma": 6.5,
+     "gauntlet": 4.5,
+     "grenades": 2.4,
+     "machine gun": 2.2
+    },
+    "firing_share": 37.1,
+    "fire_shares": {
+     "lightning": 39.2,
+     "rockets": 36.8,
+     "plasma": 13.1,
+     "shotgun": 5.2,
+     "machine gun": 3.5,
+     "grenades": 1.9
+    },
+    "height": {
+     "higher": 1.3,
+     "level": 85.3,
+     "lower": 13.4
+    },
+    "distance_median": 317
+   }
+  },
+  {
+   "id": 23,
+   "pos": [
+    -280,
+    853,
+    491
+   ],
+   "radius": 128.0,
+   "share": 0.74,
+   "shots": {
+    "rockets": 474,
+    "grenades": 59,
+    "plasma": 385
+   },
+   "near": {
+    "item": "YA2",
+    "units": 484,
+    "height": 90
+   },
+   "distance_median": 587,
+   "met_share": 18.1,
+   "hit_share": 10.5,
+   "fired_from": [
+    {
+     "pos": [
+      -410,
+      401,
+      417
+     ],
+     "share": 46.7,
+     "near": {
+      "item": "YA2",
+      "units": 47,
+      "height": 16
+     }
+    },
+    {
+     "pos": [
+      620,
+      206,
+      413
+     ],
+     "share": 15.7,
+     "near": {
+      "item": "YA",
+      "units": 328,
+      "height": 77
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 1060,
+    "sightings_10s": 1043,
+    "outcome": 0.075,
+    "frags_a_sighting": 0.258,
+    "deaths_a_sighting": 0.183,
+    "outcome_expected": 0.093,
+    "outcome_over_expected": -0.018,
+    "closing_speed": -1.0,
+    "push_share": 10.1,
+    "in_view_seconds": 895.2,
+    "weapon_shares": {
+     "rockets": 59.8,
+     "lightning": 19.0,
+     "plasma": 13.1,
+     "shotgun": 4.3,
+     "machine gun": 2.8,
+     "grenades": 0.6
+    },
+    "firing_share": 48.7,
+    "fire_shares": {
+     "rockets": 35.8,
+     "lightning": 35.5,
+     "plasma": 24.1,
+     "machine gun": 2.2,
+     "shotgun": 2.1
+    },
+    "height": {
+     "higher": 23.1,
+     "level": 72.3,
+     "lower": 4.6
+    },
+    "distance_median": 291
+   }
+  },
+  {
+   "id": 24,
+   "pos": [
+    162,
+    -93,
+    426
+   ],
+   "radius": 128.0,
+   "share": 0.73,
+   "shots": {
+    "rockets": 576,
+    "grenades": 4,
+    "plasma": 137
+   },
+   "near": {
+    "item": "RL",
+    "units": 143,
+    "height": -30
+   },
+   "distance_median": 515,
+   "met_share": 40.9,
+   "hit_share": 15.9,
+   "fired_from": [
+    {
+     "pos": [
+      333,
+      149,
+      29
+     ],
+     "share": 39.5,
+     "near": {
+      "item": "RA",
+      "units": 45,
+      "height": 9
+     }
+    },
+    {
+     "pos": [
+      162,
+      231,
+      29
+     ],
+     "share": 5.9,
+     "near": {
+      "item": "RA",
+      "units": 213,
+      "height": 9
+     }
+    }
+   ],
+   "standing_there": {
+    "sightings": 3463,
+    "sightings_10s": 3426,
+    "outcome": 0.008,
+    "frags_a_sighting": 0.13,
+    "deaths_a_sighting": 0.122,
+    "outcome_expected": 0.024,
+    "outcome_over_expected": -0.017,
+    "closing_speed": 39.9,
+    "push_share": 10.0,
+    "in_view_seconds": 4429.0,
+    "weapon_shares": {
+     "rockets": 48.4,
+     "lightning": 31.4,
+     "machine gun": 13.4,
+     "plasma": 4.1,
+     "shotgun": 1.8,
+     "grenades": 0.7
+    },
+    "firing_share": 57.7,
+    "fire_shares": {
+     "lightning": 48.2,
+     "rockets": 26.9,
+     "machine gun": 18.3,
+     "plasma": 5.6,
+     "shotgun": 0.7
+    },
+    "height": {
+     "higher": 62.4,
+     "level": 35.4,
+     "lower": 2.3
+    },
+    "distance_median": 636
+   }
+  }
+ ],
+ "standing": {
+  "sightings": 83549,
+  "sightings_10s": 81811,
+  "in_view_seconds": 105302,
+  "outcome": 0.051,
+  "min_sightings": 30
+ }
+}
