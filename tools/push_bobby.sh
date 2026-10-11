@@ -14,9 +14,13 @@ RUN="${1:?run name}"; ENVMOD="${2:-duel_env_ffa}"; MAP="${3:-bloodrun}"
 HOST="$(grep '^PUBLIC_HOST=' data/owner.env 2>/dev/null | cut -d= -f2)"
 [ -n "$HOST" ] || { echo "add PUBLIC_HOST=root@<address> to data/owner.env"; exit 1; }
 mkdir -p data/public
+rm -f data/public/legs.npz                                    # (a network with legs brings its own: sim/export_duel.py --legs <run>)
 "${PYTHON:-python}" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --out data/public/policy.npz $EXPORT_ARGS   # EXPORT_ARGS="--set INTENT_HOLD=8": the switches a run before v13 was trained with
 if [ -n "$CODE" ]; then
     ssh -o BatchMode=yes "$HOST" 'cd bobbybones-quake && git checkout -q -- . && git pull -q && docker build -q -t qlbot . >/dev/null && echo "code and image up to date: $(git log --oneline | head -1)"'
+fi
+if [ -f data/public/legs.npz ]; then                          # his legs' network first: the plugin loads it when it sees the new policy file
+    scp -o BatchMode=yes -q data/public/legs.npz "$HOST":bobbybones-quake/data/duellive/legs.npz
 fi
 scp -o BatchMode=yes -q data/public/policy.npz "$HOST":bobbybones-quake/data/duellive/policy.npz
 echo "network of $RUN copied to the public server"
