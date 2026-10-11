@@ -295,6 +295,7 @@ for j in ("nearest", "second nearest", "third nearest", "fourth nearest", "fifth
 add("his legs", "the switch to his legs is on", "the movement network moves him while it is on and he has a target it knows a way to (LEGS)",      # ---- his legs (2026-10-10, v15b)
     "0 or 1", "v15b")
 add("his legs", "his legs carried him on the last frame", "", "0 or 1", "v15b")
+add("intention", "his intention is the enemy", "the ninth intention (FIGHT_TARGET): his way leads to where he believes the enemy is", "0 or 1", "v15f")     # ---- the enemy as a target (2026-10-11)
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

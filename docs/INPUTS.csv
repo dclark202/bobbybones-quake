@@ -575,3 +575,4 @@ index,group,input,meaning,scale,added in
 573,projectiles,sixth nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15
 574,his legs,the switch to his legs is on,the movement network moves him while it is on and he has a target it knows a way to (LEGS),0 or 1,v15b
 575,his legs,his legs carried him on the last frame,,0 or 1,v15b
+576,intention,his intention is the enemy,the ninth intention (FIGHT_TARGET): his way leads to where he believes the enemy is,0 or 1,v15f

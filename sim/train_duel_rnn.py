@@ -227,6 +227,8 @@ def main():
     I_HEAD = getattr(E_, "INTENT_HEAD", len(ACTION_DIMS) - 1)                # the intention; (LEGS) the switch to his legs and the
     L_HEAD, L_TAKES = (E_.LEGS_HEAD, tuple(E_.LEGS_TAKES)) if len(ACTION_DIMS) > getattr(E_, "LEGS_HEAD", 99) else (-1, ())   # outputs they take
 
+    EN_I = E_.EN_INTENT if getattr(E_, "FIGHT_TARGET", False) else -1         # (FIGHT_TARGET) the intention "the enemy"
+
     def head_masks(dc, lv, ll, lo):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
         intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his)"""
@@ -634,7 +636,10 @@ def main():
                 if ik > 0:                                               # the intention head leans on the item rule at first
                     it_ = b_iteach[:, chunk]
                     im_ = b_live[:, chunk] * wgt
-                    ik_l = -(dst[I_HEAD].log_prob(it_) * im_).sum() / im_.sum().clamp(min=1.0)
+                    lpi_ = dst[I_HEAD].log_prob(it_)
+                    if EN_I >= 0:                                        # the enemy as a target is not the item rule's to judge: the lesson
+                        lpi_ = lpi_ - torch.log1p(-dst[I_HEAD].probs[..., EN_I].clamp(max=0.999))   # is about which item, among the items
+                    ik_l = -(lpi_ * im_).sum() / im_.sum().clamp(min=1.0)
                     loss = loss + ik * ik_l
                 if demo_w > 0:                                           # imitate what pro players did in the same situation
                     d_obs, d_act, d_first = demo_batch()
@@ -661,6 +666,7 @@ def main():
         G = NP / n_groups                                                # mean players per group (for the per-player numbers)
         LG_ = np.atleast_1d(agg.get("legs", np.zeros(8)))              # (LEGS: the simulator's counters, see duel_env's stats)
         LR_ = np.atleast_1d(agg.get("legs_reads", np.zeros(2)))
+        EN_ = np.atleast_1d(agg.get("en_frames", np.zeros(3)))
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    fire_in_view=round(float(agg.get("fire_vis", 0) / max(1, agg.get("vis_frames_h", 0))), 3),
                    shot_cost_per_player_min=round(float(agg.get("shot_cost", 0.0) / max(1e-9, NP * T * DT_MIN)), 3),
@@ -719,6 +725,9 @@ def main():
                              by_map={m_: round(float(np.atleast_1d(v_["legs"])[4] / max(1.0, float(np.atleast_1d(v_["legs"])[5]))), 3)        # in games, by map
                                      for m_, v_ in agg_map.items() if "legs" in v_ and float(np.atleast_1d(v_["legs"])[5]) > 0},
                              auto_switch_per_player_min=round(float(agg.get("auto_switch", 0)) / max(1e-9, NP * T * DT_MIN), 3)),   # (AUTO_SWITCH)
+                   fight=dict(share=round(float(EN_[0] / max(1.0, LG_[3])), 4),                 # (FIGHT_TARGET) the share of his time alive with the enemy as his intention,
+                              on_legs=round(float(EN_[1] / max(1.0, EN_[0])), 3),               # ... of it on his legs,
+                              in_view=round(float(EN_[2] / max(1.0, EN_[0])), 3)),              # ... of it with the enemy in view
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,

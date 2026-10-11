@@ -278,7 +278,17 @@ LOADOUTS = {   # weapons owned at spawn, ammo
 # gun. Changing it costs INTENT_SWITCH. Travel toward the chosen item pays (env.intent_seek per second of the way
 # gained, while the item is up or comes up before he gets there), taking it pays env.item_reward. The choice is an
 # input back to him, with the way to it, so "follow the arrow" is easy and "which arrow" is the decision.
-INTENTS = ("none", "MH", "RA", "RL", "RG", "LG", "YA", "YA2")   # (v13: the yellow armors, up to two a map; the pros take them most of all)
+INTENTS = ("none", "MH", "RA", "RL", "RG", "LG", "YA", "YA2", "EN")   # (v13: the yellow armors, up to two a map; the pros take them most of all)
+# "EN" (FIGHT_TARGET; owner, 2026-10-11: "'fight' is a target"): the enemy. Until then every target was an item, so his
+# legs could carry him only to an item, which mostly means away from a fight: with more than 125 health and armor he
+# closed on an enemy in view at 60 to 80 units a second, a stroll. With the enemy as his intention his way leads to the
+# route goal nearest (in seconds of way) to where he believes the enemy is, his legs take it as any other way, and the
+# intention is reached when the enemy is in view. A believed place older than EN_KNOWN seconds is no target. Nothing is
+# paid for the way there: it pays by what the fight brings. With the switch off the choice counts as "none".
+EN_INTENT = 8
+FIGHT_TARGET = float(os.environ.get("FIGHT_TARGET") or 0.0) > 0
+EN_KNOWN = float(os.environ.get("EN_KNOWN") or 20.0)
+N_EN = 1                                                   # one more input (the last): his intention is the enemy
 INTENT_EVERY, INTENT_SWITCH = 40, 0.02
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
@@ -348,7 +358,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
-             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS", "LEGS_EVERY", "LEGS_OFF", "AUTO_SWITCH")
+             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS", "LEGS_EVERY", "LEGS_OFF", "AUTO_SWITCH", "FIGHT_TARGET", "EN_KNOWN")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -439,7 +449,7 @@ LEGS_OFF = int(float(os.environ.get("LEGS_OFF") or 1))    # readings of "my own 
 #                 one, 62 to 73% of his stretches ended on a single "no" with no enemy in view and most lasted under a second)
 N_LEGS = 2
 INTENT_HEAD, LEGS_HEAD, LEGS_TAKES = 10, 11, (0, 1, 2, 3, 7, 8)
-N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE) + N_LEGS
+N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE) + N_LEGS + N_EN
 # AUTO_SWITCH (owner, 2026-10-10: "if you run out of ammo it moves you to a different weapon. Give him that setting and
 # use the weapon swaps from quake live"): the trigger pressed on an empty weapon brings up the highest weapon of the
 # game's own order that has ammunition (the client's cg_switchOnEmpty, in the game's weapon numbers from the top:
@@ -637,7 +647,7 @@ STYLE_DMG = float(os.environ.get("STYLE_DMG") or 0.5)
 STYLE_BAND = float(os.environ.get("STYLE_BAND") or 0.5)
 STACK_TEACH_QUIET = 1.5
 INTENT_HOLD = float(os.environ.get("INTENT_HOLD") or 3.0)     # (v11: longer, with a release when the item is gone, see intend)
-INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25, 0.5, 0.5)
+INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25, 0.5, 0.5, 0.0)
 CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
                                                        # trips ending in death the long ones (mega, red) lost money and he chose the
                                                        # launcher 92% of the time (v9 night, 2026-10-07). Now only a trip given up is clawed back (owner)
@@ -1642,6 +1652,7 @@ class DuelEnv:
                                                           # without a way, his frames alive; the first and the last of these in games; the sum of
                                                           # his speed on legs frames, on his own
                           legs_reads=np.zeros(2),         # ... the switch read, and read as "legs"
+                          en_frames=np.zeros(3),          # FIGHT_TARGET: frames his intention is the enemy, of them on his legs, with the enemy in view
                           auto_switch=0,                  # AUTO_SWITCH: weapon changes the game made for him on an empty weapon
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
 
@@ -2273,7 +2284,7 @@ class DuelEnv:
         T, s = self.teacher, self.state
         if not len(ri):
             return
-        gi = self._trip_goal((self.run_k if k is None else k)[ri], R.locate(s[ri, :3]), R)
+        gi = self._trip_goal((self.run_k if k is None else k)[ri], R.locate(s[ri, :3]), R, who=ri)
         tg = np.where(gi >= 0, self.t_route[np.maximum(gi, 0)], -1)
         if land:
             tg = np.where(self.jrun_over[ri] | self.jrun_past[ri], tg, len(self.t_nav[1]) + self.jrun_k[ri])
@@ -2678,7 +2689,7 @@ class DuelEnv:
         """a player's place in his group"""
         return j % 2
 
-    def _trip_goal(self, intent, node, R=None):
+    def _trip_goal(self, intent, node, R=None, who=None):
         """the route goal each player's intention means from the point he stands at: where a kind has several items
         (NEAREST) the one the shortest way leads to; -1 for no intention or a thing the map has not. R: the ways that
         count (a jump run's; the walking map's if not given)"""
@@ -2688,6 +2699,14 @@ class DuelEnv:
             w_ = np.nonzero(np.asarray(intent) == k_)[0]
             if len(w_):
                 gi[w_] = gs_[T_[gs_][:, np.asarray(node)[w_]].argmin(0)]
+        if FIGHT_TARGET:                                     # the enemy: the route goal nearest to where he believes him to be
+            w_ = np.nonzero(np.asarray(intent) == EN_INTENT)[0]
+            if len(w_) and who is None and len(gi) == self.n:
+                who = np.arange(self.n)
+            if len(w_) and who is not None:
+                p_ = np.asarray(who)[w_]
+                t_ = T_[:, (self.route if R is None else R).locate(self.known[p_])]
+                gi[w_] = np.where((self.seen_t[p_] <= EN_KNOWN) & (t_.min(0) < 1e8), t_.argmin(0), -1)
         return gi
 
     def _alt(self):
@@ -2852,7 +2871,7 @@ class DuelEnv:
             gi = self._trip_goal(k, node)
             alt = self._alt()
             for m_, X_ in alt:                               # (a jump run, or jumps open in games: the ways with those jumps)
-                gi[m_] = self._trip_goal(k[m_], node[m_], X_)
+                gi[m_] = self._trip_goal(k[m_], node[m_], X_, who=np.nonzero(m_)[0])
             valid = gi >= 0
             g = np.maximum(gi, 0)
             off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
@@ -2876,6 +2895,7 @@ class DuelEnv:
             else:
                 out[:, 4] = self.item_up[grp, it] * valid
                 out[:, 5] = np.minimum(self.item_t[grp, it] / 30.0, 2.0) * valid
+        out[k == EN_INTENT, 4:6] = 0.0                      # (the enemy is no item: nothing to be "up")
         oh_ = np.eye(len(INTENTS), dtype=np.float32)[k]
         out[:, 6:12] = oh_[:, :6]
         out[:, 49:51] = oh_[:, 6:8]                         # (the yellow armors, added after the style inputs)
@@ -2996,6 +3016,8 @@ class DuelEnv:
         self.int_tick += 1
         live = who & (((self.int_tick + np.arange(n)) % INTENT_EVERY == 0) | self.intent_new)
         choice = np.asarray(choice, np.int64)
+        if not FIGHT_TARGET:                                 # (the enemy as a target: only with the switch)
+            choice = np.where(choice == EN_INTENT, 0, choice)
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD) | self.intent_gone     # a choice holds (INTENT_HOLD)
         live = live & may
         changed = live & (choice != self.intent)
@@ -3375,7 +3397,7 @@ class DuelEnv:
         for m_, J in self._alt():
             ii = np.nonzero(m_)[0]
             node = J.locate(pos[ii])
-            gi = self._trip_goal(self.intent[ii], node, J)
+            gi = self._trip_goal(self.intent[ii], node, J, who=ii)
             g = np.maximum(gi, 0)
             out[ii, :JL.N_JUMP] = JL.inputs(self.jumps, J.jd[g, node], np.where(gi >= 0, J.ji[g, node], -1),
                                            np.linalg.norm(J.nodes[node] - pos[ii], axis=1))
@@ -3393,9 +3415,11 @@ class DuelEnv:
             out[:, JL.N_JUMP:JL.N_JUMP + 6] = np.stack([np.clip(ey / 30.0, -1, 1), np.clip(ey / 2.0, -1, 1), np.clip(ep / 15.0, -1, 1),
                                            np.clip(ep / 2.0, -1, 1), np.clip(tf / 1.5, 0, 2), np.ones(len(pos))], 1) * reach[:, None]
         if getattr(self, "_pm", None) is not None:           # the projectiles he sees beyond the nearest two, and what each is about to do
-            out[:, JL.N_JUMP + 6:N_V15 - N_LEGS] = self._pm
+            out[:, JL.N_JUMP + 6:N_V15 - N_LEGS - N_EN] = self._pm
         if LEGS:                                             # his legs: the switch as it stands, and that they carried him on the last frame
-            out[:, N_V15 - 2], out[:, N_V15 - 1] = self.legs, self.legs_on
+            out[:, N_V15 - N_EN - 2], out[:, N_V15 - N_EN - 1] = self.legs, self.legs_on
+        if FIGHT_TARGET:                                     # his intention is the enemy
+            out[:, N_V15 - 1] = self.intent == EN_INTENT
         return out
 
     def _v14(self, vel, yaw, pit, eye, known, opp_vel, visible, opp):
@@ -4638,7 +4662,7 @@ class DuelEnv:
             gi_ = self._trip_goal(self.intent, node)
             alt_ = self._alt()
             for m_, X_ in alt_:                              # (a jump run, or jumps open in games: the ways with those jumps)
-                gi_[m_] = self._trip_goal(self.intent[m_], node[m_], X_)
+                gi_[m_] = self._trip_goal(self.intent[m_], node[m_], X_, who=np.nonzero(m_)[0])
             valid = gi_ >= 0
             g_ = np.maximum(gi_, 0)
             t_ = R_.T[g_, node]
@@ -4647,9 +4671,15 @@ class DuelEnv:
             phi = np.where(valid, t_ + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
             it_ = np.array(self.route_item)[g_]
-            soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0)
+            soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0) | (self.intent == EN_INTENT)
             gone_before = self.intent_gone.copy()
             self.intent_gone = valid & ~soon & (self.intent > 0)
+            if FIGHT_TARGET:                                 # the enemy as the target: reached when he is in view, given up when
+                en_ = self.intent == EN_INTENT               # nothing is known of him any more
+                self.intent_done = self.intent_done | (en_ & np.asarray(self.visible, bool)[:len(en_)])
+                self.intent_gone = self.intent_gone | (en_ & ~valid)
+                self.stats["en_frames"] += np.array([(en_ & (self.script == 0) & (self.hp > 0)).sum(), (en_ & self.legs_on).sum(),
+                                                     (en_ & np.asarray(self.visible, bool)[:len(en_)] & (self.script == 0)).sum()], np.float64)
             self.intent_phi0 = np.where(self.intent_changed, np.maximum(phi, 1.0), self.intent_phi0).astype(np.float32)
             # Only ground never reached before on this trip pays (the least seconds-to-go so far). Until 2026-10-08 every
             # frame's change paid unless it was a jump of 0.4 s or more: a fall cost nothing and the walk back was paid
