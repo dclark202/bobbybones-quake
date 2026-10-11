@@ -47,6 +47,14 @@ static long long key_counts[MAX_CLIENTS][6];
 
 SV_ClientThink_ptr SV_ClientThink;
 
+// A seat's override outlives the bot it was set for (nothing clears it when he is kicked), and a person who then
+// connects into that seat must not get it: his own commands were thrown away and the bot flag was put on him after
+// every frame, so the server sent him no snapshots ("awaiting snapshot", then a timeout: the public server after a
+// switch from free-for-all to 1v1, 2026-10-10, every join into the second Bobby's old seat). Only a bot's seat is ours.
+static int bot_seat(int id) {
+    return svs && svs->clients && svs->clients[id].netchan.remoteAddress.type == NA_BOT;
+}
+
 void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd) {
     int id = cl - svs->clients;
     if (id >= 0 && id < MAX_CLIENTS) {
@@ -54,7 +62,7 @@ void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd) {
         bot_override_t* o = &overrides[id];
         // Only touch fully connected, in-game clients: during map changes the game
         // state behind g_entities is torn down and must not be read.
-        if (o->active && cl->state == CS_ACTIVE && cl->gentity && g_entities && g_entities[id].client) {
+        if (o->active && bot_seat(id) && cl->state == CS_ACTIVE && cl->gentity && g_entities && g_entities[id].client) {
             int* delta = g_entities[id].client->ps.delta_angles;
             if (!o->hybrid && o->substeps > 1 && !self_driving)
                 return;                 // the game AI's command for a bot we drive ourselves: not run (see self_driving)
@@ -144,7 +152,7 @@ void Botctl_AfterFrame(void) {
     if (!g_entities)
         return;
     for (int id = 0; id < MAX_CLIENTS; id++) {
-        if (overrides[id].cleared_bot_flag && overrides[id].substeps && g_entities[id].inuse && g_entities[id].client)
+        if (overrides[id].cleared_bot_flag && overrides[id].substeps && bot_seat(id) && g_entities[id].inuse && g_entities[id].client)
             g_entities[id].r.svFlags |= BOTCTL_SVF_BOT;
     }
 }
@@ -156,7 +164,7 @@ void Botctl_BeforeFrame(int time) {
         return;
     for (int id = 0; id < MAX_CLIENTS && id < sv_maxclients->integer; id++) {
         bot_override_t* o = &overrides[id];
-        if (!o->active || o->hybrid || o->substeps <= 1)
+        if (!o->active || o->hybrid || o->substeps <= 1 || !bot_seat(id))
             continue;
         client_t* cl = &svs->clients[id];
         if (cl->state != CS_ACTIVE || !cl->gentity || !g_entities[id].inuse || !g_entities[id].client)

@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-10](results/2026-10-10.md)
 
+- 20:40 — Public server: nobody could join after a switch to 1v1 ("awaiting snapshot"); a kicked Bobby's seat stayed bot-driven
 - 17:15 — `duel_gru_v15` started (owner's go), to noon tomorrow
 - 16:10 — Tries at 137 of the 144 jumps (owner: "Build first"); the teacher silent where its own way goes round a jump; "taught the general path", not the execution
 - 15:45 — v14's end is on the public server; the owner's answers on v15: from v14's end, tries for the 36 jumps built first, projectiles only in view or heard for good
