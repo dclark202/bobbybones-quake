@@ -348,7 +348,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
-             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS", "LEGS_EVERY", "AUTO_SWITCH")
+             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS", "LEGS_EVERY", "LEGS_OFF", "AUTO_SWITCH")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -435,6 +435,8 @@ N_PROJ_MORE, PROJ_FAR = 4, 1500.0
 # The trainer counts the taken outputs on the frames he moved himself only, and the switch on the frames it was read.
 LEGS = float(os.environ.get("LEGS") or 0.0) > 0
 LEGS_EVERY = int(float(os.environ.get("LEGS_EVERY") or 10))
+LEGS_OFF = int(float(os.environ.get("LEGS_OFF") or 1))    # readings of "my own movement" in a row that end a stretch on his legs (2026-10-11: with
+#                 one, 62 to 73% of his stretches ended on a single "no" with no enemy in view and most lasted under a second)
 N_LEGS = 2
 INTENT_HEAD, LEGS_HEAD, LEGS_TAKES = 10, 11, (0, 1, 2, 3, 7, 8)
 N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE) + N_LEGS
@@ -1433,6 +1435,7 @@ class DuelEnv:
         self.legs_on = np.zeros(self.n, bool)               # ... the movement network moved him this frame,
         self.legs_live = np.zeros(self.n, bool)             # ... the switch was read this frame
         self.legs_tick = 0
+        self.legs_no = np.zeros(self.n, np.int64)           # ... readings of "my own movement" in a row (LEGS_OFF)
         self.teach_runs = "all"                             # the key labels of this map's runs (the trainer's --teacher-skip): "all";
         #   "jump": none in item runs, the movement teacher's in jump runs; "none": none (a map its pupil fails on)
         self.jump_a = self.jump_b = np.zeros((0, 3), np.float32)
@@ -2347,7 +2350,11 @@ class DuelEnv:
         who = self.script == 0
         self.legs_tick += 1
         live = who & ((self.legs_tick + np.arange(n)) % LEGS_EVERY == 0)
-        self.legs = np.where(live, a[:, LEGS_HEAD] == 1, self.legs) & who & (self.hp > 0)
+        ask = a[:, LEGS_HEAD] == 1
+        if LEGS_OFF > 1:                                     # a stretch on his legs ends only at the LEGS_OFF-th "no" in a row
+            self.legs_no = np.where(live, np.where(ask, 0, self.legs_no + 1), self.legs_no)
+            ask = ask | (self.legs & (self.legs_no < LEGS_OFF))
+        self.legs = np.where(live, ask, self.legs) & who & (self.hp > 0)
         self.legs_live = live
         self.stats["legs_reads"] += (int(live.sum()), int((live & (a[:, LEGS_HEAD] == 1)).sum()))
         self.legs_on = np.zeros(n, bool)
