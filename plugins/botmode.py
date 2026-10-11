@@ -81,7 +81,7 @@ class botmode(minqlx.Plugin):
             if not msg[2].isdigit() or not 0 <= int(msg[2]) <= 4:
                 return minqlx.RET_USAGE
             bots = int(msg[2])
-        mapname = (minqlx.get_cvar("mapname") or "aerowalk").lower()
+        mapname = (minqlx.get_cvar("mapname") or "bloodrun").lower()
         if mode == self.current() and bots is None:
             player.tell("The server is already in {} mode.".format("free-for-all" if mode == "ffa" else "1v1"))
             return minqlx.RET_STOP_ALL

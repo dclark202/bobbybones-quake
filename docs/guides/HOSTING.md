@@ -58,7 +58,7 @@ On the machine:
 
 ```bash
 cd bobbybones-quake
-PUBLIC=1 RESTART=1 FFA=2 HOSTNAME_QL="doppz's bot arena | duel & FFA | chicago" bash tools/duel_server.sh - aerowalk
+PUBLIC=1 RESTART=1 FFA=2 HOSTNAME_QL="doppz's bot arena | duel & FFA | chicago" bash tools/duel_server.sh - bloodrun
 ```
 
 - `-` means "use the `policy.npz` already in `data/duellive`" (no PyTorch needed on the machine).
@@ -71,7 +71,7 @@ One server holds one duel at a time; other players spectate and queue (the game'
 
 ## Free-for-all instead of 1v1
 
-The public server runs free-for-all by default: since 2026-10-09 with two Bobbys on Aerowalk (owner; from 2026-10-06 it was three on `arena1`). `CODE=1 bash tools/push_bobby.sh <run>` restarts it that way; `FFA=<n>` and a third argument change the number and the map, and it copies the walking maps and map tables of every map the server offers (they are not in git). Players change the map with `!map <name>` (the ten duel maps he trained on or is checked on, in free-for-all with the items of a duel; `!map testlab` is 1v1) and the mode with `!mode ffa|duel`, see `docs/COMMANDS.md`. The owner kicks and bans from the game chat (`!kick`, `!ban`; `plugins/banlist.py`, the bans in `data/duellive/bans.txt` on the server). A leaderboard local to the server counts every frag between a person and Bobby (`!bobby`, `!top`, `!elo`; `plugins/ladder.py`, its files `ratings.json` and `frags.jsonl` beside the bans).
+The public server runs free-for-all by default: since 2026-10-09 with two Bobbys, on Blood Run from 2026-10-11 (owner, 2026-10-10: there are things about Aerowalk he does not understand yet; it was Aerowalk; from 2026-10-06 it was three on `arena1`). `CODE=1 bash tools/push_bobby.sh <run>` restarts it that way; `FFA=<n>` and a third argument change the number and the map, and it copies the walking maps and map tables of every map the server offers (they are not in git). Players change the map with `!map <name>` (the ten duel maps he trained on or is checked on, in free-for-all with the items of a duel; `!map testlab` is 1v1) and the mode with `!mode ffa|duel`, see `docs/COMMANDS.md`. The owner kicks and bans from the game chat (`!kick`, `!ban`; `plugins/banlist.py`, the bans in `data/duellive/bans.txt` on the server). A leaderboard local to the server counts every frag between a person and Bobby (`!bobby`, `!top`, `!elo`; `plugins/ladder.py`, its files `ratings.json` and `frags.jsonl` beside the bans).
 
 ```bash
 FFA=3 bash tools/duel_server.sh duel_gru_v13 aerowalk duel_env_ffa_v13     # three Bobbys, three seats for people

@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-10](results/2026-10-10.md)
 
+- 21:00 — The public server's default map is Blood Run (owner); the restart waits for an empty server in the night
 - 20:45 — v15's first start stopped after 104 minutes; the teacher got his mouse and moves like the pros; he still cannot be taught it as a side lesson: strafe jumping does not survive an approximate copy; the teacher as his legs, tried without training
 - 20:40 — Public server: nobody could join after a switch to 1v1 ("awaiting snapshot"); a kicked Bobby's seat stayed bot-driven
 - 17:15 — `duel_gru_v15` started (owner's go), to noon tomorrow

@@ -3,14 +3,14 @@
 #   PUBLIC_HOST=root@<address>
 #   bash tools/push_bobby.sh <run> [simulator module=duel_env_ffa]          the network only: the running server picks
 #                                                                             it up by itself between rooms
-#   CODE=1 bash tools/push_bobby.sh <run> [module] [map=aerowalk]           also the newest code and maps (git pull, image
+#   CODE=1 bash tools/push_bobby.sh <run> [module] [map=bloodrun]           also the newest code and maps (git pull, image
 #                                                                             build, restart in free-for-all with FFA=<n> Bobbys, 2 by default
-#                                                                             (owner, 2026-10-09: Aerowalk and two; it was arena1 and three);
+#                                                                             (owner, 2026-10-09: two; 2026-10-10: Blood Run, it was Aerowalk);
 #                                                                             build, restart): needed whenever the simulator,
 #                                                                             the plugin or a map changed since the last push
 set -e
 cd "$(dirname "$0")/.."
-RUN="${1:?run name}"; ENVMOD="${2:-duel_env_ffa}"; MAP="${3:-aerowalk}"
+RUN="${1:?run name}"; ENVMOD="${2:-duel_env_ffa}"; MAP="${3:-bloodrun}"
 HOST="$(grep '^PUBLIC_HOST=' data/owner.env 2>/dev/null | cut -d= -f2)"
 [ -n "$HOST" ] || { echo "add PUBLIC_HOST=root@<address> to data/owner.env"; exit 1; }
 mkdir -p data/public
