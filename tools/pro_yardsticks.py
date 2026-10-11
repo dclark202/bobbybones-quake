@@ -69,8 +69,9 @@ for k_ in ("OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "OMP_NUM_THREADS"):
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SIM = os.path.join(ROOT, "sim")
-MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged"
-VERSION = 11                                                    # of the counts kept per demo: a change here counts every demo again
+MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged"         # the trained maps: "all"
+MORE = "campgrounds,hektik,toxicity,cure"                      # the maps of movement practice only: under their own names and in "all_ten"
+VERSION = 13                                                    # of the counts kept per demo: a change here counts every demo again
 
 # ---------------------------------------------------------------------------------------------------------------------
 # the record and what is measured on it (no demo below this line until "reading a demo")
@@ -112,6 +113,19 @@ ENEMY_BANDS = ("enemy holds a small weapon", "enemy holds a big weapon", "enemy'
 DIST_BANDS = ("under 400 units", "400 to 800", "over 800")
 BIG_W = (RL, LG, RG)
 VIEW_EVERY = 8                                                 # every this many frames with the enemy in view, a row for the places
+WAY_STEP = 128.0                                               # a trip's path is kept as points this far apart
+WAY_KEEP, WAY_KEEP_SHARE = 3, 0.10                             # sim/pro_ways: at most this many ways a pair, each with this share of its trips
+RJ_UP = 300.0                                                  # a rocket jump: his upward speed rises by this within 0.25 s of a rocket of his
+DROP = 128.0                                                   # a fall: this far down between leaving the ground and landing
+TELE = 400.0                                                   # a step of this many units between two frames: a teleporter
+QUIET_BIN, QUIET_BINS, STEADY = 10.0, 41, 3.0                  # the speed histogram's bins; steady: under this change of speed a frame
+SEEN_S, LAST_R = 5.0, 600.0
+HURT, HURT_BAD, HURT_S, DIED_S = 20.0, 50.0, 5.0, 10.0
+NEAR_ITEM = 300.0
+HIT_COMBO_S, JUGGLE_S, COMBO_FRAG_S = 1.5, 1.2, 2.0
+SINCE_BANDS = ("under 2 s", "2 to 5 s", "5 to 10 s", "over 10 s", "not seen yet in this stretch")
+ITEM_CATS = ("mega or armor, back within 5 s as far as he knows", "mega or armor, back in 5 to 10 s", "mega or armor, back in over 10 s",
+             "mega or armor, its return unknown to him", "a rocket launcher, rail or lightning gun", "no big item within 300 units")
 SOLID = 1
 LEADS = {1: "ahead", 0: "level", -1: "behind"}
 STATES = [l + ", " + p for l in ("ahead", "level", "behind") for p in ("before 7:00", "after 7:00")]
@@ -121,7 +135,7 @@ STATE_KEYS = ("time", "alive", "inview", "toward", "dist", "frags", "deaths", "t
 
 def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, enemy, enemy_score=None, lead=None,
                 clock=None, alive=None, eye_h=None, enemy_air=None, hits=None, seg=None, ammo=None, client=None, owned=None,
-                enemy_weapon=None):
+                enemy_weapon=None, ground=None):
     """One player's game, frame by frame, as measure() wants it. Arrays of N frames in the order of time:
       t          seconds (any origin)                     pos, vel   (N, 3) units, units a second
       yaw, pitch degrees (pitch: looking down is positive, as the game's)
@@ -135,7 +149,8 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
       ammo       (N, 9) his ammunition by weapon in the order of WEAPONS (None: no weapon pickups are seen, so no trips
                  from and to weapons)                     client     who P is, a number (None: one player throughout)
       owned      (N, 9) which weapons he owns (None: those he has ammunition for)
-      enemy_weapon (N,) the weapon in the enemy's hand, an index of WEAPONS, -1 where it is not known (None: never)"""
+      enemy_weapon (N,) the weapon in the enemy's hand, an index of WEAPONS, -1 where it is not known (None: never)
+      ground     (N,) he stands on the ground (None: not known: no walking numbers, and a fall is read from his height)"""
     n = len(t)
     r = dict(t=np.asarray(t, np.float64), pos=np.asarray(pos, np.float32).reshape(n, 3),
              vel=np.asarray(vel, np.float32).reshape(n, 3), yaw=np.asarray(yaw, np.float32),
@@ -152,6 +167,7 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
     r["client"] = np.zeros(n, np.int64) if client is None else np.asarray(client, np.int64)
     r["owned"] = None if owned is None else np.asarray(owned, bool).reshape(n, len(WEAPONS))
     r["enemy_weapon"] = np.full(n, -1, np.int64) if enemy_weapon is None else np.asarray(enemy_weapon, np.int64)
+    r["ground"] = None if ground is None else np.asarray(ground, bool)
     if lead is None:
         lead = np.sign(r["score"] - np.asarray(enemy_score, np.int64))
     r["lead"] = np.asarray(lead, np.int64)
@@ -246,7 +262,12 @@ def new_tally():
                                                                           "stack under 100", "stack 100 to 149", "stack 150 or more"]},
                 items={k: dict(pickups=0, counted=0, back=0, died=0, took=0, gaps=[]) for k in RETURN},
                 cells={}, cells_own=[], zhist={}, height=dict(view=0.0, higher=0.0, lower=0.0), stand=dict(time=0.0, longest=[]),
-                trips={}, aggro={}, aggro_dist={})
+                trips={}, aggro={}, aggro_dist={},
+                quiet=dict(ground={}, steady={}, crouch={}, by={}),
+                when={w: dict(n=0, since={}, item={}, hurt=0, hurt_bad=0, after_death=0) for w in ("rl", "gl", "pg")},
+                when_base=dict(alive=0.0, hurt=0.0, hurt_bad=0.0, after_death=0.0),
+                hitcombo=dict(known=0.0, rl_shots=0, rl_hits=0, gl_shots=0, gl_hits=0, rl_lg=0, rl_rg=0, gl_lg=0, gl_rg=0, juggle=0, frags=0,
+                              frags_combo=0, frags_juggle=0))
 
 
 def add_tally(a, b):
@@ -268,6 +289,27 @@ def measure(rec, world, info):
     see(rec, world)
     T = new_tally()
     items = info["items"]
+    n0 = len(rec["t"])
+    ok0 = ~rec["first"] & rec["alive"] & np.concatenate([[False], rec["alive"][:-1]])
+    dh0, da0 = np.zeros(n0), np.zeros(n0)
+    dh0[1:], da0[1:] = np.diff(rec["health"]), np.diff(rec["armor"])
+    big_picks = [_picks(rec, it, ok0, dh0 if it["col"] == "health" else da0) if it["col"] in ("health", "armor") else None for it in info["big"]]
+    took = np.maximum(0.0, -(dh0 + da0)) * ok0                   # what a frame took off his health and armor (the slow loss above 100 is 1 a second)
+    took[took < 3.0] = 0.0
+    ctook = np.cumsum(took)
+    tt = rec["t"]
+    back5 = np.searchsorted(tt, tt - HURT_S, side="left")
+    taken5 = ctook - ctook[np.maximum(back5 - 1, 0)]
+    dead_t = np.where(~rec["alive"], tt, -np.inf)                # when he last was dead, within the stretch
+    for a_, b_ in zip(np.nonzero(rec["first"])[0], np.concatenate([np.nonzero(rec["first"])[0][1:], [n0]])):
+        dead_t[a_:b_] = np.maximum.accumulate(dead_t[a_:b_])
+    after_death = rec["alive"] & (tt - dead_t <= DIED_S)
+    ever = np.zeros(n0, bool)                                    # the enemy has been in view in this stretch
+    for a_, b_ in zip(np.nonzero(rec["first"])[0], np.concatenate([np.nonzero(rec["first"])[0][1:], [n0]])):
+        ever[a_:b_] = np.maximum.accumulate(rec["inview"][a_:b_])
+    al_ = rec["alive"]
+    T["when_base"] = dict(alive=float(rec["w"][al_].sum()), hurt=float(rec["w"][al_ & (taken5 >= HURT)].sum()),
+                          hurt_bad=float(rec["w"][al_ & (taken5 >= HURT_BAD)].sum()), after_death=float(rec["w"][after_death].sum()))
     t, w, alive, inview, since, seg = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["since"], rec["seg"]
     n = len(t)
     T["demos"], T["stretches"] = 1, int(rec["first"].sum())
@@ -302,6 +344,24 @@ def measure(rec, world, info):
             d = float(np.linalg.norm(L - rec["eye"][i]))
             if d >= FEET_R:
                 away_n[int(wq)][i] += cnt
+                W_ = T["when"][WEAPONS[wq]]                        # when and at what the spam goes
+                sb_ = 4 if not ever[i] else 0 if since[i] < 2.0 else 1 if since[i] < 5.0 else 2 if since[i] < 10.0 else 3
+                dn_ = [float(np.linalg.norm(L - b_["pos"])) for b_ in info["big"]]
+                k_ = int(np.argmin(dn_)) if dn_ else -1
+                if k_ < 0 or dn_[k_] > NEAR_ITEM:
+                    ic_ = 5
+                elif big_picks[k_] is None:
+                    ic_ = 4
+                else:
+                    pk_ = big_picks[k_][(big_picks[k_] < i) & (seg[big_picks[k_]] == seg[i])] if len(big_picks[k_]) else big_picks[k_]
+                    left_ = t[pk_[-1]] + info["big"][k_]["back"] - t[i] if len(pk_) else -1.0
+                    ic_ = 3 if left_ <= 0 else 0 if left_ <= 5.0 else 1 if left_ <= 10.0 else 2
+                W_["n"] += int(cnt)
+                W_["since"][str(sb_)] = W_["since"].get(str(sb_), 0) + int(cnt)
+                W_["item"][str(ic_)] = W_["item"].get(str(ic_), 0) + int(cnt)
+                W_["hurt"] += int(cnt) * int(taken5[i] >= HURT)
+                W_["hurt_bad"] += int(cnt) * int(taken5[i] >= HURT_BAD)
+                W_["after_death"] += int(cnt) * int(after_death[i])
             j1 = min(int(np.searchsorted(t, t[i] + MET_S, side="right")), seg_end[i] + 1)
             near = np.linalg.norm(en[i + 1:j1] - L, axis=1) <= MET_R          # (NaN where he is not known: False)
             seen = near & inview[i + 1:j1]
@@ -379,14 +439,7 @@ def measure(rec, world, info):
     dh[1:] = np.diff(rec["health"])
     da[1:] = np.diff(rec["armor"])
     for it in items:
-        col = dh if it["kind"] == "mega" else da
-        at = ok & (col > 0) & (np.hypot(rec["pos"][:, 0] - it["pos"][0], rec["pos"][:, 1] - it["pos"][1]) < TAKE_R) & \
-            (np.abs(rec["pos"][:, 2] - it["pos"][2]) < TAKE_Z)
-        for o in it["rivals"]:                                  # another item of its sort is nearer: that one was taken
-            at &= np.linalg.norm(rec["pos"] - it["pos"], axis=1) <= np.linalg.norm(rec["pos"] - o, axis=1)
-        picks = np.nonzero(at)[0]
-        if len(picks) > 1:                                      # (one pickup cannot be within 5 s of the one before)
-            picks = picks[np.concatenate([[True], np.diff(t[picks]) > 5.0])]
+        picks = _picks(rec, it, ok, dh if it["kind"] == "mega" else da)
         I = T["items"][it["kind"]]
         I["pickups"] += len(picks)
         near = alive & (np.linalg.norm(rec["pos"] - it["pos"], axis=1) <= BACK_R)
@@ -402,9 +455,138 @@ def measure(rec, world, info):
             I["back"] += int(near[a:b + 1].any())
             I["died"] += int((~alive[i:a]).any())
             I["took"] += int(q + 1 < len(picks) and picks[q + 1] <= e and t[picks[q + 1]] <= t[i] + R + 5.0)
-    predictable(rec, info, T, dh, da, ok, seg_end)
+    predictable(rec, info, T, dh, da, ok, seg_end, sh)
     sight, view = sightings(rec, T, seg_end, frag, died, fire)
+    quiet(rec, T, ever, stack)
+    hit_combos(rec, T, sh, frag, world, seg_end)
     return T, dict(blind=rows, sight=sight, view=view)
+
+
+def _picks(rec, it, ok, col):
+    """the frames he picks an item up on: what it gives rises (col) while he is at its spot, and no other item of its sort
+    is nearer; one pickup cannot be within 5 s of the one before"""
+    pos, t = rec["pos"], rec["t"]
+    at = ok & (col > 0) & (np.hypot(pos[:, 0] - it["pos"][0], pos[:, 1] - it["pos"][1]) < TAKE_R) & (np.abs(pos[:, 2] - it["pos"][2]) < TAKE_Z)
+    for o in it["rivals"]:
+        at &= np.linalg.norm(pos - it["pos"], axis=1) <= np.linalg.norm(pos - o, axis=1)
+    picks = np.nonzero(at)[0]
+    if len(picks) > 1:
+        picks = picks[np.concatenate([[True], np.diff(t[picks]) > 5.0])]
+    return picks
+
+
+def quiet(rec, T, ever, stack):
+    """walking and quiet: his time by speed on the ground (all of it; while his speed is steady; crouched), and for every
+    situation the steady time by speed, the time crouched and moving, standing, in the air (the walking band is chosen
+    in report(), from the histogram)"""
+    if rec["ground"] is None:
+        return
+    t, w, alive, pos = rec["t"], rec["w"], rec["alive"], rec["pos"]
+    n = len(t)
+    sp = np.hypot(rec["vel"][:, 0], rec["vel"][:, 1])
+    gr = rec["ground"] & alive
+    ds = np.abs(np.diff(sp))
+    steady = gr.copy()
+    steady[1:] &= (ds < STEADY) & ~rec["first"][1:]
+    steady[:-1] &= ds < STEADY
+    crouch = alive & (rec["eye_h"] < 20.0)
+    b = np.minimum((sp / QUIET_BIN).astype(np.int64), QUIET_BINS - 1)
+    Q = T["quiet"]
+    for name, m in (("ground", gr), ("steady", steady & ~crouch), ("crouch", gr & crouch)):
+        h = np.bincount(b[m], weights=w[m], minlength=QUIET_BINS)
+        Q[name] = {str(k): round(float(v), 3) for k, v in enumerate(h) if v > 0}
+    # the place the enemy was last seen at, within the stretch
+    last = np.maximum.accumulate(np.where(rec["inview"], np.arange(n), 0))
+    lastpos = np.where(np.isfinite(rec["enemy"][last]), rec["enemy"][last], 0.0)
+    near = ever & (np.linalg.norm(pos - lastpos, axis=1) <= LAST_R)
+    sp3 = np.linalg.norm(rec["vel"], axis=1)
+    sit = {"enemy seen within 5 s": ever & (rec["since"] < SEEN_S), "enemy not seen for 5 s or more": ever & (rec["since"] >= SEEN_S),
+           "enemy not seen yet in this stretch": ~ever,
+           "stack under 60": stack < 60, "stack 60 to 125": (stack >= 60) & (stack <= 125), "stack over 125": stack > 125,
+           "behind": rec["lead"] < 0, "level": rec["lead"] == 0, "ahead": rec["lead"] > 0,
+           "within 600 units of where the enemy was last seen": near, "farther from where he was last seen": ever & ~near, "all": np.ones(n, bool)}
+    for name, m in sit.items():
+        m = m & alive
+        h = np.bincount(b[m & steady & ~crouch], weights=w[m & steady & ~crouch], minlength=QUIET_BINS)
+        Q["by"][name] = dict(alive=float(w[m].sum()), stand=float(w[m & (sp3 < STAND)].sum()), crouch_move=float(w[m & gr & crouch & (sp >= STAND)].sum()),
+                             air=float(w[m & ~rec["ground"]].sum()), steady={str(k): round(float(v), 3) for k, v in enumerate(h) if v > 0})
+
+
+def hit_combos(rec, T, sh, frag, world, seg_end):
+    """combinations by hits, from his own hit counter. A step of the counter on a frame he fires lightning, rail, machine
+    gun or shotgun on (or the frame before) is that weapon's hit; any other step is the hit of the rocket, grenade or
+    plasma ball of his that is due about then (a rocket and plasma: from 0.05 s after the shot to 0.2 s after it would
+    reach the wall his view points at; a grenade: until its fuse ends). Counted: a rocket (a grenade) that hit, then a
+    lightning or rail hit within HIT_COMBO_S; a rocket hit, then another rocket's hit within JUGGLE_S; his frags within
+    COMBO_FRAG_S after such a pair."""
+    H = T["hitcombo"]
+    if rec["hits"] is None or world is None:
+        return
+    t, alive = rec["t"], rec["alive"]
+    n = len(t)
+    H["known"] = float(rec["w"][alive].sum())
+    inc = np.zeros(n, np.int64)
+    inc[1:] = np.diff(rec["hits"])
+    inc[rec["first"]] = 0
+    inc = np.clip(inc, 0, 8)
+    H["frags"] = int(frag.sum())
+    if not len(sh):
+        return
+    scan = np.full(n, -1, np.int64)                              # the hitscan weapon he fires on a frame
+    for i, wq, _ in sh:
+        if wq in (LG, RG, MG, SG, HMG) and (scan[i] < 0 or wq in (LG, RG)):
+            scan[i] = wq
+    pr = sh[np.isin(sh[:, 1], (RL, GL, PG))]
+    H["rl_shots"], H["gl_shots"] = int(pr[pr[:, 1] == RL, 2].sum()), int(pr[pr[:, 1] == GL, 2].sum())
+    lo = np.zeros(len(pr))
+    hi = np.zeros(len(pr))
+    if len(pr):
+        line = pr[:, 1] != GL
+        dist = np.zeros(len(pr))
+        if line.any():
+            fd = _fwd(rec["yaw"][pr[line, 0]], rec["pitch"][pr[line, 0]])
+            eye = rec["eye"][pr[line, 0]]
+            dist[line] = 8192.0 * world.lines(eye, eye + fd * 8192.0, mask=SOLID)
+        speed = np.array([PROJ[int(x)] for x in pr[:, 1]])
+        lo = t[pr[:, 0]] + 0.05
+        hi = np.where(line, t[pr[:, 0]] + dist / speed + 0.2, t[pr[:, 0]] + GL_FUSE + 0.2)
+    used = np.zeros(len(pr), bool)
+    hits = []                                                   # (frame, weapon, the projectile's row or -1)
+    for f in np.nonzero(inc)[0]:
+        left = int(inc[f])
+        wq = scan[f] if scan[f] >= 0 else scan[f - 1] if f > 0 else -1
+        if wq >= 0:
+            hits.append((int(f), int(wq), -1))
+            left -= 1
+            if left <= 0:
+                continue
+        c = np.nonzero((lo <= t[f]) & (t[f] <= hi) & (seg_end[pr[:, 0]] >= f) & ~used)[0] if len(pr) else []
+        if len(c):
+            k = c[np.argmin(np.abs(hi[c] - 0.2 - t[f]))]        # the one due nearest to now
+            used[k] = pr[k, 1] != PG
+            hits.append((int(f), int(pr[k, 1]), int(k)))
+    rl = [(f, k) for f, wq, k in hits if wq == RL]
+    gl = [(f, k) for f, wq, k in hits if wq == GL]
+    beam = [(f, wq) for f, wq, _ in hits if wq in (LG, RG)]
+    H["rl_hits"], H["gl_hits"] = len(rl), len(gl)
+    bf = np.array([f for f, _ in beam], np.int64)
+    pairs, juggles = [], []
+    for name, first in (("rl", rl), ("gl", gl)):
+        for f, _ in first:
+            j = np.nonzero((bf > f) & (t[bf] <= t[f] + HIT_COMBO_S) & (seg_end[f] >= bf))[0] if len(bf) else []
+            if len(j):
+                H[name + ("_lg" if beam[j[0]][1] == LG else "_rg")] += 1
+                pairs.append(int(bf[j[0]]))
+    for a in range(len(rl) - 1):
+        f, f2 = rl[a][0], rl[a + 1][0]
+        if rl[a][1] != rl[a + 1][1] and t[f2] - t[f] <= JUGGLE_S and seg_end[f] >= f2:
+            H["juggle"] += 1
+            juggles.append(int(f2))
+    fr = np.nonzero(frag)[0]
+    for name, ends in (("frags_combo", pairs), ("frags_juggle", juggles)):
+        e = np.array(sorted(set(ends)), np.int64)
+        if len(e) and len(fr):
+            H[name] = int(sum(1 for x in fr if ((e <= x) & (t[x] - t[e] <= COMBO_FRAG_S)).any()))
 
 
 SIGHT_COLS = ("x", "y", "z", "stack band", "owns a big weapon", "frag band", "enemy weapon band", "lead", "speed toward him over 3 s",
@@ -520,7 +702,7 @@ def _resample(path, k=TRIP_PTS):
     return np.stack([np.interp(at, d, path[:, c]) for c in range(3)], 1)
 
 
-def predictable(rec, info, T, dh, da, ok, seg_end):
+def predictable(rec, info, T, dh, da, ok, seg_end, sh=()):
     """the sixth group: how predictable his places and ways are (his time over cells, his height, his ways between the
     big items, his standing), into the tally T"""
     t, w, alive, pos, seg = rec["t"], rec["w"], rec["alive"], rec["pos"], rec["seg"]
@@ -585,28 +767,101 @@ def predictable(rec, info, T, dh, da, ok, seg_end):
         ev += [(int(i), k) for i in np.nonzero(at)[0]]
     ev.sort()
     dead = np.concatenate([[0], np.cumsum(~alive)])
+    rockets = np.array(sorted({int(x[0]) for x in sh if x[1] == RL}), np.int64)
     for (i, a), (j, b) in zip(ev[:-1], ev[1:]):
         if a == b or seg[i] != seg[j] or seg_end[i] < j or dead[j + 1] != dead[i] or not (TRIP_MIN_S <= t[j] - t[i] <= TRIP_MAX_S):
             continue
         kk = "{}:{}>{}".format(name, info["big"][a]["label"], info["big"][b]["label"])
-        T["trips"].setdefault(kk, []).append([int(round(x)) for x in _resample(pos[i:j + 1].astype(np.float64)).ravel()] + [round(float(t[j] - t[i]), 2)])
+        path = pos[i:j + 1].astype(np.float64)
+        step = np.linalg.norm(np.diff(path, axis=0), axis=1)
+        vz = rec["vel"][i:j + 12, 2]
+        rj = 0
+        for s_ in rockets[(rockets >= i) & (rockets <= j)] - i:   # his upward speed jumps just after a rocket of his: a rocket jump
+            if vz[s_:s_ + 11].max() - vz[max(0, s_ - 1)] > RJ_UP:
+                rj = 1
+        z = path[:, 2]
+        if rec["ground"] is not None:                           # the farthest he falls between leaving the ground and landing
+            g = rec["ground"][i:j + 1]
+            drop, start, tele_at = 0.0, z[0], np.concatenate([[False], step > TELE])
+            for q in range(1, len(g)):
+                if tele_at[q] or (g[q - 1] and not g[q]):       # he leaves the ground (or comes out of a teleporter): the fall starts here
+                    start = z[q - 1] if not tele_at[q] else z[q]
+                if g[q] and not g[q - 1]:
+                    drop = max(drop, start - z[q])
+                if g[q]:
+                    start = z[q]
+        else:
+            drop = float(np.max(np.maximum.accumulate(z) - z))
+        pieces, a0 = [], 0                                       # the path every WAY_STEP units; a teleporter is one step of it
+        for c in list(np.nonzero(step > TELE)[0]) + [len(path) - 1]:
+            piece = path[a0:c + 1]
+            ln = float(step[a0:c].sum())
+            pieces.append(_resample(piece, max(2, int(np.ceil(ln / WAY_STEP)) + 1)) if len(piece) > 1 and ln > 0 else piece[:1])
+            a0 = c + 1
+        T["trips"].setdefault(kk, []).append([round(float(t[j] - t[i]), 2), rj, int(round(max(0.0, drop))), int((step > TELE).any())] +
+                                             [int(round(x)) for x in np.concatenate(pieces).ravel()])
 
 
-def ways(trips):
-    """the trips of one pair (rows: TRIP_PTS points and the seconds) -> the number of trips on each of their ways, the
-    most used first. A trip joins the way whose first trip lies nearest, within WAY_D units on average along the path,
-    else it opens a new way; then every trip goes to the nearest way once more."""
-    P = np.asarray(trips, np.float64)[:, :TRIP_PTS * 3].reshape(len(trips), TRIP_PTS, 3)
+def trip_points(row):
+    """a trip's row (seconds, rocket jump, fall, teleporter, then its path every WAY_STEP units) -> its path, (k, 3)"""
+    return np.asarray(row[4:], np.float64).reshape(-1, 3)
+
+
+def way_labels(trips):
+    """the trips of one pair -> for each the number of its way, and their paths as TRIP_PTS points. A trip joins the way
+    whose first trip lies nearest, within WAY_D units on average along the path, else it opens a new way; then every
+    trip goes to the nearest way once more."""
+    P = np.stack([_resample(trip_points(r)) for r in trips])
     lead = [0]
     for i in range(1, len(P)):
         d = np.linalg.norm(P[lead] - P[i], axis=2).mean(1)
         if d.min() > WAY_D:
             lead.append(i)
-    n = np.zeros(len(lead), np.int64)
+    lab = np.zeros(len(P), np.int64)
     for a in range(0, len(P), 2000):
-        d = np.linalg.norm(P[a:a + 2000, None] - P[lead][None], axis=3).mean(2)
-        n += np.bincount(d.argmin(1), minlength=len(lead))
-    return sorted(n.tolist(), reverse=True)
+        lab[a:a + 2000] = np.linalg.norm(P[a:a + 2000, None] - P[lead][None], axis=3).mean(2).argmin(1)
+    return lab, P
+
+
+def pro_ways(T, mp, info):
+    """the ways of a map as routes (sim/pro_ways/<map>.json): for every ordered pair of big items with WAY_MIN_TRIPS trips
+    or more its ways with WAY_KEEP_SHARE of the trips or more, the commonest first, WAY_KEEP at most; a way is given by
+    the trip that lies nearest to the mean of its trips"""
+    pairs = []
+    for k, tr in sorted(T["trips"].items()):
+        if not k.startswith(mp + ":") or len(tr) < WAY_MIN_TRIPS:
+            continue
+        lab, P = way_labels(tr)
+        n = np.bincount(lab)
+        ways_ = []
+        for c in np.argsort(-n)[:WAY_KEEP]:
+            if n[c] < WAY_KEEP_SHARE * len(tr):
+                break
+            m = np.nonzero(lab == c)[0]
+            rows = [tr[i] for i in m]
+            best = m[int(np.linalg.norm(P[m] - P[m].mean(0), axis=2).mean(1).argmin())]
+            pts = trip_points(tr[best])
+            rj = float(np.mean([r[1] for r in rows]))
+            hop = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+            ways_.append(dict(share=round(100.0 * n[c] / len(tr), 1), trips=int(n[c]), seconds_median=_med([r[0] for r in rows]),
+                              seconds_typical=tr[best][0], length_units=int(round(float(hop[hop <= TELE].sum()))),
+                              teleporter_after_point=[int(q) for q in np.nonzero(hop > TELE)[0]],
+                              rocket_jump=bool(rj >= 0.5), rocket_jump_share=round(100.0 * rj, 1),
+                              fall=bool(np.median([r[2] for r in rows]) >= DROP), fall_units_median=int(np.median([r[2] for r in rows])),
+                              teleporter=bool(np.mean([r[3] for r in rows]) >= 0.5), points=[[int(x) for x in q] for q in pts]))
+        if ways_:
+            a, b = k.split(":")[1].split(">")
+            pairs.append({"from": a, "to": b, "trips": len(tr), "seconds_median": _med([r[0] for r in tr]),
+                          "trips_on_these_ways_share": round(sum(w_["share"] for w_ in ways_), 1), "ways": ways_})
+    return dict(map=mp, step_units=WAY_STEP, same_way_within_units=WAY_D, min_trips=WAY_MIN_TRIPS, min_share=WAY_KEEP_SHARE,
+                rocket_jump="his upward speed rises by {:.0f} or more within 0.25 s of a rocket of his, on half the way's trips or more".format(RJ_UP),
+                fall="{:.0f} units or more down between leaving the ground and landing (the median of the way's trips)".format(DROP),
+                items={b_["label"]: [int(round(float(x))) for x in b_["pos"]] for b_ in info["big"]}, pairs=pairs)
+
+
+def ways(trips):
+    """the trips of one pair -> the number of trips on each of their ways, the most used first (see way_labels)"""
+    return sorted(np.bincount(way_labels(trips)[0]).tolist(), reverse=True)
 
 
 def _med(v, q=50):
@@ -669,7 +924,75 @@ def report(T, zrange=None):
                                gap_median_s=_med(I["gaps"]), gap_25=_med(I["gaps"], 25), gap_75=_med(I["gaps"], 75))
     out["predictability"] = predictability(T, zrange)
     out["aggression"] = aggression(T)
+    out["walking"] = walking(T)
+    out["spam_when"] = spam_when(T)
+    out["hit_combinations"] = hit_combinations(T)
     return out
+
+
+def walk_band(steady):
+    """the walking speed from the time by steady speed on the ground: the fullest 10-unit bin from 100 to 260 units a
+    second, if it stands clear of the bins 30 units to either side (twice their mean); else none"""
+    h = np.array([steady.get(str(k), 0.0) for k in range(QUIET_BINS)])
+    k = 10 + int(np.argmax(h[10:26]))
+    side = np.mean([h[k - 3], h[k + 3]])
+    clear = bool(h[k] > 0 and h[k] >= 2.0 * side)
+    return k, clear, h
+
+
+def walking(T):
+    """walking and quiet from a tally: the speed histograms, the walking band found in them, and the shares of his time
+    alive that he walks, moves crouched or stands, in all and by situation"""
+    Q = T["quiet"]
+    if not Q["by"]:
+        return dict(known=False)
+    k, clear, h = walk_band(Q["steady"])
+    lo, hi = (k - 1, k + 1) if clear else (15, 17)                # (no clear peak: Quake's half speed, 160, to have a number)
+    ground = np.array([Q["ground"].get(str(q), 0.0) for q in range(QUIET_BINS)])
+    crouch = np.array([Q["crouch"].get(str(q), 0.0) for q in range(QUIET_BINS)])
+    out = dict(known=True, walking_speed=[QUIET_BIN * k, QUIET_BIN * (k + 1)] if clear else None, clear_peak=clear,
+               band=[QUIET_BIN * lo, QUIET_BIN * (hi + 1)], peak_over_its_sides=round(float(h[k] / max(1e-9, np.mean([h[k - 3], h[k + 3]]))), 2),
+               ground_time_by_speed_share=[round(100.0 * float(x) / max(1e-9, ground.sum()), 2) for x in ground],
+               steady_ground_time_by_speed_share=[round(100.0 * float(x) / max(1e-9, ground.sum()), 2) for x in h],
+               crouched_ground_time_by_speed_share=[round(100.0 * float(x) / max(1e-9, ground.sum()), 2) for x in crouch], by={})
+    for name, c in Q["by"].items():
+        st = np.array([c["steady"].get(str(q), 0.0) for q in range(QUIET_BINS)])
+        wk = float(st[lo:hi + 1].sum())
+        out["by"][name] = dict(minutes=round(c["alive"] / 60.0, 1), walking_share=_share(wk, c["alive"], 2), crouched_moving_share=_share(c["crouch_move"], c["alive"], 2),
+                               standing_share=_share(c["stand"], c["alive"], 2), quiet_share=_share(wk + c["crouch_move"] + c["stand"], c["alive"], 2),
+                               in_the_air_share=_share(c["air"], c["alive"], 1))
+    return out
+
+
+def spam_when(T):
+    """when and at what the blind shots that land away from himself go, a weapon"""
+    out = {}
+    B = T["when_base"]
+    for wn in ("rl", "gl", "pg"):
+        W = T["when"][wn]
+        n = W["n"]
+        out[wn] = dict(shots=n, since_last_seen={SINCE_BANDS[q]: _share(W["since"].get(str(q), 0), n) for q in range(len(SINCE_BANDS))},
+                       landing={ITEM_CATS[q]: _share(W["item"].get(str(q), 0), n) for q in range(len(ITEM_CATS))},
+                       hurt_in_the_5s_before_share=_share(W["hurt"], n), hurt_badly_share=_share(W["hurt_bad"], n),
+                       within_10s_of_his_death_share=_share(W["after_death"], n))
+    out["of_all_his_time_alive"] = dict(hurt_in_the_5s_before_share=_share(B["hurt"], B["alive"]), hurt_badly_share=_share(B["hurt_bad"], B["alive"]),
+                                        within_10s_of_his_death_share=_share(B["after_death"], B["alive"]))
+    return out
+
+
+def hit_combinations(T):
+    H = T["hitcombo"]
+    m10 = H["known"] / 600.0
+    if not m10:
+        return dict(known=False)
+    per = lambda x: round(x / m10, 3)
+    return dict(known=True, rocket_hits_a_ten_minutes=per(H["rl_hits"]), rocket_hit_share=_share(H["rl_hits"], H["rl_shots"]),
+                grenade_hits_a_ten_minutes=per(H["gl_hits"]), grenade_hit_share=_share(H["gl_hits"], H["gl_shots"]),
+                rocket_hit_then_lightning_or_rail_hit_a_ten_minutes=per(H["rl_lg"] + H["rl_rg"]), rocket_then_rail_share=_share(H["rl_rg"], H["rl_lg"] + H["rl_rg"]),
+                grenade_hit_then_lightning_or_rail_hit_a_ten_minutes=per(H["gl_lg"] + H["gl_rg"]),
+                rocket_hit_then_rocket_hit_a_ten_minutes=per(H["juggle"]),
+                frags=H["frags"], frags_after_a_pair_share=_share(H["frags_combo"], H["frags"]), frags_after_a_juggle_share=_share(H["frags_juggle"], H["frags"]),
+                rocket_hits_followed_by_a_beam_hit_share=_share(H["rl_lg"] + H["rl_rg"], H["rl_hits"]))
 
 
 def zranges(path=None):
@@ -743,7 +1066,7 @@ def predictability(T, zrange=None):
                 big = [x for x in n if x >= max(3, WAY_MIN_SHARE * len(tr))]
                 pairs[k.split(":")[1]] = dict(trips=len(tr), ways=len(big), commonest_share=round(100.0 * n[0] / len(tr), 1),
                                               one_off_share=round(100.0 * (1.0 - sum(big) / len(tr)), 1),
-                                              seconds_median=_med([r[-1] for r in tr]))
+                                              seconds_median=_med([r[0] for r in tr]))
         o["routes"] = dict(pairs=len(pairs), trips=sum(len(tr) for k, tr in T["trips"].items() if k.startswith(mp + ":")),
                            one_off_share_mean=round(float(np.mean([p["one_off_share"] for p in pairs.values()])), 1) if pairs else None,
                            ways_mean=round(float(np.mean([p["ways"] for p in pairs.values()])), 2) if pairs else None,
@@ -799,7 +1122,7 @@ def map_info(world, name):
             n_same = sum(1 for f in ents if f["classname"] == cls)
             wname = {"weapon_rocketlauncher": "rl", "weapon_railgun": "rg", "weapon_lightning": "lg"}.get(cls)
             big.append(dict(label=BIG[cls] + (str(seen[BIG[cls]]) if n_same > 1 else ""), pos=p, rivals=rivals,
-                            col=sort if wname is None else WEAPONS.index(wname)))
+                            col=sort if wname is None else WEAPONS.index(wname), back=RETURN.get(ITEM_KIND.get(cls), 5.0)))
     return dict(name=name, items=out, big=big)
 
 
@@ -979,7 +1302,7 @@ def demo_record(binf, meta):
                       alive=alive[keep], eye_h=ps[keep, PS["viewheight"]], enemy_air=air[keep], hits=pers[keep, P_HITS], seg=seg[keep],
                       ammo=np.stack([np.zeros(len(keep)) if nm == "g" else am[keep, [q for q, x in QLW.items() if x == nm][0]] for nm in WEAPONS], 1),
                       client=cn[keep], owned=np.stack([(st[keep, wslot].astype(np.int64) >> [q for q, x in QLW.items() if x == nm][0]) & 1 for nm in WEAPONS], 1),
-                      enemy_weapon=eweap[keep])
+                      enemy_weapon=eweap[keep], ground=ps[keep, PS["groundEntityNum"]] != 1023)
     info.update(recorder=int((meta.get("gamestates") or [{}])[0].get("client_num", -1)), cuts=int((np.diff(cn[keep]) != 0).sum()),
                 final={int(c): int(v) for c, v in last.items()}, final_enemy=int(e), final_client=int(cn[keep[-1]]),
                 step_ms=int(np.median(dt)))
@@ -1007,7 +1330,21 @@ def parse(demo, tmp):
 _W = {}
 
 
+def low_priority():
+    """below normal, so that a training run on the same PC keeps its share"""
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+    except Exception:                                          # noqa: BLE001 (not Windows)
+        pass
+
+
+def _big():
+    return [dict(label=b["label"], pos=[float(x) for x in b["pos"]]) for b in _W["info"]["big"]]
+
+
 def _init(mp, tmp):
+    low_priority()
     sys.path.insert(0, SIM)
     from qsim import World
     w = World(os.path.join(ROOT, "data", "maps", mp + ".bsp"))  # one World a process
@@ -1051,12 +1388,25 @@ def run_map(mp, limit, procs, redo):
         if procs <= 1:
             _init(mp, tmp)
             res = [_one(j) for j in jobs]
+            big = _big()
         else:
             with mp_.Pool(procs, initializer=_init, initargs=(mp, tmp)) as pool:
                 res = pool.map(_one, jobs, chunksize=4)
+                big = pool.apply(_big)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    return files, res
+    return files, res, big
+
+
+def dump_json(obj, path, depth=4):
+    """json with a line a key down to `depth` levels and whatever lies deeper on that line: readable in a diff, and well
+    under half the size of a line a value"""
+    def w(x, d, ind):
+        if d >= depth or not isinstance(x, dict) or not x:
+            return json.dumps(x)
+        return "{\n" + ",\n".join(ind + " " + json.dumps(k) + ": " + w(v, d + 1, ind + " ") for k, v in x.items()) + "\n" + ind + "}"
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(w(obj, 0, "") + "\n")
 
 
 def table(rows, head):
@@ -1068,8 +1418,8 @@ def table(rows, head):
 
 def show(res):
     """the tables, markdown"""
-    maps = [m for m in res["maps"] if m != "all"]
-    cols = (["all"] if "all" in res["maps"] else []) + maps
+    maps = [m for m in res["maps"] if m not in ("all", "all_ten")]
+    cols = [m for m in ("all", "all_ten") if m in res["maps"]] + maps
     R = res["maps"]
     print("## The pros' yardsticks\n")
     print(table([["demos used"] + [R[m]["demos"] for m in cols], ["minutes of play"] + [R[m]["minutes"] for m in cols],
@@ -1115,7 +1465,7 @@ def show(res):
     P = {m: R[m]["predictability"] for m in cols}
 
     def pm(m, f, g):                                            # a map's own number, or over the maps their mean
-        return g(P[m]) if m == "all" else f(P[m]["maps"][m]) if m in P[m]["maps"] else None
+        return g(P[m]) if m in ("all", "all_ten") else f(P[m]["maps"][m]) if m in P[m]["maps"] else None
     rows = [
         ["one player in one game: time in his 8 most-used cells, %"] + [pm(m, lambda o: o["per_player"]["top8_share"], lambda o: o["position"]["per_player_top8_share"]) for m in cols],
         ["one player in one game: cells that hold 80% of his time"] + [pm(m, lambda o: o["per_player"]["cells_for_80"], lambda o: o["position"]["per_player_cells_for_80"]) for m in cols],
@@ -1146,6 +1496,47 @@ def show(res):
                        ("his health and armor, and the score", "by_stack_and_score"),
                        ("his health and armor, and the distance at the sighting (extra)", "by_stack_and_distance")):
         print(table([[k] + [v.get(q) for q, _ in keys] for k, v in A[tab].items()], [title] + [lbl for _, lbl in keys]) + "\n")
+    show_more(R, cols)
+
+
+def show_more(R, cols):
+    """the tables of walking, when they spam, combinations by hits"""
+    print("### 9. Walking and quiet\n")
+    Wk = {m: R[m]["walking"] for m in cols}
+    if all(not v.get("known") for v in Wk.values()):
+        print("(his feet on the ground are not in these records)\n")
+    else:
+        first = next(m for m in cols if Wk[m].get("known"))
+        w0 = Wk[first]
+        print("Time on the ground by speed ({}), % of all his time on the ground; steady = his speed changes by under {:g} a frame:\n".format(first, STEADY))
+        idx = list(range(0, 36))
+        print(table([["all", *[w0["ground_time_by_speed_share"][q] for q in idx]], ["steady, not crouched", *[w0["steady_ground_time_by_speed_share"][q] for q in idx]],
+                     ["crouched", *[w0["crouched_ground_time_by_speed_share"][q] for q in idx]]], ["speed from", *[str(int(QUIET_BIN * q)) for q in idx]]))
+        print("\n" + table([["a clear walking peak"] + [("yes" if Wk[m]["clear_peak"] else "no") if Wk[m].get("known") else None for m in cols],
+                             ["walking speed found, from"] + [(Wk[m].get("walking_speed") or [None])[0] for m in cols],
+                             ["the fullest bin from 100 to 260 over the bins 30 either side"] + [Wk[m].get("peak_over_its_sides") for m in cols]], ["", *cols]))
+        names = list(w0["by"].keys())
+        keys = (("minutes", "minutes"), ("walking_share", "walking, %"), ("crouched_moving_share", "crouched and moving, %"), ("standing_share", "standing, %"),
+                ("quiet_share", "quiet in all, %"), ("in_the_air_share", "in the air, %"))
+        print("\n" + table([[n] + [w0["by"][n][k] for k, _ in keys] for n in names], ["situation ({})".format(first)] + [lbl for _, lbl in keys]))
+    print("\n### 10. When they spam: the blind shots that land away from himself ({})\n".format(cols[0]))
+    S = R[cols[0]]["spam_when"]
+    rows = [["shots"] + [S[w]["shots"] for w in ("rl", "gl", "pg")] + [None]]
+    rows += [["enemy last in view: " + b + ", %"] + [S[w]["since_last_seen"][b] for w in ("rl", "gl", "pg")] + [None] for b in SINCE_BANDS]
+    rows += [["lands within 300 units of: " + c + ", %"] + [S[w]["landing"][c] for w in ("rl", "gl", "pg")] + [None] for c in ITEM_CATS]
+    for k, lbl in (("hurt_in_the_5s_before_share", "he lost 20 or more health and armor in the 5 s before, %"), ("hurt_badly_share", "50 or more, %"),
+                   ("within_10s_of_his_death_share", "within 10 s of his own death, %")):
+        rows.append([lbl] + [S[w][k] for w in ("rl", "gl", "pg")] + [S["of_all_his_time_alive"][k]])
+    print(table(rows, ["", "rockets", "grenades", "plasma", "of all his time alive"]))
+    print("\n### 11. Combinations by hits\n")
+    keys = (("rocket_hits_a_ten_minutes", "rocket hits a ten minutes"), ("rocket_hit_share", "rockets that hit, %"),
+            ("rocket_hit_then_lightning_or_rail_hit_a_ten_minutes", "rocket hit, then a lightning or rail hit within 1.5 s: a ten minutes"),
+            ("rocket_hits_followed_by_a_beam_hit_share", "... % of his rocket hits"), ("rocket_then_rail_share", "... the second is the rail, %"),
+            ("grenade_hit_then_lightning_or_rail_hit_a_ten_minutes", "grenade hit, then a lightning or rail hit within 1.5 s: a ten minutes"),
+            ("rocket_hit_then_rocket_hit_a_ten_minutes", "rocket hit, then another rocket's hit within 1.2 s: a ten minutes"),
+            ("frags_after_a_pair_share", "his frags within 2 s after such a pair (rocket or grenade, then beam), %"),
+            ("frags_after_a_juggle_share", "his frags within 2 s after two rocket hits, %"))
+    print(table([[lbl] + [R[m]["hit_combinations"].get(k) for m in cols] for k, lbl in keys], ["", *cols]))
 
 
 ABOUT = dict(
@@ -1163,6 +1554,9 @@ ABOUT = dict(
     routes="a trip: from his pickup of one of mega, red armor, a yellow armor, a rocket launcher, the rail, the lightning gun to his next pickup of another of them (a weapon: its ammunition rising at its spot), alive throughout, 1 to 20 s. Its path is 16 points evenly along it; two trips are the same way when their paths lie within 200 units of each other on average (a trip joins the way whose first trip is nearest). A pair (from, to: the two directions apart) counts with 30 trips or more, a way with 5% of its pair's trips (3 at least)",
     standing="his speed under 50 units a second while alive; the longest stand in a minute: for every minute of the record with 30 s or more alive, the longest unbroken stand that reaches into it",
     aggression="a sighting: the enemy comes into his view after 1 s or more out of it. Read over the next 3 s (to his death, if he dies): his mean speed along the line to the enemy (plus = closing; where the enemy is not known, to where he last was); 'pushes': that mean over 150 units a second; whether he fires within 1 s; 'view broken': neither of them died and the enemy was out of his view for 0.5 s at a stretch (who broke it is not known); and over 10 s his frags less his deaths. The situation at the sighting: his health plus armor (under 60, 60 to 125, over 125); whether he owns rockets, lightning or rail with ammunition; how long ago he fragged this enemy (under 10 s: the enemy has just spawned; what he did before a cut of the demo is not known and counts as 'not yet'); the weapon in the enemy's hand (rockets, lightning, rail = big); who leads",
+    walking="his feet on the ground and his horizontal speed steady (changing by under 3 units a second from frame to frame, the frame before and after); the walking speed is the fullest 10-unit bin of that time from 100 to 260 units a second if it stands clear of the bins 30 units either side, and walking is the steady time in that bin and the one either side of it, not crouched. Crouched and moving: his eye low, on the ground, 50 units a second or more. Standing: under 50. 'Quiet' is the three together",
+    spam_when="the blind shots that land 150 units or more from himself. The landing place within 300 units of the nearest of mega, armors, rocket launcher, rail, lightning; a mega or armor's return 'as far as he knows': his own last pickup of it in this stretch plus 35 s (mega) or 25 s (armor), if that lies ahead; 'unknown' if he did not take it or it should be back. Hurt: his health plus armor went down by 20 (50) or more in the 5 s before, single losses of under 3 not counted",
+    hit_combinations="from his own hit counter: a step of it on a frame he fires lightning, rail, machine gun or shotgun on (or the frame before) is that weapon's hit; any other step is the hit of the rocket, grenade or plasma ball of his that is due about then (from 0.05 s after the shot to 0.2 s after it would reach the wall his view pointed at; a grenade until its fuse ends). A pair: a rocket (grenade) that hit, then the first lightning or rail hit within 1.5 s. A frag 'after a pair': within 2 s of the pair's second hit",
     not_measured=[
         "whether a blind shot did damage, exactly: a demo has no damage events. The extra 'hit' is his own hit counter going up as the shot lands",
         "where the enemy is while the server does not send him (out of sight and away): 'met' misses an enemy who was there unseen, and a blind shot at an enemy heard is not told from one at nothing",
@@ -1177,7 +1571,8 @@ ABOUT = dict(
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--map", default=MAPS)
+    ap.add_argument("--map", default=MAPS + "," + MORE)
+    ap.add_argument("--ways", default=None, help="the folder of the ways as routes (default sim/pro_ways; a sample writes none)")
     ap.add_argument("--limit", type=int, default=0, help="at most this many demos a map, spread over the archive")
     ap.add_argument("--procs", type=int, default=2)
     ap.add_argument("--redo", action="store_true")
@@ -1190,8 +1585,11 @@ def main():
     maps = a.map.split(",")
     res, total, t0 = dict(about=ABOUT, maps={}), new_tally(), time.time()
     total_skips, infos = {}, {}
+    total10, skips10 = new_tally(), {}
+    ways_dir = a.ways or (None if a.limit else os.path.join(ROOT, "sim", "pro_ways"))
+    low_priority()
     for mp in maps:
-        files, rs = run_map(mp, a.limit, a.procs, a.redo)
+        files, rs, big = run_map(mp, a.limit, a.procs, a.redo)
         T, skips, rows = new_tally(), {}, dict(blind=[], sight=[], view=[])
         infos[mp] = []
         for f, r in zip(files, rs):
@@ -1211,20 +1609,37 @@ def main():
         res["maps"][mp] = dict(report(T), demos_in_archive=len(files), left_out=skips)
         if len(maps) > 1:
             res["maps"][mp]["aggression"].pop("cells")          # (a map alone is too thin for the five-way table)
-        add_tally(total, T)
+            for k in ("ground_time_by_speed_share", "steady_ground_time_by_speed_share", "crouched_ground_time_by_speed_share"):
+                res["maps"][mp]["walking"].pop(k, None)         # (the histograms under the sums)
+        if ways_dir:                                             # the ways as routes
+            os.makedirs(ways_dir, exist_ok=True)
+            with open(os.path.join(ways_dir, mp + ".json"), "w", encoding="utf-8") as f:
+                json.dump(pro_ways(T, mp, dict(big=big)), f)
+        if mp in MAPS.split(","):
+            add_tally(total, T)
+            for k, v in skips.items():
+                total_skips[k] = total_skips.get(k, 0) + v
+        add_tally(total10, T)
         for k, v in skips.items():
-            total_skips[k] = total_skips.get(k, 0) + v
+            skips10[k] = skips10.get(k, 0) + v
         print("{}: {} demos, {} used, left out {}, {:.0f} s".format(mp, len(files), T["demos"], skips, time.time() - t0), file=sys.stderr, flush=True)
     if len(maps) > 1:
-        res["maps"] = dict(all=dict(report(total), left_out=total_skips), **res["maps"])
-        for o in res["maps"]["all"]["predictability"]["maps"].values():
-            o["routes"].pop("by_pair")                          # (under the map itself)
+        six = [m for m in maps if m in MAPS.split(",")]
+        tops = {}
+        if len(six) > 1:
+            tops["all"] = dict(report(total), left_out=total_skips)
+        if len(maps) > len(six):
+            tops["all_ten" if len(maps) == 10 else "all_given"] = dict(report(total10), left_out=skips10)
+            tops["all_ten" if len(maps) == 10 else "all_given"]["aggression"].pop("cells")
+        for v in tops.values():
+            for o in v["predictability"]["maps"].values():
+                o["routes"].pop("by_pair")                      # (under the map itself)
+        res["maps"] = dict(tops, **res["maps"])
     if a.check:
         return check(infos)
-    out = a.json or (None if a.limit or a.map != MAPS else os.path.join(ROOT, "docs", "pro_yardsticks.json"))
+    out = a.json or (None if a.limit or a.map != MAPS + "," + MORE else os.path.join(ROOT, "docs", "pro_yardsticks.json"))
     if out:
-        with open(out, "w", encoding="utf-8") as f:
-            json.dump(res, f, indent=1)
+        dump_json(res, out)
     else:
         print("a sample or a part of the maps: nothing written (--json <file> writes it)", file=sys.stderr)
     show(res)

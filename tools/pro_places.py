@@ -1,7 +1,7 @@
 """Where the pros' blind shots land: the places of a map that rockets, grenades and plasma are fired at with no enemy in
 view, for the "place tokens" a model can aim at.
 
-    python tools/pro_places.py                         the six maps -> sim/pro_places/<map>.json and a list on stdout
+    python tools/pro_places.py                         the ten maps -> sim/pro_places/<map>.json and a list on stdout
     python tools/pro_places.py --picture               also docs/design/places/<map>.png (the system Python: matplotlib)
     python tools/pro_places.py --map bloodrun --shots his.npy --out his.json      another player's blind shots, the same way
 
@@ -47,9 +47,10 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged"
+MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure"
 NAMES = dict(aerowalk="Aerowalk", bloodrun="Blood Run", lostworld="Lost World", sinister="Sinister",
-             furiousheights="Furious Heights", battleforged="Battleforged", campgrounds="Campgrounds")
+             furiousheights="Furious Heights", battleforged="Battleforged", campgrounds="Campgrounds", hektik="Hektik",
+             toxicity="Toxicity", cure="Cure")
 W_NAME = {0: "rockets", 5: "grenades", 6: "plasma"}             # the simulator's weapon numbers (duel_env.WEAPONS)
 WEIGHT = {0: 1.0, 5: 1.0, 6: 0.2}
 RADIUS, GRID, KEEP = 128.0, 64.0, 24

@@ -163,7 +163,8 @@ def play(job):
                             shots=shots, health=np.where(dead, 0.0, B["hp"][:, p]), armor=B["ar"][:, p], score=B["score"][:, p], enemy=enemy,
                             enemy_score=B["score"][:, o], clock=tm, alive=alive, eye_h=np.where(B["duck"][:, p], 12.0, 26.0),
                             enemy_air=B["air"][:, o].astype(np.int64), hits=np.cumsum(up | B["frag"][:, p]), ammo=B["ammo"][:, p],
-                            owned=B["has"][:, p], enemy_weapon=B["w"][:, o], client=np.full(frames, seed * 1000 + int(p)))
+                            owned=B["has"][:, p], enemy_weapon=B["w"][:, o], client=np.full(frames, seed * 1000 + int(p)),
+                            ground=~B["air"][:, p])
         t_, r_ = Y.measure(rec, env.w, info_)
         Y.add_tally(T, t_)
         for k in rows:
@@ -226,7 +227,7 @@ def pros_standing(maps):
 def pro_trips(mp):
     """the pros' trips of a map, {pair: rows}: from tools/pro_yardsticks.py's counts a demo, kept in one file a map"""
     import pro_yardsticks as Y
-    keep = os.path.join(Y.demo_root(), "yardsticks", "trips_{}.json".format(mp))
+    keep = os.path.join(Y.demo_root(), "yardsticks", "trips_{}_v{}.json".format(mp, Y.VERSION))
     if os.path.exists(keep):
         return json.load(open(keep))
     out = {}
@@ -382,6 +383,19 @@ def show(res, pros):
                        ("his health and armor, and the distance at the sighting", "by_stack_and_distance")):
         names = list(R["pros"]["aggression"][tab].keys())
         print(table([[n] + [three(lambda r, n=n, k=k, tab=tab: r["aggression"][tab][n][k]) for k, _ in keys] for n in names], [title] + [lbl for _, lbl in keys]) + "\n")
+    print("### 9. Walking and quiet (the pros' walking speed is 160; each cell: {})\n".format(lead))
+    keys = (("minutes", "minutes"), ("walking_share", "walking, %"), ("crouched_moving_share", "crouched and moving, %"), ("standing_share", "standing, %"),
+            ("quiet_share", "quiet in all, %"), ("in_the_air_share", "in the air, %"))
+    names = list(R["pros"]["walking"]["by"].keys())
+    print(table([[n] + [three(lambda r, n=n, k=k: r["walking"]["by"][n][k]) for k, _ in keys] for n in names], ["situation"] + [lbl for _, lbl in keys]))
+    print("\n### 11. Combinations by hits\n")
+    keys = (("rocket_hits_a_ten_minutes", "rocket hits a ten minutes"), ("rocket_hit_share", "rockets that hit, %"),
+            ("rocket_hit_then_lightning_or_rail_hit_a_ten_minutes", "rocket hit, then a lightning or rail hit within 1.5 s: a ten minutes"),
+            ("rocket_hits_followed_by_a_beam_hit_share", "... % of his rocket hits"),
+            ("grenade_hit_then_lightning_or_rail_hit_a_ten_minutes", "grenade hit, then a lightning or rail hit within 1.5 s: a ten minutes"),
+            ("rocket_hit_then_rocket_hit_a_ten_minutes", "rocket hit, then another rocket's hit within 1.2 s: a ten minutes"),
+            ("frags_after_a_pair_share", "his frags within 2 s after such a pair, %"), ("frags_after_a_juggle_share", "his frags within 2 s after two rocket hits, %"))
+    print(table([row(lbl, lambda r, k=k: r["hit_combinations"][k]) for k, lbl in keys], ["", *head]) + "\n")
     st = res.get("standing", {})
     if st:
         print("### 8. With the enemy in view: weapons, distance, outcome, and the strength of where he stands\n")
@@ -462,6 +476,8 @@ def main():
             per[r["map"]] = Y.report(r["tally"], zrange=zr)
             ag = per[r["map"]]["aggression"]                    # (a map alone is too thin for the tables by two and more sides)
             per[r["map"]]["aggression"] = {k: ag[k] for k in ("all", "by_stack", "by_last_frag", "by_enemy_weapon", "by_score")}
+            for k in ("ground_time_by_speed_share", "steady_ground_time_by_speed_share", "crouched_ground_time_by_speed_share"):
+                per[r["map"]]["walking"].pop(k, None)           # (the histograms under "all")
             Y.add_tally(total, r["tally"])
             rows[r["map"]] = (r["rows"]["sight"], r["rows"]["view"])
             if opp == "nightmare":
@@ -480,8 +496,7 @@ def main():
                 out["cells"][opp][mp] = PP.cells(sight, view, PP.expected(sight), PP.map_items(mp))
     out["standing"]["pros"] = pros_standing(maps)
     path = a.json or os.path.join(ROOT, "docs", "bobby_yardsticks_{}.json".format(a.tag))
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=1)
+    Y.dump_json(out, path, 5)
     show(out, pros)
 
 

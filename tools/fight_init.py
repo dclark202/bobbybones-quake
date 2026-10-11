@@ -5,8 +5,8 @@
     python tools/fight_init.py never <file.pt> [<file.pt> ...]         (in place: a network that never takes the enemy as its target)
 
 A ninth intention that starts at "never" would be found slowly and the item rule's lesson would pull against it. So its
-weights are placed by a fit to a plain rule (RULE below: he is strong and armed, he knows where the enemy was a moment
-ago, and the enemy has just spawned or he is very strong), as the switch to his legs was (tools/legs_init.py). No reward
+weights are placed by a fit to a plain rule (rule() below: he is strong and armed, the enemy has just spawned and was seen
+a moment ago), as the switch to his legs was (tools/legs_init.py). No reward
 and no teacher's label says so afterwards, and the item rule's lesson leaves the new choice alone (the trainer).
 
 collect: the network plays itself with the rule on its intention; what its memory holds on a share of the frames is kept
@@ -22,12 +22,16 @@ NEVER = -20.0
 
 
 def rule(env, E):
-    """strong and armed, the enemy known a moment ago, and he is new or I am very strong (games only)"""
+    """FIGHT_RULE=narrow (the default since the trial of 2026-10-11): strong and armed, the enemy spawned under 10 seconds
+    ago and was seen within 4: the pros' own strongest case, and level in duels where the broad rule lost (it cost him
+    his items). FIGHT_RULE=broad: strong and armed, the enemy known within 8 s, and he is new (20 s) or I have 175"""
     st = env.hp + env.armor
     big = [E.RL, E.LG, E.RG, E.PG]
     armed = (env.has[:, big] & (env.ammo[:, big] > 0)).any(1)
-    new_enemy = env.life_t[env._others_arr()].min(1) < 20.0
-    return (st >= 125.0) & armed & (env.seen_t <= 8.0) & (new_enemy | (st >= 175.0)) & (env.hp > 0) & (env.run_k < 0)
+    new_ = env.life_t[env._others_arr()].min(1)
+    if os.environ.get("FIGHT_RULE", "narrow") == "broad":
+        return (st >= 125.0) & armed & (env.seen_t <= 8.0) & ((new_ < 20.0) | (st >= 175.0)) & (env.hp > 0) & (env.run_k < 0)
+    return (st >= 125.0) & armed & (new_ < 10.0) & (env.seen_t <= 4.0) & (env.hp > 0) & (env.run_k < 0)
 
 
 def widen(ck, E, bias=NEVER):
