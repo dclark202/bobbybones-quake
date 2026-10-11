@@ -26,7 +26,7 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 | What | Where it stands |
 |---|---|
 | On the public server | `duel_gru_v14`'s end ([runs/REPORT_v14.md](runs/REPORT_v14.md)) since 2026-10-10 15:39: free-for-all, two Bobbys with their own names and voices, the ten duel maps in the vote, a leaderboard since 2026-10-09. Against people so far (v13): 19 frags made, 130 taken (three players) |
-| In training | `duel_gru_v15` since 2026-10-10 17:10, to noon of 2026-10-11 ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md)), from v14's end ([runs/REPORT_v14.md](runs/REPORT_v14.md)); reports at 22:00 and 07:00 |
+| In training | nothing. `duel_gru_v15`'s first start (2026-10-10 17:10 to 18:54, [runs/MANIFEST_v15.md](runs/MANIFEST_v15.md)) was stopped: he copied the teacher's view zig-zag and none of its speed, and lost Lost World to v14's end at the first check. The teacher has his mouse now and moves like the pros; a trial showed he still cannot be taught it as a side lesson (the log of 2026-10-10 20:45). Next: the owner's decision on the teacher's network as his legs (B-211) |
 | The checks of a run | every save plays the last best network head to head (the owner's standing rule, 2026-10-10) and 32 ten-minute duels a map against the Nightmare stand-in; real games against the game's Nightmare bot before and after a run; play tests |
 | The simulator | movement, nine weapons, items, sounds, the human limits on hands, eyes and aim; set right against the game's maps on 2026-10-09 (twelve mismatches). Its targets are easier to hit with a rail than people are (B-199) |
 | Items and weapons (v13) | time without a big weapon 18%, red armor 0.63 a player-minute; 70% of the frags against the stand-in on the six maps; the game's Nightmare bot beaten on Blood Run (14-4, 11-6, 10-3) and Lost World (8-5, 6-4, 9-5) |
@@ -46,7 +46,7 @@ of 10:57 from before the strafe-jumping teacher (`policy_end_v14.pt`). Against v
 [runs/REPORT_v14.md](runs/REPORT_v14.md). Its two side arms (the old teacher left on; rockets at a fifth of the price)
 were stopped in the afternoon: the first went on losing to v13, the second changed nothing.
 
-**`duel_gru_v15` is training since 2026-10-10 17:10** (the owner's go at 17:05; to noon of 2026-10-11; judged by speed and
+**`duel_gru_v15`'s first start was stopped at 18:54** (the log of 2026-10-10 20:45: the teacher's lesson does not transfer as a side lesson; proposed: the teacher's network as his legs, B-211). It had begun at 17:10 (the owner's go at 17:05; to noon of 2026-10-11; judged by speed and
 jumping, then rockets, plasma and grenades: "if either of the first two don't succeed for this run we'll really need to
 reassess"). It was audited the afternoon before its start ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md); the log of
 2026-10-10 15:30): from v14's end; jump runs on the pros' jumps (144 in use on ten maps, tries at 137) with a teacher

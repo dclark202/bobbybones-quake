@@ -1,15 +1,24 @@
-# `duel_gru_v15`: the manifest (2026-10-10; started 17:10 on the owner's go, to noon of 2026-10-11)
+# `duel_gru_v15`: the manifest (2026-10-10; started 17:10 on the owner's go; **stopped 18:54**, see section 0)
 
 What v15 has in its rounds, what he is shown and paid, what changes from v14, how each new thing was tested, what is
 known not to be right yet, and what is the owner's to decide. The run starts only on his word. The network it starts
 from: [REPORT_v14.md](REPORT_v14.md). The day's log: [2026-10-10](../results/2026-10-10.md). Jump pictures and tables:
 [../design/jumps/](../design/jumps/).
 
-**Which run is which.** v13 is on the public server. v14 is the run of last night and this morning (three starts; the
+**Which run is which.** v14's end is on the public server (since 15:39). v14 is the run of last night and this morning (three starts; the
 third began at 08:06 and was ended at 11:52); "v14" or "v14's end" is its save of 10:57. **v15 is the run that began on 2026-10-10 at
 17:10** from v14's end with everything below.
 
 ## 0. The owner's decisions (2026-10-10)
+
+**Stopped at 18:54 (the first start; its saves are kept, to be `duel_gru_v15_try1` before the next one).** In 104 minutes his runs fell from 5.7 to 3.7 items a
+minute, he took the teacher's jumping and its view zig-zag and none of its speed, and the first check lost Lost World to
+v14's end (40%; the stop rule). Changed during the run: from 18:24, on the owner's word, 10% of his lives in games begin
+with a weapon in hand (rockets 50, plasma 25, grenades 25: `START_GUN_W`) and the one-weapon rounds have rockets. Found
+since (the log of 2026-10-10 20:45): the teacher's mouse was not his (retrained: `move_v15n`, which moves like the pros);
+with that teacher a trial still failed at two strengths; a copy of the teacher from his inputs cannot strafe jump at all.
+The teacher's lesson (section 4) is therefore not how v15 will be started again: what takes its place is the owner's
+decision (BACKLOG B-211), and this manifest is rewritten before he is asked for a go.
 
 | When | Decision |
 |---|---|
