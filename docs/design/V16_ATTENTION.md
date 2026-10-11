@@ -1,154 +1,189 @@
-# v16: attention (the proposed model, and what the pro demos can do for it)
+# v16: attention (the proposed model, as it stands after 2026-10-11)
 
-A proposal for the owner's review (2026-10-11). Nothing here is built. The earlier scope note is
-[ATTENTION_POC.md](ATTENTION_POC.md) (2026-10-07: timings on the rented server); the first pass of the run is
-[../runs/MANIFEST_v16.md](../runs/MANIFEST_v16.md).
+A proposal for the owner's review. Nothing of it is built. Second version: rewritten on the evening of 2026-10-11 after
+the day's measurements (the pros' yardsticks and Bobby beside them, the event record tried on the demos, the fight
+target tried in the simulator, the model timed on the rented server). The first pass of the run:
+[../runs/MANIFEST_v16.md](../runs/MANIFEST_v16.md). The event record's test: [v16_event_record.md](v16_event_record.md).
+The earlier scope note: [ATTENTION_POC.md](ATTENTION_POC.md).
 
 **What it is judged by** (the owner, 2026-10-11): "Game awareness primarily. Also how much his movement begins to blend
 together the two styles fighting/moving we have now." What he wants to see: "Rocket/plasma/grenade spam used
 appropriately"; "Playing aggressive/defensive depending on score/being in control/etc. (in control = knows item times
 and has stack to contest them when they become available)"; "Setting traps/using weapon combos for frags (rocket to
-disrupt movement, then LG on the midair enemy since they cannot dodge as easily)". Whole ten-minute games with pay for
-the result: "Yes". Training speed: "completely neutral ... I just want him to learn, and be able to fit 4 bots on the
-server that I am paying for."
+disrupt movement, then LG on the midair enemy)". After playing v15c: "their main failure point is that their routes are
+predictable"; "he has no counterplay"; "he doesn't know how to push an advantage"; "enemy position + uncertainty";
+"a 'strength of position' token ... which then influences what weapon they are likely to chose" ("Absolutely it
+should" hold the weapon that suits the spot). Whole ten-minute games with pay for the result: "Yes". Three bots a
+server would do; four fit.
 
-## 1. Today's model, and what it cannot do
+## 1. What the day's measurements say he lacks
 
-    576 inputs -> Linear 256, tanh -> Linear 256, tanh -> GRU 512 -> 12 outputs (75 choices) + a value     1.44 M weights
-    his legs: 61 inputs -> Linear 256, tanh -> Linear 256, tanh -> 4 outputs (17 choices)                  frozen, switched in
+Bobby (v15c's end, 1,440 minutes against himself) beside the pros (4,085 demos), `tools/bobby_yardsticks.py` and
+`tools/pro_yardsticks.py`:
 
-- Every thing has a fixed slot: "the nearest projectile", "the second nearest", "the red armor". What he learns about
-  one slot he does not know about another, and a relation between two things (the enemy is near the red armor, the red
-  armor is back in five seconds, I have 40 health) has to be learnt slot pair by slot pair.
-- His memory is the GRU's state: good for the last seconds, poor for "he took the mega 28 seconds ago".
-- He can aim only at an enemy: the inputs that help him aim (the lead of a rocket, a grenade's arc) are computed for
-  where he believes the enemy is. A doorway, an exit, an item spot cannot be a target.
-- Nothing says how the game stands as a whole: rounds are two minutes and a frag pays the same at any score.
-- His two ways of moving are two networks with a hard switch.
+| | The pros | Bobby |
+|---|---|---|
+| Rockets a minute; the share fired with no enemy in view | 10.8; 50% | 2.1; 0.3% |
+| Grenades a minute | 2.2 | 0.03 |
+| A rocket, then rail or lightning within 1.5 s, per ten minutes | 3.6 | 0.05 |
+| In hand with the enemy in view: lightning, rockets | 29%, 40% | 42%, 19% |
+| The distance he fights at (median) | 508 | 327 |
+| Closing on a sighting when weak (under 60) / stacked | -12 / +12 | +33 / +34 |
+| Stacked: closing just after a frag / otherwise | +37 / +5 | +34 / +32 |
+| Higher than the enemy in view; time in the lowest third of the map | 26%; 28% | 17.5%; 40% |
+| Trips between two items on the commonest way; on a way of their own | 40%; 36% | 52%; 19% |
+| Back at the mega within 2 s of its return | 47% | 49% |
+| Time in his eight most-used places (one game) | 24.5% | 25.0% |
 
-## 2. The proposed model
+He already has what a memory gives (item timing, where his time goes). He lacks what comes from knowing the enemy's
+state and the map's places: he behaves the same whatever the enemy has, never fires at a place, fights low and close,
+and takes one way. Two tests of the day say the same:
 
-Attention is added beside what he has, not in place of it. The path of today's network stays whole, so on its first
-frame v16 is the network it starts from, weight for weight.
+- **The event record on the demos** ([v16_event_record.md](v16_event_record.md)): a record of events foretells the next
+  item better (73% against 67% with no memory) and where a just-lost enemy is (125 units off against 315 in the first
+  second), nothing about the fight, and no more than a recurrent memory overall.
+- **The enemy as a target** (`FIGHT_TARGET`, built and tried): a way to the fight did not help. By a broad rule it cost
+  him his items (health and armor 154 down to 126) and his duels (39% against himself without it); by a narrow rule
+  (strong and armed, the enemy spawned under 10 s ago and was seen within 4 s) it was level. What is missing is knowing
+  when the enemy is weak.
+
+So this version differs from the first in three things: the separate list of events is out of the first build (its two
+useful parts move into the enemy token and the item tokens); the first stage already carries the new information (the
+enemy as believed, places, his position); and the outputs for a place as a target and for a choice of way come in the
+second stage, not the third.
+
+## 2. The model
+
+Attention is added beside what he has, not in place of it. Today's path stays whole, so on its first frame v16 is the
+network it starts from, weight for weight.
 
 ```
-                         today's path (kept, carried over)
- 576 flat inputs ─────────> Linear 256, tanh -> Linear 256, tanh ──────────────┐
-                                                                               (+)──> GRU 512 ──> outputs
- THINGS (up to 64 tokens)        2 blocks of self-attention                     │      (kept)      (kept; new ones
-  1 himself   1 the game         width 96, 4 heads, feed-forward 192            │                   in stage C)
-  enemies (1; up to 5 in groups) each token: Linear(its numbers -> 96)          │
-  6 projectiles                   + a learned vector for its kind               │
-  12 items    8 places           tokens that are not there are masked           │
-  6 on his way (waypoints, jump)                                                │
-  6 sounds    16 events ─────────────────────> read-out: himself's row (96)     │
-                                               + one query over all rows (96) ──┘
-                                               -> Linear 192 -> 256, starts at ZERO
+                          today's path (kept, carried over)
+ 577 flat inputs ----------> Linear 256, tanh -> Linear 256, tanh -------------+
+ + about 200 new numbers                                                      (+)---> GRU 512 ---> 12 outputs
+                                                                               |       (kept)      (kept; more in
+ TOKENS (cut out of the same input vector inside the network)                  |                    stage B)
+  each: Linear(its numbers -> 96) + a learned vector for its kind              |
+  block 1: self-attention among all tokens (4 heads of 24, feed-forward 192)   |
+  block 2: the same, computed for the two rows that are read ------------------+
+           (himself, the summary) -> Linear(192 -> 256), starts at ZERO
 ```
 
 | Part | Size | Starts as |
 |---|---|---|
-| Token layers, one a kind (9 kinds): `Linear(F_kind, 96)` and a kind vector | about 25,000 weights | random, small |
-| Self-attention block, twice: 4 heads of 24, feed-forward 96 -> 192 -> 96, layer norm before each part | about 75,000 each | random |
-| Read-out: his own row, and one learned query attending over all rows | 192 numbers | random |
-| Adapter into the GRU's input: `Linear(192, 256)` added to today's encoder output | 49,000 | **zero**: the network is the old one until training moves it |
-| Today's encoder, GRU and outputs | 1.44 M | carried over |
-| A second value output: the chance to win this game (stage B) | 513 | zero |
-| His legs as a part of the network (stage C, section 4) | 0.1 M | carried over from `move_v15n` |
+| One layer a kind of token, `Linear(F_kind, 96)`, and a kind vector | about 25,000 weights | random, small |
+| Attention block, twice: 4 heads, feed-forward 96 -> 192 -> 96, layer norm before each part | about 75,000 each | random |
+| The adapter into the GRU's input, `Linear(192, 256)` | 49,000 | **zero**: the network is the old one until training moves it |
+| Today's encoder, GRU, outputs | 1.44 M | carried over |
+| The belief output and the second value output (stage B) | under 30,000 | zero |
+| His legs as a part of the network (stage C) | 86,000 | carried over from `move_v15n` |
 
-About 1.7 M weights in all. Why an adapter that starts at zero and not a distillation into a new network: a copy is
-loose (the lesson of 2026-10-10: a network that agreed with the movement network on nearly every frame could not strafe
-jump), and a control that he equals on day one makes every later check readable.
+About 1.7 M weights. The second block is computed only for the two rows that are read: that is exact (the last block's
+rows do not depend on each other) and saves most of its cost. An adapter that starts at zero, not a distillation: a
+copy is loose (2026-10-10: a network that agreed with the movement network on nearly every frame could not strafe
+jump), and a control he equals on the first day makes every later check readable.
 
-### The things
+### The tokens (54 in a duel)
 
-A token is a view: its numbers are cut out of the flat input vector inside the network, and only the new ones (places,
-events, the time left, the noise he made: about 230 numbers beside today's 576) are added to that vector. All of it is
-under the same limits: what he does not see or hear is not a token. The flat inputs stay while the tokens prove themselves; then the groups the tokens carry are thinned out of the
-flat path (dropped at random in training) so that he has to read the tokens.
+A token is a view: its numbers are cut out of the flat input vector inside the network. Everything is under the same
+limits as today: what he does not see or hear is not shown. The walls, floor and hazards around him stay in the flat
+path. Bold: new information, about 200 numbers in all.
 
-| Kind | How many | What a token holds | Today |
+| Kind | How many | Numbers | What it holds |
 |---|---|---|---|
-| Himself | 1 | health, armor, weapon in hand, ammunition, speed, his hands, his legs' switch | "self", "weapons", "own hands", "his movement", "his legs" |
-| The game | 1 | his frags, the enemy's, the difference, **the time left in the game**, the item clocks, **how loud he has been in the last seconds** | "clock and score"; the two in bold are new |
-| Enemy | 1 (5 in groups) | where, how fast, facing, weapon, in view or how long ago, what he last fired, the damage he took, the map reader's numbers for his place | "enemy", "enemy shots", "enemy pain", "memory", "more enemies" |
-| Projectile | 6 | where, how fast, its kind, a grenade's fuse, when and how close it passes | "projectiles" |
-| Item | 12 | where, the way to it in seconds, up or not as he believes, when it is back as he believes, his intention or not | "items", "more items", "routes", "intention" |
-| Place | 8 | **new**: the nearest exits, doorways and item spots of the map: where, in view or not, whether a rocket, a plasma ball or a grenade from here reaches it and the view that does it | the lobber's exit list (`_trick_points`) has them per map |
-| His way | 6 | the next waypoints to his target, the jump ahead: what his legs' network is shown | "jump ahead"; the legs' own inputs |
-| His position | 1 | **new** (the owner, 2026-10-11: "a 'strength of position' token ... which then influences what weapon they are likely to chose"): his height against where he believes the enemy is, how much of the ways around he overlooks from here and from how many he can be seen, his ways out, how long he has stood here | "who stands higher" is counted (B-160) but he is not shown it |
-| Sound | 6 | the last sounds heard: where from, what, how long ago | "sounds", "hearing" |
-| Event | 16 | **new**: a short record with times: the enemy last seen (where, with what, how strong), an item he heard taken, an item he took, damage dealt and taken, a frag, a death, **his own loud moments** (a rail or lightning shot, a jump, running where the enemy could hear) | partly "memory" (the last of each only) |
+| Himself | 1 | about 60 | health, armor, weapon in hand, weapons owned, ammunition, speed, his hands, his legs' switch |
+| The game | 1 | about 16 | both frag counts and their difference, the round's clock, the item clocks, **the time left in the game**, **how loud he has been in the last seconds**, **his health and armor less what he believes the enemy has** |
+| His position | 1 | about 12 | **new**: his height against where he believes the enemy is; how much of the ways around he overlooks from here and from how many he can be seen; his ways out; how long he has stood here; and from the pros' fights at this place (`sim/pro_places/<map>_cells.json`): **which weapon they hold here** and **how those fights went** |
+| The enemy as seen | 1 (up to 5 in groups) | about 70 | only while in view: where, how fast, facing, weapon, what he fired, the damage he took |
+| The enemy as believed | 1 | about 24 | always: **where he was last seen or heard and how long ago, how he was moving, how far he can have got since**; his strength as far as it can be known: **seconds since he spawned** (the game announces every frag), **the weapons seen on him this life, the damage dealt to him this life, the big items he may have taken since** |
+| Projectile | 6 | 15 | where, how fast, its kind, a grenade's fuse, when and how close it passes |
+| Item | 12 | about 18 | where, the way to it in seconds, up or not as he believes, when it returns as he believes, his target or not, **when he last took it himself** |
+| Place | 8 | about 14 | **new**: the nearest of the map's places (`sim/pro_places/<map>.json`: where the pros' shots land when nobody is in view; exits, doorways, item spots): where, in view or not, **whether a rocket, a plasma ball or a grenade from here reaches it and the view that does it**, **whether the enemy can be there by now**, **whether he was heard there** |
+| His way | 3 x 6 | about 6 | the next waypoints of up to three ways to his target (stage B: the choice among them), the jump ahead |
+| Sound | 4 | about 10 | the last sounds heard: where from, what, how long ago |
+| Summary | 1 | none | a learned token that gathers an overview |
 
-Events are few and sparse: sixteen cover about a minute of a duel. This is not attention over 1,400 past frames (ruled
-out in the note of 2026-10-07): the GRU keeps the last seconds, the event record keeps what happened and when.
+No separate list of events in the first build. If a later stage wants one, the test says how: eight slots for frequent
+events and eight for rare ones (sixteen of the last reach back only 19 seconds), no "fired" events, "hurt" once a
+burst.
 
 ### Outputs
 
-Stage A and B: the twelve he has. Stage C adds two, and both stay inside the fairness rules (he still has to move the
-mouse and press the trigger):
+Stage A: the twelve he has. Stage B adds, all inside the fairness rules (he still moves the mouse and pulls the trigger):
 
-- **A target**: one of the enemy and place tokens, or none, read twice a second. It does not aim for him. It chooses
-  what the aiming inputs he already has (a rocket's lead, a grenade's arc) are computed for. Today that is always the
-  enemy. With a place as the target he can put grenades into a doorway and plasma at an exit he heard the enemy near.
-- **His intention as a choice among the item tokens** in place of the fixed list of eight.
-- **A way**: one of up to three ways to his target (the walker's shortest and the pros' other ways, which the atlas
-  has), chosen when his target changes; his legs take that way. Today there is one way to a target and his legs take
-  it every time: his routes are predictable by construction (the owner's playtest of 2026-10-11: "I find them in the
-  same 2 or 3 spots").
+- **A target**, read twice a second: an item, a place, where he believes the enemy is, or "hold here". It does two
+  things. It says where his way leads (his legs take it as any way: the fight becomes reachable at speed). And it
+  chooses what his aiming aids (a rocket's lead, a grenade's arc: inputs he already has) are computed for: today always
+  the enemy, then also a doorway or an exit.
+- **A way**: one of up to three ways to that target (the walker's shortest and the pros' other ways), chosen when the
+  target changes.
+- **A belief** (an output that is not an action): where the enemy is now, as a spread over the map's places. In the
+  simulator it learns from the true answer, which he is never shown; what it says is fed back to him in the place
+  tokens. This is "enemy position + uncertainty", learnt. The pros' demos can start it: the enemy's place while unseen
+  is in them on 64% of the samples.
 
 ## 3. What it costs on the server
 
-The rented server has two cores; four Bobbys must fit in a frame of 25 ms, of which 15 ms are the budget for all of
-them together. Measured there on 2026-10-07 with random weights (median for four bots): today's network 1.0 ms, one
-attention layer with one query over 40 tokens 2.3 ms, with a self-attention layer among the tokens 3.1 ms; building the
-inputs takes about 4 ms. The model above is larger (two blocks, 64 tokens): my estimate is 5 to 7 ms for four bots.
-**Before anything is trained** it is timed with random weights on the PC and, on the owner's word, on the server.
-Pass: four bots under 8 ms at the median and 12 ms at the 99th percentile. If it fails: one block, width 64, or 48
-tokens, in that order.
+Timed on the rented server (two cores) inside the game's image on 2026-10-11 with nobody playing, random weights, one
+thread (`tools/attention_timing_v16.py`; milliseconds a frame for all bots together, the median and the 99th percentile):
+
+| Bots | Today's network | v16 as above (width 96, 58 tokens) | Width 64 |
+|---|---|---|---|
+| 1 | 0.23 (0.44) | 4.24 (4.93) | 3.86 (4.51) |
+| 3 | 1.43 (2.09) | 6.83 (7.59) | 6.00 (7.11) |
+| 4 | 1.09 (1.69) | 6.99 (8.44) | 6.04 (6.56) |
+
+Building the inputs takes about 4 ms more; the budget for all bots is 15 ms of a 25 ms frame. Four bots fit. About
+4 ms of the cost is the overhead of many small operations, not arithmetic, and can be cut. In training the attention
+layers need several times the memory a sequence, so minibatches get smaller: about three to four times slower an update
+is my estimate; a dry run measures it.
 
 ## 4. Blending the two ways of moving (stage C)
 
-Today the switch replaces his movement outputs by his legs' on a frame, and nothing is learnt about his own keys on
-those frames or about his legs ever. The blend in three steps, each a check against the step before:
+Today the switch replaces his movement outputs by his legs' on a frame; nothing is learnt about his own keys on those
+frames, or about his legs ever. Three steps, each checked against the one before:
 
 1. **His legs learn.** Their network becomes a part of his (the same weights at the start) and the game's pay reaches
-   it through the frames it moved him. It can then learn what it never knew: to keep speed and not run into a rocket.
-2. **His legs see what he sees.** The GRU's state enters the legs' second layer through an adapter that starts at zero.
-3. **The switch becomes a share.** In place of "his keys or the legs'", the movement outputs are a mix of both with a
-   share he sets ten times a second, and the share's two ends are today's two modes. If one set of weights comes to do
-   both, the share stops mattering: that is the blend. The measure: how far apart his own movement outputs and his
-   legs' are on the same frames, fighting and travelling. Today they are two different players.
+   it through the frames it moved him: keeping speed without running into a rocket, and more speed for each jump.
+2. **His legs see what he sees**: the GRU's state enters their second layer through an adapter that starts at zero.
+3. **The switch becomes a share**: the movement outputs are a mix of both, the share set ten times a second. When one
+   set of weights does both, the share stops mattering. The measure: how far apart his own movement outputs and his
+   legs' are on the same frames.
 
-## 5. The owner's three wishes, part by part
+In the day's probes it made no difference to a fight whether he got there on his legs or on his own feet.
 
-| He wants to see | In the model | In his rounds and pay | Measured by |
+## 5. The owner's wishes, part by part
+
+| He wants to see | In the model | In his rounds and pay | The number, Bobby today -> the pros |
 |---|---|---|---|
-| Spam used appropriately | place tokens, the target output, events ("heard at the teleporter") | the blind-fire rule as it is (a rocket with no enemy in view is judged by where it lands); the lobber as an opponent who does it to him | shots with no enemy in view by weapon: how many a minute, the share that land within a splash radius of where the enemy is, damage from them; beside the pros' |
-| Aggressive or defensive by score, control and time | the game token (score, time left), item tokens with his beliefs, the event record, the second value output | **whole ten-minute games with pay for the result** in a share of his rounds (stage B); rounds that begin behind or ahead with a few minutes left | by game state (ahead, level, behind; early, late): how fast he closes on the enemy, fights he starts, time near the items about to return; the share of the big items he is at within two seconds of their return ("in control") |
-| Traps and combinations | the enemy token (in the air, his speed), projectile tokens for his own rockets, the target output | a room where the enemy is thrown up by a rocket (as the one-weapon rounds were built); nothing paid for the combination itself | frags within 1.5 seconds of his own rocket's knock, by the second weapon; frags by a grenade or plasma fired with no enemy in view |
-
-| Routes and positions that cannot be foretold; high ground (the playtest of 2026-10-11) | the position token, the way output | an opponent that waits on his commonest way (the watcher does this already); a hit from above worth more (`HIGH_PAY`, built and never used) if the owner says so | the share of his time in his eight most-used places and in the lowest third of the map, the share of his trips on the commonest way, his height against the enemy in view; beside the pros' |
+| Spam used appropriately | place tokens; the target as a place; the belief | a rocket with no enemy in view is free at the pros' places (built 2026-10-11); the lobber as an opponent | blind rockets a minute 0.004 -> 4.5; grenades a minute 0.03 -> 2.2 |
+| Pushing an advantage, backing off when weak | the enemy as believed with his strength; the advantage number; the target as the enemy | whole games with pay for the result; nothing paid for the push itself | closing when stacked, just after a frag against otherwise: +34 / +32 -> +37 / +5; when weak +33 -> -12 |
+| Aggressive or defensive by score and time | the game token (score, time left) | whole ten-minute games with pay for the result; rounds that begin ahead or behind late | closing behind after 7:00 against ahead: +45 / +56 -> +36 / +7 |
+| Traps and combinations | the enemy as seen (in the air), his own projectiles, the target | a room where a rocket throws the enemy up | a rocket then rail or lightning: 0.05 -> 3.6 per ten minutes |
+| Strong positions, high ground, the weapon for the spot | the position token | optional: a hit from above paid more (`HIGH_PAY`, built, never used) | higher than the enemy in view 17.5% -> 26%; lowest third 40% -> 28%; rockets in hand in view 19% -> 40% |
+| Routes that cannot be foretold | the way output | the watcher on his commonest way | trips on the commonest way 52% -> 40% |
+| Quiet movement | how loud he has been (the game token) | none yet | to be measured for the pros first |
 
 Attention gives him the means. The reason comes from the rounds: without whole games nothing makes the score matter,
-and without the weapon rounds nothing makes a grenade worth firing.
+and a cheaper rocket alone has not made him fire one.
 
 ## 6. The pro demos
 
-What we have: 3,712 duels, 34,238 minutes, on the six maps. A demo is one player's view: what he saw is there (the
-enemy only while the server sent him, about when he was in view; never the enemy's health), what he pressed is
-inferred, and the score and the game clock are in the file but not read out by `sim/demo_dataset.py` yet.
-
-| Use | What | Risk |
-|---|---|---|
-| **1. Yardsticks** (first, cheap) | the same numbers as section 5's last column, for the pros: spam by weapon and where it lands, combinations a game, behaviour by score and time left, arriving at items on their return, walking. As the speed profile did for movement: it says how far he is and from what | none; needs the score and clock read out of the demos |
-| **2. The places** | where the pros' shots with no enemy in view land, map by map: the list the place tokens are drawn from | none: data for his inputs, not a lesson |
-| **3. Teaching the event record to remember** | on demo sequences turned into tokens, the attention part alone learns to foretell what the demo shows later: where and when the enemy comes into view next, which item the player takes next and when, damage in the next two seconds. No output of his is trained on it | low: his aim and keys are not touched. The demo sets must be made again with tokens |
-| **4. The pros' choices as a starting lean** | which item they go for and whether they close or hold, given score, time and what they have: a teacher on the intention (later the target) output that fades, as the item rule is today, but from the pros and by situation | medium: a teacher kept too long is copied blindly (v14's lesson); fading and the control guard it |
-| **Not** | their mouse and trigger (it destroyed his aim on 2026-10-04); anything about the enemy while unseen (it is not in a demo) | |
+| Use | State |
+|---|---|
+| Yardsticks: spam, combinations, behaviour by score and time, item timing, predictability, an aggression index | done for the six maps (`docs/pro_yardsticks.json`); Bobby through the same (`docs/bobby_yardsticks_<tag>.json`) |
+| The places, and the strength of a position by cell with the weapon held there | done for the six maps (`sim/pro_places/`) |
+| The four other maps; the pros' ways as routes; walking; when they spam; combinations by hits | being pulled (2026-10-11 evening) |
+| The belief: where the unseen enemy is | possible (64% of the samples have it); needs the converter's corpse fault fixed (B-219) and the tokens built |
+| The pros' choices by situation as a fading teacher on his target | later, on the owner's word, after the gap in the index is seen |
+| Exact frags, landing points, both scores | after the parser is fixed (B-218): "do this right not rush it" |
+| Never | their mouse and trigger (it destroyed his aim on 2026-10-04) |
 
 ## 7. Order
 
-Stage A: the things, as an adapter that starts at zero; timing first. Stage B: events, the noise he makes, the time
-left, whole games with pay for the result, the yardsticks from the demos. Stage C: the target output, the intention
-among the items, his legs blended. Each stage starts from the best network of the one before and is checked against it.
+- **Stage 0, done**: the timing on the server.
+- **Stage A**: the tokens with the new information (the enemy as believed, places, his position), the adapter from
+  zero. Rounds and pay as the network he starts from. It must do no harm, and cut out it must be missed.
+- **Stage B**: the target (item, place, enemy, hold), the choice of way, the belief, the time left and the noise,
+  whole games with pay for the result.
+- **Stage C**: his legs as a learning part of him and the switch as a share; a list of events if the numbers ask for it.
