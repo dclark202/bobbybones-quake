@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-11](results/2026-10-11.md)
 
+- 13:40 — `duel_gru_v15c` (v15b's end with the weapon work, two readings to switch his legs off, speed pay 0.5): level with v15b, no gain in speed kept or in rockets; the real game plays his legs (B-213) and both beat the game's Nightmare bot; v15c on the public server
 - 12:50 — The public server's data: a fuller daily pull (raw logs, seven days on the server, an index, a second copy)
 - 07:00 — `duel_gru_v15b` after its night: he strafe jumps on his legs (9.2% of his travelling time at 400 or more; v14's end 1.3%, the pros 17.5%) and his duels rose to 56% against v14's end; his time at speed did not rise in training
 
