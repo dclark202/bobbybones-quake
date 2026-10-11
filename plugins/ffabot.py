@@ -446,6 +446,17 @@ class ffabot(duelbot):
                     tried[p.id] = 2
                     self.log("skin of {}: {}".format(p.clean_name, e))
         self.people_now = bool(people)                       # (record() writes game events only then)
+        # A session ended only with a map change: on a quiet day one folder ran for many hours, and the daily pull
+        # (tools/pull_sessions.sh) leaves the newest one on the server. A minute after the last person has gone (those
+        # watching count as there) a new folder begins, so every visit is a finished session of its own.
+        if any(not is_bot(p) for p in self.players()):
+            self.had_people, self.empty_t = True, None
+        elif getattr(self, "had_people", False):
+            if getattr(self, "empty_t", None) is None:
+                self.empty_t = now
+            elif now - self.empty_t > 60:
+                self.had_people, self.empty_t = False, None
+                self.start_session()
         if now > getattr(self, "quad_check", 0.0):
             self.quad_check = now + 3.0
             self.no_quad()

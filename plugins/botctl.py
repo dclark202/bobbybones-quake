@@ -50,8 +50,10 @@ class botctl(minqlx.Plugin):
         self.log("autospec={}".format(self.autospec))
 
     def on_player_loaded(self, player):
-        # humans who join become spectators locked onto the practicing bot (client 0)
-        if str(player.steam_id).startswith("9007199") or not getattr(self, "autospec", True):
+        # !autospec on: humans who join become spectators locked onto the practicing bot (client 0). Off by default
+        # since 2026-10-11: on the play servers it took every person who joined out of the game for a moment two
+        # seconds later (in 1v1 the game put him straight back in: two session folders for every join).
+        if str(player.steam_id).startswith("9007199") or not getattr(self, "autospec", False):
             return
         self.spectate_bot(player.id)
 

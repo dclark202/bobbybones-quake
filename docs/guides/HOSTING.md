@@ -114,7 +114,7 @@ written since 2026-10-08 carry them, for older runs give them by hand, e.g.
 | New Bobby | On the PC: export as above, then `scp data/duellive/policy.npz root@<ip>:bobbybones-quake/data/duellive/`. The running server loads it by itself between rooms and says so in chat |
 | New code or map | On the PC: `CODE=1 bash tools/push_bobby.sh <run> <simulator module>` (git pull, image build and restart on the machine, the walking maps and map tables of the ten maps copied) |
 | A hung server | `tools/watchdog.sh` (started in the container) kills the game when its main thread has used no CPU time for 90 s; with `RESTART=1` the container comes back by itself |
-| Get the data | On the PC: `rsync -av root@<ip>:bobbybones-quake/data/duellive/sessions/ data/public/sessions/` and the same for `suite/` |
+| Get the data | On the PC: `bash tools/pull_sessions.sh` (the daily task does it at 09:30; see "Logs" below). The archive is `T:\quake-sessions\public` |
 | Stop | `bash tools/duel_server.sh stop` |
 | Send a chat command from outside | `docker exec qlduel python3 /tools/rcon.py "qlx !room off" --wait 2` |
 
@@ -145,8 +145,19 @@ written since 2026-10-08 carry them, for older runs give them by hand, e.g.
   since 2026-10-07 the events too (deaths, pickups, the minute summaries were written for the bots alone before). With under
   5 GB free on the disk nothing is written.
 - `tools/pull_sessions.sh`, run every day at 09:30 by the Windows scheduled task "BobbyBones session pull" on the owner's PC
-  (and on the next start if the PC was off): packs every finished session on the server (`tar.gz`, about a fifth of the
-  size), copies the archives to `T:\quake-sessions\public`, compares checksums, and only then removes the session and its
-  archive from the server; it also clears the server images no container uses. The newest session is the live one and is
-  left alone. A line per run goes to `pull.log` in that folder. Everything played by people is kept on the PC.
+  (and on the next start if the PC was off), brings a day's data to `T:\quake-sessions\public` (the routine of 2026-10-11):
+  - **Sessions**: every finished one is packed on the server (`tar.gz`, about a fifth of the size), copied, compared by
+    checksum and test-read. Its folder is then removed from the server; its archive stays there for seven days as a
+    second copy (owner: 7) and is removed after. The newest session is the live one and is left alone; in free-for-all
+    a new session folder begins a minute after the last person has gone, so a visit is a finished session by the next pull.
+  - **Raw logs** (`server.log`, `duelbot.log`, `minqlx.log`, `duel_live.jsonl`): packed, copied to `logs\`, checked, and
+    removed from the server the same day. They hold visitors' Steam IDs and addresses and stay out of the repo.
+    `minqlx.log` (every event with its time) is written to the data folder since this routine (`QLX_LOG_DIR`); inside
+    the container it was lost at every rebuild.
+  - **Leaderboard and bans**: copied every day, never removed from the server.
+  - **Index**: `sessions.csv`, a row per session (`tools/session_index.py`: start, end, minutes, map, mode, people at
+    once, different persons by the leaderboard's keys, frags). `python tools/session_index.py --since "2026-10-10 21:00"`
+    answers "who played since".
+  - **Second copy**: the whole folder is copied to `E:\quake-sessions\public`, another disk (`SESSION_MIRROR`).
+  It also clears the server images no container uses. A few lines per run go to `pull.log`. Everything played by people is kept on the PC.
 

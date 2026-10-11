@@ -69,6 +69,15 @@ state (`b_*`, the same 18 columns as the 1v1 rows: position, velocity, view, hea
 `minute` per Bobby (share of frames with an enemy in sight, firing, weapon shares, the game's kills, deaths, damage
 dealt and taken, how many people and bots), `end`. No names or Steam IDs.
 
+## The archive's index (`tools/session_index.py`)
+
+`sessions.csv` in the session archive (`T:\quake-sessions\public`), a row per packed session, written by the daily
+`tools/pull_sessions.sh`: `session` (the folder's name), `kind` (`ffa`, `human`: a 1v1 with a person, `spar`), `map`,
+`policy`, `started` and `ended` (PC time: the first and last frame with a person in the game), `minutes` (time covered
+by frames), `people_max` (most people in the game at once), `persons` (different people with a frag made or taken in
+that time, by the leaderboard's keys), `frags`, `deaths`, `mb`. The raw logs of the server (`logs\logs_<time>.tar.gz`:
+`server.log`, `duelbot.log`, `minqlx.log`, `duel_live.jsonl`) are beside it; they hold Steam IDs and addresses.
+
 ## The leaderboard (`plugins/ladder.py`)
 
 Two files in a server's data folder (`data/duellive/` on the public server), copied to the session archive by the daily

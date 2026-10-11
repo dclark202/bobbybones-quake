@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-11](results/2026-10-11.md)
 
+- 12:50 — The public server's data: a fuller daily pull (raw logs, seven days on the server, an index, a second copy)
 - 07:00 — `duel_gru_v15b` after its night: he strafe jumps on his legs (9.2% of his travelling time at 400 or more; v14's end 1.3%, the pros 17.5%) and his duels rose to 56% against v14's end; his time at speed did not rise in training
 
 ## [2026-10-10](results/2026-10-10.md)

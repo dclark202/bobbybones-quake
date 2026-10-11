@@ -3,6 +3,7 @@ redis-server --daemonize yes >/dev/null
 cp -n /ql/baseq3-extra/* /ql/baseq3/ 2>/dev/null
 cp -f /ql/baseq3-extra/workshop.txt /ql/baseq3/workshop.txt 2>/dev/null   # ours replaces the game's empty one
 /tools/watchdog.sh >/dev/null 2>&1 &
+export QLX_LOG_DIR="${QLX_LOG_DIR:-/tmp/practice}"         # minqlx.log beside server.log (tools/pull_sessions.sh takes both)
 # No powerups on any server (owner, 2026-10-09; plugins/powerups.py): the game's own switch is off for the first map too
 # (the plugins put a map's duel items in place in every mode, Campgrounds' mega among them).
 # The map pool (the maps of the vote at a game's end) is set on the command line and not only in lab.cfg: the game reads

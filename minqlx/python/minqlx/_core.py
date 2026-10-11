@@ -117,10 +117,13 @@ def _configure_logger():
     logger.setLevel(logging.DEBUG)
 
     # File
-    file_path = os.path.join(minqlx.get_cvar("fs_homepath"), "minqlx.log")
+    # (BobbyBones: QLX_LOG_DIR puts the log in the server's data folder, outside the container, where the daily pull
+    # finds it: in fs_homepath it was lost with every new container. The day is in the time stamps for the same reason.)
+    log_dir = os.environ.get("QLX_LOG_DIR") or ""
+    file_path = os.path.join(log_dir if os.path.isdir(log_dir) else minqlx.get_cvar("fs_homepath"), "minqlx.log")
     maxlogs = minqlx.Plugin.get_cvar("qlx_logs", int)
     maxlogsize = minqlx.Plugin.get_cvar("qlx_logsSize", int)
-    file_fmt = logging.Formatter("(%(asctime)s) [%(levelname)s @ %(name)s.%(funcName)s] %(message)s", "%H:%M:%S")
+    file_fmt = logging.Formatter("(%(asctime)s) [%(levelname)s @ %(name)s.%(funcName)s] %(message)s", "%Y-%m-%d %H:%M:%S")
     file_handler = RotatingFileHandler(file_path, encoding="utf-8", maxBytes=maxlogsize, backupCount=maxlogs)
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(file_fmt)
