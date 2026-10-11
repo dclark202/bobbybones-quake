@@ -14,6 +14,7 @@ the owner's choice after the noon report) with attention added. The model in ful
 | What he wants to see | spam with rockets, plasma and grenades used appropriately; aggressive or defensive by score and control ("in control = knows item times and has stack to contest them when they become available"); traps and weapon combinations ("rocket to disrupt movement, then LG on the midair enemy") |
 | Whole ten-minute games with pay for the result | "Yes" |
 | Training speed | "completely neutral"; four bots must fit on the rented server |
+| After playing v15c on the public server (13:20) | "much better than v14 was": plasma "a little but it was really good", "strong LG, very strong", "some rocket usage, could use more". "Biggest criticism: their paths are still predictable. I find them in the same 2 or 3 spots usually. And typically they're kind of 'weird' spots, like maintaining a low ground position, or stuck on the stairs in the yellow room" of Blood Run. "Leaning towards installing in them some amount of preference for high ground. Perhaps this should be a 'strength of position' token in attention, which then influences what weapon they are likely to chose." Movement: "more speed per jump, maintaining speed for longer; rather than just 'average speed'" |
 | Still his to decide | section 6 |
 
 ## 1. Three stages, each from the best network of the one before
@@ -60,6 +61,7 @@ Measured at every check, beside the pros' numbers where the demos give them (sec
 | Control | the time he holds more than the enemy (health plus armor, big weapons) and what he does with it |
 | Spam | shots with no enemy in view a minute by weapon; the share landing within a splash radius of the enemy's true place; damage and frags from them |
 | Combinations and traps | frags within 1.5 seconds of his own rocket's knock, by the second weapon; frags by grenades and plasma fired at a place |
+| Predictable or not | the share of his time in his eight most-used places and in the lowest third of the map; the share of his trips on the commonest way between two items; time standing; his height against the enemy in view |
 | Noise | the share of his travelling he walks while the enemy is within earshot and has not seen him; rail and lightning shots with no enemy in view |
 | The blend | how far his own movement outputs are from his legs' on the same frames (stage C); his speed profile travelling and fighting |
 | Still a duelist | against the control map by map, the stand-in on ten maps, real games against the game's Nightmare bot before and after |
@@ -96,3 +98,6 @@ Never their mouse or trigger.
 4. The pros' choices as a teacher (section 5, point 4): yes, no, or after the yardsticks are seen.
 5. Timing on the rented server (stage 0): it runs a script there for a minute with nobody playing.
 6. What trains meanwhile: nothing, or the network of point 1 continuing as it is while stage A is built.
+7. High ground: the position token alone (he is shown it and learns what it is worth), or also a hit from above paid more (`HIGH_PAY`, built on 2026-10-09 and never used in a run).
+8. Speed for each jump: a pay for speed gained from one hop to the next (approved in principle on 2026-10-10; the rule is shown first), or only his legs learning from the game's pay (stage C).
+9. Several ways to a target (the way output of stage C): brought forward to stage B, since predictable routes are his main fault today?

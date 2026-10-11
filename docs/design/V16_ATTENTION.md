@@ -76,6 +76,7 @@ flat path (dropped at random in training) so that he has to read the tokens.
 | Item | 12 | where, the way to it in seconds, up or not as he believes, when it is back as he believes, his intention or not | "items", "more items", "routes", "intention" |
 | Place | 8 | **new**: the nearest exits, doorways and item spots of the map: where, in view or not, whether a rocket, a plasma ball or a grenade from here reaches it and the view that does it | the lobber's exit list (`_trick_points`) has them per map |
 | His way | 6 | the next waypoints to his target, the jump ahead: what his legs' network is shown | "jump ahead"; the legs' own inputs |
+| His position | 1 | **new** (the owner, 2026-10-11: "a 'strength of position' token ... which then influences what weapon they are likely to chose"): his height against where he believes the enemy is, how much of the ways around he overlooks from here and from how many he can be seen, his ways out, how long he has stood here | "who stands higher" is counted (B-160) but he is not shown it |
 | Sound | 6 | the last sounds heard: where from, what, how long ago | "sounds", "hearing" |
 | Event | 16 | **new**: a short record with times: the enemy last seen (where, with what, how strong), an item he heard taken, an item he took, damage dealt and taken, a frag, a death, **his own loud moments** (a rail or lightning shot, a jump, running where the enemy could hear) | partly "memory" (the last of each only) |
 
@@ -91,6 +92,10 @@ mouse and press the trigger):
   what the aiming inputs he already has (a rocket's lead, a grenade's arc) are computed for. Today that is always the
   enemy. With a place as the target he can put grenades into a doorway and plasma at an exit he heard the enemy near.
 - **His intention as a choice among the item tokens** in place of the fixed list of eight.
+- **A way**: one of up to three ways to his target (the walker's shortest and the pros' other ways, which the atlas
+  has), chosen when his target changes; his legs take that way. Today there is one way to a target and his legs take
+  it every time: his routes are predictable by construction (the owner's playtest of 2026-10-11: "I find them in the
+  same 2 or 3 spots").
 
 ## 3. What it costs on the server
 
@@ -122,6 +127,8 @@ those frames or about his legs ever. The blend in three steps, each a check agai
 | Spam used appropriately | place tokens, the target output, events ("heard at the teleporter") | the blind-fire rule as it is (a rocket with no enemy in view is judged by where it lands); the lobber as an opponent who does it to him | shots with no enemy in view by weapon: how many a minute, the share that land within a splash radius of where the enemy is, damage from them; beside the pros' |
 | Aggressive or defensive by score, control and time | the game token (score, time left), item tokens with his beliefs, the event record, the second value output | **whole ten-minute games with pay for the result** in a share of his rounds (stage B); rounds that begin behind or ahead with a few minutes left | by game state (ahead, level, behind; early, late): how fast he closes on the enemy, fights he starts, time near the items about to return; the share of the big items he is at within two seconds of their return ("in control") |
 | Traps and combinations | the enemy token (in the air, his speed), projectile tokens for his own rockets, the target output | a room where the enemy is thrown up by a rocket (as the one-weapon rounds were built); nothing paid for the combination itself | frags within 1.5 seconds of his own rocket's knock, by the second weapon; frags by a grenade or plasma fired with no enemy in view |
+
+| Routes and positions that cannot be foretold; high ground (the playtest of 2026-10-11) | the position token, the way output | an opponent that waits on his commonest way (the watcher does this already); a hit from above worth more (`HIGH_PAY`, built and never used) if the owner says so | the share of his time in his eight most-used places and in the lowest third of the map, the share of his trips on the commonest way, his height against the enemy in view; beside the pros' |
 
 Attention gives him the means. The reason comes from the rounds: without whole games nothing makes the score matter,
 and without the weapon rounds nothing makes a grenade worth firing.
