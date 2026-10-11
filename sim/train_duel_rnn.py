@@ -687,8 +687,8 @@ def main():
                             blind_fire={w_: round(float(np.atleast_1d(agg.get("blind_w", np.zeros(len(WEAPONS))))[i_]          # ... of that time, firing it with no enemy seen for a second
                                                         / max(1.0, float(np.atleast_1d(agg.get("hand_w", np.zeros(len(WEAPONS))))[i_]))), 3) for i_, w_ in enumerate(WEAPONS)},
                             blind_rockets=dict(per_player_min=round(float(agg.get("blind_rl", 0) / max(1e-9, NP * T * DT_MIN)), 3),          # (BLIND_RULE)
-                                               how={k_: round(float(np.atleast_1d(agg.get("blind_rl_how", np.zeros(4)))[i_] / max(1, agg.get("blind_rl", 0))), 3)
-                                                    for i_, k_ in enumerate(("wasted", "jump", "near", "way"))}),
+                                               how={k_: round(float(np.atleast_1d(agg.get("blind_rl_how", np.zeros(5)))[i_] / max(1, agg.get("blind_rl", 0))), 3)
+                                                    for i_, k_ in enumerate(("wasted", "jump", "near", "way", "place")) if i_ < len(np.atleast_1d(agg.get("blind_rl_how", np.zeros(5))))}),
                             prefire_frames=int(agg.get("prefire_frames", 0)), blind_charged_frames=int(agg.get("blind_bill", 0)),
                             speed_pay_per_player_min=round(float(agg.get("speed_pay", 0.0) / max(1e-9, NP * T * DT_MIN)), 4),             # (SPEED_PAY: on his way in games)
                             speed_pay_run_per_player_min=round(float(agg.get("speed_pay_run", 0.0) / max(1e-9, NP * T * DT_MIN)), 4),     # ... in item runs

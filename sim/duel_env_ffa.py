@@ -632,6 +632,11 @@ STACK_KEYS = float(os.environ.get("STACK_KEYS") or 1.0) > 0
 #                 where the enemy must be ("a small radius for allowance of prefire for hitscan weapons").
 BLIND_RULE = float(os.environ.get("BLIND_RULE") or 0.0) > 0
 BLIND_NEAR, BLIND_JUMP, BLIND_WAY_R, BLIND_SLACK, BLIND_RL_DMG = 600.0, 100.0, 200.0, 1.0, 6.0
+BLIND_RL_DMG = float(os.environ.get("BLIND_RL_DMG") or BLIND_RL_DMG)      # (owner, 2026-10-11: more forgiving: 3)
+# BLIND_PLACES=<radius>: a rocket with no enemy in view is free as well when it lands within that many units of one of the
+# places the pros' blind shots land on this map (sim/pro_places/<map>.json: the 24 heaviest, from 4,085 demos). The pros
+# fire half their rockets with nobody in view, 4.5 a minute; he fired 0.001.
+BLIND_PLACES = float(os.environ.get("BLIND_PLACES") or 0.0)
 PREFIRE_R, PREFIRE_T = 150.0, 1.5
 LAVA_DMG, SLIME_DMG, LAVA_TICK = 30.0, 10.0, 0.5
 C_LAVA, C_SLIME, C_WATER = 8, 16, 32                       # brush contents
@@ -1441,6 +1446,12 @@ class DuelEnv:
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
         self._replaced = False                              # a try began inside this step: the state is read again at its end
         self.count_even = False                             # the jump counters count the even seats only (the trainer: those are always his)
+        self.spam_places = np.zeros((0, 3), np.float32)     # BLIND_PLACES: where the pros' blind shots land on this map
+        if BLIND_PLACES > 0:
+            f_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_places", os.path.splitext(os.path.basename(bsp))[0] + ".json")
+            if os.path.exists(f_):
+                import json as json_
+                self.spam_places = np.array([p_["pos"] for p_ in json_.load(open(f_))["places"]], np.float32).reshape(-1, 3)
         self.legs = np.zeros(self.n, bool)                  # LEGS: his switch as it stands (his legs, not his own movement),
         self.legs_on = np.zeros(self.n, bool)               # ... the movement network moved him this frame,
         self.legs_live = np.zeros(self.n, bool)             # ... the switch was read this frame
@@ -1682,7 +1693,7 @@ class DuelEnv:
                           hand_g=np.zeros(NW),                            # ... in games alone (not in one-weapon rounds)
                           hand_w=np.zeros(NW), blind_w=np.zeros(NW),      # frames with each weapon in hand; frames firing it with no enemy seen for a second
                           speed_pay=0.0, speed_pay_run=0.0, speed_frames=0, move_teach_frames=0,
-                          blind_rl=0, blind_rl_how=np.zeros(4), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way
+                          blind_rl=0, blind_rl_how=np.zeros(5), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way, at one of the pros' places
                           vs_persona=np.zeros((3, len(PERSONAS))), fall_dmg=0.0, duck_frames=0, walk_frames=0)      # rows: frags against, deaths to, frames
         for wn in WEAPONS:
             self.stats[wn + "_shots"] = 0               # shots, ticks or pellets fired
@@ -3841,6 +3852,8 @@ class DuelEnv:
                 how = 1
             elif np.linalg.norm(L - B) < BLIND_NEAR:
                 how = 2
+            elif len(self.spam_places) and float(np.linalg.norm(self.spam_places - L, axis=1).min()) < BLIND_PLACES:
+                how = 4                                      # (a place the pros fire at with nobody in view)
             elif R is not None:
                 nb, nl, me = (int(x) for x in R.locate(np.stack([B, L, s[i, :3]]).astype(np.float32)))
                 if np.linalg.norm(R.nodes[nl] - L) < BLIND_WAY_R:
