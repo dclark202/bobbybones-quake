@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-11](results/2026-10-11.md)
+
+- 07:00 — `duel_gru_v15b` after its night: he strafe jumps on his legs (9.2% of his travelling time at 400 or more; v14's end 1.3%, the pros 17.5%) and his duels rose to 56% against v14's end; his time at speed did not rise in training
+
 ## [2026-10-10](results/2026-10-10.md)
 
 - 22:15 — The movement network built into him as his legs, with a switch that is his; `duel_gru_v15b` started 22:01 to 07:00; the game's weapon change on an empty weapon

@@ -251,6 +251,8 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - `tools/list_inputs.py` writes `docs/INPUTS.csv` whatever its arguments.
 - A fixed-run identity check after a new output: random actions for the old outputs only (the scratch `ident16.py`, `IDENT_HEADS=11`), or the random stream shifts and nothing matches.
 - Two half-size trainers, a set of duels and a dry run together were 97% of the load (2026-10-10 21:50): stop a side arm before a dry run.
+- A run's wake-ups must watch for a stall (no new line in `metrics.jsonl` for ten minutes): `duel_gru_v15b` died at 02:25 with the graphics card full after 89 updates at `--minibatches 70` (576 inputs, 10,892 players; 80 held) and stood 37 minutes before it was seen. A check loop that outlives a crash checks the old save again under a new label.
+- The trainer's `legs.share` counts every seat, the league's older selves too: read the updates whose opponents have legs, or the duel checks' own number.
 - After merging a branch, push plainly: `git pull --rebase` on a merge commit replays the branch and conflicts (2026-10-10;
   `git rebase --abort` put everything back, the owner's uncommitted files too). Fetch and look first.
 - A reviewer's eye on the reward: anything paid per frame for progress must be paid on a running best, or a setback and its recovery is a pump (the trip pay, 2026-10-08).
