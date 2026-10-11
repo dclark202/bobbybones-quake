@@ -348,7 +348,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
-             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN")
+             "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS", "LEGS_EVERY", "AUTO_SWITCH")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -422,7 +422,30 @@ N_V14 = 10
 # speed 3, kind 3), and each of the six gets three more: a grenade's fuse left (1 = just fired), the seconds until it
 # passes closest to him (over 2), and how close that is in splash radii (over 3; under a third: inside its blast).
 N_PROJ_MORE, PROJ_FAR = 4, 1500.0
-N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE)
+# The movement network as his legs (LEGS; owner, 2026-10-10: "build movement/fighting as a switch and let him decide when
+# to use it"). Taught as a side lesson, strafe jumping never reached him: a network copies the movement network only
+# loosely, and a loose copy does not strafe jump (RESULTS 2026-10-10 20:45). So it is not copied: it is a part of him.
+# One more output (the last, LEGS_HEAD: his own movement, or his legs), read every LEGS_EVERY frames (four times a second,
+# staggered by player) and held between. While it is on and he has a target (the item of his intention, or of his run)
+# that the movement network knows a way to, his movement keys, his view's turn, walk and zoom (LEGS_TAKES) are the
+# movement network's choices for that frame, made from its own inputs and under his finger and mouse limits; his view's
+# pitch, his trigger, his weapon key and his intention stay his own. Without a way (no target, a map the network has no
+# walking map of, the try of a jump its pupil fails at before its landing) the switch does nothing and he moves himself.
+# Two inputs, the last of N_V15: the switch as it stands, and that his legs carried him on the last frame.
+# The trainer counts the taken outputs on the frames he moved himself only, and the switch on the frames it was read.
+LEGS = float(os.environ.get("LEGS") or 0.0) > 0
+LEGS_EVERY = int(float(os.environ.get("LEGS_EVERY") or 10))
+N_LEGS = 2
+INTENT_HEAD, LEGS_HEAD, LEGS_TAKES = 10, 11, (0, 1, 2, 3, 7, 8)
+N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE) + N_LEGS
+# AUTO_SWITCH (owner, 2026-10-10: "if you run out of ammo it moves you to a different weapon. Give him that setting and
+# use the weapon swaps from quake live"): the trigger pressed on an empty weapon brings up the highest weapon of the
+# game's own order that has ammunition (the client's cg_switchOnEmpty, in the game's weapon numbers from the top:
+# heavy machine gun, plasma, rail, lightning, rockets, grenades, shotgun, machine gun, gauntlet), after the empty click's
+# half second (Quake 3's source: pm->ps->weaponTime += 500; not measured in Quake Live yet) and the weapon change itself.
+AUTO_SWITCH = float(os.environ.get("AUTO_SWITCH") or 0.0) > 0
+AUTO_ORDER = np.array([HMG, PG, RG, LG, RL, GL, SG, MG, G], np.int64)
+NOAMMO_WAIT = 0.5
 GL_KNOWN = 3.0
 PROJ_SEE = float(os.environ.get("PROJ_SEE") or 0.0) > 0
 LEAD_SPEED = np.zeros(NW, np.float32)
@@ -616,7 +639,7 @@ INTENT_VALUE = (0.0, 1.0, 1.0, 0.25, 0.25, 0.25, 0.5, 0.5)
 CLAW_ON_DEATH = False                                  # the trip's pay was also taken back when he died on the way: with half the
                                                        # trips ending in death the long ones (mega, red) lost money and he chose the
                                                        # launcher 92% of the time (v9 night, 2026-10-07). Now only a trip given up is clawed back (owner)
-ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2, len(INTENTS))  # ..., walk, zoom, lift the mouse, intention
+ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2, len(INTENTS), 2)  # ..., walk, zoom, lift the mouse, intention, his legs (LEGS)
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 MEM_COLS = np.array([0, 1] + [2 + int(w) for w in OBS_W])  # the columns of e_got that are inputs (see N_MEM)
@@ -1406,6 +1429,10 @@ class DuelEnv:
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
         self._replaced = False                              # a try began inside this step: the state is read again at its end
         self.count_even = False                             # the jump counters count the even seats only (the trainer: those are always his)
+        self.legs = np.zeros(self.n, bool)                  # LEGS: his switch as it stands (his legs, not his own movement),
+        self.legs_on = np.zeros(self.n, bool)               # ... the movement network moved him this frame,
+        self.legs_live = np.zeros(self.n, bool)             # ... the switch was read this frame
+        self.legs_tick = 0
         self.teach_runs = "all"                             # the key labels of this map's runs (the trainer's --teacher-skip): "all";
         #   "jump": none in item runs, the movement teacher's in jump runs; "none": none (a map its pupil fails on)
         self.jump_a = self.jump_b = np.zeros((0, 3), np.float32)
@@ -1548,6 +1575,8 @@ class DuelEnv:
             if goals:
                 from movement_env import NavField
                 self.field = NavField(nav, goals, world=self.w)
+            if LEGS and not teacher:                         # (his legs' network where no teacher is passed: checks, servers)
+                teacher = os.environ.get("LEGS_NET")
             if goals and teacher and os.path.exists(teacher):
                 import movement_env as M
                 ck = np.load(teacher)                           # sim/export_policy.py output (no torch in workers)
@@ -1624,6 +1653,11 @@ class DuelEnv:
                           jump_frames=0, start_gun=0,          # frames in jump runs; lives begun with a weapon in hand (START_GUN_P)
                           start_gun_w=np.zeros(len(WEAPONS)),  # ... by weapon
                           lob=np.zeros(3),                              # TRICKS, the lobber: frames firing at a place: plasma, grenades; at an exit
+                          legs=np.zeros(8),               # LEGS: frames his legs carried him, of them with an enemy in view, frames the switch was on
+                                                          # without a way, his frames alive; the first and the last of these in games; the sum of
+                                                          # his speed on legs frames, on his own
+                          legs_reads=np.zeros(2),         # ... the switch read, and read as "legs"
+                          auto_switch=0,                  # AUTO_SWITCH: weapon changes the game made for him on an empty weapon
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
@@ -2217,12 +2251,14 @@ class DuelEnv:
         T.key_tok = self.key_tok[ii]
         T.key_wait = ((-(self.key_tick + 1 + np.asarray(ii))) % KEY_EVERY).astype(np.float32)
 
-    def _move_teach(self):
+    def _move_teach(self, ri=None, k=None, into=None):
         """item runs: what the strafe-jumping movement network would do toward his target (keys, jump and view), sampled
-        from its policy, in place of the walking teacher's keys (see RUN_TEACHER)"""
-        ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0))[0]
-        if self.teach_runs == "jump":
-            ri = ri[self.jrun[ri]]
+        from its policy, in place of the walking teacher's keys (see RUN_TEACHER).
+        LEGS: the same for the players ri it moves, toward the targets k (per player), written into the array given"""
+        if ri is None:
+            ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0))[0]
+            if self.teach_runs == "jump":
+                ri = ri[self.jrun[ri]]
         if not len(ri):
             return
         T, s = self.teacher, self.state
@@ -2247,7 +2283,7 @@ class DuelEnv:
                 T.field, T.goal_pos = self.t_field_j, self.t_field_j.goals
                 try:
                     for f_ in (np.unique(self.jrun_f[rj]) if len(self.jfields) > 1 else (0,)):
-                        self._move_labels(rj[self.jrun_f[rj] == f_] if len(self.jfields) > 1 else rj, self.jfields[int(f_)], land=True)
+                        self._move_labels(rj[self.jrun_f[rj] == f_] if len(self.jfields) > 1 else rj, self.jfields[int(f_)], land=True, k=k, into=into)
                 finally:
                     T.field, T.goal_pos = self.t_field, gp_
         if len(ri) and self.route_o is not None and getattr(T, "jump_obs", False):   # (JUMP_OPEN: its ways with the open jumps)
@@ -2258,20 +2294,20 @@ class DuelEnv:
                                             jumps=[j_ for j_ in self.jumps if j_["id"] in self.jump_open])
             T.field = self.t_field_o
             try:
-                self._move_labels(ri, self.route_o)
+                self._move_labels(ri, self.route_o, k=k, into=into)
             finally:
                 T.field = self.t_field
         elif len(ri):
-            self._move_labels(ri, self.route)
+            self._move_labels(ri, self.route, k=k, into=into)
 
-    def _move_labels(self, ri, R, land=False):
+    def _move_labels(self, ri, R, land=False, k=None, into=None):
         """the movement network's labels for players ri, whose ways are R's (the walking map's, or with the pros' jumps).
         land (a jump run): its goal is the landing of his try's jump until he is over it, as in its own tries, then the item
         (asked for the item from the start, its own ways went round some jumps: Blood Run 7, over 0 of 89 with its labels)"""
         T, s = self.teacher, self.state
         if not len(ri):
             return
-        gi = self._trip_goal(self.run_k[ri], R.locate(s[ri, :3]), R)
+        gi = self._trip_goal((self.run_k if k is None else k)[ri], R.locate(s[ri, :3]), R)
         tg = np.where(gi >= 0, self.t_route[np.maximum(gi, 0)], -1)
         if land:
             tg = np.where(self.jrun_over[ri] | self.jrun_past[ri], tg, len(self.t_nav[1]) + self.jrun_k[ri])
@@ -2297,8 +2333,37 @@ class DuelEnv:
             w_ = ri
             out[3] = np.where((sg_ != 0) & (self.turn_dir[w_] != 0) & (sg_ != self.turn_dir[w_]) & (self.rev_wait[w_] > 0), self.t_mid, out[3])
         out[3] = self.t_turn[out[3]]
+        if into is not None:                                 # (LEGS: its choices move him)
+            into[ri[ok]] = np.stack(out, 1)[ok]
+            return
         self.teach[ri[ok], :4] = np.stack(out, 1)[ok]
         self.stats["move_teach_frames"] += int(ok.sum())
+
+    def _legs_step(self, a):
+        """LEGS: his switch is read (every LEGS_EVERY frames, staggered by player; held between), and for the players
+        whose switch is on the movement network's choices of this frame take the place of their own movement keys and
+        view turn in a (walk and zoom let go). Called before the finger limits: its keys pass through his hand as his do."""
+        n = self.n
+        who = self.script == 0
+        self.legs_tick += 1
+        live = who & ((self.legs_tick + np.arange(n)) % LEGS_EVERY == 0)
+        self.legs = np.where(live, a[:, LEGS_HEAD] == 1, self.legs) & who & (self.hp > 0)
+        self.legs_live = live
+        self.stats["legs_reads"] += (int(live.sum()), int((live & (a[:, LEGS_HEAD] == 1)).sum()))
+        self.legs_on = np.zeros(n, bool)
+        ri = np.nonzero(self.legs)[0]
+        if not len(ri) or self.teacher is None or self.route is None:
+            return
+        k = np.where(self.run_k > 0, self.run_k, self.intent)       # his target: the item of his run, or of his intention
+        ri = ri[k[ri] > 0]
+        if not len(ri):
+            return
+        ch = np.full((n, 4), -1, np.int64)
+        self._move_teach(ri, k, ch)
+        ok = ch[:, 0] >= 0
+        a[ok, :4] = ch[ok]
+        a[ok, 7:9] = 0
+        self.legs_on = ok
 
     def _spawn(self, i, avoid, close=None):
         if self.near_item_p > 0 and self.route is not None and self.script[i] == 0 and self.run_k[i] < 0 and self.rng.random() < self.near_item_p:
@@ -3403,7 +3468,9 @@ class DuelEnv:
             out[:, JL.N_JUMP:JL.N_JUMP + 6] = np.stack([np.clip(ey / 30.0, -1, 1), np.clip(ey / 2.0, -1, 1), np.clip(ep / 15.0, -1, 1),
                                            np.clip(ep / 2.0, -1, 1), np.clip(tf / 1.5, 0, 2), np.ones(len(pos))], 1) * reach[:, None]
         if getattr(self, "_pm", None) is not None:           # the projectiles he sees beyond the nearest two, and what each is about to do
-            out[:, JL.N_JUMP + 6:] = self._pm
+            out[:, JL.N_JUMP + 6:N_V15 - N_LEGS] = self._pm
+        if LEGS:                                             # his legs: the switch as it stands, and that they carried him on the last frame
+            out[:, N_V15 - 2], out[:, N_V15 - 1] = self.legs, self.legs_on
         return out
 
     def _v14(self, vel, yaw, pit, eye, known, opp_vel, visible, opp):
@@ -4149,6 +4216,8 @@ class DuelEnv:
         sc = np.nonzero(self.script > 0)[0]
         if len(sc):
             a[sc] = self._script_actions(sc)
+        if LEGS and a.shape[1] > LEGS_HEAD:
+            self._legs_step(a)
         if self.key_limits:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
@@ -4246,6 +4315,12 @@ class DuelEnv:
         else:
             reward -= BLIND_FIRE_COST * blind
         fight = human & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
+        if LEGS:
+            lg_, up_ = self.legs_on, human & (self.hp > 0)
+            gm_ = up_ & (pkind == NORMAL) & (self.run_k < 0)
+            sp_ = np.hypot(prev[:, 3], prev[:, 4])
+            self.stats["legs"] += np.array([lg_.sum(), (lg_ & np.asarray(self.visible, bool)).sum(), (self.legs & ~lg_).sum(), up_.sum(), (lg_ & gm_).sum(),
+                                            gm_.sum(), sp_[lg_].sum(), sp_[up_ & ~lg_].sum()], np.float64)
         self.stats["switches"] += int((sw & fight).sum())
         self.stats["hand_w"] += np.bincount(self.weapon[fight & (self.hp > 0)], minlength=NW)
         self.stats["hand_g"] += np.bincount(self.weapon[fight & (pkind == NORMAL) & (self.hp > 0)], minlength=NW)
@@ -4318,6 +4393,14 @@ class DuelEnv:
         do_fire, do_w = self.fire_q, self.fire_w
         ammo_ok = (self.ammo[ar, self.weapon] > 0) | (self.weapon == G)
         shoot = fire & (self.cool <= 1e-4) & ammo_ok & self.has[ar, self.weapon]
+        if AUTO_SWITCH:                                      # the trigger on an empty weapon: the game brings up another (see AUTO_SWITCH)
+            dry = np.nonzero(fire & (self.cool <= 1e-4) & ~ammo_ok & (self.script == 0) & (self.hp > 0))[0]
+            if len(dry):
+                can = self.has[dry] & (self.ammo[dry] > 0)
+                can[:, G] = True
+                self.weapon[dry] = AUTO_ORDER[can[:, AUTO_ORDER].argmax(1)]
+                self.cool[dry] = np.maximum(self.cool[dry], NOAMMO_WAIT + SWITCH)
+                self.stats["auto_switch"] += len(dry)
         self.cool = np.where(shoot, W_REFIRE[self.weapon], self.cool)
         self.fire_cd = np.where(shoot, W_REFIRE[self.weapon], self.fire_cd)
         if self.human_aim:                                  # nobody fires on the exact frame the reload ends

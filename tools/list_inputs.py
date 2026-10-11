@@ -292,6 +292,9 @@ for j in ("nearest", "second nearest", "third nearest", "fourth nearest", "fifth
     add("projectiles", "{} enemy projectile: seconds until it passes closest to him".format(j), "as if both kept their speed", "seconds / 2, capped at 1", "v15")
     add("projectiles", "{} enemy projectile: how close it passes".format(j), "in its splash radii (rocket 120 units, grenade 150, plasma 20)",
         "radii / 3, capped at 1 (under a third: inside its blast)", "v15")
+add("his legs", "the switch to his legs is on", "the movement network moves him while it is on and he has a target it knows a way to (LEGS)",      # ---- his legs (2026-10-10, v15b)
+    "0 or 1", "v15b")
+add("his legs", "his legs carried him on the last frame", "", "0 or 1", "v15b")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

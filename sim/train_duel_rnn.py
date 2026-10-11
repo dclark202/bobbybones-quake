@@ -99,7 +99,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["match_of_kill"] = [e["killer"] // G for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
             remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy(),
-                         env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool)))
+                         env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool),
+                         env.legs_live.copy() if hasattr(env, "legs_live") else np.zeros(env.n, bool),      # (LEGS) the switch was read,
+                         env.legs_on.copy() if hasattr(env, "legs_on") else np.zeros(env.n, bool)))         # his legs moved him
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -222,6 +224,20 @@ def main():
     E_ = importlib.import_module(a.env)
     ACTION_DIMS, OBS_DIM, PERSONAS, WEAPONS = E_.ACTION_DIMS, E_.OBS_DIM, E_.PERSONAS, E_.WEAPONS
     KEY_HEADS = (0, 1, 2, 6)                                 # forward, strafe, vertical, weapon key: the left hand's outputs
+    I_HEAD = getattr(E_, "INTENT_HEAD", len(ACTION_DIMS) - 1)                # the intention; (LEGS) the switch to his legs and the
+    L_HEAD, L_TAKES = (E_.LEGS_HEAD, tuple(E_.LEGS_TAKES)) if len(ACTION_DIMS) > getattr(E_, "LEGS_HEAD", 99) else (-1, ())   # outputs they take
+
+    def head_masks(dc, lv, ll, lo):
+        """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
+        intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his)"""
+        out = []
+        for j in range(len(ACTION_DIMS)):
+            m = dc if j in KEY_HEADS else (lv if j == I_HEAD else (ll if j == L_HEAD else None))
+            if j in L_TAKES:
+                m = (1.0 - lo) if m is None else m * (1.0 - lo)
+            out.append(m)
+        return out
+
     OBS_FREEZE = 2e9                                         # frames after which the input statistics stand still (they did anyway)
     groups = [int(x) for x in str(a.group).split(",")]
     G = groups[0]
@@ -401,7 +417,7 @@ def main():
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
-                "hurt_dmg")
+                "hurt_dmg", "legs")
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
@@ -426,7 +442,7 @@ def main():
             opp.load_state_dict(anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))])
         # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
         # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
-        b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_dec = b_iteach = b_teach = None
+        b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_dec = b_ll = b_lo = b_iteach = b_teach = None
         if dev.type == "cuda":
             torch.cuda.empty_cache()
         b_obs = torch.zeros(T, N, OBS_DIM, device=dev)
@@ -438,6 +454,8 @@ def main():
         b_w = torch.zeros(T, N, device=dev)
         b_live = torch.zeros(T, N, device=dev)                           # the intention head was read on that frame
         b_dec = torch.zeros(T, N, device=dev)                            # the left hand's outputs (keys, weapon key) were read on that frame
+        b_ll = torch.zeros(T, N, device=dev)                             # (LEGS) the switch to his legs was read on that frame
+        b_lo = torch.zeros(T, N, device=dev)                             # ... his legs moved him on that frame
         b_iteach = torch.zeros(T, N, dtype=torch.long, device=dev)       # what the item rule would have chosen
         b_teach = torch.zeros(T, N, 5, dtype=torch.long, device=dev)
         h0 = h.clone()
@@ -453,15 +471,11 @@ def main():
                 ds = dists(logits)
                 act = torch.stack([d.sample() for d in ds], -1)
                 lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
-                # the intention's part counts only when it was read, the left hand's (keys, weapon key) only on the one
-                # frame in four it decides on: until 2026-10-08 all four were counted and three were noise
-                logp = sum(lp_ for j_, lp_ in enumerate(lps[:-1]) if j_ not in KEY_HEADS)
-                keylp = sum(lps[j_] for j_ in KEY_HEADS)
                 if snaps:
                     lo, _, h_opp = opp.step(x, h_opp)
                     act_o = torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
-            b_obs[t], b_act[t], b_logp[t], b_val[t] = x, act, logp, val
+            b_obs[t], b_act[t], b_val[t] = x, act, val
             b_w[t] = learn * (1.0 - scr)
             b_teach[t] = torch.from_numpy(teach).to(dev)
             an = act.cpu().numpy()
@@ -477,7 +491,13 @@ def main():
             b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
             dec = torch.from_numpy(np.concatenate([r[8] for r in res]).astype(np.float32)).to(dev)
             b_dec[t] = dec
-            b_logp[t] = b_logp[t] + lps[-1] * live + keylp * dec
+            ll = torch.from_numpy(np.concatenate([r[9] for r in res]).astype(np.float32)).to(dev)
+            lo = torch.from_numpy(np.concatenate([r[10] for r in res]).astype(np.float32)).to(dev)
+            b_ll[t], b_lo[t] = ll, lo
+            # an output's part counts only on the frames its choice was read: the intention's when it was read, the left
+            # hand's (keys, weapon key) on the one frame in four it decides on (until 2026-10-08 all four were counted and
+            # three were noise), the switch to his legs when it was read, what his legs take only while he moves himself
+            b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo)))
             scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
             teach = np.concatenate([r[5] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
@@ -579,9 +599,9 @@ def main():
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
-                lp = sum(dd.log_prob(A[..., j]) * (dc if j in KEY_HEADS else 1.0) for j, dd in enumerate(ds[:-1])) + ds[-1].log_prob(A[..., -1]) * lv
-                ent = sum(w_ * dd.entropy() * (dc if j in KEY_HEADS else 1.0) for j, (w_, dd) in enumerate(zip(ent_heads[:-1], ds[:-1]))) \
-                    + ent_heads[-1] * ds[-1].entropy() * lv
+                hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk])
+                lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
+                ent = sum(w_ * dd.entropy() * (1.0 if hm[j] is None else hm[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
@@ -594,7 +614,7 @@ def main():
                         kl_n += 1
                         if old_h is not None:
                             for j, dd in enumerate(ds):
-                                mk_ = dc if j in KEY_HEADS else (lv if j == len(ds) - 1 else 1.0)
+                                mk_ = 1.0 if hm[j] is None else hm[j]
                                 klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * wgt).sum() / wsum)
                 pg = -(torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
                 vl = (0.5 * (v - ret[:, chunk]).pow(2) * wgt).sum() / wsum
@@ -614,7 +634,7 @@ def main():
                 if ik > 0:                                               # the intention head leans on the item rule at first
                     it_ = b_iteach[:, chunk]
                     im_ = b_live[:, chunk] * wgt
-                    ik_l = -(dst[-1].log_prob(it_) * im_).sum() / im_.sum().clamp(min=1.0)
+                    ik_l = -(dst[I_HEAD].log_prob(it_) * im_).sum() / im_.sum().clamp(min=1.0)
                     loss = loss + ik * ik_l
                 if demo_w > 0:                                           # imitate what pro players did in the same situation
                     d_obs, d_act, d_first = demo_batch()
@@ -639,6 +659,8 @@ def main():
         total += T * N
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
         G = NP / n_groups                                                # mean players per group (for the per-player numbers)
+        LG_ = np.atleast_1d(agg.get("legs", np.zeros(8)))              # (LEGS: the simulator's counters, see duel_env's stats)
+        LR_ = np.atleast_1d(agg.get("legs_reads", np.zeros(2)))
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    fire_in_view=round(float(agg.get("fire_vis", 0) / max(1, agg.get("vis_frames_h", 0))), 3),
                    shot_cost_per_player_min=round(float(agg.get("shot_cost", 0.0) / max(1e-9, NP * T * DT_MIN)), 3),
@@ -688,6 +710,15 @@ def main():
                                           for i_, w_ in enumerate(WEAPONS) if np.atleast_1d(agg.get("start_gun_w", np.zeros(len(WEAPONS))))[i_] > 0},
                             in_hand_games={w_: round(float(np.atleast_1d(agg.get("hand_g", np.zeros(len(WEAPONS))))[i_]                # the share of his time in games (not in
                                                            / max(1.0, float(np.sum(agg.get("hand_g", 0.0))))), 4) for i_, w_ in enumerate(WEAPONS)}),   # one-weapon rounds) with each weapon in hand               # (START_GUN_P) lives begun with grenades or plasma in hand
+                   legs=dict(share=round(float(LG_[0] / max(1.0, LG_[3])), 4),                 # (LEGS) the share of his time alive that his legs carried him,
+                             in_games=round(float(LG_[4] / max(1.0, LG_[5])), 4),              # ... in games alone,
+                             enemy_in_view=round(float(LG_[1] / max(1.0, LG_[0])), 4),         # ... of the legs' frames those with an enemy in view,
+                             no_way=round(float(LG_[2] / max(1.0, LG_[3])), 4),                # ... his time with the switch on and no way to go,
+                             asked=round(float(LR_[1] / max(1.0, LR_[0])), 4),                 # ... the share of the switch's readings that said "legs",
+                             speed=[int(LG_[6] / max(1.0, LG_[0])), int(LG_[7] / max(1.0, LG_[3] - LG_[0]))],   # his speed on his legs, on his own
+                             by_map={m_: round(float(np.atleast_1d(v_["legs"])[4] / max(1.0, float(np.atleast_1d(v_["legs"])[5]))), 3)        # in games, by map
+                                     for m_, v_ in agg_map.items() if "legs" in v_ and float(np.atleast_1d(v_["legs"])[5]) > 0},
+                             auto_switch_per_player_min=round(float(agg.get("auto_switch", 0)) / max(1e-9, NP * T * DT_MIN), 3)),   # (AUTO_SWITCH)
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,
