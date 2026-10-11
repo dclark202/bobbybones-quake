@@ -59,7 +59,10 @@ def low_priority():
     """below normal, so that a training run on the same PC keeps its share"""
     try:
         import ctypes
-        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+        k32_ = ctypes.windll.kernel32                         # (with ctypes' default types the handle is cut to 32 bits and the call fails silently)
+        k32_.GetCurrentProcess.restype = ctypes.c_void_p
+        k32_.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        k32_.SetPriorityClass(k32_.GetCurrentProcess(), 0x4000)
     except Exception:                                          # noqa: BLE001 (not Windows)
         try:
             os.nice(5)
@@ -144,7 +147,7 @@ def play(job):
     info_ = Y.map_info(env.w, mp)
     tm = (np.arange(frames) + 1) * E.DT
     T = Y.new_tally()
-    rows = dict(blind=[], sight=[], view=[])
+    rows = dict(blind=[], sight=[], view=[], fight=[])
     for p in P:
         o = p ^ 1
         dead = B["died"][:, p]
@@ -167,12 +170,22 @@ def play(job):
         snd[1:] |= 1 * (~B["air"][:-1, o] & B["air"][1:, o] & (B["vel"][1:, o, 2] > 150.0) & oboth[1:])
         snd[1:] |= 2 * (((B["ammo"][:-1, o] - B["ammo"][1:, o]).max(1) > 0.5) & oboth[1:])
         snd[1:] |= 4 * (((B["hp"][1:, o] > B["hp"][:-1, o]) | (B["ar"][1:, o] > B["ar"][:-1, o])) & oboth[1:])
+        ids = {int(p): seed * 1000 + int(p), int(o): seed * 1000 + int(o)}
+        obits = [[tm[f], ids[int(v)], ids[int(k)] if B["frag"][f, k] else -1] for v, k in ((p, o), (o, p)) for f in np.nonzero(B["died"][:, v])[0]]
+        od = np.where(B["died"][:, o], tm, -np.inf)
+        od = np.maximum.accumulate(od)
+        life = np.where(np.isfinite(od), tm - od, tm)             # seconds since the enemy last died (or since the game began)
+        near = np.linalg.norm(B["pos"][:, o] - B["pos"][:, p], axis=1) <= 1200.0
+        dhp, dar = np.zeros(frames), np.zeros(frames)
+        dhp[1:], dar[1:] = B["hp"][1:, o] - B["hp"][:-1, o], B["ar"][1:, o] - B["ar"][:-1, o]
+        picks = [[int(f), int(round(max(dhp[f], 0.0) + max(dar[f], 0.0))), int(dhp[f] >= 60 or dar[f] >= 40), int(dhp[f] > 0)]
+                 for f in np.nonzero(oboth & near & ((dhp > 0) | (dar > 0)))[0]]      # what he sees or hears the enemy pick up
         rec = Y.make_record(t=tm, pos=B["pos"][:, p], vel=B["vel"][:, p], yaw=B["yaw"][:, p], pitch=B["pitch"][:, p], weapon=B["w"][:, p],
                             shots=shots, health=np.where(dead, 0.0, B["hp"][:, p]), armor=B["ar"][:, p], score=B["score"][:, p], enemy=enemy,
                             enemy_score=B["score"][:, o], clock=tm, alive=alive, eye_h=np.where(B["duck"][:, p], 12.0, 26.0),
                             enemy_air=B["air"][:, o].astype(np.int64), hits=np.cumsum(up | B["frag"][:, p]), ammo=B["ammo"][:, p],
                             owned=B["has"][:, p], enemy_weapon=B["w"][:, o], client=np.full(frames, seed * 1000 + int(p)),
-                            ground=~B["air"][:, p], enemy_sound=snd)
+                            ground=~B["air"][:, p], enemy_sound=snd, obits=obits, enemy_life=life, clock_exact=tm, enemy_pick=picks)
         t_, r_ = Y.measure(rec, env.w, info_)
         Y.add_tally(T, t_)
         for k in rows:
@@ -282,6 +295,30 @@ def routes_same_size(T, maps, draws=20):
     m = lambda key: round(float(np.mean([r[key] for r in rows])), 2)
     return dict(pairs=len(rows), trips=sum(r["trips"] for r in rows), ways=m("ways"), commonest_share=m("commonest_share"), one_off_share=m("one_off_share"),
                 pros_ways=m("pros_ways"), pros_commonest_share=m("pros_commonest_share"), pros_one_off_share=m("pros_one_off_share"), by_pair=rows)
+
+
+def fight_index(rows, model):
+    """his own choices beside the pros' index (the formula of the pros' json, fitted on what they take and refuse): of
+    the offers he takes or refuses, how many he takes, and how many the pros would in the same situations; by his health
+    and armor and by the enemy's as he can guess it"""
+    import pro_yardsticks as Y
+    rows = rows[rows[:, 13] < 2]
+    if not len(rows):
+        return {}
+    z = np.full(len(rows), model["intercept"], np.float64)
+    for fi, (fname, levels) in enumerate(Y.FIGHT_FACTORS):
+        z += np.array([model["effects"].get(fname, {}).get(lvl, 0.0) for lvl in levels])[rows[:, 3 + fi]]
+    pro = 1.0 / (1.0 + np.exp(-z))
+    he = (rows[:, 13] == 0).astype(np.float64)
+
+    def cell(m):
+        return dict(offers=int(m.sum()), he_takes_share=round(100.0 * float(he[m].mean()), 1), the_pros_would_take_share=round(100.0 * float(pro[m].mean()), 1)) if m.any() else dict(offers=0)
+    out = dict(all=cell(np.ones(len(rows), bool)), by={})
+    for fi in (0, 1, 3, 6, 7, 9):
+        fname, levels = Y.FIGHT_FACTORS[fi]
+        out["by"][fname] = {levels[lv]: cell(rows[:, 3 + fi] == lv) for lv in range(len(levels)) if (rows[:, 3 + fi] == lv).any()}
+    out["his_choice_against_the_index_correlation"] = round(float(np.corrcoef(he, pro)[0, 1]), 3) if he.std() > 0 and pro.std() > 0 else None
+    return out
 
 
 def table(rows, head):
@@ -455,6 +492,49 @@ def show(res, pros):
             ("distance_change_mean", "change of the distance in 2 s"), ("farther_by_100_share", "farther by 100 or more, %"), ("nearer_by_100_share", "nearer by 100 or more, %"))
     print("\n" + table([[n] + [three(lambda r, n=n, k=k: r["fight_movement"]["after_a_big_hit"][n][k]) for k, _ in keys] for n in R["pros"]["fight_movement"]["after_a_big_hit"]],
                         ["after a hit of 50 or more that he lives through", *[lbl for _, lbl in keys]]) + "\n")
+    print("### 16. Fights taken and refused (each cell: {})\n".format(lead))
+    keys = (("sightings", "sightings"), ("takes_share", "takes it, %"), ("commits_share", "... and is still in it after 3 s (commits), %"),
+            ("refuses_share", "refuses it, %"), ("index", "index: taken of taken and refused, %"))
+
+    def frow(name, f):
+        return [name] + [three(lambda r, k=k: f(r)[k]) for k, _ in keys] + [three(lambda r: f(r)["when_taken"]["frags_for_less_of_him"]),
+                                                                           three(lambda r: f(r)["when_refused"]["frags_for_less_of_him"]), three(lambda r: f(r)["taking_pays"])]
+    rows = [frow("all", lambda r: r["fights"]["all"])]
+    for fname, tab in R["pros"]["fights"]["by"].items():
+        rows += [frow("{}: {}".format(fname, lvl), lambda r, fname=fname, lvl=lvl: r["fights"]["by"][fname][lvl]) for lvl in tab]
+    print(table(rows, ["situation"] + [lbl for _, lbl in keys] + ["taken: frags for less of him in 10 s", "refused: the same", "taking pays (frags)"]))
+    fi_ = res.get("fight_index", {})
+    if fi_:
+        print("\nHis choices beside the pros' index (of the offers taken or refused: he takes / the pros would take in the same situations, %):\n")
+        names = [("all", lambda v: v["all"])] + [("{}: {}".format(f, l_), lambda v, f=f, l_=l_: v["by"][f][l_]) for f, t_ in next(iter(fi_.values()))["by"].items() for l_ in t_]
+        frs = []
+        for nm, g in names:
+            line = [nm]
+            for k, _ in WHO[1:]:
+                try:
+                    c = g(fi_[k])
+                    line += [c["offers"], c.get("he_takes_share"), c.get("the_pros_would_take_share")]
+                except (KeyError, TypeError):
+                    line += [None, None, None]
+            frs.append(line)
+        print(table(frs, ["", "against himself: offers", "he takes, %", "the pros would, %", "against the stand-in: offers", "he takes, %", "the pros would, %"]))
+    print("\n### 17. The flick by how far off target he is as the enemy appears (each cell: {})\n".format(lead))
+    keys = (("appearances", "appearances"), ("a_shot_within_3s_share", "a shot within 3 s, %"), ("seconds_to_the_first_shot_median", "seconds to the first shot, median"),
+            ("a_hit_within_3s_share", "a hit within 3 s, %"), ("seconds_to_the_first_hit_median", "seconds to the first hit, median"),
+            ("hits_of_the_first_half_second_of_fire_share", "hits of the first 0.5 s of fire, %"))
+    rows = [[b] + [three(lambda r, b=b, k=k: r["flick_curve"]["by_angle"][b][k]) for k, _ in keys] for b in Y.ERR_BANDS]
+    for wn in Y.FLICK_W[:3]:
+        rows += [["{}, {}".format(wn, b)] + [three(lambda r, wn=wn, b=b, k=k: r["flick_curve"]["by_angle_and_weapon"][wn][b][k]) for k, _ in keys] for b in Y.ERR_BANDS]
+    print(table(rows, ["off target as a clear line to the enemy opens"] + [lbl for _, lbl in keys]))
+    tv = [row("travelling at 350 or more: his view off his direction of travel, degrees, median", lambda r: r["view_travelling"]["view_off_his_direction_of_travel"]["median"]),
+          row("... within 20 degrees of it, % of that time", lambda r: r["view_travelling"]["view_off_his_direction_of_travel"]["within_20_share"]),
+          row("... over 90 degrees off it, %", lambda r: r["view_travelling"]["view_off_his_direction_of_travel"]["over_90_share"])]
+    for lbl in ("travelling at 350 or more, no enemy in view", "all his time with no enemy in view"):
+        for k, kl in (("view_within_20_of_where_he_last_saw_him_share", "within 20 degrees of where he last saw him, %"),
+                      ("view_at_one_of_the_maps_places_share", "at one of the map's places, %"),
+                      ("view_at_the_doorway_the_enemy_would_come_through_share", "at the doorway the enemy would come through, %")):
+            tv.append(row("{}: {}".format(lbl, kl), lambda r, lbl=lbl, k=k: r["view_travelling"][lbl][k]))
+    print("\n" + table(tv, ["his view with nobody in view", *head]) + "\n")
     st = res.get("standing", {})
     if st:
         print("### 8. With the enemy in view: weapons, distance, outcome, and the strength of where he stands\n")
@@ -498,7 +578,8 @@ def main():
     ap.add_argument("--pros", default=os.path.join(ROOT, "docs", "pro_yardsticks.json"))
     ap.add_argument("--show", default=None)
     a = ap.parse_args()
-    pros = json.load(open(a.pros, encoding="utf-8"))
+    import pro_yardsticks as Y0
+    pros = Y0.load_both(a.pros)
     if a.show:
         return show(json.load(open(a.show, encoding="utf-8")), pros)
     low_priority()
@@ -530,7 +611,7 @@ def main():
         rs = [r for r in res if r["opp"] == opp]
         if not rs:
             continue
-        total, per, rows = Y.new_tally(), {}, {}
+        total, per, rows, frows = Y.new_tally(), {}, {}, []
         for r in sorted(rs, key=lambda r: maps.index(r["map"])):
             per[r["map"]] = Y.report(r["tally"], zrange=zr)
             ag = per[r["map"]]["aggression"]                    # (a map alone is too thin for the tables by two and more sides)
@@ -543,10 +624,13 @@ def main():
             for v in per[r["map"]]["hands"]["accuracy"].values():
                 for k in [k for k in v if k != "all"]:
                     v.pop(k)
+            per[r["map"]]["fights"].pop("pairs", None)
+            per[r["map"]]["flick_curve"].pop("by_angle_and_distance", None)
             ab = per[r["map"]]["fight_movement"]["after_a_big_hit"]
             per[r["map"]]["fight_movement"]["after_a_big_hit"] = {k: ab[k] for k in ("all", "enemy in view at the hit") if k in ab}
             Y.add_tally(total, r["tally"])
             rows[r["map"]] = (r["rows"]["sight"], r["rows"]["view"])
+            frows.append(np.asarray(r["rows"]["fight"], np.int64).reshape(-1, len(Y.FIGHT_COLS)))
             if opp == "nightmare":
                 f = np.array(r["final"], np.float64)
                 out["score"][r["map"]] = [round(float(f[:, 0].mean()), 1), round(float(f[:, 1].mean()), 1)]
@@ -556,6 +640,9 @@ def main():
         alls["holds"].pop("top_cells", None)                    # (under the map itself)
         out[opp] = dict(all=alls, **per)
         out["standing"][opp] = standing(rows)
+        md = pros["maps"]["all"].get("fights", {}).get("index_model")
+        if md and frows:
+            out.setdefault("fight_index", {})[opp] = fight_index(np.concatenate(frows), md)
         out["routes"][opp] = routes_same_size(total, maps)
         out["cells"][opp] = {}
         for mp, (sight, view) in rows.items():                  # his own cells with enough sightings, as the pros' table of cells

@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-11](results/2026-10-11.md)
 
+- 19:10 — Fights taken and refused, and the flick curve, from the pros' demos with v15c's end beside them: he stays in twice as many fights as the pros and the same in every situation; up to 40 degrees off target his first hit comes sooner than a pro's, and the enemy appears within 20 degrees of his view 28% of the time (the pros 65%)
 - 19:00 — The afternoon before v16: the pros' measures and how near he is to them (48% of the way on fourteen measures), the enemy as a target (lost by a broad rule, level by a narrow one), the three rocket changes tried (no change in his rocket use), the server's timing for the attention model (passes), a held-out map, the duel check made even between its seats
 - 13:40 — `duel_gru_v15c` (v15b's end with the weapon work, two readings to switch his legs off, speed pay 0.5): level with v15b, no gain in speed kept or in rockets; the real game plays his legs (B-213) and both beat the game's Nightmare bot; v15c on the public server
 - 12:50 — The public server's data: a fuller daily pull (raw logs, seven days on the server, an index, a second copy)

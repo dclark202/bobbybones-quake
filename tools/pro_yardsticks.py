@@ -73,8 +73,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SIM = os.path.join(ROOT, "sim")
 MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged"         # the trained maps: "all"
+GROUPS2 = ("fights", "flick_curve", "view_travelling")         # the groups kept in the second file, docs/pro_yardsticks2.json
 MORE = "campgrounds,hektik,toxicity,cure"                      # the maps of movement practice only: under their own names and in "all_ten"
-VERSION = 14                                                    # of the counts kept per demo: a change here counts every demo again
+VERSION = 15                                                    # of the counts kept per demo: a change here counts every demo again
 
 # ---------------------------------------------------------------------------------------------------------------------
 # the record and what is measured on it (no demo below this line until "reading a demo")
@@ -139,6 +140,31 @@ HEARD_BANDS = ("no sound of his in the last second", "a jump, shot or pickup of 
 ACC_BANDS = ("under 250 units", "250 to 500", "500 to 750", "750 to 1100", "over 1100", "enemy's place not known")
 ACC_EDGES = (250.0, 500.0, 750.0, 1100.0)
 CROSS_BANDS = ("enemy crossing under 15 degrees a second", "15 to 30", "30 to 60", "over 60")
+DEAD_S = 2.1                                                   # a fragged player is back after this long (the median of the pros' own deaths)
+# the pros' own stack by the seconds since they spawned (medians of 71 demos): what an enemy not seen for a while is guessed to have
+PRIOR_T = (0.0, 3.5, 7.5, 12.5, 17.5, 25.0, 37.5, 52.5, 75.0, 105.0, 150.0)
+PRIOR_V = (125.0, 122.0, 119.0, 126.0, 129.0, 138.0, 151.0, 163.0, 181.0, 188.0, 211.0)
+DMG = {0: 70.0, 1: 80.0, 2: 6.0, 3: 5.0, 4: 40.0, 5: 60.0, 6: 20.0, 7: 8.0, 8: 50.0}     # what a hit of his is counted as, by weapon (WEAPONS' order)
+EST_BANDS = ("enemy guessed under 60", "enemy guessed 60 to 125", "enemy guessed over 125", "enemy not guessed")
+FIGHT_FACTORS = (("his health and armor", STACK_BANDS), ("the enemy's, as he can guess it", EST_BANDS),
+                 ("in his hand", ("lightning", "rail", "rockets", "another weapon")),
+                 ("in the enemy's hand", ("lightning or rail", "rockets", "another weapon", "not known")),
+                 ("height", ("he stands higher", "level", "he stands lower")),
+                 ("his cell for the pros", ("weak (under -0.05)", "neither", "strong (over +0.05)", "no number")),
+                 ("distance", DIST_BANDS), ("score", ("behind", "level", "ahead")),
+                 ("time left", ("over 3 minutes left", "3 minutes or less left", "overtime or no clock")),
+                 ("the enemy spawned", ("under 10 s ago", "10 to 25 s ago", "over 25 s ago")))
+FIGHT_PAIRS = ((0, 1), (0, 3), (1, 6), (0, 7), (0, 9))
+CHOICES = ("takes it", "refuses it", "neither")
+FIGHT_COLS = ("x", "y", "z", "his stack band", "enemy guessed band", "his weapon", "enemy's weapon", "height", "cell", "distance band", "score", "time left",
+              "enemy spawned", "choice: 0 takes, 1 refuses, 2 neither", "damage dealt in 5 s (counted)", "taken in 5 s", "dealt in 10 s (-1: not known)",
+              "taken in 10 s", "a frag for him within 10 s", "a frag of him", "he takes a big item within 15 s", "the enemy is seen or heard taking one",
+              "distance", "enemy guessed", "his stack", "he is still in it after 3 s (takes it, the view not broken, not 150 farther)")
+ERR_BANDS = ("0 to 5 degrees off", "5 to 10", "10 to 20", "20 to 40", "40 to 80", "over 80")
+ERR_EDGES = (5.0, 10.0, 20.0, 40.0, 80.0)
+FLICK_W = ("lightning", "rail", "rockets", "another weapon")
+FAST = 350.0
+VIEW_STEP = 16                                                 # every this many frames with no enemy in view, a sample for places and doorways
 SOLID = 1
 LEADS = {1: "ahead", 0: "level", -1: "behind"}
 STATES = [l + ", " + p for l in ("ahead", "level", "behind") for p in ("before 7:00", "after 7:00")]
@@ -148,7 +174,7 @@ STATE_KEYS = ("time", "alive", "inview", "toward", "dist", "frags", "deaths", "t
 
 def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, enemy, enemy_score=None, lead=None,
                 clock=None, alive=None, eye_h=None, enemy_air=None, hits=None, seg=None, ammo=None, client=None, owned=None,
-                enemy_weapon=None, ground=None, enemy_sound=None):
+                enemy_weapon=None, ground=None, enemy_sound=None, obits=None, enemy_life=None, clock_exact=None, enemy_pick=None):
     """One player's game, frame by frame, as measure() wants it. Arrays of N frames in the order of time:
       t          seconds (any origin)                     pos, vel   (N, 3) units, units a second
       yaw, pitch degrees (pitch: looking down is positive, as the game's)
@@ -165,7 +191,13 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
       enemy_weapon (N,) the weapon in the enemy's hand, an index of WEAPONS, -1 where it is not known (None: never)
       ground     (N,) he stands on the ground (None: not known: no walking numbers, and a fall is read from his height)
       enemy_sound (N,) what the enemy did on this frame that is heard: 1 a jump, 2 a shot, 4 a pickup, added up; 0 nothing
-                 or his place not known (None: sounds not known)"""
+                 or his place not known (None: sounds not known)
+      obits      (K, 3) every death of the game: seconds (t's clock), the victim, the killer (-1: the world), the two as
+                 `client` numbers (None: frags and deaths are read from his score and his health, inside a stretch only)
+      enemy_life (N,) seconds since the enemy last died, or since the game began (None: not known)
+      clock_exact (N,) the game clock where `clock` has none (a timeout, a demo that begins in a game); None: `clock`
+      enemy_pick (M, 4) what the enemy was seen or heard picking up: frame, health and armor it gives, 1 for mega or an
+                 armor (red, yellow), 1 for health"""
     n = len(t)
     r = dict(t=np.asarray(t, np.float64), pos=np.asarray(pos, np.float32).reshape(n, 3),
              vel=np.asarray(vel, np.float32).reshape(n, 3), yaw=np.asarray(yaw, np.float32),
@@ -184,6 +216,10 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
     r["enemy_weapon"] = np.full(n, -1, np.int64) if enemy_weapon is None else np.asarray(enemy_weapon, np.int64)
     r["ground"] = None if ground is None else np.asarray(ground, bool)
     r["enemy_sound"] = None if enemy_sound is None else np.asarray(enemy_sound, np.int64)
+    r["obits"] = None if obits is None else np.asarray(obits, np.float64).reshape(-1, 3)
+    r["enemy_life"] = None if enemy_life is None else np.asarray(enemy_life, np.float64)
+    r["clock_exact"] = None if clock_exact is None else np.asarray(clock_exact, np.float64)
+    r["enemy_pick"] = None if enemy_pick is None else np.asarray(enemy_pick, np.int64).reshape(-1, 4)
     if lead is None:
         lead = np.sign(r["score"] - np.asarray(enemy_score, np.int64))
     r["lead"] = np.asarray(lead, np.int64)
@@ -224,6 +260,13 @@ def see(rec, world):
     rec["eye"], rec["inview"], rec["dist"] = eye, inview, np.where(have, dist, np.nan)
     last = np.where(inview | rec["first"], rec["t"], -np.inf)
     rec["since"] = rec["t"] - np.maximum.accumulate(last)
+    los = inview.copy()                                         # `los`: a clear line to the enemy, wherever his view points
+    idx = np.nonzero(have & (dist < SIGHT) & ~(cosang > FOV_COS))[0]
+    if world is not None and len(idx):
+        f1 = world.lines(eye[idx], en[idx] + np.array([0, 0, 8.0], np.float32), mask=SOLID)
+        f2 = world.lines(eye[idx], en[idx] + np.array([0, 0, 26.0], np.float32), mask=SOLID)
+        los[idx] = (f1 >= 0.999) | (f2 >= 0.999)
+    rec["los"] = los
     return rec
 
 
@@ -289,7 +332,10 @@ def new_tally():
                            look_time=0.0, look_item=0.0, look_exit=0.0, trap_shots=0, traps=0, with_trap=0, trap_frags=0, cells={}),
                 hands=dict(turn=dict(travel={}, fight={}), flick=dict(n=0, size={}, peak={}, t_peak={}, shot={}, hit={}, err0={}, err3={}, shot_none=0, hit_none=0),
                            acc={}, lg_cross={}, lg_track=dict(time=0.0, reversals=0)),
-                fight=dict(by={}, hit50={}))
+                fight=dict(by={}, hit50={}),
+                fights=dict(one={}, two={}), est_check=[], flickc={},
+                tview=dict(move={}, fast=dict(time=0.0, along=0.0, ever=0.0, at_last=0.0, sample=0.0, at_place=0.0, door=0.0, at_door=0.0),
+                           nv=dict(time=0.0, along=0.0, ever=0.0, at_last=0.0, sample=0.0, at_place=0.0, door=0.0, at_door=0.0)))
 
 
 def add_tally(a, b):
@@ -486,7 +532,260 @@ def measure(rec, world, info):
     holds(rec, T, info, world, hits, pr, took, frag, died, seg_end, since)
     hands(rec, T, starts_, hits, pr, sh, seg_end)
     fight_move(rec, T, took, stack, seg_end)
-    return T, dict(blind=rows, sight=sight, view=view)
+    est, prior = enemy_estimate(rec, hits)
+    his_big = np.array(sorted({int(x) for k_, bp in enumerate(big_picks) if bp is not None and info["big"][k_]["back"] > 5.0 for x in bp}), np.int64)
+    frows = fights(rec, T, info, starts_, hits, took, stack, est, prior, seg_end, his_big, frag, died)
+    flick_curve(rec, T, hits, pr, sh, seg_end)
+    travel_view(rec, T, info, world, ever)
+    return T, dict(blind=rows, sight=sight, view=view, fight=frows)
+
+
+def enemy_estimate(rec, hits):
+    """the enemy's health plus armor as he can guess it, frame by frame: 125 as the enemy spawns; less what his own hits
+    are counted as (DMG); more by what he sees or hears him pick up; and while he has not had him in view for 3 s it
+    rises toward what the pros themselves have that long after a spawn (PRIOR), a fifteenth of the gap a second. A
+    stretch begins at that table's value. Returns the guess and the table's value alone; (None, None) without
+    `enemy_life`."""
+    life = rec["enemy_life"]
+    if life is None:
+        return None, None
+    n = len(life)
+    prior = np.interp(np.maximum(life - DEAD_S, 0.0), PRIOR_T, PRIOR_V)
+    delta = np.zeros(n)
+    for f, wq, _ in hits:
+        delta[f] -= DMG.get(int(wq), 10.0)
+    if rec["enemy_pick"] is not None:
+        for f, amount, _, _ in rec["enemy_pick"]:
+            if 0 <= f < n:
+                delta[f] += amount
+    est = np.zeros(n)
+    e = float(prior[0])
+    first, since, w = rec["first"], rec["since"], rec["w"]
+    for i in range(n):
+        if first[i]:
+            e = float(prior[i])
+        elif life[i] < life[i - 1] - 0.5:                       # he died: he is back with what a spawn gives
+            e = 125.0
+        e += delta[i]
+        if e > 200.0:
+            e -= 2.0 * w[i]
+        if since[i] > 3.0 and e < prior[i]:
+            e += (prior[i] - e) * w[i] / 15.0
+        e = min(max(e, 1.0), 400.0)
+        est[i] = e
+    return est, prior
+
+
+def fights(rec, T, info, starts, hits, took, stack, est, prior, seg_end, his_big, frag, died):
+    """fights taken and refused. An offer is a sighting. He takes it when within 3 s he deals damage or is 150 units or
+    more nearer; refuses it when he does neither and the enemy is out of his view for 0.5 s at a stretch or he is 150 or
+    more farther; else neither. How it went: the damage he deals (his hits, counted by DMG) and takes (his own health
+    and armor) in 5 and 10 s, a frag for him or of him within 10 s, a big item for him or (seen or heard) the enemy
+    within 15 s. Counted by every side of the situation (FIGHT_FACTORS) and a few pairs of them; returns a row a
+    sighting (FIGHT_COLS)."""
+    Fx = T["fights"]
+    t, w, alive, inview, pos, en, dist = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["pos"], rec["enemy"], rec["dist"]
+    n = len(t)
+    dmg = np.zeros(n)
+    for f, wq, _ in hits:
+        dmg[f] += DMG.get(int(wq), 10.0)
+    cd, ct = np.concatenate([[0.0], np.cumsum(dmg)]), np.concatenate([[0.0], np.cumsum(took)])
+    hitc = dmg > 0
+    ob = rec["obits"]
+    ebig = np.sort(rec["enemy_pick"][rec["enemy_pick"][:, 2] > 0, 0]) if rec["enemy_pick"] is not None else np.zeros(0, np.int64)
+    cellv = info.get("cellv") or {}
+    ce = rec["clock_exact"] if rec["clock_exact"] is not None else rec["clock"]
+    # ---- how good the guess of the enemy's stack is: at a cut to the other player his true stack is seen
+    if est is not None:
+        for i in np.nonzero(rec["first"])[0]:
+            if i > 0 and rec["client"][i] != rec["client"][i - 1] and t[i] - t[i - 1] <= 0.25 and alive[i] and alive[i - 1]:
+                T["est_check"].append([int(round(est[i - 1])), int(round(prior[i - 1])), int(round(stack[i]))])
+    rows = []
+    for i in starts:
+        e3 = min(int(np.searchsorted(t, t[i] + 3.0, side="right")) - 1, int(seg_end[i]))
+        if e3 <= i:
+            continue
+        dead = np.nonzero(~alive[i:e3 + 1])[0]
+        ea = i + int(dead[0]) - 1 if len(dead) else e3
+        dealt3 = bool(hitc[i + 1:ea + 1].any())
+        kn = np.nonzero(np.isfinite(dist[i:ea + 1]))[0]
+        d0 = float(dist[i])
+        d1 = float(dist[i + kn[-1]]) if len(kn) else d0
+        broke, acc = False, 0.0
+        for q in range(i, ea + 1):
+            acc = acc + w[q] if not inview[q] else 0.0
+            if acc >= SIGHT_BREAK_S:
+                broke = True
+                break
+        choice = 0 if (dealt3 or d1 - d0 <= -150.0) else 1 if (broke or d1 - d0 >= 150.0) else 2
+        stay = int(choice == 0 and not broke and d1 - d0 < 150.0 and not len(dead))
+        e = int(seg_end[i])
+        e5 = min(int(np.searchsorted(t, t[i] + 5.0, side="right")) - 1, e)
+        e10 = int(np.searchsorted(t, t[i] + 10.0, side="right")) - 1
+        known10 = e10 <= e
+        e10 = min(e10, e)
+        dealt5, taken5 = cd[e5 + 1] - cd[i + 1], ct[e5 + 1] - ct[i + 1]
+        dealt10, taken10 = cd[e10 + 1] - cd[i + 1], ct[e10 + 1] - ct[i + 1]
+        c = rec["client"][i]
+        if ob is not None:
+            m = (ob[:, 0] > t[i]) & (ob[:, 0] <= t[i] + 10.0)
+            ffor, fof = bool((m & (ob[:, 2] == c) & (ob[:, 1] != c)).any()), bool((m & (ob[:, 1] == c)).any())
+        else:
+            ffor, fof = bool(frag[i + 1:e10 + 1].any()), bool(died[i + 1:e10 + 1].any())
+        e15 = min(int(np.searchsorted(t, t[i] + 15.0, side="right")) - 1, e)
+        ihim = bool(((his_big > i) & (his_big <= e15)).any())
+        ien = bool(((ebig > i) & (ebig <= e15)).any())
+        sb = 0 if stack[i] < 60 else 1 if stack[i] <= 125 else 2
+        eb = 3 if est is None else 0 if est[i] < 60 else 1 if est[i] <= 125 else 2
+        hw = {LG: 0, RG: 1, RL: 2}.get(int(rec["weapon"][i]), 3)
+        ewq = int(rec["enemy_weapon"][i])
+        ew = 3 if ewq < 0 else 0 if ewq in (LG, RG) else 1 if ewq == RL else 2
+        dz = pos[i, 2] - en[i, 2]
+        hg = 0 if dz >= HIGHER else 2 if dz <= -HIGHER else 1
+        cv = cellv.get(tuple(int(x) for x in np.floor(pos[i] / np.array([256.0, 256.0, 128.0]))))
+        cs = 3 if cv is None else 0 if cv < -0.05 else 2 if cv > 0.05 else 1
+        db = 0 if d0 < 400 else 1 if d0 <= 800 else 2
+        ld = int(rec["lead"][i]) + 1
+        tl = 2 if not np.isfinite(ce[i]) or ce[i] > 600.0 else 0 if 600.0 - ce[i] > 180.0 else 1
+        lf = 999.0 if rec["enemy_life"] is None else rec["enemy_life"][i] - DEAD_S
+        es = 0 if lf < 10.0 else 1 if lf <= 25.0 else 2
+        lv = (sb, eb, hw, ew, hg, cs, db, ld, tl, es)
+        keys = ["one:{}:{}:{}".format(fi, lv[fi], choice) for fi in range(len(lv))] + ["one:all:0:{}".format(choice)] + \
+            ["two:{},{}:{},{}:{}".format(a, b, lv[a], lv[b], choice) for a, b in FIGHT_PAIRS]
+        for k in keys:
+            grp, rest = k.split(":", 1)
+            C = Fx[grp].setdefault(rest, dict(n=0, k10=0, dealt5=0.0, taken5=0.0, dealt10=0.0, taken10=0.0, ffor=0, fof=0, ihim=0, ien=0, stay=0))
+            C["n"] += 1
+            C["stay"] += stay
+            C["dealt5"] += dealt5
+            C["taken5"] += taken5
+            if known10:
+                C["k10"] += 1
+                C["dealt10"] += dealt10
+                C["taken10"] += taken10
+            C["ffor"] += int(ffor)
+            C["fof"] += int(fof)
+            C["ihim"] += int(ihim)
+            C["ien"] += int(ien)
+        rows.append([int(round(float(x))) for x in pos[i]] + list(lv) + [choice, int(round(dealt5)), int(round(taken5)), int(round(dealt10)) if known10 else -1,
+                                                                        int(round(taken10)), int(ffor), int(fof), int(ihim), int(ien), int(round(d0)),
+                                                                        -1 if est is None else int(round(est[i])), int(round(float(stack[i]))), stay])
+    return rows
+
+
+def flick_curve(rec, T, hits, pr, sh, seg_end):
+    """the flick by how far off target he is as the enemy appears. An appearance here: a clear line to the enemy after 1 s
+    or more without one, wherever his view points (so the angle runs to 180). Per band of that angle, by the weapon of
+    his first shot (the one in his hand if he does not fire) and by the distance: the time to his first shot and to
+    his first hit, and the shots and hits of the first 0.5 s of his fire."""
+    Fc = T["flickc"]
+    t, alive, en, eye = rec["t"], rec["alive"], rec["enemy"], rec["eye"]
+    los = rec["los"]
+    last = np.where(los | rec["first"], t, -np.inf)
+    since_los = t - np.maximum.accumulate(last)
+    starts = np.nonzero(los & ~rec["first"] & (np.concatenate([[0.0], since_los[:-1]]) >= SIGHT_OUT_S - 0.03))[0]
+    if not len(starts):
+        return
+    fd = _fwd(rec["yaw"], rec["pitch"]).astype(np.float64)
+    shf = sh[np.argsort(sh[:, 0], kind="stable")] if len(sh) else np.zeros((0, 3), np.int64)
+    hit_fr = np.array(sorted({f for f, _, _ in hits}), np.int64)
+    hit_shot = [(int(pr[k, 0]) if k >= 0 else f, wq) for f, wq, k in hits]     # the frame of the shot that hit, its weapon
+    up = np.array([0, 0, 8.0])
+    for i in starts:
+        d = en[i] + up - eye[i]
+        err = float(np.degrees(np.arccos(np.clip((d / (np.linalg.norm(d) + 1e-9)) @ fd[i], -1.0, 1.0))))
+        eb = int(np.searchsorted(ERR_EDGES, err, side="right"))
+        dist = float(np.linalg.norm(d))
+        db = 0 if dist < 400 else 1 if dist <= 800 else 2
+        e3 = min(int(np.searchsorted(t, t[i] + 3.0, side="right")) - 1, int(seg_end[i]))
+        q = int(np.searchsorted(shf[:, 0], i)) if len(shf) else 0
+        s1 = int(shf[q, 0]) if len(shf) and q < len(shf) and shf[q, 0] <= e3 else -1
+        wq = int(shf[q, 1]) if s1 >= 0 else int(rec["weapon"][i])
+        wc = {LG: 0, RG: 1, RL: 2}.get(wq, 3)
+        h1 = np.searchsorted(hit_fr, i)
+        hf = int(hit_fr[h1]) if h1 < len(hit_fr) and hit_fr[h1] <= e3 else -1
+        s05 = h05 = 0
+        if s1 >= 0:
+            e05 = min(int(np.searchsorted(t, t[s1] + 0.5, side="right")) - 1, int(seg_end[i]))
+            m = (shf[:, 0] >= s1) & (shf[:, 0] <= e05) & (shf[:, 1] == wq)
+            s05 = int(shf[m, 2].sum())
+            h05 = sum(1 for s0, w_ in hit_shot if s1 <= s0 <= e05 and w_ == wq)
+        for key in ("e{}".format(eb), "e{}:w{}".format(eb, wc), "e{}:d{}".format(eb, db), "w{}".format(wc)):
+            C = Fc.setdefault(key, dict(n=0, shot={}, shot_none=0, hit={}, hit_none=0, s05=0, h05=0))
+            C["n"] += 1
+            if s1 >= 0:
+                _hadd(C["shot"], t[s1] - t[i], 0.05, 3.0)
+            else:
+                C["shot_none"] += 1
+            if hf >= 0:
+                _hadd(C["hit"], t[hf] - t[i], 0.05, 3.0)
+            else:
+                C["hit_none"] += 1
+            C["s05"] += s05
+            C["h05"] += min(h05, s05)
+
+
+def travel_view(rec, T, info, world, ever):
+    """where his view points with nobody in view: against his direction of travel (at FAST or more), and how much of the
+    time it is within NEAR_DEG of where he last saw the enemy, of one of the map's places (the pros' blind shots land
+    there; a clear line to it), of the doorway the enemy would come through (the first spot on the enemy's way from
+    where he was last seen to him, by the walking map, that he has a clear line to). The last two on every VIEW_STEP-th
+    frame."""
+    V = T["tview"]
+    t, w, alive, inview, pos, eye, en = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["pos"], rec["eye"], rec["enemy"]
+    n = len(t)
+    fd = _fwd(rec["yaw"], rec["pitch"]).astype(np.float64)
+    cosn = np.cos(np.radians(NEAR_DEG))
+    hsp = np.hypot(rec["vel"][:, 0], rec["vel"][:, 1])
+    nv = alive & ~inview
+    fast = nv & (hsp >= FAST)
+    off = np.abs((rec["yaw"] - np.degrees(np.arctan2(rec["vel"][:, 1], rec["vel"][:, 0])) + 180.0) % 360.0 - 180.0)
+    _hadd(V["move"], off[fast], 10.0, 170.0, w[fast])
+    last = np.maximum.accumulate(np.where(inview, np.arange(n), 0))
+    lastpos = np.where(np.isfinite(en[last]), en[last], 0.0).astype(np.float64) + np.array([0, 0, 8.0])
+    dl = lastpos - eye
+    at_last = (dl * fd).sum(1) / (np.linalg.norm(dl, axis=1) + 1e-9) >= cosn
+    places = np.array(info.get("places") or [], np.float64).reshape(-1, 3)
+    nodes, hop = info.get("nav_nodes"), info.get("nav_hop")
+    samp = np.zeros(n, bool)
+    samp[::VIEW_STEP] = True
+    samp &= nv
+    at_place = np.zeros(n, bool)
+    door = np.zeros(n, bool)
+    at_door = np.zeros(n, bool)
+    idx = np.nonzero(samp)[0]
+    if len(idx) and len(places) and world is not None:
+        for q in range(len(places)):
+            d = places[q] + np.array([0, 0, 16.0]) - eye[idx]
+            dn = np.linalg.norm(d, axis=1) + 1e-9
+            m = ((d * fd[idx]).sum(1) / dn >= cosn) & (dn <= 3000.0) & ~at_place[idx]
+            if m.any():
+                m[m] = world.lines(eye[idx][m], np.repeat((places[q] + np.array([0, 0, 16.0]))[None], int(m.sum()), 0), mask=SOLID) >= 0.999
+                at_place[idx[m]] = True
+    if len(idx) and nodes is not None and world is not None:
+        di = idx[ever[idx]]
+        if len(di):
+            a_ = np.concatenate([np.linalg.norm(nodes[None, :, :] - pos[di[q:q + 200]][:, None, :], axis=2).argmin(1) for q in range(0, len(di), 200)])
+            b_ = np.concatenate([np.linalg.norm(nodes[None, :, :] - lastpos[di[q:q + 200]][:, None, :], axis=2).argmin(1) for q in range(0, len(di), 200)])
+            for i, a, b in zip(di, a_, b_):
+                path, k = [int(b)], int(b)
+                while k != a and len(path) < 64:
+                    k = int(hop[k, a])
+                    if k < 0:
+                        break
+                    path.append(k)
+                P = nodes[path] + np.array([0, 0, 8.0])
+                vis = world.lines(np.repeat(eye[i][None], len(P), 0), P, mask=SOLID) >= 0.999
+                if not vis.any():
+                    continue
+                door[i] = True
+                target = lastpos[i] if vis[0] else P[int(np.argmax(vis))]
+                d = target - eye[i]
+                at_door[i] = float(d @ fd[i]) / (np.linalg.norm(d) + 1e-9) >= cosn
+    ws = w * VIEW_STEP
+    for name, m in (("fast", fast), ("nv", nv)):
+        V[name] = dict(time=float(w[m].sum()), along=float(w[m & (off <= NEAR_DEG)].sum()), ever=float(w[m & ever].sum()), at_last=float(w[m & ever & at_last].sum()),
+                       sample=float(ws[m & samp].sum()), at_place=float(ws[m & at_place].sum()), door=float(ws[m & door].sum()), at_door=float(ws[m & at_door].sum()))
 
 
 def _hadd(h, vals, step, top, weights=None):
@@ -1291,6 +1590,133 @@ def report(T, zrange=None):
     out["holds"] = holds_report(T)
     out["hands"] = hands_report(T)
     out["fight_movement"] = fight_report(T)
+    out["fights"] = fights_report(T)
+    out["flick_curve"] = flick_report(T)
+    out["view_travelling"] = tview_report(T)
+    return out
+
+
+def _fight_cell(Fx, grp, prefix):
+    """the three choices of one situation -> its numbers"""
+    cs = [Fx[grp].get("{}:{}".format(prefix, c)) for c in range(3)]
+    tot = sum(c["n"] for c in cs if c)
+    if not tot:
+        return dict(sightings=0)
+    out = dict(sightings=tot)
+    for c, nm in zip(cs, ("takes", "refuses", "neither")):
+        out[nm + "_share"] = _share(c["n"] if c else 0, tot)
+    t_, r_ = (cs[0]["n"] if cs[0] else 0), (cs[1]["n"] if cs[1] else 0)
+    out["index"] = round(100.0 * t_ / (t_ + r_), 1) if t_ + r_ else None
+    out["commits_share"] = _share(cs[0]["stay"] if cs[0] else 0, tot)        # takes it and is still in it after the 3 s
+    out["fires_and_leaves_share"] = _share((cs[0]["n"] - cs[0]["stay"]) if cs[0] else 0, tot)
+    for c, nm in zip(cs, ("when_taken", "when_refused", "when_neither")):
+        if c and c["n"]:
+            out[nm] = dict(sightings=c["n"], damage_dealt_less_taken_in_10s=round((c["dealt10"] - c["taken10"]) / c["k10"], 1) if c["k10"] else None,
+                           damage_taken_in_10s=round(c["taken10"] / c["k10"], 1) if c["k10"] else None,
+                           frag_for_him_share=_share(c["ffor"], c["n"]), frag_of_him_share=_share(c["fof"], c["n"]),
+                           frags_for_less_of_him=round((c["ffor"] - c["fof"]) / c["n"], 3), big_item_for_him_share=_share(c["ihim"], c["n"]),
+                           big_item_enemy_seen_share=_share(c["ien"], c["n"]))
+    a, b = out.get("when_taken"), out.get("when_refused")
+    out["taking_pays"] = round(a["frags_for_less_of_him"] - b["frags_for_less_of_him"], 3) if a and b else None
+    return out
+
+
+def fights_report(T):
+    """fights taken and refused from a tally: all, by every side of the situation, by the pairs counted; and how good the
+    guess of the enemy's stack is where the demo shows the truth (a cut to the other player)"""
+    Fx = T["fights"]
+    out = dict(all=_fight_cell(Fx, "one", "all:0"), by={}, pairs={})
+    for fi, (fname, levels) in enumerate(FIGHT_FACTORS):
+        out["by"][fname] = {levels[lv]: _fight_cell(Fx, "one", "{}:{}".format(fi, lv)) for lv in range(len(levels)) if any("{}:{}:{}".format(fi, lv, c) in Fx["one"] for c in range(3))}
+    for a, b in FIGHT_PAIRS:
+        tab = {}
+        for la in range(len(FIGHT_FACTORS[a][1])):
+            for lb in range(len(FIGHT_FACTORS[b][1])):
+                c = _fight_cell(Fx, "two", "{},{}:{},{}".format(a, b, la, lb))
+                if c["sightings"]:
+                    tab["{}; {}".format(FIGHT_FACTORS[a][1][la], FIGHT_FACTORS[b][1][lb])] = c
+        out["pairs"]["{} x {}".format(FIGHT_FACTORS[a][0], FIGHT_FACTORS[b][0])] = tab
+    ec = np.array(T["est_check"], np.float64).reshape(-1, 3)
+    if len(ec) >= 20:
+        band = lambda x: np.where(x < 60, 0, np.where(x <= 125, 1, 2))
+        be, bp, bt = band(ec[:, 0]), band(ec[:, 1]), band(ec[:, 2])
+        out["enemy_stack_guess_check"] = dict(
+            cuts=len(ec), guess_off_by_median=round(float(np.median(np.abs(ec[:, 0] - ec[:, 2]))), 1), table_alone_off_by_median=round(float(np.median(np.abs(ec[:, 1] - ec[:, 2]))), 1),
+            guess_in_the_right_band_share=_share(int((be == bt).sum()), len(ec)), table_alone_in_the_right_band_share=_share(int((bp == bt).sum()), len(ec)),
+            correlation=round(float(np.corrcoef(ec[:, 0], ec[:, 2])[0, 1]), 3),
+            guessed_band_by_true_band={STACK_BANDS[q]: {STACK_BANDS[r]: _share(int(((bt == q) & (be == r)).sum()), int((bt == q).sum())) for r in range(3)} for q in range(3)})
+    return out
+
+
+def fight_model(rows, commit=False):
+    """the calibrated aggression index: a logistic fit of "takes it" against "refuses it" on the sides of the situation
+    (rows of FIGHT_COLS; the sightings that end in neither are left out). index(situation) = 1 / (1 + exp(-(intercept +
+    the sum of its levels' effects))): the share of such offers the pros take among those they take or refuse.
+    commit=True: "takes it and is still in it after the 3 s" against every other offer."""
+    rows = np.asarray(rows, np.int64)
+    if commit:
+        y = (rows[:, 25] == 1).astype(np.float64)
+    else:
+        rows = rows[rows[:, 13] < 2]
+        y = (rows[:, 13] == 0).astype(np.float64)
+    cols, names = [np.ones(len(rows))], [("intercept", "")]
+    for fi, (fname, levels) in enumerate(FIGHT_FACTORS):
+        for lv in range(1, len(levels)):
+            cols.append((rows[:, 3 + fi] == lv).astype(np.float64))
+            names.append((fname, levels[lv]))
+    X = np.stack(cols, 1)
+    b = np.zeros(X.shape[1])
+    for _ in range(25):
+        pr_ = 1.0 / (1.0 + np.exp(-(X @ b)))
+        W = pr_ * (1.0 - pr_) + 1e-9
+        H = X.T @ (X * W[:, None]) + 1e-3 * np.eye(X.shape[1])
+        b = b + np.linalg.solve(H, X.T @ (y - pr_) - 1e-3 * b)
+    pr_ = np.clip(1.0 / (1.0 + np.exp(-(X @ b))), 1e-9, 1 - 1e-9)
+    base = float(y.mean())
+    ll = float(-(y * np.log(pr_) + (1 - y) * np.log(1 - pr_)).mean())
+    ll0 = float(-(base * np.log(base) + (1 - base) * np.log(1 - base)))
+    eff = {}
+    for (fname, lvl), v in zip(names[1:], b[1:]):
+        eff.setdefault(fname, {FIGHT_FACTORS[[f for f, _ in FIGHT_FACTORS].index(fname)][1][0]: 0.0})[lvl] = round(float(v), 3)
+    return dict(sightings=int(len(rows)), takes_share=round(100.0 * base, 1), intercept=round(float(b[0]), 3), effects=eff,
+                log_loss=round(ll, 4), log_loss_of_the_plain_share=round(ll0, 4),
+                says="index = 1 / (1 + exp(-(intercept + the effects of the situation's levels))); the first level of every side is 0")
+
+
+def fight_index(model, levels):
+    """the index of one situation: `levels` {side's name: level's name} (a side left out counts as its first level)"""
+    z = model["intercept"] + sum(model["effects"].get(k, {}).get(v, 0.0) for k, v in levels.items())
+    return 1.0 / (1.0 + np.exp(-z))
+
+
+def flick_report(T):
+    Fc = T["flickc"]
+
+    def cell(C):
+        if not C or not C["n"]:
+            return dict(appearances=0)
+        ns, nh = sum(C["shot"].values()), sum(C["hit"].values())
+        return dict(appearances=C["n"], a_shot_within_3s_share=_share(ns, C["n"]), seconds_to_the_first_shot_median=_hq(C["shot"], 50, 0.05),
+                    seconds_to_the_first_shot_25=_hq(C["shot"], 25, 0.05), a_hit_within_3s_share=_share(nh, C["n"]),
+                    seconds_to_the_first_hit_median=_hq(C["hit"], 50, 0.05), seconds_to_the_first_hit_25=_hq(C["hit"], 25, 0.05),
+                    hits_of_the_first_half_second_of_fire_share=_share(C["h05"], C["s05"]), shots_in_it=C["s05"])
+    return dict(by_angle={ERR_BANDS[e]: cell(Fc.get("e{}".format(e))) for e in range(len(ERR_BANDS))},
+                by_weapon={FLICK_W[w_]: cell(Fc.get("w{}".format(w_))) for w_ in range(4)},
+                by_angle_and_weapon={FLICK_W[w_]: {ERR_BANDS[e]: cell(Fc.get("e{}:w{}".format(e, w_))) for e in range(len(ERR_BANDS))} for w_ in range(3)},
+                by_angle_and_distance={DIST_BANDS[d]: {ERR_BANDS[e]: cell(Fc.get("e{}:d{}".format(e, d))) for e in range(len(ERR_BANDS))} for d in range(3)})
+
+
+def tview_report(T):
+    V = T["tview"]
+    out = dict(view_off_his_direction_of_travel=dict(median=_hq(V["move"], 50, 10.0), p75=_hq(V["move"], 75, 10.0), within_20_share=_hunder(V["move"], 20, 10.0),
+                                                     within_40_share=_hunder(V["move"], 40, 10.0), over_90_share=round(100.0 - (_hunder(V["move"], 90, 10.0) or 0.0), 1) if V["move"] else None))
+    for name, lbl in (("fast", "travelling at 350 or more, no enemy in view"), ("nv", "all his time with no enemy in view")):
+        c = V[name]
+        out[lbl] = dict(minutes=round(c["time"] / 60.0, 1), view_within_20_of_his_direction_of_travel_share=_share(c["along"], c["time"]),
+                        view_within_20_of_where_he_last_saw_him_share=_share(c["at_last"], c["ever"]),
+                        view_at_one_of_the_maps_places_share=_share(c["at_place"], c["sample"]),
+                        view_at_the_doorway_the_enemy_would_come_through_share=_share(c["at_door"], c["door"]),
+                        a_doorway_found_share_of_the_samples=_share(c["door"], c["sample"]))
     return out
 
 
@@ -1603,7 +2029,48 @@ def map_info(world, name):
             big.append(dict(label=BIG[cls] + (str(seen[BIG[cls]]) if n_same > 1 else ""), pos=p, rivals=rivals,
                             col=sort if wname is None else WEAPONS.index(wname), back=RETURN.get(ITEM_KIND.get(cls), 5.0)))
     exits = [[float(x) for x in d] for cls_, _, d in getattr(world, "triggers", []) if cls_ == "trigger_teleport"]
-    return dict(name=name, items=out, big=big, exits=exits)
+    info = dict(name=name, items=out, big=big, exits=exits, places=[], cellv={}, nav_nodes=None, nav_hop=None)
+    f = os.path.join(ROOT, "sim", "pro_places", name + ".json")
+    if os.path.exists(f):
+        info["places"] = [pl["pos"] for pl in json.load(open(f)).get("places", [])]
+    f = os.path.join(ROOT, "sim", "pro_places", name + "_cells.json")
+    if os.path.exists(f):
+        info["cellv"] = {tuple(c["cell"]): c["outcome_over_expected"] for c in json.load(open(f))["cells"] if c.get("outcome_over_expected") is not None}
+    nh = nav_hops(name)
+    if nh is not None:
+        info["nav_nodes"], info["nav_hop"] = nh
+    return info
+
+
+def nav_hops(name):
+    """the walking map of a map (data/maps/nav_<map>_sim.json) and for every pair of its spots the next spot on the
+    quickest way from the one to the other (kept in the demo root: it takes a minute to work out)"""
+    src = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(name))
+    if not os.path.exists(src):
+        return None
+    keep = os.path.join(demo_root(), "yardsticks", "navhop_{}.npz".format(name))
+    if os.path.exists(keep) and os.path.getmtime(keep) >= os.path.getmtime(src):
+        z = np.load(keep)
+        return z["nodes"], z["hop"]
+    nav = json.load(open(src))
+    nodes = np.array(nav["nodes"], np.float64).reshape(-1, 3)
+    n = len(nodes)
+    D = np.full((n, n), np.inf, np.float32)
+    hop = np.full((n, n), -1, np.int16)
+    for e in nav["edges"]:
+        a, b, c = int(e[0]), int(e[1]), float(e[2])
+        if c < D[a, b]:
+            D[a, b], hop[a, b] = c, b
+    D[np.arange(n), np.arange(n)] = 0.0
+    hop[np.arange(n), np.arange(n)] = np.arange(n)
+    for k in range(n):
+        alt = D[:, k:k + 1] + D[k:k + 1, :]
+        better = alt < D
+        D = np.where(better, alt, D)
+        hop = np.where(better, hop[:, k:k + 1], hop)
+    os.makedirs(os.path.dirname(keep), exist_ok=True)
+    np.savez_compressed(keep, nodes=nodes, hop=hop)
+    return nodes, hop
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1661,8 +2128,10 @@ def stat_slots(st, alive):
     return wslot, aslot
 
 
-def demo_record(binf, meta):
-    """one parsed demo -> (record of its game, facts about the reading) or (None, facts)"""
+def demo_record(binf, meta, E=None):
+    """one parsed demo -> (record of its game, facts about the reading) or (None, facts). E: the parser's events file
+    (tools/demodump/events_reader.py): every death with killer and victim, the level's start time as the server sets
+    it (timeouts in it), the enemy's pickups while the server sends him"""
     d = read_dump(binf)
     info = dict(protocol=meta.get("protocol"), snapshots=0 if d is None else len(d["time"]))
     if d is None or len(d["time"]) < 800:
@@ -1793,27 +2262,97 @@ def demo_record(binf, meta):
                       alive=alive[keep], eye_h=ps[keep, PS["viewheight"]], enemy_air=air[keep], hits=pers[keep, P_HITS], seg=seg[keep],
                       ammo=np.stack([np.zeros(len(keep)) if nm == "g" else am[keep, [q for q, x in QLW.items() if x == nm][0]] for nm in WEAPONS], 1),
                       client=cn[keep], owned=np.stack([(st[keep, wslot].astype(np.int64) >> [q for q, x in QLW.items() if x == nm][0]) & 1 for nm in WEAPONS], 1),
-                      enemy_weapon=eweap[keep], ground=ps[keep, PS["groundEntityNum"]] != 1023, enemy_sound=esound[keep])
+                      enemy_weapon=eweap[keep], ground=ps[keep, PS["groundEntityNum"]] != 1023, enemy_sound=esound[keep],
+                      **events_fields(E, tm, cn, keep, remap, start, end, t0))
+    info["events"] = E is not None
     info.update(recorder=int((meta.get("gamestates") or [{}])[0].get("client_num", -1)), cuts=int((np.diff(cn[keep]) != 0).sum()),
                 final={int(c): int(v) for c, v in last.items()}, final_enemy=int(e), final_client=int(cn[keep[-1]]),
                 step_ms=int(np.median(dt)))
     return rec, info
 
 
+def events_fields(E, tm, cn, keep, remap, start, end, t0):
+    """what the parser's events file adds to a record: `obits`, `enemy_life`, `clock_exact`, `enemy_pick` (make_record)"""
+    if E is None or len(E["times"]) != len(tm):
+        return {}
+    import events_reader as R
+    N = len(tm)
+    ob = R.obituaries(E)                                        # snap, server time, victim, killer, means
+    ob = ob[(ob[:, 0] >= start) & (ob[:, 0] < min(end + 200, N))]
+    obits = [[tm[s_] / 1000.0, v, k] for s_, _, v, k, _ in ob]
+    # the level's start time as the server sets it: at the game's restart, and again when a timeout ends; while a
+    # timeout runs the clock stands
+    lst = np.full(N, np.nan)
+    cid = E["config_string_ids"]
+    evs = [(a, 0, x) for a, x in R.config_string(E, "LevelStartTime")] + [(a, 1, x) for a, x in R.config_string(E, "PauseStart")]
+    evs.sort(key=lambda x: x[0])
+    cur, pause = np.nan, None
+    marks = []
+    for a, kind, x in evs:
+        try:
+            v = float(x)
+        except (TypeError, ValueError):
+            v = 0.0
+        if kind == 0:
+            cur, pause = v, None
+        else:
+            pause = v if v > 0 else None
+        marks.append((int(a), cur, pause))
+    times = E["times"].astype(np.float64)
+    clock = np.full(N, np.nan)
+    for q, (a, cur, pause) in enumerate(marks):
+        b = marks[q + 1][0] if q + 1 < len(marks) else N
+        if b > a and np.isfinite(cur) and cur > 0:
+            seg_t = times[a:b] if pause is None else np.minimum(times[a:b], pause)
+            clock[a:b] = (seg_t - cur) / 1000.0
+    clock[:start] = np.nan
+    # the seconds since the enemy last died (or since the game began)
+    life = np.full(N, 999.0)
+    begin = t0 if t0 is not None else float(tm[start])
+    for c in np.unique(cn[keep]):
+        dts = np.sort(np.array([tm[s_] for s_, _, v, _, _ in ob if v != c], np.float64))
+        m = cn == c
+        if len(dts):
+            j = np.searchsorted(dts, tm[m], side="right") - 1
+            life[m] = np.where(j >= 0, (tm[m] - dts[np.maximum(j, 0)]) / 1000.0, (tm[m] - begin) / 1000.0)
+        else:
+            life[m] = (tm[m] - begin) / 1000.0
+    # the enemy's pickups, seen or heard: an item-pickup event on his entity while the server sends him
+    give = {"ItemHealthMega": (100, 1, 1), "ItemArmorBody": (100, 1, 0), "ItemArmorCombat": (50, 1, 0), "ItemArmorJacket": (25, 0, 0),
+            "ItemArmorShard": (5, 0, 0), "ItemHealth": (25, 0, 1), "ItemHealthLarge": (50, 0, 1), "ItemHealthSmall": (5, 0, 1)}
+    by_id = {E["item_ids"][k]: v for k, v in give.items() if k in E["item_ids"]}
+    c_ = E["c"]
+    picks = []
+    for r in R.rows(E, "ItemPickup", source=1, etype="Player"):
+        s_, num, item = int(r[c_["snap"]]), int(r[c_["number"]]), int(r[c_["eventParm"]])
+        if 0 <= s_ < N and remap[s_] >= 0 and num != cn[s_] and num < 64 and item in by_id:
+            picks.append([int(remap[s_]), *by_id[item]])
+    return dict(obits=obits, enemy_life=life[keep], clock_exact=np.where(np.isfinite(clock[keep]), clock[keep], np.nan), enemy_pick=picks)
+
+
 def parse(demo, tmp):
     """a demo file -> (record, facts)"""
-    b, js = os.path.join(tmp, "d.bin"), os.path.join(tmp, "d.json")
-    for p in (b, js):
+    b, js, ev = os.path.join(tmp, "d.bin"), os.path.join(tmp, "d.json"), os.path.join(tmp, "d.events.json")
+    for p in (b, js, ev):
         if os.path.exists(p):
             os.remove(p)
-    subprocess.run([EXE, demo, b, js], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
+    subprocess.run([EXE, demo, b, js, ev], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
     if not os.path.exists(js) or not os.path.exists(b):
         return None, dict(why="parser")
     meta = json.load(open(js, encoding="utf-8", errors="replace"))
+    E = None
+    if os.path.exists(ev):                                      # (the parser of 2026-10-11 on; without it the record has no deaths list)
+        try:
+            if os.path.join(HERE, "demodump") not in sys.path:
+                sys.path.insert(0, os.path.join(HERE, "demodump"))
+            import events_reader
+            E = events_reader.load(ev)
+        except Exception:                                      # noqa: BLE001
+            E = None
     try:
-        return demo_record(b, meta)
+        return demo_record(b, meta, E)
     finally:
-        for p in (b, js):                                       # (a parsed demo is 18 MB)
+        for p in (b, js, ev):                                   # (a parsed demo is 18 MB)
             if os.path.exists(p):
                 os.remove(p)
 
@@ -1825,7 +2364,10 @@ def low_priority():
     """below normal, so that a training run on the same PC keeps its share"""
     try:
         import ctypes
-        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+        k32_ = ctypes.windll.kernel32                         # (with ctypes' default types the handle is cut to 32 bits and the call fails silently)
+        k32_.GetCurrentProcess.restype = ctypes.c_void_p
+        k32_.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        k32_.SetPriorityClass(k32_.GetCurrentProcess(), 0x4000)
     except Exception:                                          # noqa: BLE001 (not Windows)
         pass
 
@@ -1871,7 +2413,7 @@ def run_map(mp, limit, procs, redo):
     files = sorted(f for f in glob.glob(os.path.join(demo_root(), "demos", mp, "*.dm_*")) if not f.endswith(".part"))
     if limit:
         files = files[::max(1, len(files) // limit)][:limit]
-    out_dir = os.path.join(demo_root(), "yardsticks", mp)
+    out_dir = os.path.join(demo_root(), "yardsticks", "sample", mp) if limit else os.path.join(demo_root(), "yardsticks", mp)
     os.makedirs(out_dir, exist_ok=True)
     jobs = [(f, os.path.join(out_dir, os.path.splitext(os.path.basename(f))[0] + ".json"), redo) for f in files]
     tmp = tempfile.mkdtemp(prefix="yard_")                       # the parsed demos of the moment, a folder a process
@@ -1887,6 +2429,26 @@ def run_map(mp, limit, procs, redo):
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return files, res, big
+
+
+ABOUT2 = ("fights", "flick_curve", "view_travelling")
+
+
+def second_file(path):
+    """docs/pro_yardsticks.json -> docs/pro_yardsticks2.json: where the groups of GROUPS2 are kept"""
+    return path[:-5] + "2.json" if path.endswith(".json") else path + "2"
+
+
+def load_both(path):
+    """the yardsticks' json with the second file's groups put into its maps, if that file is there"""
+    res = json.load(open(path, encoding="utf-8"))
+    f2 = second_file(path)
+    if os.path.exists(f2):
+        r2 = json.load(open(f2, encoding="utf-8"))
+        res.setdefault("about", {}).update(r2.get("about", {}))
+        for m, v in r2.get("maps", {}).items():
+            res["maps"].setdefault(m, {}).update({k: x for k, x in v.items() if k in GROUPS2})
+    return res
 
 
 def dump_json(obj, path, depth=4):
@@ -1989,6 +2551,7 @@ def show(res):
         print(table([[k] + [v.get(q) for q, _ in keys] for k, v in A[tab].items()], [title] + [lbl for _, lbl in keys]) + "\n")
     show_more(R, cols)
     show_fine(R, cols)
+    show_fights(R, cols)
 
 
 def show_more(R, cols):
@@ -2092,6 +2655,72 @@ def show_fine(R, cols):
     print("\n" + table([[n] + [v.get(k) for k, _ in keys] for n, v in Fg["after_a_big_hit"].items()], ["after a hit of 50 or more that he lives through", *[lbl for _, lbl in keys]]))
 
 
+def show_fights(R, cols):
+    """the tables of fights taken and refused, the flick by the angle, the view while travelling"""
+    m0 = cols[0]
+    if "fights" not in R[m0]:
+        return
+    Ft = R[m0]["fights"]
+    print("\n### 16. Fights taken and refused ({}): what he does with a sighting, and how it goes\n".format(m0))
+    keys = (("sightings", "sightings"), ("takes_share", "takes it, %"), ("commits_share", "... and is still in it after 3 s (commits), %"),
+            ("refuses_share", "refuses it, %"), ("index", "index: taken of taken and refused, %"))
+    sub = (("frags_for_less_of_him", "frags for less of him in 10 s"), ("damage_dealt_less_taken_in_10s", "damage dealt less taken in 10 s"), ("frag_of_him_share", "a frag of him, %"))
+
+    def line(name, c):
+        return [name] + [c.get(k) for k, _ in keys] + [(c.get("when_taken") or {}).get(k) for k, _ in sub] + [(c.get("when_refused") or {}).get(k) for k, _ in sub] + [c.get("taking_pays")]
+
+    def short(name, c):                                         # (a map's own entry in the second file)
+        return [name] + [c.get(k) for k, _ in keys] + [c.get("taken_frags_for_less_of_him", (c.get("when_taken") or {}).get("frags_for_less_of_him")),
+                                                      c.get("refused_frags_for_less_of_him", (c.get("when_refused") or {}).get("frags_for_less_of_him")), c.get("taking_pays")]
+    head = ["situation"] + [lbl for _, lbl in keys] + ["taken: " + lbl for _, lbl in sub] + ["refused: " + lbl for _, lbl in sub] + ["taking pays (frags)"]
+    rows = [line("all", Ft["all"])]
+    for fname, tab in Ft["by"].items():
+        rows += [line("{}: {}".format(fname, lvl), c) for lvl, c in tab.items()]
+    print(table(rows, head))
+    for pname, tab in list(Ft.get("pairs", {}).items())[:2]:
+        print("\n" + table([line(k, c) for k, c in tab.items()], [pname] + head[1:]))
+    maps_ = [m for m in cols if m not in ("all", "all_ten", "all_given") and "fights" in R[m]]
+    if len(maps_) > 1:
+        print("\nBy map, all sightings:\n")
+        print(table([short(m, R[m]["fights"]["all"]) for m in maps_], ["map"] + [lbl for _, lbl in keys] + ["taken: frags for less of him in 10 s", "refused: the same", "taking pays (frags)"]))
+    ck = Ft.get("enemy_stack_guess_check")
+    if ck:
+        print("\nThe guess of the enemy's stack beside the truth at {} cuts to the other player: off by {} (median; the table of stack by time since a spawn alone: {}), in the right band {}% (the table alone {}%), correlation {}.".format(
+            ck["cuts"], ck["guess_off_by_median"], ck["table_alone_off_by_median"], ck["guess_in_the_right_band_share"], ck["table_alone_in_the_right_band_share"], ck["correlation"]))
+    for md, what in ((Ft.get("commit_model"), "Commits against every other offer"),):
+        if md:
+            print("\n{} as a formula ({} sightings, {}% commit; log loss {} against {}): intercept {}; effects ".format(
+                what, md["sightings"], md["takes_share"], md["log_loss"], md["log_loss_of_the_plain_share"], md["intercept"]) +
+                "; ".join("{}: {}".format(f, ", ".join("{} {:+.2f}".format(l_, v) for l_, v in e.items() if v)) for f, e in md["effects"].items()))
+    md = Ft.get("index_model")
+    if md:
+        print("\nThe index as a formula ({} sightings taken or refused; log loss {} against {} for the plain share): intercept {}; effects ".format(
+            md["sightings"], md["log_loss"], md["log_loss_of_the_plain_share"], md["intercept"]) +
+            "; ".join("{}: {}".format(f, ", ".join("{} {:+.2f}".format(l_, v) for l_, v in e.items() if v)) for f, e in md["effects"].items()))
+    Fl = R[m0]["flick_curve"]
+    print("\n### 17. The flick by how far off target he is as the enemy appears ({})\n".format(m0))
+    keys = (("appearances", "appearances"), ("a_shot_within_3s_share", "a shot within 3 s, %"), ("seconds_to_the_first_shot_median", "seconds to the first shot, median"),
+            ("a_hit_within_3s_share", "a hit within 3 s, %"), ("seconds_to_the_first_hit_median", "seconds to the first hit, median"),
+            ("hits_of_the_first_half_second_of_fire_share", "hits of the first 0.5 s of fire, %"))
+    rows = [[b] + [c.get(k) for k, _ in keys] for b, c in Fl["by_angle"].items()]
+    for wn, tab in Fl["by_angle_and_weapon"].items():
+        rows += [["{}, {}".format(wn, b)] + [c.get(k) for k, _ in keys] for b, c in tab.items()]
+    for dn, tab in Fl["by_angle_and_distance"].items():
+        rows += [["{}, {}".format(dn, b)] + [c.get(k) for k, _ in keys] for b, c in tab.items()]
+    print(table(rows, ["off target as a clear line to the enemy opens"] + [lbl for _, lbl in keys]))
+    print("\nHis view with nobody in view:\n")
+    Tv = {m: R[m]["view_travelling"] for m in cols}
+    rows = [["travelling at 350 or more: his view off his direction of travel, degrees, median"] + [Tv[m]["view_off_his_direction_of_travel"]["median"] for m in cols],
+            ["... within 20 degrees of it, % of that time"] + [Tv[m]["view_off_his_direction_of_travel"]["within_20_share"] for m in cols],
+            ["... over 90 degrees off it, %"] + [Tv[m]["view_off_his_direction_of_travel"]["over_90_share"] for m in cols]]
+    for lbl in ("travelling at 350 or more, no enemy in view", "all his time with no enemy in view"):
+        for k, kl in (("view_within_20_of_where_he_last_saw_him_share", "within 20 degrees of where he last saw him, %"),
+                      ("view_at_one_of_the_maps_places_share", "at one of the map's places (20 degrees, a clear line), %"),
+                      ("view_at_the_doorway_the_enemy_would_come_through_share", "at the doorway the enemy would come through, %")):
+            rows.append(["{}: {}".format(lbl, kl)] + [Tv[m][lbl][k] for m in cols])
+    print(table(rows, ["", *cols]))
+
+
 ABOUT = dict(
     blind_shot="a shot (a weapon's ammunition going down) while the enemy has not been in his view for 1.0 s or more; in view = inside a cone of 55 degrees round his view, under 4000 units, a clear line through the map from his eye to the enemy's chest or head",
     landing="rockets and plasma: his view traced from his eye to the first wall; grenades: the simulator's grenade flight (700 units a second, lofted, gravity, bounces keep 0.65) to where it lies when the 2.5 s fuse ends. A blind shot that lands under 150 units from his eye is 'at his own feet' (a rocket jump, a shot at the floor): it is counted, but the numbers of the landing (distance, met, hit) and 'blind and away' are of the others",
@@ -2114,6 +2743,9 @@ ABOUT = dict(
     holds="a hold: 2 s or more within 150 units of where the stretch began, alive, no enemy in view, rockets, lightning or rail in hand. What follows is read to 3 s (the enemy in view) and 5 s (who deals damage first: a step of his hit counter against a loss of his own health and armor; frags) after its end. Its cell: 256 x 256 x 128 as tools/pro_places.py's, named by the nearest big item. His view 'at' a big item or a teleporter's exit: within 20 degrees with a clear line, on every fourth frame of the hold. A trap: a rocket or grenade fired with no enemy in view for 1 s or more during the hold or within 1 s after it, whose hit (as in hit_combinations) comes within 1.5 s of the shot",
     hands="turn speed: the angle between his view on two snapshots over the time between them (a demo has his view 40 times a second, 30 in some old spectator demos: faster movements inside a snapshot are not seen, peaks are means over 25 ms). The flick: from the sighting's frame to 0.3 s later. Accuracy: hits as in hit_combinations over shots (ammunition going down), by the distance to the enemy on the shot's frame where the demo has his place; a rocket's hit is 'direct' when the enemy is within 60 units of where the rocket was in the 75 ms before the hit shows. The enemy's crossing speed: his velocity relative to P across the line of sight over the distance, in degrees a second, from his places on two snapshots. Turning changes while tracking: the sign of the yaw's change flips between two frames on which a lightning cell left within the last 0.1 s, with the enemy in view",
     fight_movement="frames with the enemy in view within 800 units. A change of strafe direction: his speed to his right (over 60 units a second) has the other sign than the last time it was over 60, within a second. A jump: he leaves the ground with 150 or more upward speed. The change of the distance: per second, both players' movement in it (minus = nearer). After a big hit: his health and armor fall by 50 or more on one frame and he lives; read 2 s on",
+    fights="an offer: a sighting (the enemy in view after 1 s or more out of it). Takes it: within 3 s he deals damage (a step of his hit counter) or is 150 units or more nearer to the enemy than at the sighting (at the last moment of the 3 s the enemy's place is known). Refuses it: neither of those, and the enemy is out of his view for 0.5 s at a stretch or he is 150 or more farther. How it goes: the damage he deals is counted from his hits (rocket 70, rail 80, a lightning cell 6, machine gun 5, a shotgun shell 40, grenade 60, plasma 20: a demo has no damage numbers), the damage he takes is his own health and armor going down; frags from the game's death notices (exact, also after a cut of the demo); a big item (mega, red, yellow armor) for him within 15 s, and for the enemy only where the server sent the enemy's pickup. The enemy's stack is a guess (enemy_estimate): 125 at his spawn, less the counted damage of his hits, more by pickups seen or heard, rising toward the pros' own stack by time since a spawn while unseen; checked at the demos' cuts to the other player (enemy_stack_guess_check). The index of a situation: taken / (taken + refused); index_model gives it for any mix of the sides as a logistic formula. 'Commits': he takes it and after the 3 s the view was never broken for 0.5 s, he is not 150 farther and he lives (commits_share is of all offers; commit_model is its formula); 'fires and leaves' is the rest of the taken ones. 'Taking pays': frags for less frags of him within 10 s when taken, less the same when refused",
+    flick_curve="an appearance: a clear line to the enemy opens after 1 s or more without one, wherever his view points (the sightings elsewhere need the enemy inside the 55 degree cone; here the angle runs to 180). The weapon is that of his first shot within 3 s, else the one in his hand. Hits as in hit_combinations; of the first 0.5 s of fire: the shots of that weapon from his first shot on for 0.5 s and the hits of those shots",
+    view_travelling="his view against the direction of his velocity while he moves at 350 or more with no enemy in view; and on every 16th such frame: his view within 20 degrees of one of the map's places (sim/pro_places) with a clear line to it and under 3000 units, and of 'the doorway': the first spot on the walking map's quickest way from where he last saw the enemy to himself that he has a clear line to (the place itself if he has a clear line to it)",
     not_measured=[
         "whether a blind shot did damage, exactly: a demo has no damage events. The extra 'hit' is his own hit counter going up as the shot lands",
         "where the enemy is while the server does not send him (out of sight and away): 'met' misses an enemy who was there unseen, and a blind shot at an enemy heard is not told from one at nothing",
@@ -2141,16 +2773,19 @@ def main():
     ap.add_argument("--check", action="store_true", help="the clock, the score and the pickups beside the demo site's own numbers")
     a = ap.parse_args()
     if a.show:
-        return show(json.load(open(a.show)))
+        return show(load_both(a.show))
     maps = a.map.split(",")
     res, total, t0 = dict(about=ABOUT, maps={}), new_tally(), time.time()
     total_skips, infos = {}, {}
     total10, skips10 = new_tally(), {}
+    frows = {}
+    for mp in maps:                                             # the walking maps' next steps, once, before the workers want them
+        nav_hops(mp)
     ways_dir = a.ways or (None if a.limit else os.path.join(ROOT, "sim", "pro_ways"))
     low_priority()
     for mp in maps:
         files, rs, big = run_map(mp, a.limit, a.procs, a.redo)
-        T, skips, rows = new_tally(), {}, dict(blind=[], sight=[], view=[])
+        T, skips, rows = new_tally(), {}, dict(blind=[], sight=[], view=[], fight=[])
         infos[mp] = []
         for f, r in zip(files, rs):
             if "tally" in r:
@@ -2162,7 +2797,8 @@ def main():
             infos[mp].append((os.path.basename(f), dict(info=r.get("info", {}), skip=r.get("skip"), used="tally" in r,
                                                         picks={k: v["pickups"] for k, v in r["tally"]["items"].items()} if "tally" in r else {})))
         del rs
-        for k, width in (("blind", 9), ("sight", len(SIGHT_COLS)), ("view", len(VIEW_COLS))):          # (a sample's rows beside the archive's, not over them)
+        frows[mp] = np.array(rows["fight"], np.int32).reshape(-1, len(FIGHT_COLS))
+        for k, width in (("blind", 9), ("sight", len(SIGHT_COLS)), ("view", len(VIEW_COLS)), ("fight", len(FIGHT_COLS))):   # (a sample's rows beside the archive's, not over them)
             np.save(os.path.join(demo_root(), "yardsticks", "{}_{}{}.npy".format(k, mp, ".sample" if a.limit else "")),
                     np.array(rows[k], np.int32).reshape(-1, width))
         del rows
@@ -2195,12 +2831,33 @@ def main():
             for o in v["predictability"]["maps"].values():
                 o["routes"].pop("by_pair")                      # (under the map itself)
             v["holds"].pop("top_cells", None)                   # (under the map itself)
+        for name, ms in (("all", six), ("all_ten", maps), ("all_given", maps)):
+            if name in tops and sum(len(frows[m]) for m in ms) >= 2000:
+                tops[name]["fights"]["index_model"] = fight_model(np.concatenate([frows[m] for m in ms]))
+                tops[name]["fights"]["commit_model"] = fight_model(np.concatenate([frows[m] for m in ms]), commit=True)
         res["maps"] = dict(tops, **res["maps"])
     if a.check:
         return check(infos)
     out = a.json or (None if a.limit or a.map != MAPS + "," + MORE else os.path.join(ROOT, "docs", "pro_yardsticks.json"))
     if out:
-        dump_json(res, out)
+        res2 = dict(about={k: ABOUT[k] for k in ABOUT2}, maps={})
+        for m, v in res["maps"].items():                        # a map alone: without the tables by pair
+            v2 = {k: v[k] for k in GROUPS2 if k in v}
+            if m not in ("all", "all_ten", "all_given"):
+                v2 = json.loads(json.dumps(v2))
+                v2.get("fights", {}).pop("pairs", None)
+                for c_ in [v2.get("fights", {}).get("all", {})] + [c_ for tab in v2.get("fights", {}).get("by", {}).values() for c_ in tab.values()]:
+                    for k, short in (("when_taken", "taken_frags_for_less_of_him"), ("when_refused", "refused_frags_for_less_of_him"), ("when_neither", None)):
+                        w_ = c_.pop(k, None)
+                        if w_ and short:
+                            c_[short] = w_.get("frags_for_less_of_him")
+                for k in ("by_angle_and_distance", "by_angle_and_weapon"):
+                    v2.get("flick_curve", {}).pop(k, None)
+            res2["maps"][m] = dict(demos=v.get("demos"), minutes=v.get("minutes"), **v2)
+        first = dict(about={k: x for k, x in res["about"].items() if k not in ABOUT2},
+                     maps={m: {k: x for k, x in v.items() if k not in GROUPS2} for m, v in res["maps"].items()})
+        dump_json(first, out)
+        dump_json(res2, second_file(out))
     else:
         print("a sample or a part of the maps: nothing written (--json <file> writes it)", file=sys.stderr)
     show(res)
