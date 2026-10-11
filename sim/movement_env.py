@@ -55,6 +55,9 @@ FINGER_HOLD = np.array([6, 6, 6, 4], np.int64)              # frames a finger wa
 KEY_EVERY, KEY_BURST = 4, 10.0                              # the keys are read every 4 frames; a burst of ten key actions
 KEY_RATE = float(os.environ.get("KEY_RATE") or 8.0)         # ... refilled at this many a second (v14: 8)
 N_HAND = 5                                                  # inputs: the keys held (forward, strafe, jump), the hand's budget, frames to the next reading
+N_MOUSE = 3                                                 # inputs: the view's turning speed, the direction the hand turns, frames until it may change
+MOUSE_SMOOTH, MOUSE_SMOOTH_FINE, TURN_CAP = 0.75, 0.2, 30.0   # his mouse (duel_env): inertia a frame, for commands up to a degree, the fastest flick
+MOUSE_REV = 8                                               # frames after a change of the turn's direction before the hand changes it again (0.2 s)
 OBS_DIM = 3 + 1 + 12 + 4 + 3 + 1 + N_WALL + N_FLOOR
 
 
@@ -196,7 +199,7 @@ class NavField:
 
 class MoveEnv:
     def __init__(self, bsp, nav_path, n=512, seed=0, max_goal_time=8.0, min_goal_time=0.8, substeps=(8, 8, 9),
-                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5, hand=False):
+                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5, hand=False, mouse=False, mouse_rev=MOUSE_REV):
         """substeps: physics steps (ms) per 25 ms decision. (8, 8, 9) = a 125 fps human: the frame-rate
         dependent ground-strafe boost that 40 Hz bots get (25,) is not available, as for real players."""
         self.w = World(bsp, n=n)
@@ -236,6 +239,11 @@ class MoveEnv:
         self.jump_a = np.array([j["a"] for j in self.jumps], np.float32).reshape(-1, 3)
         self.jump_b = np.array([j["b"] for j in self.jumps], np.float32).reshape(-1, 3)
         self.hand = bool(hand)                                 # v15: his finger limits on the keys, and five inputs of what the hand holds
+        self.mouse = bool(mouse)                               # v15: his mouse (see mouse_turn), and three inputs of what it does
+        self.mouse_rev = float(mouse_rev)                      # ... the frames between two changes of the turn's direction
+        self.mv = np.zeros(n, np.float32)                      # the view's turning speed, degrees a frame
+        self.turn_dir = np.zeros(n, np.float32)                # the direction the hand turns (-1, 0 at the start, 1)
+        self.rev_wait = np.zeros(n, np.float32)                # frames until it may change direction again
         self.key_last = np.tile(np.array([1, 1, 0], np.int64), (n, 1))     # the keys as they are held: forward, strafe, jump
         self.key_req = self.key_last.copy()                    # ... as last asked for
         self.key_hold = np.full((n, 4), 99, np.int64)          # frames since each finger acted
@@ -272,6 +280,7 @@ class MoveEnv:
         f = self.field
         self.try_k[i], self.crossed[i], self.at_edge[i] = -1, False, False
         self.key_last[i], self.key_req[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), (1, 1, 0), 99, KEY_BURST
+        self.mv[i], self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0, 0.0
         if self.jump_p and self.try_by_k and self.rng.random() < self.jump_p:
             ks = list(self.try_by_k)                           # (every jump as often as any other)
             k = int(ks[self.rng.integers(len(ks))])
@@ -352,6 +361,9 @@ class MoveEnv:
                                  (self.key_tok / KEY_BURST)[:, None],
                                  (self.key_wait / KEY_EVERY)[:, None].astype(np.float32)], 1)
             obs = np.concatenate([obs, ho], 1)
+        if getattr(self, "mouse", False):                      # v15: what his mouse is doing
+            mo = np.stack([self.mv / TURN_CAP, self.turn_dir, self.rev_wait / getattr(self, "mouse_rev", MOUSE_REV)], 1).astype(np.float32)
+            obs = np.concatenate([obs, mo], 1)
         if self.obs_noise:
             obs = obs + self.rng.normal(0, self.obs_noise, obs.shape)
         return obs.astype(np.float32)
@@ -401,6 +413,19 @@ class MoveEnv:
         self.key_wait = ((-(self.key_tick + 1 + np.arange(n))) % KEY_EVERY).astype(np.float32)
         return self.key_last
 
+    def mouse_turn(self, cmd):
+        """his mouse: the turn asked for (degrees a frame) -> the turn the view makes. A change of direction within
+        MOUSE_REV frames of the last one is not made (the view rests); the rest is followed with inertia."""
+        sg = np.sign(cmd)
+        rev = (sg != 0) & (self.turn_dir != 0) & (sg != self.turn_dir)
+        blocked = rev & (self.rev_wait > 0)
+        cmd = np.where(blocked, 0.0, cmd).astype(np.float32)
+        self.rev_wait = np.where(rev & ~blocked, self.mouse_rev, np.maximum(0.0, self.rev_wait - 1.0)).astype(np.float32)
+        self.turn_dir = np.where((sg != 0) & ~blocked, sg, self.turn_dir).astype(np.float32)
+        sm = np.where(np.abs(cmd) <= 1.0, MOUSE_SMOOTH_FINE, MOUSE_SMOOTH)
+        self.mv = np.clip(sm * self.mv + (1.0 - sm) * cmd, -TURN_CAP, TURN_CAP).astype(np.float32)
+        return self.mv
+
     def step(self, actions):
         a = np.asarray(actions)
         if self.delay_p and self.prev_actions is not None:
@@ -414,6 +439,8 @@ class MoveEnv:
         side = (a[:, 1].astype(np.int32) - 1) * 127
         jump = a[:, 2].astype(np.int32) * 127
         turn = TURN_BINS[a[:, 3]]
+        if self.mouse:
+            turn = self.mouse_turn(turn)
         moves = np.stack([fwd, side, jump], 1).astype(np.int8)
         y0 = self.yaw
         done_ms = 0

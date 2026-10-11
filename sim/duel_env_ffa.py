@@ -1564,6 +1564,10 @@ class DuelEnv:
                 T.goal_pos = T.field.goals
                 T.jump_obs = bool(ck["jumps"]) if "jumps" in ck.files else False   # trained with the five inputs of a jump ahead
                 T.hand = bool(ck["hand"]) if "hand" in ck.files else False         # ... under his finger limits, with the five inputs of the hand
+                T.mouse = bool(ck["mouse"]) if "mouse" in ck.files else False      # ... with his mouse, and its three inputs
+                T.mouse_rev = self.t_rev = float(ck["mouse_rev"]) if "mouse_rev" in ck.files else 8.0
+                self.t_bins = M.TURN_BINS
+                self.t_mid = int(np.argmin(np.abs(M.TURN_BINS)))   # its choice "no turn"
                 self.t_field, self.t_field_j, self.t_nav = T.field, None, (nav, tg)   # (its field with the pros' jumps: _move_teach)
                 ta = np.linspace(0, 2 * np.pi, M.N_WALL, endpoint=False)
                 T.wall_dirs = np.stack([np.cos(ta), np.sin(ta), np.zeros_like(ta)], 1).astype(np.float32)
@@ -1579,6 +1583,9 @@ class DuelEnv:
         self.sp_hist = np.zeros((n, 4), np.float32)     # his speed over the ground one to four frames ago (see N_V14; a plugin keeps it itself)
         self.wet = np.zeros(n, np.int8)                 # how deep he stands in water, slime or lava: feet 1, waist 2, head 3 (LAVA)
         self.cmd = np.zeros((n, 2), np.float32)         # last turn command (for the jerk cost)
+        self.turn_dir = np.zeros(n, np.float32)         # the direction his hand turns the view (-1, 0, 1) and the frames since it
+        self.rev_wait = np.zeros(n, np.float32)         # changed, counted down from the teacher's hold (for a teacher with his mouse)
+        self.t_rev = getattr(self, "t_rev", 8.0)     # (the teacher's, if one was loaded above)
         self.hp = np.full(n, SPAWN_HP, np.float32)
         self.armor = np.zeros(n, np.float32)
         self.has = np.zeros((n, NW), bool)
@@ -1661,6 +1668,7 @@ class DuelEnv:
                 self.style[i] = 0                            # (no rail life on a map without a railgun)
         self.mv[i] = 0.0
         self.cmd[i] = 0.0
+        self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
         self.fire_cd[i] = 0.0
         self.duck[i] = False
@@ -2190,12 +2198,18 @@ class DuelEnv:
             pr /= pr.sum(1, keepdims=True)
             out.append(l.argmax(1) if TEACH_BEST else (pr.cumsum(1) > self.rng.random((len(mi), 1))).argmax(1))
             j += d
+        if getattr(T, "mouse", False):                       # (a change of direction his hand cannot make yet: the view rests)
+            sg_ = np.sign(self.t_bins[out[3]])
+            w_ = mi
+            out[3] = np.where((sg_ != 0) & (self.turn_dir[w_] != 0) & (sg_ != self.turn_dir[w_]) & (self.rev_wait[w_] > 0), self.t_mid, out[3])
         out[3] = self.t_turn[out[3]]
         self.teach[mi, :4] = np.stack(out, 1)
 
     def _teacher_hand(self, T, ii):
         """a movement network trained under the finger limits (train_move.py --hand) is shown the hand of the players
         it labels: the keys they hold, their budget of key actions, the frames until their keys are read next"""
+        if getattr(T, "mouse", False):                       # ... and one trained with his mouse (--mouse) his view's turning speed,
+            T.mv, T.turn_dir, T.rev_wait = self.mv[ii, 0].copy(), self.turn_dir[ii], self.rev_wait[ii]    # its direction, the frames to a change
         if not getattr(T, "hand", False):
             return
         kl = self.key_last[ii]
@@ -2278,6 +2292,10 @@ class DuelEnv:
             pr /= pr.sum(1, keepdims=True)
             out.append(l_.argmax(1) if TEACH_BEST else (pr.cumsum(1) > self.rng.random((len(ri), 1))).argmax(1))
             j += d_
+        if getattr(T, "mouse", False):                       # (a change of direction his hand cannot make yet: the view rests)
+            sg_ = np.sign(self.t_bins[out[3]])
+            w_ = ri
+            out[3] = np.where((sg_ != 0) & (self.turn_dir[w_] != 0) & (sg_ != self.turn_dir[w_]) & (self.rev_wait[w_] > 0), self.t_mid, out[3])
         out[3] = self.t_turn[out[3]]
         self.teach[ri[ok], :4] = np.stack(out, 1)[ok]
         self.stats["move_teach_frames"] += int(ok.sum())
@@ -4160,6 +4178,10 @@ class DuelEnv:
         cmd = cmd * np.where(self.zoom, ZOOM, 1.0).astype(np.float32)[:, None]      # zoomed: the same hand movement turns less
         jerk = np.abs(cmd - self.cmd).sum(1)
         self.cmd = cmd
+        sg_ = np.sign(cmd[:, 0])
+        ch_ = (sg_ != 0) & (self.turn_dir != 0) & (sg_ != self.turn_dir)
+        self.rev_wait = np.where(ch_, self.t_rev, np.maximum(0.0, self.rev_wait - 1.0)).astype(np.float32)
+        self.turn_dir = np.where(sg_ != 0, sg_, self.turn_dir).astype(np.float32)
         sm = np.where(np.abs(cmd) <= 1.0, MOUSE_SMOOTH_FINE, MOUSE_SMOOTH)   # small corrections follow faster
         self.mv = sm * self.mv + (1.0 - sm) * cmd
         if self.human_aim:
