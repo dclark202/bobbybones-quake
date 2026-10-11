@@ -107,11 +107,15 @@ items. Strafe jumping emerges there within minutes; that network is used as a te
 
 ## In progress and planned
 
-In progress (the next run, [docs/runs/MANIFEST_v15.md](docs/runs/MANIFEST_v15.md)):
+In progress (the run in training, [docs/runs/MANIFEST_v15b.md](docs/runs/MANIFEST_v15b.md); what waits for the next one,
+[docs/runs/MANIFEST_v15.md](docs/runs/MANIFEST_v15.md)):
 
-- Strafe jumping: a movement network trained under his own finger limits as a teacher, and practice rounds that begin
-  before the jumps professional players make (144 jumps on ten maps, listed from their demos:
-  [docs/design/jumps/](docs/design/jumps/)).
+- Strafe jumping: a separate movement network, trained under his own finger and mouse limits, travels the maps at the
+  speed professional players do. Taught to him as a lesson it did not transfer, so it is built into him as his legs: one
+  more output switches his movement keys and view turn over to it while he travels to the item he chose, and he learns
+  when to use it. Practice rounds begin before the jumps professional players make (144 jumps on ten maps, listed from
+  their demos: [docs/design/jumps/](docs/design/jumps/)).
+- The game's own weapon change when a weapon runs empty, as most players have it set.
 - Movement practice without fights on four more maps (Campgrounds, Hektik, Toxicity, Cure).
 - Projectiles as a player sees them: the six nearest rockets, grenades and plasma balls inside his view with a clear
   line of sight, each with its kind, a grenade's fuse and how close it will pass.
