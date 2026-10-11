@@ -157,5 +157,9 @@ players every 10 s; the simulator runs 32 subjects per map at once.
   frame health, armor, position and velocity of shooter and target.
 - `data/movetest*/movetest.jsonl`, `movetest_frames.jsonl`: live movement trips of a simulator policy.
 - `data/demos_parsed/<map>/`: pro demos as float32 records (format in `tools/demodump/demodump.cpp`,
-  reader `sim/demo_reader.py`).
+  reader `sim/demo_reader.py`). With a fourth file name the parser also writes `<out.events.json>` (since 2026-10-11, B-218):
+  every event with its kind and all fields (obituaries with killer, victim and means of death; where rockets, plasma
+  and grenades end; the enemy's pickups and shots while in view), the config strings as they arrive (both scores, the
+  level's start time, the intermission) and the exact server time of every snapshot. Format: the header of
+  `tools/demodump/demodump.cpp`; reader: `tools/demodump/events_reader.py`.
 - `data/practice/`: public-server logs from the retired Nightmare-based bot (`human_results.jsonl`, recordings).

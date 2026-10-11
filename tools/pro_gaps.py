@@ -216,7 +216,10 @@ def main():
     a = ap.parse_args()
     if a.low and os.name == "nt":
         import ctypes
-        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x00004000)
+        k32_ = ctypes.windll.kernel32                         # (with ctypes' default types the handle is cut to 32 bits and the call fails silently)
+        k32_.GetCurrentProcess.restype = ctypes.c_void_p
+        k32_.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        k32_.SetPriorityClass(k32_.GetCurrentProcess(), 0x4000)
     MIN_SEEN[:] = [int(x) for x in a.min_seen.split(",")]
     for k_, v_ in V14.items():
         os.environ.setdefault(k_, v_)

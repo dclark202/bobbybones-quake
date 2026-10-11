@@ -35,7 +35,10 @@ def main():
     ap.add_argument("--best", action="store_true")
     a = ap.parse_args()
     if os.name == "nt":
-        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+        k32_ = ctypes.windll.kernel32                         # (with ctypes' default types the handle is cut to 32 bits and the call fails silently)
+        k32_.GetCurrentProcess.restype = ctypes.c_void_p
+        k32_.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        k32_.SetPriorityClass(k32_.GetCurrentProcess(), 0x4000)
     os.environ.update(VARS)
     os.environ.update(ITEM_RUN_P="1.0" if a.runs == "item" else "0", JUMP_RUN_P="1.0" if a.runs == "jump" else "0")
     if a.best:

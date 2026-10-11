@@ -105,3 +105,7 @@ Never their mouse or trigger.
     2026-10-11): the second value estimate brought forward to stage A; an exploiter in his league and its share of the
     simulators; a frag paid by what it moves his chance of winning the game; the pros' choices as a standing prior
     (point 4 above); promotion by the scorecard beside the control.
+11. A target that is never "nothing" (measured 2026-10-11, the log of 19:00): with no item due he has no target, his legs
+    cannot carry him, and he stands on his own feet at 270 units a second, 13 to 23% of his time; it is also where the
+    owner found him waiting in odd places. Proposed for stage B: with no item due the target is a place worth holding
+    (from the pros' cells and holds), and his legs take him there.

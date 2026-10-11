@@ -271,7 +271,10 @@ def main():
     else:
         if os.name == "nt":
             import ctypes
-            ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+            k32_ = ctypes.windll.kernel32                         # (with ctypes' default types the handle is cut to 32 bits and the call fails silently)
+            k32_.GetCurrentProcess.restype = ctypes.c_void_p
+            k32_.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+            k32_.SetPriorityClass(k32_.GetCurrentProcess(), 0x4000)
         maps = a.map.split(",")
         sets = dict(SETS, **dict(x.split("=", 1) for x in a.set))
         jobs = [(m, a.policy, a.games, a.minutes, 100 + i, sets, a.mode, a.labels) for i, m in enumerate(maps)]

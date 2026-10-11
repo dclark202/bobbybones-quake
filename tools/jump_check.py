@@ -33,7 +33,10 @@ def main():
     ap.add_argument("--teacher", default="", help="a movement run whose policy.npz gives the labels")
     a = ap.parse_args()
     if os.name == "nt":
-        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+        k32_ = ctypes.windll.kernel32                         # (with ctypes' default types the handle is cut to 32 bits and the call fails silently)
+        k32_.GetCurrentProcess.restype = ctypes.c_void_p
+        k32_.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        k32_.SetPriorityClass(k32_.GetCurrentProcess(), 0x4000)
     os.environ.update(RUN_VARS)
     sys.path.insert(0, SIM)
     import numpy as np

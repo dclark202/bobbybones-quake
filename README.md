@@ -17,11 +17,14 @@ Quake Live server through a server plugin. Nothing about aiming, moving or fight
 the limits a person has (see the fairness rules).
 
 Where he is now: he plays duels and free-for-all on six of the game's duel maps (Blood Run, Aerowalk, Lost World, Sinister,
-Furious Heights, Battleforged). He collects weapons, armor and
-the mega, keeps a stack, and beats a scripted item-running opponent that has the aim of the game's hardest bot on the
-maps he trained on (60 to 89% of the frags over 32 ten-minute duels a map), and beats the game's own Nightmare bot
-in real ten-minute duels on Blood Run and Lost World (three of four, one drawn). He does not strafe jump yet and fires few rockets. Every run and measurement, including what did not work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest
-full report is [docs/runs/REPORT_v14.md](docs/runs/REPORT_v14.md).
+Furious Heights, Battleforged). He collects weapons, armor and the mega, keeps a stack, and strafe jumps between items
+on a second, movement-only network that he switches to (his legs). He beats a scripted item-running opponent that has
+the aim of the game's hardest bot (83% of the frags on the maps he trained on) and the game's own Nightmare bot in
+real ten-minute duels on Blood Run, Aerowalk and Lost World (50 frags to 22 over six games). Set beside professional
+players' demos he fires a fifth of their rockets, takes the commonest way between two items too often, and closes on
+the enemy at the same speed whether the enemy is weak or strong. Every run and measurement, including what did not
+work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest full report is
+[docs/runs/REPORT_v15b.md](docs/runs/REPORT_v15b.md).
 
 The goal is a bot that beats strong players fairly, with learned movement, weapon choice, item control and positioning,
 and later one that adapts to the level of the player in front of him.
@@ -107,25 +110,25 @@ items. Strafe jumping emerges there within minutes; that network is used as a te
 
 ## In progress and planned
 
-In progress (the run in training, [docs/runs/MANIFEST_v15b.md](docs/runs/MANIFEST_v15b.md); what waits for the next one,
-[docs/runs/MANIFEST_v15.md](docs/runs/MANIFEST_v15.md)):
+In progress:
 
-- Strafe jumping: a separate movement network, trained under his own finger and mouse limits, travels the maps at the
-  speed professional players do. Taught to him as a lesson it did not transfer, so it is built into him as his legs: one
-  more output switches his movement keys and view turn over to it while he travels to the item he chose, and he learns
-  when to use it. Practice rounds begin before the jumps professional players make (144 jumps on ten maps, listed from
-  their demos: [docs/design/jumps/](docs/design/jumps/)).
-- The game's own weapon change when a weapon runs empty, as most players have it set.
-- Movement practice without fights on four more maps (Campgrounds, Hektik, Toxicity, Cure).
-- Projectiles as a player sees them: the six nearest rockets, grenades and plasma balls inside his view with a clear
-  line of sight, each with its kind, a grenade's fuse and how close it will pass.
-- Grenades and plasma: their flight and splash set to measurements from the game, lives that begin with one in hand,
-  scripted opponents that fight with them.
+- An attention layer over what he knows: the enemy as seen and as he believes him to be (where last seen or heard, how
+  long ago, how strong), the items with their clocks, the map's places, his own position and his way
+  ([docs/design/V16_ATTENTION.md](docs/design/V16_ATTENTION.md), [docs/runs/MANIFEST_v16.md](docs/runs/MANIFEST_v16.md),
+  [docs/design/V16_TRAINING.md](docs/design/V16_TRAINING.md)).
+- The measures of professional play, from 4,449 duel demos of ten maps: rockets fired with nobody in view and where they
+  land, weapon combinations, how they close on a weak or a strong enemy, item timing, the ways they take, walking
+  (`tools/pro_yardsticks.py`, `tools/pro_places.py`). His networks are put through the same measures
+  (`tools/bobby_yardsticks.py`) and `tools/convergence.py` prints how near he is to them.
+- Rockets with nobody in view: free of their price at the places professional players fire them.
+- The enemy as a target he can choose, beside the items.
+- His legs in games: carried by them for six seconds he is past 500 units a second; in games the stretches are short.
 
 Planned:
 
-- Position play: fighting from above, backing off when weak; plasma and grenades for closing off ways.
-- Rockets: he holds them a fifth of the time; a lower price for the shot and rocket-only rounds did not change it.
+- Whole ten-minute games with pay for the result, and rounds that begin ahead or behind late in a game.
+- A choice among several ways to a target; positions worth holding when no item is due.
+- His legs as a trainable part of the one network.
 - More maps, and free-for-all with up to six players.
 - An opponent that adapts to the player's level.
 - Player reports: how an opponent plays, from the logs.

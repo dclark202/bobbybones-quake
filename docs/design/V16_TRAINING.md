@@ -63,6 +63,10 @@ kept. Beyond it:
 - His own movement outputs are taught by the branch in every frame the branch is carrying him (a lesson with his own
   hands, at a small constant weight). What the branch knows moves into the shared layers; the switch is used less as
   his own movement gets as fast, and can be measured going to zero.
+- His legs need a target at every moment. Measured on v15c's end (the log of 2026-10-11 19:00): carried by his legs
+  he is at 400 or more 20% of the time (the pros 17.5%) and past 500 after six seconds; on his own feet with nobody in
+  view he mostly has no target (the intention "nothing") or has just lost sight of the enemy. A target that is never
+  "nothing" (a place worth holding when no item is due) is a gain in speed as much as in position.
 - The same form fits the next skills as they come: quiet movement, rocket jumps, dodging. Each is learned alone where
   it is easy to pay for, joins as a branch, and is absorbed.
 

@@ -3,13 +3,14 @@
 Long-term goal: a Quake Live bot that **learns** to play (movement, aim, tactics) and beats people fairly: human
 physics, human-like limits, knowledge only from sight and sound. The target since 2026-10-09 (owner): human-like play
 on the game's own duel maps, one against one and all against all with up to six players. Trained on Blood Run,
-Aerowalk, Lost World, Sinister, Furious Heights and Battleforged; Campgrounds, Hektik, Toxicity and Cure are held out
-for checks. Judged by how the play looks (videos, play tests), by duels against the last best network and against the
-Nightmare stand-in, by real games against the game's Nightmare bot on a free PC, and by what people do to him on the
-public server.
+Aerowalk, Lost World, Sinister, Furious Heights and Battleforged, with movement-only practice on Campgrounds, Hektik,
+Toxicity and Cure; the owner wants the ten in training and less played maps held out (2026-10-11; House of Decay is
+prepared). Judged by how near his play comes to the pros' measures, verified by the owner's play and by what people do
+to him on the public server; by duels against the last best network; the Nightmare stand-in and the game's Nightmare
+bot are the floor.
 
 What lives where in `docs/`, and the routine that keeps it so: [README.md](README.md). The plan as it stood until
-2026-10-10 (the status table of 2026-10-08, Goal 1 and the yard, v11 to v13 as proposed and as done, the suite after
+2026-10-11: [archive/PLAN_2026-10-11.md](archive/PLAN_2026-10-11.md); until 2026-10-10 (the status table of 2026-10-08, Goal 1 and the yard, v11 to v13 as proposed and as done, the suite after
 the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-10.md).
 
 ## Approach
@@ -21,62 +22,38 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 3. **Measure against people.** A fixed test chamber scores Bobby and human players in the same rooms; play tests
    and (soon) a public server give the human side. Nightmare is a milestone, not the gate.
 
-## Status (2026-10-10)
+## Status (2026-10-11)
 
 | What | Where it stands |
 |---|---|
-| On the public server | `duel_gru_v14`'s end ([runs/REPORT_v14.md](runs/REPORT_v14.md)) since 2026-10-10 15:39: free-for-all, two Bobbys with their own names and voices, the ten duel maps in the vote, a leaderboard since 2026-10-09. Against people so far (v13): 19 frags made, 130 taken (three players) |
-| In training | nothing. `duel_gru_v15b`, the legs run, trained 2026-10-10 22:01 to 2026-10-11 07:00 ([runs/REPORT_v15b.md](runs/REPORT_v15b.md)): he strafe jumps on his legs (9.2% of his travelling time at 400 or more; v14's end 1.3%, the pros 17.5%) and stands at 56 to 57% against v14's end in the last checks; his time at speed did not rise in training. The real game cannot play it yet (B-213). Next: the owner's decisions (the report's section 7) |
-| The checks of a run | every save plays the last best network head to head (the owner's standing rule, 2026-10-10) and 32 ten-minute duels a map against the Nightmare stand-in; real games against the game's Nightmare bot before and after a run; play tests |
-| The simulator | movement, nine weapons, items, sounds, the human limits on hands, eyes and aim; set right against the game's maps on 2026-10-09 (twelve mismatches). Its targets are easier to hit with a rail than people are (B-199) |
-| Items and weapons (v13) | time without a big weapon 18%, red armor 0.63 a player-minute; 70% of the frags against the stand-in on the six maps; the game's Nightmare bot beaten on Blood Run (14-4, 11-6, 10-3) and Lost World (8-5, 6-4, 9-5) |
-| Strafe jumping and speed | not there: he moves at 290 units a second, fast in the air a tenth of the time. A strafe-jumping teacher gave half of the lesson in item runs and little of it in his games (B-200, B-201) |
-| Rockets | v13 fights with the rail at every distance (rockets 17% of his frags). Taught the pros' table and playing styles he used rockets (39%) and lost to v13 (B-198, B-199) |
-| Plasma, grenades, shotgun | never in his hand (B-189) |
-| Game awareness | not begun: he does not hunt, runs the same ways, walks into fire at a teleporter's exit, cannot play from behind (B-188 to B-191). Scope: [design/SCOPE_v15.md](design/SCOPE_v15.md) |
+| On the public server | `duel_gru_v15c`'s end with his legs since 2026-10-11 13:01: free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard. The owner after playing it: "much better than v14 was"; "strong LG, very strong"; "their main failure point is that their routes are predictable"; "he doesn't know how to push an advantage" |
+| In training | nothing at 19:00. Proposed for the night, on the owner's go: `duel_gru_v15e` ([runs/MANIFEST_v15e.md](runs/MANIFEST_v15e.md)): games on all ten maps, the rocket changes, the enemy as a target |
+| The checks of a run | every save plays the last best network head to head, seats swapped in half of the games since 2026-10-11 (B-220), and the Nightmare stand-in; his speed profile in games; at a run's end the measures beside the pros' (`tools/convergence.py`) and real games against the game's Nightmare bot on a free PC; play tests |
+| How near he is to the pros | v15c's end: 48% on fourteen measures (position 65%, speed 82%, weapons 17%, aggression 3%, control 95%); v14's end 39%: the log of 2026-10-11 19:00, [design/V16_APPROACH.md](design/V16_APPROACH.md) |
+| Strafe jumping and speed | he strafe jumps on his legs (a second, movement-only network he switches to: v15b). In games: 9.4% of his travelling time at 400 or more, hops 332, 389, 384 (the pros 17.5%; 366, 421, 422). His legs alone reach 356, 405, 410: the limit is how they are used (they carry him 46% of his game time and his chains fall after the second hop) |
+| Rockets | 2.1 a minute against the pros' 10.8; none with no enemy in view (the pros: half); in hand 20% of his time. The three changes the owner allowed (half the shot's price, free at the pros' places, half the cost of a wasted one) changed nothing in 165 minutes of training; a seed that presses fire by rule is level in games but its rockets do not hit (B-210) |
+| Plasma, grenades | in hand 1.7% and 0.9% of his time (v15c); grenades 0.03 a minute against the pros' 2.2 |
+| Game awareness | measured beside the pros: he closes on the enemy at the same speed whatever the enemy's state, takes the commonest way 57% of the time (the pros 43%), stands low. The enemy as a target is built and lost its first trial (B-221). The attention model is designed: [design/V16_ATTENTION.md](design/V16_ATTENTION.md), [runs/MANIFEST_v16.md](runs/MANIFEST_v16.md), [design/V16_TRAINING.md](design/V16_TRAINING.md) |
+| Against the game's Nightmare bot, real games | v15c's end 50 frags to 22, v15b's end 54 to 11 (six ten-minute games each on Blood Run, Aerowalk, Lost World) |
+| The simulator | movement, nine weapons, items, sounds, the human limits on hands, eyes and aim; set right against the game's maps on 2026-10-09. Its targets are easier to hit with a rail than people are (B-199) |
 | Aim | one knob (`AIM_LEVEL`, 3 = the owner's reflex card plus about a tenth). On a real server his rail hits 35% of its shots, three people's 32% |
-| Pro demos | 3,700 duel demos of five of the maps, as tables: the weapon by distance, the order of items, positions, where they jump |
+| Pro demos | 4,449 duel demos of the ten maps: the weapon by distance, the order of items, positions, jumps; since 2026-10-11 the measures of play (`docs/pro_yardsticks.json`), the places their blind shots land (`sim/pro_places/`), their ways as routes (`sim/pro_ways/`). where they look, their holds, their hands, their movement in a fight. The parser and the converter were mended on 2026-10-11 (B-218, B-219); the stored sets are still to be rebuilt |
 
 ## Now
 
-**`duel_gru_v14` is ended** (owner, 2026-10-10 11:51: "calling the run mixed in success"): its end network is the save
-of 10:57 from before the strafe-jumping teacher (`policy_end_v14.pt`). Against v13 on six maps: level on v13's three
-(53%, 49%, 53% of the frags), ahead on the three new ones (56%, 79%, 71%); against the stand-in 77% on the six maps
-(v13: 70%) and 60% on the four others (49%). No faster, rockets flat, grenades and plasma never in hand. Report:
-[runs/REPORT_v14.md](runs/REPORT_v14.md). Its two side arms (the old teacher left on; rockets at a fifth of the price)
-were stopped in the afternoon: the first went on losing to v13, the second changed nothing.
+The owner's priority list (2026-10-10): (1) strafe jumping and keeping speed; (2) rockets; (3) plasma and grenades, the
+shotgun less; (4) game awareness. Since 2026-10-11 the next model is the attention model (v16), judged by "game
+awareness primarily. Also how much his movement begins to blend together the two styles fighting/moving"; progress is
+read as how near he comes to the pros' measures, verified by the owner's play and, less, by the Nightmare bot.
 
-**`duel_gru_v15b` (the legs run) trained from 22:01 of 2026-10-10 to 07:00 of 2026-10-11** ([runs/REPORT_v15b.md](runs/REPORT_v15b.md)) (the owner's go at 20:50: "Let's build it and try it"; B-211; judged by his time at 400 or more and his speed from hop to hop in games, and by his duels against v14's end). **`duel_gru_v15`'s first start was stopped at 18:54** (the log of 2026-10-10 20:45: the teacher's lesson does not transfer as a side lesson; proposed: the teacher's network as his legs, B-211). It had begun at 17:10 (the owner's go at 17:05; to noon of 2026-10-11; judged by speed and
-jumping, then rockets, plasma and grenades: "if either of the first two don't succeed for this run we'll really need to
-reassess"). It was audited the afternoon before its start ([runs/MANIFEST_v15.md](runs/MANIFEST_v15.md); the log of
-2026-10-10 15:30): from v14's end; jump runs on the pros' jumps (144 in use on ten maps, tries at 137) with a teacher
-trained under his finger limits and kept off the maps where its pupil fails (Toxicity; Lost World's item runs);
-movement-only practice on Campgrounds, Hektik, Toxicity and Cure; enemy projectiles as a player sees them; grenades as
-measured in the game; the lobber, the watcher and the holder among his opponents; lives that begin with grenades or
-plasma in hand. Rockets are not in it (B-210).
+The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
 
-**The owner's priority list for the next models (2026-10-10)**: (1) strafe jumping and keeping speed; (2) rockets; (3)
-plasma and grenades, the shotgun to a lesser extent; (4) "game awareness": not through a teleporter the enemy watches,
-not always the same path, which "needs more model build out" and is "arguably the most important long term" but comes
-when the first two or three are there. "Any plan going forward needs to address those, together with any weird
-behavior that is showing up mid run/in duels."
-
-**Mid-run of the second start, 2026-10-10 07:00 ([MIDRUN_v14.md](runs/MIDRUN_v14.md))**: as a duelist v14 is weaker than v13: head to head 36% of the
-frags on the six maps and 41 games won of 192; against the stand-in 70% -> 58%. Two causes in the run's setup: the weapon
-in his hand (he holds what the weapon teacher names, in a styled life at every distance; v13 holds the rail at every
-distance and that wins in the simulator) and a league of his own last eight snapshots, without the control (B-197).
-Rockets make 35% of his frags; shotgun, grenades and plasma 0.0% in hand; strafe jumping is half-learned in item runs
-and hardly there in his games. The owner's answer the same morning: try again, from v13 and with v13 kept in
-the league (the third start, above).
-
-The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)):
-
-- The run in progress: B-197, B-195.
-- 1, strafe jumping and keeping speed: B-204 (the items behind a jump), B-200, B-201.
-- 2, rockets: B-198, B-199.
-- 3, plasma, grenades, the shotgun: B-189, B-169.
-- 4, game awareness: B-191 (scoped for him on 2026-10-10: [design/SCOPE_v15.md](design/SCOPE_v15.md), part 3), B-190, B-188, B-202.
-- Odd behaviour seen in runs and duels: B-192, B-194, B-196.
+- 1, speed: B-211 (his legs in games), B-213 (the real game with legs: three measurements open), B-204.
+- 2, rockets: B-210.
+- 3, plasma, grenades: B-189.
+- 4, game awareness: B-217 (predictable routes), B-216 (offense or defense by the score), B-221 (the enemy as a target), B-191.
+- The demos and the checks: B-218, B-219, B-220.
+- Odd behaviour seen in runs and duels: B-214, B-215, B-192.
 
 ## Owner decisions
 
@@ -177,6 +154,26 @@ The backlog items in work or next, by the owner's list ([BACKLOG.md](BACKLOG.md)
 - (2026-10-10 15:28) v14's end goes on the public server with the bots' names and voices.
 - (2026-10-10) The priority list for the next models: strafe jumping and keeping speed; rockets; plasma and grenades
   (the shotgun less); then game awareness. Every plan addresses these and any odd behaviour seen in a run or in duels.
+- (2026-10-11) v15c's end with his legs goes on the public server ("Push 15c to the live server so I can play against
+  him"). Three bots a server are enough if the next model costs more ("if we need to drop to 3 bots max per server that
+  is also fine").
+- (2026-10-11) The next model is the attention model: "I believe attention will be the secret sauce if we can get it
+  right". Judged by "game awareness primarily. Also how much his movement begins to blend together the two styles
+  fighting/moving we have now". Whole ten-minute games with pay for the result: "Yes". Training speed: "completely
+  neutral". The position token holds the weapon that suits the spot ("Absolutely it should"); places and their strength
+  come from the pros' demos. The parser and the converter are mended first: "We should do this right not rush it".
+- (2026-10-11) Progress is read as convergence on the pros ("position, speed bursts, combos, aggressive play"), from his
+  games against himself, the Nightmare bot as a floor: "targets to aim for as a result of training, to be verified by me
+  playing against him and to a lesser extent his performance against nightmare". The pros' numbers lean toward winners:
+  "we want to emulate the best behavior anyway".
+- (2026-10-11) Maps: the ten duel maps he knows are "the most popular in the game, if we can get those in training (maybe
+  hold out dm6 just because there was so little data for it) and use some others for hold out that are less popular
+  that's fine".
+- (2026-10-11) Rockets: "we can be more forgiving with him for how he uses rockets, reduce the cost slightly"; the three
+  changes (half the shot's price, free at the pros' places, half the cost of a wasted one) "but test them first".
+- (2026-10-11) Movement stays first: "He needs to maintain speed, and build it more effectively, AND we should be
+  thinking about how the two networks will mesh into one over time"; tuned for "more speed per jump, maintaining speed
+  for longer".
 
 ## How to run (short)
 
