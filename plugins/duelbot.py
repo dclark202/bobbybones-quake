@@ -638,6 +638,8 @@ class duelbot(minqlx.Plugin):
         self.P = {k: P[k] for k in P.files}
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
+        if "legs" in self.P:                                 # his legs' network (duel_env's LEGS), exported beside the policy file
+            os.environ["LEGS_NET"] = os.path.join(D, str(self.P["legs"]))
         self.E = E = self.env_module(str(self.P["env"]))
         # the round after which his clock, score and memory start over, as in training
         self.round_secs = float(self.P["round_secs"]) if "round_secs" in self.P else (180.0 if mapname == "arena1" else 120.0)
@@ -896,6 +898,20 @@ class duelbot(minqlx.Plugin):
         limited: the finger rules were already applied to this row (the free-for-all plugin: one call for all seats)"""
         rules2 = hasattr(E, "ACQUIRE_FRAMES") and len(a) > 7 and env.script[i] == 0
         hand = rules2 and hasattr(env, "limit_keys") and getattr(env, "key_limits", False)
+        if rules2 and not limited and getattr(E, "LEGS", False) and len(a) > getattr(E, "LEGS_HEAD", 99):
+            # his legs (duel_env's LEGS): the switch is read as in the simulator and, while it is on, the movement
+            # network's choices of this frame take the place of his movement keys and view turn, before the finger limits
+            A = np.tile(np.asarray(a, np.int64), (env.n, 1))
+            A[np.arange(env.n) != i, E.LEGS_HEAD] = 0
+            env._legs_step(A)
+            a = A[i]
+            self.legs_n = getattr(self, "legs_n", np.zeros(3))
+            on_ = float(env.legs_on[i])
+            self.legs_n += (1.0, on_, on_ * float(np.hypot(env.state[i, 3], env.state[i, 4])))
+            if int(self.legs_n[0]) % 2400 == 0:              # a line a minute: how much his legs carried him, and how fast
+                with open(os.path.join(D, "legs_status.txt"), "a") as f_:
+                    f_.write("{} frames {} on his legs {:.3f} speed there {:.0f}\n".format(
+                        time.strftime("%H:%M:%S"), int(self.legs_n[0]), self.legs_n[1] / self.legs_n[0], self.legs_n[2] / max(1.0, self.legs_n[1])))
         if hand and not limited:                             # finger limits, as in training
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             env.limit_keys(A, who=np.arange(env.n) == i)
@@ -908,6 +924,12 @@ class duelbot(minqlx.Plugin):
         cmd = np.array([E.TURN[a[3]], E.PITCH[a[4]]], np.float32)
         zs = float(E.ZOOM) if (rules2 and hasattr(env, "zoom") and env.zoom[i]) else 1.0     # zoomed: the hand turns the view less
         cmd = cmd * zs
+        if hasattr(env, "turn_dir"):                         # (the simulator's step keeps these: the movement network is shown
+            sg_ = float(np.sign(cmd[0]))                     # which way his view turns and when it may turn back)
+            flip_ = sg_ != 0 and env.turn_dir[i] != 0 and sg_ != float(env.turn_dir[i])
+            env.rev_wait[i] = float(env.t_rev) if flip_ else max(0.0, float(env.rev_wait[i]) - 1.0)
+            if sg_ != 0:
+                env.turn_dir[i] = sg_
         nine = hasattr(E, "NW")
         sm = np.where(np.abs(cmd) <= 1.0, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH) if hasattr(E, "MOUSE_SMOOTH_FINE") \
             else E.MOUSE_SMOOTH
@@ -950,6 +972,11 @@ class duelbot(minqlx.Plugin):
         env.cool[i] = max(0.0, env.cool[i] - E.DT)
         if nine:
             env.fire_cd[i] = max(0.0, env.fire_cd[i] - E.DT)
+        if rules2 and nine and getattr(E, "AUTO_SWITCH", False) and fire and env.cool[i] <= 1e-4 and w != E.G and w < ncol and env.ammo[i, w] <= 0:
+            can_ = env.has[i] & (env.ammo[i] > 0)            # the game's weapon change on an empty weapon is the client's: a
+            can_[E.G] = True                                 # server does not do it for a bot, so it is done here (AUTO_SWITCH)
+            w = int(E.AUTO_ORDER[int(np.argmax(can_[E.AUTO_ORDER]))])
+            env.cool[i] = max(float(env.cool[i]), E.NOAMMO_WAIT + E.SWITCH)
         refire = E.W_REFIRE if nine else (E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK)
         ready = env.cool[i] <= 0
         if fire and ready:

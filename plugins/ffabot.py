@@ -220,6 +220,8 @@ class ffabot(duelbot):
         self.P = {k: P[k] for k in P.files}
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
+        if "legs" in self.P:                                 # his legs' network (duel_env's LEGS), exported beside the policy file
+            os.environ["LEGS_NET"] = os.path.join(D, str(self.P["legs"]))
         envmod = str(self.P["env"]) if "ffa" in str(self.P["env"]) else "duel_env_ffa"     # the group simulator the policy was trained in
         self.E = E = self.env_module(envmod)                   # with the switches he was trained with (policy.npz env_vars)
         self.round_secs = float(self.P["round_secs"]) if "round_secs" in self.P else ROUND_SECS
@@ -644,6 +646,8 @@ class ffabot(duelbot):
             A = np.zeros((SEATS, acts.shape[1]), np.int64)
             A[:, 0] = A[:, 1] = 1
             A[live_bots] = acts
+            if getattr(E, "LEGS", False) and A.shape[1] > getattr(E, "LEGS_HEAD", 99):
+                env._legs_step(A)                                # his legs (duel_env's LEGS): every Bobby in one call, before the finger limits
             env.limit_keys(A, who=np.isin(np.arange(SEATS), live_bots))
             acts = A[live_bots]
         for a, k in zip(acts, live_bots):

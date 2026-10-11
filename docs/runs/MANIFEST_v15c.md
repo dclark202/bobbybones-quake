@@ -1,6 +1,6 @@
 # `duel_gru_v15c`: the manifest (2026-10-11, to noon)
 
-**Which run is which.** v14's end is on the public server (the owner, 07:15: "hold off on the public server promotion just
+**Which run is which.** v14's end is on the public server (the owner, about 07:12: "hold off on the public server promotion just
 yet"). v15b is the legs run of the night ([REPORT_v15b.md](REPORT_v15b.md)); its end is the network this run starts from
 and the control of its checks. **v15c is the run of this document**: v15b's end with the weapon work and two changes to
 how his legs are used, from the morning of 2026-10-11 to noon. The day's log: [2026-10-11](../results/2026-10-11.md).
@@ -9,11 +9,11 @@ how his legs are used, from the morning of 2026-10-11 to noon. The day's log: [2
 
 | When | Decision |
 |---|---|
-| 07:10 | "We can continue training with another [...] round check in at noon. What do you recommend putting all in it?" |
-| 07:20 | "Things I would like to see in the next run - maintaining speed longer - making better decisions on when to go fast - weapon usage. Can you continue that until noon." |
-| 07:20 | "Build out the necessary infra to get him to fight in simulator and real game with the legs. Then benchmark him [...] make sure we have all the needed build out to do the same nightmare bot evals we've been doing with this latest version" |
-| 07:35 | "Pay for speed in games - yes. Two readings - yes." The two movement modes "are fine for now but long term they in theory should blend into one 'movement' knowledge basis in the weights" |
-| 07:40 | his scores against the Nightmare bot and against v14 in a short report now and another at noon; after the noon report the work on an attention layer begins |
+| about 07:05 | "We can continue training with another [...] round check in at noon. What do you recommend putting all in it?" |
+| about 07:15 | "Things I would like to see in the next run - maintaining speed longer - making better decisions on when to go fast - weapon usage. Can you continue that until noon." |
+| about 07:15 | "Build out the necessary infra to get him to fight in simulator and real game with the legs. Then benchmark him [...] make sure we have all the needed build out to do the same nightmare bot evals we've been doing with this latest version" |
+| about 07:25 | "Pay for speed in games - yes. Two readings - yes." The two movement modes "are fine for now but long term they in theory should blend into one 'movement' knowledge basis in the weights" |
+| about 07:30 | his scores against the Nightmare bot and against v14 in a short report now and another at noon; after the noon report the work on an attention layer begins |
 
 Changes during the run are written here.
 
