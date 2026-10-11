@@ -23,6 +23,8 @@ What the simulator knows and a demo does not is left out of the record or made l
   hits              a frame on which the damage he has dealt rises, or he frags: a counter like the demo's
   death             the simulator puts a dead player on a spawn point within the same frame: that frame counts as his
                     one dead frame (a pro is dead for about two seconds), and the enemy is "not there" on it
+  sounds            a jump, a shot or a pickup of the enemy's within 1200 units, from his own state frame by frame (a demo
+                    has them as events of his entity while the server sends him)
 Output: docs/bobby_yardsticks_<tag>.json: "self" and "nightmare", each with "all" and the maps, a map as in
 docs/pro_yardsticks.json; `standing` (the weapons, height, distance and outcome with the enemy in view, tools/pro_places.py's
 strength() on his rows), `cells` (his own cells with 30 sightings or more) and `routes` (his ways beside the pros' at the
@@ -159,12 +161,18 @@ def play(job):
         up[1:] = B["dmg"][1:, p] > B["dmg"][:-1, p]
         enemy = B["pos"][:, o].copy()
         enemy[B["died"][:, o]] = np.nan
+        oal = (B["hp"][:, o] > 0) & ~B["died"][:, o]
+        oboth = oal & np.concatenate([[False], oal[:-1]])
+        snd = np.zeros(frames, np.int64)                        # what the enemy does that is heard: 1 a jump, 2 a shot, 4 a pickup
+        snd[1:] |= 1 * (~B["air"][:-1, o] & B["air"][1:, o] & (B["vel"][1:, o, 2] > 150.0) & oboth[1:])
+        snd[1:] |= 2 * (((B["ammo"][:-1, o] - B["ammo"][1:, o]).max(1) > 0.5) & oboth[1:])
+        snd[1:] |= 4 * (((B["hp"][1:, o] > B["hp"][:-1, o]) | (B["ar"][1:, o] > B["ar"][:-1, o])) & oboth[1:])
         rec = Y.make_record(t=tm, pos=B["pos"][:, p], vel=B["vel"][:, p], yaw=B["yaw"][:, p], pitch=B["pitch"][:, p], weapon=B["w"][:, p],
                             shots=shots, health=np.where(dead, 0.0, B["hp"][:, p]), armor=B["ar"][:, p], score=B["score"][:, p], enemy=enemy,
                             enemy_score=B["score"][:, o], clock=tm, alive=alive, eye_h=np.where(B["duck"][:, p], 12.0, 26.0),
                             enemy_air=B["air"][:, o].astype(np.int64), hits=np.cumsum(up | B["frag"][:, p]), ammo=B["ammo"][:, p],
                             owned=B["has"][:, p], enemy_weapon=B["w"][:, o], client=np.full(frames, seed * 1000 + int(p)),
-                            ground=~B["air"][:, p])
+                            ground=~B["air"][:, p], enemy_sound=snd)
         t_, r_ = Y.measure(rec, env.w, info_)
         Y.add_tally(T, t_)
         for k in rows:
@@ -396,6 +404,57 @@ def show(res, pros):
             ("rocket_hit_then_rocket_hit_a_ten_minutes", "rocket hit, then another rocket's hit within 1.2 s: a ten minutes"),
             ("frags_after_a_pair_share", "his frags within 2 s after such a pair, %"), ("frags_after_a_juggle_share", "his frags within 2 s after two rocket hits, %"))
     print(table([row(lbl, lambda r, k=k: r["hit_combinations"][k]) for k, lbl in keys], ["", *head]) + "\n")
+    print("### 12. Where he looks with no enemy in view (each cell: {})\n".format(lead))
+    print("(For him the enemy's place is always known; for the pros only while the server sent the enemy. The sounds are a jump, a shot, a pickup within 1200 units for both.)\n")
+    nv = (("view_within_20_of_the_enemy_share", "his view within 20 degrees of the enemy's true place, % of the time with no enemy in view"),
+          ("view_within_20_of_where_he_last_saw_him_share", "within 20 degrees of where he last saw him, %"),
+          ("view_within_20_of_the_nearest_mega_or_armor_share", "within 20 degrees of the nearest mega or armor, %"))
+    print(table([row(lbl, lambda r, k=k: r["looking"]["no_enemy_in_view"][k]) for k, lbl in nv], ["", *head]) + "\n")
+    keys = (("sightings", "sightings"), ("sideways_median", "sideways off, degrees: median"), ("sideways_75", "75th"), ("sideways_under_10_share", "under 10, %"),
+            ("sideways_under_20_share", "under 20, %"), ("up_down_median", "up-down off: median"), ("up_down_under_10_share", "under 10, %"))
+    rows = [["all sightings, " + lbl] + [three(lambda r, lbl=lbl, k=k: r["looking"]["at_a_sighting"][lbl][k]) for k, _ in keys] for _, lbl in Y.LAGS]
+    for grp in ("by_time_unseen", "by_sound"):
+        for band in R["pros"]["looking"][grp]:
+            rows += [[band + ", " + lbl] + [three(lambda r, grp=grp, band=band, lbl=lbl, k=k: r["looking"][grp][band][lbl][k]) for k, _ in keys] for _, lbl in Y.LAGS[::2]]
+    print(table(rows, ["the angle from his view to where the enemy appears"] + [lbl for _, lbl in keys]))
+    print("\n### 13. Holds and traps\n")
+    keys = (("a_ten_minutes", "holds a ten minutes"), ("share_of_his_time_alive", "% of his time alive"), ("seconds_median", "seconds: median"), ("seconds_90", "seconds: 90th percentile"),
+            ("enemy_in_view_within_3s_of_its_end_share", "enemy in view within 3 s of its end, %"), ("he_deals_damage_first_within_5s_share", "he deals damage first within 5 s, %"),
+            ("he_takes_damage_first_within_5s_share", "he takes damage first, %"), ("a_frag_for_him_within_5s_share", "a frag for him within 5 s, %"),
+            ("a_frag_of_him_within_5s_share", "a frag of him, %"), ("view_at_a_big_item_share", "his view at a big item, % of the hold"),
+            ("view_at_a_teleporter_exit_share", "at a teleporter's exit, %"), ("blind_rockets_and_grenades_from_holds_a_ten_minutes", "blind rockets and grenades from holds a ten minutes"),
+            ("traps_a_ten_minutes", "of them hit within 1.5 s (traps) a ten minutes"), ("holds_with_a_trap_share", "holds with a trap, %"))
+    rows = [row(lbl, lambda r, k=k: r["holds"][k]) for k, lbl in keys]
+    rows += [row("in hand: " + w_ + ", %", lambda r, w_=w_: r["holds"]["weapon_in_hand"][w_]) for w_ in ("rockets", "lightning", "rail")]
+    print(table(rows, ["", *head]))
+    print("\n### 14. His hands (each cell: {})\n".format(lead))
+    keys = (("median", "median"), ("p75", "75th"), ("p90", "90th"), ("p99", "99th"), ("under_30_share", "under 30, % of the time"), ("under_300_share", "under 300, %"))
+    print(table([[n] + [three(lambda r, n=n, k=k: r["hands"]["turn_speed"][n][k]) for k, _ in keys] for n in ("no enemy in view", "enemy in view")],
+                ["turn speed of his view, degrees a second"] + [lbl for _, lbl in keys]))
+    fl = (("off_target_at_the_sighting_median", "off target as the enemy comes into view, degrees, median"), ("off_target_0_3s_later_median", "off target 0.3 s later, median"),
+          ("turn_in_0_3s_median", "his view's turn in those 0.3 s, degrees: median"), ("turn_in_0_3s_90", "90th percentile"), ("peak_speed_median", "peak turn speed in them, degrees a second: median"),
+          ("peak_speed_90", "90th percentile"), ("seconds_to_the_peak_median", "seconds to the peak, median"), ("a_shot_within_3s_share", "a shot within 3 s, %"),
+          ("seconds_to_the_first_shot_median", "seconds to the first shot, median"), ("a_hit_within_3s_share", "a hit within 3 s, %"), ("seconds_to_the_first_hit_median", "seconds to the first hit, median"))
+    print("\n" + table([row(lbl, lambda r, k=k: r["hands"]["flick"][k]) for k, lbl in fl], ["the flick", *head]))
+    bands = ("all", *Y.ACC_BANDS[:5])
+    rows = []
+    for wn in ("lightning", "rail", "rockets", "plasma", "machine gun", "shotgun"):
+        rows.append([wn + ": hits, % of its shots"] + [three(lambda r, wn=wn, b=b: r["hands"]["accuracy"][wn][b]["hit_share"]) for b in bands])
+        if wn == "rockets":
+            rows.append(["rockets: direct hits, %"] + [three(lambda r, b=b: r["hands"]["accuracy"]["rockets"][b]["direct_share"]) for b in bands])
+        rows.append([wn + ": shots"] + [three(lambda r, wn=wn, b=b: r["hands"]["accuracy"][wn][b]["shots"]) for b in bands])
+    print("\n" + table(rows, ["accuracy by the distance to the enemy", *bands]))
+    rows = [[b, three(lambda r, b=b: r["hands"]["lightning_by_crossing_speed"][b]["shots"]), three(lambda r, b=b: r["hands"]["lightning_by_crossing_speed"][b]["hit_share"])] for b in Y.CROSS_BANDS]
+    rows.append(["his view's changes of turning direction a second while tracking with lightning", "", three(lambda r: r["hands"]["lightning_tracking"]["turning_direction_changes_a_second"])])
+    print("\n" + table(rows, ["lightning", "cells", "hits, %"]))
+    print("\n### 15. Movement in a fight: the enemy in view within 800 units (each cell: {})\n".format(lead))
+    keys = (("minutes", "minutes"), ("strafe_changes_a_second", "changes of strafe direction a second"), ("in_the_air_share", "in the air, %"), ("crouched_share", "crouched, %"),
+            ("jumps_a_minute", "jumps a minute"), ("speed", "speed"), ("distance_change_a_second", "change of the distance a second"))
+    print(table([[n] + [three(lambda r, n=n, k=k: r["fight_movement"]["by"][n][k]) for k, _ in keys] for n in R["pros"]["fight_movement"]["by"]], ["", *[lbl for _, lbl in keys]]))
+    keys = (("hits", "hits of 50 or more"), ("died_within_2s_share", "dead within 2 s, %"), ("lost_view_share", "the enemy out of view for 0.5 s within 2 s, %"), ("weapon_change_share", "weapon changed, %"),
+            ("distance_change_mean", "change of the distance in 2 s"), ("farther_by_100_share", "farther by 100 or more, %"), ("nearer_by_100_share", "nearer by 100 or more, %"))
+    print("\n" + table([[n] + [three(lambda r, n=n, k=k: r["fight_movement"]["after_a_big_hit"][n][k]) for k, _ in keys] for n in R["pros"]["fight_movement"]["after_a_big_hit"]],
+                        ["after a hit of 50 or more that he lives through", *[lbl for _, lbl in keys]]) + "\n")
     st = res.get("standing", {})
     if st:
         print("### 8. With the enemy in view: weapons, distance, outcome, and the strength of where he stands\n")
@@ -478,6 +537,14 @@ def main():
             per[r["map"]]["aggression"] = {k: ag[k] for k in ("all", "by_stack", "by_last_frag", "by_enemy_weapon", "by_score")}
             for k in ("ground_time_by_speed_share", "steady_ground_time_by_speed_share", "crouched_ground_time_by_speed_share"):
                 per[r["map"]]["walking"].pop(k, None)           # (the histograms under "all")
+            for grp, keys in (("looking", ("by_time_unseen", "by_sound")), ("hands", ("lightning_by_crossing_speed",))):
+                for k in keys:
+                    per[r["map"]][grp].pop(k, None)             # (a map alone is too thin for these)
+            for v in per[r["map"]]["hands"]["accuracy"].values():
+                for k in [k for k in v if k != "all"]:
+                    v.pop(k)
+            ab = per[r["map"]]["fight_movement"]["after_a_big_hit"]
+            per[r["map"]]["fight_movement"]["after_a_big_hit"] = {k: ab[k] for k in ("all", "enemy in view at the hit") if k in ab}
             Y.add_tally(total, r["tally"])
             rows[r["map"]] = (r["rows"]["sight"], r["rows"]["view"])
             if opp == "nightmare":
@@ -486,6 +553,7 @@ def main():
         alls = Y.report(total, zrange=zr)
         for o in alls["predictability"]["maps"].values():
             o["routes"].pop("by_pair", None)
+        alls["holds"].pop("top_cells", None)                    # (under the map itself)
         out[opp] = dict(all=alls, **per)
         out["standing"][opp] = standing(rows)
         out["routes"][opp] = routes_same_size(total, maps)

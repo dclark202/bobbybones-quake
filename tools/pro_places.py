@@ -13,7 +13,8 @@ to the first wall for rockets and plasma and the simulator's grenade flight for 
 A place is found by weight: a rocket and a grenade count 1, a plasma cell 0.2 (five cells for a rocket, by damage; a
 second of plasma is ten cells). A shot that lands under 150 units from where he stands is left out of the places: it
 is a rocket jump or a shot at the floor, not a place to aim at (`at_own_feet` has their number and the spots they are
-fired at most: the pros' rocket jumps). The heaviest cell of a 64-unit grid over what is left gives a start; the place's middle is
+fired at most: the pros' rocket jumps). A map with under MIN_SHOTS (1,000) blind shots gets an empty list of places and
+no cells or picture: its places would be chance. The heaviest cell of a 64-unit grid over what is left gives a start; the place's middle is
 the weighted mean of the shots within RADIUS of it, moved to that mean three times; its shots are taken out and the next
 place is looked for, until KEEP places are found. RADIUS is 128 units, a little over a rocket's splash (120). The typical
 place the shots were fired from is found the same way among the places he stood (the two heaviest are given).
@@ -56,6 +57,7 @@ WEIGHT = {0: 1.0, 5: 1.0, 6: 0.2}
 RADIUS, GRID, KEEP = 128.0, 64.0, 24
 FEET_R = 150.0                                                 # a shot that lands this near himself is no place to aim at (a rocket jump)
 MIN_SIGHT = 30                                                 # sightings a place or a cell needs for its numbers
+MIN_SHOTS = 1000                                               # blind shots a map needs for a list of places at all
 CELL, CELL_Z = 256.0, 128.0
 WEAPONS = ("rl", "rg", "lg", "mg", "sg", "gl", "pg", "hmg", "g")           # the simulator's order (duel_env.WEAPONS)
 W_SAYS = dict(rl="rockets", rg="rail", lg="lightning", mg="machine gun", sg="shotgun", gl="grenades", pg="plasma", hmg="heavy machine gun",
@@ -334,10 +336,20 @@ def main():
             print("{}: {} is not there (run tools/pro_yardsticks.py first)".format(mp, f))
             continue
         shots = np.load(f)
-        items = map_items(mp)
-        res = dict(map=mp, **places(shots, items, a.keep))
         out = a.out or os.path.join(ROOT, "sim", "pro_places", mp + ".json")
         os.makedirs(os.path.dirname(out), exist_ok=True)
+        if len(shots) < MIN_SHOTS:                              # too few for places: an empty list (the simulator's BLIND_PLACES
+            with open(out, "w", encoding="utf-8") as fh:        # reads the file if it is there), no cells, no picture
+                json.dump(dict(map=mp, places=[], blind_shots=int(len(shots)), min_shots=MIN_SHOTS,
+                               note="too few blind shots on this map for a list of places"), fh, indent=1)
+            gone = [x for x in (out[:-5] + "_cells.json", os.path.join(ROOT, "docs", "design", "places", mp + ".png")) if not a.out and os.path.exists(x)]
+            for x in gone:
+                os.remove(x)
+            print("{}: {} blind shots, under {}: an empty list of places written, no cells, no picture{}".format(
+                mp, len(shots), MIN_SHOTS, " (removed: {})".format(", ".join(os.path.relpath(x, ROOT).replace("\\", "/") for x in gone)) if gone else ""))
+            continue
+        items = map_items(mp)
+        res = dict(map=mp, **places(shots, items, a.keep))
         fs, fv = (a.sight or f.replace("blind_", "sight_")), (a.view or f.replace("blind_", "view_"))
         if os.path.exists(fs) and os.path.exists(fv) and fs != f:
             sight, view = np.load(fs).astype(np.int64), np.load(fv).astype(np.int64)

@@ -3,6 +3,9 @@
   4 item timing                              5 extras, marked as such in the tables
   6 how predictable he is: his places, his height, his ways between the big items, his standing
   7 aggression by advantage: what he does in the 3 s after the enemy comes into view, by his situation
+  9 walking and quiet      10 when they spam      11 combinations by hits
+  12 where he looks with no enemy in view        13 holds and traps
+  14 his hands: turn speed, the flick, accuracy  15 movement in a fight
 (the strength of a position, the eighth, is in tools/pro_places.py, from rows this tool writes).
 
     python tools/pro_yardsticks.py                              all six maps, every demo -> docs/pro_yardsticks.json, tables on stdout
@@ -71,7 +74,7 @@ ROOT = os.path.dirname(HERE)
 SIM = os.path.join(ROOT, "sim")
 MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged"         # the trained maps: "all"
 MORE = "campgrounds,hektik,toxicity,cure"                      # the maps of movement practice only: under their own names and in "all_ten"
-VERSION = 13                                                    # of the counts kept per demo: a change here counts every demo again
+VERSION = 14                                                    # of the counts kept per demo: a change here counts every demo again
 
 # ---------------------------------------------------------------------------------------------------------------------
 # the record and what is measured on it (no demo below this line until "reading a demo")
@@ -126,6 +129,16 @@ HIT_COMBO_S, JUGGLE_S, COMBO_FRAG_S = 1.5, 1.2, 2.0
 SINCE_BANDS = ("under 2 s", "2 to 5 s", "5 to 10 s", "over 10 s", "not seen yet in this stretch")
 ITEM_CATS = ("mega or armor, back within 5 s as far as he knows", "mega or armor, back in 5 to 10 s", "mega or armor, back in over 10 s",
              "mega or armor, its return unknown to him", "a rocket launcher, rail or lightning gun", "no big item within 300 units")
+HOLD_R, HOLD_S = 150.0, 2.0                                    # a hold: within this far of where it began, this long, no enemy in view, a big weapon in hand
+HEAR_R = 1200.0                                                # a jump, a shot, a pickup is heard this far (the simulator's HEAR_EVT)
+NEAR_DEG = 20.0                                                # his view "points at" something within this angle
+FIGHT_R = 800.0                                                # movement in a fight: the enemy in view within this
+BIG_HIT = 50.0
+UNSEEN_BANDS = ("unseen 1 to 3 s", "unseen 3 to 10 s", "unseen over 10 s")
+HEARD_BANDS = ("no sound of his in the last second", "a jump, shot or pickup of his heard in the last second", "sounds not known")
+ACC_BANDS = ("under 250 units", "250 to 500", "500 to 750", "750 to 1100", "over 1100", "enemy's place not known")
+ACC_EDGES = (250.0, 500.0, 750.0, 1100.0)
+CROSS_BANDS = ("enemy crossing under 15 degrees a second", "15 to 30", "30 to 60", "over 60")
 SOLID = 1
 LEADS = {1: "ahead", 0: "level", -1: "behind"}
 STATES = [l + ", " + p for l in ("ahead", "level", "behind") for p in ("before 7:00", "after 7:00")]
@@ -135,7 +148,7 @@ STATE_KEYS = ("time", "alive", "inview", "toward", "dist", "frags", "deaths", "t
 
 def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, enemy, enemy_score=None, lead=None,
                 clock=None, alive=None, eye_h=None, enemy_air=None, hits=None, seg=None, ammo=None, client=None, owned=None,
-                enemy_weapon=None, ground=None):
+                enemy_weapon=None, ground=None, enemy_sound=None):
     """One player's game, frame by frame, as measure() wants it. Arrays of N frames in the order of time:
       t          seconds (any origin)                     pos, vel   (N, 3) units, units a second
       yaw, pitch degrees (pitch: looking down is positive, as the game's)
@@ -150,7 +163,9 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
                  from and to weapons)                     client     who P is, a number (None: one player throughout)
       owned      (N, 9) which weapons he owns (None: those he has ammunition for)
       enemy_weapon (N,) the weapon in the enemy's hand, an index of WEAPONS, -1 where it is not known (None: never)
-      ground     (N,) he stands on the ground (None: not known: no walking numbers, and a fall is read from his height)"""
+      ground     (N,) he stands on the ground (None: not known: no walking numbers, and a fall is read from his height)
+      enemy_sound (N,) what the enemy did on this frame that is heard: 1 a jump, 2 a shot, 4 a pickup, added up; 0 nothing
+                 or his place not known (None: sounds not known)"""
     n = len(t)
     r = dict(t=np.asarray(t, np.float64), pos=np.asarray(pos, np.float32).reshape(n, 3),
              vel=np.asarray(vel, np.float32).reshape(n, 3), yaw=np.asarray(yaw, np.float32),
@@ -168,6 +183,7 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
     r["owned"] = None if owned is None else np.asarray(owned, bool).reshape(n, len(WEAPONS))
     r["enemy_weapon"] = np.full(n, -1, np.int64) if enemy_weapon is None else np.asarray(enemy_weapon, np.int64)
     r["ground"] = None if ground is None else np.asarray(ground, bool)
+    r["enemy_sound"] = None if enemy_sound is None else np.asarray(enemy_sound, np.int64)
     if lead is None:
         lead = np.sign(r["score"] - np.asarray(enemy_score, np.int64))
     r["lead"] = np.asarray(lead, np.int64)
@@ -267,7 +283,13 @@ def new_tally():
                 when={w: dict(n=0, since={}, item={}, hurt=0, hurt_bad=0, after_death=0) for w in ("rl", "gl", "pg")},
                 when_base=dict(alive=0.0, hurt=0.0, hurt_bad=0.0, after_death=0.0),
                 hitcombo=dict(known=0.0, rl_shots=0, rl_hits=0, gl_shots=0, gl_hits=0, rl_lg=0, rl_rg=0, gl_lg=0, gl_rg=0, juggle=0, frags=0,
-                              frags_combo=0, frags_juggle=0))
+                              frags_combo=0, frags_juggle=0),
+                look=dict(nv=0.0, known=0.0, at_enemy=0.0, ever=0.0, at_last=0.0, item=0.0, at_item=0.0, sight={}),
+                holds=dict(n=0, time=0.0, alive=0.0, dur=[], seen3=0, dealt_first=0, took_first=0, frag5=0, died5=0, ended_by_view=0, w={},
+                           look_time=0.0, look_item=0.0, look_exit=0.0, trap_shots=0, traps=0, with_trap=0, trap_frags=0, cells={}),
+                hands=dict(turn=dict(travel={}, fight={}), flick=dict(n=0, size={}, peak={}, t_peak={}, shot={}, hit={}, err0={}, err3={}, shot_none=0, hit_none=0),
+                           acc={}, lg_cross={}, lg_track=dict(time=0.0, reversals=0)),
+                fight=dict(by={}, hit50={}))
 
 
 def add_tally(a, b):
@@ -458,8 +480,345 @@ def measure(rec, world, info):
     predictable(rec, info, T, dh, da, ok, seg_end, sh)
     sight, view = sightings(rec, T, seg_end, frag, died, fire)
     quiet(rec, T, ever, stack)
-    hit_combos(rec, T, sh, frag, world, seg_end)
+    hits, pr = hit_combos(rec, T, sh, frag, world, seg_end)
+    starts_ = np.nonzero(inview & ~rec["first"] & (np.concatenate([[0.0], since[:-1]]) >= SIGHT_OUT_S - 0.03))[0]
+    looking(rec, T, info, starts_, ever)
+    holds(rec, T, info, world, hits, pr, took, frag, died, seg_end, since)
+    hands(rec, T, starts_, hits, pr, sh, seg_end)
+    fight_move(rec, T, took, stack, seg_end)
     return T, dict(blind=rows, sight=sight, view=view)
+
+
+def _hadd(h, vals, step, top, weights=None):
+    """values into a histogram kept as {bin: count}, bins `step` wide, everything from `top` on in the last"""
+    vals = np.atleast_1d(np.asarray(vals, np.float64))
+    if not len(vals):
+        return
+    b = np.minimum((np.maximum(vals, 0.0) / step).astype(np.int64), int(top / step))
+    c = np.bincount(b, weights=None if weights is None else np.atleast_1d(weights))
+    for k in np.nonzero(c)[0]:
+        h[str(int(k))] = round(h.get(str(int(k)), 0) + float(c[k]), 3)
+
+
+def _hq(h, q, step):
+    """the q-th percentile of a histogram {bin: count}: the middle of the bin it falls in"""
+    ks = sorted((int(k), v) for k, v in h.items())
+    tot = sum(v for _, v in ks)
+    acc = 0.0
+    for k, v in ks:
+        acc += v
+        if tot and acc >= q / 100.0 * tot:
+            return round((k + 0.5) * step, 3)
+    return None
+
+
+def _hunder(h, below, step):
+    """the share of a histogram under a value, %"""
+    tot = sum(h.values())
+    return round(100.0 * sum(v for k, v in h.items() if (int(k) + 1) * step <= below) / tot, 1) if tot else None
+
+
+def looking(rec, T, info, starts, ever):
+    """where he looks with no enemy in view. At every sighting (the enemy comes into view after SIGHT_OUT_S or more out
+    of it) the angle between his view and the direction to the place the enemy appears at, sideways and up-down apart,
+    on that frame and 0.25 and 0.5 s before it, by the time unseen and by whether a sound of the enemy's reached him in
+    the last second. And of his time with no enemy in view: how much his view is within NEAR_DEG of the enemy's true
+    place (where it is known), of the place he last saw him, of the nearest mega or armor."""
+    L = T["look"]
+    t, w, alive, inview, pos, eye, en = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["pos"], rec["eye"], rec["enemy"]
+    n = len(t)
+    fd = _fwd(rec["yaw"], rec["pitch"]).astype(np.float64)
+    cosn = np.cos(np.radians(NEAR_DEG))
+
+    def at(target, m):
+        d = target - eye
+        d = d / (np.linalg.norm(d, axis=1)[:, None] + 1e-9)
+        return m & ((d * fd).sum(1) >= cosn)
+    up = np.array([0, 0, 8.0])
+    nv = alive & ~inview
+    known = nv & np.isfinite(en[:, 0])
+    L["nv"], L["known"] = float(w[nv].sum()), float(w[known].sum())
+    L["at_enemy"] = float(w[at(np.where(np.isfinite(en), en, 0.0) + up, known)].sum())
+    last = np.maximum.accumulate(np.where(inview, np.arange(n), 0))
+    ev = nv & ever
+    L["ever"], L["at_last"] = float(w[ev].sum()), float(w[at(np.where(np.isfinite(en[last]), en[last], 0.0) + up, ev)].sum())
+    if info["items"]:
+        I = np.array([it["pos"] for it in info["items"]], np.float64)
+        near = I[np.linalg.norm(pos[:, None, :] - I[None], axis=2).argmin(1)]
+        L["item"], L["at_item"] = float(w[nv].sum()), float(w[at(near, nv)].sum())
+    seg0 = np.maximum.accumulate(np.where(rec["first"], np.arange(n), 0))
+    snd = rec["enemy_sound"]
+    for i in starts:
+        target = en[i] + up
+        ub = 0 if rec["since"][i - 1] < 3.0 else 1 if rec["since"][i - 1] < 10.0 else 2
+        if snd is None:
+            hb = 2
+        else:
+            a = max(int(np.searchsorted(t, t[i] - 1.0)), int(seg0[i]))
+            hb = int(bool(((snd[a:i] > 0) & (rec["dist"][a:i] <= HEAR_R)).any()))
+        for lag, ln in ((0.0, "0"), (0.25, "25"), (0.5, "50")):
+            j = i if lag == 0 else int(np.searchsorted(t, t[i] - lag + 1e-6, side="right")) - 1
+            if j < seg0[i] or not alive[j]:
+                continue
+            d = target - eye[j]
+            h = abs((np.degrees(np.arctan2(d[1], d[0])) - rec["yaw"][j] + 180.0) % 360.0 - 180.0)
+            v = abs(-np.degrees(np.arctan2(d[2], np.hypot(d[0], d[1]))) - rec["pitch"][j])
+            S = L["sight"].setdefault("{}|{}|{}".format(ln, ub, hb), dict(n=0, h={}, v={}))
+            S["n"] += 1
+            for name, x, top in (("h", h, 179), ("v", v, 89)):
+                k = str(int(min(x, top)))
+                S[name][k] = S[name].get(k, 0) + 1
+
+
+def holds(rec, T, info, world, hits, pr, took, frag, died, seg_end, since):
+    """holds and traps: the stretches he stays within HOLD_R of where the stretch began for HOLD_S or more, alive, no
+    enemy in view, rockets, lightning or rail in hand; what follows them, where they are, what his view points at, and
+    the blind rockets and grenades fired from them that hit"""
+    Hd = T["holds"]
+    t, w, alive, inview, pos = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["pos"]
+    n = len(t)
+    Hd["alive"] = float(w[alive].sum())
+    okh = alive & ~inview & np.isin(rec["weapon"], BIG_W)
+    bad = np.concatenate([[0], np.cumsum(~okh)])
+    j2 = np.minimum(np.searchsorted(t, t + HOLD_S), n - 1)
+    mid = (np.arange(n) + j2) // 2
+    cand = okh & (t[j2] - t >= HOLD_S - 0.03) & (j2 <= seg_end) & (bad[j2 + 1] == bad[np.arange(n)]) & \
+        (np.linalg.norm(pos[j2] - pos, axis=1) <= HOLD_R) & (np.linalg.norm(pos[mid] - pos, axis=1) <= HOLD_R)
+    hitc = np.zeros(n, bool)                                    # his hit counter steps on this frame
+    if rec["hits"] is not None:
+        hitc[1:] = (np.diff(rec["hits"]) > 0) & ~rec["first"][1:]
+    hurt = took > 0
+    fd = _fwd(rec["yaw"], rec["pitch"]).astype(np.float64)
+    cosn = np.cos(np.radians(NEAR_DEG))
+    big = np.array([b["pos"] for b in info["big"]], np.float64).reshape(-1, 3)
+    exits = np.array(info.get("exits", []), np.float64).reshape(-1, 3)
+    shot_hit = {}                                               # a projectile's row -> the frame it hit on
+    for f, wq, k in hits:
+        if k >= 0 and k not in shot_hit:
+            shot_hit[k] = f
+    done = -1
+    for a in np.nonzero(cand)[0]:
+        if a <= done:
+            continue
+        K = int(min(seg_end[a], a + 4000))
+        out = np.nonzero((np.linalg.norm(pos[a:K + 1] - pos[a], axis=1) > HOLD_R) | ~okh[a:K + 1])[0]
+        b = a + int(out[0]) - 1 if len(out) else K
+        if t[b] - t[a] < HOLD_S - 0.03:
+            continue
+        done = b
+        Hd["n"] += 1
+        Hd["time"] += float(w[a:b + 1].sum())
+        Hd["dur"].append(round(float(t[b] - t[a]), 2))
+        wn = WEAPONS[int(rec["weapon"][a])]
+        Hd["w"][wn] = Hd["w"].get(wn, 0) + 1
+        e = int(seg_end[a])
+        e3 = min(int(np.searchsorted(t, t[b] + 3.0, side="right")) - 1, e)
+        e5 = min(int(np.searchsorted(t, t[b] + 5.0, side="right")) - 1, e)
+        Hd["seen3"] += int(inview[b + 1:e3 + 1].any())
+        Hd["ended_by_view"] += int(b + 1 <= e and bool(inview[b + 1]))
+        fh, ft = np.nonzero(hitc[b + 1:e5 + 1])[0], np.nonzero(hurt[b + 1:e5 + 1])[0]
+        Hd["dealt_first"] += int(len(fh) > 0 and (len(ft) == 0 or fh[0] <= ft[0]))
+        Hd["took_first"] += int(len(ft) > 0 and (len(fh) == 0 or ft[0] < fh[0]))
+        Hd["frag5"] += int(frag[b + 1:e5 + 1].any())
+        Hd["died5"] += int(died[b + 1:e5 + 1].any())
+        # where: the cell of tools/pro_places.py's table (256 x 256 x 128), named by the nearest big item
+        c = np.floor(pos[a] / np.array([256.0, 256.0, 128.0])).astype(np.int64)
+        midc = (c + 0.5) * np.array([256.0, 256.0, 128.0])
+        lab, un = "", 0
+        if len(big):
+            dn = np.linalg.norm(big - midc, axis=1)
+            lab, un = info["big"][int(dn.argmin())]["label"], int(round(float(dn.min())))
+        ck = "{}:{}:{}:{}:{}:{}".format(info["name"], int(c[0]), int(c[1]), int(c[2]), lab, un)
+        C = Hd["cells"].setdefault(ck, dict(n=0))
+        C["n"] += 1
+        C[wn] = C.get(wn, 0) + 1
+        # what his view points at: a big item, a teleporter's exit (within NEAR_DEG, a clear line to it), every fourth frame
+        fr = np.arange(a, b + 1, 4)
+        ww = np.array([w[q:q + 4].sum() for q in fr])
+        seen = {}
+        for name, P in (("item", big), ("exit", exits)):
+            hit_ = np.zeros(len(fr), bool)
+            for q in range(len(P)):
+                d = P[q] + np.array([0, 0, 8.0]) - rec["eye"][fr]
+                d = d / (np.linalg.norm(d, axis=1)[:, None] + 1e-9)
+                m = (d * fd[fr]).sum(1) >= cosn
+                if m.any() and world is not None:
+                    m[m] = world.lines(rec["eye"][fr][m], np.repeat((P[q] + np.array([0, 0, 8.0]))[None], int(m.sum()), 0), mask=SOLID) >= 0.999
+                hit_ |= m
+            seen[name] = hit_
+        Hd["look_time"] += float(ww.sum())
+        Hd["look_item"] += float(ww[seen["item"]].sum())
+        Hd["look_exit"] += float(ww[seen["exit"]].sum())
+        # a trap: a blind rocket or grenade fired during the hold or within a second after it that hits within 1.5 s
+        if pr is not None and len(pr):
+            b1 = min(int(np.searchsorted(t, t[b] + 1.0, side="right")) - 1, e)
+            ks = np.nonzero((pr[:, 0] >= a) & (pr[:, 0] <= b1) & np.isin(pr[:, 1], (RL, GL)) & (since[pr[:, 0]] >= BLIND_S))[0]
+            Hd["trap_shots"] += len(ks)
+            got = [k for k in ks if k in shot_hit and t[shot_hit[k]] - t[pr[k, 0]] <= 1.5]
+            Hd["traps"] += len(got)
+            Hd["with_trap"] += int(len(got) > 0)
+            Hd["trap_frags"] += int(any(frag[shot_hit[k]:min(int(np.searchsorted(t, t[shot_hit[k]] + 2.0, side="right")), e + 1)].any() for k in got))
+
+
+def hands(rec, T, starts, hits, pr, sh, seg_end):
+    """his hands as a demo shows them: how fast his view turns (travelling, with the enemy in view), the flick after a
+    sighting, accuracy by weapon and distance from the hits as hit_combos() gives them, lightning by how fast the enemy
+    crosses his view, and how often his view changes its turning direction while he tracks with lightning"""
+    Hn = T["hands"]
+    t, w, alive, inview, en, eye = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["enemy"], rec["eye"]
+    n = len(t)
+    fd = _fwd(rec["yaw"], rec["pitch"]).astype(np.float64)
+    dt = np.diff(t)
+    ok = alive[1:] & alive[:-1] & ~rec["first"][1:] & (dt > 0)
+    turn = np.zeros(n)                                          # degrees a second, from the frame before
+    turn[1:] = np.where(ok, np.degrees(np.arccos(np.clip((fd[1:] * fd[:-1]).sum(1), -1.0, 1.0))) / np.maximum(dt, 1e-3), 0.0)
+    okf = np.concatenate([[False], ok])
+    for name, m in (("travel", okf & ~inview), ("fight", okf & inview)):
+        _hadd(Hn["turn"][name], turn[m], 10.0, 2000.0, w[m])
+    # ---- the flick: the 0.3 s after the enemy comes into view
+    F = Hn["flick"]
+    shot_fr = np.array(sorted({int(x[0]) for x in sh}), np.int64) if len(sh) else np.zeros(0, np.int64)
+    hit_fr = np.array(sorted({f for f, _, _ in hits}), np.int64)
+    up = np.array([0, 0, 8.0])
+
+    def err(j):
+        d = en[j] + up - eye[j]
+        return float(np.degrees(np.arccos(np.clip((d / (np.linalg.norm(d) + 1e-9)) @ fd[j], -1.0, 1.0))))
+    for i in starts:
+        j = int(np.searchsorted(t, t[i] + 0.3, side="right")) - 1
+        if j > seg_end[i] or j <= i or not alive[i:j + 1].all():
+            continue
+        F["n"] += 1
+        _hadd(F["size"], np.degrees(np.arccos(np.clip(fd[i] @ fd[j], -1.0, 1.0))), 1.0, 180.0)
+        k = i + 1 + int(np.argmax(turn[i + 1:j + 1]))
+        _hadd(F["peak"], turn[k], 20.0, 3000.0)
+        _hadd(F["t_peak"], t[k] - t[i], 0.025, 0.5)
+        _hadd(F["err0"], err(i), 1.0, 180.0)
+        if np.isfinite(en[j, 0]):
+            _hadd(F["err3"], err(j), 1.0, 180.0)
+        for name, fr in (("shot", shot_fr), ("hit", hit_fr)):
+            q = np.searchsorted(fr, i)
+            if q < len(fr) and fr[q] <= seg_end[i] and t[fr[q]] - t[i] <= 3.0:
+                _hadd(F[name], t[fr[q]] - t[i], 0.05, 3.0)
+            else:
+                F[name + "_none"] = F.get(name + "_none", 0) + 1
+    # ---- accuracy by weapon and distance (the enemy's place where it is known), the hits as hit_combos() gives them
+    dist = rec["dist"]
+
+    def band(f):                                                # (the shot that kills him: he is gone on its frame, so the frame before)
+        d = dist[f] if np.isfinite(dist[f]) or f == 0 or rec["first"][f] else dist[f - 1]
+        return 5 if not np.isfinite(d) else int(np.searchsorted(ACC_EDGES, d, side="right"))
+
+    def acc(wq, b, key, cnt=1):
+        A = Hn["acc"].setdefault(WEAPONS[wq], {}).setdefault(str(b), dict(shots=0, hits=0, direct=0))
+        A[key] += int(cnt)
+    for i, wq, cnt in sh:
+        if wq in (LG, RG, RL, PG, MG, SG):
+            acc(int(wq), band(i), "shots", cnt)
+    for f, wq, k in hits:
+        if wq not in (LG, RG, RL, PG, MG, SG):
+            continue
+        s0 = int(pr[k, 0]) if k >= 0 else f                     # a rocket's and a plasma ball's distance is the one it was fired at
+        acc(wq, band(s0), "hits")
+        if wq == RL and k >= 0 and np.isfinite(en[f, 0]):       # direct: the enemy within 60 units of where the rocket was in the last 75 ms
+            a0, a1 = PROJ[RL] * max(0.0, t[f] - t[s0] - 0.075), PROJ[RL] * (t[f] - t[s0])
+            c = en[f] + up - eye[s0]
+            along = float(np.clip(c @ fd[s0], a0, a1))
+            if np.linalg.norm(c - fd[s0] * along) <= 60.0:
+                acc(RL, band(s0), "direct")
+    # ---- lightning: by how fast the enemy crosses his view, and the turns of his view while tracking
+    lg = sh[sh[:, 1] == LG][:, 0] if len(sh) else np.zeros(0, np.int64)
+    lg_hit = {f for f, wq, _ in hits if wq == LG}
+    for i in lg:
+        if i < 1 or rec["first"][i] or not (np.isfinite(en[i, 0]) and np.isfinite(en[i - 1, 0])) or t[i] <= t[i - 1]:
+            continue
+        rel = (en[i] - en[i - 1]) / (t[i] - t[i - 1]) - rec["vel"][i]
+        d = en[i] + up - eye[i]
+        dn = np.linalg.norm(d) + 1e-9
+        cross = np.degrees(np.linalg.norm(rel - (rel @ d) / dn * d / dn) / dn)
+        b = 0 if cross < 15 else 1 if cross < 30 else 2 if cross < 60 else 3
+        C = Hn["lg_cross"].setdefault(str(b), dict(shots=0, hits=0))
+        C["shots"] += 1
+        C["hits"] += int(int(i) in lg_hit or int(i) + 1 in lg_hit)
+    if len(lg):
+        fire = np.zeros(n, bool)
+        fire[lg] = True
+        recent = np.convolve(fire.astype(np.int64), np.ones(5, np.int64))[:n] > 0   # a cell of lightning within the last 100 ms
+        track = recent & inview & (rec["weapon"] == LG) & okf
+        dy = np.zeros(n)
+        dy[1:] = (np.diff(rec["yaw"].astype(np.float64)) + 180.0) % 360.0 - 180.0
+        sg = np.where(np.abs(dy) > 0.1, np.sign(dy), 0.0)
+        idx = np.nonzero(track & (sg != 0))[0]
+        if len(idx) > 1:
+            near = (np.diff(idx) <= 4) & (seg_end[idx[:-1]] >= idx[1:])
+            Hn["lg_track"]["reversals"] += int((near & (sg[idx[1:]] != sg[idx[:-1]])).sum())
+        Hn["lg_track"]["time"] += float(w[track].sum())
+
+
+def fight_move(rec, T, took, stack, seg_end):
+    """movement in a fight (the enemy in view within FIGHT_R): changes of strafe direction, time in the air and crouched,
+    jumps, speed, the change of the distance, by the weapon in his hand, by the enemy's, by his health and armor; and
+    what he does in the 2 s after a hit of BIG_HIT or more"""
+    Fg = T["fight"]
+    t, w, alive, inview, vel, dist = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["vel"], rec["dist"]
+    n = len(t)
+    m = inview & (np.nan_to_num(dist, nan=1e9) <= FIGHT_R)
+    yr = np.radians(rec["yaw"].astype(np.float64))
+    lat = vel[:, 0] * np.sin(yr) - vel[:, 1] * np.cos(yr)       # his speed to his right
+    sg = np.where(np.abs(lat) > 60.0, np.sign(lat), 0.0)
+    idx = np.nonzero(sg != 0)[0]
+    flip = np.zeros(n, bool)                                    # his strafe direction is the other one than the last time he strafed
+    if len(idx) > 1:
+        ch = (sg[idx[1:]] != sg[idx[:-1]]) & (t[idx[1:]] - t[idx[:-1]] <= 1.0) & (seg_end[idx[:-1]] >= idx[1:])
+        flip[idx[1:][ch]] = True
+    gr = rec["ground"]
+    jump = np.zeros(n, bool)
+    if gr is not None:
+        jump[1:] = gr[:-1] & ~gr[1:] & (vel[1:, 2] > 150.0) & ~rec["first"][1:]
+    both = np.zeros(n, bool)
+    both[1:] = m[1:] & m[:-1] & ~rec["first"][1:]
+    dd = np.zeros(n)
+    dd[1:] = np.where(both[1:], np.nan_to_num(dist[1:]) - np.nan_to_num(dist[:-1]), 0.0)
+    sp = np.hypot(vel[:, 0], vel[:, 1])
+    hw, ew = rec["weapon"], rec["enemy_weapon"]
+    sit = {"all": np.ones(n, bool),
+           "lightning in his hand": hw == LG, "rail in his hand": hw == RG, "rockets in his hand": hw == RL, "another weapon in his hand": ~np.isin(hw, BIG_W),
+           "enemy holds lightning or rail": np.isin(ew, (LG, RG)), "enemy holds rockets": ew == RL, "enemy holds another weapon": (ew >= 0) & ~np.isin(ew, BIG_W),
+           "stack under 60": stack < 60, "stack 60 to 125": (stack >= 60) & (stack <= 125), "stack over 125": stack > 125}
+    for name, q in sit.items():
+        q = q & m
+        Fg["by"][name] = dict(time=float(w[q].sum()), flips=int(flip[q].sum()), air=float(w[q & ~gr].sum()) if gr is not None else 0.0,
+                              ground_known=float(w[q].sum()) if gr is not None else 0.0, crouch=float(w[q & (rec["eye_h"] < 20.0)].sum()),
+                              jumps=int(jump[q].sum()), speed=float((sp[q] * w[q]).sum()), ddist=float(dd[q & both].sum()), ddist_time=float(w[q & both].sum()))
+    # ---- after a hit of BIG_HIT or more that he lives through
+    for h in np.nonzero((took >= BIG_HIT) & alive)[0]:
+        e = int(np.searchsorted(t, t[h] + 2.0, side="right")) - 1
+        if e > seg_end[h] or e <= h:
+            continue
+        sb = 0 if stack[h] < 60 else 1 if stack[h] <= 125 else 2
+        seen = bool(inview[max(0, h - 20):h + 1].any())
+        key = "{}|{}".format(int(seen), sb)
+        C = Fg["hit50"].setdefault(key, dict(n=0, died=0, known=0, ddist=0.0, away=0, closer=0, lost=0, wchange=0, alive2=0))
+        C["n"] += 1
+        dead = not alive[h:e + 1].all()
+        C["died"] += int(dead)
+        if dead:
+            continue
+        C["alive2"] += 1
+        C["wchange"] += int((rec["weapon"][h + 1:e + 1] != rec["weapon"][h]).any())
+        if np.isfinite(dist[h]) and np.isfinite(dist[e]):
+            C["known"] += 1
+            C["ddist"] += float(dist[e] - dist[h])
+            C["away"] += int(dist[e] - dist[h] > 100.0)
+            C["closer"] += int(dist[e] - dist[h] < -100.0)
+        if seen:
+            acc_, lost = 0.0, 0
+            for q in range(h + 1, e + 1):
+                acc_ = acc_ + w[q] if not inview[q] else 0.0
+                if acc_ >= 0.5:
+                    lost = 1
+                    break
+            C["lost"] += lost
 
 
 def _picks(rec, it, ok, col):
@@ -521,7 +880,7 @@ def hit_combos(rec, T, sh, frag, world, seg_end):
     COMBO_FRAG_S after such a pair."""
     H = T["hitcombo"]
     if rec["hits"] is None or world is None:
-        return
+        return [], None
     t, alive = rec["t"], rec["alive"]
     n = len(t)
     H["known"] = float(rec["w"][alive].sum())
@@ -531,7 +890,7 @@ def hit_combos(rec, T, sh, frag, world, seg_end):
     inc = np.clip(inc, 0, 8)
     H["frags"] = int(frag.sum())
     if not len(sh):
-        return
+        return [], None
     scan = np.full(n, -1, np.int64)                              # the hitscan weapon he fires on a frame
     for i, wq, _ in sh:
         if wq in (LG, RG, MG, SG, HMG) and (scan[i] < 0 or wq in (LG, RG)):
@@ -587,6 +946,7 @@ def hit_combos(rec, T, sh, frag, world, seg_end):
         e = np.array(sorted(set(ends)), np.int64)
         if len(e) and len(fr):
             H[name] = int(sum(1 for x in fr if ((e <= x) & (t[x] - t[e] <= COMBO_FRAG_S)).any()))
+    return hits, pr
 
 
 SIGHT_COLS = ("x", "y", "z", "stack band", "owns a big weapon", "frag band", "enemy weapon band", "lead", "speed toward him over 3 s",
@@ -927,6 +1287,125 @@ def report(T, zrange=None):
     out["walking"] = walking(T)
     out["spam_when"] = spam_when(T)
     out["hit_combinations"] = hit_combinations(T)
+    out["looking"] = looking_report(T)
+    out["holds"] = holds_report(T)
+    out["hands"] = hands_report(T)
+    out["fight_movement"] = fight_report(T)
+    return out
+
+
+LAGS = (("0", "as he comes into view"), ("25", "0.25 s before"), ("50", "0.5 s before"))
+
+
+def looking_report(T):
+    L = T["look"]
+
+    def stats(lag, ub=None, hb=None):
+        h, v, n = {}, {}, 0
+        for k, S in L["sight"].items():
+            a, b, c = k.split("|")
+            if a == lag and (ub is None or int(b) == ub) and (hb is None or int(c) == hb):
+                n += S["n"]
+                for dst, src in ((h, S["h"]), (v, S["v"])):
+                    for q, x in src.items():
+                        dst[q] = dst.get(q, 0) + x
+        return dict(sightings=n, sideways_median=_hq(h, 50, 1.0), sideways_25=_hq(h, 25, 1.0), sideways_75=_hq(h, 75, 1.0),
+                    sideways_under_10_share=_hunder(h, 10, 1.0), sideways_under_20_share=_hunder(h, 20, 1.0),
+                    up_down_median=_hq(v, 50, 1.0), up_down_75=_hq(v, 75, 1.0), up_down_under_10_share=_hunder(v, 10, 1.0)) if n else dict(sightings=0)
+    return dict(
+        no_enemy_in_view=dict(view_within_20_of_the_enemy_share=_share(L["at_enemy"], L["known"]), enemy_place_known_share_of_that_time=_share(L["known"], L["nv"]),
+                              view_within_20_of_where_he_last_saw_him_share=_share(L["at_last"], L["ever"]),
+                              view_within_20_of_the_nearest_mega_or_armor_share=_share(L["at_item"], L["item"])),
+        at_a_sighting={lbl: stats(lag) for lag, lbl in LAGS},
+        by_time_unseen={UNSEEN_BANDS[b]: {lbl: stats(lag, ub=b) for lag, lbl in LAGS} for b in range(3)},
+        by_sound={HEARD_BANDS[b]: {lbl: stats(lag, hb=b) for lag, lbl in LAGS} for b in range(3) if any(k.endswith("|" + str(b)) for k in L["sight"])})
+
+
+def holds_report(T):
+    Hd = T["holds"]
+    n, m10 = Hd["n"], Hd["alive"] / 600.0
+    if not m10:
+        return dict(known=False)
+    cells = {}
+    for k, c in Hd["cells"].items():
+        mp, cx, cy, cz, lab, un = k.split(":")
+        cells.setdefault(mp, []).append(dict(cell=[int(cx), int(cy), int(cz)], middle=[int((int(cx) + 0.5) * 256), int((int(cy) + 0.5) * 256), int((int(cz) + 0.5) * 128)],
+                                             near=lab, near_units=int(un), holds=c["n"], weapons={w_: c[w_] for w_ in ("rl", "lg", "rg") if c.get(w_)}))
+    top = {}
+    for mp, cs in cells.items():
+        tot = sum(c["holds"] for c in cs)
+        top[mp] = [dict(c, share=round(100.0 * c["holds"] / tot, 1)) for c in sorted(cs, key=lambda c: -c["holds"])[:10]]
+    return dict(known=True, holds=n, a_ten_minutes=round(n / m10, 2), share_of_his_time_alive=_share(Hd["time"], Hd["alive"]),
+                seconds_median=_med(Hd["dur"]), seconds_75=_med(Hd["dur"], 75), seconds_90=_med(Hd["dur"], 90),
+                weapon_in_hand={W_NAMES[w_]: _share(Hd["w"].get(w_, 0), n) for w_ in ("rl", "lg", "rg")},
+                enemy_in_view_within_3s_of_its_end_share=_share(Hd["seen3"], n), ended_by_the_enemy_coming_into_view_share=_share(Hd["ended_by_view"], n),
+                he_deals_damage_first_within_5s_share=_share(Hd["dealt_first"], n), he_takes_damage_first_within_5s_share=_share(Hd["took_first"], n),
+                a_frag_for_him_within_5s_share=_share(Hd["frag5"], n), a_frag_of_him_within_5s_share=_share(Hd["died5"], n),
+                view_at_a_big_item_share=_share(Hd["look_item"], Hd["look_time"]), view_at_a_teleporter_exit_share=_share(Hd["look_exit"], Hd["look_time"]),
+                blind_rockets_and_grenades_from_holds_a_ten_minutes=round(Hd["trap_shots"] / m10, 2), traps_a_ten_minutes=round(Hd["traps"] / m10, 3),
+                trap_shots_that_hit_share=_share(Hd["traps"], Hd["trap_shots"]), holds_with_a_trap_share=_share(Hd["with_trap"], n),
+                traps_with_a_frag_within_2s_share=_share(Hd["trap_frags"], Hd["with_trap"]), top_cells=top)
+
+
+def hands_report(T):
+    Hn = T["hands"]
+    out = dict(turn_speed={}, flick={}, accuracy={}, lightning_by_crossing_speed={}, lightning_tracking={})
+    for name, lbl in (("travel", "no enemy in view"), ("fight", "enemy in view")):
+        h = Hn["turn"][name]
+        out["turn_speed"][lbl] = dict(median=_hq(h, 50, 10.0), p75=_hq(h, 75, 10.0), p90=_hq(h, 90, 10.0), p99=_hq(h, 99, 10.0),
+                                      under_30_share=_hunder(h, 30, 10.0), under_100_share=_hunder(h, 100, 10.0), under_300_share=_hunder(h, 300, 10.0))
+    F = Hn["flick"]
+    if F["n"]:
+        ns, nh = sum(F["shot"].values()), sum(F["hit"].values())
+        out["flick"] = dict(sightings=F["n"], off_target_at_the_sighting_median=_hq(F["err0"], 50, 1.0), off_target_0_3s_later_median=_hq(F["err3"], 50, 1.0),
+                            turn_in_0_3s_median=_hq(F["size"], 50, 1.0), turn_in_0_3s_75=_hq(F["size"], 75, 1.0), turn_in_0_3s_90=_hq(F["size"], 90, 1.0),
+                            peak_speed_median=_hq(F["peak"], 50, 20.0), peak_speed_90=_hq(F["peak"], 90, 20.0), seconds_to_the_peak_median=_hq(F["t_peak"], 50, 0.025),
+                            a_shot_within_3s_share=_share(ns, ns + F["shot_none"]), seconds_to_the_first_shot_median=_hq(F["shot"], 50, 0.05),
+                            seconds_to_the_first_shot_25=_hq(F["shot"], 25, 0.05),
+                            a_hit_within_3s_share=_share(nh, nh + F["hit_none"]), seconds_to_the_first_hit_median=_hq(F["hit"], 50, 0.05),
+                            seconds_to_the_first_hit_25=_hq(F["hit"], 25, 0.05))
+    for wn, A in Hn["acc"].items():
+        row = {}
+        tot = dict(shots=0, hits=0, direct=0)
+        for b in range(len(ACC_BANDS)):
+            c = A.get(str(b))
+            if c:
+                row[ACC_BANDS[b]] = dict(shots=c["shots"], hit_share=_share(c["hits"], c["shots"]), **({"direct_share": _share(c["direct"], c["shots"])} if wn == "rl" else {}))
+                for k in tot:
+                    tot[k] += c[k]
+        row["all"] = dict(shots=tot["shots"], hit_share=_share(tot["hits"], tot["shots"]), **({"direct_share": _share(tot["direct"], tot["shots"])} if wn == "rl" else {}))
+        out["accuracy"][W_NAMES.get(wn, wn)] = row
+    out["lightning_by_crossing_speed"] = {CROSS_BANDS[int(b)]: dict(shots=c["shots"], hit_share=_share(c["hits"], c["shots"])) for b, c in sorted(Hn["lg_cross"].items())}
+    tr = Hn["lg_track"]
+    out["lightning_tracking"] = dict(seconds=round(tr["time"], 1), turning_direction_changes_a_second=round(tr["reversals"] / tr["time"], 2) if tr["time"] else None)
+    return out
+
+
+def fight_report(T):
+    Fg = T["fight"]
+    out = dict(by={}, after_a_big_hit={})
+    for name, c in Fg["by"].items():
+        if c["time"] <= 0:
+            continue
+        out["by"][name] = dict(minutes=round(c["time"] / 60.0, 1), strafe_changes_a_second=round(c["flips"] / c["time"], 2),
+                               in_the_air_share=_share(c["air"], c["ground_known"]), crouched_share=_share(c["crouch"], c["time"], 2),
+                               jumps_a_minute=round(c["jumps"] / c["time"] * 60.0, 1) if c["ground_known"] else None, speed=round(c["speed"] / c["time"], 1),
+                               distance_change_a_second=round(c["ddist"] / c["ddist_time"], 1) if c["ddist_time"] else None)
+
+    def merged(seen=None, sb=None):
+        tot = {}
+        for k, c in Fg["hit50"].items():
+            a, b = (int(x) for x in k.split("|"))
+            if (seen is None or a == seen) and (sb is None or b == sb):
+                for q, v in c.items():
+                    tot[q] = tot.get(q, 0) + v
+        if not tot.get("n"):
+            return dict(hits=0)
+        return dict(hits=tot["n"], died_within_2s_share=_share(tot["died"], tot["n"]), weapon_change_share=_share(tot["wchange"], tot["alive2"]),
+                    distance_change_mean=round(tot["ddist"] / tot["known"], 1) if tot["known"] else None, farther_by_100_share=_share(tot["away"], tot["known"]),
+                    nearer_by_100_share=_share(tot["closer"], tot["known"]), **({"lost_view_share": _share(tot["lost"], tot["alive2"])} if seen == 1 else {}))
+    out["after_a_big_hit"] = {"all": merged(), "enemy in view at the hit": merged(seen=1), "enemy not in view at the hit": merged(seen=0),
+                              **{"enemy in view, " + STACK_BANDS[b] + " after it": merged(seen=1, sb=b) for b in range(3)}}
     return out
 
 
@@ -1123,7 +1602,8 @@ def map_info(world, name):
             wname = {"weapon_rocketlauncher": "rl", "weapon_railgun": "rg", "weapon_lightning": "lg"}.get(cls)
             big.append(dict(label=BIG[cls] + (str(seen[BIG[cls]]) if n_same > 1 else ""), pos=p, rivals=rivals,
                             col=sort if wname is None else WEAPONS.index(wname), back=RETURN.get(ITEM_KIND.get(cls), 5.0)))
-    return dict(name=name, items=out, big=big)
+    exits = [[float(x) for x in d] for cls_, _, d in getattr(world, "triggers", []) if cls_ == "trigger_teleport"]
+    return dict(name=name, items=out, big=big, exits=exits)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1247,6 +1727,7 @@ def demo_record(binf, meta):
     enemy = np.full((N, 3), np.nan, np.float32)
     air = np.full(N, -1, np.int64)
     eweap = np.full(N, -1, np.int64)
+    eev = np.full(N, -1, np.int64)                              # the enemy entity's event field, -1 where he is not sent
     if len(pl):
         m = (pl[:, 0] < 64) & (pl[:, 0] != cn[snap]) & ((pl[:, 12].astype(np.int64) & 1) == 0)
         s_, first = np.unique(snap[m], return_index=True)
@@ -1254,6 +1735,16 @@ def demo_record(binf, meta):
         enemy[s_] = rows[:, 2:5]
         air[s_] = (rows[:, 13] == 1023).astype(np.int64)
         eweap[s_] = [WEAPONS.index(QLW[int(x)]) if int(x) in QLW else -1 for x in rows[:, 11]]
+        eev[s_] = rows[:, 14].astype(np.int64)
+    # a new event of his: the field changes (its two sequence bits count) between two snapshots he is in. Quake Live's
+    # numbers: 10 a jump, 9 a jump pad, 20 a shot, 15 and 16 an item picked up
+    esound = np.zeros(N, np.int64)
+    new_ev = np.zeros(N, bool)
+    new_ev[1:] = (eev[1:] >= 0) & (eev[:-1] >= 0) & (eev[1:] != eev[:-1]) & ((eev[1:] & 0xFF) != 0)
+    kind = eev & 0xFF
+    esound[new_ev & np.isin(kind, (9, 10))] |= 1
+    esound[new_ev & (kind == 20)] |= 2
+    esound[new_ev & np.isin(kind, (15, 16))] |= 4
     # ---- stretches of one followed player
     brk = np.ones(N, bool)
     brk[1:] = (cn[1:] != cn[:-1]) | ~ok[1:] | ~ok[:-1] | (dt > 100) | (dt <= 0)
@@ -1302,7 +1793,7 @@ def demo_record(binf, meta):
                       alive=alive[keep], eye_h=ps[keep, PS["viewheight"]], enemy_air=air[keep], hits=pers[keep, P_HITS], seg=seg[keep],
                       ammo=np.stack([np.zeros(len(keep)) if nm == "g" else am[keep, [q for q, x in QLW.items() if x == nm][0]] for nm in WEAPONS], 1),
                       client=cn[keep], owned=np.stack([(st[keep, wslot].astype(np.int64) >> [q for q, x in QLW.items() if x == nm][0]) & 1 for nm in WEAPONS], 1),
-                      enemy_weapon=eweap[keep], ground=ps[keep, PS["groundEntityNum"]] != 1023)
+                      enemy_weapon=eweap[keep], ground=ps[keep, PS["groundEntityNum"]] != 1023, enemy_sound=esound[keep])
     info.update(recorder=int((meta.get("gamestates") or [{}])[0].get("client_num", -1)), cuts=int((np.diff(cn[keep]) != 0).sum()),
                 final={int(c): int(v) for c, v in last.items()}, final_enemy=int(e), final_client=int(cn[keep[-1]]),
                 step_ms=int(np.median(dt)))
@@ -1497,6 +1988,7 @@ def show(res):
                        ("his health and armor, and the distance at the sighting (extra)", "by_stack_and_distance")):
         print(table([[k] + [v.get(q) for q, _ in keys] for k, v in A[tab].items()], [title] + [lbl for _, lbl in keys]) + "\n")
     show_more(R, cols)
+    show_fine(R, cols)
 
 
 def show_more(R, cols):
@@ -1539,6 +2031,67 @@ def show_more(R, cols):
     print(table([[lbl] + [R[m]["hit_combinations"].get(k) for m in cols] for k, lbl in keys], ["", *cols]))
 
 
+def show_fine(R, cols):
+    """the tables of where he looks, holds and traps, his hands, movement in a fight"""
+    m0 = cols[0]
+    Lk = R[m0]["looking"]
+    print("\n### 12. Where he looks with no enemy in view ({})\n".format(m0))
+    nv = Lk["no_enemy_in_view"]
+    print(table([["of his time with no enemy in view: his view within 20 degrees of the enemy's true place (where the demo has it), %"] + [R[m]["looking"]["no_enemy_in_view"]["view_within_20_of_the_enemy_share"] for m in cols],
+                 ["... the demo has the enemy's place for this much of that time, %"] + [R[m]["looking"]["no_enemy_in_view"]["enemy_place_known_share_of_that_time"] for m in cols],
+                 ["... within 20 degrees of where he last saw him, %"] + [R[m]["looking"]["no_enemy_in_view"]["view_within_20_of_where_he_last_saw_him_share"] for m in cols],
+                 ["... within 20 degrees of the nearest mega or armor, %"] + [R[m]["looking"]["no_enemy_in_view"]["view_within_20_of_the_nearest_mega_or_armor_share"] for m in cols]], ["", *cols]))
+    keys = (("sightings", "sightings"), ("sideways_median", "sideways off: median"), ("sideways_25", "25th"), ("sideways_75", "75th"), ("sideways_under_10_share", "under 10 degrees, %"),
+            ("sideways_under_20_share", "under 20, %"), ("up_down_median", "up-down off: median"), ("up_down_75", "75th"), ("up_down_under_10_share", "under 10, %"))
+    rows = [["all sightings, " + lbl] + [Lk["at_a_sighting"][lbl].get(k) for k, _ in keys] for _, lbl in LAGS]
+    for grp in ("by_time_unseen", "by_sound"):
+        for band, v in Lk[grp].items():
+            rows += [[band + ", " + lbl] + [v[lbl].get(k) for k, _ in keys] for _, lbl in LAGS]
+    print("\n" + table(rows, ["the angle from his view to where the enemy appears"] + [lbl for _, lbl in keys]))
+    print("\n### 13. Holds and traps\n")
+    keys = (("a_ten_minutes", "holds a ten minutes"), ("share_of_his_time_alive", "% of his time alive"), ("seconds_median", "seconds: median"), ("seconds_90", "seconds: 90th percentile"),
+            ("enemy_in_view_within_3s_of_its_end_share", "enemy in view within 3 s of its end, %"), ("ended_by_the_enemy_coming_into_view_share", "ended by the enemy coming into view, %"),
+            ("he_deals_damage_first_within_5s_share", "he deals damage first within 5 s, %"), ("he_takes_damage_first_within_5s_share", "he takes damage first, %"),
+            ("a_frag_for_him_within_5s_share", "a frag for him within 5 s, %"), ("a_frag_of_him_within_5s_share", "a frag of him, %"),
+            ("view_at_a_big_item_share", "his view at a big item (20 degrees, a clear line), % of the hold"), ("view_at_a_teleporter_exit_share", "at a teleporter's exit, %"),
+            ("blind_rockets_and_grenades_from_holds_a_ten_minutes", "blind rockets and grenades from holds a ten minutes"), ("traps_a_ten_minutes", "of them hit within 1.5 s (traps) a ten minutes"),
+            ("trap_shots_that_hit_share", "... % of those shots"), ("holds_with_a_trap_share", "holds with a trap, %"))
+    rows = [[lbl] + [R[m]["holds"].get(k) for m in cols] for k, lbl in keys]
+    rows += [["in hand: " + w_ + ", %"] + [R[m]["holds"].get("weapon_in_hand", {}).get(w_) for m in cols] for w_ in ("rockets", "lightning", "rail")]
+    print(table(rows, ["", *cols]))
+    for m in [c for c in cols if c not in ("all", "all_ten")][:3]:
+        tc = R[m]["holds"].get("top_cells", {}).get(m, [])
+        print("\nThe cells of {} with the most holds: ".format(m) + "; ".join("{} units from {} at height {} {}% ({})".format(
+            c["near_units"], c["near"], c["middle"][2], c["share"], ", ".join("{} {}".format(W_NAMES[k], v) for k, v in c["weapons"].items())) for c in tc[:5]))
+    print("\n### 14. His hands ({})\n".format(m0))
+    Hn = R[m0]["hands"]
+    keys = (("median", "median"), ("p75", "75th"), ("p90", "90th"), ("p99", "99th"), ("under_30_share", "under 30, % of the time"), ("under_100_share", "under 100, %"), ("under_300_share", "under 300, %"))
+    print(table([[n] + [v.get(k) for k, _ in keys] for n, v in Hn["turn_speed"].items()], ["turn speed of his view, degrees a second"] + [lbl for _, lbl in keys]))
+    fl = (("off_target_at_the_sighting_median", "off target as the enemy comes into view, degrees, median"), ("off_target_0_3s_later_median", "off target 0.3 s later, median"),
+          ("turn_in_0_3s_median", "his view's turn in those 0.3 s, degrees: median"), ("turn_in_0_3s_90", "90th percentile"), ("peak_speed_median", "peak turn speed in them, degrees a second: median"),
+          ("peak_speed_90", "90th percentile"), ("seconds_to_the_peak_median", "seconds to the peak, median"), ("a_shot_within_3s_share", "a shot within 3 s, %"),
+          ("seconds_to_the_first_shot_median", "seconds to the first shot, median"), ("a_hit_within_3s_share", "a hit within 3 s, %"), ("seconds_to_the_first_hit_median", "seconds to the first hit, median"))
+    print("\n" + table([[lbl] + [R[m]["hands"]["flick"].get(k) for m in cols] for k, lbl in fl], ["the flick", *cols]))
+    rows = []
+    for wn, A in Hn["accuracy"].items():
+        rows.append([wn + ": hits, % of its shots"] + [A.get(b, {}).get("hit_share") for b in ("all", *ACC_BANDS)])
+        if wn == "rockets":
+            rows.append(["rockets: direct hits, %"] + [A.get(b, {}).get("direct_share") for b in ("all", *ACC_BANDS)])
+        rows.append([wn + ": shots"] + [A.get(b, {}).get("shots") for b in ("all", *ACC_BANDS)])
+    print("\n" + table(rows, ["accuracy by the distance to the enemy", "all", *ACC_BANDS]))
+    print("\n" + table([[b, v["shots"], v["hit_share"]] for b, v in Hn["lightning_by_crossing_speed"].items()] +
+                        [["his view's changes of turning direction a second while tracking with lightning", None, Hn["lightning_tracking"].get("turning_direction_changes_a_second")]],
+                        ["lightning", "cells", "hits, %"]))
+    print("\n### 15. Movement in a fight: the enemy in view within 800 units ({})\n".format(m0))
+    Fg = R[m0]["fight_movement"]
+    keys = (("minutes", "minutes"), ("strafe_changes_a_second", "changes of strafe direction a second"), ("in_the_air_share", "in the air, %"), ("crouched_share", "crouched, %"),
+            ("jumps_a_minute", "jumps a minute"), ("speed", "speed"), ("distance_change_a_second", "change of the distance a second"))
+    print(table([[n] + [v.get(k) for k, _ in keys] for n, v in Fg["by"].items()], ["", *[lbl for _, lbl in keys]]))
+    keys = (("hits", "hits of 50 or more"), ("died_within_2s_share", "dead within 2 s, %"), ("lost_view_share", "the enemy out of view for 0.5 s within 2 s, %"), ("weapon_change_share", "weapon changed, %"),
+            ("distance_change_mean", "change of the distance in 2 s"), ("farther_by_100_share", "farther by 100 or more, %"), ("nearer_by_100_share", "nearer by 100 or more, %"))
+    print("\n" + table([[n] + [v.get(k) for k, _ in keys] for n, v in Fg["after_a_big_hit"].items()], ["after a hit of 50 or more that he lives through", *[lbl for _, lbl in keys]]))
+
+
 ABOUT = dict(
     blind_shot="a shot (a weapon's ammunition going down) while the enemy has not been in his view for 1.0 s or more; in view = inside a cone of 55 degrees round his view, under 4000 units, a clear line through the map from his eye to the enemy's chest or head",
     landing="rockets and plasma: his view traced from his eye to the first wall; grenades: the simulator's grenade flight (700 units a second, lofted, gravity, bounces keep 0.65) to where it lies when the 2.5 s fuse ends. A blind shot that lands under 150 units from his eye is 'at his own feet' (a rocket jump, a shot at the floor): it is counted, but the numbers of the landing (distance, met, hit) and 'blind and away' are of the others",
@@ -1557,6 +2110,10 @@ ABOUT = dict(
     walking="his feet on the ground and his horizontal speed steady (changing by under 3 units a second from frame to frame, the frame before and after); the walking speed is the fullest 10-unit bin of that time from 100 to 260 units a second if it stands clear of the bins 30 units either side, and walking is the steady time in that bin and the one either side of it, not crouched. Crouched and moving: his eye low, on the ground, 50 units a second or more. Standing: under 50. 'Quiet' is the three together",
     spam_when="the blind shots that land 150 units or more from himself. The landing place within 300 units of the nearest of mega, armors, rocket launcher, rail, lightning; a mega or armor's return 'as far as he knows': his own last pickup of it in this stretch plus 35 s (mega) or 25 s (armor), if that lies ahead; 'unknown' if he did not take it or it should be back. Hurt: his health plus armor went down by 20 (50) or more in the 5 s before, single losses of under 3 not counted",
     hit_combinations="from his own hit counter: a step of it on a frame he fires lightning, rail, machine gun or shotgun on (or the frame before) is that weapon's hit; any other step is the hit of the rocket, grenade or plasma ball of his that is due about then (from 0.05 s after the shot to 0.2 s after it would reach the wall his view pointed at; a grenade until its fuse ends). A pair: a rocket (grenade) that hit, then the first lightning or rail hit within 1.5 s. A frag 'after a pair': within 2 s of the pair's second hit",
+    looking="a sighting: the enemy comes into view after 1 s or more out of it. The angle between his view and the direction from his eye to the place the enemy appears at (the enemy's place on the sighting's frame), sideways (yaw) and up-down (pitch) apart, on that frame and on the frames 0.25 s and 0.5 s before. On the sighting's frame the enemy is inside the 55 degree cone by definition. A sound: a new event of the enemy's entity (a jump or jump pad, a shot, an item picked up) in the last second while the server sent him and he was within 1200 units; a demo has his events only while the server sends him, which is also when the player's own game could play them. Of the time with no enemy in view: his view within 20 degrees of the enemy's true place (only where the demo has it), of the place he last saw him in this stretch, of the nearest mega or armor (walls not looked at)",
+    holds="a hold: 2 s or more within 150 units of where the stretch began, alive, no enemy in view, rockets, lightning or rail in hand. What follows is read to 3 s (the enemy in view) and 5 s (who deals damage first: a step of his hit counter against a loss of his own health and armor; frags) after its end. Its cell: 256 x 256 x 128 as tools/pro_places.py's, named by the nearest big item. His view 'at' a big item or a teleporter's exit: within 20 degrees with a clear line, on every fourth frame of the hold. A trap: a rocket or grenade fired with no enemy in view for 1 s or more during the hold or within 1 s after it, whose hit (as in hit_combinations) comes within 1.5 s of the shot",
+    hands="turn speed: the angle between his view on two snapshots over the time between them (a demo has his view 40 times a second, 30 in some old spectator demos: faster movements inside a snapshot are not seen, peaks are means over 25 ms). The flick: from the sighting's frame to 0.3 s later. Accuracy: hits as in hit_combinations over shots (ammunition going down), by the distance to the enemy on the shot's frame where the demo has his place; a rocket's hit is 'direct' when the enemy is within 60 units of where the rocket was in the 75 ms before the hit shows. The enemy's crossing speed: his velocity relative to P across the line of sight over the distance, in degrees a second, from his places on two snapshots. Turning changes while tracking: the sign of the yaw's change flips between two frames on which a lightning cell left within the last 0.1 s, with the enemy in view",
+    fight_movement="frames with the enemy in view within 800 units. A change of strafe direction: his speed to his right (over 60 units a second) has the other sign than the last time it was over 60, within a second. A jump: he leaves the ground with 150 or more upward speed. The change of the distance: per second, both players' movement in it (minus = nearer). After a big hit: his health and armor fall by 50 or more on one frame and he lives; read 2 s on",
     not_measured=[
         "whether a blind shot did damage, exactly: a demo has no damage events. The extra 'hit' is his own hit counter going up as the shot lands",
         "where the enemy is while the server does not send him (out of sight and away): 'met' misses an enemy who was there unseen, and a blind shot at an enemy heard is not told from one at nothing",
@@ -1566,6 +2123,9 @@ ABOUT = dict(
         "the game clock of a demo that begins in a running game, and of a game with a timeout",
         "sounds: what he heard is not in a demo",
         "a grenade that went off on a player before its fuse ended",
+        "the enemy's own aim and hands: a demo has the followed player's view on every snapshot and the other player's only as an entity while the server sends him",
+        "sounds the player heard from farther than the server sends an entity, footsteps (not read), and whether he listened",
+        "direct and splash hits as such: a demo has no damage numbers; 'direct' is read from where the rocket was",
     ])
 
 
@@ -1634,6 +2194,7 @@ def main():
         for v in tops.values():
             for o in v["predictability"]["maps"].values():
                 o["routes"].pop("by_pair")                      # (under the map itself)
+            v["holds"].pop("top_cells", None)                   # (under the map itself)
         res["maps"] = dict(tops, **res["maps"])
     if a.check:
         return check(infos)

@@ -101,3 +101,7 @@ Never their mouse or trigger.
 7. High ground: the position token alone (he is shown it and learns what it is worth), or also a hit from above paid more (`HIGH_PAY`, built on 2026-10-09 and never used in a run).
 8. Speed for each jump: a pay for speed gained from one hop to the next (approved in principle on 2026-10-10; the rule is shown first), or only his legs learning from the game's pay (stage C).
 9. Several ways to a target (the way output of stage C): brought forward to stage B, since predictable routes are his main fault today?
+10. His pay, his rounds and his opponents ([../design/V16_TRAINING.md](../design/V16_TRAINING.md), written on his question of
+    2026-10-11): the second value estimate brought forward to stage A; an exploiter in his league and its share of the
+    simulators; a frag paid by what it moves his chance of winning the game; the pros' choices as a standing prior
+    (point 4 above); promotion by the scorecard beside the control.

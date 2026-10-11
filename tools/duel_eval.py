@@ -35,7 +35,7 @@ def names(path):
 
 
 def play(job):
-    (envmod, envvars, mp, games, minutes, seed, pol, idx, opp_kind, opp_pol, opp_idx, round_secs) = job
+    (envmod, envvars, mp, games, minutes, seed, pol, idx, opp_kind, opp_pol, opp_idx, round_secs, swap) = job
     os.environ.update(envvars)
     E = importlib.import_module(envmod)
     nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
@@ -62,6 +62,9 @@ def play(job):
     env.round_len = env.arena_len = 1e9                          # one game, no restarts
     env.round_t[:] = 0.0
     ev, od = np.arange(0, n, 2), np.arange(1, n, 2)
+    swap = bool(swap) and opp_pol is not None                # --swap: he sits on the odd seats in this job (two networks only)
+    if swap:
+        ev, od = od, ev
     if scripted:
         env.script[od] = 3
         env.sc_persona[od] = E.NIGHTMARE if opp_kind == "nightmare" else E.PERSONAS.index(opp_kind) if opp_kind in E.PERSONAS else 0
@@ -91,7 +94,7 @@ def play(job):
                       "pick_drop_new", "self_dmg", "fall_dmg", "lob", "sc_frags_w"]
           + [w + x for w in E.WEAPONS for x in ("_frags", "_shots", "_hits")] if k in env.stats]
     st0 = {k: np.array(env.stats[k], np.float64).copy() for k in SK}
-    side = np.arange(n) % 2
+    side = (np.arange(n) + int(swap)) % 2                       # 0: he, 1: the opponent
     for t in range(frames):
         a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
         al, h = pol.act(obs[ev][:, idx], h)
@@ -110,7 +113,7 @@ def play(job):
                 kills[k] += 1
             else:
                 score[v] -= 1                                   # his own hand or the map: a point off, as in the game
-                c["own_deaths"][v % 2] += 1
+                c["own_deaths"][side[v]] += 1
         alive = env.hp > 0
         nbig = env.has[:, big].sum(1)
         new = (alive & ~was) | died
@@ -163,7 +166,8 @@ def play(job):
             h[:] = 0.0
             if opp_pol is not None:
                 h2[:] = 0.0
-    return dict(score=score.reshape(-1, 2).tolist(), kills=kills.reshape(-1, 2).tolist(), c={k: v.tolist() for k, v in c.items()},
+    flip = slice(None, None, -1) if swap else slice(None)
+    return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS),
                 st={k: (np.array(env.stats[k], np.float64) - st0[k]).tolist() for k in SK})
 
@@ -183,6 +187,8 @@ def main():
     ap.add_argument("--env", default="duel_env_ffa")
     ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator setting (environment variable) for these games")
     ap.add_argument("--seed", type=int, default=100)
+    ap.add_argument("--swap", action="store_true", help="two networks: every second process seats him on the odd seats (the same network on both "
+                    "sides got 47 percent of the frags on the even seats: B-220); give --procs an even number")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
@@ -204,7 +210,7 @@ def main():
     for mp in a.map.split(","):
         per = [a.games // a.procs + (1 if k < a.games % a.procs else 0) for k in range(a.procs)]
         jobs = [(a.env, envvars, mp, g, a.minutes, a.seed + 17 * k, pol, idx, kind, opp_pol, opp_idx,
-                 a.round or (180.0 if mp == "arena1" else 120.0)) for k, g in enumerate(per) if g > 0]
+                 a.round or (180.0 if mp == "arena1" else 120.0), a.swap and k % 2 == 1) for k, g in enumerate(per) if g > 0]
         with mp_.Pool(len(jobs)) as pool:
             res = pool.map(play, jobs)
         sc = np.concatenate([np.array(r["score"]) for r in res])
