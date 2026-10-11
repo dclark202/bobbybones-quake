@@ -1,0 +1,489 @@
+"""A network through the pros' yardsticks (tools/pro_yardsticks.py): he plays ten-minute duels in the simulator, every
+game becomes the same frame-by-frame record a pro demo becomes, and the same functions measure it. One table a group
+with the pros beside him.
+
+    python tools/bobby_yardsticks.py --policy data/sim_runs/duel_gru_v15c/policy_end_v15c.pt --tag v15c
+    python tools/bobby_yardsticks.py --policy data/sim_runs/duel_gru_v15f/policy.pt --tag v15f --set FIGHT_TARGET=1
+    python tools/bobby_yardsticks.py --show docs/bobby_yardsticks_v15c.json
+    (Anaconda Python; six maps, 12 games a map against himself and 8 against the stand-in, --procs 6 at low priority)
+
+Two passes a map:
+  self        both seats are the network; every seat is measured (the fair comparison: the pros play people)
+  nightmare   the stand-in for the game's Nightmare bot in the other seat (as tools/duel_eval.py --opp nightmare); only
+              the network's seat is measured
+The games are set up as tools/duel_eval.py's: one ten-minute game, the game's spawn, no restarts, his clock, score and
+memory starting over every 120 s as in training. A network with fewer inputs or outputs than the simulator gets the
+first of the inputs and its actions go into the first columns.
+
+What the simulator knows and a demo does not is left out of the record or made like a demo's:
+  enemy in view     worked out by pro_yardsticks.see() from the positions and the map, as for the demos; the simulator's
+                    own `visible` (which has his reaction time in it) is not used
+  shots             a weapon's ammunition going down from one frame to the next, as in a demo
+  pickups           health, armor or a weapon's ammunition rising at the item's spot, as in a demo
+  hits              a frame on which the damage he has dealt rises, or he frags: a counter like the demo's
+  death             the simulator puts a dead player on a spawn point within the same frame: that frame counts as his
+                    one dead frame (a pro is dead for about two seconds), and the enemy is "not there" on it
+Output: docs/bobby_yardsticks_<tag>.json: "self" and "nightmare", each with "all" and the maps, a map as in
+docs/pro_yardsticks.json; `standing` (the weapons, height, distance and outcome with the enemy in view, tools/pro_places.py's
+strength() on his rows), `cells` (his own cells with 30 sightings or more) and `routes` (his ways beside the pros' at the
+same number of trips).
+"""
+import argparse
+import glob
+import importlib
+import json
+import multiprocessing as mp_
+import os
+import sys
+import time
+
+import numpy as np
+
+for k_ in ("OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "OMP_NUM_THREADS"):
+    os.environ.setdefault(k_, "1")
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+SIM = os.path.join(ROOT, "sim")
+sys.path.insert(0, SIM)
+sys.path.insert(0, HERE)
+MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged"
+SETS = ("AIM_LEVEL=3 ITEM_BELIEF=1 STYLE_P=0.75 INTENT_HOLD=8 KEY_RATE=8 AMMO_PACKS=0 GROUND_SENSE=1 DROPS=1 SHOT_MASK=1 LAVA=1 "
+        "WALK_FIX=1 QL_MOVE=1 ITEM_DROP=1 SOLIDS=1 PRO_WAYS=1 NEAREST=1 PROJ_SEE=1 GL_QL=1 LEGS=1 LEGS_EVERY=4 AUTO_SWITCH=1 LEGS_OFF=2 "
+        "LEGS_NET=" + os.path.join(ROOT, "data", "sim_runs", "move_v15n", "policy.npz").replace("\\", "/"))
+WHO = (("pros", "the pros"), ("self", "he, against himself"), ("nightmare", "he, against the stand-in"))
+
+
+def low_priority():
+    """below normal, so that a training run on the same PC keeps its share"""
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+    except Exception:                                          # noqa: BLE001 (not Windows)
+        try:
+            os.nice(5)
+        except Exception:                                      # noqa: BLE001
+            pass
+
+
+def play(job):
+    """one map, one pass: `games` ten-minute games at once -> a tally and the rows of every measured player"""
+    envmod, envvars, mp, games, minutes, seed, pol, opp, round_secs = job
+    low_priority()
+    os.environ.update(envvars)
+    E = importlib.import_module(envmod)
+    import pro_yardsticks as Y
+    nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
+    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
+                    nav=nav_ if os.path.exists(nav_) else None)
+    # ---- the game, as tools/duel_eval.py sets it up
+    env.react_frames = round(pol.react_ms / 25)
+    env.arena_stack = False
+    env.arena_sets = [(E.MG,)]
+    env.loadout_p = (0.0, 1.0, 0.0, 0.0)
+    env.stack_p = env.near_item_p = 0.0
+    env.close_p = 0.0
+    env.item_run_p = 0.0
+    env.jump_run_p = 0.0
+    env.kind_p = (1.0, 0.0, 0.0, 0.0)
+    env.bot_p = 0.0
+    scripted = opp == "nightmare"
+    env.runner_p = 1.0 if scripted else 0.0
+    if getattr(env, "lab", None) is not None:
+        env.lab_force = dict(kind=E.NORMAL, arena=3)
+        env.arena_len = 1e9
+    env.round_t[:] = 1e9
+    n = env.n
+    obs, _, _, _ = env.step(np.zeros((n, len(E.ACTION_DIMS)), np.int64))
+    env.round_len = env.arena_len = 1e9                          # one game, no restarts
+    env.round_t[:] = 0.0
+    ev, od = np.arange(0, n, 2), np.arange(1, n, 2)
+    if scripted:
+        env.script[od] = 3
+        env.sc_persona[od] = E.NIGHTMARE
+    else:
+        env.script[od] = 0
+    env.script[ev] = 0
+    P = ev if scripted else np.arange(n)                         # the seats the network plays, and that are measured
+    pol.rng = np.random.default_rng(seed)
+    h = pol.zeros(len(P))
+    ni = len(pol.mean)
+    frames = int(minutes * 60 / E.DT)
+    wrap = max(1, int(round_secs / E.DT))
+    nw = len(E.WEAPONS)
+    assert tuple(E.WEAPONS) == tuple(Y.WEAPONS), "the simulator's weapons are not in the yardsticks' order"
+    B = dict(pos=np.zeros((frames, n, 3), np.float32), vel=np.zeros((frames, n, 3), np.float32), air=np.zeros((frames, n), bool),
+             yaw=np.zeros((frames, n), np.float32), pitch=np.zeros((frames, n), np.float32), hp=np.zeros((frames, n), np.float32),
+             ar=np.zeros((frames, n), np.float32), w=np.zeros((frames, n), np.int8), ammo=np.zeros((frames, n, nw), np.float32),
+             has=np.zeros((frames, n, nw), bool), duck=np.zeros((frames, n), bool), dmg=np.zeros((frames, n), np.float32),
+             score=np.zeros((frames, n), np.int32), died=np.zeros((frames, n), bool), frag=np.zeros((frames, n), bool))
+    score = np.zeros(n, np.int64)
+    for t in range(frames):
+        a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
+        al, h = pol.act(obs[P][:, :ni], h)
+        a[P, :al.shape[1]] = al
+        obs, _, _, info = env.step(a)
+        for e in info["events"]:
+            v, k = int(e["victim"]), int(e["killer"])
+            B["died"][t, v] = True
+            if k >= 0 and k != v:
+                score[k] += 1
+                B["frag"][t, k] = True
+            else:
+                score[v] -= 1                                   # his own hand or the map: a point off, as in the game
+        s = env.state
+        B["pos"][t], B["vel"][t], B["air"][t] = s[:, :3], s[:, 3:6], s[:, 6] < 0.5
+        B["yaw"][t], B["pitch"][t], B["hp"][t], B["ar"][t], B["w"][t] = env.yaw, env.pitch, env.hp, env.armor, env.weapon
+        B["ammo"][t], B["has"][t], B["duck"][t], B["dmg"][t], B["score"][t] = env.ammo, env.has, env.duck, env.dmg_life, score
+        if (t + 1) % wrap == 0:                                 # his clock, score and memory start over, as on the server
+            env.round_t[:] = 0.0
+            env.frags_r[:] = 0
+            h[:] = 0.0
+    # ---- every measured seat: a record as a demo gives one
+    info_ = Y.map_info(env.w, mp)
+    tm = (np.arange(frames) + 1) * E.DT
+    T = Y.new_tally()
+    rows = dict(blind=[], sight=[], view=[])
+    for p in P:
+        o = p ^ 1
+        dead = B["died"][:, p]
+        alive = (B["hp"][:, p] > 0) & ~dead
+        both = alive & np.concatenate([[False], alive[:-1]])
+        shots = []
+        for wq in range(nw):
+            if E.WEAPONS[wq] == "g":
+                continue
+            dec = np.zeros(frames)
+            dec[1:] = B["ammo"][:-1, p, wq] - B["ammo"][1:, p, wq]
+            shots += [(int(i), wq, int(round(dec[i]))) for i in np.nonzero(both & (dec > 0.5) & (dec <= 6))[0]]
+        up = np.zeros(frames, bool)
+        up[1:] = B["dmg"][1:, p] > B["dmg"][:-1, p]
+        enemy = B["pos"][:, o].copy()
+        enemy[B["died"][:, o]] = np.nan
+        rec = Y.make_record(t=tm, pos=B["pos"][:, p], vel=B["vel"][:, p], yaw=B["yaw"][:, p], pitch=B["pitch"][:, p], weapon=B["w"][:, p],
+                            shots=shots, health=np.where(dead, 0.0, B["hp"][:, p]), armor=B["ar"][:, p], score=B["score"][:, p], enemy=enemy,
+                            enemy_score=B["score"][:, o], clock=tm, alive=alive, eye_h=np.where(B["duck"][:, p], 12.0, 26.0),
+                            enemy_air=B["air"][:, o].astype(np.int64), hits=np.cumsum(up | B["frag"][:, p]), ammo=B["ammo"][:, p],
+                            owned=B["has"][:, p], enemy_weapon=B["w"][:, o], client=np.full(frames, seed * 1000 + int(p)))
+        t_, r_ = Y.measure(rec, env.w, info_)
+        Y.add_tally(T, t_)
+        for k in rows:
+            rows[k] += r_[k]
+    final = B["score"][-1].reshape(-1, 2)
+    return dict(map=mp, opp=opp, tally=T, rows=rows, final=final.tolist(), players=len(P))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# beside the pros
+# ---------------------------------------------------------------------------------------------------------------------
+def standing(rows_by_map):
+    """{map: (sight, view)} -> tools/pro_places.py's strength() over all of it (the weapons, height, distance and
+    outcome with the enemy in view), and by the pros' own cells: how strong the places are that his sightings begin in"""
+    import pro_places as PP
+    S, V, X = [], [], []
+    there = dict(n=0, known=0, sum=0.0, weak=0, strong=0)
+    for mp, (sight, view) in rows_by_map.items():
+        sight, view = np.asarray(sight, np.int64).reshape(-1, 15), np.asarray(view, np.int64).reshape(-1, 8)
+        if not len(sight):
+            continue
+        S.append(sight)
+        V.append(view)
+        X.append(PP.expected(sight))
+        f = os.path.join(ROOT, "sim", "pro_places", mp + "_cells.json")
+        if os.path.exists(f):                                   # the pros' strength of the cell each of his sightings begins in
+            pc = json.load(open(f))
+            size = np.array(pc["cell"])
+            val = {tuple(c["cell"]): c.get("outcome_over_expected") for c in pc["cells"]}
+            for c in np.floor(sight[:, :3] / size).astype(np.int64):
+                v = val.get(tuple(int(x) for x in c))
+                there["n"] += 1
+                if v is not None:
+                    there["known"] += 1
+                    there["sum"] += v
+                    there["weak"] += int(v < -0.05)
+                    there["strong"] += int(v > 0.05)
+    if not S:
+        return {}
+    sight, view, exp = np.concatenate(S), np.concatenate(V), np.concatenate(X)
+    out = PP.strength(np.ones(len(sight), bool), np.ones(len(view), bool), sight, view, exp)
+    if there["known"]:
+        out["pros_strength_of_his_cells"] = dict(mean=round(there["sum"] / there["known"], 3), weak_cells_share=round(100.0 * there["weak"] / there["n"], 1),
+                                                 strong_cells_share=round(100.0 * there["strong"] / there["n"], 1),
+                                                 cells_the_pros_hardly_fight_from_share=round(100.0 * (there["n"] - there["known"]) / there["n"], 1))
+    return out
+
+
+def pros_standing(maps):
+    """the same for the pros, from their rows (tools/pro_yardsticks.py's files in the demo root), where they are there"""
+    import pro_yardsticks as Y
+    rows = {}
+    for mp in maps:
+        fs, fv = (os.path.join(Y.demo_root(), "yardsticks", "{}_{}.npy".format(k, mp)) for k in ("sight", "view"))
+        if os.path.exists(fs) and os.path.exists(fv):
+            rows[mp] = (np.load(fs), np.load(fv))
+    return standing(rows) if rows else {}
+
+
+def pro_trips(mp):
+    """the pros' trips of a map, {pair: rows}: from tools/pro_yardsticks.py's counts a demo, kept in one file a map"""
+    import pro_yardsticks as Y
+    keep = os.path.join(Y.demo_root(), "yardsticks", "trips_{}.json".format(mp))
+    if os.path.exists(keep):
+        return json.load(open(keep))
+    out = {}
+    for f in sorted(glob.glob(os.path.join(Y.demo_root(), "yardsticks", mp, "*.json"))):
+        try:
+            r = json.load(open(f))
+        except ValueError:
+            continue
+        for k, v in r.get("tally", {}).get("trips", {}).items():
+            out.setdefault(k, []).extend(v)
+    if out:
+        with open(keep, "w") as fh:
+            json.dump(out, fh)
+    return out
+
+
+def routes_same_size(T, maps, draws=20):
+    """his ways between the big items beside the pros' at the same number of trips: for every pair he has WAY_MIN_TRIPS
+    trips of, as many of the pros' trips of that pair drawn at random (the mean of `draws` draws). The number of ways
+    found grows with the number of trips, so the pros' own table (thousands of trips a pair) is no yardstick for him."""
+    import pro_yardsticks as Y
+    rng = np.random.default_rng(0)
+    rows, ptrips = [], {}
+    for k, tr in sorted(T["trips"].items()):
+        mp = k.split(":")[0]
+        if len(tr) < Y.WAY_MIN_TRIPS or mp not in maps:
+            continue
+        if mp not in ptrips:
+            ptrips[mp] = pro_trips(mp)
+        pt = ptrips[mp].get(k, [])
+        if len(pt) < len(tr):
+            continue
+
+        def numbers(x):
+            n = Y.ways(x)
+            clear = [v for v in n if v >= max(3, Y.WAY_MIN_SHARE * len(x))]
+            return len(clear), 100.0 * n[0] / len(x), 100.0 * (1.0 - sum(clear) / len(x))
+        his = numbers(tr)
+        pro = np.mean([numbers([pt[i] for i in rng.choice(len(pt), len(tr), replace=False)]) for _ in range(draws)], 0)
+        rows.append(dict(pair=k, trips=len(tr), ways=his[0], commonest_share=round(his[1], 1), one_off_share=round(his[2], 1),
+                         pros_ways=round(float(pro[0]), 2), pros_commonest_share=round(float(pro[1]), 1), pros_one_off_share=round(float(pro[2]), 1)))
+    if not rows:
+        return dict(pairs=0, by_pair=[])
+    m = lambda key: round(float(np.mean([r[key] for r in rows])), 2)
+    return dict(pairs=len(rows), trips=sum(r["trips"] for r in rows), ways=m("ways"), commonest_share=m("commonest_share"), one_off_share=m("one_off_share"),
+                pros_ways=m("pros_ways"), pros_commonest_share=m("pros_commonest_share"), pros_one_off_share=m("pros_one_off_share"), by_pair=rows)
+
+
+def table(rows, head):
+    out = ["| " + " | ".join(head) + " |", "|" + "|".join(["---"] + ["---:"] * (len(head) - 1)) + "|"]
+    for r in rows:
+        out.append("| " + " | ".join("" if x is None else str(x) for x in r) + " |")
+    return "\n".join(out)
+
+
+def show(res, pros):
+    """one table a group: the pros (all maps), he against himself, he against the stand-in"""
+    import pro_yardsticks as Y
+    R = dict(pros=pros["maps"]["all"], self=res.get("self", {}).get("all"), nightmare=res.get("nightmare", {}).get("all"))
+    who = [(k, lbl) for k, lbl in WHO if R.get(k)]
+    head = [lbl for _, lbl in who]
+
+    def row(label, f):
+        out = [label]
+        for k, _ in who:
+            try:
+                out.append(f(R[k]))
+            except (KeyError, TypeError, IndexError):
+                out.append(None)
+        return out
+
+    def three(f):                                               # one cell: the pros / himself / the stand-in
+        out = []
+        for k, _ in who:
+            try:
+                v = f(R[k])
+            except (KeyError, TypeError, IndexError):
+                v = None
+            out.append("-" if v is None else str(v))
+        return " / ".join(out)
+    print("## {} through the pros' yardsticks\n".format(res.get("tag", "he")))
+    g = res.get("games", {})
+    print("Network {}. {} maps; against himself {} games a map (every seat measured), against the stand-in {}; games of {:g} minutes.".format(
+        res.get("policy", ""), len(res.get("maps", [])), g.get("self"), g.get("nightmare"), res.get("minutes", 10.0)))
+    if res.get("score"):
+        print("Against the stand-in, mean score of a game, he : stand-in: " + ", ".join("{} {} : {}".format(m, v[0], v[1]) for m, v in res["score"].items()) + ".")
+    print("\n" + table([row("player-games measured", lambda r: r["demos"]), row("minutes of play", lambda r: r["minutes"])], ["", *head]))
+    print("\n### 1. Spam: shots with no enemy in view for a second or more\n")
+    rows = []
+    for wn in ("rl", "gl", "pg"):
+        nm = Y.W_NAMES[wn]
+        rows += [row(nm + ": shots a minute", lambda r, wn=wn: r["spam"][wn]["shots_a_minute"]),
+                 row(nm + ": blind a minute", lambda r, wn=wn: r["spam"][wn]["blind_a_minute"]),
+                 row(nm + ": blind, % of its shots", lambda r, wn=wn: r["spam"][wn]["blind_share"]),
+                 row(nm + ": of the blind ones at his own feet, %", lambda r, wn=wn: r["spam"][wn]["at_own_feet_share"]),
+                 row(nm + ": blind and away a minute", lambda r, wn=wn: r["spam"][wn]["blind_away_a_minute"]),
+                 row(nm + ": away: distance to where it lands, median", lambda r, wn=wn: r["spam"][wn]["landing_distance_median"]),
+                 row(nm + ": away: enemy in view near there within 2 s, %", lambda r, wn=wn: r["spam"][wn]["met_share"]),
+                 row(nm + ": away: a hit as it lands, %", lambda r, wn=wn: r["spam"][wn]["hit_share"])]
+    for wn in ("rg", "lg", "mg", "sg"):
+        rows += [row(Y.W_NAMES[wn] + ": shots a minute", lambda r, wn=wn: r["spam"][wn]["shots_a_minute"]),
+                 row(Y.W_NAMES[wn] + ": blind, % of its shots", lambda r, wn=wn: r["spam"][wn]["blind_share"])]
+    print(table(rows, ["", *head]))
+    print("\n### 2. Combinations\n")
+    rows = []
+    for nm in ("rocket then rail or lightning", "grenade then rail or lightning"):
+        rows += [row(nm + ": a ten minutes", lambda r, nm=nm: r["combinations"][nm]["per_ten_minutes"]),
+                 row(nm + ": enemy in the air at the second shot, %", lambda r, nm=nm: r["combinations"][nm]["enemy_in_the_air_share"]),
+                 row(nm + ": the second weapon is the rail, %", lambda r, nm=nm: r["combinations"][nm]["rail_share"])]
+    rows.append(row("enemy in the air, % of all his time in view (to compare)", lambda r: r["combinations"]["enemy in the air, of all the time he is in view"]))
+    print(table(rows, ["", *head]))
+    lead = " / ".join(head)
+    print("\n### 3. By score and time (each cell: {})\n".format(lead))
+    keys = (("minutes", "minutes"), ("in_view_share", "enemy in view, %"), ("toward_enemy_speed", "speed toward the enemy in view"),
+            ("frags_a_minute", "frags a minute"), ("deaths_a_minute", "deaths a minute"), ("travelling_speed", "travelling speed"),
+            ("stacked_share", "150+ stack, %"), ("blind_rockets_a_minute", "blind rockets away a minute"))
+    names = Y.STATES + ["ahead", "level", "behind", "all", "stack under 100", "stack 100 to 149", "stack 150 or more"]
+    print(table([[n] + [three(lambda r, n=n, k=k: r["by_state"][n][k]) for k, _ in keys] for n in names], ["state"] + [lbl for _, lbl in keys]))
+    print("\n### 4. Item timing\n")
+    rows = []
+    for k in ("mega", "red", "yellow"):
+        rows += [row(k + ": pickups a ten minutes", lambda r, k=k: r["items"][k]["pickups_a_ten_minutes"]),
+                 row(k + ": back within 150 units, 2 s either side of its return, %", lambda r, k=k: r["items"][k]["back_at_return_share"]),
+                 row(k + ": took it again within 5 s of its return, %", lambda r, k=k: r["items"][k]["took_it_again_within_5s_share"]),
+                 row(k + ": died before its return, %", lambda r, k=k: r["items"][k]["died_before_return_share"]),
+                 row(k + ": seconds between his pickups, median", lambda r, k=k: r["items"][k]["gap_median_s"])]
+    print(table(rows, ["", *head]))
+    print("\n### 6. How predictable: places, height, ways, standing\n")
+    rows = [row("one player in one game: time in his 8 most-used cells, %", lambda r: r["predictability"]["position"]["per_player_top8_share"]),
+            row("one player in one game: cells that hold 80% of his time", lambda r: r["predictability"]["position"]["per_player_cells_for_80"]),
+            row("one player in one game: entropy of his time over cells, bits", lambda r: r["predictability"]["position"]["per_player_entropy_bits"]),
+            row("enemy in view: he stands 48 units or more higher, %", lambda r: r["predictability"]["height"]["higher_share"]),
+            row("enemy in view: 48 or more lower, %", lambda r: r["predictability"]["height"]["lower_share"]),
+            row("enemy in view: level, %", lambda r: r["predictability"]["height"]["level_share"]),
+            row("time in the lowest third of the heights the pros visit, %", lambda r: r["predictability"]["lowest_third_share"]),
+            row("standing (under 50 units a second), % of his time alive", lambda r: r["predictability"]["standing"]["share"]),
+            row("longest stand in a minute, seconds: mean", lambda r: r["predictability"]["standing"]["longest_a_minute_mean"]),
+            row("longest stand in a minute, seconds: median", lambda r: r["predictability"]["standing"]["longest_a_minute_median"]),
+            row("longest stand in a minute, seconds: 90th percentile", lambda r: r["predictability"]["standing"]["longest_a_minute_90"])]
+    print(table(rows, ["", *head]))
+    rt = res.get("routes", {})
+    if any(rt.get(k, {}).get("pairs") for k in ("self", "nightmare")):
+        print("\nHis ways between the big items, beside the pros' at the same number of trips of the same pairs (pairs he has 30 trips or more of):\n")
+        print(table([[lbl, rt[k]["pairs"], rt[k]["trips"], rt[k]["ways"], rt[k]["pros_ways"], rt[k]["commonest_share"], rt[k]["pros_commonest_share"],
+                      rt[k]["one_off_share"], rt[k]["pros_one_off_share"]] for k, lbl in WHO[1:] if rt.get(k, {}).get("pairs")],
+                    ["", "pairs", "trips", "clear ways a pair: he", "the pros", "on the commonest way, %: he", "the pros", "on a way of their own, %: he", "the pros"]))
+    print("\n### 7. Aggression by advantage: the 3 s after the enemy comes into view (each cell: {})\n".format(lead))
+    keys = (("sightings", "sightings"), ("closing_speed", "closing speed"), ("push_share", "pushes, %"), ("fires_within_1s_share", "fires within 1 s, %"),
+            ("view_broken_share", "view broken, %"), ("fragged_him_in_3s_share", "fragged him in 3 s, %"), ("died_in_3s_share", "died in 3 s, %"),
+            ("frags_less_deaths_in_10s", "frags less deaths in 10 s"))
+    for title, tab in (("his health and armor", "by_stack"), ("his health and armor, and how long ago he fragged him", "by_stack_and_last_frag"),
+                       ("his health and armor, and the enemy's weapon", "by_stack_and_enemy_weapon"), ("his health and armor, and the score", "by_stack_and_score"),
+                       ("his health and armor, and the distance at the sighting", "by_stack_and_distance")):
+        names = list(R["pros"]["aggression"][tab].keys())
+        print(table([[n] + [three(lambda r, n=n, k=k, tab=tab: r["aggression"][tab][n][k]) for k, _ in keys] for n in names], [title] + [lbl for _, lbl in keys]) + "\n")
+    st = res.get("standing", {})
+    if st:
+        print("### 8. With the enemy in view: weapons, distance, outcome, and the strength of where he stands\n")
+        S = {k: st.get(k) for k, _ in who}
+        ws = sorted({w for v in S.values() if v for w in v.get("weapon_shares", {})}, key=lambda w: -(S["pros"] or {}).get("weapon_shares", {}).get(w, 0))
+
+        def srow(label, f):
+            out = [label]
+            for k, _ in who:
+                try:
+                    out.append(f(S[k]))
+                except (KeyError, TypeError):
+                    out.append(None)
+            return out
+        rows = [srow("sightings", lambda s: s["sightings"]), srow("frags less deaths in the 10 s after a sighting", lambda s: s["outcome"]),
+                srow("frags a sighting", lambda s: s["frags_a_sighting"]), srow("deaths a sighting", lambda s: s["deaths_a_sighting"]),
+                srow("distance to the enemy in view, median", lambda s: s["distance_median"]), srow("firing, % of the time in view", lambda s: s["firing_share"])]
+        rows += [srow("in hand, % of the time in view: " + w, lambda s, w=w: s["weapon_shares"].get(w, 0.0)) for w in ws]
+        rows += [srow("of his firing in view, %: " + w, lambda s, w=w: s["fire_shares"].get(w, 0.0)) for w in ws]
+        rows += [srow("the pros' strength of the cells his sightings begin in, mean", lambda s: s["pros_strength_of_his_cells"]["mean"]),
+                 srow("sightings that begin in a cell weak for the pros (under -0.05), %", lambda s: s["pros_strength_of_his_cells"]["weak_cells_share"]),
+                 srow("... in a cell strong for the pros (over +0.05), %", lambda s: s["pros_strength_of_his_cells"]["strong_cells_share"]),
+                 srow("... in a cell the pros hardly fight from (under 30 sightings), %", lambda s: s["pros_strength_of_his_cells"]["cells_the_pros_hardly_fight_from_share"])]
+        print(table(rows, ["", *head]))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--policy", default=os.path.join(ROOT, "data", "sim_runs", "duel_gru_v15c", "policy_end_v15c.pt"))
+    ap.add_argument("--tag", default="v15c")
+    ap.add_argument("--map", default=MAPS)
+    ap.add_argument("--games-self", type=int, default=12, help="games a map against himself (two measured players a game)")
+    ap.add_argument("--games-nightmare", type=int, default=8)
+    ap.add_argument("--minutes", type=float, default=10.0)
+    ap.add_argument("--procs", type=int, default=6)
+    ap.add_argument("--round", type=float, default=120.0, help="his clock and memory start over every this many seconds, as in training")
+    ap.add_argument("--env", default="duel_env_ffa")
+    ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator setting on top of the defaults (SETS)")
+    ap.add_argument("--seed", type=int, default=500)
+    ap.add_argument("--json", default=None)
+    ap.add_argument("--pros", default=os.path.join(ROOT, "docs", "pro_yardsticks.json"))
+    ap.add_argument("--show", default=None)
+    a = ap.parse_args()
+    pros = json.load(open(a.pros, encoding="utf-8"))
+    if a.show:
+        return show(json.load(open(a.show, encoding="utf-8")), pros)
+    low_priority()
+    envvars = dict(x.split("=", 1) for x in SETS.split())
+    envvars.update(dict(x.split("=", 1) for x in a.set))
+    os.environ.update(envvars)                                   # (before anything of the simulator is imported, here and in the workers)
+    import pro_yardsticks as Y
+    import pro_places as PP
+    import test_suite as TS
+    pol = TS.Policy(a.policy, seed=1)
+    maps = a.map.split(",")
+    jobs = []
+    for q, mp in enumerate(maps):
+        if a.games_self > 0:
+            jobs.append((a.env, envvars, mp, a.games_self, a.minutes, a.seed + 17 * q, pol, "self", a.round))
+        if a.games_nightmare > 0:
+            jobs.append((a.env, envvars, mp, a.games_nightmare, a.minutes, a.seed + 1000 + 17 * q, pol, "nightmare", a.round))
+    t0 = time.time()
+    with mp_.Pool(min(a.procs, len(jobs)), maxtasksperchild=1) as pool:      # (one World a process: a new process a job)
+        res = []
+        for r in pool.imap_unordered(play, jobs):
+            res.append(r)
+            print("{} {}: {} players measured, {:.0f} s".format(r["map"], r["opp"], r["players"], time.time() - t0), file=sys.stderr, flush=True)
+    zr = Y.zranges(a.pros)
+    out = dict(tag=a.tag, policy=os.path.relpath(a.policy, ROOT).replace("\\", "/") if os.path.isabs(a.policy) else a.policy, env=a.env,
+               settings={k: (v if k != "LEGS_NET" else os.path.relpath(v, ROOT).replace("\\", "/") if os.path.isabs(v) else v) for k, v in envvars.items()},
+               maps=maps, minutes=a.minutes, games=dict(self=a.games_self, nightmare=a.games_nightmare), standing={}, cells={}, routes={}, score={})
+    for opp in ("self", "nightmare"):
+        rs = [r for r in res if r["opp"] == opp]
+        if not rs:
+            continue
+        total, per, rows = Y.new_tally(), {}, {}
+        for r in sorted(rs, key=lambda r: maps.index(r["map"])):
+            per[r["map"]] = Y.report(r["tally"], zrange=zr)
+            ag = per[r["map"]]["aggression"]                    # (a map alone is too thin for the tables by two and more sides)
+            per[r["map"]]["aggression"] = {k: ag[k] for k in ("all", "by_stack", "by_last_frag", "by_enemy_weapon", "by_score")}
+            Y.add_tally(total, r["tally"])
+            rows[r["map"]] = (r["rows"]["sight"], r["rows"]["view"])
+            if opp == "nightmare":
+                f = np.array(r["final"], np.float64)
+                out["score"][r["map"]] = [round(float(f[:, 0].mean()), 1), round(float(f[:, 1].mean()), 1)]
+        alls = Y.report(total, zrange=zr)
+        for o in alls["predictability"]["maps"].values():
+            o["routes"].pop("by_pair", None)
+        out[opp] = dict(all=alls, **per)
+        out["standing"][opp] = standing(rows)
+        out["routes"][opp] = routes_same_size(total, maps)
+        out["cells"][opp] = {}
+        for mp, (sight, view) in rows.items():                  # his own cells with enough sightings, as the pros' table of cells
+            sight, view = np.asarray(sight, np.int64).reshape(-1, 15), np.asarray(view, np.int64).reshape(-1, 8)
+            if len(sight):
+                out["cells"][opp][mp] = PP.cells(sight, view, PP.expected(sight), PP.map_items(mp))
+    out["standing"]["pros"] = pros_standing(maps)
+    path = a.json or os.path.join(ROOT, "docs", "bobby_yardsticks_{}.json".format(a.tag))
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=1)
+    show(out, pros)
+
+
+if __name__ == "__main__":
+    main()
