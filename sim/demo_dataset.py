@@ -21,6 +21,8 @@ What a demo does not contain and how it is filled in
   mouse     The view change per frame, turned back into the commanded turn through the simulator's view inertia,
             then put into the nearest turn / pitch bin.
   enemy     Present only while the server sent him (roughly: while he could be seen). His health is not in the demo.
+            A dead enemy lying where he fell and a corpse are not him (until 2026-10-11 they were: 4.2% and 1.1% of
+            the frames with an enemy in a sample of 88 demos; B-219).
   sounds, hit feedback, round clock and score: left at "nothing heard / start of round" in this version.
 """
 import argparse
@@ -55,6 +57,38 @@ QLW = {1: "g", 2: "mg", 3: "sg", 4: "gl", 5: "rl", 6: "lg", 7: "rg", 8: "pg", 14
 MDIR = {0: (1, 0), 1: (1, -1), 2: (0, -1), 3: (-1, -1), 4: (-1, 0), 5: (-1, 1), 6: (0, 1), 7: (1, 1)}
 STAT_HEALTH, STAT_WEAPONS, STAT_ARMOR = 0, 3, 4
 DT = 0.025
+# another player's row in a snapshot (tools/demodump): its entity number, its client number, ... its entity flags.
+# Entities 0 to 63 are the players themselves; a corpse is an entity from 64 on that keeps its player's client number,
+# and a dead player's own entity lies where he fell, with the dead flag, until he respawns.
+ROW_NUMBER, ROW_CLIENT, ROW_EFLAGS = 0, 1, 12
+MAX_CLIENTS, EF_DEAD = 64, 1
+
+
+def is_enemy(row, me):
+    """is this player row the enemy of the followed client `me`: another player's own entity, alive"""
+    return int(row[ROW_NUMBER]) < MAX_CLIENTS and int(row[ROW_CLIENT]) != me and not (int(row[ROW_EFLAGS]) & EF_DEAD)
+
+
+EXE = os.path.join(ROOT, "tools", "demodump", "demodump.exe")
+# The snapshots' server times are float32 in the dump, which holds whole numbers only up to 2**24 ms (4.66 hours of
+# server uptime): above it a 25 ms step reads as 24 or 26, no stretch of play is found and the whole demo was left out
+# (140 of the archive's 4,166 demos until 2026-10-11). The dump's fourth file (tools/demodump since that day) has the
+# times exactly. False: the times as the .bin has them.
+EXACT_TIME = True
+FLOAT_EXACT = 2 ** 24
+
+
+def exact_times(binf, t):
+    """the server time of every snapshot, exact where the dump's fourth file is there and agrees with the .bin"""
+    if not EXACT_TIME or not len(t) or int(t.max()) < FLOAT_EXACT:
+        return t                                               # (under 2**24 the float32 times are exact)
+    f = os.path.splitext(binf)[0] + ".events.json"
+    if not os.path.exists(f):
+        return t
+    exact = np.array(json.load(open(f, encoding="ascii"))["times"], np.int64)
+    if len(exact) != len(t) or not np.array_equal(exact.astype(np.float32).astype(np.int64), t):
+        return t
+    return exact
 
 
 def stat_layout(d):
@@ -155,7 +189,7 @@ def build_demo(E, env, binf, out, lite=False):
     N = len(d["time"])
     if N < 800:
         return 0, 0
-    t = d["time"]
+    t = exact_times(binf, d["time"])
     pos, vel, ang = d["origin"], d["velocity"], d["angles"]
     wslot, aslot = stat_layout(d)
     normal = int(np.bincount(d["pm_type"].clip(0, 15)).argmax())
@@ -204,7 +238,7 @@ def build_demo(E, env, binf, out, lite=False):
                 env.round_t[0] = ((k - i) * DT) % 120.0
                 present = False
                 for row in d["players"][k]:
-                    if int(row[1]) != me:
+                    if is_enemy(row, me):
                         opp_last = np.array([row[2], row[3], row[4], row[5], row[6], row[7], 1.0, row[9]], np.float32)
                         env.yaw[1], env.pitch[1] = row[9], row[8]
                         env.weapon[1] = names.index(QLW.get(int(row[11]), "mg"))
@@ -263,7 +297,6 @@ def worker(args):
                     nav=os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp)))
     env.kind[:] = E.NORMAL
     env.script[:] = 0
-    exe = os.path.join(ROOT, "tools", "demodump", "demodump.exe")
     tmp = tempfile.mkdtemp(prefix="demoset_")
     done = []
     for f in files:
@@ -271,9 +304,10 @@ def worker(args):
         out = os.path.join(out_dir, stem + ".npz")
         if os.path.exists(out) or os.path.exists(out + ".skip"):
             continue
-        b, js = os.path.join(tmp, "d.bin"), os.path.join(tmp, "d.json")
+        b, js, ev = os.path.join(tmp, "d.bin"), os.path.join(tmp, "d.json"), os.path.join(tmp, "d.events.json")
         try:
-            subprocess.run([exe, f, b, js], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
+            # (the fourth file: the exact times, see exact_times(); a demodump from before it takes no notice of the name)
+            subprocess.run([EXE, f, b, js, ev], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
             n, total = build_demo(E, env, b, out, lite)
         except Exception as e:                               # a broken demo must not stop the batch
             n, total = 0, 0
@@ -281,7 +315,7 @@ def worker(args):
         if n == 0:
             open(out + ".skip", "w").close()
         done.append((n, total))
-        for p in (b, js):
+        for p in (b, js, ev):
             if os.path.exists(p):
                 os.remove(p)
     return done
