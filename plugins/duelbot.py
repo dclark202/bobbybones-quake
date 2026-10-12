@@ -33,8 +33,14 @@ try:                                                        # no powerups on any
 except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _pu = importlib.import_module("powerups")
+try:                                                        # the network's forward pass, with the attention part of v0.2 (plugins/netpass.py)
+    _net = importlib.import_module(__package__ + ".netpass")
+except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    _net = importlib.import_module("netpass")
 
 sys.path.insert(0, "/sim")
+TIMING = bool(os.environ.get("DUEL_TIMING"))                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
 D = "/tmp/practice"
 MAPS = ("testlab", "bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")      # the only maps a player can pick with !map (owner, 2026-10-09): the duel maps he trained on or is checked on (botmode.py keeps a copy)
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
@@ -315,6 +321,7 @@ class duelbot(minqlx.Plugin):
 
     def on_game_start(self, data):
         self.ready_ids = set()
+        self.game_new = True                                 # (v0.2: frame() starts his round with the game)
 
     def on_game_end(self, data):
         self.real_game = False
@@ -634,8 +641,7 @@ class duelbot(minqlx.Plugin):
                 raise RuntimeError("no map file for " + mapname)
             with open(bsp, "wb") as f:
                 f.write(data)
-        P = np.load(os.path.join(D, "policy.npz"))
-        self.P = {k: P[k] for k in P.files}
+        self.P, self.attn = _net.load(os.path.join(D, "policy.npz"))     # (v0.2: with the attention part, if it has one)
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
         if "legs" in self.P:                                 # his legs' network (duel_env's LEGS), exported beside the policy file
@@ -671,35 +677,81 @@ class duelbot(minqlx.Plugin):
                 self.lab = json.load(f)
         self.rng = np.random.default_rng(int(time.time()))
         self.item_ent = {}
+        self.game_new, self.ground_was, self.shot_made = False, None, {}
+        self.obs_dump, self.aim_dump = [], []                # (the debugging dumps start over with a network: another one has other inputs)
         self.ready = True
-        self.log("ready on {}: policy {} ({} min of training), {} inputs, reaction {} ms, rooms nav {}".format(
+        self.log("ready on {}: policy {} ({} min of training), {} inputs, reaction {} ms, rooms nav {}, {}{}".format(
             mapname, self.P["run"], int(self.P["minutes"]), E.OBS_DIM, int(self.react_ms),
-            "yes" if self.renv.field is not None else "no"))
+            "yes" if self.renv.field is not None else "no", _net.describe(self.P, self.attn), self.v02_note(self.env, E)))
 
     def act(self, obs):
-        P = self.P
-        x = np.clip((obs - P["obs_mean"]) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
-        if "cell" in P:                                      # the learned map (v8): the last two inputs are cell numbers
-            ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
-            x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
-        x = np.tanh(x @ P["w0"].T + P["b0"])
-        x = np.tanh(x @ P["w1"].T + P["b1"])
-        gi = x @ P["wih"].T + P["bih"]
-        gh = self.h @ P["whh"].T + P["bhh"]
-        H = self.h.shape[1]
-        r = sig(gi[:, :H] + gh[:, :H])
-        z = sig(gi[:, H:2 * H] + gh[:, H:2 * H])
-        nn_ = np.tanh(gi[:, 2 * H:] + r * gh[:, 2 * H:])
-        self.h = ((1 - z) * nn_ + z * self.h).astype(np.float32)
-        logits = self.h @ P["wp"].T + P["bp"]
-        out, i = [], 0
-        for d in self.dims:
-            l = logits[0, i:i + d]
-            p = np.exp(l - l.max())
-            p /= p.sum()
-            out.append(int(np.random.choice(d, p=p)))        # sampled, as in training
-            i += d
-        return out
+        """one frame of the network for the one Bobby of a 1v1 server (plugins/netpass.py: the same sums as the
+        simulator's checks, the attention part of v0.2 included; one sampled choice per output, as in training)"""
+        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng)
+        return [int(v) for v in acts[0]]
+
+    # ------------------------------------------------------------------ v0.2: what step() keeps for the last 143 inputs
+    # The simulator's observe() builds them (N_V02) and keeps their clocks, but a plugin never calls step(): the noise he
+    # makes (note_noise, beside hear), every pickup (note_take), the share of the round left (v02_left), a new life (what
+    # _fresh forgets) and a game's start (what a round's start resets) are told to the simulator here. Both plugins use
+    # these; with a simulator from before v0.2 each of them does nothing.
+    def v02_note(self, env, E):
+        """for the log: what the new inputs found on this map"""
+        if not hasattr(env, "v02_pp"):
+            return ""
+        aim = getattr(E, "AIM_SET", {})                      # (as the module read it when it was loaded: the proof that the switch arrived)
+        return "; v0.2 inputs: {} places, {} cells with numbers, ways {}; aim level {} (sight off by {:.3f} deg, hand noise {:.4f}, surprise {:.0f} ms), legs {} (a stretch ends after {} readings of no)".format(
+            len(env.v02_pp), 0 if env.v02_cell is None else len(env.v02_cell[4]) - 1,
+            "none" if env.v02_ways is None else "{} points".format(len(env.v02_ways)), aim.get("level", "?"),
+            float(getattr(E, "PERCEPT_SIGMA", 0.0)), float(getattr(E, "MOTOR_NOISE", 0.0)), float(getattr(E, "SURPRISE_MS", 0.0)),
+            "on" if getattr(E, "LEGS", False) and getattr(env, "teacher", None) is not None else "off", getattr(E, "LEGS_OFF", "?"))
+
+    @staticmethod
+    def new_life_of(env, i):
+        """player i has a new life: what the others knew him to have, and his big pickups as they counted them, went
+        with the old one (the simulator's _fresh)"""
+        if hasattr(env, "v02_pk"):
+            m_ = env._mates(i)
+            env.e_got[m_, env._slot(i)] = 0.0
+            env.v02_pk[m_, env._slot(i)] = 0.0
+
+    @staticmethod
+    def new_game_in(env):
+        """a real game has begun (everybody spawns anew, every item lies there again): what the simulator resets at a
+        round's start. Nothing is known, nothing is believed, nothing was taken."""
+        if hasattr(env, "_v02_round"):
+            env.it_t[:], env.e_got[:], env.e_life[:] = 99.0, 0.0, 99.0
+            if hasattr(env, "bel_t"):
+                env.bel_t[:] = 99.0
+            env._v02_round(np.ones(env.n, bool))
+
+    @staticmethod
+    def v02_tick(env, E):
+        """a frame on which observe() is not called (none of ours alive): the new inputs' clocks, kept in observe(), go on"""
+        if hasattr(env, "v02_took"):
+            for name in ("v02_bt", "v02_ht", "v02_took", "v02_by"):
+                setattr(env, name, np.minimum(getattr(env, name) + E.DT, 99.0).astype(np.float32))
+            env.v02_loud = (env.v02_loud * (1.0 - E.DT / E.V02_LOUD_T)).astype(np.float32)
+
+    def time_note(self, total):
+        """DUEL_TIMING=1: the plugin's time for a frame on which the network ran: the whole frame hook, of it building
+        the inputs (observe) and the network. A line per number of Bobbys alive goes to timing.txt every 2,400 such
+        frames (a minute for one Bobby): the median and the 99th percentile in milliseconds."""
+        tn = self.__dict__.pop("t_net", None)
+        if tn is None:
+            return
+        T = self.__dict__.setdefault("t_rows", [])
+        T.append((int(self.__dict__.pop("t_live", 1)), total, self.__dict__.pop("t_obs", 0.0), tn))
+        if len(T) >= 2400:
+            a = np.array(T)
+            self.t_rows = []
+            with open(os.path.join(D, "timing.txt"), "a") as f:
+                for nb in np.unique(a[:, 0]):
+                    r = a[a[:, 0] == nb] * 1000.0
+                    f.write("{} {} bobbys {} frames | frame median {:.2f} p90 {:.2f} p99 {:.2f} max {:.2f}, over 15 ms {:.1%}, over 25 ms {:.1%} | inputs median {:.2f} p99 {:.2f} | network median {:.2f} p99 {:.2f}\n".format(
+                        time.strftime("%H:%M:%S"), int(nb), len(r), np.median(r[:, 1]), np.percentile(r[:, 1], 90), np.percentile(r[:, 1], 99), r[:, 1].max(),
+                        float((r[:, 1] > 15.0).mean()), float((r[:, 1] > 25.0).mean()),
+                        np.median(r[:, 2]), np.percentile(r[:, 2], 99), np.median(r[:, 3]), np.percentile(r[:, 3], 99)))
 
     # ------------------------------------------------------------------ players and world
     def cast(self):
@@ -808,6 +860,7 @@ class duelbot(minqlx.Plugin):
                         env.rage[slot, k] = now_ - born.setdefault(num, now_)
                     k += 1
         taken = []
+        self.took_k = []                                     # ... and which of the simulator's items each was (-1: none of his), in the same order
         drops = []
         dropped = {}
         if hasattr(E, "DROP_MAX"):
@@ -835,6 +888,7 @@ class duelbot(minqlx.Plugin):
                 if self.item_was.get(num, up) and not up:    # an item was just taken: by the nearer player
                     d = np.linalg.norm(env.state[:, :3] - np.array([x, y, z], np.float32), axis=1)
                     taken.append((cls, int(d.argmin()) if d.min() < 120 else -1))
+                    self.took_k.append(int(k))
                 self.item_was[num] = up
         if hasattr(env, "drop_w"):                           # what he is shown of them (the simulator's N_DROP inputs)
             env.drop_w[0] = -1
@@ -876,6 +930,11 @@ class duelbot(minqlx.Plugin):
             env.known[heard] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
         env.seen_t = np.where(vis | heard, 0.0, env.seen_t + E.DT).astype(np.float32)
+        if hasattr(env, "seen2") and env.seen2.shape[1] == 1:
+            # The group simulator with two players (a 1v1 server playing a network trained in it): it keeps these per
+            # other player as well, and the inputs of v0.2 read them there (_v02_others); its step() fills both.
+            env.vis2[:, 0], env.vis_run2[:, 0], env.acq2[:, 0] = env.visible, env.vis_run, env.acquired
+            env.known2[:, 0], env.seen2[:, 0] = env.known, env.seen_t
         return dist
 
     def held(self, env, i):
@@ -916,6 +975,7 @@ class duelbot(minqlx.Plugin):
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             env.limit_keys(A, who=np.arange(env.n) == i)
             a = A[i]
+        self.row_used = a                                    # (for DUEL_AIMDUMP: his choices as his hands and legs left them)
         key = E.WALK if (rules2 and a[7] == 1 and not self.no_walk) else 127
         fwd, side = (int(a[0]) - 1) * key, (int(a[1]) - 1) * key
         jump = (127 if a[2] == 1 else -127 if a[2] == 2 else 0) if len(a) > 7 else int(a[2]) * 127
@@ -979,6 +1039,9 @@ class duelbot(minqlx.Plugin):
             env.cool[i] = max(float(env.cool[i]), E.NOAMMO_WAIT + E.SWITCH)
         refire = E.W_REFIRE if nine else (E.REFIRE, E.RG_REFIRE, E.LG_TICK, E.MG_TICK)
         ready = env.cool[i] <= 0
+        if nine:                                             # a shot leaves on this frame, as the simulator counts one (v0.2: the
+            self.__dict__.setdefault("shot_made", {})[(id(env), i)] = bool(     # noise he makes, told to it on the next frame)
+                fire and ready and w != E.G and w < ncol and env.ammo[i, w] > 0)
         if fire and ready:
             env.cool[i] = float(refire[w])
             if nine:
@@ -997,12 +1060,20 @@ class duelbot(minqlx.Plugin):
 
     # ------------------------------------------------------------------ frame
     def on_frame(self):
+        t0_ = time.perf_counter() if TIMING else 0.0
         try:
             self.frame()
         except Exception as e:
             if time.time() > self.err_t:
                 self.err_t = time.time() + 5
                 self.log("frame error: {!r}".format(e))
+                try:                                         # where it happened: the last lines of the trace, into the same log
+                    import traceback
+                    self.log("  " + " | ".join(l_.strip().replace("\n", " ") for l_ in traceback.format_exc().splitlines()[-7:-1]))
+                except Exception:                            # noqa: BLE001
+                    pass
+        if TIMING:
+            self.time_note(time.perf_counter() - t0_)
 
     def frame(self):
         now = time.time()
@@ -1084,6 +1155,8 @@ class duelbot(minqlx.Plugin):
                         face = math.degrees(math.atan2(o_.position[1] - q[1], o_.position[0] - q[0])) if o_ else 0.0
                         self.put(p, q, face, human=(who == "opp" and not is_bot(p)))
                 self.tot.pop(who, None)
+                self.new_life_of(self.env, 0 if who == "bobby" else 1)     # (v0.2: what the other knew him to have went with his old life)
+                self.ground_was = None                       # (a spawn is neither a jump nor a landing)
                 if who == "opp" and getattr(self, "rules2", False):
                     self.env.dmg_life[0] = 0.0               # what Bobby knows about this opponent's damage resets
                     self.opp_ammo = None
@@ -1148,11 +1221,21 @@ class duelbot(minqlx.Plugin):
             if now >= A["t_end"]:
                 self.arena_end("time")
         env, E = self.env, self.E
+        if self.game_new:                                    # a real game has begun (the countdown is over, everybody spawns anew):
+            self.game_new = False                            # with a simulator of v0.2 his round begins with it, as a round does
+            if hasattr(env, "_v02_round"):                   # in training: clock, score and memory start over and nothing is
+                self.sess_t0 = now                           # believed. (Ten minutes are five of his rounds: the share of the
+                self.round_base = (self.score["bobby"], self.score["opp"])     # round left runs out with the game.)
+                self.h[:] = 0
+                self.new_game_in(env)
+                self.log("a game began: his round starts with it")
         if bs.health <= 0:                                   # tap fire to respawn
             minqlx.set_bot_input(bobby.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
             self.fill_player(env, E, 0, bobby, bs)
             self.fill_player(env, E, 1, opp, os_)
             env.visible[:] = False
+            self.shot_made = {}
+            self.v02_tick(env, E)                            # (v0.2: the new inputs' clocks go on while he is dead)
             self.log_frame(now, env, 0, bobby, opp, bs, os_, [0, 0, 0, 0], self.drill)
             return
         if self.drill and not hasattr(E, "NW") and now > self.top_up:    # older simulator: drills had endless ammo
@@ -1163,12 +1246,32 @@ class duelbot(minqlx.Plugin):
         opos = self.fill_player(env, E, 1, opp, os_)[0]
         if hasattr(env, "hear"):                             # what he hears of the opponent: running steps and shots
             st_ = env.state
-            noisy = (st_[:, 6] > 0.5) & (np.hypot(st_[:, 3], st_[:, 4]) > 200.0)
-            noisy[1] |= bool(minqlx.ran_usercmd(opp.id)[1] & 1) and int(os_.weapon) != QLNUM["g"]
-            noisy[0] = False
-            env.hear(noisy)
-        for cls, slot in self.sync_world(env, E, (bobby.id, opp.id)):
+            gr_ = st_[:, 6] > 0.5
+            noisy = gr_ & (np.hypot(st_[:, 3], st_[:, 4]) > 200.0)
+            ofire_ = bool(minqlx.ran_usercmd(opp.id)[1] & 1) and int(os_.weapon) != QLNUM["g"]
+            if hasattr(env, "note_noise"):
+                # (v0.2) The noise of this frame as the simulator's step() has it, for both players in one call each:
+                # a shot with anything but the gauntlet, a jump or a landing, a frame of running steps (not crouched).
+                # hear() is given all three, as there (jumps and landings were missing here), and note_noise() the same
+                # for the one who makes them: how loud he has been, and that he made a noise near a believed enemy.
+                was_ = self.ground_was
+                hop_ = (gr_ != was_) if was_ is not None else np.zeros(len(gr_), bool)
+                self.ground_was = gr_.copy()
+                steps_ = noisy & ~env.duck
+                shot_ = np.array([bool(self.shot_made.get((id(env), 0), False)), ofire_], bool)
+                heard_ = shot_ | hop_ | steps_
+                heard_[0] = False
+                env.hear(heard_)
+                env.note_noise(shot_, hop_, steps_)
+            else:
+                noisy[1] |= ofire_
+                noisy[0] = False
+                env.hear(noisy)
+        took_ = self.sync_world(env, E, (bobby.id, opp.id))
+        for (cls, slot), k_ in zip(took_, self.took_k):
             self.record(event="pickup", item=cls, by=("bobby", "opp")[slot] if slot >= 0 else "?")
+            if hasattr(env, "note_take") and slot in (0, 1) and k_ >= 0:
+                env.note_take(slot, k_)                      # (v0.2) when he last took it; a big one the other heard or saw taken
             if hasattr(env, "note_pickup") and slot in (0, 1) and cls in ("item_health_mega", "item_armor_body"):
                 env.note_pickup(slot, 0 if cls == "item_health_mega" else 1)     # he took it, or heard it taken
             if slot == 0:
@@ -1186,6 +1289,8 @@ class duelbot(minqlx.Plugin):
                 self.round_base = (self.score["bobby"], self.score["opp"])
                 self.h[:] = 0
             env.round_t[0] = now - self.sess_t0
+            if hasattr(env, "v02_left"):                             # (v0.2) the share of his round left, by the same clock
+                env.v02_left = min(1.0, max(0.0, 1.0 - (now - self.sess_t0) / max(1.0, self.round_secs)))
             env.frags_r[:] = (self.score["bobby"] - self.round_base[0], self.score["opp"] - self.round_base[1])
             oc_ = minqlx.ran_usercmd(opp.id)
             env.duck[1] = oc_[5] < 0
@@ -1215,13 +1320,17 @@ class duelbot(minqlx.Plugin):
         self.senses(env, E)
         if hasattr(E, "NW"):
             env.weapon[0] = self.held(env, 0)                # the chosen weapon, as the simulator shows it
-        ob = env.observe()[:1]
+        t_ = time.perf_counter()
+        ob = env.observe()[:1]                               # (once a frame: the new inputs' clocks are kept in it)
+        self.t_obs = time.perf_counter() - t_
         if os.environ.get("DUEL_OBSDUMP"):                   # debugging: keep the inputs to compare with the simulator's
             self.obs_dump = getattr(self, "obs_dump", [])
             self.obs_dump.append(ob[0].copy())
             if len(self.obs_dump) % 2000 == 0:
                 np.save("/tmp/practice/obs_dump.npy", np.array(self.obs_dump[-12000:]))
+        t_ = time.perf_counter()
         a = self.act(ob)
+        self.t_net, self.t_live = time.perf_counter() - t_, 1
         if len(a) > 10 and hasattr(env, "intend"):           # the intention head (v8), as in training
             env.intend(np.full(env.n, int(a[10]), np.int64), np.arange(env.n) == 0)
         yaw_in_, pitch_in_ = float(yaw), float(pitch)
@@ -1233,7 +1342,13 @@ class duelbot(minqlx.Plugin):
                                   float(env.pad[0]) if hasattr(env, "pad") else 0.0, float(env.pad_lift[0]) if hasattr(env, "pad_lift") else 0.0,
                                   float(env.zoom[0]) if hasattr(env, "zoom") else 0.0, float(env.script[0]), float(getattr(env, "human_aim", False)),
                                   yaw_in_, float(yaw), pitch_in_, float(pitch), float(ru_[0]), float(ru_[7]), float(ru_[6]), float(bs.health),
-                                  float(self.h.std()) if hasattr(self, "h") else 0.0, float(env.seen_t[0]), float(env.intent[0]) if hasattr(env, "intent") else -1.0])
+                                  float(self.h.std()) if hasattr(self, "h") else 0.0, float(env.seen_t[0]), float(env.intent[0]) if hasattr(env, "intent") else -1.0,
+                                  # (columns 22 to 30, for the weapon change on an empty weapon: the trigger and the weapon key the network
+                                  # asked for and as his hand left them, the weapon the plugin holds, the game's, his reload clock, the
+                                  # ammunition of the plugin's weapon, his style)
+                                  float(a[5]), float(a[6]), float(self.row_used[5]), float(self.row_used[6]), float(w), float(bs.weapon),
+                                  float(env.cool[0]), float(env.ammo[0, w]) if w < env.ammo.shape[1] else -1.0,
+                                  float(env.style[0]) if hasattr(env, "style") else -1.0])
             if len(self.aim_dump) % 1000 == 0:
                 np.save("/tmp/practice/aim_dump.npy", np.array(self.aim_dump[-12000:]))
         wname = E.WEAPONS[w]
@@ -1372,6 +1487,9 @@ class duelbot(minqlx.Plugin):
         INTENT_HOLD, ITEM_BELIEF, ...). None of them reached a server until 2026-10-08. They are read when the module is
         loaded, so they are set first; a module loaded before with other values is loaded again."""
         ev_ = json.loads(str(self.P["env_vars"])) if "env_vars" in self.P else {}
+        for k_ in set(getattr(duelbot, "_env_set", ())) - set(ev_):     # a switch of the network served before that this one
+            os.environ.pop(k_, None)                                    # does not name goes back to the simulator's own value
+        duelbot._env_set = set(ev_)
         os.environ.update({k_: str(v_) for k_, v_ in ev_.items()})
         E = importlib.import_module(name)
         if hasattr(E, "_plugin_env") and E._plugin_env != ev_:

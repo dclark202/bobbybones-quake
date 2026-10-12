@@ -28,6 +28,7 @@ except Exception:                                           # noqa: BLE001 - loa
 duelbot, is_bot, sig, D, QLNUM = _duel.duelbot, _duel.is_bot, _duel.sig, _duel.D, _duel.QLNUM
 is_bobby, BOT_NAMES, BOT_BODY, BOT_SKIN = _duel.is_bobby, _duel.BOT_NAMES, _duel.BOT_BODY, _duel.BOT_SKIN
 _pu = _duel._pu                                              # no powerups on any server (plugins/powerups.py)
+_net = _duel._net                                            # the network's forward pass, with the attention part of v0.2 (plugins/netpass.py)
 
 SEATS = 6
 MAX_BOTS = 4
@@ -109,6 +110,7 @@ class ffabot(duelbot):
     def on_game_start(self, data):
         """a real game: the stats start from zero here; the table at the end is the game's own score"""
         self.ready_ids = set()
+        self.game_new = True                                 # (v0.2: frame() starts his round with the game)
         if not self.people():
             return
         try:
@@ -216,8 +218,7 @@ class ffabot(duelbot):
                 raise RuntimeError("no map file for " + mapname)
             with open(bsp, "wb") as f:
                 f.write(data)
-        P = np.load(os.path.join(D, "policy.npz"))
-        self.P = {k: P[k] for k in P.files}
+        self.P, self.attn = _net.load(os.path.join(D, "policy.npz"))     # (v0.2: with the attention part, if it has one)
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
         if "legs" in self.P:                                 # his legs' network (duel_env's LEGS), exported beside the policy file
@@ -257,11 +258,26 @@ class ffabot(duelbot):
         self.h = np.zeros((SEATS, self.P["whh"].shape[1]), np.float32)
         for k in range(SEATS):
             self.park(k)
+        if os.environ.get("FFA_OBSDUMP"):
+            # debugging: how often a frame calls the simulator's functions that write whole arrays for all seats (one call
+            # a frame each, however many Bobbys play: see the note at limit_keys below). Written to the log with every dump.
+            self.calls = {}
+
+            def counted(f_, name_):
+                def g_(*a_, **k_):
+                    self.calls[name_] = self.calls.get(name_, 0) + 1
+                    return f_(*a_, **k_)
+                return g_
+            for name_ in ("observe", "hear", "note_noise", "_legs_step", "limit_keys", "intend"):
+                if hasattr(env, name_):
+                    setattr(env, name_, counted(getattr(env, name_), name_))
         self.sess_t0 = time.time()
+        self.game_new, self.shot_made = False, {}
+        self.obs_dump = []                                   # (the debugging dump starts over with a network: another one has other inputs)
         self.ready = True
         self.start_session()
-        self.log("free-for-all on {}: {} Bobbys, {} seats, policy {} ({} min), {} inputs".format(
-            mapname, self.n_bots, SEATS, self.P["run"], int(self.P["minutes"]), E.OBS_DIM))
+        self.log("free-for-all on {}: {} Bobbys, {} seats, policy {} ({} min), {} inputs, {}{}".format(
+            mapname, self.n_bots, SEATS, self.P["run"], int(self.P["minutes"]), E.OBS_DIM, _net.describe(self.P, self.attn), self.v02_note(env, E)))
 
     def park(self, k):
         env = self.env
@@ -272,6 +288,11 @@ class ffabot(duelbot):
         self.h[k] = 0.0
         self.want_w.pop((id(env), k), None)
         self.prev.pop(k, None), self.ammo_prev.pop(k, None), self.tot.pop(k, None)
+        if hasattr(env, "_v02_round"):                       # (v0.2) the seat's own clocks and beliefs, and what the others
+            env._v02_round(np.arange(SEATS) == k)            # believed of the player who sat there: all void
+            env.v02_bt[:, k], env.v02_ht[:, k], env.v02_pk[:, k] = 99.0, 99.0, 0.0
+            env.e_got[:, k], env.e_life[:, k] = 0.0, 99.0
+        getattr(self, "shot_made", {}).pop((id(env), k), None)
 
     def free_seat(self, cid):
         k = self.seat.pop(cid, None)
@@ -326,31 +347,9 @@ class ffabot(duelbot):
 
     # ------------------------------------------------------------------ the network for several seats at once
     def act_batch(self, obs, seats):
-        P = self.P
-        x = np.clip((obs - P["obs_mean"]) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
-        if "cell" in P:
-            ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
-            x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
-        x = np.tanh(x @ P["w0"].T + P["b0"])
-        x = np.tanh(x @ P["w1"].T + P["b1"])
-        h = self.h[seats]
-        gi = x @ P["wih"].T + P["bih"]
-        gh = h @ P["whh"].T + P["bhh"]
-        H = h.shape[1]
-        r = sig(gi[:, :H] + gh[:, :H])
-        z = sig(gi[:, H:2 * H] + gh[:, H:2 * H])
-        nn_ = np.tanh(gi[:, 2 * H:] + r * gh[:, 2 * H:])
-        h = ((1 - z) * nn_ + z * h).astype(np.float32)
-        self.h[seats] = h
-        logits = h @ P["wp"].T + P["bp"]
-        out = np.zeros((len(seats), len(self.dims)), np.int64)
-        i = 0
-        for j, d in enumerate(self.dims):
-            l = logits[:, i:i + d]
-            p = np.exp(l - l.max(1, keepdims=True))
-            p /= p.sum(1, keepdims=True)
-            out[:, j] = (p.cumsum(1) > self.rng.random((len(seats), 1))).argmax(1)     # sampled, as in training
-            i += d
+        """one pass of the network for all the Bobbys alive (plugins/netpass.py: the same sums as the simulator's checks,
+        the attention part of v0.2 included; sampled, as in training)"""
+        out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng)
         return out
 
     # ------------------------------------------------------------------ the simulator's senses for every seat
@@ -510,15 +509,23 @@ class ffabot(duelbot):
         if not seated:
             return
         # the round clock (as in training: the clock, the score and the memory start over every ROUND_SECS)
-        if now - self.sess_t0 > self.round_secs:
+        new_ = self.game_new and hasattr(env, "_v02_round")  # (v0.2) a real game has begun: his round begins with it, and
+        self.game_new = False                                # nothing is believed or was taken, as at a round's start in training
+        if now - self.sess_t0 > self.round_secs or new_:
             self.sess_t0 = now
             self.h[:] = 0
             self.kills0 = {p.id: p.stats.kills for k, p, st in seated}
+        if new_:
+            self.new_game_in(env)
+            self.log("a game began: their round starts with it")
         env.round_t[0] = now - self.sess_t0
+        if hasattr(env, "v02_left"):                         # (v0.2) the share of his round left, by the same clock, for every seat
+            env.v02_left = min(1.0, max(0.0, 1.0 - (now - self.sess_t0) / max(1.0, self.round_secs)))
         for k, p, st in seated:
             env.frags_r[k] = p.stats.kills - self.kills0.get(p.id, p.stats.kills)
         # deaths and respawns
         noisy = np.zeros(SEATS, bool)
+        shot_, hop_, steps_ = np.zeros(SEATS, bool), np.zeros(SEATS, bool), np.zeros(SEATS, bool)     # (v0.2: note_noise, below)
         hurt = {}
         for k, p, st in seated:
             bot = is_bot(p)
@@ -542,6 +549,7 @@ class ffabot(duelbot):
                 self.prev.pop(k, None)                       # (a respawn is not a teleport: no such sound)
                 if hasattr(env, "dmg_on"):
                     env.dmg_on[:, k] = 0.0                   # what the others had done to him is gone with his old life
+                self.new_life_of(env, k)                     # (v0.2: and what they knew him to have)
             if was and not up:
                 env.note_death(k, -1)                        # those in earshot know; the killer is not known here
                 self.record(event="death", seat=k, bot=bot, kills=p.stats.kills, deaths=p.stats.deaths)
@@ -551,6 +559,11 @@ class ffabot(duelbot):
             fire = bool(self.fired[k]) if bot else bool(minqlx.ran_usercmd(p.id)[1] & 1) and int(st.weapon) != QLNUM["g"]
             noisy[k] = up and ((ground > 0.5 and math.hypot(env.state[k, 3], env.state[k, 4]) > 200.0) or fire)
             po = self.prev.get(k)
+            # (v0.2) his noise of this frame as the simulator's step() counts it: a shot that left (a Bobby's by his own
+            # reload clock, a person's by his fire button), a jump or a landing, a frame of running steps (not crouched)
+            shot_[k] = up and (bool(self.shot_made.get((id(env), k), False)) if bot else fire)
+            hop_[k] = up and po is not None and ((po[1] > 0.5) != (ground > 0.5))
+            steps_[k] = up and ground > 0.5 and math.hypot(env.state[k, 3], env.state[k, 4]) > 200.0 and not bool(env.duck[k])
             if po is not None and up and self.rules2:
                 if fire:
                     env._hear(1, np.array([k]))
@@ -575,13 +588,23 @@ class ffabot(duelbot):
                 hurt[k] = int(prev - tot)
             self.tot[k] = tot
         self.n_present = int(present.sum())
-        if hasattr(env, "hear"):
+        if hasattr(env, "note_noise"):
+            # (v0.2) ONE call each for all six seats, as in the simulator's step(): hear() with shots, jumps and landings
+            # and running steps (jumps and landings were missing here), and note_noise() with the same three for the
+            # ones who make them (how loud each has been; that he made a noise near a believed enemy). Both write whole
+            # arrays: a call per Bobby would add every seat's noise once per Bobby.
+            env.hear((noisy | hop_) & present)
+            env.note_noise(shot_ & present, hop_ & present, steps_ & present)
+        elif hasattr(env, "hear"):
             env.hear(noisy & present)
         ids = [-1] * SEATS
         for k, p, st in seated:
             ids[k] = p.id
-        for cls, slot in self.sync_world(env, E, ids):
+        took_ = self.sync_world(env, E, ids)
+        for (cls, slot), k_ in zip(took_, self.took_k):
             self.record(event="pickup", item=cls, seat=slot, bot=bool(slot >= 0 and ids[slot] >= 0 and is_bot(here[ids[slot]])))
+            if slot >= 0 and k_ >= 0 and present[slot] and hasattr(env, "note_take"):
+                env.note_take(slot, k_)                      # (v0.2) when he last took it; a big one the others heard or saw taken
             if slot >= 0 and self.rules2:
                 self.took_chosen(env, E, slot, cls)
                 if hasattr(env, "note_pickup") and cls in ("item_health_mega", "item_armor_body"):
@@ -627,6 +650,7 @@ class ffabot(duelbot):
             if is_bot(p) and st.health <= 0:                 # tap fire to respawn
                 minqlx.set_bot_input(p.id, 0, 0, 0, int(now * 4) % 2, 0, 0.0, 0.0)
                 self.fired[k] = False
+                self.shot_made.pop((id(env), k), None)
         if people:                                           # the people's own frames too (owner, 2026-10-07: to learn aim habits
             for k, p, st in seated:                          # from): the same columns, bot = 0, the keys as the engine ran them
                 if not is_bot(p) and st.health > 0:
@@ -634,14 +658,23 @@ class ffabot(duelbot):
                     keys_ = (int(np.sign(c_[3])), int(np.sign(c_[4])), int(np.sign(c_[5])), int(c_[1] & 1))
                     self.log_row(now, env, E, k, p, st, keys_, present, bot_seats, len(people), len(bobbys), bot=0)
         if not live_bots:
+            self.v02_tick(env, E)                            # (v0.2: observe() keeps the new inputs' clocks; without it they go on here)
             return
-        obs = env.observe()
+        t_ = time.perf_counter()
+        obs = env.observe()                                  # (once a frame, for all seats: the new inputs' clocks are kept in it)
+        self.t_obs = time.perf_counter() - t_
         if os.environ.get("FFA_OBSDUMP"):                    # debugging: keep the first live Bobby's inputs, to set beside the
             self.obs_dump = getattr(self, "obs_dump", [])    # simulator's (tools/input_check.py --real)
             self.obs_dump.append(obs[live_bots[0]].copy())
             if len(self.obs_dump) % 2000 == 0:
                 np.save("/tmp/practice/obs_dump.npy", np.array(self.obs_dump[-12000:]))
+                c_ = getattr(self, "calls", {})
+                self.log("calls a frame with {} Bobbys in the game: {}".format(len(bobbys), ", ".join(
+                    "{} {:.3f}".format(k_, v_ / max(1, c_.get("observe", 1))) for k_, v_ in sorted(c_.items()))))
+                self.calls.clear()
+        t_ = time.perf_counter()
         acts = self.act_batch(obs[live_bots], live_bots)
+        self.t_net, self.t_live = time.perf_counter() - t_, len(live_bots)
         if acts.shape[1] > 10 and hasattr(env, "intend"):
             choice = np.zeros(SEATS, np.int64)
             choice[live_bots] = acts[:, 10]
@@ -659,6 +692,14 @@ class ffabot(duelbot):
             A[live_bots] = acts
             if getattr(E, "LEGS", False) and A.shape[1] > getattr(E, "LEGS_HEAD", 99):
                 env._legs_step(A)                                # his legs (duel_env's LEGS): every Bobby in one call, before the finger limits
+                self.legs_n = getattr(self, "legs_n", np.zeros(3))
+                on_ = env.legs_on[live_bots].astype(np.float64)
+                was_ = int(self.legs_n[0]) // 2400
+                self.legs_n += (len(live_bots), on_.sum(), float((on_ * np.hypot(env.state[live_bots, 3], env.state[live_bots, 4])).sum()))
+                if int(self.legs_n[0]) // 2400 != was_:          # a line every 2,400 Bobby-frames: how much their legs carried them, and how fast
+                    with open(os.path.join(D, "legs_status.txt"), "a") as f_:
+                        f_.write("{} frames {} on his legs {:.3f} speed there {:.0f}\n".format(
+                            time.strftime("%H:%M:%S"), int(self.legs_n[0]), self.legs_n[1] / self.legs_n[0], self.legs_n[2] / max(1.0, self.legs_n[1])))
             env.limit_keys(A, who=np.isin(np.arange(SEATS), live_bots))
             acts = A[live_bots]
         for a, k in zip(acts, live_bots):

@@ -4,6 +4,10 @@
 #   bash tools/bench_arena.sh <run> [env|box|yard] [minutes=5] [map=testlab] [simulator module=duel_env]
 #   bash tools/bench_arena.sh duel_gru_v6 yard 5 arena1 duel_env_ffa
 # BENCH_NAME / BENCH_DATA (default qltest, data/labtest): another container and data folder, for games side by side.
+# A network with legs (v0.1, v0.2): EXPORT_ARGS="--legs move_v15n"; a copy of a running trainer's save:
+#   EXPORT_ARGS="--policy <full path of the copy> --legs move_v15n" bash tools/bench_arena.sh duel_gru_v0_2 map 5 bloodrun duel_env_ffa
+# (PYTHON=<the Anaconda Python> and CUDA_VISIBLE_DEVICES=-1 while a run trains: the export reads the checkpoint with torch.)
+# OBSDUMP=1 / AIMDUMP=1 / TIMING=1 record his inputs, his mouse and the plugin's time a frame in the data folder.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 export MSYS_NO_PATHCONV=1
