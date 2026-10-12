@@ -173,3 +173,5 @@ judge of pro-like movement ("remind me of it after tonight's run"); sounds on st
   lean (4.7 GB a piece of 63 players, at half precision on the card) and the update reworked so that only his memory
   steps frame by frame: 15,400 frames a second against 22,800 without attention. His step in the first updates 0.023
   falling to 0.019 (the afternoon's trial: 0.010); the door at 3% of his memory's input after four updates.
+
+- **22:10 on 2026-10-11, the owner**: "Let's plan to run until noon tomorrow, with early stopping if something seems to be going wrong. Quick checks overnight, very brief, with a midway report ready at 6:30am (not 7am)." The run ends at 12:00 on 2026-10-12 (it was started with `--minutes 1270`: it is stopped by hand right after a save near noon and that save kept as its end); the midway report at 06:30; the reports of 16:00 and 19:00 fall away. He means to play it around noon: the plugins and the export for its inputs and attention part (B-223) are not built yet.
