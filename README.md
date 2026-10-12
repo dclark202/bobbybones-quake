@@ -1,5 +1,7 @@
 ## Play against him in Quake Live
-Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal).
+Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal). 
+
+Join the discord server https://discord.gg/dH2mfzbMa
 
 The server runs free-for-all on the game's duel maps with each map's duel items and no powerups; six play at a time,
 Bobbys included, the rest watch. Chat commands: `!bots <0-4>` sets how many Bobbys play, `!map <name>` changes the map
