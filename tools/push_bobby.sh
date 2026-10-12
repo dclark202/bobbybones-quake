@@ -8,6 +8,12 @@
 #                                                                             (owner, 2026-10-09: two; 2026-10-10: Blood Run, it was Aerowalk);
 #                                                                             build, restart): needed whenever the simulator,
 #                                                                             the plugin or a map changed since the last push
+#   QLSTATS=1 CODE=1 bash tools/push_bobby.sh ...                           the restart also switches the leaderboard's QLStats
+#                                                                             lookup on (plugins/ladder.py; off without it: every
+#                                                                             CODE=1 push must name it again, as FFA and HOSTNAME_QL)
+# v0.1 as it is on the server (the network unchanged, new code):
+#   QLSTATS=1 CODE=1 EXPORT_ARGS="--policy policy_end_v15c.pt --legs move_v15n --set LEGS_OFF=2" \
+#       bash tools/push_bobby.sh duel_gru_v15c duel_env_ffa_v15 bloodrun
 set -e
 cd "$(dirname "$0")/.."
 RUN="${1:?run name}"; ENVMOD="${2:-duel_env_ffa}"; MAP="${3:-bloodrun}"
@@ -36,6 +42,6 @@ if [ -n "$CODE" ]; then
     for m_ in "$MAP" bloodrun aerowalk lostworld sinister furiousheights battleforged campgrounds hektik toxicity cure; do
         scp -o BatchMode=yes -q data/maps/nav_${m_}_sim.json data/maps/cells_${m_}.npy data/maps/nav_${m_}_sim.json.ways_*.npz "$HOST":bobbybones-quake/data/maps/ 2>/dev/null || true
     done
-    ssh -o BatchMode=yes "$HOST" "cd bobbybones-quake && PUBLIC=1 FFA=${FFA:-2} RESTART=1 HOSTNAME_QL=\"$NAME_QL\" bash tools/duel_server.sh - $MAP | tail -1"
+    ssh -o BatchMode=yes "$HOST" "cd bobbybones-quake && PUBLIC=1 FFA=${FFA:-2} RESTART=1 QLSTATS=${QLSTATS:-} HOSTNAME_QL=\"$NAME_QL\" bash tools/duel_server.sh - $MAP | tail -1"
 fi
 ssh -o BatchMode=yes "$HOST" 'sleep 20; tail -1 bobbybones-quake/data/duellive/duelbot.log'

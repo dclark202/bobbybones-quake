@@ -12,20 +12,27 @@ Typed in the game chat on the play-test server (`plugins/duelbot.py`). Anyone on
 | `!nosg` / `!nosg off` | Nobody spawns with a shotgun (it can still be picked up on the map); `off` returns to every weapon |
 | `!reflex` (or `!room reflex`) | On the test map: the aim reflex test. Four short aim rooms, about three and a half minutes; in three of them the target shoots back for the second half (you cannot die); move as you normally would: lightning gun on a target that walks slowly from side to side, lightning gun on a target that strafes and turns at random, railgun on a target that jumps to a new place every few seconds, rockets on the strafing target. Stand still. Results are saved under an anonymous id; `tools/reflex_report.py` compares people with Bobby. Single rooms: `!room reflex slow|track|flick|rocket` |
 | `!arena box` / `!arena env` / `!arena yard` `[minutes]` / `!arena off` | On the test map: fight BobbyBones in the aim box, the environment box or the yard (a small two-level duel arena: balconies, stairs, a ramp, a tower with a catwalk, a jump pad, a teleporter, a tunnel; not in his training yet) under the rules he trains with: full weapon set at spawn, 125 health, nobody leaves the room, five minutes (or the number given). The score and damage are announced at the end |
-| `!duel [minutes]` (or `!match`) | In 1v1 mode, a timed, scored duel: on `testlab` in the environment box, on the duel maps across the whole map as it is (10 minutes by default). `!duel off` stops it |
+| F3 (ready up) | In 1v1 mode, the person in the game starts a real 10-minute game against BobbyBones (the game's own duel: machine gun at spawn, the items on the map). At its end the game's usual screen: the scoreboard, then the vote among three of the ten duel maps (20 seconds; click one, or `vote 1`, `vote 2`, `vote 3` in the console), then the chosen map in 1v1, in warmup. A person who is watching is told that F3 is for the one who plays; while a test room or a `!duel` runs F3 is refused with a line that says so. (Until 2026-10-12 F3 did nothing in 1v1: see `docs/results/2026-10-12.md`) |
+| `!duel [minutes]` (or `!match`) | In 1v1 mode, a timed, scored duel: on `testlab` in the environment box, on the duel maps across the whole map as it is (10 minutes by default). It runs in warmup under the plugin's own clock (every weapon at spawn), so there is no scoreboard and no map vote after it: its result is a chat line (and a line in the leaderboard's `duels.jsonl`). `!duel off` stops it; it also ends when the person leaves |
 | `!spar` / `!spar off` | You become a spectator and BobbyBones plays a Nightmare bot in a real match. `!spar off`, or joining the game, ends it |
 
 ## Free-for-all servers (`plugins/ffabot.py`)
 
 A server started with `FFA=<n>` runs up to four Bobbys and people together, six seats in all, everybody against
 everybody. It waits in warmup (every weapon at spawn) until more than half of the people in the game have readied up
-(F3; the Bobbys never ready up and are not counted): then a real 10-minute game runs, machine gun at spawn, the game's
-own table at the end, and warmup again. No quad, no spawn timers on the armors and the mega, weapons back in 2 s (2026-10-06).
+(F3; the Bobbys never ready up and are not counted): then a real 10-minute game runs, machine gun at spawn. At its end
+the game's usual screen (since 2026-10-12; before, the server went straight back to warmup): the scoreboard, and the
+vote for the next map among three maps drawn from the pool, for 20 seconds; about 23 seconds after the end the chosen
+map loads in free-for-all with the Bobbys and the map's duel items, in warmup. The pool is exactly the ten duel maps he
+trains on (`server/mappool_lab.txt`; in 1v1 mode `server/mappool_lab_duel.txt`, the same ten in the duel factory). A
+person votes by clicking a map or with `vote 1`, `vote 2`, `vote 3` in the console, and may change his vote; the Bobbys
+do not vote. One vote decides; with no vote, or a tie, the game takes one of the tied maps itself. No quad, no spawn
+timers on the armors and the mega (2026-10-06), weapons back in 5 s as in a duel and as he is trained (2026-10-12; it was 2 s).
 
 | Command | Who | What it does |
 |---|---|---|
 | `!bots <0-4>` | anyone | how many Bobbys play; people get the other seats (6 - n; the server holds 8 clients, the rest spectate). Raising it is refused while more people than that are playing; lowering it frees seats. Nobody can push a bot out. |
-| F3 (ready up) | people | when more than half of the people in the game are ready, a real 10-minute game starts (no frag limit, machine gun at spawn, the items on the map); the game's own table of kills, deaths and damage at the end, then warmup again. There is no `!match` in free-for-all (2026-10-06) |
+| F3 (ready up) | people | when more than half of the people in the game are ready, a real 10-minute game starts (no frag limit, machine gun at spawn, the items on the map); at the end the game's scoreboard and the vote for the next map (above), then the chosen map in warmup. There is no `!match` in free-for-all (2026-10-06) |
 | `!help`, `!maps`, `!note <text>` | anyone | as on the 1v1 server |
 
 The 1v1 rooms (`!reflex`, `!movement`, `!room`) are not in free-for-all mode.
@@ -86,7 +93,8 @@ rooms (where Bobby's body is a scripted target) do not. It is local to the serve
 |---|---|
 | `!bobby` | BobbyBones' rating and rank, his frags made and taken against people, and the ratings of his earlier networks |
 | `!top` | the board: the first eight, and always Bobby's line and your own |
-| `!elo` / `!elo <name>` | your rating and rank, or how many frags are missing until you are ranked; somebody else's by a part of his name |
+| `!elo` / `!elo <name>` | your rating and rank, or how many frags are missing until you are ranked; somebody else's by a part of his name. On a server with the QLStats lookup switched on, your own `!elo` has a second line with your global rating there: `QLStats (global): duel 1412 (+-80, 212 games), ffa 1105 (+-120, 40 games)`, or "QLStats has no duel rating for you", or "QLStats did not answer just now"; the first line then reads "here, against me" (the two numbers are on different footings: ours starts at 1500 and knows only frags with Bobby). `!elo <name>` stays local |
+| `!qlstats off` / `!qlstats on` | (only where the lookup is switched on) `off`: what the server had stored of your QLStats rating is deleted and you are not looked up again; `on` allows it again |
 | `!ladder` | (the owner) what the plugin has read since it was loaded: deaths seen, paired with a killer, counted, left out |
 
 The rating is Glicko-1 with one update per frag (`plugins/ratings.py`): a number and how unsure it is. Everybody starts
@@ -98,6 +106,15 @@ is his number that moves, not the people's, when he has got better or worse.
 
 On the PC: `python tools/elo.py` prints the board and, per network and person, the frags made and taken with a 95%
 range (the files come with the daily `tools/pull_sessions.sh`).
+
+The server's owner (the Steam ID of `QLX_OWNER`) is marked in the leaderboard's files, so that his games, which may be
+tests, can be set apart: `"owner": 1` on his frag lines, `"owner": true` on his row (2026-10-12; `docs/guides/LOGS.md`).
+The board and the commands show him as anybody else.
+
+**The QLStats lookup** (off unless the server is started with `QLSTATS=1`; `docs/design/QLSTATS.md`, `docs/guides/HOSTING.md`).
+At a person's first join of a day the server asks qlstats.net for his public rating (his Steam id is in the request) and
+keeps the answer by his anonymous key. A person is told so in the welcome ("Ratings: I look up your public QLStats
+rating (your Steam id goes to qlstats.net) ... !qlstats off stops it.") and can switch it off for himself.
 
 ## The bots' names and what they say (`plugins/banter.py`)
 
@@ -142,3 +159,11 @@ a second; do not cut it off, and do not use another rcon client on a server peop
 
 A new `data/duellive/policy.npz` (written by `sim/export_duel.py`) is loaded by the running server on its own,
 between rooms, and announced in chat.
+
+**Checks of the server's own routines without a person** (`plugins/testkit.py`; only on a private server, and only
+when it is named in the plugin list and the container has `TESTKIT=1`): one of the game's own bots stands in for a
+person (it takes a seat, is counted by the leaderboard, is written to the session logs), and the owner's commands
+`!tcmd <client> <command>` (the client "sends" a command: `readyup` is F3, `vote 2` a map vote, `say !elo` a chat
+command), `!tloaded <client>` (the welcome), `!towner <client>`, `!tstate`, `!tframes` drive a test; everything goes to
+`testkit.jsonl` in the data folder.
+`IMAGE=qlbot:test NAME=qlpub DATA=data/pubtest PORT=27975 FFA=2 PLUGINS_EXTRA=testkit DOCKER_EXTRA="-e TESTKIT=1" bash tools/duel_server.sh - bloodrun`

@@ -90,6 +90,24 @@ def duel_layout(mapname):
     return len(extra), len(missing)
 
 
+# The maps of the vote at a game's end: the ten duel maps he trains on, each in the mode's own factory (server/
+# mappool_lab.txt, mappool_lab_duel.txt; owner, 2026-10-12). The game reads its pool at the start (entrypoint.sh names
+# the file on the command line) and again on "reload_mappool": a mode switch on a running server changes it here.
+POOLS = {"ffa": "mappool_lab.txt", "duel": "mappool_lab_duel.txt"}
+
+
+def map_pool(factory):
+    """the vote's pool for this mode; True when it had to be loaded anew"""
+    want = POOLS.get(str(factory).lower())
+    if not want or (minqlx.get_cvar("sv_mapPoolFile") or "").strip().strip('"') == want:
+        return False
+    if not os.path.exists(os.path.join("/ql/baseq3", want)):   # an older image: the pool stays as it is
+        return False
+    minqlx.console_command('set sv_mapPoolFile "{}"'.format(want))
+    minqlx.console_command("reload_mappool")
+    return True
+
+
 def load_map(mapname, factory):
     """every map change of the plugins goes through here"""
     minqlx.console_command('set g_spawnItemPowerup "{}"'.format(1 if wanted(mapname, factory) else 0))

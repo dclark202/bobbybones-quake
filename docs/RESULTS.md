@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-12](results/2026-10-12.md)
 
+- 09:45 — The server batch of the owner's remarks: a game's own end with the map vote, weapons back in 5 s, the owner marked, people tied to their sessions, F3 in 1v1 found and fixed, the Discord line, the QLStats lookup; proven on a private server, not on the public one yet
 - 06:55 — "Awaiting snapshot" again on the public server: the seat guard of 2026-10-10 read a field the header has wrong
 - 05:00 — v0.2 at seven hours: 56.7% against v0.1, all of the gain on the four maps v0.1 never played games on; his way of playing has not moved (scorecard 47%); stages B and C all built and merged in a copy
 

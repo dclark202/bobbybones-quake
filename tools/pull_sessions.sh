@@ -12,7 +12,10 @@
 #              minute after the last person has gone, so a visit is never the newest for long.
 #   raw logs   server.log, duelbot.log, minqlx.log, duel_live.jsonl: packed, copied to logs/, checked, and removed from
 #              the server the same day (they hold visitors' Steam ids and addresses; they never go into the repo).
-#   leaderboard and bans   copied every day, never removed.
+#   leaderboard and bans   copied every day, never removed: ratings.json, frags.jsonl, duels.jsonl (finished duels), the
+#              QLStats answers by anonymous key (qlstats.json, qlstats.jsonl, qlstats_off.json; only on a server started
+#              with QLSTATS=1), bans.txt, and salt.txt: the file that makes a person's key the same over time. The
+#              salt and the QLStats files are as private as the bans: they stay in the archive, never in the repo.
 #   index      sessions.csv, a row per session (tools/session_index.py).
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -31,6 +34,11 @@ echo "== $(date '+%Y-%m-%d %H:%M:%S')"
 # 0. the leaderboard (plugins/ladder.py) and the bans: copied, never removed (tools/elo.py reads the first two)
 $SCP "$HOST:$R/ratings.json" "$HOST:$R/frags.jsonl" "$DEST/" 2>/dev/null && cp "$DEST/ratings.json" "$DEST/ratings_$(date +%Y%m%d).json" && echo "leaderboard copied: $(grep -c . "$DEST/frags.jsonl") frags"
 $SCP "$HOST:$R/bans.txt" "$DEST/" 2>/dev/null
+# the salt of the anonymous keys (plugins/ladder.py key()): with it a key can be made again for the same person, e.g. on a
+# local play-test server; it never goes into the repo. A changed salt would cut every person's history in two: say so.
+$SCP "$HOST:$R/salt.txt" "$DEST/salt.txt.new" 2>/dev/null && { if [ -f "$DEST/salt.txt" ] && ! cmp -s "$DEST/salt.txt" "$DEST/salt.txt.new"; then cp "$DEST/salt.txt" "$DEST/salt_before_$(date +%Y%m%d).txt"; echo "THE SERVER'S SALT CHANGED: the keys from today are other keys (the old salt kept beside it)"; fi; mv "$DEST/salt.txt.new" "$DEST/salt.txt"; }
+# finished duels and the QLStats answers (keys only; the last three exist only where the lookup is switched on)
+for f in duels.jsonl qlstats.json qlstats.jsonl qlstats_off.json; do $SCP "$HOST:$R/$f" "$DEST/" 2>/dev/null; done
 
 # 1. the raw logs: copied aside and emptied in one step on the server (the writers keep their files open), packed
 $SSH "$HOST" "cd $R && mkdir -p logs_out && st=\$(date -u +%Y%m%d-%H%M%S) && mkdir logs_out/\$st && \

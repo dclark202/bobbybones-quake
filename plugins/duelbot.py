@@ -160,6 +160,31 @@ class duelbot(minqlx.Plugin):
         with open(path, "a") as f:
             f.write(json.dumps(rec) + "\n")
 
+    def note_person(self, p, seat):
+        """a seat of this session tied to the leaderboard's anonymous key of the person in it (plugins/ladder.py; owner,
+        2026-10-12: "give each person a unique random id that can be used to tie their performance together"): a line
+        {"event": "person", "seat", "key", "owner"} in the session's events and the same in meta.json's "people" list.
+        "owner": 1 for the server's owner, whose games may be tests. Nothing without a session, for a bot, or when the
+        ladder plugin is not loaded. No name and no Steam id are written."""
+        if not self.sess or p is None or is_bot(p):
+            return
+        try:
+            lad = minqlx.Plugin._loaded_plugins.get("ladder")
+            key = lad.person_key(p) if lad is not None and hasattr(lad, "person_key") else None
+            if not key:
+                return
+            owner = int(bool(lad.is_owner(p))) if hasattr(lad, "is_owner") else 0
+            self.record(event="person", seat=seat, key=key, owner=owner)
+            path = os.path.join(self.sess, "meta.json")
+            with open(path) as f:
+                meta = json.load(f)
+            meta.setdefault("people", []).append(dict(seat=seat, key=key, owner=owner, t=round(time.time(), 2)))
+            with open(path + ".tmp", "w") as f:
+                json.dump(meta, f, indent=1)
+            os.replace(path + ".tmp", path)
+        except Exception as e:                               # noqa: BLE001 - a log line is never worth a frame
+            minqlx.console_print("[duelbot] person: {}\n".format(type(e).__name__))
+
     # ------------------------------------------------------------------ session logs (schema: docs/guides/LOGS.md)
     def start_session(self, opp):
         self.end_session()
@@ -168,6 +193,7 @@ class duelbot(minqlx.Plugin):
         self.sess = os.path.join(D, "sessions", "{}_{}_{}".format(time.strftime("%Y%m%d-%H%M%S"), mapname, kind))
         os.makedirs(self.sess, exist_ok=True)
         self.sess_opp = opp.id
+        self.sess_person = not is_bot(opp)
         self.sess_t0 = time.time()
         self.h[:] = 0                                        # a new opponent: fresh memory
         self.score = dict(bobby=0, opp=0)
@@ -183,6 +209,7 @@ class duelbot(minqlx.Plugin):
         self.frames_f.write(",".join(FRAME_COLS) + "\n")
         self.missiles_f = open(os.path.join(self.sess, "missiles.csv"), "a")      # projectiles in flight, per frame (for replays)
         self.missiles_f.write("t,num,owner,weapon,x,y,z,vx,vy,vz\n")
+        self.note_person(opp, 1)                             # (the person of a 1v1 session is seat 1: the o_ columns)
         self.log("session {}".format(os.path.basename(self.sess)))
 
     def end_session(self):
@@ -246,7 +273,7 @@ class duelbot(minqlx.Plugin):
         _pu.load_map(self.want_map, "duel")
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
-            "^3Play me:^7 join the game, I'm already in it. ^2!duel [minutes]^7 starts a timed duel.",
+            "^3Play me:^7 join the game, I'm already in it. ^2F3^7 starts a real 10-minute game (the scoreboard and a vote for the next map at its end); ^2!duel [minutes]^7 a timed duel in warmup.",
             "^3Help me learn:^7 ^2!map testlab^7, then ^2!reflex^7 or ^2!movement^7. ^2!match [minutes]^7 scores a game on any map.",
             "^3Maps and modes:^7 ^2!maps^7 lists the maps, ^2!map <name>^7 changes it. ^2!mode ffa^7: up to four of me and people, six seats; ^2!bots <0-4>^7 sets how many of me play. ^2!mode duel^7: one against one.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
@@ -272,20 +299,50 @@ class duelbot(minqlx.Plugin):
             player.tell(self.WELCOME)
             lad = minqlx.Plugin._loaded_plugins.get("ladder")
             if lad is not None:                              # owner, 2026-10-09: "see how I rank on the leaderboard"
-                player.tell(lad.WELCOME)
+                for line in (lad.welcome_lines(player) if hasattr(lad, "welcome_lines") else [lad.WELCOME]):
+                    player.tell(line)
             player.tell("See more about the project: ^5github.com/dclark202/bobbybones-quake")
+            player.tell(self.DISCORD)
+
+    # owner, 2026-10-12: the project's Discord server, in the welcome of both modes (ffabot inherits on_player_loaded)
+    DISCORD = "Talk to us and follow his progress: ^5discord.gg/dH2mfzbMa"
 
     def on_vote_called(self, player, vote, args):
-        """no player votes at all: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS)"""
+        """no votes called by players: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS).
+        The game's own vote for the next map at a game's end is not such a vote and is left alone."""
         player.tell("Voting is off on this server. ^2!map <{}>^7 changes the map.".format("|".join(MAPS)))
         return minqlx.RET_STOP_ALL
 
+    AFTER_GAME = 90.0                                        # after a real game's end the game's own end is left alone for
+                                                             # this long: the scoreboard, the vote for the next map (20 s), the
+                                                             # map's load. A map load ends it; a server left without one goes
+                                                             # back to warmup when it is over.
+
+    def after_game(self, now=None):
+        """is the game's own end sequence running (a real game has just ended and the next map is not up yet)"""
+        return (time.time() if now is None else now) - getattr(self, "game_over_t", 0.0) < self.AFTER_GAME
+
     def on_client_command(self, player, cmd):
-        """F3 (the game's "readyup") in 1v1: the game starts when the person is ready. The engine would wait for the bot,
-        who never readies up (owner, 2026-10-07)"""
+        """F3 (the game's "readyup") in 1v1: a real ten-minute game starts when the person in the game is ready. The
+        engine would wait for the bot, who never readies up (owner, 2026-10-07), so the plugin says "allready" for
+        him: in the NEXT frame (frame(), go_f3). Said here, before the game has run the person's own "readyup", it made
+        everybody ready and the game then toggled the person back to not ready: nothing started, ever (found
+        2026-10-12 after "f3 on duel mode wasn't working")."""
         if cmd.strip().lower() != "readyup" or is_bot(player) or self.game is None or self.game.state != "warmup":
             return
         people = [p for p in self.players() if not is_bot(p) and p.team != "spectator"]
+        now = time.time()
+        if player.id not in [p.id for p in people]:          # somebody watching: his F3 starts nothing, and he is told why
+            tells = self.__dict__.setdefault("f3_told", {})
+            if now - tells.get(player.id, 0.0) > 10:
+                tells[player.id] = now
+                player.tell("^3You are watching.^7 F3 starts a game for the one who plays; join when the seat is free.")
+            return
+        if self.room is not None or self.queue or self.arena:
+            player.tell("^3A test room or a timed duel is running:^7 ^2!room off^7 or ^2!duel off^7 first, then F3.")
+            return
+        if getattr(self, "go_f3", 0.0):                      # the start is already on its way
+            return
         if player.id in self.ready_ids:
             self.ready_ids.discard(player.id)
         else:
@@ -294,9 +351,9 @@ class duelbot(minqlx.Plugin):
         if people and n * 2 > len(people):
             self.ready_ids = set()
             self.real_game = True
+            self.go_f3 = now                                 # frame() says "allready" once the game has run his "readyup"
             self.set_cvar("timelimit", "10")
-            self.msg("^3Game on:^7 1v1 against BobbyBones, 10 minutes.")
-            minqlx.console_command("allready")
+            self.msg("^3Game on:^7 1v1 against BobbyBones, 10 minutes, then the scoreboard and the map vote.")
 
     def on_stats(self, stats):
         """the game's own table for a player at the end of a game (or when he leaves): shots, hits, damage, kills and time
@@ -322,8 +379,15 @@ class duelbot(minqlx.Plugin):
     def on_game_start(self, data):
         self.ready_ids = set()
         self.game_new = True                                 # (v0.2: frame() starts his round with the game)
+        self.game_over_t = 0.0
 
     def on_game_end(self, data):
+        """a real game's own end (not one thrown back to warmup): the scoreboard and the vote for the next map follow,
+        and the plugin keeps its hands off until the next map is up (owner, 2026-10-12; until then frame() said
+        "abort" in the very frame of the end, because the game was no longer a person's: no scoreboard, no vote)"""
+        if self.real_game and not (isinstance(data, dict) and data.get("ABORTED")):
+            self.game_over_t = time.time()
+            self.vote_map_ok = True                          # the map the vote picks is kept (frame, not ready)
         self.real_game = False
 
     def on_team_switch(self, player, old, new):
@@ -397,6 +461,14 @@ class duelbot(minqlx.Plugin):
         b, o = self.score["bobby"] - A["base"]["bobby"], self.score["opp"] - A["base"]["opp"]
         self.record(event="arena_result", where=A["where"], minutes=A["mins"], why=why, bobby=b, opp=o,
                     dmg_dealt=A["dmg"][0], dmg_taken=A["dmg"][1])
+        if A["where"] == "map" and A.get("key"):             # a timed duel on a duel map against a person: a line in the
+            try:                                             # leaderboard's duels.jsonl, by his key (plugins/ladder.py)
+                lad = minqlx.Plugin._loaded_plugins.get("ladder")
+                if lad is not None and hasattr(lad, "note_duel"):
+                    played = A["mins"] if why == "time" else max(0.0, A["mins"] - (A["t_end"] - time.time()) / 60.0)
+                    lad.note_duel(A["key"], A.get("owner", 0), played, o, b, why != "time", "timed")
+            except Exception as e:                           # noqa: BLE001
+                self.log("duel line: {}".format(type(e).__name__))
         self.msg("^3Arena over ({})^7: BobbyBones ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
 
     def arena_spot(self, other):
@@ -599,6 +671,7 @@ class duelbot(minqlx.Plugin):
         self.ready = False
         self.alive = {}
         self.room, self.queue = None, []
+        self.game_over_t, self.go_f3 = 0.0, 0.0              # a new map: a game's end sequence is over with it
 
     # ------------------------------------------------------------------ setup
     FACTORY = "duel"                                         # (ffabot: "ffa")
@@ -624,7 +697,10 @@ class duelbot(minqlx.Plugin):
 
     def setup(self):
         mapname = (minqlx.get_cvar("mapname") or "").lower()
-        self.set_cvar("g_weaponRespawn", "5")                # the game's 1v1 value (ffabot sets 2 s; a runtime cvar outlives the map)
+        self.set_cvar("g_weaponRespawn", "5")                # weapons back in 5 s, as in the simulator (ITEM_DEFS: every weapon
+                                                             # 5); the free-for-all plugin sets the same (a runtime cvar outlives the map)
+        if _pu.map_pool(self.FACTORY):                       # the maps of the vote at a game's end: the ten, in 1v1
+            self.log("the vote's map pool: {}".format(minqlx.get_cvar("sv_mapPoolFile")))
         self.no_powerups(say=True)
         bsp = "/tmp/maps/{}.bsp".format(mapname)
         if not os.path.exists(bsp) or os.path.getsize(bsp) < 1000:
@@ -680,6 +756,8 @@ class duelbot(minqlx.Plugin):
         self.game_new, self.ground_was, self.shot_made = False, None, {}
         self.obs_dump, self.aim_dump = [], []                # (the debugging dumps start over with a network: another one has other inputs)
         self.ready = True
+        self.log("rules on {}: weapons back in {} s, the vote's map pool {}, factory {}".format(
+            mapname, minqlx.get_cvar("g_weaponRespawn"), minqlx.get_cvar("sv_mapPoolFile"), minqlx.get_cvar("g_factory")))
         self.log("ready on {}: policy {} ({} min of training), {} inputs, reaction {} ms, rooms nav {}, {}{}".format(
             mapname, self.P["run"], int(self.P["minutes"]), E.OBS_DIM, int(self.react_ms),
             "yes" if self.renv.field is not None else "no", _net.describe(self.P, self.attn), self.v02_note(self.env, E)))
@@ -1080,9 +1158,13 @@ class duelbot(minqlx.Plugin):
         if not self.ready:
             if now > self.next_check:
                 self.next_check = now + 2
-                if (minqlx.get_cvar("mapname") or "").lower() != self.want_map:
-                    self.next_check = now + 10
-                    _pu.load_map(self.want_map, "duel")
+                mapname = (minqlx.get_cvar("mapname") or "").lower()
+                if getattr(self, "vote_map_ok", False) and mapname in MAPS and mapname != "testlab":
+                    self.want_map = mapname                  # the vote at the end of a person's game picked it: stay
+                self.vote_map_ok = False                     # (a sparring server's games end with no person: it stays on its map)
+                if mapname != self.want_map or (minqlx.get_cvar("g_factory") or "").lower() == "ffa":
+                    self.next_check = now + 10               # another map, or this one in the free-for-all factory (a pool
+                    _pu.load_map(self.want_map, "duel")      # of the other mode): the 1v1 plugin needs the duel factory
                     return
                 self.setup()
             return
@@ -1106,10 +1188,25 @@ class duelbot(minqlx.Plugin):
                 pass
         bobby, human, filler = self.cast()
         real_human = human is not None and not is_bot(human)
-        if not real_human:
+        if real_human:
+            self.human_t = now
+        elif now - getattr(self, "human_t", 0.0) > 3.0:      # the person gone for three seconds, not for one frame
             self.real_game = False
+        if getattr(self, "go_f3", 0.0):                      # the person pressed F3 (on_client_command): the game has run his
+            state_ = self.game.state if self.game is not None else None      # "readyup" by now, and "allready" readies Bobby
+            if state_ in ("countdown", "in_progress"):
+                self.go_f3 = 0.0                             # the countdown runs
+            elif not getattr(self, "go_sent", 0.0) or self.go_sent < self.go_f3:
+                self.go_sent = now
+                minqlx.console_command("allready")
+            elif now - self.go_f3 > 5.0:                     # the game would not start (its reason is on the console)
+                self.go_f3, self.real_game = 0.0, False
+                self.msg("^3The game did not start.^7 Press F3 again, or ^2!duel^7 for a timed duel.")
+        if getattr(self, "vote_map_ok", False) and not self.after_game(now):
+            self.vote_map_ok = False                         # no map came out of the vote: back to the usual rules
+        # (not in the game's own end sequence: the scoreboard and the vote for the next map: see on_game_end)
         if real_human and not self.real_game and self.game is not None and self.game.state not in ("warmup", None) \
-                and now - self.last_abort > 30:
+                and now - self.last_abort > 30 and not self.after_game(now):
             self.last_abort = now                            # with a human: stay in warmup (never abort in a tight loop)
             self.log("game state {} - back to warmup".format(self.game.state))
             minqlx.console_command("abort")
@@ -1129,6 +1226,9 @@ class duelbot(minqlx.Plugin):
                 self.next_check = now + 5
                 minqlx.console_command("addbot sarge {}".format(os.environ.get("DUEL_BOT_SKILL") or 5))   # 5 Nightmare, 4 Hardcore
             minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, 0.0)
+            if self.arena and self.sess and getattr(self, "sess_person", False):
+                self.arena_end("left")                       # the person left in the middle of a timed duel: it ends here (it
+                                                             # went on against whoever came next and ended on his first frame)
             if self.sess:
                 self.end_session()
             self.room, self.queue = None, []
@@ -1203,6 +1303,11 @@ class duelbot(minqlx.Plugin):
             self.arena = dict(where="map", t_end=now + mins * 60, mins=mins, base=dict(self.score), place=False, dmg=[0, 0])
             self.record(event="arena_start", where="map", minutes=mins)    # (the first life still has the handed-out weapons)
         if self.arena and self.arena["where"] == "map":       # a timed, scored duel on a map as it is
+            if "key" not in self.arena:                      # who it is against, by the leaderboard's key (arena_end)
+                lad_ = minqlx.Plugin._loaded_plugins.get("ladder")
+                ok_ = lad_ is not None and hasattr(lad_, "person_key") and not is_bot(opp)
+                self.arena["key"] = lad_.person_key(opp) if ok_ else None
+                self.arena["owner"] = int(bool(lad_.is_owner(opp))) if ok_ else 0
             if now >= self.arena["t_end"]:
                 self.arena_end("time")
         elif self.arena:

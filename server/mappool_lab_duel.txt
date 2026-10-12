@@ -1,0 +1,10 @@
+bloodrun|duel
+aerowalk|duel
+lostworld|duel
+sinister|duel
+furiousheights|duel
+battleforged|duel
+campgrounds|duel
+hektik|duel
+toxicity|duel
+cure|duel

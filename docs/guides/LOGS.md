@@ -3,6 +3,20 @@
 All logs live under `data/` (git-ignored, never committed). No Steam IDs or player names of humans are
 written to the session logs; the human is always `opp` / `"human"`.
 
+**Who sat where** (since 2026-10-12; owner: "give each person a unique random id that can be used to tie their
+performance together"). A session names a person only by his seat. So that a recording can be tied to the
+leaderboard's person, the plugins write the leaderboard's anonymous key beside the seat:
+- `events.jsonl`: `{"event": "person", "seat": <seat>, "key": "<key>", "owner": 0 or 1}` when a person takes a seat, and
+  at a session's start for those already in theirs. In free-for-all the seat is the `seat` column of `frames.csv`; in
+  a 1v1 session the one person is seat 1 (the `o_` columns).
+- `meta.json`: `"people": [{"seat", "key", "owner", "t"}, ...]`, the same lines, added to as they come.
+- The key is the leaderboard's (`plugins/ladder.py`): the first ten signs of sha1(salt + Steam id), the salt being
+  `salt.txt` in the server's data folder. It is the key of `frags.jsonl`, `ratings.json`, `duels.jsonl` and
+  `qlstats.json`. `"owner": 1` marks the server's owner (the Steam ID of `QLX_OWNER`), whose games may be tests.
+- Nothing is written when the ladder plugin is not loaded, for a bot, or outside a session. No name and no Steam id.
+- The persons' random ids (one per person, whatever his keys) live in `people.json` in the session archive on the PC,
+  never on the server and never in the repo.
+
 ## Play-test sessions (`plugins/duelbot.py`, schema 1)
 
 One folder per session: `data/duellive/sessions/<UTC date-time>_<map>_<human|spar>/`. A session starts when
@@ -48,6 +62,8 @@ an opponent is in the game with Bobby and ends when they leave or the map change
 | `note` | `text`, `drill`, `state`, score | The play-tester's `!note`, with the same snapshot as a death |
 | `drill` | `drill`, score | `!drill` changed the mode (`null` = normal loadout) |
 | `minute` | `visible`, `fire`, `fast_air`, `weapon_share`, `dmg_dealt`, `dmg_taken`, score | Per-minute summary for Bobby: share of frames he saw the opponent, held fire, was airborne above 330 u/s; share of frames per weapon (RL, RG, LG, MG); cumulative damage |
+| `person` | `seat`, `key`, `owner` | Since 2026-10-12: the person of this session by the leaderboard's anonymous key ("Who sat where" above); seat 1 |
+| `arena_start`, `arena_result` | `where`, `minutes`; `why` (`time`, `stopped`, `left`), `bobby`, `opp`, damage | A timed duel (`!duel`, `!arena`) and its result |
 | `end` | score | Session closed |
 
 Suggested note tags (first word of the text): `aim`, `move`, `weapon`, `items`, `stuck`, `weird`, `good`.
@@ -67,7 +83,9 @@ state (`b_*`, the same 18 columns as the 1v1 rows: position, velocity, view, hea
 `intent` (none / MH / RA / RL / RG / LG), `people`, `bots`. `events.jsonl`: `join` / `leave` (seat, bot), `death`
 (seat, bot, the game's kill and death counts), `pickup` (item, seat, bot), `bots` (n set by a player), `note`,
 `minute` per Bobby (share of frames with an enemy in sight, firing, weapon shares, the game's kills, deaths, damage
-dealt and taken, how many people and bots), `end`. No names or Steam IDs.
+dealt and taken, how many people and bots), `end`; since 2026-10-12 `person` (seat, key, owner: "Who sat where" at the
+top) after a person's `join` and at a session's start for those already seated, and `match_start` / `match_result` for a
+real game (`why`: `time`, or `stopped` for a game thrown back to warmup). No names or Steam IDs.
 
 ## The archive's index (`tools/session_index.py`)
 
@@ -80,16 +98,32 @@ that time, by the leaderboard's keys), `frags`, `deaths`, `mb`. The raw logs of 
 
 ## The leaderboard (`plugins/ladder.py`)
 
-Two files in a server's data folder (`data/duellive/` on the public server), copied to the session archive by the daily
+Its files in a server's data folder (`data/duellive/` on the public server), copied to the session archive by the daily
 `tools/pull_sessions.sh` and never removed from the server:
 
 - `frags.jsonl`: one line per counted frag (a person and BobbyBones, either way): `t`, `map`, `state` (`warmup`,
   `in_progress`, ...), `mode` (`ffa` or `duel`), `net` (the run of the network that played), `killer`, `victim` (a
   person's anonymous key, the same salted hash as the subject ids of the test rooms, or `bobby:<run>`), `r` (the two
-  ratings after it). No names, no Steam IDs.
+  ratings after it). No names, no Steam IDs. Since 2026-10-12 `"owner": 1` on the lines of the server's owner (the
+  person whose Steam ID is `QLX_OWNER`; the field is absent on everybody else's lines): his games may be tests, and the
+  PC's tools set them apart by it. His id is compared in the plugin and written nowhere.
 - `ratings.json`: `players`: key -> `name` (the name the player was last seen with: the board shows it; this is the
   one place a person's name is kept, and it stays on the server and in the git-ignored archive), `r`, `rd`, `won`,
-  `lost` (frags made and taken against Bobby; for Bobby against people), `t`, `since`, `bot`.
+  `lost` (frags made and taken against Bobby; for Bobby against people), `t`, `since`, `bot`; `"owner": true` on the
+  owner's row (set at his first frag after 2026-10-12).
+- `duels.jsonl` (since 2026-10-12): one line per finished duel between one person and Bobby in 1v1 mode: `t`, `map`,
+  `net`, `key`, `owner`, `minutes` (played), `score` ([the person's, Bobby's]), `forfeit` (1: the person left or
+  stopped it, or it ended before its time with no limit hit), `kind`: `game` (a real game, started with F3: the game's
+  own score, machine gun at spawn) or `timed` (`!duel` on a duel map: the plugin's clock in warmup, every weapon at
+  spawn, the score counted from deaths). A game thrown back to warmup leaves no line.
+- `salt.txt`: the salt of the keys. Whoever has it and a Steam id can make that person's key: it is as private as the
+  bans, is copied to the archive by the daily pull and never goes into the repo.
+- Only on a server started with `QLSTATS=1` (`docs/guides/HOSTING.md`): `qlstats.json`: `players`: key -> `t`, `status`
+  (`ok`, `none`: no rating there, `untracked`, `deactivated`, `error`), `duel` and `ffa` (`r`, `rd`, `games`; `null`
+  without rated games; `rd` is `null` when only QLStats's `/elo` answered), `team` (20 games or more in a team mode),
+  `err` (an error's class name, e.g. `ReadTimeout`, `http503`, `notjson`), `tried` (when a later request failed: the
+  earlier answer stays). `qlstats.jsonl`: every answer as it came, a line each, with its `key`. `qlstats_off.json`:
+  `keys`, those who said `!qlstats off` (their rows and lines are deleted). Never a Steam id, never an address.
 
 ## Test suite cards
 One JSON per card: `{suite, run, subject, minutes, maps, rooms: {<room name>: {<metric>: value}}}`.

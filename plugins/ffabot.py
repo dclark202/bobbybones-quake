@@ -86,7 +86,7 @@ class ffabot(duelbot):
     WELCOME = "^2!bots <0-4>^7 sets how many of me play. ^2!map <name>^7 changes the map (^2!maps^7 lists them), ^2!mode duel^7 is one against one."
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game. ^2!bots <0-4>^7 sets how many of me play; people get the other seats (six play, the rest spectate).",
-            "^3Commands:^7 ^2F3^7 readies you up: when more than half of the people are ready a real game starts (10 min, machine gun at spawn). ^2!map <name>^7 changes the map (^2!maps^7 lists them), ^2!map testlab^7 is 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
+            "^3Commands:^7 ^2F3^7 readies you up: when more than half of the people are ready a real game starts (10 min, machine gun at spawn; the scoreboard and a vote for the next map at its end). ^2!map <name>^7 changes the map (^2!maps^7 lists them), ^2!map testlab^7 is 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def log(self, msg):
@@ -124,8 +124,17 @@ class ffabot(duelbot):
         self.msg("^3Game on: {} minutes, everybody against everybody, machine gun at spawn.^7".format(mins))
 
     def on_game_end(self, data):
+        """the end of a real game. The game's own end follows (owner, 2026-10-12: "the usual 'view the results and vote on
+        next map' screen"): the scoreboard, the vote among three maps of the pool (20 s), the chosen map's load. Until
+        then frame() said "abort" in the very frame of the end, because the game was no longer the people's (self.match
+        was cleared here): straight back to warmup, no scoreboard, no vote. Now the plugin keeps its hands off for
+        AFTER_GAME seconds or until the next map is up (duelbot.after_game). A game thrown back to warmup (ABORTED: this
+        event comes for those too) has no such end."""
+        aborted = isinstance(data, dict) and bool(data.get("ABORTED"))
         if self.match:
-            self.match_end("time")
+            self.match_end("stopped" if aborted else "time")
+        if not aborted:
+            self.game_over_t = time.time()
 
     def match_end(self, why="time"):
         M = self.match
@@ -187,6 +196,7 @@ class ffabot(duelbot):
         self.ready = False
         self.skin_tried = {}
         self.ready_ids = set()
+        self.game_over_t = 0.0                               # a new map: a game's end sequence is over with it
         self.seat, self.alive, self.prev, self.ammo_prev, self.tot, self.acc = {}, {}, {}, {}, {}, {}
 
     # ------------------------------------------------------------------ setup
@@ -195,9 +205,13 @@ class ffabot(duelbot):
         worlds share buffers sized by player count, so duelbot's two-seat ones are never built here)"""
         mapname = (minqlx.get_cvar("mapname") or "").lower()
         self.set_cvar("g_itemTimers", "0")                   # owner (2026-10-06): no spawn timers on the armors and the mega
-        self.set_cvar("g_weaponRespawn", "2")                # weapons back in 2 s (duelbot.setup puts the 5 s of 1v1 back)
+        self.set_cvar("g_weaponRespawn", "5")                # weapons back in 5 s, as in a duel and as he is trained (owner,
+                                                             # 2026-10-12; the simulator's ITEM_DEFS have 5 for every weapon in
+                                                             # every group size; it was 2 here since 2026-10-06)
         self.set_cvar("timelimit", "10")                     # a real game (started by the people readying up) lasts this long
         self.set_cvar("fraglimit", "0")
+        if _pu.map_pool("ffa"):                              # the maps of the vote at a game's end: the ten, in free-for-all
+            self.log("the vote's map pool: {}".format(minqlx.get_cvar("sv_mapPoolFile")))
         if _pu.reload_needed(mapname, "ffa"):                # the game loaded Campgrounds by itself with no quad to turn into the mega
             self.log("{}: loaded again with its quad, for the mega".format(mapname))
             _pu.load_map(mapname, "ffa")
@@ -276,6 +290,8 @@ class ffabot(duelbot):
         self.obs_dump = []                                   # (the debugging dump starts over with a network: another one has other inputs)
         self.ready = True
         self.start_session()
+        self.log("rules on {}: weapons back in {} s, the vote's map pool {}, factory {}".format(
+            mapname, minqlx.get_cvar("g_weaponRespawn"), minqlx.get_cvar("sv_mapPoolFile"), minqlx.get_cvar("g_factory")))
         self.log("free-for-all on {}: {} Bobbys, {} seats, policy {} ({} min), {} inputs, {}{}".format(
             mapname, self.n_bots, SEATS, self.P["run"], int(self.P["minutes"]), E.OBS_DIM, _net.describe(self.P, self.attn), self.v02_note(env, E)))
 
@@ -306,6 +322,7 @@ class ffabot(duelbot):
             if k not in used:
                 self.seat[p.id] = k
                 self.record(event="join", seat=k, bot=is_bot(p))
+                self.note_person(p, k)                       # (a person: his seat beside his leaderboard key; duelbot.note_person)
                 return k
         return None
 
@@ -337,6 +354,10 @@ class ffabot(duelbot):
             json.dump(meta, f, indent=1)
         self.frames_f = open(os.path.join(self.sess, "frames.csv"), "a")
         self.frames_f.write(",".join(FRAME_COLS) + "\n")
+        here = {p.id: p for p in self.players()}             # those already in their seats: a new session knows them too
+        for cid, k in sorted(self.seat.items(), key=lambda ck: ck[1]):
+            if cid in here:
+                self.note_person(here[cid], k)
         self.log("session {}".format(os.path.basename(self.sess)))
 
     def end_session(self):
@@ -413,6 +434,10 @@ class ffabot(duelbot):
                     self.next_check = now + 10               # a random map of its own pool right after the first one (every
                     _pu.load_map(self.want_map, "ffa")       # start), and when that map was one of ours the server stayed on
                     return                                   # it (2026-10-09: Lost World in place of Aerowalk)
+                if (minqlx.get_cvar("g_factory") or "").lower() == "duel":   # the map came up in the 1v1 factory (a pool of
+                    self.next_check = now + 10                               # the other mode): six seats need free-for-all
+                    _pu.load_map(mapname, "ffa")
+                    return
                 self.setup()
             return
         if mapname not in FFA_MAPS:
@@ -466,8 +491,10 @@ class ffabot(duelbot):
         # Not in the 30 s after the people's own start ("allready"): this frame can run before on_game_start has marked the
         # game as theirs, and the abort then threw the game they had just started back to warmup, with the "Game on" line
         # on the screen and everybody still carrying every weapon (owner, 2026-10-07).
+        # And not in the game's own end sequence (the scoreboard, the vote for the next map, the map's load): the game's
+        # state reads "in progress" all through it, and this abort cut it off in the frame of the game's end (2026-10-12).
         if (loaded and not self.match and self.game is not None and self.game.state == "in_progress"
-                and now - self.last_abort > 60 and now - self.go_t > 30):
+                and now - self.last_abort > 60 and now - self.go_t > 30 and not self.after_game(now)):
             self.last_abort = now
             minqlx.console_command("abort")
         if len(bobbys) < self.n_bots and now > self.next_check:
@@ -499,7 +526,10 @@ class ffabot(duelbot):
         if self.match:
             if now >= self.match["t_end"]:                                     # the game's own end was missed
                 self.match_end("time")
-                minqlx.console_command("abort")
+                if (minqlx.get_configstring(14) or "") == "1":                 # (configstring 14: the intermission is on, the
+                    self.game_over_t = now                                     # scoreboard and the vote for the next map
+                else:                                                          # are on the screens: leave it alone)
+                    minqlx.console_command("abort")
         elif people and self.game is not None and self.game.state == "warmup" and now - self.go_t > 20:
             n = len([p for p in people if p.id in self.ready_ids])
             if n * 2 > len(people):                                            # more than half of the people are ready
