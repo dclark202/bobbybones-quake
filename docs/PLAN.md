@@ -27,7 +27,7 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 | What | Where it stands |
 |---|---|
 | On the public server | **v0.1** (`duel_gru_v15c`'s end with his legs) since 2026-10-11 13:01: free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard. The owner after playing it: "much better than v14 was"; "strong LG, very strong"; "their main failure point is that their routes are predictable"; "he doesn't know how to push an advantage" |
-| In training | nothing at 19:30. For the owner's go: v0.2 ([runs/MANIFEST_v0.2.md](runs/MANIFEST_v0.2.md)): games on all ten maps, the rocket changes, the enemy as a target, and stage A of the attention model, which is not built yet; the part that is ready is v0.2.1 ([runs/MANIFEST_v15e.md](runs/MANIFEST_v15e.md)) |
+| In training | **v0.2** (`duel_gru_v0_2`) since 2026-10-11 21:49, to 19:00 on 2026-10-12: attention stage A (143 new inputs: the enemy as he believes him, the pros' places, his position), the pay for items and stack counted two minutes ahead, a tiny pay for speed gained from hop to hop, the first step of his aim toward the pros' (`AIM_LEVEL=1.5`), games on all ten maps, the rocket changes; it starts as v0.1 exactly. Held-out checks: House of Decay and Dismemberment. [runs/MANIFEST_v0.2.md](runs/MANIFEST_v0.2.md) |
 | The checks of a run | every save plays the last best network head to head, seats swapped in half of the games since 2026-10-11 (B-220), and the Nightmare stand-in; his speed profile in games; at a run's end the measures beside the pros' (`tools/convergence.py`) and real games against the game's Nightmare bot on a free PC; play tests |
 | How near he is to the pros | v15c's end: 48% on fourteen measures (position 65%, speed 82%, weapons 17%, aggression 3%, control 95%); v14's end 39%: the log of 2026-10-11 19:00, [design/V16_APPROACH.md](design/V16_APPROACH.md) |
 | Strafe jumping and speed | he strafe jumps on his legs (a second, movement-only network he switches to: v15b). In games: 9.4% of his travelling time at 400 or more, hops 332, 389, 384 (the pros 17.5%; 366, 421, 422). His legs alone reach 356, 405, 410: the limit is how they are used (they carry him 46% of his game time and his chains fall after the second hop) |
@@ -52,7 +52,10 @@ The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
 - 2, rockets: B-210.
 - 3, plasma, grenades: B-189.
 - 4, game awareness: B-217 (predictable routes), B-216 (offense or defense by the score), B-221 (the enemy as a target), B-191.
-- The demos and the checks: B-218, B-219, B-220.
+- The run in training: B-223 (v0.2).
+- The demos and the checks: B-218, B-219, B-220, B-225, B-226.
+- His aim, where he looks, the fights he takes: B-228, B-229, B-230, B-231.
+- The simulator and the maps: B-224, B-227.
 - Odd behaviour seen in runs and duels: B-214, B-215, B-192.
 
 ## Owner decisions
