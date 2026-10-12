@@ -1,0 +1,89 @@
+# Stage B of the attention model: the build's specification (2026-10-11 night; being built in copies while v0.2 trains)
+
+The owner, 2026-10-11: "Build everything for attention A first, then build the rest (B and C) once the run has started
+and you have downtime." Stage A is training as v0.2 ([../runs/MANIFEST_v0.2.md](../runs/MANIFEST_v0.2.md)). This page
+says what stage B is in the simulator and the trainer, part by part, so that each part can be built and checked on its
+own and merged after the run. Nothing here changes the running simulator: every part is behind a switch that is off by
+default, and with all of them off fixed runs must be bit for bit what they are today. His answers that it rests on are
+in [V16_APPROACH.md](V16_APPROACH.md) ("The owner's answers").
+
+## Part 1. Things he is asked to foretell (not paid)
+
+Why: they shape what his memory keeps and what the attention part reads; nothing pays him for them. Owner: fights taken
+and refused "as a measure and as something he is asked to foretell"; crosshair placement "very important".
+
+| What | The label | Where it comes from |
+|---|---|---|
+| Where the unseen enemy is | his true place in his own frame (forward, left, up), on frames the enemy is alive and out of view | the simulator's state at that frame |
+| Where the enemy next appears | the direction (sideways and up-down angle from his view as it stands) of the enemy at the next frame he comes into view, if that is within 5 s | hindsight inside a rollout |
+| How the next fight ends | within 10 s of a frame with the enemy in view: his frag, the enemy's frag, or neither; and the damage dealt less the damage taken in the next 5 s | hindsight inside a rollout |
+| When the big items return | seconds until the mega and the red armor are back, as they truly are (he is shown only what he believes) | the simulator's state |
+
+- Simulator: `info["aux"]`, one array a step with, per player: the enemy's true place in his frame, alive and in-view
+  flags, the true seconds to the mega and the red armor, the damage dealt and taken this frame, a frag made, a frag
+  taken. Always written (cheap), read only by the trainer.
+- Trainer: `--aux <weight>` (0 = off). Small output layers on his memory for the four labels; the hindsight labels are
+  made from the rollout's stored frames; losses: squared error on places and seconds (scaled), cross-entropy on the
+  fight's end. The size of each loss and how well he foretells (the error in units; the share of fights called right)
+  are written with every update. With `--aux 0` the trainer is as it was.
+- Never an input: what he foretells is not fed back to him in this stage.
+
+## Part 2. A target that is never "nothing", and places as targets
+
+Why: with no item due he has no target, his legs cannot carry him and he stands on his own feet at 270 units a second,
+13 to 23% of his time, in the places the owner found him waiting. Owner: "Yes".
+
+- Switch `TARGETS=1`. The intention keeps its nine choices and gains eight: "place 1" to "place 8", the map's holding
+  places: the eight cells of `sim/pro_places/<map>_cells.json` where the pros hold longest and fare best (a list a map,
+  made once by a tool and kept as `sim/pro_holds/<map>.json`; a map without one has no place choices).
+- A place as a target: his way leads to it (the route field's nearest point), it is reached when he stands within 96
+  units, and it stays his target while he holds it. No pay of its own.
+- "Nothing" stays a choice but the item rule's lesson no longer names it: where the rule names no item the lesson is
+  silent, so that what he does then is his own.
+- The enemy as a target (the ninth choice) stays as built and is still not seeded.
+- His legs: a place is a way like an item's. The inputs "his target" and "his way" show a place as they show an item.
+- New inputs, at the end: for each of the eight holding places, where it is in his frame, the way to it in seconds, and
+  how the pros fare there (already in the place tokens of stage A for the firing places; these are the holding ones).
+
+## Part 3. Several ways to a target
+
+Why: there is one way to each item, the shortest, and his legs take it every time; the owner's "main failure point is
+that their routes are predictable". Owner: "Yes".
+
+- Switch `WAYS=1`. For each pair of route goals the pros' ways are in `sim/pro_ways/<map>.json` (up to three a pair,
+  with points every 128 units). A second route field is built a map from each goal's alternative ways: the shortest way
+  that follows the pros' second and third ways where they exist.
+- A new output, the way (three choices: the shortest, the second, the third), read with the intention. His legs and his
+  own way inputs follow the way he chose. Where a pair has fewer ways the other choices are the shortest.
+- Measured, not paid: the share of his trips on the commonest way (57% today, the pros 43%).
+
+## Part 4. Whole games, and a frag paid by what it does to the game
+
+Why: only a whole game makes the score and the time left mean anything. Owner: whole games "Yes"; a frag paid by what
+it moves his chance of winning "yes"; late-game rounds from drawn states "yes, up to 25%".
+
+- Switch `GAME_P=<share>`: that share of the games' groups play whole ten-minute games (clock and score running, no
+  restart at two minutes). Switch `LATE_P=<share>`: rounds of three minutes that begin at 7:00 of such a game with a drawn
+  score (ahead or behind by one to three, or level) and the stacks that go with it.
+- The pay in those games, switch `WIN_PAY=1`: a frag for him or of him pays the change in his chance of winning the
+  game, by the score difference and the time left, times a scale that makes a frag at 0:0 with ten minutes left worth
+  what a frag is worth today. The table comes from the pros' games (the mended parser gives both scores at every
+  moment): `sim/win_chance.json`, made by a tool. The flat pay for a frag is not paid there.
+- The game token gets the true time left in the game and the score difference (they are inputs already in rounds).
+- Checks: the same network in whole games against two-minute rounds (does anything break when a game runs ten minutes:
+  items, clocks, memory resets); what a game pays in all against today.
+
+## Part 5. The pros' choices as a small standing pull
+
+Owner: "yes". After part 2. A table from the demos: by situation (his stack band, the enemy's time alive, the items
+due), the share of the pros' next targets (an item, a place). A small constant weight on the distance between his
+choice of target and that table, in place of the item rule's lesson where the table has enough lives. Not built before
+parts 1 to 4 have run.
+
+## The order of merging and the first run
+
+Each part arrives as a patch script against the simulator and the trainer as they stand in v0.2, with its own checks
+(fixed runs unchanged with its switch off; its numbers with the switch on). After v0.2 ends: part 1 first (it changes
+no behaviour), then 2, then 4, then 3; a ten-minute dry run after each; the run after v0.2 takes what has passed.
+Stage C (his legs as a part of the one network that can run and look; the judge) is specified when v0.2's numbers on
+his legs are in.
