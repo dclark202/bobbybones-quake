@@ -27,7 +27,7 @@ Code, the simulator and every result, including what did not work: https://githu
 ```
 **Playing him**
 
-Find the server in Quake Live's browser: **BobbyBones - the learning quake bot**. Nothing to install.
+Find the server in Quake Live's browser: **doppz's bot arena | duel & FFA | chicago** (the connect line is in the README on GitHub). Nothing to install.
 
 It starts in free-for-all on a duel map with two Bobbys and stays in warmup until people ready up.
 
