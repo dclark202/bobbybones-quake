@@ -51,8 +51,12 @@ SV_ClientThink_ptr SV_ClientThink;
 // connects into that seat must not get it: his own commands were thrown away and the bot flag was put on him after
 // every frame, so the server sent him no snapshots ("awaiting snapshot", then a timeout: the public server after a
 // switch from free-for-all to 1v1, 2026-10-10, every join into the second Bobby's old seat). Only a bot's seat is ours.
+// A bot is known by his Steam id, as the plugins know him (90071996842377216 and up: the top twelve bits are 0x014,
+// a person's 0x011). The first guard (2026-10-10) read the address type in the seat's netchan, which lies below the
+// part of client_t this header has right ("everything above this is correct. Below is a mess"): it took every seat
+// for a bot's, and the same thing happened again after "!bots 1" (2026-10-12).
 static int bot_seat(int id) {
-    return svs && svs->clients && svs->clients[id].netchan.remoteAddress.type == NA_BOT;
+    return svs && svs->clients && (svs->clients[id].steam_id >> 52) == 0x014;
 }
 
 void __cdecl My_SV_ClientThink(client_t* cl, usercmd_t* cmd) {
