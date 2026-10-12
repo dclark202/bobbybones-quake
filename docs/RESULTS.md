@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-12](results/2026-10-12.md)
 
+- 16:00 — The second aim step: the aim level is a weak lever, the tracking delay is the strong one and takes the rail with it; no setting gives all three; leg 2 takes the small step
 - 15:15 — v0.2 is on the public server (the owner: "yes send him to the public server"); his answers to v0.2.1's questions; the run waits for his go at about 21:00
 - 15:00 — v0.2.1's pretests on the card: both legs fit and run on the eight performance cores; the legs' lesson takes at once and leaves his aim alone; the place choice as first opened cost him the big items; 60% of an update is the learning step, not the simulators; an efficiency core is not safe even for a job pinned alone
 - 13:00 — Python jobs on the PC began to die at random at 11:12: not our code but the processor's efficiency cores (a thread pushed off one in mid-work now and then resumes a few instructions early); stages B and C merged; everything of ours now runs on the eight performance cores
