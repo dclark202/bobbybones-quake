@@ -149,7 +149,10 @@ def play(job):
         import test_suite as T
         pol = T.Policy(policy, seed=seed)
         pol.rng = np.random.default_rng(seed)
-        env.react_frames = round(pol.react_ms / 25)
+        # (B-226) his seats at the delays he was trained with (or --react-ms / --acquire-ms); the stand-in keeps his tracking
+        # delay and the simulator's own acquire delay
+        T.set_delays(E, env, [(np.arange(0, env.n, 2) if mode == "game" else np.arange(env.n),
+                               float(sets.get("REACT_MS") or pol.react_ms), float(sets.get("ACQUIRE_MS") or pol.acquire_ms))])
     env.loadout_p = (0.0, 1.0, 0.0, 0.0)
     env.kind_p, env.bot_p = (1.0, 0.0, 0.0, 0.0), 0.0
     n = env.n
@@ -260,6 +263,9 @@ def main():
     ap.add_argument("--json", default="")
     ap.add_argument("--show", nargs="*", default=None)
     ap.add_argument("--set", action="append", default=[])
+    ap.add_argument("--react-ms", type=float, default=None, help="his tracking delay (default: the checkpoint's react_ms)")
+    ap.add_argument("--acquire-ms", type=float, default=None, help="his delay before an enemy who has just come into view is noticed "
+                                                                    "(default: the checkpoint's acquire_ms; B-226)")
     a = ap.parse_args()
     if a.show is not None:
         show(a.show)
@@ -277,6 +283,9 @@ def main():
             k32_.SetPriorityClass(k32_.GetCurrentProcess(), 0x4000)
         maps = a.map.split(",")
         sets = dict(SETS, **dict(x.split("=", 1) for x in a.set))
+        for k_, v_ in (("REACT_MS", a.react_ms), ("ACQUIRE_MS", a.acquire_ms)):
+            if v_ is not None:
+                sets[k_] = str(v_)
         jobs = [(m, a.policy, a.games, a.minutes, 100 + i, sets, a.mode, a.labels) for i, m in enumerate(maps)]
         with mp_.Pool(min(a.procs, len(jobs))) as pool:
             res = pool.map(play, jobs)

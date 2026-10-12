@@ -17,6 +17,7 @@ import json
 import math
 import os
 import sys
+import zlib
 
 import numpy as np
 try:
@@ -58,6 +59,33 @@ N_HAND = 5                                                  # inputs: the keys h
 N_MOUSE = 3                                                 # inputs: the view's turning speed, the direction the hand turns, frames until it may change
 MOUSE_SMOOTH, MOUSE_SMOOTH_FINE, TURN_CAP = 0.75, 0.2, 30.0   # his mouse (duel_env): inertia a frame, for commands up to a degree, the fastest flick
 MOUSE_REV = 8                                               # frames after a change of the turn's direction before the hand changes it again (0.2 s)
+# Stage C part 2 (docs/design/V02_STAGE_C.md): his legs learn to run while they look somewhere, and to arrive at a place
+# and stand. Three more inputs at the very end (N_C2; there when look, arrive or c2 is set, zero where nothing is given):
+#   the sideways angle from his view to the look point / 90 degrees (left is plus; 1 is straight to his side, 2 behind
+#   him), that a look direction is given, that he is to stand at the goal.
+# A LOOK try (the share `look` of the tries, whatever their kind): a point of the walking map LOOK_NEAR to LOOK_FAR units
+# from him, up to LOOK_OFF degrees to either side of his way, fixed in the world for LOOK_T seconds and then drawn anew
+# from where he is (a stretch with none at the chance LOOK_NONE): the angle changes as he moves, as to the place he
+# believes an enemy at. Progress counts only as far as his view is on it: in full within LOOK_IN degrees sideways, not
+# at all beyond LOOK_OUT, a straight line between (MOVE_LOOK_OUT=<degrees> sets a wider edge for the start of a
+# training, should the narrow one give it too little to go by; 45 is the rule). In such a try progress is paid on new
+# ground only (the try's running best: a stretch of way given back while he looked away and made again while he looked
+# is paid once, and a step back costs the time alone). Everything else is as in any try: the frame's time, an arrival,
+# a jump made, lava and falls.
+# An ARRIVE try (the share `arrive`): the goal is a place to stand at (the map's holding places of sim/pro_holds/<map>.json
+# where stage B part 2 has written them, and ARRIVE_MORE points of the walking map with floor all round and as many at
+# a ledge), "stand at the goal" is set from its start and the try does not end at the goal. Until he is first within
+# STAND_R units of it (STAND_Z in height) everything is as in any try. From the next frame on: he stands while he is
+# within that distance at under STAND_SPEED units a second over the ground; a frame standing pays STAND_PAY (with a look
+# direction given: as far as his view is on it), the first one 1 as well (what an arrival pays); every other frame
+# costs its time as before; outside the distance the progress he has lost by leaving is charged (against the try's
+# running best, 0.5 s a frame at most) and what was charged is returned as he comes back, never more: leaving and
+# coming back cannot earn. It ends STAND_T seconds after he was first within the distance.
+N_C2 = 3
+LOOK_IN, LOOK_OUT, LOOK_OFF = 30.0, max(31.0, float(os.environ.get("MOVE_LOOK_OUT") or 45.0)), 120.0
+LOOK_NEAR, LOOK_FAR, LOOK_T, LOOK_NONE = 200.0, 1500.0, (2.0, 5.0), 0.2
+STAND_R, STAND_Z, STAND_SPEED = 96.0, 64.0, 100.0           # (duel_env's HOLD_R and HOLD_Z of stage B part 2)
+STAND_PAY, STAND_T, ARRIVE_MORE = 0.0125, (3.0, 6.0), 12
 OBS_DIM = 3 + 1 + 12 + 4 + 3 + 1 + N_WALL + N_FLOOR
 
 
@@ -86,6 +114,38 @@ def teleports(world):
     sp = world.trigger_spots()
     return (np.array([c for k, c, d in sp if k == 1], np.float32).reshape(-1, 3),
             np.array([d for k, c, d in sp if k == 1], np.float32).reshape(-1, 3))
+
+
+def arrive_points(world, nav_path, mapname, hazard):
+    """the goals of the arrive tries (stage C part 2): the map's holding places (sim/pro_holds/<map>.json of stage B part
+    2: the real ones, where the file is there), then ARRIVE_MORE points of the walking map with floor all round and as
+    many at a ledge (a drop of 100 units or more, or lava, on two or more of the eight sides 96 units away, floor on
+    three or more), drawn from a random stream of the map's own (the same in every worker and every run)."""
+    pts = []
+    hf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_holds", mapname.lower() + ".json")
+    if os.path.exists(hf):
+        with open(hf, encoding="utf-8") as fh:
+            pts += [[float(x) for x in p_["pos"]] for p_ in (json.load(fh).get("places") or [])]
+    nodes = np.array(json.load(open(nav_path))["nodes"], np.float32)
+    down = np.array([[0, 0, -1.0]], np.float32)
+    ok = np.array([world.cluster(p) >= 0 for p in nodes]) & (world.rays(nodes, down, 64.0)[:, 0] < 1)
+    ang = np.linspace(0, 2 * np.pi, N_FLOOR, endpoint=False)
+    st = np.concatenate([nodes[:, None, :2] + (np.stack([np.cos(ang), np.sin(ang)], 1) * 96.0)[None, :, :],
+                         np.repeat(nodes[:, None, 2:3], N_FLOOR, 1)], 2).reshape(-1, 3).astype(np.float32)
+    fr = world.rays(st, down, 256.0).reshape(-1)
+    drop = fr * 256.0 > 124.0
+    if hazard:
+        end = st + np.array([0, 0, -1.0], np.float32)[None, :] * (fr * 256.0 - 4.0)[:, None]
+        drop |= (world.contents_n(end) & HAZARD) != 0
+        ok &= (world.contents_n(nodes + np.array([0, 0, -23.0], np.float32)) & HAZARD) == 0
+    drop = drop.reshape(len(nodes), N_FLOOR)
+    flat = (fr * 256.0 < 64.0).reshape(len(nodes), N_FLOOR) & ~drop
+    rng = np.random.default_rng(zlib.crc32(mapname.lower().encode()))
+    for sel in (ok & flat.all(1), ok & (drop.sum(1) >= 2) & (flat.sum(1) >= 3)):
+        idx = np.nonzero(sel)[0]
+        if len(idx):
+            pts += [[float(x) for x in nodes[k]] for k in rng.choice(idx, min(ARRIVE_MORE, len(idx)), replace=False)]
+    return pts
 
 
 class NavField:
@@ -137,6 +197,7 @@ class NavField:
         for a, b, t, k in (JL.links(self.jumps, self.nodes, lambda p: self.locate(p)[0], ok=self.valid) if self.jumps else ()):
             radj[b].append((a, t, "jump"))
             jl[(a, b)] = k
+        self.radj, self._enter, self._jl = radj, enter, jl     # (kept for sim/ways.py: the second and third sets of ways)
         self.goals = np.array(goals, np.float32)
         G = len(goals)
         self.T = np.full((G, n), 1e9, np.float32)
@@ -199,7 +260,8 @@ class NavField:
 
 class MoveEnv:
     def __init__(self, bsp, nav_path, n=512, seed=0, max_goal_time=8.0, min_goal_time=0.8, substeps=(8, 8, 9),
-                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5, hand=False, mouse=False, mouse_rev=MOUSE_REV):
+                 stall_limit=5.0, obs_noise=0.0, delay_p=0.0, v14=False, jumps=False, jump_p=0.5, hand=False, mouse=False, mouse_rev=MOUSE_REV,
+                 look=0.0, arrive=0.0, c2=False):
         """substeps: physics steps (ms) per 25 ms decision. (8, 8, 9) = a 125 fps human: the frame-rate
         dependent ground-strafe boost that 40 Hz bots get (25,) is not available, as for real players."""
         self.w = World(bsp, n=n)
@@ -225,12 +287,17 @@ class MoveEnv:
         self.jumps = JL.load(os.path.splitext(os.path.basename(bsp))[0]) if jumps else []
         self.n_items = len(goals)                              # (a plain try's goal is an item; a jump's landing is a goal too, so
         goals = goals + [j_["b"] for j_ in self.jumps]         # that every jump has tries: many lie on no item's shortest way)
+        self.look_p, self.arrive_p = float(look), float(arrive)        # stage C part 2 (see N_C2): the shares of look tries, of arrive tries
+        self.c2 = N_C2 if (self.look_p > 0 or self.arrive_p > 0 or c2) else 0     # ... and how many inputs there are for them
+        self.n_plain = len(goals)                              # (the goals of the plain tries and of the jumps' tries end here)
+        if self.arrive_p > 0:                                  # the places to stand at, as goals after them
+            goals = goals + arrive_points(self.w, nav_path, os.path.splitext(os.path.basename(bsp))[0], self.v14)
         self.field = NavField(nav_path, goals, world=self.w, hazard=self.v14, starts=starts if self.v14 else None,
                               drop=shut_teleports(self.w, nav_path) if self.v14 else None,
                               tele=teleports(self.w) if self.v14 else None, jumps=self.jumps)
         self.jump_p = float(jump_p) if self.jumps else 0.0
         self.try_by_k = {}                                     # jump -> [(goal, the points a try can begin at)]
-        for g_ in range(len(self.field.goals) if self.jumps else 0):
+        for g_ in range(self.n_plain if self.jumps else 0):    # (not the arrive tries' goals: a jump's try is to an item or its landing)
             for k_ in range(len(self.jumps)):
                 st_ = np.nonzero((self.field.ji[g_] == k_) & (self.field.jd[g_] > JL.run_up(self.jumps[k_]["need"]))
                                  & (self.field.jd[g_] < 1300.0) & self.field.spawnable)[0]
@@ -256,6 +323,23 @@ class MoveEnv:
         self.at_edge = np.zeros(n, bool)
         self.fall_dmg = np.zeros(n, np.float32)
         self.spawn_nodes = np.nonzero(self.field.spawnable)[0]
+        # stage C part 2: the arrive tries' goals that tries can start for, and each player's books
+        t_ = self.field.T[self.n_plain:][:, self.spawn_nodes]
+        self.arr_goals = self.n_plain + np.nonzero(((t_ >= min_goal_time) & (t_ <= 15.0)).sum(1) >= 20)[0]
+        self.look_nodes = self.field.nodes[self.field.kd_idx]  # the points a look point is taken from
+        self.look_try = np.zeros(n, bool)                      # a look try,
+        self.look_on = np.zeros(n, bool)                       # ... a look direction is given now,
+        self.look_pt = np.zeros((n, 3), np.float32)            # ... the point,
+        self.look_t = np.zeros(n, np.float32)                  # ... seconds until it is drawn anew
+        self.stand = np.zeros(n, bool)                         # an arrive try ("stand at the goal"),
+        self.arr_len = np.zeros(n, np.float32)                 # ... the seconds it lasts after he was first within the distance,
+        self.arr_t = np.full(n, -1.0, np.float32)              # ... the second of the try that was (-1: not yet),
+        self.arr_sp = np.zeros(n, np.float32)                  # ... his speed over the ground as he crossed it,
+        self.arr_stood = np.zeros(n, bool)                     # ... he has stood there (the first frame pays 1),
+        self.arr_owed = np.zeros(n, np.float32)                # ... the lost progress charged and not yet returned, seconds,
+        self.arr_n = np.zeros((n, 3), np.int64)                # ... frames since: all, within the distance, standing,
+        self.arr_fell = np.zeros(n, bool)                      # ... he dropped below the place since
+        self.c2_now = np.zeros(8, np.float64)                  # the frame's counters (_c2_pay)
         self.goal_pos = self.field.goals
         self.max_goal_time, self.min_goal_time = max_goal_time, min_goal_time
         nodes = self.field.nodes
@@ -281,7 +365,17 @@ class MoveEnv:
         self.try_k[i], self.crossed[i], self.at_edge[i] = -1, False, False
         self.key_last[i], self.key_req[i], self.key_hold[i], self.key_tok[i] = (1, 1, 0), (1, 1, 0), 99, KEY_BURST
         self.mv[i], self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0, 0.0
-        if self.jump_p and self.try_by_k and self.rng.random() < self.jump_p:
+        if self.c2:
+            self._c2_clear(i)
+        if self.arrive_p and len(self.arr_goals) and self.rng.random() < self.arrive_p:     # an arrive try: to a place, and stand there
+            for _ in range(50):
+                g = int(self.arr_goals[self.rng.integers(len(self.arr_goals))])
+                node = int(self.spawn_nodes[self.rng.integers(len(self.spawn_nodes))])
+                T = f.T[g, node]
+                if self.min_goal_time <= T <= self.max_goal_time and f.next[g, node] >= 0:
+                    break
+            self.stand[i], self.arr_len[i] = True, self.rng.uniform(*STAND_T)
+        elif self.jump_p and self.try_by_k and self.rng.random() < self.jump_p:
             ks = list(self.try_by_k)                           # (every jump as often as any other)
             k = int(ks[self.rng.integers(len(ks))])
             g, st = self.try_by_k[k][int(self.rng.integers(len(self.try_by_k[k])))]
@@ -305,6 +399,9 @@ class MoveEnv:
         self.start_phi[i] = T
         self.stall[i] = 0.0
         self.limit[i] = 2.0 * T + 5.0
+        if self.look_p and self.rng.random() < self.look_p:    # a look try: somewhere to look while he runs (any kind of try)
+            self.look_try[i] = True
+            self._look_draw(i, p, math.degrees(math.atan2(nxt[1] - p[1], nxt[0] - p[0])))
 
     def place(self, i, pos, yaw, goal_idx):
         """start player i at pos facing yaw, heading for goal goal_idx (evaluation)"""
@@ -316,6 +413,8 @@ class MoveEnv:
         self.phi[i] = self.best_phi[i] = self.start_phi[i] = T[0]
         self.stall[i] = 0.0
         self.limit[i] = 30.0
+        if getattr(self, "c2", 0):                             # (stage C part 2: nothing given; a check sets it by hand)
+            self._c2_clear(i)
         self.state = self.w.state()
 
     def observe(self):
@@ -364,6 +463,16 @@ class MoveEnv:
         if getattr(self, "mouse", False):                      # v15: what his mouse is doing
             mo = np.stack([self.mv / TURN_CAP, self.turn_dir, self.rev_wait / getattr(self, "mouse_rev", MOUSE_REV)], 1).astype(np.float32)
             obs = np.concatenate([obs, mo], 1)
+        if getattr(self, "c2", 0):                             # stage C part 2: where to look, and that he is to stand at the goal
+            co = np.zeros((len(pos), N_C2), np.float32)        # (zeros where nothing is given, or nobody has set it: a teacher's asker)
+            lk = getattr(self, "look_on", None)
+            if lk is not None and len(lk) == len(pos) and lk.any():
+                co[:, 0] = np.where(lk, self.look_angle(pos) / 90.0, 0.0)
+                co[:, 1] = lk
+            st_ = getattr(self, "stand", None)
+            if st_ is not None and len(st_) == len(pos):
+                co[:, 2] = st_
+            obs = np.concatenate([obs, co], 1)
         if self.obs_noise:
             obs = obs + self.rng.normal(0, self.obs_noise, obs.shape)
         return obs.astype(np.float32)
@@ -379,6 +488,99 @@ class MoveEnv:
             end = st + np.array([0, 0, -1.0], np.float32)[None, :] * (fr * 256.0 - 4.0)[:, None]
             fr = np.where((self.w.contents_n(end) & HAZARD) != 0, 1.0, fr)
         return fr.reshape(self.n, N_FLOOR)
+
+    def _c2_clear(self, i):
+        """stage C part 2: player i's try gives no look direction and is no arrive try (until drawn or set)"""
+        self.look_try[i], self.look_on[i], self.stand[i], self.arr_t[i], self.arr_stood[i] = False, False, False, -1.0, False
+        self.arr_owed[i], self.arr_sp[i], self.arr_n[i], self.arr_fell[i] = 0.0, 0.0, 0, False
+
+    def look_angle(self, pos):
+        """the sideways angle (degrees; left is plus) from each player's view to his look point"""
+        d = self.look_pt - pos
+        return ((np.degrees(np.arctan2(d[:, 1], d[:, 0])) - self.yaw + 180.0) % 360.0 - 180.0).astype(np.float32)
+
+    def _way(self, i):
+        """the direction (degrees) player i's way leads from where he is: to the third point ahead on it (his view's,
+        where his way ends)"""
+        f, p = self.field, self.state[i, :3]
+        cur = int(f.locate(p[None])[0][0])
+        for _ in range(3):
+            nx = int(f.next[self.goal[i], cur])
+            if nx < 0:
+                break
+            cur = nx
+        d = f.nodes[cur] - p
+        return float(self.yaw[i]) if float(np.hypot(d[0], d[1])) < 24.0 else math.degrees(math.atan2(d[1], d[0]))
+
+    def _look_draw(self, i, pos, way):
+        """a look try's next stretch for player i, who is at pos and whose way leads toward `way` (degrees): with the
+        chance LOOK_NONE no look direction; else a point up to LOOK_OFF degrees to either side of his way (the angle
+        drawn evenly) and LOOK_NEAR to LOOK_FAR units away, moved to the point of the walking map nearest to it inside
+        the same angle (a map with none there: left in the air)."""
+        self.look_t[i] = self.rng.uniform(*LOOK_T)
+        if self.rng.random() < LOOK_NONE:
+            self.look_on[i] = False
+            return
+        ang = math.radians(way + self.rng.uniform(-LOOK_OFF, LOOK_OFF))
+        r = self.rng.uniform(LOOK_NEAR, LOOK_FAR)
+        pt = np.array([pos[0] + r * math.cos(ang), pos[1] + r * math.sin(ang), pos[2]], np.float32)
+        nd = self.look_nodes
+        d = nd[:, :2] - np.asarray(pos[:2], np.float32)[None, :]
+        off = (np.degrees(np.arctan2(d[:, 1], d[:, 0])) - way + 180.0) % 360.0 - 180.0
+        ok = np.nonzero((np.hypot(d[:, 0], d[:, 1]) >= LOOK_NEAR) & (np.abs(off) <= LOOK_OFF))[0]
+        if len(ok):
+            pt = nd[ok[np.linalg.norm(nd[ok] - pt[None, :], axis=1).argmin()]]
+        self.look_pt[i], self.look_on[i] = pt, True
+
+    def _c2_pay(self, s, pos, phi, reward, arrived):
+        """stage C part 2 (see N_C2): the frame's pay in a look try and in an arrive try, in place of the plain one (the
+        try's end is booked after it as for any try). Returns the pay; who arrived as a plain try does (an arrive try does
+        not end at its goal); and for the arrive tries who has been within the distance, and whose time there is up."""
+        speed = np.hypot(s[:, 3], s[:, 4])
+        lk = self.look_on
+        ang = np.abs(self.look_angle(pos)) if lk.any() else np.zeros(self.n, np.float32)
+        gate = np.where(lk, np.clip((LOOK_OUT - ang) / (LOOK_OUT - LOOK_IN), 0.0, 1.0), 1.0).astype(np.float32)
+        # a look try: progress on new ground only (the try's running best), and only as far as he looks
+        reward = np.where(self.look_try, np.clip(self.best_phi - phi, 0.0, 0.5) * gate - DT, reward)
+        # an arrive try
+        gp = self.goal_pos[self.goal]
+        inside = self.stand & (np.hypot(gp[:, 0] - pos[:, 0], gp[:, 1] - pos[:, 1]) < STAND_R) & (np.abs(gp[:, 2] - pos[:, 2]) < STAND_Z)
+        second = self.stand & (self.arr_t >= 0.0)              # he was within the distance before this frame
+        first = inside & ~second
+        self.arr_t = np.where(first, self.t, self.arr_t).astype(np.float32)
+        self.arr_sp = np.where(first, speed, self.arr_sp).astype(np.float32)
+        standing = second & inside & (speed < STAND_SPEED)
+        owed = np.minimum(np.maximum(phi - self.best_phi, 0.0), self.arr_owed + 0.5)     # the progress lost by leaving: charged 0.5 s a frame
+        owed = np.where(second & ~inside, owed, 0.0).astype(np.float32)                  # at most; returned as he comes back, the rest inside
+        new = standing & ~self.arr_stood
+        self.arr_stood |= standing
+        pay2 = (self.arr_owed - owed) + np.where(standing, STAND_PAY * gate, -DT) + new * 1.0
+        reward = np.where(second, pay2, reward).astype(np.float32)
+        self.arr_owed = owed
+        self.arr_n += np.stack([second, second & inside, standing], 1)
+        self.arr_fell |= second & (pos[:, 2] < gp[:, 2] - STAND_Z)
+        # the counters, over the frames he travels (not an arrive try's part at the place): with a look direction given the
+        # frames, of them his view within LOOK_IN degrees, the sum of his speed, frames at 400 or more; the same three
+        # without one; the sum of the share of progress that counted
+        here = second | first
+        a_, b_ = lk & ~here, ~lk & ~here
+        self.c2_now = np.array([a_.sum(), (a_ & (ang <= LOOK_IN)).sum(), speed[a_].sum(), (a_ & (speed >= 400.0)).sum(),
+                                b_.sum(), speed[b_].sum(), (b_ & (speed >= 400.0)).sum(), gate[a_].sum()], np.float64)
+        return reward, arrived & ~self.stand, (here, here & (self.t - self.arr_t >= self.arr_len))
+
+    def _c2_ep(self, i, fell):
+        """what a finished try's record says of stage C part 2: a look try, an arrive try; for an arrive try `arrived` is
+        that he came within the distance and `t` the second he did, then the frames after it (all, within the distance,
+        standing), his speed as he crossed it, and that he fell after arriving (into lava, out of the map, or below
+        the place)"""
+        d = dict(look=bool(self.look_try[i]), stand=bool(self.stand[i]))
+        if self.stand[i]:
+            got = bool(self.arr_t[i] >= 0.0)
+            d.update(arrived=got, after=int(self.arr_n[i, 0]), within=int(self.arr_n[i, 1]), stood=int(self.arr_n[i, 2]),
+                     cross=float(self.arr_sp[i]), fell_after=bool(got and (fell or self.arr_fell[i])))
+            if got:
+                d["t"] = float(self.arr_t[i])
+        return d
 
     def limit_keys(self, a):
         """his left hand (see duel_env.limit_keys): the keys asked for become the keys one hand can hold"""
@@ -460,6 +662,9 @@ class MoveEnv:
         self.phi = phi
         gp = self.goal_pos[self.goal]
         arrived = (np.hypot(gp[:, 0] - pos[:, 0], gp[:, 1] - pos[:, 1]) < 40) & (np.abs(gp[:, 2] - pos[:, 2]) < 64)
+        hold = None
+        if self.c2:                                            # stage C part 2: a look try's pay, an arrive try's (see N_C2)
+            reward, arrived, hold = self._c2_pay(s, pos, phi, reward, arrived)
         fell = pos[:, 2] < self.zmin
         hard = np.zeros(self.n, np.float32)
         wet = np.zeros(self.n, bool)
@@ -487,18 +692,28 @@ class MoveEnv:
         self.best_phi = np.minimum(self.best_phi, phi)
         self.stall = np.where(improved, 0.0, self.stall + DT)
         timeout = (self.t > self.limit) | (self.stall > self.stall_limit)
+        if hold is not None:                                   # (an arrive try, once he was within the distance, ends by its own clock)
+            timeout = np.where(hold[0], hold[1], timeout)
         reward = reward + arrived * 1.0 - fell * 1.0 - (LAVA_COST - 1.0) * wet - FALL_COST * hard + over * 1.0
         done = arrived | fell | timeout
         speed = np.hypot(s[:, 3], s[:, 4])
         info = dict(speed=speed, ground=s[:, 6].copy(), key_dec=self.key_dec.copy() if self.hand else None)
+        if self.c2:
+            info["c2"] = self.c2_now
         ep = []
         for i in np.nonzero(done)[0]:
             ep.append(dict(arrived=bool(arrived[i]), fell=bool(fell[i]), lava=bool(wet[i]), t=float(self.t[i]),
                            est=float(self.start_phi[i]), goal=int(self.goal[i]), fall_dmg=float(self.fall_dmg[i]),
                            jump=int(self.try_k[i]), crossed=bool(self.crossed[i])))
+            if self.c2:
+                ep[-1].update(self._c2_ep(int(i), bool(fell[i])))
             self.fall_dmg[i] = 0.0
             self._reset(int(i))
         if len(ep):
             self.state = self.w.state()
+        if self.look_p:                                        # a look try's point is drawn anew every few seconds, from where he is
+            self.look_t = (self.look_t - DT).astype(np.float32)
+            for i in np.nonzero(self.look_try & (self.look_t <= 0.0))[0]:
+                self._look_draw(int(i), self.state[i, :3], self._way(int(i)))
         info["episodes"] = ep
         return self.observe(), reward.astype(np.float32), done, info

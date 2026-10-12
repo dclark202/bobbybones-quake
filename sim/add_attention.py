@@ -53,7 +53,8 @@ def same(a, b, frames=40, players=32):
     rng = np.random.default_rng(1)
     ha, hb = pa.zeros(players), pb.zeros(players)
     worst, acts = 0.0, 0
-    for _ in range(frames):
+    for f_ in range(frames):
+        pa.rng, pb.rng = np.random.default_rng(1000 + f_), np.random.default_rng(1000 + f_)     # (the same draws for the outputs both have)
         obs = (rng.standard_normal((players, n)) * 2.0).astype(np.float32)
         aa, ha = pa.act(obs, ha)
         ab, hb = pb.act(obs, hb)

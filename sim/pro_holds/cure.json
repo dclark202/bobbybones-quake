@@ -1,0 +1,371 @@
+{
+ "map": "cure",
+ "cell": [
+  256.0,
+  256.0,
+  128.0
+ ],
+ "keep": 8,
+ "apart": 200.0,
+ "source": {
+  "holds_cells": 10,
+  "ratio": 1.4,
+  "cells": 74
+ },
+ "spawns": 12,
+ "about": "the map's holding places, best first (tools/pro_holds.py): pos is a point of the walking map; share: the pros' share of holds in its cell, per cent (share_from sightings: put from the pros' sightings there); outcome_over_expected: how a pro seen standing in the cell fares against what his stack would give anywhere; from_spawns_s: a walker's way from the spawn points, seconds",
+ "places": [
+  {
+   "id": 1,
+   "pos": [
+    655.0,
+    -97.0,
+    -103.9
+   ],
+   "node": 816,
+   "cell": [
+    2,
+    -1,
+    -1
+   ],
+   "cell_middle": [
+    640.0,
+    -128.0,
+    -64.0
+   ],
+   "in_cell": true,
+   "moved": 52.7,
+   "floor_round": 1.0,
+   "share": 7.8,
+   "share_from": "holds",
+   "holds": 152,
+   "sightings": 216,
+   "outcome_over_expected": 0.045,
+   "factor": 1.117,
+   "score": 8.711,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 78.3,
+    "lightning": 9.9,
+    "rail": 11.8
+   },
+   "near": {
+    "item": "RA",
+    "units": 104,
+    "height": -24
+   },
+   "from_spawns_s": {
+    "worst": 7.1,
+    "mean": 4.6
+   }
+  },
+  {
+   "id": 2,
+   "pos": [
+    415.0,
+    -385.0,
+    408.1
+   ],
+   "node": 591,
+   "cell": [
+    1,
+    -2,
+    3
+   ],
+   "cell_middle": [
+    384.0,
+    -384.0,
+    448.0
+   ],
+   "in_cell": true,
+   "moved": 50.5,
+   "floor_round": 0.94,
+   "share": 5.7,
+   "share_from": "holds",
+   "holds": 111,
+   "sightings": 220,
+   "outcome_over_expected": 0.014,
+   "factor": 1.037,
+   "score": 5.909,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 85.6,
+    "lightning": 3.6,
+    "rail": 10.8
+   },
+   "near": {
+    "item": "RL2",
+    "units": 283,
+    "height": 264
+   },
+   "from_spawns_s": {
+    "worst": 7.5,
+    "mean": 5.1
+   }
+  },
+  {
+   "id": 3,
+   "pos": [
+    367.0,
+    -385.0,
+    152.1
+   ],
+   "node": 531,
+   "cell": [
+    1,
+    -2,
+    1
+   ],
+   "cell_middle": [
+    384.0,
+    -384.0,
+    192.0
+   ],
+   "in_cell": true,
+   "moved": 43.4,
+   "floor_round": 1.0,
+   "share": 6.5,
+   "share_from": "holds",
+   "holds": 128,
+   "sightings": 229,
+   "outcome_over_expected": -0.047,
+   "factor": 0.875,
+   "score": 5.685,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 77.3,
+    "lightning": 6.2,
+    "rail": 16.4
+   },
+   "near": {
+    "item": "RL2",
+    "units": 102,
+    "height": 8
+   },
+   "from_spawns_s": {
+    "worst": 7.1,
+    "mean": 4.0
+   }
+  },
+  {
+   "id": 4,
+   "pos": [
+    943.0,
+    -433.0,
+    408.1
+   ],
+   "node": 981,
+   "cell": [
+    3,
+    -2,
+    3
+   ],
+   "cell_middle": [
+    896.0,
+    -384.0,
+    448.0
+   ],
+   "in_cell": true,
+   "moved": 78.8,
+   "floor_round": 0.94,
+   "share": 5.0,
+   "share_from": "holds",
+   "holds": 98,
+   "sightings": 142,
+   "outcome_over_expected": 0.008,
+   "factor": 1.017,
+   "score": 5.083,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 90.8,
+    "lightning": 4.1,
+    "rail": 5.1
+   },
+   "near": {
+    "item": "GA2",
+    "units": 106,
+    "height": -32
+   },
+   "from_spawns_s": {
+    "worst": 7.8,
+    "mean": 5.1
+   }
+  },
+  {
+   "id": 5,
+   "pos": [
+    367.0,
+    -385.0,
+    -71.9
+   ],
+   "node": 530,
+   "cell": [
+    1,
+    -2,
+    -1
+   ],
+   "cell_middle": [
+    384.0,
+    -384.0,
+    -64.0
+   ],
+   "in_cell": true,
+   "moved": 18.8,
+   "floor_round": 1.0,
+   "share": 3.9,
+   "share_from": "holds",
+   "holds": 76,
+   "sightings": 165,
+   "outcome_over_expected": -0.047,
+   "factor": 0.894,
+   "score": 3.486,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 84.2,
+    "lightning": 2.6,
+    "rail": 13.2
+   },
+   "near": {
+    "item": "RL2",
+    "units": 268,
+    "height": -248
+   },
+   "from_spawns_s": {
+    "worst": 6.7,
+    "mean": 4.2
+   }
+  },
+  {
+   "id": 6,
+   "pos": [
+    895.0,
+    383.0,
+    216.1
+   ],
+   "node": 963,
+   "cell": [
+    3,
+    1,
+    1
+   ],
+   "cell_middle": [
+    896.0,
+    384.0,
+    192.0
+   ],
+   "in_cell": true,
+   "moved": 24.1,
+   "floor_round": 1.0,
+   "share": 3.5,
+   "share_from": "holds",
+   "holds": 69,
+   "sightings": 148,
+   "outcome_over_expected": -0.008,
+   "factor": 0.983,
+   "score": 3.44,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 73.9,
+    "lightning": 0.0,
+    "rail": 26.1
+   },
+   "near": {
+    "item": "YA",
+    "units": 365,
+    "height": 0
+   },
+   "from_spawns_s": {
+    "worst": 8.7,
+    "mean": 5.7
+   }
+  },
+  {
+   "id": 7,
+   "pos": [
+    655.0,
+    -433.0,
+    408.1
+   ],
+   "node": 811,
+   "cell": [
+    2,
+    -2,
+    3
+   ],
+   "cell_middle": [
+    640.0,
+    -384.0,
+    448.0
+   ],
+   "in_cell": true,
+   "moved": 64.9,
+   "floor_round": 1.0,
+   "share": 3.0,
+   "share_from": "holds",
+   "holds": 58,
+   "sightings": 139,
+   "outcome_over_expected": 0.044,
+   "factor": 1.09,
+   "score": 3.271,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 87.9,
+    "lightning": 6.9,
+    "rail": 5.2
+   },
+   "near": {
+    "item": "GA2",
+    "units": 355,
+    "height": -32
+   },
+   "from_spawns_s": {
+    "worst": 6.9,
+    "mean": 5.1
+   }
+  },
+  {
+   "id": 8,
+   "pos": [
+    895.0,
+    383.0,
+    -103.9
+   ],
+   "node": 962,
+   "cell": [
+    3,
+    1,
+    -1
+   ],
+   "cell_middle": [
+    896.0,
+    384.0,
+    -64.0
+   ],
+   "in_cell": true,
+   "moved": 39.9,
+   "floor_round": 1.0,
+   "share": 2.5,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 131,
+   "outcome_over_expected": 0.147,
+   "factor": 1.291,
+   "score": 3.227,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 40.1,
+    "lightning": 30.5,
+    "rail": 29.5
+   },
+   "near": {
+    "item": "RL",
+    "units": 292,
+    "height": -32
+   },
+   "from_spawns_s": {
+    "worst": 6.0,
+    "mean": 3.8
+   }
+  }
+ ]
+}

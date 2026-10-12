@@ -1,0 +1,371 @@
+{
+ "map": "houseofdecay",
+ "cell": [
+  256.0,
+  256.0,
+  128.0
+ ],
+ "keep": 8,
+ "apart": 200.0,
+ "source": {
+  "holds_cells": 0,
+  "ratio": 1.4,
+  "cells": 48
+ },
+ "spawns": 6,
+ "about": "the map's holding places, best first (tools/pro_holds.py): pos is a point of the walking map; share: the pros' share of holds in its cell, per cent (share_from sightings: put from the pros' sightings there); outcome_over_expected: how a pro seen standing in the cell fares against what his stack would give anywhere; from_spawns_s: a walker's way from the spawn points, seconds",
+ "places": [
+  {
+   "id": 1,
+   "pos": [
+    623.0,
+    -385.0,
+    24.1
+   ],
+   "node": 736,
+   "cell": [
+    2,
+    -2,
+    0
+   ],
+   "cell_middle": [
+    640.0,
+    -384.0,
+    64.0
+   ],
+   "in_cell": true,
+   "moved": 43.4,
+   "floor_round": 1.0,
+   "share": 10.88,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 981,
+   "outcome_over_expected": 0.002,
+   "factor": 1.008,
+   "score": 10.97,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 80.8,
+    "lightning": 19.2,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "RL",
+    "units": 185,
+    "height": 48
+   },
+   "from_spawns_s": {
+    "worst": 5.8,
+    "mean": 2.8
+   }
+  },
+  {
+   "id": 2,
+   "pos": [
+    -145.0,
+    623.0,
+    152.1
+   ],
+   "node": 361,
+   "cell": [
+    -1,
+    2,
+    1
+   ],
+   "cell_middle": [
+    -128.0,
+    640.0,
+    192.0
+   ],
+   "in_cell": true,
+   "moved": 46.6,
+   "floor_round": 1.0,
+   "share": 10.24,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 923,
+   "outcome_over_expected": -0.016,
+   "factor": 0.934,
+   "score": 9.563,
+   "weapon": "lightning",
+   "weapons": {
+    "rockets": 44.4,
+    "lightning": 55.6,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "PG",
+    "units": 102,
+    "height": 48
+   },
+   "from_spawns_s": {
+    "worst": 4.1,
+    "mean": 3.5
+   }
+  },
+  {
+   "id": 3,
+   "pos": [
+    -1153.0,
+    -433.0,
+    24.1
+   ],
+   "node": 2,
+   "cell": [
+    -5,
+    -2,
+    0
+   ],
+   "cell_middle": [
+    -1152.0,
+    -384.0,
+    64.0
+   ],
+   "in_cell": true,
+   "moved": 63.2,
+   "floor_round": 0.94,
+   "share": 7.14,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 644,
+   "outcome_over_expected": 0.055,
+   "factor": 1.21,
+   "score": 8.641,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 57.3,
+    "lightning": 42.7,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "LG",
+    "units": 290,
+    "height": 48
+   },
+   "from_spawns_s": {
+    "worst": 4.1,
+    "mean": 3.2
+   }
+  },
+  {
+   "id": 4,
+   "pos": [
+    623.0,
+    -145.0,
+    24.1
+   ],
+   "node": 743,
+   "cell": [
+    2,
+    -1,
+    0
+   ],
+   "cell_middle": [
+    640.0,
+    -128.0,
+    64.0
+   ],
+   "in_cell": true,
+   "moved": 46.6,
+   "floor_round": 1.0,
+   "share": 6.57,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 592,
+   "outcome_over_expected": 0.025,
+   "factor": 1.093,
+   "score": 7.179,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 73.2,
+    "lightning": 26.8,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "YA",
+    "units": 416,
+    "height": 48
+   },
+   "from_spawns_s": {
+    "worst": 5.2,
+    "mean": 2.8
+   }
+  },
+  {
+   "id": 5,
+   "pos": [
+    -145.0,
+    -385.0,
+    24.1
+   ],
+   "node": 332,
+   "cell": [
+    -1,
+    -2,
+    0
+   ],
+   "cell_middle": [
+    -128.0,
+    -384.0,
+    64.0
+   ],
+   "in_cell": true,
+   "moved": 43.4,
+   "floor_round": 1.0,
+   "share": 7.28,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 656,
+   "outcome_over_expected": -0.009,
+   "factor": 0.966,
+   "score": 7.024,
+   "weapon": "lightning",
+   "weapons": {
+    "rockets": 38.8,
+    "lightning": 61.2,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "YA3",
+    "units": 236,
+    "height": 40
+   },
+   "from_spawns_s": {
+    "worst": 4.6,
+    "mean": 2.7
+   }
+  },
+  {
+   "id": 6,
+   "pos": [
+    143.0,
+    -385.0,
+    24.1
+   ],
+   "node": 563,
+   "cell": [
+    0,
+    -2,
+    0
+   ],
+   "cell_middle": [
+    128.0,
+    -384.0,
+    64.0
+   ],
+   "in_cell": true,
+   "moved": 42.6,
+   "floor_round": 1.0,
+   "share": 6.87,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 619,
+   "outcome_over_expected": -0.017,
+   "factor": 0.936,
+   "score": 6.424,
+   "weapon": "lightning",
+   "weapons": {
+    "rockets": 47.7,
+    "lightning": 52.3,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "YA3",
+    "units": 298,
+    "height": 40
+   },
+   "from_spawns_s": {
+    "worst": 5.2,
+    "mean": 2.7
+   }
+  },
+  {
+   "id": 7,
+   "pos": [
+    -385.0,
+    383.0,
+    152.1
+   ],
+   "node": 218,
+   "cell": [
+    -2,
+    1,
+    1
+   ],
+   "cell_middle": [
+    -384.0,
+    384.0,
+    192.0
+   ],
+   "in_cell": true,
+   "moved": 39.9,
+   "floor_round": 1.0,
+   "share": 4.41,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 398,
+   "outcome_over_expected": 0.036,
+   "factor": 1.12,
+   "score": 4.943,
+   "weapon": "lightning",
+   "weapons": {
+    "rockets": 49.9,
+    "lightning": 50.1,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "PG",
+    "units": 376,
+    "height": 48
+   },
+   "from_spawns_s": {
+    "worst": 5.0,
+    "mean": 3.7
+   }
+  },
+  {
+   "id": 8,
+   "pos": [
+    -625.0,
+    383.0,
+    152.1
+   ],
+   "node": 164,
+   "cell": [
+    -3,
+    1,
+    1
+   ],
+   "cell_middle": [
+    -640.0,
+    384.0,
+    192.0
+   ],
+   "in_cell": true,
+   "moved": 42.6,
+   "floor_round": 1.0,
+   "share": 3.34,
+   "share_from": "sightings",
+   "holds": null,
+   "sightings": 301,
+   "outcome_over_expected": 0.148,
+   "factor": 1.445,
+   "score": 4.822,
+   "weapon": "rockets",
+   "weapons": {
+    "rockets": 51.7,
+    "lightning": 48.3,
+    "rail": 0.0
+   },
+   "near": {
+    "item": "YA2",
+    "units": 265,
+    "height": 48
+   },
+   "from_spawns_s": {
+    "worst": 5.7,
+    "mean": 3.9
+   }
+  }
+ ]
+}

@@ -81,13 +81,13 @@ def play(job):
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
                     nav=nav_ if os.path.exists(nav_) else None)
     # ---- the game, as tools/duel_eval.py sets it up
-    env.react_frames = round(pol.react_ms / 25)
     # two delays the simulator reads from the run, not from the environment (the trainer's --react-ms and --acquire-ms):
-    # here as settings of this tool (--set ACQUIRE_MS=225), for trials of his aim
-    if envvars.get("REACT_MS"):
-        env.react_frames = round(float(envvars["REACT_MS"]) / 25)
-    if envvars.get("ACQUIRE_MS"):
-        env.acquire_frames = round(float(envvars["ACQUIRE_MS"]) / 25)
+    # from his checkpoint (B-226: the acquire delay too), or as settings of this tool (--acquire-ms 225, or
+    # --set ACQUIRE_MS=225 as before), for trials of his aim. They are his seats' alone: the stand-in keeps his tracking
+    # delay and the simulator's own acquire delay (until 2026-10-12 --set ACQUIRE_MS moved the stand-in's too)
+    import test_suite as TS_
+    TS_.set_delays(E, env, [(np.arange(0, env.n, 2) if opp == "nightmare" else np.arange(env.n),
+                             float(envvars.get("REACT_MS") or pol.react_ms), float(envvars.get("ACQUIRE_MS") or pol.acquire_ms))])
     env.arena_stack = False
     env.arena_sets = [(E.MG,)]
     env.loadout_p = (0.0, 1.0, 0.0, 0.0)
@@ -724,6 +724,9 @@ def main():
     ap.add_argument("--json", default=None)
     ap.add_argument("--pros", default=os.path.join(ROOT, "docs", "pro_yardsticks.json"))
     ap.add_argument("--show", default=None)
+    ap.add_argument("--react-ms", type=float, default=None, help="his tracking delay (default: the checkpoint's react_ms)")
+    ap.add_argument("--acquire-ms", type=float, default=None, help="his delay before an enemy who has just come into view is noticed "
+                                                                    "(default: the checkpoint's acquire_ms; B-226)")
     a = ap.parse_args()
     import pro_yardsticks as Y0
     pros = Y0.load_both(a.pros)
@@ -732,6 +735,9 @@ def main():
     low_priority()
     envvars = dict(x.split("=", 1) for x in SETS.split())
     envvars.update(dict(x.split("=", 1) for x in a.set))
+    for k_, v_ in (("REACT_MS", a.react_ms), ("ACQUIRE_MS", a.acquire_ms)):     # (the flags go the way --set REACT_MS= always went)
+        if v_ is not None:
+            envvars[k_] = str(v_)
     os.environ.update(envvars)                                   # (before anything of the simulator is imported, here and in the workers)
     import pro_yardsticks as Y
     import pro_places as PP

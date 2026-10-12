@@ -20,11 +20,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.environ.get("QLBOT_ROOT") or os.path.dirname(HERE)      # (QLBOT_ROOT: the repo, when this file is run from a copy)
 
 
-def worker(remote, bsp, nav, n, seed, substeps, v14=False, jumps=False, jump_p=0.5, hand=False, mouse=False, mouse_rev=8):
+def worker(remote, bsp, nav, n, seed, substeps, v14=False, jumps=False, jump_p=0.5, hand=False, mouse=False, mouse_rev=8,
+           look=0.0, arrive=0.0, c2=False):
     os.environ["OMP_NUM_THREADS"] = "1"
     sys.path.insert(0, HERE)
     from movement_env import MoveEnv
-    env = MoveEnv(bsp, nav, n=n, seed=seed, substeps=substeps, v14=v14, jumps=jumps, jump_p=jump_p, hand=hand, mouse=mouse, mouse_rev=mouse_rev)
+    env = MoveEnv(bsp, nav, n=n, seed=seed, substeps=substeps, v14=v14, jumps=jumps, jump_p=jump_p, hand=hand, mouse=mouse, mouse_rev=mouse_rev,
+                  look=look, arrive=arrive, c2=c2)
     mapname = os.path.basename(bsp)[:-4]
     remote.send(env.observe())
     while True:
@@ -37,7 +39,8 @@ def worker(remote, bsp, nav, n, seed, substeps, v14=False, jumps=False, jump_p=0
                 ep["map"] = mapname
             stats = dict(n_moving=int(moving.sum()), n_fast=int((sp[moving] > 330).sum()),
                          vmax=float(sp.max()), air=float(1 - gr.mean()), episodes=info["episodes"],
-                         key_dec=info.get("key_dec"))              # (hand: the frames on which the keys are read next)
+                         key_dec=info.get("key_dec"),              # (hand: the frames on which the keys are read next)
+                         c2=info.get("c2"))                        # (stage C part 2: the frame's counters of the look tries)
             remote.send((obs, rew, done, stats))
         elif cmd == "curriculum":
             env.max_goal_time = data
@@ -73,6 +76,15 @@ def main():
     ap.add_argument("--hand", action="store_true", help="v15: his finger limits on the keys (read ten times a second, a finger at most "
                                                         "every 150 ms, KEY_RATE key actions a second) and five inputs of what the hand "
                                                         "holds; the key outputs are credited only on the frames they are read")
+    ap.add_argument("--look", type=float, default=0.0, help="stage C part 2: the share of tries with somewhere to look while he runs "
+                    "(a point up to 120 degrees off his way; progress counts only while his view is on it; see movement_env.N_C2)")
+    ap.add_argument("--arrive", type=float, default=0.0, help="stage C part 2: the share of tries whose goal is a place to arrive at "
+                    "and stand (the map's holding places, points with floor all round and at ledges)")
+    ap.add_argument("--c2", action="store_true", help="the three inputs of stage C part 2 with neither kind of try (a network "
+                    "that has them, trained on as it is)")
+    ap.add_argument("--device", default="cpu", choices=("cpu", "cuda"), help="where the network is worked out and updated")
+    ap.add_argument("--threads", type=int, default=6, help="torch's threads on the processor")
+    ap.add_argument("--runs-dir", default=None, help="the folder of the runs (default: data/sim_runs of the repo)")
     a = ap.parse_args()
     if a.low and os.name == "nt":
         import ctypes
@@ -86,10 +98,14 @@ def main():
     sys.path.insert(0, HERE)
     import movement_env
     from movement_env import ACTION_DIMS
+    C2 = movement_env.N_C2 if (a.look > 0 or a.arrive > 0 or a.c2) else 0     # stage C part 2: its three inputs, the last
     OBS_DIM = (movement_env.OBS_DIM + (movement_env.JL.N_JUMP if a.jumps else 0) + (movement_env.N_HAND if a.hand else 0)
-               + (movement_env.N_MOUSE if a.mouse else 0))
-    KEY_COL = -1 - (movement_env.N_MOUSE if a.mouse else 0)   # the input "frames until the keys are read" (the last of the hand's)
-    torch.set_num_threads(6)
+               + (movement_env.N_MOUSE if a.mouse else 0) + C2)
+    KEY_COL = -1 - (movement_env.N_MOUSE if a.mouse else 0) - C2   # the input "frames until the keys are read" (the last of the hand's)
+    torch.set_num_threads(a.threads)
+    dev = torch.device(a.device)
+    assert dev.type == "cpu" or torch.cuda.is_available(), "--device cuda: no graphics card to be seen"
+    print("device {} | torch threads {} | inputs {}".format(dev, a.threads, OBS_DIM), flush=True)     # (before anything is loaded or started)
     maps = a.map.split(",")
 
     def nav_for(m):
@@ -98,7 +114,7 @@ def main():
         if a.nav == "recorded":
             return os.path.join(ROOT, "data", "practice", "nav_{}.json".format(m))
         return a.nav
-    out = os.path.join(ROOT, "data", "sim_runs", a.run)
+    out = os.path.join(a.runs_dir or os.path.join(ROOT, "data", "sim_runs"), a.run)
     os.makedirs(out, exist_ok=True)
 
     pipes, procs = [], []
@@ -107,7 +123,8 @@ def main():
         substeps = tuple(int(x) for x in a.substeps.split(","))
         m = maps[w % len(maps)]
         pr = mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), nav_for(m),
-                                             a.envs, 1000 + w, substeps, a.v14, a.jumps, a.jump_p, a.hand, a.mouse, a.mouse_rev), daemon=True)
+                                             a.envs, 1000 + w, substeps, a.v14, a.jumps, a.jump_p, a.hand, a.mouse, a.mouse_rev,
+                                             a.look, a.arrive, bool(C2)), daemon=True)
         pr.start()
         pipes.append(p_main)
         procs.append(pr)
@@ -125,14 +142,16 @@ def main():
             logits = self.pi(self.body(x)).split(ACTION_DIMS, -1)
             return [torch.distributions.Categorical(logits=l) for l in logits]
 
-    pol = Policy()
+    pol = Policy().to(dev)
     opt = torch.optim.Adam(pol.parameters(), lr=a.lr, eps=1e-5)
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     curriculum = 3.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
-        ck = torch.load(os.path.join(out, "policy.pt"), weights_only=False)
+        ck = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         sd = ck["model"]
         more = OBS_DIM - sd["body.0.weight"].shape[1]
+        assert more >= 0, "the saved network has {} inputs, these options give {}: a network with the inputs of stage C part 2 needs --c2 (or --look, --arrive)".format(
+            sd["body.0.weight"].shape[1], OBS_DIM)
         if more > 0:                                          # a network from before the inputs of a jump ahead: they start at nothing
             for k_ in ("body.0.weight", "v.0.weight"):
                 sd[k_] = torch.cat([sd[k_], torch.zeros(sd[k_].shape[0], more)], 1)
@@ -157,6 +176,8 @@ def main():
     print("training {} players on {} ({} workers), {} min".format(N, a.map, a.workers, a.minutes), flush=True)
     while time.time() - t_start < a.minutes * 60:
         update += 1
+        t_u0 = time.time()
+        c2n, eps_now = np.zeros(8), []                         # stage C part 2: the frames' counters, the tries that ended in this update
         b_obs = np.zeros((T, N, OBS_DIM), np.float32)
         b_act = np.zeros((T, N, len(ACTION_DIMS)), np.int64)
         b_logp = np.zeros((T, N), np.float32)
@@ -169,17 +190,17 @@ def main():
         vmax, air = 0.0, []
         for t in range(T):
             raw.append(obs)
-            x = torch.from_numpy(norm(obs))
+            x = torch.from_numpy(norm(obs)).to(dev)
             with torch.no_grad():
                 ds = pol.dist(x)
                 act = torch.stack([d.sample() for d in ds], -1)
-                # (hand) the keys are read at the next step only for the players whose wait is over: the last input says so
-                kd = torch.from_numpy((obs[:, KEY_COL] == 0).astype(np.float32)) if a.hand else torch.ones(len(obs))
+                # (hand) the keys are read at the next step only for the players whose wait is over: the last input of the hand says so
+                kd = torch.from_numpy((obs[:, KEY_COL] == 0).astype(np.float32)).to(dev) if a.hand else torch.ones(len(obs), device=dev)
                 logp = sum(d.log_prob(act[:, i]) * (kd if i < 3 else 1.0) for i, d in enumerate(ds))
                 val = pol.v(x).squeeze(-1)
-            b_obs[t], b_act[t], b_logp[t], b_val[t] = x.numpy(), act.numpy(), logp.numpy(), val.numpy()
-            b_dec[t] = kd.numpy()
-            chunks = np.array_split(act.numpy(), len(pipes))
+            b_obs[t], b_act[t], b_logp[t], b_val[t] = x.cpu().numpy(), act.cpu().numpy(), logp.cpu().numpy(), val.cpu().numpy()
+            b_dec[t] = kd.cpu().numpy()
+            chunks = np.array_split(act.cpu().numpy(), len(pipes))
             for p, c in zip(pipes, chunks):
                 p.send(("step", c))
             res = [p.recv() for p in pipes]
@@ -193,8 +214,12 @@ def main():
                 vmax = max(vmax, st["vmax"])
                 air.append(st["air"])
                 recent += st["episodes"]
+                eps_now += st["episodes"]
+                if st.get("c2") is not None:
+                    c2n += st["c2"]
         with torch.no_grad():
-            b_val[T] = pol.v(torch.from_numpy(norm(obs))).squeeze(-1).numpy()
+            b_val[T] = pol.v(torch.from_numpy(norm(obs)).to(dev)).squeeze(-1).cpu().numpy()
+        t_u1 = time.time()
         # obs normalization update (running mean/var over this rollout)
         flat = np.concatenate(raw)
         bm, bv, bc = flat.mean(0), flat.var(0), len(flat)
@@ -211,18 +236,18 @@ def main():
             last = delta_t + gamma * lam * nonterm * last
             adv[t] = last
         ret = adv + b_val[:T]
-        O = torch.from_numpy(b_obs.reshape(T * N, -1))
-        A = torch.from_numpy(b_act.reshape(T * N, -1))
-        LP = torch.from_numpy(b_logp.reshape(-1))
-        ADV = torch.from_numpy(adv.reshape(-1))
-        RET = torch.from_numpy(ret.reshape(-1))
-        DEC = torch.from_numpy(b_dec.reshape(-1))
+        O = torch.from_numpy(b_obs.reshape(T * N, -1)).to(dev)
+        A = torch.from_numpy(b_act.reshape(T * N, -1)).to(dev)
+        LP = torch.from_numpy(b_logp.reshape(-1)).to(dev)
+        ADV = torch.from_numpy(adv.reshape(-1)).to(dev)
+        RET = torch.from_numpy(ret.reshape(-1)).to(dev)
+        DEC = torch.from_numpy(b_dec.reshape(-1)).to(dev)
         frac = min(1.0, (time.time() - t_start) / (a.minutes * 60))
         for g in opt.param_groups:
             g["lr"] = a.lr * (1.0 - 0.9 * frac)
         mb = 8192
         for epoch in range(4):
-            perm = torch.randperm(T * N)
+            perm = torch.randperm(T * N, device=dev)
             for i in range(0, T * N, mb):
                 idx = perm[i:i + mb]
                 ds = pol.dist(O[idx])
@@ -263,12 +288,33 @@ def main():
             for e in tr:
                 pj.setdefault("{}:{}".format(e.get("map"), e["jump"]), []).append(e["crossed"])
             rec["per_jump"] = {k_: [round(float(np.mean(v_)), 2), len(v_)] for k_, v_ in sorted(pj.items())}
+        rec["roll_s"], rec["update_s"] = round(t_u1 - t_u0, 2), round(time.time() - t_u1, 2)     # the simulators' part of the update, the network's
+        if C2:
+            # stage C part 2. The look tries, by frame of this update, over the frames he travels: with a look direction
+            # given the share his view is within 30 degrees of it, the share of progress that counted, his speed and the
+            # share at 400 or more; his speed and that share without one. The arrive tries that ended in this update:
+            # how many, the share that came within the distance, of the frames after that the share within it and the
+            # share standing, his speed as he crossed it, the share that fell after arriving.
+            lf_, ff_ = max(1.0, c2n[0]), max(1.0, c2n[4])
+            at_ = [e for e in eps_now if e.get("stand")]
+            got_ = [e for e in at_ if e["arrived"]]
+            aft_ = max(1.0, float(sum(e["after"] for e in got_)))
+            rec.update(look_frames=int(c2n[0]), look_in30=round(c2n[1] / lf_, 3), look_counted=round(c2n[7] / lf_, 3), look_speed=round(c2n[2] / lf_),
+                       look_fast=round(c2n[3] / lf_, 3), free_frames=int(c2n[4]), free_speed=round(c2n[5] / ff_), free_fast=round(c2n[6] / ff_, 3),
+                       look_tries=sum(1 for e in eps_now if e.get("look")), tries=len(eps_now),
+                       arr_tries=len(at_), arr_arrived=round(len(got_) / max(1, len(at_)), 3), arr_after=int(sum(e["after"] for e in got_)),
+                       arr_within=round(sum(e["within"] for e in got_) / aft_, 3), arr_stood=round(sum(e["stood"] for e in got_) / aft_, 3),
+                       arr_cross=round(float(np.mean([e["cross"] for e in got_] or [0.0]))),
+                       arr_fell=round(float(np.mean([e["fell_after"] for e in got_] or [0.0])), 3))
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:
             print("upd {update} steps {steps:,} ({sps:,}/s) success {success:.0%} fell {fell:.0%} lava {lava:.1%} "
                   "t/est {t_over_est} fast% {fast_pct} vmax {vmax} air {air} curr {curriculum}s {per_map}".format(**rec)
-                  + (" | jumps over {:.0%} of {}".format(rec["jump_over"], rec["jump_tries"]) if a.jumps else ""), flush=True)
+                  + (" | jumps over {:.0%} of {}".format(rec["jump_over"], rec["jump_tries"]) if a.jumps else "")
+                  + (" | look: within 30 deg {look_in30:.0%}, speed {look_speed} ({look_fast:.0%} at 400+) against {free_speed} ({free_fast:.0%}) without"
+                     " | stand: {arr_tries} tries, arrived {arr_arrived:.0%}, then within {arr_within:.0%}, standing {arr_stood:.0%}, crossed at {arr_cross},"
+                     " fell {arr_fell:.0%}".format(**rec) if C2 else ""), flush=True)
         if succ > a.curr_threshold and len(recent) > 2000 and curriculum < 15:
             curriculum = min(15.0, curriculum + 2.0)
             recent = []
@@ -276,13 +322,13 @@ def main():
                 p.send(("curriculum", curriculum))
                 p.recv()
         if update % 20 == 0:
-            torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
+            torch.save(dict(model={k_: v_.cpu() for k_, v_ in pol.state_dict().items()}, obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
                             curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14, jumps=a.jumps,
-                            hand=a.hand, mouse=a.mouse, mouse_rev=a.mouse_rev, substeps=a.substeps),
+                            hand=a.hand, mouse=a.mouse, mouse_rev=a.mouse_rev, substeps=a.substeps, c2=C2, look=a.look, arrive=a.arrive),
                        os.path.join(out, "policy.pt"))
-    torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
+    torch.save(dict(model={k_: v_.cpu() for k_, v_ in pol.state_dict().items()}, obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count,
                     curriculum=curriculum, map=a.map, obs_dim=OBS_DIM, action_dims=ACTION_DIMS, v14=a.v14, jumps=a.jumps,
-                            hand=a.hand, mouse=a.mouse, mouse_rev=a.mouse_rev, substeps=a.substeps),
+                            hand=a.hand, mouse=a.mouse, mouse_rev=a.mouse_rev, substeps=a.substeps, c2=C2, look=a.look, arrive=a.arrive),
                os.path.join(out, "policy.pt"))
     for p in pipes:
         p.send(("close", None))

@@ -13,13 +13,14 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
+MAPS = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps")      # (QLBOT_ROOT: the repo, when this file is run from a copy)
 
 
 def run(module, group, frames, out, bsp="testlab", rooms=(2,), sets=None, matches=24):
     import importlib
     E = importlib.import_module(module)
     kw = dict(group=group) if module.endswith("ffa") else {}
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", bsp + ".bsp"), n_matches=matches, seed=5, **kw)
+    env = E.DuelEnv(os.path.join(MAPS, bsp + ".bsp"), n_matches=matches, seed=5, **kw)
     env.kind_p, env.lab_p, env.arena_rooms, env.arena_len, env.no_walk = (1, 0, 0, 0), (0, 0, 1), rooms, 20.0, True
     env.react_frames, env.acquire_frames = 3, 8
     env.dmg_reward, env.dmg_taken_w = 0.005, 1.0

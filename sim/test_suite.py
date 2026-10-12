@@ -50,6 +50,7 @@ class Policy:
         self.dims = [int(x) for x in ck["action_dims"]]
         self.minutes = float(ck.get("minutes", 0.0))
         self.react_ms = float(ck.get("react_ms", 150.0))
+        self.acquire_ms = float(ck.get("acquire_ms", 200.0))  # (B-226) the trainer's --acquire-ms; 200: the simulator's own
         self.H = self.whh.shape[1]
         self.rng = np.random.default_rng(seed)
         self.attn = ck.get("attn")                           # (v0.2) the attention part: its layout and weights; skipped while its door is shut
@@ -92,6 +93,43 @@ class Policy:
             out.append((p.cumsum(1) > self.rng.random((len(p), 1))).argmax(1))   # sampled, as in training
             i += d
         return np.stack(out, 1), h
+
+
+def set_delays(E, env, who):
+    """(B-226) the two reaction delays of a check, from the networks that play it.
+      who   [(seats, react_ms, acquire_ms), ...]: the seats a network plays (indices) and the delays it was trained with
+            (Policy.react_ms and Policy.acquire_ms: the trainer's --react-ms and --acquire-ms; or an override). The first
+            entry is "he".
+    Seats nobody names (a scripted player: the stand-in, a target, a fighter) keep what they have had in every check: his
+    tracking delay and the simulator's own acquire delay (ACQUIRE_FRAMES, 200 ms), so that the yardstick does not move
+    with the network it measures. Where every seat has the same, one number is set, as ever (env.react_frames,
+    env.acquire_frames). Where they differ, one a seat (env.react_seat, env.acquire_seat: duel_env's SEAT_DELAYS; the two
+    numbers are then the largest); a simulator module that cannot do that is refused, not played at one seat's delays.
+    -> what was set, in ms: {"he": [react, acquire], "opponent": [...] (a second network), "others": [...] (unnamed seats)}"""
+    n = env.n
+    rf = np.full(n, int(round(float(who[0][1]) / 25)), np.int64)
+    af = np.full(n, int(getattr(E, "ACQUIRE_FRAMES", 8)), np.int64)
+    named = np.zeros(n, bool)
+    for seats, r_ms, a_ms in who:
+        rf[seats], af[seats], named[seats] = int(round(float(r_ms) / 25)), int(round(float(a_ms) / 25)), True
+    for name, fr in (("react", rf), ("acquire", af)):
+        if (fr == fr[0]).all():
+            setattr(env, name + "_frames", int(fr[0]))
+            if hasattr(env, name + "_seat"):
+                setattr(env, name + "_seat", None)
+        else:
+            assert getattr(E, "SEAT_DELAYS", False), (
+                "the seats differ in their {} delay ({} frames) and the simulator module {} has one number for all seats: play them in the "
+                "current module, or give both networks one delay (--{}-ms and its --opp- twin)".format(
+                    name, sorted(set(int(x) for x in fr)), E.__name__, name))
+            setattr(env, name + "_frames", int(fr.max()))
+            setattr(env, name + "_seat", fr.copy())
+    out = {}
+    for key, seats in [("he", who[0][0])] + ([("opponent", who[1][0])] if len(who) > 1 else []) + [("others", ~named)]:
+        s_ = np.atleast_1d(np.arange(n)[seats])
+        if len(s_):
+            out[key] = [25 * int(rf[s_[0]]), 25 * int(af[s_[0]])]
+    return out
 
 
 def rooms(E, quick=False):
@@ -285,6 +323,10 @@ def main():
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--lab", action="store_true", help="the test map's rooms (testlab), as on the play-test server")
     ap.add_argument("--compare", default=None, help="an earlier card (JSON) to show changes against")
+    ap.add_argument("--react-ms", type=float, default=None, help="his tracking delay (default: the checkpoint's react_ms)")
+    ap.add_argument("--acquire-ms", type=float, default=None, help="his delay before an enemy who has just come into view is noticed "
+                                                                    "(default: the checkpoint's acquire_ms; B-226). The scripted "
+                                                                    "players keep the simulator's own 200 ms")
     a = ap.parse_args()
     import importlib
     E = importlib.import_module(a.env)
@@ -298,7 +340,8 @@ def main():
     for mp in maps:
         env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=a.matches, seed=7,
                         nav=os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp)), close_p=1.0, loadout="all")
-        env.react_frames = round(pol.react_ms / 25)
+        dl_ = set_delays(E, env, [(np.arange(0, env.n, 2), pol.react_ms if a.react_ms is None else a.react_ms,       # (the subject is the
+                                   pol.acquire_ms if a.acquire_ms is None else a.acquire_ms)])                    # even player of a match)
         if a.lab:
             for room in lab_rooms(E, env):
                 per_room.setdefault(room["name"], []).append(run_lab_room(E, env, pol, room))
@@ -306,7 +349,7 @@ def main():
         for room in rooms(E, a.quick):
             per_room.setdefault(room["name"], []).append(run_room(E, env, pol, room))
         print("{} done ({:.0f} s)".format(mp, time.time() - t0), flush=True)
-    card = dict(suite=SUITE_VERSION, run=a.run, minutes=int(pol.minutes), maps=maps, subject="policy",
+    card = dict(suite=SUITE_VERSION, run=a.run, minutes=int(pol.minutes), maps=maps, subject="policy", delays_ms=dl_,
                 rooms={k: merge(v) for k, v in per_room.items()})
     out = os.path.join(ROOT, "data", "sim_runs", a.run, "suite")
     os.makedirs(out, exist_ok=True)

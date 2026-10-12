@@ -26,8 +26,16 @@ ONE = [("self", ("self", "weapons", "own hands", "his movement", "his legs", "st
        ("believed", ("memory", "hearing", "v02 believed")),
        ("drop", ("dropped weapon",)),
        ("way", ("movement goal", "routes", "jump ahead", "intention")),
-       ("sound", ("sounds",))]
-SPLIT = [("proj", ("projectiles",)), ("item", ("items", "more items", "v02 items")), ("place", ("v02 places",))]
+       ("sound", ("sounds",)),
+       ("ways", ("b3 ways",))]                               # (stage B part 3: his way, and what the other ways are from here)
+SPLIT = [("proj", ("projectiles",)), ("item", ("items", "more items", "v02 items")), ("place", ("v02 places",)),
+         ("hold", ("b2 holds",))]                            # (stage B part 2: a token a holding place)
+# A layout may say "gated": the network then carries "gate" among its weights (not trained: a buffer), a number a token
+# (the summary token too) that is added to every look at that token before the softmax of both blocks. A network that
+# is given new tokens answers as before while their gate is very negative (GATE_SHUT: nothing looks at them;
+# tools/targets_init.py makes such a network and opens the gate). Every file of a run has its own gate: the league's
+# older selves keep theirs shut when the learner's is opened. Not gated: the sums are what they were.
+GATE_SHUT = -30.0
 
 
 def layout_from_csv(path):
@@ -91,14 +99,15 @@ def make_module(lay, out_dim=256, seed=0):
             self.q, self.k, self.v, self.o = (nn.Linear(D, D, bias=False) for _ in range(4))
             self.f1, self.f2 = nn.Linear(D, 2 * D, bias=False), nn.Linear(2 * D, D, bias=False)
 
-        def forward(self, xq, xall):
+        def forward(self, xq, xall, gate=None):
             B, Q, T = xq.shape[0], xq.shape[1], xall.shape[1]
             hd = D // H_
             q = self.q(norm(xq)).view(B, Q, H_, hd).transpose(1, 2)
             na = norm(xall)
             k = self.k(na).view(B, T, H_, hd).transpose(1, 2)
             v = self.v(na).view(B, T, H_, hd).transpose(1, 2)
-            y = xq + self.o(F_.scaled_dot_product_attention(q, k, v).transpose(1, 2).reshape(B, Q, D))    # softmax(q k' / sqrt(hd)) v
+            y = xq + self.o(F_.scaled_dot_product_attention(q, k, v, attn_mask=None if gate is None else gate.to(q.dtype)[None, :])
+                            .transpose(1, 2).reshape(B, Q, D))                                           # softmax(q k' / sqrt(hd) + gate) v
             return y + self.f2(F_.relu(self.f1(norm(y)), inplace=True))
 
     class Attn(nn.Module):
@@ -119,14 +128,18 @@ def make_module(lay, out_dim=256, seed=0):
             self.door = nn.Linear(2 * D, out_dim, bias=False)
             nn.init.zeros_(self.door.weight)
             self.read = list(lay["read"])
+            if lay.get("gated"):                                 # (see GATE_SHUT)
+                self.register_buffer("gate", torch.zeros(lay["tokens"]))
+            else:
+                self.gate = None
 
         def forward(self, x):
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=AMP and x.is_cuda):
                 xp = torch.cat([x, x.new_zeros(x.shape[0], 1)], 1)
                 toks = [e(xp[:, getattr(self, "idx_" + k_["name"])]) for k_, e in zip(lay["kinds"], self.emb)]
                 t = torch.cat(toks + [x.new_zeros(x.shape[0], 1, D)], 1) + self.mark
-                t = self.b1(t, t)
-                r = self.b2(t[:, self.read], t)
+                t = self.b1(t, t, self.gate)
+                r = self.b2(t[:, self.read], t, self.gate)
                 out = self.door(norm(r.reshape(x.shape[0], 2 * D)))
             return out.float()
 
@@ -143,7 +156,7 @@ def _norm(x):
     return (x - m) / np.sqrt(((x - m) ** 2).mean(-1, keepdims=True) + 1e-5)
 
 
-def _block(P, b, xq, xall, heads):
+def _block(P, b, xq, xall, heads, gate=None):
     B, Q, D = xq.shape
     T = xall.shape[1]
     hd = D // heads
@@ -152,6 +165,8 @@ def _block(P, b, xq, xall, heads):
     k = (na @ P[b + ".k.weight"].T).reshape(B, T, heads, hd).transpose(0, 2, 3, 1)
     v = (na @ P[b + ".v.weight"].T).reshape(B, T, heads, hd).transpose(0, 2, 1, 3)
     a = (q @ k) / np.sqrt(hd)
+    if gate is not None:
+        a = a + gate
     a = np.exp(a - a.max(-1, keepdims=True))
     a /= a.sum(-1, keepdims=True)
     y = xq + (a @ v).transpose(0, 2, 1, 3).reshape(B, Q, D) @ P[b + ".o.weight"].T
@@ -167,6 +182,7 @@ def forward_np(lay, P, x):
         idx = np.asarray(k["idx"], np.int64) % (lay["obs_dim"] + 1)
         toks.append(xp[:, idx] @ P["emb.{}.weight".format(i)].T)
     t = np.concatenate(toks + [np.zeros((len(x), 1, lay["D"]), np.float32)], 1) + P["mark"]
-    t = _block(P, "b1", t, t, lay["heads"])
-    r = _block(P, "b2", t[:, lay["read"]], t, lay["heads"])
+    gate = np.asarray(P["gate"], np.float32) if lay.get("gated") else None
+    t = _block(P, "b1", t, t, lay["heads"], gate)
+    r = _block(P, "b2", t[:, lay["read"]], t, lay["heads"], gate)
     return _norm(r.reshape(len(x), -1)) @ P["door.weight"].T

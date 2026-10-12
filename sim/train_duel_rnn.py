@@ -73,6 +73,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         env.teach_runs = "none" if m_ in skip_ else ("jump" if m_ + ":item" in skip_ else "all")
     if hasattr(env, "count_even"):
         env.count_even = not move_only                       # the jump counters: his seats only (in a move-only simulator every seat)
+    if hasattr(env, "legs_keep_who") and not move_only:      # (LEGS_KEEP) stretches are withheld from his seats only: the odd seats of the
+        i_ = np.arange(env.n)                                # second half of a simulator's players are the league's, an older self who
+        env.legs_keep_who = ~((i_ >= env.n // 2) & (i_ % G % 2 == 1))      # keeps his legs (and is never learnt from)
     if move_only:                                            # a map he only learns to move on (--move-maps): every round an item
         pj_ = env.jump_run_p if getattr(env, "jump_tries", None) else 0.0   # run or a jump run, in the shares they have in the run
         assert env.item_run_p > 0 and env.route is not None, "--move-maps needs ITEM_RUN_P and the map's walking map"
@@ -80,7 +83,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         env.jump_run_p, env.collect_fight_p = 1.0 - env.item_run_p, 0.0
     env.round_t[:] = 1e9                                     # every round starts anew at the first step: until 2026-10-08 the
     env._teach_update()                                      # first round after a (re)start was played with every weapon at spawn
-    remote.send((env.observe(), env.teach.copy()))
+    remote.send((env.observe(), env.teach.copy(), env.aux() if hasattr(env, "aux") else None,        # (--aux) the truth of the first frame
+                 env.hand_lab.astype(np.float16) if getattr(E_, "HAND_TEACH", False) else None))        # (--hand-teach) the first frame's label (none yet)
     last = {k: np.copy(v) for k, v in env.stats.items()}
     while True:
         cmd, data = remote.recv()
@@ -92,6 +96,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["air_fast"] = int(((np.hypot(s[:, 3], s[:, 4]) > 330) & (s[:, 6] < 0.5)).sum())
             delta["visible"] = int(env.visible.sum())
             delta["players"] = env.n
+            delta["way_trips"] = list(getattr(env, "way_trips", ()))      # (WAYS) this step's trips between two places: [from, to, 16 points]
             # frags scored by even (learner) players and by odd players, for learner-vs-snapshot win tracking
             ev = info["events"]
             delta["kills_even"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 0)
@@ -102,12 +107,121 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool),
                          env.legs_live.copy() if hasattr(env, "legs_live") else np.zeros(env.n, bool),      # (LEGS) the switch was read,
                          env.legs_on.copy() if hasattr(env, "legs_on") else np.zeros(env.n, bool),          # his legs moved him
-                         np.asarray(info.get("r_long", np.zeros(env.n, np.float32)), np.float32)))          # (v0.2) the part of this frame's pay that is for items and stack
+                         np.asarray(info.get("r_long", np.zeros(env.n, np.float32)), np.float32),           # (v0.2) the part of this frame's pay that is for items and stack
+                         info.get("aux"),                                                                   # (--aux) the truth the lesson's labels are made of (None: an older simulator)
+                         (np.concatenate([info["legs_lab"], info["legs_held"][:, None]], 1).astype(np.int8)    # (--legs-teach) his legs' four choices
+                          if "legs_lab" in info else None),                                               # (-1: no label), the stretch withheld; None: the simulator gives none
+                         (info["hand_lab"].astype(np.float16) if "hand_lab" in info else None)))           # (--hand-teach) the target of his NEXT reading of the weapon key (zeros: none)
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
         elif cmd == "close":
             break
+
+
+def aux_labels(A, dn, ix, frames):
+    """(--aux; stage B, part 1) the labels of the things he is asked to foretell, made by hindsight inside one rollout.
+      A   [T+1, n, columns] float32: row t is the simulator's info["aux"] as the game stood BEFORE step t (row T: after the
+          last step). A row's event columns (damage, frag, fragged, died) are those of the step before it: step t's are in
+          row t+1
+      dn  [T, n]: his round ended in step t
+      ix  {column name: its index} (the simulator's AUX_COLS);  frames: the windows (appear, fight, damage), in frames
+    ->  Y [T, n, 8] float32: the enemy's place / 1500 (forward, left, up); the angles from his view to where the enemy next
+                             appears / 90 (sideways -180 to 180 with left as plus, up-down with down as plus: the signs of
+                             his crosshair inputs); the damage dealt less taken / 100; the seconds to the mega and to the
+                             red armor / 40
+        M [T, n, 6] bool:    the label is there: place, appear, the fight's end, its damage, mega, red
+        C [T, n] int64:      the fight's end: 0 neither, 1 he makes a frag, 2 he is fragged (whichever comes first; a frag
+                             of his in the frame he is fragged in counts as his)
+    Where the labels are:
+      place    the enemy is alive and not in view
+      appear   the same, and the enemy is in view at a later frame at most `appear` frames on, the first such frame
+      fight    the enemy is in view, and the whole window of `fight` (`damage`) frames lies inside the rollout: a frame
+               whose window runs past the rollout's end has no label (labelled by what is seen of it, the late frames
+               of every rollout would say "neither" and "little damage" for want of a future)
+      mega, red   the map has one
+    A step in which his round ends or he dies ends his hindsight: nothing after it counts for a frame before it.
+    Whole tensors over the players and the frames; no loop over either."""
+    import torch
+    T, n = A.shape[0] - 1, A.shape[1]
+    Wa, Wf, Wd = (int(x) for x in frames)
+    dev_ = A.device
+    S, E = A[:T], A[1:]                                      # the game before step t; what happened in step t
+    BIG = 1 << 30
+    tt = torch.arange(T + 1, device=dev_)[:, None]
+
+    def nxt(flag):                                           # for every row, the first row at or after it where flag holds (BIG: none)
+        c_ = torch.where(flag, tt[:flag.shape[0]].expand(flag.shape), torch.full(flag.shape, BIG, dtype=torch.long, device=dev_))
+        return torch.flip(torch.cummin(torch.flip(c_, (0,)), 0).values, (0,))
+
+    t0 = tt[:T]
+    vis = A[..., ix["en_in_view"]] > 0.5                     # [T+1, n]
+    hid = (S[..., ix["en_alive"]] > 0.5) & ~vis[:T]          # there is an enemy and he is not in view
+    nc = nxt((dn > 0.5) | (E[..., ix["died"]] > 0.5))        # the step that ends his hindsight
+    Y = torch.zeros(T, n, 8, dtype=torch.float32, device=dev_)
+    M = torch.zeros(T, n, 6, dtype=torch.bool, device=dev_)
+    # (a) where the unseen enemy is
+    Y[..., 0:3] = S[..., ix["en_fwd"]:ix["en_fwd"] + 3] / 1500.0
+    M[..., 0] = hid
+    # (b) where he next appears: the enemy's place in the world at the first later frame he is in view, as angles from
+    #     this frame's eyes and view
+    na = nxt(vis)[:T]
+    M[..., 1] = hid & (na - t0 <= Wa) & (nc >= na)
+    yw = torch.deg2rad(A[..., ix["yaw"]])
+    c_, s_ = torch.cos(yw), torch.sin(yw)
+    f_, l_ = A[..., ix["en_fwd"]], A[..., ix["en_left"]]
+    ew = torch.stack([A[..., ix["x"]] + c_ * f_ - s_ * l_, A[..., ix["y"]] + s_ * f_ + c_ * l_, A[..., ix["z"]] + A[..., ix["en_up"]]], -1)
+    to = torch.gather(ew, 0, na.clamp(max=T)[..., None].expand(T, n, 3)) - S[..., ix["x"]:ix["x"] + 3]
+    tz = to[..., 2] + 4.0 - S[..., ix["eye_h"]]              # (to the same point of him as his crosshair inputs: 4 above his place)
+    ay = torch.rad2deg(torch.atan2(to[..., 1], to[..., 0])) - S[..., ix["yaw"]]
+    ap = -torch.rad2deg(torch.atan2(tz, torch.hypot(to[..., 0], to[..., 1]) + 1e-6)) - S[..., ix["pitch"]]
+    Y[..., 3] = ((ay + 180.0) % 360.0 - 180.0) / 90.0 * M[..., 1]
+    Y[..., 4] = ap / 90.0 * M[..., 1]
+    # (c) how the next fight ends, and the damage dealt less taken
+    nf, nd = nxt(E[..., ix["frag"]] > 0.5), nxt(E[..., ix["fragged"]] > 0.5)
+    lim = torch.minimum(t0 + (Wf - 1), nc)
+    C = (nd <= lim).long() * 2
+    C = torch.where((nf <= lim) & (nf <= nd), torch.ones_like(C), C)
+    M[..., 2] = vis[:T] & (t0 + Wf <= T)
+    P = torch.cat([torch.zeros(1, n, dtype=torch.float64, device=dev_),
+                   torch.cumsum((E[..., ix["dmg_dealt"]] - E[..., ix["dmg_taken"]]).double(), 0)])
+    end = torch.minimum(t0 + (Wd - 1), nc).clamp(max=T - 1)
+    Y[..., 5] = ((torch.gather(P, 0, end + 1) - P[:T]) / 100.0).float()
+    M[..., 3] = vis[:T] & (t0 + Wd <= T)
+    # (d) when the big items return (the simulator gives 40 for an item the map has not)
+    for k_, nm_ in enumerate(("mega_s", "red_s")):
+        Y[..., 6 + k_] = S[..., ix[nm_]] / 40.0
+        M[..., 4 + k_] = S[..., ix[nm_]] < 39.99
+    return Y, M, C
+
+
+def way_measure(store, keep=50, least=30, same=200.0):
+    """(WAYS) how predictable his ways are, counted as tools/pro_yardsticks.py counts the pros' (way_labels: 43% for them,
+    57% for v0.1 on recorded games): of his trips between the same two places, the share on the commonest way.
+      store  {map: {(from, to): [a trip's path as 48 numbers, 16 points along it; the newest last]}}
+    For every pair with `least` trips or more, its newest `keep`: a trip joins the way whose first trip lies nearest,
+    within `same` units on average along the path, else it opens a new way; then every trip goes to the nearest way once
+    more; the pair's number is the share of its trips on the way with the most. A map's number is the mean of its
+    pairs'. The number of ways found grows with the number of trips, so the count is always over the same number.
+    -> {map: {"commonest": per cent, "pairs": n, "trips": n}}"""
+    out = {}
+    for mp_ in sorted(store):
+        sh, nt = [], 0
+        for key in sorted(store[mp_]):
+            tr = store[mp_][key][-keep:]
+            if len(tr) < least:
+                continue
+            P = np.asarray(tr, np.float64).reshape(len(tr), -1, 3)
+            lead = [0]
+            for i in range(1, len(P)):
+                if np.linalg.norm(P[lead] - P[i], axis=2).mean(1).min() > same:
+                    lead.append(i)
+            lab = np.linalg.norm(P[:, None] - P[lead][None], axis=3).mean(2).argmin(1)
+            sh.append(float(np.bincount(lab).max()) / len(P))
+            nt += len(P)
+        if sh:
+            out[mp_] = dict(commonest=round(100.0 * float(np.mean(sh)), 1), pairs=len(sh), trips=nt)
+    return out
 
 
 def main():
@@ -153,6 +267,15 @@ def main():
     ap.add_argument("--intent-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
     ap.add_argument("--weapon-teach", type=float, default=0.0, help="weight of imitating the weapon rule on the weapon key (env._weapon_teach)")
     ap.add_argument("--weapon-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
+    ap.add_argument("--hand-teach", type=float, default=0.0,
+                    help="the pros' weapon in hand with nobody in view, as a standing pull (0 = off): on the frames the simulator gives a "
+                         "label (HAND_TEACH=1: the pros' shares of the weapons he owns, for his map, travelling or holding, by how long "
+                         "ago an enemy was in view) and his hand reads the weapon key, cross-entropy of his weapon output against that "
+                         "distribution. Not paid; no fade-out")
+    ap.add_argument("--hand-teach-trunk", type=float, default=0.05, help="... the share of that lesson's gradient that reaches the shared "
+                                                                         "layers (as --teach-trunk); the weapon output's layer learns it in full")
+    ap.add_argument("--hand-teach-warm", type=float, default=0.0, help="... minutes over which its weight rises from nothing, counted from "
+                                                                       "--fade-start")
     ap.add_argument("--near-item-p", type=float, default=0.0, help="share of spawns within 2 s of the mega or the red armor")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
@@ -194,6 +317,20 @@ def main():
     ap.add_argument("--long-cap", type=float, default=0.5, help="... and is cut when the long count would add more than this share of the size "
                                                                 "of his credit of today (the mean of the absolute values)")
     ap.add_argument("--obs-half", action="store_true", help="v0.2: the rollout's stored inputs at half precision (they fill most of the card)")
+    ap.add_argument("--aux", type=float, default=0.0,
+                    help="stage B, part 1: the weight of the things he is asked to foretell from his memory (0 = off). Four small output "
+                         "layers on his memory: where the unseen enemy is, where he next appears, how the fight ends, when the big items "
+                         "return; labels by hindsight inside the rollout from the simulator's info['aux']. Never an input, never paid")
+    ap.add_argument("--aux-heads", default="place,appear,fight,items", help="... which of the four are in the lesson")
+    ap.add_argument("--aux-trunk", type=float, default=1.0, help="... the share of the lesson's gradient that reaches the shared layers (his "
+                                                                 "memory and what feeds it); the four output layers learn in full. 0 = "
+                                                                 "they only read his memory (a measure of what it holds)")
+    ap.add_argument("--aux-frames", default="200,400,200", help="... the windows in frames: the enemy appears within, the fight ends within, "
+                                                                "the damage counted over. Only a frame whose whole window lies in the "
+                                                                "rollout is labelled for the last two, so they are cut to three quarters "
+                                                                "of the rollout (--steps): at 384 steps 400 becomes 288, and the first "
+                                                                "96 frames of a rollout carry the fight's label")
+    ap.add_argument("--aux-warm", type=float, default=0.0, help="... minutes over which the weight rises from nothing, from --fade-start")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -216,6 +353,25 @@ def main():
     ap.add_argument("--teach-warm", type=float, default=0.0, help="minutes over which that weight first rises from nothing: a new "
                     "teacher at full weight moves the whole policy in its first update (0.60 at 0.5 with the strafe-jumping "
                     "teacher, 2026-10-09; the run before started at 0.021), while its loss is still large")
+    ap.add_argument("--legs-teach", type=float, default=0.0,
+                    help="stage C, part 1: the weight of the lesson of his legs (0 = off). On the frames the simulator gives a label "
+                         "(LEGS_LABEL=1: the movement network's four choices where his legs carried him, or would have in a withheld "
+                         "stretch) his own outputs for forward and back, sideways, jump and crouch and the view's turn are pulled "
+                         "toward it: cross-entropy, the keys only on the frames his hand reads them. Not paid")
+    ap.add_argument("--legs-teach-trunk", type=float, default=1.0, help="... the share of that lesson's gradient that reaches the shared "
+                                                                        "layers (as --teach-trunk); the output layer learns it in full")
+    ap.add_argument("--legs-teach-warm", type=float, default=0.0, help="... minutes over which its weight rises from nothing, counted from "
+                                                                       "--fade-start (a teacher at full weight from the first update "
+                                                                       "has cost him aim before)")
+    ap.add_argument("--gate-open", type=float, default=0.0,
+                    help="the attention part's gate (sim/attn.py): the tokens whose gate is below zero in the network he starts from "
+                         "(new tokens begin shut at -30: tools/targets_init.py) are opened over this many minutes, counted from "
+                         "--fade-start: before every rollout their gate is set to a value rising in a straight line from --gate-from "
+                         "to 0 (never lowered: a gate already further open stays until the line passes it). At 0 it stays 0 and is "
+                         "saved so; a resume goes on from the clock. 0 = off: the gate is left as the checkpoint has it. The "
+                         "league's files keep their own gates")
+    ap.add_argument("--gate-from", type=float, default=-6.0, help="... where the line begins (at -6 a look at such a token weighs a "
+                                                                 "four-hundredth of what it weighs at 0)")
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
                     help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
     ap.add_argument("--bot-p", type=float, default=0.5, help="share of normal rounds against the scripted fighter")
@@ -236,8 +392,19 @@ def main():
     KEY_HEADS = (0, 1, 2, 6)                                 # forward, strafe, vertical, weapon key: the left hand's outputs
     I_HEAD = getattr(E_, "INTENT_HEAD", len(ACTION_DIMS) - 1)                # the intention; (LEGS) the switch to his legs and the
     L_HEAD, L_TAKES = (E_.LEGS_HEAD, tuple(E_.LEGS_TAKES)) if len(ACTION_DIMS) > getattr(E_, "LEGS_HEAD", 99) else (-1, ())   # outputs they take
+    W_HEAD = E_.WAY_HEAD if len(ACTION_DIMS) > getattr(E_, "WAY_HEAD", 99) else -1     # (WAYS) his way to his target: read with the intention,
+    W_ON = bool(getattr(E_, "WAYS", False))                                             # ... and with the switch off never (the output is there)
 
     EN_I = E_.EN_INTENT if getattr(E_, "FIGHT_TARGET", False) else -1         # (FIGHT_TARGET) the intention "the enemy"
+    TG_I = (E_.HOLD_INTENT, E_.HOLD_INTENT + E_.HOLD_SLOTS) if getattr(E_, "TARGETS", False) else None     # (TARGETS) the intentions "place 1" to "place 8"
+
+    LEGS_LAB = bool(getattr(E_, "LEGS_LAB", False))          # (--legs-teach) the simulators give the labels of his legs (LEGS_LABEL=1, or LEGS_KEEP below 1)
+    assert a.legs_teach <= 0 or LEGS_LAB, "--legs-teach: the simulator {} gives no labels (set LEGS_LABEL=1 with LEGS=1; p_c1_env.py)".format(a.env)
+    HAND_LAB = bool(getattr(E_, "HAND_TEACH", False))        # (--hand-teach) the simulators give the label of his weapon output (HAND_TEACH=1)
+    assert a.hand_teach <= 0 or HAND_LAB, "--hand-teach: the simulator {} gives no labels (set HAND_TEACH=1; p_hand_env.py)".format(a.env)
+    assert 0.0 <= a.hand_teach_trunk <= 1.0, "--hand-teach-trunk: a share, 0 to 1"
+    HAND_HEAD = 6                                            # ... the weapon key's output, where its choices begin among all outputs' and
+    HAND_O, HAND_D = sum(ACTION_DIMS[:HAND_HEAD]), ACTION_DIMS[HAND_HEAD]      # how many they are ("keep", then a choice a weapon)
 
     def head_masks(dc, lv, ll, lo):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
@@ -245,6 +412,8 @@ def main():
         out = []
         for j in range(len(ACTION_DIMS)):
             m = dc if j in KEY_HEADS else (lv if j == I_HEAD else (ll if j == L_HEAD else None))
+            if j == W_HEAD:                                      # (WAYS) his way: on the frames the intention was read; on none with the switch off
+                m = lv if W_ON else lv * 0.0
             if j in L_TAKES:
                 m = (1.0 - lo) if m is None else m * (1.0 - lo)
             out.append(m)
@@ -296,6 +465,7 @@ def main():
         print("no key labels in the runs of: {}".format(a.teacher_skip), flush=True)
     obs = np.concatenate([f[0] for f in first])
     teach = np.concatenate([f[1] for f in first])
+    hand = np.concatenate([f[3] for f in first]) if HAND_LAB else None      # (--hand-teach) the label of the frame about to be played
     N = len(obs)
     H = a.hidden
 
@@ -305,13 +475,37 @@ def main():
         assert tuple(E_.CELL_COLS) == (OBS_DIM - 2, OBS_DIM - 1)
 
     ATT = None                                               # (v0.2) the attention part's layout: it comes with the network he resumes from
+    AUX_SAVE = {}                                            # (--aux) what is kept in a saved file beside the lesson's layers
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
-        ATT = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu").get("attn")
+        ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
+        ATT = ck0_.get("attn")
+        if any(k_.startswith("aux.") for k_ in ck0_["model"]):
+            AUX_SAVE = dict(aux_heads=ck0_.get("aux_heads"))
+        del ck0_
     if ATT is not None:
         import attn as attn_
         assert ATT["obs_dim"] == OBS_DIM, "the network's tokens are cut from {} inputs, the simulator has {}".format(ATT["obs_dim"], OBS_DIM)
         print("attention: " + attn_.describe(ATT), flush=True)
     LONG = a.long_gamma > 0
+    AUX_W = float(a.aux)                                     # (--aux) the lesson's weight. Its output layers are in the network when the
+    AUX = AUX_W > 0 or bool(AUX_SAVE)                        # lesson is on, or when the network he resumes from has them (kept as they are)
+    AUX_HEADS = tuple(x_ for x_ in a.aux_heads.split(",") if x_)
+    assert all(x_ in ("place", "appear", "fight", "items") for x_ in AUX_HEADS), a.aux_heads
+    aux = None
+    if AUX_W > 0:
+        AUX_COLS = getattr(E_, "AUX_COLS", None)
+        assert AUX_COLS is not None and all(len(f) > 2 and f[2] is not None for f in first), \
+            "--aux: the simulator {} gives no info['aux'] (p_b1_env.py)".format(a.env)
+        AUX_IX = {k_: i_ for i_, k_ in enumerate(AUX_COLS)}
+        aux = np.concatenate([f[2] for f in first])
+        fr_ = [int(x_) for x_ in a.aux_frames.split(",")]
+        AUX_FR = (min(fr_[0], a.steps), min(fr_[1], a.steps - a.steps // 4), min(fr_[2], a.steps - a.steps // 4))
+        AUX_SAVE = dict(aux_heads=dict(place=3, appear=2, fight=4, items=2, place_units=1500.0, angle_degrees=90.0, damage_points=100.0,
+                                       item_seconds=40.0, fight_classes=("neither", "frag", "fragged"), frames=AUX_FR, cols=tuple(AUX_COLS)))
+        AUX_MI = torch.tensor([0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5], device=dev)   # which label each measure is of
+        print("aux: weight {} on {}, {} of its gradient into the shared layers; windows in frames: appears within {}, the fight within {}, "
+              "damage over {} (asked: {}; a rollout is {})".format(AUX_W, "+".join(AUX_HEADS), a.aux_trunk, AUX_FR[0], AUX_FR[1], AUX_FR[2],
+                                                                   a.aux_frames, a.steps), flush=True)
 
     class Policy(nn.Module):
         def __init__(self):
@@ -330,6 +524,13 @@ def main():
             self.gru = nn.GRUCell(256, H)
             self.pi = nn.Linear(H, sum(ACTION_DIMS))
             self.v = nn.Linear(H, 1)
+            if AUX:                                              # (--aux) from his memory: the unseen enemy's place (3), the angles to
+                self.aux = nn.Module()                           # where he next appears (2), the fight's end (3 classes) and its damage
+                self.aux.place, self.aux.appear = nn.Linear(H, 3), nn.Linear(H, 2)     # (1), the seconds to the mega and the red armor
+                self.aux.fight, self.aux.items = nn.Linear(H, 4), nn.Linear(H, 2)      # (2). (Not a ModuleDict: "items" is a name of its own there.)
+                for l_ in self.aux.children():                   # They start at nothing: until they have learnt something the lesson
+                    nn.init.zeros_(l_.weight)                    # does not move his memory
+                    nn.init.zeros_(l_.bias)
 
         def step(self, x, h, f=None):
             if HAS_CELLS:
@@ -344,6 +545,13 @@ def main():
     def dists(logits):
         return [torch.distributions.Categorical(logits=l) for l in logits.split(ACTION_DIMS, -1)]
 
+    def load_net(net, sd):
+        """a network's weights. Only the layers of --aux may be missing (they stay as they are: fresh in the learner) or
+        left over (the lesson is off and they are not in this network)"""
+        bad = net.load_state_dict(sd, strict=False)
+        odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.")]
+        assert not odd, "the network does not fit: {}".format(odd)
+
     pol = Policy().to(dev)
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
@@ -352,7 +560,7 @@ def main():
     elapsed0 = 0.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location=dev)
-        pol.load_state_dict(ck["model"])
+        load_net(pol, ck["model"])
         obs_mean, obs_var, obs_count = ck["obs_mean"], ck["obs_var"], ck["obs_count"]
         elapsed0 = ck.get("minutes", 0.0)
 
@@ -402,7 +610,9 @@ def main():
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
                         env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
                         round_secs=120.0, arena_secs=float(a.arena_len),
-                        cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0),
+                        game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
+                        game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY") if os.environ.get(k_)},   # games: their clock and score
+                        cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE),
                    path)
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
@@ -436,6 +646,12 @@ def main():
     scr = torch.zeros(N, device=dev)                                   # scripted players (not trained on)
 
     T = a.steps
+    b_hand = torch.zeros(T, N, HAND_D, dtype=torch.float16, device=dev) if HAND_LAB else None     # (--hand-teach) the target of the weapon
+    #                                                                  output on that frame (zeros: no label)
+    if HAND_LAB:
+        print("hand: weight {} ({} of its gradient into the shared layers, rising over {:g} min), labels from the simulators: the target draws "
+              "afresh every {:g} s{}".format(a.hand_teach, a.hand_teach_trunk, a.hand_teach_warm, float(getattr(E_, "HAND_TEACH_REDRAW", 0.0)),
+                                             ", general lives only" if getattr(E_, "HAND_TEACH_GENERAL", False) else ""), flush=True)
     gamma, lam, clip, ent_coef = a.gamma, a.lam, 0.2, a.ent_coef
     ent_heads = [float(x) for x in a.ent_heads.split(",")] if a.ent_heads else [1.0] * len(ACTION_DIMS)
     ent_heads += [1.0] * (len(ACTION_DIMS) - len(ent_heads))
@@ -445,13 +661,36 @@ def main():
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
         a.map, N, sum(p.numel() for p in pol.parameters()), dev, a.minutes), flush=True)
     fade0 = a.fade_start if a.fade_start >= 0 else elapsed0             # the minute of training the teachers' fades count from
+    GATE_M = None                                                        # (--gate-open) the tokens whose gate is below zero in the network
+    if pol.attn is not None and getattr(pol.attn, "gate", None) is not None:   # he starts from: the ones the opening is for
+        GATE_M = pol.attn.gate < 0
+    assert a.gate_open <= 0 or (GATE_M is not None and a.gate_from <= 0), \
+        "--gate-open: the network has no gated attention part (tools/targets_init.py makes one), or --gate-from is above 0"
+    if a.gate_open > 0:
+        print("gate: {} tokens (lowest now {:.2f}) open from {:g} to 0 over {:g} min, counted from minute {:.2f} (this process starts at {:.2f})".format(
+            int(GATE_M.sum()), float(pol.attn.gate.min()), a.gate_from, a.gate_open, fade0, elapsed0), flush=True)
+    if os.environ.get("STYLE_MIX"):                                      # (STYLE_MIX) what the simulators draw, said once
+        sc_ = getattr(E_, "STYLE_CUM", None)
+        if sc_ is None or not getattr(E_, "STYLE_P", 0.0) > 0:
+            print("STYLE_MIX is set and {}: NO life is drawn by it".format("the simulator does not know it" if sc_ is None else "STYLE_P is 0"), flush=True)
+        else:
+            sh_ = np.diff(np.concatenate([[0.0], sc_]))
+            print("styles: " + ", ".join("{} {:.0%}".format(k_, float(v_)) for k_, v_ in zip(E_.STYLES[1:], sh_))
+                  + ", general {:.0%} of his lives (STYLE_MIX; a rail life on a map without a railgun is general)".format(1.0 - float(sc_[-1])), flush=True)
+    WAY_STORE = {}                                                       # (WAYS) his trips between two places: {map: {(from, to): [paths]}}
+    WAY_KEEP, WAY_MIN = 50, int(os.environ.get("WAY_TRIPS_MIN") or 30)   # ... the newest kept a pair; a pair counts from this many
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
-                "hurt_dmg", "legs")
+                "hurt_dmg", "legs", "games")
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
+        if a.gate_open > 0 and bool(GATE_M.any()):                       # (--gate-open) before the rollout: it is played and learnt
+            gf_ = min(1.0, max(0.0, mins - fade0) / a.gate_open)        # from at one gate
+            g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
+            with torch.no_grad():
+                pol.attn.gate[GATE_M] = pol.attn.gate[GATE_M].clamp(min=g_now)
         close_p = max(a.close_floor, 1.0 - 0.8 * mins / a.close_minutes)
         round_len = 15.0 + 105.0 * (1.0 - (max(close_p, 0.2) - 0.2) / 0.8)
         dmg_reward = 0.004 * max(0.25, close_p)                         # damage shaping fades with the curriculum
@@ -470,7 +709,7 @@ def main():
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
         if snaps:                                                        # pick this rollout's opponent
             vs_anchor = bool(anchors) and np.random.random() < a.anchor_p
-            opp.load_state_dict(anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))])
+            load_net(opp, anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))])
             opp.door_open = bool(opp.attn is not None and float(opp.attn.door.weight.abs().sum()) > 0)
         # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
         # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
@@ -491,8 +730,12 @@ def main():
         b_dec = torch.zeros(T, N, device=dev)                            # the left hand's outputs (keys, weapon key) were read on that frame
         b_ll = torch.zeros(T, N, device=dev)                             # (LEGS) the switch to his legs was read on that frame
         b_lo = torch.zeros(T, N, device=dev)                             # ... his legs moved him on that frame
+        b_lab = torch.full((T, N, 5), -1, dtype=torch.int8, device=dev) if LEGS_LAB else None   # (--legs-teach) his legs' four choices on that frame
+        #                                                                  (-1: no label), and that the stretch was withheld (LEGS_KEEP)
         b_iteach = torch.zeros(T, N, dtype=torch.long, device=dev)       # what the item rule would have chosen
         b_teach = torch.zeros(T, N, 5, dtype=torch.long, device=dev)
+        if AUX_W > 0:
+            b_aux = torch.zeros(T + 1, N, len(AUX_COLS), dtype=torch.float16)    # (--aux) the simulator's truth, frame by frame
         h0 = h.clone()
         raw, agg, agg_map = [], {}, {}
         keep_raw = obs_count < OBS_FREEZE or (bool(a.obs_dump) and a.obs_dump_from <= update <= a.obs_dump_to)
@@ -515,6 +758,10 @@ def main():
             b_obs[t], b_act[t], b_val[t] = x, act, val
             b_w[t] = learn * (1.0 - scr)
             b_teach[t] = torch.from_numpy(teach).to(dev)
+            if HAND_LAB:
+                b_hand[t] = torch.from_numpy(hand).to(dev)
+            if AUX_W > 0:
+                b_aux[t] = torch.from_numpy(aux)
             an = act.cpu().numpy()
             for w_, p in enumerate(pipes):
                 p.send(("step", an[w_off[w_]:w_off[w_ + 1]]))
@@ -533,12 +780,18 @@ def main():
             ll = torch.from_numpy(np.concatenate([r[9] for r in res]).astype(np.float32)).to(dev)
             lo = torch.from_numpy(np.concatenate([r[10] for r in res]).astype(np.float32)).to(dev)
             b_ll[t], b_lo[t] = ll, lo
+            if LEGS_LAB:
+                b_lab[t] = torch.from_numpy(np.concatenate([r[13] for r in res])).to(dev)
             # an output's part counts only on the frames its choice was read: the intention's when it was read, the left
             # hand's (keys, weapon key) on the one frame in four it decides on (until 2026-10-08 all four were counted and
             # three were noise), the switch to his legs when it was read, what his legs take only while he moves himself
             b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo)))
             scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
             teach = np.concatenate([r[5] for r in res])
+            if HAND_LAB:
+                hand = np.concatenate([r[14] for r in res])
+            if AUX_W > 0:
+                aux = np.concatenate([r[12] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
             for w_, r in enumerate(res):
@@ -550,6 +803,10 @@ def main():
                     if k in MAP_KEYS:
                         am_ = agg_map.setdefault(w_map[w_], {})
                         am_[k] = am_.get(k, 0) + v
+                for tr_ in r[3].get("way_trips", ()):                    # (WAYS) his finished trips between two places, by map and pair
+                    l_ = WAY_STORE.setdefault(w_map[w_], {}).setdefault((int(tr_[0]), int(tr_[1])), [])
+                    l_.append(tr_[2:])
+                    del l_[:-WAY_KEEP]
                 for mk, ek in zip(r[3]["match_of_kill"], r[3]["even_kill"]):
                     if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
@@ -558,6 +815,8 @@ def main():
             b_val[T] = vT_
             if LONG:
                 b_val2[T] = pol.v2(hT_)
+        if AUX_W > 0:
+            b_aux[T] = torch.from_numpy(aux)
         if obs_count < OBS_FREEZE:
             flat = np.concatenate(raw)
             bm, bv, bc = flat.mean(0), flat.var(0), len(flat)
@@ -612,6 +871,14 @@ def main():
         ik_l = torch.zeros(())
         wk = a.weapon_teach * max(0.0, 1.0 - (mins - fade0) / a.weapon_teach_minutes)
         wk_l = torch.zeros(())
+        lt_w = a.legs_teach * (min(1.0, max(0.0, mins - fade0) / a.legs_teach_warm) if a.legs_teach_warm > 0 else 1.0)   # (--legs-teach)
+        lt_acc = torch.zeros(4, 6, dtype=torch.float64, device=dev)      # ... per output: its frames, the sum of its loss, his likeliest choice is the label's,
+        #                                                                  the chance he gives the label; its frames in withheld stretches, his likeliest right there
+        lt_fr = torch.zeros(3, dtype=torch.float64, device=dev)          # ... the learner's frames, of them with a label, of those in withheld stretches
+        hd_w = a.hand_teach * (min(1.0, max(0.0, mins - fade0) / a.hand_teach_warm) if a.hand_teach_warm > 0 else 1.0)   # (--hand-teach)
+        hd_acc = torch.zeros(7, dtype=torch.float64, device=dev)         # ... the learner's frames, of them with a label, of those read by his hand; over the
+        #                                                                  last: the sums of the loss, of the target's own entropy, of his chance of a choice
+        #                                                                  other than "keep", of the target's
         demo_w = a.demo_coef * (max(0.0, 1.0 - (time.time() - t_start) / 60.0 / a.demo_minutes) if a.demo_minutes > 0 else 1.0)
         demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
         if demo_w > 0 and update % 5 == 0:
@@ -651,6 +918,23 @@ def main():
                         lgk_ = seq_pass(chunk, hh)[0]
                     for j, dd in enumerate(dists(lgk_)):
                         old_h[:, chunk, j] = dd.log_prob(b_act[:, chunk, j])
+        aux_w = 0.0
+        if AUX_W > 0:                                                    # (--aux) the lesson's labels, by hindsight inside this rollout
+            aux_w = AUX_W * (min(1.0, max(0.0, mins - fade0) / a.aux_warm) if a.aux_warm > 0 else 1.0)
+            t_aux = time.time()
+            dn_ = b_done.cpu()
+            ys_, ms_, cs_ = [], [], []
+            for c0_ in range(0, N, 4096):                                # (a few thousand players at a time: whole tensors, no loop over players)
+                y_, m_, c_ = aux_labels(b_aux[:, c0_:c0_ + 4096].float(), dn_[:, c0_:c0_ + 4096], AUX_IX, AUX_FR)
+                ys_.append(y_.half())
+                ms_.append(m_)
+                cs_.append(c_.to(torch.uint8))
+            AUX_Y, AUX_M, AUX_C = torch.cat(ys_, 1), torch.cat(ms_, 1), torch.cat(cs_, 1)      # (off the card: a piece goes over with its minibatch)
+            ys_ = ms_ = cs_ = None
+            aux_secs = time.time() - t_aux
+            ax_s, ax_n, ax_w = torch.zeros(len(AUX_MI), dtype=torch.float64), torch.zeros(6, dtype=torch.float64), 0.0
+        wy_acc = torch.zeros(8, dtype=torch.float64, device=dev)         # (WAYS) the learner's readings of his way: how many, the sum of the
+        #                                                                  entropy, of the chance given to each way, the readings on each way
         for epoch in range(3):
             perm = torch.randperm(N, device=dev)
             for chunk in perm.chunk(n_mb):                               # whole sequences per player
@@ -700,7 +984,43 @@ def main():
                 if LONG:
                     vl = vl + (0.5 * (v2_all - ret2[:, chunk]).pow(2).sum(-1) * wgt).sum() / wsum
                 en = (ent * wgt).sum() / wsum
+                if W_HEAD >= 0 and W_ON and epoch == 0:                  # (WAYS) how he chooses his way, on the frames it was read
+                    with torch.no_grad():
+                        wyf_ = lv * wgt
+                        wy_acc += torch.cat([torch.stack([wyf_.sum(), (ds[W_HEAD].entropy() * wyf_).sum()]),
+                                             (ds[W_HEAD].probs * wyf_[..., None]).sum((0, 1)),
+                                             torch.stack([((A[..., W_HEAD] == j_).float() * wyf_).sum() for j_ in range(3)])]).double()
                 loss = pg + 0.5 * vl - ent_coef * en
+                if AUX_W > 0:                                            # (--aux) what he is asked to foretell from his memory
+                    ci_ = chunk.cpu()
+                    ay_, am_, ac_ = AUX_Y[:, ci_].to(dev).float(), AUX_M[:, ci_].to(dev), AUX_C[:, ci_].to(dev).long()
+                    hx_ = hs_all if a.aux_trunk >= 1.0 else a.aux_trunk * hs_all + (1.0 - a.aux_trunk) * hs_all.detach()   # (as --teach-trunk)
+                    wm_ = am_.float() * wgt[..., None]                   # a label is there, on the learner's frames
+                    wn_ = wm_.sum((0, 1)).clamp(min=1.0)
+                    o_fi = pol.aux.fight(hx_)
+                    e_pl = pol.aux.place(hx_) - ay_[..., 0:3]
+                    e_ap = pol.aux.appear(hx_) - ay_[..., 3:5]
+                    e_sd = e_ap[..., 0] - 4.0 * torch.round(e_ap[..., 0] / 4.0)      # sideways the short way round (a whole turn is 4 x 90)
+                    ce_ = nn.functional.cross_entropy(o_fi[..., :3].reshape(-1, 3), ac_.reshape(-1), reduction="none").view(ac_.shape)
+                    e_dm = o_fi[..., 3] - ay_[..., 5]
+                    e_it = pol.aux.items(hx_) - ay_[..., 6:8]
+                    al_ = dict(place=(e_pl.pow(2).sum(-1) * wm_[..., 0]).sum() / wn_[0],
+                               appear=((e_sd.pow(2) + e_ap[..., 1].pow(2)) * wm_[..., 1]).sum() / wn_[1],
+                               fight=(ce_ * wm_[..., 2]).sum() / wn_[2] + (e_dm.pow(2) * wm_[..., 3]).sum() / wn_[3],
+                               items=(e_it[..., 0].pow(2) * wm_[..., 4]).sum() / wn_[4] + (e_it[..., 1].pow(2) * wm_[..., 5]).sum() / wn_[5])
+                    loss = loss + aux_w * sum(al_[k_] for k_ in AUX_HEADS)
+                    if epoch == 0:                                       # his errors on frames this update has not yet learnt from
+                        with torch.no_grad():
+                            mv_ = torch.stack([e_pl.pow(2).sum(-1), e_pl.norm(dim=-1) * 1500.0, ay_[..., 0:3].norm(dim=-1) * 1500.0,
+                                               e_sd.pow(2) + e_ap[..., 1].pow(2), e_sd.abs() * 90.0, e_ap[..., 1].abs() * 90.0,
+                                               ay_[..., 3].abs() * 90.0, ay_[..., 4].abs() * 90.0,
+                                               ce_, (o_fi[..., :3].argmax(-1) == ac_).float(), (ac_ == 0).float(), (ac_ == 1).float(), (ac_ == 2).float(),
+                                               e_dm.pow(2), e_dm.abs() * 100.0, ay_[..., 5].abs() * 100.0,
+                                               e_it[..., 0].pow(2), e_it[..., 0].abs() * 40.0, ay_[..., 6].abs() * 40.0,
+                                               e_it[..., 1].pow(2), e_it[..., 1].abs() * 40.0, ay_[..., 7].abs() * 40.0], -1)
+                            ax_s += (mv_ * wm_[..., AUX_MI]).sum((0, 1)).double().cpu()
+                            ax_n += wm_.sum((0, 1)).double().cpu()
+                            ax_w += float(wgt.sum())
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
                     tl = b_teach[:, chunk]
                     tm = (tl[..., 0] >= 0).float() * wgt
@@ -714,12 +1034,59 @@ def main():
                     loss = loss + wk * wk_l
                 if ik > 0:                                               # the intention head leans on the item rule at first
                     it_ = b_iteach[:, chunk]
-                    im_ = b_live[:, chunk] * wgt
-                    lpi_ = dst[I_HEAD].log_prob(it_)
-                    if EN_I >= 0:                                        # the enemy as a target is not the item rule's to judge: the lesson
-                        lpi_ = lpi_ - torch.log1p(-dst[I_HEAD].probs[..., EN_I].clamp(max=0.999))   # is about which item, among the items
+                    im_ = b_live[:, chunk] * wgt * (it_ >= 0).float()    # (TARGETS: a negative label: the rule names no item, the lesson is silent)
+                    lpi_ = dst[I_HEAD].log_prob(it_.clamp(min=0))
+                    out_ = dst[I_HEAD].probs[..., EN_I] if EN_I >= 0 else None       # the enemy as a target is not the item rule's to judge,
+                    if TG_I is not None:                                 # nor is a holding place: the lesson is about which item, among the items
+                        pl_ = dst[I_HEAD].probs[..., TG_I[0]:TG_I[1]].sum(-1)
+                        out_ = pl_ if out_ is None else out_ + pl_
+                    if out_ is not None:
+                        lpi_ = lpi_ - torch.log1p(-out_.clamp(max=0.999))
                     ik_l = -(lpi_ * im_).sum() / im_.sum().clamp(min=1.0)
                     loss = loss + ik * ik_l
+                if LEGS_LAB and (lt_w > 0 or epoch == 0):               # (--legs-teach) his own movement outputs toward what his legs chose
+                    L_ = b_lab[:, chunk].long()
+                    lm_ = (L_[..., 0] >= 0).float() * wgt                # a label is there, on the learner's frames
+                    lms_ = [lm_ * dc, lm_ * dc, lm_ * dc, lm_]           # the keys on the frames his hand reads them, the view's turn on every one
+                    lj_ = [L_[..., j].clamp(min=0) for j in range(4)]
+                    if lt_w > 0:
+                        tr_ = a.legs_teach_trunk                         # (as --teach-trunk: the same outputs, the shared layers held back)
+                        dsl = ds if tr_ >= 1.0 else dists(pol.pi(tr_ * hs_all + (1.0 - tr_) * hs_all.detach()))
+                        lt_l = sum(-(dsl[j].log_prob(lj_[j]) * lms_[j]).sum() / lms_[j].sum().clamp(min=1.0) for j in range(4))
+                        loss = loss + lt_w * lt_l
+                    if epoch == 0:                                       # how near he is, on frames this update has not yet learnt from
+                        with torch.no_grad():
+                            hd_ = (L_[..., 4] > 0).float()
+                            for j in range(4):
+                                lpj_ = ds[j].log_prob(lj_[j])
+                                hit_ = (ds[j].logits.argmax(-1) == lj_[j]).float()
+                                lt_acc[j] += torch.stack([lms_[j].sum(), (-lpj_ * lms_[j]).sum(), (hit_ * lms_[j]).sum(), (lpj_.exp() * lms_[j]).sum(),
+                                                          (lms_[j] * hd_).sum(), (hit_ * lms_[j] * hd_).sum()]).double()
+                            lt_fr += torch.stack([wgt.sum(), lm_.sum(), (lm_ * hd_).sum()]).double()
+                if HAND_LAB and (hd_w > 0 or epoch == 0):               # (--hand-teach) his weapon output toward the pros' shares of what he owns
+                    Y_ = b_hand[:, chunk].float()
+                    yl_ = (Y_.sum(-1) > 0.5).float() * wgt               # a label is there, on the learner's frames
+                    ym_ = yl_ * dc                                       # ... and his hand reads the weapon key on that frame
+                    Y_ = Y_ / Y_.sum(-1, keepdim=True).clamp(min=1e-6)   # (stored at half precision: a sum of 1 again)
+                    if hd_w > 0:
+                        tr_ = a.hand_teach_trunk
+                        if tr_ >= 1.0:
+                            lw_ = ds[HAND_HEAD].logits
+                        else:                                            # as --teach-trunk (the same output, the shared layers held back to a
+                            W_, c_ = pol.pi.weight[HAND_O:HAND_O + HAND_D], pol.pi.bias[HAND_O:HAND_O + HAND_D]     # share), on the weapon
+                            lw_ = nn.functional.linear(hs_all.detach(), W_, c_)                                     # output's rows alone
+                            if tr_ > 0:
+                                z_ = nn.functional.linear(hs_all, W_.detach())
+                                lw_ = lw_ + tr_ * (z_ - z_.detach())
+                            lw_ = torch.log_softmax(lw_, -1)
+                        hd_l = -((Y_ * lw_).sum(-1) * ym_).sum() / ym_.sum().clamp(min=1.0)
+                        loss = loss + hd_w * hd_l
+                    if epoch == 0:                                       # how near he is, on frames this update has not yet learnt from
+                        with torch.no_grad():
+                            lq_ = ds[HAND_HEAD].logits
+                            hd_acc += torch.stack([wgt.sum(), yl_.sum(), ym_.sum(), (-(Y_ * lq_).sum(-1) * ym_).sum(),
+                                                   (-(Y_ * torch.log(Y_.clamp(min=1e-9))).sum(-1) * ym_).sum(),
+                                                   ((1.0 - lq_[..., 0].exp()) * ym_).sum(), ((1.0 - Y_[..., 0]) * ym_).sum()]).double()
                 if demo_w > 0:                                           # imitate what pro players did in the same situation
                     d_obs, d_act, d_first = demo_batch()
                     dh = torch.zeros(d_obs.shape[1], H, device=dev)
@@ -738,7 +1105,11 @@ def main():
                                     float(((dd_[3].logits.argmax(-1) - da[..., 3]).abs() <= 1).float().mean())]
                 opt.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
+                if AUX:
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.")], 0.5)
+                    nn.utils.clip_grad_norm_(pol.aux.parameters(), 0.5)
+                else:
+                    nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
         total += T * N
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
@@ -746,6 +1117,7 @@ def main():
         LG_ = np.atleast_1d(agg.get("legs", np.zeros(8)))              # (LEGS: the simulator's counters, see duel_env's stats)
         LR_ = np.atleast_1d(agg.get("legs_reads", np.zeros(2)))
         EN_ = np.atleast_1d(agg.get("en_frames", np.zeros(3)))
+        HF_ = np.atleast_1d(agg.get("hold_frames", np.zeros(6)))
         rec = dict(update=update, steps=total, minutes=round(mins, 2), sps=int(total / (time.time() - t_start)),
                    fire_in_view=round(float(agg.get("fire_vis", 0) / max(1, agg.get("vis_frames_h", 0))), 3),
                    shot_cost_per_player_min=round(float(agg.get("shot_cost", 0.0) / max(1e-9, NP * T * DT_MIN)), 3),
@@ -807,6 +1179,12 @@ def main():
                    fight=dict(share=round(float(EN_[0] / max(1.0, LG_[3])), 4),                 # (FIGHT_TARGET) the share of his time alive with the enemy as his intention,
                               on_legs=round(float(EN_[1] / max(1.0, EN_[0])), 3),               # ... of it on his legs,
                               in_view=round(float(EN_[2] / max(1.0, EN_[0])), 3)),              # ... of it with the enemy in view
+                   targets=dict(share=round(float(HF_[0] / max(1.0, LG_[3])), 4),               # (TARGETS) the share of his time alive with a holding place as his intention,
+                                on_legs=round(float(HF_[1] / max(1.0, HF_[0])), 3),             # ... of it on his legs,
+                                at_it=round(float(HF_[2] / max(1.0, HF_[0])), 3),               # ... standing at the place,
+                                in_view=round(float(HF_[3] / max(1.0, HF_[0])), 3),             # ... with the enemy in view;
+                                reached_per_player_min=round(float(HF_[4] / max(1e-9, NP * T * DT_MIN)), 3),      # places reached,
+                                speed_on_the_way=int(HF_[5] / max(1.0, HF_[0] - HF_[2]))),     # his speed while not yet at it
                    closing=[int(v_ / max(1.0, c_)) for v_, c_ in zip(np.atleast_1d(agg.get("close_v", np.zeros(3))),       # his speed toward an enemy in view
                                                                     np.atleast_1d(agg.get("close_n", np.zeros(3))))],     # (health plus armor under 60, to 125, over)
                    kl_heads=[round(float(x), 5) for x in klh / max(1, kl_n)] if old_h is not None else None,
@@ -916,12 +1294,126 @@ def main():
                 xs_ = b_obs[T - 1, :2048].float()
                 rec["door"] = dict(w=round(float(pol.attn.door.weight.abs().mean()), 6),
                                    share=round(float(pol.attn(xs_).abs().mean() / (pol.enc(xs_).abs().mean() + 1e-8)), 4))
+        if GATE_M is not None:                                           # (--gate-open) the gate of the tokens that began below zero: the
+            rec["gate"] = dict(value=round(float(pol.attn.gate[GATE_M].min()), 4) if bool(GATE_M.any()) else 0.0,   # lowest now, how many
+                               tokens=int(GATE_M.sum()), over=a.gate_open,                                           # they are, the opening asked
+                               start=a.gate_from if a.gate_open > 0 else None)                                       # for (0 minutes: none)
         if LONG:
             rec["long"] = dict(share=round(long_c, 3), gap=round(long_gap, 4))
+        if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
+            def q_(i_, d_=4):
+                return round(float(ax_s[i_] / max(1.0, float(ax_n[int(AUX_MI[i_])]))), d_)
+            rec["aux"] = dict(w=round(aux_w, 4), trunk=a.aux_trunk, heads=list(AUX_HEADS), frames=list(AUX_FR),
+                              loss=dict(place=q_(0), appear=q_(3), fight=round(q_(8, 6) + q_(13, 6), 4), items=round(q_(16, 6) + q_(19, 6), 4)),
+                              parts=dict(fight_class=q_(8), fight_damage=q_(13), mega=q_(16), red=q_(19)),
+                              place_units=q_(1, 1),                      # (a) the mean distance between where he puts the unseen enemy and where he is
+                              appear_deg=[q_(4, 2), q_(5, 2)],           # (b) the mean absolute error of the angle: sideways, up-down
+                              fight_right=q_(9),                         # (c) the share of fights called right ...
+                              fight_base=dict(neither=q_(10), frag=q_(11), fragged=q_(12)),      # ... and how the labelled fights end
+                              damage_points=q_(14, 2),                   # ... the mean error of the damage dealt less taken
+                              items_s=[q_(17, 2), q_(20, 2)],            # (d) the mean error in seconds: mega, red armor
+                              zero=dict(place_units=q_(2, 1), appear_deg=[q_(6, 2), q_(7, 2)], damage_points=q_(15, 2),      # the same errors had he
+                                        items_s=[q_(18, 2), q_(21, 2)]),                                                  # answered nothing (zeros)
+                              labelled={k_: round(float(ax_n[i_] / ax_w), 4)       # the share of the learner's frames with each label
+                                        for i_, k_ in enumerate(("place", "appear", "fight", "damage", "mega", "red"))},
+                              label_s=round(aux_secs, 2))
+        if "qhand" in agg:                                               # (--hand-teach) the weapon in his hand with nobody in view for 1 s or more:
+            QH_ = np.asarray(agg["qhand"], np.float64).reshape(3, 4, -1)      # the simulators' counters (his counted seats, in games), also with the lesson off
+            QM_, QS_ = np.asarray(agg["qhand_meet"], np.float64), np.asarray(agg["qhand_sw"], np.float64)
+            QO_, QP_ = (np.asarray(agg[k_], np.float64).reshape(2, 4, -1) for k_ in ("qhand_on", "qhand_pro"))
+            ha_ = hd_acc.cpu().numpy()
+            WI_ = {w_: i_ for i_, w_ in enumerate(WEAPONS)}
+
+            def sh_(x_, ws_=None, d_=4):                                 # the share of the frames x_ (by weapon) with one of ws_ in hand; None: no frames
+                return (round(float(sum(x_[WI_[w_]] for w_ in ws_) / x_.sum()), d_) if ws_ else
+                        {w_: round(float(x_[i_] / x_.sum()), d_) for w_, i_ in WI_.items() if x_[i_] > 0}) if x_.sum() > 0 else None
+
+            def tv_(a_, b_):                                             # half the sum of the differences of two rows of shares (0: the same)
+                return round(float(0.5 * np.abs(a_ / a_.sum() - b_ / b_.sum()).sum()), 4) if a_.sum() > 0 and b_.sum() > 0 else None
+            rec["hand_teach"] = dict(
+                w=round(hd_w, 4), trunk=a.hand_teach_trunk, on=HAND_LAB,
+                redraw_s=float(getattr(E_, "HAND_TEACH_REDRAW", 0.0)),
+                loss=round(float(ha_[3] / max(1.0, ha_[2])), 4) if HAND_LAB else None,                    # cross-entropy against the target, a labelled reading
+                kl=round(float((ha_[3] - ha_[4]) / max(1.0, ha_[2])), 4) if HAND_LAB else None,            # ... less the target's own entropy: 0 = he chooses as the target
+                labelled=round(float(ha_[1] / max(1.0, ha_[0])), 4) if HAND_LAB else None,                 # the share of the learner's frames with a label,
+                read=round(float(ha_[2] / max(1.0, ha_[0])), 4) if HAND_LAB else None,                     # ... and with a label his hand reads (the lesson's frames)
+                p_change=[round(float(ha_[5] / max(1.0, ha_[2])), 4), round(float(ha_[6] / max(1.0, ha_[2])), 4)] if HAND_LAB else None,   # a choice other than "keep" at such a reading: his chance, the target's
+                # THE MEASURES (the simulators' count; bands: an enemy in view under 5 s ago, 5 to 15 s, over 15 s, nobody seen yet in this round)
+                unseen_min=round(float(QH_.sum() * DT_MIN), 2),                                            # player-minutes with nobody in view for 1 s or more
+                time=dict(travelling=round(float(QH_[0].sum() / max(1.0, QH_.sum())), 4), holding=round(float(QH_[1].sum() / max(1.0, QH_.sum())), 4),
+                          neither=round(float(QH_[2].sum() / max(1.0, QH_.sum())), 4)),                    # of that time: at 200 or more and not in a hold; in a hold; neither
+                humming=[sh_(QH_[:, b_].sum(0), ("rg", "lg")) for b_ in range(4)],                       # rail or lightning in hand, by band: all of that time
+                humming_travelling=[sh_(QH_[0, b_], ("rg", "lg")) for b_ in range(4)],                   # ... travelling alone (the pros: 0.28, 0.12, 0.09)
+                rockets=dict(travelling=sh_(QH_[0].sum(0), ("rl",)), holding=sh_(QH_[1].sum(0), ("rl",)), neither=sh_(QH_[2].sum(0), ("rl",))),   # rockets in hand (the pros holding: 0.82)
+                in_hand=sh_(QH_.sum((0, 1))),                                                              # every weapon's share of that time
+                meet=sh_(QM_), meets=int(QM_.sum()),                                                       # the weapon in his hand as an enemy comes into view after 1 s or more out of it
+                changes_a_minute=round(float(QS_[0] / max(1e-9, QS_[1] * DT_MIN)), 2),                    # changes of the weapon in his hand a minute of that time
+                on_label=dict(frames=int(QO_.sum()),                                                       # the frames the lesson would label (he owns two or more of the row's weapons):
+                              share=round(float(QO_.sum() / max(1.0, QH_.sum())), 4),                      # ... their share of the time with nobody in view,
+                              his=dict(travelling=sh_(QO_[0].sum(0)), holding=sh_(QO_[1].sum(0))),         # ... his hand on them,
+                              pros=dict(travelling=sh_(QP_[0].sum(0)), holding=sh_(QP_[1].sum(0))),        # ... the pros' shares of what he owned there,
+                              gap=dict(travelling=tv_(QO_[0].sum(0), QP_[0].sum(0)), holding=tv_(QO_[1].sum(0), QP_[1].sum(0)))))    # ... and how far apart (0 to 1)
         if "hop_pay" in agg:                                             # (HOP_PAY) speed gained from hop to hop: what it paid, how often
             pm_ = max(1e-9, NP * T * DT_MIN)
             rec["hop"] = dict(pay_per_player_min=round(float(agg["hop_pay"] / pm_), 4), paying_per_min=round(float(agg.get("hop_n", 0) / pm_), 2),
                               takeoffs_per_min=round(float(agg.get("hop_takeoffs", 0) / pm_), 2), chains_per_min=round(float(agg.get("hop_chains", 0) / pm_), 2))
+        if "games" in agg:                                               # (GAME_P, LATE_P, WIN_PAY) the whole games and late rounds that ended in this rollout
+            g_ = np.atleast_1d(agg["games"]).astype(np.float64)        # (the simulator's GAMES_COLS)
+            n_, l_ = max(1.0, g_[0] + g_[1]), max(1.0, g_[4])
+            rec["games"] = dict(whole=int(g_[0]), late=int(g_[1]), begun=int(g_[15]), level_at_the_limit=int(g_[2]),
+                                frags_a_whole_game=round(float(g_[3] / max(1.0, g_[0])), 1),
+                                time_share=dict(whole=round(float(g_[13] / max(1.0, T * n_groups)), 4),             # of all the groups' time
+                                                late=round(float(g_[14] / max(1.0, T * n_groups)), 4)),
+                                league=dict(games=int(g_[4]), won=int(g_[5]), drawn=int(g_[6]), lost=int(g_[7]),     # his seat against the league's, in the
+                                            frag_diff=round(float(g_[8] / l_), 2),                                 # league half of the matches (the league's
+                                            win_pay_a_game=round(float(g_[9] / l_), 3),                            # network changes with every rollout)
+                                            flat_pay_a_game=round(float(g_[10] / l_), 3),
+                                            opponent_now="anchor" if (snaps and vs_anchor) else "snapshot" if snaps else "himself"),
+                                pay_size=dict(win=round(float(g_[11] / n_), 3), flat=round(float(g_[12] / n_), 3)),  # the first seat's pay a game, without its sign
+                                by_map={m_: [int(x_) for x_ in np.atleast_1d(v_["games"])[[0, 1, 4, 5, 6, 7]]]       # whole, late; league: games, won, level, lost
+                                        for m_, v_ in agg_map.items() if "games" in v_ and float(np.atleast_1d(v_["games"])[[0, 1]].sum()) > 0})
+        if W_HEAD >= 0:                                                  # (WAYS) his ways to his targets
+            wa_ = wy_acc.cpu().numpy()
+            WR_, WD_, WF_ = (np.atleast_1d(agg.get(k_, np.zeros(z_))).astype(np.float64) for k_, z_ in (("way_reads", 3), ("way_done", 3), ("way_frames", 4)))
+            wm_ = way_measure(WAY_STORE, WAY_KEEP, WAY_MIN)
+            rec["ways"] = dict(on=W_ON,
+                               reads=[round(float(x_), 4) for x_ in wa_[5:8] / max(1.0, wa_[0])],        # the learner's readings of his way: the share on the shortest, the second, the third (what he drew),
+                               p=[round(float(x_), 4) for x_ in wa_[2:5] / max(1.0, wa_[0])],            # ... the chance his network gave each,
+                               entropy=round(float(wa_[1] / max(1.0, wa_[0])), 4),                       # ... its entropy (all alike: 1.0986),
+                               read_frames=round(float(wa_[0] / max(1.0, float(b_w.sum()))), 5),         # ... the share of his frames it was read on
+                               reads_sim=[round(float(x_), 4) for x_ in WR_ / max(1.0, WR_.sum())],      # the same by the simulators' count (his seats, every reading)
+                               trips=[round(float(x_), 4) for x_ in WD_ / max(1.0, WD_.sum())],          # his finished trips (an item taken, a place reached) by the way he was on
+                               time=[round(float(x_), 4) for x_ in WF_[:3] / max(1.0, WF_[:3].sum())],   # his time in games with a target and a way to it, by way
+                               differs=round(float(WF_[3] / max(1.0, WF_[1] + WF_[2])), 4),              # of his time on the second or third: where it differs from the shortest from there
+                               changes_per_player_min=round(float(agg.get("way_changes", 0)) / max(1e-9, NP * T * DT_MIN), 3),   # changes of the way alone
+                               pay_per_player_min=[round(float(x_) / max(1e-9, NP * T * DT_MIN), 4)                    # what the ways of his trips paid, and what
+                                                   for x_ in np.atleast_1d(agg.get("way_pay", np.zeros(2)))],          # trips given up gave back
+                               commonest=round(float(np.mean([v_["commonest"] for v_ in wm_.values()])), 1) if wm_ else None,   # THE MEASURE: of his trips between the same
+                               by_map={m_: v_["commonest"] for m_, v_ in wm_.items()},                   # two places, the share on the commonest way, per cent (the pros 43, v0.1 57);
+                               pairs=sum(v_["pairs"] for v_ in wm_.values()),                            # by map; the pairs and trips it is counted over
+                               counted=sum(v_["trips"] for v_ in wm_.values()),                          # (the newest WAY_KEEP of a pair with WAY_MIN or more);
+                               trips_per_player_min=round(float(agg.get("way_trips_n", 0)) / max(1e-9, NP * T * DT_MIN), 3))     # the trips between two places that came in
+        if LEGS_LAB:                                                     # (--legs-teach) the lesson of his legs, measured in the update's first pass
+            la_, lf_ = lt_acc.cpu().numpy(), lt_fr.cpu().numpy()
+            KP_ = np.asarray(agg.get("legs_keep", np.zeros((2, 7))), np.float64).reshape(2, 7)   # (the simulator's counters: carried, withheld)
+
+            def kp_(r_):
+                k_ = KP_[r_]
+                return dict(stretches=int(k_[0]),                                       # stretches begun (his switch turned on), his seats only
+                            frames=int(k_[1]),                                          # frames with a label,
+                            fast=round(float(k_[2] / max(1.0, k_[1])), 4),              # ... the share of them at 400 units a second or more,
+                            speed=int(k_[3] / max(1.0, k_[1])),                         # ... his mean speed on them,
+                            runs=int(k_[4]), runs_2s=int(k_[5]),                        # runs of such frames begun, runs that lasted two seconds,
+                            gain_2s=round(float(k_[6] / max(1.0, k_[5])), 1))           # ... the mean speed gained in their first two seconds
+            rec["legs_teach"] = dict(w=round(lt_w, 4), trunk=a.legs_teach_trunk,
+                                     loss=round(float((la_[:, 1] / np.maximum(1.0, la_[:, 0])).sum()), 4),                 # the four outputs' losses added,
+                                     loss_by=[round(float(x_), 4) for x_ in la_[:, 1] / np.maximum(1.0, la_[:, 0])],       # ... and apart: forward, sideways, jump, turn
+                                     labelled=round(float(lf_[1] / max(1.0, lf_[0])), 4),                                  # the share of the learner's frames with a label
+                                     agree=[round(float(x_), 4) for x_ in la_[:, 2] / np.maximum(1.0, la_[:, 0])],         # his likeliest choice is the label's, by output
+                                     p_label=[round(float(x_), 4) for x_ in la_[:, 3] / np.maximum(1.0, la_[:, 0])],       # the chance he gives the label, by output
+                                     withheld=round(float(lf_[2] / max(1.0, lf_[1])), 4),                                  # the share of the labelled frames in withheld stretches
+                                     agree_withheld=[round(float(x_), 4) for x_ in la_[:, 5] / np.maximum(1.0, la_[:, 4])] if lf_[2] > 0 else None,
+                                     carried=kp_(0), held=kp_(1))
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:

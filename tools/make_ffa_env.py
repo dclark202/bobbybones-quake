@@ -31,9 +31,9 @@ def rep(a, b, count=1):
 
 
 # ---- constants
-rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02",
+rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3",
     "N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players\n"
-    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02")
+    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3")
 rep("        return (np.arange(self.n) ^ 1)[:, None]", "        return self.others")
 rep("        return [i ^ 1]", "        return [int(x) for x in self.others[i]]")
 rep("        return j % 2", "        return j % self.G")
@@ -233,14 +233,14 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
                               self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir),
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
-                              self._v02(pos, eye, rot, c, si, known, opp)], 1)
+                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos)], 1)
         return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
                               self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir),
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
-                              self._v02(pos, eye, rot, c, si, known, opp)], 1)
+                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -464,7 +464,7 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
                 self.acq_extra2[:, k_] = np.where(vis & (self.vis_run2[:, k_] == 0), surprise_frames(ecc_, self.seen2[:, k_]),
                                                   np.where(vis, self.acq_extra2[:, k_], 0))
             self.vis_run2[:, k_] = np.where(vis, self.vis_run2[:, k_] + 1, 0)
-            acq = vis & (self.vis_run2[:, k_] >= max(1, self.acquire_frames - self.react_frames) + self.acq_extra2[:, k_])
+            acq = vis & (self.vis_run2[:, k_] >= self._acq_need() + self.acq_extra2[:, k_])
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
             if heard.any():

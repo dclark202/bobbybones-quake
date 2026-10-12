@@ -1,0 +1,1019 @@
+{
+ "map": "sinister",
+ "made": "2026-10-12 01:08",
+ "legs": "move_v15n",
+ "tries": 6,
+ "need": 5,
+ "made_means": "that many of the tries stand at the target within max(6, 1.25 x the way's seconds + 3) seconds, his legs on from the way's origin; and from no spawn point or other item do at most 2 of 4 arrive where the shortest way does better by two",
+ "switches": {
+  "AIM_LEVEL": "3",
+  "AMMO_PACKS": "0",
+  "AUTO_SWITCH": "1",
+  "FIGHT_TARGET": "1",
+  "GROUND_SENSE": "1",
+  "INTENT_HOLD": "8",
+  "ITEM_BELIEF": "1",
+  "ITEM_DROP": "1",
+  "KEY_RATE": "8",
+  "LAVA": "1",
+  "LEGS": "1",
+  "LEGS_EVERY": "4",
+  "LEGS_OFF": "2",
+  "NEAREST": "1",
+  "PROJ_SEE": "1",
+  "PRO_WAYS": "1",
+  "SHOT_MASK": "1",
+  "SOLIDS": "1",
+  "TARGETS": "1",
+  "WALK_FIX": "1",
+  "WAYS": "1",
+  "WAY_UNTESTED": "1"
+ },
+ "ways": {
+  "LG>308,-160,-9:8:19": {
+   "ok": true,
+   "target": "1 MH",
+   "origin": "LG",
+   "set": 2,
+   "trips": 8,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 5.1,
+   "seconds_by_the_set": 5.6
+  },
+  "LG>656,1040,527:32:14": {
+   "ok": true,
+   "target": "2 RA",
+   "origin": "LG",
+   "set": 2,
+   "trips": 32,
+   "arrived": 5,
+   "tries": 6,
+   "seconds_median": 4.8,
+   "seconds_by_the_set": 5.2
+  },
+  "RL2>656,1040,527:16:22": {
+   "ok": true,
+   "target": "2 RA",
+   "origin": "RL2",
+   "set": 2,
+   "trips": 16,
+   "arrived": 5,
+   "tries": 6,
+   "seconds_median": 5.5,
+   "seconds_by_the_set": 7.1
+  },
+  "YA1>656,1040,527:20:28": {
+   "ok": true,
+   "target": "2 RA",
+   "origin": "YA1",
+   "set": 2,
+   "trips": 20,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 7.8,
+   "seconds_by_the_set": 8.9
+  },
+  "YA2>-288,192,271:12:24": {
+   "ok": true,
+   "target": "3 RL",
+   "origin": "YA2",
+   "set": 2,
+   "trips": 12,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 6.8,
+   "seconds_by_the_set": 8.0
+  },
+  "RA>1024,-160,-41:8:19": {
+   "ok": true,
+   "target": "4 RG",
+   "origin": "RA",
+   "set": 2,
+   "trips": 8,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 6.8,
+   "seconds_by_the_set": 7.4
+  },
+  "RL2>1024,-160,-41:29:13": {
+   "ok": true,
+   "target": "4 RG",
+   "origin": "RL2",
+   "set": 2,
+   "trips": 29,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 3.4,
+   "seconds_by_the_set": 3.5
+  },
+  "YA1>1024,-160,-41:9:20": {
+   "ok": true,
+   "target": "4 RG",
+   "origin": "YA1",
+   "set": 2,
+   "trips": 9,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 4.7,
+   "seconds_by_the_set": 6.9
+  },
+  "MH>512,896,-9:14:21": {
+   "ok": true,
+   "target": "5 LG",
+   "origin": "MH",
+   "set": 2,
+   "trips": 14,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 5.2,
+   "seconds_by_the_set": 7.2
+  },
+  "MH>512,896,-9:10:24": {
+   "ok": true,
+   "target": "5 LG",
+   "origin": "MH",
+   "set": 3,
+   "trips": 10,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 7.0,
+   "seconds_by_the_set": 7.8
+  },
+  "RA>-544,192,7:41:17": {
+   "ok": true,
+   "target": "6 YA",
+   "origin": "RA",
+   "set": 2,
+   "trips": 41,
+   "arrived": 5,
+   "tries": 6,
+   "seconds_median": 8.2,
+   "seconds_by_the_set": 6.3
+  },
+  "YA2>-544,192,7:25:24": {
+   "ok": true,
+   "target": "6 YA",
+   "origin": "YA2",
+   "set": 2,
+   "trips": 25,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 7.9,
+   "seconds_by_the_set": 8.5
+  },
+  "RA>1472,-160,463:123:15": {
+   "ok": true,
+   "target": "7 YA2",
+   "origin": "RA",
+   "set": 2,
+   "trips": 123,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 4.7,
+   "seconds_by_the_set": 5.6
+  },
+  "RL1>1472,-160,463:4:31": {
+   "ok": true,
+   "target": "7 YA2",
+   "origin": "RL1",
+   "set": 2,
+   "trips": 4,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 9.3,
+   "seconds_by_the_set": 10.9
+  },
+  "LG>383,-129,0:10:20": {
+   "ok": true,
+   "target": "9 H1",
+   "origin": "LG",
+   "set": 2,
+   "trips": 10,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 5.1,
+   "seconds_by_the_set": 5.7
+  },
+  "LG>623,1215,536:56:18": {
+   "ok": true,
+   "target": "10 H2",
+   "origin": "LG",
+   "set": 2,
+   "trips": 56,
+   "arrived": 5,
+   "tries": 6,
+   "seconds_median": 4.1,
+   "seconds_by_the_set": 4.8
+  },
+  "RA>1439,-129,472:31:16": {
+   "ok": true,
+   "target": "11 H3",
+   "origin": "RA",
+   "set": 2,
+   "trips": 31,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 4.4,
+   "seconds_by_the_set": 5.4
+  },
+  "RL1>1439,-129,472:4:32": {
+   "ok": true,
+   "target": "11 H3",
+   "origin": "RL1",
+   "set": 2,
+   "trips": 4,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 9.2,
+   "seconds_by_the_set": 10.7
+  },
+  "RL1>1391,-369,472:4:24": {
+   "ok": true,
+   "target": "12 H4",
+   "origin": "RL1",
+   "set": 2,
+   "trips": 4,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 6.1,
+   "seconds_by_the_set": 7.8
+  },
+  "RA>623,-129,0:34:22": {
+   "ok": true,
+   "target": "13 H5",
+   "origin": "RA",
+   "set": 2,
+   "trips": 34,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 6.3,
+   "seconds_by_the_set": 6.0
+  },
+  "YA1>623,-129,0:9:18": {
+   "ok": true,
+   "target": "13 H5",
+   "origin": "YA1",
+   "set": 2,
+   "trips": 9,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 3.3,
+   "seconds_by_the_set": 5.6
+  },
+  "LG>431,-369,0:10:23": {
+   "ok": true,
+   "target": "14 H6",
+   "origin": "LG",
+   "set": 2,
+   "trips": 10,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 5.5,
+   "seconds_by_the_set": 6.4
+  },
+  "RL2>1391,927,504:5:25": {
+   "ok": true,
+   "target": "15 H7",
+   "origin": "RL2",
+   "set": 2,
+   "trips": 5,
+   "arrived": 6,
+   "tries": 6,
+   "seconds_median": 7.2,
+   "seconds_by_the_set": 8.0
+  },
+  "LG>308,-160,-9:10:26": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "1 MH",
+   "origin": "LG",
+   "trips": 10
+  },
+  "RA>308,-160,-9:34:25": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "1 MH",
+   "origin": "RA",
+   "trips": 34
+  },
+  "RL2>308,-160,-9:7:23": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "1 MH",
+   "origin": "RL2",
+   "trips": 7,
+   "times_the_shortest": 1.67
+  },
+  "LG>656,1040,527:21:26": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "2 RA",
+   "origin": "LG",
+   "trips": 21
+  },
+  "RL1>656,1040,527:15:21": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "2 RA",
+   "origin": "RL1",
+   "trips": 15
+  },
+  "RL2>656,1040,527:5:31": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "2 RA",
+   "origin": "RL2",
+   "trips": 5,
+   "times_the_shortest": 1.58
+  },
+  "RA>1024,-160,-41:10:23": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "4 RG",
+   "origin": "RA",
+   "trips": 10
+  },
+  "MH>512,896,-9:20:15": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "5 LG",
+   "origin": "MH",
+   "trips": 20
+  },
+  "RG>512,896,-9:17:15": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "5 LG",
+   "origin": "RG",
+   "trips": 17
+  },
+  "RG>512,896,-9:6:18": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "5 LG",
+   "origin": "RG",
+   "trips": 6
+  },
+  "YA2>512,896,-9:13:22": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "5 LG",
+   "origin": "YA2",
+   "trips": 13
+  },
+  "MH>1472,-160,463:14:28": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "7 YA2",
+   "origin": "MH",
+   "trips": 14,
+   "times_the_shortest": 2.07
+  },
+  "RL1>1472,-160,463:4:25": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "7 YA2",
+   "origin": "RL1",
+   "trips": 4
+  },
+  "MH>1120,400,79:61:11": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "8 RL",
+   "origin": "MH",
+   "trips": 61
+  },
+  "MH>1120,400,79:16:15": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "8 RL",
+   "origin": "MH",
+   "trips": 16
+  },
+  "RG>1120,400,79:25:13": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "8 RL",
+   "origin": "RG",
+   "trips": 25
+  },
+  "RG>1120,400,79:12:17": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "8 RL",
+   "origin": "RG",
+   "trips": 12
+  },
+  "YA1>1120,400,79:21:19": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "8 RL",
+   "origin": "YA1",
+   "trips": 21
+  },
+  "YA2>1120,400,79:8:17": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "8 RL",
+   "origin": "YA2",
+   "trips": 8
+  },
+  "YA2>1120,400,79:4:18": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "8 RL",
+   "origin": "YA2",
+   "trips": 4
+  },
+  "RA>383,-129,0:34:26": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "9 H1",
+   "origin": "RA",
+   "trips": 34
+  },
+  "YA1>383,-129,0:9:16": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "9 H1",
+   "origin": "YA1",
+   "trips": 9,
+   "times_the_shortest": 1.52
+  },
+  "RL2>383,-129,0:7:24": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "9 H1",
+   "origin": "RL2",
+   "trips": 7
+  },
+  "RL2>623,1215,536:5:31": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "10 H2",
+   "origin": "RL2",
+   "trips": 5,
+   "times_the_shortest": 1.74
+  },
+  "MH>1439,-129,472:14:29": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "11 H3",
+   "origin": "MH",
+   "trips": 14,
+   "times_the_shortest": 2.07
+  },
+  "RL1>1439,-129,472:4:26": {
+   "ok": false,
+   "why": "no such way for a walker",
+   "target": "11 H3",
+   "origin": "RL1",
+   "trips": 4
+  },
+  "RL2>623,-129,0:7:16": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "13 H5",
+   "origin": "RL2",
+   "trips": 7,
+   "times_the_shortest": 1.73
+  },
+  "RL2>623,-129,0:5:15": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "13 H5",
+   "origin": "RL2",
+   "trips": 5,
+   "times_the_shortest": 1.81
+  },
+  "RL2>431,-369,0:5:18": {
+   "ok": false,
+   "why": "over the cap",
+   "target": "14 H6",
+   "origin": "RL2",
+   "trips": 5,
+   "times_the_shortest": 1.61
+  }
+ },
+ "other_starts": [
+  {
+   "target": "1 MH",
+   "set": 2,
+   "start": "spawn point 6",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "1 MH",
+   "set": 2,
+   "start": "spawn point 8",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "1 MH",
+   "set": 2,
+   "start": "the 2 RA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "1 MH",
+   "set": 2,
+   "start": "the 5 LG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "2 RA",
+   "set": 2,
+   "start": "spawn point 5",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "2 RA",
+   "set": 2,
+   "start": "spawn point 9",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "2 RA",
+   "set": 2,
+   "start": "spawn point 10",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "2 RA",
+   "set": 2,
+   "start": "the 5 LG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "2 RA",
+   "set": 2,
+   "start": "the 6 YA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "2 RA",
+   "set": 2,
+   "start": "the 8 RL",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "3 RL",
+   "set": 2,
+   "start": "spawn point 1",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "3 RL",
+   "set": 2,
+   "start": "spawn point 3",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "3 RL",
+   "set": 2,
+   "start": "spawn point 5",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "3 RL",
+   "set": 2,
+   "start": "the 4 RG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "3 RL",
+   "set": 2,
+   "start": "the 7 YA2",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "4 RG",
+   "set": 2,
+   "start": "spawn point 8",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "4 RG",
+   "set": 2,
+   "start": "spawn point 10",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "4 RG",
+   "set": 2,
+   "start": "the 2 RA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "4 RG",
+   "set": 2,
+   "start": "the 6 YA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "4 RG",
+   "set": 2,
+   "start": "the 7 YA2",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 2,
+   "start": "spawn point 2",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 2,
+   "start": "spawn point 3",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 2,
+   "start": "spawn point 11",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 2,
+   "start": "the 1 MH",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 2,
+   "start": "the 4 RG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 2,
+   "start": "the 7 YA2",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 3,
+   "start": "spawn point 2",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 3,
+   "start": "spawn point 3",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 3,
+   "start": "spawn point 11",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 3,
+   "start": "the 1 MH",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 3,
+   "start": "the 2 RA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 3,
+   "start": "the 4 RG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "5 LG",
+   "set": 3,
+   "start": "the 7 YA2",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "6 YA",
+   "set": 2,
+   "start": "spawn point 1",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "6 YA",
+   "set": 2,
+   "start": "spawn point 2",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "6 YA",
+   "set": 2,
+   "start": "spawn point 3",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "6 YA",
+   "set": 2,
+   "start": "spawn point 11",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "6 YA",
+   "set": 2,
+   "start": "the 2 RA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "6 YA",
+   "set": 2,
+   "start": "the 7 YA2",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "6 YA",
+   "set": 2,
+   "start": "the 8 RL",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "7 YA2",
+   "set": 2,
+   "start": "spawn point 4",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "7 YA2",
+   "set": 2,
+   "start": "spawn point 11",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "7 YA2",
+   "set": 2,
+   "start": "the 2 RA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "7 YA2",
+   "set": 2,
+   "start": "the 3 RL",
+   "arrived": 3,
+   "tries": 4
+  },
+  {
+   "target": "9 H1",
+   "set": 2,
+   "start": "spawn point 6",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "9 H1",
+   "set": 2,
+   "start": "spawn point 8",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "9 H1",
+   "set": 2,
+   "start": "the 2 RA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "9 H1",
+   "set": 2,
+   "start": "the 5 LG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "9 H1",
+   "set": 2,
+   "start": "the 6 YA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "10 H2",
+   "set": 2,
+   "start": "spawn point 1",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "10 H2",
+   "set": 2,
+   "start": "spawn point 10",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "10 H2",
+   "set": 2,
+   "start": "the 5 LG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "10 H2",
+   "set": 2,
+   "start": "the 6 YA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "10 H2",
+   "set": 2,
+   "start": "the 8 RL",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "11 H3",
+   "set": 2,
+   "start": "spawn point 4",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "11 H3",
+   "set": 2,
+   "start": "spawn point 10",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "11 H3",
+   "set": 2,
+   "start": "spawn point 11",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "11 H3",
+   "set": 2,
+   "start": "the 3 RL",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "11 H3",
+   "set": 2,
+   "start": "the 6 YA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "12 H4",
+   "set": 2,
+   "start": "spawn point 4",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "12 H4",
+   "set": 2,
+   "start": "spawn point 10",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "12 H4",
+   "set": 2,
+   "start": "the 6 YA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "13 H5",
+   "set": 2,
+   "start": "spawn point 6",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "13 H5",
+   "set": 2,
+   "start": "spawn point 8",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "13 H5",
+   "set": 2,
+   "start": "spawn point 10",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "13 H5",
+   "set": 2,
+   "start": "the 2 RA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "13 H5",
+   "set": 2,
+   "start": "the 6 YA",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "14 H6",
+   "set": 2,
+   "start": "spawn point 6",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "14 H6",
+   "set": 2,
+   "start": "spawn point 8",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "14 H6",
+   "set": 2,
+   "start": "the 5 LG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "15 H7",
+   "set": 2,
+   "start": "spawn point 1",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "15 H7",
+   "set": 2,
+   "start": "spawn point 4",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "15 H7",
+   "set": 2,
+   "start": "the 5 LG",
+   "arrived": 4,
+   "tries": 4
+  },
+  {
+   "target": "15 H7",
+   "set": 2,
+   "start": "the 8 RL",
+   "arrived": 4,
+   "tries": 4
+  }
+ ]
+}

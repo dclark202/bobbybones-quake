@@ -296,7 +296,7 @@ add("his legs", "the switch to his legs is on", "the movement network moves him 
     "0 or 1", "v15b")
 add("his legs", "his legs carried him on the last frame", "", "0 or 1", "v15b")
 add("intention", "his intention is the enemy", "the ninth intention (FIGHT_TARGET): his way leads to where he believes the enemy is", "0 or 1", "v15f")     # ---- the enemy as a target (2026-10-11)
-assert len(rows) == E.OBS_DIM - E.N_V02, (len(rows), E.OBS_DIM - E.N_V02)
+assert len(rows) == E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3, (len(rows), E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3)
 # ---- v0.2 (2026-10-11): stage A of the attention model, five groups (N_V02 in sim/duel_env.py; the tokens are cut by these group names)
 V02 = "v0.2"
 add("v02 game", "time left in the round", "the share of the round's length still to play (on a game server: of the game's time limit)", "0 to 1", V02)
@@ -352,6 +352,34 @@ for j in range(1, E.V02_SLOTS + 1):
     add("v02 places", "place {}: outcome over expected standing there".format(j), "as for his cell, for a pro seen standing within 128 units of it; zero where it is not known", "/ 0.3, between -1 and 1", V02)
     add("v02 places", "place {}: nearest to the believed enemy".format(j), "of all the map's places this one is nearest to " + BEL.split(":")[0], "0 or 1", V02)
     add("v02 places", "place {}: slot holds a place".format(j), "", "0 or 1", V02)
+assert len(rows) == E.OBS_DIM - E.N_B2 - E.N_B3, (len(rows), E.OBS_DIM - E.N_B2 - E.N_B3)
+# ---- stage B part 2 (TARGETS; N_B2 in sim/duel_env.py): the map's holding places, slot by slot (a token each: the text before the colon)
+B2 = "stage B2"
+HOLD = ("one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: "
+        "slot j is the intention 'place j'; zeros on a map without a list")
+for j in range(1, E.HOLD_SLOTS + 1):
+    for ax in XYZ:
+        add("b2 holds", "hold {}: {}".format(j, ax), HOLD, "units / 1500, between -2 and 2", B2)
+    add("b2 holds", "hold {}: way".format(j), "seconds along the walking map from where he stands to it", "seconds / 15, capped at 1 (1: none)", B2)
+    add("b2 holds", "hold {}: share of the pros' holds".format(j), "of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; "
+        "where the demos give no holds, put from the pros' sightings there", "per cent / 10, capped at 1", B2)
+    add("b2 holds", "hold {}: outcome over expected standing there".format(j), "as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro "
+        "standing in its cell, less what his stack and the weapons would give anywhere", "/ 0.3, between -1 and 1", B2)
+    add("b2 holds", "hold {}: his target".format(j), "his intention is this place (TARGETS)", "0 or 1", B2)
+    add("b2 holds", "hold {}: slot holds a place".format(j), "", "0 or 1", B2)
+assert len(rows) == E.OBS_DIM - E.N_B3, (len(rows), E.OBS_DIM - E.N_B3)
+# ---- stage B part 3 (WAYS; N_B3 in sim/duel_env.py): his way to his target, and what the other ways are from where he stands (one token)
+B3 = "stage B3"
+WAYN = ("the shortest", "the second", "the third")
+for j in range(E.N_WAYS):
+    add("b3 ways", "his way: {}".format(WAYN[j]), "the set of ways he is on to his target (his thirteenth output, read with his intention; "
+        "zeros with WAYS off)", "0 or 1", B3)
+for j in range(1, E.N_WAYS):
+    add("b3 ways", "{} way: longer".format(WAYN[j]), "how much longer that way to his target is than the shortest from where he stands (0: it is "
+        "the shortest way here, or he has no target, or he is in an item run)", "seconds / 5, capped at 1", B3)
+for j in range(1, E.N_WAYS):
+    add("b3 ways", "{} way: differs".format(WAYN[j]), "from where he stands more than a quarter of that way's seconds lie farther than 128 units "
+        "from the shortest way", "0 or 1", B3)
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now
@@ -384,5 +412,5 @@ for r in rows:
 print("{} inputs ({} in the network training now) -> docs/INPUTS.csv".format(len(rows), E.OBS_DIM))
 print(", ".join("{} {}".format(v, k) for k, v in groups.items()))
 ACT = ("forward / back", "strafe", "jump / crouch", "turn speed", "pitch speed", "fire", "weapon key", "walk", "zoom", "lift the mouse",
-       "intention")
+       "intention", "his legs", "his way")
 print("outputs: " + ", ".join("{} ({} choices)".format(n, d) for n, d in zip(ACT, E.ACTION_DIMS)))

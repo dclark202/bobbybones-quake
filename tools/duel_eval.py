@@ -35,13 +35,16 @@ def names(path):
 
 
 def play(job):
-    (envmod, envvars, mp, games, minutes, seed, pol, idx, opp_kind, opp_pol, opp_idx, round_secs, swap) = job
+    (envmod, envvars, mp, games, minutes, seed, pol, idx, opp_kind, opp_pol, opp_idx, round_secs, swap, delays) = job
     os.environ.update(envvars)
     E = importlib.import_module(envmod)
     nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
                     nav=nav_ if os.path.exists(nav_) else None)
-    env.react_frames = round(pol.react_ms / 25)
+    import test_suite as T_                                   # (B-226) each network's seats at the delays it was trained with; a scripted
+    sw_ = int(bool(swap) and opp_pol is not None)             # opponent: his tracking delay, the simulator's own acquire delay
+    set_ = T_.set_delays(E, env, [(np.arange(sw_, env.n, 2), delays[0], delays[1])]
+                         + ([(np.arange(1 - sw_, env.n, 2), delays[2], delays[3])] if opp_pol is not None else []))
     env.arena_stack = False
     env.arena_sets = [(E.MG,)]
     env.loadout_p = (0.0, 1.0, 0.0, 0.0)
@@ -97,6 +100,13 @@ def play(job):
           + [w + x for w in E.WEAPONS for x in ("_frags", "_shots", "_hits")] if k in env.stats]
     st0 = {k: np.array(env.stats[k], np.float64).copy() for k in SK}
     side = (np.arange(n) + int(swap)) % 2                       # 0: he, 1: the opponent
+    # by the kind of life (STYLE_P, STYLE_MIX; a scripted player's lives are all general): rows he / the opponent, columns
+    # the styles. His frames alive, with the enemy in view, with rockets / rail / lightning in hand while in view; his
+    # frags and his deaths of any kind, by the style of the life they fell in
+    SN_ = list(E.STYLES) if hasattr(env, "style") else ["general"]
+    NS_, SZ_ = len(SN_), np.zeros(n, np.int64)
+    sty = dict(alive=np.zeros((2, NS_)), vis=np.zeros((2, NS_)), hand=np.zeros((2, NS_, 3)), frags=np.zeros((2, NS_)), deaths=np.zeros((2, NS_)),
+               lives=np.zeros((2, NS_)))
     for t in range(frames):
         a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
         al, h = pol.act(obs[ev][:, idx], h)
@@ -104,15 +114,18 @@ def play(job):
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2)
             a[od, :ao.shape[1]] = ao
-        obs, r, done, info = env.step(a)
+        sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
+        obs, r, done, info = env.step(a)                                        # falls in; a scripted seat's is never drawn: general)
         c["restarts"][0] += int(done.any())
         died = np.zeros(n, bool)                                # (a death and the respawn fall in the same step here)
         for e in info["events"]:
             v, k = int(e["victim"]), int(e["killer"])
             died[v] = True
+            sty["deaths"][side[v], sty0[v]] += 1
             if k >= 0 and k != v:
                 score[k] += 1
                 kills[k] += 1
+                sty["frags"][side[k], sty0[k]] += 1
             else:
                 score[v] -= 1                                   # his own hand or the map: a point off, as in the game
                 c["own_deaths"][side[v]] += 1
@@ -129,6 +142,13 @@ def play(job):
         gain_w = (env.has[:, big] & ~has0).sum(1) * same
         dh, da = (env.hp - hp0) * same, (env.armor - ar0) * same
         vis = env.visible & alive
+        sty1 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_
+        np.add.at(sty["lives"], (side[new], sty1[new]), 1)      # (lives begun)
+        np.add.at(sty["alive"], (side[alive], sty1[alive]), 1)
+        np.add.at(sty["vis"], (side[vis], sty1[vis]), 1)
+        for j_, w_ in enumerate(big):
+            m_ = vis & (env.weapon == w_)
+            np.add.at(sty["hand"], (side[m_], sty1[m_], j_), 1)
         spd = np.hypot(env.state[:, 3], env.state[:, 4])
         still = np.where(alive & (spd < 50.0) & ~died, still + E.DT, 0.0)
         other = np.arange(len(alive)) ^ 1                         # who stands higher (B-160: he fights from below)
@@ -177,6 +197,7 @@ def play(job):
     flip = slice(None, None, -1) if swap else slice(None)
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS),
+                sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_,
                 st={k: (np.array(env.stats[k], np.float64) - st0[k]).tolist() for k in SK})
 
 
@@ -195,6 +216,12 @@ def main():
     ap.add_argument("--env", default="duel_env_ffa")
     ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator setting (environment variable) for these games")
     ap.add_argument("--seed", type=int, default=100)
+    ap.add_argument("--react-ms", type=float, default=None, help="his tracking delay on an enemy in view (default: his checkpoint's react_ms)")
+    ap.add_argument("--acquire-ms", type=float, default=None, help="his delay before an enemy who has just come into view is noticed (default: his "
+                                                                    "checkpoint's acquire_ms, the trainer's --acquire-ms; B-226)")
+    ap.add_argument("--opp-react-ms", type=float, default=None, help="... of the opponent network (default: its checkpoint's). A scripted opponent "
+                                                                      "always has his tracking delay and the simulator's own 200 ms")
+    ap.add_argument("--opp-acquire-ms", type=float, default=None)
     ap.add_argument("--swap", action="store_true", help="two networks: every second process seats him on the odd seats (the same network on both "
                     "sides got 47 percent of the frags on the even seats: B-220); give --procs an even number")
     ap.add_argument("--json", default="")
@@ -214,11 +241,15 @@ def main():
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
+    delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,
+              None if opp_pol is None else (opp_pol.react_ms if a.opp_react_ms is None else a.opp_react_ms),
+              None if opp_pol is None else (opp_pol.acquire_ms if a.opp_acquire_ms is None else a.opp_acquire_ms))
+    dl_out = None
     out = {}
     for mp in a.map.split(","):
         per = [a.games // a.procs + (1 if k < a.games % a.procs else 0) for k in range(a.procs)]
         jobs = [(a.env, envvars, mp, g, a.minutes, a.seed + 17 * k, pol, idx, kind, opp_pol, opp_idx,
-                 a.round or (180.0 if mp == "arena1" else 120.0), a.swap and k % 2 == 1) for k, g in enumerate(per) if g > 0]
+                 a.round or (180.0 if mp == "arena1" else 120.0), a.swap and k % 2 == 1, delays) for k, g in enumerate(per) if g > 0]
         with mp_.Pool(len(jobs)) as pool:
             res = pool.map(play, jobs)
         sc = np.concatenate([np.array(r["score"]) for r in res])
@@ -231,6 +262,8 @@ def main():
         boot = [share(kl[rng.integers(0, G, G)]) for _ in range(1000)]
         pm = G * a.minutes                                       # player-minutes of each side
         row = {}
+        dl_out = res[0].get("delays")
+        sy, SN = {k: np.sum([np.array(r["sty"][k]) for r in res], 0) for k in res[0]["sty"]}, res[0]["styles"]
         for s_, who in ((0, "he"), (1, "opponent")):
             al = max(1.0, c["alive"][s_])
             row[who] = dict(score=round(float(sc[:, s_].mean()), 2), kills=round(float(kl[:, s_].mean()), 2),
@@ -249,6 +282,15 @@ def main():
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
                             mega_share=round(float(c["mega"][s_] / (pm * 60 / 35.0)), 3), red_share=round(float(c["red"][s_] / (pm * 60 / 25.0)), 3),
                             yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2))
+            # by the kind of life: lives begun; the share of his time alive in such lives; frags, deaths (of any kind) and frags a
+            # death; of that time the share with the enemy in view; of the time in view the share with each of the three in hand
+            row[who]["by_style"] = {nm: dict(lives=int(sy["lives"][s_, j]), time=round(float(sy["alive"][s_, j] / max(1.0, sy["alive"][s_].sum())), 3),
+                                             frags=int(sy["frags"][s_, j]), deaths=int(sy["deaths"][s_, j]),
+                                             frags_per_death=round(float(sy["frags"][s_, j] / max(1.0, sy["deaths"][s_, j])), 2),
+                                             in_view=round(float(sy["vis"][s_, j] / max(1.0, sy["alive"][s_, j])), 3),
+                                             in_hand_in_view={w: round(float(sy["hand"][s_, j, q] / max(1.0, sy["vis"][s_, j])), 3)
+                                                              for q, w in enumerate(("rl", "rg", "lg"))})
+                                    for j, nm in enumerate(SN)}
         st = {k: np.sum([np.array(r["st"][k]) for r in res], 0) for k in res[0].get("st", {})}
         if "sc_frags_w" in st:                               # (staging) the scripted opponent's frags by weapon
             row["opponent"]["frags_w"] = {w: float(x) for w, x in zip(res[0]["weapons"], np.array(st["sc_frags_w"])) if x > 0}
@@ -288,9 +330,16 @@ def main():
             print("    {:9s} bare {:.0%} | first weapon {} s | 150+ {:.0%} | weapons {}/min | mega {:.0%}, red {:.0%} of spawns | yellow {}/min | in view {:.0%} | firing {:.0%} ({:.0%} of the time in view) | speed {}, standing {:.0%} (over 3 s: {:.0%}) | lives {}/min, own deaths {} a game".format(
                 who, w["time_bare"], w["first_weapon_s"], w["stack_150_up"], w["weapons_per_min"], w["mega_share"], w["red_share"],
                 w["yellow_per_min"], w["in_view"], w["firing"], w["firing_in_view"], w["speed"], w["standing"], w["standing_over_3s"], w["lives_per_min"], w["own_deaths"]), flush=True)
+        for who in ("he", "opponent"):                           # by the kind of life (nothing to say where every life is general)
+            bs = o[who].get("by_style") or {}
+            if sum(1 for v_ in bs.values() if v_["time"] > 0) > 1:
+                print("    {:9s} by life: ".format(who) + " | ".join(
+                    "{} {} lives, {:.0%} of his time, {:.2f} frags a death ({}:{}), in view with rl {:.0%} rg {:.0%} lg {:.0%}".format(
+                        nm, v_["lives"], v_["time"], v_["frags_per_death"], v_["frags"], v_["deaths"], v_["in_hand_in_view"]["rl"],
+                        v_["in_hand_in_view"]["rg"], v_["in_hand_in_view"]["lg"]) for nm, v_ in bs.items()), flush=True)
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
-            json.dump(dict(run=a.run, policy=path, opp=a.opp, env=a.env, set=envvars, maps=out), f, indent=1)
+            json.dump(dict(run=a.run, policy=path, opp=a.opp, env=a.env, set=envvars, delays_ms=dl_out, maps=out), f, indent=1)
 
 
 if __name__ == "__main__":

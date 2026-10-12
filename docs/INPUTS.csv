@@ -719,3 +719,74 @@ index,group,input,meaning,scale,added in
 717,v02 places,place 8: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
 718,v02 places,place 8: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
 719,v02 places,place 8: slot holds a place,,0 or 1,v0.2
+720,b2 holds,hold 1: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+721,b2 holds,hold 1: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+722,b2 holds,hold 1: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+723,b2 holds,hold 1: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+724,b2 holds,hold 1: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+725,b2 holds,hold 1: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+726,b2 holds,hold 1: his target,his intention is this place (TARGETS),0 or 1,stage B2
+727,b2 holds,hold 1: slot holds a place,,0 or 1,stage B2
+728,b2 holds,hold 2: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+729,b2 holds,hold 2: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+730,b2 holds,hold 2: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+731,b2 holds,hold 2: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+732,b2 holds,hold 2: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+733,b2 holds,hold 2: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+734,b2 holds,hold 2: his target,his intention is this place (TARGETS),0 or 1,stage B2
+735,b2 holds,hold 2: slot holds a place,,0 or 1,stage B2
+736,b2 holds,hold 3: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+737,b2 holds,hold 3: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+738,b2 holds,hold 3: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+739,b2 holds,hold 3: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+740,b2 holds,hold 3: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+741,b2 holds,hold 3: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+742,b2 holds,hold 3: his target,his intention is this place (TARGETS),0 or 1,stage B2
+743,b2 holds,hold 3: slot holds a place,,0 or 1,stage B2
+744,b2 holds,hold 4: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+745,b2 holds,hold 4: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+746,b2 holds,hold 4: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+747,b2 holds,hold 4: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+748,b2 holds,hold 4: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+749,b2 holds,hold 4: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+750,b2 holds,hold 4: his target,his intention is this place (TARGETS),0 or 1,stage B2
+751,b2 holds,hold 4: slot holds a place,,0 or 1,stage B2
+752,b2 holds,hold 5: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+753,b2 holds,hold 5: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+754,b2 holds,hold 5: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+755,b2 holds,hold 5: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+756,b2 holds,hold 5: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+757,b2 holds,hold 5: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+758,b2 holds,hold 5: his target,his intention is this place (TARGETS),0 or 1,stage B2
+759,b2 holds,hold 5: slot holds a place,,0 or 1,stage B2
+760,b2 holds,hold 6: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+761,b2 holds,hold 6: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+762,b2 holds,hold 6: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+763,b2 holds,hold 6: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+764,b2 holds,hold 6: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+765,b2 holds,hold 6: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+766,b2 holds,hold 6: his target,his intention is this place (TARGETS),0 or 1,stage B2
+767,b2 holds,hold 6: slot holds a place,,0 or 1,stage B2
+768,b2 holds,hold 7: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+769,b2 holds,hold 7: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+770,b2 holds,hold 7: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+771,b2 holds,hold 7: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+772,b2 holds,hold 7: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+773,b2 holds,hold 7: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+774,b2 holds,hold 7: his target,his intention is this place (TARGETS),0 or 1,stage B2
+775,b2 holds,hold 7: slot holds a place,,0 or 1,stage B2
+776,b2 holds,hold 8: forward,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+777,b2 holds,hold 8: left,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+778,b2 holds,hold 8: up,"one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: slot j is the intention 'place j'; zeros on a map without a list","units / 1500, between -2 and 2",stage B2
+779,b2 holds,hold 8: way,seconds along the walking map from where he stands to it,"seconds / 15, capped at 1 (1: none)",stage B2
+780,b2 holds,hold 8: share of the pros' holds,"of the map's holds (2 s or more within 150 units, a big weapon in hand, no enemy in view) those in its cell; where the demos give no holds, put from the pros' sightings there","per cent / 10, capped at 1",stage B2
+781,b2 holds,hold 8: outcome over expected standing there,"as for his cell (v02 position): frags less deaths in the 10 s after a sighting that begins with a pro standing in its cell, less what his stack and the weapons would give anywhere","/ 0.3, between -1 and 1",stage B2
+782,b2 holds,hold 8: his target,his intention is this place (TARGETS),0 or 1,stage B2
+783,b2 holds,hold 8: slot holds a place,,0 or 1,stage B2
+784,b3 ways,his way: the shortest,"the set of ways he is on to his target (his thirteenth output, read with his intention; zeros with WAYS off)",0 or 1,stage B3
+785,b3 ways,his way: the second,"the set of ways he is on to his target (his thirteenth output, read with his intention; zeros with WAYS off)",0 or 1,stage B3
+786,b3 ways,his way: the third,"the set of ways he is on to his target (his thirteenth output, read with his intention; zeros with WAYS off)",0 or 1,stage B3
+787,b3 ways,the second way: longer,"how much longer that way to his target is than the shortest from where he stands (0: it is the shortest way here, or he has no target, or he is in an item run)","seconds / 5, capped at 1",stage B3
+788,b3 ways,the third way: longer,"how much longer that way to his target is than the shortest from where he stands (0: it is the shortest way here, or he has no target, or he is in an item run)","seconds / 5, capped at 1",stage B3
+789,b3 ways,the second way: differs,from where he stands more than a quarter of that way's seconds lie farther than 128 units from the shortest way,0 or 1,stage B3
+790,b3 ways,the third way: differs,from where he stands more than a quarter of that way's seconds lie farther than 128 units from the shortest way,0 or 1,stage B3
