@@ -74,6 +74,24 @@ Two ways, the first built first:
    as today. The movement trainer and the switch are built; the network needs about three hours of training on the
    graphics card, which the run holds: after v0.2.
 
+**Built 2026-10-12 night** (patch scripts with their checks, in a copy; not trained: the card is the run's). With it
+came the cure for a fault stage B part 2 found, that his legs cannot stop (sent to a holding place on a ledge he
+arrives at 370 units a second and goes over): `--arrive`, a goal of the kind "arrive and stand", and the switch
+`LEGS_STAND`. Three more inputs of the movement network (the angle to the look point, "a direction is given", "stand
+at the goal"); `move_v15n` widened chooses exactly as before. A sixteen-minute run on the processor, one map:
+
+| | First ten updates | Last ten |
+|---|---|---|
+| Standing after he arrives | 6.5% | 81.8% |
+| Fell after arriving | 14.0% | 3.4% |
+| His view within 30 degrees of the look point | 16.4% | 17.4% |
+| Speed in item runs, told nothing | 361 | 336 |
+
+Standing is learnt in minutes. Looking did not move in sixteen, and the short run cost plain speed: the real training
+(an hour a session on the card, from `move_v15n` widened) is judged at thirty minutes, with a wider edge for the start
+if the looking has not moved, and its result passes the pupil test of `move_v15n` on the ten maps before it may carry
+him. `LEGS_STAND` with an untrained network is worse than none (he stands 4% of the time).
+
 **For the owner to decide before the second is used in a run**: who chooses the direction. As specified it is his
 belief of the enemy, always: simple, and what a pro mostly does, but a rule. The other form is an output of his own
 (free, the believed enemy, the way ahead): his choice, at the price of one more thing to learn.
