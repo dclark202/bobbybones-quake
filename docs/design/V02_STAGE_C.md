@@ -35,10 +35,25 @@ for the situation, because it is the movement that was made.
   1 - share the stretch is **withheld**: he asked for his legs and moves himself. The label is still worked out and
   taught, and the input "his legs carried him" says truthfully that they do not. Counted apart: his speed (time at 400
   or more, units a second gained in the first two seconds) in withheld stretches beside carried ones.
-- The plan for a run: `LEGS_KEEP` 1 with the teaching on until his own choice is the label's about as often as two
-  runs of the movement network agree with each other; then the share falls in steps (0.75, 0.5, 0.25) while his speed
-  in withheld stretches stays within a tenth of the carried ones; at 0 the switch has no work left and his movement is
-  one network's, learnt from the game.
+- The plan for a run: `LEGS_KEEP` 1 (or 0.9, for an early reading of what he can do himself) with the teaching on
+  until his own likeliest choice is the label's about as often as the movement network's own likeliest choice is
+  (the ceiling, because the label is a sample); then the share falls in steps (0.75, 0.5, 0.25), each a restart after
+  a save, while his speed in withheld stretches stays within a tenth of the carried ones; at 0 the switch has no work
+  left and his movement is one network's, learnt from the game. Stretches are withheld from his own seats only, never
+  from the older selves in his league, and never in the checks.
+
+**Built 2026-10-11 night** (patch scripts with their checks, in a copy; not yet on the graphics card). Measured on the
+start network of v0.2, on the frames his legs carry him:
+
+| His own likeliest choice is the label's | Forward | Sideways | Jump | The view's turn |
+|---|---|---|---|---|
+| The ceiling (the movement network's own likeliest choice) | 93 to 95% | 91% | 98% | 71 to 72% |
+| He, today | 85 to 86% | 43 to 47% | 93 to 94% | 5 to 7% |
+
+His own turn on those frames was never trained: it is the whole of strafe jumping that he lacks on his own feet. The
+lesson at full weight into the shared layers triples his step in the first update and moves his pitch, which it does
+not teach, 3.5 times as far (the known hazard of a new teacher); held back to a twentieth it barely moves him and
+barely teaches. The share and a warm-up are set by a ten-minute dry run on the card before a run.
 - Not paid. No label outside the stretches he chose: the movement network runs for an item, and in a fight that is
   the wrong lesson (v14 lost a map to exactly this within an hour).
 
