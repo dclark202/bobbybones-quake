@@ -144,6 +144,24 @@ v0.1 stays (the owner: "Do not promote the live server yet"). Nothing is pushed 
 
 ## 8. The owner's decisions
 
-(filled from his decision document when he has answered; the run does not start before)
+His answers of 2026-10-12 (his decision document, section 4). The run starts on his word, "around 9pm" after his review.
+
+| # | The question | His answer | So |
+|---|---|---|---|
+| 1 | Two legs, one run with everything, or two half-size runs | "your call" | two legs |
+| 2 | May leg 2 start by itself when leg 1 passes its gate | "yes" | it may |
+| 3 | The draw of his lives in leg 2 | "your call" | rockets 40%, lightning 15%, rail 10%, general 35% |
+| 4 | The second aim step | "yes" | the setting of pretest 8 |
+| 5 | The pros' weapon in hand with nobody in view | "yes, all" | in leg 2, all lives |
+| 6 | A hit from above worth more | "yes, but this seems somewhat dangerous. I'm open to trying it" | in leg 2 at the small size (`HIGH_PAY=0.25`, about 3% of his pay); the mega and the low items watched |
+| 7 | Legs that stand at a place | "your call" | out of this run (slower: pretest 2) |
+| 8 | v0.2's end as the control, v0.1 in the league | "yes" | so |
+| 9 | v0.2 on the public server | "we've already moved 0.2 up" | on it since 15:15 (RESULTS 2026-10-12 15:15) |
+| 10 | Games that begin in their middle; the table a frag is paid by | "yes games can and should start mid way with a different variety of states (up/down/tied/stacked/not/etc.)" | to build for the run after; the table explained to him, his answer open |
+| 11 | The QLStats lookup on for everyone | "yes" | it is on |
+| 12 | Which player id is his | "tbd" | when he next plays |
+| 13 | Start and end | "let's discuss this later, likely I will review everything and we'll start the run around 9pm" | no start before his go; the end (07:00 or later) is his to say |
+| 14 | Where his legs look while they carry him | "explain more" | explained; not in this run |
+| 15 | The BIOS update or the performance cores | "just use the performance cores" | so |
 
 ## 9. Changes during the run
