@@ -1,4 +1,4 @@
-# v0.2: the manifest (2026-10-11, 20:00; being built; it starts when its checks pass)
+# v0.2: the manifest (2026-10-11; started 21:49:59, to 19:00 on 2026-10-12; changes during the run in section 9)
 
 **The names** (the owner, 2026-10-11): "The v15c bot that exists on the server is now: v0.1. We're building v0.2
 currently, any exploration phases will get a further index e.g., v0.2.1, etc." and "v1.0 starts when he can beat me."
@@ -43,12 +43,12 @@ flick curve and where he looks before the enemy appears, and at the end real gam
 |---|---|---|---|---|
 | 1 | Games on all ten maps (Campgrounds "in") | games on six, movement only on four | thirty simulators, three a map | ready (a dry run without attention passed at 18:38) |
 | 2 | The three rocket changes ("in"): half the shot's price, free at the pros' places, half the cost of a wasted one | off | on | ready; in a trial of 165 minutes harmless and without effect on his rocket use |
-| 3 | The enemy as a target, seeded by the narrow rule ("in") | none | a ninth intention | ready (the fit agrees with the rule on 93% of the frames) |
-| 4 | **Attention, stage A** (section 2) | a flat list of 577 inputs | the inputs cut into about 40 tokens, about 140 new numbers, two attention blocks, a door into his memory that starts closed | being built |
-| 5 | **A value estimate that counts two minutes ahead** ("yes") | one estimate, 25 s | the pay for items and stack is also counted at two minutes; fights stay at 25 s. It fades in over the first hour, so the start is today's training exactly | being built |
-| 6 | **A tiny pay for speed gained from hop to hop** ("pay him a tiny amount for it") | none | at a take-off while travelling with nobody in view, 0.001 for each unit of speed above the best take-off of this chain so far, between 320 and 480. A whole chain from 320 to 480 pays 0.16 (a big item 0.75); losing speed and regaining it pays nothing | being built |
-| 7 | **His aim, a first step toward the pros' flick curve** ("let's slowly tune it down, using pros as a goal") | `AIM_LEVEL=3` | the delay before he notices an enemy off his crosshair and his hand's noise raised until his first hit at 10 to 40 degrees off is a third of the way to the pros' (today 0.38 and 0.58 s; the pros 0.53 and 0.78). Both sides of every check play under the same limits | to calibrate (three replays) |
-| 8 | Held-out check: two maps he never trains on and the owner does not know, "purely to make sure he's not 'overfitting'" | the stand-in on ten maps | also House of Decay and Delirium; the control with seats swapped | House of Decay ready; Delirium being prepared (it has doors or lifts, which the simulator does not move: its fitness as a check is being looked at) |
+| 3 | The enemy as a target, seeded by the narrow rule ("in") | none | **not in the run as started** (section 9) | its start lost the level check |
+| 4 | **Attention, stage A** (section 2) | a flat list of 577 inputs | 720 inputs (143 new) cut into 38 tokens and a summary, two attention blocks, a door into his memory that starts closed; 1,719,471 weights (1,435,981) | in |
+| 5 | **A value estimate that counts two minutes ahead** ("yes") | one estimate, 25 s | the pay for items and stack is also counted at two minutes (`--long-gamma 0.9998`); fights stay at 25 s. It fades in over the first hour (`--long-ramp 60`) and is cut if it would add more than half the size of today's credit (`--long-cap 0.5`); in the dry run it added 1.5 to 3.5% | in |
+| 6 | **A tiny pay for speed gained from hop to hop** ("pay him a tiny amount for it") | none | `HOP_PAY=0.001`: at a take-off while travelling with nobody in view, 0.001 for each unit of speed above the best take-off of this chain so far, between 320 and 480. A chain's first take-off sets the mark and is not paid (paid, it could be farmed by starting chains again and again); a chain ends after 0.4 s on the ground, with an enemy in view or under 250. The movement network's pupil earns 0.49 a minute from it, a walker nothing; in the dry run he earned 0.16 to 0.19 | in |
+| 7 | **His aim, a first step toward the pros' flick curve** ("let's slowly tune it down, using pros as a goal") | `AIM_LEVEL=3` | `AIM_LEVEL=1.5`: his sight error, the delay before he notices an enemy off his crosshair, his flinch and his hand's noise up by 1.4. Measured on v0.1 (19 settings tried): first hit 0.29, 0.33, 0.41, 0.63 s at 0 to 5, 5 to 10, 10 to 20, 20 to 40 degrees off (before 0.29, 0.32, 0.38, 0.59; the pros 0.32, 0.44, 0.55, 0.76); lightning 43% of its cells (47%; the pros 32%); rail unchanged at 45% (the pros 43%). Both sides of every check play under the same limits | in |
+| 8 | Held-out check: two maps he never trains on and the owner does not know, "purely to make sure he's not 'overfitting'" | the stand-in on ten maps | also House of Decay and Dismemberment (the owner, on Delirium's faults: "don't know delerium it can go. dismemberment works instead"); the control with seats swapped | both ready, with their own places and cells from their demos |
 
 Unchanged: his legs, the pay for speed in games (0.5), the weapon rounds, item runs and jump runs, the item rule, the
 game's weapon change on an empty weapon, the league of his last eight selves with the older networks (v0.1 among them)
@@ -163,4 +163,13 @@ judge of pro-like movement ("remind me of it after tonight's run"); sounds on st
 
 ## 9. Changes during the run
 
-(none yet)
+- **Before the start (21:45): the enemy as a target is out.** The start network with the narrow fit took 45.9% of the
+  frags against v0.1 over eight maps with the seats swapped (45 games won, 8 drawn, 75 lost) before the check was
+  stopped: not level. The afternoon's probe that read level was 48 games. The run starts as v0.1 exactly (the converted
+  network differs from v0.1 in 0 of 15,360 choices); `FIGHT_TARGET` is not set.
+- **As started**: `duel_gru_v0_2`, 21:49:59, 1,270 minutes; thirty simulators of 168 games; an update cut into 240
+  pieces (the dry run with 200 came within 0.3 GB of the card's limit); stored inputs at half precision.
+- **The dry runs** (on the way to the start): the first try filled the card in the update; the attention part was made
+  lean (4.7 GB a piece of 63 players, at half precision on the card) and the update reworked so that only his memory
+  steps frame by frame: 15,400 frames a second against 22,800 without attention. His step in the first updates 0.023
+  falling to 0.019 (the afternoon's trial: 0.010); the door at 3% of his memory's input after four updates.

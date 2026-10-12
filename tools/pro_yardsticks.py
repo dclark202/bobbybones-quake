@@ -73,9 +73,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SIM = os.path.join(ROOT, "sim")
 MAPS = "bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged"         # the trained maps: "all"
-GROUPS2 = ("fights", "flick_curve", "view_travelling")         # the groups kept in the second file, docs/pro_yardsticks2.json
+GROUPS2 = ("fights", "flick_curve", "view_travelling", "openings", "sounds", "weapon_in_hand", "teleporters")         # the groups kept in the second file, docs/pro_yardsticks2.json
 MORE = "campgrounds,hektik,toxicity,cure"                      # the maps of movement practice only: under their own names and in "all_ten"
-VERSION = 15                                                    # of the counts kept per demo: a change here counts every demo again
+VERSION = 17                                                    # of the counts kept per demo: a change here counts every demo again
 
 # ---------------------------------------------------------------------------------------------------------------------
 # the record and what is measured on it (no demo below this line until "reading a demo")
@@ -165,6 +165,18 @@ ERR_EDGES = (5.0, 10.0, 20.0, 40.0, 80.0)
 FLICK_W = ("lightning", "rail", "rockets", "another weapon")
 FAST = 350.0
 VIEW_STEP = 16                                                 # every this many frames with no enemy in view, a sample for places and doorways
+OPEN = dict(BIG, item_armor_jacket="GA", weapon_grenadelauncher="GL", weapon_plasmagun="PG", weapon_shotgun="SG", weapon_hmg="HMG")   # the items of an opening
+OPEN_S, OPEN_STACK_S, OPEN_FRAG_S = 15.0, 20.0, 30.0
+SOUND_KINDS = ("a jump", "a jump pad", "a rocket fired", "a rail shot", "lightning (its start)", "the machine gun (its start)", "a shotgun shot", "a grenade fired",
+               "plasma (its start)", "the mega picked up", "the red armor picked up", "a yellow armor picked up", "the green armor picked up", "a weapon picked up",
+               "a health picked up (25 or 50)", "a small item picked up (shard, 5 health, ammunition)", "a teleporter")
+SOUND_DIST = ("under 400 units", "400 to 800", "800 to 1200", "over 1200")
+HUM = (1, 2)                                                   # the weapons that hum in the hand: rail, lightning (WEAPONS' numbers)
+SEEN_BANDS = ("seen under 5 s ago", "5 to 15 s ago", "over 15 s ago", "not seen yet in this stretch")
+LAST_BANDS = ("under 600 units from where he last saw him", "600 to 1200", "over 1200", "not seen yet")
+TELE_JUMP_S = 0.2                                              # a jump as he comes out of a teleporter: within this of the exit
+TELE_CELL = (48.0, 48.0, 32.0)                                 # the cells of the landings and of the ways out of a teleporter
+HIGH_JUMP = (300.0, 480.0)                                     # a take-off with this much upward speed and no weapon's help: more than a plain jump (275)
 SOLID = 1
 LEADS = {1: "ahead", 0: "level", -1: "behind"}
 STATES = [l + ", " + p for l in ("ahead", "level", "behind") for p in ("before 7:00", "after 7:00")]
@@ -174,7 +186,8 @@ STATE_KEYS = ("time", "alive", "inview", "toward", "dist", "frags", "deaths", "t
 
 def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, enemy, enemy_score=None, lead=None,
                 clock=None, alive=None, eye_h=None, enemy_air=None, hits=None, seg=None, ammo=None, client=None, owned=None,
-                enemy_weapon=None, ground=None, enemy_sound=None, obits=None, enemy_life=None, clock_exact=None, enemy_pick=None):
+                enemy_weapon=None, ground=None, enemy_sound=None, obits=None, enemy_life=None, clock_exact=None, enemy_pick=None,
+                enemy_events=None):
     """One player's game, frame by frame, as measure() wants it. Arrays of N frames in the order of time:
       t          seconds (any origin)                     pos, vel   (N, 3) units, units a second
       yaw, pitch degrees (pitch: looking down is positive, as the game's)
@@ -197,7 +210,9 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
       enemy_life (N,) seconds since the enemy last died, or since the game began (None: not known)
       clock_exact (N,) the game clock where `clock` has none (a timeout, a demo that begins in a game); None: `clock`
       enemy_pick (M, 4) what the enemy was seen or heard picking up: frame, health and armor it gives, 1 for mega or an
-                 armor (red, yellow), 1 for health"""
+                 armor (red, yellow), 1 for health
+      enemy_events (M, 5) what the enemy did that makes a sound, where his place is known: frame, a number of
+                 SOUND_KINDS, the place (3)"""
     n = len(t)
     r = dict(t=np.asarray(t, np.float64), pos=np.asarray(pos, np.float32).reshape(n, 3),
              vel=np.asarray(vel, np.float32).reshape(n, 3), yaw=np.asarray(yaw, np.float32),
@@ -220,6 +235,7 @@ def make_record(t, pos, vel, yaw, pitch, weapon, shots, health, armor, score, en
     r["enemy_life"] = None if enemy_life is None else np.asarray(enemy_life, np.float64)
     r["clock_exact"] = None if clock_exact is None else np.asarray(clock_exact, np.float64)
     r["enemy_pick"] = None if enemy_pick is None else np.asarray(enemy_pick, np.int64).reshape(-1, 4)
+    r["enemy_events"] = None if enemy_events is None else np.asarray(enemy_events, np.float64).reshape(-1, 5)
     if lead is None:
         lead = np.sign(r["score"] - np.asarray(enemy_score, np.int64))
     r["lead"] = np.asarray(lead, np.int64)
@@ -333,7 +349,7 @@ def new_tally():
                 hands=dict(turn=dict(travel={}, fight={}), flick=dict(n=0, size={}, peak={}, t_peak={}, shot={}, hit={}, err0={}, err3={}, shot_none=0, hit_none=0),
                            acc={}, lg_cross={}, lg_track=dict(time=0.0, reversals=0)),
                 fight=dict(by={}, hit50={}),
-                fights=dict(one={}, two={}), est_check=[], flickc={},
+                fights=dict(one={}, two={}), est_check=[], flickc={}, openings={}, sounds={}, quietw={}, tele={}, tele_land={}, hijump={}, jumps_n={}, wjump={}, upjump={}, jgain={},
                 tview=dict(move={}, fast=dict(time=0.0, along=0.0, ever=0.0, at_last=0.0, sample=0.0, at_place=0.0, door=0.0, at_door=0.0),
                            nv=dict(time=0.0, along=0.0, ever=0.0, at_last=0.0, sample=0.0, at_place=0.0, door=0.0, at_door=0.0)))
 
@@ -537,7 +553,346 @@ def measure(rec, world, info):
     frows = fights(rec, T, info, starts_, hits, took, stack, est, prior, seg_end, his_big, frag, died)
     flick_curve(rec, T, hits, pr, sh, seg_end)
     travel_view(rec, T, info, world, ever)
+    openings(rec, T, info, world, ok0, dh0, da0, frag, died, stack, seg_end)
+    sounds(rec, T, sh, seg_end)
+    quiet_weapon(rec, T, info, sh, ever, stack)
+    teleports(rec, T, info, sh, seg_end)
     return T, dict(blind=rows, sight=sight, view=view, fight=frows)
+
+
+def openings(rec, T, info, world, ok, dh, da, frag, died, stack, seg_end):
+    """after a spawn and after a frag. A life begins on a spawn point (the game's first frame, or the frame he is alive
+    again): its first OPEN_S seconds as the items he takes (weapons, armors, the mega; the first three, with their
+    times), the first weapon, whether the enemy came into view, his stack OPEN_STACK_S seconds on, a frag for him or of
+    him within OPEN_FRAG_S, and what the enemy held and where he stood as he killed him. After a frag of his: the items
+    of the next OPEN_S seconds, where he is 5 and 10 s on, whether he sees the enemy again, how much his view is on a
+    spawn point from 2 to 6 s on. A row a life and a row a frag, into T["openings"]."""
+    t, w, alive, pos, inview, first = rec["t"], rec["w"], rec["alive"], rec["pos"], rec["inview"], rec["first"]
+    n = len(t)
+    op = info.get("open") or []
+    spawns = np.array(info.get("spawns") or [], np.float64).reshape(-1, 3)
+    if not op or not len(spawns):
+        return
+    name = info["name"]
+    ev = []
+    for k, it in enumerate(op):
+        if it["col"] == "health":
+            col = dh
+        elif it["col"] == "armor":
+            col = da
+        elif rec["ammo"] is not None:
+            col = np.zeros(n)
+            col[1:] = np.diff(rec["ammo"][:, it["col"]])
+        else:
+            continue
+        ev += [(int(f), k) for f in _picks(rec, it, ok, col)]
+    ev.sort()
+    evf = np.array([f for f, _ in ev], np.int64)
+    evk = np.array([k for _, k in ev], np.int64)
+    opos = np.array([it["pos"] for it in op], np.float64)
+    ob = rec["obits"]
+    fd = _fwd(rec["yaw"], rec["pitch"]).astype(np.float64)
+    cosn = np.cos(np.radians(NEAR_DEG))
+
+    def at(sec, i):
+        return int(np.searchsorted(t, t[i] + sec, side="right")) - 1
+
+    def plan(i, e):
+        m = (evf > i) & (evf <= e)
+        ks, ts = [], []
+        for f, k in zip(evf[m], evk[m]):
+            if k not in ks:
+                ks.append(int(k))
+                ts.append(int(round(10.0 * (t[f] - t[i]))))
+            if len(ks) == 3:
+                break
+        fw = next((k for k in ks if op[k]["kind"] == "weapon"), -1)
+        return ks + [-1] * (3 - len(ks)), ts + [-1] * (3 - len(ts)), fw
+
+    def frags(i, sec, c):
+        if ob is not None:
+            m = (ob[:, 0] > t[i] + 0.1) & (ob[:, 0] <= t[i] + sec)
+            return int((m & (ob[:, 2] == c) & (ob[:, 1] != c)).any()), int((m & (ob[:, 1] == c)).any())
+        e = min(at(sec, i), int(seg_end[i]))
+        return int(frag[i + 1:e + 1].any()), int(died[i + 1:e + 1].any())
+
+    def near_item(q):
+        d = np.linalg.norm(opos - q, axis=1)
+        return int(d.argmin()) if d.min() <= 600.0 else -1
+    born = list(np.nonzero(alive[1:] & ~alive[:-1] & ~first[1:])[0] + 1)
+    ck = rec["clock"] if rec.get("clock_exact") is None else np.where(np.isfinite(rec["clock_exact"]), rec["clock_exact"], rec["clock"])
+    b0 = np.nonzero(first & alive & np.isfinite(ck) & (ck < 2.0))[0]
+    born0 = int(b0[-1]) if len(b0) else -1                      # the game's first life (the last start of a stretch in its first 2 s)
+    if born0 >= 0:
+        born = [born0] + [i for i in born if i > born0]
+    for i in born:
+        d = np.linalg.norm(spawns - pos[i], axis=1)
+        e15 = at(OPEN_S, i)
+        if d.min() > 100.0 or e15 > seg_end[i]:
+            continue
+        dead = np.nonzero(~alive[i:e15 + 1])[0]
+        e = i + int(dead[0]) - 1 if len(dead) else e15
+        ks, ts, fw = plan(i, e)
+        e20 = at(OPEN_STACK_S, i)
+        s20 = -1 if e20 > seg_end[i] else 0 if not alive[i:e20 + 1].all() else int(round(float(stack[e20])))
+        ffor, fof = frags(i, OPEN_FRAG_S, rec["client"][i])
+        ewc, eit = 4, -1                                        # (the game's first life: nobody killed him)
+        if i != born0:
+            j = i - 1
+            while j > 0 and not alive[j] and not first[j]:
+                j -= 1
+            a = max(0, int(np.searchsorted(t, t[j] - 2.0)))
+            kn = np.nonzero(rec["enemy_weapon"][a:j + 1] >= 0)[0]
+            ewq = int(rec["enemy_weapon"][a + kn[-1]]) if len(kn) else -1
+            ewc = 3 if ewq < 0 else 0 if ewq in (LG, RG) else 1 if ewq == RL else 2
+            kp = np.nonzero(np.isfinite(rec["enemy"][a:j + 1, 0]))[0]
+            eit = near_item(rec["enemy"][a + kp[-1]]) if len(kp) else -1
+        kind1 = {"weapon": 0, "armor": 1, "mega": 2}[op[ks[0]]["kind"]] if ks[0] >= 0 else -1
+        T["openings"].setdefault("spawn:" + name, []).append([int(d.argmin())] + ks + ts + [fw, int(inview[i:e + 1].any()), s20, ffor, fof, ewc, eit, kind1,
+                                                                                         int(op[fw]["col"]) if fw >= 0 else -1, ts[ks.index(fw)] if fw >= 0 else -1])
+    for f in np.nonzero(frag & alive)[0]:
+        e15 = at(OPEN_S, f)
+        if e15 > seg_end[f]:
+            continue
+        dead = np.nonzero(~alive[f:e15 + 1])[0]
+        e = f + int(dead[0]) - 1 if len(dead) else e15
+        ks, ts, _ = plan(f, e)
+        ffor, fof = frags(f, OPEN_FRAG_S, rec["client"][f])
+        a2 = at(2.0, f)
+        met = int(inview[min(a2, e):e + 1].any())
+        fr = np.arange(a2, min(at(6.0, f), e) + 1, 4)
+        watch = 0
+        if len(fr) and world is not None:
+            seen = np.zeros(len(fr), bool)
+            for q in range(len(spawns)):
+                dd = spawns[q] + np.array([0, 0, 26.0]) - rec["eye"][fr]
+                m = ((dd * fd[fr]).sum(1) / (np.linalg.norm(dd, axis=1) + 1e-9) >= cosn) & ~seen
+                if m.any():
+                    m[m] = world.lines(rec["eye"][fr][m], np.repeat((spawns[q] + np.array([0, 0, 26.0]))[None], int(m.sum()), 0), mask=SOLID) >= 0.999
+                    seen |= m
+            watch = int(round(100.0 * seen.mean()))
+        p5, p10 = (near_item(pos[at(x, f)]) if at(x, f) <= e else -1 for x in (5.0, 10.0))
+        sb = 0 if stack[f] < 60 else 1 if stack[f] <= 125 else 2
+        T["openings"].setdefault("frag:" + name, []).append([near_item(pos[f])] + ks + ts + [met, ffor, fof, sb, watch, p5, p10])
+
+
+def sounds(rec, T, sh, seg_end):
+    """what he does with a sound of the enemy's heard with the enemy out of view (rec["enemy_events"]), by the kind of
+    sound and the distance: in the next 1 and 2 s how far his view turns toward the sound's place, a turn of his
+    movement direction by more than 60 degrees, a change of weapon, a shot with nobody in view within NEAR_DEG of the
+    place; and the same from moments with the enemy's place known, out of view and no sound of his within a second
+    (every 20th such frame): the baseline. Out of view: for BLIND_S or more, as for a blind shot."""
+    ee = rec["enemy_events"]
+    if ee is None:
+        return
+    S_ = T["sounds"]
+    t, alive, inview, eye, en, vel = rec["t"], rec["alive"], rec["inview"], rec["eye"], rec["enemy"], rec["vel"]
+    n = len(t)
+    fd = _fwd(rec["yaw"], rec["pitch"]).astype(np.float64)
+    hsp = np.hypot(vel[:, 0], vel[:, 1])
+    head = np.degrees(np.arctan2(vel[:, 1], vel[:, 0]))
+    shot_fr = np.array(sorted({int(x[0]) for x in sh}), np.int64) if len(sh) else np.zeros(0, np.int64)
+    cosn = np.cos(np.radians(NEAR_DEG))
+
+    def ang(j, P):
+        d = P - eye[j]
+        return float(np.degrees(np.arccos(np.clip((d @ fd[j]) / (np.linalg.norm(d) + 1e-9), -1.0, 1.0))))
+
+    def one(key, i, P):
+        e1, e2 = int(np.searchsorted(t, t[i] + 1.0, side="right")) - 1, int(np.searchsorted(t, t[i] + 2.0, side="right")) - 1
+        if e2 > seg_end[i] or e1 <= i or not alive[i:e2 + 1].all():
+            return
+        C = S_.setdefault(key, dict(n=0, a0=0.0, g1=0.0, g2=0.0, t1=0, t2=0, mt1=0, mk1=0, mt2=0, mk2=0, w1=0, w2=0, shot=0, seen2=0))
+        a0 = ang(i, P)
+        g1, g2 = a0 - ang(e1, P), a0 - ang(e2, P)
+        C["n"] += 1
+        C["a0"] += a0
+        C["g1"] += g1
+        C["g2"] += g2
+        C["t1"] += int(g1 >= 10.0)
+        C["t2"] += int(g2 >= 10.0)
+        for e, nm in ((e1, "1"), (e2, "2")):
+            if hsp[i] > 100.0 and hsp[e] > 100.0:
+                C["mk" + nm] += 1
+                C["mt" + nm] += int(abs((head[e] - head[i] + 180.0) % 360.0 - 180.0) > 60.0)
+            C["w" + nm] += int((rec["weapon"][i + 1:e + 1] != rec["weapon"][i]).any())
+        sf = shot_fr[(shot_fr > i) & (shot_fr <= e2)]
+        C["shot"] += int(any((not inview[q]) and ((P - eye[q]) @ fd[q]) / (np.linalg.norm(P - eye[q]) + 1e-9) >= cosn for q in sf))
+        C["seen2"] += int(inview[i + 1:e2 + 1].any())
+    up = np.array([0, 0, 8.0])
+    noisy = np.zeros(n, bool)
+    since = rec["since"]
+    for f, kind, x, y, z in ee:
+        f = int(f)
+        if not (0 <= f < n):
+            continue
+        noisy[int(np.searchsorted(t, t[f] - 1.0)):int(np.searchsorted(t, t[f] + 1.0, side="right"))] = True
+        if not alive[f] or inview[f] or since[f] < BLIND_S:
+            continue
+        P = np.array([x, y, z]) + up
+        d = float(np.linalg.norm(P - eye[f]))
+        one("k{}:d{}".format(int(kind), 0 if d < 400 else 1 if d < 800 else 2 if d < 1200 else 3), f, P)
+        if d < 1200.0:                                          # (the sums: what is near enough to be heard well, and what a simulator's record holds)
+            one("k{}:all".format(int(kind)), f, P)
+    base = np.nonzero(alive & ~inview & (since >= BLIND_S) & np.isfinite(en[:, 0]) & ~noisy)[0][::20]
+    for i in base:
+        P = en[i] + up
+        d = float(np.linalg.norm(P - eye[i]))
+        one("base:d{}".format(0 if d < 400 else 1 if d < 800 else 2 if d < 1200 else 3), int(i), P)
+        if d < 1200.0:
+            one("base:all", int(i), P)
+
+
+def quiet_weapon(rec, T, info, sh, ever, stack):
+    """the weapon in his hand with nobody in view, while he travels (200 units a second or more, not in a hold) and while
+    he holds (holds()), by how long ago he saw the enemy, how far he is from where he last saw him, his stack; the time
+    by cell while holding; and his shots with nobody in view for a second or more, by weapon and by how long ago he saw
+    him"""
+    Q = T["quietw"]
+    t, w, alive, inview, pos, en = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["pos"], rec["enemy"]
+    n = len(t)
+    hold = rec.get("hold_mask")
+    if hold is None:
+        hold = np.zeros(n, bool)
+    hsp = np.hypot(rec["vel"][:, 0], rec["vel"][:, 1])
+    nv = alive & ~inview
+    since = rec["since"]
+    sb = np.where(~ever, 3, np.where(since < 5.0, 0, np.where(since < 15.0, 1, 2)))
+    last = np.maximum.accumulate(np.where(inview, np.arange(n), 0))
+    dl = np.linalg.norm(pos - np.where(np.isfinite(en[last]), en[last], 0.0), axis=1)
+    lb = np.where(~ever, 3, np.where(dl < 600.0, 0, np.where(dl < 1200.0, 1, 2)))
+    kb = np.where(stack < 60, 0, np.where(stack <= 125, 1, 2))
+    hw = rec["weapon"]
+    for mode, m in (("travelling", nv & (hsp >= 200.0) & ~hold), ("holding", nv & hold)):
+        for fac, arr, k in (("seen", sb, 4), ("last", lb, 4), ("stack", kb, 3), ("all", np.zeros(n, np.int64), 1)):
+            for lv in range(k):
+                q = m & (arr == lv)
+                if q.any():
+                    c = np.bincount(hw[q], weights=w[q], minlength=len(WEAPONS))
+                    Q["{}:{}:{}".format(mode, fac, lv)] = {WEAPONS[x]: round(float(c[x]), 3) for x in np.nonzero(c)[0]}
+    hm = nv & hold
+    if hm.any():
+        c = np.floor(pos[hm] / np.array([256.0, 256.0, 128.0])).astype(np.int64)
+        hum = np.isin(hw[hm], HUM)
+        for key in {tuple(x) for x in c.tolist()}:
+            q = (c == np.array(key)).all(1)
+            Q["cell:{}:{}:{}:{}".format(info["name"], *key)] = dict(hum=round(float(w[hm][q & hum].sum()), 3), silent=round(float(w[hm][q & ~hum].sum()), 3))
+    for lv in range(4):
+        q = nv & (sb == lv)
+        Q["time:{}".format(lv)] = dict(s=float(w[q].sum()))
+    if len(sh):
+        for i, wq, cnt in sh:
+            if not inview[i] and since[i] >= BLIND_S:
+                C = Q.setdefault("fire:{}".format(int(sb[i])), {})
+                C[WEAPONS[wq]] = C.get(WEAPONS[wq], 0) + int(cnt)
+
+
+def teleports(rec, T, info, sh, seg_end):
+    """his trips through the map's teleporters: the speed in and out, whether he jumps within TELE_JUMP_S of the exit;
+    where the jump comes down (its first landing within 1.5 s), and for the trips without the jump every cell he is in
+    for 1.5 s: a landing that none of those passes is reached only with the jump. And his take-offs: with HIGH_JUMP
+    upward speed and no rocket, grenade or plasma of his just before (more than a plain jump gives), with his own
+    weapon under him, and the plain jumps by how much higher they come down.
+    A trip: a step in one frame that no movement makes, to within 120 units of a teleporter's exit."""
+    t, alive, pos, vel, first = rec["t"], rec["alive"], rec["pos"], rec["vel"], rec["first"]
+    n = len(t)
+    name = info["name"]
+    gr = rec["ground"]
+    hsp = np.hypot(vel[:, 0], vel[:, 1])
+    sp3 = np.linalg.norm(vel, axis=1)
+    step = np.zeros(n)
+    step[1:] = np.linalg.norm(np.diff(pos, axis=0), axis=1)
+    dt = np.zeros(n)
+    dt[1:] = np.diff(t)
+    both = alive & np.concatenate([[False], alive[:-1]]) & ~first
+    far = np.zeros(n, bool)
+    far[1:] = (step[1:] > 100.0) & (step[1:] > 4.0 * np.maximum(sp3[1:], sp3[:-1]) * dt[1:] + 40.0)
+    far &= both
+    exits = np.array([x["exit"] for x in info.get("teles") or []], np.float64).reshape(-1, 3)
+    cell_ = np.array(TELE_CELL)
+    hid = np.zeros(n, bool)                                     # he came down and went up again between two snapshots: a landing and a take-off
+    if gr is not None:                                          # the ground flag does not show (about a quarter of the pros' jumps)
+        hid[1:] = ~gr[:-1] & ~gr[1:] & (vel[:-1, 2] < -50.0) & (np.diff(vel[:, 2]) > 150.0) & both[1:]
+        lands = gr | hid
+
+    def ckey(q):
+        return "{},{},{}".format(*np.floor(q / cell_).astype(np.int64))
+    for i in np.nonzero(far)[0]:
+        if not len(exits):
+            break
+        d = np.linalg.norm(exits - pos[i], axis=1)
+        k = int(d.argmin())
+        e15 = int(np.searchsorted(t, t[i] + 1.5, side="right")) - 1
+        if d[k] > 120.0 or e15 > seg_end[i] or not alive[i:e15 + 1].all():
+            continue
+        key = "{}:{}".format(name, k)
+        C = T["tele"].setdefault(key, dict(n=0, jumped=0, air_in=0, vin={}, vout={}))
+        e = int(np.searchsorted(t, t[i] + TELE_JUMP_S, side="right")) - 1
+        up_ = np.nonzero(vel[i:e + 1, 2] > 150.0)[0]
+        C["n"] += 1
+        C["jumped"] += int(len(up_) > 0)
+        C["air_in"] += int(gr is not None and not gr[i - 1])
+        _hadd(C["vin"], [hsp[i - 1]], 10.0, 990.0)
+        _hadd(C["vout"], [hsp[min(i + 2, n - 1)]], 10.0, 990.0)
+        nxt = np.nonzero(far[i + 1:e15 + 1])[0]                  # (to the next teleporter at most)
+        end = i + int(nxt[0]) if len(nxt) else e15
+        L = T["tele_land"].setdefault(key, {})
+        if len(up_):
+            if gr is not None:
+                a = i + int(up_[0])
+                on = np.nonzero(lands[a + 1:end + 1])[0]
+                if len(on) and not (hid[a + 1 + int(on[0])] and vel[a + 1 + int(on[0]), 2] > 300.0):   # (a pad or a blast in the air is no landing)
+                    j = a + 1 + int(on[0]) - int(hid[a + 1 + int(on[0])])
+                    c = L.setdefault(ckey(pos[j]), dict(j=0, p=0, ms=0, x=0, y=0, z=0))
+                    c["j"] += 1
+                    c["ms"] += int(round(1000.0 * (t[j] - t[i])))
+                    for ax, nm in enumerate("xyz"):
+                        c[nm] += int(round(float(pos[j, ax])))
+        else:
+            for q in {ckey(pos[x]) for x in range(i, end + 1)}:
+                L.setdefault(q, dict(j=0, p=0, ms=0, x=0, y=0, z=0))["p"] += 1
+    if gr is None:
+        return
+    to = np.nonzero((gr[:-1] & ~gr[1:] & both[1:]) | hid[1:])[0] + 1
+    vz = vel[to, 2]
+    T["jumps_n"][name] = int(((vz >= 200.0) & (vz < HIGH_JUMP[0])).sum())
+    projw = {int(x[0]): int(x[1]) for x in sh if x[1] in (RL, GL, PG)} if len(sh) else {}
+    proj = np.array(sorted(projw), np.int64)
+    hurt = np.zeros(n, bool)
+    hurt[1:] = np.diff(rec["health"] + rec["armor"]) < 0
+    rows, helped, up = [], [], []
+    gain = {}
+    for i, v in zip(to, vz):
+        a = int(np.searchsorted(t, t[i] - 0.3))
+        if far[a:i + 1].any():
+            continue
+        mine = proj[(proj >= a) & (proj <= i)]
+        if v >= HIGH_JUMP[0] and len(mine):                     # his own rocket, grenade or plasma under him
+            helped.append([int(round(float(x))) for x in pos[i - 1]] + [int(round(float(v))), projw[int(mine[-1])]])
+        elif HIGH_JUMP[0] <= v <= HIGH_JUMP[1] and not hurt[a:i + 1].any():
+            rows.append([int(round(float(x))) for x in pos[i - 1]] + [int(round(float(v)))])
+        elif 240.0 <= v < HIGH_JUMP[0] and not hurt[a:i + 1].any():
+            # a plain jump: how much higher he comes down (its top is 47 above the take-off; more is a step taken in the air)
+            e = int(np.searchsorted(t, t[i] + 1.5, side="right")) - 1
+            if e > seg_end[i] or not alive[i:e + 1].all():
+                continue
+            on = np.nonzero(lands[i + 1:e + 1])[0]
+            if not len(on):
+                continue
+            k_ = i + 1 + int(on[0])
+            if (hid[k_] and vel[k_, 2] > 300.0) or far[i:k_ + 1].any() or hurt[i:k_ + 1].any() or (vel[i + 1:k_, 2] > v + 30.0).any():
+                continue
+            g = float(pos[k_ - int(hid[k_]), 2] - pos[i - 1, 2])
+            if g >= 0.0:
+                b = str(int(min(g, 127.0) // 8))
+                gain[b] = gain.get(b, 0) + 1
+            if g >= 50.0:
+                up.append([int(round(float(x))) for x in pos[i - 1]] + [int(round(g))])
+    for key, r_ in (("hijump", rows), ("wjump", helped), ("upjump", up)):
+        if r_:
+            T[key][name] = r_
+    if gain:
+        T["jgain"][name] = gain
 
 
 def enemy_estimate(rec, hits):
@@ -740,7 +1095,7 @@ def travel_view(rec, T, info, world, ever):
     nv = alive & ~inview
     fast = nv & (hsp >= FAST)
     off = np.abs((rec["yaw"] - np.degrees(np.arctan2(rec["vel"][:, 1], rec["vel"][:, 0])) + 180.0) % 360.0 - 180.0)
-    _hadd(V["move"], off[fast], 10.0, 170.0, w[fast])
+    _hadd(V["move"], off[fast], 2.0, 178.0, w[fast])
     last = np.maximum.accumulate(np.where(inview, np.arange(n), 0))
     lastpos = np.where(np.isfinite(en[last]), en[last], 0.0).astype(np.float64) + np.array([0, 0, 8.0])
     dl = lastpos - eye
@@ -811,6 +1166,18 @@ def _hq(h, q, step):
     return None
 
 
+def _hq_fine(h, q, step):
+    """the q-th percentile of a histogram {bin: count}, read inside the bin it falls in by a straight line"""
+    ks = sorted((int(k), v) for k, v in h.items())
+    tot = sum(v for _, v in ks)
+    acc = 0.0
+    for k, v in ks:
+        if tot and acc + v >= q / 100.0 * tot:
+            return round((k + (q / 100.0 * tot - acc) / v) * step, 3)
+        acc += v
+    return None
+
+
 def _hunder(h, below, step):
     """the share of a histogram under a value, %"""
     tot = sum(h.values())
@@ -876,6 +1243,7 @@ def holds(rec, T, info, world, hits, pr, took, frag, died, seg_end, since):
     Hd = T["holds"]
     t, w, alive, inview, pos = rec["t"], rec["w"], rec["alive"], rec["inview"], rec["pos"]
     n = len(t)
+    rec["hold_mask"] = np.zeros(n, bool)
     Hd["alive"] = float(w[alive].sum())
     okh = alive & ~inview & np.isin(rec["weapon"], BIG_W)
     bad = np.concatenate([[0], np.cumsum(~okh)])
@@ -905,6 +1273,7 @@ def holds(rec, T, info, world, hits, pr, took, frag, died, seg_end, since):
         if t[b] - t[a] < HOLD_S - 0.03:
             continue
         done = b
+        rec["hold_mask"][a:b + 1] = True
         Hd["n"] += 1
         Hd["time"] += float(w[a:b + 1].sum())
         Hd["dur"].append(round(float(t[b] - t[a]), 2))
@@ -1593,7 +1962,354 @@ def report(T, zrange=None):
     out["fights"] = fights_report(T)
     out["flick_curve"] = flick_report(T)
     out["view_travelling"] = tview_report(T)
+    out["openings"] = openings_report(T)
+    out["sounds"] = sounds_report(T)
+    out["weapon_in_hand"] = quietw_report(T)
+    out["teleporters"] = tele_report(T)
     return out
+
+
+SPAWN_COLS = ("spawn point", "item 1", "item 2", "item 3", "its time, tenths of a second", "time 2", "time 3", "the first weapon (an item's number)", "enemy in view within 15 s",
+              "stack 20 s on (0: dead, -1: not known)", "a frag for him within 30 s", "a frag of him", "the killer's weapon: 0 beam, 1 rockets, 2 other, 3 not known, 4 the game's start",
+              "the item nearest the killer", "the first item's kind: 0 weapon, 1 armor, 2 mega", "the first weapon (WEAPONS' number)", "its time")
+FRAG_COLS = ("the item nearest him at the frag", "item 1", "item 2", "item 3", "time 1", "time 2", "time 3", "the enemy in view again within 15 s", "a frag for him within 30 s",
+             "a frag of him", "his stack band", "his view on a spawn point from 2 to 6 s on, %", "the item nearest him 5 s on", "10 s on")
+KILLER = ("the killer held lightning or rail", "the killer held rockets", "the killer held another weapon", "the killer's weapon not known", "the game's first life")
+
+
+def _plans(rows, cols=(1, 2, 3)):
+    """rows of lives (or of frags) -> their plans (the first three items, as numbers) with the rows of each, the commonest first"""
+    by = {}
+    for r in rows:
+        by.setdefault(tuple(int(r[c]) for c in cols), []).append(r)
+    return sorted(by.items(), key=lambda kv: -len(kv[1]))
+
+
+def openings_report(T):
+    """after a spawn and after a frag, over the maps of a tally: what the first item is, the first weapon and when, how
+    the life goes; how much of a spawn point's lives its commonest plan and its three commonest hold"""
+    S = {k.split(":", 1)[1]: np.array(v, np.int64).reshape(-1, len(SPAWN_COLS)) for k, v in T["openings"].items() if k.startswith("spawn:")}
+    F = {k.split(":", 1)[1]: np.array(v, np.int64).reshape(-1, len(FRAG_COLS)) for k, v in T["openings"].items() if k.startswith("frag:")}
+    out = dict(known=bool(S))
+    if not S:
+        return out
+    A = np.concatenate(list(S.values()))
+
+    def life(r):
+        n = len(r)
+        if not n:
+            return dict(lives=0)
+        k20 = r[r[:, 9] >= 0, 9]
+        fw = r[r[:, 15] >= 0]
+        return dict(lives=n, first_item_a_weapon_share=_share(int((r[:, 14] == 0).sum()), n), first_item_an_armor_share=_share(int((r[:, 14] == 1).sum()), n),
+                    first_item_the_mega_share=_share(int((r[:, 14] == 2).sum()), n), no_item_in_15s_share=_share(int((r[:, 14] < 0).sum()), n),
+                    a_weapon_within_15s_share=_share(len(fw), n), seconds_to_the_first_weapon_median=round(float(np.median(fw[:, 16])) / 10.0, 1) if len(fw) else None,
+                    first_weapon={W_NAMES.get(WEAPONS[q], WEAPONS[q]): _share(int((fw[:, 15] == q).sum()), len(fw)) for q in (RL, RG, LG, GL, PG, SG) if len(fw) and (fw[:, 15] == q).any()},
+                    enemy_in_view_within_15s_share=_share(int(r[:, 8].sum()), n), stack_20s_on_median=round(float(np.median(k20)), 0) if len(k20) else None,
+                    dead_within_20s_share=_share(int((k20 == 0).sum()), len(k20)), frag_for_him_within_30s_share=_share(int(r[:, 10].sum()), n),
+                    frag_of_him_within_30s_share=_share(int(r[:, 11].sum()), n))
+    out["after_a_spawn"] = dict(all=life(A), **{KILLER[q]: life(A[A[:, 12] == q]) for q in range(5) if (A[:, 12] == q).any()})
+    top1, top3, nsp = [], [], 0
+    for mp, r in S.items():
+        for sp in np.unique(r[:, 0]):
+            rr = r[r[:, 0] == sp]
+            if len(rr) >= 30:
+                pl = _plans(rr)
+                nsp += 1
+                top1.append(100.0 * len(pl[0][1]) / len(rr))
+                top3.append(100.0 * sum(len(x[1]) for x in pl[:3]) / len(rr))
+    out["plans"] = dict(spawn_points_with_30_lives=nsp, commonest_plan_share_mean=round(float(np.mean(top1)), 1) if top1 else None,
+                        three_commonest_plans_share_mean=round(float(np.mean(top3)), 1) if top3 else None)
+    if F:
+        B = np.concatenate(list(F.values()))
+        n = len(B)
+
+        def after(r):
+            n_ = len(r)
+            return dict(frags=n_, an_item_within_15s_share=_share(int((r[:, 1] >= 0).sum()), n_), enemy_in_view_again_within_15s_share=_share(int(r[:, 7].sum()), n_),
+                        frag_for_him_within_30s_share=_share(int(r[:, 8].sum()), n_), frag_of_him_within_30s_share=_share(int(r[:, 9].sum()), n_),
+                        view_on_a_spawn_point_2_to_6s_on_share=round(float(r[:, 11].mean()), 1)) if n_ else dict(frags=0)
+        out["after_a_frag"] = dict(all=after(B), **{"his stack " + STACK_BANDS[q]: after(B[B[:, 10] == q]) for q in range(3)},
+                                   **{"an item within 15 s": after(B[B[:, 1] >= 0]), "no item within 15 s": after(B[B[:, 1] < 0])})
+    return out
+
+
+def spawn_summary(rr, lab):
+    """the lives from one spawn point (rows of SPAWN_COLS; lab: the items' labels) -> the first items they take, how many
+    last 20 s, and the plans of those that do: a life that ends early has a short plan whatever he meant to do"""
+    rr = np.asarray(rr, np.int64).reshape(-1, len(SPAWN_COLS))
+    name = lambda k: lab[k] if 0 <= k < len(lab) else None
+    n = len(rr)
+    firsts = []
+    for k in np.argsort(-np.bincount(rr[rr[:, 1] >= 0, 1], minlength=1))[:3]:
+        m = rr[:, 1] == k
+        if m.any():
+            firsts.append(dict(item=name(int(k)), share=round(100.0 * float(m.mean()), 1), seconds=round(float(np.median(rr[m, 4])) / 10.0, 1)))
+    known = rr[rr[:, 9] >= 0]
+    last = rr[rr[:, 9] > 0]
+    plans = []
+    for key, v in _plans(last)[:3]:
+        v = np.array(v)
+        plans.append(dict(items=[name(k) for k in key if k >= 0], share=round(100.0 * len(v) / len(last), 1), lives=len(v),
+                          seconds=[round(float(np.median(v[v[:, 4 + q] >= 0, 4 + q])) / 10.0, 1) for q in range(3) if key[q] >= 0],
+                          stack_20s_on_median=int(np.median(v[:, 9])), frag_for_him_within_30s_share=round(100.0 * float(v[:, 10].mean()), 1),
+                          frag_of_him_within_30s_share=round(100.0 * float(v[:, 11].mean()), 1)))
+    return dict(first_items=firsts, lives_that_last_20s_share=round(100.0 * len(last) / len(known), 1) if len(known) else None, lives_that_last_20s=int(len(last)),
+                stack_20s_on_of_those_median=int(np.median(last[:, 9])) if len(last) else None, plans_of_the_lives_that_last_20s=plans)
+
+
+def pro_openings(T, mp, mapd):
+    """sim/pro_openings/<map>.json: for every spawn point its three commonest plans (the first three items of the first
+    15 s) with their share and how such lives go, the same by what the killer held and by where he stood; and after a
+    frag, by where the fragger stood, his commonest plans and where he is 5 and 10 s on"""
+    lab = [o["label"] for o in mapd["open"]]
+    name = lambda k: lab[k] if 0 <= k < len(lab) else None
+    rows = np.array(T["openings"].get("spawn:" + mp, []), np.int64).reshape(-1, len(SPAWN_COLS))
+    fr = np.array(T["openings"].get("frag:" + mp, []), np.int64).reshape(-1, len(FRAG_COLS))
+
+    def plan(key, rr, total):
+        k20 = rr[rr[:, 9] >= 0, 9]
+        return dict(items=[name(k) for k in key if k >= 0], share=round(100.0 * len(rr) / total, 1), lives=len(rr),
+                    seconds=[round(float(np.median(rr[rr[:, 4 + q] >= 0, 4 + q])) / 10.0, 1) for q in range(3) if key[q] >= 0],
+                    stack_20s_on_median=int(np.median(k20)) if len(k20) else None, enemy_in_view_within_15s_share=round(100.0 * float(rr[:, 8].mean()), 1),
+                    frag_for_him_within_30s_share=round(100.0 * float(rr[:, 10].mean()), 1), frag_of_him_within_30s_share=round(100.0 * float(rr[:, 11].mean()), 1))
+    def short(r2):
+        b = spawn_summary(r2, lab)
+        pl = b["plans_of_the_lives_that_last_20s"]
+        return dict(lives=len(r2), first_items=b["first_items"][:2], lives_that_last_20s_share=b["lives_that_last_20s_share"],
+                    commonest_plan_of_those=dict(items=pl[0]["items"], share=pl[0]["share"], seconds=pl[0]["seconds"]) if pl else None)
+    spawns = []
+    for sp in range(len(mapd["spawns"])):
+        rr = rows[rows[:, 0] == sp]
+        if not len(rr):
+            continue
+        dn = np.linalg.norm(np.array([o["pos"] for o in mapd["open"]], np.float64) - np.array(mapd["spawns"][sp], np.float64), axis=1)
+        k20 = rr[rr[:, 9] >= 0, 9]
+        e = dict(id=sp, pos=[int(round(x)) for x in mapd["spawns"][sp]], near=lab[int(dn.argmin())], units_from_it=int(round(float(dn.min()))), lives=len(rr),
+                 plans=[plan(k, np.array(v), len(rr)) for k, v in _plans(rr)[:3]],
+                 how_its_lives_go=dict(stack_20s_on_median=int(np.median(k20)) if len(k20) else None, dead_within_20s_share=_share(int((k20 == 0).sum()), len(k20)),
+                                       enemy_in_view_within_15s_share=round(100.0 * float(rr[:, 8].mean()), 1), frag_for_him_within_30s_share=round(100.0 * float(rr[:, 10].mean()), 1),
+                                       frag_of_him_within_30s_share=round(100.0 * float(rr[:, 11].mean()), 1)),
+                 by_the_killers_weapon={}, by_where_the_killer_stood={})
+        e["three_commonest_share"] = round(sum(x["share"] for x in e["plans"]), 1)
+        e["no_item_in_15s_share"] = round(100.0 * float((rr[:, 1] < 0).mean()), 1)
+        e["plans_with_an_item"] = [plan(k, np.array(v), len(rr)) for k, v in _plans(rr) if k[0] >= 0][:3]
+        e.update(spawn_summary(rr, lab))
+        for q in range(5):                                      # (4: the game's first life, nobody killed him)
+            r2 = rr[rr[:, 12] == q]
+            if len(r2) >= 20:
+                e["by_the_killers_weapon"][KILLER[q]] = short(r2)
+        for it in np.unique(rr[rr[:, 13] >= 0, 13]):
+            r2 = rr[rr[:, 13] == it]
+            if len(r2) >= 20:
+                e["by_where_the_killer_stood"]["near " + name(int(it))] = short(r2)
+        spawns.append(e)
+    after = []
+    for it in np.unique(fr[:, 0]) if len(fr) else []:
+        r2 = fr[fr[:, 0] == it]
+        if len(r2) < 30:
+            continue
+        where = lambda col: [dict(near=name(int(k)), share=round(100.0 * float((r2[:, col] == k).mean()), 1)) for k in np.argsort(-np.bincount(r2[r2[:, col] >= 0, col], minlength=1))[:3]
+                             if (r2[:, col] == k).any()]
+        after.append(dict(he_stood="near " + name(int(it)) if it >= 0 else "away from the items", frags=len(r2),
+                          plans=[dict(items=[name(k) for k in key if k >= 0], share=round(100.0 * len(v) / len(r2), 1),
+                                      seconds=[round(float(np.median(np.array(v)[np.array(v)[:, 4 + q] >= 0, 4 + q])) / 10.0, 1) for q in range(3) if key[q] >= 0])
+                                 for key, v in _plans(r2)[:3]],
+                          five_seconds_on=where(12), ten_seconds_on=where(13), enemy_in_view_again_within_15s_share=round(100.0 * float(r2[:, 7].mean()), 1),
+                          frag_for_him_within_30s_share=round(100.0 * float(r2[:, 8].mean()), 1), frag_of_him_within_30s_share=round(100.0 * float(r2[:, 9].mean()), 1),
+                          view_on_a_spawn_point_2_to_6s_on_share=round(float(r2[:, 11].mean()), 1)))
+    after.sort(key=lambda x: -x["frags"])
+    return dict(map=mp, seconds=OPEN_S, lives=int(len(rows)), frags=int(len(fr)), items={o["label"]: [int(round(x)) for x in o["pos"]] for o in mapd["open"]},
+                says="a plan: the first three different items (weapons, armors, the mega) he takes in the 15 s after a spawn, in their order; an empty list: none "
+                     "(plans: the commonest of all lives; plans_with_an_item: the commonest that take something; plans_of_the_lives_that_last_20s: of the lives he is "
+                     "still alive in 20 s on, the ones to read as plans: a life that ends early has a short plan whatever he meant; first_items: the first item of all lives)",
+                spawns=spawns, after_a_frag=after)
+
+
+def sounds_report(T):
+    S = T["sounds"]
+    if not S:
+        return dict(known=False)
+
+    def cell(c):
+        if not c or not c["n"]:
+            return dict(n=0)
+        n = c["n"]
+        return dict(n=n, off_his_view_at_the_sound=round(c["a0"] / n, 1), degrees_gained_in_1s=round(c["g1"] / n, 1), degrees_gained_in_2s=round(c["g2"] / n, 1),
+                    turned_10_toward_in_1s_share=_share(c["t1"], n), in_2s_share=_share(c["t2"], n), movement_turned_60_in_1s_share=_share(c["mt1"], c["mk1"]),
+                    movement_turned_60_in_2s_share=_share(c["mt2"], c["mk2"]), weapon_changed_in_1s_share=_share(c["w1"], n), weapon_changed_in_2s_share=_share(c["w2"], n),
+                    blind_shot_toward_it_in_2s_share=_share(c["shot"], n), enemy_in_view_within_2s_share=_share(c["seen2"], n))
+    out = dict(known=True, baseline={"all": cell(S.get("base:all")), **{SOUND_DIST[d]: cell(S.get("base:d{}".format(d))) for d in range(4)}}, by_kind={})
+    for k, nm in enumerate(SOUND_KINDS):
+        if "k{}:all".format(k) in S:
+            out["by_kind"][nm] = {"all": cell(S["k{}:all".format(k)]), **{SOUND_DIST[d]: cell(S.get("k{}:d{}".format(k, d))) for d in range(4)}}
+    return out
+
+
+def quietw_report(T):
+    Q = T["quietw"]
+    if not Q:
+        return dict(known=False)
+
+    def cell(c):
+        tot = sum(c.values()) if c else 0.0
+        if not tot:
+            return dict(minutes=0)
+        sh_ = lambda ws: round(100.0 * sum(c.get(WEAPONS[x], 0.0) for x in ws) / tot, 1)
+        return dict(minutes=round(tot / 60.0, 1), humming_share=sh_(HUM), rail_share=sh_((RG,)), lightning_share=sh_((LG,)), rockets_share=sh_((RL,)),
+                    machine_gun_share=sh_((MG,)), other_share=sh_((SG, GL, PG, HMG, GAUNT)))
+    out = dict(known=True)
+    for mode in ("travelling", "holding"):
+        out[mode] = {"all": cell(Q.get(mode + ":all:0")), **{SEEN_BANDS[q]: cell(Q.get("{}:seen:{}".format(mode, q))) for q in range(4)},
+                     **{LAST_BANDS[q]: cell(Q.get("{}:last:{}".format(mode, q))) for q in range(3)}, **{"stack " + STACK_BANDS[q]: cell(Q.get("{}:stack:{}".format(mode, q))) for q in range(3)}}
+    fire = {}
+    for q in range(4):
+        m = (Q.get("time:{}".format(q)) or {}).get("s", 0.0) / 60.0
+        c = Q.get("fire:{}".format(q)) or {}
+        fire[SEEN_BANDS[q]] = dict(minutes=round(m, 1), **{W_NAMES.get(w_, w_) + "_a_minute": round(c.get(w_, 0) / m, 3) for w_ in ("mg", "sg", "lg", "rg", "rl", "gl", "pg")}) if m else dict(minutes=0)
+    out["shots_with_nobody_in_view_for_1s"] = fire
+    cells = {}
+    for k, c in Q.items():
+        if k.startswith("cell:"):
+            _, mp, cx, cy, cz = k.split(":")
+            cells.setdefault(mp, []).append(dict(cell=[int(cx), int(cy), int(cz)], middle=[int((int(cx) + 0.5) * 256), int((int(cy) + 0.5) * 256), int((int(cz) + 0.5) * 128)],
+                                                 seconds=round(c["hum"] + c["silent"], 1), humming_share=_share(c["hum"], c["hum"] + c["silent"])))
+    out["holding_by_cell"] = {mp: sorted(cs, key=lambda c: -c["seconds"])[:10] for mp, cs in cells.items()}
+    return out
+
+
+def _clusters(pts, radius=96.0, keep=6):
+    """points -> the fullest spots: the fullest 64-unit cell's points, their middle moved to the mean of the points within
+    `radius` three times, taken out, and again; returns (middle, the points' numbers) the fullest first"""
+    pts = np.asarray(pts, np.float64).reshape(-1, 3)
+    left = np.ones(len(pts), bool)
+    out = []
+    while left.any() and len(out) < keep:
+        cell = np.floor(pts[left] / 64.0).astype(np.int64)
+        key = (cell[:, 0] + 4096) * 67108864 + (cell[:, 1] + 4096) * 8192 + (cell[:, 2] + 4096)
+        u, inv = np.unique(key, return_inverse=True)
+        c = pts[left][inv == int(np.bincount(inv).argmax())].mean(0)
+        for _ in range(3):
+            m = left & (np.linalg.norm(pts - c, axis=1) <= radius)
+            if not m.any():
+                break
+            c = pts[m].mean(0)
+        m = left & (np.linalg.norm(pts - c, axis=1) <= radius)
+        if not m.any():
+            break
+        out.append((c, np.nonzero(m)[0]))
+        left &= ~m
+    return out
+
+
+def pro_tele_jumps(T, mp, mapd):
+    """sim/pro_tele_jumps/<map>.json: every teleporter with how often it is taken, the speed in and out, how often he jumps
+    as he comes out, and where the jumps come down (the fullest spots, each with how many trips without the jump pass
+    it): a spot that none of those passes is a teleporter jump. And the map's take-offs: higher than a plain jump with
+    no weapon's help, on his own weapon, and the plain jumps that come down higher than a jump reaches."""
+    teles, jumps, habit = [], [], []
+    cell_ = np.array(TELE_CELL)
+    for k, tp in enumerate(mapd["teles"]):
+        C = T["tele"].get("{}:{}".format(mp, k))
+        if not C or not C["n"]:
+            continue
+        L = T["tele_land"].get("{}:{}".format(mp, k), {})
+        mid = np.array([[float(x) + 0.5 for x in key.split(",")] for key in L], np.float64).reshape(-1, 3) * cell_
+        nj = np.array([v["j"] for v in L.values()], np.float64)
+        npass = np.array([v["p"] for v in L.values()], np.float64)
+        ms = np.array([v["ms"] for v in L.values()], np.float64)
+        sums = np.array([[v["x"], v["y"], v["z"]] for v in L.values()], np.float64).reshape(-1, 3)
+        ex = np.array(tp["exit"], np.float64)
+        without = C["n"] - C["jumped"]
+        left = nj > 0
+        land = []
+        while left.any() and len(land) < 6:
+            c = mid[int(np.argmax(np.where(left, nj, -1)))]
+            for _ in range(2):
+                m = left & (np.linalg.norm(mid - c, axis=1) <= 96.0)
+                c = (mid[m] * nj[m][:, None]).sum(0) / nj[m].sum()
+            m = left & (np.linalg.norm(mid - c, axis=1) <= 96.0)
+            if not m.any() or nj[m].sum() < max(5, 0.03 * C["jumped"]):
+                break
+            c = sums[m].sum(0) / nj[m].sum()                     # (the landings' own mean, not the cells' middles)
+            near = np.linalg.norm(mid - c, axis=1) <= 64.0
+            passed = int(npass[near].max()) if near.any() else 0
+            only = None if without < 20 else bool(nj[m].sum() >= 10 and passed <= 0.02 * without)
+            e = dict(pos=[int(round(x)) for x in c], landings=int(nj[m].sum()), share_of_the_jumps=round(100.0 * nj[m].sum() / C["jumped"], 1),
+                     above_the_exit=int(round(c[2] - ex[2])), units_from_the_exit=int(round(float(np.linalg.norm(c[:2] - ex[:2])))),
+                     seconds_mean=round(float(ms[m].sum() / nj[m].sum()) / 1000.0, 2), trips_without_the_jump_that_pass_there=passed, only_with_a_jump=only)
+            land.append(e)
+            left &= ~m
+            if only:
+                jumps.append(dict(teleporter=k, exit=[int(round(x)) for x in ex], landing=e["pos"], landings=e["landings"], share_of_the_teleporters_trips=round(100.0 * e["landings"] / C["n"], 1),
+                                  above_the_exit=e["above_the_exit"], units_from_the_exit=e["units_from_the_exit"], seconds_mean=e["seconds_mean"]))
+        one = dict(id=k, entrance=None if tp["entrance"] is None else [int(round(x)) for x in tp["entrance"]], exit=[int(round(x)) for x in ex], trips=int(C["n"]),
+                   speed_in_median=_hq(C["vin"], 50, 10.0), speed_out_median=_hq(C["vout"], 50, 10.0), jumped_share=round(100.0 * C["jumped"] / C["n"], 1),
+                   in_the_air_as_he_went_in_share=round(100.0 * C["air_in"] / C["n"], 1), trips_without_the_jump=int(without), landings_of_the_jumps=land)
+        teles.append(one)
+        if C["n"] >= 30 and C["jumped"] >= 0.75 * C["n"]:
+            habit.append(dict(teleporter=k, exit=one["exit"], trips=one["trips"], jumped_share=one["jumped_share"], landings_of_the_jumps=[x["pos"] for x in land[:3]]))
+    hj = np.array(T["hijump"].get(mp, []), np.int64).reshape(-1, 4)
+    high = []
+    for c, idx in _clusters(hj[:, :3], radius=80.0, keep=30) if len(hj) else []:
+        if len(idx) >= 20:
+            high.append(dict(pos=[int(round(x)) for x in c], take_offs=len(idx), upward_speed_median=int(np.median(hj[idx, 3]))))
+    wj = np.array(T["wjump"].get(mp, []), np.int64).reshape(-1, 5)
+    helped = []
+    for wn, wname in ((RL, "rocket"), (GL, "grenade"), (PG, "plasma")):
+        q = wj[wj[:, 4] == wn]
+        for c, idx in _clusters(q[:, :3], radius=96.0, keep=20) if len(q) else []:
+            if len(idx) >= 10:
+                helped.append(dict(weapon=wname, pos=[int(round(x)) for x in c], take_offs=len(idx), upward_speed_median=int(np.median(q[idx, 3]))))
+    uj = np.array(T["upjump"].get(mp, []), np.int64).reshape(-1, 4)
+    ups = []
+    for c, idx in _clusters(uj[:, :3], radius=80.0, keep=30) if len(uj) else []:
+        if len(idx) >= 20:
+            ups.append(dict(pos=[int(round(x)) for x in c], jumps=len(idx), comes_down_higher_by_median=int(np.median(uj[idx, 3]))))
+    return dict(map=mp, says="a trip: a step in one frame that no movement makes, to within 120 units of a teleporter's exit. A jump as he comes out: 150 or more upward speed "
+                            "within 0.2 s of the exit; its landing: the first ground after it within 1.5 s (cells of 48 x 48 x 32, gathered within 96 units). A teleporter jump: "
+                            "a landing spot of 10 jumps or more that at most 2% of the trips without the jump pass within 64 units of in their 1.5 s (20 such trips or more; "
+                            "fewer: only_with_a_jump is null). Teleporters they jump out of: three trips in four or more. "
+                            "High take-offs: 300 to 480 upward speed with no rocket, grenade or plasma of his and no damage to him in the 0.3 s before and no "
+                            "teleporter (a plain jump gives 275): places with 20 or more; a jump pad is among them; a take-off counts whether the ground flag shows it or he came down and went up again between two snapshots. Take-offs with a weapon: 300 or more upward speed with "
+                            "his own rocket, grenade or plasma in the 0.3 s before: places with 10 or more. Jumps that come down higher: plain jumps whose landing is 50 "
+                            "units or more above the take-off (the plain jump's top is 47, so a step was taken in the air): places with 20 or more",
+                teleporters=teles, teleporter_jumps=sorted(jumps, key=lambda x: -x["landings"]), teleporters_they_jump_out_of=sorted(habit, key=lambda x: -x["trips"]), high_take_offs=sorted(high, key=lambda x: -x["take_offs"]),
+                take_offs_with_a_weapon=sorted(helped, key=lambda x: -x["take_offs"]), jumps_that_come_down_higher=sorted(ups, key=lambda x: -x["jumps"]),
+                plain_jumps=int(T["jumps_n"].get(mp, 0)), high_take_offs_in_all=int(len(hj)), take_offs_with_a_weapon_in_all=int(len(wj)),
+                jumps_that_come_down_50_higher_in_all=int(len(uj)))
+
+
+def tele_report(T):
+    cs = [c for c in T["tele"].values() if c.get("n")]
+    if not cs:
+        return dict(known=False)
+    n = sum(c["n"] for c in cs)
+    vin, vout = {}, {}
+    for c in cs:
+        for dst, src in ((vin, c["vin"]), (vout, c["vout"])):
+            for k, x in src.items():
+                dst[k] = dst.get(k, 0) + x
+    m10 = T["alive"] / 600.0
+    hi = sum(len(v) for v in T["hijump"].values())
+    pl = sum(T["jumps_n"].values())
+    wj = np.array([x for v in T["wjump"].values() for x in v], np.int64).reshape(-1, 5)
+    up = sum(len(v) for v in T["upjump"].values())
+    gain = {}
+    for v in T["jgain"].values():
+        for k, x in v.items():
+            gain[k] = gain.get(k, 0) + x
+    gn = sum(gain.values())
+    return dict(known=True, teleporters_used=len(cs), trips=int(n), trips_a_ten_minutes=round(n / m10, 2) if m10 else None, speed_in_median=_hq(vin, 50, 10.0),
+                speed_out_median=_hq(vout, 50, 10.0), jumped_as_he_came_out_share=_share(sum(c["jumped"] for c in cs), n),
+                in_the_air_as_he_went_in_share=_share(sum(c["air_in"] for c in cs), n), high_take_offs_a_ten_minutes=round(hi / m10, 2) if m10 else None,
+                high_take_offs_share_of_his_jumps=_share(hi, hi + pl),
+                rocket_take_offs_a_ten_minutes=round(int((wj[:, 4] == RL).sum()) / m10, 2) if m10 else None,
+                grenade_take_offs_a_ten_minutes=round(int((wj[:, 4] == GL).sum()) / m10, 2) if m10 else None,
+                plasma_take_offs_a_ten_minutes=round(int((wj[:, 4] == PG).sum()) / m10, 2) if m10 else None,
+                plain_jumps_a_ten_minutes=round(pl / m10, 1) if m10 else None,
+                jumps_that_come_down_50_higher_a_ten_minutes=round(up / m10, 2) if m10 else None,
+                plain_jumps_landing_higher_by={"{} to {}".format(8 * k, 8 * k + 8): _share(gain.get(str(k), 0), gn) for k in range(0, 10)} if gn else {})
 
 
 def _fight_cell(Fx, grp, prefix):
@@ -1699,6 +2415,7 @@ def flick_report(T):
         return dict(appearances=C["n"], a_shot_within_3s_share=_share(ns, C["n"]), seconds_to_the_first_shot_median=_hq(C["shot"], 50, 0.05),
                     seconds_to_the_first_shot_25=_hq(C["shot"], 25, 0.05), a_hit_within_3s_share=_share(nh, C["n"]),
                     seconds_to_the_first_hit_median=_hq(C["hit"], 50, 0.05), seconds_to_the_first_hit_25=_hq(C["hit"], 25, 0.05),
+                    seconds_to_the_first_shot_median_fine=_hq_fine(C["shot"], 50, 0.05), seconds_to_the_first_hit_median_fine=_hq_fine(C["hit"], 50, 0.05),
                     hits_of_the_first_half_second_of_fire_share=_share(C["h05"], C["s05"]), shots_in_it=C["s05"])
     return dict(by_angle={ERR_BANDS[e]: cell(Fc.get("e{}".format(e))) for e in range(len(ERR_BANDS))},
                 by_weapon={FLICK_W[w_]: cell(Fc.get("w{}".format(w_))) for w_ in range(4)},
@@ -1708,8 +2425,8 @@ def flick_report(T):
 
 def tview_report(T):
     V = T["tview"]
-    out = dict(view_off_his_direction_of_travel=dict(median=_hq(V["move"], 50, 10.0), p75=_hq(V["move"], 75, 10.0), within_20_share=_hunder(V["move"], 20, 10.0),
-                                                     within_40_share=_hunder(V["move"], 40, 10.0), over_90_share=round(100.0 - (_hunder(V["move"], 90, 10.0) or 0.0), 1) if V["move"] else None))
+    out = dict(view_off_his_direction_of_travel=dict(median=_hq(V["move"], 50, 2.0), p75=_hq(V["move"], 75, 2.0), within_20_share=_hunder(V["move"], 20, 2.0),
+                                                     within_40_share=_hunder(V["move"], 40, 2.0), over_90_share=round(100.0 - (_hunder(V["move"], 90, 2.0) or 0.0), 1) if V["move"] else None))
     for name, lbl in (("fast", "travelling at 350 or more, no enemy in view"), ("nv", "all his time with no enemy in view")):
         c = V[name]
         out[lbl] = dict(minutes=round(c["time"] / 60.0, 1), view_within_20_of_his_direction_of_travel_share=_share(c["along"], c["time"]),
@@ -2030,6 +2747,22 @@ def map_info(world, name):
                             col=sort if wname is None else WEAPONS.index(wname), back=RETURN.get(ITEM_KIND.get(cls), 5.0)))
     exits = [[float(x) for x in d] for cls_, _, d in getattr(world, "triggers", []) if cls_ == "trigger_teleport"]
     info = dict(name=name, items=out, big=big, exits=exits, places=[], cellv={}, nav_nodes=None, nav_hop=None)
+    info["open"], seen2 = [], {}
+    for e, p in zip(ents, pos):
+        cls = e["classname"]
+        if cls in OPEN:
+            lab = OPEN[cls]
+            seen2[lab] = seen2.get(lab, 0) + 1
+            several = sum(1 for f_ in ents if f_["classname"] == cls) > 1
+            wname = cls[len("weapon_"):] if cls.startswith("weapon_") else None
+            wnum = {"rocketlauncher": RL, "railgun": RG, "lightning": LG, "grenadelauncher": GL, "plasmagun": PG, "shotgun": SG, "hmg": HMG}.get(wname)
+            sort = cls.split("_")[1] if cls.startswith("item_") else cls
+            info["open"].append(dict(label=lab + (str(seen2[lab]) if several else ""), pos=p, kind="weapon" if wname else "mega" if lab == "MH" else "armor",
+                                     col=sort if wname is None else wnum,
+                                     rivals=[q for f_, q in zip(ents, pos) if f_ is not e and cls.startswith("item_") and f_["classname"].startswith("item_" + sort)]))
+    info["spawns"] = [[float(x) for x in e["origin"]] for e in world.spawns() if "origin" in e]
+    spots = [(c, d) for kind, c, d in world.trigger_spots() if kind == 1] if hasattr(world, "trigger_spots") else []
+    info["teles"] = [dict(entrance=[float(x) for x in c], exit=[float(x) for x in d]) for c, d in spots] or [dict(entrance=None, exit=x) for x in exits]
     f = os.path.join(ROOT, "sim", "pro_places", name + ".json")
     if os.path.exists(f):
         info["places"] = [pl["pos"] for pl in json.load(open(f)).get("places", [])]
@@ -2327,7 +3060,40 @@ def events_fields(E, tm, cn, keep, remap, start, end, t0):
         s_, num, item = int(r[c_["snap"]]), int(r[c_["number"]]), int(r[c_["eventParm"]])
         if 0 <= s_ < N and remap[s_] >= 0 and num != cn[s_] and num < 64 and item in by_id:
             picks.append([int(remap[s_]), *by_id[item]])
-    return dict(obits=obits, enemy_life=life[keep], clock_exact=np.where(np.isfinite(clock[keep]), clock[keep], np.nan), enemy_pick=picks)
+    # the enemy's sounds by kind: the events of his entity while the server sends him, and his teleporter events
+    ev_ = E["events"]
+    P1 = ev_[(ev_[:, c_["source"]] == 1) & (ev_[:, c_["eType"]] == E["entity_types"]["Player"])]
+    names_ = {v: k for k, v in E["item_ids"].items()}
+    wkind = {"rl": 2, "rg": 3, "lg": 4, "mg": 5, "hmg": 5, "sg": 6, "gl": 7, "pg": 8}
+    ikind = {"ItemHealthMega": 9, "ItemArmorBody": 10, "ItemArmorCombat": 11, "ItemArmorJacket": 12, "ItemHealth": 14, "ItemHealthLarge": 14}
+    sounds_, last_t = [], {}
+    for r in P1:
+        s_, num, e_ = int(r[c_["snap"]]), int(r[c_["number"]]), int(r[c_["event"]])
+        if not (0 <= s_ < N) or remap[s_] < 0 or num == cn[s_] or num >= 64:
+            continue
+        kind = None
+        if e_ == 10:
+            kind = 0
+        elif e_ == 9:
+            kind = 1
+        elif e_ == E["event_ids"]["WeaponFired"]:
+            kind = wkind.get(QLW.get(int(r[c_["weapon"]]), ""))
+        elif e_ == E["event_ids"]["ItemPickup"]:
+            nm = names_.get(int(r[c_["eventParm"]]), "")
+            kind = ikind.get(nm, 13 if nm.startswith("Weapon") else 15)
+        if kind is None:
+            continue
+        if kind in (4, 5, 8) and tm[s_] - last_t.get(kind, -1e9) < 500:     # a stream of fire: its start only
+            last_t[kind] = tm[s_]
+            continue
+        last_t[kind] = tm[s_]
+        sounds_.append([int(remap[s_]), kind, r[c_["pos_trBase_0"]], r[c_["pos_trBase_1"]], r[c_["pos_trBase_2"]]])
+    for r in R.rows(E, "PlayerTeleportIn", source=0):
+        s_ = int(r[c_["snap"]])
+        if 0 <= s_ < N and remap[s_] >= 0 and int(r[c_["clientNum"]]) != cn[s_]:
+            sounds_.append([int(remap[s_]), 16, r[c_["pos_trBase_0"]], r[c_["pos_trBase_1"]], r[c_["pos_trBase_2"]]])
+    return dict(obits=obits, enemy_life=life[keep], clock_exact=np.where(np.isfinite(clock[keep]), clock[keep], np.nan), enemy_pick=picks,
+                enemy_events=sounds_)
 
 
 def parse(demo, tmp):
@@ -2373,7 +3139,10 @@ def low_priority():
 
 
 def _big():
-    return [dict(label=b["label"], pos=[float(x) for x in b["pos"]]) for b in _W["info"]["big"]]
+    I = _W["info"]
+    return dict(big=[dict(label=b["label"], pos=[float(x) for x in b["pos"]]) for b in I["big"]],
+                open=[dict(label=b["label"], kind=b["kind"], pos=[float(x) for x in b["pos"]]) for b in I["open"]],
+                spawns=I["spawns"], teles=I["teles"])
 
 
 def _init(mp, tmp):
@@ -2431,7 +3200,7 @@ def run_map(mp, limit, procs, redo):
     return files, res, big
 
 
-ABOUT2 = ("fights", "flick_curve", "view_travelling")
+ABOUT2 = ("fights", "flick_curve", "view_travelling", "openings", "sounds", "weapon_in_hand", "teleporters")
 
 
 def second_file(path):
@@ -2552,6 +3321,7 @@ def show(res):
     show_more(R, cols)
     show_fine(R, cols)
     show_fights(R, cols)
+    show_rest(R, cols)
 
 
 def show_more(R, cols):
@@ -2721,6 +3491,138 @@ def show_fights(R, cols):
     print(table(rows, ["", *cols]))
 
 
+def slim_map(v2):
+    """the second file's groups of a map alone, cut to what a map's own numbers can carry (the sums keep everything)"""
+    v2 = json.loads(json.dumps(v2))
+    v2.get("fights", {}).pop("pairs", None)
+    for c_ in [v2.get("fights", {}).get("all", {})] + [c_ for tab in v2.get("fights", {}).get("by", {}).values() for c_ in tab.values()]:
+        for k, short in (("when_taken", "taken_frags_for_less_of_him"), ("when_refused", "refused_frags_for_less_of_him"), ("when_neither", None)):
+            w_ = c_.pop(k, None)
+            if w_ and short:
+                c_[short] = w_.get("frags_for_less_of_him")
+    for k in ("by_angle_and_distance", "by_angle_and_weapon"):
+        v2.get("flick_curve", {}).pop(k, None)
+    if v2.get("sounds", {}).get("known"):                       # (a map's sounds: the baseline and every kind within 1200 units, the main numbers)
+        keep = ("n", "turned_10_toward_in_1s_share", "in_2s_share", "weapon_changed_in_2s_share", "blind_shot_toward_it_in_2s_share", "enemy_in_view_within_2s_share")
+        short = lambda c: {k: c.get(k) for k in keep if k in c}
+        v2["sounds"] = dict(known=True, baseline={"all": short(v2["sounds"]["baseline"].get("all", {}))},
+                            by_kind={nm: {"all": short(tab["all"])} for nm, tab in v2["sounds"]["by_kind"].items() if tab.get("all", {}).get("n", 0) >= 50})
+    for mode in ("travelling", "holding"):
+        tab = v2.get("weapon_in_hand", {}).get(mode)
+        if tab:
+            v2["weapon_in_hand"][mode] = {k: v for k, v in tab.items() if k == "all" or k in SEEN_BANDS}
+    return v2
+
+
+def openings_tables(maps, bot=None, min_lives=30, folder=None):
+    """one table a map from sim/pro_openings/<map>.json: a spawn point, the first item the pros take from it, how many of
+    their lives last 20 s and the commonest plan of those, and how the lives from that point go; bot: {map: rows of his
+    lives (SPAWN_COLS)} puts his lives beside it"""
+    out = []
+    for mp in maps:
+        f = os.path.join(folder or _W.get("open_dir") or os.path.join(ROOT, "sim", "pro_openings"), mp + ".json")
+        if not os.path.exists(f):
+            continue
+        P = json.load(open(f, encoding="utf-8"))
+        lab = list(P["items"].keys())
+        mine = np.array((bot or {}).get(mp) or [], np.int64).reshape(-1, len(SPAWN_COLS))
+        first = lambda fi, q=2: ", ".join("{} {}% ({} s)".format(x["item"], x["share"], x["seconds"]) for x in fi[:q])
+        way = lambda pl: " > ".join("{} {} s".format(it, sec) for it, sec in zip(pl["items"], pl["seconds"])) or "no item"
+        rows = []
+        for sp in P["spawns"]:
+            if sp["lives"] < min_lives or not sp.get("plans_of_the_lives_that_last_20s"):
+                continue
+            pls, go = sp["plans_of_the_lives_that_last_20s"], sp["how_its_lives_go"]
+            row = ["{}: near {}".format(sp["id"], sp["near"]), sp["lives"], first(sp["first_items"]), sp["lives_that_last_20s_share"], way(pls[0]), pls[0]["share"],
+                   round(sum(x["share"] for x in pls), 1), sp["stack_20s_on_of_those_median"], go["frag_for_him_within_30s_share"], go["frag_of_him_within_30s_share"]]
+            if bot is not None:
+                r = mine[mine[:, 0] == sp["id"]]
+                if len(r):
+                    b = spawn_summary(r, lab)
+                    his = np.array([[lab[k] if 0 <= k < len(lab) else None for k in x[1:4]] for x in r[r[:, 9] > 0]], object).reshape(-1, 3)
+                    on = lambda pl: [[y for y in x if y is not None] == pl["items"] for x in his.tolist()]
+                    hp = b["plans_of_the_lives_that_last_20s"]
+                    row += [len(r), first(b["first_items"], 1), b["lives_that_last_20s_share"], way(hp[0]) if hp else "", hp[0]["share"] if hp else None,
+                            round(100.0 * float(np.mean(on(pls[0]))), 1) if len(his) else None,
+                            round(100.0 * float(np.mean(np.any([on(pl) for pl in pls], axis=0))), 1) if len(his) else None, b["stack_20s_on_of_those_median"]]
+                else:
+                    row += [0, "", None, "", None, None, None, None]
+            rows.append(row)
+        if rows:
+            head = ["spawn point", "lives", "the first item (share of all lives, seconds after the spawn)", "lives that last 20 s, %", "their commonest plan", "its share of them, %",
+                    "their three commonest, %", "their stack 20 s on, median", "a frag for him within 30 s, % of all lives", "a frag of him, %"]
+            if bot is not None:
+                head += ["his lives there", "his first item", "his lives that last 20 s, %", "their commonest plan", "its share, %", "his on the pros' commonest plan, %",
+                         "on one of their three, %", "his stack 20 s on"]
+            out.append("\n{} ({} lives in all; a plan: the first three different items of weapons, armors and the mega in the first 15 s, of the lives that last 20 s):\n\n".format(
+                mp, P["lives"]) + table(rows, head))
+    return "\n".join(out)
+
+
+def show_rest(R, cols):
+    """the tables of openings, sounds, the weapon in hand, teleporters"""
+    m0 = cols[0]
+    if "openings" not in R[m0] or not R[m0]["openings"].get("known"):
+        return
+    Op = R[m0]["openings"]
+    print("\n### 18. After a spawn and after a frag ({})\n".format(m0))
+    keys = (("lives", "lives"), ("first_item_a_weapon_share", "first item a weapon, %"), ("first_item_an_armor_share", "an armor, %"), ("first_item_the_mega_share", "the mega, %"),
+            ("no_item_in_15s_share", "no item in 15 s, %"), ("seconds_to_the_first_weapon_median", "seconds to the first weapon, median"),
+            ("enemy_in_view_within_15s_share", "enemy in view within 15 s, %"), ("stack_20s_on_median", "stack 20 s on, median"), ("dead_within_20s_share", "dead within 20 s, %"),
+            ("frag_for_him_within_30s_share", "a frag for him within 30 s, %"), ("frag_of_him_within_30s_share", "a frag of him, %"))
+    print(table([[n] + [v.get(k) for k, _ in keys] for n, v in Op["after_a_spawn"].items()], ["after a spawn"] + [lbl for _, lbl in keys]))
+    print("\nThe first weapon: " + ", ".join("{} {}%".format(k, v) for k, v in Op["after_a_spawn"]["all"].get("first_weapon", {}).items()) +
+          ". Spawn points with 30 lives or more: {}; their commonest plan holds {}% of a point's lives on average, the three commonest {}%.".format(
+              Op["plans"]["spawn_points_with_30_lives"], Op["plans"]["commonest_plan_share_mean"], Op["plans"]["three_commonest_plans_share_mean"]))
+    if "after_a_frag" in Op:
+        keys = (("frags", "frags"), ("an_item_within_15s_share", "an item within 15 s, %"), ("enemy_in_view_again_within_15s_share", "the enemy in view again within 15 s, %"),
+                ("frag_for_him_within_30s_share", "a frag for him within 30 s, %"), ("frag_of_him_within_30s_share", "a frag of him, %"),
+                ("view_on_a_spawn_point_2_to_6s_on_share", "his view on a spawn point 2 to 6 s on, % of that time"))
+        print("\n" + table([[n] + [v.get(k) for k, _ in keys] for n, v in Op["after_a_frag"].items()], ["after a frag of his"] + [lbl for _, lbl in keys]))
+    tabs = openings_tables([m for m in cols if not m.startswith("all")])
+    if tabs:
+        print("\nThe openings a map (spawn points with 30 lives or more):\n" + tabs)
+    Sd = R[m0]["sounds"]
+    if Sd.get("known"):
+        print("\n### 19. What he does with a sound of the enemy's, the enemy out of view ({})\n".format(m0))
+        keys = (("n", "heard"), ("off_his_view_at_the_sound", "off his view at the sound, degrees"), ("degrees_gained_in_1s", "degrees turned toward it in 1 s"),
+                ("degrees_gained_in_2s", "in 2 s"), ("turned_10_toward_in_1s_share", "turned 10 or more toward it in 1 s, %"), ("in_2s_share", "in 2 s, %"),
+                ("movement_turned_60_in_1s_share", "his way turned by 60 or more in 1 s, %"), ("movement_turned_60_in_2s_share", "in 2 s, %"),
+                ("weapon_changed_in_2s_share", "weapon changed in 2 s, %"), ("blind_shot_toward_it_in_2s_share", "a blind shot toward it in 2 s, %"),
+                ("enemy_in_view_within_2s_share", "the enemy in view within 2 s, %"))
+        rows = [["no sound (the baseline)"] + [Sd["baseline"]["all"].get(k) for k, _ in keys]]
+        rows += [[nm] + [v["all"].get(k) for k, _ in keys] for nm, v in Sd["by_kind"].items()]
+        for d in SOUND_DIST:
+            rows.append(["no sound, " + d] + [Sd["baseline"][d].get(k) for k, _ in keys])
+            for nm in ("a jump", "a rocket fired", "the red armor picked up"):
+                if nm in Sd["by_kind"]:
+                    rows.append(["{}, {}".format(nm, d)] + [Sd["by_kind"][nm][d].get(k) for k, _ in keys])
+        print(table(rows, ["the sound"] + [lbl for _, lbl in keys]))
+    Qw = R[m0]["weapon_in_hand"]
+    if Qw.get("known"):
+        print("\n### 20. The weapon in his hand with nobody in view ({}); rail and lightning hum\n".format(m0))
+        keys = (("minutes", "minutes"), ("humming_share", "rail or lightning, %"), ("rail_share", "rail, %"), ("lightning_share", "lightning, %"), ("rockets_share", "rockets, %"),
+                ("machine_gun_share", "machine gun, %"), ("other_share", "another, %"))
+        rows = []
+        for mode in ("travelling", "holding"):
+            rows += [["{}: {}".format(mode, n)] + [v.get(k) for k, _ in keys] for n, v in Qw[mode].items()]
+        print(table(rows, [""] + [lbl for _, lbl in keys]))
+        ws = ("machine gun", "shotgun", "lightning", "rail", "rockets", "grenades", "plasma")
+        print("\n" + table([[n, v.get("minutes")] + [v.get(w_ + "_a_minute") for w_ in ws] for n, v in Qw["shots_with_nobody_in_view_for_1s"].items()],
+                            ["shots a minute with nobody in view for 1 s or more", "minutes", *ws]))
+    Tp = {m: R[m]["teleporters"] for m in cols}
+    if any(v.get("known") for v in Tp.values()):
+        print("\n### 21. Teleporters and high take-offs\n")
+        keys = (("teleporters_used", "teleporters used"), ("trips_a_ten_minutes", "trips a ten minutes"), ("speed_in_median", "speed going in, median"),
+                ("speed_out_median", "speed coming out, median"), ("jumped_as_he_came_out_share", "jumps within 0.2 s of the exit, %"),
+                ("in_the_air_as_he_went_in_share", "in the air as he went in, %"), ("plain_jumps_a_ten_minutes", "plain jumps a ten minutes"),
+                ("high_take_offs_a_ten_minutes", "high take-offs without a weapon a ten minutes"),
+                ("high_take_offs_share_of_his_jumps", "... % of his jumps"), ("rocket_take_offs_a_ten_minutes", "take-offs on his own rocket a ten minutes"),
+                ("grenade_take_offs_a_ten_minutes", "... on his own grenade"), ("plasma_take_offs_a_ten_minutes", "... on his own plasma"),
+                ("jumps_that_come_down_50_higher_a_ten_minutes", "plain jumps that come down 50 or more higher (a step in the air) a ten minutes"))
+        print(table([[lbl] + [Tp[m].get(k) for m in cols] for k, lbl in keys], ["", *cols]))
+
+
 ABOUT = dict(
     blind_shot="a shot (a weapon's ammunition going down) while the enemy has not been in his view for 1.0 s or more; in view = inside a cone of 55 degrees round his view, under 4000 units, a clear line through the map from his eye to the enemy's chest or head",
     landing="rockets and plasma: his view traced from his eye to the first wall; grenades: the simulator's grenade flight (700 units a second, lofted, gravity, bounces keep 0.65) to where it lies when the 2.5 s fuse ends. A blind shot that lands under 150 units from his eye is 'at his own feet' (a rocket jump, a shot at the floor): it is counted, but the numbers of the landing (distance, met, hit) and 'blind and away' are of the others",
@@ -2746,6 +3648,10 @@ ABOUT = dict(
     fights="an offer: a sighting (the enemy in view after 1 s or more out of it). Takes it: within 3 s he deals damage (a step of his hit counter) or is 150 units or more nearer to the enemy than at the sighting (at the last moment of the 3 s the enemy's place is known). Refuses it: neither of those, and the enemy is out of his view for 0.5 s at a stretch or he is 150 or more farther. How it goes: the damage he deals is counted from his hits (rocket 70, rail 80, a lightning cell 6, machine gun 5, a shotgun shell 40, grenade 60, plasma 20: a demo has no damage numbers), the damage he takes is his own health and armor going down; frags from the game's death notices (exact, also after a cut of the demo); a big item (mega, red, yellow armor) for him within 15 s, and for the enemy only where the server sent the enemy's pickup. The enemy's stack is a guess (enemy_estimate): 125 at his spawn, less the counted damage of his hits, more by pickups seen or heard, rising toward the pros' own stack by time since a spawn while unseen; checked at the demos' cuts to the other player (enemy_stack_guess_check). The index of a situation: taken / (taken + refused); index_model gives it for any mix of the sides as a logistic formula. 'Commits': he takes it and after the 3 s the view was never broken for 0.5 s, he is not 150 farther and he lives (commits_share is of all offers; commit_model is its formula); 'fires and leaves' is the rest of the taken ones. 'Taking pays': frags for less frags of him within 10 s when taken, less the same when refused",
     flick_curve="an appearance: a clear line to the enemy opens after 1 s or more without one, wherever his view points (the sightings elsewhere need the enemy inside the 55 degree cone; here the angle runs to 180). The weapon is that of his first shot within 3 s, else the one in his hand. Hits as in hit_combinations; of the first 0.5 s of fire: the shots of that weapon from his first shot on for 0.5 s and the hits of those shots",
     view_travelling="his view against the direction of his velocity while he moves at 350 or more with no enemy in view; and on every 16th such frame: his view within 20 degrees of one of the map's places (sim/pro_places) with a clear line to it and under 3000 units, and of 'the doorway': the first spot on the walking map's quickest way from where he last saw the enemy to himself that he has a clear line to (the place itself if he has a clear line to it)",
+    openings="a life begins within 100 units of a spawn point: the game's first frame, or the frame he is alive again. Its plan: the first three different items of weapons, armors (red, yellow, green) and the mega he takes in the next 15 s (a weapon: its ammunition rising at its spot), in their order. The killer's weapon and place: the enemy's in the 2 s before his death, where the demo has them. Frags within 30 s from the game's death notices. After a frag of his: the same plan from the frag on; 'his view on a spawn point': within 20 degrees of one with a clear line, from 2 to 6 s after the frag (the enemy is back after about 2.1 s). The files sim/pro_openings/<map>.json hold the plans a spawn point",
+    sounds="a sound: a new event on the enemy's entity while the server sends him (a jump, a jump pad, a shot by weapon, a pickup by kind), or his teleporter event; a stream of lightning, machine gun or plasma counts once, at its start. Counted when the enemy has been out of view for a second or more at that moment. His view's angle to the sound's place then, 1 s and 2 s later (the difference is the degrees gained); his way turned: the direction of his velocity differs by over 60 degrees (both speeds over 100); a blind shot toward it: a shot within 2 s with nobody in view and his view within 20 degrees of the sound's place. The baseline: every 20th frame with the enemy's place known, out of view for a second or more, and none of these sounds of his within a second either side (his steps on the ground are not among the kinds: they may be heard); the same numbers toward the enemy's place. 'all' is the sounds within 1200 units; the bands by distance hold the farther ones too",
+    weapon_in_hand="his time with no enemy in view, by the weapon in his hand: travelling (200 units a second or more, outside a hold) and holding (the holds group). Rail and lightning hum in the hand; the others are silent. By how long ago the enemy was in view, how far he is from where he last saw him, his stack. The shots: with nobody in view for 1 s or more, a minute of that time",
+    teleporters="a trip: a step in one frame that no movement makes (over 100 units and over four times his speed times the frame), to within 120 units of a teleporter's exit. The speed in: on the frame before; out: two frames after (medians from bands of 10). A jump as he comes out: 150 or more upward speed within 0.2 s. High take-offs: he leaves the ground with 300 to 480 upward speed, no rocket, grenade or plasma shot of his and no damage to him in the 0.3 s before, no teleporter (a plain jump gives 275). Take-offs on his own weapon: 300 or more upward speed with his rocket, grenade or plasma in the 0.3 s before. Plain jumps that come down 50 or more higher: the landing against the take-off, no weapon, damage, pad or teleporter on the way (the plain jump's top is 47 units: a step was taken in the air); plain_jumps_landing_higher_by is the share of the plain jumps that come down level or higher, by 8 units. The files sim/pro_tele_jumps/<map>.json list the teleporters, the landings only the jump reaches and the places of these take-offs",
     not_measured=[
         "whether a blind shot did damage, exactly: a demo has no damage events. The extra 'hit' is his own hit counter going up as the shot lands",
         "where the enemy is while the server does not send him (out of sight and away): 'met' misses an enemy who was there unseen, and a blind shot at an enemy heard is not told from one at nothing",
@@ -2810,7 +3716,14 @@ def main():
         if ways_dir:                                             # the ways as routes
             os.makedirs(ways_dir, exist_ok=True)
             with open(os.path.join(ways_dir, mp + ".json"), "w", encoding="utf-8") as f:
-                json.dump(pro_ways(T, mp, dict(big=big)), f)
+                json.dump(pro_ways(T, mp, dict(big=big["big"])), f)
+            for folder, made in (("pro_openings", pro_openings(T, mp, big)), ("pro_tele_jumps", pro_tele_jumps(T, mp, big))):
+                d_ = os.path.join(os.path.dirname(ways_dir), folder) if not a.ways else os.path.join(ways_dir, folder)
+                if folder == "pro_openings":
+                    _W["open_dir"] = d_                         # (the tables below read the files just written)
+                os.makedirs(d_, exist_ok=True)
+                with open(os.path.join(d_, mp + ".json"), "w", encoding="utf-8") as f:
+                    json.dump(made, f)
         if mp in MAPS.split(","):
             add_tally(total, T)
             for k, v in skips.items():
@@ -2844,15 +3757,12 @@ def main():
         for m, v in res["maps"].items():                        # a map alone: without the tables by pair
             v2 = {k: v[k] for k in GROUPS2 if k in v}
             if m not in ("all", "all_ten", "all_given"):
+                v2 = slim_map(v2)
+            else:
                 v2 = json.loads(json.dumps(v2))
-                v2.get("fights", {}).pop("pairs", None)
-                for c_ in [v2.get("fights", {}).get("all", {})] + [c_ for tab in v2.get("fights", {}).get("by", {}).values() for c_ in tab.values()]:
-                    for k, short in (("when_taken", "taken_frags_for_less_of_him"), ("when_refused", "refused_frags_for_less_of_him"), ("when_neither", None)):
-                        w_ = c_.pop(k, None)
-                        if w_ and short:
-                            c_[short] = w_.get("frags_for_less_of_him")
-                for k in ("by_angle_and_distance", "by_angle_and_weapon"):
-                    v2.get("flick_curve", {}).pop(k, None)
+                v2.get("weapon_in_hand", {}).pop("holding_by_cell", None)   # (under the map itself)
+                if m != "all":
+                    v2.get("fights", {}).pop("pairs", None)                 # (the tables by pair under "all" only)
             res2["maps"][m] = dict(demos=v.get("demos"), minutes=v.get("minutes"), **v2)
         first = dict(about={k: x for k, x in res["about"].items() if k not in ABOUT2},
                      maps={m: {k: x for k, x in v.items() if k not in GROUPS2} for m, v in res["maps"].items()})

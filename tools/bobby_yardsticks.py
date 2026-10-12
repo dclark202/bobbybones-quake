@@ -82,6 +82,12 @@ def play(job):
                     nav=nav_ if os.path.exists(nav_) else None)
     # ---- the game, as tools/duel_eval.py sets it up
     env.react_frames = round(pol.react_ms / 25)
+    # two delays the simulator reads from the run, not from the environment (the trainer's --react-ms and --acquire-ms):
+    # here as settings of this tool (--set ACQUIRE_MS=225), for trials of his aim
+    if envvars.get("REACT_MS"):
+        env.react_frames = round(float(envvars["REACT_MS"]) / 25)
+    if envvars.get("ACQUIRE_MS"):
+        env.acquire_frames = round(float(envvars["ACQUIRE_MS"]) / 25)
     env.arena_stack = False
     env.arena_sets = [(E.MG,)]
     env.loadout_p = (0.0, 1.0, 0.0, 0.0)
@@ -180,12 +186,43 @@ def play(job):
         dhp[1:], dar[1:] = B["hp"][1:, o] - B["hp"][:-1, o], B["ar"][1:, o] - B["ar"][:-1, o]
         picks = [[int(f), int(round(max(dhp[f], 0.0) + max(dar[f], 0.0))), int(dhp[f] >= 60 or dar[f] >= 40), int(dhp[f] > 0)]
                  for f in np.nonzero(oboth & near & ((dhp > 0) | (dar > 0)))[0]]      # what he sees or hears the enemy pick up
+        kinds = np.full(frames, -1, np.int64)                   # the kind of sound the enemy makes on a frame (pro_yardsticks.SOUND_KINDS)
+        up_ = np.zeros(frames, bool)
+        up_[1:] = ~B["air"][:-1, o] & B["air"][1:, o] & oboth[1:]
+        kinds[up_ & (B["vel"][:, o, 2] > 150.0)] = 0
+        kinds[up_ & (B["vel"][:, o, 2] > 480.0)] = 1
+        kinds[oboth & (dhp > 0) & (dhp < 20)] = 15
+        kinds[oboth & (dar > 0) & (dar < 20)] = 15
+        kinds[oboth & (dhp >= 20) & (dhp < 60)] = 14
+        got = np.zeros(frames, bool)
+        got[1:] = (B["has"][1:, o] & ~B["has"][:-1, o]).any(1)
+        kinds[oboth & got] = 13
+        kinds[oboth & (dar >= 20) & (dar < 40)] = 12
+        kinds[oboth & (dar >= 40) & (dar < 90)] = 11
+        kinds[oboth & (dar >= 90)] = 10
+        kinds[oboth & (dhp >= 60)] = 9
+        dam = np.zeros((frames, nw))
+        dam[1:] = B["ammo"][:-1, o] - B["ammo"][1:, o]
+        stream = {}
+        for wn_, kd in (("rl", 2), ("rg", 3), ("lg", 4), ("mg", 5), ("hmg", 5), ("sg", 6), ("gl", 7), ("pg", 8)):
+            for f in np.nonzero(oboth & (dam[:, list(E.WEAPONS).index(wn_)] > 0.5))[0]:
+                if kd in (4, 5, 8) and tm[f] - stream.get(kd, -9.0) < 0.5:      # a stream of fire: its start only
+                    stream[kd] = tm[f]
+                    continue
+                stream[kd] = tm[f]
+                kinds[f] = kd
+        jump_ = np.zeros(frames, bool)
+        st_ = np.linalg.norm(B["pos"][1:, o] - B["pos"][:-1, o], axis=1)
+        sp_ = np.linalg.norm(B["vel"][:, o], axis=1)
+        jump_[1:] = (st_ > 100.0) & (st_ > 4.0 * np.maximum(sp_[1:], sp_[:-1]) * E.DT + 40.0) & oboth[1:]   # (a teleporter: pro_yardsticks.teleports' rule)
+        kinds[jump_] = 16
+        events = [[int(f), int(kinds[f]), *[float(x) for x in B["pos"][f, o]]] for f in np.nonzero((kinds >= 0) & near)[0]]
         rec = Y.make_record(t=tm, pos=B["pos"][:, p], vel=B["vel"][:, p], yaw=B["yaw"][:, p], pitch=B["pitch"][:, p], weapon=B["w"][:, p],
                             shots=shots, health=np.where(dead, 0.0, B["hp"][:, p]), armor=B["ar"][:, p], score=B["score"][:, p], enemy=enemy,
                             enemy_score=B["score"][:, o], clock=tm, alive=alive, eye_h=np.where(B["duck"][:, p], 12.0, 26.0),
                             enemy_air=B["air"][:, o].astype(np.int64), hits=np.cumsum(up | B["frag"][:, p]), ammo=B["ammo"][:, p],
                             owned=B["has"][:, p], enemy_weapon=B["w"][:, o], client=np.full(frames, seed * 1000 + int(p)),
-                            ground=~B["air"][:, p], enemy_sound=snd, obits=obits, enemy_life=life, clock_exact=tm, enemy_pick=picks)
+                            ground=~B["air"][:, p], enemy_sound=snd, obits=obits, enemy_life=life, clock_exact=tm, enemy_pick=picks, enemy_events=events)
         t_, r_ = Y.measure(rec, env.w, info_)
         Y.add_tally(T, t_)
         for k in rows:
@@ -319,6 +356,45 @@ def fight_index(rows, model):
         out["by"][fname] = {levels[lv]: cell(rows[:, 3 + fi] == lv) for lv in range(len(levels)) if (rows[:, 3 + fi] == lv).any()}
     out["his_choice_against_the_index_correlation"] = round(float(np.corrcoef(he, pro)[0, 1]), 3) if he.std() > 0 and pro.std() > 0 else None
     return out
+
+
+def plans_match(tallies):
+    """his lives beside the pros' plans (sim/pro_openings/<map>.json), over the spawn points the pros have 30 lives or more
+    from: how many of his lives begin with the pros' commonest first item there, how many last 20 s, and of those how many
+    follow the pros' commonest plan there and how many one of their three commonest (the plans of the lives that last
+    20 s). tallies: {map: the rows of his lives (pro_yardsticks.SPAWN_COLS)}"""
+    lives = last = f1 = top1 = top3 = 0
+    pf, p1, p3, pl_, pn = 0.0, 0.0, 0.0, 0.0, 0
+    for mp, rows in tallies.items():
+        f = os.path.join(ROOT, "sim", "pro_openings", mp + ".json")
+        if not os.path.exists(f):
+            continue
+        pro = json.load(open(f))
+        lab = list(pro["items"].keys())
+        plans = {sp["id"]: sp for sp in pro["spawns"] if sp["lives"] >= 30 and sp.get("plans_of_the_lives_that_last_20s") and sp.get("first_items")}
+        for r in rows:
+            sp = plans.get(int(r[0]))
+            if sp is None:
+                continue
+            pp = sp["plans_of_the_lives_that_last_20s"]
+            mine = [lab[k] for k in r[1:4] if 0 <= k < len(lab)]
+            lives += 1
+            f1 += int(bool(mine) and mine[0] == sp["first_items"][0]["item"])
+            pf += sp["first_items"][0]["share"]
+            pl_ += sp["lives_that_last_20s_share"] or 0.0
+            pn += 1
+            if r[9] > 0:
+                last += 1
+                top1 += int(mine == pp[0]["items"])
+                top3 += int(any(mine == x["items"] for x in pp[:3]))
+                p1 += pp[0]["share"]
+                p3 += sum(x["share"] for x in pp[:3])
+    if not lives:
+        return {}
+    return dict(lives=lives, first_item_is_the_pros_commonest_share=round(100.0 * f1 / lives, 1), the_pros_themselves_share=round(pf / pn, 1),
+                lives_that_last_20s_share=round(100.0 * last / lives, 1), the_pros_lives_that_last_20s_share=round(pl_ / pn, 1), lives_that_last_20s=last,
+                on_the_pros_commonest_plan_share=round(100.0 * top1 / last, 1) if last else None, on_one_of_their_three_commonest_share=round(100.0 * top3 / last, 1) if last else None,
+                the_pros_themselves_on_their_commonest_share=round(p1 / last, 1) if last else None, on_their_three_commonest_share=round(p3 / last, 1) if last else None)
 
 
 def table(rows, head):
@@ -535,6 +611,61 @@ def show(res, pros):
                       ("view_at_the_doorway_the_enemy_would_come_through_share", "at the doorway the enemy would come through, %")):
             tv.append(row("{}: {}".format(lbl, kl), lambda r, lbl=lbl, k=k: r["view_travelling"][lbl][k]))
     print("\n" + table(tv, ["his view with nobody in view", *head]) + "\n")
+    if R["pros"].get("openings", {}).get("known"):
+        print("### 18. After a spawn and after a frag (each cell: {})\n".format(lead))
+        keys = (("lives", "lives"), ("first_item_a_weapon_share", "first item a weapon, %"), ("first_item_an_armor_share", "an armor, %"), ("first_item_the_mega_share", "the mega, %"),
+                ("no_item_in_15s_share", "no item in 15 s, %"), ("seconds_to_the_first_weapon_median", "seconds to the first weapon, median"),
+                ("enemy_in_view_within_15s_share", "enemy in view within 15 s, %"), ("stack_20s_on_median", "stack 20 s on, median"), ("dead_within_20s_share", "dead within 20 s, %"),
+                ("frag_for_him_within_30s_share", "a frag for him within 30 s, %"), ("frag_of_him_within_30s_share", "a frag of him, %"))
+        print(table([[n] + [three(lambda r, n=n, k=k: r["openings"]["after_a_spawn"][n][k]) for k, _ in keys] for n in R["pros"]["openings"]["after_a_spawn"]],
+                    ["after a spawn"] + [lbl for _, lbl in keys]))
+        print("\n" + table([row("spawn points with 30 lives or more", lambda r: r["openings"]["plans"]["spawn_points_with_30_lives"]),
+                             row("their commonest plan holds, % of a point's lives", lambda r: r["openings"]["plans"]["commonest_plan_share_mean"]),
+                             row("the three commonest, %", lambda r: r["openings"]["plans"]["three_commonest_plans_share_mean"])], ["plans", *head]))
+        pm_ = res.get("plans_match", {})
+        lr_ = res.get("lives_rows", {})
+        pm_ = {k: plans_match(lr_[k]) for k in lr_} if lr_ else pm_          # (set beside the pros' files as they are now)
+        if any(pm_.get(k) for k, _ in WHO[1:]):
+            cols_ = (("lives", "lives"), ("first_item_is_the_pros_commonest_share", "his first item is the pros' commonest there, %"), ("the_pros_themselves_share", "the pros themselves, %"),
+                     ("lives_that_last_20s_share", "lives that last 20 s, %"), ("the_pros_lives_that_last_20s_share", "the pros', %"),
+                     ("on_the_pros_commonest_plan_share", "of those: on the pros' commonest plan, %"), ("the_pros_themselves_on_their_commonest_share", "the pros themselves, %"),
+                     ("on_one_of_their_three_commonest_share", "on one of their three commonest, %"), ("on_their_three_commonest_share", "the pros themselves, %"))
+            print("\n" + table([[lbl] + [pm_[k].get(c) for c, _ in cols_] for k, lbl in WHO[1:] if pm_.get(k)],
+                                ["his lives beside the pros' plans of the same spawn point"] + [h for _, h in cols_]))
+        keys = (("frags", "frags"), ("an_item_within_15s_share", "an item within 15 s, %"), ("enemy_in_view_again_within_15s_share", "the enemy in view again within 15 s, %"),
+                ("frag_for_him_within_30s_share", "a frag for him within 30 s, %"), ("frag_of_him_within_30s_share", "a frag of him, %"),
+                ("view_on_a_spawn_point_2_to_6s_on_share", "his view on a spawn point 2 to 6 s on, %"))
+        print("\n" + table([[n] + [three(lambda r, n=n, k=k: r["openings"]["after_a_frag"][n][k]) for k, _ in keys] for n in R["pros"]["openings"].get("after_a_frag", {})],
+                            ["after a frag of his"] + [lbl for _, lbl in keys]))
+        tabs = Y.openings_tables(res.get("maps", []), bot=lr_.get("self") or {})
+        if tabs:
+            print("\nThe openings a map (spawn points with 30 lives of the pros or more; his lives against himself beside them):\n" + tabs)
+        print("\n### 19. What he does with a sound of the enemy's, the enemy out of view (each cell: {})\n".format(lead))
+        keys = (("n", "heard"), ("degrees_gained_in_1s", "degrees turned toward it in 1 s"), ("degrees_gained_in_2s", "in 2 s"), ("turned_10_toward_in_1s_share", "turned 10 or more toward it in 1 s, %"),
+                ("movement_turned_60_in_2s_share", "his way turned by 60 or more in 2 s, %"), ("weapon_changed_in_2s_share", "weapon changed in 2 s, %"),
+                ("blind_shot_toward_it_in_2s_share", "a blind shot toward it in 2 s, %"), ("enemy_in_view_within_2s_share", "the enemy in view within 2 s, %"))
+        rows = [["no sound (the baseline)"] + [three(lambda r, k=k: r["sounds"]["baseline"]["all"][k]) for k, _ in keys]]
+        rows += [[nm] + [three(lambda r, nm=nm, k=k: r["sounds"]["by_kind"][nm]["all"][k]) for k, _ in keys] for nm in R["pros"]["sounds"].get("by_kind", {})]
+        print(table(rows, ["the sound"] + [lbl for _, lbl in keys]))
+        print("\n### 20. The weapon in his hand with nobody in view (each cell: {}); rail and lightning hum\n".format(lead))
+        keys = (("minutes", "minutes"), ("humming_share", "rail or lightning, %"), ("rail_share", "rail, %"), ("lightning_share", "lightning, %"), ("rockets_share", "rockets, %"),
+                ("machine_gun_share", "machine gun, %"), ("other_share", "another, %"))
+        rows = []
+        for mode in ("travelling", "holding"):
+            rows += [["{}: {}".format(mode, n)] + [three(lambda r, mode=mode, n=n, k=k: r["weapon_in_hand"][mode][n][k]) for k, _ in keys] for n in R["pros"]["weapon_in_hand"][mode]]
+        print(table(rows, [""] + [lbl for _, lbl in keys]))
+        ws = ("machine gun", "shotgun", "lightning", "rail", "rockets", "grenades", "plasma")
+        print("\n" + table([[n] + [three(lambda r, n=n, w_=w_: r["weapon_in_hand"]["shots_with_nobody_in_view_for_1s"][n][w_ + "_a_minute"]) for w_ in ws]
+                             for n in R["pros"]["weapon_in_hand"]["shots_with_nobody_in_view_for_1s"]], ["shots a minute with nobody in view for 1 s or more", *ws]))
+        print("\n### 21. Teleporters and high take-offs\n")
+        keys = (("trips_a_ten_minutes", "teleporter trips a ten minutes"), ("speed_in_median", "speed going in, median"), ("speed_out_median", "speed coming out, median"),
+                ("jumped_as_he_came_out_share", "jumps within 0.2 s of the exit, %"), ("in_the_air_as_he_went_in_share", "in the air as he went in, %"),
+                ("plain_jumps_a_ten_minutes", "plain jumps a ten minutes"),
+                ("high_take_offs_a_ten_minutes", "high take-offs without a weapon a ten minutes"), ("high_take_offs_share_of_his_jumps", "... % of his jumps"),
+                ("rocket_take_offs_a_ten_minutes", "take-offs on his own rocket a ten minutes"), ("grenade_take_offs_a_ten_minutes", "... on his own grenade"),
+                ("plasma_take_offs_a_ten_minutes", "... on his own plasma"),
+                ("jumps_that_come_down_50_higher_a_ten_minutes", "plain jumps that come down 50 or more higher (a step in the air) a ten minutes"))
+        print(table([row(lbl, lambda r, k=k: r["teleporters"][k]) for k, lbl in keys], ["", *head]) + "\n")
     st = res.get("standing", {})
     if st:
         print("### 8. With the enemy in view: weapons, distance, outcome, and the strength of where he stands\n")
@@ -561,6 +692,22 @@ def show(res, pros):
         print(table(rows, ["", *head]))
 
 
+def merged(path):
+    """his json with the second file's groups put back into its maps"""
+    import pro_yardsticks as Y
+    res = json.load(open(path, encoding="utf-8"))
+    f2 = Y.second_file(path)
+    if os.path.exists(f2):
+        r2 = json.load(open(f2, encoding="utf-8"))
+        for k in ("fight_index", "plans_match", "lives_rows"):
+            if r2.get(k):
+                res[k] = r2[k]
+        for opp in ("self", "nightmare"):
+            for m, v in r2.get(opp, {}).items():
+                res.get(opp, {}).get(m, {}).update(v)
+    return res
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--policy", default=os.path.join(ROOT, "data", "sim_runs", "duel_gru_v15c", "policy_end_v15c.pt"))
@@ -581,7 +728,7 @@ def main():
     import pro_yardsticks as Y0
     pros = Y0.load_both(a.pros)
     if a.show:
-        return show(json.load(open(a.show, encoding="utf-8")), pros)
+        return show(merged(a.show), pros)
     low_priority()
     envvars = dict(x.split("=", 1) for x in SETS.split())
     envvars.update(dict(x.split("=", 1) for x in a.set))
@@ -611,7 +758,7 @@ def main():
         rs = [r for r in res if r["opp"] == opp]
         if not rs:
             continue
-        total, per, rows, frows = Y.new_tally(), {}, {}, []
+        total, per, rows, frows, lives = Y.new_tally(), {}, {}, [], {}
         for r in sorted(rs, key=lambda r: maps.index(r["map"])):
             per[r["map"]] = Y.report(r["tally"], zrange=zr)
             ag = per[r["map"]]["aggression"]                    # (a map alone is too thin for the tables by two and more sides)
@@ -624,13 +771,14 @@ def main():
             for v in per[r["map"]]["hands"]["accuracy"].values():
                 for k in [k for k in v if k != "all"]:
                     v.pop(k)
-            per[r["map"]]["fights"].pop("pairs", None)
-            per[r["map"]]["flick_curve"].pop("by_angle_and_distance", None)
+            per[r["map"]].get("weapon_in_hand", {}).pop("holding_by_cell", None)
+            per[r["map"]].update(Y.slim_map({k: per[r["map"]][k] for k in Y.GROUPS2 if k in per[r["map"]]}))
             ab = per[r["map"]]["fight_movement"]["after_a_big_hit"]
             per[r["map"]]["fight_movement"]["after_a_big_hit"] = {k: ab[k] for k in ("all", "enemy in view at the hit") if k in ab}
             Y.add_tally(total, r["tally"])
             rows[r["map"]] = (r["rows"]["sight"], r["rows"]["view"])
             frows.append(np.asarray(r["rows"]["fight"], np.int64).reshape(-1, len(Y.FIGHT_COLS)))
+            lives[r["map"]] = r["tally"].get("openings", {}).get("spawn:" + r["map"], [])
             if opp == "nightmare":
                 f = np.array(r["final"], np.float64)
                 out["score"][r["map"]] = [round(float(f[:, 0].mean()), 1), round(float(f[:, 1].mean()), 1)]
@@ -638,8 +786,14 @@ def main():
         for o in alls["predictability"]["maps"].values():
             o["routes"].pop("by_pair", None)
         alls["holds"].pop("top_cells", None)                    # (under the map itself)
+        alls["fights"].pop("pairs", None)                       # (two sides at once: too thin on a set of games; the pros' file has them)
+        if alls.get("sounds", {}).get("known"):                 # (a sound by distance: the same)
+            alls["sounds"]["baseline"] = {"all": alls["sounds"]["baseline"].get("all", {})}
+            alls["sounds"]["by_kind"] = {nm_: {"all": tab_["all"]} for nm_, tab_ in alls["sounds"]["by_kind"].items()}
         out[opp] = dict(all=alls, **per)
         out["standing"][opp] = standing(rows)
+        out.setdefault("plans_match", {})[opp] = plans_match(lives)
+        out.setdefault("lives_rows", {})[opp] = {m: [[int(x) for x in r_] for r_ in v] for m, v in lives.items()}   # (his lives as rows: SPAWN_COLS)
         md = pros["maps"]["all"].get("fights", {}).get("index_model")
         if md and frows:
             out.setdefault("fight_index", {})[opp] = fight_index(np.concatenate(frows), md)
@@ -651,8 +805,13 @@ def main():
                 out["cells"][opp][mp] = PP.cells(sight, view, PP.expected(sight), PP.map_items(mp))
     out["standing"]["pros"] = pros_standing(maps)
     path = a.json or os.path.join(ROOT, "docs", "bobby_yardsticks_{}.json".format(a.tag))
+    out2 = dict(tag=out["tag"], policy=out["policy"], fight_index=out.pop("fight_index", {}), plans_match=out.pop("plans_match", {}), lives_rows=out.pop("lives_rows", {}))
+    for opp in ("self", "nightmare"):
+        if opp in out:
+            out2[opp] = {m: {k: v.pop(k) for k in Y.GROUPS2 if k in v} for m, v in out[opp].items()}
     Y.dump_json(out, path, 5)
-    show(out, pros)
+    Y.dump_json(out2, Y.second_file(path), 5)
+    show(merged(path), pros)
 
 
 if __name__ == "__main__":
