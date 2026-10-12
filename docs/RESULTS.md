@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-12](results/2026-10-12.md)
+
+- 05:00 — v0.2 at seven hours: 56.7% against v0.1, all of the gain on the four maps v0.1 never played games on; his way of playing has not moved (scorecard 47%); stages B and C all built and merged in a copy
+
 ## [2026-10-11](results/2026-10-11.md)
 
 - 23:40 — v0.2 plays on a real server (private, both plugins: its 143 inputs and the attention part); stage B parts 1 and 2 and stage C part 1 built in copies; the checks' noise measured (the same network against itself: 48.8%)
