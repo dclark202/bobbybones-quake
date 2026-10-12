@@ -73,6 +73,29 @@ it moves his chance of winning "yes"; late-game rounds from drawn states "yes, u
 - Checks: the same network in whole games against two-minute rounds (does anything break when a game runs ten minutes:
   items, clocks, memory resets); what a game pays in all against today.
 
+**Built 2026-10-12 night** (patch scripts with their checks, in a copy; not on the card). With the switches off fixed
+runs are bit for bit; a whole game ends once at its 24,000th frame with clock, score and items right on every frame;
+late rounds are drawn as specified. What the build changed in the specification, and what is the owner's to decide:
+
+- **The pay is per frame, not per frag.** The chance of winning moves with the clock too: paid at frags alone, falling
+  one behind early and levelling late would pay 1.4 for an unchanged chance. So every frame pays the change, a frag's
+  frame carries the step, and between frags the leader gets a trickle (one ahead for a whole game: about 3.1 of the
+  4.1 a won game pays in all). The two players' pays sum to zero on every frame and a game's sum is exactly the
+  scale times the change in chance. An enemy's death by his own hand pays him.
+- **The table** is from 300 demos read tonight (257 games; the whole archive is 33 minutes at one process). One frag
+  ahead with ten minutes left is 62%, at 3:00 66%, at 1:00 73%, at 0:30 81%; three ahead at 3:00 89%. The frag that
+  breaks a level score with 30 seconds left pays 2.5 times an opening frag; a frag when five ahead with a minute left
+  pays nothing.
+- **For the owner**: the pros' pairings are uneven, so in their games a lead also says who is the better player; between
+  equal players one ahead at 10:00 is 58%, not 62%, and the late level-breaking frag is worth 4 opening frags, not 2.5.
+  His own games are between near-equals. The table can be the pros' as it is, the same model for equal players, or
+  counted from his own league games (a collector for those is not built).
+- **Whole games fill slowly.** A ten-minute game is 4.8 hours of a run at today's speed and a late round 1.4 hours; a
+  restart of the trainer loses every game in progress. Starting some matches in the middle of a game at a run's start
+  would cure it and is not built.
+- Whole games are duels only (17 of v0.2's 30 simulators); a network trained on them needs the game's clock and score
+  on a server and in the checks, which neither has yet.
+
 ## Part 5. The pros' choices as a small standing pull
 
 Owner: "yes". After part 2. A table from the demos: by situation (his stack band, the enemy's time alive, the items
