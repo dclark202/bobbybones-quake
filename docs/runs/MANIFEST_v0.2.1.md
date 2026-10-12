@@ -120,7 +120,7 @@ their middle); several ways; legs that run and look (not learnt in two trainings
 | 7 | Level check of the opened place choice against the control | evenly at 5% of all his readings: 44.7% in 128 games (42-7-79), a fail: a place holds like an item, 5% of readings was 19% of his time and came out of the armors' time. Out of his "nothing" only: 48.0% in 128. The same and left for an item at any reading (`TARGETS_FREE=2`): **50.9% in 160 games (86-9-65)**, the mega 43.6% of its spawns against the control's 44.6% |
 | 8 | The second aim step | **pending** |
 | 9 | The size of the height pay | v0.2's end against itself, the same games at four sizes: 14% of his damage is dealt from above, 11% from below; 0.25 moves 3.1% of his pay between the two players (0.1: 1.25%, would drown in the entropy bonus; 0.5: 6.25%, a rule and not a nudge) |
-| 10 | The weighted draw of lives at the start | **pending** |
+| 10 | The weighted draw of lives at the start | by the draw alone rockets in hand with the enemy in view 21.9% to 33.4%, rockets' share of his frags 17% to 28%. Leg 2's baseline, frags a death under the mix: rockets life 0.83, general 0.91, rail 0.80, lightning 1.18 |
 | 11 | The weapon-in-hand pull and leg 2's first step on the card | dry run of 13:50, two updates: 13.1 GB; his step 0.043 then 0.026, of it his weapon key 0.009 then 0.0003 at the full weight; 6.3 then 1.5 weapon changes a minute; lives drawn 36 / 41 / 9 / 14%. Where the lesson speaks his hand is already the pros' while travelling (rockets 62% against 60%) and differs only while holding a place (30% against 73%; 2% of his time) |
 | 12 | The people scale with v0.1's first day | v0.1: 32% of 185 frags against four people, rating 1269 (v14's end 1251); in real games 14% of 119 |
 
