@@ -4,6 +4,7 @@
     python tools/targets_init.py never <file.pt> [<file.pt> ...]       (in place: the control, the league's files)
     python tools/targets_init.py collect <policy.pt> <map> <out.npz>   (a map a process; Anaconda Python)
     python tools/targets_init.py open <in.pt> <out.pt> [--share 0.05] [<npz> ...]
+    python tools/targets_init.py open <in.pt> <out.pt> --from-nothing 0.03
     python tools/targets_init.py gate <file.pt> <value> [kind=hold]    (in place: an attention network's new tokens)
 
 What every one of them does first (widen): the inputs are widened to the simulator's (new inputs are its last: zero
@@ -21,6 +22,11 @@ open:    the eight places share about --share of the intention's probability in 
          (no fit: where he goes is his to find; the item rule's lesson leaves the places alone). The bias is solved so
          that the mean share over the states of `collect` is --share; without such files, from the old choices' biases
          alone (said so: it is then right only where his memory says little).
+         --from-nothing s: the places open out of his "nothing" only. Each place's row is a copy of the row of "nothing"
+         (weights and bias) less log(8 / s), and "nothing" keeps the share 1 - s of what it had: in every state every
+         item is chosen exactly as often as before at a reading, and of the readings he would have chosen nothing at,
+         a share s is a place (evenly). No states needed. (2026-10-12: the even opening at 5% of all readings was 22%
+         of his time on Blood Run and came out of the armors' time: 38% of the frags against the same network.)
 collect: the network plays itself in games; at one frame in TARGETS_KEEP (12) a living player's memory gives what his
          old choices weigh together (the log of the sum of their exponentials). TARGETS_GAMES (24), TARGETS_MINUTES (6).
 gate:    the gate of a kind's tokens (0: looked at as any token). Opening it changes his answers a little at once: do it
@@ -187,7 +193,7 @@ def collect(policy, mapname, out):
         mapname, len(c), float(c.mean()), float(c.min()), float(c.max()), float(np.exp(n0 - c).mean())), flush=True)
 
 
-def open_(policy, out, share, files, inputs):
+def open_(policy, out, share, files, inputs, from_nothing=None):
     E = _env()
     import numpy as np
     import torch
@@ -197,6 +203,20 @@ def open_(policy, out, share, files, inputs):
     sd = ck["model"]
     I = E.INTENT_HEAD
     o = sum(E.ACTION_DIMS[:I])
+    if from_nothing is not None:                              # the places out of "nothing" only: exact, in every state
+        s_ = float(from_nothing)
+        assert 0.0 < s_ < 1.0, s_
+        a, b = o + E.HOLD_INTENT, o + E.HOLD_INTENT + E.HOLD_SLOTS
+        with torch.no_grad():
+            sd["pi.weight"][a:b] = sd["pi.weight"][o].clone()
+            sd["pi.bias"][a:b] = sd["pi.bias"][o] + float(np.log(s_ / E.HOLD_SLOTS))
+            sd["pi.bias"][o] = sd["pi.bias"][o] + float(np.log(1.0 - s_))
+        ck["targets_init"] = dict(from_nothing=s_, source="the row of 'nothing'")
+        torch.save(ck, out)
+        say("the holding places opened out of 'nothing'", out, ck, extra, fresh)
+        print("  of the readings he would have chosen nothing at, {:.1%} are a place now (evenly among the {}); every item's share is what it was".format(
+            s_, E.HOLD_SLOTS))
+        return
     if files:
         c = np.concatenate([np.load(f)["c"] for f in files]).astype(np.float64)
         src = "{} states of {} files".format(len(c), len(files))
@@ -259,7 +279,12 @@ if __name__ == "__main__":
             i = args.index("--share")
             share = float(args[i + 1])
             del args[i:i + 2]
-        open_(args[1], args[2], share, args[3:], inputs)
+        from_nothing = None
+        if "--from-nothing" in args:
+            i = args.index("--from-nothing")
+            from_nothing = float(args[i + 1])
+            del args[i:i + 2]
+        open_(args[1], args[2], share, args[3:], inputs, from_nothing)
     elif args[0] == "gate":
         gate(args[1], float(args[2]), dict(x.split("=", 1) for x in args[3:]).get("kind", "hold"))
     else:

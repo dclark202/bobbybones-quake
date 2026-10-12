@@ -287,7 +287,9 @@ def main():
             if v_ is not None:
                 sets[k_] = str(v_)
         jobs = [(m, a.policy, a.games, a.minutes, 100 + i, sets, a.mode, a.labels) for i, m in enumerate(maps)]
-        with mp_.Pool(min(a.procs, len(jobs))) as pool:
+        sys.path.insert(0, SIM)
+        import pin                                           # (PIN_CORES: a pool worker on a processor of its own)
+        with mp_.Pool(min(a.procs, len(jobs)), initializer=pin.pin_pool_worker) as pool:
             res = pool.map(play, jobs)
         segs = sum((s for _, s in res), [])
         out = dict(tag=a.tag or (a.labels + "'s pupil" if a.labels else os.path.basename(os.path.dirname(os.path.abspath(a.policy)))),

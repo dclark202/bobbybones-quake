@@ -308,7 +308,10 @@ N_EN = 1                                                   # one more input (the
 # from then on he may choose anew at every reading, as after a pickup, but it stays his target for as long as he chooses
 # it, and his legs do nothing while he stands there (he holds it on his own feet; they carry him back when he has left
 # it). Before he has reached it the choice holds as an item's does (INTENT_HOLD), unless TARGETS_FREE=1: then a place
-# can be left at any reading, as "nothing" can. Nothing is paid for it: no pay for the way, none for speed on it, no
+# can be left at any reading, as "nothing" can. TARGETS_FREE=2 (2026-10-12): a place is left at any reading for an
+# ITEM and for nothing else (a place held for 8 s cost him the mega: a place opened at 5% of his readings was 22% of
+# his time and 38% of the frags against the same network on Blood Run); so an item is chosen when he would have
+# chosen it from "nothing", and a place is not dropped for "nothing" or another place at the next reading. Nothing is paid for it: no pay for the way, none for speed on it, no
 # pay for being there, and leaving it costs nothing (INTENT_SWITCH is not charged). In an item run or a jump run the
 # target is given, so a place is never one there. The item rule's lesson (intent_teach, the intention's teacher): where
 # the rule names no item its label is -1 with the switch on, and the trainer leaves such a frame out, so that what he
@@ -317,7 +320,7 @@ N_EN = 1                                                   # one more input (the
 # A game server's plugin, which does not call step(): note_holds() every frame (the place reached).
 HOLD_INTENT, HOLD_SLOTS = 9, 8                             # the first place among the intentions; how many
 TARGETS = float(os.environ.get("TARGETS") or 0.0) > 0
-TARGETS_FREE = float(os.environ.get("TARGETS_FREE") or 0.0) > 0
+TARGETS_FREE = int(float(os.environ.get("TARGETS_FREE") or 0.0))
 HOLD_R, HOLD_Z = 96.0, 64.0
 assert INTENTS[HOLD_INTENT] == "H1" and len(INTENTS) == HOLD_INTENT + HOLD_SLOTS
 # WAYS (stage B part 3, docs/design/V02_STAGE_B.md; owner, 2026-10-11: "Yes"; his "main failure point is that their routes are
@@ -3780,8 +3783,10 @@ class DuelEnv:
             choice = np.where(choice == EN_INTENT, 0, choice)
         choice = np.where(choice >= HOLD_INTENT + self.hold_n, 0, choice)     # (a holding place: only with TARGETS, and one the map has)
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD) | self.intent_gone     # a choice holds (INTENT_HOLD)
-        if TARGETS_FREE:                                     # (a holding place can be left at any reading, as "nothing")
+        if TARGETS_FREE == 1:                                # (a holding place can be left at any reading, as "nothing")
             may = may | (self.intent >= HOLD_INTENT)
+        elif TARGETS_FREE >= 2:                              # (... for an item only)
+            may = may | ((self.intent >= HOLD_INTENT) & (choice >= 1) & (choice < HOLD_INTENT))
         live = live & may
         changed = live & (choice != self.intent)
         self.intent = np.where(live, choice, self.intent)

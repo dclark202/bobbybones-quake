@@ -28,6 +28,7 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
+import pin  # noqa: E402  (PIN_CORES: a pool worker on a processor of its own)
 
 
 def names(path):
@@ -250,7 +251,7 @@ def main():
         per = [a.games // a.procs + (1 if k < a.games % a.procs else 0) for k in range(a.procs)]
         jobs = [(a.env, envvars, mp, g, a.minutes, a.seed + 17 * k, pol, idx, kind, opp_pol, opp_idx,
                  a.round or (180.0 if mp == "arena1" else 120.0), a.swap and k % 2 == 1, delays) for k, g in enumerate(per) if g > 0]
-        with mp_.Pool(len(jobs)) as pool:
+        with mp_.Pool(len(jobs), initializer=pin.pin_pool_worker) as pool:
             res = pool.map(play, jobs)
         sc = np.concatenate([np.array(r["score"]) for r in res])
         kl = np.concatenate([np.array(r["kills"]) for r in res])
