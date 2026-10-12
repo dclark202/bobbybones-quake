@@ -1,4 +1,4 @@
-# v0.2: the midway report (2026-10-12, 06:30; numbers to 05:00)
+# v0.2: the midway report (2026-10-12, 06:30; numbers to 06:00)
 
 **Which run is which.** v0.2 is `duel_gru_v0_2`: v0.1 (v15c's end, on the public server) with attention stage A, 143
 new inputs, the two-minute value estimate, the hop-gain pay, the first aim step and games on all ten maps
@@ -7,26 +7,26 @@ control in every check is v0.1.
 
 ## In short
 
-- **The run is healthy**: 97 updates in seven hours, one every 4.3 minutes, no stall, nothing changed in it.
-- **He is stronger than v0.1, and all of it is on the four maps v0.1 never played games on.** 56.7% of the frags at the
-  last check (90 games won, 14 drawn, 56 lost). On Cure, Hektik, Campgrounds and Toxicity 62%; on the six maps both
-  know 53%, which is inside the checks' noise.
+- **The run is healthy**: 111 updates in eight hours, one every 4.2 minutes, no stall, nothing changed in it.
+- **He is stronger than v0.1, and all of it is on the four maps v0.1 never played games on.** 56.9% of the frags at the
+  last check (100 games won, 8 drawn, 52 lost), and flattening: 54.8, 56.1, 56.7, 56.9 over four hours. On Cure, Hektik,
+  Campgrounds and Toxicity 64%; on the six maps both know 52%, which is inside the checks' noise.
 - **No sign of overfitting**: against the stand-in 72% to 75% over twelve maps, the two maps he never trains on level
   (House of Decay 77% to 75%, Dismemberment 58% to 60%).
 - **His way of playing has not moved yet.** The scorecard beside the pros reads 47% as it did at the start (49%, v0.1
-  47%). Of the seven things the owner wants to see, none has moved beyond noise in seven hours; three small moves
+  47%). Of the seven things the owner wants to see, none has moved beyond noise in eight hours; three small moves
   point the right way (below).
 - **Built beside it**: v0.2 plays on a real server (for the noon game), and all of stages B and C exist as tested patch
   scripts that apply together. None of B and C has run on the graphics card.
 
 ## 1. The run
 
-| | Start | Now (update 97, 05:00) |
+| | Start | Now (update 111, 06:00) |
 |---|---|---|
-| Frames a second | 14,230 | 14,580 |
+| Frames a second | 14,230 | 14,720 |
 | His step in an update | 0.021 | 0.017 |
-| The door: share of his memory's input that comes through the attention part | 1.7% | 33% |
-| The two-minute count: what it adds to his credit | 1.5% | 30% |
+| The door: share of his memory's input that comes through the attention part | 1.7% | 36% |
+| The two-minute count: what it adds to his credit | 1.5% | 33% |
 | The hop-gain pay, a player-minute | 0.175 | 0.18 |
 | The card | 13.4 GB of 16 | 13.6 GB |
 
@@ -44,9 +44,10 @@ Against v0.1, seats swapped, 160 ten-minute games a check, his share of the frag
 | 01:19 | 54 | 49 | 54 | 50 | 51 | 50 | 61 | 57 | 51 | 71 | 54.8 | 97-8-55 |
 | 02:17 | 52 | 54 | 51 | 54 | 47 | 54 | 56 | 59 | 55 | 81 | 56.1 | 96-12-52 |
 | 04:15 | 54 | 48 | 56 | 47 | 60 | 51 | 55 | 60 | 55 | 80 | 56.7 | 90-14-56 |
+| 05:17 | 53 | 49 | 52 | 53 | 56 | 51 | 59 | 60 | 54 | 81 | 56.9 | 100-8-52 |
 
-The six maps v0.1 was trained on: 48.3, 46.8, 51.3, 52.0, 52.7. The four it only had movement practice on: 49.5, 55.8,
-60.0, 62.8, 62.5. So far v0.2 has learnt four maps; on the other six it is level with v0.1. In the same games he keeps
+The six maps v0.1 was trained on: 48.3, 46.8, 51.3, 52.0, 52.7, 52.4. The four it only had movement practice on: 49.5,
+55.8, 60.0, 62.8, 62.5, 63.7. So far v0.2 has learnt four maps; on the other six it is level with v0.1. In the same games he keeps
 his stack better than v0.1 does (150 or more 53% of his time, at the start 43%; bare 8%, at the start 11%) and dies by
 his own hand less (0.9 a game against 1.2).
 
@@ -89,7 +90,7 @@ he is at the mega more often than the pros (53% against 47%), which the index co
 
 ## 5. What this says, plainly
 
-Stage A shows him more; in seven hours he has used it to play four more maps as well as he plays the six, not to play
+Stage A shows him more; in eight hours he has used it to play four more maps as well as he plays the six, not to play
 differently. That is what the plan said of it ("it passes if it is level with the control at the first check and
 ahead after a night, and the door has opened": both true), and why the plan had stages B and C: his targets, his ways
 and his legs are what hold speed, rockets, height and the choice of fights where they are, and stage A changes none of
