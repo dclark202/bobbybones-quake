@@ -750,6 +750,15 @@ NEAREST = float(os.environ.get("NEAREST") or 0.0) > 0
 #                 arrive, and lost Aerowalk to v13 12% to 88% within 17 minutes of every start of v14 (RESULTS
 #                 2026-10-10 09:30). His inputs still show the pros' way: he may choose it himself. Off by default.
 RULE_WALK = float(os.environ.get("RULE_WALK") or 0.0) > 0
+#   RULE_CONTEST=<seconds>   (2026-10-12; the owner: "we should be pushing him hard to prioritize knowing where the enemy is and
+#                 how that should inform what he does next") the item rule, his intention's teacher through a whole run, names the
+#                 nearest item he can use and never looks at the enemy: a template by construction. With the switch the rule's
+#                 lesson is SILENT (a negative label, as where it names nothing under TARGETS) on the frames he believes the enemy
+#                 (his own inputs' believed place, not the truth) nearer to the item it names than he is himself by this many
+#                 seconds of way or more: there what he goes for is his own to find, by what it pays him. Nothing is paid, nothing
+#                 else is taught. 0: off. A training switch: not a PLAY_VAR. Counted: stats["rule_contest"] (frames silenced,
+#                 frames the rule named an item for one of his seats).
+RULE_CONTEST = float(os.environ.get("RULE_CONTEST") or 0.0)
 # v15 (2026-10-10), both off by default:
 #   JUMPS=1       the pros' jumps that a walker cannot make (tools/pro_gaps.py -> sim/pro_gaps/<map>.json) are links of a
 #                 second set of ways (route_j), which are his in a jump run: a share of the playing time (JUMP_RUN_P, beside
@@ -2187,6 +2196,7 @@ class DuelEnv:
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
+                          rule_contest=np.zeros(2),                     # (RULE_CONTEST) frames the rule's lesson was silenced; frames it named an item
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
@@ -3650,6 +3660,24 @@ class DuelEnv:
         idx = np.arange(self.n) if who is None else np.asarray(who)
         near = np.linalg.norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
         self.resp_t[idx[near], cat] = 0.0
+
+    def _rule_contested(self, lab):
+        """(RULE_CONTEST) the players for whom the item the rule names (lab) is nearer, by RULE_CONTEST seconds of way or more,
+        to the place they believe the enemy at (his own inputs' belief: v02_bel, the frame before) than to themselves"""
+        out = np.zeros(self.n, bool)
+        R = self.route
+        bel, ok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
+        if R is None or bel is None or ok is None or len(bel) != self.n:
+            return out
+        ok = np.asarray(ok, bool) & (lab > 0)
+        if not ok.any():
+            return out
+        na, nb = R.locate(self.state[:, :3]), R.locate(np.asarray(bel, np.float32))
+        for gi, lb in enumerate(self.route_goal):
+            m = ok & (lab == INTENTS.index(lb)) if lb in INTENTS else None
+            if m is not None and m.any():
+                out |= m & (R.T[gi, nb] + RULE_CONTEST < R.T[gi, na])
+        return out
 
     def intent_rule(self):
         """a hand-written prior for the intention head, like the game bot's item table (owner, 2026-10-06: "seeding is
@@ -5538,6 +5566,10 @@ class DuelEnv:
                                      self.intent_teach)     # a drill or an aim round: nothing to fetch
         if TARGETS:                                          # where the rule names no item its lesson is silent (a negative label: the
             self.intent_teach = np.where((self.intent_teach == 0) & human, -1, self.intent_teach)   # trainer leaves the frame out)
+        if RULE_CONTEST > 0:                                 # ... and where he believes the enemy nearer to the item it names
+            rc_ = self._rule_contested(self.intent_teach) & human
+            self.stats["rule_contest"] += (float(rc_.sum()), float(((self.intent_teach > 0) & human).sum()))
+            self.intent_teach = np.where(rc_, -1, self.intent_teach)
         ch_ = (a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64)).copy()
         in_run = self.run_k >= 0
         ch_[in_run] = self.run_k[in_run]                    # an item run: the target is given, not chosen
