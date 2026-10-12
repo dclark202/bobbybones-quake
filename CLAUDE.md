@@ -44,8 +44,9 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   checked save plays it head to head, beside the stand-in; a network is promoted only if it beats the control.
 - **Names (owner, 2026-10-11)**: "The v15c bot that exists on the server is now: v0.1. We're building v0.2 currently, any
   exploration phases will get a further index e.g., v0.2.1, etc."; "v1.0 starts when he can beat me." v0.2 = ten maps, the
-  rocket changes, the enemy as a target and stage A of the attention model (`docs/runs/MANIFEST_v0.2.md`); the part ready
-  on 2026-10-11 is v0.2.1 (written up as `duel_gru_v15e`). Use these names in every report and give the old run name
+  rocket changes, the enemy as a target and stage A of the attention model (`docs/runs/MANIFEST_v0.2.md`); the write-up of
+  2026-10-11 that first carried the name v0.2.1 (`MANIFEST_v15e.md`) was never run; since 2026-10-12 v0.2.1 is the run after v0.2, from
+  its end, with stages B and C (`docs/runs/PROPOSAL_v0.2.1.md`). Use these names in every report and give the old run name
   once where a folder carries it.
 - No personal data in the repo (Steam IDs, home IP, Windows usernames, passwords). The repo is public.
 - The owner prefers concise answers and doable batches. Do not start a training run without his go-ahead when he
