@@ -57,6 +57,25 @@ that their routes are predictable". Owner: "Yes".
   own way inputs follow the way he chose. Where a pair has fewer ways the other choices are the shortest.
 - Measured, not paid: the share of his trips on the commonest way (57% today, the pros 43%).
 
+**Built 2026-10-12 night** (patch scripts with their checks, in a copy; not on the card). With `WAYS` off fixed runs
+are bit for bit; every set of ways arrives from every point of every map; flipping the way at every reading earns no
+more trip pay than keeping it. **The lever is small as built**:
+
+| | Ten maps |
+|---|---|
+| The pros' ways that are not the shortest | about 380 |
+| ... that need a drop or a jump the walking map lacks / are rocket jumps / cost over 1.5 times the shortest | 147 / 74 / 28 |
+| ... that his legs make when tried (5 of 6 tries) | 134 of 176 tried: 130 second ways, 4 third ways |
+| Starts from which the second way differs from the shortest | 9 to 24% by map |
+
+Blood Run's and Aerowalk's mega have no second way at all. Where there is one his legs really take another path (Blood
+Run's red armor: 39% of the path's points over 128 units from the shortest run; Aerowalk's yellow armor 73%). A new
+finding on the way: his legs do not make every link of the walking map (a drop onto a ledge on Blood Run sent him
+round for good), so a way counts only after his legs have made it (`sim/pro_ways_legs/<map>.json`, made again when his
+legs or the walking map change). What limits the choice is the walking map and his legs, not the choosing: the pros'
+other ways are mostly jumps and drops. It joins the jumps (B-204) and rocket jumps, which the owner asked to be
+reminded of after this run.
+
 ## Part 4. Whole games, and a frag paid by what it does to the game
 
 Why: only a whole game makes the score and the time left mean anything. Owner: whole games "Yes"; a frag paid by what
