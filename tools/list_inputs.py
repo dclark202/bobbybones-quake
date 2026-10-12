@@ -296,6 +296,62 @@ add("his legs", "the switch to his legs is on", "the movement network moves him 
     "0 or 1", "v15b")
 add("his legs", "his legs carried him on the last frame", "", "0 or 1", "v15b")
 add("intention", "his intention is the enemy", "the ninth intention (FIGHT_TARGET): his way leads to where he believes the enemy is", "0 or 1", "v15f")     # ---- the enemy as a target (2026-10-11)
+assert len(rows) == E.OBS_DIM - E.N_V02, (len(rows), E.OBS_DIM - E.N_V02)
+# ---- v0.2 (2026-10-11): stage A of the attention model, five groups (N_V02 in sim/duel_env.py; the tokens are cut by these group names)
+V02 = "v0.2"
+add("v02 game", "time left in the round", "the share of the round's length still to play (on a game server: of the game's time limit)", "0 to 1", V02)
+add("v02 game", "how loud he has been", "over the last 3 seconds: a frame of running steps counts one frame, a shot (not the gauntlet), a jump or a landing eight; "
+    "1 = heard all the time. Walking and crouching are silent", "0 to 1", V02)
+add("v02 game", "made a noise near a believed enemy", "in the last second he made such a noise while he believed an enemy within earshot (seen or heard in the "
+    "last 3 s, within 1,000 units of where he was). From what he believes, not from where the enemy is", "0 or 1", V02)
+BEL = "the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of"
+CELL = "from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)"
+add("v02 position", "height above the believed enemy", BEL + "; zero with nothing believed", "units / 300, between -1 and 1", V02)
+add("v02 position", "height among the map's standing places", "the share of the walking map's points that lie below him", "0 (lowest) to 1 (highest)", V02)
+add("v02 position", "pros in this cell: outcome over expected", "frags less deaths in the 10 s after a sighting that begins with a pro standing here, less what his stack and "
+    "the weapons would give anywhere; " + CELL, "/ 0.3, between -1 and 1", V02)
+add("v02 position", "pros in this cell: sightings", CELL, "log(1 + n) / log(1 + the map's busiest cell)", V02)
+for w_ in ("rockets", "rail", "lightning"):
+    add("v02 position", "pros in this cell: {} in hand".format(w_), "the share of their time here with the enemy in view; " + CELL, "share (0 to 1)", V02)
+add("v02 position", "pros in this cell: push share", "the share of their sightings here after which they close on the enemy at over 150 units a second; " + CELL, "share / 0.5, capped at 1", V02)
+add("v02 position", "this cell has numbers", CELL, "0 or 1", V02)
+add("v02 position", "places with a clear line", "how many of the eight place slots (v02 places) he has a clear line to from his eyes", "count / 8", V02)
+add("v02 believed", "a place is believed", BEL, "0 or 1", V02)
+for ax in XYZ:
+    add("v02 believed", "believed place: {}".format(ax), BEL + "; from him, turned to his facing; as old as his reaction time and with his error of sight while in view; zero with nothing believed",
+        "units / 1500, between -2 and 2", V02)
+HEARD = "heard: running within 800 units out of view, or any sound the simulator delivers (steps, jumps, landings, shots, a weapon's hum, pickups, teleporters)"
+add("v02 believed", "seconds since he last heard him", HEARD, "seconds / 20, capped at 1 (1: never in this round and life of his)", V02)
+for ax in XYZ:
+    add("v02 believed", "where he last heard him: {}".format(ax), "about where the sound came from, from where he stands now; zero if never", "units / 1500, between -2 and 2", V02)
+add("v02 believed", "how far he can have got since", "400 units for every second since he was last seen or heard", "units / 3000, capped at 1 (1: nothing believed)", V02)
+add("v02 believed", "way to the believed place", "seconds along the walking map from where he stands", "seconds / 15, capped at 1 (1: none, or nothing believed)", V02)
+for it_ in ("mega health", "red armor"):
+    add("v02 believed", "way from the believed place to the {}".format(it_), "seconds along the walking map", "seconds / 15, capped at 1 (1: the map has none, or nothing believed)", V02)
+add("v02 believed", "damage dealt to him this life", "the same number as the older input: what he knows he has hit for", "/ 200, capped at 2", V02)
+add("v02 believed", "seconds since his life began", "since the frag he made or heard; with none known, since the round began", "seconds / 60, capped at 1", V02)
+add("v02 believed", "his last death is known", "he made the frag or heard it", "0 or 1", V02)
+for it_ in ("the mega health", "the red armor", "a yellow or green armor"):
+    add("v02 believed", "times he took {} this life".format(it_), "pickups heard within 1,200 units or made in his view, since that player's last spawn", "count / 2, capped at 1", V02)
+for w_ in ("rockets", "rail", "lightning"):
+    add("v02 believed", "seen with {} this life".format(w_), "in his hands at some point since his last death (the same flag as the older memory input)", "0 or 1", V02)
+for lab in E.SLOTS:
+    add("v02 items", "since he took: nearest {}".format(NAMES[lab]), "seconds since HE last took the item the slot's own inputs describe", "seconds / 40, capped at 1 (1: not in this round, or the map has none)", V02)
+for what in ("nearest health (25 or 50)", "second nearest health", "nearest health bubble or armor shard", "second nearest bubble or shard"):
+    add("v02 items", "since he took: {}".format(what), "seconds since HE last took the item the slot's own inputs describe", "seconds / 40, capped at 1 (1: not in this round, or the map has none)", V02)
+PLACE = "one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list"
+for j in range(1, E.V02_SLOTS + 1):
+    for ax in XYZ:
+        add("v02 places", "place {}: {}".format(j, ax), PLACE, "units / 1500, between -2 and 2", V02)
+    add("v02 places", "place {}: distance".format(j), PLACE, "units / 2000, capped at 1.5", V02)
+    add("v02 places", "place {}: clear line".format(j), "the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)", "0 or 1", V02)
+    add("v02 places", "place {}: distance from the believed enemy".format(j), BEL, "units / 1500, capped at 1 (1: nothing believed)", V02)
+    add("v02 places", "place {}: share of the pros' blind shots".format(j), "of the map's rockets, grenades and plasma fired with nobody in view", "per cent / 15, capped at 1", V02)
+    add("v02 places", "place {}: pros meet the enemy there".format(j), "the share of their shots at it after which the enemy came into view near it within 2 s", "share (0 to 1)", V02)
+    add("v02 places", "place {}: pros hit the enemy there".format(j), "the share of their shots at it at whose landing a hit was counted; zero where it is not known", "share (0 to 1)", V02)
+    add("v02 places", "place {}: outcome over expected standing there".format(j), "as for his cell, for a pro seen standing within 128 units of it; zero where it is not known", "/ 0.3, between -1 and 1", V02)
+    add("v02 places", "place {}: nearest to the believed enemy".format(j), "of all the map's places this one is nearest to " + BEL.split(":")[0], "0 or 1", V02)
+    add("v02 places", "place {}: slot holds a place".format(j), "", "0 or 1", V02)
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

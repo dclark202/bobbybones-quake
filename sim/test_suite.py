@@ -52,17 +52,30 @@ class Policy:
         self.react_ms = float(ck.get("react_ms", 150.0))
         self.H = self.whh.shape[1]
         self.rng = np.random.default_rng(seed)
+        self.attn = ck.get("attn")                           # (v0.2) the attention part: its layout and weights; skipped while its door is shut
+        self.attP = None
+        if self.attn is not None:
+            import attn as attn_
+            self.attn_fwd = attn_.forward_np
+            self.attP = attn_.params_np(sd)
+            if not np.abs(self.attP["door.weight"]).sum() > 0:
+                self.attP = None
 
     def zeros(self, n):
         return np.zeros((n, self.H), np.float32)
 
     def act(self, obs, h):
+        if obs.shape[1] > len(self.mean):                    # an older network in a simulator with more inputs: they are appended at the end
+            obs = obs[:, :len(self.mean)]
         x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
+        xa = x
         if self.cell is not None:
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
             x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
         x = np.tanh(x @ self.w0.T + self.b0)
         x = np.tanh(x @ self.w1.T + self.b1)
+        if self.attP is not None:
+            x = x + self.attn_fwd(self.attn, self.attP, xa)
         gi = x @ self.wih.T + self.bih
         gh = h @ self.whh.T + self.bhh
         H = self.H

@@ -13,7 +13,11 @@ currently, any exploration phases will get a further index e.g., v0.2.1, etc." a
 **The owner's go** (2026-10-11 evening): "I would prefer to just build everything and start when it's ready ... I do not
 need the computer tomorrow during the day"; "begin building everything ... You can start it whenever it is ready. let it
 run until 7pm tomorrow, with a midway report around 12noon and brief checkup at 7am. Monitor it while running every 30
-minutes, you can make changes if you think something has gone wrong, but stop if things look really bad."
+minutes, you can make changes if you think something has gone wrong, but stop if things look really bad." At 20:00:
+"Add another short repot at 4pm. Add delirium to the held out map ... I don't know either of those two maps so they're
+held out for me too. This check is purely to make sure he's not 'overfitting'. Build everything for attention A first,
+then build the rest (B and C) once the run has started and you have downtime. monitor the memory usage and computer/gpu
+usage, optimize it accordingly".
 
 ## 0. What it is judged by
 
@@ -44,7 +48,7 @@ flick curve and where he looks before the enemy appears, and at the end real gam
 | 5 | **A value estimate that counts two minutes ahead** ("yes") | one estimate, 25 s | the pay for items and stack is also counted at two minutes; fights stay at 25 s. It fades in over the first hour, so the start is today's training exactly | being built |
 | 6 | **A tiny pay for speed gained from hop to hop** ("pay him a tiny amount for it") | none | at a take-off while travelling with nobody in view, 0.001 for each unit of speed above the best take-off of this chain so far, between 320 and 480. A whole chain from 320 to 480 pays 0.16 (a big item 0.75); losing speed and regaining it pays nothing | being built |
 | 7 | **His aim, a first step toward the pros' flick curve** ("let's slowly tune it down, using pros as a goal") | `AIM_LEVEL=3` | the delay before he notices an enemy off his crosshair and his hand's noise raised until his first hit at 10 to 40 degrees off is a third of the way to the pros' (today 0.38 and 0.58 s; the pros 0.53 and 0.78). Both sides of every check play under the same limits | to calibrate (three replays) |
-| 8 | Held-out check | the stand-in on ten maps | also House of Decay ("held out"); the control with seats swapped | ready |
+| 8 | Held-out check: two maps he never trains on and the owner does not know, "purely to make sure he's not 'overfitting'" | the stand-in on ten maps | also House of Decay and Delirium; the control with seats swapped | House of Decay ready; Delirium being prepared (it has doors or lifts, which the simulator does not move: its fitness as a check is being looked at) |
 
 Unchanged: his legs, the pay for speed in games (0.5), the weapon rounds, item runs and jump runs, the item rule, the
 game's weapon change on an empty weapon, the league of his last eight selves with the older networks (v0.1 among them)
@@ -100,15 +104,16 @@ and runner; his last eight selves; v0.1 and the network before it as standing op
   his step per output is normal; its first check against v0.1 is level (48 to 52% with the seats swapped). If one fails
   it does not start and the owner has the reason at 07:00.
 - **Until 19:00 on 2026-10-12.**
-- **Size and speed**: full size if it fits the card; the stored inputs go to half precision. A step is three to four
-  times slower than today.
+- **Size and speed**: set by a full-size dry run: the stored inputs at half precision, the number of pieces an update is
+  cut into chosen so that the card stays under 90% of its memory. The card's memory, its load and the PC's load are read
+  at every 30-minute check and the run's size or the side jobs are changed if one is out of line (the PC at 80 to 85%).
 - **Every 30 minutes** a line to the owner ("checked <time> ..."): updates coming, his step, the door (how much of his
   memory's input comes through it), and from the trainer's own counters: his legs' share and speed, rockets in hand and
   rockets with nobody in view, his closing speed when weak and when stacked, his height against the enemy, the hop pay.
 - **Checks from every save**: against v0.1 on the ten maps with the seats swapped; his speed profile; every third time
   the stand-in on the ten maps and on House of Decay.
-- **07:00 a brief checkup, 12:00 a midway report, 19:00 the end**: each with the scorecard beside the pros (a replay of
-  25 minutes at low priority) and the table of section 0. At the end also his flick curve, where he looks, real games
+- **07:00 a brief checkup, 12:00 a midway report, 16:00 a short report, 19:00 the end**: each with the scorecard beside
+  the pros (a replay of 25 minutes at low priority) and the table of section 0. At the end also his flick curve, where he looks, real games
   against the game's Nightmare bot on the quiet PC, and a video.
 - **Changes during the run** (the owner: "you can make changes if you think something has gone wrong, but stop if things
   look really bad"): written into this file's section 9 with the hour and the reason. Stopped: under 45% against v0.1
@@ -129,7 +134,8 @@ and runner; his last eight selves; v0.1 and the network before it as standing op
 | g | Dry run, the card's memory, the first level check | the main session | last |
 | h | For the real server (not needed to train): the plugins and the export build the tokens with the simulator's own function; four Bobbys timed on a private server | | before promotion |
 
-A crude estimate: ready between 02:00 and 05:00 if nothing fails its checks.
+A crude estimate: ready between 02:00 and 05:00 if nothing fails its checks. Stages B and C (a target that is never
+"nothing", several ways, whole games, legs that run and look) are built in copies once the run is going.
 
 ## 6. What could go wrong
 

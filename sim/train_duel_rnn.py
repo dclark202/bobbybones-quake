@@ -101,7 +101,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy(),
                          env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool),
                          env.legs_live.copy() if hasattr(env, "legs_live") else np.zeros(env.n, bool),      # (LEGS) the switch was read,
-                         env.legs_on.copy() if hasattr(env, "legs_on") else np.zeros(env.n, bool)))         # his legs moved him
+                         env.legs_on.copy() if hasattr(env, "legs_on") else np.zeros(env.n, bool),          # his legs moved him
+                         np.asarray(info.get("r_long", np.zeros(env.n, np.float32)), np.float32)))          # (v0.2) the part of this frame's pay that is for items and stack
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -184,6 +185,15 @@ def main():
                     help="movement courses of the test map (testlab) used when that map is in --map")
     ap.add_argument("--minibatches", type=int, default=8,
                     help="players are split into this many groups per training pass (more = less GPU memory)")
+    ap.add_argument("--long-gamma", type=float, default=0.0,
+                    help="v0.2: the pay for items and stack (the simulator's r_long) is also counted this far ahead (0.9998 = about "
+                         "two minutes); 0 = off. Two more value outputs estimate that pay at --gamma and at this; his credit is "
+                         "today's plus a share of their difference")
+    ap.add_argument("--long-ramp", type=float, default=60.0, help="... the share rises from nothing to all of it over this many minutes "
+                                                                 "from the start (--fade-start), while the two new outputs learn")
+    ap.add_argument("--long-cap", type=float, default=0.5, help="... and is cut when the long count would add more than this share of the size "
+                                                                "of his credit of today (the mean of the absolute values)")
+    ap.add_argument("--obs-half", action="store_true", help="v0.2: the rollout's stored inputs at half precision (they fill most of the card)")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -294,9 +304,24 @@ def main():
     if HAS_CELLS:
         assert tuple(E_.CELL_COLS) == (OBS_DIM - 2, OBS_DIM - 1)
 
+    ATT = None                                               # (v0.2) the attention part's layout: it comes with the network he resumes from
+    if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
+        ATT = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu").get("attn")
+    if ATT is not None:
+        import attn as attn_
+        assert ATT["obs_dim"] == OBS_DIM, "the network's tokens are cut from {} inputs, the simulator has {}".format(ATT["obs_dim"], OBS_DIM)
+        print("attention: " + attn_.describe(ATT), flush=True)
+    LONG = a.long_gamma > 0
+
     class Policy(nn.Module):
         def __init__(self):
             super().__init__()
+            self.attn = attn_.make_module(ATT, 256) if ATT is not None else None
+            self.door_open = True                                # (a league opponent whose door is shut skips the attention part)
+            if LONG or ATT is not None:                          # (v0.2) the pay for items and stack, counted as far as the fight's and two minutes ahead
+                self.v2 = nn.Linear(H, 2)
+                nn.init.zeros_(self.v2.weight)
+                nn.init.zeros_(self.v2.bias)
             if HAS_CELLS:
                 self.cell = nn.Embedding(E_.MAX_CELLS, CELL_DIM)
                 nn.init.normal_(self.cell.weight, 0.0, 0.1)
@@ -306,11 +331,14 @@ def main():
             self.pi = nn.Linear(H, sum(ACTION_DIMS))
             self.v = nn.Linear(H, 1)
 
-        def step(self, x, h):
+        def step(self, x, h, f=None):
             if HAS_CELLS:
                 ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
                 x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
-            h = self.gru(self.enc(x), h)
+            e = self.enc(x)
+            if self.attn is not None and (f is not None or self.door_open):
+                e = e + (self.attn(x) if f is None else f)       # what the door lets through, added to the old encoder's
+            h = self.gru(e, h)
             return self.pi(h), self.v(h).squeeze(-1), h
 
     def dists(logits):
@@ -368,7 +396,8 @@ def main():
 
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
-                        obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru", hidden=H, minutes=minutes,
+                        obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
+                        hidden=H, minutes=minutes,
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
                         env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
@@ -442,12 +471,16 @@ def main():
         if snaps:                                                        # pick this rollout's opponent
             vs_anchor = bool(anchors) and np.random.random() < a.anchor_p
             opp.load_state_dict(anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))])
+            opp.door_open = bool(opp.attn is not None and float(opp.attn.door.weight.abs().sum()) > 0)
         # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
         # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
-        b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_dec = b_ll = b_lo = b_iteach = b_teach = None
+        b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_dec = b_ll = b_lo = b_iteach = b_teach = b_rl = b_val2 = None
         if dev.type == "cuda":
             torch.cuda.empty_cache()
-        b_obs = torch.zeros(T, N, OBS_DIM, device=dev)
+        b_obs = torch.zeros(T, N, OBS_DIM, device=dev, dtype=torch.float16 if a.obs_half else torch.float32)
+        if LONG:
+            b_rl = torch.zeros(T, N, device=dev)                             # the pay for items and stack, frame by frame
+            b_val2 = torch.zeros(T + 1, N, 2, device=dev)                    # ... as he estimates it at --gamma and at --long-gamma
         b_act = torch.zeros(T, N, len(ACTION_DIMS), dtype=torch.long, device=dev)
         b_logp = torch.zeros(T, N, device=dev)
         b_val = torch.zeros(T + 1, N, device=dev)
@@ -470,6 +503,8 @@ def main():
             x = torch.from_numpy(norm(obs)).to(dev)
             with torch.no_grad():
                 logits, val, h = pol.step(x, h)
+                if LONG:
+                    b_val2[t] = pol.v2(h)
                 ds = dists(logits)
                 act = torch.stack([d.sample() for d in ds], -1)
                 lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
@@ -486,6 +521,8 @@ def main():
             res = [p.recv() for p in pipes]
             obs = np.concatenate([r[0] for r in res])
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
+            if LONG:
+                b_rl[t] = torch.from_numpy(np.concatenate([r[11] for r in res])).to(dev)
             d = torch.from_numpy(np.concatenate([r[2] for r in res]).astype(np.float32)).to(dev)
             b_done[t] = d
             live = torch.from_numpy(np.concatenate([r[6] for r in res]).astype(np.float32)).to(dev)
@@ -517,7 +554,10 @@ def main():
                     if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
         with torch.no_grad():
-            b_val[T] = pol.step(torch.from_numpy(norm(obs)).to(dev), h)[1]
+            _, vT_, hT_ = pol.step(torch.from_numpy(norm(obs)).to(dev), h)
+            b_val[T] = vT_
+            if LONG:
+                b_val2[T] = pol.v2(hT_)
         if obs_count < OBS_FREEZE:
             flat = np.concatenate(raw)
             bm, bv, bc = flat.mean(0), flat.var(0), len(flat)
@@ -539,6 +579,22 @@ def main():
             last = dl + gamma * lam * nonterm * last
             adv[t] = last
         ret = adv + b_val[:T]
+        long_c, long_gap = 0.0, 0.0
+        if LONG:                                                         # the pay for items and stack: what counting it two minutes ahead adds
+            long_c = min(1.0, max(0.0, mins - fade0) / a.long_ramp) if a.long_ramp > 0 else 1.0
+            adv2 = torch.zeros(T, N, 2, device=dev)
+            last2 = torch.zeros(N, 2, device=dev)
+            g2 = torch.tensor([gamma, a.long_gamma], device=dev)
+            for t in reversed(range(T)):
+                nt2 = (1.0 - b_done[t])[:, None]
+                dl2 = b_rl[t][:, None] + g2 * b_val2[t + 1] * nt2 - b_val2[t]
+                last2 = dl2 + g2 * lam * nt2 * last2
+                adv2[t] = last2
+            ret2 = adv2 + b_val2[:T]
+            long_gap = float((adv2[..., 1] - adv2[..., 0]).abs().mean() / (adv.abs().mean() + 1e-8))
+            if a.long_cap > 0 and long_c * long_gap > a.long_cap:
+                long_c = a.long_cap / long_gap
+            adv = adv + long_c * (adv2[..., 1] - adv2[..., 0])
         frac = min(1.0, mins / a.lr_minutes) if a.lr_minutes > 0 else min(1.0, (time.time() - t_start) / (a.minutes * 60))
         for g in opt.param_groups:
             g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
@@ -560,6 +616,22 @@ def main():
         demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
         if demo_w > 0 and update % 5 == 0:
             demo_refill()
+        def seq_pass(chunk, hh):
+            """his outputs over the rollout's whole sequences for these players: the encoder, the attention part and the output
+            layers in one go each, only his memory frame by frame -> (logits, value, memories, the two long values or None)"""
+            xs_ = b_obs[:, chunk].float()
+            e_ = pol.enc(xs_)
+            if pol.attn is not None:
+                e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM)).view(T, len(chunk), -1)
+            dn_ = (1.0 - b_done[:, chunk])[..., None]
+            hs_l = []
+            for t in range(T):
+                hh = pol.gru(e_[t], hh)
+                hs_l.append(hh)
+                hh = hh * dn_[t]
+            hs_a = torch.stack(hs_l)
+            return pol.pi(hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
+
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
         klh = np.zeros(len(ACTION_DIMS))
         old_h = None
@@ -569,35 +641,40 @@ def main():
                 for chunk in torch.arange(N, device=dev).chunk(n_mb):
                     hh = h0[chunk]
                     lgs = []
-                    for t in range(T):
-                        lg, v, hh = pol.step(b_obs[t, chunk], hh)
-                        lgs.append(lg)
-                        hh = hh * (1.0 - b_done[t, chunk])[:, None]
-                    for j, dd in enumerate(dists(torch.stack(lgs))):
+                    if HAS_CELLS:
+                        for t in range(T):
+                            lg, v, hh = pol.step(b_obs[t, chunk].float(), hh)
+                            lgs.append(lg)
+                            hh = hh * (1.0 - b_done[t, chunk])[:, None]
+                        lgk_ = torch.stack(lgs)
+                    else:
+                        lgk_ = seq_pass(chunk, hh)[0]
+                    for j, dd in enumerate(dists(lgk_)):
                         old_h[:, chunk, j] = dd.log_prob(b_act[:, chunk, j])
         for epoch in range(3):
             perm = torch.randperm(N, device=dev)
             for chunk in perm.chunk(n_mb):                               # whole sequences per player
                 hh = h0[chunk]
                 lgs, vals, hs = [], [], []
-                for t in range(T):
-                    lg, v, hh = pol.step(b_obs[t, chunk], hh)
-                    lgs.append(lg)
-                    vals.append(v)
-                    if a.teach_trunk < 1.0 or 0.0 <= a.teach_trunk_move < 1.0:
+                if HAS_CELLS:
+                    for t in range(T):
+                        lg, v, hh = pol.step(b_obs[t, chunk].float(), hh)
+                        lgs.append(lg)
+                        vals.append(v)
                         hs.append(hh)
-                    hh = hh * (1.0 - b_done[t, chunk])[:, None]
-                lg = torch.stack(lgs)
-                v = torch.stack(vals)
+                        hh = hh * (1.0 - b_done[t, chunk])[:, None]
+                    lg, v, hs_all, v2_all = torch.stack(lgs), torch.stack(vals), torch.stack(hs), None
+                else:
+                    lg, v, hs_all, v2_all = seq_pass(chunk, hh)
                 ds = dists(lg)
                 dst = ds                                                 # what the teachers' losses read
                 if a.teach_trunk < 1.0 and (kick > 0 or wk > 0 or ik > 0):
-                    hs_ = torch.stack(hs)                                # the same outputs, the shared layers held back
+                    hs_ = hs_all                                         # the same outputs, the shared layers held back
                     dst = dists(pol.pi(a.teach_trunk * hs_ + (1.0 - a.teach_trunk) * hs_.detach()))
                 dstm = dst                                               # ... and what the movement teacher's loss reads (--teach-trunk-move)
                 if kick > 0 and a.teach_trunk_move >= 0 and a.teach_trunk_move != a.teach_trunk:
                     tm_ = a.teach_trunk_move
-                    dstm = ds if tm_ >= 1.0 else dists(pol.pi(tm_ * torch.stack(hs) + (1.0 - tm_) * torch.stack(hs).detach()))
+                    dstm = ds if tm_ >= 1.0 else dists(pol.pi(tm_ * hs_all + (1.0 - tm_) * hs_all.detach()))
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
@@ -620,6 +697,8 @@ def main():
                                 klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * wgt).sum() / wsum)
                 pg = -(torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
                 vl = (0.5 * (v - ret[:, chunk]).pow(2) * wgt).sum() / wsum
+                if LONG:
+                    vl = vl + (0.5 * (v2_all - ret2[:, chunk]).pow(2).sum(-1) * wgt).sum() / wsum
                 en = (ent * wgt).sum() / wsum
                 loss = pg + 0.5 * vl - ent_coef * en
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
@@ -832,6 +911,17 @@ def main():
                    vs_snapshot_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and not vs_anchor else None,
                    vs_anchor_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and vs_anchor else None,
                    league_size=len(snaps), entropy=round(float(en), 3), close_p=round(close_p, 2))
+        if pol.attn is not None:                                         # the door: its weights, and what comes through it beside the old encoder's
+            with torch.no_grad():
+                xs_ = b_obs[T - 1, :2048].float()
+                rec["door"] = dict(w=round(float(pol.attn.door.weight.abs().mean()), 6),
+                                   share=round(float(pol.attn(xs_).abs().mean() / (pol.enc(xs_).abs().mean() + 1e-8)), 4))
+        if LONG:
+            rec["long"] = dict(share=round(long_c, 3), gap=round(long_gap, 4))
+        if "hop_pay" in agg:                                             # (HOP_PAY) speed gained from hop to hop: what it paid, how often
+            pm_ = max(1e-9, NP * T * DT_MIN)
+            rec["hop"] = dict(pay_per_player_min=round(float(agg["hop_pay"] / pm_), 4), paying_per_min=round(float(agg.get("hop_n", 0) / pm_), 2),
+                              takeoffs_per_min=round(float(agg.get("hop_takeoffs", 0) / pm_), 2), chains_per_min=round(float(agg.get("hop_chains", 0) / pm_), 2))
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:

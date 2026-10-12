@@ -576,3 +576,146 @@ index,group,input,meaning,scale,added in
 574,his legs,the switch to his legs is on,the movement network moves him while it is on and he has a target it knows a way to (LEGS),0 or 1,v15b
 575,his legs,his legs carried him on the last frame,,0 or 1,v15b
 576,intention,his intention is the enemy,the ninth intention (FIGHT_TARGET): his way leads to where he believes the enemy is,0 or 1,v15f
+577,v02 game,time left in the round,the share of the round's length still to play (on a game server: of the game's time limit),0 to 1,v0.2
+578,v02 game,how loud he has been,"over the last 3 seconds: a frame of running steps counts one frame, a shot (not the gauntlet), a jump or a landing eight; 1 = heard all the time. Walking and crouching are silent",0 to 1,v0.2
+579,v02 game,made a noise near a believed enemy,"in the last second he made such a noise while he believed an enemy within earshot (seen or heard in the last 3 s, within 1,000 units of where he was). From what he believes, not from where the enemy is",0 or 1,v0.2
+580,v02 position,height above the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of; zero with nothing believed","units / 300, between -1 and 1",v0.2
+581,v02 position,height among the map's standing places,the share of the walking map's points that lie below him,0 (lowest) to 1 (highest),v0.2
+582,v02 position,pros in this cell: outcome over expected,"frags less deaths in the 10 s after a sighting that begins with a pro standing here, less what his stack and the weapons would give anywhere; from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)","/ 0.3, between -1 and 1",v0.2
+583,v02 position,pros in this cell: sightings,"from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)",log(1 + n) / log(1 + the map's busiest cell),v0.2
+584,v02 position,pros in this cell: rockets in hand,"the share of their time here with the enemy in view; from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)",share (0 to 1),v0.2
+585,v02 position,pros in this cell: rail in hand,"the share of their time here with the enemy in view; from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)",share (0 to 1),v0.2
+586,v02 position,pros in this cell: lightning in hand,"the share of their time here with the enemy in view; from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)",share (0 to 1),v0.2
+587,v02 position,pros in this cell: push share,"the share of their sightings here after which they close on the enemy at over 150 units a second; from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)","share / 0.5, capped at 1",v0.2
+588,v02 position,this cell has numbers,"from sim/pro_places/<map>_cells.json for the cell of 256 x 256 x 128 units he stands in (zero where the pros were seen under 30 times, or the map has no file)",0 or 1,v0.2
+589,v02 position,places with a clear line,how many of the eight place slots (v02 places) he has a clear line to from his eyes,count / 8,v0.2
+590,v02 believed,a place is believed,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of",0 or 1,v0.2
+591,v02 believed,believed place: forward,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of; from him, turned to his facing; as old as his reaction time and with his error of sight while in view; zero with nothing believed","units / 1500, between -2 and 2",v0.2
+592,v02 believed,believed place: left,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of; from him, turned to his facing; as old as his reaction time and with his error of sight while in view; zero with nothing believed","units / 1500, between -2 and 2",v0.2
+593,v02 believed,believed place: up,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of; from him, turned to his facing; as old as his reaction time and with his error of sight while in view; zero with nothing believed","units / 1500, between -2 and 2",v0.2
+594,v02 believed,seconds since he last heard him,"heard: running within 800 units out of view, or any sound the simulator delivers (steps, jumps, landings, shots, a weapon's hum, pickups, teleporters)","seconds / 20, capped at 1 (1: never in this round and life of his)",v0.2
+595,v02 believed,where he last heard him: forward,"about where the sound came from, from where he stands now; zero if never","units / 1500, between -2 and 2",v0.2
+596,v02 believed,where he last heard him: left,"about where the sound came from, from where he stands now; zero if never","units / 1500, between -2 and 2",v0.2
+597,v02 believed,where he last heard him: up,"about where the sound came from, from where he stands now; zero if never","units / 1500, between -2 and 2",v0.2
+598,v02 believed,how far he can have got since,400 units for every second since he was last seen or heard,"units / 3000, capped at 1 (1: nothing believed)",v0.2
+599,v02 believed,way to the believed place,seconds along the walking map from where he stands,"seconds / 15, capped at 1 (1: none, or nothing believed)",v0.2
+600,v02 believed,way from the believed place to the mega health,seconds along the walking map,"seconds / 15, capped at 1 (1: the map has none, or nothing believed)",v0.2
+601,v02 believed,way from the believed place to the red armor,seconds along the walking map,"seconds / 15, capped at 1 (1: the map has none, or nothing believed)",v0.2
+602,v02 believed,damage dealt to him this life,the same number as the older input: what he knows he has hit for,"/ 200, capped at 2",v0.2
+603,v02 believed,seconds since his life began,"since the frag he made or heard; with none known, since the round began","seconds / 60, capped at 1",v0.2
+604,v02 believed,his last death is known,he made the frag or heard it,0 or 1,v0.2
+605,v02 believed,times he took the mega health this life,"pickups heard within 1,200 units or made in his view, since that player's last spawn","count / 2, capped at 1",v0.2
+606,v02 believed,times he took the red armor this life,"pickups heard within 1,200 units or made in his view, since that player's last spawn","count / 2, capped at 1",v0.2
+607,v02 believed,times he took a yellow or green armor this life,"pickups heard within 1,200 units or made in his view, since that player's last spawn","count / 2, capped at 1",v0.2
+608,v02 believed,seen with rockets this life,in his hands at some point since his last death (the same flag as the older memory input),0 or 1,v0.2
+609,v02 believed,seen with rail this life,in his hands at some point since his last death (the same flag as the older memory input),0 or 1,v0.2
+610,v02 believed,seen with lightning this life,in his hands at some point since his last death (the same flag as the older memory input),0 or 1,v0.2
+611,v02 items,since he took: nearest mega health,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+612,v02 items,since he took: nearest red armor,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+613,v02 items,since he took: nearest rocket launcher,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+614,v02 items,since he took: nearest railgun,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+615,v02 items,since he took: nearest lightning gun,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+616,v02 items,since he took: nearest shotgun,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+617,v02 items,since he took: nearest grenade launcher,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+618,v02 items,since he took: nearest plasma gun,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+619,v02 items,since he took: nearest heavy machine gun,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+620,v02 items,since he took: nearest health (25 or 50),seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+621,v02 items,since he took: second nearest health,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+622,v02 items,since he took: nearest health bubble or armor shard,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+623,v02 items,since he took: second nearest bubble or shard,seconds since HE last took the item the slot's own inputs describe,"seconds / 40, capped at 1 (1: not in this round, or the map has none)",v0.2
+624,v02 places,place 1: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+625,v02 places,place 1: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+626,v02 places,place 1: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+627,v02 places,place 1: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+628,v02 places,place 1: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+629,v02 places,place 1: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+630,v02 places,place 1: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+631,v02 places,place 1: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+632,v02 places,place 1: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+633,v02 places,place 1: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+634,v02 places,place 1: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+635,v02 places,place 1: slot holds a place,,0 or 1,v0.2
+636,v02 places,place 2: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+637,v02 places,place 2: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+638,v02 places,place 2: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+639,v02 places,place 2: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+640,v02 places,place 2: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+641,v02 places,place 2: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+642,v02 places,place 2: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+643,v02 places,place 2: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+644,v02 places,place 2: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+645,v02 places,place 2: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+646,v02 places,place 2: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+647,v02 places,place 2: slot holds a place,,0 or 1,v0.2
+648,v02 places,place 3: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+649,v02 places,place 3: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+650,v02 places,place 3: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+651,v02 places,place 3: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+652,v02 places,place 3: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+653,v02 places,place 3: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+654,v02 places,place 3: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+655,v02 places,place 3: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+656,v02 places,place 3: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+657,v02 places,place 3: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+658,v02 places,place 3: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+659,v02 places,place 3: slot holds a place,,0 or 1,v0.2
+660,v02 places,place 4: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+661,v02 places,place 4: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+662,v02 places,place 4: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+663,v02 places,place 4: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+664,v02 places,place 4: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+665,v02 places,place 4: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+666,v02 places,place 4: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+667,v02 places,place 4: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+668,v02 places,place 4: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+669,v02 places,place 4: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+670,v02 places,place 4: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+671,v02 places,place 4: slot holds a place,,0 or 1,v0.2
+672,v02 places,place 5: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+673,v02 places,place 5: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+674,v02 places,place 5: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+675,v02 places,place 5: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+676,v02 places,place 5: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+677,v02 places,place 5: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+678,v02 places,place 5: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+679,v02 places,place 5: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+680,v02 places,place 5: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+681,v02 places,place 5: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+682,v02 places,place 5: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+683,v02 places,place 5: slot holds a place,,0 or 1,v0.2
+684,v02 places,place 6: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+685,v02 places,place 6: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+686,v02 places,place 6: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+687,v02 places,place 6: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+688,v02 places,place 6: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+689,v02 places,place 6: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+690,v02 places,place 6: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+691,v02 places,place 6: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+692,v02 places,place 6: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+693,v02 places,place 6: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+694,v02 places,place 6: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+695,v02 places,place 6: slot holds a place,,0 or 1,v0.2
+696,v02 places,place 7: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+697,v02 places,place 7: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+698,v02 places,place 7: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+699,v02 places,place 7: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+700,v02 places,place 7: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+701,v02 places,place 7: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+702,v02 places,place 7: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+703,v02 places,place 7: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+704,v02 places,place 7: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+705,v02 places,place 7: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+706,v02 places,place 7: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+707,v02 places,place 7: slot holds a place,,0 or 1,v0.2
+708,v02 places,place 8: forward,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+709,v02 places,place 8: left,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+710,v02 places,place 8: up,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 1500, between -2 and 2",v0.2
+711,v02 places,place 8: distance,"one of the eight places of sim/pro_places/<map>.json (where the pros' shots land with nobody in view) nearest to him, nearest first; zeros on a map without a list","units / 2000, capped at 1.5",v0.2
+712,v02 places,place 8: clear line,"the line from his eyes to it is clear (looked at every eighth frame, whichever way he faces)",0 or 1,v0.2
+713,v02 places,place 8: distance from the believed enemy,"the place he believes the enemy is: his last known place and up to a second of his last known movement; believed for 20 s after he was last seen or heard, not across a round's start or a death of his that he knows of","units / 1500, capped at 1 (1: nothing believed)",v0.2
+714,v02 places,place 8: share of the pros' blind shots,"of the map's rockets, grenades and plasma fired with nobody in view","per cent / 15, capped at 1",v0.2
+715,v02 places,place 8: pros meet the enemy there,the share of their shots at it after which the enemy came into view near it within 2 s,share (0 to 1),v0.2
+716,v02 places,place 8: pros hit the enemy there,the share of their shots at it at whose landing a hit was counted; zero where it is not known,share (0 to 1),v0.2
+717,v02 places,place 8: outcome over expected standing there,"as for his cell, for a pro seen standing within 128 units of it; zero where it is not known","/ 0.3, between -1 and 1",v0.2
+718,v02 places,place 8: nearest to the believed enemy,of all the map's places this one is nearest to the place he believes the enemy is,0 or 1,v0.2
+719,v02 places,place 8: slot holds a place,,0 or 1,v0.2

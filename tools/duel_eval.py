@@ -81,7 +81,9 @@ def play(job):
     kills = np.zeros(n)
     c = {k: np.zeros(2) for k in ("alive", "bare", "over150", "vis", "fire", "speed", "wp", "mega", "red", "yellow", "lives", "restarts",
                                   "standing", "stuck", "own_deaths", "fire_vis", "both", "lower", "higher", "vis_lower", "vis_higher", "empty", "empty_fire",
-                                  "legs", "at400")}       # (LEGS) frames his legs carried him; frames at 400 units a second or more
+                                  "legs", "at400",        # (LEGS) frames his legs carried him; frames at 400 units a second or more
+                                  "unseen_hits", "unseen_dmg",    # hits he takes (10 points or more on a frame) while the other side has nobody in view
+                                  "exposed", "watching")}         # the other side has him in view and he has nobody in view; the reverse
     still = np.zeros(n)                                         # seconds he has been standing (under 50 units a second)
     life, got, was = np.zeros(n), np.zeros(n, bool), np.zeros(n, bool)
     first = [[], []]
@@ -151,6 +153,12 @@ def play(job):
             c["speed"][s_] += spd[alive & m].sum()
             c["legs"][s_] += (getattr(env, "legs_on", np.zeros(len(alive), bool)) & alive)[m].sum()
             c["at400"][s_] += (alive & (spd >= 400.0))[m].sum()
+            if env.n == 2 * (env.n // 2) and getattr(env, "G", 2) == 2:      # (duels: "the other side" is one player)
+                hit_ = same & ((dh + da) <= -10.0) & ~vis[other] & alive[other]
+                c["unseen_hits"][s_] += hit_[m].sum()
+                c["unseen_dmg"][s_] += -(dh + da)[hit_ & m].sum()
+                c["exposed"][s_] += (alive & ~vis & vis[other])[m].sum()
+                c["watching"][s_] += (vis & alive[other] & ~vis[other])[m].sum()
             c["standing"][s_] += (alive & (spd < 50.0))[m].sum()
             c["stuck"][s_] += (still > 3.0)[m].sum()
             c["wp"][s_] += gain_w[m].sum()
@@ -233,6 +241,8 @@ def main():
                             standing=round(float(c["standing"][s_] / al), 3), standing_over_3s=round(float(c["stuck"][s_] / al), 3),
                             own_deaths=round(float(c["own_deaths"][s_] / G), 2),
                             legs=round(float(c["legs"][s_] / al), 3), at_400=round(float(c["at400"][s_] / al), 4),   # (LEGS) of his time alive: on his legs; at 400 units a second or more
+                            unseen_hits_per_min=round(float(c["unseen_hits"][s_] / pm), 3), unseen_dmg_per_min=round(float(c["unseen_dmg"][s_] / pm), 2),   # taken while the other side had nobody in view
+                            exposed=round(float(c["exposed"][s_] / al), 4), watching=round(float(c["watching"][s_] / al), 4),   # of his time alive: seen without seeing; seeing without being seen
                             empty_in_hand=round(float(c["empty"][s_] / al), 4), firing_empty=round(float(c["empty_fire"][s_] / max(1.0, c["fire"][s_])), 4),   # of his time alive; of his firing
                             lower=round(float(c["lower"][s_] / max(1.0, c["both"][s_])), 3), higher=round(float(c["higher"][s_] / max(1.0, c["both"][s_])), 3),   # of the time both live: lower or higher by 48 units or more
                             lower_in_view=round(float(c["vis_lower"][s_] / max(1.0, c["vis"][s_])), 3), higher_in_view=round(float(c["vis_higher"][s_] / max(1.0, c["vis"][s_])), 3),
