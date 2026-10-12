@@ -26,8 +26,8 @@ the audit, the seeding plan): [archive/PLAN_2026-10-10.md](archive/PLAN_2026-10-
 
 | What | Where it stands |
 |---|---|
-| On the public server | `duel_gru_v15c`'s end with his legs since 2026-10-11 13:01: free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard. The owner after playing it: "much better than v14 was"; "strong LG, very strong"; "their main failure point is that their routes are predictable"; "he doesn't know how to push an advantage" |
-| In training | nothing at 19:00. Proposed for the night, on the owner's go: `duel_gru_v15e` ([runs/MANIFEST_v15e.md](runs/MANIFEST_v15e.md)): games on all ten maps, the rocket changes, the enemy as a target |
+| On the public server | **v0.1** (`duel_gru_v15c`'s end with his legs) since 2026-10-11 13:01: free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard. The owner after playing it: "much better than v14 was"; "strong LG, very strong"; "their main failure point is that their routes are predictable"; "he doesn't know how to push an advantage" |
+| In training | nothing at 19:30. For the owner's go: v0.2 ([runs/MANIFEST_v0.2.md](runs/MANIFEST_v0.2.md)): games on all ten maps, the rocket changes, the enemy as a target, and stage A of the attention model, which is not built yet; the part that is ready is v0.2.1 ([runs/MANIFEST_v15e.md](runs/MANIFEST_v15e.md)) |
 | The checks of a run | every save plays the last best network head to head, seats swapped in half of the games since 2026-10-11 (B-220), and the Nightmare stand-in; his speed profile in games; at a run's end the measures beside the pros' (`tools/convergence.py`) and real games against the game's Nightmare bot on a free PC; play tests |
 | How near he is to the pros | v15c's end: 48% on fourteen measures (position 65%, speed 82%, weapons 17%, aggression 3%, control 95%); v14's end 39%: the log of 2026-10-11 19:00, [design/V16_APPROACH.md](design/V16_APPROACH.md) |
 | Strafe jumping and speed | he strafe jumps on his legs (a second, movement-only network he switches to: v15b). In games: 9.4% of his travelling time at 400 or more, hops 332, 389, 384 (the pros 17.5%; 366, 421, 422). His legs alone reach 356, 405, 410: the limit is how they are used (they carry him 46% of his game time and his chains fall after the second hop) |
@@ -174,6 +174,20 @@ The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
 - (2026-10-11) Movement stays first: "He needs to maintain speed, and build it more effectively, AND we should be
   thinking about how the two networks will mesh into one over time"; tuned for "more speed per jump, maintaining speed
   for longer".
+- (2026-10-11 evening) **Names**: "The v15c bot that exists on the server is now: v0.1. We're building v0.2 currently, any
+  exploration phases will get a further index e.g., v0.2.1, etc."; "v1.0 starts when he can beat me." v0.2 is the run
+  proposed for the night (ten maps, the rocket changes, the enemy as a target) with stage A of the attention model:
+  [runs/MANIFEST_v0.2.md](runs/MANIFEST_v0.2.md); the part that is ready is v0.2.1.
+- (2026-10-11 evening) His answers to the day's questions ([design/V16_APPROACH.md](design/V16_APPROACH.md)): Campgrounds in
+  training, House of Decay held out, Toxicity stays on the public server's list; the enemy as a target and the rocket
+  changes in; a value estimate that counts two minutes ahead with the first attention stage; his aim "overtuned ...
+  let's slowly tune it down, using pros as a goal"; "pay him a tiny amount" for speed gained from hop to hop, "but the
+  key is getting him to use them and maintain speed"; fights taken and refused as a measure ("his choice of picking fight
+  is terrible currently"); the noise he makes with footsteps and stairs ("you make sound on stairs even when walking");
+  the gauntlet "ideally he should, but i won't hold up the run for it"; promotion by the control and the scorecard "within
+  an amount of noise"; later: a frag paid by what it moves his chance of winning, late-game rounds "up to 25%", the pros'
+  choices as a small standing pull, high ground "token first"; the exploiter left out ("Isn't HE the exploiter? He should
+  be?").
 
 ## How to run (short)
 

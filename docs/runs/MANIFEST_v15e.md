@@ -1,5 +1,10 @@
 # `duel_gru_v15e`: the manifest for the night of 2026-10-11 (for the owner's go; not started)
 
+**Renamed on 2026-10-11 evening: this run is v0.2.1** in the owner's new naming (v0.1 is v15c's end on the public server;
+v0.2 is this run's content with stage A of the attention model: [MANIFEST_v0.2.md](MANIFEST_v0.2.md)). Its folder is
+`duel_gru_v0_2_1`. The owner's answers of the evening: Campgrounds in, House of Decay held out, the enemy as a target in,
+the rocket changes in.
+
 **Which run is which.** v15c's end is on the public server since 13:01 and is the control here. v15f was the afternoon's
 trial of the enemy as a target (stopped), v15r the afternoon's trial of the rocket changes. **v15e is the run proposed
 for tonight**: today's network, not attention. The attention model ([../design/V16_ATTENTION.md](../design/V16_ATTENTION.md),

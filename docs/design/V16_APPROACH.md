@@ -122,6 +122,38 @@ how possible this would be": left out of the plan, see 3.4); the parser first ("
 | 21 | Promotion: beats the control and does not fall back in any group of the scorecard? | yes |
 | 22 | v16 starts from tonight's end if it beats v15c's end, else from v15c's end? | yes |
 
+### The owner's answers (2026-10-11 evening, typed into the working copy; the numbers are that copy's)
+
+New names: v15c's end on the server is v0.1; the next model is v0.2, trials on the way v0.2.1 and so on; v1.0 when he
+beats the owner. "Add stage A from attention to your proposed v15e for tonight and call it v0.2": the manifest is
+[../runs/MANIFEST_v0.2.md](../runs/MANIFEST_v0.2.md).
+
+| Question | His answer |
+|---|---|
+| Campgrounds in training or held out | "in" |
+| House of Decay as the held-out map | "held out" |
+| The enemy as a target tonight | "in" |
+| The three rocket changes | "in" |
+| A trial of the rocket seed | not answered (my recommendation was no) |
+| Fetch Campgrounds' older demos | "yes" |
+| His lightning: tighten now or measure against people first | "measure first, I think he just sucks at doding" |
+| Toxicity off the public server's list | "no" |
+| A value estimate that counts two minutes ahead, with the first stage | "yes" |
+| The list of events out of the first build | "yes" |
+| A frag paid by what it moves his chance of winning | "yes" |
+| Late-game rounds from drawn states | "yes, up to 25%" |
+| The pros' choices as a small standing pull | "yes" |
+| High ground: the token alone or also a pay | "token first" |
+| A pay for speed gained from hop to hop | "I don't think they're quite there yet, pay him a tiny amount for it. but the key is getting him to use them and maintain speed" |
+| His hand set to the pros' flick curve | "yes, it seems his aim is overtuned at possibly the reason why he has become so reliant on lg/rail rather than rockets. let's slowly tune it down, using pros as a goal" |
+| Fights taken and refused as a measure and something to foretell | "yes. his choice of picking fight is terrible currently" |
+| The sound tokens, calibrated on the pros | "yes" |
+| The noise he makes, measured, no pay | "yes, make sure it involves footsteps and stairs as well (you make sound on stairs even when walking)" |
+| The gauntlet | "ideally he should, but i won't hold up the run for it" |
+| Promotion: beats the control and falls back in no group | "yes within an amount of noise" |
+| v16 from tonight's end | "I'm tempted to just start v16 now, why not?" |
+| The exploiter left out | "leave it out -- I think this is harder to build than you're anticipating. Isn't HE the exploiter? He should be?" |
+
 ## 3. What I suggest we do
 
 ### 3.1 Tonight
