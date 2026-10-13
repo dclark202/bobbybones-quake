@@ -1,4 +1,4 @@
-# v0.2.1: the manifest (2026-10-12, rewritten in the evening around the owner's four goals; not started: it starts on his go; changes during the run in section 9)
+# v0.2.1: the manifest (2026-10-12, rewritten in the evening around the owner's four goals; started 2026-10-12 20:31 on his go; changes during the run in section 9)
 
 **The names.** v0.1 is `duel_gru_v15c`. v0.2 (`duel_gru_v0_2`) ended on 2026-10-12 at 08:43
 ([REPORT_v0.2.md](REPORT_v0.2.md)) and is the network on the public server since 15:15. **v0.2.1** (`duel_gru_v0_2_1`)
@@ -217,7 +217,7 @@ word.
 | 9 | v0.2 on the public server | "we've already moved 0.2 up" | on it since 15:15 |
 | 10 | Games that begin in their middle; the table a frag is paid by | "yes games can and should start mid way with a different variety of states (up/down/tied/stacked/not/etc.)" | to build for the run after; the table explained to him, his answer open |
 | 11 | The QLStats lookup on for everyone | "yes" | it is on |
-| 12 | Which player id is his | "tbd" | when he next plays |
+| 12 | Which player id is his | "tbd"; then (20:05) "I'm on it now playing on campgrounds you can verify my account id" | found by the server's own owner mark on his frag lines; the people reports keep him apart |
 | 13 | Start and end | "let's discuss this later, likely I will review everything and we'll start the run around 9pm" | no start before his go; the end is decision 19 |
 | 14 | Where the autopilot looks while it carries him | "explain more" | explained; not in this run |
 | 15 | The BIOS update or the performance cores | "just use the performance cores" | so |
@@ -225,6 +225,20 @@ word.
 | 17 | The item rule silent in a contest (`RULE_CONTEST=2`) | "yes, it will and should affect item pickups but that's moot if he loses to every human. He should avoid an item that is being actively watched in a way that require him to approach from an inferior position. period." | on, from the start |
 | 18 | Lightning down: the aim level alone (small), or with the tracking limit of pretest 18 | "we need roughly lg down but rail up. can put this off for now, but it's something to come back to."; "Leave aim untouched tonight is fine." | no aim change in this run; B-228 |
 | 19 | The end: 07:00 or 11:00 | "you can go until 3pm tomorrow if need be, I would like a check in report at 6:30 am and noon." | the end at 15:00 on 2026-10-13 (nine hours a half); check-in reports at 06:30 and 12:00 |
-| 20 | The go | "TBD likely around 9pm I would still like to play him first" | no start before his word |
+| 20 | The go | "TBD likely around 9pm I would still like to play him first"; then (20:27, after the PC's restart) "Ok ready to go now. Before you start the run check the pickup logic in the sim to make sure it's not buggy ... Then start the run." | started 20:31 |
 
 ## 9. Changes during the run
+
+- **2026-10-12 20:31: started** (`duel_gru_v0_2_1`), as sections 0 to 2 say: the first half for 554 minutes (to about
+  05:45), the end at 15:00 on 2026-10-13. The owner: "Quick checks on the hour, nothing too detailed needed on my
+  end, just a run health. 6:30 midway report and another at noon, with a planned end of 3pm; metric evals afterwards
+  for validation. It can be stopped early or altered if you think something has gone wrong and can be fixed easily.
+  Anything more substantial just stop the run and flag for me."
+- **Before the start, the pickup reach** (the owner had seen him walk to an item and pass it without taking it): in
+  7,767 pickups recorded on the public server the game takes an item within 36 units on each horizontal axis and at
+  any height of a jump; the simulator's reach (a circle of 36, a height of 56) lies inside that everywhere. Not the
+  cause, nothing changed (RESULTS 2026-10-12 20:35; B-241).
+- **His feedback from watching v0.2 that evening**, for the runs after: rail should be 50 to 60% against people
+  (B-228); with nobody in view he should look where the enemy must come from ("let's see what happens tonight, but
+  keep this in mind": B-242); a pickup should be confirmed by its sound, "otherwise if he wants it he has to go back
+  to it" (B-241).

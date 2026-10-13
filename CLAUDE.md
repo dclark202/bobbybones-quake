@@ -278,6 +278,7 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - After merging a branch, push plainly: `git pull --rebase` on a merge commit replays the branch and conflicts (2026-10-10;
   `git rebase --abort` put everything back, the owner's uncommitted files too). Fetch and look first.
 - A reviewer's eye on the reward: anything paid per frame for progress must be paid on a running best, or a setback and its recovery is a pump (the trip pay, 2026-10-08).
+- The game's reach for picking an item up, measured in 7,767 pickups recorded on the public server (2026-10-12): within 36 units on each horizontal axis (a box) and at any height of a jump (up to about 58 units above standing; Quake 3's own box, 36 in height, is not Quake Live's). The simulator's reach (`dxy < 36`, `dz < 56` in `duel_env.py`) lies inside it: what the simulator gives, the game gives.
 - Joining a pure server: its pak list must be exactly what a client gets (pak00, bin, the Workshop item); any extra mounted
   pk3 drops every player who lacks it, silently ("connected" then "disconnected"). `sv_pure` is write-protected,
   `sv_warmupReadyPercentage` and `sv_maxclients` are latched (a map change applies them); `allready` cannot start a game
