@@ -1,5 +1,7 @@
 # v0.2.1: the manifest (2026-10-12, rewritten in the evening around the owner's four goals; started 2026-10-12 20:31 on his go; changes during the run in section 9)
 
+**The run on one page: [RUN_v0.2.1.md](RUN_v0.2.1.md).** This file is the long write-up behind it.
+
 **The names.** v0.1 is `duel_gru_v15c`. v0.2 (`duel_gru_v0_2`) ended on 2026-10-12 at 08:43
 ([REPORT_v0.2.md](REPORT_v0.2.md)) and is the network on the public server since 15:15. **v0.2.1** (`duel_gru_v0_2_1`)
 is this run: from v0.2's end, one night. The proposal it grew from is [PROPOSAL_v0.2.1.md](PROPOSAL_v0.2.1.md); the

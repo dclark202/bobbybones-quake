@@ -61,7 +61,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   first, what did not work included. Add an entry with `python tools/add_result.py entry.md` (first line
   `## <date> <time> — <the finding>`; links written as from `docs/results/`). "RESULTS 2026-10-08 18:45" anywhere
   means the entry of that time in `docs/results/2026-10-08.md`.
-- `docs/runs/`: a run's own documents, `MANIFEST_v<n>.md` (the run in full, for the owner's go before a start; changes
+- `docs/runs/`: a run's own documents, `RUN_v<n>.md` (one page in plain words, the one the owner reads and gives his go on: owner, 2026-10-13, "your manifests are getting rather long and complicated and difficult for me to follow"; keep it to one page and current), `MANIFEST_v<n>.md` (the run in full, for the owner's go before a start; changes
   during the run go into its section 0), `MIDRUN_v<n>.md`, `REPORT_v<n>.md` (the full report, ending with what to try next).
 - `docs/guides/` (PLAYTEST, COMMANDS, HOSTING, COMMUNITY, LOGS: the schemas of recorded data, ATLAS), `docs/design/`
   (proposals not tied to a run: SCOPE_v15, ATTENTION_POC), `docs/archive/`.
