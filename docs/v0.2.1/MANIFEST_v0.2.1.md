@@ -257,3 +257,15 @@ word.
   first half only, to 19:00; no second half by itself. His words for the day: "give me a mid run report at noon and
   4, same hourly check ins, flag anything weird. Run the evals when it finishes, and after it's done make a
   recommendation on the second half". The first start's files: `first_start_1012` in the run's folder.
+- **2026-10-13 10:10: stopped by hand** (the owner, 09:35: "That sounds good to me"): the checks slid 52.1 (start), 47.8
+  (update 10), 41.1 (20), 39.1 (30) while training's own reading against the control read 55%; 36 updates, the last save
+  update 30 (`evals/policy_m7381.pt`). The day's test runs of twenty updates from the start network, checked on ten maps:
+  none of the new parts 51.7% and 52.3%; the guessing game alone 43.9% and 41.8%; the slid save in two-minute games 39.3%
+  (the start network 51.2%): the checks' game length is not the gap. The owner's words of the day: whole games and
+  mid-game starts only from the next run (B-244), openings from each spawn like chess openings (B-245), one against one
+  only from now on, and a review by a new pair of eyes: [REVIEW_v0.2.1.md](REVIEW_v0.2.1.md), [AUDIT_v0.2.1.md](AUDIT_v0.2.1.md)
+  (the guessing game moves the shared layers outside PPO's trust region, B-246; the movement network's lesson trained his
+  aim output, B-243; training's reading against the control is not a check, B-247). Test run W (the three parts without
+  the guessing game, together) was stopped at the owner's word before its first check for the evening's three test runs
+  one against one: P (the guessing game at a tenth of its pull into the shared layers), E (none of the parts), Q (no pull).
+  No second half: the run is over; what follows is the next run (B-244, B-245).
