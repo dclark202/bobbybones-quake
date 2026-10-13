@@ -242,3 +242,16 @@ word.
   (B-228); with nobody in view he should look where the enemy must come from ("let's see what happens tonight, but
   keep this in mind": B-242); a pickup should be confirmed by its sound, "otherwise if he wants it he has to go back
   to it" (B-241).
+- **2026-10-12 23:30: stopped by the watcher's rule.** Against the control 52% at the start, 36% at update 10, 25%
+  at update 20, on every map; his aim unchanged, his stack and his deaths worse.
+- **The night's arms** (ten updates each from the run's start network, then four maps against the control): none of
+  the new parts 51%, the gate's opening alone 50%, the guessing game alone 46%, the item rule's silence alone 52%,
+  the movement network's lesson alone 36%, the same lesson held out of the shared layers 30%, the withholding
+  without the lesson 55%. The lesson of section 1 (his own keys and turn taught by the movement network) is the
+  cause and is out of v0.2.1 (RESULTS 2026-10-13 07:00; B-243).
+- **2026-10-13 06:43: started again** on the owner's word ("You can restart the run now ... You can use the computer
+  until 7pm, if you want to spend the whole time for the first half + early stopping, that's fine, we'll do the
+  second half overnight"): the same start network, `--legs-teach 0`, everything else as sections 0 to 2 say; the
+  first half only, to 19:00; no second half by itself. His words for the day: "give me a mid run report at noon and
+  4, same hourly check ins, flag anything weird. Run the evals when it finishes, and after it's done make a
+  recommendation on the second half". The first start's files: `first_start_1012` in the run's folder.

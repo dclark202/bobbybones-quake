@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-13](results/2026-10-13.md)
+
+- 07:00 — v0.2.1's first start fell to 25% against the control in 20 updates and was stopped (23:30); seven arms in the night: the lesson that makes his own keys copy the movement network is the cause, alone and with the shared layers held out; started again at 06:43 without it, first half only, to 19:00
+
 ## [2026-10-12](results/2026-10-12.md)
 
 - 20:35 — v0.2.1 started (20:31, the owner's go); before it, the game's reach for a pickup measured in 7,767 recorded pickups: the simulator's reach lies inside it, so it is not why he passes items; the owner's notes from watching v0.2
