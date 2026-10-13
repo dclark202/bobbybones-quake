@@ -24,6 +24,26 @@ alone at full pull (A) 43.9% and 41.8%.
 The choice tonight made for v0.2.2's guessing game (by the rule in the runbook: P within three points of E → a tenth of the pull; else
 Q within three → no pull; else out): **AUX_TRUNK = ___**.
 
+### The plan reviewed (2026-10-13 18:05, on the owner's word)
+
+The night's build was rehearsed on a throwaway copy of the repo's three files before the evening's runs end: the four patches
+apply, the six fixed sets are identical bit for bit with every new switch off, and a short run with V's and B's switches on goes
+through. What a reader of the table must keep in mind:
+
+- **Times** (each run's last check is 45 minutes after its last update): P about 18:30, E 20:50, Q 23:10, the build 23:10 to 23:35,
+  V about 02:45, H 05:05, B 07:25.
+- **Who is compared with whom.** P and Q against E (same rounds, one part apart). H against E (one setting apart). B against V at
+  updates 10 and 20 (one switch apart). V against E is *not* one part apart: the rounds, the openings, the gate, the rule's silence
+  in a contest and the guessing game all differ, so a low V says "not ready" and not which part; a level V is what the pretest asks.
+- **One check is 160 games, about three points of noise.** The choice of the guessing game's form rests on single checks at update
+  20; a P or Q within three points of E on either side is "no harm seen", no more. B against V likewise: read the records
+  (items a minute, armor, the intention shares) beside the two numbers.
+- **B is a large change, not a nudge**: under random play `RULE_BLIND=10` silenced 44% of the item rule's frames (the frames with a
+  label fell from 43% to 26% of all). If his item numbers fall in B, a shorter memory (3 to 5 s) is the next thing to try, not the end of the idea.
+- **V's whole games reach 4:48 of ten minutes** in 30 updates and the bank of saved moments starts empty: the pretest reads the first
+  half of a game and few mid-game starts.
+- **H's 60% line** is a judgment, not a measured threshold; E's number the same night is the real comparison.
+
 ## 2. What the records say (fill in)
 
 - **V, the openings:** share of his lives with an opening's label (`openings.with_opening`), his agreement with the label
