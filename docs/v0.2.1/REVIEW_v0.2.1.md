@@ -6,6 +6,8 @@ Background in one page: [RUN_v0.2.1.md](RUN_v0.2.1.md). The run in full: [MANIFE
 The designs: [V02_STAGE_B.md](V02_STAGE_B.md), [V02_STAGE_C.md](V02_STAGE_C.md), [ENEMY_MODEL.md](ENEMY_MODEL.md),
 [PROPOSAL_v0.2.1.md](PROPOSAL_v0.2.1.md). The log: [results/2026-10-13.md](../results/2026-10-13.md) and the day before.
 
+The review itself, with the fixes and the questions for the owner: [AUDIT_v0.2.1.md](AUDIT_v0.2.1.md) (16:30).
+
 ## 1. The short of it
 
 v0.2.1 is the run after v0.2 (`duel_gru_v0_2`), started from v0.2's end. v0.2's end is also **the control**: every
