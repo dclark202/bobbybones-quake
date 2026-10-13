@@ -110,8 +110,8 @@ to watch at noon.
 | C2: legs that run and look, and that arrive and stand | built, checked, merged; needs an hour or more of the card | standing is learnt in minutes; looking did not move in a sixteen-minute run |
 | The six together | one script, tested in a copy | with every switch off bit for bit today's simulator and trainer; everything on runs; v0.2 converted answers exactly as before |
 
-Specifications and results: [../design/V02_STAGE_B.md](../design/V02_STAGE_B.md),
-[../design/V02_STAGE_C.md](../design/V02_STAGE_C.md); the log: RESULTS 2026-10-11 23:40.
+Specifications and results: [../v0.2.1/V02_STAGE_B.md](../v0.2.1/V02_STAGE_B.md),
+[../v0.2.1/V02_STAGE_C.md](../v0.2.1/V02_STAGE_C.md); the log: RESULTS 2026-10-11 23:40.
 
 ## 7. For the owner to decide
 

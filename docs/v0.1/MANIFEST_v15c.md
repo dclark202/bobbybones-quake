@@ -1,7 +1,7 @@
 # `duel_gru_v15c`: the manifest (2026-10-11, to noon)
 
 **Which run is which.** v14's end is on the public server (the owner, about 07:12: "hold off on the public server promotion just
-yet"). v15b is the legs run of the night ([REPORT_v15b.md](REPORT_v15b.md)); its end is the network this run starts from
+yet"). v15b is the legs run of the night ([REPORT_v15b.md](../legacy/REPORT_v15b.md)); its end is the network this run starts from
 and the control of its checks. **v15c is the run of this document**: v15b's end with the weapon work and two changes to
 how his legs are used, from the morning of 2026-10-11 to noon. The day's log: [2026-10-11](../results/2026-10-11.md).
 

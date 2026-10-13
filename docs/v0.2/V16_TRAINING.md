@@ -3,7 +3,7 @@
 The owner, 2026-10-11: "can you just take a second think about if there's any signal in the pro demos that we're
 overlooking or not taking full advantage of? Or if there's better ways to reward his play in training to get us towards
 these goals, changes to architecture, etc." The model itself is [V16_ATTENTION.md](V16_ATTENTION.md); the stages are
-[../runs/MANIFEST_v16.md](../runs/MANIFEST_v16.md). Every change to his pay below is the owner's call.
+[../v0.2/MANIFEST_v16.md](MANIFEST_v16.md). Every change to his pay below is the owner's call.
 
 ## 1. Three reasons in the trainer why he plays moment to moment
 

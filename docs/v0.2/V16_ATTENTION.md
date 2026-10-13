@@ -3,7 +3,7 @@
 A proposal for the owner's review. Nothing of it is built. Second version: rewritten on the evening of 2026-10-11 after
 the day's measurements (the pros' yardsticks and Bobby beside them, the event record tried on the demos, the fight
 target tried in the simulator, the model timed on the rented server). The first pass of the run:
-[../runs/MANIFEST_v16.md](../runs/MANIFEST_v16.md). The event record's test: [v16_event_record.md](v16_event_record.md).
+[../v0.2/MANIFEST_v16.md](MANIFEST_v16.md). The event record's test: [v16_event_record.md](v16_event_record.md).
 The earlier scope note: [ATTENTION_POC.md](ATTENTION_POC.md).
 
 **What it is judged by** (the owner, 2026-10-11): "Game awareness primarily. Also how much his movement begins to blend

@@ -1,10 +1,10 @@
 # v16: the manifest, a first pass (2026-10-11; for the owner's review, nothing is built or started)
 
 **Which run is which.** v14's end is on the public server. v15b is the legs run of the night
-([REPORT_v15b.md](REPORT_v15b.md)); v15c is its continuation to noon with the weapon work
-([MANIFEST_v15c.md](MANIFEST_v15c.md)). **v16 is the next model**: the network v16 starts from (v15b's end or v15c's,
+([REPORT_v15b.md](../legacy/REPORT_v15b.md)); v15c is its continuation to noon with the weapon work
+([MANIFEST_v15c.md](../v0.1/MANIFEST_v15c.md)). **v16 is the next model**: the network v16 starts from (v15b's end or v15c's,
 the owner's choice after the noon report) with attention added. The model in full:
-[../design/V16_ATTENTION.md](../design/V16_ATTENTION.md).
+[../v0.2/V16_ATTENTION.md](V16_ATTENTION.md).
 
 ## 0. The owner's decisions so far (2026-10-11)
 
@@ -26,7 +26,7 @@ the owner's choice after the noon report) with attention added. The model in ful
 | **B. Targets, ways, the game as a whole** | the target output (an item, a place, the enemy's believed place, hold); the choice among up to three ways; the belief output; the time left and the noise he makes; whole ten-minute games with pay for the result; rounds that begin ahead or behind late in a game | three days to build, two nights | the numbers of section 3 move toward the pros' (first: blind rockets, the commonest way's share, closing by the enemy's state) and he beats stage A's end |
 | **C. One way of moving** | his legs as a learning part of him, then seeing what he sees, then the switch as a share; a list of events (eight frequent, eight rare) if the numbers ask for it; the room for combinations | three days to build, two nights | his own movement outputs and his legs' come closer on the same frames; more speed for each jump in games; he beats stage B's end |
 
-Second version (2026-10-11 evening), after the day's measurements: the list of events is out of the first build (on the pros' demos it foretold the next item and a just-lost enemy better and nothing else: [../design/v16_event_record.md](../design/v16_event_record.md)); the first stage carries the new information; a place as a target and the choice of way move to the second stage, because spam and routes are where he is furthest from the pros.
+Second version (2026-10-11 evening), after the day's measurements: the list of events is out of the first build (on the pros' demos it foretold the next item and a just-lost enemy better and nothing else: [../v0.2/v16_event_record.md](v16_event_record.md)); the first stage carries the new information; a place as a target and the choice of way move to the second stage, because spam and routes are where he is furthest from the pros.
 
 ## 2. His rounds (stage B on; stage A keeps what he has)
 
@@ -101,7 +101,7 @@ Never their mouse or trigger.
 7. High ground: the position token alone (he is shown it and learns what it is worth), or also a hit from above paid more (`HIGH_PAY`, built on 2026-10-09 and never used in a run).
 8. Speed for each jump: a pay for speed gained from one hop to the next (approved in principle on 2026-10-10; the rule is shown first), or only his legs learning from the game's pay (stage C).
 9. Several ways to a target (the way output of stage C): brought forward to stage B, since predictable routes are his main fault today?
-10. His pay, his rounds and his opponents ([../design/V16_TRAINING.md](../design/V16_TRAINING.md), written on his question of
+10. His pay, his rounds and his opponents ([../v0.2/V16_TRAINING.md](V16_TRAINING.md), written on his question of
     2026-10-11): the second value estimate brought forward to stage A; an exploiter in his league and its share of the
     simulators; a frag paid by what it moves his chance of winning the game; the pros' choices as a standing prior
     (point 4 above); promotion by the scorecard beside the control.

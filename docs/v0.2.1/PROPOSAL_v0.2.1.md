@@ -21,7 +21,7 @@ stays on v0.1.
 | 8 | The two-minute value estimate did no harm and may have helped his stack | it adds a third to his credit; back at the mega within 2 s 48% to 53%; against v0.1 he holds 150 or more 53% of the time (v0.1 in the same games 43%) |
 | 9 | Held-out maps are a sound check | House of Decay 77 to 75%, Dismemberment 58 to 60% while the trained maps rose |
 | 10 | The checks' noise | the same network against itself: 48.8%, single maps 41 to 56%. A check is read by its mean and by map group, never by one map |
-| 11 | From the builds: his legs cannot stop (over a ledge at 370); the pros' other ways are mostly drops, jumps and rocket jumps the walking map lacks; a frag paid by the game must be paid per frame | [../design/V02_STAGE_B.md](../design/V02_STAGE_B.md), [../design/V02_STAGE_C.md](../design/V02_STAGE_C.md) |
+| 11 | From the builds: his legs cannot stop (over a ledge at 370); the pros' other ways are mostly drops, jumps and rocket jumps the walking map lacks; a frag paid by the game must be paid per frame | [../v0.2.1/V02_STAGE_B.md](V02_STAGE_B.md), [../v0.2.1/V02_STAGE_C.md](V02_STAGE_C.md) |
 
 Findings 2 and 3 are new and change what I would do about rockets. The first aim step, the rocket prices and the
 places could not have moved his weapon use: the draw of lives decides it, and inside a life his own results favour

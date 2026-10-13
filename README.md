@@ -26,7 +26,7 @@ real ten-minute duels on Blood Run, Aerowalk and Lost World (50 frags to 22 over
 players' demos he fires a fifth of their rockets, takes the commonest way between two items too often, and closes on
 the enemy at the same speed whether the enemy is weak or strong. Every run and measurement, including what did not
 work, is in [docs/RESULTS.md](docs/RESULTS.md); the latest full report is
-[docs/runs/REPORT_v15b.md](docs/runs/REPORT_v15b.md).
+[docs/legacy/REPORT_v15b.md](docs/legacy/REPORT_v15b.md).
 
 The goal is a bot that beats strong players fairly, with learned movement, weapon choice, item control and positioning,
 and later one that adapts to the level of the player in front of him.
@@ -116,8 +116,8 @@ In progress:
 
 - An attention layer over what he knows: the enemy as seen and as he believes him to be (where last seen or heard, how
   long ago, how strong), the items with their clocks, the map's places, his own position and his way
-  ([docs/design/V16_ATTENTION.md](docs/design/V16_ATTENTION.md), [docs/runs/MANIFEST_v16.md](docs/runs/MANIFEST_v16.md),
-  [docs/design/V16_TRAINING.md](docs/design/V16_TRAINING.md)).
+  ([docs/v0.2/V16_ATTENTION.md](docs/v0.2/V16_ATTENTION.md), [docs/v0.2/MANIFEST_v16.md](docs/v0.2/MANIFEST_v16.md),
+  [docs/v0.2/V16_TRAINING.md](docs/v0.2/V16_TRAINING.md)).
 - The measures of professional play, from 4,449 duel demos of ten maps: rockets fired with nobody in view and where they
   land, weapon combinations, how they close on a weak or a strong enemy, item timing, the ways they take, walking
   (`tools/pro_yardsticks.py`, `tools/pro_places.py`). His networks are put through the same measures

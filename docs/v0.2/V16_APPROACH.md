@@ -10,8 +10,8 @@ edits; this file is the repo's record as of 19:00 and takes his answers when the
 **Which run is which.** v15c's end (his legs, the weapon rounds) is on the public server since 13:01 and is the control.
 `duel_gru_v15f` was the afternoon's trial of the enemy as a target (stopped), `duel_gru_v15r` the trial of the three
 rocket changes (ended 18:01). `duel_gru_v15e` is the run proposed for tonight with today's network
-([../runs/MANIFEST_v15e.md](../runs/MANIFEST_v15e.md)). v16 is the attention model, not built yet. The details behind
-this page: the model ([V16_ATTENTION.md](V16_ATTENTION.md)), its stages ([../runs/MANIFEST_v16.md](../runs/MANIFEST_v16.md)),
+([../v0.2/MANIFEST_v15e.md](MANIFEST_v15e.md)). v16 is the attention model, not built yet. The details behind
+this page: the model ([V16_ATTENTION.md](V16_ATTENTION.md)), its stages ([../v0.2/MANIFEST_v16.md](MANIFEST_v16.md)),
 pay, rounds and opponents ([V16_TRAINING.md](V16_TRAINING.md)), the day's numbers
 ([the log of 2026-10-11](../results/2026-10-11.md)).
 
@@ -126,7 +126,7 @@ how possible this would be": left out of the plan, see 3.4); the parser first ("
 
 New names: v15c's end on the server is v0.1; the next model is v0.2, trials on the way v0.2.1 and so on; v1.0 when he
 beats the owner. "Add stage A from attention to your proposed v15e for tonight and call it v0.2": the manifest is
-[../runs/MANIFEST_v0.2.md](../runs/MANIFEST_v0.2.md).
+[../v0.2/MANIFEST_v0.2.md](MANIFEST_v0.2.md).
 
 | Question | His answer |
 |---|---|
@@ -160,7 +160,7 @@ beats the owner. "Add stage A from attention to your proposed v15e for tonight a
 
 Nothing starts without the owner's go.
 
-1. `duel_gru_v15e` at full size until 07:00 ([../runs/MANIFEST_v15e.md](../runs/MANIFEST_v15e.md)): games on all ten maps (thirty
+1. `duel_gru_v15e` at full size until 07:00 ([../v0.2/MANIFEST_v15e.md](MANIFEST_v15e.md)): games on all ten maps (thirty
    simulators, three a map, 10,080 players as before), the three rocket changes, the enemy as a target seeded by the narrow
    rule; v15c's end in his league and as the control in every check, seats swapped in half of the games; the stand-in on
    the ten maps and on House of Decay every third check. Stopped under 45% against the control at two checks in a row, or

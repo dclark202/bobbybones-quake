@@ -1,7 +1,7 @@
 # Stage C of the attention model: one way of moving. The build's specification (2026-10-11 night; built in copies while v0.2 trains)
 
 The owner, 2026-10-11: "Make sure parts B and C are built along the way too." Stage A is training as v0.2
-([../runs/MANIFEST_v0.2.md](../runs/MANIFEST_v0.2.md)); stage B is in [V02_STAGE_B.md](V02_STAGE_B.md). This page says
+([../v0.2/MANIFEST_v0.2.md](../v0.2/MANIFEST_v0.2.md)); stage B is in [V02_STAGE_B.md](V02_STAGE_B.md). This page says
 what stage C is in the simulator and the trainer. As in stage B every part is behind a switch that is off by default,
 and with all of them off fixed runs must be bit for bit what they are today.
 

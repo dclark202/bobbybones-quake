@@ -7,7 +7,7 @@ the rocket changes in.
 
 **Which run is which.** v15c's end is on the public server since 13:01 and is the control here. v15f was the afternoon's
 trial of the enemy as a target (stopped), v15r the afternoon's trial of the rocket changes. **v15e is the run proposed
-for tonight**: today's network, not attention. The attention model ([../design/V16_ATTENTION.md](../design/V16_ATTENTION.md),
+for tonight**: today's network, not attention. The attention model ([../v0.2/V16_ATTENTION.md](V16_ATTENTION.md),
 [MANIFEST_v16.md](MANIFEST_v16.md)) is built over the next two days ("We should do this right not rush it").
 The day's log: [2026-10-11](../results/2026-10-11.md).
 

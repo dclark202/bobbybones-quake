@@ -96,8 +96,8 @@ not.
   owner's "Do not promote the live server yet".
 - The owner's server remarks went live on 2026-10-12 09:59 with v0.1 unchanged (RESULTS 2026-10-12 09:45).
 - Stages B and C of the attention model, the pre-start pieces and the weapon-in-hand lesson: built, tested alone and
-  together, and merged into the repo on 2026-10-12 with every switch off ([../design/V02_STAGE_B.md](../design/V02_STAGE_B.md),
-  [../design/V02_STAGE_C.md](../design/V02_STAGE_C.md)).
+  together, and merged into the repo on 2026-10-12 with every switch off ([../v0.2.1/V02_STAGE_B.md](../v0.2.1/V02_STAGE_B.md),
+  [../v0.2.1/V02_STAGE_C.md](../v0.2.1/V02_STAGE_C.md)).
 - A 90-second video of selected moments (`videos/v0_2/`).
 
 ## 6. Faults and what did not work
@@ -112,7 +112,7 @@ not.
 
 ## 7. What to try next
 
-[PROPOSAL_v0.2.1.md](PROPOSAL_v0.2.1.md) and the owner's decision doc: from v0.2's end, one night in two legs.
+[PROPOSAL_v0.2.1.md](../v0.2.1/PROPOSAL_v0.2.1.md) and the owner's decision doc: from v0.2's end, one night in two legs.
 Leg 1, movement and targets: his own movement taught by his legs, places as targets, the things he foretells, legs
 that stand at a place. Leg 2, weapons and height: more rocket lives, the second aim step calibrated from the pros and
 from the players on his server, the pull toward the pros' weapon in hand, a hit from above worth more. Held: whole

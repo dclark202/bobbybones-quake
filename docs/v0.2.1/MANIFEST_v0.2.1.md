@@ -3,9 +3,9 @@
 **The run on one page: [RUN_v0.2.1.md](RUN_v0.2.1.md).** This file is the long write-up behind it.
 
 **The names.** v0.1 is `duel_gru_v15c`. v0.2 (`duel_gru_v0_2`) ended on 2026-10-12 at 08:43
-([REPORT_v0.2.md](REPORT_v0.2.md)) and is the network on the public server since 15:15. **v0.2.1** (`duel_gru_v0_2_1`)
+([REPORT_v0.2.md](../v0.2/REPORT_v0.2.md)) and is the network on the public server since 15:15. **v0.2.1** (`duel_gru_v0_2_1`)
 is this run: from v0.2's end, one night. The proposal it grew from is [PROPOSAL_v0.2.1.md](PROPOSAL_v0.2.1.md); the
-thinking behind goal 1 is [../design/ENEMY_MODEL.md](../design/ENEMY_MODEL.md).
+thinking behind goal 1 is [../v0.2.1/ENEMY_MODEL.md](ENEMY_MODEL.md).
 
 **Words.**
 - **The movement autopilot**: the separate small network that runs and strafe-jumps him to a target when he switches it
@@ -160,7 +160,7 @@ In the rows written before the evening "his legs" is the movement autopilot and 
 |---|---|---|
 | 1 | Legs trained to look and stand together | standing learnt (arrives 91%), looking not (17.8% against 16.6%), plain speed down 3%: stopped |
 | 2 | Legs trained to stand only (`move_v16b`, 40 minutes), then the ten-map test of today's legs | passes (items a minute +2.4% over `move_v15n`, no map more than 5% under; Campgrounds on the line); Blood Run's upper ledge held 91% of the time against 76%, the lower one no better. But its pupil is slower: 2 to 6% on most maps, 17% on Aerowalk, and told to stand it brakes all the way to the place (at 400 or more 22% of the way against 35%). Out |
-| 3 | v0.2's end checks | [REPORT_v0.2.md](REPORT_v0.2.md) |
+| 3 | v0.2's end checks | [REPORT_v0.2.md](../v0.2/REPORT_v0.2.md) |
 | 4 | The merge: with everything off, bit for bit | 16 of 16 fixed runs |
 | 5 | Size and speed on the card | section 4 |
 | 6 | The legs' lesson with its warm-up | his step 0.03, 0.07, 0.04, 0.04 over four updates while the weight rose to a third; his own turn's agreement with his legs' 7, 11, 24, 29%; sideways key 48 to 57%; in withheld stretches his turn 6 to 17%; on target 28.0 to 28.3% |
