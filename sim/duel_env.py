@@ -1096,9 +1096,29 @@ CELL_COLS = None                                           # no learned cell tab
 #   died                     in this step: he died of anything (a frag, his own rocket, lava, the void) and is back at a
 #                            spawn: his life's hindsight ends here (a round's end is `done`)
 #   eye_h                    the height of his eyes above his place (crouched or not)
+# (2026-10-12, the questions a pro asks himself; the trainer's --aux-heads target, strength, first)
+#   en_target                what the enemy goes for, a number of INTENTS: a network's seat its own intention as the simulator
+#                            holds it (self.intent: 0 nothing, an item, the enemy, a holding place; after a pickup it stays
+#                            the item until his next reading); the scripted item runner and the lobber the item the rule
+#                            names them, to which they walk (_runner_keys: self.intent_teach, 0 nothing). -1, nothing to
+#                            say: the other scripted opponents (the strafing target, the fighter; the holder and the
+#                            watcher, whose target may be a place that is no intention), and a round without other players
+#   en_band                  the enemy's health and armor together, in bands (AUX_BANDS): 0 under 75, 1 from 75 to under
+#                            125, 2 from 125 to 200, 3 over 200
+#   en_weapon                the weapon in the enemy's hand, a number of WEAPONS
+#   mega_take, red_take      in this step: who took the mega, the red armor (the items of mega_s and red_s): 0 nobody of his
+#                            match, 1 he, 2 another player of his match (in a pair: the enemy)
 AUX_COLS = ("en_fwd", "en_left", "en_up", "en_alive", "en_in_view", "mega_s", "red_s", "dmg_dealt", "dmg_taken", "frag", "fragged",
-            "x", "y", "z", "yaw", "pitch", "died", "eye_h")
+            "x", "y", "z", "yaw", "pitch", "died", "eye_h",
+            "en_target", "en_band", "en_weapon", "mega_take", "red_take",
+            "en_near")
+#   en_near                  (--aux-heads near) the landmark nearest the enemy where he truly is, a number of INTENTS as
+#                            en_target: of the targets with a row of the route field on this map (the items; with TARGETS
+#                            the map's holding places) the one with the least seconds of way FROM his place (route.T[row,
+#                            route.locate(place)]; of several items of a kind the nearest). Never 0 ("none") or "EN". -1,
+#                            nothing to say: a round without other players, no walking map, no landmark he can walk to
 AUX_ITEM_CAP = 40.0
+AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
 ITEM_DEFS = {
     "item_health_small": ("hp", 5, 35, 200, None), "item_health": ("hp", 25, 35, 100, None),
@@ -5536,6 +5556,28 @@ class DuelEnv:
         out[:, C["yaw"]] = (self.yaw + 180.0) % 360.0 - 180.0
         out[:, C["pitch"]] = self.pitch
         out[:, C["eye_h"]] = np.where(self.duck, VIEW_H_DUCK, VIEW_H)
+        sf_ = self.script[foe]                               # what the enemy goes for: a network's seat its intention, the item runner
+        tg_ = np.where(sf_ == 0, self.intent[foe],           # and the lobber what the rule names them, nothing to say of the rest
+                       np.where((sf_ == 3) & (self.sc_persona[foe] != HOLDER) & (self.sc_persona[foe] != WATCHER), self.intent_teach[foe], -1))
+        out[:, C["en_target"]] = np.where(about, tg_, -1)
+        sk_ = self.hp[foe] + self.armor[foe]                 # his stack's band, the weapon in his hand
+        out[:, C["en_band"]] = (sk_ >= AUX_BANDS[0]).astype(np.float32) + (sk_ >= AUX_BANDS[1]) + (sk_ > AUX_BANDS[2])
+        out[:, C["en_weapon"]] = self.weapon[foe]
+        nr_ = np.full(n, -1, np.int64)                       # the landmark nearest the enemy, by seconds of way from where he is
+        if self.route is not None:
+            nd_ = self.route.locate(s[foe, :3])
+            bt_ = np.full(n, 1e8, np.float32)                # (a way of 1e8 s or more is no way)
+            for k_ in range(1, len(INTENTS)):                # in the order of INTENTS: of two equally near the first
+                gs_ = self.intent_more.get(k_)               # (NEAREST: the rows of a kind with several items)
+                if gs_ is None:
+                    gs_ = np.array([self.intent_gi[k_]] if self.intent_gi[k_] >= 0 else [], np.int64)
+                gs_ = gs_[gs_ < len(self.route.T)]
+                if k_ == EN_INTENT or not len(gs_):
+                    continue
+                t_ = self.route.T[gs_][:, nd_].min(0)
+                nr_ = np.where(t_ < bt_, k_, nr_)
+                bt_ = np.minimum(bt_, t_)
+        out[:, C["en_near"]] = np.where(about, nr_, -1)
         if st is not None:
             for (i_, v_), d_ in st["by"].items():            # (the damage as booked per attacker: _book)
                 out[i_, C["dmg_dealt"]] += d_
@@ -5544,6 +5586,10 @@ class DuelEnv:
                 if e_["killer"] >= 0 and e_["killer"] != e_["victim"]:
                     out[e_["killer"], C["frag"]] = 1.0
                     out[e_["victim"], C["fragged"]] = 1.0
+            for i_, k_ in getattr(self, "aux_take", ()):     # who took the mega (0) or the red armor (1) in this step: he, or
+                c_ = C["mega_take"] + k_                     # another player of his match (he, if both did: a jump run's item stays)
+                out[oth[i_], c_] = np.where(out[oth[i_], c_] == 1.0, 1.0, 2.0)
+                out[i_, c_] = 1.0
         if died is not None:
             out[:, C["died"]] = died
         return out
@@ -5574,6 +5620,7 @@ class DuelEnv:
         in_run = self.run_k >= 0
         ch_[in_run] = self.run_k[in_run]                    # an item run: the target is given, not chosen
         self.way_trips = []                                 # (WAY_MEASURE: this step's trips)
+        self.aux_take = []                                  # (--aux, "who gets there first") this step's takes of the mega and the red armor
         wy_ = None
         if WAYS and a.shape[1] > WAY_HEAD:                   # his way: the thirteenth output; the shortest in an item run or a jump run
             wy_ = np.where(in_run, 0, a[:, WAY_HEAD])
@@ -6037,6 +6084,8 @@ class DuelEnv:
                     self._hear(0, np.array([i]), 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "ar" else 3)
                 if took:
                     self.note_take(int(i), int(it))          # (N_V02: when he last took it; who heard or saw a big one taken)
+                    if int(it) in self.big_ids:              # (--aux, "who gets there first") the mega or the red armor: who took it
+                        self.aux_take.append((int(i), self.big_ids.index(int(it))))
                     if WAY_MEASURE and int(it) in self.route_item:
                         self._way_trip(int(i), self.route_item.index(int(it)))
                 own_ = bool(self.jrun[i]) and it == self.jrun_it[i]    # (a jump run: his target stays for the other seats' tries)

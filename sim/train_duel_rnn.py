@@ -195,6 +195,100 @@ def aux_labels(A, dn, ix, frames):
     return Y, M, C
 
 
+def aux_guess(A, dn, ix, window):
+    """(--aux-heads target, strength, first; 2026-10-12) the labels of three more questions of the --aux lesson, from the
+    simulator's five last columns of info["aux"] (en_target, en_band, en_weapon, mega_take, red_take).
+      A, dn, ix   as aux_labels takes them: A [T+1, n, columns], row t the game as it stood BEFORE step t and, in its event
+                  columns (the takes), what happened in step t-1: step t's are in row t+1; dn [T, n] his round ended in step t
+      window      (first) frames
+    ->  K [T, n, 5] int64:  the classes: what the enemy goes for (a number of the simulator's INTENTS); his stack's band (0 to
+                            3); the weapon in his hand (a number of WEAPONS); who takes the mega next, who the red armor
+                            (0 nobody within the window, 1 he, 2 another player of his match: in a pair the enemy)
+        M [T, n, 6] bool:   the label is there: target, band, weapon, the mega's taker, the red armor's taker; the sixth is
+                            the target's on the frames the enemy is not in view (for the record only)
+    Where the labels are:
+      target    there is an enemy alive (en_alive: a round with other players) and the simulator has a target to name for
+                him (en_target is not -1: a network's seat, a scripted item runner), in view or not
+      band      there is an enemy alive, in view or not
+      weapon    there is an enemy alive and he is not in view (in view it is an input already)
+      first     the map has the item (lying there or away), there is an enemy alive, and the whole window lies inside the
+                rollout (a frame whose window runs past the rollout's end has no label: the fight's rule). The class is by
+                the item's first take in the steps t to t+window-1; a step in which his round ends is the last that counts
+                for the frames before it (the take of that same step counts). His death does not end it: who takes the
+                item next is a fact of the same game.
+    Whole tensors over the players and the frames; no loop over either."""
+    import torch
+    T, n = A.shape[0] - 1, A.shape[1]
+    W = int(window)
+    dev_ = A.device
+    S, E = A[:T], A[1:]                                      # the game before step t; what happened in step t
+    BIG = 1 << 30
+    t0 = torch.arange(T, device=dev_)[:, None]
+
+    def nxt(flag):                                           # for every row, the first row at or after it where flag holds (BIG: none)
+        c_ = torch.where(flag, t0.expand(flag.shape), torch.full(flag.shape, BIG, dtype=torch.long, device=dev_))
+        return torch.flip(torch.cummin(torch.flip(c_, (0,)), 0).values, (0,))
+
+    alive = S[..., ix["en_alive"]] > 0.5
+    seen = S[..., ix["en_in_view"]] > 0.5
+    K = torch.zeros(T, n, 5, dtype=torch.long, device=dev_)
+    M = torch.zeros(T, n, 6, dtype=torch.bool, device=dev_)
+    tg = S[..., ix["en_target"]].round().long()
+    K[..., 0] = tg.clamp(min=0)
+    M[..., 0] = alive & (tg >= 0)
+    M[..., 5] = M[..., 0] & ~seen
+    K[..., 1] = S[..., ix["en_band"]].round().long().clamp(0, 3)
+    M[..., 1] = alive
+    K[..., 2] = S[..., ix["en_weapon"]].round().long().clamp(min=0)
+    M[..., 2] = alive & ~seen
+    lim = torch.minimum(t0 + (W - 1), nxt(dn > 0.5))         # the last step that counts: the window's, or the one that ends his round
+    for k_, (it_, tk_) in enumerate((("mega_s", "mega_take"), ("red_s", "red_take"))):
+        who = E[..., ix[tk_]].round().long()                 # in step t: 0 nobody, 1 he, 2 another player took it
+        nt = nxt(who > 0)
+        K[..., 3 + k_] = torch.where(nt <= lim, torch.gather(who, 0, nt.clamp(max=T - 1)), torch.zeros_like(who))
+        M[..., 3 + k_] = (S[..., ix[it_]] < 39.99) & alive & (t0 + W <= T)
+    return K, M
+
+
+def aux_near(A, dn, ix, window):
+    """(--aux-heads near; 2026-10-12) near which landmark the enemy is, now and `window` frames on, from the simulator's column
+    en_near of info["aux"] (a number of INTENTS; -1: nothing to say).
+      A, dn, ix   as aux_labels takes them: A [T+1, n, columns], row t the game as it stood BEFORE step t; dn [T, n] his round
+                  ended in step t
+    ->  K [T, n, 2] int64:  the landmark nearest the enemy at frame t; at frame t+window
+        M [T, n, 4] bool:   the label is there: now; later; and the same two on the frames the enemy is not in view at frame t
+                            (for the record only)
+    Where the labels are:
+      now      there is an enemy alive (en_alive) and the simulator names a landmark (en_near is not -1)
+      later    the same at frame t, the frame t+window lies inside the rollout (a frame whose window runs past the rollout's
+               end has no label), the simulator names a landmark there, and his round does not end in the steps t to
+               t+window-1 (the enemy of another round is nowhere for this one). His death, or the enemy's, does not end it:
+               where the enemy is then is a fact of the same game.
+    Whole tensors over the players and the frames; no loop over either."""
+    import torch
+    T, n = A.shape[0] - 1, A.shape[1]
+    W = max(1, int(window))
+    dev_ = A.device
+    S = A[:T]
+    BIG = 1 << 30
+    t0 = torch.arange(T, device=dev_)[:, None]
+    c_ = torch.where(dn > 0.5, t0.expand(dn.shape), torch.full(dn.shape, BIG, dtype=torch.long, device=dev_))
+    ne = torch.flip(torch.cummin(torch.flip(c_, (0,)), 0).values, (0,))      # the first step at or after t that ends his round (BIG: none)
+    alive = S[..., ix["en_alive"]] > 0.5
+    seen = S[..., ix["en_in_view"]] > 0.5
+    nr = A[..., ix["en_near"]].round().long()                # [T+1, n]
+    lt = nr[(t0[:, 0] + W).clamp(max=T)]                     # the same column `window` frames on (the last row where that is past the end)
+    K = torch.zeros(T, n, 2, dtype=torch.long, device=dev_)
+    M = torch.zeros(T, n, 4, dtype=torch.bool, device=dev_)
+    K[..., 0] = nr[:T].clamp(min=0)
+    M[..., 0] = alive & (nr[:T] >= 0)
+    K[..., 1] = lt.clamp(min=0)
+    M[..., 1] = alive & (lt >= 0) & (t0 + W <= T) & (ne >= t0 + W)
+    M[..., 2] = M[..., 0] & ~seen
+    M[..., 3] = M[..., 1] & ~seen
+    return K, M
+
+
 def way_measure(store, keep=50, least=30, same=200.0):
     """(WAYS) how predictable his ways are, counted as tools/pro_yardsticks.py counts the pros' (way_labels: 43% for them,
     57% for v0.1 on recorded games): of his trips between the same two places, the share on the commonest way.
@@ -321,7 +415,16 @@ def main():
                     help="stage B, part 1: the weight of the things he is asked to foretell from his memory (0 = off). Four small output "
                          "layers on his memory: where the unseen enemy is, where he next appears, how the fight ends, when the big items "
                          "return; labels by hindsight inside the rollout from the simulator's info['aux']. Never an input, never paid")
-    ap.add_argument("--aux-heads", default="place,appear,fight,items", help="... which of the four are in the lesson")
+    ap.add_argument("--aux-heads", default="place,appear,fight,items",
+                    help="... which are in the lesson: the four, and (2026-10-12; only when named) target = what the enemy goes for (his "
+                         "intention, a class), strength = his stack's band and the weapon in his hand (two classes), first = who takes the "
+                         "mega and who the red armor at its next pickup (he, another player, nobody within --aux-first-frames)")
+    ap.add_argument("--aux-first-frames", type=int, default=400,
+                    help="... (first) the window in frames (400 = 10 s). Only a frame whose whole window lies in the rollout is labelled, "
+                         "so it is cut to three quarters of the rollout as the fight's: at 384 steps 400 becomes 288")
+    ap.add_argument("--aux-near-frames", type=int, default=120,
+                    help="... (--aux-heads near: near which landmark the enemy is, now and later; a landmark is an item or a holding place "
+                         "of the intention list) how many frames on 'later' is (120 = 3 s); cut to three quarters of the rollout")
     ap.add_argument("--aux-trunk", type=float, default=1.0, help="... the share of the lesson's gradient that reaches the shared layers (his "
                                                                  "memory and what feeds it); the four output layers learn in full. 0 = "
                                                                  "they only read his memory (a measure of what it holds)")
@@ -475,12 +578,14 @@ def main():
         assert tuple(E_.CELL_COLS) == (OBS_DIM - 2, OBS_DIM - 1)
 
     ATT = None                                               # (v0.2) the attention part's layout: it comes with the network he resumes from
+    AUX_CK = ()                                              # (--aux) which of the layers of 2026-10-12 the network he resumes from has
     AUX_SAVE = {}                                            # (--aux) what is kept in a saved file beside the lesson's layers
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
         if any(k_.startswith("aux.") for k_ in ck0_["model"]):
             AUX_SAVE = dict(aux_heads=ck0_.get("aux_heads"))
+        AUX_CK = tuple(h_ for h_ in ("target", "strength", "first", "near") if "aux.{}.weight".format(h_) in ck0_["model"])
         del ck0_
     if ATT is not None:
         import attn as attn_
@@ -490,7 +595,13 @@ def main():
     AUX_W = float(a.aux)                                     # (--aux) the lesson's weight. Its output layers are in the network when the
     AUX = AUX_W > 0 or bool(AUX_SAVE)                        # lesson is on, or when the network he resumes from has them (kept as they are)
     AUX_HEADS = tuple(x_ for x_ in a.aux_heads.split(",") if x_)
-    assert all(x_ in ("place", "appear", "fight", "items") for x_ in AUX_HEADS), a.aux_heads
+    assert all(x_ in ("place", "appear", "fight", "items", "target", "strength", "first", "near") for x_ in AUX_HEADS), a.aux_heads
+    AUX_Q = tuple(h_ for h_ in ("target", "strength", "first", "near") if AUX_W > 0 and h_ in AUX_HEADS)       # (2026-10-12) the questions asked beside the four,
+    AUX_NEW = tuple(h_ for h_ in ("target", "strength", "first", "near") if h_ in AUX_Q or h_ in AUX_CK)        # and their layers in the network (asked, or come with it)
+    AUX_NN = dict(target=len(getattr(E_, "INTENTS", ())), strength=4 + len(E_.WEAPONS), first=6,       # their outputs: the intentions; 4 bands + the weapons; 3 + 3;
+                  near=2 * len(getattr(E_, "INTENTS", ())))                                            # the intentions twice (the landmark now, later)
+    AUX_KO = (("target", 0, AUX_NN["target"]), ("strength", 0, 4), ("strength", 4, AUX_NN["strength"]), ("first", 0, 3), ("first", 3, 6))   # label j: its layer, its outputs
+    AUX_KN = tuple(hi_ - lo_ for _, lo_, hi_ in AUX_KO) + (AUX_NN["target"],)                           # the classes of each label (the sixth: the target, enemy unseen)
     aux = None
     if AUX_W > 0:
         AUX_COLS = getattr(E_, "AUX_COLS", None)
@@ -506,6 +617,21 @@ def main():
         print("aux: weight {} on {}, {} of its gradient into the shared layers; windows in frames: appears within {}, the fight within {}, "
               "damage over {} (asked: {}; a rollout is {})".format(AUX_W, "+".join(AUX_HEADS), a.aux_trunk, AUX_FR[0], AUX_FR[1], AUX_FR[2],
                                                                    a.aux_frames, a.steps), flush=True)
+        if AUX_NEW:
+            AUX_SAVE["aux_heads"].update({h_: AUX_NN[h_] for h_ in AUX_NEW})
+        if AUX_Q:
+            assert all(c_ in AUX_IX for c_ in ("en_target", "en_band", "en_weapon", "mega_take", "red_take")), \
+                "--aux-heads {}: the simulator {} has not the columns for them (p_g15_env.py)".format(a.aux_heads, a.env)
+            AUX_FW = min(int(a.aux_first_frames), a.steps - a.steps // 4)
+            AUX_SAVE["aux_heads"].update(target_classes=tuple(E_.INTENTS), band_edges=tuple(getattr(E_, "AUX_BANDS", ())), weapon_classes=tuple(E_.WEAPONS),
+                                         first_classes=("nobody", "he", "another"), first_frames=AUX_FW)
+            print("aux: and {}: {} outputs; who takes the big items next within {} frames (asked: {})".format(
+                "+".join(AUX_Q), "+".join(str(AUX_NN[h_]) for h_ in AUX_Q), AUX_FW, a.aux_first_frames), flush=True)
+        if "near" in AUX_Q:
+            assert "en_near" in AUX_IX, "--aux-heads near: the simulator {} has not the column for it (p_g15_near_env.py)".format(a.env)
+            AUX_NW = max(1, min(int(a.aux_near_frames), a.steps - a.steps // 4))
+            AUX_SAVE["aux_heads"].update(near_classes=tuple(E_.INTENTS), near_frames=AUX_NW)
+            print("aux: near: the landmark nearest the enemy now and {} frames on (asked: {})".format(AUX_NW, a.aux_near_frames), flush=True)
 
     class Policy(nn.Module):
         def __init__(self):
@@ -531,6 +657,11 @@ def main():
                 for l_ in self.aux.children():                   # They start at nothing: until they have learnt something the lesson
                     nn.init.zeros_(l_.weight)                    # does not move his memory
                     nn.init.zeros_(l_.bias)
+                for h_ in AUX_NEW:                               # (2026-10-12) what the enemy goes for (the intentions), his stack's band
+                    l_ = nn.Linear(H, AUX_NN[h_])                # and weapon (4 + 9), who takes the mega and the red armor next (3 + 3):
+                    nn.init.zeros_(l_.weight)                    # only the ones named in --aux-heads or in the network he resumes from
+                    nn.init.zeros_(l_.bias)
+                    setattr(self.aux, h_, l_)
 
         def step(self, x, h, f=None):
             if HAS_CELLS:
@@ -933,6 +1064,28 @@ def main():
             ys_ = ms_ = cs_ = None
             aux_secs = time.time() - t_aux
             ax_s, ax_n, ax_w = torch.zeros(len(AUX_MI), dtype=torch.float64), torch.zeros(6, dtype=torch.float64), 0.0
+            if AUX_Q:                                                    # (2026-10-12) the labels of the questions beside the four, the same way
+                t_aux = time.time()
+                ks_, ms_ = [], []
+                for c0_ in range(0, N, 4096):
+                    k_, m_ = aux_guess(b_aux[:, c0_:c0_ + 4096].float(), dn_[:, c0_:c0_ + 4096], AUX_IX, AUX_FW)
+                    ks_.append(k_.to(torch.uint8))
+                    ms_.append(m_)
+                AUX_K, AUX_KM = torch.cat(ks_, 1), torch.cat(ms_, 1)     # (off the card, as the four's)
+                ks_ = ms_ = None
+                if "near" in AUX_Q:                                      # (near) the landmark nearest the enemy, now and later
+                    ks_, ms_ = [], []
+                    for c0_ in range(0, N, 4096):
+                        k_, m_ = aux_near(b_aux[:, c0_:c0_ + 4096].float(), dn_[:, c0_:c0_ + 4096], AUX_IX, AUX_NW)
+                        ks_.append(k_.to(torch.uint8))
+                        ms_.append(m_)
+                    AUX_N, AUX_NM = torch.cat(ks_, 1), torch.cat(ms_, 1)
+                    ks_ = ms_ = None
+                    nx_s, nx_n = torch.zeros(6, dtype=torch.float64), torch.zeros(4, dtype=torch.float64)      # sums: 2 losses, 4 x called right; weights
+                    nx_h = [torch.zeros(AUX_NN["target"], dtype=torch.float64) for _ in range(4)]             # how often each landmark is the true one
+                guess_secs = time.time() - t_aux
+                gx_s, gx_n = torch.zeros(11, dtype=torch.float64), torch.zeros(6, dtype=torch.float64)      # sums: 5 losses, 5 x called right, the target
+                gx_h = [torch.zeros(n_, dtype=torch.float64) for n_ in AUX_KN]                              # unseen; weights; how often each answer is true
         wy_acc = torch.zeros(8, dtype=torch.float64, device=dev)         # (WAYS) the learner's readings of his way: how many, the sum of the
         #                                                                  entropy, of the chance given to each way, the readings on each way
         for epoch in range(3):
@@ -1008,6 +1161,25 @@ def main():
                                appear=((e_sd.pow(2) + e_ap[..., 1].pow(2)) * wm_[..., 1]).sum() / wn_[1],
                                fight=(ce_ * wm_[..., 2]).sum() / wn_[2] + (e_dm.pow(2) * wm_[..., 3]).sum() / wn_[3],
                                items=(e_it[..., 0].pow(2) * wm_[..., 4]).sum() / wn_[4] + (e_it[..., 1].pow(2) * wm_[..., 5]).sum() / wn_[5])
+                    if AUX_Q:                                            # (2026-10-12) what the enemy goes for, how strong he is, who takes the big items
+                        ak_ = AUX_K[:, ci_].to(dev).long()
+                        wk_ = AUX_KM[:, ci_].to(dev).float() * wgt[..., None]        # a label is there, on the learner's frames
+                        wkn_ = wk_.sum((0, 1)).clamp(min=1.0)
+                        og_ = {h_: getattr(pol.aux, h_)(hx_) for h_ in AUX_Q}
+                        cg_ = {}                                         # label j: its outputs, its loss frame by frame, the true answer
+                        for j_, (h_, lo_, hi_) in enumerate(AUX_KO):
+                            if h_ in og_:
+                                o_, y_ = og_[h_][..., lo_:hi_], ak_[..., j_].clamp(max=hi_ - lo_ - 1)
+                                cg_[j_] = (o_, nn.functional.cross_entropy(o_.reshape(-1, hi_ - lo_), y_.reshape(-1), reduction="none").view(y_.shape), y_)
+                        for h_ in AUX_Q:
+                            al_[h_] = sum((cg_[j_][1] * wk_[..., j_]).sum() / wkn_[j_] for j_ in range(5) if AUX_KO[j_][0] == h_)
+                    if "near" in AUX_Q:                                  # (near) two answers over the intentions: now, later
+                        an_ = AUX_N[:, ci_].to(dev).long().clamp(max=AUX_NN["target"] - 1)
+                        wr_ = AUX_NM[:, ci_].to(dev).float() * wgt[..., None]
+                        wrn_ = wr_.sum((0, 1)).clamp(min=1.0)
+                        on_ = og_["near"].view(og_["near"].shape[0], og_["near"].shape[1], 2, AUX_NN["target"])
+                        cn_ = nn.functional.cross_entropy(on_.reshape(-1, AUX_NN["target"]), an_.reshape(-1), reduction="none").view(an_.shape)
+                        al_["near"] = (cn_[..., 0] * wr_[..., 0]).sum() / wrn_[0] + (cn_[..., 1] * wr_[..., 1]).sum() / wrn_[1]
                     loss = loss + aux_w * sum(al_[k_] for k_ in AUX_HEADS)
                     if epoch == 0:                                       # his errors on frames this update has not yet learnt from
                         with torch.no_grad():
@@ -1021,6 +1193,25 @@ def main():
                             ax_s += (mv_ * wm_[..., AUX_MI]).sum((0, 1)).double().cpu()
                             ax_n += wm_.sum((0, 1)).double().cpu()
                             ax_w += float(wgt.sum())
+                            if AUX_Q:
+                                for j_, (o_, c_, y_) in cg_.items():
+                                    r_ = (o_.argmax(-1) == y_).float()
+                                    gx_s[j_] += float((c_ * wk_[..., j_]).sum())
+                                    gx_s[5 + j_] += float((r_ * wk_[..., j_]).sum())
+                                    gx_h[j_] += torch.bincount(y_.reshape(-1), weights=wk_[..., j_].reshape(-1).double(), minlength=AUX_KN[j_]).cpu()
+                                    if j_ == 0:                          # ... the target on the frames the enemy is not in view
+                                        gx_s[10] += float((r_ * wk_[..., 5]).sum())
+                                        gx_h[5] += torch.bincount(y_.reshape(-1), weights=wk_[..., 5].reshape(-1).double(), minlength=AUX_KN[5]).cpu()
+                                gx_n += wk_.sum((0, 1)).double().cpu()
+                                if "near" in AUX_Q:
+                                    rn_ = (on_.argmax(-1) == an_).float()        # [T, players, 2]
+                                    for j_ in range(4):                          # now, later; the same with the enemy not in view
+                                        nx_s[2 + j_] += float((rn_[..., j_ % 2] * wr_[..., j_]).sum())
+                                        nx_h[j_] += torch.bincount(an_[..., j_ % 2].reshape(-1), weights=wr_[..., j_].reshape(-1).double(),
+                                                                   minlength=AUX_NN["target"]).cpu()
+                                    nx_s[0] += float((cn_[..., 0] * wr_[..., 0]).sum())
+                                    nx_s[1] += float((cn_[..., 1] * wr_[..., 1]).sum())
+                                    nx_n += wr_.sum((0, 1)).double().cpu()
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
                     tl = b_teach[:, chunk]
                     tm = (tl[..., 0] >= 0).float() * wgt
@@ -1318,6 +1509,55 @@ def main():
                               labelled={k_: round(float(ax_n[i_] / ax_w), 4)       # the share of the learner's frames with each label
                                         for i_, k_ in enumerate(("place", "appear", "fight", "damage", "mega", "red"))},
                               label_s=round(aux_secs, 2))
+            if AUX_Q:                                                    # (2026-10-12) each answer as the share called right, beside the share of
+                ra_ = rec["aux"]                                         # the commonest true answer ("zero": had he always given that one)
+
+                def g_(i_, j_, d_=4):
+                    return round(float(gx_s[i_] / max(1.0, float(gx_n[j_]))), d_)
+
+                def z_(j_):
+                    return round(float(gx_h[j_].max() / max(1.0, float(gx_h[j_].sum()))), 4)
+
+                def sh_(j_):
+                    return [round(float(x_), 4) for x_ in (gx_h[j_] / max(1.0, float(gx_h[j_].sum()))).tolist()]
+
+                if "target" in AUX_Q:                                    # what the enemy goes for: overall, and with the enemy not in view
+                    ra_["loss"]["target"] = g_(0, 0)
+                    ra_["target_right"], ra_["target_unseen_right"] = g_(5, 0), g_(10, 5)
+                    ra_["zero"].update(target_right=z_(0), target_unseen_right=z_(5))
+                    ra_["target_share"] = sh_(0)                         # how often each intention is the true answer (the simulator's INTENTS)
+                if "strength" in AUX_Q:                                  # his stack's band; the weapon in his hand (enemy not in view)
+                    ra_["loss"]["strength"] = round(g_(1, 1, 6) + g_(2, 2, 6), 4)
+                    ra_["parts"].update(band=g_(1, 1), weapon=g_(2, 2))
+                    ra_["band_right"], ra_["weapon_right"] = g_(6, 1), g_(7, 2)
+                    ra_["zero"].update(band_right=z_(1), weapon_right=z_(2))
+                    ra_["band_share"], ra_["weapon_share"] = sh_(1), sh_(2)      # under 75, 75-125, 125-200, over 200; the simulator's WEAPONS
+                if "first" in AUX_Q:                                     # who takes the mega, the red armor next: [mega, red]
+                    ra_["loss"]["first"] = round(g_(3, 3, 6) + g_(4, 4, 6), 4)
+                    ra_["parts"].update(first_mega=g_(3, 3), first_red=g_(4, 4))
+                    ra_["first_right"] = [g_(8, 3), g_(9, 4)]
+                    ra_["zero"]["first_right"] = [z_(3), z_(4)]
+                    ra_["first_share"] = [sh_(3), sh_(4)]                # nobody within the window, he, another player
+                    ra_["first_frames"] = AUX_FW
+                ra_["labelled"].update({k_: round(float(gx_n[j_] / ax_w), 4)     # the share of the learner's frames with each label
+                                        for j_, (k_, h_) in enumerate((("target", "target"), ("band", "strength"), ("weapon", "strength"),
+                                                                       ("first_mega", "first"), ("first_red", "first"), ("target_unseen", "target")))
+                                        if h_ in AUX_Q})
+                if "near" in AUX_Q:                                      # near which landmark the enemy is: [now, later], overall and unseen
+                    def n_(i_, j_, d_=4):
+                        return round(float(nx_s[i_] / max(1.0, float(nx_n[j_]))), d_)
+
+                    def nz_(j_):
+                        return round(float(nx_h[j_].max() / max(1.0, float(nx_h[j_].sum()))), 4)
+
+                    ra_["loss"]["near"] = round(n_(0, 0, 6) + n_(1, 1, 6), 4)
+                    ra_["parts"].update(near_now=n_(0, 0), near_later=n_(1, 1))
+                    ra_["near_right"], ra_["near_unseen_right"] = [n_(2, 0), n_(3, 1)], [n_(4, 2), n_(5, 3)]
+                    ra_["zero"].update(near_right=[nz_(0), nz_(1)], near_unseen_right=[nz_(2), nz_(3)])
+                    ra_["near_share"] = [round(float(x_), 4) for x_ in (nx_h[0] / max(1.0, float(nx_h[0].sum()))).tolist()]    # how often each landmark is the nearest now
+                    ra_["near_frames"] = AUX_NW
+                    ra_["labelled"].update({k_: round(float(nx_n[j_] / ax_w), 4) for j_, k_ in enumerate(("near_now", "near_later", "near_now_unseen", "near_later_unseen"))})
+                ra_["guess_s"] = round(guess_secs, 2)                    # the seconds the new labels took (label_s: the four's)
         if "qhand" in agg:                                               # (--hand-teach) the weapon in his hand with nobody in view for 1 s or more:
             QH_ = np.asarray(agg["qhand"], np.float64).reshape(3, 4, -1)      # the simulators' counters (his counted seats, in games), also with the lesson off
             QM_, QS_ = np.asarray(agg["qhand_meet"], np.float64), np.asarray(agg["qhand_sw"], np.float64)

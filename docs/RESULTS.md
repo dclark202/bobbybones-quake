@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-12](results/2026-10-12.md)
 
+- 20:00 — v0.2.1 rewritten around the owner's four goals: the guessing game gets four more questions (eight in all); his choice of what to do next does not use where the enemy is (the blindfold, with its control); eight questions at three times the weight move him three times as hard at first and his aim holds; a tracking limit lowers lightning and leaves rail; his aim stays as it is
 - 16:00 — The second aim step: the aim level is a weak lever, the tracking delay is the strong one and takes the rail with it; no setting gives all three; leg 2 takes the small step
 - 15:15 — v0.2 is on the public server (the owner: "yes send him to the public server"); his answers to v0.2.1's questions; the run waits for his go at about 21:00
 - 15:00 — v0.2.1's pretests on the card: both legs fit and run on the eight performance cores; the legs' lesson takes at once and leaves his aim alone; the place choice as first opened cost him the big items; 60% of an update is the learning step, not the simulators; an efficiency core is not safe even for a job pinned alone

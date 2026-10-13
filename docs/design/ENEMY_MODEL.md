@@ -46,6 +46,7 @@ place, nothing).
 | Commits more against an enemy spawned under 10 s ago than against one alive over 25 s | +2.4 points | -5.6 (v0.1) |
 | **The blindfold, all of him**: his share of the frags against himself with everything about an unseen enemy hidden from all his outputs | | 14.9% (64 games on four maps: 3 won, 60 lost); he is seen without seeing 9% of the time against 2% |
 | **The blindfold, his intention only**: the same, hidden only from his choice of what to go for next | | **51.0% (160 games on the ten maps: 79 won, 74 lost): it costs him nothing.** He uses where the enemy is to turn, face and track, and not at all to choose what he does next |
+| The method's control: the items' state hidden from that choice | | 44.8% (160 games: 55 won, 96 lost): what the choice does use, the blindfold sees |
 | **Contest sense, who takes it**: the mega or the red armor, 3 s before its return, his way under 5 s: taken when he is clearly nearer, and when the enemy is | 67% and 16% | 70% and 21%: the same (it is the race) |
 | **Contest sense, who comes**: he is at the item within 10 s, at equal own distance: when he is nearer, and when the enemy is | 57% and 28% | 72% and 61% |
 | ... at the mega alone | 72% and 30% | 73% and 71% |
@@ -74,8 +75,9 @@ limits: a single point cannot say "at the red armor or at the mega" (it lands be
 what the enemy WANTS or how strong he is; and his answers go nowhere: they shape his memory and that is all. The
 blindfold of section 3 shows what that is worth to his next move: nothing yet.
 
-**Step 2: the questions a pro asks himself** (built as an option for tonight; no new inputs, the checks and the
-servers untouched):
+**Step 2: the questions a pro asks himself** (in v0.2.1 since the evening of 2026-10-12, with a fourth: the landmark
+the enemy is nearest to now and three seconds on, the first half of step 3's picture; `--aux-heads`; no new inputs, the
+checks and the servers untouched; RESULTS 2026-10-12 20:00):
 
 | The question | The answer's form | Where the truth comes from | What a pro does with it |
 |---|---|---|---|
