@@ -293,6 +293,104 @@ def aux_near(A, dn, ix, window):
     return K, M
 
 
+def aux_life(A, dn, ix, life0=None):
+    """(--aux-fresh, --aux-tail; v0.2.2) the age of his life in frames on every row of a rollout's truth.
+      A   [T+1, n, columns]: info["aux"] rows (row t: the game before step t; its `died` column: he died in step t-1)
+      dn  [T, n]: his round ended in step t;  life0 [n]: the age on row 0 (the last row of the rollout before; None: 0)
+    A life begins on the row after a death or a round's end. -> [T+1, n] int64"""
+    import torch
+    T, n = A.shape[0] - 1, A.shape[1]
+    rs = torch.zeros(T + 1, n, dtype=torch.bool)
+    rs[1:] = (A[1:, :, ix["died"]].float() > 0.5) | (dn > 0.5)
+    tt = torch.arange(T + 1)[:, None].expand(T + 1, n)
+    last = torch.cummax(torch.where(rs, tt, torch.full_like(tt, -1)), 0).values
+    l0 = torch.zeros(n, dtype=torch.long) if life0 is None else life0.long()
+    return torch.where(last >= 0, tt - last, l0[None, :] + tt)
+
+
+AUX_BEL_AGE = 3000.0 / 400.0                                 # (the v0.2 input: min(belief age x 400, 3000) / 3000: ages up to 7.5 s)
+
+
+def aux_known(bel, life, secs, dt=0.025):
+    """(--aux-fresh) may `place` and `near` be asked on this frame: his life is `secs` old or older, or he has seen or heard
+    the enemy since it began (his belief, as his inputs have it, is not older than his life).
+      bel   [rows, n, 5]: his raw inputs "believes anything", the believed place (forward, left, up) / 1500, the belief's
+            age (min(age x 400, 3000) / 3000; 1 also when nothing is believed);  life [rows, n] frames -> [rows, n] bool"""
+    import torch
+    ok = bel[..., 0] > 0.5
+    ag = bel[..., 4]
+    bt = torch.where(ok & (ag < 0.99999), ag * AUX_BEL_AGE, torch.full_like(ag, 99.0))
+    ls = life.float() * dt
+    return (ls >= secs) | (bt <= ls + 1e-3)
+
+
+def aux2_labels(A, dn, bel, ix, fr, fw, nw, guess, near, fresh, unseen, tw, tail=None, life0=None, chunk=4096):
+    """(v0.2.2: --aux-tail, --aux-fresh, --aux-unseen) every label of the --aux lesson for one rollout, as aux_labels,
+    aux_guess and aux_near make them, and then:
+      tail   (--aux-tail) the rows of the rollout before's last `tw` frames are put in front (their truth `a`, `dn`), so
+             that their windows run on into this rollout; a label there counts only where it was missing at the update
+             before (its masks `m`, `km`, `nm`): the frames whose window ran past that rollout's end
+      fresh  (--aux-fresh, seconds) `place` and `near` (all four of its masks) only where aux_known (his life's age by
+             aux_life from `life0`; his belief from `bel`, [T+1, n, 5])
+      unseen (--aux-unseen) `near` now and later only where the enemy is not in view at the frame (its masks 2 and 3)
+      A [T+1, n, cols] (float16 as the trainer keeps it), dn [T, n]; fr, fw, nw the windows; guess / near: aux_guess /
+      aux_near asked. -> dict: Y, M, C, K, KM, N, NM (the trainer's AUX_Y ... AUX_NM; None where not asked) over
+      len(tail) + T rows; tw (the rows in front); life (the age on the last row, for the next rollout); tail (this
+      rollout's last `tw` frames, for the next update; None when tw is 0); stats (numbers for the record)"""
+    import torch
+    T, n = A.shape[0] - 1, A.shape[1]
+    assert 0 <= tw <= T, (tw, T)
+    TW = 0 if tail is None else int(tail["a"].shape[0])
+    Ae = A if not TW else torch.cat([tail["a"], A])
+    De = dn if not TW else torch.cat([tail["dn"], dn])
+    out = {k_: [] for k_ in ("Y", "M", "C", "K", "KM", "N", "NM")}
+    for c0_ in range(0, n, chunk):
+        a_, d_ = Ae[:, c0_:c0_ + chunk].float(), De[:, c0_:c0_ + chunk]
+        y_, m_, c_ = aux_labels(a_, d_, ix, fr)
+        out["Y"].append(y_.half())
+        out["M"].append(m_)
+        out["C"].append(c_.to(torch.uint8))
+        if guess:
+            k_, m_ = aux_guess(a_, d_, ix, fw)
+            out["K"].append(k_.to(torch.uint8))
+            out["KM"].append(m_)
+        if near:
+            k_, m_ = aux_near(a_, d_, ix, nw)
+            out["N"].append(k_.to(torch.uint8))
+            out["NM"].append(m_)
+    R = {k_: (torch.cat(v_, 1) if v_ else None) for k_, v_ in out.items()}
+    st = {}
+    life = aux_life(A, dn, ix, life0)
+    keep = None
+    if fresh > 0:
+        keep = aux_known(bel, life, fresh)
+        kc = keep[:T]
+        hid = (A[:T, :, ix["en_alive"]].float() > 0.5) & (A[:T, :, ix["en_in_view"]].float() <= 0.5)
+        cut = hid & ~kc
+        st["fresh_cut"] = round(float(cut.sum()) / max(1.0, float(hid.sum())), 4)      # of the frames `place` would be asked on
+        st["fresh_cut_old_belief"] = round(float((cut & (bel[:T, :, 0] > 0.5)).sum()) / max(1.0, float(cut.sum())), 4)    # ... of those, with a belief from before his life
+        kx = kc if not TW else torch.cat([tail["keep"], kc])
+        R["M"][..., 0] &= kx
+        if R["NM"] is not None:
+            R["NM"] &= kx[..., None]
+    if unseen and R["NM"] is not None:
+        R["NM"][..., 0] = R["NM"][..., 2].clone()
+        R["NM"][..., 1] = R["NM"][..., 3].clone()
+    if TW:
+        add_ = {}
+        for q_, k_ in (("M", "m"), ("KM", "km"), ("NM", "nm")):
+            if R[q_] is not None:
+                R[q_][:TW] &= ~tail[k_]
+                add_[q_] = [round(float(x_) / max(1.0, float(y_)), 4) for x_, y_ in zip(R[q_][:TW].sum((0, 1)).tolist(), R[q_][TW:].sum((0, 1)).tolist())]
+        st["tail_added"] = add_                              # per mask: the labels the tail adds / the labels of this rollout's own frames
+    R["tw"], R["life"], R["stats"], R["tail"] = TW, life[T].clone(), st, None
+    if tw > 0:
+        s_ = slice(TW + T - tw, TW + T)
+        R["tail"] = dict(a=A[T - tw:T].clone(), dn=dn[T - tw:].clone(), keep=None if keep is None else keep[T - tw:T].clone(),
+                         m=R["M"][s_].clone(), km=None if R["KM"] is None else R["KM"][s_].clone(), nm=None if R["NM"] is None else R["NM"][s_].clone())
+    return R
+
+
 def way_measure(store, keep=50, least=30, same=200.0):
     """(WAYS) how predictable his ways are, counted as tools/pro_yardsticks.py counts the pros' (way_labels: 43% for them,
     57% for v0.1 on recorded games): of his trips between the same two places, the share on the commonest way.
@@ -325,6 +423,17 @@ def way_measure(store, keep=50, least=30, same=200.0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--map", default="bloodrun,aerowalk,lostworld")
+    ap.add_argument("--slow-mem", type=int, default=0,
+                    help="(v0.3 candidate, 2026-10-14; sim/slowmem.py) 1: give him the slow memory: a second GRU (--slow-size) that ticks every "
+                         "--slow-every frames on his fast memory and the encoder's mean, read by every output through a door that starts at "
+                         "zero, taught over the last --slow-ring ticks (minutes) from a ring of its stored inputs. A network that has the part "
+                         "keeps it whatever this says; 0 and a network without it: the trainer as before")
+    ap.add_argument("--slow-size", type=int, default=256, help="(--slow-mem) the slow GRU's width (a new part only)")
+    ap.add_argument("--slow-in", type=int, default=128, help="(--slow-mem) the width of its input squeeze (a new part only)")
+    ap.add_argument("--slow-every", type=int, default=48, help="(--slow-mem) frames from tick to tick (a new part only; --steps must be a "
+                    "whole number of ticks: 48 = 1.2 s, 8 ticks a rollout of 384)")
+    ap.add_argument("--slow-ring", type=int, default=-1, help="(--slow-mem) ticks before the rollout the gradient reaches (320 x 1.2 s = 6.4 min; "
+                    "-1: the network's own or 320; 0: no ring, the slow state carried as the fast one is)")
     ap.add_argument("--run", default="duel_gru_v1")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--matches", type=int, default=128, help="matches per worker (2 players each)")
@@ -438,6 +547,17 @@ def main():
                                                                 "of the rollout (--steps): at 384 steps 400 becomes 288, and the first "
                                                                 "96 frames of a rollout carry the fight's label")
     ap.add_argument("--aux-warm", type=float, default=0.0, help="... minutes over which the weight rises from nothing, from --fade-start")
+    ap.add_argument("--aux-tail", action="store_true",
+                    help="v0.2.2 (F4): every question is labelled over its whole window: the last frames of a rollout, whose window runs past its "
+                         "end, are labelled at the next update with the next rollout's truth, on the memory he played them with (kept on the "
+                         "CPU at half precision: players x the longest window asked x 512 x 2 bytes); they teach the questions' layers only")
+    ap.add_argument("--aux-fresh", type=float, default=0.0,
+                    help="v0.2.2 (F5): place and near are not asked on the frames where his life is younger than this many seconds and he "
+                         "has had no sighting or sound of the enemy since it began (by his own belief inputs; at most 7.5). 0 = off")
+    ap.add_argument("--aux-unseen", action="store_true", help="v0.2.2: near (now and later) is asked only while the enemy is out of his sight, as place is")
+    ap.add_argument("--aux-measure", action="store_true",
+                    help="v0.2.2: the record's aux.v022.memory_vs_belief: where his memory puts the unseen enemy against the place his belief "
+                         "inputs give, on the same frames, by the belief's age")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -582,11 +702,13 @@ def main():
         assert tuple(E_.CELL_COLS) == (OBS_DIM - 2, OBS_DIM - 1)
 
     ATT = None                                               # (v0.2) the attention part's layout: it comes with the network he resumes from
+    SLOW_CK = None                                           # (--slow-mem) the slow memory's layout: comes with the network as the attention part's
     AUX_CK = ()                                              # (--aux) which of the layers of 2026-10-12 the network he resumes from has
     AUX_SAVE = {}                                            # (--aux) what is kept in a saved file beside the lesson's layers
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
+        SLOW_CK = ck0_.get("slow")
         if any(k_.startswith("aux.") for k_ in ck0_["model"]):
             AUX_SAVE = dict(aux_heads=ck0_.get("aux_heads"))
         AUX_CK = tuple(h_ for h_ in ("target", "strength", "first", "near") if "aux.{}.weight".format(h_) in ck0_["model"])
@@ -595,6 +717,18 @@ def main():
         import attn as attn_
         assert ATT["obs_dim"] == OBS_DIM, "the network's tokens are cut from {} inputs, the simulator has {}".format(ATT["obs_dim"], OBS_DIM)
         print("attention: " + attn_.describe(ATT), flush=True)
+    SLOW = SLOW_CK                                           # (--slow-mem) the network's own part, or a new one with its door shut
+    if SLOW is not None or a.slow_mem > 0:
+        import slowmem as slowmem_
+        if SLOW is None:
+            SLOW = slowmem_.layout(size=a.slow_size, inp=a.slow_in, every=a.slow_every, ring=320, fast=H, enc=256)
+        if a.slow_ring >= 0:
+            SLOW = dict(SLOW, ring=int(a.slow_ring))
+        assert SLOW["fast"] == H and SLOW["enc"] == 256, "the slow memory's layout does not fit the network: {}".format(SLOW)
+        assert a.steps % SLOW["every"] == 0, "--steps {} is not a whole number of the slow memory's ticks ({})".format(a.steps, SLOW["every"])
+        assert not HAS_CELLS, "the slow memory is for networks without the learned map cells (v8)"
+        print(slowmem_.describe(SLOW) + ("" if SLOW_CK is not None else " (new: its door shut)"), flush=True)
+    SLOW_SAVE = {"slow": SLOW} if SLOW else {}               # (a checkpoint without the part is as it was)
     LONG = a.long_gamma > 0
     AUX_W = float(a.aux)                                     # (--aux) the lesson's weight. Its output layers are in the network when the
     AUX = AUX_W > 0 or bool(AUX_SAVE)                        # lesson is on, or when the network he resumes from has them (kept as they are)
@@ -637,6 +771,24 @@ def main():
             AUX_SAVE["aux_heads"].update(near_classes=tuple(E_.INTENTS), near_frames=AUX_NW)
             print("aux: near: the landmark nearest the enemy now and {} frames on (asked: {})".format(AUX_NW, a.aux_near_frames), flush=True)
 
+    AUX_TAIL, AUX_FRESH = AUX_W > 0 and a.aux_tail, (float(a.aux_fresh) if AUX_W > 0 else 0.0)      # (v0.2.2) the revised guessing game
+    AUX_UNSEEN, AUX_MEAS = AUX_W > 0 and a.aux_unseen, AUX_W > 0 and a.aux_measure
+    AUX2 = bool(AUX_TAIL or AUX_FRESH > 0 or AUX_UNSEEN)     # the labels are made by aux2_labels
+    AUX_BEL = AUX_FRESH > 0 or AUX_MEAS                      # his raw belief inputs are kept frame by frame
+    AUX_TW, AUX_TWN, AUX_TAILD, AUX_LIFE, AX2_ST = 0, 0, None, None, {}
+    if AUX_W > 0 and (AUX2 or AUX_MEAS):
+        assert 0.0 <= AUX_FRESH <= AUX_BEL_AGE, "--aux-fresh: 0 to {} seconds".format(AUX_BEL_AGE)
+        if AUX_TAIL:                                         # the longest window of the questions asked (place, items: none)
+            AUX_TW = max(([AUX_FR[0]] if "appear" in AUX_HEADS else []) + ([AUX_FR[1], AUX_FR[2]] if "fight" in AUX_HEADS else [])
+                         + ([AUX_FW] if "first" in AUX_Q else []) + ([AUX_NW] if "near" in AUX_Q else []) + [0])
+        BEL_IX = None
+        if AUX_BEL:                                          # (the v0.2 inputs "the enemy as he believes him": believes, where x 3, how old)
+            assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
+            o_ = OBS_DIM - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
+        print("aux (v0.2.2): tail {} ({} frames), fresh {} s, unseen {}, measure {}".format(bool(AUX_TAIL), AUX_TW, AUX_FRESH, bool(AUX_UNSEEN),
+                                                                                           bool(AUX_MEAS)), flush=True)
+
     class Policy(nn.Module):
         def __init__(self):
             super().__init__()
@@ -654,6 +806,7 @@ def main():
             self.gru = nn.GRUCell(256, H)
             self.pi = nn.Linear(H, sum(ACTION_DIMS))
             self.v = nn.Linear(H, 1)
+            self.slow = slowmem_.make_module(SLOW) if SLOW else None     # (--slow-mem) sim/slowmem.py: inp, gru, door (zeros)
             if AUX:                                              # (--aux) from his memory: the unseen enemy's place (3), the angles to
                 self.aux = nn.Module()                           # where he next appears (2), the fight's end (3 classes) and its damage
                 self.aux.place, self.aux.appear = nn.Linear(H, 3), nn.Linear(H, 2)     # (1), the seconds to the mega and the red armor
@@ -667,7 +820,7 @@ def main():
                     nn.init.zeros_(l_.bias)
                     setattr(self.aux, h_, l_)
 
-        def step(self, x, h, f=None):
+        def step(self, x, h, f=None, sm=None):
             if HAS_CELLS:
                 ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
                 x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
@@ -675,7 +828,12 @@ def main():
             if self.attn is not None and (f is not None or self.door_open):
                 e = e + (self.attn(x) if f is None else f)       # what the door lets through, added to the old encoder's
             h = self.gru(e, h)
-            return self.pi(h), self.v(h).squeeze(-1), h
+            if sm is None or self.slow is None:
+                self.zl = h                                      # (what the outputs read: his memory, or with the slow one)
+                return self.pi(h), self.v(h).squeeze(-1), h
+            z = slowmem_.live(self.slow, sm, e, h)               # (--slow-mem) z = h + door(s); the slow GRU ticks on its frames
+            self.zl = z
+            return self.pi(z), self.v(z).squeeze(-1), h
 
     def dists(logits):
         return [torch.distributions.Categorical(logits=l) for l in logits.split(ACTION_DIMS, -1)]
@@ -686,6 +844,16 @@ def main():
         bad = net.load_state_dict(sd, strict=False)
         odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.")]
         assert not odd, "the network does not fit: {}".format(odd)
+
+    if SLOW:                                                 # (--slow-mem) a network without the part (the control, older league files, the
+        load_net0_ = load_net                                # start before conversion) gets one with its door shut: it answers as it did
+
+        def load_net(net, sd):
+            if net.slow is not None and "slow.door.weight" not in sd:
+                sd = dict(sd)
+                for k_, v_ in net.slow.state_dict().items():
+                    sd["slow." + k_] = torch.zeros_like(v_) if k_ == "door.weight" else v_
+            load_net0_(net, sd)
 
     pol = Policy().to(dev)
     with torch.no_grad():                                   # start out mostly keeping the current weapon
@@ -737,14 +905,18 @@ def main():
         demo_refill()
         print("pro demos: {} files, {} in memory, weight {}".format(len(demo_files), len(demo_pool), a.demo_coef), flush=True)
 
+    # what a checkpoint says of his clock (the checks' tools and the export read it): 600 when the games' time is all whole
+    # games and mid-game starts (v0.2.2: one clock, one score, one memory a game), 120 otherwise (two-minute rounds)
+    ROUND_SECS_CK = 600.0 if float(getattr(E_, "GAME_P", 0.0)) + float(getattr(E_, "MID_START_P", 0.0)) >= 0.99 else 120.0
+
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
-                        hidden=H, minutes=minutes,
+                        hidden=H, minutes=minutes, **SLOW_SAVE,
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
                         env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
-                        round_secs=120.0, arena_secs=float(a.arena_len),
+                        round_secs=ROUND_SECS_CK, arena_secs=float(a.arena_len),
                         game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
                         game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS") if os.environ.get(k_)},   # games: their clock and score
                         cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE),
@@ -778,6 +950,12 @@ def main():
     last_snap = time.time()
     h = torch.zeros(N, H, device=dev)
     h_opp = torch.zeros(N, H, device=dev)
+    SM = SM_O = RING = None                                  # (--slow-mem) the slow state of his seats and of the league's, the ring
+    if SLOW:
+        SM, SM_O = slowmem_.State(N, SLOW, dev), slowmem_.State(N, SLOW, dev)
+        RING = slowmem_.Ring(N, SLOW, a.steps // SLOW["every"], dev)
+        print("slow memory: a ring of {} ticks x {} players x {} inputs at half precision on the host ({:.2f} GB)".format(
+            RING.cap, N, SLOW["fast"] + SLOW["enc"], RING.u.numel() * 2 / 1e9), flush=True)
     scr = torch.zeros(N, device=dev)                                   # scripted players (not trained on)
 
     T = a.steps
@@ -871,7 +1049,15 @@ def main():
         b_teach = torch.zeros(T, N, 5, dtype=torch.long, device=dev)
         if AUX_W > 0:
             b_aux = torch.zeros(T + 1, N, len(AUX_COLS), dtype=torch.float16)    # (--aux) the simulator's truth, frame by frame
+            b_ht = torch.zeros(AUX_TW, N, H, dtype=torch.float16) if AUX_TW else None      # (--aux-tail) his memory on the last frames
+            b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
+        if SLOW:                                                         # (--slow-mem) the ring's ticks beyond its length folded into its
+            t_sl = time.time()                                           # stored state; he plays from the state the update re-runs
+            RING.trim(pol.slow)
+            SM.s = RING.state_all(pol.slow) * (1.0 - SM.rs)[:, None]
+            SL_RS0, SL_PEND, SL_S0 = SM.rs.clone(), [], SM.s.clone()
+            sl_secs = [time.time() - t_sl, 0.0]
         raw, agg, agg_map = [], {}, {}
         keep_raw = obs_count < OBS_FREEZE or (bool(a.obs_dump) and a.obs_dump_from <= update <= a.obs_dump_to)
         lk = [0, 0]                                                      # league matches: learner kills, snapshot kills
@@ -880,17 +1066,23 @@ def main():
                 raw.append(obs if obs_count < OBS_FREEZE else obs[np.random.rand(len(obs)) < 0.005])
             x = torch.from_numpy(norm(obs)).to(dev)
             with torch.no_grad():
-                logits, val, h = pol.step(x, h)
+                logits, val, h = pol.step(x, h, sm=SM)
+                if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
+                    SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 if LONG:
-                    b_val2[t] = pol.v2(h)
+                    b_val2[t] = pol.v2(pol.zl)
                 ds = dists(logits)
                 act = torch.stack([d.sample() for d in ds], -1)
                 lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
                 if snaps:
-                    lo, _, h_opp = opp.step(x, h_opp)
+                    lo, _, h_opp = opp.step(x, h_opp, sm=SM_O)
                     act_o = torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
             b_obs[t], b_act[t], b_val[t] = x, act, val
+            if AUX_TW and t >= T - AUX_TW:                               # (--aux-tail) his memory as he played the rollout's last frames
+                b_ht[t - (T - AUX_TW)] = pol.zl.half().cpu()             # (--slow-mem: what the outputs read; h with it off)
+            if AUX_BEL:                                                  # (--aux-fresh, --aux-measure) his belief inputs on this frame
+                b_bel[t] = torch.from_numpy(np.ascontiguousarray(obs[:, BEL_IX], dtype=np.float32))
             b_w[t] = learn * (1.0 - scr)
             b_teach[t] = torch.from_numpy(teach).to(dev)
             if HAND_LAB:
@@ -929,6 +1121,9 @@ def main():
                 aux = np.concatenate([r[12] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
+            if SM is not None:                                           # (--slow-mem) ... and the slow memory's
+                SM.reset(d)
+                SM_O.reset(d)
             for w_, r in enumerate(res):
                 for k, v in r[3].items():
                     if isinstance(v, list):
@@ -946,12 +1141,14 @@ def main():
                     if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
         with torch.no_grad():
-            _, vT_, hT_ = pol.step(torch.from_numpy(norm(obs)).to(dev), h)
+            _, vT_, hT_ = pol.step(torch.from_numpy(norm(obs)).to(dev), h, sm=SM.peek() if SM is not None else None)
             b_val[T] = vT_
             if LONG:
-                b_val2[T] = pol.v2(hT_)
+                b_val2[T] = pol.v2(pol.zl)
         if AUX_W > 0:
             b_aux[T] = torch.from_numpy(aux)
+            if AUX_BEL:
+                b_bel[T] = torch.from_numpy(np.ascontiguousarray(obs[:, BEL_IX], dtype=np.float32))
         if obs_count < OBS_FREEZE:
             flat = np.concatenate(raw)
             bm, bv, bc = flat.mean(0), flat.var(0), len(flat)
@@ -1018,6 +1215,18 @@ def main():
         demo_l, demo_acc = torch.zeros(()), [0.0, 0.0, 0.0]
         if demo_w > 0 and update % 5 == 0:
             demo_refill()
+        def slow_z(chunk, e_, hs_a):
+            """(--slow-mem) what the outputs read over the rollout: the slow state re-run from the ring (the gradient reaches its
+            ticks, minutes back), then the rollout's own ticks from these players' encoder and fast memory"""
+            t_ = time.time()
+            if torch.is_grad_enabled():
+                s0_ = RING.state(pol.slow, chunk.cpu()) * (1.0 - SL_RS0[chunk])[:, None]
+            else:                                                        # (the pass before the update's steps, --kl-heads: the weights
+                s0_ = SL_S0[chunk]                                       # the rollout was played with, the state it started from)
+            z_ = slowmem_.seq_z(pol.slow, SLOW, e_, hs_a, 1.0 - b_done[:, chunk], s0_)
+            sl_secs[1] += time.time() - t_
+            return z_
+
         def seq_pass(chunk, hh):
             """his outputs over the rollout's whole sequences for these players: the encoder, the attention part and the output
             layers in one go each, only his memory frame by frame -> (logits, value, memories, the two long values or None)"""
@@ -1032,6 +1241,8 @@ def main():
                 hs_l.append(hh)
                 hh = hh * dn_[t]
             hs_a = torch.stack(hs_l)
+            if SLOW:                                                     # (--slow-mem) every output (the guessing game's too) reads z
+                hs_a = slow_z(chunk, e_, hs_a)
             return pol.pi(hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
 
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
@@ -1090,6 +1301,23 @@ def main():
                 guess_secs = time.time() - t_aux
                 gx_s, gx_n = torch.zeros(11, dtype=torch.float64), torch.zeros(6, dtype=torch.float64)      # sums: 5 losses, 5 x called right, the target
                 gx_h = [torch.zeros(n_, dtype=torch.float64) for n_ in AUX_KN]                              # unseen; weights; how often each answer is true
+        if AUX_W > 0 and AUX2:                                           # (v0.2.2) the labels again, by aux2_labels: the tail of the rollout before,
+            AX2_ = aux2_labels(b_aux, b_done.cpu(), b_bel, AUX_IX, AUX_FR, AUX_FW if AUX_Q else 0,   # his life's first seconds, the enemy unseen
+                               AUX_NW if "near" in AUX_Q else 0, bool(AUX_Q), "near" in AUX_Q, AUX_FRESH, AUX_UNSEEN, AUX_TW, AUX_TAILD, AUX_LIFE)
+            AUX_Y, AUX_M, AUX_C = AX2_["Y"], AX2_["M"], AX2_["C"]
+            if AUX_Q:
+                AUX_K, AUX_KM = AX2_["K"], AX2_["KM"]
+            if "near" in AUX_Q:
+                AUX_N, AUX_NM = AX2_["N"], AX2_["NM"]
+            AUX_TWN = AX2_["tw"]                                         # the rows in front: the rollout before's last frames
+            AUX_TH, AUX_TWG = (AUX_TAILD["h"], AUX_TAILD["w"]) if AUX_TWN else (None, None)
+            AUX_LIFE, AX2_ST, AUX_TAILD = AX2_["life"], AX2_["stats"], AX2_["tail"]
+            if AUX_TAILD is not None:
+                AUX_TAILD.update(h=b_ht, w=b_w[T - AUX_TW:].cpu())
+            AX2_ = None
+        if AUX_W > 0 and AUX_MEAS:                                       # (--aux-measure) bands: nothing believed, believed 0-2 s ago, 2-7.5 s, 7.5-20 s;
+            mb_s = torch.zeros(4, 4, dtype=torch.float64)                # frames, his memory's error, the belief's (nothing believed: the zero
+            AUX_BL = b_bel[:T]                                           # answer's), frames his memory was nearer
         wy_acc = torch.zeros(8, dtype=torch.float64, device=dev)         # (WAYS) the learner's readings of his way: how many, the sum of the
         #                                                                  entropy, of the chance given to each way, the readings on each way
         for epoch in range(3):
@@ -1152,7 +1380,11 @@ def main():
                     ci_ = chunk.cpu()
                     ay_, am_, ac_ = AUX_Y[:, ci_].to(dev).float(), AUX_M[:, ci_].to(dev), AUX_C[:, ci_].to(dev).long()
                     hx_ = hs_all if a.aux_trunk >= 1.0 else a.aux_trunk * hs_all + (1.0 - a.aux_trunk) * hs_all.detach()   # (as --teach-trunk)
-                    wm_ = am_.float() * wgt[..., None]                   # a label is there, on the learner's frames
+                    wa_ = wgt                                            # (the learner's frames; --aux-tail: the rollout before's last frames in front)
+                    if AUX_TWN:
+                        hx_ = torch.cat([AUX_TH[:, ci_].to(dev).float(), hx_])
+                        wa_ = torch.cat([AUX_TWG[:, ci_].to(dev), wgt])
+                    wm_ = am_.float() * wa_[..., None]                   # a label is there, on the learner's frames
                     wn_ = wm_.sum((0, 1)).clamp(min=1.0)
                     o_fi = pol.aux.fight(hx_)
                     e_pl = pol.aux.place(hx_) - ay_[..., 0:3]
@@ -1167,7 +1399,7 @@ def main():
                                items=(e_it[..., 0].pow(2) * wm_[..., 4]).sum() / wn_[4] + (e_it[..., 1].pow(2) * wm_[..., 5]).sum() / wn_[5])
                     if AUX_Q:                                            # (2026-10-12) what the enemy goes for, how strong he is, who takes the big items
                         ak_ = AUX_K[:, ci_].to(dev).long()
-                        wk_ = AUX_KM[:, ci_].to(dev).float() * wgt[..., None]        # a label is there, on the learner's frames
+                        wk_ = AUX_KM[:, ci_].to(dev).float() * wa_[..., None]        # a label is there, on the learner's frames
                         wkn_ = wk_.sum((0, 1)).clamp(min=1.0)
                         og_ = {h_: getattr(pol.aux, h_)(hx_) for h_ in AUX_Q}
                         cg_ = {}                                         # label j: its outputs, its loss frame by frame, the true answer
@@ -1179,7 +1411,7 @@ def main():
                             al_[h_] = sum((cg_[j_][1] * wk_[..., j_]).sum() / wkn_[j_] for j_ in range(5) if AUX_KO[j_][0] == h_)
                     if "near" in AUX_Q:                                  # (near) two answers over the intentions: now, later
                         an_ = AUX_N[:, ci_].to(dev).long().clamp(max=AUX_NN["target"] - 1)
-                        wr_ = AUX_NM[:, ci_].to(dev).float() * wgt[..., None]
+                        wr_ = AUX_NM[:, ci_].to(dev).float() * wa_[..., None]
                         wrn_ = wr_.sum((0, 1)).clamp(min=1.0)
                         on_ = og_["near"].view(og_["near"].shape[0], og_["near"].shape[1], 2, AUX_NN["target"])
                         cn_ = nn.functional.cross_entropy(on_.reshape(-1, AUX_NN["target"]), an_.reshape(-1), reduction="none").view(an_.shape)
@@ -1197,6 +1429,20 @@ def main():
                             ax_s += (mv_ * wm_[..., AUX_MI]).sum((0, 1)).double().cpu()
                             ax_n += wm_.sum((0, 1)).double().cpu()
                             ax_w += float(wgt.sum())
+                            if AUX_MEAS:                                 # (--aux-measure) his memory against his belief inputs, where place is asked
+                                bl_ = AUX_BL[:, ci_].to(dev)
+                                wp_ = wm_[AUX_TWN:, :, 0]
+                                tr_ = ay_[AUX_TWN:, :, 0:3] * 1500.0
+                                hd_ = e_pl[AUX_TWN:].norm(dim=-1) * 1500.0
+                                ok_ = bl_[..., 0] > 0.5
+                                be_ = torch.where(ok_, (bl_[..., 1:4] * 1500.0 - tr_).norm(dim=-1), tr_.norm(dim=-1))
+                                bd_ = torch.full(ok_.shape, 3, dtype=torch.long, device=dev)
+                                bd_[bl_[..., 4] < 0.99999] = 2
+                                bd_[bl_[..., 4] * AUX_BEL_AGE < 2.0] = 1
+                                bd_[~ok_] = 0
+                                for b_ in range(4):
+                                    w_ = wp_ * (bd_ == b_).float()
+                                    mb_s[b_] += torch.stack([w_.sum(), (hd_ * w_).sum(), (be_ * w_).sum(), ((hd_ < be_).float() * w_).sum()]).double().cpu()
                             if AUX_Q:
                                 for j_, (o_, c_, y_) in cg_.items():
                                     r_ = (o_.argmax(-1) == y_).float()
@@ -1306,6 +1552,9 @@ def main():
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
+        if SLOW:                                                         # (--slow-mem) the rollout's ticks join the ring
+            RING.push(SL_PEND)
+            SL_PEND = []
         total += T * N
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
         G = NP / n_groups                                                # mean players per group (for the per-player numbers)
@@ -1486,6 +1735,14 @@ def main():
                    vs_snapshot_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and not vs_anchor else None,
                    vs_anchor_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and vs_anchor else None,
                    league_size=len(snaps), entropy=round(float(en), 3), close_p=round(close_p, 2))
+        if SLOW:                                                         # (--slow-mem) its door, what comes through it beside his fast memory,
+            with torch.no_grad():                                        # the ring's ticks, the seconds of its parts (fold + re-run before the
+                ds_ = pol.slow.door(SM.s[:2048])                         # rollout; the passes of the update)
+                rec["slow"] = dict(w=round(float(pol.slow.door.weight.abs().mean()), 6),
+                                   share=round(float(ds_.abs().mean() / (h[:2048].abs().mean() + 1e-8)), 4),
+                                   s=round(float(SM.s[:2048].abs().mean()), 4), ring=RING.L,
+                                   ring_min=round(RING.L * SLOW["every"] * 0.025 / 60.0, 2),
+                                   fold_s=round(sl_secs[0], 2), pass_s=round(sl_secs[1], 2))
         if pol.attn is not None:                                         # the door: its weights, and what comes through it beside the old encoder's
             with torch.no_grad():
                 xs_ = b_obs[T - 1, :2048].float()
@@ -1563,6 +1820,19 @@ def main():
                     ra_["near_frames"] = AUX_NW
                     ra_["labelled"].update({k_: round(float(nx_n[j_] / ax_w), 4) for j_, k_ in enumerate(("near_now", "near_later", "near_now_unseen", "near_later_unseen"))})
                 ra_["guess_s"] = round(guess_secs, 2)                    # the seconds the new labels took (label_s: the four's)
+        if AUX_W > 0 and ax_w > 0 and (AUX2 or AUX_MEAS):               # (v0.2.2) the revised guessing game
+            v2_ = dict(tail=bool(AUX_TAIL), tail_frames=AUX_TWN, fresh=AUX_FRESH, unseen=bool(AUX_UNSEEN))
+            v2_.update(AX2_ST)
+            if AUX_MEAS:
+                v2_["memory_vs_belief"] = {k_: dict(share=round(float(mb_s[i_, 0]) / max(1.0, float(mb_s[:, 0].sum())), 4),
+                                                    memory=round(float(mb_s[i_, 1]) / max(1.0, float(mb_s[i_, 0])), 1),
+                                                    belief=round(float(mb_s[i_, 2]) / max(1.0, float(mb_s[i_, 0])), 1),
+                                                    memory_nearer=round(float(mb_s[i_, 3]) / max(1.0, float(mb_s[i_, 0])), 4))
+                                           for i_, k_ in enumerate(("none", "0-2s", "2-7.5s", "7.5-20s"))}
+                v2_["memory_vs_belief"]["all"] = dict(memory=round(float(mb_s[:, 1].sum()) / max(1.0, float(mb_s[:, 0].sum())), 1),
+                                                      belief=round(float(mb_s[:, 2].sum()) / max(1.0, float(mb_s[:, 0].sum())), 1),
+                                                      memory_nearer=round(float(mb_s[:, 3].sum()) / max(1.0, float(mb_s[:, 0].sum())), 4))
+            rec["aux"]["v022"] = v2_
         if "qhand" in agg:                                               # (--hand-teach) the weapon in his hand with nobody in view for 1 s or more:
             QH_ = np.asarray(agg["qhand"], np.float64).reshape(3, 4, -1)      # the simulators' counters (his counted seats, in games), also with the lesson off
             QM_, QS_ = np.asarray(agg["qhand_meet"], np.float64), np.asarray(agg["qhand_sw"], np.float64)

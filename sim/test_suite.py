@@ -51,6 +51,7 @@ class Policy:
         self.minutes = float(ck.get("minutes", 0.0))
         self.react_ms = float(ck.get("react_ms", 150.0))
         self.acquire_ms = float(ck.get("acquire_ms", 200.0))  # (B-226) the trainer's --acquire-ms; 200: the simulator's own
+        self.round_secs = float(ck.get("round_secs") or 120.0)    # his clock, score and memory start over every this many seconds; 600: whole games, never (tools/duel_eval.py SeatClock)
         self.H = self.whh.shape[1]
         self.rng = np.random.default_rng(seed)
         self.attn = ck.get("attn")                           # (v0.2) the attention part: its layout and weights; skipped while its door is shut
@@ -61,11 +62,19 @@ class Policy:
             self.attP = attn_.params_np(sd)
             if not np.abs(self.attP["door.weight"]).sum() > 0:
                 self.attP = None
+        self.slow = ck.get("slow")                           # (--slow-mem) the slow memory: its layout and weights; the memory array
+        self.W = self.H                                      # a seat carries is wider (sim/slowmem.py: [fast | slow | sum | count | frames])
+        if self.slow is not None:
+            import slowmem as slowmem_
+            self.slowP, self.slow_step, self.W = slowmem_.params_np(sd), slowmem_.np_step, slowmem_.width(self.slow)
 
     def zeros(self, n):
-        return np.zeros((n, self.H), np.float32)
+        return np.zeros((n, self.W), np.float32)
 
     def act(self, obs, h):
+        hf = h                                               # (--slow-mem) the whole state; h its fast part
+        if self.slow is not None:
+            h = hf[:, :self.H]
         if obs.shape[1] > len(self.mean):                    # an older network in a simulator with more inputs: they are appended at the end
             obs = obs[:, :len(self.mean)]
         x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
@@ -84,7 +93,10 @@ class Policy:
         z = sig(gi[:, H:2 * H] + gh[:, H:2 * H])
         nn_ = np.tanh(gi[:, 2 * H:] + r * gh[:, 2 * H:])
         h = ((1 - z) * nn_ + z * h).astype(np.float32)
-        logits = h @ self.wp.T + self.bp
+        zo = h
+        if self.slow is not None:                            # (--slow-mem) the outputs read h + door(s); the slow GRU ticks on its frames
+            zo, h = self.slow_step(self.slowP, self.slow, x, h, hf)
+        logits = zo @ self.wp.T + self.bp
         out, i = [], 0
         for d in self.dims:
             l = logits[:, i:i + d]

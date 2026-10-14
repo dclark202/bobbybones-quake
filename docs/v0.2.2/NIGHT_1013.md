@@ -54,6 +54,11 @@ through. What a reader of the table must keep in mind:
 - The checks' two-minute reset of his clock, score and memory is fixed before v0.2.2's checks; the frozen "time left" input of two-minute networks in checks is repaired too (a new baseline follows); the plugins get the same clock.
 - His memory: the learning window is 9.6 s and his memory reaches 10 to 30 s (tools/memory_reach.py). The owner: "make the easy updates now with v0.2.2, then expand the memory to minutes and that becomes v0.3", then (2026-10-14 09:00) build the longer memory now and test whether it belongs in v0.2.2: report at 16:00 with pros and cons, an addendum at 19:00 if the memory test runs long.
 - Weapon use is measured at every check (aim stability).
+- The evening of 2026-10-14 (the owner, 11:58: "Do that exact plan"): the report at 16:00; at 19:00 an addendum, and the slow-memory
+  test run (arm S) stops right after its update-40 save; the game server image is rebuilt with the day's code and the plugins' clock
+  checked on a private server (not the public one); v0.2.2's pretest network (V, update 30) and S's update-40 save exported; the owner
+  plays them about 19:30, then decides overnight: resume S (its six minutes of stored past start empty again) or start a new
+  training session with the slow memory in.
 
 ## 2. What the records say (fill in)
 

@@ -96,6 +96,65 @@ def sig(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
+GAME_SECS = 600.0                                           # a whole game as he is trained on them (duel_env's GAME_LEN)
+
+
+class GameClock:
+    """The clock and the score of a whole-games network on a server (policy.npz round_secs >= 600; duelbot.clock_frame
+    keeps one for all seats). Plain numbers in, plain numbers out: nothing of the game is read here.
+    key     ("game", its start) a real game, ("arena", its end) a timed duel, ("free",) neither: warmup, a server
+            that never plays a game
+    t0      when it began (wall time); length: the game's or the duel's limit in seconds; real: a real game
+    ot      seconds of one overtime period of a real game (0: none, or sudden death)"""
+
+    def __init__(self, key, t0, length=GAME_SECS, real=False, ot=0.0):
+        self.key, self.t0, self.length, self.real, self.ot = key, float(t0), float(length), bool(real), float(ot)
+        self.src = None                                      # a real game: "level" (the game's own clock) or "wall", decided once
+        self.prev, self.tally = {}, {}                       # outside a real game: the game's score counted from here
+
+    def elapsed(self, now, level=None):
+        """seconds since it began. level: a real game's own clock in seconds (level time minus the level's start time)
+        or None. It is taken, for the rest of the game, if after the first second it stands within five seconds of the
+        time since the game's start event (a timeout stops it, the wall clock goes on: the game's is the true one);
+        if it does not (a start time that is not the game's), the wall clock stays."""
+        wall = max(0.0, float(now) - self.t0)
+        if not self.real:
+            return wall
+        if self.src is None and level is not None and wall >= 1.0:
+            self.src = "level" if abs(float(level) - wall) <= 5.0 else "wall"
+        if self.src == "level" and level is not None:
+            return max(0.0, float(level))
+        return wall
+
+    def fed(self, el, extra=True):
+        """the seconds of a ten-minute game he is shown at el seconds of this clock (0 to GAME_SECS: training shows
+        nothing else). A game or a timed duel shorter than ten minutes ends at GAME_SECS: it is shown as the last
+        minutes of a game, as a mid-game start is in training. Past the limit: a real game in overtime (extra: not the
+        scoreboard) is shown its last ot seconds again, period after period (the score is level and that much is left:
+        what those inputs say); with no overtime period, or a longer game, the clock holds at the end."""
+        L = self.length
+        if self.key[0] == "free" or L <= 0:
+            return min(el, GAME_SECS)
+        if el <= L:
+            return min(max(0.0, GAME_SECS - L) + el, GAME_SECS)
+        if self.real and self.ot > 0 and extra:
+            w = min(self.ot, GAME_SECS)
+            return GAME_SECS - w + (el - L) % w
+        return GAME_SECS
+
+    def score(self, pid, raw):
+        """player pid's score as he is shown it. raw: the game's own score of him (frags, a point off for a death by
+        his own hand or the map). A real game: that number. Otherwise it is counted from this clock's start; a fall of
+        more than a point in a frame is the game setting its counters back (a restart), not a score."""
+        raw = int(raw)
+        if self.real:
+            return float(raw)
+        d = raw - self.prev.get(pid, raw)
+        self.prev[pid] = raw
+        self.tally[pid] = self.tally.get(pid, 0) + (d if d >= -1 else 0)
+        return float(self.tally[pid])
+
+
 class duelbot(minqlx.Plugin):
     def __init__(self):
         self.add_hook("frame", self.on_frame)
@@ -196,6 +255,7 @@ class duelbot(minqlx.Plugin):
         self.sess_person = not is_bot(opp)
         self.sess_t0 = time.time()
         self.h[:] = 0                                        # a new opponent: fresh memory
+        self.gclock = None                                   # (a whole-games network: and a new clock, clock_frame)
         self.score = dict(bobby=0, opp=0)
         self.tot = {}
         self.item_was = {}
@@ -379,6 +439,7 @@ class duelbot(minqlx.Plugin):
     def on_game_start(self, data):
         self.ready_ids = set()
         self.game_new = True                                 # (v0.2: frame() starts his round with the game)
+        self.game_t0 = time.time()                           # (a whole-games network: the game's clock starts here, clock_frame)
         self.game_over_t = 0.0
 
     def on_game_end(self, data):
@@ -731,6 +792,7 @@ class duelbot(minqlx.Plugin):
         nav = "/maps/nav_{}_sim.json".format(mapname)
         os.environ["ROUTE_CACHE"] = D                          # the route grid is cached here (/maps is read-only)
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1, nav=nav if os.path.exists(nav) else None)
+        self.clock_setup(self.env)                           # (a whole-games network: the game's clock, see clock_frame)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.env.react_frames = round(self.react_ms / 25)    # same reaction delay as in training (newer simulators)
         self.no_walk = bool(self.P["no_walk"]) if "no_walk" in self.P else False    # trained without the walk key
@@ -740,7 +802,7 @@ class duelbot(minqlx.Plugin):
             self.env.lab = None
         self.prev_opp, self.fb_next, self.sess_t0 = None, np.zeros(4, np.float32), time.time()
         self.round_base = (0, 0)
-        self.h = np.zeros((1, self.P["whh"].shape[1]), np.float32)
+        self.h = np.zeros((1, _net.width(self.P)), np.float32)            # (--slow-mem: wider with the slow memory)
         # the test rooms always use the current simulator's scripted players; slot 0 = human, slot 1 = Bobby
         self.R = R = importlib.import_module("duel_env")
         self.renv = R.DuelEnv(bsp, n_matches=1, seed=2, nav=nav if os.path.exists(nav) else None)
@@ -783,6 +845,100 @@ class duelbot(minqlx.Plugin):
             "none" if env.v02_ways is None else "{} points".format(len(env.v02_ways)), aim.get("level", "?"),
             float(getattr(E, "PERCEPT_SIGMA", 0.0)), float(getattr(E, "MOTOR_NOISE", 0.0)), float(getattr(E, "SURPRISE_MS", 0.0)),
             "on" if getattr(E, "LEGS", False) and getattr(env, "teacher", None) is not None else "off", getattr(E, "LEGS_OFF", "?"))
+
+    # ------------------------------------------------------------------ the game's clock for a whole-games network
+    # A network trained on whole ten-minute games (policy.npz round_secs >= 600) has one clock, one score and one memory
+    # for a game. Both plugins give it those through the simulator's seat clocks (clock_t, clock_game: observe() reads
+    # them): clock_setup() after the simulator is built, clock_frame() once a frame for ALL seats in place of the round
+    # lines. A network of two-minute rounds never comes here.
+    def clock_setup(self, env):
+        self.gclock = None                                   # (begun in the first frame: clock_frame)
+        whole = self.round_secs >= GAME_SECS
+        self.game_seat = whole and hasattr(env, "clock_t")
+        if whole and not self.game_seat:
+            self.log("policy.npz says whole games ({:.0f} s) and this simulator has no seat clocks: the round lines, every {:.0f} s".format(
+                self.round_secs, self.round_secs))
+        elif whole:
+            self.log("a whole-games network: the game's clock, score and memory (a real game's own; outside one a clock of {:.0f} s)".format(GAME_SECS))
+
+    def game_state(self):
+        try:
+            return self.game.state if self.game is not None else None
+        except Exception:                                    # noqa: BLE001 - no game yet (a map is loading)
+            return None
+
+    @staticmethod
+    def cvar_secs(name, scale=1.0):
+        try:
+            return max(0.0, float(minqlx.get_cvar(name) or 0) * scale)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def clock_frame(self, now, env, rows):
+        """one frame of the game's clock for every seat. rows: (seat, player) for everybody seated, people too (their
+        scores are in his inputs). Starts a new clock where one begins (his memory is empty there), then writes the
+        time, the share left and the scores into the simulator for observe()."""
+        state = self.game_state()
+        t0g = getattr(self, "game_t0", None)                 # a real game's start (on_game_start)
+        if t0g is not None and state != "in_progress" and now - t0g > 3.0:
+            t0g = self.game_t0 = None                        # it is over (thrown back to warmup, or a new map)
+        A = getattr(self, "arena", None)                     # a timed duel (the 1v1 plugin)
+        key = ("game", t0g) if t0g is not None else ("arena", A["t_end"]) if A else ("free",)
+        c = self.gclock
+        why = None
+        if c is None:
+            why = "a new session"
+        elif c.key != key:
+            why = {"game": "a game began", "arena": "a timed duel began"}.get(key[0], "the {} is over".format(
+                "game" if c.key[0] == "game" else "timed duel"))
+        elif key[0] == "free" and now - c.t0 > GAME_SECS:
+            why = "{:.0f} s outside a game".format(GAME_SECS)
+        if why:
+            if key[0] == "game":
+                c = GameClock(key, t0g, self.cvar_secs("timelimit", 60.0) or GAME_SECS, True,
+                              self.cvar_secs("g_overtime") if self.FACTORY == "duel" else 0.0)
+            elif key[0] == "arena":
+                c = GameClock(key, A["t_end"] - A["mins"] * 60.0, A["mins"] * 60.0)
+            else:
+                c = GameClock(key, now)
+            self.gclock = c
+            self.h[:] = 0                                    # a new game, a new memory
+            self.log("clock: {} ({}, limit {:.0f} s, overtime {:.0f} s): clock, score and memory start".format(why, key[0], c.length, c.ot))
+        level, extra = None, True
+        if c.real:
+            if c.src != "wall":
+                try:                                         # the game's own clock: level time minus the level's start time
+                    level = (int(minqlx.item_states()[0]) - int(minqlx.get_configstring(13))) / 1000.0
+                except Exception:                            # noqa: BLE001 - no such number: the time since the start event
+                    level = None
+            was = c.src
+            el = c.elapsed(now, level)
+            if c.src != was:
+                self.log("clock: the game's time by {} ({} s against {:.1f} s since its start event)".format(
+                    "the game's own clock" if c.src == "level" else "the wall clock", level, now - c.t0))
+            if el > c.length:
+                extra = (minqlx.get_configstring(14) or "") != "1"       # (configstring 14: the scoreboard is up, the game is over)
+        else:
+            el = c.elapsed(now)
+        t = c.fed(el, extra)
+        env.clock_t = np.full(env.n, t, np.float32)          # every seat: the same game
+        env.clock_game = np.ones(env.n, bool)
+        env.round_t[0] = t
+        if hasattr(env, "v02_left"):                         # the share of the game left
+            env.v02_left = min(1.0, max(0.0, 1.0 - t / GAME_SECS))
+        env.frags_r[:] = 0                                   # (an empty seat has no score)
+        ids = set()
+        for k, p in rows:
+            env.frags_r[k] = c.score(p.id, p.stats.score)
+            ids.add(p.id)
+        for pid in [q for q in c.prev if q not in ids]:      # he left: his count goes with him
+            c.prev.pop(pid, None)
+            c.tally.pop(pid, None)
+        if os.environ.get("CLOCK_LOG") and now > getattr(self, "clock_log_t", 0.0):
+            self.clock_log_t = now + 60.0                    # CLOCK_LOG=1: a line a minute, to set beside the game's own clock and scoreboard
+            self.log("clock: {} at {:.1f} s of its {:.0f}, shown {:.1f} s (clock {:.3f}, left {:.3f}), by {}, level {}; scores by seat {}; kills and deaths {}".format(
+                key[0], el, c.length, t, t / GAME_SECS, 1.0 - t / GAME_SECS, c.src or "the wall clock", level,
+                {k: int(env.frags_r[k]) for k, p in rows}, {k: (p.stats.kills, p.stats.deaths) for k, p in rows}))
 
     @staticmethod
     def new_life_of(env, i):
@@ -1389,14 +1545,17 @@ class duelbot(minqlx.Plugin):
         taken_items = []
         if self.rules2:
             env.kind[0] = E.NORMAL
-            if now - self.sess_t0 > self.round_secs:                  # the round as in training (see setup)
-                self.sess_t0 = now                                   # clock, score and memory start over
-                self.round_base = (self.score["bobby"], self.score["opp"])
-                self.h[:] = 0
-            env.round_t[0] = now - self.sess_t0
-            if hasattr(env, "v02_left"):                             # (v0.2) the share of his round left, by the same clock
-                env.v02_left = min(1.0, max(0.0, 1.0 - (now - self.sess_t0) / max(1.0, self.round_secs)))
-            env.frags_r[:] = (self.score["bobby"] - self.round_base[0], self.score["opp"] - self.round_base[1])
+            if getattr(self, "game_seat", False):                    # a whole-games network: the game's clock, score and memory
+                self.clock_frame(now, env, [(0, bobby), (1, opp)])
+            else:
+                if now - self.sess_t0 > self.round_secs:                  # the round as in training (see setup)
+                    self.sess_t0 = now                                   # clock, score and memory start over
+                    self.round_base = (self.score["bobby"], self.score["opp"])
+                    self.h[:] = 0
+                env.round_t[0] = now - self.sess_t0
+                if hasattr(env, "v02_left"):                             # (v0.2) the share of his round left, by the same clock
+                    env.v02_left = min(1.0, max(0.0, 1.0 - (now - self.sess_t0) / max(1.0, self.round_secs)))
+                env.frags_r[:] = (self.score["bobby"] - self.round_base[0], self.score["opp"] - self.round_base[1])
             oc_ = minqlx.ran_usercmd(opp.id)
             env.duck[1] = oc_[5] < 0
             env.snd_t += E.DT

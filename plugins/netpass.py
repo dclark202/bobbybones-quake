@@ -36,7 +36,19 @@ def load(path):
             # (the index lists as arrays once, not at every frame: forward_np takes either)
             lay = dict(lay, kinds=[dict(k_, idx=np.asarray(k_["idx"], np.int64)) for k_ in lay["kinds"]])
             A = (lay, W, attn_.forward_np)
+    if "slow" in P:                                          # (--slow-mem) the slow memory: kept beside the arrays as (layout, weights, step)
+        if "/sim" not in sys.path and os.path.isdir("/sim"):
+            sys.path.insert(0, "/sim")
+        import slowmem as slowmem_                           # sim/slowmem.py: numpy only at the top
+        lay = json.loads(str(P["slow"]))
+        P["_slow"] = (lay, {k[len("slow."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("slow.")}, slowmem_.np_step,
+                      slowmem_.width(lay))
     return P, A
+
+
+def width(P):
+    """the width of a seat's memory array: the fast memory, or the whole state with the slow memory (sim/slowmem.py)"""
+    return P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
 
 
 def describe(P, A):
@@ -53,6 +65,9 @@ def step(P, A, obs, h, rng):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
     and the new memory."""
+    hf = h                                                   # (--slow-mem) the whole state; h its fast part
+    if "_slow" in P:
+        h = hf[:, :P["whh"].shape[1]]
     mean = P["obs_mean"]
     if obs.shape[1] > len(mean):                             # an older network in a simulator with more inputs: they are appended at the end
         obs = obs[:, :len(mean)]
@@ -72,7 +87,10 @@ def step(P, A, obs, h, rng):
     z = sig(gi[:, H:2 * H] + gh[:, H:2 * H])
     nn_ = np.tanh(gi[:, 2 * H:] + r * gh[:, 2 * H:])
     h = ((1 - z) * nn_ + z * h).astype(np.float32)
-    logits = h @ P["wp"].T + P["bp"]
+    zo = h
+    if "_slow" in P:                                         # (--slow-mem) the outputs read h + door(s); the slow GRU ticks on its frames
+        zo, h = P["_slow"][2](P["_slow"][1], P["_slow"][0], x, h, hf)
+    logits = zo @ P["wp"].T + P["bp"]
     dims = [int(d) for d in P["action_dims"]]
     out = np.zeros((len(obs), len(dims)), np.int64)
     i = 0

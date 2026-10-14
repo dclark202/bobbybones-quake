@@ -1785,6 +1785,10 @@ class DuelEnv:
         self.field = None
         self.round_len = 15.0                           # seconds; matches restart (players near each other) after this
         self.round_t = self.rng.uniform(0, 15.0, n_matches).astype(np.float32)
+        # a check's own clocks (2026-10-13; tools/duel_eval.py SeatClock): per seat the seconds since his round or game began,
+        # whether his network was trained on whole games, what is added to the scores as he counts them, and (optional) the
+        # length his "left" input counts down over. All None: the simulator's own clock and score (training, a server).
+        self.clock_t = self.clock_game = self.clock_score = self.clock_len = None
         self.spots = None
         if nav and os.path.exists(nav):
             self.spots = np.array(json.load(open(nav))["nodes"], np.float32)
@@ -3267,6 +3271,17 @@ class DuelEnv:
         g_ = self._others_arr().shape[1] + 1
         return (np.asarray(i) % g_ % 2 == 0) | (not self.count_even)
 
+    def _clock_seats(self):
+        """(a check: see clock_t in __init__) per seat the seconds since his round or his game began and whether his network
+        was trained on whole games; None: the simulator's own clock"""
+        if self.clock_t is None:
+            return None
+        ct = np.asarray(self.clock_t, np.float32)
+        assert ct.shape == (self.n,), "clock_t: one number a seat"
+        cg = np.zeros(self.n, bool) if self.clock_game is None else np.asarray(self.clock_game, bool)
+        assert cg.shape == (self.n,), "clock_game: one flag a seat"
+        return ct, cg
+
     def _others_arr(self):
         """for every player, the other players of his group (one column each)"""
         return self.others
@@ -4571,6 +4586,14 @@ class DuelEnv:
                 if GAME_ON:                                  # (a whole game or a late round: the share of the game left)
                     len_ = np.where(self.game > 0, GAME_LEN, len_)
             left = np.clip(1.0 - self.round_t / np.maximum(len_, 1e-3), 0.0, 1.0)[grp]
+            cs_ = self._clock_seats()
+            if cs_ is not None:                              # (a check: his own clock; a whole-games network: the share of the game left)
+                lg_ = len_[grp] if isinstance(len_, np.ndarray) else len_
+                lg_ = np.where(cs_[1], GAME_LEN, lg_)
+                if self.clock_len is not None:
+                    cl_ = np.asarray(self.clock_len, np.float64)
+                    lg_ = np.where(cl_ > 0, cl_, lg_)
+                left = np.clip(1.0 - cs_[0] / np.maximum(lg_, 1e-3), 0.0, 1.0)
         out[:, 0] = left
         out[:, 1] = self.v02_loud
         out[:, 2] = self.v02_by < 1.0
@@ -4612,7 +4635,8 @@ class DuelEnv:
         dm_ = getattr(self, "dmg_on", None)                  # (a group of more than two: the damage dealt to that player)
         out[:, o + 12] = np.minimum((self.dmg_life if dm_ is None or dm_.shape[1] == 2 else dm_[ar, so]) / 200.0, 2.0)
         el = self.e_life[ar, so]
-        out[:, o + 13] = np.minimum(np.minimum(el, self.round_t[grp]), 60.0) / 60.0
+        cs_ = self._clock_seats()                            # (a check: his own clock)
+        out[:, o + 13] = np.minimum(np.minimum(el, self.round_t[grp] if cs_ is None else cs_[0]), 60.0) / 60.0
         out[:, o + 14] = el < 90.0
         out[:, o + 15:o + 18] = np.minimum(self.v02_pk[ar, so], 2.0) / 2.0
         out[:, o + 18:o + 21] = self.e_got[ar, so][:, [2 + RL, 2 + RG, 2 + LG]]
@@ -4787,6 +4811,20 @@ class DuelEnv:
         if GAME_ON and self.game.any():                      # a whole game or a late round: the clock is the share of the game played
             gm_ = self.game[ar // (self._others_arr().shape[1] + 1)] > 0     # (seconds / 120 held at 2 would stand still from 4:00 on)
             clock[:, 0] = np.where(gm_, t / GAME_LEN, clock[:, 0])
+        cs_ = self._clock_seats()
+        if cs_ is not None:                                  # a check: each seat on the clock and the score of its own training
+            ct_, cg_ = cs_
+            clock[:, 0] = np.where(cg_, ct_ / GAME_LEN, np.minimum(ct_ / 120.0, 2.0))
+            clock[:, 1], clock[:, 2] = np.sin(2 * np.pi * ct_ / 25.0), np.cos(2 * np.pi * ct_ / 25.0)
+            clock[:, 3], clock[:, 4] = np.sin(2 * np.pi * ct_ / 35.0), np.cos(2 * np.pi * ct_ / 35.0)
+            if self.clock_score is not None:
+                oth_ = self._others_arr()
+                adj_ = np.asarray(self.clock_score, np.float32)
+                assert adj_.shape == (n, oth_.shape[1] + 1), "clock_score: his own score and each other player's, a seat"
+                own_ = self.frags_r + adj_[:, 0]
+                best_ = (self.frags_r[oth_] + adj_[:, 1:]).max(1)
+                clock[:, 5], clock[:, 6] = np.minimum(own_ / 10.0, 2.0), np.minimum(best_ / 10.0, 2.0)
+                clock[:, 7] = np.clip((own_ - best_) / 5.0, -2, 2)
         xitems = np.concatenate([self._item_block(ids, r, pos, eye, fdir, up, rot) for ids, r in self.xslots], 1)
         # sounds: how long ago and roughly where, per category; which pickup it was
         fresh = self.snd_t < 5.0

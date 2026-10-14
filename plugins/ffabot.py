@@ -111,6 +111,7 @@ class ffabot(duelbot):
         """a real game: the stats start from zero here; the table at the end is the game's own score"""
         self.ready_ids = set()
         self.game_new = True                                 # (v0.2: frame() starts his round with the game)
+        self.game_t0 = time.time()                           # (a whole-games network: the game's clock starts here, clock_frame)
         if not self.people():
             return
         try:
@@ -253,6 +254,7 @@ class ffabot(duelbot):
         self.item_ent, self.item_was, self.want_w = {}, {}, {}
         nav = "/maps/nav_{}_sim.json".format(mapname)
         self.env = env = E.DuelEnv(bsp, n_matches=1, seed=3, nav=nav if os.path.exists(nav) else None, group=SEATS)
+        self.clock_setup(env)                                # (a whole-games network: the game's clock, duelbot.clock_frame)
         env.react_frames = round(self.react_ms / 25)
         if hasattr(env, "_ffa"):
             # "players beyond two": the simulator here has six seats, so the input read 1.0 whoever was present; in training
@@ -269,7 +271,7 @@ class ffabot(duelbot):
             env.acquire_frames = round(float(self.P["acquire_ms"]) / 25) if "acquire_ms" in self.P else E.ACQUIRE_FRAMES
             env.lab = None
             env.kind[:] = E.NORMAL
-        self.h = np.zeros((SEATS, self.P["whh"].shape[1]), np.float32)
+        self.h = np.zeros((SEATS, _net.width(self.P)), np.float32)        # (--slow-mem: wider with the slow memory)
         for k in range(SEATS):
             self.park(k)
         if os.environ.get("FFA_OBSDUMP"):
@@ -541,18 +543,24 @@ class ffabot(duelbot):
         # the round clock (as in training: the clock, the score and the memory start over every ROUND_SECS)
         new_ = self.game_new and hasattr(env, "_v02_round")  # (v0.2) a real game has begun: his round begins with it, and
         self.game_new = False                                # nothing is believed or was taken, as at a round's start in training
-        if now - self.sess_t0 > self.round_secs or new_:
-            self.sess_t0 = now
-            self.h[:] = 0
-            self.kills0 = {p.id: p.stats.kills for k, p, st in seated}
-        if new_:
-            self.new_game_in(env)
-            self.log("a game began: their round starts with it")
-        env.round_t[0] = now - self.sess_t0
-        if hasattr(env, "v02_left"):                         # (v0.2) the share of his round left, by the same clock, for every seat
-            env.v02_left = min(1.0, max(0.0, 1.0 - (now - self.sess_t0) / max(1.0, self.round_secs)))
-        for k, p, st in seated:
-            env.frags_r[k] = p.stats.kills - self.kills0.get(p.id, p.stats.kills)
+        if getattr(self, "game_seat", False):                # a whole-games network: the game's clock, score and memory, every
+            if new_:                                         # seat in one call (duelbot.clock_frame)
+                self.new_game_in(env)
+                self.log("a game began: the game's clock starts with it")
+            self.clock_frame(now, env, [(k, p) for k, p, st in seated])
+        else:
+            if now - self.sess_t0 > self.round_secs or new_:
+                self.sess_t0 = now
+                self.h[:] = 0
+                self.kills0 = {p.id: p.stats.kills for k, p, st in seated}
+            if new_:
+                self.new_game_in(env)
+                self.log("a game began: their round starts with it")
+            env.round_t[0] = now - self.sess_t0
+            if hasattr(env, "v02_left"):                         # (v0.2) the share of his round left, by the same clock, for every seat
+                env.v02_left = min(1.0, max(0.0, 1.0 - (now - self.sess_t0) / max(1.0, self.round_secs)))
+            for k, p, st in seated:
+                env.frags_r[k] = p.stats.kills - self.kills0.get(p.id, p.stats.kills)
         # deaths and respawns
         noisy = np.zeros(SEATS, bool)
         shot_, hop_, steps_ = np.zeros(SEATS, bool), np.zeros(SEATS, bool), np.zeros(SEATS, bool)     # (v0.2: note_noise, below)

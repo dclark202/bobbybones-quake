@@ -8,7 +8,8 @@ real-server games cannot give (docs/RESULTS.md, audit of 2026-10-08; owner: "pla
 Opponents: "nightmare" = the stand-in for the game's Nightmare bot (the scripted item runner with the persona of that
 name in sim/duel_env.py; for checks only, never a training opponent), "runner" = the plain item runner, or another
 network ("policy:<file>"). Rules as on the server: the game's spawn (machine gun), spawn points away from the enemy,
-one game without restarts; his clock, score and memory start over every --round seconds as in training. A network
+one game without restarts; each seat's clock, score and memory start over as in its own training: every round_secs of its
+checkpoint (120), or never for a network trained on whole games (round_secs 600: the game's clock; SeatClock). A network
 trained with fewer inputs plays through its own list of input names (--inputs, --opp-inputs: docs/INPUTS_v11.csv for
 v10 and v11, docs/INPUTS_v12.csv for v12).
 
@@ -33,6 +34,102 @@ import pin  # noqa: E402  (PIN_CORES: a pool worker on a processor of its own)
 
 def names(path):
     return [(r["group"], r["input"]) for r in csv.DictReader(open(path, encoding="utf-8"))]
+
+
+GAME_SECS = 600.0     # a seat whose round is this long or longer is a whole-games seat (the simulator's GAME_LEN)
+
+
+def round_of(flag, pol, mp=""):
+    """the seconds after which a seat's clock, score and memory start over: the flag when given, else his checkpoint's
+    round_secs (test_suite.Policy; the trainer writes 600 for a network of whole games: never), 180 on arena1 as before"""
+    if flag:
+        return float(flag)
+    r = float(getattr(pol, "round_secs", 0.0) or 120.0)
+    return 180.0 if (mp == "arena1" and r == 120.0) else r
+
+
+class SeatClock:
+    """each seat of a check on the clock, score and memory of its own training (2026-10-13).
+    rounds = (his, the opponent's) seconds; he, opp = the seats of the two sides (every match: one of each).
+    A ROUND seat: the clock, the scores as it counts them and its memory start over every that many seconds.
+    A GAME seat (GAME_SECS or more): seconds since the game's start that never wrap, the game's clock format and share
+    left, one score for the game (a death by his own hand or the map: a point off him, as in training's whole games; it
+    reaches his inputs a frame late), memory never reset.
+    The share of the round LEFT (the v0.2 input): a round seat's runs from 1 to 0 over its round_secs and starts over with
+    its clock, by the plugins' rule 1 - t / round_secs (the owner, 2026-10-13; in training it ran out over round_len times
+    a factor drawn in 0.67 to 1.33 a round: after 80 to 160 s). left_full=True: the constant 1.0 the checks fed until
+    then (--left-full: to reproduce older numbers). A game seat's is 1 - t / GAME_LEN either way.
+    Use: before() ahead of every env.step(); after(t, events, (h, h2)) behind it (h2 None: a scripted opponent).
+    A simulator module without clock_t (the frozen copies): what the tools always did, both seats on one round; the share
+    left through the module's v02_left where it has one (the same rule, one clock for both seats)."""
+
+    def __init__(self, E, env, he, opp, rounds, left_full=False):
+        n = env.n
+        gl = float(getattr(E, "GAME_LEN", GAME_SECS))
+        self.E, self.env, self.sides, self.rounds = E, env, (np.asarray(he), np.asarray(opp)), [float(r) for r in rounds]
+        self.game = [r >= gl for r in self.rounds]
+        self.wrap = [max(1, int(r / E.DT)) for r in self.rounds]
+        self.own = hasattr(env, "clock_t")
+        self.left_full = bool(left_full)
+        self.ct = np.zeros(n, np.float32)
+        if not self.own:
+            assert not any(self.game), "this simulator module has no clock for a whole-games network (no clock_t): use the current module"
+            assert self.wrap[0] == self.wrap[1], "this simulator module keeps one clock for both seats: --round and --opp-round must be equal"
+            return
+        self.gs = np.zeros(n, bool)
+        self.gs[self.sides[0]], self.gs[self.sides[1]] = self.game[0], self.game[1]
+        self.tick = 0
+        self.adj = np.zeros((n, 2), np.float32)
+        self._zero(np.arange(n))
+        env.clock_t, env.clock_game, env.clock_score = self.ct.copy(), self.gs, self.adj
+        if not self.left_full:                               # a round seat's share left: 1 - t / round_secs (0: the simulator's own; a game seat's is the game's)
+            cl_ = np.zeros(n, np.float64)
+            cl_[self.sides[0]], cl_[self.sides[1]] = self.rounds[0], self.rounds[1]
+            env.clock_len = np.where(self.gs, 0.0, cl_)
+
+    def _zero(self, seats):
+        """these seats count the score from here: his own and the other's stand at nothing"""
+        fr = self.env.frags_r
+        self.adj[seats, 0], self.adj[seats, 1] = np.float32(0) - fr[seats], np.float32(0) - fr[seats ^ 1]
+
+    def before(self):
+        if self.own:                                         # (as the simulator: a round's clock is a sum of float32 steps, a game's
+            self.tick += 1                                   # is its frame count times the step)
+            self.ct += self.E.DT
+            self.env.clock_t = np.where(self.gs, np.float32(self.tick * self.E.DT), self.ct)
+        elif not self.left_full and hasattr(self.env, "v02_left"):      # (a frozen module of v0.2: the same rule through its v02_left)
+            self.ct += self.E.DT
+            self.env.v02_left = np.clip(1.0 - self.ct.astype(np.float64) / max(self.rounds[0], 1e-3), 0.0, 1.0)
+
+    def after(self, t, events, mem):
+        env = self.env
+        if not self.own:
+            if (t + 1) % self.wrap[0] == 0:
+                self.ct[:] = 0.0
+                env.round_t[:] = 0.0
+                env.frags_r[:] = 0
+                for h_ in mem:
+                    if h_ is not None:
+                        h_[:] = 0.0
+            return
+        for e in events:                                     # a game seat's score: a death that is nobody's frag is a point off
+            v, k = int(e["victim"]), int(e["killer"])
+            if k < 0 or k == v:
+                if self.gs[v]:
+                    self.adj[v, 0] -= 1
+                if self.gs[v ^ 1]:
+                    self.adj[v ^ 1, 1] -= 1
+        for s_, seats in enumerate(self.sides):
+            if not self.game[s_] and (t + 1) % self.wrap[s_] == 0:
+                self.ct[seats] = 0.0
+                self._zero(seats)
+                if mem[s_] is not None:
+                    mem[s_][:] = 0.0
+
+    def told(self):
+        return dict(he=dict(round_secs=self.rounds[0], whole_game=bool(self.game[0])),
+                    opponent=dict(round_secs=self.rounds[1], whole_game=bool(self.game[1])), per_seat=bool(self.own),
+                    left="1.0 (--left-full)" if self.left_full else "1 - t / round_secs")
 
 
 def play(job):
@@ -93,7 +190,7 @@ def play(job):
     first = [[], []]
     hp0, ar0, has0 = env.hp.copy(), env.armor.copy(), env.has[:, big].copy()
     frames = int(minutes * 60 / E.DT)
-    wrap = max(1, int(round_secs / E.DT))
+    sc_ = SeatClock(E, env, ev, od, (round_secs[0], round_secs[1] if opp_pol is not None else round_secs[0]), left_full=round_secs[2])    # (he first, as ev)
     # the simulator's own counters (they count the learner's side): damage, shots, hits and frags by weapon, the weapon in
     # hand by distance, his speed toward an enemy in view by strength, how well he knows where the enemy is, dropped weapons
     SK = [k for k in ["dmg_h", "dmg_from_script", "w_dist", "close_v", "close_n", "know", "know_frames", "drops", "pick_drop",
@@ -116,6 +213,7 @@ def play(job):
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2)
             a[od, :ao.shape[1]] = ao
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
+        sc_.before()
         obs, r, done, info = env.step(a)                                        # falls in; a scripted seat's is never drawn: general)
         c["restarts"][0] += int(done.any())
         died = np.zeros(n, bool)                                # (a death and the respawn fall in the same step here)
@@ -189,15 +287,10 @@ def play(job):
             c["lives"][s_] += new[m].sum()
         was = alive.copy()
         hp0, ar0, has0 = env.hp.copy(), env.armor.copy(), env.has[:, big].copy()
-        if (t + 1) % wrap == 0:                                 # his clock, score and memory start over, as on the server
-            env.round_t[:] = 0.0
-            env.frags_r[:] = 0
-            h[:] = 0.0
-            if opp_pol is not None:
-                h2[:] = 0.0
+        sc_.after(t, info["events"], (h, h2 if opp_pol is not None else None))    # a round seat's clock, score and memory start over; a game seat's never
     flip = slice(None, None, -1) if swap else slice(None)
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
-                first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS),
+                first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),
                 sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_,
                 st={k: (np.array(env.stats[k], np.float64) - st0[k]).tolist() for k in SK})
 
@@ -213,7 +306,11 @@ def main():
     ap.add_argument("--games", type=int, default=100)
     ap.add_argument("--minutes", type=float, default=10.0)
     ap.add_argument("--procs", type=int, default=16)
-    ap.add_argument("--round", type=float, default=0.0, help="his clock and memory start over every this many seconds (default: 180 on arena1, 120 elsewhere, as in training)")
+    ap.add_argument("--round", type=float, default=0.0, help="his clock, score and memory start over every this many seconds; 600 or more: never, and the "
+                    "whole game's clock (default: his checkpoint's round_secs: 120 for a network of two-minute rounds, 600 for one of whole games; 180 on arena1)")
+    ap.add_argument("--opp-round", type=float, default=0.0, help="... of the opponent network (default: its checkpoint's)")
+    ap.add_argument("--left-full", action="store_true", help="a round seat's 'time left in the round' input stays at 1.0, as the checks fed it until 2026-10-13 "
+                    "(default: it runs from 1 to 0 over his round, 1 - t / round_secs, as on the server); to reproduce older numbers")
     ap.add_argument("--env", default="duel_env_ffa")
     ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator setting (environment variable) for these games")
     ap.add_argument("--seed", type=int, default=100)
@@ -250,7 +347,8 @@ def main():
     for mp in a.map.split(","):
         per = [a.games // a.procs + (1 if k < a.games % a.procs else 0) for k in range(a.procs)]
         jobs = [(a.env, envvars, mp, g, a.minutes, a.seed + 17 * k, pol, idx, kind, opp_pol, opp_idx,
-                 a.round or (180.0 if mp == "arena1" else 120.0), a.swap and k % 2 == 1, delays) for k, g in enumerate(per) if g > 0]
+                 (round_of(a.round, pol, mp), round_of(a.opp_round, opp_pol, mp) if opp_pol is not None else round_of(a.round, pol, mp), a.left_full),
+                 a.swap and k % 2 == 1, delays) for k, g in enumerate(per) if g > 0]
         with mp_.Pool(len(jobs), initializer=pin.pin_pool_worker) as pool:
             res = pool.map(play, jobs)
         sc = np.concatenate([np.array(r["score"]) for r in res])
@@ -319,13 +417,17 @@ def main():
             if "drops" in st:
                 row["he"]["dropped_weapons"] = dict(fell_per_game=round(float(st["drops"]) / G, 1), taken_per_game=round(float(st["pick_drop"]) / G, 1),
                                                     new_to_taker=round(float(st["pick_drop_new"]) / max(1.0, float(st["pick_drop"])), 2))
-        out[mp] = dict(games=G, minutes=a.minutes, frag_share=round(share(kl), 3), frag_share_95=[round(float(np.percentile(boot, 2.5)), 3), round(float(np.percentile(boot, 97.5)), 3)],
+        out[mp] = dict(games=G, minutes=a.minutes, clock=res[0].get("clock"), frag_share=round(share(kl), 3), frag_share_95=[round(float(np.percentile(boot, 2.5)), 3), round(float(np.percentile(boot, 97.5)), 3)],
                        won=int((sc[:, 0] > sc[:, 1]).sum()), drawn=int((sc[:, 0] == sc[:, 1]).sum()), lost=int((sc[:, 0] < sc[:, 1]).sum()),
                        restarts=int(c["restarts"][0]), **row)
         o = out[mp]
         print("{} | {} against {} | {} games of {:g} min | score {:.1f} : {:.1f} | his share of the frags {:.0%} ({:.0%} to {:.0%}) | won {} drawn {} lost {}".format(
             mp, a.run or os.path.basename(path), a.opp, G, a.minutes, o["he"]["score"], o["opponent"]["score"], o["frag_share"],
             o["frag_share_95"][0], o["frag_share_95"][1], o["won"], o["drawn"], o["lost"]))
+        ck_ = o.get("clock") or {}
+        if any(ck_.get(w_, {}).get("round_secs", 120.0) != 120.0 for w_ in ("he", "opponent")):      # (said only where a seat is not on two-minute rounds)
+            print("    clocks: " + " | ".join("{} {}".format(w_, "the whole game (clock, score and memory never start over)" if ck_[w_]["whole_game"]
+                                                             else "rounds of {:g} s".format(ck_[w_]["round_secs"])) for w_ in ("he", "opponent")), flush=True)
         for who in ("he", "opponent"):
             w = o[who]
             print("    {:9s} bare {:.0%} | first weapon {} s | 150+ {:.0%} | weapons {}/min | mega {:.0%}, red {:.0%} of spawns | yellow {}/min | in view {:.0%} | firing {:.0%} ({:.0%} of the time in view) | speed {}, standing {:.0%} (over 3 s: {:.0%}) | lives {}/min, own deaths {} a game".format(
