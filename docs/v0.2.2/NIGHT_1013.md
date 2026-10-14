@@ -14,7 +14,7 @@ alone at full pull (A) 43.9% and 41.8%.
 
 | Run | What it tests | Update 10 | Update 20 | Update 30 | Notes |
 |---|---|---|---|---|---|
-| P | the guessing game (eight questions) with a tenth of its pull on his playing layers (`--aux-trunk 0.1`) | 50.3% | | | step per update 0.022, the base's (full pull: 0.047) |
+| P | the guessing game (eight questions) with a tenth of its pull on his playing layers (`--aux-trunk 0.1`) | 50.3% | 47.6% | | step per update 0.021 to 0.022 throughout, the base's (full pull: 0.047) |
 | E | none of the new parts: the 1v1 baseline | | | | |
 | Q | the guessing game with no pull on his playing layers (`--aux-trunk 0`): a probe | | | | |
 | V | **the pretest of v0.2.2's exact setting** (whole games 75% / mid-game starts 25% of the games' time, item and jump runs 10%, no weapon drills, the openings silent where nothing is left, no autopilot lesson, the guessing game as `place` and `near` at the pull chosen from P, E, Q) | | | | 30 updates: whole games reach 4:48 |
@@ -72,6 +72,17 @@ a second anchor beside the control, at no further cost; the mid-run refresh is t
 **What it is not.** No new pay, no new input: the opponents change, nothing else.
 
 ## 4. Recommendation (fill in the morning)
+
+The owner (2026-10-13 evening): one report once B is done, giving the best guess at what goes into the next full run (one against
+one: whole games and some mid-game starts), part by part against his four goals, for his decision in the morning:
+
+1. keeping speed and moving well through the map;
+2. the right weapon for the moment;
+3. good positions;
+4. counterplay: pressing when stacked against a weak enemy, no fights when weak, taking or keeping away from items.
+
+For each goal: what the night's records show (speed and hops, `v14.in_hand` and hits by weapon, `v14.height` and the places,
+kills and deaths by stack in the checks' lives), which part of v0.2.2 serves it, and what is still missing.
 
 - v0.2.2: go / not yet, and why (V against E; the openings' numbers).
 - The guessing game: the form chosen, and what P, E, Q say about the diagnosis of B-246.
