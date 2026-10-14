@@ -101,8 +101,12 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             ev = info["events"]
             delta["kills_even"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 0)
             delta["kills_odd"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 1)
-            delta["match_of_kill"] = [e["killer"] // G for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
-            delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"]]
+            # (B-247) the league count behind vs_snapshot_kill_share / vs_anchor_kill_share: kills in one-against-one normal
+            # rounds and whole games only (a drill's kill is aim alone; in a group of three two seats of three are his), and
+            # even so a hint, not a check: 9.6-second slices against one opponent network an update
+            hint_kill = [e for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and G == 2 and int(env.kind[e["killer"] // G]) == 0]
+            delta["match_of_kill"] = [e["killer"] // G for e in hint_kill]
+            delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in hint_kill]
             remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy(),
                          env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool),
                          env.legs_live.copy() if hasattr(env, "legs_live") else np.zeros(env.n, bool),      # (LEGS) the switch was read,
@@ -742,7 +746,7 @@ def main():
                         env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
                         round_secs=120.0, arena_secs=float(a.arena_len),
                         game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
-                        game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY") if os.environ.get(k_)},   # games: their clock and score
+                        game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS") if os.environ.get(k_)},   # games: their clock and score
                         cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE),
                    path)
 
@@ -813,7 +817,7 @@ def main():
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
-                "hurt_dmg", "legs", "games")
+                "hurt_dmg", "legs", "games", "open", "moments")
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
@@ -1449,7 +1453,8 @@ def main():
                              refused=round(float(agg["key_blocked"] / max(1.0, agg["key_blocked"] + agg["key_changes"])), 3)),
                    teach=[round(kick, 3), round(float(kick_l), 3)],
                    intent_teach=[round(ik, 3), round(float(ik_l), 3)],
-                   rule_contest=round(float(np.atleast_1d(agg.get("rule_contest", np.zeros(2)))[0]) / max(1.0, float(np.atleast_1d(agg.get("rule_contest", np.zeros(2)))[-1])), 4),   # (RULE_CONTEST) the share of the rule's item frames silenced
+                   rule_contest=round(float(np.atleast_1d(agg.get("rule_contest", np.zeros(2)))[0]) / max(1.0, float(np.atleast_1d(agg.get("rule_contest", np.zeros(2)))[-1])), 4),
+                   rule_blind=round(float(np.atleast_1d(agg.get("rule_blind", np.zeros(2)))[0]) / max(1.0, float(np.atleast_1d(agg.get("rule_blind", np.zeros(2)))[-1])), 4),      # (RULE_BLIND) the share of the rule's frames silenced by a fresh belief   # (RULE_CONTEST) the share of the rule's item frames silenced
                    weapon_teach=[round(wk, 3), round(float(wk_l), 3)],
                    weapon_rule_agree=round(float(agg.get("wrule_agree", 0) / max(1, agg.get("wrule_frames", 0))), 3),
                    stack=dict(over=round(float(agg.get("stack_over", 0)) / max(1, agg.get("stack_frames", 0)), 3),
@@ -1613,6 +1618,33 @@ def main():
                                 pay_size=dict(win=round(float(g_[11] / n_), 3), flat=round(float(g_[12] / n_), 3)),  # the first seat's pay a game, without its sign
                                 by_map={m_: [int(x_) for x_ in np.atleast_1d(v_["games"])[[0, 1, 4, 5, 6, 7]]]       # whole, late; league: games, won, level, lost
                                         for m_, v_ in agg_map.items() if "games" in v_ and float(np.atleast_1d(v_["games"])[[0, 1]].sum()) > 0})
+        if "open" in agg:                                                # (OPENINGS) the pros' spawn openings as the item rule's label, his seats
+            def open_(o_):                                               # (the simulator's OPEN_COLS)
+                o_ = np.atleast_1d(o_).astype(np.float64)
+                at_ = max(1.0, o_[1] + o_[2])
+                return dict(lives=int(o_[0]),                                                        # his lives begun in games
+                            with_opening=round(float((o_[1] + o_[2]) / max(1.0, o_[0])), 4),         # ... the share at a spawn point (an opening's label),
+                            general_rule=round(float(o_[2] / at_), 4),                               # of them by the general rule (too little data),
+                            avoid_changed=round(float(o_[3] / at_), 4),                              # with the second pickup changed by the believed enemy,
+                            avoid_left_none=round(float(o_[4] / at_), 4),                            # ... to nothing (the normal rule spoke)
+                            label_readings=int(o_[5]),                                               # readings of his intention with an opening's label
+                            agree=round(float(o_[6] / max(1.0, o_[5])), 4),                          # ... his choice was the label
+                            first_taken=round(float(o_[7] / at_), 4),                                # lives that took the first pickup named in the window,
+                            second_taken=round(float(o_[8] / at_), 4),                               # ... and a second one of the opening
+                            first_big_s=round(float(o_[9] / max(1.0, o_[10])), 2),                   # seconds to the first big pickup of a life
+                            lives_with_a_big_pickup=round(float(o_[10] / max(1.0, o_[0])), 4))
+            rec["openings"] = dict(open_(agg["open"]), by_map={m_: open_(v_["open"]) for m_, v_ in agg_map.items() if "open" in v_})
+        if "moments" in agg:                                             # (MID_START_P, SPAWN_START_P) rounds begun from saved moments of whole games
+            mo_ = np.atleast_1d(agg["moments"]).astype(np.float64)       # (the simulator's MOMENT_COLS)
+            rec["moments"] = dict(mid_begun=int(mo_[0]), spawn_begun=int(mo_[1]), mid_ended=int(mo_[2]), spawn_ended=int(mo_[3]),
+                                  no_moment_yet=int(mo_[4]),                                           # asked for with none saved: a whole game or a drill instead
+                                  time_share=dict(mid=round(float(mo_[5] / max(1.0, T * n_groups)), 4),  # of all the groups' time
+                                                  spawn=round(float(mo_[6] / max(1.0, T * n_groups)), 4)),
+                                  saved=dict(spawn=int(mo_[7]), mid=int(mo_[8])),
+                                  respawns=int(mo_[9]), with_a_believed_enemy=round(float(mo_[10] / max(1.0, mo_[9])), 4),
+                                  league_mid=dict(games=int(mo_[11]), won=int(mo_[12]), drawn=int(mo_[13]), lost=int(mo_[14])),
+                                  by_map={k_: [int(x_) for x_ in np.atleast_1d(v_["moments"])[[0, 1, 4, 7, 8]]]     # mid begun, spawn begun, none saved, saved spawn, saved mid
+                                          for k_, v_ in agg_map.items() if "moments" in v_})
         if W_HEAD >= 0:                                                  # (WAYS) his ways to his targets
             wa_ = wy_acc.cpu().numpy()
             WR_, WD_, WF_ = (np.atleast_1d(agg.get(k_, np.zeros(z_))).astype(np.float64) for k_, z_ in (("way_reads", 3), ("way_done", 3), ("way_frames", 4)))

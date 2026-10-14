@@ -759,6 +759,13 @@ RULE_WALK = float(os.environ.get("RULE_WALK") or 0.0) > 0
 #                 else is taught. 0: off. A training switch: not a PLAY_VAR. Counted: stats["rule_contest"] (frames silenced,
 #                 frames the rule named an item for one of his seats).
 RULE_CONTEST = float(os.environ.get("RULE_CONTEST") or 0.0)
+#   RULE_BLIND=<seconds>   (2026-10-13; the owner: "he does not change aggression/decisions based on the enemy location or
+#                 knowledge") the rule's lesson is SILENT (a negative label) on the frames he has a belief of the enemy's place
+#                 fresher than this many seconds (his own inputs' belief, the frame before: never the truth): with nobody known
+#                 about the rule speaks as before (the prior: go and get items), with a fresh belief what he goes for is his own
+#                 to find, by what it pays him. The openings' label (OPENINGS) is untouched. 0: off. A training switch: not a
+#                 PLAY_VAR. Counted: stats["rule_blind"] (frames silenced, frames the rule named an item for one of his seats).
+RULE_BLIND = float(os.environ.get("RULE_BLIND") or 0.0)
 # v15 (2026-10-10), both off by default:
 #   JUMPS=1       the pros' jumps that a walker cannot make (tools/pro_gaps.py -> sim/pro_gaps/<map>.json) are links of a
 #                 second set of ways (route_j), which are his in a jump run: a share of the playing time (JUMP_RUN_P, beside
@@ -895,6 +902,99 @@ GAMES_COLS = ("whole games ended", "late rounds ended", "of both: level at the l
               "his lead at the end, summed", "what WIN_PAY paid him in them", "what the flat pay for frags and deaths would have",
               "all that ended: the size of the first seat's WIN_PAY, summed", "... of his flat pay", "frames of matches in whole games",
               "in late rounds", "whole games and late rounds begun")
+#   OPENINGS=1    the pros' spawn openings as the item rule's label (the owner, 2026-10-13: "spawn openings like chess
+#                 openings"; sim/pro_spawn_openings/<map>.json of tools/pro_openings.py, docs/design/openings/README.md).
+#                 It changes ONLY what the intention's teacher (intent_rule(), the trainer's --intent-teach) names in the
+#                 first OPEN_SECS seconds of a life that begins at a spawn point, in a game (a NORMAL round, a whole game,
+#                 a round begun from a saved moment), for his own seats: no output, no pay, no lesson on keys or view, and
+#                 a scripted player's rule is what it was.
+#                   first pickup    the pros' commonest first pickup from that spawn point;
+#                   second pickup   their commonest second pickup after that first one, UNLESS he believes the enemy
+#                                   within OPEN_AVOID units of it (his own belief, v02_bel of the frame before: never the
+#                                   place of an enemy he could not know); then the next on that spawn's list (the other
+#                                   seconds after that first by their lives, then the first and second pickups of the
+#                                   spawn's other openings); if none is left the opening names nothing and the normal
+#                                   rule speaks. After the second pickup or OPEN_SECS seconds: the normal rule.
+#                   too little data (a spawn point the demos do not have, fewer than OPEN_MIN_LIVES lives at it, or no
+#                                   first pickup he can name in OPEN_MIN_SHARE of them): the general rule the demos show:
+#                                   the nearest big weapon first (by the rule's ways), then the nearest armor or mega the
+#                                   enemy is not believed within OPEN_AVOID units of.
+#                 An opening is cut to what he can name as an intention (INTENTS: plasma, grenades, the shotgun, the green
+#                 armor and small items fall out of it), and a step is named only while the rule could name it: an item
+#                 he believes there (or back within the way and 3 s, an armor or the mega), a weapon he does not own, with
+#                 a way by the rule's own times (RULE_WALK: a walker's). A step that cannot be named is passed over.
+#                 The opening's label is not silenced by RULE_CONTEST (the pros take the weapon whoever stands there; the
+#                 second pickup has its own rule) and stands where TARGETS would be silent.
+#                 OPEN_SILENT=1 (off by default: the owner's design is that the normal rule speaks): on the frames the
+#                 avoid rule leaves no second pickup the lesson is silent (a negative label) instead: the normal rule
+#                 knows nothing of the enemy and often names the very item avoided (Blood Run from the rocket spawns:
+#                 the yellow armor) unless RULE_CONTEST silences it.
+#                 Counters: stats["open"] (OPEN_COLS), of the seats the jump counters count (count_even: the even
+#                 seats, his in the trainer's league half). A training switch: not a PLAY_VAR.
+OPENINGS = float(os.environ.get("OPENINGS") or 0.0) > 0
+OPEN_AVOID = float(os.environ.get("OPEN_AVOID") or 500.0)
+OPEN_SECS = float(os.environ.get("OPEN_SECS") or 10.0)
+OPEN_SILENT = float(os.environ.get("OPEN_SILENT") or 0.0) > 0     # (see below: 1 = where the avoid rule leaves none the lesson is silent)
+OPEN_MIN_LIVES, OPEN_MIN_SHARE = 30, 0.10                  # a spawn point's lives in the demos, the first pickup's share of them
+OPEN_SPAWN_R, OPEN_ITEM_R, OPEN_AT = 80.0, 64.0, 48.0      # a pros' start to the map's spawn point, an item of the file to
+#                                                            the simulator's, his place at a life's first frame to a spawn point
+OPEN_COLS = ("his lives begun in games", "of them at a spawn point with the pros' opening", "... with the general rule (too little data)",
+             "lives in which the avoid rule changed the second pickup", "of them: it left none (the normal rule spoke)",
+             "readings of his intention with an opening's label", "of them his choice was the label",
+             "lives that took the first pickup named", "lives that took a second pickup of the opening",
+             "seconds to the first big pickup of a life, summed", "lives with a big pickup")
+#   MID_START_P, SPAWN_START_P   rounds begun from SAVED MOMENTS of whole games (the owner, 2026-10-13: "full games, mid game
+#                 starts and '10s after a spawn with a believed enemy location'"): shares of the games' time, beside GAME_P
+#                 and LATE_P and counted like them (a round's kind is drawn by share / length). Whole games must be on
+#                 (GAME_P > 0): the moments come from them, in this simulator, while it runs.
+#                 A moment is everything the simulator keeps for the two players of a match and for the match: every array
+#                 with a row a player or a row a match (bodies, stacks, weapons, rockets in the air, the items' clocks,
+#                 dropped weapons, score and game clock, and what each player KNOWS: where he last saw or heard the enemy
+#                 and when, the item clocks he knows, what he saw the enemy take), the delayed sightings on their way, and
+#                 the inputs of that frame. Begun from it, a round is that game from that frame on: nothing is invented.
+#                 What is not kept: the network's own memory (the trainer's; it starts empty, as at every round), the
+#                 simulator's random numbers, the frame counters that stagger the players' readings (his next reading of
+#                 keys and intention can fall up to a few frames earlier or later), the hand statistics' last two seconds,
+#                 and of the movement library the flags of a body in motion (jump held, the 160 ms after a teleporter,
+#                 the double-jump clock): place, speed and view are exact (measured: tools of 2026-10-13).
+#                   spawn moments   every respawn in a whole game or a mid-game start (SPAWN_START_BEL=1, the default: only
+#                                   with a believed enemy place at that frame), the frame he stands at the spawn point.
+#                   mid moments     MID_PER_GAME frames of every whole game, drawn evenly between MID_LO and MID_HI seconds.
+#                 The newest SPAWN_BANK and MID_BANK moments are kept (a simulator's own; gone with the process).
+#   MID_START_P=<share>   a mid-game start: a mid moment, played to the game's limit as a whole game is.
+#   SPAWN_START_P=<share> a spawn start: a spawn moment, played for SPAWN_START_LEN seconds (10) of that game, then the
+#                 round ends. In the second half of a simulator's matches (the trainer's league half, where the first seat
+#                 is his) only moments whose spawning player is the first seat are used.
+#                 Asked for with no moment saved yet (the first minutes of a process), a whole game begins instead or
+#                 a round of the other kinds (the drills), by their shares of the time. A process begins with every
+#                 whole game at 0:00: the mix is the one asked for only after a game's length (as with GAME_P alone).
+#                 WIN_PAY carries on in both from the chance as last paid. Counters: stats["moments"] (MOMENT_COLS).
+MID_START_P = float(os.environ.get("MID_START_P") or 0.0)
+SPAWN_START_P = float(os.environ.get("SPAWN_START_P") or 0.0)
+SPAWN_START_LEN = float(os.environ.get("SPAWN_START_LEN") or 10.0)
+SPAWN_START_BEL = float(os.environ.get("SPAWN_START_BEL") or 1.0) > 0
+MOMENT_P = MID_START_P + SPAWN_START_P
+MOMENTS = MOMENT_P > 0
+assert MID_START_P >= 0 and SPAWN_START_P >= 0 and GAME_P + LATE_P + MOMENT_P <= 1.0 + 1e-9, "GAME_P, LATE_P, MID_START_P and SPAWN_START_P are shares of the games' time"
+assert not MOMENTS or GAME_P > 0, "MID_START_P and SPAWN_START_P begin from moments of whole games: GAME_P must be on"
+MID_LO, MID_HI, MID_PER_GAME = 60.0, 480.0, 2
+MID_MEAN = GAME_LEN - 0.5 * (MID_LO + MID_HI)             # a mid-game start's length on average (for the shares)
+SPAWN_BANK, MID_BANK = 256, 64
+SPAWN_FRAMES = int(round(SPAWN_START_LEN / DT))
+MOMENT_COLS = ("mid-game starts begun", "spawn starts begun", "mid-game starts ended", "spawn starts ended",
+               "a start asked for with no moment saved: a whole game or another kind instead", "frames of matches in mid-game starts", "in spawn starts",
+               "spawn moments saved", "mid-game moments saved", "respawns in whole games and mid-game starts", "of them with a believed enemy place",
+               "mid-game starts ended in the second half of the matches (the first seat is his)", "of those: he won", "level", "he lost")
+# what a moment does not hold: the map's and the setup's tables (some have as many rows as there are players or matches
+# in one simulator or another), the group's fixed structure, and what only reports the step just made to the trainer
+MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_feat", "hold_node", "hold_pos", "hurt_zones", "item_pos", "jump_a",
+                 "jump_b", "jump_lab_off", "lo", "long_dirs", "pad_dest", "pads", "persona_p", "shot_fire", "shot_scarce", "shot_way", "spam_places",
+                 "spawn_yaw", "spawns", "spots", "t_bins", "t_goal", "t_route", "t_turn", "tele_in", "tele_out", "up_dirs", "v02_pf", "v02_pp",
+                 "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
+                 "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
+                 "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
+                 "r_long", "op_lab")
+MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
 #                 for less: by HIGH_PAY (0.25 = a quarter) at HIGH_Z units of height between the two, in proportion
@@ -2217,6 +2317,7 @@ class DuelEnv:
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
                           rule_contest=np.zeros(2),                     # (RULE_CONTEST) frames the rule's lesson was silenced; frames it named an item
+                          rule_blind=np.zeros(2),                       # (RULE_BLIND) the same, for a fresh belief of the enemy's place
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
                                                           # distance in view, damage, damage with his weapon, big weapons held, frags, deaths
@@ -2287,6 +2388,10 @@ class DuelEnv:
         self.lab_course_ids = list(range(len(self.courses)))     # courses used when a lab round picks one
         self._game_init()
         self._v02_init(bsp)
+        if MOMENTS:                                          # (MID_START_P, SPAWN_START_P) the saved moments of whole games
+            self._moment_init(seed)
+        if OPENINGS:                                         # (OPENINGS) the pros' openings by spawn point
+            self._open_init(bsp)
         for i in range(n):
             self._spawn(i, avoid=None if i % 2 == 0 else self.w.state()[i - 1, :3])
         self.state = self.w.state()
@@ -3714,6 +3819,8 @@ class DuelEnv:
             Tn = R.T_walk[:, node] if RULE_WALK else np.where((self.script > 0)[None, :], R.T_walk[:, node], Tn)   # (RULE_WALK: for him too)
         if self.route_o is not None:                         # (JUMP_OPEN: the jumps that are open count for him)
             Tn = np.where(((self.script == 0) & ~self.jrun)[None, :], self.route_o.T[:len(self.route_goal), node], Tn)
+        if OPENINGS:                                         # (the opening names by the same ways)
+            self.rule_tn = Tn
         grp = np.arange(n) // (self._others_arr().shape[1] + 1)
         best_t = np.full(n, 1e9, np.float32)
         for gi, lab in enumerate(self.route_goal):
@@ -4367,6 +4474,7 @@ class DuelEnv:
         bel_ok = bt < V02_KNOWN
         bel = (known + self.last_vel * np.minimum(bt, 1.0)[:, None]).astype(np.float32)     # (the extrapolation of the pre-fire rule)
         self.v02_bel, self.v02_bel_ok = bel, bel_ok          # (LEGS_LOOK: where his legs look; kept, changes nothing)
+        self.v02_bt_now = bt                                 # (RULE_BLIND: how old his belief is, seconds)
         # ---- the game
         if self.v02_left is not None:
             left = np.broadcast_to(np.asarray(self.v02_left, np.float32), (n,))
@@ -5030,13 +5138,15 @@ class DuelEnv:
         """round starts a second of playing time, by kind_p's shares: an ordinary game round, a whole game, a late round,
         and the other kinds together (aim, one weapon, movement)"""
         kp = np.asarray(self.kind_p, np.float64)
-        return (float(kp[0]) * max(0.0, 1.0 - GAME_P - LATE_P) / self.round_len, float(kp[0]) * GAME_P / GAME_LEN,
+        return (float(kp[0]) * max(0.0, 1.0 - GAME_P - LATE_P - MOMENT_P) / self.round_len, float(kp[0]) * GAME_P / GAME_LEN,
                 float(kp[0]) * LATE_P / LATE_LEN, float((kp[1:] / np.array([15.0, 15.0, self.move_len])).sum()))
 
     def _game_draw(self, m):
         """is match m's new round a whole game or a late round (by their shares of the playing time)? Then it begins here"""
         if not self._game_ok():
             return False
+        if MOMENTS:                                          # (... or a round begun from a saved moment)
+            return self._moment_draw(m)
         r0, rg, rl, rx = self._game_rates()
         if rg + rl <= 0:
             return False
@@ -5064,6 +5174,8 @@ class DuelEnv:
         self.item_up[m], self.item_t[m] = True, 0.0
         self.contest_t[m] = -1.0
         self.stats["games"][15] += 1
+        if MOMENTS:
+            self._moment_game(m, late)
         if late:
             self._late_m.append(int(m))
 
@@ -5133,6 +5245,8 @@ class DuelEnv:
 
     def _game_end(self, m):
         """the whole game or late round of match m is over, at the limit (level is a draw: no overtime): into the counters"""
+        if MOMENTS and self.game[m] > 2:                     # (a round begun from a saved moment: its own counters)
+            return self._moment_end(m)
         q = self._seats(m)
         a_, b_ = int(q[0]), int(q[1])
         d = float(self.frags_r[a_] - self.frags_r[b_])
@@ -5154,6 +5268,324 @@ class DuelEnv:
         self.game[m] = 0
         self.g_win[q], self.g_flat[q] = 0.0, 0.0
 
+    # ---------------------------------------------------------------- the pros' spawn openings (OPENINGS)
+    def _open_init(self, bsp):
+        """(OPENINGS) per spawn point of the map: the first pickup the opening names and the order of the second ones
+        (open_first, open_rank by intention; open_kind 1), or the general rule (open_kind 0); per player the books of his
+        life: the spawn point (-1: none), the step he is at (0 the first pickup, 1 the second, 2 over)"""
+        n, S, K = self.n, len(self.spawns), HOLD_INTENT
+        self.op_sp = np.full(n, -1, np.int64)
+        self.op_st = np.full(n, 2, np.int64)
+        self.op_lt = np.full(n, 1e9, np.float32)            # his life's clock at the last look (a new life: it has not gone on)
+        self.op_av = np.zeros(n, np.int64)                  # the avoid rule in this life: 0 not, 1 changed the second pickup, 2 left none
+        self.op_big = np.zeros(n, bool)                     # a big pickup in this life (the counter's)
+        self.op_lab = np.zeros(n, np.int64)                 # the opening's label of this frame (0: it names nothing)
+        self.stats["open"] = np.zeros(len(OPEN_COLS))
+        self.open_first = np.zeros(S, np.int64)
+        self.open_rank = np.full((S, K), 99, np.int64)
+        self.open_kind = np.zeros(S, np.int64)
+        self.open_info = [None] * S                         # (for the reader: the pros' name of the spawn point, lives, the steps)
+        f_ = os.path.join(os.environ.get("OPEN_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_spawn_openings"),
+                          os.path.splitext(os.path.basename(bsp))[0].lower() + ".json")
+        if self.route is None or not os.path.exists(f_):
+            return
+        with open(f_, encoding="utf-8") as fh_:
+            d_ = json.load(fh_)
+        lab_of = {}                                          # the file's item -> his intention, by its place (0: none he can name)
+        for nm_, p_ in (d_.get("items") or {}).items():
+            dd_ = [float(np.linalg.norm(self.item_pos[it_] - np.array(p_, np.float32))) for it_ in self.route_item]
+            if dd_ and min(dd_) < OPEN_ITEM_R and self.route_goal[int(np.argmin(dd_))] in INTENTS[1:EN_INTENT]:
+                lab_of[nm_] = INTENTS.index(self.route_goal[int(np.argmin(dd_))])
+        best = {}
+        for sp_ in d_.get("spawns") or []:                   # the pros' start -> the map's spawn point (the nearest start wins it)
+            b_ = sp_.get("bsp")
+            if not b_ or float(b_.get("distance", 1e9)) > OPEN_SPAWN_R:
+                continue
+            dk_ = np.linalg.norm(self.spawns - np.array(b_["pos"], np.float32)[None, :], axis=1)
+            k_ = int(dk_.argmin())
+            if dk_[k_] < OPEN_AT and (k_ not in best or float(b_["distance"]) < float(best[k_]["bsp"]["distance"])):
+                best[k_] = sp_
+        for k_, sp_ in best.items():
+            W = {}                                           # (first,) and (first, second) as he can name them -> lives
+
+            def walk(node, pre):
+                c_ = lab_of.get(node["items"][-1], 0)
+                seq = pre
+                if c_ and c_ not in pre:
+                    seq = pre + (c_,)
+                    W[seq] = W.get(seq, 0) + int(node["lives"])
+                if len(seq) < 2:
+                    for ch_ in node.get("then") or []:
+                        walk(ch_, seq)
+
+            for top_ in sp_.get("openings") or []:
+                walk(top_, ())
+            lives = int(sp_.get("lives", 0))
+            firsts = sorted([(v_, q_[0]) for q_, v_ in W.items() if len(q_) == 1], reverse=True)
+            self.open_info[k_] = dict(name=sp_.get("name"), lives=lives, kind=0, first=None, seconds=[])
+            if lives < OPEN_MIN_LIVES or not firsts or firsts[0][0] < OPEN_MIN_SHARE * lives:
+                continue
+            f1 = firsts[0][1]
+            order = [q_[1] for v_, q_ in sorted([(v_, q_) for q_, v_ in W.items() if len(q_) == 2 and q_[0] == f1], reverse=True)]
+            order += [c_ for v_, c_ in firsts[1:]]           # then the spawn's other openings: their first pickups,
+            order += [q_[1] for v_, q_ in sorted([(v_, q_) for q_, v_ in W.items() if len(q_) == 2 and q_[0] != f1], reverse=True)]   # their second ones
+            seen_ = [f1]
+            for c_ in order:
+                if c_ not in seen_:
+                    self.open_rank[k_, c_] = len(seen_) - 1
+                    seen_.append(c_)
+            self.open_first[k_], self.open_kind[k_] = f1, 1
+            self.open_info[k_].update(kind=1, first=INTENTS[f1], seconds=[INTENTS[c_] for c_ in seen_[1:]],
+                                      share=round(firsts[0][0] / max(1, lives), 3))
+
+    def _open_step(self, human):
+        """(OPENINGS) the opening's label of this frame, in place of the rule's where it names something (see OPENINGS)"""
+        n, R = self.n, self.route
+        self.op_lab = np.zeros(n, np.int64)
+        Tn = getattr(self, "rule_tn", None)
+        if R is None or Tn is None:
+            return
+        ar = np.arange(n)
+        st_ = self.stats["open"]
+        cn = self._counted(ar)                               # (the counters: his seats, as the jump counters')
+        grp = ar // (self._others_arr().shape[1] + 1)
+        on = human & (self.kind[grp] == NORMAL) & (self.run_k < 0) & (self.hp > 0) & (self.round_t[grp] < 1e8)    # (not a process's frame before its first round)
+        new = self.life_t <= self.op_lt                     # a new life: his clock has not gone on (a life's clock goes on every
+        #                                                      frame; after a respawn it is a frame old again, as it may have been)
+        self.op_lt = self.life_t.copy()
+        if new.any():
+            ii = np.nonzero(new)[0]
+            dd = np.linalg.norm(self.spawns[None, :, :] - self.state[ii, None, :3], axis=2)
+            k_ = dd.argmin(1)
+            at = (dd[np.arange(len(ii)), k_] < OPEN_AT) & on[ii]
+            self.op_sp[ii] = np.where(at, k_, -1)
+            self.op_st[ii] = np.where(at, 0, 2)
+            self.op_av[ii], self.op_big[ii] = 0, False
+            st_[0:3] += (float((on & cn)[ii].sum()), float((at & cn[ii] & (self.open_kind[k_] == 1)).sum()), float((at & cn[ii] & (self.open_kind[k_] == 0)).sum()))
+        K = HOLD_INTENT
+        t = np.full((n, K), 1e9, np.float32)                 # per intention he can name: the rule's seconds of way to the nearest
+        valid = np.zeros((n, K), bool)                       # one the rule could name, whether there is one, whether he has
+        done = np.zeros((n, K), bool)                        # taken it in this life (or owns the weapon), whether he believes the
+        near = np.zeros((n, K), bool)                        # enemy near it; tk: taken from its place in this life (the counters')
+        tk = np.zeros((n, K), bool)
+        bel, bok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
+        for gi, lab in enumerate(self.route_goal):
+            c_ = INTENTS.index(lab)
+            it = self.route_item[gi]
+            tg = Tn[gi]
+            gu_, gb_ = self._goal_state(gi, grp)
+            took = (self.v02_took[:, it] < self.life_t) & (self.v02_took[:, it] < 90.0)     # (since he took it: less than his life; the clock stops at 99)
+            if lab in ("RL", "RG", "LG"):
+                w_ = WEAPONS.index(lab.lower())
+                v_ = gu_ & ~self.has[:, w_] & (tg < 1e8)
+                done[:, c_] |= self.has[:, w_]
+            else:
+                v_ = (gu_ | (gb_ < tg + 3.0)) & (tg < 1e8)
+                done[:, c_] |= took
+            tk[:, c_] |= took
+            bet = v_ & (tg < t[:, c_])
+            if bel is not None and bok is not None and len(bel) == n:
+                near[:, c_] = np.where(bet, np.asarray(bok, bool) & (np.linalg.norm(bel - self.item_pos[it][None, :], axis=1) < OPEN_AVOID), near[:, c_])
+            t[:, c_] = np.where(bet, tg, t[:, c_])
+            valid[:, c_] |= v_
+        fb = on & ~self.op_big & tk.any(1)                   # the first big pickup of a life: its seconds
+        st_[9:11] += (float(self.life_t[fb & cn].sum()), float((fb & cn).sum()))
+        self.op_big |= fb
+        act = on & (self.op_sp >= 0) & (self.op_st < 2) & (self.life_t < OPEN_SECS)
+        if not act.any():
+            return
+        sp = np.maximum(self.op_sp, 0)
+        pro = self.open_kind[sp] == 1
+        f1 = self.open_first[sp]
+        wp_ = [INTENTS.index(x_) for x_ in ("RL", "RG", "LG")]
+        sk_ = [INTENTS.index(x_) for x_ in ("MH", "RA", "YA", "YA2")]
+        tw = np.where(valid[:, wp_], t[:, wp_], 1e9)
+        s0 = act & (self.op_st == 0)
+        got1 = np.where(pro, done[ar, f1], done[:, wp_].any(1))
+        can1 = np.where(pro, valid[ar, f1], valid[:, wp_].any(1))
+        st_[7] += float((s0 & cn & np.where(pro, tk[ar, f1], tk[:, wp_].any(1))).sum())
+        lab1 = np.where(pro, f1, np.array(wp_)[tw.argmin(1)])
+        self.op_st = np.where(s0 & (got1 | ~can1), 1, self.op_st)
+        s0 = s0 & ~got1 & can1
+        s1 = act & (self.op_st == 1)
+        # the second pickups and their order: the pros' list, or (the general rule) the armors and the mega, the nearest first
+        cand = np.where(pro[:, None], self.open_rank[sp] < 99, np.isin(np.arange(K), sk_)[None, :])
+        rank = np.where(pro[:, None], self.open_rank[sp].astype(np.float32), t)
+        got2 = s1 & (cand & done).any(1)
+        st_[8] += float((got2 & cn & (cand & tk).any(1)).sum())
+        self.op_st = np.where(got2, 2, self.op_st)
+        s1 = s1 & ~got2
+        plain = cand & valid & ~done
+        free = plain & ~near
+        p0, p1 = np.where(plain, rank, 2e9).argmin(1), np.where(free, rank, 2e9).argmin(1)
+        ch = s1 & plain.any(1) & (~free.any(1) | (p0 != p1))     # the avoid rule changed what it names
+        st_[3] += float((ch & cn & (self.op_av == 0)).sum())
+        st_[4] += float((ch & cn & ~free.any(1) & (self.op_av < 2)).sum())
+        self.op_av = np.where(ch, np.maximum(self.op_av, np.where(free.any(1), 1, 2)), self.op_av)
+        out = np.where(s0, lab1, np.where(s1 & free.any(1), p1, 0))
+        self.op_lab = out.astype(np.int64)
+        self.intent_teach = np.where(self.op_lab > 0, self.op_lab, self.intent_teach)
+        if OPEN_SILENT:                                      # (the avoid rule left none: nothing is taught on this frame)
+            self.intent_teach = np.where(s1 & plain.any(1) & ~free.any(1), -1, self.intent_teach)
+
+    # ---------------------------------------------------------------- rounds begun from saved moments (MID_START_P, SPAWN_START_P)
+    def _moment_init(self, seed):
+        """(MID_START_P, SPAWN_START_P) the books: the saved moments (spawn moments, mid-game moments: the newest are
+        kept), the rounds to put in place at this step's end, per match the frame its game ends at and the frames of a
+        whole game at which a mid-game moment is saved"""
+        self.rng_mom = np.random.default_rng([abs(int(seed)), 0xC2])     # the draws' own random stream
+        self.mom_bank = ([], [])
+        self.mom_n = [0, 0]                                  # moments saved so far, by kind (the bank's oldest is replaced)
+        self.mom_put = []
+        self.mom_first = True                                # the second half of the matches: a spawn start's spawning player is the first seat
+        self.g_end = np.full(self.M, GAME_FRAMES, np.int64)
+        self.g_snap = np.full((self.M, MID_PER_GAME), -1, np.int64)
+        self.stats["moments"] = np.zeros(len(MOMENT_COLS))
+
+    def _moment_game(self, m, late):
+        """a whole game or a late round begins in match m: its limit, and a whole game's frames for the mid-game moments"""
+        self.g_end[m] = GAME_FRAMES
+        self.g_snap[m] = -1
+        if not late:
+            self.g_snap[m] = self.rng_mom.integers(int(round(MID_LO / DT)), int(round(MID_HI / DT)) + 1, MID_PER_GAME)
+
+    def _moment_draw(self, m):
+        """match m's new round: a whole game, a late round, a mid-game start or a spawn start (by their shares of the
+        playing time), or none of them. A start from a moment is put in place at this step's end (_moment_step)"""
+        r0, rg, rl, rx = self._game_rates()
+        kp0 = float(self.kind_p[0])
+        rm, rs = kp0 * MID_START_P / MID_MEAN, kp0 * SPAWN_START_P / SPAWN_START_LEN
+        if rg + rl + rm + rs <= 0:
+            return False
+        u = self.rng.random() * (r0 + rg + rl + rx + rm + rs)
+        if u >= rg + rl + rm + rs:
+            return False
+        if u < rg + rl:
+            self._game_start(m, late=bool(u >= rg))
+            return True
+        kd = 3 if u < rg + rl + rm else 4
+        bank = self.mom_bank[1 if kd == 3 else 0]            # (the bank: spawn moments, mid-game moments)
+        if kd == 4 and self.mom_first and m * 2 >= self.M:   # (the first seat is his there: he is the one who spawns)
+            bank = [b_ for b_ in bank if b_["who"] == 0]
+        if not bank:                                         # nothing saved yet (a process's first minutes): a whole game or one of
+            self.stats["moments"][4] += 1                    # the other kinds, by their shares of the time (drawn by the rates the
+            kp = np.asarray(self.kind_p, np.float64)         # short kinds would take nearly every start, and a whole game at every
+            oth = kp0 * max(0.0, 1.0 - GAME_P - LATE_P - MOMENT_P) + float(kp[1:].sum())      # ask would leave none for later)
+            if self.rng_mom.random() * (kp0 * GAME_P + oth) >= kp0 * GAME_P:
+                return False
+            self._game_start(m, late=False)
+            return True
+        self.mom_put.append((int(m), bank[int(self.rng_mom.integers(len(bank)))], kd))
+        return True
+
+    def _moment_names(self):
+        """the arrays a moment holds, by name: a row a player, a row a match (see MOMENT_STATIC for what it leaves)"""
+        P, Q = [], []
+        for k_, v_ in self.__dict__.items():
+            if isinstance(v_, np.ndarray) and v_.ndim >= 1 and k_ not in MOMENT_STATIC:
+                if v_.shape[0] == self.n:
+                    P.append(k_)
+                elif v_.shape[0] == self.M:
+                    Q.append(k_)
+        return P, Q
+
+    def _moment_take(self, m, obs, who=-1):
+        """the moment of match m as it stands at this step's end (obs: the inputs just made)"""
+        q = self._seats(m)
+        P, Q = self._moment_names()
+        return dict(q0=int(q[0]), who=int(who), tick=int(self.g_tick[m]), obs=obs[q].copy(),
+                    P={k_: getattr(self, k_)[q].copy() for k_ in P},
+                    Q={k_: np.array(getattr(self, k_)[m], copy=True) for k_ in Q},
+                    H={k_: [tuple(np.array(a_[q], copy=True) for a_ in f_) for f_ in getattr(self, k_)] for k_ in MOMENT_HIST if hasattr(self, k_)},
+                    load=[self.load_sets[int(i)] for i in q])
+
+    def _moment_set(self, m, mo, obs):
+        """match m becomes the saved moment mo: its players' and its own rows of every array, the delayed sightings, the
+        bodies in the movement library (place, speed, view), the inputs of that frame"""
+        q = self._seats(m)
+        off = int(q[0]) - mo["q0"]
+        for k_, v_ in mo["P"].items():
+            a_ = getattr(self, k_, None)
+            if isinstance(a_, np.ndarray) and a_.shape[0] == self.n and a_.shape[1:] == v_.shape[1:]:
+                a_[q] = np.where(v_ >= 0, v_ + off, v_) if k_ in ("shot_src", "pain_src") else v_      # (a player's number: the new seats')
+        for k_, v_ in mo["Q"].items():
+            a_ = getattr(self, k_, None)
+            if isinstance(a_, np.ndarray) and a_.shape[0] == self.M and a_.shape[1:] == v_.shape:
+                a_[m] = v_
+        for k_, fr_ in mo["H"].items():
+            L = getattr(self, k_, None)
+            if L is not None and len(L) == len(fr_):         # (as many frames on their way as then: always, but in a simulator's first frames)
+                for f_, g_ in zip(L, fr_):
+                    for a_, v_ in zip(f_, g_):
+                        a_[q] = v_
+        hb_ = getattr(self, "hand_buf", None)
+        if hb_ is not None:                                  # (the hand statistics' frames on their way belong to the round that ended)
+            hb_[:, q] = -1
+        for j_, i in enumerate(q):
+            self.load_sets[int(i)] = mo["load"][j_]
+            s_ = mo["P"]["state"][j_]
+            self.w.reset(int(i), (float(s_[0]), float(s_[1]), float(s_[2])), (float(s_[3]), float(s_[4]), float(s_[5])), float(s_[7]))
+        obs[q] = mo["obs"]
+
+    def _moment_step(self, obs, done, died, info):
+        """a step's end: the rounds drawn from a saved moment are put in place (and the inputs returned are that
+        moment's), then this frame's moments are saved"""
+        MS = self.stats["moments"]
+        if self.mom_put:
+            qq = []
+            for m, mo, kd in self.mom_put:
+                self._moment_set(m, mo, obs)
+                self.game[m] = kd                            # 3 a mid-game start, 4 a spawn start
+                self.g_end[m] = GAME_FRAMES if kd == 3 else min(GAME_FRAMES, int(self.g_tick[m]) + SPAWN_FRAMES)
+                self.g_snap[m] = -1
+                MS[kd - 3] += 1
+                qq += [int(i) for i in self._seats(m)]
+            self.mom_put = []
+            if info.get("aux") is not None:                  # (the truth of the frame for --aux: the moment's, not the ended round's)
+                info["aux"][qq] = self.aux()[qq]
+            if "hand_lab" in info:
+                info["hand_lab"][qq] = self.hand_lab[qq]
+        MS[5:7] += (float((self.game == 3).sum()), float((self.game == 4).sum()))
+        bok = getattr(self, "v02_bel_ok", None)
+        g_ = self._others_arr().shape[1] + 1
+        for v in np.nonzero(died & ~done)[0]:                # a respawn in a whole game or a mid-game start: the spawn moment
+            m = self._match_of(v)
+            if self.game[m] not in (1, 3):
+                continue
+            MS[9] += 1
+            if bok is None or not bool(bok[v]):
+                if SPAWN_START_BEL:
+                    continue
+            else:
+                MS[10] += 1
+            self._moment_keep(0, self._moment_take(m, obs, who=int(v) % g_))
+            MS[7] += 1
+        for m in np.nonzero((self.game == 1) & (self.g_snap == self.g_tick[:, None]).any(1))[0]:
+            self._moment_keep(1, self._moment_take(int(m), obs))
+            MS[8] += 1
+
+    def _moment_keep(self, kd, mo):
+        bank, cap = self.mom_bank[kd], (SPAWN_BANK, MID_BANK)[kd]
+        if len(bank) < cap:
+            bank.append(mo)
+        else:
+            bank[self.mom_n[kd] % cap] = mo
+        self.mom_n[kd] += 1
+
+    def _moment_end(self, m):
+        """the round of match m that began from a saved moment is over: a mid-game start at the game's limit (its result
+        counts from the saved score), a spawn start after its seconds"""
+        q = self._seats(m)
+        MS = self.stats["moments"]
+        kd = int(self.game[m])
+        MS[kd - 1] += 1
+        if kd == 3 and m * 2 >= self.M:
+            d = float(self.frags_r[int(q[0])] - self.frags_r[int(q[1])])
+            MS[11] += 1
+            MS[12 if d > 0 else 13 if d == 0 else 14] += 1
+        self.game[m] = 0
+        self.g_win[q], self.g_flat[q] = 0.0, 0.0
+
     def _seats(self, m):
         g_ = self._others_arr().shape[1] + 1
         return np.arange(g_ * m, g_ * m + g_)
@@ -5169,7 +5601,9 @@ class DuelEnv:
             other = 1.0 / max(1e-9, float((np.asarray(self.kind_p[:3], np.float64) / np.array([self.round_len, 15.0, 15.0])).sum()))
             if GAME_ON and self._game_ok():                  # (whole games and late rounds are longer than a round)
                 r0_, rg_, rl_, _ = self._game_rates()
-                other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
+                rm_ = float(self.kind_p[0]) * MID_START_P / MID_MEAN if MOMENTS else 0.0          # (the rounds begun from saved moments)
+                rs_ = float(self.kind_p[0]) * SPAWN_START_P / SPAWN_START_LEN if MOMENTS else 0.0
+                other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
         p = self.item_run_p + pj
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
             return None
@@ -5616,6 +6050,14 @@ class DuelEnv:
             rc_ = self._rule_contested(self.intent_teach) & human
             self.stats["rule_contest"] += (float(rc_.sum()), float(((self.intent_teach > 0) & human).sum()))
             self.intent_teach = np.where(rc_, -1, self.intent_teach)
+        if RULE_BLIND > 0:                                   # ... and where he has a fresh belief of the enemy's place (RULE_BLIND)
+            bt_ = getattr(self, "v02_bt_now", None)
+            if bt_ is not None and len(bt_) == n:
+                rb_ = human & (self.intent_teach > 0) & (np.asarray(bt_, np.float32) < RULE_BLIND)
+                self.stats["rule_blind"] += (float(rb_.sum()), float(((self.intent_teach > 0) & human).sum()))
+                self.intent_teach = np.where(rb_, -1, self.intent_teach)
+        if OPENINGS:                                         # the first seconds of a life at a spawn point: the pros' opening
+            self._open_step(human)
         ch_ = (a[:, 10] if a.shape[1] > 10 else np.zeros(n, np.int64)).copy()
         in_run = self.run_k >= 0
         ch_[in_run] = self.run_k[in_run]                    # an item run: the target is given, not chosen
@@ -5626,6 +6068,9 @@ class DuelEnv:
             wy_ = np.where(in_run, 0, a[:, WAY_HEAD])
         self.intend(ch_, human, wy_)
         self.intent_live = self.intent_live & ~in_run       # (and the intention head is not trained on those frames)
+        if OPENINGS:                                         # ... how often his reading is the opening's label
+            ol_ = (self.op_lab > 0) & self.intent_live & self._counted(ar)
+            self.stats["open"][5:7] += (float(ol_.sum()), float((ol_ & (self.intent == self.op_lab)).sum()))
         if WAYS:                                             # (nor the way: it is given there)
             self.way_live = self.way_live & ~in_run
             self.stats["way_reads"] += np.bincount(self.way[self.way_live & self._counted(ar)], minlength=N_WAYS)
@@ -6439,7 +6884,7 @@ class DuelEnv:
             klen = np.full(self.M, self.round_len)
         ends = np.nonzero(self.round_t > klen * self.round_fac)[0]
         if GAME_ON:                                          # (a whole game ends at its limit, to the frame)
-            ends = np.nonzero(np.where(self.game > 0, self.g_tick >= GAME_FRAMES, self.round_t > klen * self.round_fac))[0]
+            ends = np.nonzero(np.where(self.game > 0, self.g_tick >= (self.g_end if MOMENTS else GAME_FRAMES), self.round_t > klen * self.round_fac))[0]
         if self.lab is not None:                            # lab rooms have exact lengths
             ends = np.nonzero(self.round_t >= self.lab_len)[0]
             am = np.repeat(self.arena > 0, 2)
@@ -6482,7 +6927,7 @@ class DuelEnv:
             # the chance of starting each kind is weighted by 1 / its length
             wts = np.asarray(self.kind_p, np.float64) / np.array([self.round_len, 15.0, 15.0, self.move_len])
             if GAME_ON and self._game_ok():                  # (the whole games' and late rounds' part of the games' time was drawn above)
-                wts[0] *= max(0.0, 1.0 - GAME_P - LATE_P)
+                wts[0] *= max(0.0, 1.0 - GAME_P - LATE_P - MOMENT_P)
             kd = int(self.rng.choice(4, p=wts / wts.sum()))
             if self.rng.random() < self.drill_p:            # older option: share of one-weapon rounds
                 kd = DRILL
@@ -6610,4 +7055,7 @@ class DuelEnv:
         if HAND_TEACH:                                       # (HAND_TEACH) the pros' shares as the target of his next reading of
             info["hand_lab"] = self.hand_lab.copy()          # the weapon key, for the trainer's --hand-teach
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
-        return self.observe(), reward.astype(np.float32), done, info
+        obs = self.observe()
+        if MOMENTS:                                          # the rounds begun from a saved moment are put in place; this frame's
+            self._moment_step(obs, done, died, info)         # moments are saved
+        return obs, reward.astype(np.float32), done, info
