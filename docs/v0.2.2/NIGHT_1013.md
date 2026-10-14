@@ -44,6 +44,17 @@ through. What a reader of the table must keep in mind:
   half of a game and few mid-game starts.
 - **H's 60% line** is a judgment, not a measured threshold; E's number the same night is the real comparison.
 
+### The owner's decisions since the plan was written (2026-10-13 evening to 2026-10-14 morning)
+
+- The five goals weigh every change: speed and movement, weapon use, positioning, counterplay, beating people.
+- The guessing game is opt-in: pull on his playing layers only if a test is level with the baseline (P was not; v0.2.2 takes it with no pull). The owner doubts the tests judged it fairly ("knowing the enemy location is exactly the way to play this game"): it is revised (the audit's two flaws fixed, asked only while the enemy is unseen, judged against his belief inputs).
+- The item rule must be loosened in v0.2.2; its form from run B.
+- Exploiters are dropped ("I honestly don't think exploiters are going to work at this point"; run H found no hole).
+- A counterplay measure was built (tools/counterplay.py, the pros' side tools/counterplay_pros.py); the owner calls the pros-against-v0.2 table "arguably his biggest weakness": the report addresses it.
+- The checks' two-minute reset of his clock, score and memory is fixed before v0.2.2's checks; the frozen "time left" input of two-minute networks in checks is repaired too (a new baseline follows); the plugins get the same clock.
+- His memory: the learning window is 9.6 s and his memory reaches 10 to 30 s (tools/memory_reach.py). The owner: "make the easy updates now with v0.2.2, then expand the memory to minutes and that becomes v0.3", then (2026-10-14 09:00) build the longer memory now and test whether it belongs in v0.2.2: report at 16:00 with pros and cons, an addendum at 19:00 if the memory test runs long.
+- Weapon use is measured at every check (aim stability).
+
 ## 2. What the records say (fill in)
 
 - **V, the openings:** share of his lives with an opening's label (`openings.with_opening`), his agreement with the label
