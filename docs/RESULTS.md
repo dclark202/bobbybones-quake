@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-14](results/2026-10-14.md)
+
+- 16:00 — v0.2.2's setting (V) holds 53.5% against v0.2 under the fixed clock; the slow memory (S) is level at update 10 and two points under at 20, 21% slower an update; counterplay unchanged in every run
+
 ## [2026-10-13](results/2026-10-13.md)
 
 - 07:00 — v0.2.1's first start fell to 25% against the control in 20 updates and was stopped (23:30); seven arms in the night: the lesson that makes his own keys copy the movement network is the cause, alone and with the shared layers held out; started again at 06:43 without it, first half only, to 19:00
