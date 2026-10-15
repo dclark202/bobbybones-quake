@@ -23,7 +23,7 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 |---|---|
 | On the public server | **v0.2** since 2026-10-12: free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard. [v0.2/REPORT_v0.2.md](v0.2/REPORT_v0.2.md) |
 | The run now | **v0.3** (`duel_gru_v0_3`), the new baseline: whole ten-minute games with overtime, mid-game starts, the pros' openings, places as targets, the real clock, no styles. Started 2026-10-14 20:17, runs to 18:00 on 2026-10-15 (the owner: so he plays enough whole games); evaluation by 19:00. [v0.3/RUN_v0.3.md](v0.3/RUN_v0.3.md), [v0.3/MIDRUN_v0.3.md](v0.3/MIDRUN_v0.3.md) |
-| Next | **v0.4**, proposed: a bigger network (about 13.7 M weights), a store of his past read by attention, a judge of the game's result, the pay leaning on winning (B-250). [v0.4/PROPOSAL_v0.4.md](v0.4/PROPOSAL_v0.4.md), [v0.3/PLUTO.md](v0.3/PLUTO.md) |
+| Next | **v0.4**, the candidate (2026-10-15): the hands (v0.3, every frame, his legs inside) and the head (strategy, five times a second, a store of three minutes), about 9 M weights: [v0.4/CANDIDATE_v0.4.md](v0.4/CANDIDATE_v0.4.md). From the proposal: a bigger network (about 13.7 M weights), a store of his past read by attention, a judge of the game's result, the pay leaning on winning (B-250). [v0.4/PROPOSAL_v0.4.md](v0.4/PROPOSAL_v0.4.md), [v0.3/PLUTO.md](v0.3/PLUTO.md) |
 | Trials between | v0.2.1 stopped twice ([v0.2.1/AUDIT_v0.2.1.md](v0.2.1/AUDIT_v0.2.1.md)); the test runs of 2026-10-13 and 14 that led to v0.3 ([v0.2.2/NIGHT_1013.md](v0.2.2/NIGHT_1013.md)) |
 | Checks of a run | every tenth save plays the control in 160 ten-minute games on ten maps (level 50%, one check moves about ±3 points); the weapon in his hand at every check |
 
@@ -35,7 +35,7 @@ counterplay, beating people.
 
 The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
 
-- The next model: B-250 (v0.4), B-240 (the enemy in his head), B-248 (slower memory).
+- The next model: B-237 (the learning step, first), B-250 (v0.4), B-253 (the legs inside), B-251 (aim from the free-for-all games), B-252 (rocket jumps), B-240 (the enemy in his head), B-248 (slower memory).
 - 1, speed: B-211 (his legs in games), B-213, B-204.
 - 2, rockets: B-210.
 - 3, plasma, grenades: B-189.

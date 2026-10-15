@@ -319,8 +319,8 @@ then h = z·h + (1 - z)·n. Weights: 3 × (M + N) × N, plus small biases.
 | **Head total** | | **7.0 M** |
 
 **Total about 9.1 M** (today 1.75 M). On the server a frame costs the hands' 2.1 M; the head's 7 M every eighth frame
-(about 3 ms that frame at one thread): one or two Bobbys fit the 25 ms frame. The movement network (his legs, 1.2 M) stays
-apart, as today.
+(about 3 ms that frame at one thread): one or two Bobbys fit the 25 ms frame. The candidate built from this, with the legs inside the hands
+and three sizes: [CANDIDATE_v0.4.md](CANDIDATE_v0.4.md).
 
 **The start is exact**: the hands are v0.3's end, the plan's columns and the head's target part at zero, so the network
 plays as v0.3 until what the head says wins games (the rule of stage A). **Training**: a window of 768 frames (96 head
