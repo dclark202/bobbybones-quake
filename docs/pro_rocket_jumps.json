@@ -1,0 +1,3922 @@
+{
+ "aerowalk": {
+  "games": 992,
+  "minutes": 8926,
+  "jumps": 2043,
+  "per_game": 2.06,
+  "games_with_one": 0.719,
+  "pitch_median": 53.8,
+  "jumped_then_fired": 0.7,
+  "self_damage_median": 33,
+  "rise_median": 192,
+  "dist_median": 222,
+  "hp_at_take_off_median": 176,
+  "links": [
+   {
+    "n": 877,
+    "games": 439,
+    "take_off": [
+     -357,
+     77,
+     228
+    ],
+    "landing": [
+     -356,
+     -53,
+     360
+    ],
+    "near_item": "red armor",
+    "rise": 182,
+    "dist": 169,
+    "pitch": 47.4,
+    "self_damage": 33,
+    "hp_at_take_off": 147
+   },
+   {
+    "n": 144,
+    "games": 118,
+    "take_off": [
+     -325,
+     326,
+     326
+    ],
+    "landing": [
+     -356,
+     -53,
+     360
+    ],
+    "near_item": "red armor",
+    "rise": 143,
+    "dist": 411,
+    "pitch": 53.1,
+    "self_damage": 27,
+    "hp_at_take_off": 114
+   },
+   {
+    "n": 74,
+    "games": 71,
+    "take_off": [
+     -148,
+     354,
+     168
+    ],
+    "landing": [
+     -209,
+     306,
+     321
+    ],
+    "near_item": "lightning",
+    "rise": 196,
+    "dist": 164,
+    "pitch": 52.8,
+    "self_damage": 31,
+    "hp_at_take_off": 193
+   },
+   {
+    "n": 68,
+    "games": 62,
+    "take_off": [
+     -148,
+     354,
+     168
+    ],
+    "landing": [
+     -270,
+     554,
+     320
+    ],
+    "near_item": "lightning",
+    "rise": 215,
+    "dist": 343,
+    "pitch": 54.3,
+    "self_damage": 32,
+    "hp_at_take_off": 198
+   },
+   {
+    "n": 60,
+    "games": 56,
+    "take_off": [
+     234,
+     -392,
+     77
+    ],
+    "landing": [
+     411,
+     172,
+     376
+    ],
+    "near_item": "rockets",
+    "rise": 354,
+    "dist": 590,
+    "pitch": 84.2,
+    "self_damage": 40,
+    "hp_at_take_off": 254
+   },
+   {
+    "n": 37,
+    "games": 35,
+    "take_off": [
+     234,
+     -392,
+     77
+    ],
+    "landing": [
+     504,
+     4,
+     376
+    ],
+    "near_item": "rockets",
+    "rise": 335,
+    "dist": 493,
+    "pitch": 86.1,
+    "self_damage": 38,
+    "hp_at_take_off": 265
+   },
+   {
+    "n": 35,
+    "games": 32,
+    "take_off": [
+     -67,
+     -85,
+     157
+    ],
+    "landing": [
+     504,
+     4,
+     376
+    ],
+    "near_item": "rockets",
+    "rise": 272,
+    "dist": 578,
+    "pitch": 61.2,
+    "self_damage": 37,
+    "hp_at_take_off": 198
+   },
+   {
+    "n": 31,
+    "games": 31,
+    "take_off": [
+     234,
+     -392,
+     77
+    ],
+    "landing": [
+     411,
+     400,
+     376
+    ],
+    "near_item": null,
+    "rise": 344,
+    "dist": 823,
+    "pitch": 87.5,
+    "self_damage": 38,
+    "hp_at_take_off": 263
+   },
+   {
+    "n": 22,
+    "games": 22,
+    "take_off": [
+     -67,
+     -85,
+     157
+    ],
+    "landing": [
+     411,
+     172,
+     376
+    ],
+    "near_item": "rockets",
+    "rise": 275,
+    "dist": 505,
+    "pitch": 66.8,
+    "self_damage": 36,
+    "hp_at_take_off": 227
+   },
+   {
+    "n": 22,
+    "games": 20,
+    "take_off": [
+     886,
+     -255,
+     148
+    ],
+    "landing": [
+     642,
+     -518,
+     382
+    ],
+    "near_item": null,
+    "rise": 308,
+    "dist": 414,
+    "pitch": 61.4,
+    "self_damage": 37,
+    "hp_at_take_off": 241
+   },
+   {
+    "n": 21,
+    "games": 21,
+    "take_off": [
+     -67,
+     -85,
+     157
+    ],
+    "landing": [
+     187,
+     -525,
+     420
+    ],
+    "near_item": "rail",
+    "rise": 274,
+    "dist": 508,
+    "pitch": 63.8,
+    "self_damage": 36,
+    "hp_at_take_off": 221
+   },
+   {
+    "n": 21,
+    "games": 21,
+    "take_off": [
+     -148,
+     354,
+     168
+    ],
+    "landing": [
+     -33,
+     460,
+     320
+    ],
+    "near_item": "lightning",
+    "rise": 206,
+    "dist": 231,
+    "pitch": 53.9,
+    "self_damage": 31,
+    "hp_at_take_off": 212
+   },
+   {
+    "n": 21,
+    "games": 20,
+    "take_off": [
+     -167,
+     460,
+     323
+    ],
+    "landing": [
+     -356,
+     -53,
+     360
+    ],
+    "near_item": "red armor",
+    "rise": 180,
+    "dist": 619,
+    "pitch": 47.7,
+    "self_damage": 31,
+    "hp_at_take_off": 93
+   }
+  ]
+ },
+ "battleforged": {
+  "games": 147,
+  "minutes": 1350,
+  "jumps": 931,
+  "per_game": 6.33,
+  "games_with_one": 1.0,
+  "pitch_median": 53.0,
+  "jumped_then_fired": 0.243,
+  "self_damage_median": 33,
+  "rise_median": 213,
+  "dist_median": 539,
+  "hp_at_take_off_median": 261,
+  "links": [
+   {
+    "n": 115,
+    "games": 72,
+    "take_off": [
+     -64,
+     -734,
+     -443
+    ],
+    "landing": [
+     -236,
+     -289,
+     -296
+    ],
+    "near_item": null,
+    "rise": 194,
+    "dist": 487,
+    "pitch": 49.7,
+    "self_damage": 31,
+    "hp_at_take_off": 291
+   },
+   {
+    "n": 84,
+    "games": 58,
+    "take_off": [
+     -64,
+     -734,
+     -443
+    ],
+    "landing": [
+     -77,
+     -180,
+     -296
+    ],
+    "near_item": "rockets",
+    "rise": 205,
+    "dist": 564,
+    "pitch": 51.5,
+    "self_damage": 33,
+    "hp_at_take_off": 281
+   },
+   {
+    "n": 76,
+    "games": 52,
+    "take_off": [
+     -64,
+     -734,
+     -443
+    ],
+    "landing": [
+     88,
+     -168,
+     -72
+    ],
+    "near_item": "rockets",
+    "rise": 397,
+    "dist": 551,
+    "pitch": 87.9,
+    "self_damage": 41,
+    "hp_at_take_off": 238
+   },
+   {
+    "n": 66,
+    "games": 54,
+    "take_off": [
+     718,
+     564,
+     -131
+    ],
+    "landing": [
+     -711,
+     397,
+     -72
+    ],
+    "near_item": null,
+    "rise": 157,
+    "dist": 1407,
+    "pitch": 43.8,
+    "self_damage": 28,
+    "hp_at_take_off": 248
+   },
+   {
+    "n": 54,
+    "games": 40,
+    "take_off": [
+     -64,
+     -734,
+     -443
+    ],
+    "landing": [
+     192,
+     -389,
+     -72
+    ],
+    "near_item": null,
+    "rise": 396,
+    "dist": 458,
+    "pitch": 87.9,
+    "self_damage": 41,
+    "hp_at_take_off": 265
+   },
+   {
+    "n": 36,
+    "games": 32,
+    "take_off": [
+     718,
+     564,
+     -131
+    ],
+    "landing": [
+     42,
+     494,
+     -28
+    ],
+    "near_item": null,
+    "rise": 167,
+    "dist": 638,
+    "pitch": 44.9,
+    "self_damage": 29,
+    "hp_at_take_off": 245
+   },
+   {
+    "n": 36,
+    "games": 26,
+    "take_off": [
+     -289,
+     -1028,
+     -110
+    ],
+    "landing": [
+     -656,
+     -463,
+     24
+    ],
+    "near_item": null,
+    "rise": 215,
+    "dist": 614,
+    "pitch": 59.3,
+    "self_damage": 32,
+    "hp_at_take_off": 291
+   },
+   {
+    "n": 35,
+    "games": 28,
+    "take_off": [
+     718,
+     564,
+     -131
+    ],
+    "landing": [
+     -443,
+     520,
+     -72
+    ],
+    "near_item": null,
+    "rise": 174,
+    "dist": 1100,
+    "pitch": 45.5,
+    "self_damage": 29,
+    "hp_at_take_off": 243
+   },
+   {
+    "n": 20,
+    "games": 19,
+    "take_off": [
+     144,
+     487,
+     -288
+    ],
+    "landing": [
+     749,
+     587,
+     -136
+    ],
+    "near_item": "red armor",
+    "rise": 192,
+    "dist": 552,
+    "pitch": 56.5,
+    "self_damage": 31,
+    "hp_at_take_off": 150
+   },
+   {
+    "n": 19,
+    "games": 16,
+    "take_off": [
+     718,
+     564,
+     -131
+    ],
+    "landing": [
+     -195,
+     416,
+     -72
+    ],
+    "near_item": null,
+    "rise": 165,
+    "dist": 974,
+    "pitch": 43.1,
+    "self_damage": 29,
+    "hp_at_take_off": 300
+   },
+   {
+    "n": 19,
+    "games": 16,
+    "take_off": [
+     -455,
+     32,
+     -222
+    ],
+    "landing": [
+     -656,
+     -463,
+     24
+    ],
+    "near_item": null,
+    "rise": 304,
+    "dist": 419,
+    "pitch": 54.0,
+    "self_damage": 38,
+    "hp_at_take_off": 258
+   },
+   {
+    "n": 17,
+    "games": 15,
+    "take_off": [
+     -123,
+     -482,
+     -452
+    ],
+    "landing": [
+     -236,
+     -289,
+     -296
+    ],
+    "near_item": null,
+    "rise": 215,
+    "dist": 326,
+    "pitch": 53.9,
+    "self_damage": 33,
+    "hp_at_take_off": 265
+   },
+   {
+    "n": 15,
+    "games": 14,
+    "take_off": [
+     -64,
+     -734,
+     -443
+    ],
+    "landing": [
+     -69,
+     17,
+     -296
+    ],
+    "near_item": "rockets",
+    "rise": 229,
+    "dist": 732,
+    "pitch": 56.8,
+    "self_damage": 34,
+    "hp_at_take_off": 280
+   },
+   {
+    "n": 14,
+    "games": 12,
+    "take_off": [
+     -289,
+     -1028,
+     -110
+    ],
+    "landing": [
+     -521,
+     -654,
+     24
+    ],
+    "near_item": null,
+    "rise": 186,
+    "dist": 478,
+    "pitch": 54.4,
+    "self_damage": 30,
+    "hp_at_take_off": 266
+   },
+   {
+    "n": 12,
+    "games": 10,
+    "take_off": [
+     -123,
+     -482,
+     -452
+    ],
+    "landing": [
+     88,
+     -168,
+     -72
+    ],
+    "near_item": "rockets",
+    "rise": 404,
+    "dist": 427,
+    "pitch": 87.9,
+    "self_damage": 41,
+    "hp_at_take_off": 214
+   },
+   {
+    "n": 11,
+    "games": 11,
+    "take_off": [
+     207,
+     -996,
+     -132
+    ],
+    "landing": [
+     420,
+     -124,
+     -72
+    ],
+    "near_item": null,
+    "rise": 172,
+    "dist": 1039,
+    "pitch": 44.6,
+    "self_damage": 30,
+    "hp_at_take_off": 296
+   },
+   {
+    "n": 11,
+    "games": 11,
+    "take_off": [
+     -64,
+     -734,
+     -443
+    ],
+    "landing": [
+     -353,
+     24,
+     -272
+    ],
+    "near_item": null,
+    "rise": 238,
+    "dist": 771,
+    "pitch": 57.6,
+    "self_damage": 36,
+    "hp_at_take_off": 276
+   }
+  ]
+ },
+ "bloodrun": {
+  "games": 1271,
+  "minutes": 12049,
+  "jumps": 6828,
+  "per_game": 5.37,
+  "games_with_one": 0.945,
+  "pitch_median": 68.5,
+  "jumped_then_fired": 0.528,
+  "self_damage_median": 33,
+  "rise_median": 212,
+  "dist_median": 430,
+  "hp_at_take_off_median": 243,
+  "links": [
+   {
+    "n": 1858,
+    "games": 807,
+    "take_off": [
+     -246,
+     -274,
+     447
+    ],
+    "landing": [
+     -157,
+     -51,
+     536
+    ],
+    "near_item": "red armor",
+    "rise": 153,
+    "dist": 313,
+    "pitch": 55.7,
+    "self_damage": 28,
+    "hp_at_take_off": 176
+   },
+   {
+    "n": 519,
+    "games": 394,
+    "take_off": [
+     277,
+     -227,
+     101
+    ],
+    "landing": [
+     -304,
+     -460,
+     408
+    ],
+    "near_item": null,
+    "rise": 365,
+    "dist": 610,
+    "pitch": 87.6,
+    "self_damage": 40,
+    "hp_at_take_off": 284
+   },
+   {
+    "n": 409,
+    "games": 323,
+    "take_off": [
+     673,
+     -1048,
+     109
+    ],
+    "landing": [
+     446,
+     -1304,
+     280
+    ],
+    "near_item": "rockets",
+    "rise": 212,
+    "dist": 362,
+    "pitch": 50.7,
+    "self_damage": 33,
+    "hp_at_take_off": 282
+   },
+   {
+    "n": 349,
+    "games": 275,
+    "take_off": [
+     673,
+     -1048,
+     109
+    ],
+    "landing": [
+     658,
+     -572,
+     488
+    ],
+    "near_item": null,
+    "rise": 402,
+    "dist": 415,
+    "pitch": 87.9,
+    "self_damage": 41,
+    "hp_at_take_off": 321
+   },
+   {
+    "n": 295,
+    "games": 259,
+    "take_off": [
+     -113,
+     -427,
+     366
+    ],
+    "landing": [
+     -157,
+     -51,
+     536
+    ],
+    "near_item": "red armor",
+    "rise": 187,
+    "dist": 501,
+    "pitch": 51.0,
+    "self_damage": 31,
+    "hp_at_take_off": 150
+   },
+   {
+    "n": 292,
+    "games": 245,
+    "take_off": [
+     277,
+     -227,
+     101
+    ],
+    "landing": [
+     -241,
+     -284,
+     409
+    ],
+    "near_item": null,
+    "rise": 343,
+    "dist": 533,
+    "pitch": 86.7,
+    "self_damage": 39,
+    "hp_at_take_off": 253
+   },
+   {
+    "n": 216,
+    "games": 182,
+    "take_off": [
+     673,
+     -1048,
+     109
+    ],
+    "landing": [
+     784,
+     -1381,
+     280
+    ],
+    "near_item": "rockets",
+    "rise": 220,
+    "dist": 381,
+    "pitch": 54.5,
+    "self_damage": 33,
+    "hp_at_take_off": 287
+   },
+   {
+    "n": 201,
+    "games": 177,
+    "take_off": [
+     203,
+     -391,
+     95
+    ],
+    "landing": [
+     -304,
+     -460,
+     408
+    ],
+    "near_item": null,
+    "rise": 360,
+    "dist": 507,
+    "pitch": 86.3,
+    "self_damage": 39,
+    "hp_at_take_off": 245
+   },
+   {
+    "n": 174,
+    "games": 152,
+    "take_off": [
+     -246,
+     -274,
+     447
+    ],
+    "landing": [
+     302,
+     -51,
+     592
+    ],
+    "near_item": null,
+    "rise": 189,
+    "dist": 569,
+    "pitch": 49.3,
+    "self_damage": 31,
+    "hp_at_take_off": 277
+   },
+   {
+    "n": 160,
+    "games": 143,
+    "take_off": [
+     607,
+     -879,
+     91
+    ],
+    "landing": [
+     446,
+     -1304,
+     280
+    ],
+    "near_item": "rockets",
+    "rise": 226,
+    "dist": 549,
+    "pitch": 56.0,
+    "self_damage": 34,
+    "hp_at_take_off": 296
+   },
+   {
+    "n": 130,
+    "games": 121,
+    "take_off": [
+     277,
+     -227,
+     101
+    ],
+    "landing": [
+     -432,
+     -343,
+     408
+    ],
+    "near_item": null,
+    "rise": 384,
+    "dist": 743,
+    "pitch": 87.9,
+    "self_damage": 41,
+    "hp_at_take_off": 292
+   },
+   {
+    "n": 116,
+    "games": 102,
+    "take_off": [
+     -246,
+     -274,
+     447
+    ],
+    "landing": [
+     202,
+     -286,
+     583
+    ],
+    "near_item": null,
+    "rise": 179,
+    "dist": 507,
+    "pitch": 46.5,
+    "self_damage": 30,
+    "hp_at_take_off": 276
+   },
+   {
+    "n": 96,
+    "games": 88,
+    "take_off": [
+     203,
+     -391,
+     95
+    ],
+    "landing": [
+     -241,
+     -284,
+     409
+    ],
+    "near_item": null,
+    "rise": 357,
+    "dist": 444,
+    "pitch": 85.6,
+    "self_damage": 39,
+    "hp_at_take_off": 241
+   },
+   {
+    "n": 94,
+    "games": 87,
+    "take_off": [
+     277,
+     -227,
+     101
+    ],
+    "landing": [
+     -170,
+     -293,
+     24
+    ],
+    "near_item": "rail",
+    "rise": 212,
+    "dist": 458,
+    "pitch": 87.6,
+    "self_damage": 41,
+    "hp_at_take_off": 289
+   },
+   {
+    "n": 91,
+    "games": 84,
+    "take_off": [
+     673,
+     -1048,
+     109
+    ],
+    "landing": [
+     571,
+     -799,
+     404
+    ],
+    "near_item": null,
+    "rise": 343,
+    "dist": 221,
+    "pitch": 87.3,
+    "self_damage": 39,
+    "hp_at_take_off": 304
+   },
+   {
+    "n": 86,
+    "games": 83,
+    "take_off": [
+     -272,
+     -555,
+     439
+    ],
+    "landing": [
+     -157,
+     -51,
+     536
+    ],
+    "near_item": "red armor",
+    "rise": 187,
+    "dist": 531,
+    "pitch": 48.4,
+    "self_damage": 31,
+    "hp_at_take_off": 150
+   },
+   {
+    "n": 86,
+    "games": 72,
+    "take_off": [
+     786,
+     -856,
+     91
+    ],
+    "landing": [
+     446,
+     -1304,
+     280
+    ],
+    "near_item": "rockets",
+    "rise": 224,
+    "dist": 668,
+    "pitch": 48.1,
+    "self_damage": 40,
+    "hp_at_take_off": 307
+   },
+   {
+    "n": 81,
+    "games": 75,
+    "take_off": [
+     173,
+     -77,
+     97
+    ],
+    "landing": [
+     -304,
+     -460,
+     408
+    ],
+    "near_item": null,
+    "rise": 378,
+    "dist": 584,
+    "pitch": 87.9,
+    "self_damage": 40,
+    "hp_at_take_off": 261
+   },
+   {
+    "n": 80,
+    "games": 76,
+    "take_off": [
+     -246,
+     -274,
+     447
+    ],
+    "landing": [
+     705,
+     -43,
+     536
+    ],
+    "near_item": null,
+    "rise": 180,
+    "dist": 910,
+    "pitch": 47.5,
+    "self_damage": 30,
+    "hp_at_take_off": 307
+   },
+   {
+    "n": 75,
+    "games": 72,
+    "take_off": [
+     673,
+     -1048,
+     109
+    ],
+    "landing": [
+     273,
+     -1167,
+     280
+    ],
+    "near_item": null,
+    "rise": 241,
+    "dist": 397,
+    "pitch": 55.4,
+    "self_damage": 35,
+    "hp_at_take_off": 311
+   },
+   {
+    "n": 73,
+    "games": 69,
+    "take_off": [
+     673,
+     -1048,
+     109
+    ],
+    "landing": [
+     625,
+     -1208,
+     280
+    ],
+    "near_item": "rockets",
+    "rise": 186,
+    "dist": 225,
+    "pitch": 51.7,
+    "self_damage": 31,
+    "hp_at_take_off": 298
+   }
+  ]
+ },
+ "campgrounds": {
+  "games": 217,
+  "minutes": 2040,
+  "jumps": 1513,
+  "per_game": 6.97,
+  "games_with_one": 0.972,
+  "pitch_median": 84.2,
+  "jumped_then_fired": 0.545,
+  "self_damage_median": 38,
+  "rise_median": 320,
+  "dist_median": 537,
+  "hp_at_take_off_median": 256,
+  "links": [
+   {
+    "n": 214,
+    "games": 114,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     -272,
+     -835,
+     538
+    ],
+    "near_item": null,
+    "rise": 374,
+    "dist": 616,
+    "pitch": 87.9,
+    "self_damage": 40,
+    "hp_at_take_off": 299
+   },
+   {
+    "n": 72,
+    "games": 54,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     -104,
+     -949,
+     538
+    ],
+    "near_item": null,
+    "rise": 349,
+    "dist": 503,
+    "pitch": 87.7,
+    "self_damage": 39,
+    "hp_at_take_off": 278
+   },
+   {
+    "n": 62,
+    "games": 45,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     -446,
+     -799,
+     538
+    ],
+    "near_item": "rockets",
+    "rise": 374,
+    "dist": 879,
+    "pitch": 87.9,
+    "self_damage": 40,
+    "hp_at_take_off": 297
+   },
+   {
+    "n": 40,
+    "games": 38,
+    "take_off": [
+     -683,
+     408,
+     299
+    ],
+    "landing": [
+     -1230,
+     368,
+     538
+    ],
+    "near_item": "yellow armor",
+    "rise": 304,
+    "dist": 610,
+    "pitch": 85.0,
+    "self_damage": 36,
+    "hp_at_take_off": 186
+   },
+   {
+    "n": 35,
+    "games": 32,
+    "take_off": [
+     -930,
+     297,
+     298
+    ],
+    "landing": [
+     -1230,
+     368,
+     538
+    ],
+    "near_item": "yellow armor",
+    "rise": 296,
+    "dist": 445,
+    "pitch": 73.0,
+    "self_damage": 37,
+    "hp_at_take_off": 196
+   },
+   {
+    "n": 31,
+    "games": 26,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     91,
+     -802,
+     538
+    ],
+    "near_item": null,
+    "rise": 375,
+    "dist": 535,
+    "pitch": 87.9,
+    "self_damage": 40,
+    "hp_at_take_off": 282
+   },
+   {
+    "n": 26,
+    "games": 25,
+    "take_off": [
+     -530,
+     -323,
+     26
+    ],
+    "landing": [
+     -640,
+     105,
+     282
+    ],
+    "near_item": null,
+    "rise": 283,
+    "dist": 378,
+    "pitch": 70.4,
+    "self_damage": 37,
+    "hp_at_take_off": 269
+   },
+   {
+    "n": 26,
+    "games": 18,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     -760,
+     -817,
+     538
+    ],
+    "near_item": "rockets",
+    "rise": 370,
+    "dist": 1139,
+    "pitch": 87.9,
+    "self_damage": 40,
+    "hp_at_take_off": 339
+   },
+   {
+    "n": 22,
+    "games": 21,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     248,
+     -839,
+     538
+    ],
+    "near_item": null,
+    "rise": 366,
+    "dist": 510,
+    "pitch": 87.4,
+    "self_damage": 39,
+    "hp_at_take_off": 279
+   },
+   {
+    "n": 22,
+    "games": 21,
+    "take_off": [
+     -51,
+     471,
+     53
+    ],
+    "landing": [
+     -434,
+     489,
+     282
+    ],
+    "near_item": null,
+    "rise": 306,
+    "dist": 424,
+    "pitch": 76.9,
+    "self_damage": 37,
+    "hp_at_take_off": 179
+   },
+   {
+    "n": 21,
+    "games": 19,
+    "take_off": [
+     355,
+     -494,
+     300
+    ],
+    "landing": [
+     472,
+     12,
+     538
+    ],
+    "near_item": "rail",
+    "rise": 278,
+    "dist": 440,
+    "pitch": 72.4,
+    "self_damage": 36,
+    "hp_at_take_off": 200
+   },
+   {
+    "n": 20,
+    "games": 17,
+    "take_off": [
+     -319,
+     -373,
+     31
+    ],
+    "landing": [
+     -288,
+     -612,
+     282
+    ],
+    "near_item": null,
+    "rise": 310,
+    "dist": 319,
+    "pitch": 60.6,
+    "self_damage": 38,
+    "hp_at_take_off": 284
+   },
+   {
+    "n": 20,
+    "games": 15,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     403,
+     -1009,
+     538
+    ],
+    "near_item": null,
+    "rise": 338,
+    "dist": 342,
+    "pitch": 80.7,
+    "self_damage": 39,
+    "hp_at_take_off": 297
+   },
+   {
+    "n": 19,
+    "games": 18,
+    "take_off": [
+     -530,
+     -323,
+     26
+    ],
+    "landing": [
+     26,
+     -185,
+     282
+    ],
+    "near_item": null,
+    "rise": 308,
+    "dist": 478,
+    "pitch": 72.1,
+    "self_damage": 38,
+    "hp_at_take_off": 263
+   },
+   {
+    "n": 18,
+    "games": 18,
+    "take_off": [
+     181,
+     -657,
+     294
+    ],
+    "landing": [
+     472,
+     12,
+     538
+    ],
+    "near_item": "rail",
+    "rise": 298,
+    "dist": 577,
+    "pitch": 80.2,
+    "self_damage": 36,
+    "hp_at_take_off": 212
+   },
+   {
+    "n": 18,
+    "games": 18,
+    "take_off": [
+     -930,
+     297,
+     298
+    ],
+    "landing": [
+     -1500,
+     450,
+     538
+    ],
+    "near_item": "yellow armor",
+    "rise": 336,
+    "dist": 614,
+    "pitch": 82.2,
+    "self_damage": 38,
+    "hp_at_take_off": 262
+   },
+   {
+    "n": 18,
+    "games": 14,
+    "take_off": [
+     -530,
+     -323,
+     26
+    ],
+    "landing": [
+     -288,
+     -612,
+     282
+    ],
+    "near_item": null,
+    "rise": 270,
+    "dist": 431,
+    "pitch": 86.0,
+    "self_damage": 35,
+    "hp_at_take_off": 322
+   },
+   {
+    "n": 17,
+    "games": 14,
+    "take_off": [
+     181,
+     -657,
+     294
+    ],
+    "landing": [
+     443,
+     -221,
+     538
+    ],
+    "near_item": "rail",
+    "rise": 267,
+    "dist": 483,
+    "pitch": 83.2,
+    "self_damage": 35,
+    "hp_at_take_off": 193
+   },
+   {
+    "n": 16,
+    "games": 15,
+    "take_off": [
+     -548,
+     -121,
+     47
+    ],
+    "landing": [
+     -640,
+     105,
+     282
+    ],
+    "near_item": null,
+    "rise": 310,
+    "dist": 190,
+    "pitch": 68.8,
+    "self_damage": 38,
+    "hp_at_take_off": 246
+   },
+   {
+    "n": 16,
+    "games": 15,
+    "take_off": [
+     205,
+     -1299,
+     220
+    ],
+    "landing": [
+     -1119,
+     -738,
+     538
+    ],
+    "near_item": null,
+    "rise": 370,
+    "dist": 1485,
+    "pitch": 87.7,
+    "self_damage": 40,
+    "hp_at_take_off": 293
+   }
+  ]
+ },
+ "cure": {
+  "games": 129,
+  "minutes": 1096,
+  "jumps": 438,
+  "per_game": 3.4,
+  "games_with_one": 0.814,
+  "pitch_median": 63.8,
+  "jumped_then_fired": 0.509,
+  "self_damage_median": 36,
+  "rise_median": 263,
+  "dist_median": 416,
+  "hp_at_take_off_median": 226,
+  "links": [
+   {
+    "n": 67,
+    "games": 45,
+    "take_off": [
+     1247,
+     -404,
+     -98
+    ],
+    "landing": [
+     1517,
+     -888,
+     152
+    ],
+    "near_item": "mega",
+    "rise": 285,
+    "dist": 604,
+    "pitch": 68.9,
+    "self_damage": 37,
+    "hp_at_take_off": 234
+   },
+   {
+    "n": 54,
+    "games": 38,
+    "take_off": [
+     803,
+     385,
+     -97
+    ],
+    "landing": [
+     745,
+     590,
+     88
+    ],
+    "near_item": "yellow armor",
+    "rise": 206,
+    "dist": 264,
+    "pitch": 48.8,
+    "self_damage": 32,
+    "hp_at_take_off": 184
+   },
+   {
+    "n": 36,
+    "games": 30,
+    "take_off": [
+     943,
+     -541,
+     -102
+    ],
+    "landing": [
+     1517,
+     -888,
+     152
+    ],
+    "near_item": "mega",
+    "rise": 313,
+    "dist": 685,
+    "pitch": 86.0,
+    "self_damage": 38,
+    "hp_at_take_off": 179
+   },
+   {
+    "n": 33,
+    "games": 25,
+    "take_off": [
+     505,
+     -24,
+     -99
+    ],
+    "landing": [
+     457,
+     -384,
+     152
+    ],
+    "near_item": "rockets",
+    "rise": 286,
+    "dist": 375,
+    "pitch": 62.4,
+    "self_damage": 37,
+    "hp_at_take_off": 299
+   },
+   {
+    "n": 30,
+    "games": 23,
+    "take_off": [
+     1134,
+     -811,
+     -97
+    ],
+    "landing": [
+     1517,
+     -888,
+     152
+    ],
+    "near_item": "mega",
+    "rise": 277,
+    "dist": 470,
+    "pitch": 82.4,
+    "self_damage": 35,
+    "hp_at_take_off": 197
+   },
+   {
+    "n": 11,
+    "games": 8,
+    "take_off": [
+     1459,
+     -880,
+     -98
+    ],
+    "landing": [
+     1517,
+     -888,
+     152
+    ],
+    "near_item": "mega",
+    "rise": 292,
+    "dist": 154,
+    "pitch": 87.7,
+    "self_damage": 41,
+    "hp_at_take_off": 210
+   },
+   {
+    "n": 11,
+    "games": 10,
+    "take_off": [
+     620,
+     653,
+     95
+    ],
+    "landing": [
+     882,
+     351,
+     216
+    ],
+    "near_item": null,
+    "rise": 172,
+    "dist": 356,
+    "pitch": 50.6,
+    "self_damage": 30,
+    "hp_at_take_off": 280
+   },
+   {
+    "n": 9,
+    "games": 9,
+    "take_off": [
+     620,
+     653,
+     95
+    ],
+    "landing": [
+     -217,
+     324,
+     344
+    ],
+    "near_item": null,
+    "rise": 248,
+    "dist": 800,
+    "pitch": 55.2,
+    "self_damage": 32,
+    "hp_at_take_off": 360
+   },
+   {
+    "n": 9,
+    "games": 8,
+    "take_off": [
+     386,
+     363,
+     -100
+    ],
+    "landing": [
+     745,
+     590,
+     88
+    ],
+    "near_item": "yellow armor",
+    "rise": 244,
+    "dist": 367,
+    "pitch": 46.2,
+    "self_damage": 34,
+    "hp_at_take_off": 187
+   },
+   {
+    "n": 9,
+    "games": 9,
+    "take_off": [
+     1494,
+     -619,
+     -89
+    ],
+    "landing": [
+     1517,
+     -888,
+     152
+    ],
+    "near_item": "mega",
+    "rise": 282,
+    "dist": 416,
+    "pitch": 77.9,
+    "self_damage": 37,
+    "hp_at_take_off": 259
+   },
+   {
+    "n": 8,
+    "games": 8,
+    "take_off": [
+     668,
+     490,
+     -80
+    ],
+    "landing": [
+     745,
+     590,
+     88
+    ],
+    "near_item": "yellow armor",
+    "rise": 189,
+    "dist": 210,
+    "pitch": 48.6,
+    "self_damage": 30,
+    "hp_at_take_off": 142
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     803,
+     385,
+     -97
+    ],
+    "landing": [
+     652,
+     743,
+     88
+    ],
+    "near_item": "yellow armor",
+    "rise": 237,
+    "dist": 365,
+    "pitch": 53.0,
+    "self_damage": 35,
+    "hp_at_take_off": 200
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     620,
+     653,
+     95
+    ],
+    "landing": [
+     220,
+     463,
+     280
+    ],
+    "near_item": null,
+    "rise": 210,
+    "dist": 529,
+    "pitch": 53.8,
+    "self_damage": 32,
+    "hp_at_take_off": 261
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     505,
+     -24,
+     -99
+    ],
+    "landing": [
+     464,
+     -178,
+     152
+    ],
+    "near_item": "rockets",
+    "rise": 255,
+    "dist": 169,
+    "pitch": 52.8,
+    "self_damage": 34,
+    "hp_at_take_off": 298
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     620,
+     653,
+     95
+    ],
+    "landing": [
+     393,
+     449,
+     280
+    ],
+    "near_item": null,
+    "rise": 192,
+    "dist": 321,
+    "pitch": 47.3,
+    "self_damage": 31,
+    "hp_at_take_off": 244
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     159,
+     -29,
+     -36
+    ],
+    "landing": [
+     457,
+     -384,
+     152
+    ],
+    "near_item": "rockets",
+    "rise": 234,
+    "dist": 383,
+    "pitch": 55.0,
+    "self_damage": 34,
+    "hp_at_take_off": 209
+   }
+  ]
+ },
+ "dismemberment": {
+  "games": 138,
+  "minutes": 1329,
+  "jumps": 595,
+  "per_game": 4.31,
+  "games_with_one": 0.942,
+  "pitch_median": 63.3,
+  "jumped_then_fired": 0.613,
+  "self_damage_median": 36,
+  "rise_median": 270,
+  "dist_median": 432,
+  "hp_at_take_off_median": 220,
+  "links": [
+   {
+    "n": 49,
+    "games": 40,
+    "take_off": [
+     946,
+     416,
+     9
+    ],
+    "landing": [
+     1239,
+     474,
+     200
+    ],
+    "near_item": null,
+    "rise": 249,
+    "dist": 316,
+    "pitch": 61.1,
+    "self_damage": 34,
+    "hp_at_take_off": 179
+   },
+   {
+    "n": 49,
+    "games": 38,
+    "take_off": [
+     -268,
+     -145,
+     -8
+    ],
+    "landing": [
+     107,
+     627,
+     200
+    ],
+    "near_item": null,
+    "rise": 292,
+    "dist": 975,
+    "pitch": 69.4,
+    "self_damage": 37,
+    "hp_at_take_off": 278
+   },
+   {
+    "n": 38,
+    "games": 33,
+    "take_off": [
+     915,
+     180,
+     -17
+    ],
+    "landing": [
+     1239,
+     474,
+     200
+    ],
+    "near_item": null,
+    "rise": 260,
+    "dist": 428,
+    "pitch": 61.8,
+    "self_damage": 35,
+    "hp_at_take_off": 210
+   },
+   {
+    "n": 34,
+    "games": 25,
+    "take_off": [
+     -305,
+     -325,
+     -29
+    ],
+    "landing": [
+     107,
+     627,
+     200
+    ],
+    "near_item": null,
+    "rise": 276,
+    "dist": 1094,
+    "pitch": 63.0,
+    "self_damage": 36,
+    "hp_at_take_off": 256
+   },
+   {
+    "n": 33,
+    "games": 30,
+    "take_off": [
+     924,
+     1059,
+     -15
+    ],
+    "landing": [
+     842,
+     934,
+     232
+    ],
+    "near_item": null,
+    "rise": 287,
+    "dist": 197,
+    "pitch": 70.1,
+    "self_damage": 36,
+    "hp_at_take_off": 143
+   },
+   {
+    "n": 25,
+    "games": 19,
+    "take_off": [
+     -268,
+     -145,
+     -8
+    ],
+    "landing": [
+     242,
+     777,
+     232
+    ],
+    "near_item": null,
+    "rise": 305,
+    "dist": 1132,
+    "pitch": 77.0,
+    "self_damage": 37,
+    "hp_at_take_off": 279
+   },
+   {
+    "n": 23,
+    "games": 20,
+    "take_off": [
+     -491,
+     -704,
+     16
+    ],
+    "landing": [
+     -390,
+     -453,
+     200
+    ],
+    "near_item": null,
+    "rise": 237,
+    "dist": 227,
+    "pitch": 53.7,
+    "self_damage": 32,
+    "hp_at_take_off": 224
+   },
+   {
+    "n": 19,
+    "games": 15,
+    "take_off": [
+     -491,
+     -704,
+     16
+    ],
+    "landing": [
+     -505,
+     -583,
+     200
+    ],
+    "near_item": null,
+    "rise": 200,
+    "dist": 108,
+    "pitch": 49.3,
+    "self_damage": 31,
+    "hp_at_take_off": 231
+   },
+   {
+    "n": 18,
+    "games": 16,
+    "take_off": [
+     -268,
+     -145,
+     -8
+    ],
+    "landing": [
+     -10,
+     294,
+     200
+    ],
+    "near_item": null,
+    "rise": 283,
+    "dist": 633,
+    "pitch": 74.7,
+    "self_damage": 36,
+    "hp_at_take_off": 234
+   },
+   {
+    "n": 14,
+    "games": 12,
+    "take_off": [
+     -305,
+     -325,
+     -29
+    ],
+    "landing": [
+     242,
+     777,
+     232
+    ],
+    "near_item": null,
+    "rise": 307,
+    "dist": 1254,
+    "pitch": 77.4,
+    "self_damage": 38,
+    "hp_at_take_off": 288
+   },
+   {
+    "n": 12,
+    "games": 12,
+    "take_off": [
+     -305,
+     -325,
+     -29
+    ],
+    "landing": [
+     -10,
+     294,
+     200
+    ],
+    "near_item": null,
+    "rise": 283,
+    "dist": 693,
+    "pitch": 68.3,
+    "self_damage": 37,
+    "hp_at_take_off": 207
+   },
+   {
+    "n": 11,
+    "games": 8,
+    "take_off": [
+     -268,
+     -145,
+     -8
+    ],
+    "landing": [
+     -390,
+     -453,
+     200
+    ],
+    "near_item": null,
+    "rise": 281,
+    "dist": 388,
+    "pitch": 63.3,
+    "self_damage": 36,
+    "hp_at_take_off": 192
+   },
+   {
+    "n": 10,
+    "games": 10,
+    "take_off": [
+     113,
+     36,
+     -9
+    ],
+    "landing": [
+     -550,
+     -345,
+     200
+    ],
+    "near_item": null,
+    "rise": 296,
+    "dist": 731,
+    "pitch": 67.7,
+    "self_damage": 37,
+    "hp_at_take_off": 277
+   },
+   {
+    "n": 10,
+    "games": 10,
+    "take_off": [
+     113,
+     36,
+     -9
+    ],
+    "landing": [
+     -278,
+     241,
+     200
+    ],
+    "near_item": null,
+    "rise": 255,
+    "dist": 387,
+    "pitch": 59.5,
+    "self_damage": 36,
+    "hp_at_take_off": 257
+   },
+   {
+    "n": 10,
+    "games": 9,
+    "take_off": [
+     924,
+     1059,
+     -15
+    ],
+    "landing": [
+     922,
+     788,
+     232
+    ],
+    "near_item": null,
+    "rise": 313,
+    "dist": 282,
+    "pitch": 64.7,
+    "self_damage": 38,
+    "hp_at_take_off": 141
+   },
+   {
+    "n": 10,
+    "games": 9,
+    "take_off": [
+     1163,
+     352,
+     -13
+    ],
+    "landing": [
+     1239,
+     474,
+     200
+    ],
+    "near_item": null,
+    "rise": 274,
+    "dist": 101,
+    "pitch": 68.0,
+    "self_damage": 35,
+    "hp_at_take_off": 191
+   },
+   {
+    "n": 9,
+    "games": 8,
+    "take_off": [
+     -491,
+     -704,
+     16
+    ],
+    "landing": [
+     -465,
+     -748,
+     16
+    ],
+    "near_item": null,
+    "rise": 192,
+    "dist": 54,
+    "pitch": 57.9,
+    "self_damage": 36,
+    "hp_at_take_off": 200
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     1128,
+     73,
+     199
+    ],
+    "landing": [
+     734,
+     478,
+     232
+    ],
+    "near_item": null,
+    "rise": 156,
+    "dist": 565,
+    "pitch": 41.6,
+    "self_damage": 27,
+    "hp_at_take_off": 179
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     675,
+     -21,
+     -23
+    ],
+    "landing": [
+     635,
+     -564,
+     152
+    ],
+    "near_item": null,
+    "rise": 247,
+    "dist": 531,
+    "pitch": 74.5,
+    "self_damage": 35,
+    "hp_at_take_off": 274
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     388,
+     -22,
+     -24
+    ],
+    "landing": [
+     404,
+     230,
+     224
+    ],
+    "near_item": null,
+    "rise": 296,
+    "dist": 266,
+    "pitch": 63.1,
+    "self_damage": 37,
+    "hp_at_take_off": 186
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     388,
+     -22,
+     -24
+    ],
+    "landing": [
+     995,
+     -162,
+     192
+    ],
+    "near_item": null,
+    "rise": 263,
+    "dist": 564,
+    "pitch": 57.2,
+    "self_damage": 36,
+    "hp_at_take_off": 235
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     -268,
+     -145,
+     -8
+    ],
+    "landing": [
+     -550,
+     -345,
+     200
+    ],
+    "near_item": null,
+    "rise": 260,
+    "dist": 449,
+    "pitch": 66.3,
+    "self_damage": 35,
+    "hp_at_take_off": 244
+   }
+  ]
+ },
+ "furiousheights": {
+  "games": 149,
+  "minutes": 1359,
+  "jumps": 170,
+  "per_game": 1.14,
+  "games_with_one": 0.631,
+  "pitch_median": 59.6,
+  "jumped_then_fired": 0.359,
+  "self_damage_median": 34,
+  "rise_median": 216,
+  "dist_median": 484,
+  "hp_at_take_off_median": 221,
+  "links": [
+   {
+    "n": 15,
+    "games": 15,
+    "take_off": [
+     191,
+     893,
+     230
+    ],
+    "landing": [
+     272,
+     748,
+     472
+    ],
+    "near_item": "mega",
+    "rise": 269,
+    "dist": 234,
+    "pitch": 59.6,
+    "self_damage": 35,
+    "hp_at_take_off": 247
+   },
+   {
+    "n": 8,
+    "games": 6,
+    "take_off": [
+     -484,
+     418,
+     30
+    ],
+    "landing": [
+     -153,
+     1147,
+     216
+    ],
+    "near_item": null,
+    "rise": 255,
+    "dist": 811,
+    "pitch": 61.0,
+    "self_damage": 35,
+    "hp_at_take_off": 296
+   },
+   {
+    "n": 6,
+    "games": 5,
+    "take_off": [
+     -1619,
+     430,
+     480
+    ],
+    "landing": [
+     -660,
+     23,
+     472
+    ],
+    "near_item": null,
+    "rise": 231,
+    "dist": 1006,
+    "pitch": 57.3,
+    "self_damage": 32,
+    "hp_at_take_off": 216
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     -1619,
+     430,
+     480
+    ],
+    "landing": [
+     13,
+     -79,
+     456
+    ],
+    "near_item": null,
+    "rise": 204,
+    "dist": 1760,
+    "pitch": 56.1,
+    "self_damage": 31,
+    "hp_at_take_off": 233
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     191,
+     893,
+     230
+    ],
+    "landing": [
+     222,
+     470,
+     472
+    ],
+    "near_item": "mega",
+    "rise": 254,
+    "dist": 465,
+    "pitch": 65.0,
+    "self_damage": 34,
+    "hp_at_take_off": 170
+   }
+  ]
+ },
+ "hektik": {
+  "games": 144,
+  "minutes": 1241,
+  "jumps": 310,
+  "per_game": 2.15,
+  "games_with_one": 0.75,
+  "pitch_median": 55.7,
+  "jumped_then_fired": 0.432,
+  "self_damage_median": 34,
+  "rise_median": 219,
+  "dist_median": 419,
+  "hp_at_take_off_median": 192,
+  "links": [
+   {
+    "n": 30,
+    "games": 27,
+    "take_off": [
+     -48,
+     82,
+     -137
+    ],
+    "landing": [
+     -224,
+     599,
+     56
+    ],
+    "near_item": "rail",
+    "rise": 228,
+    "dist": 545,
+    "pitch": 57.3,
+    "self_damage": 34,
+    "hp_at_take_off": 242
+   },
+   {
+    "n": 30,
+    "games": 24,
+    "take_off": [
+     -280,
+     -369,
+     68
+    ],
+    "landing": [
+     161,
+     -108,
+     272
+    ],
+    "near_item": "red armor",
+    "rise": 260,
+    "dist": 404,
+    "pitch": 78.1,
+    "self_damage": 34,
+    "hp_at_take_off": 235
+   },
+   {
+    "n": 24,
+    "games": 23,
+    "take_off": [
+     -280,
+     -369,
+     68
+    ],
+    "landing": [
+     -420,
+     30,
+     256
+    ],
+    "near_item": null,
+    "rise": 240,
+    "dist": 401,
+    "pitch": 51.3,
+    "self_damage": 33,
+    "hp_at_take_off": 212
+   },
+   {
+    "n": 16,
+    "games": 15,
+    "take_off": [
+     -482,
+     553,
+     81
+    ],
+    "landing": [
+     -145,
+     514,
+     256
+    ],
+    "near_item": null,
+    "rise": 204,
+    "dist": 287,
+    "pitch": 52.3,
+    "self_damage": 31,
+    "hp_at_take_off": 187
+   },
+   {
+    "n": 12,
+    "games": 12,
+    "take_off": [
+     341,
+     351,
+     5
+    ],
+    "landing": [
+     334,
+     119,
+     281
+    ],
+    "near_item": "red armor",
+    "rise": 318,
+    "dist": 264,
+    "pitch": 65.7,
+    "self_damage": 37,
+    "hp_at_take_off": 120
+   },
+   {
+    "n": 11,
+    "games": 11,
+    "take_off": [
+     275,
+     141,
+     -6
+    ],
+    "landing": [
+     -224,
+     599,
+     56
+    ],
+    "near_item": "rail",
+    "rise": 153,
+    "dist": 658,
+    "pitch": 46.1,
+    "self_damage": 27,
+    "hp_at_take_off": 208
+   },
+   {
+    "n": 11,
+    "games": 11,
+    "take_off": [
+     581,
+     556,
+     156
+    ],
+    "landing": [
+     334,
+     119,
+     281
+    ],
+    "near_item": "red armor",
+    "rise": 193,
+    "dist": 405,
+    "pitch": 48.0,
+    "self_damage": 30,
+    "hp_at_take_off": 83
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     341,
+     351,
+     5
+    ],
+    "landing": [
+     -224,
+     599,
+     56
+    ],
+    "near_item": "rail",
+    "rise": 150,
+    "dist": 545,
+    "pitch": 41.6,
+    "self_damage": 27,
+    "hp_at_take_off": 143
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     -49,
+     987,
+     58
+    ],
+    "landing": [
+     200,
+     -99,
+     -183
+    ],
+    "near_item": "mega",
+    "rise": 193,
+    "dist": 1018,
+    "pitch": 67.0,
+    "self_damage": 34,
+    "hp_at_take_off": 100
+   },
+   {
+    "n": 6,
+    "games": 5,
+    "take_off": [
+     -37,
+     819,
+     84
+    ],
+    "landing": [
+     200,
+     -99,
+     -183
+    ],
+    "near_item": "mega",
+    "rise": 143,
+    "dist": 959,
+    "pitch": 56.6,
+    "self_damage": 32,
+    "hp_at_take_off": 95
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     -48,
+     82,
+     -137
+    ],
+    "landing": [
+     309,
+     115,
+     -8
+    ],
+    "near_item": "lightning",
+    "rise": 177,
+    "dist": 432,
+    "pitch": 44.4,
+    "self_damage": 30,
+    "hp_at_take_off": 293
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     -280,
+     -369,
+     68
+    ],
+    "landing": [
+     48,
+     -275,
+     24
+    ],
+    "near_item": "mega",
+    "rise": 194,
+    "dist": 297,
+    "pitch": 61.9,
+    "self_damage": 36,
+    "hp_at_take_off": 203
+   }
+  ]
+ },
+ "houseofdecay": {
+  "games": 138,
+  "minutes": 1357,
+  "jumps": 367,
+  "per_game": 2.66,
+  "games_with_one": 0.812,
+  "pitch_median": 72.1,
+  "jumped_then_fired": 0.7,
+  "self_damage_median": 37,
+  "rise_median": 289,
+  "dist_median": 408,
+  "hp_at_take_off_median": 225,
+  "links": [
+   {
+    "n": 89,
+    "games": 62,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -360,
+     303,
+     152
+    ],
+    "near_item": null,
+    "rise": 304,
+    "dist": 296,
+    "pitch": 76.4,
+    "self_damage": 37,
+    "hp_at_take_off": 251
+   },
+   {
+    "n": 43,
+    "games": 37,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -872,
+     317,
+     152
+    ],
+    "near_item": null,
+    "rise": 322,
+    "dist": 807,
+    "pitch": 78.2,
+    "self_damage": 38,
+    "hp_at_take_off": 220
+   },
+   {
+    "n": 24,
+    "games": 20,
+    "take_off": [
+     203,
+     207,
+     -83
+    ],
+    "landing": [
+     790,
+     280,
+     24
+    ],
+    "near_item": null,
+    "rise": 166,
+    "dist": 510,
+    "pitch": 53.2,
+    "self_damage": 30,
+    "hp_at_take_off": 245
+   },
+   {
+    "n": 21,
+    "games": 16,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -549,
+     358,
+     152
+    ],
+    "near_item": null,
+    "rise": 336,
+    "dist": 550,
+    "pitch": 79.1,
+    "self_damage": 38,
+    "hp_at_take_off": 239
+   },
+   {
+    "n": 20,
+    "games": 19,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -124,
+     470,
+     152
+    ],
+    "near_item": null,
+    "rise": 291,
+    "dist": 239,
+    "pitch": 68.0,
+    "self_damage": 37,
+    "hp_at_take_off": 216
+   },
+   {
+    "n": 15,
+    "games": 13,
+    "take_off": [
+     -215,
+     275,
+     -90
+    ],
+    "landing": [
+     -360,
+     303,
+     152
+    ],
+    "near_item": null,
+    "rise": 275,
+    "dist": 105,
+    "pitch": 83.3,
+    "self_damage": 36,
+    "hp_at_take_off": 201
+   },
+   {
+    "n": 11,
+    "games": 10,
+    "take_off": [
+     -790,
+     -274,
+     37
+    ],
+    "landing": [
+     -872,
+     317,
+     152
+    ],
+    "near_item": null,
+    "rise": 189,
+    "dist": 545,
+    "pitch": 47.9,
+    "self_damage": 31,
+    "hp_at_take_off": 209
+   },
+   {
+    "n": 11,
+    "games": 10,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -193,
+     334,
+     -104
+    ],
+    "near_item": null,
+    "rise": 200,
+    "dist": 158,
+    "pitch": 59.9,
+    "self_damage": 33,
+    "hp_at_take_off": 168
+   },
+   {
+    "n": 10,
+    "games": 10,
+    "take_off": [
+     203,
+     207,
+     -83
+    ],
+    "landing": [
+     -360,
+     303,
+     152
+    ],
+    "near_item": null,
+    "rise": 279,
+    "dist": 493,
+    "pitch": 63.7,
+    "self_damage": 39,
+    "hp_at_take_off": 199
+   },
+   {
+    "n": 8,
+    "games": 8,
+    "take_off": [
+     203,
+     207,
+     -83
+    ],
+    "landing": [
+     -872,
+     317,
+     152
+    ],
+    "near_item": null,
+    "rise": 309,
+    "dist": 962,
+    "pitch": 67.9,
+    "self_damage": 39,
+    "hp_at_take_off": 154
+   },
+   {
+    "n": 7,
+    "games": 6,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -1112,
+     -425,
+     24
+    ],
+    "near_item": null,
+    "rise": 334,
+    "dist": 1265,
+    "pitch": 86.6,
+    "self_damage": 38,
+    "hp_at_take_off": 207
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     203,
+     207,
+     -83
+    ],
+    "landing": [
+     627,
+     208,
+     24
+    ],
+    "near_item": null,
+    "rise": 138,
+    "dist": 405,
+    "pitch": 49.7,
+    "self_damage": 29,
+    "hp_at_take_off": 236
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -64,
+     -541,
+     24
+    ],
+    "near_item": null,
+    "rise": 213,
+    "dist": 664,
+    "pitch": 52.0,
+    "self_damage": 33,
+    "hp_at_take_off": 241
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     203,
+     207,
+     -83
+    ],
+    "landing": [
+     -124,
+     470,
+     152
+    ],
+    "near_item": null,
+    "rise": 290,
+    "dist": 341,
+    "pitch": 79.5,
+    "self_damage": 37,
+    "hp_at_take_off": 277
+   },
+   {
+    "n": 5,
+    "games": 4,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     -83,
+     -291,
+     24
+    ],
+    "near_item": null,
+    "rise": 178,
+    "dist": 553,
+    "pitch": 45.8,
+    "self_damage": 30,
+    "hp_at_take_off": 199
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     -24,
+     287,
+     -90
+    ],
+    "landing": [
+     61,
+     559,
+     152
+    ],
+    "near_item": null,
+    "rise": 293,
+    "dist": 311,
+    "pitch": 73.7,
+    "self_damage": 36,
+    "hp_at_take_off": 112
+   }
+  ]
+ },
+ "lostworld": {
+  "games": 1380,
+  "minutes": 13246,
+  "jumps": 15368,
+  "per_game": 11.14,
+  "games_with_one": 0.986,
+  "pitch_median": 59.0,
+  "jumped_then_fired": 0.643,
+  "self_damage_median": 34,
+  "rise_median": 238,
+  "dist_median": 298,
+  "hp_at_take_off_median": 223,
+  "links": [
+   {
+    "n": 1830,
+    "games": 910,
+    "take_off": [
+     -353,
+     206,
+     235
+    ],
+    "landing": [
+     -387,
+     326,
+     412
+    ],
+    "near_item": "yellow armor",
+    "rise": 217,
+    "dist": 210,
+    "pitch": 50.6,
+    "self_damage": 33,
+    "hp_at_take_off": 187
+   },
+   {
+    "n": 1183,
+    "games": 727,
+    "take_off": [
+     482,
+     361,
+     229
+    ],
+    "landing": [
+     685,
+     294,
+     408
+    ],
+    "near_item": "yellow armor",
+    "rise": 222,
+    "dist": 245,
+    "pitch": 54.3,
+    "self_damage": 33,
+    "hp_at_take_off": 202
+   },
+   {
+    "n": 1135,
+    "games": 684,
+    "take_off": [
+     1093,
+     9,
+     276
+    ],
+    "landing": [
+     1072,
+     64,
+     408
+    ],
+    "near_item": "mega",
+    "rise": 189,
+    "dist": 108,
+    "pitch": 51.9,
+    "self_damage": 31,
+    "hp_at_take_off": 289
+   },
+   {
+    "n": 918,
+    "games": 563,
+    "take_off": [
+     300,
+     142,
+     49
+    ],
+    "landing": [
+     -105,
+     202,
+     216
+    ],
+    "near_item": null,
+    "rise": 219,
+    "dist": 441,
+    "pitch": 55.5,
+    "self_damage": 33,
+    "hp_at_take_off": 260
+   },
+   {
+    "n": 894,
+    "games": 637,
+    "take_off": [
+     432,
+     137,
+     222
+    ],
+    "landing": [
+     685,
+     294,
+     408
+    ],
+    "near_item": "yellow armor",
+    "rise": 234,
+    "dist": 269,
+    "pitch": 54.5,
+    "self_damage": 34,
+    "hp_at_take_off": 197
+   },
+   {
+    "n": 841,
+    "games": 557,
+    "take_off": [
+     625,
+     336,
+     51
+    ],
+    "landing": [
+     575,
+     313,
+     216
+    ],
+    "near_item": null,
+    "rise": 218,
+    "dist": 68,
+    "pitch": 56.4,
+    "self_damage": 33,
+    "hp_at_take_off": 251
+   },
+   {
+    "n": 585,
+    "games": 436,
+    "take_off": [
+     432,
+     137,
+     222
+    ],
+    "landing": [
+     64,
+     552,
+     472
+    ],
+    "near_item": null,
+    "rise": 309,
+    "dist": 627,
+    "pitch": 79.4,
+    "self_damage": 37,
+    "hp_at_take_off": 268
+   },
+   {
+    "n": 483,
+    "games": 377,
+    "take_off": [
+     482,
+     361,
+     229
+    ],
+    "landing": [
+     273,
+     402,
+     483
+    ],
+    "near_item": null,
+    "rise": 277,
+    "dist": 197,
+    "pitch": 59.8,
+    "self_damage": 36,
+    "hp_at_take_off": 248
+   },
+   {
+    "n": 418,
+    "games": 345,
+    "take_off": [
+     482,
+     361,
+     229
+    ],
+    "landing": [
+     871,
+     341,
+     344
+    ],
+    "near_item": "yellow armor",
+    "rise": 244,
+    "dist": 461,
+    "pitch": 55.8,
+    "self_damage": 34,
+    "hp_at_take_off": 199
+   },
+   {
+    "n": 376,
+    "games": 313,
+    "take_off": [
+     432,
+     137,
+     222
+    ],
+    "landing": [
+     273,
+     402,
+     483
+    ],
+    "near_item": null,
+    "rise": 273,
+    "dist": 426,
+    "pitch": 67.1,
+    "self_damage": 36,
+    "hp_at_take_off": 229
+   },
+   {
+    "n": 335,
+    "games": 277,
+    "take_off": [
+     -353,
+     206,
+     235
+    ],
+    "landing": [
+     -395,
+     544,
+     430
+    ],
+    "near_item": "yellow armor",
+    "rise": 236,
+    "dist": 401,
+    "pitch": 51.3,
+    "self_damage": 33,
+    "hp_at_take_off": 213
+   },
+   {
+    "n": 317,
+    "games": 261,
+    "take_off": [
+     554,
+     30,
+     227
+    ],
+    "landing": [
+     64,
+     552,
+     472
+    ],
+    "near_item": null,
+    "rise": 313,
+    "dist": 677,
+    "pitch": 69.4,
+    "self_damage": 38,
+    "hp_at_take_off": 273
+   },
+   {
+    "n": 271,
+    "games": 242,
+    "take_off": [
+     432,
+     137,
+     222
+    ],
+    "landing": [
+     109,
+     -158,
+     464
+    ],
+    "near_item": "rockets",
+    "rise": 282,
+    "dist": 461,
+    "pitch": 72.3,
+    "self_damage": 36,
+    "hp_at_take_off": 189
+   },
+   {
+    "n": 270,
+    "games": 237,
+    "take_off": [
+     432,
+     137,
+     222
+    ],
+    "landing": [
+     871,
+     341,
+     344
+    ],
+    "near_item": "yellow armor",
+    "rise": 248,
+    "dist": 510,
+    "pitch": 64.0,
+    "self_damage": 34,
+    "hp_at_take_off": 178
+   },
+   {
+    "n": 257,
+    "games": 218,
+    "take_off": [
+     554,
+     30,
+     227
+    ],
+    "landing": [
+     273,
+     402,
+     483
+    ],
+    "near_item": null,
+    "rise": 279,
+    "dist": 519,
+    "pitch": 66.4,
+    "self_damage": 36,
+    "hp_at_take_off": 265
+   },
+   {
+    "n": 199,
+    "games": 122,
+    "take_off": [
+     458,
+     -108,
+     35
+    ],
+    "landing": [
+     497,
+     -420,
+     402
+    ],
+    "near_item": null,
+    "rise": 385,
+    "dist": 320,
+    "pitch": 87.9,
+    "self_damage": 41,
+    "hp_at_take_off": 283
+   },
+   {
+    "n": 179,
+    "games": 150,
+    "take_off": [
+     -81,
+     142,
+     237
+    ],
+    "landing": [
+     109,
+     -158,
+     464
+    ],
+    "near_item": "rockets",
+    "rise": 281,
+    "dist": 338,
+    "pitch": 67.9,
+    "self_damage": 36,
+    "hp_at_take_off": 212
+   },
+   {
+    "n": 176,
+    "games": 158,
+    "take_off": [
+     554,
+     30,
+     227
+    ],
+    "landing": [
+     109,
+     -158,
+     464
+    ],
+    "near_item": "rockets",
+    "rise": 283,
+    "dist": 492,
+    "pitch": 75.4,
+    "self_damage": 36,
+    "hp_at_take_off": 235
+   },
+   {
+    "n": 161,
+    "games": 152,
+    "take_off": [
+     254,
+     206,
+     242
+    ],
+    "landing": [
+     685,
+     294,
+     408
+    ],
+    "near_item": "yellow armor",
+    "rise": 240,
+    "dist": 495,
+    "pitch": 81.9,
+    "self_damage": 33,
+    "hp_at_take_off": 175
+   }
+  ]
+ },
+ "sinister": {
+  "games": 146,
+  "minutes": 1292,
+  "jumps": 308,
+  "per_game": 2.11,
+  "games_with_one": 0.788,
+  "pitch_median": 66.8,
+  "jumped_then_fired": 0.477,
+  "self_damage_median": 36,
+  "rise_median": 274,
+  "dist_median": 462,
+  "hp_at_take_off_median": 257,
+  "links": [
+   {
+    "n": 26,
+    "games": 25,
+    "take_off": [
+     335,
+     -170,
+     13
+    ],
+    "landing": [
+     -63,
+     -124,
+     280
+    ],
+    "near_item": null,
+    "rise": 320,
+    "dist": 476,
+    "pitch": 68.9,
+    "self_damage": 38,
+    "hp_at_take_off": 263
+   },
+   {
+    "n": 21,
+    "games": 17,
+    "take_off": [
+     317,
+     662,
+     324
+    ],
+    "landing": [
+     653,
+     1052,
+     536
+    ],
+    "near_item": "red armor",
+    "rise": 235,
+    "dist": 476,
+    "pitch": 59.4,
+    "self_damage": 33,
+    "hp_at_take_off": 160
+   },
+   {
+    "n": 14,
+    "games": 13,
+    "take_off": [
+     335,
+     -170,
+     13
+    ],
+    "landing": [
+     -254,
+     -109,
+     280
+    ],
+    "near_item": null,
+    "rise": 370,
+    "dist": 689,
+    "pitch": 77.2,
+    "self_damage": 40,
+    "hp_at_take_off": 309
+   },
+   {
+    "n": 14,
+    "games": 13,
+    "take_off": [
+     335,
+     -170,
+     13
+    ],
+    "landing": [
+     82,
+     -209,
+     280
+    ],
+    "near_item": null,
+    "rise": 303,
+    "dist": 242,
+    "pitch": 70.2,
+    "self_damage": 37,
+    "hp_at_take_off": 283
+   },
+   {
+    "n": 12,
+    "games": 11,
+    "take_off": [
+     101,
+     684,
+     323
+    ],
+    "landing": [
+     480,
+     385,
+     536
+    ],
+    "near_item": null,
+    "rise": 267,
+    "dist": 488,
+    "pitch": 64.3,
+    "self_damage": 36,
+    "hp_at_take_off": 339
+   },
+   {
+    "n": 10,
+    "games": 10,
+    "take_off": [
+     335,
+     -170,
+     13
+    ],
+    "landing": [
+     488,
+     -625,
+     304
+    ],
+    "near_item": null,
+    "rise": 347,
+    "dist": 471,
+    "pitch": 78.3,
+    "self_damage": 39,
+    "hp_at_take_off": 335
+   },
+   {
+    "n": 8,
+    "games": 8,
+    "take_off": [
+     791,
+     -410,
+     284
+    ],
+    "landing": [
+     1385,
+     -167,
+     472
+    ],
+    "near_item": "yellow armor",
+    "rise": 234,
+    "dist": 645,
+    "pitch": 58.1,
+    "self_damage": 34,
+    "hp_at_take_off": 202
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     1236,
+     -195,
+     103
+    ],
+    "landing": [
+     1385,
+     -167,
+     472
+    ],
+    "near_item": "yellow armor",
+    "rise": 503,
+    "dist": 216,
+    "pitch": 46.7,
+    "self_damage": 33,
+    "hp_at_take_off": 296
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     101,
+     684,
+     323
+    ],
+    "landing": [
+     653,
+     1052,
+     536
+    ],
+    "near_item": "red armor",
+    "rise": 221,
+    "dist": 569,
+    "pitch": 70.7,
+    "self_damage": 33,
+    "hp_at_take_off": 138
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     791,
+     -410,
+     284
+    ],
+    "landing": [
+     1201,
+     -370,
+     408
+    ],
+    "near_item": null,
+    "rise": 206,
+    "dist": 511,
+    "pitch": 51.0,
+    "self_damage": 32,
+    "hp_at_take_off": 268
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     335,
+     -170,
+     13
+    ],
+    "landing": [
+     460,
+     70,
+     312
+    ],
+    "near_item": null,
+    "rise": 341,
+    "dist": 368,
+    "pitch": 81.2,
+    "self_damage": 38,
+    "hp_at_take_off": 242
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     534,
+     -182,
+     11
+    ],
+    "landing": [
+     -63,
+     -124,
+     280
+    ],
+    "near_item": null,
+    "rise": 311,
+    "dist": 595,
+    "pitch": 87.3,
+    "self_damage": 37,
+    "hp_at_take_off": 249
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     784,
+     -98,
+     280
+    ],
+    "landing": [
+     1385,
+     -167,
+     472
+    ],
+    "near_item": "yellow armor",
+    "rise": 219,
+    "dist": 587,
+    "pitch": 50.3,
+    "self_damage": 32,
+    "hp_at_take_off": 229
+   }
+  ]
+ },
+ "toxicity": {
+  "games": 87,
+  "minutes": 747,
+  "jumps": 394,
+  "per_game": 4.53,
+  "games_with_one": 0.92,
+  "pitch_median": 62.9,
+  "jumped_then_fired": 0.614,
+  "self_damage_median": 35,
+  "rise_median": 259,
+  "dist_median": 411,
+  "hp_at_take_off_median": 211,
+  "links": [
+   {
+    "n": 117,
+    "games": 54,
+    "take_off": [
+     -1255,
+     2086,
+     1003
+    ],
+    "landing": [
+     -836,
+     1931,
+     1248
+    ],
+    "near_item": null,
+    "rise": 276,
+    "dist": 449,
+    "pitch": 70.1,
+    "self_damage": 36,
+    "hp_at_take_off": 250
+   },
+   {
+    "n": 63,
+    "games": 44,
+    "take_off": [
+     -1255,
+     2086,
+     1003
+    ],
+    "landing": [
+     -968,
+     1781,
+     1248
+    ],
+    "near_item": null,
+    "rise": 280,
+    "dist": 377,
+    "pitch": 68.7,
+    "self_damage": 35,
+    "hp_at_take_off": 183
+   },
+   {
+    "n": 26,
+    "games": 23,
+    "take_off": [
+     -1089,
+     1768,
+     1033
+    ],
+    "landing": [
+     -1075,
+     1430,
+     1112
+    ],
+    "near_item": null,
+    "rise": 145,
+    "dist": 367,
+    "pitch": 49.2,
+    "self_damage": 29,
+    "hp_at_take_off": 192
+   },
+   {
+    "n": 16,
+    "games": 14,
+    "take_off": [
+     -327,
+     1011,
+     1015
+    ],
+    "landing": [
+     -365,
+     1266,
+     1248
+    ],
+    "near_item": "mega",
+    "rise": 269,
+    "dist": 313,
+    "pitch": 70.8,
+    "self_damage": 35,
+    "hp_at_take_off": 140
+   },
+   {
+    "n": 15,
+    "games": 10,
+    "take_off": [
+     -618,
+     2166,
+     1135
+    ],
+    "landing": [
+     -836,
+     1931,
+     1248
+    ],
+    "near_item": null,
+    "rise": 157,
+    "dist": 371,
+    "pitch": 57.2,
+    "self_damage": 28,
+    "hp_at_take_off": 111
+   },
+   {
+    "n": 12,
+    "games": 12,
+    "take_off": [
+     -1089,
+     1768,
+     1033
+    ],
+    "landing": [
+     -937,
+     1244,
+     1176
+    ],
+    "near_item": null,
+    "rise": 157,
+    "dist": 463,
+    "pitch": 51.9,
+    "self_damage": 30,
+    "hp_at_take_off": 205
+   },
+   {
+    "n": 12,
+    "games": 11,
+    "take_off": [
+     -1255,
+     2086,
+     1003
+    ],
+    "landing": [
+     -708,
+     1790,
+     1248
+    ],
+    "near_item": null,
+    "rise": 292,
+    "dist": 642,
+    "pitch": 75.3,
+    "self_damage": 36,
+    "hp_at_take_off": 275
+   },
+   {
+    "n": 8,
+    "games": 8,
+    "take_off": [
+     -596,
+     950,
+     1021
+    ],
+    "landing": [
+     -365,
+     1266,
+     1248
+    ],
+    "near_item": "mega",
+    "rise": 255,
+    "dist": 410,
+    "pitch": 82.5,
+    "self_damage": 35,
+    "hp_at_take_off": 194
+   },
+   {
+    "n": 7,
+    "games": 7,
+    "take_off": [
+     -618,
+     2166,
+     1135
+    ],
+    "landing": [
+     -730,
+     1574,
+     1240
+    ],
+    "near_item": null,
+    "rise": 183,
+    "dist": 584,
+    "pitch": 44.6,
+    "self_damage": 30,
+    "hp_at_take_off": 201
+   },
+   {
+    "n": 6,
+    "games": 6,
+    "take_off": [
+     -963,
+     1635,
+     1020
+    ],
+    "landing": [
+     -1075,
+     1430,
+     1112
+    ],
+    "near_item": null,
+    "rise": 135,
+    "dist": 199,
+    "pitch": 52.6,
+    "self_damage": 32,
+    "hp_at_take_off": 180
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     -360,
+     1231,
+     1039
+    ],
+    "landing": [
+     -365,
+     1266,
+     1248
+    ],
+    "near_item": "mega",
+    "rise": 317,
+    "dist": 162,
+    "pitch": 56.3,
+    "self_damage": 38,
+    "hp_at_take_off": 123
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     -1255,
+     2086,
+     1003
+    ],
+    "landing": [
+     -416,
+     1721,
+     1240
+    ],
+    "near_item": "rockets",
+    "rise": 294,
+    "dist": 913,
+    "pitch": 69.7,
+    "self_damage": 37,
+    "hp_at_take_off": 227
+   },
+   {
+    "n": 5,
+    "games": 5,
+    "take_off": [
+     -1255,
+     2086,
+     1003
+    ],
+    "landing": [
+     -1045,
+     1871,
+     972
+    ],
+    "near_item": null,
+    "rise": 183,
+    "dist": 333,
+    "pitch": 46.1,
+    "self_damage": 31,
+    "hp_at_take_off": 196
+   }
+  ]
+ }
+}

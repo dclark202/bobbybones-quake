@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-15](results/2026-10-15.md)
 
+- 12:45 — The pros' rocket jumps found in 5,039 demos: on every map, 1 to 11 a game, with the links they repeat (B-252)
 - 06:15 — v0.3's night: from level to 57.5% against v0.2 at update 70, then two falls to 52.1%; no stall, no weapon collapse
 
 ## [2026-10-14](results/2026-10-14.md)
