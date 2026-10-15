@@ -22,7 +22,7 @@ Whole games, mid-game starts and movement practice as in v0.3, and beside them:
 | Rocket drills | 10% | short rounds on the ten maps, both players with the rocket launcher only (15 rockets), against his league: aim, splash, the enemy in the air |
 | Rocket jump runs (if ready) | 2% | from a pro's take-off spot to its landing, with the launcher and about 220 health and armor; a ladder of starts (in the air looking down; on the floor looking down; a normal stance); a nudge on the look-down and the shot's moment toward the pros' that fades |
 
-**His aim at level 3** (the owner, 2026-10-15: "Set it to 3 going forward"; v0.2 and v0.3 trained at 1.5, which cost the rail most: B-255). The plan (the owner, 2026-10-15): build v0.3.1 tonight, then train on for a while to see what happens.
+**His aim at level 3** (the owner, 2026-10-15: "Set it to 3 going forward"; v0.2 and v0.3 trained at 1.5, which cost the rail most: B-255). **The surprise delay with the rail** (the owner, 2026-10-15) set from the pros' demos: how soon after an enemy appears they fire the rail, by how far off the crosshair he was; his own curve is matched to theirs at level 3 before the start. The plan (the owner, 2026-10-15): build v0.3.1 tonight, then train on for a while to see what happens.
 
 Unchanged from v0.3: sight and sound only, sight and sound only, the pay (no pay for a near miss), the ten maps, no powerups,
 overtime, no styles.
