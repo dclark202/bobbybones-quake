@@ -4,7 +4,7 @@ Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.3
 - `!map <name>` changes the map, `!maps` lists them
 - `!mode <ffa|duel>` to change the mode
 - `!note <text>` leaves a comment for the log.
-- The server also runs a dedicated elo ranking: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours.
+- The server also runs a dedicated elo ranking: `!bobby` shows his rating and rank, `!top` the whole board, `!elo` your rank
 
 We also have a [discord server](https://discord.gg/dH2mfzbMa)
 
