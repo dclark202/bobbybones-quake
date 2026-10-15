@@ -10,7 +10,7 @@ Put in order on 2026-10-10 and cleaned up on 2026-10-15: everything from before 
 | [BACKLOG.md](BACKLOG.md) | The open work, each item with a number (`B-nn`), grouped by the owner's priority list | An item is added, started or closed |
 | [RESULTS.md](RESULTS.md) | The index of the results log: one line an entry, by day | Every entry |
 | [results/](results/) | The results log itself, one file a day, newest entry first: what was tried and measured, what did **not** work included | Every run, live test, measurement or decision |
-| `v<model>/` ([v0.4/](v0.4/), [v0.3/](v0.3/), [v0.2.2/](v0.2.2/), [v0.2.1/](v0.2.1/), [v0.2/](v0.2/)) | **A folder a model** (owner, 2026-10-13): its run sheet (`RUN_v<n>.md`), manifest, mid-run report, full report and design proposals | A run is planned, started, reported |
+| `v<model>/` ([v0.4/](v0.4/), [v0.3.1/](v0.3.1/), [v0.3/](v0.3/), [v0.2.2/](v0.2.2/), [v0.2.1/](v0.2.1/), [v0.2/](v0.2/)) | **A folder a model** (owner, 2026-10-13): its run sheet (`RUN_v<n>.md`), manifest, mid-run report, full report and design proposals | A run is planned, started, reported |
 | [guides/](guides/) | How to use and read things: the play-test routine and the test suite (PLAYTEST), the server's chat commands (COMMANDS), renting and starting a server (HOSTING), the community page (COMMUNITY), the formats of recorded data (LOGS), the map atlas (ATLAS) | The thing they describe changes |
 | [design/](design/) | What belongs to no one model (QLSTATS); `jumps/`: the pros' jumps a walker cannot make, a picture and a table per map (`tools/pro_gaps.py`, `tools/draw_gaps.py`) | A proposal is written or decided |
 | [archive/](archive/) | The closed backlog items | An item is closed |
