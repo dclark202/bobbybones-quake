@@ -43,10 +43,38 @@ The shares are read in a two-update dry run before the start and set right there
   At level 3: sight error 0.6 degrees, tracking delay 100 ms, noticing delay 200 ms, surprise up to 200 ms, flinch 0.25
   a point of damage up to 6 degrees, hand noise 0.10 and 0.05. The view inertia (0.75) and the flick cap (30 degrees a
   frame) do not move with the level.
-- **The rail's surprise delay, calibrated by the pros' demos** (B-255; RESULTS 2026-10-15 16:50): his share of
-  sightings with a rail shot by 0.3, 0.5, 0.75 and 1 s, by angle off the crosshair, set on the pros' curve and never
-  ahead of it. The first read says he is not slower than the pros where he fires, and fires far less often at wide angles.
-  So the value may stay as it is; the fix may be elsewhere (see the rail test, section 6).
+- **The rail: the plan after the rail test and the pros' demos** (B-255; RESULTS 2026-10-15 16:50; for the owner's
+  review, 2026-10-15 evening). What was found:
+  - **No one limit brings the rail back.** v0.3's save 180 against the control, each limit eased to its level-3 value
+    alone (Blood Run and Aerowalk, 8 games each, noisy): his rail hits rise 2 to 6 points (40% at level 1.5; 43 to 46%
+    with less hand noise, no surprise delay, less flinch, or all of level 3), his rail shots a minute do not (4.1; 3.1 to
+    4.5), his rail time in hand does not (18%; 15 to 20%). The noticing delay at 100 ms changed nothing.
+  - **He is not slow to fire.** Where he fires the rail after an enemy appears he is as quick as the pros or quicker up
+    to 80 degrees off the crosshair (20 to 40 degrees: 0.49 s against 0.71). The surprise delay stays as level 3 has it
+    (up to 200 ms); cutting it would put him ahead of people.
+  - **He does not take the shot.** An enemy who appears 40 to 80 degrees off gets a rail shot within 3 s in 55% of his
+    sightings and 89% of the pros'; beyond 80 degrees 44% against 83%. In v0.3 the rail in hand fell from 18% to 9% while
+    lightning took the time (half his time, 61% of his frags).
+
+  So the rail is a matter of his choices, not his limits. The plan, in order, nothing a reward for one behaviour:
+  1. **Aim level 3** (decided): his rail hits a few points up at once.
+  2. **Measure why the wide shots are not taken**: after a sighting 40 degrees or more off, does he turn to the enemy
+     (his turn in 0.3 s and its peak speed beside the pros': 10.5 degrees and 130 a second median), is the rail in his
+     hand, does he switch to it, does the enemy leave his view first. The view inertia (`MOUSE_SMOOTH` 0.75, the same at
+     every level) is read here: if his wide turns are slower than the pros', it is the one limit left to calibrate, from
+     the pros' turn speeds, never past them.
+  3. **The rail in hand**: the pros' weapon by distance (the weapon teacher's table)
+     read beside his: if he holds lightning where the pros hold the rail (beyond 500 units: the pros 82% of their rail
+     shots, he 18%), the weapon lesson from the pros' table at the start, fading, as the owner's rule for teachers has it
+     (what stays must hold without it). The owner's call before it goes in.
+  4. **Where to start from** (the owner asked, 2026-10-15: how far back to go for the rail). In v0.3 the rail in hand was
+     18% at update 20, 16 to 17% to update 60, 15% at 70, then fell steadily to 9% by 180, while his checks against v0.2
+     rose (57.5% at 70; 59.4 to 59.8% at 190 to 210). Going back to update 60 or 70 buys about 6 points of rail time
+     and costs about 2 points against v0.2, and the same pressure (lightning pays more under his limits) would drain it
+     again. The proposal: start from the 18:00 stop point as decided, and fix the cause; save 70 is re-checked in the
+     evaluation beside the last, rail by rail, so the owner can choose.
+  5. **Judged by**: his rail curve after a sighting (shots by 0.3 to 1 s, by angle) on the pros' and never ahead of it;
+     the rail in hand and the rail's share of his frags; the check against the control.
 - Unchanged: sight with line of sight and sound only, enemy projectiles only as a player sees them, no powerups.
 
 ## 5. The pay and the teachers
@@ -61,8 +89,8 @@ v0.4. No new single-behaviour reward.
 |---|---|---|---|---|
 | 1 | Aim level 3 in training | **built** (a setting) | the run's `.cmd`; the checks' settings (diag5 and the night watcher still carry `AIM_LEVEL=1.5`) set to 3 | any time |
 | 2 | Rocket drills | **built** (`--drill-p`, `--drill-weapons rl`) | check that a drill round is on the real maps and not in a box; that it does not break the whole-game clock; the share in a dry run | any time |
-| 3 | The rail's surprise delay | **measured for the pros**; not set | his curve at level 3 from `tools/bobby_yardsticks.py` (scheduled after the rail test), a value set for the rail or by where he held his crosshair, behind a switch, proven to change nothing when off | after 4 |
-| 4 | The rail test (which limit costs the rail) | **running**: 3 of 7 arms done, a fourth half done | flinch, the noticing delay at 100 ms, all of level 3; the summary's parser fixed | now |
+| 3 | The rail (section 4) | **the limits measured**: none brings it back; the surprise delay stays as level 3 has it | his rail curve at level 3 (`tools/bobby_yardsticks.py`); why wide sightings get no shot (his turn, the weapon in hand, the enemy gone); the view inertia calibrated from the pros' turns if his are slower; the pros' weapon table beside his, and a fading weapon lesson only on the owner's word | after 4 |
+| 4 | The rail test (which limit costs the rail) | **6 of 7 arms done** (all of level 3: two maps of four) | the last two maps; the summary's parser fixed; more games on the arms that moved the hits (hand, flinch, level 3) if the owner wants them firmer | now |
 | 5 | Rocket jump check: the game against the simulator | **not built** | a measuring plugin beside `plugins/weaponlab.py` (about 200 scripted jumps on a private server), the same jumps in the simulator, compared (rise and distance within 5%, damage exact); about a day | before 6 |
 | 6 | Rocket jump runs | **not built**; the pros' rocket jumps are found (`docs/pro_rocket_jumps.json`) | the runs' code in a staging copy, the ladder of starts, the fading nudge, proven to change nothing when off; the links drawn for the owner's keep or drop; in only if 5 passes | after 5 and 8 (the runs train the legs) |
 | 7 | The learning step rebuilt (B-237) | **not built** | the library's GRU over whole sequences, proven to give the same loss and gradients on a saved update; about a day; every run after it about twice as fast | first |
