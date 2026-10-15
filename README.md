@@ -1,14 +1,13 @@
 ## Play against him in Quake Live
-Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal). 
-
-Join the discord server https://discord.gg/dH2mfzbMa
-
-The server runs FFA and duel. Chat commands
+Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal). Chat commands
 - `!bots <0-4>` sets how many bots
 - `!map <name>` changes the map, `!maps` lists them
 - `!mode <ffa|duel>` to change the mode
 - `!note <text>` leaves a comment for the log.
 - The server also runs a dedicated elo ranking: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours.
+
+We also have a [discord server](
+Join the discord server https://discord.gg/dH2mfzbMa)
 
 ## What it is
 
