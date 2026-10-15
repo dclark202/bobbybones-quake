@@ -902,6 +902,28 @@ GAMES_COLS = ("whole games ended", "late rounds ended", "of both: level at the l
               "his lead at the end, summed", "what WIN_PAY paid him in them", "what the flat pay for frags and deaths would have",
               "all that ended: the size of the first seat's WIN_PAY, summed", "... of his flat pay", "frames of matches in whole games",
               "in late rounds", "whole games and late rounds begun")
+#   OVERTIME=1    Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
+#                 the game's limit (GAME_LEN) with the score level goes on for another OT_LEN seconds, period after period,
+#                 until a period ends with the score not level, or after OT_CAP periods (OVERTIME_CAP, 10): then it is a
+#                 draw. A spawn start (SPAWN_START_P) ends after its seconds as before. Groups of three or more have no
+#                 whole games (_game_ok), so nothing changes there. In overtime every time input reads as the game
+#                 server's plugin shows it (plugins/duelbot.py GameClock.fed): the last OT_LEN seconds of the game again,
+#                 round_t = 480 + ((t - 600) mod 120) for t past 600 (exactly 600: 600; the first frame of each further
+#                 period: 480): the clock input (round_t / GAME_LEN), the item-timer waves, the v0.2 "left" (1 - round_t /
+#                 GAME_LEN) and WIN_PAY's time left (the seconds left in the period). The game's frame counter g_tick runs
+#                 on; nothing is reset between periods (no done: the memory goes on). Saved moments are taken before the
+#                 limit only (a mid-game moment is at most at MID_HI; a respawn in overtime is not saved as a spawn moment).
+#                 Counters: stats["overtime"] (OT_COLS). A training switch: not a PLAY_VAR.
+OVERTIME = float(os.environ.get("OVERTIME") or 0.0) > 0
+OT_LEN = 120.0
+OT_FRAMES = int(round(OT_LEN / DT))
+OT_CAP = int(os.environ.get("OVERTIME_CAP") or 10)
+OT_KINDS = (1, 2, 3)                                        # whole games, late rounds, mid-game starts (not spawn starts: 4)
+assert OT_CAP >= 1 and OT_FRAMES <= GAME_FRAMES
+OT_COLS = ("games that went to overtime (whole, late, mid-game starts)", "overtime periods begun", "of those games: ended with a lead",
+           "ended level at the cap (a draw)", "frames of matches in overtime",
+           "overtime games ended in the second half of the matches (the trainer's league half: the first seat is his)",
+           "of those: he won", "level", "he lost")
 #   OPENINGS=1    the pros' spawn openings as the item rule's label (the owner, 2026-10-13: "spawn openings like chess
 #                 openings"; sim/pro_spawn_openings/<map>.json of tools/pro_openings.py, docs/design/openings/README.md).
 #                 It changes ONLY what the intention's teacher (intent_rule(), the trainer's --intent-teach) names in the
@@ -5143,6 +5165,9 @@ class DuelEnv:
         self.win_tab, self.win_scale = None, 0.0
         if GAME_ON:
             self.stats["games"] = np.zeros(len(GAMES_COLS))
+        self.g_ot = np.zeros(self.M, np.int64) if OVERTIME else None     # (OVERTIME) overtime periods begun in match m's game
+        if GAME_ON and OVERTIME:
+            self.stats["overtime"] = np.zeros(len(OT_COLS))
         if GAME_ON and WIN_PAY:
             f_ = os.environ.get("WIN_CHANCE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "win_chance.json")
             with open(f_, encoding="utf-8") as fh_:
@@ -5202,6 +5227,8 @@ class DuelEnv:
         self.kind[m], self.mode[m] = NORMAL, -1
         self.game[m] = 2 if late else 1
         self.g_tick[m], self.round_t[m], self.g_p[m] = 0, 0.0, 0.5
+        if OVERTIME:
+            self.g_ot[m] = 0
         self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
         self.hold_ahead[q] = False
         self.g_win[q], self.g_flat[q] = 0.0, 0.0
@@ -5265,6 +5292,11 @@ class DuelEnv:
             return
         self.g_tick[gm] += 1
         self.round_t[gm] = (self.g_tick[gm] * DT).astype(np.float32)    # (a sum of float32 steps is frames off after ten minutes)
+        if OVERTIME:                                         # (OVERTIME) past the limit: the game's last OT_LEN seconds again
+            ov_ = gm[self.g_tick[gm] > GAME_FRAMES]
+            if len(ov_):
+                self.round_t[ov_] = (self._ot_fold(self.g_tick[ov_]) * DT).astype(np.float32)
+                self.stats["overtime"][4] += len(ov_)
         G = self.stats["games"]
         G[13] += int((self.game[gm] == 1).sum())
         G[14] += int((self.game[gm] == 2).sum())
@@ -5272,7 +5304,10 @@ class DuelEnv:
             return
         g_ = self._others_arr().shape[1] + 1
         a_, b_ = gm * g_, gm * g_ + 1
-        p = self._win_p(self.frags_r[a_] - self.frags_r[b_], GAME_LEN - self.g_tick[gm] * DT)
+        left_ = GAME_LEN - self.g_tick[gm] * DT
+        if OVERTIME:                                         # (OVERTIME) in a period: the seconds left in it
+            left_ = np.where(self.g_tick[gm] > GAME_FRAMES, GAME_LEN - self.round_t[gm].astype(np.float64), left_)
+        p = self._win_p(self.frags_r[a_] - self.frags_r[b_], left_)
         pay = self.win_scale * (p - self.g_p[gm])
         self.g_p[gm] = p
         reward[a_] += pay
@@ -5281,8 +5316,49 @@ class DuelEnv:
         self.g_win[a_] += pay
         self.g_win[b_] -= pay
 
+    def _ot_fold(self, tick):
+        """(OVERTIME) a game's frame past the limit as the plugin shows it: the last OT_LEN seconds again, period after
+        period (frame GAME_FRAMES + k * OT_FRAMES, k >= 1, shows the period's start)"""
+        return GAME_FRAMES - OT_FRAMES + (np.asarray(tick, np.int64) - GAME_FRAMES) % OT_FRAMES
+
+    def _ot_ends(self, ends):
+        """(OVERTIME) of the matches at their limit, a game with the score level goes on for another period (up to OT_CAP);
+        a game in a period goes on to its end; the rest end"""
+        OS = self.stats["overtime"]
+        keep = []
+        for m in ends:
+            m = int(m)
+            if self.game[m] not in OT_KINDS or (MOMENTS and int(self.g_end[m]) != GAME_FRAMES):
+                keep.append(m)
+                continue
+            if self.g_tick[m] < GAME_FRAMES + OT_FRAMES * int(self.g_ot[m]):
+                continue                                     # (in a period)
+            q = self._seats(m)
+            if self.frags_r[int(q[0])] == self.frags_r[int(q[1])] and self.g_ot[m] < OT_CAP:
+                OS[0] += int(self.g_ot[m] == 0)
+                OS[1] += 1
+                self.g_ot[m] += 1
+                continue
+            keep.append(m)
+        return np.array(keep, np.int64)
+
+    def _ot_over(self, m):
+        """(OVERTIME) a game that went to overtime is over: into the counters"""
+        if self.g_ot[m] <= 0:
+            return
+        OS = self.stats["overtime"]
+        q = self._seats(m)
+        d = float(self.frags_r[int(q[0])] - self.frags_r[int(q[1])])
+        OS[2 if d != 0 else 3] += 1
+        if m * 2 >= self.M:
+            OS[5] += 1
+            OS[6 if d > 0 else 7 if d == 0 else 8] += 1
+        self.g_ot[m] = 0
+
     def _game_end(self, m):
         """the whole game or late round of match m is over, at the limit (level is a draw: no overtime): into the counters"""
+        if OVERTIME:
+            self._ot_over(m)
         if MOMENTS and self.game[m] > 2:                     # (a round begun from a saved moment: its own counters)
             return self._moment_end(m)
         q = self._seats(m)
@@ -5576,6 +5652,8 @@ class DuelEnv:
                 self.game[m] = kd                            # 3 a mid-game start, 4 a spawn start
                 self.g_end[m] = GAME_FRAMES if kd == 3 else min(GAME_FRAMES, int(self.g_tick[m]) + SPAWN_FRAMES)
                 self.g_snap[m] = -1
+                if OVERTIME:
+                    self.g_ot[m] = 0
                 MS[kd - 3] += 1
                 qq += [int(i) for i in self._seats(m)]
             self.mom_put = []
@@ -5589,6 +5667,8 @@ class DuelEnv:
         for v in np.nonzero(died & ~done)[0]:                # a respawn in a whole game or a mid-game start: the spawn moment
             m = self._match_of(v)
             if self.game[m] not in (1, 3):
+                continue
+            if OVERTIME and self.g_tick[m] >= GAME_FRAMES:  # (OVERTIME) moments are taken before the limit only
                 continue
             MS[9] += 1
             if bok is None or not bool(bok[v]):
@@ -6923,6 +7003,8 @@ class DuelEnv:
         ends = np.nonzero(self.round_t > klen * self.round_fac)[0]
         if GAME_ON:                                          # (a whole game ends at its limit, to the frame)
             ends = np.nonzero(np.where(self.game > 0, self.g_tick >= (self.g_end if MOMENTS else GAME_FRAMES), self.round_t > klen * self.round_fac))[0]
+            if OVERTIME:                                     # (OVERTIME) a level game goes on, OT_LEN seconds a period
+                ends = self._ot_ends(ends)
         if self.lab is not None:                            # lab rooms have exact lengths
             ends = np.nonzero(self.round_t >= self.lab_len)[0]
             am = np.repeat(self.arena > 0, 2)

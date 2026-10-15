@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-14](results/2026-10-14.md)
 
+- 20:15 — The owner's play test: V30 better than v0.2, S40 fought worse; the judge that sees the truth did not help and is left out; v0.3, the new baseline, started 20:17
 - 16:00 — v0.2.2's setting (V) holds 53.5% against v0.2 under the fixed clock; the slow memory (S) is level at update 10 and two points under at 20, 21% slower an update; counterplay unchanged in every run
 
 ## [2026-10-13](results/2026-10-13.md)

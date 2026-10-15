@@ -918,7 +918,7 @@ def main():
                         env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
                         round_secs=ROUND_SECS_CK, arena_secs=float(a.arena_len),
                         game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
-                        game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS") if os.environ.get(k_)},   # games: their clock and score
+                        game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS", "OVERTIME", "STYLE_P") if os.environ.get(k_)},   # games: their clock and score
                         cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE),
                    path)
 
@@ -995,7 +995,7 @@ def main():
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
-                "hurt_dmg", "legs", "games", "open", "moments")
+                "hurt_dmg", "legs", "games", "open", "moments", "overtime")
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
@@ -1915,6 +1915,13 @@ def main():
                                   league_mid=dict(games=int(mo_[11]), won=int(mo_[12]), drawn=int(mo_[13]), lost=int(mo_[14])),
                                   by_map={k_: [int(x_) for x_ in np.atleast_1d(v_["moments"])[[0, 1, 4, 7, 8]]]     # mid begun, spawn begun, none saved, saved spawn, saved mid
                                           for k_, v_ in agg_map.items() if "moments" in v_})
+        if "overtime" in agg:                                            # (OVERTIME) games level at the limit played on, 120 s a period
+            ot_ = np.atleast_1d(agg["overtime"]).astype(np.float64)      # (the simulator's OT_COLS)
+            rec["overtime"] = dict(games=int(ot_[0]), periods=int(ot_[1]), ended_with_a_lead=int(ot_[2]), level_at_the_cap=int(ot_[3]),
+                                   time_share=round(float(ot_[4] / max(1.0, T * n_groups)), 4),          # of all the groups' time
+                                   league=dict(games=int(ot_[5]), won=int(ot_[6]), drawn=int(ot_[7]), lost=int(ot_[8])),
+                                   by_map={k_: [int(x_) for x_ in np.atleast_1d(v_["overtime"])[[0, 1, 3]]]     # to overtime, periods, level at the cap
+                                           for k_, v_ in agg_map.items() if "overtime" in v_})
         if W_HEAD >= 0:                                                  # (WAYS) his ways to his targets
             wa_ = wy_acc.cpu().numpy()
             WR_, WD_, WF_ = (np.atleast_1d(agg.get(k_, np.zeros(z_))).astype(np.float64) for k_, z_ in (("way_reads", 3), ("way_done", 3), ("way_frames", 4)))

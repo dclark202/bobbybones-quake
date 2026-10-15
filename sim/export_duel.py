@@ -30,6 +30,8 @@ ck = torch.load(os.path.join(ROOT, "data", "sim_runs", a.run, a.policy), weights
 sd = {k: v.cpu().numpy() for k, v in ck["model"].items()}
 os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 env_vars = dict(ck.get("env_vars") or {})
+if "STYLE_P" in (ck.get("game_vars") or {}):                # (v0.3 on) trained with no styles, or with this share: the plugins draw by it
+    env_vars["STYLE_P"] = str(ck["game_vars"]["STYLE_P"])
 env_vars.update(dict(x.split("=", 1) for x in a.set))
 round_secs = a.round_secs or float(ck.get("round_secs") or 0.0)
 legs = {}

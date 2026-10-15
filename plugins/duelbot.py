@@ -1774,7 +1774,8 @@ class duelbot(minqlx.Plugin):
             if hasattr(env, name):
                 getattr(env, name)[k] = v
         getattr(self, "press_q", {}).pop((id(env), k), None)
-        if style and hasattr(E, "STYLES") and hasattr(env, "style"):
+        no_styles = str(getattr(E, "_plugin_env", {}).get("STYLE_P", "")) in ("0", "0.0")   # (v0.3 on) trained with no styles
+        if style and not no_styles and hasattr(E, "STYLES") and hasattr(env, "style"):
             ok_ = [j for j, w_ in enumerate(E.STYLE_W) if w_ < 0 or int(w_) in env.map_weapons]
             env.style[k] = int(ok_[np.random.randint(len(ok_))])
             return E.STYLES[int(env.style[k])]
@@ -1792,9 +1793,13 @@ class duelbot(minqlx.Plugin):
         valid = gi_ >= 0
         g_ = np.maximum(gi_, 0)
         phi = np.where(valid, R_.T[g_, node] + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
-        it_ = np.array(env.route_item)[g_]
-        soon = env.item_up[0, it_] | (env.item_t[0, it_] < phi + 5.0)
+        it_ = np.array(env.route_item)[np.minimum(g_, len(env.route_item) - 1)]     # (a holding place's row is no item's: "soon" below)
+        soon = env.item_up[0, it_] | (env.item_t[0, it_] < phi + 5.0) | (env.intent >= getattr(E, "EN_INTENT", 1 << 30))
         gone = valid & ~soon & (env.intent > 0)
+        if getattr(env, "hold_n", 0):                        # (TARGETS, as step() does: a place is reached where he stands at it,
+            hd_ = env.intent >= E.HOLD_INTENT                # given up where no way leads to it; 2026-10-14, the first real games)
+            env.note_holds()
+            gone = gone | (hd_ & (~valid | (R_.T[g_, node] >= 1e8)))
         env.intent_gone = np.where(np.isin(np.arange(env.n), seats), gone, False)
 
     def took_chosen(self, env, E, k, cls):
