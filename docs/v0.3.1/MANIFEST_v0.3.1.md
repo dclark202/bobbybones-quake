@@ -20,8 +20,8 @@ model version"): the hands of the v0.4 candidate. Two stages, each with its own 
 
 ## 2. The start and the control
 
-- **Start**: v0.3's best save by its evaluation (the owner picks it after the play test).
-- **Control**: that same save. It stays in his league (`--anchor-p 0.25`: a quarter of his games) and every check plays it.
+- **Start**: v0.3's last save, where it stops at 18:00 on 2026-10-15 (the owner, 17:20: "We'll pick up v0.3.1 from the 6pm stop point"; kept as `keep/policy_end.pt`).
+- **Control**: v0.3's best save by its evaluation tonight (the standing rule: the last best network; it may be the same save). It stays in his league (`--anchor-p 0.25`: a quarter of his games) and every check plays it.
   v0.2 is checked once at the end.
 - **Promotion**: only on the owner's word, and only if it beats the control.
 

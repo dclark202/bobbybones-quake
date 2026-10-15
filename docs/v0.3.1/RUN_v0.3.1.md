@@ -29,7 +29,7 @@ overtime, no styles.
 
 ## What it starts from, and the control
 
-v0.3's best save by its evaluation (the owner picks it at 19:00). **The control is that same save** (the last best
+v0.3's last save, where it stops at 18:00 (the owner: "We'll pick up v0.3.1 from the 6pm stop point"). **The control is v0.3's best save by its evaluation tonight** (the last best
 network): it stays in his league (a quarter of his games) and every check plays it. v0.2 is checked once at the end.
 
 ## How it is judged and stopped
