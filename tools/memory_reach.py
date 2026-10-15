@@ -479,9 +479,9 @@ def main():
     ap.add_argument("--minutes", type=float, default=10.0)
     ap.add_argument("--env", default="duel_env_ffa")
     ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator setting for the recorded games")
-    ap.add_argument("--wrap", type=float, default=120.0, help="the clock and the round's score start over every this many seconds in the "
+    ap.add_argument("--wrap", type=float, default=600.0, help="the clock and the round's score start over every this many seconds in the "
                     "recorded games, as in the checks (0: never). The memory is never reset")
-    ap.add_argument("--check-round", type=float, default=120.0, help="the twin's memory is reset every this many seconds")
+    ap.add_argument("--check-round", type=float, default=600.0, help="the twin's memory is reset every this many seconds")
     ap.add_argument("--t0-first", type=float, default=37.0)
     ap.add_argument("--t0-every", type=float, default=30.0)
     ap.add_argument("--early", type=float, default=150.0, help="t0 before this many seconds: an early copy")

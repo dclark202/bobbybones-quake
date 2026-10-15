@@ -717,7 +717,7 @@ def main():
     ap.add_argument("--games-nightmare", type=int, default=8)
     ap.add_argument("--minutes", type=float, default=10.0)
     ap.add_argument("--procs", type=int, default=6)
-    ap.add_argument("--round", type=float, default=120.0, help="his clock and memory start over every this many seconds, as in training")
+    ap.add_argument("--round", type=float, default=600.0, help="his clock and memory start over every this many seconds (600: whole games, as in training since v0.3)")
     ap.add_argument("--env", default="duel_env_ffa")
     ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator setting on top of the defaults (SETS)")
     ap.add_argument("--seed", type=int, default=500)

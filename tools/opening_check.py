@@ -252,7 +252,7 @@ def cmd_play(a):
     os.makedirs(a.out, exist_ok=True)
     for mp in a.map.split(","):
         per = [a.games // a.procs + (1 if k < a.games % a.procs else 0) for k in range(a.procs)]
-        jobs = [(a.env, envvars, mp, g, a.minutes, a.seed + 17 * k, pol, idx, a.round or 120.0, delays, "{}_{}".format(a.seed, k))
+        jobs = [(a.env, envvars, mp, g, a.minutes, a.seed + 17 * k, pol, idx, a.round or 600.0, delays, "{}_{}".format(a.seed, k))
                 for k, g in enumerate(per) if g > 0]
         with mp_.Pool(len(jobs), initializer=pin.pin_pool_worker) as pool:
             res = pool.map(play, jobs)
@@ -261,7 +261,7 @@ def cmd_play(a):
         if a.add and os.path.exists(fn):
             lives = json.load(open(fn))["lives"] + lives
         with open(fn, "w", encoding="utf-8") as fh:
-            json.dump(dict(map=mp, policy=os.path.basename(a.policy), env=a.env, minutes=a.minutes, round=a.round or 120.0,
+            json.dump(dict(map=mp, policy=os.path.basename(a.policy), env=a.env, minutes=a.minutes, round=a.round or 600.0,
                            set={k: (os.path.basename(v) if os.sep in v or "/" in v else v) for k, v in envvars.items()},
                            delays_ms=list(delays), games=len({l["game"] for l in lives}), lives=lives), fh, separators=(",", ":"))
         print("{}: {} games, {} lives ({} a player a game)".format(mp, len({l["game"] for l in lives}), len(lives),
