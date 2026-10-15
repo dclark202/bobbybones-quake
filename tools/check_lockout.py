@@ -51,12 +51,18 @@ def main():
         return int((p[0] - x0 + G / 2) // G), int((p[1] - y0 + G / 2) // G)
 
     def node_near(p):
+        """the floor the item drops onto: the highest floor at or below the item (+48 of slack) in its own cell, else in a neighbour"""
         i, j = cell_of(p)
-        best = None
-        for k, z in enumerate(floors.get((i, j), [])):
-            if abs(z - (p[2] + 24)) < 40 and (best is None or abs(z - (p[2] + 24)) < abs(floors[(i, j)][best] - (p[2] + 24))):
-                best = k
-        return None if best is None else (i, j, best)
+        for ring in ((0,), (-1, 1)):
+            best, bz = None, None
+            for di in (0,) + tuple(ring) if ring != (0,) else (0,):
+                for dj in (0,) + tuple(ring) if ring != (0,) else (0,):
+                    for k, z in enumerate(floors.get((i + di, j + dj), [])):
+                        if z <= p[2] + 24 + 48 and (bz is None or z > bz):
+                            best, bz = (i + di, j + dj, k), z
+            if best is not None:
+                return best
+        return None
 
     pads = []                                        # (from node cell, to point) for every jump pad: land where the target is
     for tr in w.triggers if hasattr(w, "triggers") else []:

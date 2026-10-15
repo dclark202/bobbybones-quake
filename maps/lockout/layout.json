@@ -1,263 +1,355 @@
 {
- "version": 1,
- "note": "items and spawns for maps/lockout; z is the floor height (the generator adds 24). Edit with editor.html, then run tools/make_lockout_map.py",
+ "version": 4,
+ "note": "items and spawns for maps/lockout; z is the floor height (the generator adds 24; items drop to the floor in the game). Edit with the editor page, then run tools/make_lockout_map.py",
  "items": [
   {
    "id": "i00",
    "class": "weapon_railgun",
-   "x": 2480,
-   "y": 1424,
-   "z": 416,
-   "label": "Sniper perch (Sniper Tower roof)"
+   "x": 1398,
+   "y": 138,
+   "z": 0,
+   "label": "Sword spawn: the nook under the Library"
   },
   {
    "id": "i01",
-   "class": "weapon_lightning",
-   "x": 464,
-   "y": 1424,
-   "z": 352,
-   "label": "BR perch (BR Tower roof)"
+   "class": "weapon_rocketlauncher",
+   "x": 696,
+   "y": 870,
+   "z": 96,
+   "label": "Green Room (Halo's shotgun)"
   },
   {
    "id": "i02",
-   "class": "weapon_rocketlauncher",
-   "x": 1472,
-   "y": 1216,
-   "z": 192,
-   "label": "Centre deck, the hot spot (Halo: the sword)"
+   "class": "weapon_lightning",
+   "x": 1092,
+   "y": 1470,
+   "z": 320,
+   "label": "Top Blue, east side"
   },
   {
    "id": "i03",
-   "class": "weapon_shotgun",
-   "x": 1472,
-   "y": 1120,
-   "z": 0,
-   "label": "Hall under the centre (Halo: the shotgun hallway)"
+   "class": "weapon_rocketlauncher",
+   "x": 1644,
+   "y": 678,
+   "z": 384,
+   "label": "Second rocket launcher: Top BR"
   },
   {
    "id": "i04",
    "class": "weapon_plasmagun",
-   "x": 1472,
-   "y": 2060,
-   "z": 192,
-   "label": "Library"
+   "x": 1410,
+   "y": 78,
+   "z": 256,
+   "label": "Library, middle bay"
   },
   {
    "id": "i05",
    "class": "weapon_grenadelauncher",
-   "x": 1408,
-   "y": 120,
+   "x": 948,
+   "y": 654,
    "z": 0,
-   "label": "South yard, by the lift well door"
+   "label": "Bottom Middle"
   },
   {
    "id": "i06",
-   "class": "item_health_mega",
-   "x": 1168,
-   "y": 1470,
+   "class": "weapon_shotgun",
+   "x": 1800,
+   "y": 678,
    "z": 0,
-   "label": "West green chamber"
+   "label": "Bottom BR"
   },
   {
    "id": "i07",
-   "class": "item_armor_body",
-   "x": 1776,
-   "y": 2240,
-   "z": 192,
-   "label": "Library, north-east corner (red armor)"
+   "class": "item_armor_combat",
+   "x": 408,
+   "y": 1506,
+   "z": 320,
+   "label": "Yellow armor: the corner of the upper Elbow"
   },
   {
    "id": "i08",
-   "class": "item_armor_combat",
-   "x": 2208,
-   "y": 700,
-   "z": 0,
-   "label": "Elbow corridor (yellow armor)"
+   "class": "item_armor_body",
+   "x": 660,
+   "y": 414,
+   "z": 384,
+   "label": "Red armor: Top Sniper"
   },
   {
    "id": "i09",
-   "class": "item_health_large",
-   "x": 2820,
-   "y": 1200,
+   "class": "item_health_mega",
+   "x": 1260,
+   "y": 420,
    "z": 0,
-   "label": "East yard"
+   "label": "Mega: the bottom corridor's south leg"
   },
   {
    "id": "i10",
-   "class": "item_health_large",
-   "x": 124,
-   "y": 1200,
-   "z": 0,
-   "label": "West yard"
+   "class": "item_armor_combat",
+   "x": 1728,
+   "y": 78,
+   "z": 256,
+   "label": "Second yellow armor: Library, east bay"
   },
   {
    "id": "i11",
-   "class": "item_health",
-   "x": 2368,
-   "y": 1100,
-   "z": 0,
-   "label": "Sniper Tower ground floor"
+   "class": "item_health_large",
+   "x": 2112,
+   "y": 942,
+   "z": 384,
+   "label": "The ring's north-east corner"
   },
   {
    "id": "i12",
-   "class": "item_health",
-   "x": 576,
-   "y": 1100,
+   "class": "item_health_large",
+   "x": 360,
+   "y": 450,
    "z": 0,
-   "label": "BR Tower ground floor"
+   "label": "Bottom Sniper"
   },
   {
    "id": "i13",
    "class": "item_health",
-   "x": 1408,
-   "y": 360,
-   "z": 0,
-   "label": "Lift well"
+   "x": 750,
+   "y": 960,
+   "z": 256,
+   "label": "Top Middle, north-west"
   },
   {
    "id": "i14",
    "class": "item_health",
-   "x": 1472,
-   "y": 1900,
-   "z": 192,
-   "label": "Library door"
+   "x": 1140,
+   "y": 522,
+   "z": 256,
+   "label": "Top Middle, south-east"
   },
   {
    "id": "i15",
-   "class": "item_armor_shard",
-   "x": 1408,
-   "y": 1700,
-   "z": 192,
-   "label": "Bridge: deck to library"
+   "class": "item_health",
+   "x": 300,
+   "y": 570,
+   "z": 256,
+   "label": "Mid Sniper"
   },
   {
    "id": "i16",
-   "class": "item_armor_shard",
-   "x": 1950,
-   "y": 1920,
-   "z": 192,
-   "label": "Bridge: library to Sniper terrace"
+   "class": "item_health",
+   "x": 1560,
+   "y": 678,
+   "z": 256,
+   "label": "Mid BR"
   },
   {
    "id": "i17",
-   "class": "item_armor_shard",
-   "x": 994,
-   "y": 1920,
-   "z": 192,
-   "label": "Bridge: library to BR terrace"
+   "class": "item_health",
+   "x": 402,
+   "y": 1110,
+   "z": 96,
+   "label": "Lower Elbow"
   },
   {
    "id": "i18",
-   "class": "item_armor_shard",
-   "x": 1408,
-   "y": 800,
-   "z": 192,
-   "label": "Lift top"
+   "class": "item_health",
+   "x": 1260,
+   "y": 912,
+   "z": 256,
+   "label": "Foot of the BR Tower Ramp"
   },
   {
    "id": "i19",
-   "class": "ammo_slugs",
-   "x": 2540,
-   "y": 1100,
-   "z": 192,
-   "label": "Sniper Tower second floor"
+   "class": "item_health",
+   "x": 960,
+   "y": 1290,
+   "z": 96,
+   "label": "Bottom Blue"
   },
   {
    "id": "i20",
-   "class": "ammo_cells",
-   "x": 404,
-   "y": 1100,
-   "z": 192,
-   "label": "BR Tower second floor"
+   "class": "item_armor_shard",
+   "x": 942,
+   "y": 1098,
+   "z": 320,
+   "label": "Ramp: Top Blue to Top Middle"
   },
   {
    "id": "i21",
-   "class": "ammo_rockets",
-   "x": 1180,
-   "y": 1100,
-   "z": 192,
-   "label": "Centre deck, west side"
+   "class": "item_armor_shard",
+   "x": 1110,
+   "y": 408,
+   "z": 256,
+   "label": "The Window"
   },
   {
    "id": "i22",
-   "class": "ammo_rockets",
-   "x": 1760,
-   "y": 1400,
-   "z": 192,
-   "label": "Centre deck, north-east"
+   "class": "item_armor_shard",
+   "x": 720,
+   "y": 690,
+   "z": 0,
+   "label": "Bottom corridor, west"
   },
   {
    "id": "i23",
-   "class": "ammo_shells",
-   "x": 1300,
-   "y": 1480,
-   "z": 0,
-   "label": "Hall, by the chamber"
+   "class": "item_armor_shard",
+   "x": 966,
+   "y": 978,
+   "z": 96,
+   "label": "Blue Ramp"
   },
   {
    "id": "i24",
-   "class": "ammo_grenades",
-   "x": 1500,
-   "y": 200,
+   "class": "item_armor_shard",
+   "x": 1950,
+   "y": 270,
+   "z": 384,
+   "label": "The ring, south leg"
+  },
+  {
+   "id": "i25",
+   "class": "item_armor_shard",
+   "x": 144,
+   "y": 390,
    "z": 0,
-   "label": "South yard"
+   "label": "Foot of the Sniper Ramp"
+  },
+  {
+   "id": "i26",
+   "class": "ammo_rockets",
+   "x": 690,
+   "y": 1194,
+   "z": 96,
+   "label": "Green Room, top"
+  },
+  {
+   "id": "i27",
+   "class": "ammo_rockets",
+   "x": 1740,
+   "y": 780,
+   "z": 256,
+   "label": "Mid BR"
+  },
+  {
+   "id": "i28",
+   "class": "ammo_slugs",
+   "x": 1560,
+   "y": 252,
+   "z": 0,
+   "label": "Sword room"
+  },
+  {
+   "id": "i29",
+   "class": "ammo_lightning",
+   "x": 840,
+   "y": 1290,
+   "z": 320,
+   "label": "Top Blue, west side"
+  },
+  {
+   "id": "i30",
+   "class": "ammo_cells",
+   "x": 1128,
+   "y": 78,
+   "z": 256,
+   "label": "Library, west bay"
+  },
+  {
+   "id": "i31",
+   "class": "ammo_grenades",
+   "x": 990,
+   "y": 612,
+   "z": 0,
+   "label": "Bottom Middle"
+  },
+  {
+   "id": "i32",
+   "class": "ammo_shells",
+   "x": 1560,
+   "y": 780,
+   "z": 0,
+   "label": "Bottom BR"
   }
  ],
  "spawns": [
   {
-   "id": "s0",
-   "x": 300,
-   "y": 300,
+   "id": "s00",
+   "x": 420,
+   "y": 690,
    "z": 0,
-   "angle": 45
-  },
-  {
-   "id": "s1",
-   "x": 2644,
-   "y": 300,
-   "z": 0,
-   "angle": 135
-  },
-  {
-   "id": "s2",
-   "x": 300,
-   "y": 2100,
-   "z": 0,
-   "angle": 315
-  },
-  {
-   "id": "s3",
-   "x": 2644,
-   "y": 2100,
-   "z": 0,
-   "angle": 225
-  },
-  {
-   "id": "s4",
-   "x": 1100,
-   "y": 1000,
-   "z": 192,
-   "angle": 0
-  },
-  {
-   "id": "s5",
-   "x": 1850,
-   "y": 1450,
-   "z": 192,
    "angle": 180
   },
   {
-   "id": "s6",
-   "x": 1472,
-   "y": 1060,
-   "z": 0,
+   "id": "s01",
+   "x": 360,
+   "y": 450,
+   "z": 256,
+   "angle": 0
+  },
+  {
+   "id": "s02",
+   "x": 960,
+   "y": 1260,
+   "z": 320,
+   "angle": 270
+  },
+  {
+   "id": "s03",
+   "x": 750,
+   "y": 540,
+   "z": 256,
+   "angle": 45
+  },
+  {
+   "id": "s04",
+   "x": 1200,
+   "y": 270,
+   "z": 256,
    "angle": 90
   },
   {
-   "id": "s7",
-   "x": 1472,
-   "y": 2000,
-   "z": 192,
+   "id": "s05",
+   "x": 1560,
+   "y": 780,
+   "z": 256,
+   "angle": 180
+  },
+  {
+   "id": "s06",
+   "x": 1680,
+   "y": 252,
+   "z": 0,
+   "angle": 180
+  },
+  {
+   "id": "s07",
+   "x": 2106,
+   "y": 570,
+   "z": 384,
+   "angle": 180
+  },
+  {
+   "id": "s08",
+   "x": 420,
+   "y": 1530,
+   "z": 320,
+   "angle": 0
+  },
+  {
+   "id": "s09",
+   "x": 1830,
+   "y": 780,
+   "z": 0,
+   "angle": 180
+  },
+  {
+   "id": "s10",
+   "x": 1020,
+   "y": 1290,
+   "z": 96,
+   "angle": 180
+  },
+  {
+   "id": "s11",
+   "x": 600,
+   "y": 540,
+   "z": 384,
    "angle": 270
   }
  ]
