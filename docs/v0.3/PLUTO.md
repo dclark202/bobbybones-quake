@@ -42,3 +42,6 @@ the computers used, how long it trained.
 5. **Size**, last: Pluto is 150 times bigger, on more computers than this PC. A GRU of 1024 and a larger attention part are
    possible here (an update would take about twice as long); worth it only after 1 to 3 work.
 6. **On the servers**: openings chosen per person by a bandit over his record against them (the random ids), Pluto's way.
+
+The design that takes 2 to 5 up, with the size and the pay, for the model after v0.3: [../v0.4/PROPOSAL_v0.4.md](../v0.4/PROPOSAL_v0.4.md)
+(2026-10-14 night; the 25-second judge of 1 was tested the same evening and left out, and comes back there as a judge of the game's result).
