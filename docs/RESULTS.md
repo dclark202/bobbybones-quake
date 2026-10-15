@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-15](results/2026-10-15.md)
+
+- 06:15 — v0.3's night: from level to 57.5% against v0.2 at update 70, then two falls to 52.1%; no stall, no weapon collapse
+
 ## [2026-10-14](results/2026-10-14.md)
 
 - 22:30 — The architecture for the model after v0.3 proposed, Pluto's way: a store of his past read by attention, a judge of the game's result, the pay leaning on winning, a network of about 13.7 M weights; the owner's two thoughts answered
