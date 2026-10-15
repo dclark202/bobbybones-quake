@@ -38,16 +38,11 @@ docs/      plan, backlog, results log, run reports
 
 ## Fairness
 
-He plays under a person's limits:
-
+He plays under a human's limits:
 - **Physics**: the same 125 fps movement as a human client.
 - **Senses**: he knows where the enemy is only when in his field of view with a clear line of sight, or roughly from
   sound. No wallhack, no health readout, item timers only from what he saw or heard.
-- **Reaction and aim**: he sees the enemy 100 ms late; the view turns like a mouse, with a capped flick speed, inertia and
-  hand noise.
-- **Hands**: a limited number of key presses and clicks a second, as measured on a player.
-
-The game's own bots are used only as a yardstick, never as a teacher.
+- **Reaction, aim, and inputs**: human-like reflexes, aim limitation, and keypresses per second 
 
 ## Run it
 
