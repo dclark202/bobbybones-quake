@@ -52,6 +52,8 @@ The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
   flick speed and hand noise; never miss on purpose; no wallhacks.
 - **Method**: limit what he can do until the right play appears; do not add rewards for single behaviors without asking;
   the reward is the owner's call. Fading lessons from the pros are fine; what stays must hold without them.
+- **Aim level 3 from v0.3.1 on** (the owner, 2026-10-15: "Set it to 3 going forward"): level 1.5 (v0.2 and v0.3, B-228's step one)
+  cost the rail most; training, the checks and the servers use 3.
 - **Training partners**: himself, his league and the control; the game's bots are a benchmark only.
 - **Promotion**: a network goes on the public server only on the owner's word and only if it beats the control.
 - **Rounds**: whole ten-minute games and mid-game starts only, one against one (2026-10-13).

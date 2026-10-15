@@ -188,7 +188,7 @@ The pay is the owner's. These are the four decisions, with what the evidence say
 read beside the frag share: a pay that costs two points of frag share and moves closing-when-weak toward the pros is a
 win for goal 4 and is reported as one).
 
-1. **`WIN_PAY=1` with the learned chance.** Every frame pays the change in his chance of winning; the leader is paid
+1. **`WIN_PAY=1` with the learned chance** (the owner, 2026-10-15: "pay by win percentage seems to be a smart play"; still his go at v0.4). Every frame pays the change in his chance of winning; the leader is paid
    to hold, the one behind to risk; the two seats sum to zero; a game's pays sum to its result, so nothing can be
    pumped. One rule gives "defend a lead late", "take risks when behind", "a frag at +8 is worth little", "a death at
    +8 with 30 s left costs about nothing", with no behaviour paid for. Evidence: the counterplay table; B-216 (a

@@ -105,8 +105,24 @@ fades early (v14 lost Aerowalk to a rule that named what he could not reach); on
 choices are seen only in part. First: the demo sets rebuilt with the mended converter (B-218, B-219) and v0.4's inputs.
 All of it offline, mostly on the processor, beside v0.3.1's training.
 
+## The enemy as a target ("hunt"; the owner, 2026-10-15; B-256)
+
+The classic Quake bots push when you are weak because their goal selector treats the enemy as a moving item: when his
+estimated stack drops, the worth of walking to him passes the worth of the yellow armor. In v0.4 the head's "where to go
+next" gets the enemy as one more target beside the items and the holding places: his believed place (the guessing game's
+answer, refreshed as the head ticks), handed to the hands' way and legs as an item's place is today. Its worth is not a
+rule: the head learns it from the pay by the game (`WIN_PAY`: a frag on a weak enemy when level late is worth a lot, at +8
+little), and the pros' demos label it in pre-training where the pro went for the enemy rather than an item. It starts
+closed (a zero row, opened out of "nothing" as the holding places were) and opens only as far as it wins games.
+
+Why it may work now when it did not before: v0.2's enemy as a target was a narrow rule with a fitted start (level in 48
+games, 45.9% in 128, left out); his pushing today is the same at every stack (12.6% of sightings, the pros 6.6%, pushing
+when the enemy is weak). A learned worth, with the enemy's stack guessed and the game's score in the pay, is what the
+classic bots hand-code.
+
 ## Also for v0.4 (backlog)
 
 - **B-251**: the owner's ~5,000 public free-for-all games: calibrate his aim limits from many players.
 - **B-252**: rocket jumps.
 - **B-253**: the legs inside the hands (above).
+- **B-256**: the enemy as a target of the head (above).
