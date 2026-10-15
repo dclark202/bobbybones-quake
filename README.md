@@ -6,8 +6,7 @@ Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.3
 - `!note <text>` leaves a comment for the log.
 - The server also runs a dedicated elo ranking: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours.
 
-We also have a [discord server](
-Join the discord server https://discord.gg/dH2mfzbMa)
+We also have a [discord server](https://discord.gg/dH2mfzbMa)
 
 ## What it is
 
