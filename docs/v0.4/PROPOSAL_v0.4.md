@@ -285,3 +285,46 @@ cost) taken as the numbers come in.
 | 3. Positioning | a memory over minutes; places as targets with the enemy in his head | high ground still unpaid (`HIGH_PAY` off) |
 | 4. Counterplay | the centre: memory, judge, pay by the game | his opponents are still himself (exploiters dropped on the owner's word) |
 | 5. Beat people | the judge's chance shown on the server; later, an opening chosen per person by his record against them (Pluto's bandit) | the play test is the only proof |
+
+## 13. The split network: hands and head (the owner's choice, 2026-10-15)
+
+The owner: "We have a mechanical side and a strategy side, so there's clear distinction between the two." It replaces
+change 2's one wide memory (sections 2 and 3): the size goes to a strategy part that ticks five times a second, not to
+the memory that aims every frame. The nearest precedent is DeepMind's Quake III Capture the Flag agent (FTW, 2019: a
+fast and a slow recurrent core); AlphaStar has one memory, not two.
+
+**A GRU** keeps a state h of N numbers. Each step it reads an input x of M numbers and three layers over [x, h] give:
+z (how much of the old state to keep), r (how much of the old state to use) and a candidate n = tanh(W [x, r·h]);
+then h = z·h + (1 - z)·n. Weights: 3 × (M + N) × N, plus small biases.
+
+**Every frame (40 a second): the hands**, v0.3's network copied exactly.
+
+| Part | Shape | Weights |
+|---|---|---|
+| Encoder | 791 inputs → 256 → 256 | 0.27 M |
+| Attention | 48 tokens 96 wide, 2 blocks, into the encoder through its door | 0.25 M |
+| Fast GRU | input 256 + the plan 256 = 512, state 512; the plan's columns start at zero | 1.57 M |
+| Outputs | keys, turn, pitch, fire, weapon, walk, zoom, mouse lift, legs switch | 0.05 M |
+| **Hands total** | | **2.1 M** |
+
+**Every eighth frame (5 a second): the head**, new.
+
+| Part | Shape | Weights |
+|---|---|---|
+| Its input | mean of the encoder over the 8 frames (256) + the fast state (512) + the store's read (256) + the tick's events (32) = 1,056 → 768 | 0.81 M |
+| Slow GRU | input 768, state 1,024 | 5.51 M |
+| The plan | 1,024 → 256, to the hands' GRU (held for 8 frames) | 0.26 M |
+| The store | write every 0.8 s (every 4th tick): [slow state 1,024 + encoder mean 256 + events 32] → a slot of 128; 224 slots (3 min); read: 4 heads asked by the slow state, slot age beside each | 0.25 M |
+| Outputs | the target (17 intentions) and the way, added to the hands' own target head (the head's part starts at zero); value 25 s and 2 min; win chance in bands; the guessing game | 0.15 M |
+| **Head total** | | **7.0 M** |
+
+**Total about 9.1 M** (today 1.75 M). On the server a frame costs the hands' 2.1 M; the head's 7 M every eighth frame
+(about 3 ms that frame at one thread): one or two Bobbys fit the 25 ms frame. The movement network (his legs, 1.2 M) stays
+apart, as today.
+
+**The start is exact**: the hands are v0.3's end, the plan's columns and the head's target part at zero, so the network
+plays as v0.3 until what the head says wins games (the rule of stage A). **Training**: a window of 768 frames (96 head
+ticks), both GRUs by the library's routine (change 1, first); the target's loss counts on the head's ticks only, as the
+intention's does today; the head learns at a quarter of the hands' rate at first; the guessing game and the win chance
+are its lessons. **Before a run**: the start answers as v0.3 (`--same`), ten updates and level against the control,
+the card's memory at 768 frames measured.
