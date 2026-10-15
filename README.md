@@ -2,7 +2,7 @@
 
 BobbyBones is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
 games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
-on a real Quake Live server through a server plugin. Nothing about aiming, moving or fighting is scripted.
+on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
 
 ## Play against him in Quake Live
 Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal). Chat commands
