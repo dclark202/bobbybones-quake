@@ -36,3 +36,59 @@ with the trainer: it runs on the processor, in the trainer's gaps, or on rented 
 
 0 first (a day). 1 and the measurements of 2 and 3 next; 2's runs after 1 (they train the legs branch). Each part
 alone: ten updates and a check against the control before it joins the run, as every new part since 2026-10-13.
+
+## After v0.3 (the owner, 2026-10-15): three plans
+
+The order: v0.3 stops at 18:00, its evaluation (an hour), the owner's play test (19:00 to 20:00); these three start after,
+with the PC free of training. The public free-for-all demos (`hza`: 6,192 games, 99.5% recorded by one player, mostly
+other maps) are put off (B-251).
+
+### 1. Does the simulator rocket jump as the game does? (B-252, first)
+
+- **The game.** A measuring plugin beside `plugins/weaponlab.py` on a private server, the test map and Blood Run: a bot
+  (through `set_bot_input`) does scripted rocket jumps on a grid: look-down 45 to 90 degrees by 5; fire on the jump's
+  frame, one to four frames after, or standing; with and without a forward or strafe key; on flat floor and beside a
+  wall; at 100 health with no armor and with armor. About 200 jumps, every frame of the next 1.5 s recorded: place,
+  speed, health, armor.
+- **The simulator.** The same inputs on the same maps in `duel_env.py`. Set side by side: the rise, the distance, the
+  top upward speed, the self-damage (armor's share), the landing.
+- **Passes** when the rise and distance agree within 5% and the damage exactly, and the game's grid covers the pros' range
+  (rise about 200 to 320, self-damage 33 to 38). A difference is fixed behind a switch (with it off the simulator is
+  v0.3's, by fixed runs), as every simulator fix since v14. Also checked: his hands allow the jump and the click within
+  his limits.
+- About a day. Written down as a results entry.
+
+### 2. The pros' rocket jumps as runs (B-252)
+
+- **The links.** Per map, the take-off and landing pairs the pros used five times or more (5 to 22 a map;
+  `docs/pro_rocket_jumps.json`), drawn on the maps' pictures for the owner to keep or drop (a `use` flag, as the jumps'
+  lists have), each marked: to an item, a route, an escape.
+- **A run** per link, as the jump runs today: he starts at the take-off with the rocket launcher and the pros' health
+  (about 220 with armor) and must reach the landing; paid for arriving, the health it costs is the game's own.
+- **A ladder of starts**, per link, the next when he arrives in half of the tries: in the air at the pros' moment and
+  already looking down (only the shot); on the floor looking down (the jump and the shot); a normal stance (the whole).
+- **A nudge that fades**: in these runs only, a lesson on his look-down and the shot's moment toward the pros' (their
+  medians per link); never his aim elsewhere.
+- **A share** inside today's movement practice (about 5% of his time): rocket jump runs about 2%.
+- **Into games only after he can do them**: a link goes into the map's walking graph (priced: health, a rocket, the
+  launcher in hand) once he arrives on it in the runs, never before (Aerowalk's red armor in v14: a rule that named what
+  he could not reach cost him the map).
+- **Read by**: arrivals per link; rocket jumps a game in self-play beside the pros' table; none at low health.
+
+### 3. Drills for rocket aim (B-254)
+
+The owner's rule since 2026-10-13 is whole games and mid-game starts only: drills come back only on his word, as a small
+share that fades.
+
+- **Measure first**, his and the pros': rockets a minute (2.1 against 10.8), direct hits, splash damage a rocket, shots at
+  the feet or the floor beside the enemy, by distance and with the enemy in the air or below him. These say which drill
+  is needed.
+- **The drills** (the trainer's one-weapon round, `--drill-p`, exists), on the real maps, not in a box: short rounds,
+  rockets only, against his league and the scripted movers (the strafer, the holder, the lobber), four kinds:
+  splash at the feet at middle range; an enemy in the air (the direct hit); an enemy coming round a corner (the shot
+  before he is seen: the pros' places for blind rockets are in `sim/pro_places/`); an enemy below him.
+- **Pay**: the game's own, damage and frags; no pay for a near miss (a reward for one behaviour: the owner's call).
+- **His inputs** checked first: the lead inputs must give the floor under the enemy's predicted place and the rocket's
+  time to get there.
+- **A share** of 5 to 10% of his time, fading over the run; kept only if his rockets in whole games improve (damage a
+  rocket, rockets a minute, the share of frags) and the check against the control holds.

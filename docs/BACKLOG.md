@@ -183,7 +183,7 @@ that showed it. `python tools/docs_check.py` says if a number is used twice.
 
 | ID | P | Status | Item | Why / evidence |
 |---|---|---|---|---|
-| B-251 | P1 | for v0.4 (the owner, 2026-10-15) | **Calibrate his aim from the owner's ~5,000 public free-for-all games.** Many players of every level: reaction time to a newly seen enemy, flick speed, tracking error with the lightning gun, hits by weapon and distance, also speeds and rocket jumps; set his limits at a chosen level among them. People only as random ids | Today's limits rest on a few people's reflex cards and the pros' duels |
+| B-251 | P3 | put off (the owner, 2026-10-15: the folder `hza`, 6,192 free-for-all games, 99.5% recorded by one player, mostly other maps) | **Calibrate his aim from the owner's ~5,000 public free-for-all games.** Many players of every level: reaction time to a newly seen enemy, flick speed, tracking error with the lightning gun, hits by weapon and distance, also speeds and rocket jumps; set his limits at a chosen level among them. People only as random ids | Today's limits rest on a few people's reflex cards and the pros' duels |
 | B-09 | P2 | open | Rebuild fair inputs from parsed pro demos; infer movement keys with the simulator | 374 demos parsed (Blood Run, Aerowalk) |
 | B-10 | P2 | open | Imitation training, then self-play on top | Expected to fix crosshair placement and weapon choice |
 | B-18 | P2 | open | Use play-test sessions as imitation data (the human's keys are logged per frame) | `frames.csv` has `o_fwd/o_right/o_up/o_fire` |
