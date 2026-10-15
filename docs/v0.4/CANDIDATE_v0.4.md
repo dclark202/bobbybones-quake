@@ -66,20 +66,44 @@ The owner: one Bobby a server is fine, two ideal. The middle shape should carry 
 4. The run: the hands start as v0.3's end exactly; the plan and the head's target start at zero and open only as far
    as they win games. Ten updates level against the control first.
 
-## The pros' demos and the head
+## The pros' demos and the head: how the seeding works
 
-The head's questions are the ones the demos answer. As AlphaStar began from people's games before playing itself, the
-head learns from 4,449 pro duels first, offline, while it cannot yet move him:
+Supervised first, as AlphaStar began from people's games before it played itself: each pro game replayed through his own
+senses, the head asked at every tick what the pro did next, and taught to answer, all before it is joined to him.
+Reviewed with the owner later (2026-10-15).
 
-- **Where to go next**: the pro's next item or holding place, read in hindsight from where he went in the next seconds.
-- **Who is winning**: the game's result is known for every frame of a demo: the win chance learnt from it.
-- **Where the enemy is**: wherever the demo shows the other player, the truth for the guessing game; elsewhere, the
-  next place he was seen.
-- **What to remember**: minutes-long sequences teach the store what to write.
+1. **Through his eyes.** A demo has the recording pro's state every frame (place, speed, view, weapon, health, armor,
+   ammunition, pickups, score, clock) and the enemy wherever the server sent him (often more than the pro could see).
+   The converter (`sim/demo_dataset.py`) builds on the map, with his own sight and sound rules, exactly the 791 inputs
+   he would have had. What the pro could not see is used only as an answer, never as an input.
+2. **The hands, frozen, over the demo.** v0.3.x's network runs over the frames as it is: the encoder's summary and the
+   fast memory's state are what the head gets in a game. The head ticks every eighth frame and writes its store as it
+   will in play.
+3. **The answers, in hindsight**, at every tick of the head:
 
-Then a small pull toward the pros' choices that fades during the run (the owner's rule: seeding is fine, what stays
-must hold without it). Never the mouse: copying the pros' aim at full weight destroyed his (RESULTS 2026-10-04 21:12,
-kept locally). The demo sets are rebuilt first with the mended converter (B-218, B-219) and v0.4's inputs.
+   | The head's question | The answer from the demo |
+   |---|---|
+   | Where to go next | the next big item the pro took, or the holding place he went to and stayed at, within seconds |
+   | Which way | which of the map's ways he took there |
+   | Who is winning | the game's result, and the score's change over the next two minutes |
+   | Where the enemy is | the enemy's true place wherever the demo has it; elsewhere, where he was next seen |
+   | What the enemy is after | the next item the enemy took |
+
+4. **Only the head learns.** About 46,000 minutes of pro play (the rocket jump extraction's count) are about 14 million
+   ticks of the head, plenty for 7 M weights. It learns on three-minute stretches, so the store learns what is worth
+   writing: a slot that answers "where is he?" a minute later is paid for.
+5. **Checked on games it never saw** (some tournaments held out, and the two held-out maps): the next target better than
+   simple rules (the nearest item, the pros' order table); the win chance true to its word (70% said, about 70% won);
+   the enemy's place better than his last-seen inputs.
+6. **Joined to him with every link at zero**: he plays as v0.3.x. In the run a small pull keeps the head near its
+   pro-taught choices until the game's pay reaches it, and fades (the owner's rule: what stays must hold without it).
+   Never the mouse: copying the pros' aim at full weight destroyed his (2026-10-04).
+
+**What can go wrong**: pros play pros and he plays himself, so the win chance is off at first and the run corrects it;
+pros take ways he cannot (a rocket jump to the red armor): such targets are masked until he can make them, or the pull
+fades early (v14 lost Aerowalk to a rule that named what he could not reach); one point of view, so the enemy's own
+choices are seen only in part. First: the demo sets rebuilt with the mended converter (B-218, B-219) and v0.4's inputs.
+All of it offline, mostly on the processor, beside v0.3.1's training.
 
 ## Also for v0.4 (backlog)
 
