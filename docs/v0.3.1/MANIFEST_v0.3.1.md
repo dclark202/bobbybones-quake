@@ -67,6 +67,23 @@ The shares are read in a two-update dry run before the start and set right there
      read beside his: if he holds lightning where the pros hold the rail (beyond 500 units: the pros 82% of their rail
      shots, he 18%), the weapon lesson from the pros' table at the start, fading, as the owner's rule for teachers has it
      (what stays must hold without it). The owner's call before it goes in.
+  **Recommendation (2026-10-15 17:45, for the owner's review)**, from reading the simulator:
+  - **His turn speed is not the cause.** His view can turn about 100 degrees in 0.1 s (commands to 60 degrees a
+    frame, the inertia 0.75, the cap 30 a frame: 1,200 a second; zoomed 480); the pros' fastest flicks (their 90th
+    percentile) peak at 570 a second. Calibrating the inertia to the pros would make him slower, not faster: leave it.
+  - **The likely cause is his legs.** While his legs carry him (in the checks 61 to 65% of his time) the movement
+    network has his view turn and his keys, and zoom is let go; his switch is read every 10 frames (0.25 s). An enemy
+    who appears wide while he travels is shot only after his switch reads "off" (up to 0.25 s more, on top of the
+    noticing), and his legs look along the way, not at the enemy. Lightning fights are close and already on his own
+    hands; the rail's are at range, in travel. First, a measurement (an evening, after v0.3's evaluation): wide
+    sightings split by legs on or off at the moment, the time to the switch's "off", the rail in hand, the enemy gone
+    before the shot.
+  - **If the legs are the cause**, the fix belongs in the legs inside the network (B-253): his switch read on the
+    frame he notices an enemy as well as every 10 frames (still his choice, no rule), and the hands' view turn kept
+    when he chooses; `LEGS_LOOK` (his legs look at the place he believes the enemy is: built, off) tested beside it.
+  - **The weapon lesson: not yet.** His rail time fell while his checks rose; a lesson toward the rail could cost games.
+    First level 3 and the legs fix; a fading lesson from the pros' table only if the rail in hand stays under about 14%
+    after ten updates of v0.3.1, and only on the owner's word.
   4. **Where to start from** (the owner asked, 2026-10-15: how far back to go for the rail). In v0.3 the rail in hand was
      18% at update 20, 16 to 17% to update 60, 15% at 70, then fell steadily to 9% by 180, while his checks against v0.2
      rose (57.5% at 70; 59.4 to 59.8% at 190 to 210). Going back to update 60 or 70 buys about 6 points of rail time
