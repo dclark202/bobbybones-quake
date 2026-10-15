@@ -14,6 +14,7 @@ picks after v0.3's evaluation and play test.*
 | 1 | **His legs inside the network** (B-253): the movement network as a branch of the main network, then learning from games, then seeing the enemy and his memory | two networks cannot learn from each other; his legs know nothing of the enemy and never learn from games | each step level or better against the control |
 | 2 | **Rocket jumps** (B-252): the game's rocket jump measured and the simulator checked against it; the pros' and the free-for-all players' rocket jumps found in the demos; rocket jump runs with a ladder of starts and a fading nudge on the look-down and the timing; the links in each map's walking graph | he never rocket jumps; some routes, items and escapes need it | he reaches the landings in the runs, then uses them in games where they pay |
 | 3 | **Better rocket and projectile aim** (B-254) | rockets are the owner's second priority; his rockets hit less and he fires far fewer than the pros | his damage per rocket and plasma shot moves toward the pros' |
+| 4 | **The rail's limits** (B-255; the owner: "his RG handicaps are just too hard on him") | in v0.3 the rail in hand fell from 18% to 9% while lightning took the time | the limit that costs the rail most found, one eased at a time against the control; his rail time and hits toward the pros' |
 
 ## Rocket and projectile aim (item 3), the first steps
 
