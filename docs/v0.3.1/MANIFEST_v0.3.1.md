@@ -11,12 +11,12 @@ None yet.
 ## 1. What it is
 
 A fine-tuning of his mechanics after v0.3 (the owner: "a fine tuning of his weapon usage. An experiment post major
-model version"): the hands of the v0.4 candidate. Two stages, each with its own go:
+model version"): the hands of the v0.4 candidate.
 
-| Stage | When | What changes |
-|---|---|---|
-| **v0.3.1a** | tonight, about 22:00 to 22:30, to noon Friday or longer | aim level 3, the rail's surprise delay calibrated, rocket drills; rocket jump runs only if their two checks pass by 22:00 |
-| **v0.3.1b** | after one to two days of building | the learning step rebuilt (B-237); his legs inside the network (B-253), three stages of ten updates each |
+**Build everything first, then resume training** (the owner, 2026-10-15 17:25: "for v0.3.1 we'll build everything first,
+then resume training. No time set for starting yet"). One start, from v0.3's 18:00 stop point, with every part of
+section 6 built and each proven alone (ten updates and a check against the control) before it joins. **No start time
+is set**; the owner names it.
 
 ## 2. The start and the control
 
@@ -57,18 +57,18 @@ v0.4. No new single-behaviour reward.
 
 ## 6. What is built, and what still needs building
 
-| # | Part | State | Work left | Needed for |
+| # | Part | State | Work left | Order |
 |---|---|---|---|---|
-| 1 | Aim level 3 in training | **built** (a setting) | the run's `.cmd`; the checks' settings (diag5 and the night watcher still carry `AIM_LEVEL=1.5`) set to 3 | v0.3.1a |
-| 2 | Rocket drills | **built** (`--drill-p`, `--drill-weapons rl`) | check that a drill round is on the real maps and not in a box; that it does not break the whole-game clock; the share in a dry run | v0.3.1a |
-| 3 | The rail's surprise delay | **measured for the pros**; not set | his curve at level 3 from `tools/bobby_yardsticks.py` (scheduled after the rail test), a value set for the rail or by where he held his crosshair, behind a switch, proven to change nothing when off | v0.3.1a, if found by 22:00 |
-| 4 | The rail test (which limit costs the rail) | **running**: 3 of 7 arms done, a fourth half done | flinch, the noticing delay at 100 ms, all of level 3; the summary's parser fixed | the choice in 3 |
-| 5 | Rocket jump check: the game against the simulator | **not built** | a measuring plugin beside `plugins/weaponlab.py` (about 200 scripted jumps on a private server), the same jumps in the simulator, compared (rise and distance within 5%, damage exact); about a day | rocket jump runs |
-| 6 | Rocket jump runs | **not built**; the pros' rocket jumps are found (`docs/pro_rocket_jumps.json`) | the runs' code in a staging copy, the ladder of starts, the fading nudge, proven to change nothing when off; the links drawn for the owner's keep or drop | v0.3.1a only if 5 passes by 22:00; otherwise v0.3.1b |
-| 7 | The learning step rebuilt (B-237) | **not built** | the library's GRU over whole sequences, proven to give the same loss and gradients on a saved update; about a day; every run after it about twice as fast | v0.3.1b, first |
-| 8 | His legs inside the network (B-253) | **not built** | the movement network as a branch of his, in the trainer, the checks' tools, the export and both plugins; stage (a) frozen and proven to play exactly as today, (b) learning at a quarter of the rate, (c) links from his memory; one to two days | v0.3.1b |
-| 9 | Rocket and projectile aim (B-254) | **measured** (his first rocket as soon as the pros', the first hit far later, 2.1 rockets a minute against 10.8) | his lead inputs checked against what a player aims at (the floor under the enemy's predicted place); the drills read by whole games | beside the run |
-| 10 | The checks' tools at level 3, round length fixed | **not done** | `round_secs` 600 in `bobby_yardsticks.py`, `opening_check.py`, `memory_reach.py` | the evaluation tonight |
+| 1 | Aim level 3 in training | **built** (a setting) | the run's `.cmd`; the checks' settings (diag5 and the night watcher still carry `AIM_LEVEL=1.5`) set to 3 | any time |
+| 2 | Rocket drills | **built** (`--drill-p`, `--drill-weapons rl`) | check that a drill round is on the real maps and not in a box; that it does not break the whole-game clock; the share in a dry run | any time |
+| 3 | The rail's surprise delay | **measured for the pros**; not set | his curve at level 3 from `tools/bobby_yardsticks.py` (scheduled after the rail test), a value set for the rail or by where he held his crosshair, behind a switch, proven to change nothing when off | after 4 |
+| 4 | The rail test (which limit costs the rail) | **running**: 3 of 7 arms done, a fourth half done | flinch, the noticing delay at 100 ms, all of level 3; the summary's parser fixed | now |
+| 5 | Rocket jump check: the game against the simulator | **not built** | a measuring plugin beside `plugins/weaponlab.py` (about 200 scripted jumps on a private server), the same jumps in the simulator, compared (rise and distance within 5%, damage exact); about a day | before 6 |
+| 6 | Rocket jump runs | **not built**; the pros' rocket jumps are found (`docs/pro_rocket_jumps.json`) | the runs' code in a staging copy, the ladder of starts, the fading nudge, proven to change nothing when off; the links drawn for the owner's keep or drop; in only if 5 passes | after 5 and 8 (the runs train the legs) |
+| 7 | The learning step rebuilt (B-237) | **not built** | the library's GRU over whole sequences, proven to give the same loss and gradients on a saved update; about a day; every run after it about twice as fast | first |
+| 8 | His legs inside the network (B-253) | **not built** | the movement network as a branch of his, in the trainer, the checks' tools, the export and both plugins; stage (a) frozen and proven to play exactly as today, (b) learning at a quarter of the rate, (c) links from his memory; one to two days | after 7 |
+| 9 | Rocket and projectile aim (B-254) | **measured** (his first rocket as soon as the pros', the first hit far later, 2.1 rockets a minute against 10.8) | his lead inputs checked against what a player aims at (the floor under the enemy's predicted place); the drills read by whole games | before the start |
+| 10 | The checks' tools at level 3, round length fixed | **not done** | `round_secs` 600 in `bobby_yardsticks.py`, `opening_check.py`, `memory_reach.py` | tonight, for v0.3's evaluation |
 
 ## 7. How it is judged
 
@@ -84,13 +84,12 @@ v0.4. No new single-behaviour reward.
 ## 8. When it stops
 
 - **By itself**: under 47% at update 10, two checks under 45%, or three checks falling.
-- At its time limit (noon Friday unless the owner says longer).
+- At its time limit (set by the owner with the start).
 - A line an hour at night, a mid-run report at 07:00, a report at the end.
 
-## 9. Before the start tonight
+## 9. Before the start (no time set)
 
-1. v0.3 ends; its evaluation; the owner's play test.
-2. The rail test and the yardstick at level 3 read; the surprise value for the rail chosen, or left as it is.
-3. Rocket jump check (part 5) by 22:00, or the runs wait for v0.3.1b.
-4. The `.cmd` written; two updates of a dry run read for the sessions' shares and the step a part.
-5. The owner's go.
+1. v0.3 ends at 18:00; its evaluation; the owner's play test.
+2. Section 6 built in its order, each part proven alone: ten updates and a check against the control.
+3. The `.cmd` written; two updates of a dry run read for the sessions' shares and the step a part.
+4. The owner's go and the start time.
