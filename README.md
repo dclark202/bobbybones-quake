@@ -3,13 +3,12 @@ Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.3
 
 Join the discord server https://discord.gg/dH2mfzbMa
 
-The server runs free-for-all on the game's duel maps with each map's duel items and no powerups; six play at a time,
-Bobbys included, the rest watch. Chat commands: `!bots <0-4>` sets how many Bobbys play, `!map <name>` changes the map
-(`!maps` lists them: Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged, Campgrounds, Hektik,
-Toxicity, Cure), `!mode duel` makes it one against one, F3 readies you up for a timed ten-minute game, `!note <text>`
-leaves a comment for the log. A leaderboard local to the server counts every frag between a person and Bobby, warmup
-included: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours. All commands:
-[docs/guides/COMMANDS.md](docs/guides/COMMANDS.md).
+The server runs FFA and duel. Chat commands
+- `!bots <0-4>` sets how many bots
+- `!map <name>` changes the map, `!maps` lists them
+- `!mode <ffa|duel>` to change the mode
+- `!note <text>` leaves a comment for the log.
+- The server also runs a dedicated elo ranking: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours.
 
 ## What it is
 
