@@ -2,7 +2,7 @@
 
 *Written 2026-10-15 13:20 on the owner's word: "rocket jumping, improved rocket aim, merging movement network ... I would
 like to train tonight". A fine-tuning of his mechanics after v0.3 ("it's a fine tuning of his weapon usage. An experiment
-post major model version"), not a full new model. The plans in full: [PROPOSAL_v0.3.1.md](PROPOSAL_v0.3.1.md).
+post major model version"), not a full new model. The plans in full: [PROPOSAL_v0.3.1.md](PROPOSAL_v0.3.1.md); the manifest with what is still to build: [MANIFEST_v0.3.1.md](MANIFEST_v0.3.1.md).
 Status: **a draft, to be reviewed with the owner after v0.3 ends** (13:30: "merging the movement network needs to be part of it. Let's just review this once the training v0.3 is done. We'll decide how much/what to build for v0.3.1"); nothing is built before. Folder: `duel_gru_v0_3_1`.*
 
 ## What can be ready tonight, and what cannot
