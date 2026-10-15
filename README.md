@@ -1,21 +1,18 @@
-## Play against him in Quake Live
-Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal). 
-
-Join the discord server https://discord.gg/dH2mfzbMa
-
-The server runs free-for-all on the game's duel maps with each map's duel items and no powerups; six play at a time,
-Bobbys included, the rest watch. Chat commands: `!bots <0-4>` sets how many Bobbys play, `!map <name>` changes the map
-(`!maps` lists them: Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged, Campgrounds, Hektik,
-Toxicity, Cure), `!mode duel` makes it one against one, F3 readies you up for a timed ten-minute game, `!note <text>`
-leaves a comment for the log. A leaderboard local to the server counts every frag between a person and Bobby, warmup
-included: `!bobby` shows his rating and rank, `!top` the board, `!elo` yours. All commands:
-[docs/guides/COMMANDS.md](docs/guides/COMMANDS.md).
-
 ## What it is
 
 BobbyBones is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
 games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
 on a real Quake Live server through a server plugin. Nothing about aiming, moving or fighting is scripted.
+
+## Play against him in Quake Live
+Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal). Chat commands
+- `!bots <0-4>` sets how many bots
+- `!map <name>` changes the map, `!maps` lists them
+- `!mode <ffa|duel>` to change the mode
+- `!note <text>` leaves a comment for the log.
+- The server also runs a dedicated elo ranking: `!bobby` shows his rating and rank, `!top` the whole board, `!elo` your rank
+
+We also have a [discord server](https://discord.gg/dH2mfzbMa)
 
 ## Architecture
 
@@ -63,9 +60,6 @@ python tools/duel_eval.py --run my_run --opp nightmare --map bloodrun --games 32
 docker build -t qlbot .                                    # game server image
 bash tools/duel_server.sh my_run bloodrun                  # private server on UDP 27970
 ```
-
-Chat commands: [docs/guides/COMMANDS.md](docs/guides/COMMANDS.md). Hosting: [docs/guides/HOSTING.md](docs/guides/HOSTING.md).
-Every run and result, including what did not work: [docs/RESULTS.md](docs/RESULTS.md).
 
 ## License
 
