@@ -20,7 +20,7 @@ until the owner names it. What is known of Pluto: [../v0.3/PLUTO.md](../v0.3/PLU
 | 8 | **Damage taken at 0.2 of damage dealt and no flat death cost** (the owner's thought tonight) | 2, 4 | none | its own test arm; my recommendation is 6 instead of a flat removal (section 7) |
 
 Not in this package, said plainly: nothing here teaches strafe jumping on his own feet (goal 1 is movement; his legs
-stay as they are; the candidate is the judge of pro-like travelling, [../v0.2/V16_TRAINING.md](../v0.2/V16_TRAINING.md)
+stay as they are; the candidate is the judge of pro-like travelling, ../v0.2/V16_TRAINING.md
 proposal 5, which is its own proposal). Rockets in hand are watched in v0.3 with the styles gone; if they fall, that is
 a pay question for section 6, not an architecture one.
 

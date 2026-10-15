@@ -1,6 +1,6 @@
 # The docs: what is where, and how it is kept
 
-Put in order on 2026-10-10 (owner: "take a pass at cleaning up the docs ... create a better organization routine").
+Put in order on 2026-10-10 and cleaned up on 2026-10-15: everything from before v0.1 (the first approach, the numbered models v1 to v15b, their log and old plans) is kept locally, out of the repo.
 
 ## What is where
 
@@ -10,10 +10,10 @@ Put in order on 2026-10-10 (owner: "take a pass at cleaning up the docs ... crea
 | [BACKLOG.md](BACKLOG.md) | The open work, each item with a number (`B-nn`), grouped by the owner's priority list | An item is added, started or closed |
 | [RESULTS.md](RESULTS.md) | The index of the results log: one line an entry, by day | Every entry |
 | [results/](results/) | The results log itself, one file a day, newest entry first: what was tried and measured, what did **not** work included | Every run, live test, measurement or decision |
-| `v<model>/` ([v0.2.1/](v0.2.1/), [v0.2/](v0.2/), [v0.1/](v0.1/)) and [legacy/](legacy/) | **A folder a model** (owner, 2026-10-13): everything written for that model, its run documents and its design proposals; everything before v0.1 (v12 to v15b) is in `legacy/`. A run's own documents: `RUN_v<n>.md` (**the run on one page, the document the owner reads**: status, what it is for, what is on, how he trains, how it is judged, what happened, what comes next; plain words, no flags; kept current during the run; owner, 2026-10-13: the manifests had become too long to follow), `MANIFEST_v<n>.md` (the settings and pretests behind it, for reference), `MIDRUN_v<n>.md` (a report while it trains), `REPORT_v<n>.md` (the full report of its network) | Before, during and after a run |
+| `v<model>/` ([v0.4/](v0.4/), [v0.3/](v0.3/), [v0.2.2/](v0.2.2/), [v0.2.1/](v0.2.1/), [v0.2/](v0.2/)) | **A folder a model** (owner, 2026-10-13): its run sheet (`RUN_v<n>.md`), manifest, mid-run report, full report and design proposals | A run is planned, started, reported |
 | [guides/](guides/) | How to use and read things: the play-test routine and the test suite (PLAYTEST), the server's chat commands (COMMANDS), renting and starting a server (HOSTING), the community page (COMMUNITY), the formats of recorded data (LOGS), the map atlas (ATLAS) | The thing they describe changes |
 | [design/](design/) | What belongs to no one model (QLSTATS); `jumps/`: the pros' jumps a walker cannot make, a picture and a table per map (`tools/pro_gaps.py`, `tools/draw_gaps.py`) | A proposal is written or decided |
-| [archive/](archive/) | What is no longer in force, kept whole: closed backlog items, the plan as it stood | Something is closed or replaced |
+| [archive/](archive/) | The closed backlog items | An item is closed |
 | `INPUTS*.csv`, `*.json`, [MAPS.md](MAPS.md) | Data that tools write and read by path: the network's inputs (today's and those of older networks), the pros' tables, measured values, the list of maps | A tool writes them. They stay in `docs/` until the tools' paths are moved with them (B-203) |
 
 The public page is the [README](../README.md) of the repository; `CLAUDE.md` there holds the project notes for the
@@ -37,11 +37,11 @@ assistant.
    number is used twice, the plan's "Now" names items that exist.
 6. The public README and `CLAUDE.md` when what they say has changed.
 
-**Names.** A run's documents carry its version (`MANIFEST_v14.md`); a day's log is `results/<date>.md`; a proposal
-is named for what it proposes. No dates in file names except in `results/` and `archive/`.
+**Names.** A run's documents carry its version (`MANIFEST_v0.2.md`); a day's log is `results/<date>.md`; a proposal
+is named for what it proposes. No dates in file names except in `results/`.
 
-**When the plan gets long**: what is over (a run that ended, a decision that was replaced) is cut out of
-`PLAN.md`; the plan as it stood then is kept whole in `archive/PLAN_<date>.md`.
+**When the plan gets long**: what is over (a run that ended, a decision that was replaced) is cut out of `PLAN.md`; the
+log keeps the history.
 
 **What does not belong here**: personal data (names of visitors, addresses, Steam IDs), raw data (it lives in the
 git-ignored `data/` folder; an entry gives the path), and anything about the public server's address or accounts.

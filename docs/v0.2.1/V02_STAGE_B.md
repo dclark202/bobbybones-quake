@@ -5,7 +5,7 @@ and you have downtime." Stage A is training as v0.2 ([../v0.2/MANIFEST_v0.2.md](
 says what stage B is in the simulator and the trainer, part by part, so that each part can be built and checked on its
 own and merged after the run. Nothing here changes the running simulator: every part is behind a switch that is off by
 default, and with all of them off fixed runs must be bit for bit what they are today. His answers that it rests on are
-in [V16_APPROACH.md](../v0.2/V16_APPROACH.md) ("The owner's answers").
+in V16_APPROACH.md ("The owner's answers").
 
 ## Part 1. Things he is asked to foretell (not paid)
 
