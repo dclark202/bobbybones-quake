@@ -3,7 +3,7 @@
 *Written 2026-10-15 13:20 on the owner's word: "rocket jumping, improved rocket aim, merging movement network ... I would
 like to train tonight". A fine-tuning of his mechanics after v0.3 ("it's a fine tuning of his weapon usage. An experiment
 post major model version"), not a full new model. The plans in full: [PROPOSAL_v0.3.1.md](PROPOSAL_v0.3.1.md).
-Status: **not started; the owner's go after his play test.** Folder: `duel_gru_v0_3_1`.*
+Status: **a draft, to be reviewed with the owner after v0.3 ends** (13:30: "merging the movement network needs to be part of it. Let's just review this once the training v0.3 is done. We'll decide how much/what to build for v0.3.1"); nothing is built before. Folder: `duel_gru_v0_3_1`.*
 
 ## What can be ready tonight, and what cannot
 
@@ -11,7 +11,7 @@ Status: **not started; the owner's go after his play test.** Folder: `duel_gru_v
 |---|---|---|
 | **Rocket drills** | **yes** | the trainer's one-weapon round exists (`--drill-p`, `--drill-weapons rl`): a setting, no new code |
 | **Rocket jump runs** | **only if two checks pass by 22:00** | the simulator's rocket jump must first match the game's (a measuring plugin, built this afternoon, run after the play test), and the runs are new code (built this afternoon in a staging copy, applied after 18:00) |
-| **His legs inside the network** | **no: the next start** | the network, the trainer's loss, the checks' tools, the export and both plugins all change, and it must be proven to play exactly as before: one to two days |
+| **His legs inside the network** | **part of v0.3.1** (the owner); not by tonight | the network, the trainer's loss, the checks' tools, the export and both plugins all change, and it must be proven to play exactly as before: one to two days |
 
 ## What he trains on (tonight)
 
