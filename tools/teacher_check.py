@@ -19,6 +19,7 @@ import sys
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data")      # (QLBOT_ROOT: the repo whose data/ to read)
 sys.path.insert(0, os.path.join(ROOT, "sim"))
 
 
@@ -27,13 +28,13 @@ def main():
     ap.add_argument("--map", default="bloodrun")
     ap.add_argument("--goal", default="", help="one item (MH, RA, RL, RG, LG, YA, YA2): print where its tries fail")
     ap.add_argument("--env", default="duel_env_ffa")
-    ap.add_argument("--nav-dir", default=os.path.join(ROOT, "data", "maps"))
+    ap.add_argument("--nav-dir", default=os.path.join(DATA, "maps"))
     ap.add_argument("--tries", type=int, default=4, help="rounds of 32 tries each")
     ap.add_argument("--secs", type=float, default=30.0)
     a = ap.parse_args()
     E = importlib.import_module(a.env)
     navp = os.path.join(a.nav_dir, "nav_{}_sim.json".format(a.map))
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n_matches=16, seed=5, loadout="all", nav=navp)
+    env = E.DuelEnv(os.path.join(DATA, "maps", a.map + ".bsp"), n_matches=16, seed=5, loadout="all", nav=navp)
     kind = {(e[0], e[1]): e[3] for e in json.load(open(navp))["edges"]}
     env.item_run_p, env.collect_fight_p = 1.0, 0.0
     env.near_item_p = env.stack_p = env.close_p = 0.0

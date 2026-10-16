@@ -22,7 +22,7 @@ import time
 import minqlx
 
 D = "/tmp/practice"
-MAP = "testlab"
+MAP = os.environ.get("PHYSLAB_MAP", "testlab").lower()   # testlab (the grid below) or bloodrun (from the spawn points)
 WEAPON = 2
 SETTLE = 40                 # frames before a case: placed, still
 PLACE_AT = (-40, -12)       # frames of the settle at which he is put on his start place again
@@ -44,7 +44,26 @@ CLIMB = (64.0, 36256.0, 24.125)       # the climb (eighteen ledges of 40), along
 AIMC = (768.0, 512.0, 24.125)         # the middle of the aim box: circle strafing on the floor
 
 
+BR_SPAWNS = [((-640, -848, 408), 90), ((864, -800, 88), 245), ((352, 480, 440), 0), ((1120, 224, 88), 160),
+             ((496, -720, 440), 0), ((96, -40, 24), 225), ((96, -408, 24), 135), ((1232, -1312, 280), 180),
+             ((240, -1136, 272), 315), ((-192, -848, 408), 135)]
+
+
+def grid_bloodrun():
+    """Blood Run: from each spawn point, facing its way: hops with forward held, a strafe-jump chain, a launch"""
+    out = []
+    for k, (pos, ang) in enumerate(BR_SPAWNS):
+        pl = (float(pos[0]), float(pos[1]), float(pos[2]))
+        out.append(dict(name="br_hops_s{}".format(k), place=pl, base=float(ang), v=[0.0, 0.0, 0.0], frames=120, keys=(127, 0, 127)))
+        out.append(dict(name="br_hop_s{}".format(k), place=pl, base=float(ang), v=[320.0, 0.0, 0.0], frames=120,
+                        keys=(127, 127, 127), phi="opt", flip=True))
+        out.append(dict(name="br_air_s{}".format(k), place=pl, base=float(ang), v=[320.0, 0.0, 300.0], frames=46, keys=(127, 0, 0)))
+    return out
+
+
 def grid():
+    if MAP == "bloodrun":
+        return grid_bloodrun()
     out = []
 
     def add(name, place, v=(0.0, 0.0, 0.0), frames=46, **ctrl):
@@ -259,7 +278,7 @@ class physlab(minqlx.Plugin):
                 yaw0 = -phi - wish_off(case["keys"])
             elif "rate" in case:
                 yaw0 = -case["a0"] - wish_off(case["keys"])
-            yaw0 += case.get("yaw_off", 0.0)
+            yaw0 += case.get("yaw_off", 0.0) + case.get("base", 0.0)
             # the start velocity is along +x (yaw 0), the view at yaw0
             self.cur = c = dict(case=case, rep=rep, frame=-SETTLE, rows=[], ins=[], yaw0=yaw0, yaw=yaw0, prev_vz=None,
                                 side=1, hops=0, land_f=None, t_hop=0, yaw_base=yaw0)
@@ -279,9 +298,11 @@ class physlab(minqlx.Plugin):
         if f == 0:                                           # the start: his resting place, the case's velocity
             pos = [float(v) for v in st.position]
             c["start"] = pos
-            c["start_vel"] = [float(v) for v in case["v"]]
+            cb_, sb_ = math.cos(math.radians(case.get("base", 0.0))), math.sin(math.radians(case.get("base", 0.0)))
+            vx_, vy_, vz_ = case["v"]
+            c["start_vel"] = [vx_ * cb_ - vy_ * sb_, vx_ * sb_ + vy_ * cb_, float(vz_)]
             c["rest_vel"] = [round(float(v), 3) for v in st.velocity]
-            b.velocity(x=float(case["v"][0]), y=float(case["v"][1]), z=float(case["v"][2]))
+            b.velocity(x=c["start_vel"][0], y=c["start_vel"][1], z=c["start_vel"][2])
             st = minqlx.player_state(b.id)
             c["prev_vz"] = 0.0
         uc = minqlx.ran_usercmd(b.id)

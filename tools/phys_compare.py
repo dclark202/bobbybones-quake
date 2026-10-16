@@ -16,6 +16,9 @@ FLOOR = dict(speed=2.0, gain=1.0, dist=4.0, rise=2.0, frame=1.0, hops=0.0)
 
 
 def group(name):
+    if name.startswith("br_"):
+        return "Blood Run: " + {"br_hops": "hops with forward held", "br_hop_": "strafe-jump chains",
+                                "br_air_": "a launch, forward held"}.get(name[:7], "other")
     for p, g in (("air_f_v", "air: forward held"), ("air_none", "air: no key"), ("air_back", "air: back"),
                  ("air_fr", "air: forward + strafe at an angle"), ("air_r_", "air: strafe alone at an angle"),
                  ("air_rturn", "air: strafe + turning"), ("air_frturn", "air: forward + strafe + turning"),
@@ -58,6 +61,7 @@ def landings(rows):
 def measures(name, rows):
     """rows: [k, x, y, z, vx, vy, vz, ...] from k = 0 (the start) on"""
     m = {}
+    name = name[3:] if name.startswith("br_") else name       # Blood Run's cases: the measures of the test map's kind
     r0, rN = rows[0], rows[-1]
     m["speed_end"] = ("speed", hsp(rN))
     m["dist_end"] = ("dist", math.hypot(rN[1] - r0[1], rN[2] - r0[2]))
