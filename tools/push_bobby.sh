@@ -3,9 +3,10 @@
 #   PUBLIC_HOST=root@<address>
 #   bash tools/push_bobby.sh <run> [simulator module=duel_env_ffa]          the network only: the running server picks
 #                                                                             it up by itself between rooms
-#   CODE=1 bash tools/push_bobby.sh <run> [module] [map=bloodrun]           also the newest code and maps (git pull, image
-#                                                                             build, restart in free-for-all with FFA=<n> Bobbys, 2 by default
-#                                                                             (owner, 2026-10-09: two; 2026-10-10: Blood Run, it was Aerowalk);
+#   CODE=1 bash tools/push_bobby.sh <run> [module] [map=campgrounds]        also the newest code and maps (git pull, image
+#                                                                             build, restart in 1v1 by default (owner, 2026-10-15: duel on every
+#                                                                             map, Campgrounds; it was free-for-all with two Bobbys on Blood Run),
+#                                                                             FFA=<n> for free-for-all with n Bobbys;
 #                                                                             build, restart): needed whenever the simulator,
 #                                                                             the plugin or a map changed since the last push
 #   QLSTATS=1 CODE=1 bash tools/push_bobby.sh ...                           the restart also switches the leaderboard's QLStats
@@ -16,7 +17,7 @@
 #       bash tools/push_bobby.sh duel_gru_v15c duel_env_ffa_v15 bloodrun
 set -e
 cd "$(dirname "$0")/.."
-RUN="${1:?run name}"; ENVMOD="${2:-duel_env_ffa}"; MAP="${3:-bloodrun}"
+RUN="${1:?run name}"; ENVMOD="${2:-duel_env_ffa}"; MAP="${3:-campgrounds}"
 HOST="$(grep '^PUBLIC_HOST=' data/owner.env 2>/dev/null | cut -d= -f2)"
 [ -n "$HOST" ] || { echo "add PUBLIC_HOST=root@<address> to data/owner.env"; exit 1; }
 mkdir -p data/public
@@ -42,6 +43,6 @@ if [ -n "$CODE" ]; then
     for m_ in "$MAP" bloodrun aerowalk lostworld sinister furiousheights battleforged campgrounds hektik toxicity cure; do
         scp -o BatchMode=yes -q data/maps/nav_${m_}_sim.json data/maps/cells_${m_}.npy data/maps/nav_${m_}_sim.json.ways_*.npz "$HOST":bobbybones-quake/data/maps/ 2>/dev/null || true
     done
-    ssh -o BatchMode=yes "$HOST" "cd bobbybones-quake && PUBLIC=1 FFA=${FFA:-2} RESTART=1 QLSTATS=${QLSTATS:-} HOSTNAME_QL=\"$NAME_QL\" bash tools/duel_server.sh - $MAP | tail -1"
+    ssh -o BatchMode=yes "$HOST" "cd bobbybones-quake && PUBLIC=1 FFA=${FFA:-} RESTART=1 QLSTATS=${QLSTATS:-} HOSTNAME_QL=\"$NAME_QL\" bash tools/duel_server.sh - $MAP | tail -1"   # (FFA empty: 1v1)
 fi
 ssh -o BatchMode=yes "$HOST" 'sleep 20; tail -1 bobbybones-quake/data/duellive/duelbot.log'

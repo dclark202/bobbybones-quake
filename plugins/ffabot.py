@@ -62,7 +62,7 @@ class ffabot(duelbot):
         self.ready_ids = set()                               # people who pressed F3 in this warmup
         self.go_t = 0.0
         self.n_bots = max(0, min(MAX_BOTS, int(os.environ.get("BOBBYS") or 2)))   # 0 allowed: people only (owner, 2026-10-06)
-        self.want_map = os.environ.get("LAB_MAP", "bloodrun").lower()
+        self.want_map = os.environ.get("LAB_MAP", "campgrounds").lower()
         self.boot_t = time.time()                            # when this plugin was loaded (see frame: the start map)
         self.lab, self.arena, self.drill, self.room, self.queue = None, None, None, None, []
         self.no_sg = self.no_walk = False

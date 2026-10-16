@@ -21,6 +21,7 @@ import importlib
 import json
 import math
 import os
+import re
 import sys
 import time
 import zipfile
@@ -192,7 +193,7 @@ class duelbot(minqlx.Plugin):
         self.real_game = False                               # a game the person started with F3 (the warmup abort below leaves it alone)
         self.ready_ids = set()
         self.next_check = 0.0
-        self.want_map = os.environ.get("LAB_MAP", "bloodrun").lower()
+        self.want_map = os.environ.get("LAB_MAP", "campgrounds").lower()
         self.opp_bot = os.environ.get("DUEL_OPP", "") == "bot"
         self.room_test = os.environ.get("DUEL_ROOMTEST", "") == "1"
         self.alive = {}                                      # client id -> was alive last frame
@@ -363,9 +364,23 @@ class duelbot(minqlx.Plugin):
                     player.tell(line)
             player.tell("See more about the project: ^5github.com/dclark202/bobbybones-quake")
             player.tell(self.DISCORD)
+            player.tell("Current bot version: ^3{}".format(self.bot_version()))
 
-    # owner, 2026-10-12: the project's Discord server, in the welcome of both modes (ffabot inherits on_player_loaded)
-    DISCORD = "Talk to us and follow his progress: ^5discord.gg/dH2mfzbMa"
+    # owner, 2026-10-12: the project's Discord server, in the welcome of both modes (ffabot inherits on_player_loaded);
+    # the wording and the version line: owner, 2026-10-15
+    DISCORD = "Join our discord: ^5discord.gg/dH2mfzbMa"
+
+    def bot_version(self):
+        """the network's version name (docs: v0.1, v0.2, v0.3, ...): BOBBY_VERSION if the server sets it, else from the run's
+        name (duel_gru_v0_3 -> v0.3, duel_gru_v0_2_1 -> v0.2.1; v0.1 is the run duel_gru_v15c)"""
+        v = os.environ.get("BOBBY_VERSION", "").strip()
+        if v:
+            return v
+        run = str(self.P["run"]) if getattr(self, "P", None) is not None and "run" in self.P else ""
+        m = re.match(r"duel_gru_v(\d+(?:_\d+)+)$", run)
+        if m:
+            return "v" + m.group(1).replace("_", ".")
+        return "v0.1" if run == "duel_gru_v15c" else (run or "unknown")
 
     def on_vote_called(self, player, vote, args):
         """no votes called by players: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS).

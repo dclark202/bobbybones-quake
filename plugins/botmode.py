@@ -1,6 +1,6 @@
 """Switch a BobbyBones server between 1v1 (plugins/duelbot.py, the duel factory) and free-for-all (plugins/ffabot.py,
-the ffa factory) while it runs: !mode ffa|duel [bots], and !map <name>, which picks the map's own mode (the duel maps
-come up in free-for-all, !mode duel makes them 1v1; testlab is always 1v1, the duel factory keeps two players active).
+the ffa factory) while it runs: !mode ffa|duel [bots], and !map <name>, which brings the map up in 1v1 (owner,
+2026-10-15: duel by default on every map; !mode ffa makes it free-for-all; the duel factory keeps two players active).
 
 Load first: QLX_PLUGINS="botctl, botmode, duelbot" (or ffabot). The switch unloads the one plugin, kicks the bots,
 changes the map with the other factory and loads the other plugin, which adds its own bots.
@@ -19,7 +19,7 @@ except Exception:                                           # noqa: BLE001 - loa
     _pu = importlib.import_module("powerups")
 
 FFA_MAPS = ("bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")
-DUEL_MAPS = ("testlab",)      # the test map is the only 1v1 one (reflex and movement tests); every other map defaults to free-for-all. duelbot.MAPS has the whole list
+DUEL_MAPS = ("testlab",)      # the test map (reflex and movement tests); since 2026-10-15 (owner) !map brings every map up in 1v1, !mode ffa switches. duelbot.MAPS has the whole list
 PLUGIN = {"ffa": "ffabot", "duel": "duelbot"}
 
 
@@ -81,7 +81,7 @@ class botmode(minqlx.Plugin):
             if not msg[2].isdigit() or not 0 <= int(msg[2]) <= 4:
                 return minqlx.RET_USAGE
             bots = int(msg[2])
-        mapname = (minqlx.get_cvar("mapname") or "bloodrun").lower()
+        mapname = (minqlx.get_cvar("mapname") or "campgrounds").lower()
         if mode == self.current() and bots is None:
             player.tell("The server is already in {} mode.".format("free-for-all" if mode == "ffa" else "1v1"))
             return minqlx.RET_STOP_ALL
@@ -94,7 +94,7 @@ class botmode(minqlx.Plugin):
         if len(msg) < 2 or msg[1].lower() not in FFA_MAPS + DUEL_MAPS:
             return minqlx.RET_USAGE
         mapname = msg[1].lower()
-        mode = "ffa" if mapname in FFA_MAPS else "duel"
+        mode = "duel"                                        # every map comes up in 1v1 (owner, 2026-10-15); !mode ffa for free-for-all
         err = self.switch(mode, mapname, None, player.clean_name)
         if err:
             player.tell("^3" + err)
