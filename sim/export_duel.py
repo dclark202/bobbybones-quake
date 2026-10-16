@@ -73,6 +73,11 @@ if ck.get("slow") is not None:
     slow = {"slow": np.array(json.dumps(ck["slow"]))}
     slow.update({k: v for k, v in sd.items() if k.startswith("slow.")})
     assert "slow.door.weight" in slow, "the checkpoint names a slow memory and has no weights for it"
+head = {}                                                    # (v0.4) the head (sim/head.py): its layout as text and its weights under "head.<name>"
+if ck.get("head") is not None:                               # (plugins/netpass.py gives both to head.np_tick; its values, win bands and
+    head = {"head": np.array(json.dumps(ck["head"]))}        # guesses are the trainer's alone and stay behind, as the aux layers)
+    head.update({k: v for k, v in sd.items() if k.startswith("head.") and not k.startswith(("head.v_short.", "head.v_long.", "head.win.", "head.aux."))})
+    assert "head.plan_in.weight" in head and "head.target.weight" in head, "the checkpoint names a head and has no weights for it"
 np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"], b1=sd["enc.2.bias"],
          wih=sd["gru.weight_ih"], whh=sd["gru.weight_hh"], bih=sd["gru.bias_ih"], bhh=sd["gru.bias_hh"],
          wp=sd["pi.weight"], bp=sd["pi.bias"], obs_mean=ck["obs_mean"], obs_var=ck["obs_var"],
@@ -80,7 +85,8 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
          env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
-         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **legs, **legs_in, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **legs, **legs_in, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
-      "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "")
+      "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",
+      "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "")

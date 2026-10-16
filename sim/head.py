@@ -478,13 +478,136 @@ def params_np(sd, prefix="head."):
     return out
 
 
+def _np_off(lay):
+    """the numpy state's columns: name -> (start, end)"""
+    S, P, E = int(lay["size"]), int(lay["plan"]), int(lay["enc"])
+    NS, C = int(lay["slots"]), int(lay["slot"])
+    o, out = 0, {}
+    for name, w in (("s", S), ("plan", P), ("acc", E), ("n", 1), ("f", 1), ("store", NS * (C + 1)), ("ticks", 1)):
+        out[name] = (o, o + w)
+        o += w
+    return out
+
+
 def np_state_width(lay):
-    """the numpy state's width per seat: [s (size) | plan | acc e (enc) | n (frames in acc) | frames (since the clear) |
-    store: slots x (slot + 1: its age + 1, 0 empty) | write count (the head's ticks since the clear)]"""
-    return (int(lay["size"]) + int(lay["plan"]) + int(lay["enc"]) + 2 + int(lay["slots"]) * (int(lay["slot"]) + 1) + 1)
+    """the numpy state's width per seat: [s (size) | plan | acc e (enc) | n (frames in acc) | frames (the tick's clock: kept
+    by np_clear, as the trainer's global frame count) | store: slots x (slot + 1: its age + 1, 0 empty) | the head's ticks
+    since the clear (a slot is written when it is a multiple of write_every, as tick())]"""
+    return _np_off(lay)["ticks"][1]
 
 
-def np_tick(W, lay, e, h_after, hf, events):
-    """one frame in numpy -> (plan, target_add, way_add, hf2): lane serve writes it (BUILD_v0.4.md section 5), to match
-    live() (tick(), read(), age_features_np) to 1e-5"""
-    raise NotImplementedError("np_tick: lane serve (BUILD_v0.4.md section 5)")
+def _np_sig(x):
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+def np_read(W, lay, s, slots, age1):
+    """read() in numpy: s [B, size] (the slow state of the tick before), slots [B, S, slot], age1 [B, S] (age + 1; 0: empty)
+    -> [B, read] (zeros where the store is empty). The same folding of the key and value layers into the query and the
+    weighted sum as read()."""
+    B, S, C = slots.shape
+    Hh, R = int(lay["read_heads"]), int(lay["read"])
+    dh = R // Hh
+    valid = age1 > 0
+    anyv = valid.any(1)
+    af = age_features_np(np.maximum(age1 - 1.0, 0.0), lay)               # [B, S, 8]
+    q = (s @ W["rq.weight"].T + W["rq.bias"]).reshape(B, Hh, dh)
+    Wk = W["rk.weight"].reshape(Hh, dh, C + N_AGE)
+    qk = np.einsum("bhd,hdc->bhc", q, Wk)
+    sc = (np.einsum("bhc,bsc->bhs", qk[..., :C], slots) + np.einsum("bhc,bsc->bhs", qk[..., C:], af)
+          + (q * W["rk.bias"].reshape(Hh, dh)).sum(-1)[..., None]) / math.sqrt(dh)
+    sc = np.where(valid[:, None, :], sc, -1e9)
+    sc = sc - sc.max(-1, keepdims=True)
+    a = np.exp(sc)
+    a = a / a.sum(-1, keepdims=True) * anyv[:, None, None]
+    ws = np.einsum("bhs,bsc->bhc", a, slots)
+    wa = np.einsum("bhs,bsc->bhc", a, af)
+    Wv = W["rv.weight"].reshape(Hh, dh, C + N_AGE)
+    vh = (np.einsum("bhc,hdc->bhd", ws, Wv[..., :C]) + np.einsum("bhc,hdc->bhd", wa, Wv[..., C:])
+          + W["rv.bias"].reshape(Hh, dh) * a.sum(-1)[..., None])
+    out = (vh.reshape(B, R) @ W["ro.weight"].T + W["ro.bias"]) * anyv[:, None]
+    return out.astype(np.float32)
+
+
+def np_tick(W, lay, e, h_after, hf, events=None):
+    """live() in numpy, one frame for B seats:
+      e        [B, enc]   the encoder's output with the attention part's added (what the fast GRU was given before the plan's)
+      h_after  [B, fast]  his fast memory after this frame (stepped on e + plan_in(the plan in hf))
+      hf       [B, np_state_width]  the head's state before the frame (np.zeros for a new seat)
+      events   [B, ev]    the tick's events (the simulator's head_events(), fetched on a frame np_due() names); read on
+                          the tick rows only; None: zeros
+    -> (plan [B, plan] for the next frames, target_add [B, n_target], way_add [B, n_way] for this frame's logits, the state
+    after). Ticks on the rows whose clock reaches a multiple of `every` (np_due); a reset is np_clear() after the frame."""
+    o = _np_off(lay)
+    K, NS, C, S = int(lay["every"]), int(lay["slots"]), int(lay["slot"]), int(lay["size"])
+    hf2 = np.array(hf, np.float32, copy=True)
+    a0, a1 = o["acc"]
+    ni, fi, ki = o["n"][0], o["f"][0], o["ticks"][0]
+    hf2[:, a0:a1] += e
+    hf2[:, ni] += 1.0
+    hf2[:, fi] += 1.0
+    tick = (np.rint(hf2[:, fi]).astype(np.int64) % K) == 0
+    if tick.any():
+        ti = np.nonzero(tick)[0]
+        s = hf2[ti, o["s"][0]:o["s"][1]]
+        mean = hf2[ti, a0:a1] / hf2[ti, ni][:, None]
+        st = hf2[ti, o["store"][0]:o["store"][1]].reshape(len(ti), NS, C + 1)
+        slots, age1 = st[..., :C], st[..., C]
+        age1 = np.where(age1 > 0, age1 + 1.0, age1)                      # (tick(): every written slot a tick older, then the read)
+        ticks = hf2[ti, ki] + 1.0
+        ev = np.zeros((len(ti), int(lay["ev"])), np.float32) if events is None else np.asarray(events, np.float32)[ti]
+        rd = np_read(W, lay, s, slots, age1)
+        u = np.concatenate([h_after[ti], mean, rd, ev], 1)
+        p = np.tanh(u @ W["inp.weight"].T + W["inp.bias"])
+        gi = p @ W["gru.weight_ih_l0"].T + W["gru.bias_ih_l0"]
+        gh = s @ W["gru.weight_hh_l0"].T + W["gru.bias_hh_l0"]
+        r = _np_sig(gi[:, :S] + gh[:, :S])
+        zg = _np_sig(gi[:, S:2 * S] + gh[:, S:2 * S])
+        nn_ = np.tanh(gi[:, 2 * S:] + r * gh[:, 2 * S:])
+        s = (1 - zg) * nn_ + zg * s
+        hf2[ti, o["s"][0]:o["s"][1]] = s
+        hf2[ti, o["plan"][0]:o["plan"][1]] = np.tanh(s @ W["plan_out.weight"].T + W["plan_out.bias"])
+        tk = np.rint(ticks).astype(np.int64)
+        wr = (tk % int(lay["write_every"])) == 0
+        if wr.any():
+            wi = np.nonzero(wr)[0]
+            pos = (tk[wi] // int(lay["write_every"]) - 1) % NS
+            slots = slots.copy()
+            slots[wi, pos] = np.concatenate([s[wi], mean[wi], ev[wi]], 1) @ W["write.weight"].T + W["write.bias"]
+            age1[wi, pos] = 1.0
+        hf2[ti, o["store"][0]:o["store"][1]] = np.concatenate([slots, age1[..., None]], -1).reshape(len(ti), -1)
+        hf2[ti, ki] = ticks
+        hf2[ti, a0:a1] = 0.0
+        hf2[ti, ni] = 0.0
+    s_all = hf2[:, o["s"][0]:o["s"][1]]
+    t_add = (s_all @ W["target.weight"].T + W["target.bias"]).astype(np.float32)
+    w_add = (s_all @ W["way.weight"].T + W["way.bias"]).astype(np.float32)
+    return hf2[:, o["plan"][0]:o["plan"][1]], t_add, w_add, hf2
+
+
+def np_due(lay, hf):
+    """[B] bool: the coming frame is a tick for these rows (the caller fetches the tick's events before it)"""
+    f = np.rint(hf[:, _np_off(lay)["f"][0]]).astype(np.int64) + 1
+    return (f % int(lay["every"])) == 0
+
+
+def np_clear(lay, hf, rows=None):
+    """State.reset() on the numpy state, in place (a view is cleared through): everything but the tick's clock cleared, so
+    that the head ticks on the same frames for every seat, as in training (the global frame count). rows: a bool mask or
+    indices (None: all)"""
+    fi = _np_off(lay)["f"][0]
+    rows = slice(None) if rows is None else rows
+    f = hf[rows, fi].copy()
+    hf[rows] = 0.0
+    hf[rows, fi] = f
+    return hf
+
+
+def np_plan(lay, hf):
+    """the plan of the last tick held in the state [B, plan]"""
+    o = _np_off(lay)["plan"]
+    return hf[:, o[0]:o[1]]
+
+
+def np_plan_in(W, plan):
+    """the plan as the fast GRU's extra input: plan_in(plan) [B, enc] (x_fast = e + plan_in(plan))"""
+    return (plan @ W["plan_in.weight"].T + W["plan_in.bias"]).astype(np.float32)

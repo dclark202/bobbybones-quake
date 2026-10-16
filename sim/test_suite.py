@@ -70,9 +70,40 @@ class Policy:
         if self.slow is not None:
             import slowmem as slowmem_
             self.slowP, self.slow_step, self.W = slowmem_.params_np(sd), slowmem_.np_step, slowmem_.width(self.slow)
+        self.head = ck.get("head")                           # (v0.4) the head (sim/head.py): its state follows the rest of the array
+        self.head_at = self.W
+        if self.head is not None:
+            import head as head_
+            self.hm, self.headP = head_, head_.params_np(sd)
+            self.W = self.head_at + head_.np_state_width(self.head)
+            o_ = np.concatenate([[0], np.cumsum(self.dims)])
+            self.head_si, self.head_sw = slice(int(o_[10]), int(o_[11])), slice(int(o_[12]), int(o_[13]))   # the intention, his way
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)
+
+    def clear(self, h, rows=None):
+        """a seat's memory cleared (the trainer's `done`), in place; the head's tick clock kept (sim/head.py np_clear). For a
+        network without a head the same as h[rows] = 0."""
+        r = slice(None) if rows is None else rows
+        if self.head is None:
+            h[r] = 0.0
+            return h
+        h[r, :self.head_at] = 0.0
+        self.hm.np_clear(self.head, h[:, self.head_at:], rows)
+        return h
+
+    def head_due(self, h):
+        """[B] bool: the head ticks on the coming frame (fetch the simulator's head_events() then); all False without a head"""
+        if self.head is None:
+            return np.zeros(len(h), bool)
+        return self.hm.np_due(self.head, h[:, self.head_at:])
+
+    def events(self, env, h):
+        """the tick's events for act(): env.head_events() on a frame the head ticks (a simulator without them: None, zeros)"""
+        if self.head is None or not self.head_due(h).any() or not hasattr(env, "head_events"):
+            return None
+        return env.head_events()
 
     def legs_logits(self, xl):
         """(LEGS_IN) his legs' branch: the simulator's legs_prep() rows -> the logits [rows, 17]; None without the branch"""
@@ -81,7 +112,11 @@ class Policy:
         w0, b0, w1, b1, wp, bp = self.legsP
         return (np.tanh(np.tanh(np.asarray(xl, np.float32) @ w0.T + b0) @ w1.T + b1) @ wp.T + bp).astype(np.float32)
 
-    def act(self, obs, h):
+    def act(self, obs, h, events=None):
+        """events [B, 32]: the head's tick events (events()); None: zeros"""
+        hh = None
+        if self.head is not None:
+            hh, h = h[:, self.head_at:], h[:, :self.head_at]
         hf = h                                               # (--slow-mem) the whole state; h its fast part
         if self.slow is not None:
             h = hf[:, :self.H]
@@ -96,17 +131,27 @@ class Policy:
         x = np.tanh(x @ self.w1.T + self.b1)
         if self.attP is not None:
             x = x + self.attn_fwd(self.attn, self.attP, xa)
-        gi = x @ self.wih.T + self.bih
+        xf = x
+        if hh is not None:                                   # (v0.4) the plan of the head's last tick: e + plan_in(plan)
+            o_ = self.hm._np_off(self.head)["plan"]
+            xf = x + self.hm.np_plan_in(self.headP, hh[:, o_[0]:o_[1]])
+        gi = xf @ self.wih.T + self.bih
         gh = h @ self.whh.T + self.bhh
         H = self.H
         r = sig(gi[:, :H] + gh[:, :H])
         z = sig(gi[:, H:2 * H] + gh[:, H:2 * H])
         nn_ = np.tanh(gi[:, 2 * H:] + r * gh[:, 2 * H:])
         h = ((1 - z) * nn_ + z * h).astype(np.float32)
+        hfast = h
         zo = h
         if self.slow is not None:                            # (--slow-mem) the outputs read h + door(s); the slow GRU ticks on its frames
             zo, h = self.slow_step(self.slowP, self.slow, x, h, hf)
         logits = zo @ self.wp.T + self.bp
+        if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
+            _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
+            logits[:, self.head_si] += t_add
+            logits[:, self.head_sw] += w_add
+            h = np.concatenate([h, hh], 1)
         out, i = [], 0
         for d in self.dims:
             l = logits[:, i:i + d]
@@ -204,9 +249,9 @@ def run_room(E, env, pol, room):
     base = {k: np.copy(v) for k, v in env.stats.items()}
     frames = int(room["secs"] / E.DT)
     for _ in range(frames):
-        act, h = pol.act(obs, h)
+        act, h = pol.act(obs, h, pol.events(env, h))
         obs, _, done, _ = env.step(act)
-        h[done] = 0.0
+        pol.clear(h, done)
     d = {k: env.stats[k] - base[k] for k in env.stats}
     mins = frames * E.DT / 60.0 * env.M                      # subject-minutes
     r = {}
@@ -278,9 +323,9 @@ def run_lab_room(E, env, pol, room):
     obs, _, done, _ = env.step(np.zeros((n, len(pol.dims)), np.int64))
     frames = int(room["secs"] / E.DT) - 1
     for _ in range(frames):
-        act, h = pol.act(obs, h)
+        act, h = pol.act(obs, h, pol.events(env, h))
         obs, _, done, _ = env.step(act)
-        h[done] = 0.0
+        pol.clear(h, done)
     if "course" in room:                                     # close the attempts still running
         for i in range(n):
             env._course_close(i, False)
