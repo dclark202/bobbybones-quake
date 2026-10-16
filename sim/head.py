@@ -47,15 +47,16 @@ AGE_PERIODS = (16.0, 128.0, 1024.0)                          # ... their sine an
 
 
 def layout(every=8, size=1024, inp=768, fast=512, enc=256, ev=32, plan=256, slots=224, write_every=4, slot=128, read=256,
-           read_heads=4, ring=96, n_target=17, n_way=3, win_bands=5, chrono=96, aux=None):
+           read_heads=4, ring=96, n_target=17, n_way=3, win_bands=5, chrono=96, aux=None, store_half=0):
     """the part's shape and timing; kept in a checkpoint as "head" and in policy.npz as JSON text. aux: {question: outputs}
     (the hands' --aux layers it answers beside them; {} none). chrono: as slowmem (the slow GRU's longest starting time
-    scale in ticks; 0: PyTorch's own start)"""
+    scale in ticks; 0: PyTorch's own start). store_half: 1: a slot is written at half precision (rounded to float16 as it is
+    written, in torch and numpy alike; the trainer keeps the store at half precision on the card, half its memory)"""
     assert read % read_heads == 0, (read, read_heads)
     return dict(version=VERSION, every=int(every), size=int(size), inp=int(inp), fast=int(fast), enc=int(enc), ev=int(ev),
                 plan=int(plan), slots=int(slots), write_every=int(write_every), slot=int(slot), read=int(read),
                 read_heads=int(read_heads), ring=int(ring), n_target=int(n_target), n_way=int(n_way), win_bands=int(win_bands),
-                chrono=int(chrono), aux={str(k): int(v) for k, v in (aux or {}).items()})
+                chrono=int(chrono), aux={str(k): int(v) for k, v in (aux or {}).items()}, store_half=int(store_half))
 
 
 def describe(lay):
@@ -171,6 +172,11 @@ def read(mod, lay, s, slots, age1, stats=None):
     attention's entropy over heads and players with a slot, those players x heads, the slots they had]"""
     import torch
     B, S, C = slots.shape
+    if slots.dtype != s.dtype:                               # (store_half) worked at full precision, a few thousand players at a time
+        CH = 2048                                            # (the whole store at full precision at once would cost what halving saved)
+        if B > CH:
+            return torch.cat([read(mod, lay, s[c0:c0 + CH], slots[c0:c0 + CH], age1[c0:c0 + CH], stats) for c0 in range(0, B, CH)])
+        slots = slots.to(s.dtype)
     Hh, R = int(lay["read_heads"]), int(lay["read"])
     dh = R // Hh
     valid = age1 > 0
@@ -213,7 +219,9 @@ def tick(mod, lay, s, slots, age1, ticks, h, mean, ev, stats=None):
         pos = (tk // W - 1) % S
         hit = (torch.arange(S, device=s.device)[None, :] == pos[:, None]) & wr[:, None]       # [B, S]
         new = mod.write(torch.cat([s, mean, ev], 1))
-        slots = torch.where(hit[..., None], new[:, None, :], slots)
+        if lay.get("store_half"):                            # (store_half) the slot as the store keeps it; the gradient as if not rounded
+            new = new + (new.half().to(new.dtype) - new).detach()
+        slots = torch.where(hit[..., None], new[:, None, :].to(slots.dtype), slots)
         age1 = torch.where(hit, torch.ones_like(age1), age1)
     return s, plan, slots, age1, ticks, u
 
@@ -228,7 +236,7 @@ class State:
         self.plan = torch.zeros(n, lay["plan"], device=dev)
         self.acc = torch.zeros(n, lay["enc"], device=dev)
         self.cnt = torch.zeros(n, device=dev)
-        self.slots = torch.zeros(n, lay["slots"], lay["slot"], device=dev)
+        self.slots = torch.zeros(n, lay["slots"], lay["slot"], device=dev, dtype=torch.float16 if lay.get("store_half") else torch.float32)
         self.age1 = torch.zeros(n, lay["slots"], device=dev)
         self.ticks = torch.zeros(n, device=dev)
         self.rs = torch.ones(n, device=dev)                  # a reset since the last tick (a fresh state counts as one: its plan is 0)
@@ -245,7 +253,7 @@ class State:
         self.plan = self.plan * k[:, None]
         self.acc = self.acc * k[:, None]
         self.cnt = self.cnt * k
-        self.slots = self.slots * k[:, None, None]
+        self.slots = self.slots * k[:, None, None].to(self.slots.dtype)
         self.age1 = self.age1 * k[:, None]
         self.ticks = self.ticks * k
         self.rs = torch.maximum(self.rs, d)
@@ -350,7 +358,7 @@ def seq(mod, lay, e, dn, st0, cell_, h0, ev, stats=None):
     if st0.get("cnt") is not None and st0["cnt"].numel():
         assert float(st0["cnt"].abs().max()) == 0.0, "the rollout does not start on a tick's boundary"
     s, plan0 = st0["s"], st0["plan"]
-    slots, age1, ticks = st0["slots"], st0["age1"], st0["ticks"]
+    slots, age1, ticks = st0["slots"].to(e.dtype), st0["age1"], st0["ticks"]       # (store_half: the slots as kept, at full precision)
     h = h0
     hs_l, S_l, P_l, U_l = [], [], [], []
     ones = torch.ones_like(dn[:1])
@@ -561,6 +569,8 @@ def np_tick(W, lay, e, h_after, hf, events=None):
             pos = (tk[wi] // int(lay["write_every"]) - 1) % NS
             slots = slots.copy()
             slots[wi, pos] = np.concatenate([s[wi], mean[wi], ev[wi]], 1) @ W["write.weight"].T + W["write.bias"]
+            if lay.get("store_half"):                        # (store_half) the slot rounded to float16 as it is written, as in training
+                slots[wi, pos] = slots[wi, pos].astype(np.float16).astype(np.float32)
             age1[wi, pos] = 1.0
         hf2[ti, o["store"][0]:o["store"][1]] = np.concatenate([slots, age1[..., None]], -1).reshape(len(ti), -1)
         hf2[ti, ki] = ticks

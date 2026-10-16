@@ -38,6 +38,10 @@ LATE = [("stack", ("v031 enemy stack",))]                   # (v0.3.1, B-257: th
 # tools/targets_init.py makes such a network and opens the gate). Every file of a run has its own gate: the league's
 # older selves keep theirs shut when the learner's is opened. Not gated: the sums are what they were.
 GATE_SHUT = -30.0
+# (v0.4, the proposal's change 4; the trainer's --attn-mem-query) A layout may say "mem": H. Block 2's query for its read rows
+# then also comes from his memory of the frame before (h_{t-1}, the fast GRU's state before this frame's step, read at half
+# precision so that the trainer can keep it for the learning step): q = Wq norm(x) + mq(h_{t-1}), the layer mq at zero to
+# begin with (the network answers exactly as without it). Not given h (forward(x) alone): as without it.
 
 
 def layout_from_csv(path):
@@ -106,10 +110,13 @@ def make_module(lay, out_dim=256, seed=0):
             self.q, self.k, self.v, self.o = (nn.Linear(D, D, bias=False) for _ in range(4))
             self.f1, self.f2 = nn.Linear(D, 2 * D, bias=False), nn.Linear(2 * D, D, bias=False)
 
-        def forward(self, xq, xall, gate=None):
+        def forward(self, xq, xall, gate=None, qadd=None):
             B, Q, T = xq.shape[0], xq.shape[1], xall.shape[1]
             hd = D // H_
-            q = self.q(norm(xq)).view(B, Q, H_, hd).transpose(1, 2)
+            q = self.q(norm(xq))
+            if qadd is not None:                             # ("mem") the query's part from his memory of the frame before
+                q = q + qadd
+            q = q.view(B, Q, H_, hd).transpose(1, 2)
             na = norm(xall)
             k = self.k(na).view(B, T, H_, hd).transpose(1, 2)
             v = self.v(na).view(B, T, H_, hd).transpose(1, 2)
@@ -139,14 +146,21 @@ def make_module(lay, out_dim=256, seed=0):
                 self.register_buffer("gate", torch.zeros(lay["tokens"]))
             else:
                 self.gate = None
+            if lay.get("mem"):                                   # ("mem", see there) zeros: the exact start
+                self.mq = nn.Linear(int(lay["mem"]), len(lay["read"]) * D)
+                nn.init.zeros_(self.mq.weight)
+                nn.init.zeros_(self.mq.bias)
 
-        def forward(self, x):
+        def forward(self, x, hm=None):
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=AMP and x.is_cuda):
                 xp = torch.cat([x, x.new_zeros(x.shape[0], 1)], 1)
                 toks = [e(xp[:, getattr(self, "idx_" + k_["name"])]) for k_, e in zip(lay["kinds"], self.emb)]
                 t = torch.cat(toks + [x.new_zeros(x.shape[0], 1, D)], 1) + self.mark
                 t = self.b1(t, t, self.gate)
-                r = self.b2(t[:, self.read], t, self.gate)
+                qa = None
+                if hm is not None and getattr(self, "mq", None) is not None:
+                    qa = self.mq(hm.half().float()).view(x.shape[0], len(self.read), D)
+                r = self.b2(t[:, self.read], t, self.gate, qa)
                 out = self.door(norm(r.reshape(x.shape[0], 2 * D)))
             return out.float()
 
@@ -163,11 +177,14 @@ def _norm(x):
     return (x - m) / np.sqrt(((x - m) ** 2).mean(-1, keepdims=True) + 1e-5)
 
 
-def _block(P, b, xq, xall, heads, gate=None):
+def _block(P, b, xq, xall, heads, gate=None, qadd=None):
     B, Q, D = xq.shape
     T = xall.shape[1]
     hd = D // heads
-    q = (_norm(xq) @ P[b + ".q.weight"].T).reshape(B, Q, heads, hd).transpose(0, 2, 1, 3)
+    q = _norm(xq) @ P[b + ".q.weight"].T
+    if qadd is not None:
+        q = q + qadd
+    q = q.reshape(B, Q, heads, hd).transpose(0, 2, 1, 3)
     na = _norm(xall)
     k = (na @ P[b + ".k.weight"].T).reshape(B, T, heads, hd).transpose(0, 2, 3, 1)
     v = (na @ P[b + ".v.weight"].T).reshape(B, T, heads, hd).transpose(0, 2, 1, 3)
@@ -180,8 +197,9 @@ def _block(P, b, xq, xall, heads, gate=None):
     return y + np.maximum(_norm(y) @ P[b + ".f1.weight"].T, 0.0) @ P[b + ".f2.weight"].T
 
 
-def forward_np(lay, P, x):
-    """the same sums as make_module().forward in numpy: x [B, obs_dim] normalised -> [B, out_dim]"""
+def forward_np(lay, P, x, hm=None):
+    """the same sums as make_module().forward in numpy: x [B, obs_dim] normalised -> [B, out_dim]. hm [B, H]: his memory of
+    the frame before (a layout with "mem"; read at half precision as the torch side does)"""
     x = np.asarray(x, np.float32)
     xp = np.concatenate([x, np.zeros((len(x), 1), np.float32)], 1)
     toks = []
@@ -191,5 +209,9 @@ def forward_np(lay, P, x):
     t = np.concatenate(toks + [np.zeros((len(x), 1, lay["D"]), np.float32)], 1) + P["mark"]
     gate = np.asarray(P["gate"], np.float32) if lay.get("gated") else None
     t = _block(P, "b1", t, t, lay["heads"], gate)
-    r = _block(P, "b2", t[:, lay["read"]], t, lay["heads"], gate)
+    qa = None
+    if hm is not None and lay.get("mem") and "mq.weight" in P:
+        h16 = np.asarray(hm, np.float32).astype(np.float16).astype(np.float32)
+        qa = (h16 @ np.asarray(P["mq.weight"], np.float32).T + P["mq.bias"]).reshape(len(x), len(lay["read"]), lay["D"])
+    r = _block(P, "b2", t[:, lay["read"]], t, lay["heads"], gate, qa)
     return _norm(r.reshape(len(x), -1)) @ P["door.weight"].T

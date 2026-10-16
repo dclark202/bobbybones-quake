@@ -154,7 +154,7 @@ def step(P, A, obs, h, rng, events=None):
     x = np.tanh(x @ P["w0"].T + P["b0"])
     x = np.tanh(x @ P["w1"].T + P["b1"])
     if A is not None:                                        # (v0.2) what the door lets through of the tokens
-        x = x + A[2](A[0], A[1], xa)
+        x = x + A[2](A[0], A[1], xa, hm=h)                    # (hm: "mem", his memory of the frame before)
     xf = x
     if hh is not None:                                       # (v0.4) the head's plan of its last tick reaches the fast GRU: e + plan_in(plan)
         hlay, hW, hm = P["_head"][:3]
@@ -178,13 +178,28 @@ def step(P, A, obs, h, rng, events=None):
         logits[:, si] += t_add
         logits[:, sw] += w_add
         h = np.concatenate([h, hh], 1)
+    return draw(P, logits, rng), h
+
+
+def draw(P, logits, rng):
+    """one sampled choice per output (one random number per player and output from rng, drawn in the outputs' order). (v0.4,
+    --ordered-heads: "ordered" in the file) the ordered outputs are drawn after the one before them, its table's row of the
+    choice drawn there added to their logits (order.t<output>)"""
     dims = [int(d) for d in P["action_dims"]]
-    out = np.zeros((len(obs), len(dims)), np.int64)
-    i = 0
-    for j, d in enumerate(dims):
-        l = logits[:, i:i + d]
+    o = np.concatenate([[0], np.cumsum(dims)]).astype(int)
+    u = [rng.random((len(logits), 1)) for _ in dims]
+    out = np.zeros((len(logits), len(dims)), np.int64)
+
+    def one(j, l):
         p = np.exp(l - l.max(1, keepdims=True))
         p /= p.sum(1, keepdims=True)
-        out[:, j] = (p.cumsum(1) > rng.random((len(p), 1))).argmax(1)
-        i += d
-    return out, h
+        out[:, j] = (p.cumsum(1) > u[j]).argmax(1)
+
+    order = json.loads(str(P["ordered"])) if "ordered" in P else []
+    later = {int(c_) for _, c_ in order}
+    for j in range(len(dims)):
+        if j not in later:
+            one(j, logits[:, o[j]:o[j + 1]])
+    for p_, c_ in order:
+        one(int(c_), logits[:, o[c_]:o[c_ + 1]] + P["order.t{}.weight".format(c_)][out[:, int(p_)]])
+    return out
