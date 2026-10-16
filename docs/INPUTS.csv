@@ -575,7 +575,7 @@ index,group,input,meaning,scale,added in
 573,projectiles,sixth nearest enemy projectile: how close it passes,"in its splash radii (rocket 120 units, grenade 150, plasma 20)","radii / 3, capped at 1 (under a third: inside its blast)",v15
 574,his legs,the switch to his legs is on,the movement network moves him while it is on and he has a target it knows a way to (LEGS),0 or 1,v15b
 575,his legs,his legs carried him on the last frame,,0 or 1,v15b
-576,intention,his intention is the enemy,the ninth intention (FIGHT_TARGET): his way leads to where he believes the enemy is,0 or 1,v15f
+576,intention,his intention is the enemy,"the ninth intention (FIGHT_TARGET; HUNT, v0.3.1: B-256): his way leads to where he believes the enemy is",0 or 1,v15f
 577,v02 game,time left in the round,the share of the round's length still to play (on a game server: of the game's time limit),0 to 1,v0.2
 578,v02 game,how loud he has been,"over the last 3 seconds: a frame of running steps counts one frame, a shot (not the gauntlet), a jump or a landing eight; 1 = heard all the time. Walking and crouching are silent",0 to 1,v0.2
 579,v02 game,made a noise near a believed enemy,"in the last second he made such a noise while he believed an enemy within earshot (seen or heard in the last 3 s, within 1,000 units of where he was). From what he believes, not from where the enemy is",0 or 1,v0.2
@@ -790,3 +790,9 @@ index,group,input,meaning,scale,added in
 788,b3 ways,the third way: longer,"how much longer that way to his target is than the shortest from where he stands (0: it is the shortest way here, or he has no target, or he is in an item run)","seconds / 5, capped at 1",stage B3
 789,b3 ways,the second way: differs,from where he stands more than a quarter of that way's seconds lie farther than 128 units from the shortest way,0 or 1,stage B3
 790,b3 ways,the third way: differs,from where he stands more than a quarter of that way's seconds lie farther than 128 units from the shortest way,0 or 1,stage B3
+791,v031 enemy stack,believed stack: health,"(EN_STACK; zeros with it off, and in movement rounds) the enemy's expected health: 125 at a spawn he knows of, his own hits off, pickups heard or seen on, over 100 ticking down, a pain sound's band, drifting to an unseen enemy's average while unseen",/ 200,v0.3.1
+792,v031 enemy stack,believed stack: armor,"(EN_STACK; zeros with it off, and in movement rounds) the enemy's expected armor, by the same rules (his hits take the armor's share off first)",/ 200,v0.3.1
+793,v031 enemy stack,believed stack: health and armor,"(EN_STACK; zeros with it off, and in movement rounds) the two together",/ 300,v0.3.1
+794,v031 enemy stack,believed stack: spread,"(EN_STACK; zeros with it off, and in movement rounds) how unsure he is: the standard deviation of the two together (0 at a spawn he knows of; grows while the enemy is out of view, toward an unseen enemy's)",/ 150,v0.3.1
+795,v031 enemy stack,believed stack: since pinned,"(EN_STACK; zeros with it off, and in movement rounds) seconds since a spawn he knows of or a pain sound of the three low bands","seconds / 30, capped at 1",v0.3.1
+796,v031 enemy stack,believed stack: weak,"(EN_STACK; zeros with it off, and in movement rounds) the expected health and armor together are under 80 (ES_WEAK)",0 or 1,v0.3.1

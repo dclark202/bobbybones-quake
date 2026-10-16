@@ -661,7 +661,7 @@ def main():
     W_HEAD = E_.WAY_HEAD if len(ACTION_DIMS) > getattr(E_, "WAY_HEAD", 99) else -1     # (WAYS) his way to his target: read with the intention,
     W_ON = bool(getattr(E_, "WAYS", False))                                             # ... and with the switch off never (the output is there)
 
-    EN_I = E_.EN_INTENT if getattr(E_, "FIGHT_TARGET", False) else -1         # (FIGHT_TARGET) the intention "the enemy"
+    EN_I = E_.EN_INTENT if getattr(E_, "EN_ON", getattr(E_, "FIGHT_TARGET", False)) else -1     # (FIGHT_TARGET, HUNT) the intention "the enemy"
     TG_I = (E_.HOLD_INTENT, E_.HOLD_INTENT + E_.HOLD_SLOTS) if getattr(E_, "TARGETS", False) else None     # (TARGETS) the intentions "place 1" to "place 8"
 
     LEGS_LAB = bool(getattr(E_, "LEGS_LAB", False))          # (--legs-teach) the simulators give the labels of his legs (LEGS_LABEL=1, or LEGS_KEEP below 1)

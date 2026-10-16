@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-15](results/2026-10-15.md)
 
+- 21:15 — v0.3.1's belief of the enemy's stack (B-257) and the hunt (B-256) built behind switches, off = today's simulator; the belief's error is a quarter of a fixed guess's
 - 16:50 — How soon the pros fire the rail after an enemy appears: Bobby is not slower at first, he fires less often later (B-255)
 - 12:45 — The pros' rocket jumps found in 5,039 demos: on every map, 1 to 11 a game, with the links they repeat (B-252)
 - 06:15 — v0.3's night: from level to 57.5% against v0.2 at update 70, then two falls to 52.1%; no stall, no weapon collapse

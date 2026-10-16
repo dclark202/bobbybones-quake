@@ -981,6 +981,8 @@ class duelbot(minqlx.Plugin):
             for name in ("v02_bt", "v02_ht", "v02_took", "v02_by"):
                 setattr(env, name, np.minimum(getattr(env, name) + E.DT, 99.0).astype(np.float32))
             env.v02_loud = (env.v02_loud * (1.0 - E.DT / E.V02_LOUD_T)).astype(np.float32)
+        if getattr(E, "EN_STACK", False) and hasattr(env, "_es_update"):
+            env._es_update()                                 # (B-257) the belief of the enemy's stack goes on too
 
     def time_note(self, total):
         """DUEL_TIMING=1: the plugin's time for a frame on which the network ran: the whole frame hook, of it building
@@ -1427,6 +1429,8 @@ class duelbot(minqlx.Plugin):
                         self.put(p, q, face, human=(who == "opp" and not is_bot(p)))
                 self.tot.pop(who, None)
                 self.new_life_of(self.env, 0 if who == "bobby" else 1)     # (v0.2: what the other knew him to have went with his old life)
+                if was is None and hasattr(self.env, "_es_set") and getattr(self.E, "EN_STACK", False):
+                    self.env._es_set(0 if who == "opp" else 1, 1 if who == "opp" else 0, spawn=True)   # (B-257) a newcomer: a fresh spawn
                 self.ground_was = None                       # (a spawn is neither a jump nor a landing)
                 if who == "opp" and getattr(self, "rules2", False):
                     self.env.dmg_life[0] = 0.0               # what Bobby knows about this opponent's damage resets
@@ -1642,11 +1646,19 @@ class duelbot(minqlx.Plugin):
             self.fb_next = np.array([min(dealt / 100.0, 2.0), min(took / 100.0, 2.0),
                                      math.sin(ang) * (took > 0), math.cos(ang) * (took > 0)], np.float32)
             env.dmg_life[0] += dealt
+            es_ = getattr(E, "EN_STACK", False) and hasattr(env, "note_dealt")
+            if es_:                                          # (B-257) his own hits on the living opponent, by the game's count of
+                dn_ = int(bobby.stats.damage_dealt)          # the damage he dealt (never the opponent's own splash or falls)
+                hit_ = max(0, dn_ - self.__dict__.get("es_dealt0", dn_))
+                self.es_dealt0 = dn_
+                if hit_ > 0 and os_.health > 0:
+                    env.note_dealt(0, 1, hit_)
             if took > 0 and hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
                 env.note_hit(0, took)                        # being shot at throws his aim off for a moment
             if hasattr(env, "pain_t"):                       # the opponent's pain sound, by his health after the hit
-                env.pain_t += E.DT
-                if dealt > 0 and os_.health > 0 and float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < E.HEAR_EVT:
+                env.pain_t += E.DT                           # (EN_STACK: after any hurt the game plays it for, his own splash and falls too, as step())
+                near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < E.HEAR_EVT
+                if (dealt > 0 or (es_ and dmg.get("opp", 0) > 0)) and os_.health > 0 and near_:
                     env.pain_t[0], env.pain_b[0] = 0.0, min(3, int(os_.health) // 25)
         if self.arena:
             self.arena["dmg"][0] += dmg.get("opp", 0)
@@ -1815,7 +1827,12 @@ class duelbot(minqlx.Plugin):
             hd_ = env.intent >= E.HOLD_INTENT                # given up where no way leads to it; 2026-10-14, the first real games)
             env.note_holds()
             gone = gone | (hd_ & (~valid | (R_.T[g_, node] >= 1e8)))
-        env.intent_gone = np.where(np.isin(np.arange(env.n), seats), gone, False)
+        mine_ = np.isin(np.arange(env.n), seats)
+        if getattr(E, "EN_ON", False):                       # (HUNT, B-256; FIGHT_TARGET) the enemy as his target, as step() does:
+            en_ = env.intent == E.EN_INTENT                  # reached when he is in view, given up when nothing is believed of him
+            env.intent_done = env.intent_done | (en_ & np.asarray(env.visible, bool)[:len(en_)] & mine_)
+            gone = gone | (en_ & ~valid)
+        env.intent_gone = np.where(mine_, gone, False)
 
     def took_chosen(self, env, E, k, cls):
         """player k took an item: was it the one he was going for (then the choice is done, as in the simulator)"""

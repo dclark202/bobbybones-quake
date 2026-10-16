@@ -547,7 +547,7 @@ SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
              "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS_LOOK", "LEGS_STAND", "LEGS", "LEGS_EVERY", "LEGS_OFF", "AUTO_SWITCH", "FIGHT_TARGET", "EN_KNOWN", "TARGETS", "TARGETS_FREE", "WAYS", "WAY_CAP", "WAY_ALPHA", "WAY_UNTESTED",
-             "STYLE_MIX")
+             "STYLE_MIX", "EN_STACK", "ES_MU_H", "ES_MU_A", "ES_SD_H", "ES_SD_A", "ES_TAU", "HUNT")
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -1203,7 +1203,56 @@ V02_SEE_EVERY, V02_SEE_TOL, V02_SEE_LIFT, V02_WAY_MAX = 8, 24.0, 8.0, 15.0
 # 0.3, between -1 and 1; that it is his target now; that the slot holds a place.
 B2_F = 8
 N_B2 = HOLD_SLOTS * B2_F
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3
+# v0.3.1, B-257 (the owner, 2026-10-15: "he should have a belief about my stack ... an expectation of the enemy's health +
+# uncertainty"): the enemy's stack as he believes it, the last N_ES inputs (zeros with EN_STACK off; with it off nothing
+# else changes). Worked out from his senses only, never from the enemy's true health: a filter he keeps in his head, a
+# mean and a variance for the enemy's health and for his armor, per other player of his group (in a group the inputs
+# are about the enemy he attends to, as the other enemy inputs):
+#   a known spawn (the frag he made or heard: note_death; a round's start: _v02_round): health 125, armor 0, exactly;
+#   health and armor over 100 tick down 1 a second, as in the game (exact);
+#   a pickup heard within HEAR_EVT (1,200 units) or seen (note_take: every health and armor item, the rule of the game the
+#     simulator uses: health +5 to 200, +25 and +50 only under 100 and to 100, the mega +100 to 200, armor to 200);
+#   the damage he deals that player (his own hits only, never his own splash, and not the blow that kills: es_dmg, which
+#     step() fills from the hits of the frame and a game server's plugin from the game's count of the damage he dealt,
+#     note_dealt()) is taken off as the game takes it (armor soaks ARMOR_ABSORB of it while it lasts, the rest is health);
+#   a pain sound heard (pain_t, pain_b: the bands under 25, 25 to 49, 50 to 74, 75 and over) pins the health into its band
+#     (the three low bands set its spread to the band's; "75 and over" only lifts a mean below 75);
+#   while that player is not in his view, the belief drifts toward what an unseen enemy's stack is on average (ES_MU_H,
+#     ES_MU_A) and its spread grows toward that of an unseen enemy (ES_SD_H, ES_SD_A), with the time constant ES_TAU: the
+#     items he may have taken unheard, the damage he may have taken from others, his own rockets and falls (an
+#     Ornstein-Uhlenbeck prior; the four numbers are measured once in self-play, as a player knows from experience what
+#     an enemy he has not seen for a while is likely to hold: ES_* below, and ES_TAU chosen against the truth: RESULTS 2026-10-15 21:15).
+# The inputs: expected health / 200, expected armor / 200, expected health and armor together / 300, the spread (the
+# standard deviation of the two together) / 150, seconds since the estimate was pinned (a known spawn, or a pain sound of
+# the three low bands) / 30 capped at 1, "the estimate is weak" (expected health and armor together under ES_WEAK).
+# Zeros in movement rounds and solo rooms (no enemy). A late round (LATE_P: drawn stacks) begins with nothing known: the
+# unseen enemy's average and spread. What step() keeps and a game server's plugin must (it calls observe() only):
+# note_take(), note_death(), _v02_round() and the pain sound (pain_t, pain_b, in a group pain_src) as the plugins keep them
+# for v0.2's inputs; note_dealt() for every hit he lands on a living enemy; _es_set() for a seat a newcomer takes; on a frame
+# on which observe() is not called, _es_update() (the plugins' v02_tick). The filter advances a frame at every observe():
+# call observe() once a frame (as for v0.2's clocks).
+EN_STACK = float(os.environ.get("EN_STACK") or 0.0) > 0
+N_ES = 6
+ES_MU_H = float(os.environ.get("ES_MU_H") or 124.0)
+ES_MU_A = float(os.environ.get("ES_MU_A") or 88.0)
+ES_SD_H = float(os.environ.get("ES_SD_H") or 38.0)
+ES_SD_A = float(os.environ.get("ES_SD_A") or 57.0)
+ES_TAU = float(os.environ.get("ES_TAU") or 120.0)
+ES_WEAK = 80.0
+ES_BAND_VAR = 25.0 ** 2 / 12.0                             # the spread of a health known to lie in a band of 25
+# v0.3.1, B-256 (the owner, 2026-10-15: "build ALL of these things"), HUNT: the enemy as a target of his intention, the
+# choice "EN" (EN_INTENT) of FIGHT_TARGET with the place he believes the enemy at as v0.2's inputs have it (v02_bel: seen
+# or heard in the last V02_KNOWN seconds of this round, and not known dead since; with his reaction time and his error of
+# sight), not only where he last saw him. His way and his legs are given the route goal that lies nearest (in seconds of
+# way FROM the believed place) to it, an item's or (TARGETS) a holding place's, as an item's place is given today; the
+# inputs "his way" show the way there and the input "his intention is the enemy" is on. Reached when the enemy is in
+# view (he may choose anew at once), given up when nothing is believed of him any more. Nothing is paid for the way:
+# it pays by what the fight brings. With the switch off (and FIGHT_TARGET off) the choice counts as "nothing". A network
+# of v0.3's shape has the row shut (its bias -20): tools/hunt_init.py makes it a copy of "nothing" that is never chosen,
+# and opens it out of "nothing" (--from-nothing). A game server's plugin: intent_release() calls note_hunt().
+HUNT = float(os.environ.get("HUNT") or 0.0) > 0
+EN_ON = FIGHT_TARGET or HUNT
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -2424,6 +2473,7 @@ class DuelEnv:
         self.lab_course_ids = list(range(len(self.courses)))     # courses used when a lab round picks one
         self._game_init()
         self._v02_init(bsp)
+        self._es_init()
         if MOMENTS:                                          # (MID_START_P, SPAWN_START_P) the saved moments of whole games
             self._moment_init(seed)
         if OPENINGS:                                         # (OPENINGS) the pros' openings by spawn point
@@ -3574,7 +3624,19 @@ class DuelEnv:
             w_ = np.nonzero(np.asarray(intent) == k_)[0]
             if len(w_):
                 gi[w_] = gs_[T_[gs_][:, np.asarray(node)[w_]].argmin(0)]
-        if FIGHT_TARGET:                                     # the enemy: the route goal nearest to where he believes him to be
+        if HUNT:                                             # (B-256) the enemy: the route goal nearest to the place he believes him at
+            w_ = np.nonzero(np.asarray(intent) == EN_INTENT)[0]
+            if len(w_) and who is None and len(gi) == self.n:
+                who = np.arange(self.n)
+            bel_ = getattr(self, "v02_bel", None)            # (kept by _v02 at the last observe(): what his inputs show)
+            if len(w_) and who is not None and bel_ is None:
+                gi[w_] = -1
+            elif len(w_) and who is not None:
+                p_ = np.asarray(who)[w_]
+                nr_ = len(self.route_goal) + (self.hold_n if len(T_) >= len(self.route_goal) + self.hold_n else 0)    # (items' rows and, with TARGETS, the places')
+                t_ = T_[:nr_, (self.route if R is None else R).locate(bel_[p_])]
+                gi[w_] = np.where(np.asarray(self.v02_bel_ok, bool)[p_] & (t_.min(0) < 1e8), t_.argmin(0), -1)
+        elif FIGHT_TARGET:                                   # the enemy: the route goal nearest to where he believes him to be
             w_ = np.nonzero(np.asarray(intent) == EN_INTENT)[0]
             if len(w_) and who is None and len(gi) == self.n:
                 who = np.arange(self.n)
@@ -3724,6 +3786,9 @@ class DuelEnv:
                 self.e_life[j, self._slot(v)] = 0.0
                 self.e_got[j, self._slot(v)] = 0.0
                 self._v02_void(j, v)
+                if EN_STACK:                                 # (B-257) he knows the stack of the new life: 125 and nothing
+                    self._es_set(j, self._slot(v), spawn=True)
+                    self.es_dmg[j, self._slot(v)] = 0.0
 
     def note_hit(self, v, dmg):
         """player v took dmg from an enemy: the flinch (used by the game-server plugin; step() does the same itself)"""
@@ -3952,7 +4017,7 @@ class DuelEnv:
         self.int_tick += 1
         live = who & (((self.int_tick + np.arange(n)) % INTENT_EVERY == 0) | self.intent_new)
         choice = np.asarray(choice, np.int64)
-        if not FIGHT_TARGET:                                 # (the enemy as a target: only with the switch)
+        if not EN_ON:                                        # (the enemy as a target: only with the switch, FIGHT_TARGET or HUNT)
             choice = np.where(choice == EN_INTENT, 0, choice)
         choice = np.where(choice >= HOLD_INTENT + self.hold_n, 0, choice)     # (a holding place: only with TARGETS, and one the map has)
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD) | self.intent_gone     # a choice holds (INTENT_HOLD)
@@ -4304,7 +4369,7 @@ class DuelEnv:
                               self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir),
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
-                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos)], 1)
+                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp)], 1)
         return obs.astype(np.float32)
 
     def _proj(self, pos, eye, fdir, rot, vel):
@@ -4376,7 +4441,7 @@ class DuelEnv:
             out[:, JL.N_JUMP + 6:N_V15 - N_LEGS - N_EN] = self._pm
         if LEGS:                                             # his legs: the switch as it stands, and that they carried him on the last frame
             out[:, N_V15 - N_EN - 2], out[:, N_V15 - N_EN - 1] = self.legs, self.legs_on
-        if FIGHT_TARGET:                                     # his intention is the enemy
+        if EN_ON:                                            # his intention is the enemy (FIGHT_TARGET, HUNT)
             out[:, N_V15 - 1] = self.intent == EN_INTENT
         return out
 
@@ -4451,6 +4516,132 @@ class DuelEnv:
         self.v02_loud[done], self.v02_by[done], self.v02_see[done] = 0.0, 99.0, False
         for q_ in self.v02_q:                                # (the sightings of the round before, still on their way)
             q_[0][done] = False
+        if EN_STACK:                                         # (B-257) everybody has just spawned: the stacks are known
+            self._es_set(done, slice(None), spawn=True)
+
+    # ---- B-257: the enemy's stack, believed (see EN_STACK)
+    def _es_init(self):
+        """the belief's state: per player and other player of his group (by his place in the group, as v02_bt): expected
+        health and armor, their variances, seconds since pinned; and the damage he has dealt each, not yet taken off"""
+        n = self.n
+        ng_ = self._others_arr().shape[1] + 1
+        self.es_h = np.full((n, ng_), SPAWN_HP, np.float32)
+        self.es_a = np.zeros((n, ng_), np.float32)
+        self.es_vh = np.zeros((n, ng_), np.float32)
+        self.es_va = np.zeros((n, ng_), np.float32)
+        self.es_pin = np.zeros((n, ng_), np.float32)
+        self.es_dmg = np.zeros((n, ng_), np.float32)        # the damage he dealt each since the last frame of the belief
+
+    def _es_set(self, rows, cols, spawn=True):
+        """rows' belief of cols: a known spawn (spawn=True) or nothing known (the unseen enemy's average and spread)"""
+        if spawn:
+            self.es_h[rows, cols], self.es_a[rows, cols], self.es_vh[rows, cols], self.es_va[rows, cols] = SPAWN_HP, 0.0, 0.0, 0.0
+            self.es_pin[rows, cols] = 0.0
+        else:
+            self.es_h[rows, cols], self.es_a[rows, cols] = ES_MU_H, ES_MU_A
+            self.es_vh[rows, cols], self.es_va[rows, cols] = ES_SD_H ** 2, ES_SD_A ** 2
+            self.es_pin[rows, cols] = 99.0
+
+    def note_dealt(self, i, v, dmg):
+        """(EN_STACK) player i hit player v (another of his group, alive after the hit) for dmg points (health and armor
+        together, before the armor's share): his belief of v's stack loses it at the next frame of the belief. step()
+        does it for the hits of each frame; a game server's plugin calls it with the game's count of what he dealt."""
+        if EN_STACK and dmg > 0:
+            self.es_dmg[i, self._slot(v)] += float(dmg)
+
+    def _es_take(self, j, k, kind, val, cap):
+        """player j saw or heard player k (by place in the group) take a health or armor item of value val to cap"""
+        if kind == "hp":
+            h, v = float(self.es_h[j, k]), float(self.es_vh[j, k])
+            if cap <= 100:                                   # (+25 and +50: taken only under 100, so he was under 100)
+                h = min(h, 99.0)
+            sd = math.sqrt(max(v, 1.0))
+            f = min(1.0, max(0.0, (cap - (h + val)) / (2.0 * sd) + 0.5))      # (the share of the belief the cap does not cut)
+            self.es_h[j, k], self.es_vh[j, k] = min(float(cap), h + val), v * f
+        else:
+            a, v = float(self.es_a[j, k]), float(self.es_va[j, k])
+            sd = math.sqrt(max(v, 1.0))
+            f = min(1.0, max(0.0, (cap - (a + val)) / (2.0 * sd) + 0.5))
+            self.es_a[j, k], self.es_va[j, k] = min(float(cap), a + val), v * f
+
+    def _es_update(self):
+        """a frame of the belief (observe() calls it; a game server's plugin on a frame without observe()): the damage he
+        dealt, a pain sound heard, the tick above 100, the drift while unseen, the clocks"""
+        if not EN_STACK:
+            return
+        n = self.n
+        ar = np.arange(n)
+        oth = self._others_arr()
+        sl = self._slot(oth)                                 # (players, others): their places in the group
+        ar2 = ar[:, None]
+        # the damage he dealt: off the armor's share while it lasts (as _damage), the rest off the health (never below 1:
+        # the blow that kills is not counted, note_dealt)
+        d = self.es_dmg
+        if (d > 0).any():
+            save = np.minimum(self.es_a, np.ceil(ARMOR_ABSORB * d))
+            self.es_a = (self.es_a - save).astype(np.float32)
+            self.es_h = np.maximum(self.es_h - (d - save), 1.0).astype(np.float32)
+        self.es_dmg = np.zeros_like(self.es_h)
+        # a pain sound heard on this frame pins the health into its band
+        pt_ = getattr(self, "pain_t", None)
+        if pt_ is not None:
+            fresh = np.nonzero(pt_[:n] < 0.5 * DT)[0]
+            if len(fresh):
+                src_ = getattr(self, "pain_src", None)
+                who_ = oth[fresh, 0] if src_ is None else np.where(src_[fresh] >= 0, src_[fresh], oth[fresh, 0])
+                k_ = self._slot(who_)
+                b_ = self.pain_b[fresh]
+                h_, v_ = self.es_h[fresh, k_], self.es_vh[fresh, k_]
+                lo_ = np.where(b_ == 0, 1.0, 25.0 * b_).astype(np.float32)
+                hi_ = np.where(b_ >= 3, 1e9, 25.0 * b_ + 24.0).astype(np.float32)
+                inb = (h_ >= lo_) & (h_ <= hi_)
+                low = b_ < 3
+                self.es_h[fresh, k_] = np.where(low & ~inb, 0.5 * (lo_ + np.minimum(hi_, 99.0)), np.where(~low & ~inb, 87.5, h_))
+                self.es_vh[fresh, k_] = np.where(low, np.where(inb, np.minimum(v_, ES_BAND_VAR), ES_BAND_VAR),
+                                                 np.where(inb, v_, np.maximum(v_, ES_BAND_VAR)))
+                self.es_pin[fresh, k_] = np.where(low, 0.0, self.es_pin[fresh, k_])
+        # health and armor over 100 tick down a point a second
+        self.es_h = np.where(self.es_h > 100.0, np.maximum(100.0, self.es_h - DT), self.es_h).astype(np.float32)
+        self.es_a = np.where(self.es_a > 100.0, np.maximum(100.0, self.es_a - DT), self.es_a).astype(np.float32)
+        # unseen: toward the unseen enemy's average, the spread toward its spread
+        acq_ = np.zeros(self.es_h.shape, bool)
+        acq_[ar2, sl] = np.asarray(self._v02_others()[1], bool)
+        k_ = (DT / ES_TAU) * ~acq_
+        self.es_h = (self.es_h + k_ * (ES_MU_H - self.es_h)).astype(np.float32)
+        self.es_a = (self.es_a + k_ * (ES_MU_A - self.es_a)).astype(np.float32)
+        self.es_vh = (self.es_vh + 2.0 * k_ * (ES_SD_H ** 2 - self.es_vh)).astype(np.float32)
+        self.es_va = (self.es_va + 2.0 * k_ * (ES_SD_A ** 2 - self.es_va)).astype(np.float32)
+        self.es_pin = np.minimum(self.es_pin + DT, 99.0).astype(np.float32)
+
+    def _es(self, opp):
+        """the inputs of N_ES (see EN_STACK), about the enemy opp of each player (in a group: the one he attends to)"""
+        n = self.n
+        out = np.zeros((n, N_ES), np.float32)
+        if not EN_STACK:
+            return out
+        self._es_update()
+        ar = np.arange(n)
+        so = self._slot(opp)
+        h, a = self.es_h[ar, so], self.es_a[ar, so]
+        out[:, 0] = h / 200.0
+        out[:, 1] = a / 200.0
+        out[:, 2] = (h + a) / 300.0
+        out[:, 3] = np.sqrt(np.maximum(self.es_vh[ar, so] + self.es_va[ar, so], 0.0)) / 150.0
+        out[:, 4] = np.minimum(self.es_pin[ar, so], 30.0) / 30.0
+        out[:, 5] = (h + a) < ES_WEAK
+        grp = ar // (self._others_arr().shape[1] + 1)
+        out[np.isin(self.kind[grp], (MOVE, SOLO))] = 0.0     # (no enemy about)
+        return out
+
+    def note_hunt(self, valid):
+        """HUNT (and FIGHT_TARGET): the enemy as his target is reached when he is in view, given up where nothing is
+        believed of him any more (valid: his intention has a route goal). step() calls it; a game server's plugin from
+        intent_release()"""
+        en_ = self.intent == EN_INTENT
+        vis_ = np.asarray(self.visible, bool)[:len(en_)]
+        self.intent_done = self.intent_done | (en_ & vis_)
+        self.intent_gone = self.intent_gone | (en_ & ~np.asarray(valid, bool))
+        return en_, vis_
 
     def _v02_void(self, j, v):
         """player j knows that player v died: where he believed him, and where he heard him, is void (N_V02)"""
@@ -4477,6 +4668,13 @@ class DuelEnv:
         plugin calls it at every pickup."""
         self.v02_took[i, it] = 0.0
         lab = self.item_def[it][4]
+        if EN_STACK and self.item_def[it][0] in ("hp", "ar") and int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
+            kd_, val_, _, cap_, _ = self.item_def[it]        # (B-257) every health and armor pickup heard or seen: the belief of his stack
+            a2_ = getattr(self, "acq2", None)
+            for j in self._mates(i):
+                sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
+                if sees or np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT:
+                    self._es_take(j, self._slot(i), kd_, float(val_), float(cap_))
         k = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab in ("YA", "GA") else -1
         if k < 0 or int(self.kind[self._match_of(i)]) in (MOVE, SOLO):     # (alone on the map: nobody else is about)
             return
@@ -5285,6 +5483,8 @@ class DuelEnv:
                         self.ammo[i, w_] = max(float(self.ammo[i, w_]), float(AMMO_MAX[w_]) * 0.4)
                 self.first_wp[i] = True
         self.g_tick[m], self.round_t[m] = LATE_FRAME, LATE_AT
+        if EN_STACK:                                         # (B-257) drawn stacks: nothing is known of them
+            self._es_set(np.array(q), slice(None), spawn=False)
         self.g_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT)) if self.win_tab is not None else 0.5
         for it in range(self.nI):
             kind, val, resp, cap, lab = self.item_def[it]
@@ -6578,6 +6778,10 @@ class DuelEnv:
         dealt = np.zeros(n, np.float32)                     # per attacker (see _book)
         for (i_, v_), d_ in st["by"].items():
             dealt[i_] += d_
+        if EN_STACK:                                         # (B-257) his own hits on a living enemy: his belief of that stack
+            for (i_, v_), d_ in st["by"].items():
+                if i_ != v_ and self.hp[v_] > 0:
+                    self.note_dealt(i_, v_, d_)
         high_ = self._high(st["by"], s, n)                  # (B-160) who stood higher at each hit; with HIGH_PAY what that adds for the two
         taken = dmg_taken + fall                            # from the opponent, own splash and falls alike
         self.stats["soak"] += float(self.soak[self.script == 0].sum())
@@ -6779,12 +6983,10 @@ class DuelEnv:
             soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0) | (self.intent >= EN_INTENT)
             gone_before = self.intent_gone.copy()
             self.intent_gone = valid & ~soon & (self.intent > 0)
-            if FIGHT_TARGET:                                 # the enemy as the target: reached when he is in view, given up when
-                en_ = self.intent == EN_INTENT               # nothing is known of him any more
-                self.intent_done = self.intent_done | (en_ & np.asarray(self.visible, bool)[:len(en_)])
-                self.intent_gone = self.intent_gone | (en_ & ~valid)
+            if EN_ON:                                        # the enemy as the target: reached when he is in view, given up when
+                en_, vis_ = self.note_hunt(valid)            # nothing is known of him any more (FIGHT_TARGET, HUNT)
                 self.stats["en_frames"] += np.array([(en_ & (self.script == 0) & (self.hp > 0)).sum(), (en_ & self.legs_on).sum(),
-                                                     (en_ & np.asarray(self.visible, bool)[:len(en_)] & (self.script == 0)).sum()], np.float64)
+                                                     (en_ & vis_ & (self.script == 0)).sum()], np.float64)
             if self.hold_n:                                  # a holding place as the target (TARGETS): reached where he stands at it,
                 hd_ = self.intent >= HOLD_INTENT             # given up where no way leads to it
                 at_, new_ = self.note_holds()
@@ -6824,7 +7026,9 @@ class DuelEnv:
             pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0)
             if self.hold_n:                                  # (nothing is paid for the way to a holding place, nor for speed on it)
                 pay = pay & (self.intent < HOLD_INTENT)
-            worth = self.item_reward * np.array(INTENT_VALUE, np.float32)[self.intent]      # the whole way is worth the pickup
+            if HUNT:                                         # (B-256: nor for the way to the enemy, nor for speed on it)
+                pay = pay & (self.intent != EN_INTENT)
+            worth =self.item_reward * np.array(INTENT_VALUE, np.float32)[self.intent]      # the whole way is worth the pickup
             # a trip given up pays nothing (v9); one whose item another player took is not given up
             claw = self.intent_changed & (prev_int > 0) & ~prev_done & ~in_run & ~gone_before[:len(prev_int)]
             reward -= self.intent_paid * claw
