@@ -295,8 +295,8 @@ for j in ("nearest", "second nearest", "third nearest", "fourth nearest", "fifth
 add("his legs", "the switch to his legs is on", "the movement network moves him while it is on and he has a target it knows a way to (LEGS)",      # ---- his legs (2026-10-10, v15b)
     "0 or 1", "v15b")
 add("his legs", "his legs carried him on the last frame", "", "0 or 1", "v15b")
-add("intention", "his intention is the enemy", "the ninth intention (FIGHT_TARGET): his way leads to where he believes the enemy is", "0 or 1", "v15f")     # ---- the enemy as a target (2026-10-11)
-assert len(rows) == E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3, (len(rows), E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3)
+add("intention", "his intention is the enemy", "the ninth intention (FIGHT_TARGET; HUNT, v0.3.1: B-256): his way leads to where he believes the enemy is", "0 or 1", "v15f")     # ---- the enemy as a target (2026-10-11)
+assert len(rows) == E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES, (len(rows), E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES)
 # ---- v0.2 (2026-10-11): stage A of the attention model, five groups (N_V02 in sim/duel_env.py; the tokens are cut by these group names)
 V02 = "v0.2"
 add("v02 game", "time left in the round", "the share of the round's length still to play (on a game server: of the game's time limit)", "0 to 1", V02)
@@ -352,7 +352,7 @@ for j in range(1, E.V02_SLOTS + 1):
     add("v02 places", "place {}: outcome over expected standing there".format(j), "as for his cell, for a pro seen standing within 128 units of it; zero where it is not known", "/ 0.3, between -1 and 1", V02)
     add("v02 places", "place {}: nearest to the believed enemy".format(j), "of all the map's places this one is nearest to " + BEL.split(":")[0], "0 or 1", V02)
     add("v02 places", "place {}: slot holds a place".format(j), "", "0 or 1", V02)
-assert len(rows) == E.OBS_DIM - E.N_B2 - E.N_B3, (len(rows), E.OBS_DIM - E.N_B2 - E.N_B3)
+assert len(rows) == E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES, (len(rows), E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES)
 # ---- stage B part 2 (TARGETS; N_B2 in sim/duel_env.py): the map's holding places, slot by slot (a token each: the text before the colon)
 B2 = "stage B2"
 HOLD = ("one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: "
@@ -367,7 +367,7 @@ for j in range(1, E.HOLD_SLOTS + 1):
         "standing in its cell, less what his stack and the weapons would give anywhere", "/ 0.3, between -1 and 1", B2)
     add("b2 holds", "hold {}: his target".format(j), "his intention is this place (TARGETS)", "0 or 1", B2)
     add("b2 holds", "hold {}: slot holds a place".format(j), "", "0 or 1", B2)
-assert len(rows) == E.OBS_DIM - E.N_B3, (len(rows), E.OBS_DIM - E.N_B3)
+assert len(rows) == E.OBS_DIM - E.N_B3 - E.N_ES, (len(rows), E.OBS_DIM - E.N_B3 - E.N_ES)
 # ---- stage B part 3 (WAYS; N_B3 in sim/duel_env.py): his way to his target, and what the other ways are from where he stands (one token)
 B3 = "stage B3"
 WAYN = ("the shortest", "the second", "the third")
@@ -380,6 +380,18 @@ for j in range(1, E.N_WAYS):
 for j in range(1, E.N_WAYS):
     add("b3 ways", "{} way: differs".format(WAYN[j]), "from where he stands more than a quarter of that way's seconds lie farther than 128 units "
         "from the shortest way", "0 or 1", B3)
+assert len(rows) == E.OBS_DIM - E.N_ES, (len(rows), E.OBS_DIM - E.N_ES)
+# ---- v0.3.1, B-257 (EN_STACK; N_ES in sim/duel_env.py): the enemy's stack as he believes it, from his senses only (one token)
+ES_ = "v0.3.1"
+ESW = "(EN_STACK; zeros with it off, and in movement rounds) "
+add("v031 enemy stack", "believed stack: health", ESW + "the enemy's expected health: 125 at a spawn he knows of, his own hits off, pickups heard or seen on, "
+    "over 100 ticking down, a pain sound's band, drifting to an unseen enemy's average while unseen", "/ 200", ES_)
+add("v031 enemy stack", "believed stack: armor", ESW + "the enemy's expected armor, by the same rules (his hits take the armor's share off first)", "/ 200", ES_)
+add("v031 enemy stack", "believed stack: health and armor", ESW + "the two together", "/ 300", ES_)
+add("v031 enemy stack", "believed stack: spread", ESW + "how unsure he is: the standard deviation of the two together (0 at a spawn he knows of; grows "
+    "while the enemy is out of view, toward an unseen enemy's)", "/ 150", ES_)
+add("v031 enemy stack", "believed stack: since pinned", ESW + "seconds since a spawn he knows of or a pain sound of the three low bands", "seconds / 30, capped at 1", ES_)
+add("v031 enemy stack", "believed stack: weak", ESW + "the expected health and armor together are under 80 (ES_WEAK)", "0 or 1", ES_)
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

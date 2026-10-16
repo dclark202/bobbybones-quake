@@ -310,6 +310,9 @@ class ffabot(duelbot):
             env._v02_round(np.arange(SEATS) == k)            # believed of the player who sat there: all void
             env.v02_bt[:, k], env.v02_ht[:, k], env.v02_pk[:, k] = 99.0, 99.0, 0.0
             env.e_got[:, k], env.e_life[:, k] = 0.0, 99.0
+        if getattr(self.E, "EN_STACK", False) and hasattr(env, "_es_set"):
+            env._es_set(slice(None), k, spawn=True)          # (B-257) whoever sits there next comes in on a fresh spawn
+            env.es_dmg[:, k] = 0.0
         getattr(self, "shot_made", {}).pop((id(env), k), None)
 
     def free_seat(self, cid):
@@ -661,6 +664,7 @@ class ffabot(duelbot):
             if hasattr(env, "pain_t"):
                 env.pain_t += E.DT
         bot_seats = [k for k, p, st in seated if is_bot(p)]
+        hp_seat = {k: st.health for k, p, st in seated}      # (B-257: whose stack is still there to believe in)
         for k, p, st in seated:                              # hit feedback and pain sounds
             bot = is_bot(p)
             took = hurt.get(k, 0)
@@ -674,12 +678,16 @@ class ffabot(duelbot):
                 env.dmg_life[k] += dealt
                 if hasattr(env, "dmg_on"):                   # (the group simulator reads this one; it was never written: the game
                     env.dmg_on[k, foe] += dealt              # does not say whom he hit, so the enemy he attends to is charged)
+                if dealt > 0 and getattr(E, "EN_STACK", False) and hasattr(env, "note_dealt") and hp_seat.get(foe, 0) > 0:
+                    env.note_dealt(k, foe, dealt)            # (B-257) his belief of that enemy's stack: the same charge
                 if took > 0 and hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
                     env.note_hit(k, took)
             if took > 0 and hasattr(env, "pain_t"):
                 for b in bot_seats:
                     if b != k and float(np.linalg.norm(env.state[b, :3] - env.state[k, :3])) < E.HEAR_EVT:
                         env.pain_t[b], env.pain_b[b] = 0.0, min(3, int(max(0, st.health)) // 25)
+                        if getattr(E, "EN_STACK", False) and hasattr(env, "pain_src"):     # (B-257: whose pain it was, as step() keeps it)
+                            env.pain_src[b] = k
         self.senses_all(env, E, present)
         for k in bot_seats:
             env.weapon[k] = self.held(env, k)

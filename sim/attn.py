@@ -30,6 +30,8 @@ ONE = [("self", ("self", "weapons", "own hands", "his movement", "his legs", "st
        ("ways", ("b3 ways",))]                               # (stage B part 3: his way, and what the other ways are from here)
 SPLIT = [("proj", ("projectiles",)), ("item", ("items", "more items", "v02 items")), ("place", ("v02 places",)),
          ("hold", ("b2 holds",))]                            # (stage B part 2: a token a holding place)
+LATE = [("stack", ("v031 enemy stack",))]                   # (v0.3.1, B-257: the enemy's stack believed; after the split kinds, so
+                                                             # that an older network's tokens keep their rows)
 # A layout may say "gated": the network then carries "gate" among its weights (not trained: a buffer), a number a token
 # (the summary token too) that is added to every look at that token before the softmax of both blocks. A network that
 # is given new tokens answers as before while their gate is very negative (GATE_SHUT: nothing looks at them;
@@ -63,6 +65,11 @@ def layout_from_csv(path):
             kinds.append(dict(name=name, idx=[v + [-1] * (w - len(v)) for v in ent.values()], names=list(ent.keys())))
             for v in ent.values():
                 used[v] = True
+    for name, groups in LATE:
+        idx = [int(r["index"]) for r in rows if r["group"] in groups]
+        if idx:
+            kinds.append(dict(name=name, idx=[idx]))
+            used[idx] = True
     rest = [i for i in range(n) if not used[i]]
     if rest:
         kinds.append(dict(name="rest", idx=[rest]))
