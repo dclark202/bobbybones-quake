@@ -75,8 +75,12 @@ long FS_ReadFile(const char *qpath, void **buffer) {
 }
 void FS_FreeFile(void *buffer) { free(buffer); }
 
-/* the server snaps velocity to whole units every frame: part of the real physics (and of strafe jumping) */
+/* the server snaps velocity to whole units every frame: part of the real physics (and of strafe jumping) in Quake 3.
+   Quake Live does not (its velocities are not whole units after a move: plugins/rjlab.py, 2026-10-15): qsim_snap(0). */
+static int sim_snap = 1;
+API void qsim_snap(int on) { sim_snap = on; }
 void trap_SnapVector(float *v) {
+    if (!sim_snap) return;
     v[0] = (float)floor(v[0] + 0.5f);
     v[1] = (float)floor(v[1] + 0.5f);
     v[2] = (float)floor(v[2] + 0.5f);
@@ -143,6 +147,8 @@ API void qsim_params2(float wade_scale, float step_size) {
 
 /* 2 = this library has the functions of 2026-10-09 (masks, many contents, solid pieces, params2) */
 API int qsim_version(void) { return 2; }
+/* 3 = this library has qsim_snap (2026-10-15) */
+API int qsim_version3(void) { return 3; }
 
 /* ---------------- world callbacks for Pmove ---------------- */
 static void sim_trace(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs,

@@ -297,6 +297,8 @@ rep('''                                np.minimum(self.dmg_life / 200.0, 2.0)[:,
 # ---- explosions
 rep('''        for v in (i, i ^ 1):                              # splash on both players (owner too)''',
     '''        for v in [i] + [int(x) for x in self.others[i]]:  # splash on everybody in the group (owner too)''')
+rep('''        for v in (i, i ^ 1):                              # (RL_QL) splash on both players, the owner too''',
+    '''        for v in [i] + [int(x) for x in self.others[i]]:  # (RL_QL) splash on everybody in the group, the owner too''')
 
 # ---- scripted players
 rep("            ph = (self.round_t[idx // 2] / DT).astype(np.int64)", "            ph = (self.round_t[idx // self.G] / DT).astype(np.int64)")
@@ -365,8 +367,10 @@ rep('''            opp = owner ^ 1
                 dk = self._seg_box(p0, hitpt, s[opp, :3], np.where(self.duck[opp], TOP_DUCK, TOP)) & ~direct
                 d_on[dk] = opp[dk]
                 direct |= dk''')
-rep("                    self._explode(i, wq, hitpt[q], i ^ 1, dirs[q], s, st)",
-    "                    self._explode(i, wq, hitpt[q], int(d_on[q]), dirs[q], s, st)")
+rep("                    self._explode(i, wq, hitpt[q], i ^ 1, dirs[q], s, st, back=dirs[q])",
+    "                    self._explode(i, wq, hitpt[q], int(d_on[q]), dirs[q], s, st, back=dirs[q])")
+rep("                            opp_rl = [i ^ 1]                # (RL_QL) whom it can meet within its first stretch",
+    "                            opp_rl = vs_                    # (RL_QL) whom it can meet within its first stretch")
 rep('''        opp_all = ar ^ 1
         hurt = np.nonzero((dmg_taken > 0) & (self.hp > 0))[0]              # pain sounds: the opponent hears them within earshot
         if len(hurt):

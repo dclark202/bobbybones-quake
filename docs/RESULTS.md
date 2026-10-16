@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-15](results/2026-10-15.md)
 
+- 21:25 — The rocket jump check (B-252): as of v0.3 the simulator's rocket jumps are wrong (the blast comes 3 frames late, damage is off by up to 10, jumps are 60 units too low); two switches, both off by default, bring it within 5% and 1 point
 - 21:40 — B-253 stage (b) built: his legs branch can learn from games (`--legs-learn`), off = stage (a) exactly
 - 21:15 — v0.3.1's belief of the enemy's stack (B-257) and the hunt (B-256) built behind switches, off = today's simulator; the belief's error is a quarter of a fixed guess's
 - 20:53 — v0.3.1 started: v0.3 resumed from its 18:00 stop with the owner's pay table and the faster learning step
