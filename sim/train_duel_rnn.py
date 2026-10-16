@@ -132,6 +132,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
+        elif cmd == "head_events":                           # (--head) the head's events since the last call, on its ticks (None: the
+            remote.send(np.asarray(env.head_events(), np.float32) if hasattr(env, "head_events") else None)   # simulator has none: zeros)
         elif cmd == "close":
             break
 
@@ -483,6 +485,23 @@ def main():
                     "whole number of ticks: 48 = 1.2 s, 8 ticks a rollout of 384)")
     ap.add_argument("--slow-ring", type=int, default=-1, help="(--slow-mem) ticks before the rollout the gradient reaches (320 x 1.2 s = 6.4 min; "
                     "-1: the network's own or 320; 0: no ring, the slow state carried as the fast one is)")
+    ap.add_argument("--head", default="",
+                    help="(v0.4, docs/v0.4/BUILD_v0.4.md; sim/head.py) give him the head: a layout as JSON text or a JSON file of "
+                         "head.layout()'s arguments, or 'default'. A slow GRU that ticks every 8 frames on his fast memory, the encoder's "
+                         "mean, a read of its store of three minutes and the simulator's events; its plan enters his fast GRU through "
+                         "head.plan_in and its target and way are added to his intention's and his way's logits, all at zero to begin "
+                         "with. A network that has the part keeps it (and its layout) whatever this says; '' and a network without it: "
+                         "the trainer as before")
+    ap.add_argument("--head-lr-scale", type=float, default=0.25, help="(--head) the head's learning rate as a share of the rest's (its own "
+                                                                      "optimiser group; plan_in is the head's)")
+    ap.add_argument("--head-v", type=float, default=0.5, help="(--head) the weight of the head's two values (on its ticks: v_short against "
+                                                              "his returns, v_long against the long count's at --long-gamma)")
+    ap.add_argument("--head-win", type=float, default=0.1, help="(--head) the weight of the win head's lesson: the band of his final score "
+                                                                "margin, from info['aux'] win_game / win_band (HEAD_EVENTS=1; BUILD_v0.4.md "
+                                                                "3a): a game that ends in the rollout gives its ticks the true band, one that "
+                                                                "goes on its forecast at its last tick in the rollout (a value at gamma 1)")
+    ap.add_argument("--head-win-true", type=float, default=1.0, help="(--head) ... the weight of a tick with the true band beside one with a "
+                                                                     "forecast for its target")
     ap.add_argument("--run", default="duel_gru_v1")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--matches", type=int, default=128, help="matches per worker (2 players each)")
@@ -795,12 +814,14 @@ def main():
 
     ATT = None                                               # (v0.2) the attention part's layout: it comes with the network he resumes from
     SLOW_CK = None                                           # (--slow-mem) the slow memory's layout: comes with the network as the attention part's
+    HEAD_CK = None                                           # (--head) the head's layout: comes with the network, as the slow memory's
     AUX_CK = ()                                              # (--aux) which of the layers of 2026-10-12 the network he resumes from has
     AUX_SAVE = {}                                            # (--aux) what is kept in a saved file beside the lesson's layers
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
         SLOW_CK = ck0_.get("slow")
+        HEAD_CK = ck0_.get("head")
         if any(k_.startswith("aux.") for k_ in ck0_["model"]):
             AUX_SAVE = dict(aux_heads=ck0_.get("aux_heads"))
         AUX_CK = tuple(h_ for h_ in ("target", "strength", "first", "near") if "aux.{}.weight".format(h_) in ck0_["model"])
@@ -881,6 +902,36 @@ def main():
         print("aux (v0.2.2): tail {} ({} frames), fresh {} s, unseen {}, measure {}".format(bool(AUX_TAIL), AUX_TW, AUX_FRESH, bool(AUX_UNSEEN),
                                                                                            bool(AUX_MEAS)), flush=True)
 
+    HEADL = HEAD_CK                                          # (--head) the network's own head, or a new one with its links at zero
+    if HEADL is not None or a.head:
+        import head as head_
+        if HEADL is None:
+            HA_ = head_.as_layout(a.head) if a.head != "default" else {}
+            HA_ = {k_: v_ for k_, v_ in HA_.items() if k_ != "version"}
+            HA_.update(fast=H, enc=256, n_target=ACTION_DIMS[I_HEAD], n_way=ACTION_DIMS[W_HEAD] if W_HEAD >= 0 else 1,
+                       aux=(dict(place=3, appear=2, fight=4, items=2, **{h_: AUX_NN[h_] for h_ in AUX_NEW}) if AUX else {}))
+            HEADL = head_.layout(**HA_)
+        assert HEADL["fast"] == H and HEADL["enc"] == 256, "the head's layout does not fit the network: {}".format(HEADL)
+        assert HEADL["n_target"] == ACTION_DIMS[I_HEAD] and (W_HEAD < 0 or HEADL["n_way"] == ACTION_DIMS[W_HEAD]), \
+            "the head's target and way ({}, {}) do not fit the outputs {}".format(HEADL["n_target"], HEADL["n_way"], ACTION_DIMS)
+        assert a.steps % HEADL["every"] == 0, "--steps {} is not a whole number of the head's ticks ({})".format(a.steps, HEADL["every"])
+        assert not SLOW, "the head and the slow memory together: not built"
+        assert not HAS_CELLS, "the head is for networks without the learned map cells (v8)"
+        assert a.demo_coef <= 0, "--demo-coef with the head: the demo loss steps his memory without the plan (not built)"
+        print(head_.describe(HEADL) + ("" if HEAD_CK is not None else " (new: its links at zero)"), flush=True)
+    HEAD_SAVE = {"head": HEADL} if HEADL else {}             # (a checkpoint without the part is as it was)
+    HD_I0 = sum(ACTION_DIMS[:I_HEAD])                        # (--head) where the intention's and the way's logits begin
+    HD_W0 = sum(ACTION_DIMS[:W_HEAD]) if W_HEAD >= 0 else -1
+
+    def head_logits(lg, ta, wa):
+        """(--head) his logits with the head's target and way added to the intention's and the way's"""
+        parts = [lg[..., :HD_I0], lg[..., HD_I0:HD_I0 + ta.shape[-1]] + ta]
+        if HD_W0 >= 0:
+            parts += [lg[..., HD_I0 + ta.shape[-1]:HD_W0], lg[..., HD_W0:HD_W0 + wa.shape[-1]] + wa, lg[..., HD_W0 + wa.shape[-1]:]]
+        else:
+            parts += [lg[..., HD_I0 + ta.shape[-1]:]]
+        return torch.cat(parts, -1)
+
     class Policy(nn.Module):
         def __init__(self):
             super().__init__()
@@ -913,14 +964,22 @@ def main():
                     nn.init.zeros_(l_.weight)                    # only the ones named in --aux-heads or in the network he resumes from
                     nn.init.zeros_(l_.bias)
                     setattr(self.aux, h_, l_)
+            if HEADL:                                            # (--head) sim/head.py; plan_in, target, way, win, aux at zero
+                self.head = head_.make_module(HEADL)
+                self.head_open = True                            # (a league opponent whose head is shut skips it)
 
-        def step(self, x, h, f=None, sm=None):
+        def step(self, x, h, f=None, sm=None, hd=None, ev=None):
             if HAS_CELLS:
                 ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
                 x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
             e = self.enc(x)
             if self.attn is not None and (f is not None or self.door_open):
                 e = e + (self.attn(x) if f is None else f)       # what the door lets through, added to the old encoder's
+            if hd is not None:                                   # (--head) his fast GRU reads the plan; the head ticks on its frames
+                h = self.gru(e + self.head.plan_in(hd.plan), h)
+                _, ta_, wa_ = head_.live(self.head, hd, e, h, ev)
+                self.zl = h
+                return head_logits(self.pi(h), ta_, wa_), self.v(h).squeeze(-1), h
             h = self.gru(e, h)
             if sm is None or self.slow is None:
                 self.zl = h                                      # (what the outputs read: his memory, or with the slow one)
@@ -952,8 +1011,23 @@ def main():
         """a network's weights. Only the layers of --aux may be missing (they stay as they are: fresh in the learner) or
         left over (the lesson is off and they are not in this network)"""
         bad = net.load_state_dict(sd, strict=False)
-        odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.")]
+        odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.") and not k_.startswith("head.aux.")]
         assert not odd, "the network does not fit: {}".format(odd)
+
+    HEAD_SHUT = ("plan_in.", "target.", "way.", "win.", "aux.")      # (--head) the links of a new head: zeros
+
+    if HEADL:                                                # (--head) a network without the part (the control, older league files, the
+        load_net2_ = load_net                                # start before conversion) gets one with its links at zero: it answers as it did
+
+        def load_net(net, sd):
+            if getattr(net, "head", None) is not None and "head.plan_in.weight" not in sd:
+                sd = dict(sd)
+                for k_, v_ in net.head.state_dict().items():
+                    sd["head." + k_] = torch.zeros_like(v_) if k_.startswith(HEAD_SHUT) else v_
+            load_net2_(net, sd)
+            if getattr(net, "head", None) is not None:       # its head counts only if a link of it is open
+                net.head_open = any(float(p_.abs().sum()) > 0 for n_, p_ in net.head.named_parameters()
+                                    if n_.startswith(("plan_in.", "target.", "way.")))
 
     if SLOW:                                                 # (--slow-mem) a network without the part (the control, older league files, the
         load_net0_ = load_net                                # start before conversion) gets one with its door shut: it answers as it did
@@ -991,7 +1065,10 @@ def main():
             " (not with map cells: those networks keep the frame-by-frame step)" if HAS_CELLS else ""), flush=True)
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
-    opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.")], lr=a.lr, eps=1e-5)   # (LEGS_IN: not the branch)
+    opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))],
+                           lr=a.lr, eps=1e-5)                # (LEGS_IN: not the branch; --head: not the head)
+    if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
+        opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
     if LEGS_LEARN and dev.type == "cuda":                    # (--legs-learn) the branch's sums in full float32 (torch's default; said, so
         torch.backends.cuda.matmul.allow_tf32 = False        # nothing elsewhere turns it on: its draws are the simulator's from these logits)
     if LEGS_LEARN:                                           # (--legs-learn) the branch in a group of its own; every setting of the rate
@@ -1054,7 +1131,7 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
-                        hidden=H, minutes=minutes, **SLOW_SAVE,
+                        hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE,
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
                         env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
@@ -1098,6 +1175,40 @@ def main():
         RING = slowmem_.Ring(N, SLOW, a.steps // SLOW["every"], dev)
         print("slow memory: a ring of {} ticks x {} players x {} inputs at half precision on the host ({:.2f} GB)".format(
             RING.cap, N, SLOW["fast"] + SLOW["enc"], RING.u.numel() * 2 / 1e9), flush=True)
+    HS = HS_O = RINGH = None                                 # (--head) the head's state of his seats and of the league's, its ring
+    HD_K = HD_J = 0
+    HD_WG = HD_WB = -1                                       # (--head) the win label's columns in info["aux"] (-1: none: never taught)
+    if HEADL:
+        HD_K = int(HEADL["every"])
+        HD_J = a.steps // HD_K
+        HS, HS_O = head_.State(N, HEADL, dev), head_.State(N, HEADL, dev)
+        if HEADL["ring"] > 0:
+            RINGH = head_.Ring(N, HEADL, HD_J, dev)
+            print("head: a ring of {} ticks x {} players x {} inputs at half precision on the host ({:.2f} GB)".format(
+                RINGH.cap, N, head_.u_width(HEADL), RINGH.u.numel() * 2 / 1e9), flush=True)
+        print("head: its store {} players x {} slots x {} on the {} ({:.2f} GB a state, two states)".format(
+            N, HEADL["slots"], HEADL["slot"], dev.type, HS.slots.numel() * 4 / 1e9), flush=True)
+        AC_ = tuple(getattr(E_, "AUX_COLS", ()) or ())
+        if "win_game" in AC_ and "win_band" in AC_:
+            HD_WG, HD_WB = AC_.index("win_game"), AC_.index("win_band")
+        HE_ = bool(getattr(E_, "HEAD_EVENTS", False))
+        assert not HE_ or int(getattr(E_, "N_HEAD_EVENTS", HEADL["ev"])) == HEADL["ev"], \
+            "the simulator gives {} events a tick, the head reads {}".format(getattr(E_, "N_HEAD_EVENTS", None), HEADL["ev"])
+        print("head: events {}; the win head's labels {}".format(
+            "from the simulators (HEAD_EVENTS)" if HE_ else "ZEROS (the simulator {} has HEAD_EVENTS off or none)".format(a.env),
+            "from info['aux'] win_game / win_band (columns {}, {})".format(HD_WG, HD_WB) if HD_WG >= 0 else "NONE: never taught"), flush=True)
+        print("head: lr x {}, values x {}, win x {} (true bands x {})".format(a.head_lr_scale, a.head_v, a.head_win, a.head_win_true), flush=True)
+
+    def head_events():
+        """(--head) the simulators' events of the head's tick about to come [N, ev] (zeros from a simulator without them)"""
+        for p in pipes:
+            p.send(("head_events", None))
+        evs_ = []
+        for w_, p in enumerate(pipes):
+            r_ = p.recv()
+            n_ = int(w_off[w_ + 1] - w_off[w_])
+            evs_.append(np.zeros((n_, HEADL["ev"]), np.float32) if r_ is None else np.asarray(r_, np.float32).reshape(n_, HEADL["ev"]))
+        return torch.from_numpy(np.concatenate(evs_)).to(dev)
     scr = torch.zeros(N, device=dev)                                   # scripted players (not trained on)
 
     T = a.steps
@@ -1200,6 +1311,17 @@ def main():
             b_ht = torch.zeros(AUX_TW, N, H, dtype=torch.float16) if AUX_TW else None      # (--aux-tail) his memory on the last frames
             b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
+        if HEADL:                                                        # (--head) the rollout's events, win labels; the ring folded and
+            t_hd = time.time()                                           # re-run as the slow memory's; he plays from the state the update
+            b_ev = torch.zeros(HD_J, N, HEADL["ev"], device=dev)         # re-runs; its start kept for the update
+            b_wg = torch.full((T, N), -1.0, device=dev)                  # (win_game, win_band of each frame: none until read)
+            b_wb = torch.full((T, N), -1.0, device=dev)
+            HS_O.g = HS.g                                                # (a league network whose head is shut skipped the frames)
+            if RINGH is not None:
+                RINGH.trim(pol.head)
+                head_.refresh(pol.head, HS, RINGH.state_all(pol.head))
+            HD_RS0, HD_PEND, HD0 = HS.rs.clone(), [], HS.snap()
+            hd_secs = [time.time() - t_hd, 0.0]
         if SLOW:                                                         # (--slow-mem) the ring's ticks beyond its length folded into its
             t_sl = time.time()                                           # stored state; he plays from the state the update re-runs
             RING.trim(pol.slow)
@@ -1213,8 +1335,19 @@ def main():
             if keep_raw:
                 raw.append(obs if obs_count < OBS_FREEZE else obs[np.random.rand(len(obs)) < 0.005])
             x = torch.from_numpy(norm(obs)).to(dev)
+            ev_ = None
+            if HEADL and (HS.g + 1) % HD_K == 0:                         # (--head) a tick: the simulators' events since the last
+                ev_ = head_events()
+                b_ev[t // HD_K] = ev_
             with torch.no_grad():
-                logits, val, h = pol.step(x, h, sm=SM)
+                if HEADL:
+                    t_hd = time.time()
+                    logits, val, h = pol.step(x, h, hd=HS, ev=ev_)
+                    if RINGH is not None and HS.ticked:                  # (--head) the tick's input, for the ring
+                        HD_PEND.append((HS.u.half().cpu(), HS.r_tick.cpu()))
+                    hd_secs[0] += time.time() - t_hd
+                else:
+                    logits, val, h = pol.step(x, h, sm=SM)
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 if LONG:
@@ -1222,7 +1355,11 @@ def main():
                 ds = dists(logits)
                 act = torch.stack([d.sample() for d in ds], -1)
                 lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
-                if snaps:
+                if snaps and HEADL:                                      # (--head) the league's network with its own head, if open
+                    lo, _, h_opp = opp.step(x, h_opp, hd=HS_O if opp.head_open else None, ev=ev_)
+                    act_o = torch.stack([d.sample() for d in dists(lo)], -1)
+                    act = torch.where(snap_players[:, None], act_o, act)
+                elif snaps:
                     lo, _, h_opp = opp.step(x, h_opp, sm=SM_O)
                     act_o = torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
@@ -1261,6 +1398,11 @@ def main():
                 b_rl[t] = torch.from_numpy(np.concatenate([r[11] for r in res])).to(dev)
             d = torch.from_numpy(np.concatenate([r[2] for r in res]).astype(np.float32)).to(dev)
             b_done[t] = d
+            if HEADL and HD_WG >= 0:                                     # (--head) the frame's game and, on its last frame, its band (BUILD 3a:
+                wl_ = np.concatenate([r[12][:, [HD_WG, HD_WB]] if r[12] is not None else np.full((len(r[2]), 2), -1.0)   # the info of the step
+                                      for r in res]).astype(np.float32)                                                  # that played frame t)
+                b_wg[t] = torch.from_numpy(wl_[:, 0]).to(dev)
+                b_wb[t] = torch.from_numpy(wl_[:, 1]).to(dev)
             live = torch.from_numpy(np.concatenate([r[6] for r in res]).astype(np.float32)).to(dev)
             b_live[t] = live
             b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
@@ -1291,6 +1433,9 @@ def main():
             if SM is not None:                                           # (--slow-mem) ... and the slow memory's
                 SM.reset(d)
                 SM_O.reset(d)
+            if HS is not None:                                           # (--head) ... and the head's
+                HS.reset(d)
+                HS_O.reset(d)
             for w_, r in enumerate(res):
                 for k, v in r[3].items():
                     if isinstance(v, list):
@@ -1308,7 +1453,10 @@ def main():
                     if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
         with torch.no_grad():
-            _, vT_, hT_ = pol.step(torch.from_numpy(norm(obs)).to(dev), h, sm=SM.peek() if SM is not None else None)
+            if HEADL:                                                    # (--head) the frame after the rollout: never a tick (T is whole ticks)
+                _, vT_, hT_ = pol.step(torch.from_numpy(norm(obs)).to(dev), h, hd=HS.peek())
+            else:
+                _, vT_, hT_ = pol.step(torch.from_numpy(norm(obs)).to(dev), h, sm=SM.peek() if SM is not None else None)
             b_val[T] = vT_
             if LONG:
                 b_val2[T] = pol.v2(pol.zl)
@@ -1396,6 +1544,8 @@ def main():
             sl_secs[1] += time.time() - t_
             return z_
 
+        HO_ = [None, [], False]                                          # (--head) the last seq_pass's head outputs; the read's numbers (first pass)
+
         def seq_pass(chunk, hh):
             """his outputs over the rollout's whole sequences for these players: the encoder, the attention part and the output
             layers in one go each, only his memory frame by frame -> (logits, value, memories, the two long values or None)"""
@@ -1403,6 +1553,21 @@ def main():
             e_ = pol.enc(xs_)
             if pol.attn is not None:
                 e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM)).view(T, len(chunk), -1)
+            if HEADL:                                                    # (--head) the fast GRU in segments of the head's ticks, the head between
+                t_ = time.time()
+                st0_ = {k_: v_[chunk] for k_, v_ in HD0.items()}        # (no ring; or the pass before the update's steps: the state played from)
+                if RINGH is not None and torch.is_grad_enabled():        # the slow state re-run from the ring (the gradient reaches its ticks)
+                    k_ = (1.0 - HD_RS0[chunk])[:, None]
+                    s0_ = RINGH.state(pol.head, chunk.cpu()) * k_
+                    st0_.update(s=s0_, plan=torch.tanh(pol.head.plan_out(s0_)) * k_)
+                ho_ = head_.seq(pol.head, HEADL, e_, 1.0 - b_done[:, chunk], st0_, pol.gru, hh, b_ev[:, chunk],
+                                stats=HO_[1] if HO_[2] else None)
+                hs_a = ho_["hs"]
+                lg_h = pol.pi(hs_a)
+                ho_["hand_int"] = lg_h[..., HD_I0:HD_I0 + HEADL["n_target"]].detach()
+                HO_[0] = ho_
+                hd_secs[1] += time.time() - t_
+                return head_logits(lg_h, ho_["tadd"], ho_["wadd"]), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, e_, hh, b_done[:, chunk])
             else:
@@ -1496,7 +1661,29 @@ def main():
         ll_first = [True]
         wy_acc = torch.zeros(8, dtype=torch.float64, device=dev)         # (WAYS) the learner's readings of his way: how many, the sum of the
         #                                                                  entropy, of the chance given to each way, the readings on each way
+        hd_acc = torch.zeros(16, dtype=torch.float64)                   # (--head) the first pass's sums: tick weights, the plan's size, the values'
+        #                                                                  loss (sum, pieces), the win head's (loss sum, labelled, game ends, the
+        #                                                                  chance of the true band there, called right), the target's part of the
+        #                                                                  intention's logits (head, hands, readings), its gradient (sum, count), its
+        #                                                                  confidence at the game ends
+
+        def pi_t(z_):
+            """what the teachers' losses read: his logits from z_, the head's part added as it is but taught by them never (--head)"""
+            lg_ = pol.pi(z_)
+            return lg_ if not HEADL else head_logits(lg_, HO_[0]["tadd"].detach(), HO_[0]["wadd"].detach())
+
+        def aux_o(name, hx_):
+            """(--aux) his answer to a question from hx_; with the head its own answer added (none on the tail's rows in front)"""
+            o_ = getattr(pol.aux, name)(hx_)
+            if HEADL and name in HO_[0]["aux"]:
+                ad_ = HO_[0]["aux"][name]
+                if ad_.shape[0] < o_.shape[0]:
+                    ad_ = torch.cat([ad_.new_zeros((o_.shape[0] - ad_.shape[0],) + tuple(ad_.shape[1:])), ad_])
+                o_ = o_ + ad_
+            return o_
+
         for epoch in range(3):
+            HO_[2] = epoch == 0
             perm = torch.randperm(N, device=dev)
             for chunk in perm.chunk(n_mb):                               # whole sequences per player
                 hh = h0[chunk]
@@ -1515,11 +1702,11 @@ def main():
                 dst = ds                                                 # what the teachers' losses read
                 if a.teach_trunk < 1.0 and (kick > 0 or wk > 0 or ik > 0):
                     hs_ = hs_all                                         # the same outputs, the shared layers held back
-                    dst = dists(pol.pi(a.teach_trunk * hs_ + (1.0 - a.teach_trunk) * hs_.detach()))
+                    dst = dists(pi_t(a.teach_trunk * hs_ + (1.0 - a.teach_trunk) * hs_.detach()))
                 dstm = dst                                               # ... and what the movement teacher's loss reads (--teach-trunk-move)
                 if kick > 0 and a.teach_trunk_move >= 0 and a.teach_trunk_move != a.teach_trunk:
                     tm_ = a.teach_trunk_move
-                    dstm = ds if tm_ >= 1.0 else dists(pol.pi(tm_ * hs_all + (1.0 - tm_) * hs_all.detach()))
+                    dstm = ds if tm_ >= 1.0 else dists(pi_t(tm_ * hs_all + (1.0 - tm_) * hs_all.detach()))
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
@@ -1571,6 +1758,44 @@ def main():
                                              (ds[W_HEAD].probs * wyf_[..., None]).sum((0, 1)),
                                              torch.stack([((A[..., W_HEAD] == j_).float() * wyf_).sum() for j_ in range(3)])]).double()
                 loss = pg + 0.5 * vl - ent_coef * en
+                if HEADL:                                                # (--head) its values on its ticks; the win head's lesson
+                    ho_ = HO_[0]
+                    tf_ = torch.arange(HD_K - 1, T, HD_K, device=dev)
+                    wt_ = wgt[tf_]
+                    wts_ = wt_.sum().clamp(min=1.0)
+                    hv_ = (0.5 * (ho_["v_short"] - ret[tf_][:, chunk]).pow(2) * wt_).sum() / wts_
+                    if LONG:
+                        hv_ = hv_ + (0.5 * (ho_["v_long"] - ret2[tf_][:, chunk, 1]).pow(2) * wt_).sum() / wts_
+                    loss = loss + a.head_v * hv_
+                    if HD_WG >= 0:
+                        with torch.no_grad():
+                            pw_ = torch.softmax(ho_["win"].detach(), -1)
+                            G_, M_, TM_ = head_.win_targets(pw_, b_wg[:, chunk], b_wb[:, chunk], HD_K, wgt)
+                            if a.head_win_true != 1.0:
+                                M_ = M_ * (1.0 + (a.head_win_true - 1.0) * TM_.float())
+                        ce_w = -(G_ * torch.log_softmax(ho_["win"], -1)).sum(-1)
+                        wl_ = (ce_w * M_).sum() / M_.sum().clamp(min=1.0)
+                        loss = loss + a.head_win * wl_
+                    if epoch == 0:
+                        with torch.no_grad():
+                            hd_acc[0] += float(wt_.sum())
+                            hd_acc[1] += float((ho_["plan"].norm(dim=-1) * wt_).sum())
+                            hd_acc[2] += float(hv_)
+                            hd_acc[3] += 1.0
+                            if HD_WG >= 0:                                # (loss and calibration: the true bands' ticks only)
+                                te_ = TM_.float() * wt_
+                                hd_acc[4] += float((ce_w * te_).sum())
+                                hd_acc[5] += float((M_ > 0).float().sum())
+                                hd_acc[6] += float(te_.sum())
+                                hd_acc[7] += float(((pw_ * G_).sum(-1) * te_).sum())
+                                hd_acc[8] += float(((pw_.argmax(-1) == G_.argmax(-1)).float() * te_).sum())
+                                hd_acc[15] += float((pw_.max(-1).values * te_).sum())
+                            ir_ = lv * wgt                                # the frames his intention was read
+                            ta_c = ho_["tadd"] - ho_["tadd"].mean(-1, keepdim=True)
+                            hi_c = ho_["hand_int"] - ho_["hand_int"].mean(-1, keepdim=True)
+                            hd_acc[9] += float((ta_c.norm(dim=-1) * ir_).sum())
+                            hd_acc[10] += float((hi_c.norm(dim=-1) * ir_).sum())
+                            hd_acc[11] += float(ir_.sum())
                 if AUX_W > 0:                                            # (--aux) what he is asked to foretell from his memory
                     ci_ = chunk.cpu()
                     ay_, am_, ac_ = AUX_Y[:, ci_].to(dev).float(), AUX_M[:, ci_].to(dev), AUX_C[:, ci_].to(dev).long()
@@ -1581,13 +1806,13 @@ def main():
                         wa_ = torch.cat([AUX_TWG[:, ci_].to(dev), wgt])
                     wm_ = am_.float() * wa_[..., None]                   # a label is there, on the learner's frames
                     wn_ = wm_.sum((0, 1)).clamp(min=1.0)
-                    o_fi = pol.aux.fight(hx_)
-                    e_pl = pol.aux.place(hx_) - ay_[..., 0:3]
-                    e_ap = pol.aux.appear(hx_) - ay_[..., 3:5]
+                    o_fi = aux_o("fight", hx_)
+                    e_pl = aux_o("place", hx_) - ay_[..., 0:3]
+                    e_ap = aux_o("appear", hx_) - ay_[..., 3:5]
                     e_sd = e_ap[..., 0] - 4.0 * torch.round(e_ap[..., 0] / 4.0)      # sideways the short way round (a whole turn is 4 x 90)
                     ce_ = nn.functional.cross_entropy(o_fi[..., :3].reshape(-1, 3), ac_.reshape(-1), reduction="none").view(ac_.shape)
                     e_dm = o_fi[..., 3] - ay_[..., 5]
-                    e_it = pol.aux.items(hx_) - ay_[..., 6:8]
+                    e_it = aux_o("items", hx_) - ay_[..., 6:8]
                     al_ = dict(place=(e_pl.pow(2).sum(-1) * wm_[..., 0]).sum() / wn_[0],
                                appear=((e_sd.pow(2) + e_ap[..., 1].pow(2)) * wm_[..., 1]).sum() / wn_[1],
                                fight=(ce_ * wm_[..., 2]).sum() / wn_[2] + (e_dm.pow(2) * wm_[..., 3]).sum() / wn_[3],
@@ -1596,7 +1821,7 @@ def main():
                         ak_ = AUX_K[:, ci_].to(dev).long()
                         wk_ = AUX_KM[:, ci_].to(dev).float() * wa_[..., None]        # a label is there, on the learner's frames
                         wkn_ = wk_.sum((0, 1)).clamp(min=1.0)
-                        og_ = {h_: getattr(pol.aux, h_)(hx_) for h_ in AUX_Q}
+                        og_ = {h_: aux_o(h_, hx_) for h_ in AUX_Q}
                         cg_ = {}                                         # label j: its outputs, its loss frame by frame, the true answer
                         for j_, (h_, lo_, hi_) in enumerate(AUX_KO):
                             if h_ in og_:
@@ -1687,7 +1912,7 @@ def main():
                     lj_ = [L_[..., j].clamp(min=0) for j in range(4)]
                     if lt_w > 0:
                         tr_ = a.legs_teach_trunk                         # (as --teach-trunk: the same outputs, the shared layers held back)
-                        dsl = ds if tr_ >= 1.0 else dists(pol.pi(tr_ * hs_all + (1.0 - tr_) * hs_all.detach()))
+                        dsl = ds if tr_ >= 1.0 else dists(pi_t(tr_ * hs_all + (1.0 - tr_) * hs_all.detach()))
                         lt_l = sum(-(dsl[j].log_prob(lj_[j]) * lms_[j]).sum() / lms_[j].sum().clamp(min=1.0) for j in range(4))
                         loss = loss + lt_w * lt_l
                     if epoch == 0:                                       # how near he is, on frames this update has not yet learnt from
@@ -1748,18 +1973,27 @@ def main():
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's gradient is clipped on its own: the
                     ll_acc[6] += float(nn.utils.clip_grad_norm_(pol.legs.parameters(), 0.5))    # rest's step is as without it
                     ll_acc[7] += 1.0
+                if HEADL:                                                # (--head) the head's gradient is clipped on its own: the rest's
+                    hd_acc[12] += float(nn.utils.clip_grad_norm_(pol.head.parameters(), 0.5))       # step is as without it
+                    hd_acc[13] += 1.0
                 if AUX:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.")
-                                              and not (LEGS_LEARN and n_.startswith("legs."))], 0.5)
+                                              and not (LEGS_LEARN and n_.startswith("legs.")) and not (HEADL and n_.startswith("head."))], 0.5)
                     nn.utils.clip_grad_norm_(pol.aux.parameters(), 0.5)
                 elif LEGS_LEARN:
-                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.")], 0.5)
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.")
+                                              and not (HEADL and n_.startswith("head."))], 0.5)
+                elif HEADL:
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("head.")], 0.5)
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
         if SLOW:                                                         # (--slow-mem) the rollout's ticks join the ring
             RING.push(SL_PEND)
             SL_PEND = []
+        if RINGH is not None:                                            # (--head) the rollout's ticks join its ring
+            RINGH.push(HD_PEND)
+            HD_PEND = []
         total += T * N
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
         G = NP / n_groups                                                # mean players per group (for the per-player numbers)
@@ -1966,6 +2200,34 @@ def main():
                                start=a.gate_from if a.gate_open > 0 else None)                                       # for (0 minutes: none)
         if LONG:
             rec["long"] = dict(share=round(long_c, 3), gap=round(long_gap, 4))
+        if HEADL:                                                        # (--head) the plan's size, plan_in, the head's part of his target, its
+            ha_ = hd_acc.numpy()                                         # values' and win head's losses, the read, its step (first pass)
+            rs_ = torch.stack(HO_[1]).sum(0).numpy() if HO_[1] else np.zeros(3)
+            with torch.no_grad():
+                pi_o = pol.head.plan_in(HS.plan[:2048]).abs().mean()
+                en_o = pol.enc(b_obs[T - 1, :2048].float()).abs().mean()
+            te_n = max(1.0, float(ha_[6]))
+            rec["head"] = dict(
+                plan=round(float(ha_[1] / max(1.0, ha_[0])), 4),                                    # the plan's mean length on his ticks
+                plan_in=dict(w=round(float(pol.head.plan_in.weight.norm()), 6), b=round(float(pol.head.plan_in.bias.norm()), 6),
+                             share=round(float(pi_o / (en_o + 1e-8)), 5)),                         # what it adds to his fast GRU's input, beside e
+                target_share=round(float(ha_[9] / max(1e-9, ha_[9] + ha_[10])), 5),                 # the head's part of his intention's logits (centred)
+                target_w=round(float(pol.head.target.weight.abs().mean()), 6), way_w=round(float(pol.head.way.weight.abs().mean()), 6),
+                v_loss=round(float(ha_[2] / max(1.0, ha_[3])), 4),
+                win=dict(on=HD_WG >= 0, loss=round(float(ha_[4] / te_n), 4),                       # the loss on the true bands' ticks, the share of ticks
+                         labelled=round(float(ha_[5] / max(1.0, ha_[0])), 4), ends=int(ha_[6]),     # with a target, those with the true band; there: the chance of the
+                         p_true=round(float(ha_[7] / te_n), 4), right=round(float(ha_[8] / te_n), 4),          # true band, called right, and
+                         confidence=round(float(ha_[15] / te_n), 4)),                                         # the chance given its own call
+                read=dict(entropy=round(float(rs_[0] / max(1.0, rs_[1])), 4),                       # the read's attention entropy (nats, a head)
+                          slots=round(float(rs_[2] / max(1.0, rs_[1] / HEADL["read_heads"])), 1),   # the slots it read from
+                          full=round(float(rs_[2] / max(1.0, rs_[1] / HEADL["read_heads"])) / HEADL["slots"], 4)),
+                kl=dict(target=round(float(klh[I_HEAD] / max(1, kl_n)), 6), way=round(float(klh[W_HEAD] / max(1, kl_n)), 6) if W_HEAD >= 0 else None)
+                if old_h is not None else None,
+                grad=round(float(ha_[12] / max(1.0, ha_[13])), 4), lr=opt.param_groups[1]["lr"],
+                events=round(float((b_ev != 0).float().mean()), 4),                                 # the share of event numbers not zero
+                win_games=round(float((b_wg > -0.5).float().mean()), 4) if HD_WG >= 0 else 0.0,    # the share of frames in labelled games
+                opp_open=bool(snaps and opp.head_open),                                             # the league's network has an open head
+                ring=RINGH.L if RINGH is not None else 0, secs=[round(hd_secs[0], 2), round(hd_secs[1], 2)])
         if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
             def q_(i_, d_=4):
                 return round(float(ax_s[i_] / max(1.0, float(ax_n[int(AUX_MI[i_])]))), d_)

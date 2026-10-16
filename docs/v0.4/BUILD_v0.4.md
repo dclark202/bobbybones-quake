@@ -97,6 +97,41 @@ np_tick(W, lay, e, h_after, hf, events)   # -> (plan, target_add, way_add, hf2)
   The whole state is one array per seat: `[s | plan | acc e | n | frames | store slots × (slot + 1 age) | write
   count]`.
 
+### 1a. As built (lane core, 2026-10-16): what differs from the text above, and what it leaves open
+
+- **`seq` takes the fast GRU, not its states**, because the plan feeds the fast GRU and so `hs` cannot be given in advance:
+  `seq(mod, lay, e, dn, st0, cell, h0, ev, stats=None)` → dict `hs, tadd, wadd, aux{q: [T,B,n]}, s, plan, v_short, v_long,
+  win [J,B,..], u`. Here `st0 = State.snap()` (`s, plan, slots, age1, ticks, rs, cnt`), `cell` is his `nn.GRUCell`, and
+  `ev` is `[J, B, 32]`.
+- **`live(mod, st, e, h, ev=None)`**: the caller has already stepped his fast GRU on `e + plan_in(st.plan)`, and `ev` is
+  the tick's events. `tick()` and `read()` are shared by `live` and `seq`.
+- **Target and way are worked out from the slow state of the moment**: `target(s)` on every frame, the same from the
+  tick's frame to the next tick. After a reset `s` = 0, so they read their bias until the next tick, while the plan reads
+  0. With the start at zero both are 0.
+- **Reset** clears `s`, the plan, the mean, the store and its tick count. The tick phase is the global frame count, as in
+  slowmem.
+- **The store**:
+  - `age1` holds the slot's age in ticks + 1; 0 means empty, so a zeroed state is an empty store.
+  - At a tick, in this order: the ages go up, the read is queried with the old `s`, the slow step runs, then the write.
+  - The write uses the new `s`, `mean e` and the events. It comes when the head's ticks since the clear are a multiple of
+    `write_every`, at slot `(ticks / write_every − 1) % slots`.
+  - Age features (`age_features_np`): `a / 896, log1p(a) / log1p(896)`, and sine and cosine at periods of 16, 128 and 1024
+    ticks.
+  - The read is split into a slot part and an age part: it never builds the keys and values of every slot.
+  - An empty store reads zeros.
+  - `rk.bias` takes no gradient (q·b_k is the same for every slot); it is kept because it does no harm.
+- **`aux.*` of the head** are added to the hands' answers on every frame, worked out from the slow state of the moment as
+  target is, and taught by the same losses. They are zeros on the `--aux-tail` rows in front.
+- **The ring** keeps the tick input `u` (1,056 numbers, fp16). This is slowmem's `Ring` with the head's width. In play
+  `refresh()` puts the re-run state in and makes the plan again from it.
+- **Measured (CPU, `scratch/test_head.py`):**
+  - `seq` against `live` frame by frame: largest difference 3.9e-07 (the default layout, resets anywhere, the store
+    wrapping round).
+  - Every layer takes a gradient.
+- **The numpy side** (`np_tick`) is still a stub for lane serve. `np_state_width` follows the layout above. The phase is
+  the serve lane's to choose ("frames"); slowmem's numpy restarts it at a clear.
+- **Weights:** 7.29 M for the default layout with v0.3.1's five guessing questions.
+
 ## 2. The trainer (lane core)
 
 - The switch is `--head <layout json or "default">`. Without it the trainer is today's: proven by an identical
@@ -111,6 +146,52 @@ np_tick(W, lay, e, h_after, hf, events)   # -> (plan, target_add, way_add, hf2)
 - **Opponents:** the league's files without a head get one with `plan_in` = 0 (as `load_net` does for the slow memory).
 - **Write per update:** `head` in `metrics.jsonl`, with the plan's size, the norm of `plan_in`, the share of the target
   from the head, the win head's loss and calibration, and the read's attention entropy.
+
+### 2a. As built (lane core, 2026-10-16)
+
+- **Flags:**
+  - `--head <json|file|default>`
+  - `--head-lr-scale 0.25`
+  - `--head-v 0.5`: the head's values on its ticks. `v_short` is learnt against his returns at the run's `--gamma`
+    (0.999 in v0.3.1); `v_long` against the long count's at `--long-gamma`. Neither enters the advantage (an open
+    question).
+  - `--head-win 0.1`, `--head-win-true 1.0`: the win head, by section 3a.
+- **Not built together with the head** (each refused with a message): `--demo-coef`, `--slow-mem`, map cells.
+- **Masks:**
+  - The head's target and way are taught through his intention's and way's own masks (`intent_live`; the way never
+    while `WAYS` is off), on whatever frame they are read.
+  - With `INTENT_HOLD=8` the intention is read seldom: in a rollout of 64 frames only at a round's start, before the
+    first tick. That is why the first tiny update moved `target.bias` and not `target.weight`.
+- **The teachers:**
+  - They read his whole logits, the head's part added but detached: the item rule never teaches the head.
+  - The entropy bonus and PPO reach the head.
+- **The head's gradient is clipped on its own** (0.5): the rest's step is as without it.
+- **Events:**
+  - Fetched by a new worker command `head_events`, sent before the network's step on the tick frames.
+  - Zeros from a simulator without them; with `HEAD_EVENTS` off the trainer says so at the start.
+- **Opponents:**
+  - A league file without the head gets one with plan_in, target, way, win and aux at zero.
+  - While those links are shut, its head is skipped in play.
+  - The league's head state is carried across opponent swaps, as `h_opp` is; its frame count is synced at each rollout.
+- **Record:** `head` in `metrics.jsonl`:
+  - `plan`, `plan_in{w, b, share}`, `target_share`, `target_w`, `way_w`, `v_loss`
+  - `win{on, loss, labelled, ends, p_true, right, confidence}` (loss and calibration on the true bands' ticks)
+  - `read{entropy, slots, full}`, `kl{target, way}` (with `--kl-heads`), `grad`, `lr`
+  - `events`, `win_games`, `opp_open`, `ring`, `secs`
+- **Proofs (CPU, `--workers 2 --matches 4 --steps 64 --minibatches 4`, Blood Run, the v0.3.1 switches, device cpu):**
+  - Without `--head`, against the base trainer on a fixed seed: all 12 backward losses, the first record (apart from its
+    clock) and the saved network are bitwise the same. Checked before and after the merge of lane sim.
+  - `tools/head_init.py` on v0.3.1's `policy_50.pt`: `--same` gives 0 over 2,400 frames × 16 players with resets
+    (logits, values, aux, legs, h).
+  - With `--head`:
+    - 19 updates from the converted file, against unconverted league files. The ring fills to its 104 and holds.
+      Every layer moves (target, plan_in, the read).
+    - From the unconverted file with `--head default`, against a league file with an open head.
+    - With `HEAD_EVENTS=1`: events arrive, and 73% of ticks have a win target.
+- **Not yet proven:**
+  - No game ended in these short runs, so the true-band path is proven only by `scratch/test_win.py`.
+  - Memory on the card at 768-frame windows and full size is not measured. The store is 10,080 × 224 × 128 fp32 =
+    1.16 GB per state, and there are two states.
 
 ## 3. The simulator (lane sim)
 
