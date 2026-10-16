@@ -496,12 +496,12 @@ def main():
                                                                       "optimiser group; plan_in is the head's)")
     ap.add_argument("--head-v", type=float, default=0.5, help="(--head) the weight of the head's two values (on its ticks: v_short against "
                                                               "his returns, v_long against the long count's at --long-gamma)")
-    ap.add_argument("--head-win", type=float, default=0.1, help="(--head) the weight of the win head's lesson (the final score margin's band, "
-                                                                "a lambda-return over the ticks; labels from info['aux'] --head-win-col)")
-    ap.add_argument("--head-win-lam", type=float, default=0.95, help="(--head) ... its lambda per tick")
-    ap.add_argument("--head-win-col", default="win_band", help="(--head) ... the simulator's column of info['aux'] with the label (a band 0..4 "
-                                                               "on the frame a whole game ends, -1 on its other frames, -2 outside whole "
-                                                               "games); a simulator without it: the win head is never taught")
+    ap.add_argument("--head-win", type=float, default=0.1, help="(--head) the weight of the win head's lesson: the band of his final score "
+                                                                "margin, from info['aux'] win_game / win_band (HEAD_EVENTS=1; BUILD_v0.4.md "
+                                                                "3a): a game that ends in the rollout gives its ticks the true band, one that "
+                                                                "goes on its forecast at its last tick in the rollout (a value at gamma 1)")
+    ap.add_argument("--head-win-true", type=float, default=1.0, help="(--head) ... the weight of a tick with the true band beside one with a "
+                                                                     "forecast for its target")
     ap.add_argument("--run", default="duel_gru_v1")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--matches", type=int, default=128, help="matches per worker (2 players each)")
@@ -1177,7 +1177,7 @@ def main():
             RING.cap, N, SLOW["fast"] + SLOW["enc"], RING.u.numel() * 2 / 1e9), flush=True)
     HS = HS_O = RINGH = None                                 # (--head) the head's state of his seats and of the league's, its ring
     HD_K = HD_J = 0
-    HD_WIN = -1                                              # (--head) the win label's column in info["aux"] (-1: none: never taught)
+    HD_WG = HD_WB = -1                                       # (--head) the win label's columns in info["aux"] (-1: none: never taught)
     if HEADL:
         HD_K = int(HEADL["every"])
         HD_J = a.steps // HD_K
@@ -1189,10 +1189,15 @@ def main():
         print("head: its store {} players x {} slots x {} on the {} ({:.2f} GB a state, two states)".format(
             N, HEADL["slots"], HEADL["slot"], dev.type, HS.slots.numel() * 4 / 1e9), flush=True)
         AC_ = tuple(getattr(E_, "AUX_COLS", ()) or ())
-        HD_WIN = AC_.index(a.head_win_col) if a.head_win_col in AC_ else -1
-        print("head: the win head's labels from info['aux'] '{}': {}".format(a.head_win_col, "column {}".format(HD_WIN) if HD_WIN >= 0 else
-                                                                          "NOT in the simulator's columns: never taught"), flush=True)
-        print("head: lr x {}, values x {}, win x {} (lambda {} a tick)".format(a.head_lr_scale, a.head_v, a.head_win, a.head_win_lam), flush=True)
+        if "win_game" in AC_ and "win_band" in AC_:
+            HD_WG, HD_WB = AC_.index("win_game"), AC_.index("win_band")
+        HE_ = bool(getattr(E_, "HEAD_EVENTS", False))
+        assert not HE_ or int(getattr(E_, "N_HEAD_EVENTS", HEADL["ev"])) == HEADL["ev"], \
+            "the simulator gives {} events a tick, the head reads {}".format(getattr(E_, "N_HEAD_EVENTS", None), HEADL["ev"])
+        print("head: events {}; the win head's labels {}".format(
+            "from the simulators (HEAD_EVENTS)" if HE_ else "ZEROS (the simulator {} has HEAD_EVENTS off or none)".format(a.env),
+            "from info['aux'] win_game / win_band (columns {}, {})".format(HD_WG, HD_WB) if HD_WG >= 0 else "NONE: never taught"), flush=True)
+        print("head: lr x {}, values x {}, win x {} (true bands x {})".format(a.head_lr_scale, a.head_v, a.head_win, a.head_win_true), flush=True)
 
     def head_events():
         """(--head) the simulators' events of the head's tick about to come [N, ev] (zeros from a simulator without them)"""
@@ -1309,7 +1314,8 @@ def main():
         if HEADL:                                                        # (--head) the rollout's events, win labels; the ring folded and
             t_hd = time.time()                                           # re-run as the slow memory's; he plays from the state the update
             b_ev = torch.zeros(HD_J, N, HEADL["ev"], device=dev)         # re-runs; its start kept for the update
-            b_wl = torch.full((T, N), -2.0, device=dev)
+            b_wg = torch.full((T, N), -1.0, device=dev)                  # (win_game, win_band of each frame: none until read)
+            b_wb = torch.full((T, N), -1.0, device=dev)
             HS_O.g = HS.g                                                # (a league network whose head is shut skipped the frames)
             if RINGH is not None:
                 RINGH.trim(pol.head)
@@ -1392,9 +1398,11 @@ def main():
                 b_rl[t] = torch.from_numpy(np.concatenate([r[11] for r in res])).to(dev)
             d = torch.from_numpy(np.concatenate([r[2] for r in res]).astype(np.float32)).to(dev)
             b_done[t] = d
-            if HEADL and HD_WIN >= 0:                                    # (--head) the win label read with the frame's done (-2: a simulator
-                b_wl[t] = torch.from_numpy(np.concatenate([r[12][:, HD_WIN] if r[12] is not None else np.full(len(r[2]), -2.0)   # with no
-                                                           for r in res]).astype(np.float32)).to(dev)                          # info["aux"])
+            if HEADL and HD_WG >= 0:                                     # (--head) the frame's game and, on its last frame, its band (BUILD 3a:
+                wl_ = np.concatenate([r[12][:, [HD_WG, HD_WB]] if r[12] is not None else np.full((len(r[2]), 2), -1.0)   # the info of the step
+                                      for r in res]).astype(np.float32)                                                  # that played frame t)
+                b_wg[t] = torch.from_numpy(wl_[:, 0]).to(dev)
+                b_wb[t] = torch.from_numpy(wl_[:, 1]).to(dev)
             live = torch.from_numpy(np.concatenate([r[6] for r in res]).astype(np.float32)).to(dev)
             b_live[t] = live
             b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
@@ -1759,10 +1767,12 @@ def main():
                     if LONG:
                         hv_ = hv_ + (0.5 * (ho_["v_long"] - ret2[tf_][:, chunk, 1]).pow(2) * wt_).sum() / wts_
                     loss = loss + a.head_v * hv_
-                    if HD_WIN >= 0:
+                    if HD_WG >= 0:
                         with torch.no_grad():
                             pw_ = torch.softmax(ho_["win"].detach(), -1)
-                            G_, M_, TM_ = head_.win_targets(pw_, b_wl[:, chunk], b_done[:, chunk], HD_K, a.head_win_lam, wgt)
+                            G_, M_, TM_ = head_.win_targets(pw_, b_wg[:, chunk], b_wb[:, chunk], HD_K, wgt)
+                            if a.head_win_true != 1.0:
+                                M_ = M_ * (1.0 + (a.head_win_true - 1.0) * TM_.float())
                         ce_w = -(G_ * torch.log_softmax(ho_["win"], -1)).sum(-1)
                         wl_ = (ce_w * M_).sum() / M_.sum().clamp(min=1.0)
                         loss = loss + a.head_win * wl_
@@ -1772,10 +1782,10 @@ def main():
                             hd_acc[1] += float((ho_["plan"].norm(dim=-1) * wt_).sum())
                             hd_acc[2] += float(hv_)
                             hd_acc[3] += 1.0
-                            if HD_WIN >= 0:
+                            if HD_WG >= 0:                                # (loss and calibration: the true bands' ticks only)
                                 te_ = TM_.float() * wt_
-                                hd_acc[4] += float((ce_w * M_).sum())
-                                hd_acc[5] += float(M_.sum())
+                                hd_acc[4] += float((ce_w * te_).sum())
+                                hd_acc[5] += float((M_ > 0).float().sum())
                                 hd_acc[6] += float(te_.sum())
                                 hd_acc[7] += float(((pw_ * G_).sum(-1) * te_).sum())
                                 hd_acc[8] += float(((pw_.argmax(-1) == G_.argmax(-1)).float() * te_).sum())
@@ -2204,8 +2214,8 @@ def main():
                 target_share=round(float(ha_[9] / max(1e-9, ha_[9] + ha_[10])), 5),                 # the head's part of his intention's logits (centred)
                 target_w=round(float(pol.head.target.weight.abs().mean()), 6), way_w=round(float(pol.head.way.weight.abs().mean()), 6),
                 v_loss=round(float(ha_[2] / max(1.0, ha_[3])), 4),
-                win=dict(on=HD_WIN >= 0, loss=round(float(ha_[4] / max(1.0, ha_[5])), 4),          # the lesson's loss, the share of ticks labelled,
-                         labelled=round(float(ha_[5] / max(1.0, ha_[0])), 4), ends=int(ha_[6]),     # the game ends seen; there: the chance of the
+                win=dict(on=HD_WG >= 0, loss=round(float(ha_[4] / te_n), 4),                       # the loss on the true bands' ticks, the share of ticks
+                         labelled=round(float(ha_[5] / max(1.0, ha_[0])), 4), ends=int(ha_[6]),     # with a target, those with the true band; there: the chance of the
                          p_true=round(float(ha_[7] / te_n), 4), right=round(float(ha_[8] / te_n), 4),          # true band, called right, and
                          confidence=round(float(ha_[15] / te_n), 4)),                                         # the chance given its own call
                 read=dict(entropy=round(float(rs_[0] / max(1.0, rs_[1])), 4),                       # the read's attention entropy (nats, a head)
@@ -2215,7 +2225,8 @@ def main():
                 if old_h is not None else None,
                 grad=round(float(ha_[12] / max(1.0, ha_[13])), 4), lr=opt.param_groups[1]["lr"],
                 events=round(float((b_ev != 0).float().mean()), 4),                                 # the share of event numbers not zero
-                win_labels=round(float((b_wl > -1.5).float().mean()), 4),                           # the share of frames in whole games
+                win_games=round(float((b_wg > -0.5).float().mean()), 4) if HD_WG >= 0 else 0.0,    # the share of frames in labelled games
+                opp_open=bool(snaps and opp.head_open),                                             # the league's network has an open head
                 ring=RINGH.L if RINGH is not None else 0, secs=[round(hd_secs[0], 2), round(hd_secs[1], 2)])
         if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
             def q_(i_, d_=4):

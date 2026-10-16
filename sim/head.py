@@ -424,47 +424,35 @@ except ImportError:                                          # (a copy of this f
     pass
 
 
-def win_targets(p, lab, done, K, lam, wgt=None):
-    """(the trainer) the win head's targets by hindsight, a lambda-return over the rollout's ticks:
-      p     [J, B, bands] the head's own chances at each tick (no gradient)
-      lab   [T, B] the simulator's label of each frame (info["aux"] "win_band", read with the frame's done): a band 0..4 on
-            the frame a whole game ends (its final score margin), -1 on the other frames of a whole game or a mid-game
-            start, below -1.5 elsewhere (not a game; a missing column is all -2)
-      done  [T, B]
-    -> (G [J, B, bands], mask [J, B], terminal [J, B]): a tick whose window (its frame to the next tick's) holds the game's
-    end gets the result itself; one with no end in it the chance at the next tick and that tick's target, (1 - lam) p + lam G
-    (the last tick of the rollout: masked, its chance stands for its target); a window that ends a round with no result, or
-    a tick outside a game, is masked."""
+def win_targets(p, wg, wb, K, wgt=None):
+    """(the trainer) the win head's targets over a rollout (BUILD_v0.4.md section 3a, lane sim's columns of info["aux"]):
+      p     [J, B, bands] the head's chances at each tick (no gradient)
+      wg    [T, B] win_game: the whole game or mid-game start that frame belongs to (-1: none), read from the info of the
+            step that played the frame
+      wb    [T, B] win_band: the band of his final margin on the frame that ends the game, -1 on every other frame
+    -> (G [J, B, bands], mask [J, B], true [J, B]): every tick of a game that ends in the rollout gets one_hot(its band)
+    (true); a tick of a game that goes on past the rollout gets the chance at that game's last tick in the rollout, and
+    that last tick is masked (gamma 1: the forecast is a value); a tick outside a labelled game is masked."""
     import torch
-    T, B = done.shape
+    T, B = wg.shape
     J, nb = p.shape[0], p.shape[2]
-    tf = torch.arange(J, device=done.device) * K + K - 1
-    pad = torch.cat([done[K - 1:], done.new_zeros(J * K - (T - K + 1), B)], 0).reshape(J, K, B)   # the window's frames
-    lpad = torch.cat([lab[K - 1:], lab.new_full((J * K - (T - K + 1), B), -2.0)], 0).reshape(J, K, B)
-    has = pad > 0.5
-    term = has.any(1)                                                    # [J, B]
-    first = torch.argmax(has.to(torch.int8), 1)                          # the window's first reset
-    lab_end = lpad.gather(1, first[:, None, :]).squeeze(1)               # its label
-    in_game = lab[tf] > -1.5
-    G = torch.zeros_like(p)
-    mask = torch.zeros(J, B, device=p.device)
-    oh = torch.nn.functional.one_hot(lab_end.clamp(0, nb - 1).long(), nb).to(p.dtype)
-    nxt = p[J - 1]
-    for j in reversed(range(J)):
-        t_ = term[j]
-        ok_end = t_ & (lab_end[j] > -0.5)
-        if j == J - 1:
-            g_ = torch.where(ok_end[:, None], oh[j], p[j])
-            m_ = ok_end
-        else:
-            boot = (1.0 - lam) * p[j + 1] + lam * nxt
-            g_ = torch.where(t_[:, None], torch.where(ok_end[:, None], oh[j], p[j]), boot)
-            m_ = torch.where(t_, ok_end, in_game[j])
-        G[j], mask[j] = g_, m_.to(p.dtype)
-        nxt = g_
+    tf = torch.arange(J, device=wg.device) * K + K - 1
+    g = wg[tf]                                                           # [J, B] each tick's game
+    ok = g > -0.5
+    end = wb > -0.5                                                      # [T, B] the frames that end a game
+    m_ = (wg[None, :, :] == g[:, None, :]) & end[None] & ok[:, None, :]  # [J, T, B] a frame of the tick's game that ends it
+    ended = m_.any(1)
+    band = torch.where(m_, wb[None].expand(J, T, B), torch.full_like(wb[None].expand(J, T, B), -1.0)).max(1).values
+    same = (g[:, None, :] == g[None, :, :])                              # [J, J, B] ticks of the same game
+    jj = torch.arange(J, device=wg.device)
+    last = torch.where(same, jj[None, :, None].expand(J, J, B), torch.full_like(jj[None, :, None].expand(J, J, B), -1)).max(1).values
+    boot = p.gather(0, last.clamp(min=0)[..., None].expand(J, B, nb))   # the chance at the game's last tick in the rollout
+    oh = torch.nn.functional.one_hot(band.clamp(0, nb - 1).long(), nb).to(p.dtype)
+    G = torch.where(ended[..., None], oh, boot)
+    mask = (ok & (ended | (last != jj[:, None]))).to(p.dtype)
     if wgt is not None:
         mask = mask * wgt[tf]
-    return G, mask, term & (lab_end > -0.5)
+    return G, mask, ended & ok
 
 
 # ------------------------------------------------------------------------------------------------------------------ numpy
