@@ -508,6 +508,7 @@ def main():
     ap.add_argument("--stack-p", type=float, default=0.0, help="share of spawns with a random stack (health 100-200, armor 0-150)")
     ap.add_argument("--intent-teach", type=float, default=0.0, help="weight of imitating the simple item rule on the intention head (env.intent_rule)")
     ap.add_argument("--intent-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
+    ap.add_argument("--intent-teach-floor", type=float, default=0.0, help="the item rule's weight never fades below this (0: to zero)")
     ap.add_argument("--weapon-teach", type=float, default=0.0, help="weight of imitating the weapon rule on the weapon key (env._weapon_teach)")
     ap.add_argument("--weapon-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
     ap.add_argument("--hand-teach", type=float, default=0.0,
@@ -1248,6 +1249,8 @@ def main():
             kick *= min(1.0, max(0.0, mins - fade0) / a.teach_warm)
         kick_l = torch.zeros(())
         ik = a.intent_teach * max(0.0, 1.0 - (mins - fade0) / a.intent_teach_minutes)
+        if a.intent_teach_floor > 0:                         # (v0.3.1, the owner 2026-10-15: fade 2.0 -> 0.1, then hold)
+            ik = max(a.intent_teach_floor, ik)
         ik_l = torch.zeros(())
         wk = a.weapon_teach * max(0.0, 1.0 - (mins - fade0) / a.weapon_teach_minutes)
         wk_l = torch.zeros(())

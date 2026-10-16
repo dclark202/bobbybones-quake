@@ -390,8 +390,16 @@ STACK_BARE_MAX = float(os.environ.get("STACK_BARE_MAX") or 4.0)   # (v0.3.1's pa
 #           nothing for the other weapons (off: any weapon he did not have counts as 25 points of item pay)
 # SELF_DEBT = 1: health and armor he took off himself (his own splash, falls, lava and slime) are not paid again when a
 #           pickup refills them ("never paid after self-damage")
+# BIG_ONCE  = 1 (with BIG_PICK): BIG_PICK once a life for the first of the three only, not for each
+# STACK_DIFF > 0: frags a minute for his stack against the enemy's (health and armor, a dead player's 0): STACK_DIFF x
+#           (his - the enemy's) / 200, clamped to +-1, paid to him and taken from the enemy (zero-sum); duels only
+# ITEM_FLAT = "MH:0.12,RA:0.12,YA:0.06": a flat pay a pickup of these items (whatever it adds), the same taken from the
+#           enemy (zero-sum); every other item pays nothing under it (run with --item-reward 0 for the points' pay)
 BIG_PICK = float(os.environ.get("BIG_PICK") or 0.0)
 SELF_DEBT = float(os.environ.get("SELF_DEBT") or 0.0) > 0
+BIG_ONCE = float(os.environ.get("BIG_ONCE") or 0.0) > 0
+STACK_DIFF = float(os.environ.get("STACK_DIFF") or 0.0)
+ITEM_FLAT = {k_: float(v_) for k_, v_ in (x_.split(":") for x_ in (os.environ.get("ITEM_FLAT") or "").split(",") if ":" in x_)}
 # The walking teacher inside normal games (the fallback of 2026-10-07, off by default): while he holds none of the big
 # weapons or is under STACK_LOW_AT, and no enemy is in view, the keys that walk to what the item rule names (intent_rule)
 # are the labels of the trainer's teacher loss (--teach, fading), as in the item runs of v10.
@@ -3452,7 +3460,7 @@ class DuelEnv:
                 self.stats["first_wp"] += np.array([float(self.life_t[i]), 1.0])
             if BIG_PICK > 0:                                 # (v0.3.1) the big three once a life, nothing else
                 b_ = (RL, LG, RG).index(int(w)) if int(w) in (RL, LG, RG) else -1
-                if b_ >= 0 and not self.big_got[i, b_]:
+                if b_ >= 0 and not self.big_got[i, b_] and not (BIG_ONCE and self.big_got[i].any()):
                     reward[i] += BIG_PICK
                     self.r_long[i] += BIG_PICK
                 if b_ >= 0:
@@ -6707,6 +6715,13 @@ class DuelEnv:
                         pay_ = BIG_PICK if b_ >= 0 and not self.big_got[i, b_] else 0.0
                         if b_ >= 0:
                             self.big_got[i, b_] = True
+                    if BIG_ONCE and kind == "wp" and BIG_PICK > 0 and pay_ > 0 and self.big_got[i].sum() > 1:
+                        pay_ = 0.0                                          # (BIG_ONCE) only the first of the three pays
+                    if ITEM_FLAT and lab in ITEM_FLAT and not own_:
+                        pay_ += ITEM_FLAT[lab]
+                        for o_ in self._mates(i):                           # (zero-sum) the enemy loses as much
+                            reward[o_] -= ITEM_FLAT[lab]
+                            r_long[o_] -= ITEM_FLAT[lab]
                     reward[i] += pay_
                     r_long[i] += pay_
                     want_ = lab if lab in ("MH", "RA") else WEAPONS[int(val)].upper() if kind == "wp" else ""
@@ -6915,6 +6930,13 @@ class DuelEnv:
                         self._run_pick(int(i))
             self.intent_phi = phi.astype(np.float32)
 
+        if STACK_DIFF:                                       # (v0.3.1) his stack against the enemy's, zero-sum (see STACK_DIFF)
+            on_ = (pkind == NORMAL) & (self.script == 0) & (self.run_k < 0)
+            st_ = np.where(self.hp > 0, np.maximum(self.hp, 0.0) + self.armor, 0.0)
+            diff_ = np.clip((st_ - st_[self._others_arr()].mean(1)) / 200.0, -1.0, 1.0)   # (a group: against the mean of the others; trained in duels only)
+            pay_ = np.where(on_, STACK_DIFF * diff_ * (DT / 60.0), 0.0)
+            reward += pay_
+            r_long += pay_
         if STACK_PAY or STACK_WPN or STACK_BARE or STACK_LOW:   # pay for the stack he keeps (see STACK_PAY)
             on = (pkind == NORMAL) & (self.hp > 0) & (self.script == 0) & (self.run_k < 0)
             big = self.has[:, [RL, LG, RG]].sum(1)
