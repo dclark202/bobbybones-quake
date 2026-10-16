@@ -5,12 +5,13 @@ the head learns, from three lessons:
   enemy   where the enemy will be 3, 10 and 30 s on (cross-entropy over the same landmarks: the aux question "near")
   win     the band of the game's final score margin (cross-entropy over 5 bands)
 
-    python sim/pretrain_head.py --ck <policy.pt> --data scratch/head_data --steps 300 [--small] [--head-module <dir>]
+    python sim/pretrain_head.py --ck <policy.pt> --data scratch/head_data --steps 300 [--small] [--test <names>]
 
 The hands: the checkpoint's enc, attn and gru, in eval mode, never in the optimiser; their weights are hashed before and
 after and must be bit-identical. The head's plan_in stays at zero (not trained here): the hands' memory does not depend on
 the head, so e and h are worked out once per shard (cached in --cache) and the head is unrolled over its ticks alone
-(head.ticks: one step a tick, the store read before the step, a slot written every write_every ticks). The enemy lesson's
+(head_ticks below: sim/head.py's tick() once a tick, the store read before the step, a slot written every write_every
+ticks; its read entropy by tick()'s stats). The enemy lesson's
 layer (pre.en, size -> 3 x 17) belongs to the pretraining only: the head's aux.* questions are the trainer's.
 
 The gate numbers (on the held-out ticks):
@@ -18,8 +19,9 @@ The gate numbers (on the held-out ticks):
   place now, v02_bel; a tick with nothing believed counts as a miss, and also shown on the believed ticks alone);
   does its target agree with the pros (or the people) more often than the item rule (env.intent_rule() at the tick).
 
-The head's module: sim/head.py (lane core); until it has ticks(), --head-module names a folder with a stand-in that
-follows the spec (scratch/standin/head.py)."""
+The held-out ticks are whole shards (--split shard, the default), a game's two seats together (a session's b and o): the
+win band is one number a game, so a time split would hold out later minutes of games seen in training. --test names them
+(parts of shard names); without it groups are drawn until --hold of the ticks are held out."""
 import argparse
 import glob
 import hashlib
@@ -176,13 +178,33 @@ def load_shards(hands, files, cache_dir, ck_tag):
     return out
 
 
+# ------------------------------------------------------------------------------------------------------------ the head
+def head_ticks(head, mod, lay, hf, em, ev, rs):
+    """the head over J ticks of B sequences, under the gradient, by sim/head.py's tick() (the same function as its live()
+    and seq()): hf [J, B, fast] the fast memory after each tick's frame, em [J, B, enc] the mean of e over the tick's frames,
+    ev [J, B, ev] the tick's events, rs [J, B] bool: the memory was cleared before this tick (State.reset: s, the store and
+    its tick count; the plan is not used here: plan_in stays at zero). -> s [J, B, size], the read's entropy a tick (nats,
+    mean over the heads of the sequences with a slot)"""
+    import torch
+    J, B = rs.shape
+    st = head.State(B, lay, hf.device)
+    out, ent = [], []
+    for j in range(J):
+        st.reset(rs[j].float())
+        stats = []
+        st.s, st.plan, st.slots, st.age1, st.ticks, _ = head.tick(mod, lay, st.s, st.slots, st.age1, st.ticks, hf[j], em[j], ev[j], stats)
+        out.append(st.s)
+        e_ = stats[0] if stats else None
+        ent.append(float(e_[0] / e_[1]) if e_ is not None and float(e_[1]) > 0 else 0.0)
+    return torch.stack(out), torch.tensor(ent)
+
+
 # ------------------------------------------------------------------------------------------------------------ training
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ck", required=True, help="the hands' checkpoint (read only: give a copy)")
     ap.add_argument("--data", default=os.path.join(ROOT, "scratch", "head_data"))
     ap.add_argument("--cache", default=os.path.join(ROOT, "scratch", "head_cache"))
-    ap.add_argument("--head-module", default=None, help="a folder with head.py to use instead of sim/head.py")
     ap.add_argument("--small", action="store_true", help="a small head for the CPU (size 256, store 64 slots of 64)")
     ap.add_argument("--steps", type=int, default=300)
     ap.add_argument("--batch", type=int, default=16)
@@ -191,8 +213,9 @@ def main():
     ap.add_argument("--w-target", type=float, default=1.0)
     ap.add_argument("--w-enemy", type=float, default=1.0)
     ap.add_argument("--w-win", type=float, default=0.5)
-    ap.add_argument("--hold", type=float, default=0.2, help="the share held out: the last part of every shard (--split time) or whole shards")
-    ap.add_argument("--split", default="time", choices=("time", "shard"))
+    ap.add_argument("--hold", type=float, default=0.2, help="the share held out: whole games (--split shard) or the last part of every shard (time)")
+    ap.add_argument("--split", default="shard", choices=("shard", "time"))
+    ap.add_argument("--test", default="", help="--split shard: the held-out shards, comma-separated parts of their names")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default=os.path.join(ROOT, "scratch", "pretrain_head"))
     ap.add_argument("--check-numpy", action="store_true", help="the hands against test_suite's numpy Policy on 40 frames")
@@ -202,13 +225,8 @@ def main():
     torch.manual_seed(a.seed)
     dev = torch.device("cpu")
     print("device", dev, "cuda visible:", torch.cuda.is_available(), "threads", torch.get_num_threads(), flush=True)
-    if a.head_module:
-        sys.path.insert(0, os.path.abspath(a.head_module))
     head = importlib.import_module("head")
-    if a.head_module:
-        sys.path.pop(0)
-    assert hasattr(head, "ticks"), "{} has no ticks(): give --head-module a folder with the stand-in".format(head.__file__)
-    print("head module:", head.__file__, flush=True)
+    print("head module:", head.__file__, "version", getattr(head, "VERSION", "?"), flush=True)
     hands = Hands(a.ck)
     d0 = hands.digest()
     ck_tag = hashlib.sha1(d0.encode()).hexdigest()[:8]
@@ -234,18 +252,32 @@ def main():
                                                                                   {k: lay[k] for k in ("size", "inp", "slots", "slot", "read")}), flush=True)
     # the split: the held-out ticks of each shard (time) or whole shards
     rng = np.random.default_rng(a.seed)
-    for k, s in enumerate(shards):
-        J = len(s["target"])
-        s["test"] = np.zeros(J, bool)
+    for s in shards:
+        s["test"] = np.zeros(len(s["target"]), bool)
+        s["group"] = s["meta"]["source"] + ":" + s["meta"]["name"]          # (a session's two seats are one game)
         if a.split == "time":
-            s["test"][int(J * (1.0 - a.hold)):] = True
-        elif rng.random() < a.hold or (k == len(shards) - 1 and not any(x["test"].any() for x in shards[:-1])):
-            s["test"][:] = True
+            s["test"][int(len(s["target"]) * (1.0 - a.hold)):] = True
+    if a.split == "shard":
+        groups = sorted({s["group"] for s in shards})
+        if a.test:
+            pick = {s["group"] for s in shards if any(t_ and t_ in s["name"] for t_ in a.test.split(","))}
+        else:
+            pick, tot = set(), sum(len(s["target"]) for s in shards)
+            for g in rng.permutation(groups):
+                if sum(len(s["target"]) for s in shards if s["group"] in pick) >= a.hold * tot:
+                    break
+                pick.add(g)
+        for s in shards:
+            s["test"][:] = s["group"] in pick
+        print("held out:", sorted(pick), flush=True)
     pool = [(k, s) for k, s in enumerate(shards) if (~s["test"]).sum() > a.seq]
     assert pool, "no shard with enough training ticks"
     wts = np.array([(~s["test"]).sum() for _, s in pool], np.float64)
     wts /= wts.sum()
     ce = nn.CrossEntropyLoss(reduction="none")
+
+    def outputs(s_):
+        return dict(target=mod.target(s_), win=mod.win(s_))
 
     def batch():
         hf, em, ev, rs, tg, en, wn = [], [], [], [], [], [], []
@@ -261,7 +293,7 @@ def main():
         return (f(hf), f(em), f(ev), torch.as_tensor(np.stack(rs, 1)), f(tg, 0), f(en, 0), f(wn, 0))
 
     def losses(s_, tg, en, wn):
-        o = head.outputs(mod, s_)
+        o = outputs(s_)
         lt = o["target"]
         le = pre.en(s_).view(*s_.shape[:2], 3, nT)
         out = {}
@@ -284,12 +316,11 @@ def main():
                 sel = s["test"] if test else ~s["test"]
                 if not sel.any():
                     continue
-                st = head.TickState(lay, 1, dev)
                 t_ = lambda x: torch.as_tensor(np.asarray(x, np.float32))[:, None]
                 rs = torch.as_tensor(s["rs"])[:, None].clone()
                 rs[0] = True
-                s_, _ = head.ticks(mod, lay, t_(s["hf"]), t_(s["em"]), t_(s["ev"]), rs, st)
-                o = head.outputs(mod, s_)
+                s_, _ = head_ticks(head, mod, lay, t_(s["hf"]), t_(s["em"]), t_(s["ev"]), rs)
+                o = outputs(s_)
                 pt = o["target"][:, 0].argmax(-1).numpy()
                 pe = pre.en(s_[:, 0]).view(-1, 3, nT).argmax(-1).numpy()
                 pw = o["win"][:, 0].argmax(-1).numpy()
@@ -347,8 +378,7 @@ def main():
     t1 = time.time()
     for step in range(1, a.steps + 1):
         hf, em, ev, rs, tg, en, wn = batch()
-        st = head.TickState(lay, a.batch, dev)
-        s_, ent = head.ticks(mod, lay, hf, em, ev, rs, st)
+        s_, ent = head_ticks(head, mod, lay, hf, em, ev, rs)
         L, _, _, _ = losses(s_, tg, en, wn)
         loss = a.w_target * L["target"] + a.w_enemy * L["enemy"] + a.w_win * L["win"]
         opt.zero_grad()

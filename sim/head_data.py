@@ -51,10 +51,9 @@ inputs: his living frames)
             -1 outside a whole game with a known end (demos: the intermission came; sessions: a real game, player_stats).
   baselines rule (env.intent_rule() of seat 0 at the tick), bel_cls (the landmark of the place v0.2's inputs believe the
             enemy at, v02_bel; -1 where nothing is believed): the gate numbers of pretrain_head.py.
-  ev        the tick's 32 events (BUILD_v0.4 section 3), counted here by the builder until env.head_events() lands; the
-            same columns: dealt, taken (/100), he fragged, he died, enemy in view (share of the tick's frames), enemy heard,
-            his pickups MH RA YA RL RG LG health-or-ammo, the enemy's pickups heard or seen (same classes), respawns heard MH
-            RA YA weapon, the enemy's pain heard, his weapon changed, he jumped, he landed from a fall, padding.
+  ev        the tick's 32 events (BUILD_v0.4 section 3): env.head_events() at the tick (HEAD_EVENTS=1, set by the
+            builder; labels only, the inputs are the same), fed by the hooks the plugins call (note_combat, note_frame,
+            note_take, note_respawn, _hear). Columns: the simulator's HEAD_EVENT_COLS. Input logs: zeros (not logged).
 
 A shard (<out>/<source>_<name>.npz): obs [F, 797] float16 (inputs logs: one row a tick), done [F] (his memory is cleared
 after this frame: a new game, a cut in the demo), tick [T] (the frame of each tick), the tick labels above, h_in [T, 512]
@@ -88,16 +87,10 @@ AHEAD = (3.0, 10.0, 30.0)                                  # the enemy's place t
 TARGET_HORIZON = 60.0                                      # a target reached later than this after the tick says nothing
 HOLD_DWELL = 1.0                                           # seconds at a holding place before it counts as reached
 BAND_EDGES = (-5, -1, 0, 4)                                # <= -5 | -4..-1 | 0 | 1..4 | >= 5
-N_EV = 32
-EV_NAMES = ["dealt", "taken", "frag", "died", "seen", "heard"] + ["took_" + c for c in ("MH", "RA", "YA", "RL", "RG", "LG", "small")] + \
-           ["en_took_" + c for c in ("MH", "RA", "YA", "RL", "RG", "LG", "small")] + ["resp_" + c for c in ("MH", "RA", "YA", "wp")] + \
-           ["pain", "wswitch", "jumped", "landed"]
-EV = {k: i for i, k in enumerate(EV_NAMES)}
-assert len(EV_NAMES) <= N_EV
+N_EV = 32                                                  # (the columns: the simulator's HEAD_EVENT_COLS, HEAD_EVENTS=1)
 QLW = {1: "g", 2: "mg", 3: "sg", 4: "gl", 5: "rl", 6: "lg", 7: "rg", 8: "pg", 14: "hmg"}
 TYPICAL_AMMO = {"mg": 100.0, "sg": 10.0, "gl": 10.0, "pg": 50.0, "hmg": 50.0}       # (sessions: not logged)
 SCRATCH = os.path.join(ROOT, "scratch")
-LAND_VZ = 400.0                                            # a landing at this falling speed or more is "from a fall"
 DUEL_WINDOW_MIN = 300.0                                    # a real game counts as whole from five minutes of play
 
 
@@ -130,10 +123,12 @@ def env_spec(ck_path=None, spec_path=None):
 
 def make_env(spec, mp, seed=1):
     os.environ.update(spec["env_vars"])
+    os.environ["HEAD_EVENTS"] = "1"                          # (the head's events from the simulator's own books: labels only, no input)
     os.environ.setdefault("ROUTE_CACHE", os.path.join(SCRATCH, "route_cache"))   # (data/ is read only: caches go to scratch)
     os.makedirs(os.environ["ROUTE_CACHE"], exist_ok=True)
     E = importlib.import_module(spec["env"])
     assert E.OBS_DIM == spec["obs_dim"], (E.OBS_DIM, spec["obs_dim"])
+    assert getattr(E, "HEAD_EVENTS", False), "{}: no HEAD_EVENTS (a simulator from before v0.4)".format(spec["env"])
     nav = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
     kw = dict(group=spec.get("group", 2)) if spec["env"].endswith("ffa") else {}
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=1, seed=seed, nav=nav if os.path.exists(nav) else None, **kw)
@@ -212,18 +207,22 @@ class Feeder:
         self.last_shot = [99.0, 99.0]
         self.w_last = None
         self.it_intent, self.it_cls = item_classes(env, E)
-        self.ev = np.zeros(N_EV, np.float32)
-        self.ev_frames = 0
-        self.vz_was = 0.0
+        self.count_frags = True                              # (sessions: his frag is the enemy's death; a demo counts the score)
+        self.frag_next = 0.0                                 # (a demo: his frags by the score, told to the books with the next frame)
 
-    # ---- events of the tick
+    # ---- events of the tick: the simulator's own books (HEAD_EVENTS=1), fed by the hooks the plugins call
     def take_events(self):
-        ev = self.ev.copy()
-        if self.ev_frames:
-            ev[EV["seen"]] /= self.ev_frames
-        self.ev[:] = 0.0
-        self.ev_frames = 0
-        return ev
+        return self.env.head_events()[0].copy()
+
+    def _combat(self, dealt, took, died):
+        """the frame's fighting into the books (note_combat), seat 0: what he dealt and took, his frags, his death"""
+        env = self.env
+        if hasattr(env, "note_combat"):
+            z = np.zeros(env.n, np.float32)
+            d_, t_, f_, x_ = z.copy(), z.copy(), z.copy(), z.copy()
+            d_[0], t_[0], f_[0], x_[0] = dealt, took, self.frag_next, died
+            env.note_combat(d_, t_, f_, x_)
+        self.frag_next = 0.0
 
     def _fill(self, i, p):
         env, E = self.env, self.E
@@ -297,7 +296,7 @@ class Feeder:
         dealt / took: damage this frame (health + armor). items: (up [nI] bool, seen [nI] bool) from a demo snapshot, or
         None (the feeder's own timers). -> inputs [OBS_DIM] float32 or None (seat 0 dead)"""
         env, E = self.env, self.E
-        ev = self.ev
+        died0 = 0.0
         if game_new:
             self.new_game()
         for i, p in ((0, me), (1, en)):
@@ -333,7 +332,10 @@ class Feeder:
             if was and not up:
                 if hasattr(env, "note_death"):
                     env.note_death(i, 1 - i)
-                ev[EV["died"] if i == 0 else EV["frag"]] += 1.0
+                if i == 0:
+                    died0 = 1.0
+                elif self.count_frags:
+                    self.frag_next += 1.0
             self.alive[i] = up
         # the items' clocks (the game's respawn times; a demo's snapshot overrides what it shows)
         back_now = []
@@ -351,6 +353,7 @@ class Feeder:
                 self.item_back = np.where(seen_ & up_, 0.0, self.item_back)
             back_now = np.nonzero(self.item_up & ~was_up)[0]
         if not me.alive:                                     # (the plugin: both filled, nothing seen, the clocks go on)
+            self._combat(0.0, took, died0)
             self._fill(0, me)
             self._fill(1, en)
             env.visible[:] = False
@@ -374,11 +377,7 @@ class Feeder:
         if hasattr(env, "note_noise"):
             was_ = self.ground_was
             hop_ = (gr_ != was_) if was_ is not None else np.zeros(len(gr_), bool)
-            if was_ is not None:
-                ev[EV["jumped"]] += float(was_[0] and not gr_[0])
-                ev[EV["landed"]] += float((not was_[0]) and gr_[0] and self.vz_was < -LAND_VZ)   # (from a fall: falling fast)
             self.ground_was = gr_.copy()
-            self.vz_was = float(me.vel[2])
             steps_ = noisy & ~env.duck
             myshot = bool(me.fire) and me.w != E.WEAPONS.index("g")
             shot_ = np.array([myshot, ofire_], bool)
@@ -387,8 +386,6 @@ class Feeder:
             heard_[1] &= en.present
             env.hear(heard_)
             env.note_noise(shot_, hop_, steps_)
-            if heard_[1] and np.linalg.norm(st_[1, :3] - st_[0, :3]) < E.EAR_RANGE:
-                ev[EV["heard"]] = 1.0                        # (a flag: any sound of his in the tick)
         # projectiles and items into the simulator
         env.ra[:] = False
         cnt = [0, 0]
@@ -406,12 +403,6 @@ class Feeder:
             for k in back_now:
                 if hasattr(env, "note_respawn"):
                     env.note_respawn(int(k))
-                c = self.it_cls[k]
-                if np.linalg.norm(env.state[0, :3] - env.item_pos[k]) < E.HEAR_EVT:
-                    lab = env.item_def[k][4]
-                    j = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab in ("YA", "GA") else 3 if env.item_def[k][0] == "wp" else -1
-                    if j >= 0:
-                        ev[EV["resp_MH"] + j] += 1.0
             env.item_up[0] = self.item_up
             env.item_t[0] = np.minimum(60.0, self.item_back)
             for seat, k in taken:
@@ -422,9 +413,7 @@ class Feeder:
                 lab = env.item_def[k][4]
                 if hasattr(env, "note_pickup") and lab in ("MH", "RA"):
                     env.note_pickup(seat, 0 if lab == "MH" else 1)
-                c = int(self.it_cls[k])
                 if seat == 0:
-                    ev[EV["took_MH"] + c] += 1.0
                     want = E.INTENTS[int(env.intent[0])]            # (took_chosen)
                     lab2 = lab if lab else (E.WEAPONS[int(env.item_def[k][1])].upper() if env.item_def[k][0] == "wp" else None)
                     if lab2 is not None and (lab2 == want or (lab2 == "YA" and want == "YA2")):
@@ -434,9 +423,6 @@ class Feeder:
                     big = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab in ("YA", "GA") else 3 if kd == "wp" else None
                     if big is not None:
                         env._hear(0, np.array([1]), big)
-                    near_ = np.linalg.norm(env.state[1, :3] - env.state[0, :3]) < E.HEAR_EVT
-                    if near_ or bool(env.visible[0]):
-                        ev[EV["en_took_MH"] + c] += 1.0
         # the game's clock and score (a whole-games network: clock_frame)
         env.kind[0] = E.NORMAL
         if hasattr(env, "clock_t"):
@@ -489,14 +475,9 @@ class Feeder:
             env.pain_t += E.DT
             if dealt > 0 and en.alive and float(np.linalg.norm(opos - pos)) < E.HEAR_EVT:
                 env.pain_t[0], env.pain_b[0] = 0.0, min(3, int(en.hp) // 25)
-                ev[EV["pain"]] += 1.0
-        ev[EV["dealt"]] += dealt / 100.0
-        ev[EV["taken"]] += took / 100.0
-        ev[EV["seen"]] += float(env.visible[0])
-        if self.w_last is not None and me.w != self.w_last:
-            ev[EV["wswitch"]] += 1.0
-        self.w_last = me.w
-        self.ev_frames += 1
+        self._combat(dealt, took, died0)                     # (HEAD_EVENTS: the frame's books, after the senses, the pain sound and
+        if hasattr(env, "note_frame"):                       # the weapon in hand are set, as the plugin does)
+            env.note_frame()
         return ob
 
     def _intent_release(self):
@@ -665,7 +646,7 @@ class Recorder:
                    rule=np.asarray(self.rule, np.int16), intent_in=np.asarray(self.intent_in, np.int16),
                    bel=np.asarray(self.bel, np.float32), **lab)
         meta = dict(meta, n_frames=len(self.obs), n_ticks=len(self.tick), every=EVERY, ahead=AHEAD, intents=list(E.INTENTS),
-                    ev_names=EV_NAMES, bands="<=-5,-4..-1,0,1..4,>=5")
+                    ev_names=list(getattr(E, "HEAD_EVENT_COLS", ())), bands="<=-5,-4..-1,0,1..4,>=5")
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         np.savez_compressed(path, meta=json.dumps(meta), **arr)
         return path
@@ -768,6 +749,7 @@ def build_demo(spec, mp, path, out, intent_mode="rule", seed=1, max_frames=0):
     names = E.WEAPONS
     NW = len(names)
     F = Feeder(E, env, intent_mode)
+    F.count_frags = False                                   # (the enemy is never dead to the senses here: frags by the score)
     rec = Recorder(F)
     tl = Timeline()
     wslot, aslot = DS.stat_layout(d)
@@ -808,7 +790,7 @@ def build_demo(spec, mp, path, out, intent_mode="rule", seed=1, max_frames=0):
             if gi is not None:
                 score[changes[ci][1]] = score.get(changes[ci][1], 0) + changes[ci][2]
             if changes[ci][1] == cl and changes[ci][2] > 0:
-                F.ev[EV["frag"]] += 1.0                     # (he fragged: his score went up)
+                F.frag_next += 1.0                          # (he fragged: his score went up)
             ci += 1
         s = d["stats"][k]
         alive_was = me.alive
@@ -1173,7 +1155,7 @@ def build_inputs(sess, out, spec=None, seed=1):
                frame=frame, ev=np.zeros((len(t), N_EV), np.float16), rule=np.full(len(t), -1, np.int16),
                intent_in=acts[:, 10].astype(np.int16) if acts.shape[1] > 10 else np.full(len(t), -1, np.int16), **lab)
     meta = dict(source="inputs", map=mp, name=os.path.basename(sess), seat="b", env=spec["env"], n_frames=len(t), n_ticks=len(t),
-                every=1, ahead=AHEAD, intents=list(E.INTENTS), ev_names=EV_NAMES, note="one row a tick; h_in is the memory he answered the row from; no events (not logged), no rule")
+                every=1, ahead=AHEAD, intents=list(E.INTENTS), ev_names=list(getattr(E, "HEAD_EVENT_COLS", ())), note="one row a tick; h_in is the memory he answered the row from; no events (not logged), no rule")
     np.savez_compressed(out, meta=json.dumps(meta), **arr)
     return out, "ok"
 

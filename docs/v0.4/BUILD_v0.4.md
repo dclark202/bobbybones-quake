@@ -346,13 +346,14 @@ python sim/pretrain_head.py --ck <policy.pt> --data scratch/head_data --small --
   the enemy's landmark 3, 10, 30 s on (as the aux question `near`; unknown where a demo did not send him), the final margin
   band (whole games with a known end: a demo's intermission with the followed player's own score agreeing, a session's
   real game from `player_stats`). Beside them the baselines: the item rule at the tick, the landmark of v0.2's believed
-  place. Events: the 32 columns of section 3, counted by the builder until `env.head_events()` lands.
+  place. Events: `env.head_events()` at every tick (the builder sets `HEAD_EVENTS=1`; the inputs are bit-identical with
+  it on), fed by the hooks the plugins call (`note_combat`, `note_frame`, `note_take`, `note_respawn`, `_hear`).
 - **Speed.** About 5 to 7 ms a frame on a busy PC: a ten-minute demo or session seat in 2 to 5 minutes. All 5,039 demos of
   the twelve maps are about 200 hours of one core; run them map by map in jobs under 20 minutes.
 - **Pretraining.** The hands' `e` and `h` are worked out once per shard and cached (`--cache`); plan_in stays at zero, so the
-  head is unrolled over its ticks only (`head.ticks`, asked of lane core; a stand-in that follows section 1 is in the
-  lane's scratch). The hands are hashed before and after (bit-identical, asserted). The enemy lesson's layer (`pre.en`) is
-  the pretraining's own.
+  head is unrolled over its ticks only, by `sim/head.py`'s own `tick()` (`head_ticks` in `pretrain_head.py`; nothing added
+  to `sim/head.py`). The hands are hashed before and after (bit-identical, asserted). The enemy lesson's layer (`pre.en`) is
+  the pretraining's own. Held out: whole games (`--split shard`; a session's two seats together; `--test` names them).
 
 **Data counts** (2026-10-16). Demos in the archive (`T:/quake-demos/demos`): Aerowalk 1,012, Blood Run 1,293, Lost World
 1,411, Campgrounds 226, Battleforged 150, Furious Heights 150, Sinister 150, Hektik 146, House of Decay 142, Dismemberment
@@ -363,13 +364,15 @@ real games of 5 min or more, minutes of frames): Blood Run 16 / 12 / 162, Sinist
 / 27, Battleforged 1 / 1 / 11: about 720 minutes, 36 games with a result, each usable twice (Bobby's seat and the
 person's). The free-for-all sessions are not used. No input logs exist yet.
 
-**The proof** (3 Blood Run demos, 2 sessions x 2 seats, 1 synthetic input log; 24,619 ticks; head at `--small`; 300 steps,
-20 % of every shard held out at its end): label rates target 0.82, enemy at 10 s 0.73 (demos 0.32 to 0.45, sessions 0.85 to
-0.98), win 0.70, belief 0.88. Losses (first 25 steps -> last 25): target 2.51 -> 0.67, enemy 2.63 -> 1.89, win 1.41 -> 0.12.
-Held out: target 22 % (item rule 10.5 %, most common label 11 %), enemy at 10 s 11.3 % against the belief's 10.9 %, at
-30 s 13.0 % against 13.2 %: on this little data the head overfits (82 % target on its training ticks) and the gate is not
-met; the win head's 74 % held out is the same games' later minutes (the band is one number a game), not a skill. The hands
-were bit-identical before and after, plan_in still zero; the hands here agree with `test_suite.Policy` to 7e-6.
+**The proof** (2026-10-16 evening, with lane core's `sim/head.py` and lane sim's events; 3 Blood Run demos, 2 sessions x 2
+seats; 21,458 ticks; head at `--small`; 300 steps; held out: one demo and the Blood Run session's two seats, 8,133 target
+ticks): label rates target 0.85, enemy at 10 s 0.69 (demos 0.32 to 0.45, sessions 0.85 to 0.98), win 0.68, belief 0.88.
+Losses (first 25 steps -> last 25): target 2.48 -> 0.32, enemy 2.59 -> 1.61, win 1.00 -> 0.02. Held out: target 19.3 %
+(item rule 7.1 %, most common label 7.5 %); enemy at 10 s 9.7 % against the belief's 6.2 %, at 30 s 11.1 % against 8.8 %,
+at 3 s 9.9 % against 14.2 %; win band 25 % (the held-out games' bands were never the training games' commonest one). On so
+little data the head overfits (93 % target, 48 % enemy at 10 s on its training ticks) and no gate can be read from it.
+The hands were bit-identical before and after, plan_in still zero; the hands here agree with `test_suite.Policy` to 7e-6.
+The synthetic input log is left out of the proof (it repeats a session's seat); `head_data.py inputs` was tested on it alone.
 
 ## 5. Serving (lane serve)
 
