@@ -83,12 +83,17 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         env.jump_run_p, env.collect_fight_p = 1.0 - env.item_run_p, 0.0
     env.round_t[:] = 1e9                                     # every round starts anew at the first step: until 2026-10-08 the
     env._teach_update()                                      # first round after a (re)start was played with every weapon at spawn
+    legs_in = bool(getattr(E_, "LEGS_IN", False))            # (LEGS_IN, B-253) his legs' inputs go to the branch of his network
     remote.send((env.observe(), env.teach.copy(), env.aux() if hasattr(env, "aux") else None,        # (--aux) the truth of the first frame
-                 env.hand_lab.astype(np.float16) if getattr(E_, "HAND_TEACH", False) else None))        # (--hand-teach) the first frame's label (none yet)
+                 env.hand_lab.astype(np.float16) if getattr(E_, "HAND_TEACH", False) else None,         # (--hand-teach) the first frame's label (none yet)
+                 env.legs_prep() if legs_in else None))     # (LEGS_IN) the movement network's inputs of the frame about to be played
     last = {k: np.copy(v) for k, v in env.stats.items()}
     while True:
         cmd, data = remote.recv()
         if cmd == "step":
+            if isinstance(data, tuple):                      # (LEGS_IN) the actions and the branch's logits [players, 17]
+                env.legs_lg = data[1]
+                data = data[0]
             obs, rew, done, info = env.step(data)
             delta = {k: env.stats[k] - last[k] for k in env.stats}
             last = {k: np.copy(v) for k, v in env.stats.items()}
@@ -115,7 +120,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          info.get("aux"),                                                                   # (--aux) the truth the lesson's labels are made of (None: an older simulator)
                          (np.concatenate([info["legs_lab"], info["legs_held"][:, None]], 1).astype(np.int8)    # (--legs-teach) his legs' four choices
                           if "legs_lab" in info else None),                                               # (-1: no label), the stretch withheld; None: the simulator gives none
-                         (info["hand_lab"].astype(np.float16) if "hand_lab" in info else None)))           # (--hand-teach) the target of his NEXT reading of the weapon key (zeros: none)
+                         (info["hand_lab"].astype(np.float16) if "hand_lab" in info else None),            # (--hand-teach) the target of his NEXT reading of the weapon key (zeros: none)
+                         env.legs_prep() if legs_in else None))                                             # (LEGS_IN) the movement network's inputs of the next frame
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -665,6 +671,22 @@ def main():
     TG_I = (E_.HOLD_INTENT, E_.HOLD_INTENT + E_.HOLD_SLOTS) if getattr(E_, "TARGETS", False) else None     # (TARGETS) the intentions "place 1" to "place 8"
 
     LEGS_LAB = bool(getattr(E_, "LEGS_LAB", False))          # (--legs-teach) the simulators give the labels of his legs (LEGS_LABEL=1, or LEGS_KEEP below 1)
+    # (LEGS_IN=1, B-253 stage a) his legs' network is a branch of his own: legs.0, legs.2, legs.4 (61 -> 256 -> 256 -> 17,
+    # tanh), its weights those of --teacher's policy.npz (or the network's own, when it has them); frozen (no gradient, not
+    # in the optimiser). The simulators send its inputs with every frame (duel_env's legs_prep()); its logits go back with
+    # the actions and are what the simulator samples his legs' choices from. A league file without the branch is given
+    # the movement network's.
+    LEGS_IN = bool(getattr(E_, "LEGS_IN", False))
+    LEGS_SD, LEGS_D, LEGS_SAID = {}, 0, []
+    if LEGS_IN:
+        assert a.teacher, "LEGS_IN=1: give --teacher <the movement network's run> (its policy.npz is the branch)"
+        z_ = np.load(os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz"))
+        LEGS_SD = {"legs.0.weight": z_["w0"], "legs.0.bias": z_["b0"], "legs.2.weight": z_["w1"], "legs.2.bias": z_["b1"],
+                   "legs.4.weight": z_["wp"], "legs.4.bias": z_["bp"]}
+        LEGS_D = int(z_["w0"].shape[1])
+        assert int(z_["wp"].shape[0]) == 17, "the legs' network has {} outputs, the simulator samples 3 + 3 + 2 + 9".format(z_["wp"].shape[0])
+        print("legs inside (LEGS_IN, B-253 stage a): the branch {} -> 256 -> 256 -> 17 from {} ({} weights), frozen".format(
+            LEGS_D, a.teacher, sum(v_.size for v_ in LEGS_SD.values())), flush=True)
     assert a.legs_teach <= 0 or LEGS_LAB, "--legs-teach: the simulator {} gives no labels (set LEGS_LABEL=1 with LEGS=1; p_c1_env.py)".format(a.env)
     HAND_LAB = bool(getattr(E_, "HAND_TEACH", False))        # (--hand-teach) the simulators give the label of his weapon output (HAND_TEACH=1)
     assert a.hand_teach <= 0 or HAND_LAB, "--hand-teach: the simulator {} gives no labels (set HAND_TEACH=1; p_hand_env.py)".format(a.env)
@@ -732,6 +754,12 @@ def main():
     obs = np.concatenate([f[0] for f in first])
     teach = np.concatenate([f[1] for f in first])
     hand = np.concatenate([f[3] for f in first]) if HAND_LAB else None      # (--hand-teach) the label of the frame about to be played
+
+    def legs_cat(parts):
+        """(LEGS_IN) the workers' legs inputs as one array (a simulator without the movement network gives none: zeros)"""
+        return np.concatenate([p_ if p_ is not None and p_.ndim == 2 and p_.shape[1] == LEGS_D else np.zeros((len(o_), LEGS_D), np.float32)
+                               for p_, o_ in parts]).astype(np.float32)
+    legs_x = legs_cat([(f[4], f[0]) for f in first]) if LEGS_IN else None
     N = len(obs)
     H = a.hidden
 
@@ -844,6 +872,8 @@ def main():
                                      nn.Linear(256, 256), nn.Tanh())
             self.gru = nn.GRUCell(256, H)
             self.pi = nn.Linear(H, sum(ACTION_DIMS))
+            if LEGS_IN:                                          # (LEGS_IN) his legs' branch: its own inputs, no memory
+                self.legs = nn.Sequential(nn.Linear(LEGS_D, 256), nn.Tanh(), nn.Linear(256, 256), nn.Tanh(), nn.Linear(256, 17))
             self.v = nn.Linear(H, 1)
             self.slow = slowmem_.make_module(SLOW) if SLOW else None     # (--slow-mem) sim/slowmem.py: inp, gru, door (zeros)
             if AUX:                                              # (--aux) from his memory: the unseen enemy's place (3), the angles to
@@ -894,7 +924,21 @@ def main():
                     sd["slow." + k_] = torch.zeros_like(v_) if k_ == "door.weight" else v_
             load_net0_(net, sd)
 
+    if LEGS_IN:                                              # (LEGS_IN) a network without the branch (the start, the control, an older
+        load_net1_ = load_net                                # league file) is given the movement network's
+
+        def load_net(net, sd):
+            if getattr(net, "legs", None) is not None and "legs.0.weight" not in sd:
+                sd = dict(sd)
+                sd.update({k_: torch.from_numpy(np.asarray(v_)) for k_, v_ in LEGS_SD.items()})
+            load_net1_(net, sd)
+
     pol = Policy().to(dev)
+    if LEGS_IN:
+        with torch.no_grad():
+            for k_, v_ in LEGS_SD.items():
+                pol.state_dict()[k_].copy_(torch.from_numpy(np.asarray(v_)))
+        pol.legs.requires_grad_(False)                       # stage (a): frozen
     if a.fast_gru:
         # cuDNN's GRU takes TF32 (10-bit products) when allowed, and torch allows it for cuDNN by default: 0.7% off the
         # frame-by-frame step in his memory, 0.5% in the gradients (2026-10-15). Off, it is the old step's to float32
@@ -906,12 +950,16 @@ def main():
             " (not with map cells: those networks keep the frame-by-frame step)" if HAS_CELLS else ""), flush=True)
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
-    opt = torch.optim.Adam(pol.parameters(), lr=a.lr, eps=1e-5)
+    opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.")], lr=a.lr, eps=1e-5)   # (LEGS_IN: not the branch)
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location=dev)
         load_net(pol, ck["model"])
+        if LEGS_IN:                                          # (the branch he resumes with against the movement network's file)
+            d_ = max(float((pol.state_dict()[k_].cpu() - torch.from_numpy(np.asarray(v_))).abs().max()) for k_, v_ in LEGS_SD.items())
+            print("legs inside: the branch {} the movement network's file (largest difference {:.3g})".format(
+                "is" if d_ == 0 else "differs from", d_), flush=True)
         obs_mean, obs_var, obs_count = ck["obs_mean"], ck["obs_var"], ck["obs_count"]
         elapsed0 = ck.get("minutes", 0.0)
 
@@ -1138,10 +1186,22 @@ def main():
             if AUX_W > 0:
                 b_aux[t] = torch.from_numpy(aux)
             an = act.cpu().numpy()
-            for w_, p in enumerate(pipes):
-                p.send(("step", an[w_off[w_]:w_off[w_ + 1]]))
+            if LEGS_IN:                                                  # (LEGS_IN) his legs' logits: the branch of each seat's network
+                with torch.no_grad():
+                    xl_ = torch.from_numpy(legs_x).to(dev)
+                    lgl_ = pol.legs(xl_)
+                    if snaps:
+                        lgl_ = torch.where(snap_players[:, None], opp.legs(xl_), lgl_)
+                lgn_ = lgl_.float().cpu().numpy()
+                for w_, p in enumerate(pipes):
+                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])))
+            else:
+                for w_, p in enumerate(pipes):
+                    p.send(("step", an[w_off[w_]:w_off[w_ + 1]]))
             res = [p.recv() for p in pipes]
             obs = np.concatenate([r[0] for r in res])
+            if LEGS_IN:
+                legs_x = legs_cat([(r[15], r[0]) for r in res])
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
             if LONG:
                 b_rl[t] = torch.from_numpy(np.concatenate([r[11] for r in res])).to(dev)
@@ -1597,6 +1657,10 @@ def main():
                                     float(((dd_[3].logits.argmax(-1) - da[..., 3]).abs() <= 1).float().mean())]
                 opt.zero_grad()
                 loss.backward()
+                if LEGS_IN and not LEGS_SAID:                    # (LEGS_IN, stage a) said once: the frozen branch takes no gradient
+                    LEGS_SAID.append(sum(int(p_.grad is not None and bool(p_.grad.abs().sum() > 0)) for p_ in pol.legs.parameters()))
+                    print("legs inside: the first backward reached {} of the branch's {} tensors (frozen: none)".format(
+                        LEGS_SAID[0], len(list(pol.legs.parameters()))), flush=True)
                 if AUX:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.")], 0.5)
                     nn.utils.clip_grad_norm_(pol.aux.parameters(), 0.5)

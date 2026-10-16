@@ -679,6 +679,20 @@ N_LEGS = 2
 LEGS_LOOK = float(os.environ.get("LEGS_LOOK") or 0.0) > 0
 LEGS_STAND = float(os.environ.get("LEGS_STAND") or 0.0) > 0
 INTENT_HEAD, LEGS_HEAD, LEGS_TAKES = 10, 11, (0, 1, 2, 3, 7, 8)
+# B-253 stage (a) (the owner, 2026-10-15: "the separate movement network should really be part of the main fast network"):
+# his legs' network as a branch of his own network. LEGS_IN=1 (with LEGS; a PLAY_VAR): legs_prep(), called by whoever
+# plays him after observe() (the trainer's workers, the plugins, the checks' tools), gives the movement network's 61
+# inputs of every seat that his legs could carry on the next step (normalised and cut at +-10 as the movement network
+# takes them; zeros where it has no way), the same inputs _legs_step() would make. The player's network works out the
+# branch's logits (17: forward 3, sideways 3, jump 3... in the movement network's order 3, 3, 2, 9) and hands them over
+# in env.legs_lg [players, 17] before step(); _legs_step() then samples from them exactly as from its own sums (the
+# same draws of the simulator's random stream, the same hand rule for the view's turn, the same turn bins). Given no
+# logits (a caller that does not know the branch) it works them out itself as before. LEGS_IN_CHECK=1 works them out
+# all the same and keeps the largest difference (legs_in_err: the largest logit difference, the rows compared, the
+# rows whose sampled choice would differ). With LEGS_IN off nothing here runs and nothing changes.
+LEGS_IN = LEGS and float(os.environ.get("LEGS_IN") or 0.0) > 0
+LEGS_IN_CHECK = LEGS_IN and float(os.environ.get("LEGS_IN_CHECK") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("LEGS_IN",)
 N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE) + N_LEGS + N_EN
 # AUTO_SWITCH (owner, 2026-10-10: "if you run out of ammo it moves you to a different weapon. Give him that setting and
 # use the weapon swaps from quake live"): the trigger pressed on an empty weapon brings up the highest weapon of the
@@ -3138,14 +3152,37 @@ class DuelEnv:
             return
         w0, b0, w1, b1, wp, bp, mean, var = self.teacher_w
         c2_ = getattr(T, "c2", 0)                            # (stage C part 2) a network with the inputs for it is told where to
+        md_ = getattr(self, "_legs_mode", None) if into is not None else None     # (LEGS_IN, B-253: legs_prep() collects, _legs_step() uses)
+        lg_in = getattr(self, "legs_lg", None) if md_ == "use" else None
         if c2_:                                              # look and that he is to stand at the goal; any other is asked as before
             T.look_pt, T.look_on, T.stand = self._legs_c2(ri, k, into is not None)
-        x = np.clip((T.observe() - mean) / np.sqrt(var + 1e-8), -10, 10).astype(np.float32)
-        if c2_:                                              # (the new inputs' part apart: with them at zero, or at zero weight, the
-            T.look_on = T.stand = None                       # sum is bit for bit the old network's; and its other askers tell it nothing)
-            lg = np.tanh(np.tanh(np.ascontiguousarray(x[:, :-c2_]) @ self.t_w0[0].T + x[:, -c2_:] @ self.t_w0[1].T + b0) @ w1.T + b1) @ wp.T + bp
+        if lg_in is not None and not LEGS_IN_CHECK:          # (LEGS_IN) the branch of his own network has worked them out
+            if c2_:
+                T.look_on = T.stand = None
+            lg = np.asarray(lg_in, np.float32)[ri]
         else:
-            lg = np.tanh(np.tanh(x @ w0.T + b0) @ w1.T + b1) @ wp.T + bp
+            x = np.clip((T.observe() - mean) / np.sqrt(var + 1e-8), -10, 10).astype(np.float32)
+            if md_ == "collect":                             # (LEGS_IN) legs_prep(): the inputs, no sums, no draws
+                if c2_:
+                    T.look_on = T.stand = None
+                self.legs_x[ri] = x
+                self.legs_xok[ri] = ok
+                return
+            if c2_:                                          # (the new inputs' part apart: with them at zero, or at zero weight, the
+                T.look_on = T.stand = None                   # sum is bit for bit the old network's; and its other askers tell it nothing)
+                lg = np.tanh(np.tanh(np.ascontiguousarray(x[:, :-c2_]) @ self.t_w0[0].T + x[:, -c2_:] @ self.t_w0[1].T + b0) @ w1.T + b1) @ wp.T + bp
+            else:
+                lg = np.tanh(np.tanh(x @ w0.T + b0) @ w1.T + b1) @ wp.T + bp
+            if lg_in is not None:                            # (LEGS_IN_CHECK) the given logits against its own; the given ones are used
+                g_ = np.asarray(lg_in, np.float32)[ri]
+                e_ = getattr(self, "legs_in_err", None)
+                if e_ is None:
+                    e_ = self.legs_in_err = np.zeros(3)
+                o_ = ok & (np.abs(self.legs_x[ri] - x).max(1) == 0) if getattr(self, "legs_x", None) is not None and len(self.legs_x) == self.n else ok
+                e_[0] = max(e_[0], float(np.abs(g_ - lg)[ok].max()))
+                e_[1] += int(ok.sum())
+                e_[2] += int((ok & ~o_).sum())               # (rows whose inputs at the step differ from legs_prep()'s: none if the order is kept)
+                lg = g_
         out, j = [], 0
         for d_ in (3, 3, 2, 9):
             l_ = lg[:, j:j + d_]
@@ -3153,6 +3190,10 @@ class DuelEnv:
             pr /= pr.sum(1, keepdims=True)
             out.append(l_.argmax(1) if TEACH_BEST else (pr.cumsum(1) > self.rng.random((len(ri), 1))).argmax(1))
             j += d_
+        if md_ == "use":                                     # (LEGS_IN) the branch's own draw, before the hand rule and the turn bins
+            if getattr(self, "legs_raw", None) is None or len(self.legs_raw) != self.n:
+                self.legs_raw = np.full((self.n, 4), -1, np.int64)
+            self.legs_raw[ri[ok]] = np.stack(out, 1)[ok]
         if getattr(T, "mouse", False):                       # (a change of direction his hand cannot make yet: the view rests)
             sg_ = np.sign(self.t_bins[out[3]])
             w_ = ri
@@ -3207,20 +3248,25 @@ class DuelEnv:
                 self.legs_held[new_] = self.rng_keep.random(len(new_)) >= LEGS_KEEP
             self.legs_held &= self.legs                      # (it ends with the stretch)
             self.stats["legs_keep"][:, 0] += (int((~self.legs_held[new_]).sum()), int(self.legs_held[new_].sum()))
+        if LEGS_IN:                                          # (B-253) the branch's draws of this frame (-1: his legs did not move him)
+            self.legs_raw = np.full((n, 4), -1, np.int64)
         ri = np.nonzero(self.legs)[0]
         if not len(ri) or self.teacher is None or self.route is None:
+            self.legs_lg = None
             return
-        k = np.where(self.run_k > 0, self.run_k, self.intent)       # his target: the item of his run, or of his intention
-        ri = ri[k[ri] > 0]
-        if self.hold_n:                                      # at his holding place there is no further way: he holds it on his own feet
-            ri = ri[~self._hold_at(ri, k[ri])]
-        if LEGS_STAND and getattr(self, "hold_tg", None) and getattr(self.teacher, "c2", 0):    # (stage C part 2) at his holding place
-            ri = np.nonzero(self.legs)[0]                    # his legs do not let go of him: a network that can is told to stand
-            ri = ri[k[ri] > 0]                               # there, and stops him (stage B part 2 takes him off his legs at the place)
+        k, ri = self._legs_who(self.legs)
         if not len(ri):
+            self.legs_lg = None
             return
         ch = np.full((n, 4), -1, np.int64)
-        self._move_teach(ri, k, ch)
+        if LEGS_IN:                                          # (B-253) the branch's logits, if the caller gave them
+            self._legs_mode = "use"
+            try:
+                self._move_teach(ri, k, ch)
+            finally:
+                self._legs_mode, self.legs_lg = None, None   # (used once: a stale set is never taken for a later frame's)
+        else:
+            self._move_teach(ri, k, ch)
         ok = ch[:, 0] >= 0
         if LEGS_LAB:
             self.legs_lab = ch.astype(np.int8)               # the four choices where the movement network has a way, -1 elsewhere
@@ -3229,6 +3275,45 @@ class DuelEnv:
         a[ok, :4] = ch[ok]
         a[ok, 7:9] = 0
         self.legs_on = ok
+
+    def _legs_who(self, on):
+        """the seats his legs carry when the switch is on for the players on (bool [players]): those with a target (the
+        item of his run, or of his intention) and not standing at his holding place. Returns (the targets, the seats)."""
+        ri = np.nonzero(on)[0]
+        k = np.where(self.run_k > 0, self.run_k, self.intent)       # his target: the item of his run, or of his intention
+        ri = ri[k[ri] > 0]
+        if self.hold_n:                                      # at his holding place there is no further way: he holds it on his own feet
+            ri = ri[~self._hold_at(ri, k[ri])]
+        if LEGS_STAND and getattr(self, "hold_tg", None) and getattr(self.teacher, "c2", 0):    # (stage C part 2) at his holding place
+            ri = np.nonzero(on)[0]                           # his legs do not let go of him: a network that can is told to stand
+            ri = ri[k[ri] > 0]                               # there, and stops him (stage B part 2 takes him off his legs at the place)
+        return k, ri
+
+    def legs_prep(self):
+        """(LEGS_IN, B-253) the movement network's inputs [players, its inputs] float32 for every seat his legs could carry
+        on the next step (a network's seat, alive, with a target and a way): what _legs_step() would give the movement
+        network if his switch were on, worked out now from the same state (normalised and cut at +-10; zeros elsewhere).
+        Also legs_xok (bool [players]): the rows with a way. Draws no random number and changes nothing the simulator
+        does. Call it after observe() and before step(), with nothing between that moves a player or changes his
+        target (a plugin that reads the intention in between calls it after that)."""
+        T = self.teacher
+        d_in = 0 if T is None else self.teacher_w[0].shape[1]
+        self.legs_x = np.zeros((self.n, d_in), np.float32)
+        self.legs_xok = np.zeros(self.n, bool)
+        if T is None or self.route is None:
+            return self.legs_x
+        k, ri = self._legs_who((self.script == 0) & (self.hp > 0))
+        if not len(ri):
+            return self.legs_x
+        c2s_ = self.stats["legs_c2"].copy() if "legs_c2" in self.stats else None
+        self._legs_mode = "collect"
+        try:
+            self._move_teach(ri, k, np.full((self.n, 4), -1, np.int64))
+        finally:
+            self._legs_mode = None
+            if c2s_ is not None:                             # (a look point counted once: on the frame it is used)
+                self.stats["legs_c2"] = c2s_
+        return self.legs_x
 
     def _spawn(self, i, avoid, close=None):
         game_ = GAME_ON and bool(self.game[self._match_of(i)])    # (a whole game or a late round: a spawn point, away from the enemy)

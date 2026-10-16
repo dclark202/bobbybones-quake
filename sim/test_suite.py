@@ -62,6 +62,9 @@ class Policy:
             self.attP = attn_.params_np(sd)
             if not np.abs(self.attP["door.weight"]).sum() > 0:
                 self.attP = None
+        self.legsP = None                                    # (LEGS_IN, B-253) his legs' branch, if the network has it inside
+        if "legs.0.weight" in sd:
+            self.legsP = tuple(sd[k_] for k_ in ("legs.0.weight", "legs.0.bias", "legs.2.weight", "legs.2.bias", "legs.4.weight", "legs.4.bias"))
         self.slow = ck.get("slow")                           # (--slow-mem) the slow memory: its layout and weights; the memory array
         self.W = self.H                                      # a seat carries is wider (sim/slowmem.py: [fast | slow | sum | count | frames])
         if self.slow is not None:
@@ -70,6 +73,13 @@ class Policy:
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)
+
+    def legs_logits(self, xl):
+        """(LEGS_IN) his legs' branch: the simulator's legs_prep() rows -> the logits [rows, 17]; None without the branch"""
+        if self.legsP is None:
+            return None
+        w0, b0, w1, b1, wp, bp = self.legsP
+        return (np.tanh(np.tanh(np.asarray(xl, np.float32) @ w0.T + b0) @ w1.T + b1) @ wp.T + bp).astype(np.float32)
 
     def act(self, obs, h):
         hf = h                                               # (--slow-mem) the whole state; h its fast part
