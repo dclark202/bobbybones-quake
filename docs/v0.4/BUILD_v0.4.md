@@ -135,6 +135,88 @@ np_tick(W, lay, e, h_after, hf, events)   # -> (plan, target_add, way_add, hf2)
   ends, or mask the ones whose game has not ended. Choose one and say which.
 - **The switch:** `HEAD_EVENTS=1` (a `PLAY_VAR`). Off means no events computed and the simulator unchanged.
 
+### 3a. As built (lane sim, 2026-10-16)
+
+**The columns**, `duel_env.HEAD_EVENT_COLS` (also `N_HEAD_EVENTS = 32` and `HEAD_COL`, name → column), and the hook that
+feeds each one. step() calls the same hooks, so a plugin that calls them gets what training gets.
+
+| # | Name | What | Fed by |
+|---|---|---|---|
+| 0 | `dmg_dealt` | damage he dealt to other players, points / 100 | `note_combat(dealt, taken, frag, died)` |
+| 1 | `dmg_taken` | damage he took from anything (enemies, his own splash, lava, falls) / 100 | `note_combat` |
+| 2 | `frag` | frags he made of another player | `note_combat` |
+| 3 | `died` | his deaths of anything | `note_combat` |
+| 4 | `en_seen` | share of the tick's frames with an enemy *noticed* in view (reaction and acquire delay, as the inputs: `acquired`, in a group `acq2`) | `note_frame()` |
+| 5 | `en_heard` | flag: any enemy sound heard | `hear()`, `_hear()`, `note_frame()` (the senses' running steps: `seen_t` at 0 with nobody noticed; a fresh pain sound) |
+| 6–12 | `took_mh`, `took_ra`, `took_ya`, `took_rl`, `took_rg`, `took_lg`, `took_small` | his pickups by class; `small` = everything else (health, shards, green armor, ammunition, the other weapons) | `note_take(i, it)` |
+| 13–19 | `en_took_*` | pickups of others he saw (noticed in view) or heard (within `HEAR_EVT`), same classes; never in movement rounds or solo rooms | `note_take(i, it)` |
+| 20–23 | `resp_mh`, `resp_ra`, `resp_ya`, `resp_wp` | item returns heard (within `HEAR_EVT`) | `note_respawn(k, who)` |
+| 24 | `en_pain` | the enemy's pain sounds heard (`pain_t` set to 0 on the frame) | `note_frame()` |
+| 25 | `weapon_change` | the weapon in his hand changed (not across a spawn or a teleport) | `note_frame()` |
+| 26 | `takeoff` | left the ground going up (over 100 u/s: a jump, a jump pad) | `note_frame()` |
+| 27 | `fall_land` | landed `HEAD_FALL_DROP` (64) units or more below where he left the ground | `note_frame()` |
+| 28–31 | `pad_28` … `pad_31` | zeros | |
+
+- `head_events()` returns the counts since the last call (`en_seen` divided by the frames counted) and starts again;
+  zeros with the switch off. `note_event(i, name, value)` adds to any column by name, for anything a plugin knows that no
+  other hook brings.
+- **The plugin's side (lane serve):** once a frame call `note_combat` with the game's counts of the frame (damage dealt
+  to the opponent, damage taken, frags, deaths; arrays of `env.n`), and `note_frame()` **after** `senses()`, the pain
+  sound (`pain_t`) and `env.weapon[0]` are set and the state is filled. `hear()`, `_hear()`, `note_take()` and
+  `note_respawn()` are already called by `duelbot.py` and count by themselves. Then `head_events()` on the head's tick.
+- **A round's end:** a player whose round ended (`done`) starts his count again at the start of the next step; the frame
+  that ended it is still in the count, so a tick on that frame sees it. A plugin has no rounds: nothing to do.
+- **Off:** nothing of it is created or computed (the names are in `MOMENT_STATIC`, so a mid-game start never copies
+  them), no random number is drawn: the simulator is today's, proven below.
+
+**The win label**, two more columns at the end of `AUX_COLS`, only with `HEAD_EVENTS=1` (read them by name:
+`AUX_COLS.index("win_game")`):
+
+- `win_game`: the number of the whole game (`game` kind 1) or mid-game start (kind 3) **the frame just played belongs
+  to**: `info["aux"]` of the step that played frame t (the trainer's `obs_t` → `act_t` → `step`) carries the game of
+  frame t. A running number of this simulator from 0, the same for all seats of the game (float32, exact below 2^24); key
+  it by (worker, player) and number. -1: no labelled game (a normal round, an item run, a jump run, a late round, a spawn
+  start).
+- `win_band`: on the frame that ends such a game (the step whose `done` is set for it; overtime played out): the band of
+  his final margin, his frags less the best of the others' (a mid-game start's saved score included): 0 for ≤ −5,
+  1 for −4..−1, 2 level, 3 for 1..4, 4 for ≥ 5 (`WIN_BAND_EDGES`). -1 on every other frame.
+
+**The trainer's side (lane core). Choice: fill in, with the true band where the game ended in the rollout and the
+head's own forecast otherwise. A game whose end has not come is never masked.** A game is 24,000 frames, about 63
+updates of 384 steps. Masking the unfinished games would label only the last 9.6 s of each game, where the score already
+tells the result. Keeping the ticks until the end costs too much memory: 3,000 ticks × 1,024 slow-state numbers a
+player-game, which is tens of GB for 10,000 players. So the band is learnt as a value is, with γ = 1: the forecast at a
+tick should equal the forecast at a later tick of the same game.
+
+1. On every head tick k (frame t_k) of the rollout keep `gid[p, k] = aux[t_k, p, win_game]`.
+2. For every player p and game g ≥ 0 in the rollout: if a frame of the rollout has `win_game == g` and `win_band >= 0`,
+   that frame ended g: the target of every tick of g is `one_hot(win_band)` (the **true** label; its loss is the one
+   counted for calibration).
+3. Otherwise g goes on past the rollout. The target of its ticks is `softmax(win_logits)` at **the last tick of g in the
+   rollout**, detached (from `seq`'s own outputs in the learning step, or from the collection pass). That last tick
+   itself is masked.
+4. Ticks with `gid == -1` are masked. Loss: cross-entropy of `win` to the target, over the ticks not masked.
+   Optionally weight the true-label ticks up. Report the loss and the calibration from the true-label ticks only.
+5. The game's frames before its first tick in the rollout (the rollout starts mid-game) need nothing: their ticks
+   were in the rollout before.
+
+**Proofs (2026-10-16, CPU, the v0.3.1 switches).**
+
+- `ident16.py`: base e9aed8c against this branch is IDENTICAL for `duel_env` and `duel_env_ffa` (group 3) on Blood
+  Run and Aerowalk, with the switch off and with `HEAD_EVENTS=1`. `tools/ffa_check.py` passes, off and on.
+- Events: random play with weapons handed out, `head_events()` on every frame. On Aerowalk (4,000 frames, 24 players)
+  the sums match the simulator's own books:
+  - pickups 198 = the stats' 198 (mega 8, red 9)
+  - frags 19, deaths 38
+  - damage dealt and taken equal to `info["aux"]`
+  - `en_seen` equals the frames noticed
+  - every column moved, and the padding never did.
+  `duel_env_ffa` on Blood Run gives the same.
+- The win label: games brought to their end with set scores, 7,748 of them on Aerowalk (2,703 whole games, 5,045
+  mid-game starts). All give the right band for both seats: ±5 and more, ±1..4, overtime decided by a frag, and level
+  after the last overtime period. No band appears on any other frame, and the game's number changes on the frame after
+  its end.
+
 ## 4. Pretraining (lane pre)
 
 - `sim/head_data.py`: sequences for the head from
