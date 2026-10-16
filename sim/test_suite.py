@@ -73,14 +73,20 @@ class Policy:
         self.head = ck.get("head")                           # (v0.4) the head (sim/head.py): its state follows the rest of the array
         self.head_at = self.W
         if self.head is not None:
-            import head as head_
-            self.hm, self.headP = head_, head_.params_np(sd)
+            import head as head_                             # (the module itself is not kept: a Policy goes to pool workers by pickle)
+            self.headP = head_.params_np(sd)
             self.W = self.head_at + head_.np_state_width(self.head)
             o_ = np.concatenate([[0], np.cumsum(self.dims)])
             self.head_si, self.head_sw = slice(int(o_[10]), int(o_[11])), slice(int(o_[12]), int(o_[13]))   # the intention, his way
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)
+
+    @property
+    def hm(self):
+        """(v0.4) sim/head.py's numpy side"""
+        import head as head_
+        return head_
 
     def clear(self, h, rows=None):
         """a seat's memory cleared (the trainer's `done`), in place; the head's tick clock kept (sim/head.py np_clear). For a
