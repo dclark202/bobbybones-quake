@@ -115,6 +115,41 @@ v0.4. No new single-behaviour reward.
 | 9 | Rocket and projectile aim (B-254) | **measured** (his first rocket as soon as the pros', the first hit far later, 2.1 rockets a minute against 10.8) | his lead inputs checked against what a player aims at (the floor under the enemy's predicted place); the drills read by whole games | before the start |
 | 10 | The checks' tools at level 3, round length fixed | **not done** | `round_secs` 600 in `bobby_yardsticks.py`, `opening_check.py`, `memory_reach.py` | tonight, for v0.3's evaluation |
 
+## 6b. The owner's play test of v0.3 and tonight's plan (2026-10-15 evening)
+
+**The play test** (the owner, aim level 3 "definitely"): "a bot that doesn't want to fight. He's quite good at moving
+around the map but backs out of every fight. I'm standing there with no hp on purpose and he runs away from me." Why:
+- **The pay**: keeping a stack pays up to a frag a minute, the big weapons in hand up to another, being low costs up to
+  one (`STACK_PAY`, `STACK_WPN`, `STACK_LOW`, `STACK_BARE`, since 2026-10-07): about as much as his frags in a whole game, and
+  only while alive. A fight risks that income.
+- **His legs** carry him 61% of the time and know only items and holding places: nothing lets him choose the enemy as a
+  place to go (v0.2's `FIGHT_TARGET` was left out).
+- **No belief of the enemy's stack** (the owner: "If he doesn't it's a massive design flaw. He should have an expectation of
+  the enemy's health + uncertainty"). He has the evidence (the pain sounds by health band for 1.5 s, the damage he dealt
+  this life, the enemy's mega and armor pickups heard, the time since his spawn) but no estimate; the guessing game's
+  `strength` question is built and was off in v0.3.
+
+**The new parts** (the owner: "build ALL of these things, then run a few short experiments on the stack pay/hunt/etc."):
+
+| # | Part | What it is | Proof before use |
+|---|---|---|---|
+| 11 | **The enemy's stack, believed** (B-257) | inputs worked out from his senses only: the enemy's expected health and armor and their spread (125 at a known spawn, pickups heard added, damage he dealt taken off, a pain sound pins the band, health over 100 ticking down, the spread growing with time unseen); and the guessing game's `strength` question on | fixed runs unchanged with it off; the estimate against the truth in self-play (error and calibration of the spread) |
+| 12 | **Hunt** (B-256, brought forward from v0.4) | the enemy's believed place as one more target of his intention, handed to his legs and his way as an item's place; opened out of "nothing" (a zero row) so he starts as v0.3 | fixed runs unchanged with it closed; the network answers as before (`add_attention.py --same`) |
+
+**Tonight, in order** (the PC is free; builds in separate worktrees, each merged only after its proof):
+
+| When | Builds | Short experiments (on the owner's go) |
+|---|---|---|
+| 20:00 to 22:00 | B-237 (the learning step) and 11 (the belief) in parallel; the rail measurement (legs on or off at wide sightings) | |
+| 22:00 to 02:00 | 12 (hunt) on top of 11; the rocket jump check (game against simulator) on a private server | arms that need no new code, one at a time: **A** level 3 alone (the arms' baseline); **B** the stack pay off; **C** damage taken at 0.75 of damage dealt |
+| 02:00 to 06:00 | B-253 stage (a), the legs as a frozen branch, started | **D** the belief and hunt (from 11 and 12) |
+| 07:00 | report: the arms' checks, the builds and their proofs | |
+
+An arm: v0.3's 18:00 save at aim level 3, ten updates (about an hour), then 160 whole games against the control on ten
+maps; read with the rockets, the rail, fights taken and frags a game. The owner picks the mix for the run.
+Not tonight: B-253 stages (b) and (c), the rocket jump runs (after the check and the legs), and the run itself.
+Dropping the death pay is not proposed (a death is the enemy's point in a duel); it can be an arm on the owner's word.
+
 ## 7. How it is judged
 
 - **Every tenth update**: 160 ten-minute whole games against the control on ten maps (level 50%, one check moves about ±3).
