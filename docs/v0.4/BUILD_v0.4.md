@@ -8,20 +8,20 @@ says so in its report rather than changing it quietly.
 
 - **Base:** branch `v0.4` (from b50983a: main 2521b01 plus the server queue). One worktree and one branch per lane:
   `v04-core`, `v04-sim`, `v04-pre`, `v04-serve`. Commit on your own branch; never push; never merge into main.
-- **Data:** each worktree gets a junction `data` → `C:\Users\dacla\ql-bot\data`. Read from it only; write your scratch
+- **Data:** each worktree gets a junction `data` → `~\ql-bot\data`. Read from it only; write your scratch
   under your worktree's `scratch/`, which is git-ignored.
-- **The running training must stay undisturbed.** `duel_gru_v0_3_1b` trains from `C:\Users\dacla\ql-bot-v031c` on the
+- **The running training must stay undisturbed.** `duel_gru_v0_3_1b` trains from `~\ql-bot-v031c` on the
   card until 19:00, and again from about 21:00.
   - CPU only: `CUDA_VISIBLE_DEVICES=-1`.
   - Every Python process: `OPENBLAS_NUM_THREADS=1`, `OMP_NUM_THREADS=1`, `PYTHONFAULTHANDLER=1`, affinity `0xC03C3`
     (`cmd //c start "" //b //wait //affinity C03C3 ...`, or the scratchpad's `es/pinrun.py`), low priority.
   - At most **two** processes per lane at a time, and nothing that runs more than about 20 minutes.
 - **Do not touch:**
-  - `C:\Users\dacla\ql-bot-v031c`, `ql-bot-v031b`, `ql-bot-arms`
+  - `~\ql-bot-v031c`, `ql-bot-v031b`, `ql-bot-arms`
   - `data/sim_runs/duel_gru_v0_3_1b` (except to read a `keep/policy_*.pt`)
   - the `qlbot` docker image, any server, the public server
   - the owner's Quake Live folder
-  - `C:\Users\dacla\ql-bot` itself (it is the owner's checkout: work in your worktree)
+  - `~\ql-bot` itself (it is the owner's checkout: work in your worktree)
 - **Off = today, proven.**
   - Every simulator change sits behind a switch that is off by default. With it off, `ident16.py` (scratchpad) is
     IDENTICAL for `duel_env` and `duel_env_ffa` on Blood Run and Aerowalk with the v0.3.1 switches.
