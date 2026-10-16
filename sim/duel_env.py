@@ -731,6 +731,13 @@ TELE_FAR = 160.0                                       # (WALK_FIX) a teleporter
 #                 moves at 0.933 of running speed (measured 298.7 units a second on Furious Heights and Hektik; the
 #                 simulator 267), and a step may be 22 units high (the game's pmove_StepHeight; Quake 3's 18).
 QL_MOVE = float(os.environ.get("QL_MOVE") or 0.0) > 0
+#   QL_FLOAT=1    velocity is not cut to whole units after every move (Quake 3's SnapVector, kept in the library from Quake 3):
+#                 Quake Live keeps it as it is (plugins/rjlab.py, 2026-10-15: speeds of 549.88, -202.08 and 69.8 u/s after
+#                 moves, a fall's speed down by exactly 20 a frame). Cut, the simulator's gravity loses about one unit a
+#                 frame (19 for the game's 20): every jump and fall in the air about 5% higher and longer than the game's
+#                 (a plain jump 49.8 units high against 47.3; a rocket jump at his feet 198 against 189). Needs the
+#                 library of 2026-10-15 (qsim_snap). Off: the simulator is v0.3's.
+QL_FLOAT = float(os.environ.get("QL_FLOAT") or 0.0) > 0
 #   ITEM_DROP=1   an item lies where the game lets it fall at a map's start (a 30-unit box dropped to the floor), not at the
 #                 map file's point: on Sinister those float a median 43 units above the resting place, on Hektik eight
 #                 items 30 to 40 (the game's own item list, plugins/maplab.py). The plugins match the game's items to his
@@ -810,6 +817,22 @@ TEACH_BEST = float(os.environ.get("TEACH_BEST") or 0.0) > 0
 #                 reaches a player when the line from the blast to his middle or to one of four points 15 units beside it
 #                 is clear (the game's CanDamage), not only the line to his middle
 GL_QL = float(os.environ.get("GL_QL") or 0.0) > 0
+#   RL_QL=1       rockets as measured in the game on 2026-10-15 (plugins/rjlab.py: 600 scripted rocket jumps on the test map
+#                 and Blood Run; B-252): a rocket leaves on the frame of the command (not one frame after it), from the
+#                 muzzle at the first of the frame's three moves (eye RL_EYE above his origin, 14 units ahead, cut to
+#                 whole units as in Quake 3) and is RL_AHEAD units further on at that frame's end (the game's prestep); its
+#                 blast point is cut to whole units toward where it came from; splash reaches a player's box grown by
+#                 RL_BOX a side (fitted: 0.5 best, Quake 3's absmin / absmax are grown by 1), with no SPLASH_NEAR; RL_EYE
+#                 and RL_AHEAD fitted too, on his own rockets and on weaponlab's rockets at the floor before another (26 is
+#                 Quake 3's view height); damage in whole points as Quake 3 counts
+#                 them (84 x falloff cut, halved and cut on oneself, at least 1); the push is 5 u/s per point of 100 x
+#                 falloff times 1.1 on oneself and 0.9 on others (the game's: 550 u/s at a rocket at one's own feet, 450 at
+#                 another's). Checked on others with weaponlab's rockets at the floor 0 to 140 units before a player
+#                 (data/weaponlab2, 2026-10-07): within 2 to 6 points; weaponlab aimed from the placed height, 2 units
+#                 above the resting eye, so its 'splash acts 20 units closer' (SPLASH_NEAR) was its own aim.
+#                 Off: the simulator is v0.3's.
+RL_QL = float(os.environ.get("RL_QL") or 0.0) > 0
+RL_EYE, RL_AHEAD, RL_BOX, RL_KNOCK_BASE, RL_KNOCK_SELF, RL_KNOCK_OTHER = 26.5, 41.0, 0.5, 100.0, 1.1, 0.9
 START_GUN_P = float(os.environ.get("START_GUN_P") or 0.0)
 #   START_GUN_W   "rl:0.5,pg:0.25,gl:0.25": which weapons those lives begin with and their shares, among the ones the map
 #                 has (owner, 2026-10-10 17:35: rockets too, "50%/25%/25% rockets/plasma/grenades"). Unset: grenades and
@@ -1706,6 +1729,8 @@ class DuelEnv:
             from qsim import QL_STEP, QL_WADE
             self.w.set_params2(QL_WADE, QL_STEP) if QL_MOVE else self.w.set_params2()
             self.w.add_solids() if SOLIDS else self.w.lib.qsim_clear_solids()
+        if QL_FLOAT or hasattr(self.w.lib, "qsim_snap"):
+            self.w.set_snap(not QL_FLOAT)
         self.lava_t = np.zeros(self.n, np.float32)          # seconds until lava or slime hurts him again (LAVA)
         self.rng = np.random.default_rng(seed)
         self.substeps = tuple(substeps)
@@ -4860,8 +4885,11 @@ class DuelEnv:
             if self.hp[v] <= 0:
                 st["killer"][v] = i
 
-    def _explode(self, i, wpn, ep, direct_on, hit_dir, s, st):
-        """projectile of player i (weapon wpn) explodes at ep; direct_on = player hit directly or None"""
+    def _explode(self, i, wpn, ep, direct_on, hit_dir, s, st, back=None):
+        """projectile of player i (weapon wpn) explodes at ep; direct_on = player hit directly or None;
+        back = the way it flew (RL_QL: the blast point is cut to whole units toward where it came from)"""
+        if RL_QL and wpn == RL:
+            return self._explode_ql(i, ep, direct_on, hit_dir, s, st, back)
         base = W_DMG[wpn]
         victims = []                                      # (player, health damage, knockback points, direction, direct)
         if direct_on is not None:
@@ -4908,6 +4936,64 @@ class DuelEnv:
                 self.stats["dmg"] += take
                 self.stats[WEAPONS[wpn] + "_hits"] += int(self.script[i] == 0)
                 if is_direct and wpn == RL:
+                    self.stats["direct"] += 1
+            else:
+                self.stats["self_dmg"] += take
+                if st["attacker"][v] < 0:
+                    st["attacker"][v] = v
+                if self.hp[v] <= 0 and st["killer"][v] < 0:
+                    st["killer"][v] = v
+
+    def _explode_ql(self, i, ep, direct_on, hit_dir, s, st, back):
+        """(RL_QL) a rocket of player i explodes at ep, as Quake 3's G_MissileImpact / G_RadiusDamage / G_Damage count it
+        with Quake Live's numbers (plugins/rjlab.py, 2026-10-15)"""
+        wpn = RL
+        ep = np.asarray(ep, np.float64).copy()
+        if back is not None:                              # SnapVectorTowards(endpos, the start): whole units, toward it
+            t_ = np.trunc(ep)                             # (int) v, or (int) v + 1 where the start lies above it
+            ep = np.where(np.asarray(back) >= 0, t_, t_ + 1.0)
+        ep = ep.astype(np.float32)
+        victims = []                                      # (player, damage points, push points, direction, direct)
+        if direct_on is not None:                         # a direct hit: 100, pushed by 100 x 0.9 (W_KNOCK)
+            victims.append((direct_on, float(W_DMG[wpn]), float(W_DMG[wpn] * W_KNOCK[wpn]), hit_dir, True))
+        R = P_RADIUS[wpn]
+        for v in (i, i ^ 1):                              # (RL_QL) splash on both players, the owner too
+            if v == direct_on:
+                continue
+            c = s[v, :3]
+            hi_ = c + MAXS + RL_BOX
+            if self.duck[v]:
+                hi_ = hi_.copy()
+                hi_[2] = c[2] + TOP_DUCK + RL_BOX
+            near = np.clip(ep, c + MINS - RL_BOX, hi_)
+            d = float(np.linalg.norm(ep - near))
+            if d < R and (self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999
+                          or (GL_QL and any(self.w.trace(ep, c + np.array([ox_, oy_, 0.0], np.float32), mask=self.sight)["fraction"] >= 0.999
+                                            for ox_, oy_ in ((15.0, 15.0), (15.0, -15.0), (-15.0, 15.0), (-15.0, -15.0))))):
+                f_ = 1.0 - d / R
+                kdir = (c - ep).astype(np.float32)
+                kdir[2] += 24.0
+                kn = float(np.linalg.norm(kdir))
+                kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
+                kp = int(RL_KNOCK_BASE * f_ * (RL_KNOCK_SELF if v == i else RL_KNOCK_OTHER))
+                victims.append((v, float(int(P_SPLASH[wpn] * f_)), float(kp), kdir, False))
+        for v, dmg, kpts, kdir, is_direct in victims:
+            take = float(max(1, int(dmg * SELF_FACTOR) if v == i else int(dmg)))     # G_Damage: at least 1
+            if kpts > 0:
+                self.w.knockback(int(v), np.asarray(kdir, np.float32) * (5.0 * kpts), int(min(200, kpts)))
+            st["kicked"] = True
+            took_s = self._damage(v, take)
+            st["dmg_taken"][v] += took_s
+            if SELF_DEBT and v == i:
+                self.self_debt[v] += took_s
+            if v != i:
+                st["attacker"][v] = i
+                self._book(st, i, v, take, wpn)
+                self.stats["dmg_h"] += float(take) * (self.script[i] == 0)
+                self.stats["dmg_from_script"] += float(take) * (self.script[v] == 0 and self.script[i] != 0)
+                self.stats["dmg"] += take
+                self.stats[WEAPONS[wpn] + "_hits"] += int(self.script[i] == 0)
+                if is_direct:
                     self.stats["direct"] += 1
             else:
                 self.stats["self_dmg"] += take
@@ -6449,7 +6535,14 @@ class DuelEnv:
                              & ((pkind != COURSE) | self.gun))[0]
             if len(br_):
                 self._blind_rockets(br_, s, reward)
-        self.fire_q, self.fire_w = shoot, self.weapon.copy()
+        if RL_QL:                                            # (RL_QL) a rocket leaves on the frame of the command
+            now_rl = shoot & (self.weapon == RL)
+            if now_rl.any():
+                do_fire = do_fire | now_rl
+                do_w = np.where(now_rl, RL, do_w)
+            self.fire_q, self.fire_w = shoot & ~now_rl, self.weapon.copy()
+        else:
+            self.fire_q, self.fire_w = shoot, self.weapon.copy()
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
         self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
                   ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
@@ -6472,6 +6565,32 @@ class DuelEnv:
                         k = slot[0]
                         self.rp[i, k] = eye[i] + fdir[i] * 14.0
                         self.rv[i, k] = fdir[i] * P_SPEED[wpn]
+                        if RL_QL and wpn == RL:             # (RL_QL) the muzzle at the first of the frame's three moves
+                            o_ = prev[i, :3] + (s[i, :3] - prev[i, :3]) / 3.0
+                            mz_ = np.trunc(o_ + np.array([0.0, 0.0, RL_EYE - (VIEW_H - VIEW_H_DUCK) * float(self.duck[i])],
+                                                         np.float32) + fdir[i] * 14.0).astype(np.float32)
+                            a_ = mz_ + fdir[i] * (RL_AHEAD + DT * P_SPEED[wpn])
+                            tr_ = self.w.trace(mz_, a_, mask=self.sight)
+                            span_ = RL_AHEAD + DT * P_SPEED[wpn]
+                            near_ = mz_ + fdir[i] * min(RL_AHEAD, tr_["fraction"] * span_)
+                            opp_rl = [i ^ 1]                # (RL_QL) whom it can meet within its first stretch
+                            got_ = [q_ for q_ in opp_rl if bool(self._seg_box(mz_[None], near_[None].astype(np.float32),
+                                                                              s[q_:q_ + 1, :3],
+                                                                              np.where(self.duck[q_:q_ + 1], TOP_DUCK, TOP))[0])]
+                            if got_ or tr_["fraction"] * span_ <= RL_AHEAD:     # it meets something within its first stretch
+                                self.stats[name + "_shots"] += hm
+                                self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
+                                dv_ = min(got_, key=lambda q_: float(np.linalg.norm(s[q_, :3] - mz_))) if got_ else None
+                                self._explode(i, wpn, near_.astype(np.float32), dv_,
+                                              fdir[i] if got_ else None, s, st, back=fdir[i])
+                                continue
+                            # at this frame's end it is RL_AHEAD beyond the muzzle: placed so that the flight below
+                            # (one frame, this one) ends there
+                            self.ra[i, k], self.rnew[i, k], self.rw[i, k], self.rage[i, k] = True, False, wpn, 0.0
+                            self.rp[i, k] = mz_ + fdir[i] * (RL_AHEAD - DT * P_SPEED[wpn])
+                            self.stats[name + "_shots"] += hm
+                            self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
+                            continue
                         if wpn == GL:                       # Quake lofts grenades a little (forward z + 0.2)
                             d_ = fdir[i].copy()
                             d_[2] += 0.2
@@ -6546,10 +6665,10 @@ class DuelEnv:
                 i, k, wq = owner[q], slot[q], int(wp[q])
                 if direct[q]:
                     self.ra[i, k] = False
-                    self._explode(i, wq, hitpt[q], i ^ 1, dirs[q], s, st)
+                    self._explode(i, wq, hitpt[q], i ^ 1, dirs[q], s, st, back=dirs[q])
                 elif timeout[q] or (wall[q] and wq != GL):
                     self.ra[i, k] = False
-                    self._explode(i, wq, hitpt[q], None, None, s, st)
+                    self._explode(i, wq, hitpt[q], None, None, s, st, back=dirs[q])
                 elif wall[q]:                               # grenade bounce off the surface it hit
                     tr = self.w.trace(p0[q], p0[q] + dirs[q] * float(step_len[q]), mask=self.sight)
                     nrm = tr["normal"]

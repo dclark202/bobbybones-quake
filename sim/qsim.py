@@ -126,6 +126,14 @@ class World:
         """wading scale and step height (Quake 3: 0.5 and 18; Quake Live: QL_WADE and QL_STEP)"""
         self.lib.qsim_params2(float(wade_scale), float(step_size))
 
+    def set_snap(self, on=True):
+        """velocity cut to whole units after every move (Quake 3; on) or not (Quake Live: QL_FLOAT in duel_env.py).
+        A library before 2026-10-15 has no switch and always cuts: False is refused there."""
+        if hasattr(self.lib, "qsim_snap"):
+            self.lib.qsim_snap(int(bool(on)))
+        elif not on:
+            raise RuntimeError("qsim: this library always cuts velocity to whole units (rebuild: sim/build.bat)")
+
     def add_solids(self):
         """the map's solid pieces that are brush models of their own (func_static, func_bobbing at rest, doors that a
         button opens: shut) become part of the collision, as in the game. Returns their (classname, model, origin)."""
