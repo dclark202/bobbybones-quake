@@ -121,7 +121,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (np.concatenate([info["legs_lab"], info["legs_held"][:, None]], 1).astype(np.int8)    # (--legs-teach) his legs' four choices
                           if "legs_lab" in info else None),                                               # (-1: no label), the stretch withheld; None: the simulator gives none
                          (info["hand_lab"].astype(np.float16) if "hand_lab" in info else None),            # (--hand-teach) the target of his NEXT reading of the weapon key (zeros: none)
-                         env.legs_prep() if legs_in else None))                                             # (LEGS_IN) the movement network's inputs of the next frame
+                         env.legs_prep() if legs_in else None,                                              # (LEGS_IN) the movement network's inputs of the next frame
+                         (np.asarray(env.legs_raw, np.int8) if legs_in and getattr(env, "legs_raw", None) is not None    # (--legs-learn) the branch's own draws
+                          and len(env.legs_raw) == env.n else (np.full((env.n, 4), -1, np.int8) if legs_in else None))))  # of this frame (-1: none)
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -636,6 +638,15 @@ def main():
     ap.add_argument("--legs-teach-warm", type=float, default=0.0, help="... minutes over which its weight rises from nothing, counted from "
                                                                        "--fade-start (a teacher at full weight from the first update "
                                                                        "has cost him aim before)")
+    ap.add_argument("--legs-learn", type=float, default=0.0,
+                    help="(LEGS_IN, B-253 stage b) his legs' branch learns from games: its learning rate is this share of the rest's "
+                         "(0.25: a quarter), through the rate schedule; 0 = off (stage a: frozen). On the frames his legs moved him "
+                         "the branch's log-probability of its own draw (before the hand rule; its keys only on the frames his hand "
+                         "reads them) joins the PPO ratio, with the run's advantage")
+    ap.add_argument("--legs-ent", type=float, default=0.0,
+                    help="... the exploration bonus on the branch's four choices: this times his own movement outputs' weights in "
+                         "--ent-heads (forward, strafe, vertical for its jump, turn), so 1 = the same as his; 0 = none (the default: "
+                         "the branch starts sharp from its own training and its draws already explore; a bonus pulls it flat)")
     ap.add_argument("--gate-open", type=float, default=0.0,
                     help="the attention part's gate (sim/attn.py): the tokens whose gate is below zero in the network he starts from "
                          "(new tokens begin shut at -30: tools/targets_init.py) are opened over this many minutes, counted from "
@@ -686,8 +697,16 @@ def main():
                    "legs.4.weight": z_["wp"], "legs.4.bias": z_["bp"]}
         LEGS_D = int(z_["w0"].shape[1])
         assert int(z_["wp"].shape[0]) == 17, "the legs' network has {} outputs, the simulator samples 3 + 3 + 2 + 9".format(z_["wp"].shape[0])
-        print("legs inside (LEGS_IN, B-253 stage a): the branch {} -> 256 -> 256 -> 17 from {} ({} weights), frozen".format(
-            LEGS_D, a.teacher, sum(v_.size for v_ in LEGS_SD.values())), flush=True)
+        print("legs inside (LEGS_IN, B-253 stage a): the branch {} -> 256 -> 256 -> 17 from {} ({} weights), {}".format(
+            LEGS_D, a.teacher, sum(v_.size for v_ in LEGS_SD.values()),
+            "learning at {:g} of the rate (stage b), exploration bonus {:g}".format(a.legs_learn, a.legs_ent) if a.legs_learn > 0 else "frozen"), flush=True)
+    # (--legs-learn, B-253 stage b) the branch learns: its log-probability of its own draw (env.legs_raw: before the turn's
+    # hand rule) on the frames his legs moved him joins the ratio; its own optimiser group at --legs-learn of the rate
+    LEGS_LEARN = LEGS_IN and a.legs_learn > 0
+    assert a.legs_learn <= 0 or LEGS_IN, "--legs-learn: set LEGS_IN=1 (with LEGS=1 and --teacher <the movement network's run>)"
+    assert a.legs_ent <= 0 or LEGS_LEARN, "--legs-ent: only with --legs-learn"
+    LEGS_DIMS = (3, 3, 2, 9)                                 # the branch's four choices: forward, sideways, jump, turn (the simulator's order)
+    LEGS_KEYS = (True, True, True, False)                    # ... the first three are keys: they count on the frames his hand reads them
     assert a.legs_teach <= 0 or LEGS_LAB, "--legs-teach: the simulator {} gives no labels (set LEGS_LABEL=1 with LEGS=1; p_c1_env.py)".format(a.env)
     HAND_LAB = bool(getattr(E_, "HAND_TEACH", False))        # (--hand-teach) the simulators give the label of his weapon output (HAND_TEACH=1)
     assert a.hand_teach <= 0 or HAND_LAB, "--hand-teach: the simulator {} gives no labels (set HAND_TEACH=1; p_hand_env.py)".format(a.env)
@@ -908,6 +927,22 @@ def main():
     def dists(logits):
         return [torch.distributions.Categorical(logits=l) for l in logits.split(ACTION_DIMS, -1)]
 
+    def legs_fwd(net, xl):
+        """(LEGS_IN) the branch's logits in full float32 (never under the attention part's half precision, no TF32: a rounded
+        sum would change a draw now and then)"""
+        with torch.autocast(device_type=dev.type, enabled=False):
+            return net.legs(xl.float())
+
+    def legs_lp(lg, raw, dc, lo):
+        """(--legs-learn) the branch's log-probability of its own draws raw [..., 4] (-1: it drew nothing) under its logits
+        lg [..., 17], counted on the frames his legs moved him (lo) and the branch drew; its three keys only on the frames
+        his hand read them (dc), as his own keys. -> (the sum [...], the four distributions, the four masks)"""
+        on = lo * (raw[..., 0] >= 0).float()
+        ms = [on * dc if k_ else on for k_ in LEGS_KEYS]
+        ds = [torch.distributions.Categorical(logits=l_) for l_ in lg.float().split(LEGS_DIMS, -1)]
+        rl = raw.long().clamp(min=0)
+        return sum(d_.log_prob(rl[..., j_]) * ms[j_] for j_, d_ in enumerate(ds)), ds, ms
+
     def load_net(net, sd):
         """a network's weights. Only the layers of --aux may be missing (they stay as they are: fresh in the learner) or
         left over (the lesson is off and they are not in this network)"""
@@ -939,7 +974,7 @@ def main():
         with torch.no_grad():
             for k_, v_ in LEGS_SD.items():
                 pol.state_dict()[k_].copy_(torch.from_numpy(np.asarray(v_)))
-        pol.legs.requires_grad_(False)                       # stage (a): frozen
+        pol.legs.requires_grad_(LEGS_LEARN)                  # stage (a): frozen; (b, --legs-learn): its own optimiser group
     if a.fast_gru:
         # cuDNN's GRU takes TF32 (10-bit products) when allowed, and torch allows it for cuDNN by default: 0.7% off the
         # frame-by-frame step in his memory, 0.5% in the gradients (2026-10-15). Off, it is the old step's to float32
@@ -952,6 +987,10 @@ def main():
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.")], lr=a.lr, eps=1e-5)   # (LEGS_IN: not the branch)
+    if LEGS_LEARN and dev.type == "cuda":                    # (--legs-learn) the branch's sums in full float32 (torch's default; said, so
+        torch.backends.cuda.matmul.allow_tf32 = False        # nothing elsewhere turns it on: its draws are the simulator's from these logits)
+    if LEGS_LEARN:                                           # (--legs-learn) the branch in a group of its own; every setting of the rate
+        opt.add_param_group({"params": list(pol.legs.parameters()), "lr": a.lr * a.legs_learn, "lr_scale": a.legs_learn})   # keeps its share
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
@@ -963,6 +1002,7 @@ def main():
                 "is" if d_ == 0 else "differs from", d_), flush=True)
         obs_mean, obs_var, obs_count = ck["obs_mean"], ck["obs_var"], ck["obs_count"]
         elapsed0 = ck.get("minutes", 0.0)
+    LEGS_W0 = [p_.detach().clone() for p_ in pol.legs.parameters()] if LEGS_LEARN else None    # (--legs-learn) where the branch starts in this process
 
     def norm(o):
         x = np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
@@ -1124,6 +1164,7 @@ def main():
         # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
         # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
         b_obs = b_act = b_logp = b_val = b_rew = b_done = b_w = b_live = b_dec = b_ll = b_lo = b_iteach = b_teach = b_rl = b_val2 = None
+        b_lx = b_lr = b_llp = None
         if dev.type == "cuda":
             torch.cuda.empty_cache()
         b_obs = torch.zeros(T, N, OBS_DIM, device=dev, dtype=torch.float16 if a.obs_half else torch.float32)
@@ -1140,6 +1181,10 @@ def main():
         b_dec = torch.zeros(T, N, device=dev)                            # the left hand's outputs (keys, weapon key) were read on that frame
         b_ll = torch.zeros(T, N, device=dev)                             # (LEGS) the switch to his legs was read on that frame
         b_lo = torch.zeros(T, N, device=dev)                             # ... his legs moved him on that frame
+        if LEGS_LEARN:                                                   # (--legs-learn) the branch's inputs (off the card: 0.9 GB at 10,080
+            b_lx = torch.zeros(T, N, LEGS_D)                             # players), its own draws and their log-probability as it played
+            b_lr = torch.full((T, N, 4), -1, dtype=torch.int8, device=dev)
+            b_llp = torch.zeros(T, N, device=dev)
         b_lab = torch.full((T, N, 5), -1, dtype=torch.int8, device=dev) if LEGS_LAB else None   # (--legs-teach) his legs' four choices on that frame
         #                                                                  (-1: no label), and that the stretch was withheld (LEGS_KEEP)
         b_iteach = torch.zeros(T, N, dtype=torch.long, device=dev)       # what the item rule would have chosen
@@ -1190,9 +1235,11 @@ def main():
             if LEGS_IN:                                                  # (LEGS_IN) his legs' logits: the branch of each seat's network
                 with torch.no_grad():
                     xl_ = torch.from_numpy(legs_x).to(dev)
-                    lgl_ = pol.legs(xl_)
+                    lgl_ = legs_fwd(pol, xl_)
                     if snaps:
-                        lgl_ = torch.where(snap_players[:, None], opp.legs(xl_), lgl_)
+                        lgl_ = torch.where(snap_players[:, None], legs_fwd(opp, xl_), lgl_)
+                if LEGS_LEARN:
+                    b_lx[t] = torch.from_numpy(legs_x)
                 lgn_ = lgl_.float().cpu().numpy()
                 for w_, p in enumerate(pipes):
                     p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])))
@@ -1222,6 +1269,11 @@ def main():
             # hand's (keys, weapon key) on the one frame in four it decides on (until 2026-10-08 all four were counted and
             # three were noise), the switch to his legs when it was read, what his legs take only while he moves himself
             b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo)))
+            if LEGS_LEARN:                                               # (--legs-learn) the branch's own draws (before the hand rule) join
+                b_lr[t] = torch.from_numpy(np.concatenate([r[16] for r in res])).to(dev)        # what he did on the frames his legs moved him
+                with torch.no_grad():
+                    b_llp[t] = legs_lp(lgl_, b_lr[t], dec, lo)[0]
+                b_logp[t] = b_logp[t] + b_llp[t]
             scr = torch.from_numpy(np.concatenate([r[4] for r in res]).astype(np.float32)).to(dev)
             teach = np.concatenate([r[5] for r in res])
             if HAND_LAB:
@@ -1296,13 +1348,13 @@ def main():
                 long_c = a.long_cap / long_gap
             adv = adv + long_c * (adv2[..., 1] - adv2[..., 0])
         frac = min(1.0, mins / a.lr_minutes) if a.lr_minutes > 0 else min(1.0, (time.time() - t_start) / (a.minutes * 60))
-        for g in opt.param_groups:
-            g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
+        for g in opt.param_groups:                                       # (--legs-learn: the branch's group keeps its share, lr_scale)
+            g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac) * g.get("lr_scale", 1.0)
         lr_now = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
         if a.lr_warm > 0:
             lr_now *= min(1.0, 0.1 + 0.9 * max(0.0, mins - fade0) / a.lr_warm)
             for g in opt.param_groups:
-                g["lr"] = lr_now
+                g["lr"] = lr_now * g.get("lr_scale", 1.0)
         n_mb = a.minibatches
         kick = a.teach * max(0.0, 1.0 - (mins - fade0) / a.teach_minutes)
         if a.teach_warm > 0:
@@ -1432,6 +1484,10 @@ def main():
         if AUX_W > 0 and AUX_MEAS:                                       # (--aux-measure) bands: nothing believed, believed 0-2 s ago, 2-7.5 s, 7.5-20 s;
             mb_s = torch.zeros(4, 4, dtype=torch.float64)                # frames, his memory's error, the belief's (nothing believed: the zero
             AUX_BL = b_bel[:T]                                           # answer's), frames his memory was nearer
+        ll_acc = torch.zeros(8, dtype=torch.float64)                     # (--legs-learn) the learner's frames, of them the branch's (turn), its
+        #                                                                  KL in the last pass (sum, pieces), the first piece's largest |log p - log p
+        #                                                                  at play| before any step, its entropy (sum), the gradient's size (sum, count)
+        ll_first = [True]
         wy_acc = torch.zeros(8, dtype=torch.float64, device=dev)         # (WAYS) the learner's readings of his way: how many, the sum of the
         #                                                                  entropy, of the chance given to each way, the readings on each way
         for epoch in range(3):
@@ -1465,6 +1521,25 @@ def main():
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
                 ent = sum(w_ * dd.entropy() * (1.0 if hm[j] is None else hm[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
+                if LEGS_LEARN:                                           # (--legs-learn) the branch's part of what he did, the same advantage
+                    lgl_ = legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev))
+                    lpl_, dsl_, msl_ = legs_lp(lgl_, b_lr[:, chunk], dc, b_lo[:, chunk])
+                    lp = lp + lpl_
+                    enl_ = sum(d_.entropy() * m_ for d_, m_ in zip(dsl_, msl_))        # (its entropy, for the record)
+                    if a.legs_ent > 0:                                   # (--legs-ent) each choice at his own movement output's weight
+                        ent = ent + a.legs_ent * sum(w_ * d_.entropy() * m_ for w_, d_, m_ in zip(ent_heads[:4], dsl_, msl_))   # (forward,
+                        #                                                  sideways, jump as his vertical key, turn) times --legs-ent
+                    with torch.no_grad():
+                        if epoch == 0:
+                            ll_acc[0] += float(wgt.sum())
+                            ll_acc[1] += float((msl_[3] * wgt).sum())
+                            ll_acc[5] += float((enl_ * wgt).sum())
+                        if ll_first[0]:                                  # (before any step: the ratio's legs part is 1 to rounding)
+                            ll_acc[4] = float(((lpl_ - b_llp[:, chunk]).abs() * (wgt > 0)).max())
+                            ll_first[0] = False
+                        if epoch == 2:
+                            ll_acc[2] += float(((b_llp[:, chunk] - lpl_) * wgt).sum() / wgt.sum().clamp(min=1.0))
+                            ll_acc[3] += 1.0
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
                 ad = (ad - (ad * wgt).sum() / wsum) / (ad[wgt > 0].std() + 1e-8)
@@ -1662,11 +1737,17 @@ def main():
                 loss.backward()
                 if LEGS_IN and not LEGS_SAID:                    # (LEGS_IN, stage a) said once: the frozen branch takes no gradient
                     LEGS_SAID.append(sum(int(p_.grad is not None and bool(p_.grad.abs().sum() > 0)) for p_ in pol.legs.parameters()))
-                    print("legs inside: the first backward reached {} of the branch's {} tensors (frozen: none)".format(
-                        LEGS_SAID[0], len(list(pol.legs.parameters()))), flush=True)
+                    print("legs inside: the first backward reached {} of the branch's {} tensors ({})".format(
+                        LEGS_SAID[0], len(list(pol.legs.parameters())), "learning: all" if LEGS_LEARN else "frozen: none"), flush=True)
+                if LEGS_LEARN:                                           # (--legs-learn) the branch's gradient is clipped on its own: the
+                    ll_acc[6] += float(nn.utils.clip_grad_norm_(pol.legs.parameters(), 0.5))    # rest's step is as without it
+                    ll_acc[7] += 1.0
                 if AUX:
-                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.")], 0.5)
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.")
+                                              and not (LEGS_LEARN and n_.startswith("legs."))], 0.5)
                     nn.utils.clip_grad_norm_(pol.aux.parameters(), 0.5)
+                elif LEGS_LEARN:
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.")], 0.5)
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
@@ -2082,6 +2163,17 @@ def main():
                                      withheld=round(float(lf_[2] / max(1.0, lf_[1])), 4),                                  # the share of the labelled frames in withheld stretches
                                      agree_withheld=[round(float(x_), 4) for x_ in la_[:, 5] / np.maximum(1.0, la_[:, 4])] if lf_[2] > 0 else None,
                                      carried=kp_(0), held=kp_(1))
+        if LEGS_LEARN:                                                   # (--legs-learn) the branch: its share of his frames, its step, how far
+            with torch.no_grad():                                        # it has moved in this process (largest, and the sum against its size)
+                mv_ = [float((p_ - p0_).abs().max()) for p_, p0_ in zip(pol.legs.parameters(), LEGS_W0)]
+                mr_ = float(sum(float((p_ - p0_).abs().sum()) for p_, p0_ in zip(pol.legs.parameters(), LEGS_W0))
+                            / max(1e-12, sum(float(p0_.abs().sum()) for p0_ in LEGS_W0)))
+            rec["legs_learn"] = dict(rate=a.legs_learn, lr=opt.param_groups[-1]["lr"], lr_rest=opt.param_groups[0]["lr"], ent_w=a.legs_ent,
+                                     share=round(float(ll_acc[1] / max(1.0, float(ll_acc[0]))), 4),
+                                     kl=round(float(ll_acc[2] / max(1.0, float(ll_acc[3]))), 6),
+                                     first_err=float(ll_acc[4]), entropy=round(float(ll_acc[5] / max(1.0, float(ll_acc[1]))), 4),
+                                     grad=round(float(ll_acc[6] / max(1.0, float(ll_acc[7]))), 4),
+                                     moved_max=round(max(mv_), 7), moved_rel=round(mr_, 8))
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:
