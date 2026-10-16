@@ -133,7 +133,7 @@ around the map but backs out of every fight. I'm standing there with no hp on pu
 
 | # | Part | What it is | Proof before use |
 |---|---|---|---|
-| 11 | **The enemy's stack, believed** (B-257) | inputs worked out from his senses only: the enemy's expected health and armor and their spread (125 at a known spawn, pickups heard added, damage he dealt taken off, a pain sound pins the band, health over 100 ticking down, the spread growing with time unseen); and the guessing game's `strength` question on | fixed runs unchanged with it off; the estimate against the truth in self-play (error and calibration of the spread) |
+| 11 | **The enemy's stack, believed** (B-257) | inputs worked out from his senses only: the enemy's expected health and armor and their spread (125 at a known spawn, pickups heard added, damage he dealt taken off, a pain sound pins the band, health over 100 ticking down, the spread growing with time unseen); (the guessing game's `strength` question waits for v0.4's head) | fixed runs unchanged with it off; the estimate against the truth in self-play (error and calibration of the spread) |
 | 12 | **Hunt** (B-256, brought forward from v0.4) | the enemy's believed place as one more target of his intention, handed to his legs and his way as an item's place; opened out of "nothing" (a zero row) so he starts as v0.3 | fixed runs unchanged with it closed; the network answers as before (`add_attention.py --same`) |
 
 **Tonight, in order** (the PC is free; builds in separate worktrees, each merged only after its proof):
@@ -147,6 +147,21 @@ around the map but backs out of every fight. I'm standing there with no hp on pu
 
 An arm: v0.3's 18:00 save at aim level 3, ten updates (about an hour), then 160 whole games against the control on ten
 maps; read with the rockets, the rail, fights taken and frags a game. The owner picks the mix for the run.
+**Against v0.4's shape** (the owner, 2026-10-15: "what portions of this would be hurtful to include now trying to cram
+into the high speed memory?"; [../v0.4/CANDIDATE_v0.4.md](../v0.4/CANDIDATE_v0.4.md): fast hands every frame, a slow head
+every eighth frame with a store of three minutes). v0.3.1 builds the hands; what the head will own is not taught to the
+fast memory now:
+- **In**: the faster learning step; the legs inside the network, stages (a) and (b) (the hands' own); the rail, rockets and
+  rocket jumps; the pay changes (stack pay, damage weight: the head is paid by the same game); **the believed stack as
+  inputs** worked out from his senses (an input costs his memory nothing, and the head will read it too); **hunt** as
+  plumbing (the enemy's believed place to his way and his legs, which the head's "where next" will use as it is) and as a
+  short-range choice ("he is weak and near: go").
+- **Out until v0.4**: the guessing game's `strength` question on the fast network (training it pulls on his shared layers
+  and crams a slow quantity into the fast memory: the head answers it); the legs' stage (c) (links from his fast memory
+  into his legs: in v0.4 the head's plan feeds them, and the two would duplicate); any longer memory (v0.3's slow memory
+  failed for doing this inside the fast network: RESULTS 2026-10-14 20:15). Long-range hunting (going to where he will
+  be) is the head's.
+
 Not tonight: B-253 stages (b) and (c), the rocket jump runs (after the check and the legs), and the run itself.
 Dropping the death pay is not proposed (a death is the enemy's point in a duel); it can be an arm on the owner's word.
 
