@@ -52,6 +52,7 @@ The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
   flick speed and hand noise; never miss on purpose; no wallhacks.
 - **Method**: limit what he can do until the right play appears; do not add rewards for single behaviors without asking;
   the reward is the owner's call. Fading lessons from the pros are fine; what stays must hold without them.
+- **Pay is judged by its equilibrium and the five goals** (the owner, 2026-10-15, twice): whenever pay weights are discussed, the equilibrium they lead to in self-play (the zero-sum parts beside the parts both copies gain from) and how it aligns with the five goals (speed and movement, weapon use, positioning, counterplay, beating humans); any change must say how it gets closer to at least one of them.
 - **Aim level 3 from v0.3.1 on** (the owner, 2026-10-15: "Set it to 3 going forward"): level 1.5 (v0.2 and v0.3, B-228's step one)
   cost the rail most; training, the checks and the servers use 3.
 - **v0.3.1: build everything first, then train** (the owner, 2026-10-15: "No time set for starting yet"): one start from v0.3's 18:00 stop point once every part is built and proven alone ([v0.3.1/MANIFEST_v0.3.1.md](v0.3.1/MANIFEST_v0.3.1.md)).
