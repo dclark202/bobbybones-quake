@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-16](results/2026-10-16.md)
 
+- 06:30 — v0.3.1's night: from level to 60% against v0.3's end (110 games to 45), no collapse; he wins the fights he gets, he does not seek more
 - 01:25 — Quake Live's movement measured case by case (B-258): four differences from the simulator found and fixed behind switches (all off); with them every measured case is within 5%. Bobby has never auto-hopped on the servers
 
 ## [2026-10-15](results/2026-10-15.md)
