@@ -193,6 +193,62 @@ np_tick(W, lay, e, h_after, hf, events)   # -> (plan, target_add, way_add, hf2)
   - Memory on the card at 768-frame windows and full size is not measured. The store is 10,080 × 224 × 128 fp32 =
     1.16 GB per state, and there are two states.
 
+### 2b. Lane core, the second batch (2026-10-16 evening)
+
+All of these are off by default. Without their flags the trainer's first update is bitwise the base's (73df14b) on the tiny
+config, provided the three flags below that read the belief columns are also off.
+
+- **`--attn-mem-query 1`** (the proposal's change 4):
+  - In `sim/attn.py`, a layout key `"mem": H`. Block 2's query for its two read rows becomes `Wq·norm(x) + mq(h_{t-1})`;
+    `mq` (Linear H → 2·D) starts at zero.
+  - h_{t-1} is read at half precision, in torch and in numpy alike. That is so the learning step can read h_{t-1} as he
+    played it, kept on the host: T × N × 512 × 2 bytes, 7.9 GB at 768 × 10,080.
+  - There is no gradient from the query into his memory. The other road, frame-by-frame learning with the exact
+    gradient, would give up B-237's fused GRU.
+  - `forward_np(lay, P, x, hm=None)`; `netpass.step` and `test_suite.Policy.act` pass his memory of the frame before.
+- **`--ordered-heads 1`** (the proposal's change 7):
+  - Drawn in order: intention (10), then way (12), then the legs switch (11), then the weapon key (6).
+  - Each takes a table at zero of the choice drawn before it, added to its logits: `order.t12`, `t11`, `t6`.
+  - The checkpoint has `"ordered"`, and `export_duel` writes it with the tables.
+  - `netpass.draw` and `test_suite` draw in that order. They still take the uniform numbers in the outputs' order, so a
+    network without the order draws exactly as before.
+  - The teachers' losses (`pi_t`) read the logits without the tables.
+  - With `WAYS` off nothing teaches `order.t12`.
+- **`--head-store-half 1`**:
+  - The layout gets `store_half: 1`, and each slot is rounded to float16 as it is written: in play, in the learning
+    step (with a straight-through gradient) and in `np_tick` alike.
+  - The trainer's store is float16 on the card, half the memory.
+  - In play the read is worked out at full precision 2,048 players at a time.
+- **`tools/head_init.py`**: `--attn-mem-query`, `--ordered-heads`, and `--head none` to add only those two.
+- **The record:**
+  - `time{rollout, learn}`: the seconds of each update.
+  - `gpu{peak_gb, held_gb}`: `torch.cuda.max_memory_allocated` and the memory reserved, on the card.
+  - `rule_hunt`: RULE_HUNT's share of the item rule's frames silenced.
+- **RULE_HUNT** is in `sim/duel_env.py`, copied from the run's copy.
+- **BEL_IX** (found by lane pre): the trainer's columns of "the enemy as he believes him", read by `--aux-fresh`,
+  `--aux-unseen` and `--aux-measure`.
+  - They were computed without `N_ES` and so read six columns too far to the left.
+  - Fixed. A check on the first update's frames stops the trainer if the columns are not where the simulator puts them.
+  - Only the guessing lesson's masks and measures read them (at `--aux-trunk 0`, not play).
+  - v0.2.2's `memory_vs_belief` measure was read from the wrong columns. On the tiny config it said his memory was nearer
+    than his belief inputs 98.9% of the time. With the right columns it is 0%: memory 420 units of error, belief 83.
+- **Proofs (CPU):**
+  - ident16 IDENTICAL with RULE_HUNT off, for both modules on Blood Run and Aerowalk. `ffa_check` passes.
+  - With RULE_HUNT=50, the run's copy and the new simulator give the same ident16 file. Every RULE_HUNT line is the same
+    text in both.
+  - `scratch/bel_ix_check.py`: over 6,400 player-frames, the fixed columns match the simulator's own belief with 0
+    mismatches; the old ones had 7,531.
+  - `head_init --same` with the head, the query and the tables against v0.3.1's `policy_50`: 0 over 2,400 frames.
+  - `scratch/test_np_match.py`, every link woken, 600 frames × 12 seats:
+    - netpass and test_suite draw the same choices as torch on all 93,600 draws.
+    - One step of the fast memory differs by 8.0e-06.
+    - Free-running over 600 frames the drift is 7.7e-05 woken and 1.3e-05 with nothing woken: float32 through the
+      recurrence.
+  - fp16 store: `scratch/test_head.py` gives seq against live 1.8e-07 and `np_tick` against live 2.4e-07. Over six tiny
+    updates the largest difference in the losses is 3.2e-04 (relative 2.9e-04).
+  - Tiny training with `--head default --attn-mem-query 1 --ordered-heads 1` from the unconverted v0.3.1 file: `mq`,
+    `order.t11`, `t6`, `plan_in` and `target` all move.
+
 ## 3. The simulator (lane sim)
 
 - **Events:** `env.head_events()` → `[n, 32]` float32. These are counts and flags since the last call (the trainer calls
