@@ -383,7 +383,15 @@ STACK_PAY = float(os.environ.get("STACK_PAY") or 0.0)
 STACK_WPN = float(os.environ.get("STACK_WPN") or 0.0)
 STACK_BARE = float(os.environ.get("STACK_BARE") or 0.0)
 STACK_LOW = float(os.environ.get("STACK_LOW") or 0.0)
-STACK_BARE_RAMP, STACK_BARE_MAX, STACK_LOW_AT = 5.0, 4.0, 70.0
+STACK_BARE_RAMP, STACK_LOW_AT = 5.0, 70.0
+STACK_BARE_MAX = float(os.environ.get("STACK_BARE_MAX") or 4.0)   # (v0.3.1's pay, the owner 2026-10-15: 1 = a steady bleed, capped)
+# v0.3.1's pay (the owner, 2026-10-15 evening, after his play test: "a bot that doesn't want to fight"), all off by default:
+# BIG_PICK  > 0: a weapon picked up pays this once a life for each of the rocket launcher, lightning gun and railgun, and
+#           nothing for the other weapons (off: any weapon he did not have counts as 25 points of item pay)
+# SELF_DEBT = 1: health and armor he took off himself (his own splash, falls, lava and slime) are not paid again when a
+#           pickup refills them ("never paid after self-damage")
+BIG_PICK = float(os.environ.get("BIG_PICK") or 0.0)
+SELF_DEBT = float(os.environ.get("SELF_DEBT") or 0.0) > 0
 # The walking teacher inside normal games (the fallback of 2026-10-07, off by default): while he holds none of the big
 # weapons or is under STACK_LOW_AT, and no enemy is in view, the keys that walk to what the item rule names (intent_rule)
 # are the labels of the trainer's teacher loss (--teach, fading), as in the item runs of v10.
@@ -1903,6 +1911,8 @@ class DuelEnv:
         self.e_life = np.full((self.n, ng_), 99.0, np.float32)  # per other player: seconds since his last known death
         self.life_t = np.zeros(self.n, np.float32)          # seconds since this player's own respawn
         self.first_wp = np.zeros(self.n, bool)              # has picked a weapon up in this life (statistics)
+        self.big_got = np.zeros((self.n, 3), bool)         # (BIG_PICK) rocket launcher, lightning gun, railgun paid this life
+        self.self_debt = np.zeros(self.n, np.float32)       # (SELF_DEBT) health and armor he took off himself, not yet refilled
         self.item_up_t = None                               # per item: seconds it has been lying there
         self.last_vel = np.zeros((self.n, 3), np.float32)   # the enemy's speed and heading when last seen
         self.walk_last = np.zeros(self.n, bool)             # the walk key as the little finger has it
@@ -2455,6 +2465,7 @@ class DuelEnv:
         self.zoom[i], self.fire_last[i], self.mouse_hold[i] = False, False, 99
         self.flinch[i], self.focus[i] = 0.0, FOCUS_SECS
         self.life_t[i], self.first_wp[i] = 0.0, False
+        self.big_got[i], self.self_debt[i] = False, 0.0
         if self.intent[i] > 0 and not self.intent_done[i]:
             self.stats["intent_trips"][3] += 1
         self.intent[i], self.intent_t[i], self.intent_new[i], self.intent_done[i] = 0, 0.0, True, False
@@ -3439,7 +3450,14 @@ class DuelEnv:
             if not self.first_wp[i]:
                 self.first_wp[i] = True
                 self.stats["first_wp"] += np.array([float(self.life_t[i]), 1.0])
-            if not had:
+            if BIG_PICK > 0:                                 # (v0.3.1) the big three once a life, nothing else
+                b_ = (RL, LG, RG).index(int(w)) if int(w) in (RL, LG, RG) else -1
+                if b_ >= 0 and not self.big_got[i, b_]:
+                    reward[i] += BIG_PICK
+                    self.r_long[i] += BIG_PICK
+                if b_ >= 0:
+                    self.big_got[i, b_] = True
+            elif not had:
                 reward[i] += self.item_reward * 25.0 / 100.0             # as any weapon he did not have
                 self.r_long[i] += self.item_reward * 25.0 / 100.0
             want_ = WEAPONS[w].upper()
@@ -4878,7 +4896,10 @@ class DuelEnv:
             kf = W_KNOCK[wpn] if is_direct else (SPLASH_KNOCK_SELF if v == i else SPLASH_KNOCK)
             self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * kpts / 200.0), int(min(200, kpts)))
             st["kicked"] = True
-            st["dmg_taken"][v] += self._damage(v, take)
+            took_s = self._damage(v, take)
+            st["dmg_taken"][v] += took_s
+            if SELF_DEBT and v == i:
+                self.self_debt[v] += took_s
             if v != i:
                 st["attacker"][v] = i
                 self._book(st, i, v, take, wpn)
@@ -6342,7 +6363,9 @@ class DuelEnv:
         st = dict(dmg_taken=np.zeros(n, np.float32), attacker=np.full(n, -1), kill_w={}, kicked=False,
                   by={}, killer=np.full(n, -1))               # damage per (attacker, victim) this frame; who took him below zero
         for v in fallers:
-            self._damage(int(v), float(fall[v]))
+            took_f = self._damage(int(v), float(fall[v]))
+            if SELF_DEBT:
+                self.self_debt[v] += took_f
             self.stats["fall_dmg"] += float(fall[v])
         for hz in self.hurt_zones:                          # lava and the void
             feet = s[:, 2] + MINS[2]
@@ -6353,6 +6376,8 @@ class DuelEnv:
                     self.armor[v] = 0.0
                 took_ = self._damage(int(v), d_)
                 st["dmg_taken"][v] += took_ if hz[6] < 1000 else 0.0     # the void costs the death, nothing more
+                if SELF_DEBT and hz[6] < 1000:
+                    self.self_debt[v] += took_
                 self.stats["hurt_dmg"] += d_ if hz[6] < 1000 else 0.0
                 self.stats["void_deaths"] += int(hz[6] >= 1000)
         if LAVA:                                             # lava and slime by the map's own brushes (see LAVA)
@@ -6370,6 +6395,8 @@ class DuelEnv:
                     v = int(live_[k_])
                     took_ = self._damage(v, float(dmg_[k_]))
                     st["dmg_taken"][v] += took_
+                    if SELF_DEBT:
+                        self.self_debt[v] += took_
                     self.stats["hurt_dmg"] += float(dmg_[k_])
                     self.lava_t[v] = LAVA_TICK
 
@@ -6669,8 +6696,19 @@ class DuelEnv:
                 if took:
                     # health and armor by the points gained; a weapon he did not have counts as 25 points, one he
                     # has already (ammo) as nothing, so standing on a weapon's spot earns nothing
-                    reward[i] += self.item_reward * (gain if kind in ("hp", "ar") else 25.0 if new_wp else 0.0) / 100.0
-                    r_long[i] += self.item_reward * (gain if kind in ("hp", "ar") else 25.0 if new_wp else 0.0) / 100.0
+                    pts_ = gain if kind in ("hp", "ar") else 25.0 if new_wp else 0.0
+                    if SELF_DEBT and kind in ("hp", "ar") and self.self_debt[i] > 0:
+                        back_ = min(float(self.self_debt[i]), pts_)          # refilling what he took off himself pays nothing
+                        self.self_debt[i] -= back_
+                        pts_ -= back_
+                    pay_ = self.item_reward * pts_ / 100.0
+                    if BIG_PICK > 0 and kind == "wp":                       # (v0.3.1) the big three once a life, nothing else
+                        b_ = (RL, LG, RG).index(int(val)) if int(val) in (RL, LG, RG) else -1
+                        pay_ = BIG_PICK if b_ >= 0 and not self.big_got[i, b_] else 0.0
+                        if b_ >= 0:
+                            self.big_got[i, b_] = True
+                    reward[i] += pay_
+                    r_long[i] += pay_
                     want_ = lab if lab in ("MH", "RA") else WEAPONS[int(val)].upper() if kind == "wp" else ""
                     if lab == "YA" and it in self.route_item:
                         want_ = self.route_goal[self.route_item.index(it)]    # YA or YA2
