@@ -816,6 +816,16 @@ RULE_WALK = float(os.environ.get("RULE_WALK") or 0.0) > 0
 #                 else is taught. 0: off. A training switch: not a PLAY_VAR. Counted: stats["rule_contest"] (frames silenced,
 #                 frames the rule named an item for one of his seats).
 RULE_CONTEST = float(os.environ.get("RULE_CONTEST") or 0.0)
+#   RULE_HUNT=<points>   (2026-10-16; the owner: "Silence the item lesson when hunting is reasonable", for the hunt, HUNT, which
+#                 the item rule never names and so taught down on every reading: 1.2% of his intentions at update 10 of
+#                 duel_gru_v0_3_1b, 0.1% at update 40) the item rule's lesson is SILENT (a negative label, as RULE_CONTEST) on the
+#                 frames where, for one of his seats in a game: neither the mega nor the red armor is up or due within his way
+#                 to it and 3 s (the rule's own "soon"), he owns a big weapon with ammunition (rockets, rail, lightning), the enemy is not in
+#                 view, and his own stack (health + armor) is above the enemy's as he believes it (EN_STACK, his inputs) by
+#                 this many points or more. There his choice is his own, by what it pays him. Nothing is paid, nothing else is
+#                 taught. 0: off. A training switch: not a PLAY_VAR. Counted: stats["rule_hunt"] (frames silenced, frames the
+#                 rule named an item for one of his seats).
+RULE_HUNT = float(os.environ.get("RULE_HUNT") or 0.0)
 #   RULE_BLIND=<seconds>   (2026-10-13; the owner: "he does not change aggression/decisions based on the enemy location or
 #                 knowledge") the rule's lesson is SILENT (a negative label) on the frames he has a belief of the enemy's place
 #                 fresher than this many seconds (his own inputs' belief, the frame before: never the truth): with nobody known
@@ -2645,6 +2655,7 @@ class DuelEnv:
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
                           rule_contest=np.zeros(2),                     # (RULE_CONTEST) frames the rule's lesson was silenced; frames it named an item
+                          rule_hunt=np.zeros(2),                        # (RULE_HUNT) the same
                           rule_blind=np.zeros(2),                       # (RULE_BLIND) the same, for a fresh belief of the enemy's place
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
@@ -4293,6 +4304,14 @@ class DuelEnv:
             Tn = np.where(((self.script == 0) & ~self.jrun)[None, :], self.route_o.T[:len(self.route_goal), node], Tn)
         if OPENINGS:                                         # (the opening names by the same ways)
             self.rule_tn = Tn
+        if RULE_HUNT > 0:                                    # (RULE_HUNT: is a mega or red armor up or due, by the same ways)
+            big_ = np.zeros(n, bool)
+            grp_ = np.arange(n) // (self._others_arr().shape[1] + 1)
+            for gi, lab in enumerate(self.route_goal):
+                if lab in ("MH", "RA"):
+                    gu_, gb_ = self._goal_state(gi, grp_)
+                    big_ |= (gu_ | (gb_ < Tn[gi] + 3.0)) & (Tn[gi] < 1e8)
+            self.rule_big = big_
         grp = np.arange(n) // (self._others_arr().shape[1] + 1)
         best_t = np.full(n, 1e9, np.float32)
         for gi, lab in enumerate(self.route_goal):
@@ -7078,6 +7097,15 @@ class DuelEnv:
             rc_ = self._rule_contested(self.intent_teach) & human
             self.stats["rule_contest"] += (float(rc_.sum()), float(((self.intent_teach > 0) & human).sum()))
             self.intent_teach = np.where(rc_, -1, self.intent_teach)
+        if RULE_HUNT > 0 and EN_STACK and len(self.hp) == 2 * len(self.kind):   # ... and where hunting is reasonable (RULE_HUNT; duels)
+            en_ = self._others_arr()[:, 0]
+            bel_ = self.es_h[ar, self._slot(en_)] + self.es_a[ar, self._slot(en_)]
+            game_ = np.repeat(self.kind, len(self.hp) // len(self.kind)) == NORMAL
+            vis_ = np.asarray(self.visible, bool)[:n] if getattr(self, "visible", None) is not None else np.zeros(n, bool)
+            rh_ = human & game_ & (self.run_k < 0) & (self.intent_teach > 0) & ~getattr(self, "rule_big", np.ones(n, bool)) \
+                & (self.has[:, [RL, RG, LG]] & (self.ammo[:, [RL, RG, LG]] > 0)).any(1) & ~vis_ & (self.hp > 0) & (self.hp + self.armor >= bel_ + RULE_HUNT)
+            self.stats["rule_hunt"] += (float(rh_.sum()), float(((self.intent_teach > 0) & human).sum()))
+            self.intent_teach = np.where(rh_, -1, self.intent_teach)
         if RULE_BLIND > 0:                                   # ... and where he has a fresh belief of the enemy's place (RULE_BLIND)
             bt_ = getattr(self, "v02_bt_now", None)
             if bt_ is not None and len(bt_) == n:
