@@ -420,6 +420,42 @@ def way_measure(store, keep=50, least=30, same=200.0):
     return out
 
 
+def gru_seq(cell, e, h0, done):
+    """(--fast-gru, B-237) his memory over whole sequences by the library's GRU (cuDNN on the card), the same numbers as
+    stepping the GRUCell frame by frame with the memory reset after every frame whose done flag is set:
+        h_t = cell(e_t, h_{t-1} * (1 - done_{t-1})),  h_{-1} = h0
+      cell  the trainer's nn.GRUCell (its four weights are used as they are: the gradient reaches them)
+      e     [T, B, In] the encoder's output (with the attention part's added)
+      h0    [B, H] the memory each player starts the rollout with
+      done  [T, B] 1 where the memory is reset after that frame (death, round restart)
+    -> [T, B, H] the memory after each frame (before its reset), as the frame-by-frame loop's.
+    Each player's frames are cut into stretches at his resets; a stretch starts from h0 (the rollout's first) or from
+    zeros (after a reset), so the cut is exact. The stretches are laid side by side, padded at their ends to the
+    longest; a GRU only looks back, so the padding changes nothing that is read out (and gets no gradient)."""
+    import torch
+    T, B = done.shape
+    w = [cell.weight_ih, cell.weight_hh, cell.bias_ih, cell.bias_hh]
+    dn = done.detach() > 0.5
+    st = torch.ones(T, B, dtype=torch.bool, device=e.device)       # a stretch starts here: the first frame, or after a reset
+    st[1:] = dn[:-1]
+    if not bool(st[1:].any()):                                     # no reset inside: the whole sequences in one go
+        return torch._VF.gru(e, h0[None].contiguous(), w, True, 1, 0.0, cell.training, False, False)[0]
+    stb = st.t().reshape(-1)                                       # player by player, frame by frame
+    sid = torch.cumsum(stb.long(), 0) - 1                          # each frame's stretch
+    S = int(sid[-1]) + 1
+    idx = torch.arange(B * T, device=e.device)
+    first = idx[stb]                                               # each stretch's first frame
+    pos = idx - first[sid]                                         # a frame's place in its stretch
+    L = int(pos.max()) + 1
+    flat = pos * S + sid                                           # its row in the stretches laid side by side
+    ef = e.transpose(0, 1).reshape(B * T, e.shape[-1])
+    P = ef.new_zeros(L * S, e.shape[-1]).index_copy(0, flat, ef).view(L, S, e.shape[-1])
+    from0 = (first % T) == 0                                       # the stretches that start the rollout carry h0, the rest zeros
+    hi = h0.new_zeros(S, h0.shape[-1]).index_copy(0, torch.nonzero(from0).squeeze(1), h0[first[from0] // T])
+    out = torch._VF.gru(P, hi[None], w, True, 1, 0.0, cell.training, False, False)[0]
+    return out.reshape(L * S, -1).index_select(0, flat).view(B, T, -1).transpose(0, 1).contiguous()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--map", default="bloodrun,aerowalk,lostworld")
@@ -524,6 +560,9 @@ def main():
     ap.add_argument("--long-cap", type=float, default=0.5, help="... and is cut when the long count would add more than this share of the size "
                                                                 "of his credit of today (the mean of the absolute values)")
     ap.add_argument("--obs-half", action="store_true", help="v0.2: the rollout's stored inputs at half precision (they fill most of the card)")
+    ap.add_argument("--fast-gru", type=int, default=0,
+                    help="(B-237) 1: in the learning step his memory is worked out over whole sequences by the library's GRU "
+                         "(gru_seq: cut at his resets, exact), not frame by frame in Python; the rollout is as before. 0 (default): as before")
     ap.add_argument("--aux", type=float, default=0.0,
                     help="stage B, part 1: the weight of the things he is asked to foretell from his memory (0 = off). Four small output "
                          "layers on his memory: where the unseen enemy is, where he next appears, how the fight ends, when the big items "
@@ -856,6 +895,15 @@ def main():
             load_net0_(net, sd)
 
     pol = Policy().to(dev)
+    if a.fast_gru:
+        # cuDNN's GRU takes TF32 (10-bit products) when allowed, and torch allows it for cuDNN by default: 0.7% off the
+        # frame-by-frame step in his memory, 0.5% in the gradients (2026-10-15). Off, it is the old step's to float32
+        # rounding. The trainer has no other cuDNN work (the GRUCell and the linear layers are plain matrix products).
+        torch.backends.cudnn.allow_tf32 = False
+        import warnings
+        warnings.filterwarnings("ignore", message="RNN module weights are not part of single contiguous chunk")   # (GRUCell's own four)
+        print("fast GRU (B-237): the learning step's memory by the library's GRU over whole sequences{}".format(
+            " (not with map cells: those networks keep the frame-by-frame step)" if HAS_CELLS else ""), flush=True)
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam(pol.parameters(), lr=a.lr, eps=1e-5)
@@ -1234,13 +1282,16 @@ def main():
             e_ = pol.enc(xs_)
             if pol.attn is not None:
                 e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM)).view(T, len(chunk), -1)
-            dn_ = (1.0 - b_done[:, chunk])[..., None]
-            hs_l = []
-            for t in range(T):
-                hh = pol.gru(e_[t], hh)
-                hs_l.append(hh)
-                hh = hh * dn_[t]
-            hs_a = torch.stack(hs_l)
+            if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
+                hs_a = gru_seq(pol.gru, e_, hh, b_done[:, chunk])
+            else:
+                dn_ = (1.0 - b_done[:, chunk])[..., None]
+                hs_l = []
+                for t in range(T):
+                    hh = pol.gru(e_[t], hh)
+                    hs_l.append(hh)
+                    hh = hh * dn_[t]
+                hs_a = torch.stack(hs_l)
             if SLOW:                                                     # (--slow-mem) every output (the guessing game's too) reads z
                 hs_a = slow_z(chunk, e_, hs_a)
             return pol.pi(hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
