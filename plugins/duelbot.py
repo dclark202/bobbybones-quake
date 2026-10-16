@@ -42,6 +42,28 @@ except Exception:                                           # noqa: BLE001 - loa
 
 sys.path.insert(0, "/sim")
 TIMING = bool(os.environ.get("DUEL_TIMING"))                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
+# BOBBY_AUTOHOP=1 (B-258, off by default): the game re-jumps a held jump on landing (pmove_AutoHop 1) only for a player
+# whose userinfo carries cg_autoHop 1, which a person's game sends (the owner's config has it) and a bot's has not: on
+# the servers Bobby's held jump has never hopped again, while the simulator he learnt in always did (plugins/physlab.py,
+# 2026-10-16: with it set in the bot's userinfo, the game's hop chains match the simulator's to 0.01 u/s).
+AUTOHOP = os.environ.get("BOBBY_AUTOHOP", "0") not in ("", "0")
+_autohop_next = {}
+
+
+def give_autohop(p, now, log=None):
+    """put cg_autoHop 1 in a Bobby's userinfo (at most every 10 s a player), when BOBBY_AUTOHOP is on"""
+    if not AUTOHOP or p is None or now < _autohop_next.get(p.id, 0.0):
+        return
+    _autohop_next[p.id] = now + 10.0
+    try:
+        cv = p.cvars
+        if str(cv.get("cg_autoHop", "")) != "1":
+            cv["cg_autoHop"] = "1"
+            p.cvars = cv
+            if log:
+                log("cg_autoHop 1 given to client {}".format(p.id))
+    except Exception:  # noqa: BLE001
+        pass
 D = "/tmp/practice"
 MAPS = ("testlab", "bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")      # the only maps a player can pick with !map (owner, 2026-10-09): the duel maps he trained on or is checked on (botmode.py keeps a copy)
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
@@ -1389,6 +1411,7 @@ class duelbot(minqlx.Plugin):
                 self.next_check = now + 5
                 minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
             return
+        give_autohop(bobby, now, self.log)
         if human is not None and filler is not None:
             if now > self.next_check:
                 self.next_check = now + 5

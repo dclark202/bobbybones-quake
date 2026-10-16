@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-16](results/2026-10-16.md)
+
+- 01:25 — Quake Live's movement measured case by case (B-258): four differences from the simulator found and fixed behind switches (all off); with them every measured case is within 5%. Bobby has never auto-hopped on the servers
+
 ## [2026-10-15](results/2026-10-15.md)
 
 - 21:25 — The rocket jump check (B-252): as of v0.3 the simulator's rocket jumps are wrong (the blast comes 3 frames late, damage is off by up to 10, jumps are 60 units too low); two switches, both off by default, bring it within 5% and 1 point

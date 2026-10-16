@@ -760,6 +760,25 @@ QL_MOVE = float(os.environ.get("QL_MOVE") or 0.0) > 0
 #                 (a plain jump 49.8 units high against 47.3; a rocket jump at his feet 198 against 189). Needs the
 #                 library of 2026-10-15 (qsim_snap). Off: the simulator is v0.3's.
 QL_FLOAT = float(os.environ.get("QL_FLOAT") or 0.0) > 0
+#   QL_FWD=1      Quake Live's push with the forward (or back) key alone (B-258; plugins/physlab.py, 2026-10-16): where
+#                 Quake 3's move gives nothing (he moves at the wish speed or faster along it) the game pushes him along
+#                 the wish direction by 0.2059 x (640 - his speed) a second, to 640 and never as a brake (at 320: 1.65
+#                 u/s a frame; the simulator had nothing), in the air and on the floor (after friction: he slows down
+#                 less). With a strafe key held the game is Quake 3's, to 0.01 u/s. This is why running rocket jumps and
+#                 short hops with forward held landed short (B-252).
+#   QL_LAND=1     his fall's speed is put to nothing when he lands, as in the game: Quake 3's walk move turned it into
+#                 speed along the floor when the floor was met just at the end of a move (a launch at 400 up, 320 along:
+#                 the game 320 after the landing, the simulator 447). Both need the library of 2026-10-16 (qsim_params3).
+#                 Off: the simulator is v0.3's.
+#   QL_JUMP=1     Quake Live's jumps (B-258; plugins/physlab.py, the game's pmove_ChainJump, AirSteps, StepJump): a jump
+#                 within 500 ms of the last is faster by 110 x (1 - ms / 500) (125 ms after: 357.5 against 275), none within
+#                 100 ms; a move in the air that ends on a floor with the jump held is a jump at once (a stair, a ledge:
+#                 holding jump up stairs and onto ledges is the game's double jump); rising, he steps onto a ledge up to a
+#                 step high (Quake 3 does not), losing 3% of his speed. Library of 2026-10-16 (qsim_params4).
+QL_FWD = float(os.environ.get("QL_FWD") or 0.0) > 0
+QL_LAND = float(os.environ.get("QL_LAND") or 0.0) > 0
+QL_JUMP = float(os.environ.get("QL_JUMP") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("QL_FLOAT", "QL_FWD", "QL_LAND", "QL_JUMP")   # (kept in a checkpoint: the physics it was trained in)
 #   ITEM_DROP=1   an item lies where the game lets it fall at a map's start (a 30-unit box dropped to the floor), not at the
 #                 map file's point: on Sinister those float a median 43 units above the resting place, on Hektik eight
 #                 items 30 to 40 (the game's own item list, plugins/maplab.py). The plugins match the game's items to his
@@ -1802,6 +1821,10 @@ class DuelEnv:
             self.w.add_solids() if SOLIDS else self.w.lib.qsim_clear_solids()
         if QL_FLOAT or hasattr(self.w.lib, "qsim_snap"):
             self.w.set_snap(not QL_FLOAT)
+        if QL_FWD or QL_LAND or hasattr(self.w.lib, "qsim_params3"):
+            self.w.set_params3(QL_FWD, QL_LAND)
+        if QL_JUMP or hasattr(self.w.lib, "qsim_params4"):
+            self.w.set_params4(QL_JUMP)
         self.lava_t = np.zeros(self.n, np.float32)          # seconds until lava or slime hurts him again (LAVA)
         self.rng = np.random.default_rng(seed)
         self.substeps = tuple(substeps)

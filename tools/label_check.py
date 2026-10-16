@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--runs", default="item", choices=("item", "jump"))
     ap.add_argument("--steps", type=int, default=2400)
     ap.add_argument("--best", action="store_true")
+    ap.add_argument("--seed", type=int, default=1, help="the simulator's seed (another seed: a second sample of the same test)")
     a = ap.parse_args()
     if os.name == "nt":
         k32_ = ctypes.windll.kernel32                         # (with ctypes' default types the handle is cut to 32 bits and the call fails silently)
@@ -46,7 +47,7 @@ def main():
     sys.path.insert(0, SIM)
     import numpy as np
     import duel_env_ffa as E
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n_matches=32, seed=1,
+    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n_matches=32, seed=a.seed,
                     nav=os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(a.map)), close_p=1.0, loadout="all",
                     teacher=os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz"))
     env.item_reward, env.intent_seek, env.item_loss, env.dmg_reward = 0.75, 1.0, 0.5, 0.005
