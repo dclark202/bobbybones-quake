@@ -1369,11 +1369,11 @@ EN_ON = FIGHT_TARGET or HUNT
 #   note_combat(dealt, taken, frag, died)   dmg_dealt, dmg_taken (points; kept / 100), frag, died: step() from its books
 #                                           of the frame (info["aux"]'s columns of the same names), once a frame
 #   note_frame()                            en_seen (frames with an enemy noticed, as a share of the frames counted here),
-#                                           en_heard (also: the senses' running steps, a fresh pain sound), en_pain,
-#                                           weapon_change, takeoff, fall_land: once a frame, after the senses, the pain
-#                                           sound and the weapon in hand are set for the frame
-#   hear(), _hear()                         en_heard: any sound of an enemy he hears (steps, shots, jumps and landings,
-#                                           the rail's or the lightning's hum; pickups, teleports)
+#                                           en_pain (and en_heard: the pain sound is an event sound), weapon_change,
+#                                           takeoff, fall_land: once a frame, after the senses, the pain sound and the
+#                                           weapon in hand are set for the frame
+#   _hear()                                 en_heard: the enemy's event sounds he hears (a shot, a pickup of a big item or
+#                                           a weapon, a jump, a teleport); never the steady hum or running steps (hear())
 #   note_take(i, it)                        took_*: his own pickup; en_took_*: another's pickup he saw (noticed in view) or
 #                                           heard (HEAR_EVT), not in movement rounds and solo rooms
 #   note_respawn(k, who)                    resp_*: an item's return heard (HEAR_EVT)
@@ -1391,24 +1391,26 @@ HEAD_EVENT_COLS = ("dmg_dealt", "dmg_taken", "frag", "died", "en_seen", "en_hear
                    "took_mh", "took_ra", "took_ya", "took_rl", "took_rg", "took_lg", "took_small",
                    "en_took_mh", "en_took_ra", "en_took_ya", "en_took_rl", "en_took_rg", "en_took_lg", "en_took_small",
                    "resp_mh", "resp_ra", "resp_ya", "resp_wp", "en_pain", "weapon_change", "takeoff", "fall_land",
-                   "pad_28", "pad_29", "pad_30", "pad_31")
+                   "took_pg", "took_gl", "en_took_pg", "en_took_gl")
 #   dmg_dealt, dmg_taken  points (health and armor together) / 100: dealt to other players; taken from anything (enemies,
 #                         his own splash, lava, falls)
 #   frag, died            frags he made of another player; his deaths of anything (counts)
 #   en_seen               the share of the frames with an enemy noticed in view (his reaction time and acquire delay, as
-#                         the inputs); en_heard: 1 if he heard any enemy sound (a flag)
+#                         the inputs); en_heard: the enemy's event sounds he heard (see _hear() above, and his pain
+#                         sounds), a count capped at HEAD_HEARD_CAP a tick
 #   took_*                his pickups by class: mega, red armor, yellow armor, rocket launcher, railgun, lightning gun,
-#                         small = everything else (health, shards, green armor, ammunition, the other weapons)
+#                         plasma gun (took_pg), grenade launcher (took_gl), small = everything else (health, shards, green
+#                         armor, ammunition, the shotgun, the heavy machine gun)
 #   en_took_*             the same classes, for the pickups of others he saw or heard
 #   resp_*                the returns he heard: mega, red armor, yellow armor, any weapon
 #   en_pain               the enemy's pain sounds he heard; weapon_change: the weapon in his hand changed (not at a spawn)
 #   takeoff               he left the ground going up (over 100 u/s: a jump, a jump pad); fall_land: he landed
 #                         HEAD_FALL_DROP units or more below where he left the ground
-#   pad_*                 zeros (room for more)
 N_HEAD_EVENTS = 32
 assert len(HEAD_EVENT_COLS) == N_HEAD_EVENTS
 HEAD_COL = {k_: i_ for i_, k_ in enumerate(HEAD_EVENT_COLS)}
 HEAD_FALL_DROP = 64.0
+HEAD_HEARD_CAP = 8.0                                       # en_heard: at most this many a tick (a tick is 8 frames)
 WIN_BAND_EDGES = (-4.5, -0.5, 0.5, 4.5)                    # margin -> band: np.digitize(margin, WIN_BAND_EDGES)
 WIN_KINDS = (1, 3)                                         # self.game: a whole game, a mid-game start
 PLAY_VARS = PLAY_VARS + ("HEAD_EVENTS",)
@@ -3698,8 +3700,6 @@ class DuelEnv:
         got = np.nonzero(d[ar, k] < 1e8)[0]
         if not len(got):
             return
-        if self._hd_live():                                  # (HEAD_EVENTS) he heard an enemy
-            self.hd_ev[got, HEAD_COL["en_heard"]] = 1.0
         src = oth[got, k[got]]
         to = s[src, :3] - s[got, :3]
         dist = d[got, k[got]]
@@ -4487,8 +4487,8 @@ class DuelEnv:
             self.snd_kind[lis] = np.asarray(kind)[ok] if np.ndim(kind) else kind
         self.v02_ht[lis, self._slot(src)] = 0.0              # (N_V02: when and about where he last heard that player)
         self.v02_hp[lis, self._slot(src)] = self.snd_pos[lis, cat]
-        if self._hd_live():                                  # (HEAD_EVENTS) he heard an enemy
-            self.hd_ev[lis, HEAD_COL["en_heard"]] = 1.0
+        if self._hd_live():                                  # (HEAD_EVENTS) he heard an enemy's event sound
+            np.add.at(self.hd_ev[:, HEAD_COL["en_heard"]], lis, 1.0)
 
     def _item_block(self, ids, rank, pos, eye, fdir, up, rot):
         """inputs for the rank-th nearest item of a group: where it is, and whether it is up (only while seen)"""
@@ -5068,13 +5068,13 @@ class DuelEnv:
         self.v02_took[i, it] = 0.0
         if self._hd_live():                                  # (HEAD_EVENTS) his pickup by class; another's, seen or heard
             c_ = self._hd_class(it)
-            self.hd_ev[i, HEAD_COL["took_mh"] + c_] += 1.0
+            self.hd_ev[i, HEAD_COL["took_" + c_]] += 1.0
             if int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
                 a2_ = getattr(self, "acq2", None)
                 for j in self._mates(i):
                     sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
                     if sees or np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT:
-                        self.hd_ev[j, HEAD_COL["en_took_mh"] + c_] += 1.0
+                        self.hd_ev[j, HEAD_COL["en_took_" + c_]] += 1.0
         lab = self.item_def[it][4]
         if EN_STACK and self.item_def[it][0] in ("hp", "ar") and int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
             kd_, val_, _, cap_, _ = self.item_def[it]        # (B-257) every health and armor pickup heard or seen: the belief of his stack
@@ -5187,25 +5187,19 @@ class DuelEnv:
     def note_frame(self):
         """(HEAD_EVENTS) once a frame, after the senses (acquired, seen_t; in a group acq2, seen2), the pain sound (pain_t)
         and the weapon in hand (weapon) are set for it, and the state is the frame's: the frame is counted, with an enemy
-        noticed in view or not; the senses' hearing (seen_t at 0 with nobody noticed) and a fresh pain sound; a change of
+        noticed in view or not; a fresh pain sound (also an event sound heard); a change of
         the weapon in hand; take-offs and landings from a fall. A spawn or a teleport (over 200 units in a frame) counts
         for none of the last three"""
         if not self._hd_live():
             return
         e, C, n = self.hd_ev, HEAD_COL, self.n
         self.hd_frames += 1.0
-        a2_, s2_ = getattr(self, "acq2", None), getattr(self, "seen2", None)
-        if a2_ is not None and s2_ is not None:
-            acq_ = np.asarray(a2_, bool)
-            snd_ = ((np.asarray(s2_) < 0.5 * DT) & ~acq_).any(1)
-            acq_ = acq_.any(1)
-        else:
-            acq_ = np.asarray(self.acquired, bool)[:n]
-            snd_ = (np.asarray(self.seen_t)[:n] < 0.5 * DT) & ~acq_
+        a2_ = getattr(self, "acq2", None)
+        acq_ = np.asarray(a2_, bool).any(1) if a2_ is not None else np.asarray(self.acquired, bool)[:n]
         pain_ = np.asarray(self.pain_t)[:n] < 0.5 * DT
         e[:, C["en_seen"]] += acq_
         e[:, C["en_pain"]] += pain_
-        e[:, C["en_heard"]] = np.maximum(e[:, C["en_heard"]], (snd_ | pain_).astype(np.float32))
+        e[:, C["en_heard"]] += pain_
         s = self.state
         gr_ = s[:, 6] > 0.5
         pos_ = s[:, :3]
@@ -5225,19 +5219,20 @@ class DuelEnv:
             return np.zeros((self.n, N_HEAD_EVENTS), np.float32)
         out = self.hd_ev.copy()
         out[:, HEAD_COL["en_seen"]] /= np.maximum(self.hd_frames, 1.0)
+        out[:, HEAD_COL["en_heard"]] = np.minimum(out[:, HEAD_COL["en_heard"]], HEAD_HEARD_CAP)
         self.hd_ev[:] = 0.0
         self.hd_frames[:] = 0.0
         self.hd_clear[:] = False
         return out
 
     def _hd_class(self, it):
-        """(HEAD_EVENTS) item it's class among took_*: 0 mega, 1 red, 2 yellow, 3 RL, 4 RG, 5 LG, 6 small (the rest)"""
+        """(HEAD_EVENTS) item it's class, the end of its took_* and en_took_* names: mh, ra, ya, rl, rg, lg, pg, gl, small"""
         kind, val, _, _, lab = self.item_def[it]
         if lab in ("MH", "RA", "YA"):
-            return ("MH", "RA", "YA").index(lab)
-        if kind == "wp" and val in (RL, RG, LG):
-            return 3 + (RL, RG, LG).index(val)
-        return 6
+            return lab.lower()
+        if kind == "wp" and val in (RL, RG, LG, PG, GL):
+            return ("rl", "rg", "lg", "pg", "gl")[(RL, RG, LG, PG, GL).index(val)]
+        return "small"
 
     def _v02_clear(self, a, b):
         """is the line a -> b clear, for many pairs, as the eye sees (the sight mask); b may lie V02_SEE_TOL deep in a wall"""

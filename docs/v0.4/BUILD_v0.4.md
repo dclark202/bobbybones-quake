@@ -147,23 +147,23 @@ feeds each one. step() calls the same hooks, so a plugin that calls them gets wh
 | 2 | `frag` | frags he made of another player | `note_combat` |
 | 3 | `died` | his deaths of anything | `note_combat` |
 | 4 | `en_seen` | share of the tick's frames with an enemy *noticed* in view (reaction and acquire delay, as the inputs: `acquired`, in a group `acq2`) | `note_frame()` |
-| 5 | `en_heard` | flag: any enemy sound heard | `hear()`, `_hear()`, `note_frame()` (the senses' running steps: `seen_t` at 0 with nobody noticed; a fresh pain sound) |
-| 6–12 | `took_mh`, `took_ra`, `took_ya`, `took_rl`, `took_rg`, `took_lg`, `took_small` | his pickups by class; `small` = everything else (health, shards, green armor, ammunition, the other weapons) | `note_take(i, it)` |
+| 5 | `en_heard` | the enemy's event sounds heard, a count capped at `HEAD_HEARD_CAP` (8) a tick: a shot, a pickup of a big item or a weapon, a jump, a teleport, a pain sound; never the steady hum or running steps | `_hear()`; `note_frame()` (the pain sound) |
+| 6–12 | `took_mh`, `took_ra`, `took_ya`, `took_rl`, `took_rg`, `took_lg`, `took_small` | his pickups by class; `small` = everything else (health, shards, green armor, ammunition, the shotgun, the heavy machine gun) | `note_take(i, it)` |
 | 13–19 | `en_took_*` | pickups of others he saw (noticed in view) or heard (within `HEAR_EVT`), same classes; never in movement rounds or solo rooms | `note_take(i, it)` |
 | 20–23 | `resp_mh`, `resp_ra`, `resp_ya`, `resp_wp` | item returns heard (within `HEAR_EVT`) | `note_respawn(k, who)` |
 | 24 | `en_pain` | the enemy's pain sounds heard (`pain_t` set to 0 on the frame) | `note_frame()` |
 | 25 | `weapon_change` | the weapon in his hand changed (not across a spawn or a teleport) | `note_frame()` |
 | 26 | `takeoff` | left the ground going up (over 100 u/s: a jump, a jump pad) | `note_frame()` |
 | 27 | `fall_land` | landed `HEAD_FALL_DROP` (64) units or more below where he left the ground | `note_frame()` |
-| 28–31 | `pad_28` … `pad_31` | zeros | |
+| 28–31 | `took_pg`, `took_gl`, `en_took_pg`, `en_took_gl` | his and the others' plasma gun and grenade launcher pickups (as 6–19); no padding is left | `note_take(i, it)` |
 
-- `head_events()` returns the counts since the last call (`en_seen` divided by the frames counted) and starts again;
+- `head_events()` returns the counts since the last call (`en_seen` divided by the frames counted, `en_heard` capped) and starts again;
   zeros with the switch off. `note_event(i, name, value)` adds to any column by name, for anything a plugin knows that no
   other hook brings.
 - **The plugin's side (lane serve):** once a frame call `note_combat` with the game's counts of the frame (damage dealt
   to the opponent, damage taken, frags, deaths; arrays of `env.n`), and `note_frame()` **after** `senses()`, the pain
-  sound (`pain_t`) and `env.weapon[0]` are set and the state is filled. `hear()`, `_hear()`, `note_take()` and
-  `note_respawn()` are already called by `duelbot.py` and count by themselves. Then `head_events()` on the head's tick.
+  sound (`pain_t`) and `env.weapon[0]` are set and the state is filled. `_hear()` (the opponent's shots, jumps,
+  teleports, big pickups), `note_take()` and `note_respawn()` are already called by `duelbot.py` and count by themselves. Then `head_events()` on the head's tick.
 - **A round's end:** a player whose round ended (`done`) starts his count again at the start of the next step; the frame
   that ended it is still in the count, so a tick on that frame sees it. A plugin has no rounds: nothing to do.
 - **Off:** nothing of it is created or computed (the names are in `MOMENT_STATIC`, so a mid-game start never copies
@@ -206,12 +206,15 @@ tick should equal the forecast at a later tick of the same game.
   Run and Aerowalk, with the switch off and with `HEAD_EVENTS=1`. `tools/ffa_check.py` passes, off and on.
 - Events: random play with weapons handed out, `head_events()` on every frame. On Aerowalk (4,000 frames, 24 players)
   the sums match the simulator's own books:
-  - pickups 198 = the stats' 198 (mega 8, red 9)
+  - pickups 198 = the stats' 198 (mega 8, red 9; grenade launcher 11)
   - frags 19, deaths 38
   - damage dealt and taken equal to `info["aux"]`
   - `en_seen` equals the frames noticed
-  - every column moved, and the padding never did.
-  `duel_env_ffa` on Blood Run gives the same.
+  - `en_heard` 3,452 event sounds, against 3,447 kinds of sound heard on a frame plus pain sounds (a frame can bring
+    two of one kind). Since the follow-up it is on in 58% of the frames, no longer on every tick.
+  `duel_env_ffa` on Blood Run gives the same (pickups 227 = 227). Aerowalk has no plasma gun, and none was taken on Blood
+  Run in the run, so `scratch` `pg_check` proves `took_pg` / `took_gl` / `en_took_pg` / `en_took_gl` through
+  `note_take` directly, with `small` untouched.
 - The win label: games brought to their end with set scores, 7,748 of them on Aerowalk (2,703 whole games, 5,045
   mid-game starts). All give the right band for both seats: ±5 and more, ±1..4, overtime decided by a frag, and level
   after the last overtime period. No band appears on any other frame, and the game's number changes on the frame after
