@@ -41,6 +41,7 @@ AIM = (160.0, 820.0, 24.125)          # the aim box (1536 x 1024, 400 high): air
 STRAIGHT = (200.0, 6256.0, 24.125)    # the speed straight (20480 x 512): hop chains along +x
 RAMPS = (64.0, 14256.0, 24.125)       # the ramps and stairs course, along +x
 CLIMB = (64.0, 36256.0, 24.125)       # the climb (eighteen ledges of 40), along +x
+PADS = (64.0, 32256.0, 24.125)        # the jump pads and teleporter course, along +x
 AIMC = (768.0, 512.0, 24.125)         # the middle of the aim box: circle strafing on the floor
 
 
@@ -124,6 +125,10 @@ def grid():
     add("air_walk_v400", AIM, (400, 0, 400), keys=(64, 0, 0))
     add("air_walk_v200", AIM, (200, 0, 400), keys=(64, 0, 0))
     add("air_fl_v500_phi0", AIM, (500, 0, 400), keys=(127, -127, 0), phi=0)
+    # I. the jump pads and the teleporter (the pads course), forward held, the jump held or not
+    for s in (0, 320):
+        add("pads_run_v{}".format(s), PADS, (s, 0, 0), frames=240, keys=(127, 0, 0))
+        add("pads_hop_v{}".format(s), PADS, (s, 0, 0), frames=240, keys=(127, 0, 127))
     return out
 
 
