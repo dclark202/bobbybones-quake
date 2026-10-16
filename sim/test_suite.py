@@ -77,7 +77,8 @@ class Policy:
             self.headP = head_.params_np(sd)
             self.W = self.head_at + head_.np_state_width(self.head)
             o_ = np.concatenate([[0], np.cumsum(self.dims)])
-            self.head_si, self.head_sw = slice(int(o_[10]), int(o_[11])), slice(int(o_[12]), int(o_[13]))   # the intention, his way
+            self.head_si = slice(int(o_[10]), int(o_[11]))  # the intention's logits and his way's (none before stage B)
+            self.head_sw = slice(int(o_[12]), int(o_[13])) if len(self.dims) > 12 else slice(0, 0)
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)

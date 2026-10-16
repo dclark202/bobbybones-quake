@@ -95,17 +95,21 @@ def head_slices(P):
     way are added to (sim/duel_env.py's INTENT_HEAD 10 and WAY_HEAD 12)"""
     dims = [int(d) for d in P["action_dims"]]
     o = np.concatenate([[0], np.cumsum(dims)])
-    return slice(int(o[10]), int(o[11])), slice(int(o[12]), int(o[13]))
+    return slice(int(o[10]), int(o[11])), (slice(int(o[12]), int(o[13])) if len(dims) > 12 else slice(0, 0))
 
 
 def describe(P, A):
     """a line for the server's log: what was loaded"""
+    hd = ""
+    if "_head" in P:                                         # (v0.4)
+        hd = ", head of {} ticking every {} frames, plan_in {}".format(P["_head"][0]["size"], P["_head"][0]["every"],
+                                                                     "open" if np.abs(P["_head"][1]["plan_in.weight"]).sum() > 0 else "at zero")
     if "attn" not in P:
-        return "no attention part"
+        return "no attention part" + hd
     lay = json.loads(str(P["attn"]))
     if A is None:
-        return "attention part of {} tokens with its door shut (skipped)".format(lay["tokens"])
-    return "attention part of {} tokens, door open (mean size of its weights {:.5f})".format(lay["tokens"], float(np.abs(A[1]["door.weight"]).mean()))
+        return "attention part of {} tokens with its door shut (skipped)".format(lay["tokens"]) + hd
+    return "attention part of {} tokens, door open (mean size of its weights {:.5f})".format(lay["tokens"], float(np.abs(A[1]["door.weight"]).mean())) + hd
 
 
 def legs_logits(P, xl):
