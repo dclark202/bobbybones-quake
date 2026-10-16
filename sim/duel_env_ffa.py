@@ -37,6 +37,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qsim import World  # noqa: E402
 import jump_links as JL  # noqa: E402
+import rocket_jumps as RJM  # noqa: E402
 
 DT = 0.025
 _T = [0.03, 0.1, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60]
@@ -850,6 +851,50 @@ JUMP_ALL = float(os.environ.get("JUMP_ALL") or 0.0) > 0
 #                 walking map with those jumps (route_o). Scripted players keep the walking map's ways. A jump is opened
 #                 when he is measured to make it in jump runs (tools/jump_check.py, the trainer's v15.jumps).
 JUMP_OPEN = os.environ.get("JUMP_OPEN") or ""
+# Rocket jump runs (B-252, 2026-10-16; sim/rocket_jumps.py), all off by default (with them off the simulator is v0.3.1's,
+# by fixed runs). Meant with RL_QL=1 and the physics switches (QL_FLOAT, QL_FWD, QL_LAND, QL_JUMP): v0.3's rockets jump
+# 60 units too low (RESULTS 2026-10-15 21:25).
+#   RJ_RUN_P      the share of the playing time in rocket jump runs (beside ITEM_RUN_P and JUMP_RUN_P, from the same
+#                 draw): he is put 30 to 90 units of way (RJ_BACK) before the take-off of one of the pros' rocket jumps on the map
+#                 (docs/pro_rocket_jumps.json; every link as often as any other), facing its landing, with the machine gun
+#                 and the rocket launcher in his hand (RJ_AMMO rockets) and the pros' health and armor at that take-off
+#                 (their median; sim/rocket_jumps.stack). His target is the landing: his way's inputs lead there through
+#                 the link (the five jump inputs show it as a jump ahead that needs no speed, N_JUMP). He ARRIVES when he
+#                 comes down within 110 units of the landing from a flight of 8 frames or more that passed the take-off (120
+#                 units about it, on the floor or in the air): paid RJ_ARRIVE, once, the next try at once. Nothing is paid for the way,
+#                 for speed, or for a near miss (the owner, 2026-10-10: "the pros' take-off and landing places only count");
+#                 the health a rocket costs him is priced as in games (damage taken). A try ends without pay when he stands
+#                 on the floor outside the take-off and away from the landing after having been at the take-off, when he
+#                 dies, or after RJ_TRY seconds plus the flight's. His legs (LEGS) and the movement and walking teachers are
+#                 silent in these runs: his own keys, view and trigger move him. Counted: stats["rj_tries"],
+#                 stats["rj_over"] (per link of the map, its number in the list less one), stats["rj_frames"],
+#                 stats["rj_shots"] (rockets he fired in them).
+#   RJ_LOOK_P     the share of the tries that begin with his view already down at the pros' look-down of that link
+#                 (their median, within 5 degrees): the jump and the shot still his (the proposal's first rung). 0: level.
+#   RJ_CLEARED=1  the runs and RJ_OPEN take only the rocket jumps that tools/rj_check.py clear found a scripted player with
+#                 the right keys to clear in this simulator (sim/rj_clear.json: 77 of the 174 on the walking maps, 2026-10-16):
+#                 a run must not ask for what cannot be done (Aerowalk's red armor in v14)
+#   RJ_BACK       "30,90": a try begins this many units of way (the walking map's, to the take-off) before the take-off;
+#                 "200,600" gives room for a run-up or a strafe jump in (the check: tools/rj_check.py clear)
+#   RJ_ARRIVE     the pay for an arrival (default 0.5: an item run's or a jump run's arrival, RUN_ARRIVE)
+#   RJ_OPEN       "bloodrun:1,3;aerowalk:all": per map, the rocket jumps (numbers in its list) his ways in games and item
+#                 runs take while he holds the rocket launcher with a rocket and RJ_OPEN_HP or more of health and armor:
+#                 his way's inputs and its pay follow those ways (the item rule, the item runs' targets and the scripted
+#                 players keep theirs). A link costs its flight's seconds plus RJ_OPEN_COST (the health and the rocket).
+#                 Open a link only when he is measured to make it in the runs (stats["rj_over"]): a way that names what he
+#                 cannot do costs a map (Aerowalk in v14).
+RJ_RUN_P = float(os.environ.get("RJ_RUN_P") or 0.0)
+RJ_LOOK_P = float(os.environ.get("RJ_LOOK_P") or 0.0)
+RJ_ARRIVE = float(os.environ.get("RJ_ARRIVE") or 0.5)
+RJ_AMMO = float(os.environ.get("RJ_AMMO") or 10.0)
+RJ_TRY = float(os.environ.get("RJ_TRY") or 2.5)
+RJ_OPEN = os.environ.get("RJ_OPEN") or ""
+RJ_OPEN_COST = float(os.environ.get("RJ_OPEN_COST") or 1.0)
+RJ_OPEN_HP = float(os.environ.get("RJ_OPEN_HP") or 150.0)
+RJ_CLEARED = float(os.environ.get("RJ_CLEARED") or 0.0) > 0   # only the rocket jumps a scripted player clears (sim/rj_clear.json)
+RJ_BACK = tuple(float(x_) for x_ in (os.environ.get("RJ_BACK") or "30,90").split(","))   # units of way before the take-off a try begins (from, to)
+RJ_EDGE, RJ_LAND = 120.0, 110.0                       # (the take-off's reach about it, the landing's: as the jump runs')
+PLAY_VARS = PLAY_VARS + ("RL_QL", "RJ_OPEN", "RJ_OPEN_COST", "RJ_OPEN_HP", "RJ_CLEARED")
 #   TEACH_BEST=1  the movement teacher's labels are its likeliest choice per output, not a sample of its choices (B-201: a
 #                 pupil of sampled labels learned its spread with it; tools/label_check.py --best says what they are worth)
 TEACH_BEST = float(os.environ.get("TEACH_BEST") or 0.0) > 0
@@ -2310,6 +2355,60 @@ class DuelEnv:
                     X_.T[g_] = np.where(X_.T[g_] < 1e8, X_.T[g_] + J_.T[g_, nb_], X_.T[g_]).astype(X_.T.dtype)   # (... and the rest from there)
                     self.jump_tries[k_] = [(g_, st_, len(self.jfields))]
                     self.jfields.append(X_)
+        self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
+        self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
+        self.rj_run_p = RJ_RUN_P
+        self.rjrun = np.zeros(self.n, bool)                 # in a rocket jump run
+        self.rjrun_k = np.zeros(self.n, np.int64)           # ... the rocket jump his try is for (into rjs)
+        self.rjrun_t = np.zeros(self.n, np.float32)         # ... the seconds the try has left
+        self.rjrun_edge = np.zeros(self.n, bool)            # ... he has been at its take-off
+        self.rjrun_new = np.zeros(self.n, bool)             # ... the try began this frame
+        self.rjrun_air = np.zeros(self.n, np.int64)         # ... frames in the air since he last touched the floor
+        self.rjrun_from = np.zeros(self.n, bool)            # ... he has been at the take-off since he last touched the floor
+        mapn_ = os.path.splitext(os.path.basename(bsp))[0]
+        rj_open_ = {}
+        for part_ in RJ_OPEN.split(";"):
+            if ":" in part_:
+                rj_open_[part_.split(":")[0].strip()] = part_.split(":")[1].strip()
+        if (RJ_RUN_P > 0 or mapn_ in rj_open_) and self.route is not None:
+            RJ_ = RJM
+            R_ = self.route
+            rjs_ = RJ_.load(mapn_, only=RJ_.cleared(mapn_) if RJ_CLEARED else None)
+            lk_ = RJ_.links(rjs_, R_.nodes, R_.locate, ok=~R_.dead)
+            items_ = [g_ for g_, lab_ in enumerate(self.route_goal) if INTENTS.index(lab_) not in self.intent_more
+                      and 0 < INTENTS.index(lab_) < HOLD_INTENT]       # (a row of an item the map has once: its intention names it alone)
+            keep_ = sorted({l_[3] for l_ in lk_})
+            if RJ_RUN_P > 0 and items_:
+                self.rjs = [rjs_[k_] for k_ in keep_]
+                new_ = {k_: j_ for j_, k_ in enumerate(keep_)}
+                lk2_ = [(a_, b_, t_, new_[k_]) for a_, b_, t_, k_ in lk_]
+                for j_, r_ in enumerate(self.rjs):
+                    g_ = min(items_, key=lambda q_: float(np.linalg.norm(np.asarray(R_.goals[q_]) - r_["b"])))   # (the item nearest the landing: its row)
+                    X_ = RJ_.field(R_, g_, [l_ for l_ in lk2_ if l_[3] == j_], self.rjs, goal=r_["b"])
+                    d_ = np.hypot(R_.nodes[:, 0] - r_["a"][0], R_.nodes[:, 1] - r_["a"][1])
+                    st_ = np.nonzero((X_.ji[g_] == j_) & (X_.jd[g_] >= RJ_BACK[0]) & (X_.jd[g_] <= RJ_BACK[1]) & ~R_.dead)[0]   # (RJ_BACK units of way before it)
+                    if not len(st_):
+                        side_ = ((R_.nodes[:, :2] - r_["a"][:2]) * (r_["b"][:2] - r_["a"][:2])).sum(1) <= 0.0
+                        st_ = (d_ > 30.0) & (d_ < 90.0) & (np.abs(R_.nodes[:, 2] - r_["a"][2]) < 30.0) & ~R_.dead & (X_.T[g_] < 1e8)
+                        st_ = np.nonzero(st_ & side_)[0] if (st_ & side_).any() else np.nonzero(st_)[0]
+                    if not len(st_):
+                        st_ = np.nonzero((d_ < 44.0) & (np.abs(R_.nodes[:, 2] - r_["a"][2]) < 30.0) & ~R_.dead)[0]
+                    self.rj_fields.append(X_)
+                    self.rj_g.append(int(g_))
+                    self.rj_start.append(st_)
+                self.rj_a = np.array([r_["a"] for r_ in self.rjs], np.float32).reshape(-1, 3)
+                self.rj_b = np.array([r_["b"] for r_ in self.rjs], np.float32).reshape(-1, 3)
+            if mapn_ in rj_open_:                            # (RJ_OPEN) his ways in games with the open rocket jumps
+                ids_ = None if rj_open_[mapn_] == "all" else {int(x_) for x_ in rj_open_[mapn_].split(",") if x_.strip()}
+                lo_ = [l_ for l_ in lk_ if ids_ is None or rjs_[l_[3]]["id"] in ids_]
+                if lo_:
+                    js_, lj_ = [], []
+                    if self.route_o is not None:             # (JUMP_OPEN too: its open jumps first, then the rocket jumps)
+                        js_ = list(self.jumps)
+                        lj_ = [l_ for l_ in JL.links(self.jumps, R_.nodes, R_.locate, ok=~R_.dead) if self.jumps[l_[3]]["id"] in self.jump_open]
+                    self.rj_open_field = RJ_.linked_all(R_, lj_ + [(a_, b_, t_, k_ + len(js_)) for a_, b_, t_, k_ in lo_], js_ + rjs_,
+                                                        RJ_OPEN_COST, n_plain=len(js_))
+        self.rj_live = len(self.rjs) > 0
         self.way = np.zeros(self.n, np.int64)               # WAYS: his way to his target (0 the shortest, 1 the second set, 2 the third),
         self.way_was = np.zeros(self.n, np.int64)           # ... as it was before this frame's reading,
         self.way_live = np.zeros(self.n, bool)              # ... it was read this frame (with the intention),
@@ -2466,6 +2565,7 @@ class DuelEnv:
                           sc_frags_w=np.zeros(NW),                      # frags made by scripted players, by weapon
                           jump_tries=np.zeros(64), jump_over=np.zeros(64), jump_short=np.zeros(64),   # JUMPS: per jump of this map
                           jump_frames=0, start_gun=0,          # frames in jump runs; lives begun with a weapon in hand (START_GUN_P)
+                          rj_tries=np.zeros(64), rj_over=np.zeros(64), rj_frames=0, rj_shots=0,   # RJ_RUN_P: per rocket jump of this map; frames, rockets fired
                           start_gun_w=np.zeros(len(WEAPONS)),  # ... by weapon
                           lob=np.zeros(3),                              # TRICKS, the lobber: frames firing at a place: plasma, grenades; at an exit
                           legs=np.zeros(8),               # LEGS: frames his legs carried him, of them with an enemy in view, frames the switch was on
@@ -2999,7 +3099,7 @@ class DuelEnv:
         R = self.route
         if R is None:
             return
-        ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0) & ~self.jrun)[0]   # (a jump is not a walker's: no keys in a jump run)
+        ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0) & ~self.jrun & ~self.rjrun)[0]   # (a jump is not a walker's: no keys in a jump run; nor in a rocket jump run)
         kk = self.run_k[ri]
         if STACK_TEACH:                                     # ... and in normal games, bare or low, with nobody in view
             pk = np.repeat(self.kind, len(self.hp) // len(self.kind))
@@ -3150,7 +3250,7 @@ class DuelEnv:
         from its policy, in place of the walking teacher's keys (see RUN_TEACHER).
         LEGS: the same for the players ri it moves, toward the targets k (per player), written into the array given"""
         if ri is None:
-            ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0))[0]
+            ri = np.nonzero((self.run_k > 0) & (self.script == 0) & (self.hp > 0) & ~self.rjrun)[0]   # (RJ_RUN_P: silent in a rocket jump run)
             if self.teach_runs == "jump":
                 ri = ri[self.jrun[ri]]
         if not len(ri):
@@ -3387,12 +3487,12 @@ class DuelEnv:
         item of his run, or of his intention) and not standing at his holding place. Returns (the targets, the seats)."""
         ri = np.nonzero(on)[0]
         k = np.where(self.run_k > 0, self.run_k, self.intent)       # his target: the item of his run, or of his intention
-        ri = ri[k[ri] > 0]
+        ri = ri[(k[ri] > 0) & ~self.rjrun[ri]]                      # (RJ_RUN_P: in a rocket jump run his own keys move him)
         if self.hold_n:                                      # at his holding place there is no further way: he holds it on his own feet
             ri = ri[~self._hold_at(ri, k[ri])]
         if LEGS_STAND and getattr(self, "hold_tg", None) and getattr(self.teacher, "c2", 0):    # (stage C part 2) at his holding place
             ri = np.nonzero(on)[0]                           # his legs do not let go of him: a network that can is told to stand
-            ri = ri[k[ri] > 0]                               # there, and stops him (stage B part 2 takes him off his legs at the place)
+            ri = ri[(k[ri] > 0) & ~self.rjrun[ri]]           # there, and stops him (stage B part 2 takes him off his legs at the place)
         return k, ri
 
     def legs_prep(self):
@@ -3870,10 +3970,21 @@ class DuelEnv:
                     out.append((self.jrun & (self.jrun_f == f_), self.jfields[int(f_)]))
             else:
                 out.append((self.jrun, self.route_j))
+        rjo_ = None
+        if self.rj_open_field is not None:                   # (RJ_OPEN) the launcher in hand with a rocket, and the stack for it
+            rjo_ = ((self.script == 0) & ~self.jrun & ~self.rjrun & (self.weapon == RL) & (self.ammo[:, RL] >= 1)
+                    & (self.hp + self.armor >= RJ_OPEN_HP) & (self.hp > 0))
+            if rjo_.any():
+                out.append((rjo_, self.rj_open_field))
         if self.route_o is not None:
-            m_ = (self.script == 0) & ~self.jrun
+            m_ = (self.script == 0) & ~self.jrun & ~self.rjrun
+            if rjo_ is not None:
+                m_ = m_ & ~rjo_
             if m_.any():
                 out.append((m_, self.route_o))
+        if self.rj_live and self.rjrun.any():                # (RJ_RUN_P) a rocket jump run: the try's ways, to its landing
+            for k_ in np.unique(self.rjrun_k[self.rjrun]):
+                out.append((self.rjrun & (self.rjrun_k == k_), self.rj_fields[int(k_)]))
         return out
 
     def _goal_state(self, gi, grp):
@@ -4033,13 +4144,15 @@ class DuelEnv:
             t = R.T[g, node]
             nx = R.walk[g, node]
             via_ = R.via[g, node]
+            gp_ = R.goals[g]
             for m_, X_ in alt:
                 t, nx, via_ = np.where(m_, X_.T[g, node], t), np.where(m_, X_.next[g, node], nx), np.where(m_[:, None], X_.via[g, node], via_)
+                gp_ = np.where(m_[:, None], X_.goals[g], gp_)    # (RJ_RUN_P: a try's goal row is the landing)
             if WAYS:                                         # (his way: the seconds and the next step of the set he chose; N_B3 reads the rest)
                 self._way_obs = (g, node, valid & (t < 1e8) & (self.run_k < 0), t)
                 t, nx, via_ = self._on_way(g, node, t, nx, via_)
             ok = valid & (t < 1e8)
-            wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], R.goals[g])
+            wp = np.where((nx >= 0)[:, None], R.nodes[np.maximum(nx, 0)], gp_)
             wp = np.where(((self.state[:len(node), 6] > 0.5) & ~np.isnan(via_[:, 0]))[:, None], via_, wp)   # a jump pad's plate, a teleporter's entrance
             out[:, 0] = np.minimum((t + off) / 10.0, 2.0) * ok
             out[:, 1:4] = np.clip(rot(wp - pos) / 200.0, -1.0, 1.0) * ok[:, None]
@@ -4645,7 +4758,7 @@ class DuelEnv:
                 w_ = np.nonzero(self.way[ii] > 0)[0]         # (the jump ahead on his second or third way)
                 jd_, ji_ = jd_.copy(), ji_.copy()
                 jd_[w_], ji_[w_] = J.wjd[self.way[ii][w_] - 1, g[w_], node[w_]], J.wji[self.way[ii][w_] - 1, g[w_], node[w_]]
-            out[ii, :JL.N_JUMP] = JL.inputs(self.jumps, jd_, np.where(gi >= 0, ji_, -1),
+            out[ii, :JL.N_JUMP] = JL.inputs(J.jumps if getattr(J, "rj", False) else self.jumps, jd_, np.where(gi >= 0, ji_, -1),   # (RJ_RUN_P, RJ_OPEN: its own list)
                                            np.linalg.norm(J.nodes[node] - pos[ii], axis=1))
         on = (self.weapon == GL) & (self.hp > 0) & (visible | (seen_t < GL_KNOWN))
         if on.any():
@@ -6218,7 +6331,8 @@ class DuelEnv:
     def _item_run_start(self, m):
         """start an item run for match m in a share of the rounds (see RUN_LEN); returns its seats, or None"""
         pj = self.jump_run_p if self.jump_tries else 0.0     # (jump runs: a share of the playing time beside the item runs')
-        if self.item_run_p + pj <= 0 or self.route is None or self.fixed_kind is not None or getattr(self, "lab_force", None):
+        pr = self.rj_run_p if self.rj_live else 0.0          # (RJ_RUN_P: rocket jump runs, the same)
+        if self.item_run_p + pj + pr <= 0 or self.route is None or self.fixed_kind is not None or getattr(self, "lab_force", None):
             return None
         if self.lab is not None:
             other = float(self.arena_len)
@@ -6229,10 +6343,11 @@ class DuelEnv:
                 rm_ = float(self.kind_p[0]) * MID_START_P / MID_MEAN if MOMENTS else 0.0          # (the rounds begun from saved moments)
                 rs_ = float(self.kind_p[0]) * SPAWN_START_P / SPAWN_START_LEN if MOMENTS else 0.0
                 other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
-        p = self.item_run_p + pj
+        p = self.item_run_p + pj + pr
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
             return None
         jump = pj > 0 and self.rng.random() < pj / p
+        rj = (not jump) and pr > 0 and self.rng.random() < pr / (p - pj)
         q = self._seats(m)
         if self.lab is not None:
             for i in q:
@@ -6246,17 +6361,20 @@ class DuelEnv:
         self.item_up[m], self.item_t[m] = True, 0.0
         self.run_k[q] = 0
         self.cf_side[q] = 0
-        self.cf_t[m] = RUN_COLLECT if (not jump and self.rng.random() < self.collect_fight_p) else -1.0
+        self.cf_t[m] = RUN_COLLECT if (not jump and not rj and self.rng.random() < self.collect_fight_p) else -1.0
         self.jrun[q] = jump
+        self.rjrun[q] = rj
         for i in q:
             self.load_sets[int(i)] = ()                     # the game's spawn: machine gun and gauntlet
             self.state = self.w.state()
             if jump:
                 self._jump_place(int(i))
+            elif rj:
+                self._rj_place(int(i))
             else:
                 self._spawn(int(i), avoid=None)
         self.state = self.w.state()
-        for i in (() if jump else q):
+        for i in (() if (jump or rj) else q):
             self._run_pick(int(i))
         return q
 
@@ -6288,6 +6406,70 @@ class DuelEnv:
         self.jrun_past[i] = False
         if self._counted(i):
             self.stats["jump_tries"][min(k, 63)] += 1
+
+    def _rj_step(self, rr, s, prev, reward, r_long):
+        """(RJ_RUN_P) the players rr of rocket jump runs this frame: he arrives when he comes down within RJ_LAND of the
+        landing from a flight of 8 frames or more that passed the take-off (RJ_EDGE about it: on the floor or in the air,
+        as the pros come in from a jump); paid RJ_ARRIVE and the next try. A try ends without pay when he touches the floor
+        elsewhere after having been at the take-off, or when its seconds are over."""
+        self.stats["rj_frames"] += int(self._counted(rr).sum())
+        self.rjrun_new[rr] = False
+        self.rjrun_t[rr] -= DT
+        kk_ = self.rjrun_k[rr]
+        A_, B_, p_ = self.rj_a[kk_], self.rj_b[kk_], s[rr, :3]
+        at_a = (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < RJ_EDGE) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
+        near_b = np.linalg.norm(p_ - B_, axis=1) < RJ_LAND
+        landed_ = (s[rr, 6] > 0.5) | ((prev[rr, 5] < 0.0) & (s[rr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
+        from_, air_ = self.rjrun_from[rr] | at_a, self.rjrun_air[rr]
+        ov_ = near_b & landed_ & from_ & (air_ >= 8)
+        fail_ = landed_ & from_ & ~at_a & ~near_b
+        self.rjrun_edge[rr] |= at_a
+        self.rjrun_air[rr] = np.where(landed_, 0, air_ + 1)
+        self.rjrun_from[rr] = np.where(landed_, at_a, from_)
+        np.add.at(self.stats["rj_over"], np.minimum(kk_[ov_ & self._counted(rr)], 63), 1)
+        for j in np.nonzero(ov_ | fail_ | (self.rjrun_t[rr] <= 0))[0]:
+            i = int(rr[j])
+            if ov_[j]:
+                reward[i] += RJ_ARRIVE
+                r_long[i] += RJ_ARRIVE
+            self._rj_place(i)
+
+    def _rj_place(self, i):
+        """a rocket jump run (RJ_RUN_P): player i begins a try 30 to 90 units of floor before the take-off of one of the pros'
+        rocket jumps (every one as often as any other), facing its landing, the rocket launcher in his hand, the pros'
+        health and armor at that take-off; his target is the landing (the item row of the try's ways that leads there)"""
+        k = int(self.rng.integers(len(self.rjs)))
+        r, X, g, st = self.rjs[k], self.rj_fields[k], self.rj_g[k], self.rj_start[k]
+        node = int(st[int(self.rng.integers(len(st)))])
+        p = X.nodes[node]
+        nx = int(X.next[g, node])
+        q = X.nodes[nx] if (nx >= 0 and X.jlink[g, node] < 0 and np.hypot(*(r["a"][:2] - p[:2])) > 120.0) else r["b"]   # (near it: toward the landing)
+        face = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])) + float(self.rng.uniform(-15, 15))
+        self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), face)
+        self._fresh(i, face)
+        self.ra[i] = False                                  # (his rockets of the last try are gone with it)
+        if self.rng.random() < RJ_LOOK_P:                   # (RJ_LOOK_P) his view already down at the pros' look-down
+            self.pitch[i] = float(np.clip(r["pitch"] + self.rng.uniform(-5, 5), 0.0, 89.0))
+        self.hp[i], self.armor[i] = RJM.stack(r["stack"])
+        self.has[i] = False
+        self.ammo[i] = 0.0
+        self.has[i, ALWAYS] = True
+        self.has[i, MG], self.has[i, RL] = True, True
+        self.ammo[i, MG], self.ammo[i, RL] = LOADOUTS["all"][1][MG], RJ_AMMO
+        self.weapon[i] = RL
+        m = self._match_of(i)
+        self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
+        self.run_k[i] = INTENTS.index(self.route_goal[g])
+        self.intent_new[i], self.intent_done[i] = True, True     # the target is read at once
+        self.rjrun_k[i] = k
+        self.rjrun_t[i] = float(X.T[g, int(X.locate(p[None])[0])]) + RJ_TRY
+        self.rjrun_edge[i], self.rjrun_new[i] = False, True
+        self.rjrun_air[i], self.rjrun_from[i] = 0, False
+        if g < self.bel_t.shape[1]:
+            self.bel_t[i, g] = 99.0                         # ... and he knows the row's item is there (its inputs say "up")
+        self._replaced = True
+        if self._counted(i):
+            self.stats["rj_tries"][min(k, 63)] += 1
 
     def _run_pick(self, i):
         """item run: the next target of player i, one of the big items lying there that he can walk to"""
@@ -6944,6 +7126,8 @@ class DuelEnv:
         else:
             self.fire_q, self.fire_w = shoot, self.weapon.copy()
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
+        if self.rj_live:                                     # (RJ_RUN_P) rockets fired in rocket jump runs
+            self.stats["rj_shots"] += int((shoot & (self.weapon == RL) & self.rjrun & self._counted(ar)).sum())
         self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
                   ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
         self.note_noise(shoot & (self.weapon != G), (prev[:, 6] > 0.5) != (s[:, 6] > 0.5),      # (N_V02: the same events, for the one who makes them)
@@ -7361,7 +7545,7 @@ class DuelEnv:
             self.intent_best = np.where(self.intent_changed, phi, self.intent_best).astype(np.float32)
             gain = np.maximum(0.0, self.intent_best - phi)
             self.intent_best = np.minimum(self.intent_best, phi).astype(np.float32)
-            pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0)
+            pay = valid & soon & ~self.intent_changed & ~self.intent_done & (self.script == 0) & (self.hp > 0) & ~self.rjrun   # (RJ_RUN_P: nothing for the way)
             if self.hold_n:                                  # (nothing is paid for the way to a holding place, nor for speed on it)
                 pay = pay & (self.intent < HOLD_INTENT)
             if HUNT:                                         # (B-256: nor for the way to the enemy, nor for speed on it)
@@ -7397,7 +7581,7 @@ class DuelEnv:
                 if SPEED_PAY or SPEED_PAY_RUN:               # per stretch of new ground, by the speed he covers it at (see SPEED_PAY)
                     new_ = np.minimum(np.where(pay, gain, 0.0), 3.0 * DT)      # (a teleporter's leap counts as three frames' running)
                     sp_f = (320.0 / SPEED_HI) * new_ * np.clip((sp_h - SPEED_LO) / (SPEED_HI - SPEED_LO), 0.0, 1.0)
-                    run_ok = in_run & (self.script == 0) & (self.hp > 0)
+                    run_ok = in_run & (self.script == 0) & (self.hp > 0) & ~self.rjrun     # (RJ_RUN_P: nor for speed)
                     pace_now = pace_now + SPEED_PAY * sp_f * trip
                     reward += SPEED_PAY_RUN * sp_f * run_ok
                     self.stats["speed_pay"] += float((SPEED_PAY * sp_f * trip).sum())
@@ -7413,14 +7597,18 @@ class DuelEnv:
             run = in_run & (self.script == 0)
             if run.any():                                   # item runs: the way gained against the clock, a bonus on taking it
                 alive = run & (self.hp > 0)
-                reward += RUN_SCALE * (np.where(pay, gain, 0.0) - DT) * alive
-                r_long += RUN_SCALE * (np.where(pay, gain, 0.0) - DT) * alive
+                aw_ = alive & ~self.rjrun                    # (RJ_RUN_P: a rocket jump run pays its arrival only, below)
+                reward += RUN_SCALE * (np.where(pay, gain, 0.0) - DT) * aw_
+                r_long += RUN_SCALE * (np.where(pay, gain, 0.0) - DT) * aw_
                 sp_ = np.hypot(s[:, 3], s[:, 4])
-                self.stats["move_frames"] += int(alive.sum())
-                self.stats["move_speed"] += float(sp_[alive].sum())
-                self.stats["move_fast"] += int(((sp_ > 330) & (s[:, 6] < 0.5) & alive).sum())
-                arr = run & self.intent_done & (self.run_k > 0) & (self.intent == self.run_k)     # (the pickup may be booked after this block: no "since last frame" test)
-                gone = run & ~arr & (self.run_k > 0) & (self.intent == self.run_k) & valid & ~soon & ~self.intent_done
+                self.stats["move_frames"] += int(aw_.sum())
+                self.stats["move_speed"] += float(sp_[aw_].sum())
+                self.stats["move_fast"] += int(((sp_ > 330) & (s[:, 6] < 0.5) & aw_).sum())
+                arr = run & self.intent_done & (self.run_k > 0) & (self.intent == self.run_k) & ~self.rjrun     # (the pickup may be booked after this block: no "since last frame" test)
+                gone = run & ~arr & (self.run_k > 0) & (self.intent == self.run_k) & valid & ~soon & ~self.intent_done & ~self.rjrun
+                rr = np.nonzero(alive & self.rjrun)[0] if self.rj_live else ()     # (RJ_RUN_P) rocket jump runs: at the landing, or not
+                if len(rr):
+                    self._rj_step(rr, s, prev, reward, r_long)
                 self.jrun_new[:] = False
                 jr = np.nonzero(alive & self.jrun)[0]       # jump runs: over the gap, fallen short of it, or out of time
                 if len(jr):
@@ -7551,6 +7739,9 @@ class DuelEnv:
             if self.jrun[v]:                                # (a jump run: the next try)
                 self._jump_place(int(v))
                 continue
+            if self.rjrun[v]:                               # (a rocket jump run: the next try)
+                self._rj_place(int(v))
+                continue
             self._spawn(int(v), avoid=s[self.foe[v], :3], close=True if self.kind[v // self.G] in (AIM, DRILL) else None)
             if self.goal[v] >= 0:
                 self._new_goal(int(v))
@@ -7573,6 +7764,8 @@ class DuelEnv:
                 self._spawn(int(v), avoid=s[self.foe[v], :3])
                 if self.jrun[v]:                            # (a jump run: the next try)
                     self._jump_place(int(v))
+                if self.rjrun[v]:                           # (a rocket jump run: the next try)
+                    self._rj_place(int(v))
                 if self.goal[v] >= 0:
                     self._new_goal(int(v))
         # short rounds (curriculum): restart both players near each other every ~round_len seconds
@@ -7614,6 +7807,7 @@ class DuelEnv:
             self.drop_w[m] = -1
             self.run_k[self._seats(int(m))] = -1
             self.jrun[self._seats(int(m))] = False
+            self.rjrun[self._seats(int(m))] = False
             self.cf_side[self._seats(int(m))] = 0
             self.cf_t[m] = -1.0
             q_ = self._item_run_start(int(m))                # an item run in a share of the rounds (RUN_LEN)

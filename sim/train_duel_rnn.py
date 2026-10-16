@@ -78,9 +78,14 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         env.legs_keep_who = ~((i_ >= env.n // 2) & (i_ % G % 2 == 1))      # keeps his legs (and is never learnt from)
     if move_only:                                            # a map he only learns to move on (--move-maps): every round an item
         pj_ = env.jump_run_p if getattr(env, "jump_tries", None) else 0.0   # run or a jump run, in the shares they have in the run
+        pr_ = env.rj_run_p if getattr(env, "rj_live", False) else 0.0       # (RJ_RUN_P: or a rocket jump run)
         assert env.item_run_p > 0 and env.route is not None, "--move-maps needs ITEM_RUN_P and the map's walking map"
-        env.item_run_p = env.item_run_p / (env.item_run_p + pj_)
-        env.jump_run_p, env.collect_fight_p = 1.0 - env.item_run_p, 0.0
+        if pr_ > 0:
+            env.item_run_p, env.rj_run_p = env.item_run_p / (env.item_run_p + pj_ + pr_), pr_ / (env.item_run_p + pj_ + pr_)
+            env.jump_run_p, env.collect_fight_p = 1.0 - env.item_run_p - env.rj_run_p, 0.0
+        else:
+            env.item_run_p = env.item_run_p / (env.item_run_p + pj_)
+            env.jump_run_p, env.collect_fight_p = 1.0 - env.item_run_p, 0.0
     env.round_t[:] = 1e9                                     # every round starts anew at the first step: until 2026-10-08 the
     env._teach_update()                                      # first round after a (re)start was played with every weapon at spawn
     legs_in = bool(getattr(E_, "LEGS_IN", False))            # (LEGS_IN, B-253) his legs' inputs go to the branch of his network
@@ -1132,6 +1137,7 @@ def main():
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
+                "rj_tries", "rj_over", "rj_frames", "rj_shots",
                 "hurt_dmg", "legs", "games", "open", "moments", "overtime")
     while time.time() - t_start < a.minutes * 60:
         update += 1
@@ -1793,6 +1799,13 @@ def main():
                                                      for i_, k_ in enumerate(("lower", "level", "higher"))},
                                         pay_per_player_min=round(float(agg.get("high_pay", 0.0)) / max(1e-9, NP * T * DT_MIN), 4))),                 # (HIGH_PAY) what height added to his pay
                    v15=dict(jump_run_frames=round(float(agg.get("jump_frames", 0) / max(1, NP * T)), 4),                                   # (JUMPS) the share of all frames in jump runs
+                            rj_run_frames=round(float(agg.get("rj_frames", 0) / max(1, NP * T)), 4),                                       # (RJ_RUN_P) rocket jump runs: the share of frames,
+                            rj_tries=int(np.sum(agg.get("rj_tries", 0))),                                                                 # ... tries, the share that arrived, rockets a try
+                            rj_over=round(float(np.sum(agg.get("rj_over", 0)) / max(1.0, float(np.sum(agg.get("rj_tries", 0))))), 3),
+                            rj_shots=round(float(agg.get("rj_shots", 0)) / max(1.0, float(np.sum(agg.get("rj_tries", 0)))), 2),
+                            rjs={m_: [[int(t_), round(float(o_ / max(1.0, t_)), 2)] for t_, o_ in                                         # ... per map and link (its place in the map's list of the links in use): tries, arrived
+                                      zip(np.atleast_1d(v_.get("rj_tries", np.zeros(1))), np.atleast_1d(v_.get("rj_over", np.zeros(1))))][:int(np.max(np.nonzero(np.atleast_1d(v_.get("rj_tries", np.zeros(1))))[0], initial=-1)) + 1]
+                                 for m_, v_ in agg_map.items() if float(np.sum(v_.get("rj_tries", 0))) > 0},
                             jump_tries=int(np.sum(agg.get("jump_tries", 0))),                                                             # ... tries begun, the share that got over, that fell short
                             jump_over=round(float(np.sum(agg.get("jump_over", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
                             jump_short=round(float(np.sum(agg.get("jump_short", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
