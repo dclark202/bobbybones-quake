@@ -9,8 +9,10 @@ before they load the simulator (none of them reached a server until 2026-10-08).
 and --round-secs give or override them (the runs up to v12: --set INTENT_HOLD=8).
 """
 import argparse
+import datetime
 import json
 import os
+import re
 
 import numpy as np
 import torch
@@ -24,8 +26,19 @@ ap.add_argument("--env", default="duel_env_v2", help="simulator module the polic
 ap.add_argument("--set", action="append", default=[], help="NAME=VALUE: a simulator switch the network was trained with")
 ap.add_argument("--policy", default="policy.pt", help="the save of the run to export: a file in its folder, or a full path (a copy of a running trainer's save: it is rewritten while the run goes on)")
 ap.add_argument("--legs", default="", help="the movement network's run (duel_env's LEGS): its policy.npz goes beside the output as legs.npz")
+ap.add_argument("--version", default="", help="the version name the server's welcome shows (default: from the run's name, duel_gru_v0_3_1b -> v0.3.1)")
+ap.add_argument("--updated", default="", help="the date the welcome shows as last updated (default: today, the day of the export and upload)")
 ap.add_argument("--round-secs", type=float, default=0.0, help="the length of a training round on the server's map (0: from the checkpoint, else the plugin's default)")
 a = ap.parse_args()
+
+
+def version_name(run):
+    """the docs' version name of a run (owner, 2026-10-11: v0.1 is duel_gru_v15c; duel_gru_v0_3 -> v0.3, a restart's letter
+    dropped: duel_gru_v0_3_1b -> v0.3.1)"""
+    m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", run)
+    return "v" + m.group(1).replace("_", ".") if m else "v0.1" if run == "duel_gru_v15c" else run
+
+
 ck = torch.load(os.path.join(ROOT, "data", "sim_runs", a.run, a.policy), weights_only=False, map_location="cpu")
 sd = {k: v.cpu().numpy() for k, v in ck["model"].items()}
 os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
@@ -66,7 +79,8 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          **({"cell": sd["cell.weight"]} if "cell.weight" in sd else {}),
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
-         env_vars=np.array(json.dumps(env_vars)), **attn, **slow, **legs, **legs_in, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **legs, **legs_in, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "")

@@ -29,17 +29,40 @@ EACH, ALL, CHANCE = 75.0, 20.0, 0.7
 FAR = 1500.0                                                           # a rail frag from this far is worth a smile
 
 LINES = (
-    dict(   # BobbyBones: the pupil
-        first=("^2gg^7! I did a learn :)", "^2gg^7 all :) don't tell my trainer, it will only raise the bar",
-               "^2gg^7! all those hours in the simulator, ^3worth it^7"),
-        mid=("^2gg^7! filing this one under ^3training data^7", "^2gg^7 :) I'll get you after my next ^310,000^7 games",
-             "^2gg^7. not first, not last, ^3still learning^7"),
-        last=("^2gg^7... I have been ^1owned^7. respectfully.", "^2gg^7 :( writing this down in my ^3loss function^7",
-              "^2gg^7. back to the simulator for me"),
-        streak=("^2:)^7", "did you see that?? ^3I^7 did that", "the practice is ^2working^7 :)"),
-        oops=("^1oops^7", "I meant to do that. (I did not)", "^3note to self:^7 that is not a floor"),
-        respect=("ok ^3{name}^7 that was ^2clean^7", "nice one ^3{name}^7 :)", "^3{name}^7 please, I am only ^35 MB^7 of numbers"),
-        rail=("^5*click*^7 :)", "^5rail^7 :)"),
+    dict(   # BobbyBones: the pupil (owner, 2026-10-16: more of them, with colour)
+        first=("^2gg^7! I did a learn ^3:)^7", "^2gg^7 all ^3:)^7 don't tell my trainer, it will only raise the bar",
+               "^2gg^7! all those hours in the simulator, ^3worth it^7",
+               "^2gg^7! ^5gradient descent^7 goes brrr",
+               "^2gg wp^7! that one goes on the ^3fridge^7",
+               "^2gg^7 ^1<3^7 my reward function is so happy right now",
+               "^2gg^7! I won?? ^6quick, somebody save a checkpoint^7",
+               "^2gg^7. I would like to thank my ^5GPU^7 and the ^5ten maps^7",
+               "^2gg^7! ^3v1.0^7 is closer than you think ^3:)^7",
+               "^2gg^7 ^3:)^7 that was ^5in distribution^7"),
+        mid=("^2gg^7! filing this one under ^3training data^7", "^2gg^7 ^3:)^7 I'll get you after my next ^310,000^7 games",
+             "^2gg^7. not first, not last, ^3still learning^7",
+             "^2gg^7! ^5mid table^7, mid learning curve",
+             "^2gg^7. my loss went down a bit, so ^2a win^7 really",
+             "^2gg^7 ^3:)^7 saving the highlights for the ^5replay buffer^7",
+             "^2gg^7. ^6average^7 is just ^3above bad^7 with extra steps"),
+        last=("^2gg^7... I have been ^1owned^7. respectfully.", "^2gg^7 ^1:(^7 writing this down in my ^3loss function^7",
+              "^2gg^7. back to the simulator for me",
+              "^2gg^7. that was a ^1very large^7 learning signal",
+              "^2gg wp^7. I will be ^3back^7, and ^5slightly^7 better",
+              "^2gg^7. ^1overnight training^7 it is",
+              "^2gg^7 ^1T_T^7 at least I am a ^3fast^7 learner",
+              "^2gg^7. please do not show this one to my ^5trainer^7",
+              "^2gg^7. new personal goal: ^3one more frag^7 than that"),
+        streak=("^2:)^7", "did you see that?? ^3I^7 did that", "the practice is ^2working^7 ^3:)^7",
+                "^3three^7 in a row ^2:D^7", "^5the simulator^7 was right about this", "^2on a roll^7 ^3:)^7",
+                "^6hello^7, ^3my legs^7 work today", "is this what ^5good^7 feels like?"),
+        oops=("^1oops^7", "I meant to do that. ^1(I did not)^7", "^3note to self:^7 that is not a floor",
+              "^1physics^7 is hard", "^3the simulator^7 did not have that ledge", "^1self-frag^7 for science",
+              "that was a ^3negative reward^7 if I ever saw one", "^1uh oh^7. pretend you did not see that"),
+        respect=("ok ^3{name}^7 that was ^2clean^7", "nice one ^3{name}^7 ^3:)^7", "^3{name}^7 please, I am only ^35 MB^7 of numbers",
+                 "^3{name}^7 you are now in my ^5training data^7", "^3{name}^7 how?? teach me", "^3{name}^7 ^2wp^7, you are too good",
+                 "^3{name}^7 I am taking ^5notes^7", "^3{name}^7 is the ^1final boss^7"),
+        rail=("^5*click*^7 ^3:)^7", "^5rail^7 ^3:)^7", "^5ping^7 ^3:)^7", "^5from here?^7 ^2yes^7", "^5aim level 3^7, still got it"),
         ),
     dict(   # Mr Skeleton: bone jokes
         first=("^2gg^7. no ^7bones^7 about it", "^2gg^7! that was ^1spine^7-tingling", "^2gg^7 :) you have all been ^3rattled^7"),
@@ -183,6 +206,13 @@ class banter(minqlx.Plugin):
             kind = "first" if n == 0 else "last" if n == len(table) - 1 and len(table) > 1 else "mid"
             self.say(p.id, self.pick(p, kind), delay)
             delay += 1.2 + self.rng.random()
+            lad = minqlx.Plugin._loaded_plugins.get("ladder")      # (owner, 2026-10-16) after a full duel BobbyBones says his
+            if voice(p) == 0 and lad is not None and time.time() - getattr(lad, "full_duel_t", 0.0) < 10.0:   # rating and record
+                try:
+                    self.say(p.id, lad.end_line(), delay)
+                    delay += 1.2 + self.rng.random()
+                except Exception:                            # noqa: BLE001
+                    pass
 
     def on_map(self, mapname, factory):
         self.queue, self.run, self.owed = [], {}, {}

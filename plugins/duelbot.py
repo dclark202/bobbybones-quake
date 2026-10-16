@@ -295,8 +295,36 @@ class duelbot(minqlx.Plugin):
         self.note_person(opp, 1)                             # (the person of a 1v1 session is seat 1: the o_ columns)
         self.log("session {}".format(os.path.basename(self.sess)))
 
+    INLOG_EVERY, INLOG_FLUSH = 8, 600                        # every 8th frame (5 a second: v0.4's head tick); a file every 2 min
+
+    def inputs_log(self, now, ob, h, a):
+        """(owner, 2026-10-16: "log the exact inputs Bobby was given, and his memory state, every head tick") the inputs the
+        network was given, the memory it answered from and its choices, every INLOG_EVERY frames of a session with a
+        person: training and calibration data for v0.4's head with nothing rebuilt. Half precision; inputs_<n>.npz files
+        in the session's folder (t, frame, obs, h, acts), written every INLOG_FLUSH ticks and at the session's end."""
+        self.inlog_frame = getattr(self, "inlog_frame", -1) + 1
+        if self.inlog_frame % self.INLOG_EVERY:
+            return
+        buf = self.__dict__.setdefault("inlog", [])
+        buf.append((now, self.inlog_frame, np.asarray(ob, np.float16), np.asarray(h, np.float16), np.asarray(a, np.int16)))
+        if len(buf) >= self.INLOG_FLUSH:
+            self.inputs_flush()
+
+    def inputs_flush(self):
+        buf, self.inlog = getattr(self, "inlog", []), []
+        if not buf or not self.sess:
+            return
+        try:
+            n = len([f for f in os.listdir(self.sess) if f.startswith("inputs_")])
+            np.savez_compressed(os.path.join(self.sess, "inputs_{:04d}.npz".format(n)), t=np.array([b[0] for b in buf]),
+                                frame=np.array([b[1] for b in buf], np.int64), obs=np.stack([b[2] for b in buf]),
+                                h=np.stack([b[3] for b in buf]), acts=np.stack([b[4] for b in buf]))
+        except Exception as e:                               # noqa: BLE001 - a full disk must not stop the game
+            self.log("inputs log: {}".format(type(e).__name__))
+
     def end_session(self):
         if self.sess:
+            self.inputs_flush()
             self.record(event="end", **self.score)
             self.frames_f.close()
             if getattr(self, "missiles_f", None):
@@ -373,24 +401,25 @@ class duelbot(minqlx.Plugin):
 
     BOT_NAMES = BOT_NAMES                                 # (read by plugins/ladder.py)
 
-    # the second line a person reads on joining (owner, 2026-10-09: a word about !bots); ffabot.py has its own
-    WELCOME = "^2!map <name>^7 changes the map (^2!maps^7 lists them). ^2!mode ffa^7 is free-for-all with up to four of me."
+    # the second line a person reads on joining (owner, 2026-10-09: a word about !bots; 2026-10-16: one line for both modes)
+    WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2!mode <ffa|duel>^7, ^2!bots <0,1,2,3>^7 ^6(FFA only)^7"
 
     def on_player_loaded(self, player):
         if not is_bot(player):
-            player.tell("^3I'm BobbyBones, the learning Quake bot.^7 Type ^2!help^7 to get started.")
+            player.tell("^3I'm ^5BobbyBones^3, the learning Quake bot.^7 Here's some commands")
             player.tell(self.WELCOME)
             lad = minqlx.Plugin._loaded_plugins.get("ladder")
             if lad is not None:                              # owner, 2026-10-09: "see how I rank on the leaderboard"
                 for line in (lad.welcome_lines(player) if hasattr(lad, "welcome_lines") else [lad.WELCOME]):
                     player.tell(line)
-            player.tell("See more about the project: ^5github.com/dclark202/bobbybones-quake")
+            player.tell("^3See more about the project:^7 ^5github.com/dclark202/bobbybones-quake")
             player.tell(self.DISCORD)
-            player.tell("Current bot version: ^3{}".format(self.bot_version()))
+            up_ = self.bot_updated()
+            player.tell("^3Current bot version:^7 ^2{}^7{}".format(self.bot_version(), " (last updated ^5{}^7)".format(up_) if up_ else ""))
 
     # owner, 2026-10-12: the project's Discord server, in the welcome of both modes (ffabot inherits on_player_loaded);
     # the wording and the version line: owner, 2026-10-15
-    DISCORD = "Join our discord: ^5discord.gg/dH2mfzbMa"
+    DISCORD = "^3Join the discord:^7 ^5discord.gg/dH2mfzbMa^7 ^6(feedback appreciated!)^7"
 
     def bot_version(self):
         """the network's version name (docs: v0.1, v0.2, v0.3, ...): BOBBY_VERSION if the server sets it, else from the run's
@@ -398,11 +427,33 @@ class duelbot(minqlx.Plugin):
         v = os.environ.get("BOBBY_VERSION", "").strip()
         if v:
             return v
-        run = str(self.P["run"]) if getattr(self, "P", None) is not None and "run" in self.P else ""
-        m = re.match(r"duel_gru_v(\d+(?:_\d+)+)$", run)
+        P = getattr(self, "P", None)
+        if P is not None and "version" in P and str(P["version"]).strip():     # (sim/export_duel.py writes it, 2026-10-16)
+            return str(P["version"]).strip()
+        run = str(P["run"]) if P is not None and "run" in P else ""
+        m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", run)
         if m:
             return "v" + m.group(1).replace("_", ".")
         return "v0.1" if run == "duel_gru_v15c" else (run or "unknown")
+
+    MONTHS = ("Jan.", "Feb.", "Mar.", "Apr.", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec.")
+
+    def bot_updated(self):
+        """the day the network was put on this server, as "16 Oct. 2026" (owner, 2026-10-16): BOBBY_UPDATED (YYYY-MM-DD) if the
+        server sets it, else the date sim/export_duel.py stamped in policy.npz, else the policy file's own date"""
+        try:
+            d = os.environ.get("BOBBY_UPDATED", "").strip()
+            P = getattr(self, "P", None)
+            if not d and P is not None and "updated" in P:
+                d = str(P["updated"]).strip()
+            if d:
+                y, mo, da = (int(x) for x in d[:10].split("-"))
+            else:
+                t = time.localtime(getattr(self, "policy_mtime", 0.0) or os.path.getmtime(os.path.join(D, "policy.npz")))
+                y, mo, da = t.tm_year, t.tm_mon, t.tm_mday
+            return "{} {} {}".format(da, self.MONTHS[mo - 1], y)
+        except Exception:                                    # noqa: BLE001 - no date: the line goes without it
+            return ""
 
     def on_vote_called(self, player, vote, args):
         """no votes called by players: no kicking Bobby, no config or map changes (the map has !map, limited to MAPS).
@@ -1636,8 +1687,11 @@ class duelbot(minqlx.Plugin):
             if len(self.obs_dump) % 2000 == 0:
                 np.save("/tmp/practice/obs_dump.npy", np.array(self.obs_dump[-12000:]))
         t_ = time.perf_counter()
+        h_in_ = self.h[0].copy() if self.sess else None      # (the memory the network answers from, for the input log)
         a = self.act(ob)
         self.t_net, self.t_live = time.perf_counter() - t_, 1
+        if h_in_ is not None:
+            self.inputs_log(now, ob[0], h_in_, a)
         if len(a) > 10 and hasattr(env, "intend"):           # the intention head (v8), as in training
             env.intend(np.full(env.n, int(a[10]), np.int64), np.arange(env.n) == 0)
         yaw_in_, pitch_in_ = float(yaw), float(pitch)
