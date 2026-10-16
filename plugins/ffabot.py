@@ -729,6 +729,7 @@ class ffabot(duelbot):
             A[:, 0] = A[:, 1] = 1
             A[live_bots] = acts
             if getattr(E, "LEGS", False) and A.shape[1] > getattr(E, "LEGS_HEAD", 99):
+                _net.legs_feed(self.P, env, E)                   # (LEGS_IN, B-253) his legs' choices from the branch of his network
                 env._legs_step(A)                                # his legs (duel_env's LEGS): every Bobby in one call, before the finger limits
                 self.legs_n = getattr(self, "legs_n", np.zeros(3))
                 on_ = env.legs_on[live_bots].astype(np.float64)

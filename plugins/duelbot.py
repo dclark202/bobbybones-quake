@@ -1211,6 +1211,7 @@ class duelbot(minqlx.Plugin):
             # network's choices of this frame take the place of his movement keys and view turn, before the finger limits
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             A[np.arange(env.n) != i, E.LEGS_HEAD] = 0
+            _net.legs_feed(self.P, env, E)                   # (LEGS_IN, B-253) his legs' choices from the branch of his network
             env._legs_step(A)
             a = A[i]
             self.legs_n = getattr(self, "legs_n", np.zeros(3))

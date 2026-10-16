@@ -214,6 +214,15 @@ def play(job):
             a[od, :ao.shape[1]] = ao
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
+        if getattr(E, "LEGS_IN", False) and (pol.legsP is not None or (opp_pol is not None and opp_pol.legsP is not None)):
+            xl_ = env.legs_prep()                                               # (LEGS_IN, B-253) the branch of each side's network
+            lg_ = None
+            lgs_ = [(ev, pol)] + ([(od, opp_pol)] if opp_pol is not None else [])
+            if all(p_.legsP is not None for _, p_ in lgs_):
+                lg_ = np.zeros((n, 17), np.float32)
+                for m_, p_ in lgs_:
+                    lg_[m_] = p_.legs_logits(xl_[m_])
+            env.legs_lg = lg_                                                   # (a side without the branch: the simulator's own sums for all)
         obs, r, done, info = env.step(a)                                        # falls in; a scripted seat's is never drawn: general)
         c["restarts"][0] += int(done.any())
         died = np.zeros(n, bool)                                # (a death and the respawn fall in the same step here)

@@ -50,6 +50,11 @@ if ck.get("attn") is not None:
     assert "attn.door.weight" in attn, "the checkpoint names an attention part and has no weights for it"
     assert int(ck["attn"]["obs_dim"]) == sd["enc.0.weight"].shape[1], "the tokens are cut from {} inputs, the network has {}".format(
         ck["attn"]["obs_dim"], sd["enc.0.weight"].shape[1])
+legs_in = {}                                                 # (LEGS_IN, B-253) his legs' branch: its weights as legs_w0 ... legs_bp
+if "legs.0.weight" in sd:                                    # (the movement network's file goes beside it all the same: the simulator
+    assert legs, "this network has its legs inside (LEGS_IN): give --legs <the movement network's run> as well"   # finds his ways with it)
+    legs_in = {"legs_w0": sd["legs.0.weight"], "legs_b0": sd["legs.0.bias"], "legs_w1": sd["legs.2.weight"], "legs_b1": sd["legs.2.bias"],
+               "legs_wp": sd["legs.4.weight"], "legs_bp": sd["legs.4.bias"]}
 slow = {}                                                    # (--slow-mem) the slow memory: its layout as text and its weights
 if ck.get("slow") is not None:
     slow = {"slow": np.array(json.dumps(ck["slow"]))}
@@ -61,7 +66,7 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          **({"cell": sd["cell.weight"]} if "cell.weight" in sd else {}),
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
-         env_vars=np.array(json.dumps(env_vars)), **attn, **slow, **legs, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         env_vars=np.array(json.dumps(env_vars)), **attn, **slow, **legs, **legs_in, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "")

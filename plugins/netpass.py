@@ -61,6 +61,24 @@ def describe(P, A):
     return "attention part of {} tokens, door open (mean size of its weights {:.5f})".format(lay["tokens"], float(np.abs(A[1]["door.weight"]).mean()))
 
 
+def legs_logits(P, xl):
+    """(LEGS_IN, B-253) his legs' branch: the movement network's inputs [B, 61] as the simulator's legs_prep() gives them
+    -> its logits [B, 17] (forward 3, sideways 3, jump 2, turn 9), which the simulator samples his legs' choices from
+    (env.legs_lg before its _legs_step). None for a network without the branch (the simulator then works them out)."""
+    if "legs_w0" not in P:
+        return None
+    x = np.asarray(xl, np.float32)
+    return (np.tanh(np.tanh(x @ P["legs_w0"].T + P["legs_b0"]) @ P["legs_w1"].T + P["legs_b1"]) @ P["legs_wp"].T + P["legs_bp"]).astype(np.float32)
+
+
+def legs_feed(P, env, E):
+    """(LEGS_IN) the branch's logits handed to the simulator for its next _legs_step(): call right before it, after
+    anything that changes a target (the intention). Does nothing for a network without the branch or a simulator
+    without the switch."""
+    if "legs_w0" in P and getattr(env, "legs_prep", None) is not None and getattr(E, "LEGS_IN", False):
+        env.legs_lg = legs_logits(P, env.legs_prep())
+
+
 def step(P, A, obs, h, rng):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
