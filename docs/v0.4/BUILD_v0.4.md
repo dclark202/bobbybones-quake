@@ -318,6 +318,62 @@ tick should equal the forecast at a later tick of the same game.
 - Read before relying on the demos: CLAUDE.md "Pro demos", and the record that imitating mouse or trigger destroyed aim
   (only the head is trained here, so the hands are safe by construction).
 
+### 4.1 How to build the data and run the pretraining (lane pre, 2026-10-16)
+
+Everything on the CPU (`CUDA_VISIBLE_DEVICES=-1`, the section 0 rules); the Anaconda Python; `data/` read only (the
+route caches go to `scratch/route_cache`, `ROUTE_CACHE`).
+
+```bash
+python sim/head_data.py spec --ck <policy.pt> --out scratch/spec.json       # the hands' simulator module and switches, once
+python sim/head_data.py demos --map bloodrun --limit 3 --spec scratch/spec.json --out scratch/head_data   # DEMODUMP=<demodump.exe>
+python sim/head_data.py sessions --archives T:/quake-sessions/public/<s>.tar.gz ... --seat both --spec scratch/spec.json --out scratch/head_data
+python sim/head_data.py inputs --session <a session folder with inputs_*.npz> --spec scratch/spec.json --out scratch/head_data
+python sim/head_data.py synth --session <an unpacked session> --into <folder> --ck <policy.pt> --spec scratch/spec.json   # a test log
+python sim/head_data.py show scratch/head_data/*.npz                        # shapes and label rates
+python sim/head_data.py count                                               # demos and 1v1 sessions per map
+python sim/pretrain_head.py --ck <policy.pt> --data scratch/head_data --small --steps 300 [--head-module scratch/standin]
+```
+
+- **Inputs.** The converted sets of `sim/demo_dataset.py` (`<demo root>/sets`) hold the 311 inputs of 2026-10-04 and are
+  not usable: `head_data.py` builds the 797 inputs again with the checkpoint's own module (`duel_env_ffa`, two seats) and
+  switches, fed as the 1v1 plugin feeds it (`plugins/duelbot.py` `frame()`), the player whose sequence it is in seat 0.
+  The plugin's input logs (`inputs_*.npz`) are taken as they are. Not rebuilt exactly (the file's top lists it all): his
+  intention input is the item rule's choice (`--intent rule`; the hands' own choice would need the network in the
+  builder), his way is 0, no legs network; in demos the enemy's health, what the recorder dealt, the enemy only while the
+  server sent him; in sessions the ammunition of SG / GL / PG / MG and the item timers (only pickups are logged).
+- **Labels per tick** (a tick on every 8th frame he is alive): target (the next item of the intention list he picked up, or
+  holding place he stood at for 1 s, within 60 s and before his next death; never across a cut to another followed player),
+  the enemy's landmark 3, 10, 30 s on (as the aux question `near`; unknown where a demo did not send him), the final margin
+  band (whole games with a known end: a demo's intermission with the followed player's own score agreeing, a session's
+  real game from `player_stats`). Beside them the baselines: the item rule at the tick, the landmark of v0.2's believed
+  place. Events: `env.head_events()` at every tick (the builder sets `HEAD_EVENTS=1`; the inputs are bit-identical with
+  it on), fed by the hooks the plugins call (`note_combat`, `note_frame`, `note_take`, `note_respawn`, `_hear`).
+- **Speed.** About 5 to 7 ms a frame on a busy PC: a ten-minute demo or session seat in 2 to 5 minutes. All 5,039 demos of
+  the twelve maps are about 200 hours of one core; run them map by map in jobs under 20 minutes.
+- **Pretraining.** The hands' `e` and `h` are worked out once per shard and cached (`--cache`); plan_in stays at zero, so the
+  head is unrolled over its ticks only, by `sim/head.py`'s own `tick()` (`head_ticks` in `pretrain_head.py`; nothing added
+  to `sim/head.py`). The hands are hashed before and after (bit-identical, asserted). The enemy lesson's layer (`pre.en`) is
+  the pretraining's own. Held out: whole games (`--split shard`; a session's two seats together; `--test` names them).
+
+**Data counts** (2026-10-16). Demos in the archive (`T:/quake-demos/demos`): Aerowalk 1,012, Blood Run 1,293, Lost World
+1,411, Campgrounds 226, Battleforged 150, Furious Heights 150, Sinister 150, Hektik 146, House of Decay 142, Dismemberment
+142, Cure 130, Toxicity 87 (hza 6,192 and trinity 22 are no map of ours). Of Blood Run's, 1,066 of 1,293 converted in
+`sim/demo_dataset.py`'s run; the rest were too short or broken. 1v1 sessions with a person in the public archive (sessions,
+real games of 5 min or more, minutes of frames): Blood Run 16 / 12 / 162, Sinister 11 / 6 / 136, Furious Heights 8 / 5 /
+114, Hektik 9 / 3 / 84, Aerowalk 37 / 1 / 72, Toxicity 7 / 2 / 41, Cure 6 / 2 / 40, Campgrounds 5 / 3 / 37, Lost World 5 / 1
+/ 27, Battleforged 1 / 1 / 11: about 720 minutes, 36 games with a result, each usable twice (Bobby's seat and the
+person's). The free-for-all sessions are not used. No input logs exist yet.
+
+**The proof** (2026-10-16 evening, with lane core's `sim/head.py` and lane sim's events; 3 Blood Run demos, 2 sessions x 2
+seats; 21,458 ticks; head at `--small`; 300 steps; held out: one demo and the Blood Run session's two seats, 8,133 target
+ticks): label rates target 0.85, enemy at 10 s 0.69 (demos 0.32 to 0.45, sessions 0.85 to 0.98), win 0.68, belief 0.88.
+Losses (first 25 steps -> last 25): target 2.48 -> 0.32, enemy 2.59 -> 1.61, win 1.00 -> 0.02. Held out: target 19.3 %
+(item rule 7.1 %, most common label 7.5 %); enemy at 10 s 9.7 % against the belief's 6.2 %, at 30 s 11.1 % against 8.8 %,
+at 3 s 9.9 % against 14.2 %; win band 25 % (the held-out games' bands were never the training games' commonest one). On so
+little data the head overfits (93 % target, 48 % enemy at 10 s on its training ticks) and no gate can be read from it.
+The hands were bit-identical before and after, plan_in still zero; the hands here agree with `test_suite.Policy` to 7e-6.
+The synthetic input log is left out of the proof (it repeats a session's seat); `head_data.py inputs` was tested on it alone.
+
 ## 5. Serving (lane serve)
 
 - The numpy head in `sim/head.py`: `np_tick` must match torch's `live` to 1e-5 on random inputs.
