@@ -53,12 +53,17 @@ def _lib():
         lib.qsim_contents_n.argtypes = [ctypes.c_int, F32, I32]
         lib.qsim_add_solid.argtypes = [ctypes.c_int, F32]
         lib.qsim_params2.argtypes = [ctypes.c_float, ctypes.c_float]
+    if hasattr(lib, "qsim_params3"):                         # the library of 2026-10-16: Quake Live's air push and landing
+        lib.qsim_params3.argtypes = [ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int]
+        lib.qsim_params4.argtypes = [ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
     return lib
 
 
 SOLID = 1                                                    # CONTENTS_SOLID: what stops a shot, a missile and the eye in the game
 LAVA, SLIME, WATER = 8, 16, 32                               # liquid contents (qsim_contents)
-QL_WADE, QL_STEP = 0.8, 22.0                                 # Quake Live: wading (fitted: 298.7 u/s with the feet in water,
+QL_FWD_RATE, QL_FWD_TOP = 0.2059, 640.0                     # Quake Live's push with the forward key alone: rate a second and
+#                                                              the speed it pushes toward (plugins/physlab.py, 2026-10-16)
+QL_WADE, QL_STEP = 0.8, 22.0                                # Quake Live: wading (fitted: 298.7 u/s with the feet in water,
 #                                                              measured 2026-10-09 with plugins/poollab.py) and pmove_StepHeight
 
 
@@ -125,6 +130,22 @@ class World:
     def set_params2(self, wade_scale=0.5, step_size=18.0):
         """wading scale and step height (Quake 3: 0.5 and 18; Quake Live: QL_WADE and QL_STEP)"""
         self.lib.qsim_params2(float(wade_scale), float(step_size))
+
+    def set_params3(self, fwd=False, land=False, fwd_rate=QL_FWD_RATE, fwd_top=QL_FWD_TOP):
+        """Quake Live's push with the forward key alone and its landing (QL_FWD, QL_LAND in duel_env.py).
+        Off (the default) is Quake 3. A library before 2026-10-16 has neither: asking for one there is refused."""
+        if hasattr(self.lib, "qsim_params3"):
+            self.lib.qsim_params3(int(bool(fwd)), float(fwd_rate), float(fwd_top), int(bool(land)))
+        elif fwd or land:
+            raise RuntimeError("qsim: this library has no Quake Live air push or landing (rebuild: sim/build.bat)")
+
+    def set_params4(self, jump=False, chain_vel=110.0, chain_ms=500.0, min_ms=100.0, air_step_friction=0.03):
+        """Quake Live's jumps (QL_JUMP in duel_env.py): the chain jump, the jump off a floor met in the air with the jump
+        held, the rising step onto a ledge. Off (the default) is Quake 3 (with QL_PARAMS' plain 275)."""
+        if hasattr(self.lib, "qsim_params4"):
+            self.lib.qsim_params4(int(bool(jump)), float(chain_vel), float(chain_ms), float(min_ms), float(air_step_friction))
+        elif jump:
+            raise RuntimeError("qsim: this library has no Quake Live jumps (rebuild: sim/build.bat)")
 
     def set_snap(self, on=True):
         """velocity cut to whole units after every move (Quake 3; on) or not (Quake Live: QL_FLOAT in duel_env.py).

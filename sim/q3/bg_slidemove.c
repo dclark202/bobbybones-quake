@@ -26,6 +26,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "bg_public.h"
 #include "bg_local.h"
 
+extern int pm_qlJump;                       /* sim: Quake Live's jumps (bg_pmove.c) */
+extern float pm_qlAirStepFriction;
+qboolean PM_QLStepJump( void );
+void PM_QLAirStep( const vec3_t start_o, const vec3_t start_v );
+
 /*
 
 input: origin, velocity, bounds, groundPlane, trace function
@@ -249,13 +254,15 @@ void PM_StepSlideMove( qboolean gravity ) {
 //	vec3_t		delta, delta2;
 	vec3_t		up, down;
 	float		stepSize;
+	float		unstep_z;
 
 	VectorCopy (pm->ps->origin, start_o);
 	VectorCopy (pm->ps->velocity, start_v);
 
 	if ( PM_SlideMove( gravity ) == 0 ) {
-		return;		// we got exactly where we wanted to go first try	
+		return;		// we got exactly where we wanted to go first try
 	}
+	unstep_z = pm->ps->origin[2];
 
 	VectorCopy(start_o, down);
 	down[2] -= STEPSIZE;
@@ -264,6 +271,11 @@ void PM_StepSlideMove( qboolean gravity ) {
 	// never step up when you still have up velocity
 	if ( pm->ps->velocity[2] > 0 && (trace.fraction == 1.0 ||
 										DotProduct(trace.plane.normal, up) < 0.7)) {
+		// sim (pm_qlJump): Quake Live steps up in the air while rising too (pmove_AirSteps), onto a ledge that the step
+		// lands him on, his speed along the floor cut by pmove_AirStepFriction; with the jump held he jumps off it
+		if ( pm_qlJump && gravity ) {
+			PM_QLAirStep( start_o, start_v );
+		}
 		return;
 	}
 
@@ -296,8 +308,19 @@ void PM_StepSlideMove( qboolean gravity ) {
 	if ( !trace.allsolid ) {
 		VectorCopy (trace.endpos, pm->ps->origin);
 	}
-	if ( trace.fraction < 1.0 ) {
+	// (sim, pm_qlJump: a step taken rising in the air keeps the rise and costs pmove_AirStepFriction, as in the game)
+	if ( trace.fraction < 1.0 && !( pm_qlJump && gravity && pm->ps->velocity[2] > 0 ) ) {
 		PM_ClipVelocity( pm->ps->velocity, trace.plane.normal, pm->ps->velocity, OVERCLIP );
+	}
+	if ( pm_qlJump && gravity && start_v[2] > 0 && pm->ps->origin[2] > unstep_z + 0.5f ) {
+		pm->ps->velocity[0] *= 1.0f - pm_qlAirStepFriction;
+		pm->ps->velocity[1] *= 1.0f - pm_qlAirStepFriction;
+	}
+	// sim (pm_qlJump): Quake Live, a move in the air that ends on a floor higher than it started (a stair, a ledge) with
+	// the jump held is a jump off it at once (pmove_StepJump). A plain landing jumps at the next move, as in Quake 3
+	if ( pm_qlJump && gravity && trace.fraction < 1.0 && !trace.allsolid && trace.plane.normal[2] >= MIN_WALK_NORMAL
+			&& pm->ps->origin[2] > start_o[2] ) {
+		PM_QLStepJump();
 	}
 
 #if 0

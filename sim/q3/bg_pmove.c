@@ -36,6 +36,11 @@ float	pm_duckScale = 0.25f;
 float	pm_swimScale = 0.50f;
 float	pm_wadeScale = 0.50f;	// sim: wading (PM_WalkMove) has its own scale; Quake 3 used pm_swimScale there
 float	pm_stepSize = 18.0f;	// sim: see bg_local.h
+int	pm_qlFwd = 0;		// sim: Quake Live's push with the forward key alone (PM_QLForward); 0 = Quake 3
+float	pm_qlFwdRate = 0.2059f;	// sim: its rate a second
+float	pm_qlFwdTop = 640.0f;	// sim: the speed it pushes toward
+int	pm_qlLand = 0;			// sim: the fall's speed put to nothing after a landing (PM_WalkMove); 0 = Quake 3
+#define	QL_LAND_STAT	15		// sim: a stat no part of the simulator uses: "landed, the fall's speed to clear"
 
 float	pm_accelerate = 10.0f;
 float	pm_airaccelerate = 1.0f;
@@ -353,6 +358,36 @@ static void PM_SetMovementDir( void ) {
 
 
 /*
+==============
+PM_QLForward
+
+sim (pm_qlFwd): Quake Live's push with the forward (or back) key alone, in the air and on the floor, where Quake 3's
+push gives nothing (cur, his speed along the wish direction before it, is at the wish speed or above): along the wish
+direction, pm_qlFwdRate x (pm_qlFwdTop - his speed along the floor, taken as at least half of pm_qlFwdTop) a second,
+never a brake. Measured with plugins/physlab.py (2026-10-16): 0.20590 x (640 - speed) in the air from 320 to 640 to
+0.0001 u/s a frame, nothing at 700; with the walk key at 200 to 260 a constant 0.2059 x 320; the same on the floor
+after friction, crouched too; with a strafe key held, Quake 3's push alone. Not while wading (not measured).
+==============
+*/
+static void PM_QLForward( const vec3_t wishdir, float wishspeed, float cur ) {
+	float	h, add;
+
+	if ( !pm_qlFwd || pm->cmd.forwardmove == 0 || pm->cmd.rightmove != 0 || wishspeed <= 0 || cur < wishspeed ) {
+		return;
+	}
+	h = sqrt( pm->ps->velocity[0] * pm->ps->velocity[0] + pm->ps->velocity[1] * pm->ps->velocity[1] );
+	if ( h < 0.5f * pm_qlFwdTop ) {
+		h = 0.5f * pm_qlFwdTop;		// below running speed (the walk key) the push is the one at 320
+	}
+	add = pm_qlFwdRate * pml.frametime * ( pm_qlFwdTop - h );
+	if ( add > 0 ) {
+		pm->ps->velocity[0] += add * wishdir[0];
+		pm->ps->velocity[1] += add * wishdir[1];
+		pm->ps->velocity[2] += add * wishdir[2];
+	}
+}
+
+/*
 =============
 PM_CheckJump
 =============
@@ -364,6 +399,105 @@ int	pm_autoHop = 1;			// pmove_AutoHop: holding jump re-jumps on landing
 int	pm_chainJump = 1;			// pmove_ChainJump
 float	pm_chainJumpVelocity = 110.0f;		// pmove_ChainJumpVelocity
 int	pm_chainJumpMs = 500;			// pmove_JumpVelocityTimeThreshold
+
+// sim (pm_qlJump): Quake Live's jumps, measured with plugins/physlab.py (2026-10-16; cvars pmove_ChainJump 1,
+// pmove_ChainJumpVelocity 110, pmove_JumpVelocityTimeThreshold 500, pmove_JumpTimeDeltaMin 100, pmove_AirSteps 1,
+// pmove_AirStepFriction 0.03, pmove_StepJump 1): a jump within 500 ms of the last is faster by 110 x (1 - ms / 500)
+// (125 ms after: 357.5, the game's to 0.1); none within 100 ms; in the air a move that ends on a floor with the jump held
+// is a jump at once (a stair, a ledge); rising, he steps onto a ledge (Quake 3 does not) and loses 3% of his speed.
+int	pm_qlJump = 0;
+float	pm_qlChainVel = 110.0f;
+float	pm_qlChainMs = 500.0f;
+float	pm_qlJumpMinMs = 100.0f;
+float	pm_qlAirStepFriction = 0.03f;
+
+static qboolean PM_QLJumpTooSoon( void ) {
+	return pm_qlJump && pm->ps->generic1 > 0 && pm->ps->commandTime - pm->ps->generic1 < pm_qlJumpMinMs;
+}
+
+static float PM_QLJumpVelocity( void ) {
+	float	v = pm_jumpVelocity;
+	int	dt = pm->ps->commandTime - pm->ps->generic1;
+
+	if ( pm->ps->generic1 > 0 && dt < pm_qlChainMs ) {
+		v += pm_qlChainVel * ( 1.0f - (float)dt / pm_qlChainMs );
+	}
+	return v;
+}
+
+static void PM_DoJump( void ) {
+	pml.groundPlane = qfalse;		// jumping away
+	pml.walking = qfalse;
+	pm->ps->pm_flags |= PMF_JUMP_HELD;
+
+	pm->ps->groundEntityNum = ENTITYNUM_NONE;
+	if ( pm_qlJump ) {
+		pm->ps->velocity[2] = PM_QLJumpVelocity();
+	} else {
+		pm->ps->velocity[2] = pm_jumpVelocity;
+		if ( pm_chainJump && pm->ps->generic1 > 0 && pm->ps->commandTime - pm->ps->generic1 < pm_chainJumpMs ) {
+			pm->ps->velocity[2] += pm_chainJumpVelocity;	// sim: QL chain jump (second jump soon after the last)
+		}
+	}
+	pm->ps->generic1 = pm->ps->commandTime > 0 ? pm->ps->commandTime : 1;	// sim: time of this jump
+	PM_AddEvent( EV_JUMP );
+}
+
+// sim (pm_qlJump): a jump off the floor a move in the air ended on (bg_slidemove.c)
+qboolean PM_QLStepJump( void ) {
+	if ( ( pm->ps->pm_flags & PMF_RESPAWNED ) || pm->cmd.upmove < 10 ) {
+		return qfalse;
+	}
+	if ( ( pm->ps->pm_flags & PMF_JUMP_HELD ) && !pm_autoHop ) {
+		return qfalse;
+	}
+	if ( PM_QLJumpTooSoon() || pm->waterlevel > 1 ) {
+		return qfalse;
+	}
+	PM_DoJump();
+	return qtrue;
+}
+
+// sim (pm_qlJump): rising in the air against a ledge, with no floor within a step under him: the step Quake 3 leaves
+// out. Taken if it lifts him (the game: 20 units up the climb's ledges, his rise kept); his speed along the floor cut
+// by pmove_AirStepFriction; ending on a floor with the jump held, a jump
+void PM_QLAirStep( const vec3_t start_o, const vec3_t start_v ) {
+	vec3_t	o1, v1, up, down;
+	trace_t	trace;
+	float	stepSize;
+
+	VectorCopy( pm->ps->origin, o1 );
+	VectorCopy( pm->ps->velocity, v1 );
+	VectorCopy( start_o, up );
+	up[2] += STEPSIZE;
+	pm->trace( &trace, start_o, pm->mins, pm->maxs, up, pm->ps->clientNum, pm->tracemask );
+	if ( trace.allsolid ) {
+		return;
+	}
+	stepSize = trace.endpos[2] - start_o[2];
+	VectorCopy( trace.endpos, pm->ps->origin );
+	VectorCopy( start_v, pm->ps->velocity );
+	PM_SlideMove( qtrue );
+	VectorCopy( pm->ps->origin, down );
+	down[2] -= stepSize;
+	pm->trace( &trace, pm->ps->origin, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask );
+	if ( !trace.allsolid ) {
+		VectorCopy( trace.endpos, pm->ps->origin );
+	}
+	if ( trace.allsolid || pm->ps->origin[2] <= o1[2] + 0.5f ) {
+		VectorCopy( o1, pm->ps->origin );		// the step lifts him nowhere: the move as Quake 3 made it
+		VectorCopy( v1, pm->ps->velocity );
+		return;
+	}
+	if ( trace.fraction < 1.0f && pm->ps->velocity[2] < 0 ) {
+		PM_ClipVelocity( pm->ps->velocity, trace.plane.normal, pm->ps->velocity, OVERCLIP );
+	}
+	pm->ps->velocity[0] *= 1.0f - pm_qlAirStepFriction;
+	pm->ps->velocity[1] *= 1.0f - pm_qlAirStepFriction;
+	if ( trace.fraction < 1.0f && trace.plane.normal[2] >= MIN_WALK_NORMAL ) {
+		PM_QLStepJump();
+	}
+}
 
 static qboolean PM_CheckJump( void ) {
 	if ( pm->ps->pm_flags & PMF_RESPAWNED ) {
@@ -382,17 +516,11 @@ static qboolean PM_CheckJump( void ) {
 		return qfalse;
 	}
 
-	pml.groundPlane = qfalse;		// jumping away
-	pml.walking = qfalse;
-	pm->ps->pm_flags |= PMF_JUMP_HELD;
-
-	pm->ps->groundEntityNum = ENTITYNUM_NONE;
-	pm->ps->velocity[2] = pm_jumpVelocity;
-	if ( pm_chainJump && pm->ps->generic1 > 0 && pm->ps->commandTime - pm->ps->generic1 < pm_chainJumpMs ) {
-		pm->ps->velocity[2] += pm_chainJumpVelocity;	// sim: QL chain jump (second jump soon after the last)
+	if ( PM_QLJumpTooSoon() ) {
+		return qfalse;
 	}
-	pm->ps->generic1 = pm->ps->commandTime > 0 ? pm->ps->commandTime : 1;	// sim: time of this jump
-	PM_AddEvent( EV_JUMP );
+
+	PM_DoJump();
 
 	if ( pm->cmd.forwardmove >= 0 ) {
 		PM_ForceLegsAnim( LEGS_JUMP );
@@ -620,6 +748,8 @@ static void PM_AirMove( void ) {
 	float		scale;
 	usercmd_t	cmd;
 
+	pm->ps->stats[QL_LAND_STAT] = 0;		// sim (pm_qlLand): in the air, no landing to finish
+
 	PM_Friction();
 
 	fmove = pm->cmd.forwardmove;
@@ -646,8 +776,12 @@ static void PM_AirMove( void ) {
 	wishspeed = VectorNormalize(wishdir);
 	wishspeed *= scale;
 
-	// not on ground, so little effect on velocity
-	PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
+	{
+		float	cur = DotProduct( pm->ps->velocity, wishdir );
+		// not on ground, so little effect on velocity
+		PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
+		PM_QLForward( wishdir, wishspeed, cur );
+	}
 
 	// we may have a ground plane that is very steep, even
 	// though we don't have a groundentity
@@ -712,6 +846,13 @@ static void PM_WalkMove( void ) {
 	usercmd_t	cmd;
 	float		accelerate;
 	float		vel;
+
+	if ( pm->ps->stats[QL_LAND_STAT] ) {		// sim (pm_qlLand): the landing's fall speed, put to nothing
+		pm->ps->stats[QL_LAND_STAT] = 0;
+		if ( pm->ps->velocity[2] < 0 ) {
+			pm->ps->velocity[2] = 0;
+		}
+	}
 
 	if ( pm->waterlevel > 2 && DotProduct( pml.forward, pml.groundTrace.plane.normal ) > 0 ) {
 		// begin swimming
@@ -788,7 +929,13 @@ static void PM_WalkMove( void ) {
 		accelerate = pm_accelerate;
 	}
 
-	PM_Accelerate (wishdir, wishspeed, accelerate);
+	{
+		float	cur = DotProduct( pm->ps->velocity, wishdir );
+		PM_Accelerate (wishdir, wishspeed, accelerate);
+		if ( !pm->waterlevel ) {
+			PM_QLForward( wishdir, wishspeed, cur );
+		}
+	}
 
 	//Com_Printf("velocity = %1.1f %1.1f %1.1f\n", pm->ps->velocity[0], pm->ps->velocity[1], pm->ps->velocity[2]);
 	//Com_Printf("velocity1 = %1.1f\n", VectorLength(pm->ps->velocity));
@@ -1192,6 +1339,14 @@ static void PM_GroundTrace( void ) {
 		}
 		
 		PM_CrashLand();
+
+		// sim (pm_qlLand): Quake Live puts the fall's speed to nothing at his first move on the floor (PM_WalkMove).
+		// Quake 3 keeps it, and when the floor is met just at the end of a move (no clip in the slide) its walk move turns
+		// the fall into speed along the floor (falling at 400 at 320 along: 447 after the landing, the game 320).
+		// Measured: plugins/physlab.py, 2026-10-16 (the game still shows the fall's speed on the frame he lands).
+		if ( pm_qlLand && pm->ps->velocity[2] < 0 ) {
+			pm->ps->stats[QL_LAND_STAT] = 1;
+		}
 
 		// don't do landing time if we were just going down a slope
 		if ( pml.previous_velocity[2] < -200 ) {

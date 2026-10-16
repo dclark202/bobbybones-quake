@@ -270,6 +270,15 @@ class MoveEnv:
             from qsim import QL_STEP, QL_WADE
             self.w.set_params2(QL_WADE, QL_STEP)
             self.w.add_solids()
+        # Quake Live's physics of B-252 / B-258, from the environment as in duel_env.py (all off: Quake 3's, as before)
+        ql_float, ql_fwd, ql_land = (float(os.environ.get(k_) or 0.0) > 0 for k_ in ("QL_FLOAT", "QL_FWD", "QL_LAND"))
+        if ql_float or hasattr(self.w.lib, "qsim_snap"):
+            self.w.set_snap(not ql_float)
+        if ql_fwd or ql_land or hasattr(self.w.lib, "qsim_params3"):
+            self.w.set_params3(ql_fwd, ql_land)
+        ql_jump = float(os.environ.get("QL_JUMP") or 0.0) > 0
+        if ql_jump or hasattr(self.w.lib, "qsim_params4"):
+            self.w.set_params4(ql_jump)
         self.substeps = tuple(substeps)
         self.stall_limit = stall_limit
         # robustness for transfer to the real game: noisy senses and the odd one-frame-late command

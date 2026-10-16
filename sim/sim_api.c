@@ -26,6 +26,10 @@
 extern float pm_jumpVelocity, pm_chainJumpVelocity;
 extern float pm_wadeScale, pm_stepSize;
 extern int pm_autoHop, pm_chainJump, pm_chainJumpMs;
+extern int pm_qlFwd, pm_qlLand;
+extern float pm_qlFwdRate, pm_qlFwdTop;
+extern int pm_qlJump;
+extern float pm_qlChainVel, pm_qlChainMs, pm_qlJumpMinMs, pm_qlAirStepFriction;
 
 /* ---------------- engine stubs the vendored code expects ---------------- */
 static jmp_buf err_jmp;
@@ -149,6 +153,26 @@ API void qsim_params2(float wade_scale, float step_size) {
 API int qsim_version(void) { return 2; }
 /* 3 = this library has qsim_snap (2026-10-15) */
 API int qsim_version3(void) { return 3; }
+
+/* Quake Live's air push with the forward key alone and its landing (B-258, plugins/physlab.py 2026-10-16). Defaults:
+   both off (Quake 3). The library keeps them between worlds of one process: set both ways. */
+API void qsim_params3(int fwd, float fwd_rate, float fwd_top, int land) {
+    pm_qlFwd = fwd;
+    pm_qlFwdRate = fwd_rate;
+    pm_qlFwdTop = fwd_top;
+    pm_qlLand = land;
+}
+/* Quake Live's jumps (B-258): a jump soon after the last is faster, none within min_ms, a move in the air that ends on a
+   floor with the jump held jumps at once, a rising step onto a ledge. Default off (Quake 3). */
+API void qsim_params4(int jump, float chain_vel, float chain_ms, float min_ms, float air_step_friction) {
+    pm_qlJump = jump;
+    pm_qlChainVel = chain_vel;
+    pm_qlChainMs = chain_ms;
+    pm_qlJumpMinMs = min_ms;
+    pm_qlAirStepFriction = air_step_friction;
+}
+/* 4 = this library has qsim_params3 and qsim_params4 (2026-10-16) */
+API int qsim_version4(void) { return 4; }
 
 /* ---------------- world callbacks for Pmove ---------------- */
 static void sim_trace(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs,
