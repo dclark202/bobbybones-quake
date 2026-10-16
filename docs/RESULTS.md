@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-16](results/2026-10-16.md)
 
+- 08:45 — Rocket jump runs built (B-252), all off by default; a scripted player clears 104 of the 174 pros' links in the corrected simulator (75% of the pros' rocket jumps); off = v0.3.1's simulator by fixed runs
 - 06:30 — v0.3.1's night: from level to 60% against v0.3's end (110 games to 45), no collapse; he wins the fights he gets, he does not seek more
 - 01:25 — Quake Live's movement measured case by case (B-258): four differences from the simulator found and fixed behind switches (all off); with them every measured case is within 5%. Bobby has never auto-hopped on the servers
 
