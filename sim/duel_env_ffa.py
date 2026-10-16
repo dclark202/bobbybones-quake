@@ -1132,7 +1132,8 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
                  "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
-                 "r_long", "op_lab")
+                 "r_long", "op_lab",
+                 "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band")   # (HEAD_EVENTS)
 MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
@@ -1361,6 +1362,58 @@ ES_BAND_VAR = 25.0 ** 2 / 12.0                             # the spread of a hea
 # and opens it out of "nothing" (--from-nothing). A game server's plugin: intent_release() calls note_hunt().
 HUNT = float(os.environ.get("HUNT") or 0.0) > 0
 EN_ON = FIGHT_TARGET or HUNT
+# v0.4, the head (docs/v0.4/BUILD_v0.4.md section 3), HEAD_EVENTS=1 (a PLAY_VAR, off by default): what happened to him since
+# the head last asked, as he could know it (never more than his inputs could tell him). head_events() gives [players, 32]
+# float32 (HEAD_EVENT_COLS) and starts the count again; the trainer asks on the head's ticks. Fed by hooks that a game
+# server's plugin calls too (it never calls step()):
+#   note_combat(dealt, taken, frag, died)   dmg_dealt, dmg_taken (points; kept / 100), frag, died: step() from its books
+#                                           of the frame (info["aux"]'s columns of the same names), once a frame
+#   note_frame()                            en_seen (frames with an enemy noticed, as a share of the frames counted here),
+#                                           en_pain (and en_heard: the pain sound is an event sound), weapon_change,
+#                                           takeoff, fall_land: once a frame, after the senses, the pain sound and the
+#                                           weapon in hand are set for the frame
+#   _hear()                                 en_heard: the enemy's event sounds he hears (a shot, a pickup of a big item or
+#                                           a weapon, a jump, a teleport); never the steady hum or running steps (hear())
+#   note_take(i, it)                        took_*: his own pickup; en_took_*: another's pickup he saw (noticed in view) or
+#                                           heard (HEAR_EVT), not in movement rounds and solo rooms
+#   note_respawn(k, who)                    resp_*: an item's return heard (HEAR_EVT)
+#   note_event(i, name, value)              anything else, by column name (adds)
+# A round's end (done) starts a player's count again at the next step (the frame that ended it is still in the count, for
+# a tick on that frame). Off: nothing of this is computed or kept, the simulator is today's.
+# With it on, also the win label in info["aux"] (labels only, never inputs; AUX_COLS' last two):
+#   win_game    the number of the whole game (GAME_P) or mid-game start (MID_START_P) the frame just played belongs to (a
+#               running number of this simulator, from 0); -1: none (a normal round, an item run, a late round, a spawn start)
+#   win_band    on the frame that ends such a game (done): the band of his final score margin (his frags less the best of
+#               the others', a mid-game start's saved score included, overtime played out): 0 for -5 or less, 1 for -4 to -1,
+#               2 level, 3 for 1 to 4, 4 for 5 or more (WIN_BAND_EDGES); -1 on every other frame
+HEAD_EVENTS = float(os.environ.get("HEAD_EVENTS") or 0.0) > 0
+HEAD_EVENT_COLS = ("dmg_dealt", "dmg_taken", "frag", "died", "en_seen", "en_heard",
+                   "took_mh", "took_ra", "took_ya", "took_rl", "took_rg", "took_lg", "took_small",
+                   "en_took_mh", "en_took_ra", "en_took_ya", "en_took_rl", "en_took_rg", "en_took_lg", "en_took_small",
+                   "resp_mh", "resp_ra", "resp_ya", "resp_wp", "en_pain", "weapon_change", "takeoff", "fall_land",
+                   "took_pg", "took_gl", "en_took_pg", "en_took_gl")
+#   dmg_dealt, dmg_taken  points (health and armor together) / 100: dealt to other players; taken from anything (enemies,
+#                         his own splash, lava, falls)
+#   frag, died            frags he made of another player; his deaths of anything (counts)
+#   en_seen               the share of the frames with an enemy noticed in view (his reaction time and acquire delay, as
+#                         the inputs); en_heard: the enemy's event sounds he heard (see _hear() above, and his pain
+#                         sounds), a count capped at HEAD_HEARD_CAP a tick
+#   took_*                his pickups by class: mega, red armor, yellow armor, rocket launcher, railgun, lightning gun,
+#                         plasma gun (took_pg), grenade launcher (took_gl), small = everything else (health, shards, green
+#                         armor, ammunition, the shotgun, the heavy machine gun)
+#   en_took_*             the same classes, for the pickups of others he saw or heard
+#   resp_*                the returns he heard: mega, red armor, yellow armor, any weapon
+#   en_pain               the enemy's pain sounds he heard; weapon_change: the weapon in his hand changed (not at a spawn)
+#   takeoff               he left the ground going up (over 100 u/s: a jump, a jump pad); fall_land: he landed
+#                         HEAD_FALL_DROP units or more below where he left the ground
+N_HEAD_EVENTS = 32
+assert len(HEAD_EVENT_COLS) == N_HEAD_EVENTS
+HEAD_COL = {k_: i_ for i_, k_ in enumerate(HEAD_EVENT_COLS)}
+HEAD_FALL_DROP = 64.0
+HEAD_HEARD_CAP = 8.0                                       # en_heard: at most this many a tick (a tick is 8 frames)
+WIN_BAND_EDGES = (-4.5, -0.5, 0.5, 4.5)                    # margin -> band: np.digitize(margin, WIN_BAND_EDGES)
+WIN_KINDS = (1, 3)                                         # self.game: a whole game, a mid-game start
+PLAY_VARS = PLAY_VARS + ("HEAD_EVENTS",)
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES
 CELL_COLS = None                                           # no learned cell table in the network any more
@@ -1401,6 +1454,8 @@ AUX_COLS = ("en_fwd", "en_left", "en_up", "en_alive", "en_in_view", "mega_s", "r
             "x", "y", "z", "yaw", "pitch", "died", "eye_h",
             "en_target", "en_band", "en_weapon", "mega_take", "red_take",
             "en_near")
+if HEAD_EVENTS:                                            # (HEAD_EVENTS) the win label: see there
+    AUX_COLS = AUX_COLS + ("win_game", "win_band")
 #   en_near                  (--aux-heads near) the landmark nearest the enemy where he truly is, a number of INTENTS as
 #                            en_target: of the targets with a row of the route field on this map (the items; with TARGETS
 #                            the map's holding places) the one with the least seconds of way FROM his place (route.T[row,
@@ -2670,6 +2725,8 @@ class DuelEnv:
             self._spawn(i, avoid=None if i % G == 0 else self.w.state()[i - 1, :3])
         self.state = self.w.state()
         self.visible = np.zeros(n, bool)
+        if HEAD_EVENTS:                                      # (HEAD_EVENTS) the head's events and the win label
+            self._head_init()
 
     # ---------------------------------------------------------------- spawning / helpers
     def _acq_need(self):
@@ -4196,6 +4253,10 @@ class DuelEnv:
         idx = np.arange(self.n) if who is None else np.asarray(who)
         near = np.linalg.norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
         self.resp_t[idx[near], cat] = 0.0
+        if self._hd_live():                                  # (HEAD_EVENTS) mega, red, yellow, a weapon: heard back
+            hc_ = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab == "YA" else 3 if kind == "wp" else -1
+            if hc_ >= 0:
+                self.hd_ev[idx[near], HEAD_COL["resp_mh"] + hc_] += 1.0
 
     def _rule_contested(self, lab):
         """(RULE_CONTEST) the players for whom the item the rule names (lab) is nearer, by RULE_CONTEST seconds of way or more,
@@ -4426,6 +4487,8 @@ class DuelEnv:
             self.snd_kind[lis] = np.asarray(kind)[ok] if np.ndim(kind) else kind
         self.v02_ht[lis, self._slot(src)] = 0.0              # (N_V02: when and about where he last heard that player)
         self.v02_hp[lis, self._slot(src)] = self.snd_pos[lis, cat]
+        if self._hd_live():                                  # (HEAD_EVENTS) he heard an enemy's event sound
+            np.add.at(self.hd_ev[:, HEAD_COL["en_heard"]], lis, 1.0)
 
     def _item_block(self, ids, rank, pos, eye, fdir, up, rot):
         """inputs for the rank-th nearest item of a group: where it is, and whether it is up (only while seen)"""
@@ -5003,6 +5066,15 @@ class DuelEnv:
         counted by every other player who hears it (as the pickup sound: HEAR_EVT) or has him in view. A game server's
         plugin calls it at every pickup."""
         self.v02_took[i, it] = 0.0
+        if self._hd_live():                                  # (HEAD_EVENTS) his pickup by class; another's, seen or heard
+            c_ = self._hd_class(it)
+            self.hd_ev[i, HEAD_COL["took_" + c_]] += 1.0
+            if int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
+                a2_ = getattr(self, "acq2", None)
+                for j in self._mates(i):
+                    sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
+                    if sees or np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT:
+                        self.hd_ev[j, HEAD_COL["en_took_" + c_]] += 1.0
         lab = self.item_def[it][4]
         if EN_STACK and self.item_def[it][0] in ("hp", "ar") and int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
             kd_, val_, _, cap_, _ = self.item_def[it]        # (B-257) every health and armor pickup heard or seen: the belief of his stack
@@ -5020,6 +5092,147 @@ class DuelEnv:
             sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
             if sees or np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT:
                 self.v02_pk[j, self._slot(i), k] += 1.0
+
+    # ---------------------------------------------------------------- the head's events and the win label (HEAD_EVENTS)
+    def _head_init(self):
+        """(HEAD_EVENTS) the books: per player the events since the head last asked (hd_ev, the frames counted in it), the
+        rows to start again at the next step (a round ended), what the frame before showed (on the ground, where, where he
+        left the ground, the weapon in hand); the win label's game numbers (now; of the frame being played) and band"""
+        n = self.n
+        s = self.state
+        self.hd_ev = np.zeros((n, N_HEAD_EVENTS), np.float32)
+        self.hd_frames = np.zeros(n, np.float32)
+        self.hd_clear = np.zeros(n, bool)
+        self.hd_gr = s[:, 6] > 0.5
+        self.hd_pos = s[:, :3].astype(np.float32).copy()
+        self.hd_z0 = s[:, 2].astype(np.float32).copy()
+        self.hd_w = np.array(self.weapon, copy=True)
+        self.hd_gid = np.full(n, -1, np.int64)
+        self.hd_gid_ran = np.full(n, -1, np.int64)
+        self.hd_band = np.full(n, -1, np.int64)
+        self.hd_next = 0
+
+    def _hd_live(self):
+        return HEAD_EVENTS and getattr(self, "hd_ev", None) is not None
+
+    def _hd_begin(self):
+        """(HEAD_EVENTS) a step's start: the players whose round ended in the step before start their count again (from
+        the state they begin in), and the game of the frame about to be played is noted (win_game)"""
+        c = self.hd_clear
+        if c.any():
+            s = self.state
+            self.hd_ev[c] = 0.0
+            self.hd_frames[c] = 0.0
+            self.hd_gr[c] = s[c, 6] > 0.5
+            self.hd_pos[c] = s[c, :3]
+            self.hd_z0[c] = s[c, 2]
+            self.hd_w[c] = self.weapon[c]
+            c[:] = False
+        self.hd_gid_ran = self.hd_gid.copy()
+        self.hd_band[:] = -1
+
+    def _hd_game(self, q, kd):
+        """(HEAD_EVENTS) the seats q begin a round of game kind kd (self.game): a new game number for a whole game or a
+        mid-game start, none for the rest"""
+        if not self._hd_live():
+            return
+        q = np.asarray(q, np.int64)
+        if kd in WIN_KINDS:
+            self.hd_gid[q] = self.hd_next
+            self.hd_next += 1
+        else:
+            self.hd_gid[q] = -1
+
+    def _hd_result(self, m):
+        """(HEAD_EVENTS) the whole game or mid-game start of match m is over (before its score is cleared): the band of
+        each seat's final margin, his frags less the best of the others'"""
+        if not self._hd_live() or int(self.game[m]) not in WIN_KINDS:
+            return
+        q = self._seats(m)
+        f = self.frags_r[q].astype(np.float64)
+        for j_, i in enumerate(q):
+            d = f[j_] - np.delete(f, j_).max()
+            self.hd_band[int(i)] = int(np.digitize(d, WIN_BAND_EDGES))
+
+    def _hd_end(self, done):
+        """(HEAD_EVENTS) a step's end: the rounds that ended start their count at the next step; a seat in no whole game
+        or mid-game start now has no game number"""
+        if not self._hd_live():
+            return
+        done = np.asarray(done, bool)
+        self.hd_clear |= done
+        g_ = self._others_arr().shape[1] + 1
+        off = ~np.isin(np.repeat(self.game, g_), WIN_KINDS)
+        self.hd_gid[done & off] = -1
+
+    def note_event(self, i, name, value=1.0):
+        """(HEAD_EVENTS) add value to the column name (HEAD_EVENT_COLS) of the head's events of player i (a number or an
+        array of them): for anything a game server's plugin knows that no other hook brings"""
+        if not self._hd_live():
+            return
+        np.add.at(self.hd_ev[:, HEAD_COL[name]], np.asarray(i, np.int64), np.asarray(value, np.float32))
+
+    def note_combat(self, dealt, taken, frag, died):
+        """(HEAD_EVENTS) a frame's fighting, a value a player: the damage he dealt to other players and the damage he took
+        from anything (points, health and armor together), the frags he made of another player, his deaths of anything.
+        step() calls it from its books of the frame; a game server's plugin once a frame from the game's counts"""
+        if not self._hd_live():
+            return
+        e, C = self.hd_ev, HEAD_COL
+        e[:, C["dmg_dealt"]] += np.asarray(dealt, np.float32) / 100.0
+        e[:, C["dmg_taken"]] += np.asarray(taken, np.float32) / 100.0
+        e[:, C["frag"]] += np.asarray(frag, np.float32)
+        e[:, C["died"]] += np.asarray(died, np.float32)
+
+    def note_frame(self):
+        """(HEAD_EVENTS) once a frame, after the senses (acquired, seen_t; in a group acq2, seen2), the pain sound (pain_t)
+        and the weapon in hand (weapon) are set for it, and the state is the frame's: the frame is counted, with an enemy
+        noticed in view or not; a fresh pain sound (also an event sound heard); a change of
+        the weapon in hand; take-offs and landings from a fall. A spawn or a teleport (over 200 units in a frame) counts
+        for none of the last three"""
+        if not self._hd_live():
+            return
+        e, C, n = self.hd_ev, HEAD_COL, self.n
+        self.hd_frames += 1.0
+        a2_ = getattr(self, "acq2", None)
+        acq_ = np.asarray(a2_, bool).any(1) if a2_ is not None else np.asarray(self.acquired, bool)[:n]
+        pain_ = np.asarray(self.pain_t)[:n] < 0.5 * DT
+        e[:, C["en_seen"]] += acq_
+        e[:, C["en_pain"]] += pain_
+        e[:, C["en_heard"]] += pain_
+        s = self.state
+        gr_ = s[:, 6] > 0.5
+        pos_ = s[:, :3]
+        moved_ = np.linalg.norm(pos_ - self.hd_pos, axis=1) > 200.0
+        e[:, C["takeoff"]] += self.hd_gr & ~gr_ & (s[:, 5] > 100) & ~moved_
+        e[:, C["fall_land"]] += ~self.hd_gr & gr_ & (self.hd_z0 - pos_[:, 2] >= HEAD_FALL_DROP) & ~moved_
+        e[:, C["weapon_change"]] += (self.weapon != self.hd_w) & ~moved_ & (self.hp > 0)
+        self.hd_z0 = np.where(gr_ | moved_, pos_[:, 2], self.hd_z0).astype(np.float32)
+        self.hd_gr = gr_
+        self.hd_pos = pos_.astype(np.float32).copy()
+        self.hd_w = np.array(self.weapon, copy=True)
+
+    def head_events(self):
+        """(HEAD_EVENTS) [players, N_HEAD_EVENTS] float32: the head's events since the last call (see HEAD_EVENT_COLS;
+        en_seen as a share of the frames counted); the count starts again. Zeros with the switch off"""
+        if not self._hd_live():
+            return np.zeros((self.n, N_HEAD_EVENTS), np.float32)
+        out = self.hd_ev.copy()
+        out[:, HEAD_COL["en_seen"]] /= np.maximum(self.hd_frames, 1.0)
+        out[:, HEAD_COL["en_heard"]] = np.minimum(out[:, HEAD_COL["en_heard"]], HEAD_HEARD_CAP)
+        self.hd_ev[:] = 0.0
+        self.hd_frames[:] = 0.0
+        self.hd_clear[:] = False
+        return out
+
+    def _hd_class(self, it):
+        """(HEAD_EVENTS) item it's class, the end of its took_* and en_took_* names: mh, ra, ya, rl, rg, lg, pg, gl, small"""
+        kind, val, _, _, lab = self.item_def[it]
+        if lab in ("MH", "RA", "YA"):
+            return lab.lower()
+        if kind == "wp" and val in (RL, RG, LG, PG, GL):
+            return ("rl", "rg", "lg", "pg", "gl")[(RL, RG, LG, PG, GL).index(val)]
+        return "small"
 
     def _v02_clear(self, a, b):
         """is the line a -> b clear, for many pairs, as the eye sees (the sight mask); b may lie V02_SEE_TOL deep in a wall"""
@@ -5857,6 +6070,7 @@ class DuelEnv:
         self.item_up[m], self.item_t[m] = True, 0.0
         self.contest_t[m] = -1.0
         self.stats["games"][15] += 1
+        self._hd_game(q, 2 if late else 1)                  # (HEAD_EVENTS) the win label's game number
         if MOMENTS:
             self._moment_game(m, late)
         if late:
@@ -5977,6 +6191,7 @@ class DuelEnv:
 
     def _game_end(self, m):
         """the whole game or late round of match m is over, at the limit (level is a draw: no overtime): into the counters"""
+        self._hd_result(m)                                   # (HEAD_EVENTS) the win label: the band of the final margin
         if OVERTIME:
             self._ot_over(m)
         if MOMENTS and self.game[m] > 2:                     # (a round begun from a saved moment: its own counters)
@@ -6270,6 +6485,7 @@ class DuelEnv:
             for m, mo, kd in self.mom_put:
                 self._moment_set(m, mo, obs)
                 self.game[m] = kd                            # 3 a mid-game start, 4 a spawn start
+                self._hd_game(self._seats(m), kd)            # (HEAD_EVENTS) the win label's game number
                 self.g_end[m] = GAME_FRAMES if kd == 3 else min(GAME_FRAMES, int(self.g_tick[m]) + SPAWN_FRAMES)
                 self.g_snap[m] = -1
                 if OVERTIME:
@@ -6833,11 +7049,16 @@ class DuelEnv:
                 out[i_, c_] = 1.0
         if died is not None:
             out[:, C["died"]] = died
+        if "win_game" in C and self._hd_live():             # (HEAD_EVENTS) the win label (labels only)
+            out[:, C["win_game"]] = self.hd_gid_ran
+            out[:, C["win_band"]] = self.hd_band
         return out
 
     def step(self, actions):
         a = np.array(actions, copy=True)
         n = self.n
+        if HEAD_EVENTS:                                      # (HEAD_EVENTS) the rows of ended rounds start again; this frame's game
+            self._hd_begin()
         ar = np.arange(n)
         sc = np.nonzero(self.script > 0)[0]
         if len(sc):
@@ -7983,7 +8204,20 @@ class DuelEnv:
         if HAND_TEACH:                                       # (HAND_TEACH) the pros' shares as the target of his next reading of
             info["hand_lab"] = self.hand_lab.copy()          # the weapon key, for the trainer's --hand-teach
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
+        if HEAD_EVENTS:                                      # (HEAD_EVENTS) the frame's events for the head
+            dl_ = np.zeros(n, np.float32)
+            for (i_, v_), d_ in st["by"].items():
+                if i_ != v_:
+                    dl_[i_] += d_
+            fr_ = np.zeros(n, np.float32)
+            for e_ in events:
+                if e_["killer"] >= 0 and e_["killer"] != e_["victim"]:
+                    fr_[e_["killer"]] += 1.0
+            self.note_combat(dl_, st["dmg_taken"] + (0.0 if fall is None else fall), fr_, died)
+            self.note_frame()
         obs = self.observe()
         if MOMENTS:                                          # the rounds begun from a saved moment are put in place; this frame's
             self._moment_step(obs, done, died, info)         # moments are saved
+        if HEAD_EVENTS:
+            self._hd_end(done)
         return obs, reward.astype(np.float32), done, info
