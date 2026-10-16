@@ -4,6 +4,14 @@
 still"). The one-page sheet is [RUN_v0.3.1.md](RUN_v0.3.1.md); the plans in full are [PROPOSAL_v0.3.1.md](PROPOSAL_v0.3.1.md).
 Nothing below is started without the owner's go. Folder: `duel_gru_v0_3_1`. Changes during the run go into section 0.*
 
+## The scope as run (the owner, 2026-10-15 20:45)
+
+"update the v0.3.1 manifest to include only the new python memory stuff together with the pay changes." v0.3.1 is v0.3
+resumed from its 18:00 stop with **the owner's pay table** and **the faster learning step** (B-237) only, at aim level 3:
+[RUN_v0.3.1.md](RUN_v0.3.1.md) has the run in full. The rest of this file (sections 1 to 9) is the wider plan; its parts
+are built and proven beside the run and come in a later run: the legs inside the network (stage a merged 2026-10-15,
+`LEGS_IN`, off), the believed stack and hunt, the rocket jump check and runs, the rail.
+
 ## 0. Changes during the run
 
 None yet.
