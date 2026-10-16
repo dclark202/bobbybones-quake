@@ -1,6 +1,7 @@
 """Gives a network the head of v0.4 (sim/head.py; docs/v0.4/BUILD_v0.4.md) with its links at zero: it plays exactly as before.
 
-    python tools/head_init.py <in.pt> <out.pt> [--head default|<layout json or file>] [--seed 0]
+    python tools/head_init.py <in.pt> <out.pt> [--head default|<layout json or file>|none] [--seed 0] [--attn-mem-query]
+                              [--ordered-heads]
     python tools/head_init.py --same <a.pt> <b.pt> [--frames 2400] [--players 16] [--obs <raw inputs .npy>]
                                                    (do two networks answer alike? every output, frame by frame)
 
@@ -9,6 +10,9 @@ file ("head"): his fast memory's and encoder's widths, the intention's and the w
 and WAY_HEAD 12) and the guessing questions the network has (its aux.* layers) are read from the network. The trainer gives a
 league file without the part one with its links at zero as it loads it; the checks' tools and the export read only what is
 in the file. A network that has the part already is refused.
+--attn-mem-query: the attention part's second block also queried by his memory of the frame before, its layer at zero
+(sim/attn.py "mem"; the trainer's --attn-mem-query). --ordered-heads: his intention, way, legs switch and weapon key drawn
+in that order, each with a table at zero of the choice before it (the trainer's --ordered-heads). --head none: only those.
 
 --same runs both networks in torch on the processor over the same inputs: random normalised inputs (or rows of raw inputs
 from --obs, normalised by each network's own statistics), random inputs of his legs' branch and random events, with resets
@@ -39,20 +43,39 @@ def head_layout(ck, spec="default"):
     return H_.layout(**kw)
 
 
-def convert(src, dst, spec="default", seed=0):
+LEGS_HEAD, WEAPON_HEAD = 11, 6
+
+
+def convert(src, dst, spec="default", seed=0, mem=False, ordered=False):
     import torch
     import head as H_
     ck = torch.load(src, weights_only=False, map_location="cpu")
-    assert ck.get("head") is None, "{} has a head already".format(src)
-    assert ck.get("slow") is None, "{} has the slow memory: the head beside it is not built".format(src)
-    lay = head_layout(ck, spec)
     sd = ck["model"]
-    for k, v in H_.make_module(lay, seed).state_dict().items():
-        sd["head." + k] = v
-    ck["head"] = lay
+    said = []
+    if spec != "none":
+        assert ck.get("head") is None, "{} has a head already".format(src)
+        assert ck.get("slow") is None, "{} has the slow memory: the head beside it is not built".format(src)
+        lay = head_layout(ck, spec)
+        for k, v in H_.make_module(lay, seed).state_dict().items():
+            sd["head." + k] = v
+        ck["head"] = lay
+        said.append("{}; weights {}".format(H_.describe(lay), sum(int(np.prod(v.shape)) for k, v in sd.items() if k.startswith("head."))))
+    if mem:
+        assert ck.get("attn") is not None and not ck["attn"].get("mem"), "--attn-mem-query: no attention part, or it has the query already"
+        Hd = int(sd["gru.weight_hh"].shape[1])
+        ck["attn"] = dict(ck["attn"], mem=Hd)
+        sd["attn.mq.weight"] = torch.zeros(len(ck["attn"]["read"]) * int(ck["attn"]["D"]), Hd)
+        sd["attn.mq.bias"] = torch.zeros(len(ck["attn"]["read"]) * int(ck["attn"]["D"]))
+        said.append("the attention part's memory query (at zero)")
+    if ordered:
+        assert not ck.get("ordered"), "--ordered-heads: the network has them already"
+        ad = tuple(ck["action_dims"])
+        ck["ordered"] = [[INTENT_HEAD, WAY_HEAD], [WAY_HEAD, LEGS_HEAD], [LEGS_HEAD, WEAPON_HEAD]]
+        for p_, c_ in ck["ordered"]:
+            sd["order.t{}.weight".format(c_)] = torch.zeros(ad[p_], ad[c_])
+        said.append("ordered outputs {} (tables at zero)".format(ck["ordered"]))
     torch.save(ck, dst)
-    print("{} -> {}: {}; weights {}".format(os.path.basename(src), os.path.basename(dst), H_.describe(lay),
-                                           sum(int(np.prod(v.shape)) for k, v in sd.items() if k.startswith("head."))))
+    print("{} -> {}: {}".format(os.path.basename(src), os.path.basename(dst), "; ".join(said)))
 
 
 def make_net(ck):
@@ -88,13 +111,25 @@ def make_net(ck):
                 for n_ in names:
                     setattr(self.aux, n_, nn.Linear(Hd, sd["aux.{}.weight".format(n_)].shape[0]))
             self.head = H_.make_module(ck["head"]) if ck.get("head") is not None else None
+            if ck.get("ordered"):
+                self.order = nn.Module()
+                for p_, c_ in ck["ordered"]:
+                    setattr(self.order, "t{}".format(c_), nn.Embedding(ad[p_], ad[c_]))
 
     net = Net()
     net.load_state_dict(sd, strict=True)
     net.eval()
     net.lay = ck.get("head")
     net.ad = ad
+    net.ordered = [tuple(p_) for p_ in ck.get("ordered") or []]
     return net
+
+
+def draw_u(l, u):
+    """a choice from logits l [B, n] with the uniform numbers u [B], as plugins/netpass.py draws"""
+    p = np.exp(l - l.max(1, keepdims=True))
+    p /= p.sum(1, keepdims=True)
+    return (p.cumsum(1) > u[:, None]).argmax(1)
 
 
 def same(a, b, frames=2400, players=16, obs_file=None, seed=1):
@@ -129,7 +164,7 @@ def same(a, b, frames=2400, players=16, obs_file=None, seed=1):
             xx = torch.from_numpy(x)
             e = net.enc(xx)
             if net.attn is not None:
-                e = e + net.attn(xx)
+                e = e + net.attn(xx, hm=h)                  # (a layout with "mem": his memory of the frame before)
             if net.head is not None:
                 h = net.gru(e + net.head.plan_in(st.plan), h)
                 _, ta, wa = H_.live(net.head, st, e, h, ev[:, :net.lay["ev"]])
@@ -140,6 +175,15 @@ def same(a, b, frames=2400, players=16, obs_file=None, seed=1):
                 lg = torch.cat([lg[:, :I0], lg[:, I0:I0 + ta.shape[1]] + ta, lg[:, I0 + ta.shape[1]:W0], lg[:, W0:W0 + wa.shape[1]] + wa,
                                 lg[:, W0 + wa.shape[1]:]], 1) if W0 >= 0 else torch.cat([lg[:, :I0], lg[:, I0:I0 + ta.shape[1]] + ta,
                                                                                           lg[:, I0 + ta.shape[1]:]], 1)
+            if net.ordered:                                  # (--ordered-heads) drawn in order with the same numbers in both networks:
+                o_ = np.concatenate([[0], np.cumsum(ad)]).astype(int)       # the logits each was drawn from (a choice before is
+                ac_ = torch.zeros(len(lg), len(ad), dtype=torch.long)     # the same where the logits are)
+                for j in range(len(ad)):
+                    ac_[:, j] = torch.from_numpy(draw_u(lg[:, o_[j]:o_[j + 1]].numpy(), U[:, j]))
+                lg = lg.clone()
+                for p_, c_ in net.ordered:
+                    lg[:, o_[c_]:o_[c_ + 1]] += getattr(net.order, "t{}".format(c_))(ac_[:, p_])
+                    ac_[:, c_] = torch.from_numpy(draw_u(lg[:, o_[c_]:o_[c_ + 1]].numpy(), U[:, c_]))
             out = dict(logits=lg, v=net.v(h), h=h)
             if hasattr(net, "v2"):
                 out["v2"] = net.v2(h)
@@ -155,6 +199,7 @@ def same(a, b, frames=2400, players=16, obs_file=None, seed=1):
             return out
 
     for f_ in range(frames):
+        U = rng.random((players, len(ad)))
         if raw is not None:
             o = raw[rng.integers(0, len(raw), players)]
             xa, xb = norm(cka, o), norm(ckb, o)
@@ -196,4 +241,5 @@ if __name__ == "__main__":
     if args and args[0] == "--same":
         b_ = same(args[1], args[2], frames=opt("--frames", 2400), players=opt("--players", 16), obs_file=opt("--obs", "") or None)
         sys.exit(0 if b_ < 1e-6 else 1)
-    convert(args[0], args[1], spec=opt("--head", "default"), seed=opt("--seed", 0))
+    convert(args[0], args[1], spec=opt("--head", "default"), seed=opt("--seed", 0), mem="--attn-mem-query" in args,
+            ordered="--ordered-heads" in args)

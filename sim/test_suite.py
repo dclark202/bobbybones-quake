@@ -70,6 +70,8 @@ class Policy:
         if self.slow is not None:
             import slowmem as slowmem_
             self.slowP, self.slow_step, self.W = slowmem_.params_np(sd), slowmem_.np_step, slowmem_.width(self.slow)
+        self.order = ck.get("ordered") or []                 # (v0.4, --ordered-heads) drawn in order, each with the one before
+        self.orderT = {int(c_): sd["order.t{}.weight".format(c_)] for _, c_ in self.order}
         self.head = ck.get("head")                           # (v0.4) the head (sim/head.py): its state follows the rest of the array
         self.head_at = self.W
         if self.head is not None:
@@ -137,7 +139,7 @@ class Policy:
         x = np.tanh(x @ self.w0.T + self.b0)
         x = np.tanh(x @ self.w1.T + self.b1)
         if self.attP is not None:
-            x = x + self.attn_fwd(self.attn, self.attP, xa)
+            x = x + self.attn_fwd(self.attn, self.attP, xa, hm=h)       # (hm: "mem", his memory of the frame before)
         xf = x
         if hh is not None:                                   # (v0.4) the plan of the head's last tick: e + plan_in(plan)
             o_ = self.hm._np_off(self.head)["plan"]
@@ -159,14 +161,21 @@ class Policy:
             logits[:, self.head_si] += t_add
             logits[:, self.head_sw] += w_add
             h = np.concatenate([h, hh], 1)
-        out, i = [], 0
-        for d in self.dims:
-            l = logits[:, i:i + d]
+        o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
+        u_ = [self.rng.random((len(logits), 1)) for _ in self.dims]       # (one number a player and output, in the outputs' order)
+        out = np.zeros((len(logits), len(self.dims)), np.int64)
+
+        def one(j, l):
             p = np.exp(l - l.max(1, keepdims=True))
             p /= p.sum(1, keepdims=True)
-            out.append((p.cumsum(1) > self.rng.random((len(p), 1))).argmax(1))   # sampled, as in training
-            i += d
-        return np.stack(out, 1), h
+            out[:, j] = (p.cumsum(1) > u_[j]).argmax(1)                  # sampled, as in training
+        later = {int(c_) for _, c_ in self.order}
+        for j in range(len(self.dims)):
+            if j not in later:
+                one(j, logits[:, o_[j]:o_[j + 1]])
+        for p_, c_ in self.order:                                        # (--ordered-heads) after the one before, its table's row added
+            one(int(c_), logits[:, o_[c_]:o_[c_ + 1]] + self.orderT[int(c_)][out[:, int(p_)]])
+        return out, h
 
 
 def set_delays(E, env, who):
