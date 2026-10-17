@@ -504,3 +504,43 @@ make the same number of updates):
 **Open**: the door at the main rate opens fast (9% of the GRU input's variance in 1,086 Adam steps, about one real
 update: a rate share of its own, as the head's, may be wanted before a run); the guide's mapping leaves out the turn's
 hand rule; step 5 (his hands' movement outputs left to the branch once `agree` is high) is not built.
+
+## 7. v0.3.3 as built (branch v033 = um34 + v032, 2026-10-16 night)
+
+**The merge** (`v032`, f1ff482: LEGS_LOOK's 64-input branch inside him, LEGS_TURN_ADD): conflicts in the trainer (both
+`load_net` wrappers kept), `export_duel` and `duel_eval`; `sim/legs_unify.py` takes the branch's first columns when the
+branch is narrower than its inputs (a league file of v0.3.1).
+
+**Step 2, `LEGS_KEYS_ADD=1`** (duel_env, a PLAY_VAR, off by default; `duel_env_ffa` regenerated, the generator's diff the same
+as duel_env's): five more outputs after the turn correction (`KA_HEAD`, two choices each: 0 "my legs'", 1 "mine") for
+forward/back, sideways, jump/crouch, walk and zoom (`KA_COLS`). On the frames his legs carry him, where he chose "mine" his
+own output of that column takes the legs' place, in `_legs_step()`, so the result goes through his finger limits as any key
+of his. **Why this form**: his own key outputs are drawn on every frame already, so a per-column gate is all that is new;
+an "add" does not exist for a discrete key, and one gate for all five would tie walking to strafing. Start: weights 0, the
+bias of "my legs'" `KA_SHUT` = 30 over "mine" (e^-30 a frame: never in a float32 draw; the turn's e^-20 could come up in
+a run's 10^9 frames). Learning: the five count on his legs (the keys' on the frames his hand reads them); his own column
+counts on his legs where he chose "mine" (`head_masks` takes his choices). `--keys-add-open/-start/-to` open them on a clock
+as `--turn-add-open` (to 2.94: "mine" on 5% of his frames on his legs with the weights at 0). Give them entropy weight 0
+in `--ent-heads` (the bonus would pull each to 50/50). Counters: `keys_add` (frames on his legs, the share each column was
+his own, the five biases, the weights' size).
+
+**Also**: `--legs-door-lr-scale` (0.25) puts `legs_door` and the guide's weights in an optimiser group of their own;
+`plugins/duelbot.py` (1v1) and `ffabot.py` call `legs_prep()` before the network's step and pass `xl`; `export_duel` checks
+the count of outputs for both switches; league snapshots are sorted by the minute in their names (from minute 10,000 the
+text order put the newest first on a restart); `tools/unify_init.py widen --keys`; `tools/prep_v033.py`.
+
+**Proofs** (CPU, seeded):
+- The merged tree with every new switch off: the first update bit for bit branch v0.4's, and six updates with
+  `MKL_CBWR=COMPATIBLE` and a fixed update count (v0.3.1b's end, its switches).
+- v0.3.2's start converted (door and guide at zero, the five shut; 19 outputs): over 2,000 frames x 32 seats with resets,
+  exactly the original in torch (memory, logits) and in numpy (memory; 0 of 896,000 choices differ; "mine" drawn 0 of
+  320,000 times); `netpass` = `test_suite.Policy` exactly; torch against numpy 1.8e-5 (memory), 1.4e-5 (chances): the
+  whole network's own, as before.
+- The simulator: the converted start playing itself 600 frames, 24 players, Blood Run, v0.3.2's switches: LEGS_KEYS_ADD on
+  (shut) against off: inputs, rewards, states, ends, the legs' inputs IDENTICAL. Opened at 2.94: "mine" on 5.2% of his
+  frames on his legs per column, and the play differs from frame 35. `tools/ffa_check.py` with the switch on: identical to
+  duel_env over 3,000 frames.
+- The trainer (78 small updates, v0.3.2's switches, v0.3.1's end as anchor and v0.3.2's league): the five open from 30 to
+  3.2 over 2 minutes and his own columns take 0 to 10% of his frames on his legs; `legs_door` at 0.25 of the rate: share
+  0.002 of the GRU input's variance (0.03 at the full rate in about as many steps); an old anchor and v0.3.2's snapshots load.
+  The template's own arguments (small) run from the prepared start.

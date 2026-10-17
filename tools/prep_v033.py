@@ -8,6 +8,7 @@
   - snapshots/: the league's last eight snap_*.pt by the minute in their names, and every anchor_*.pt (v0.3.1's end), as
     they are: the trainer's load_net gives a league file what it lacks (the door at zero, the five shut, the turn
     correction shut, a narrower branch widened at zero weight). Each is checked here for those shapes.
+With --cmd-template / --cmd-out it also writes the run's .cmd with --keys-add-start set to the save's minute.
 Refuses to write into a run folder that has a policy.pt (--force replaces the files it writes, nothing else).
 Run it with the run's switches set (LEGS=1 LEGS_IN=1 LEGS_LOOK=1 LEGS_TURN_ADD=1 LEGS_KEYS_ADD=1): it imports the simulator.
 """
@@ -28,6 +29,8 @@ ap.add_argument("--from", dest="src", required=True)
 ap.add_argument("--league", required=True)
 ap.add_argument("--run", default="duel_gru_v0_3_3")
 ap.add_argument("--force", action="store_true")
+ap.add_argument("--cmd-template", default="", help="the run's .cmd with {KEYS_ADD_START} where --keys-add-start's minute goes")
+ap.add_argument("--cmd-out", default="", help="... the .cmd written from it, the save's minute put in (the minute the run starts at)")
 a = ap.parse_args()
 for k_ in ("LEGS", "LEGS_IN", "LEGS_TURN_ADD", "LEGS_KEYS_ADD"):
     assert os.environ.get(k_) == "1", "set the run's switches first ({}=1 and the others of its .cmd)".format(k_)
@@ -75,4 +78,9 @@ for f_ in snaps + anchors:
     shutil.copy(f_, os.path.join(out, "snapshots", os.path.basename(f_)))
     print("league: {} ({} output rows, the branch {} inputs{})".format(os.path.basename(f_), rows, wl,
                                                                        ", the turn correction added shut at load" if rows == TA_O else ""))
+if a.cmd_template:                                           # (--keys-add-start: the minute v0.3.3 starts at, so that a restart goes on)
+    t_ = open(a.cmd_template, encoding="utf-8").read()
+    assert "{KEYS_ADD_START}" in t_, "the template has no {KEYS_ADD_START}"
+    open(a.cmd_out, "w", encoding="utf-8", newline=chr(13) + chr(10)).write(t_.replace("{KEYS_ADD_START}", repr(float(ck.get("minutes", 0.0)))))
+    print("wrote {} (--keys-add-start {})".format(a.cmd_out, repr(float(ck.get("minutes", 0.0)))))
 print("ready:", out)
