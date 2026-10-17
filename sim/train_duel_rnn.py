@@ -1495,17 +1495,23 @@ def main():
     snap_players = torch.from_numpy(league & is_odd).to(dev)          # controlled by the snapshot
     learn = (~snap_players).float()                                    # trained on
     snaps = []                                                         # frozen past policies (state dicts)
+    SNAP_NS = {}                                                       # (--no-switch) id(state dict) -> its switch is retired (a step-6 network)
+    OPP_NS = [False]                                                   # ... the league network of this rollout's
     if a.resume:                                                       # the league survives a restart
         import glob
         import re as re_                                               # (by the minute in the name: from minute 10,000 the names have five
         for f in sorted(glob.glob(os.path.join(out, "snapshots", "snap_*.pt")),          # digits and sort before the four-digit ones as text)
                         key=lambda f_: (int((re_.findall(r"\d+", os.path.basename(f_)) or ["0"])[0]), f_))[-8:]:
-            snaps.append(torch.load(f, weights_only=False, map_location=dev)["model"])
+            ck_ = torch.load(f, weights_only=False, map_location=dev)
+            snaps.append(ck_["model"])
+            SNAP_NS[id(snaps[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")   # (--no-switch) a step-6 file
     anchors, vs_anchor = [], False                                     # ... and opponents that never leave it (--anchor-p)
     if a.anchor_p > 0:
         import glob
         for f in sorted(glob.glob(os.path.join(out, "snapshots", "anchor_*.pt"))):
-            anchors.append(torch.load(f, weights_only=False, map_location=dev)["model"])
+            ck_ = torch.load(f, weights_only=False, map_location=dev)
+            anchors.append(ck_["model"])
+            SNAP_NS[id(anchors[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")
         print("league anchors: {} (in {:.0%} of the rollouts)".format(len(anchors), a.anchor_p), flush=True)
     opp = copy.deepcopy(pol).eval()
     opp.fade = None                                          # (--switch-fade: the learner's alone)
@@ -1653,11 +1659,14 @@ def main():
         if time.time() - last_snap > a.snapshot_min * 60:                # new league member
             last_snap = time.time()
             snaps.append(copy.deepcopy(pol.state_dict()))
+            SNAP_NS[id(snaps[-1])] = NO_SW                               # (--no-switch: his own new snapshots are step-6 networks)
             snaps = snaps[-8:]
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
         if snaps:                                                        # pick this rollout's opponent
             vs_anchor = bool(anchors) and np.random.random() < a.anchor_p
-            load_net(opp, anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))])
+            sd_o_ = anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))]
+            load_net(opp, sd_o_)
+            OPP_NS[0] = bool(SNAP_NS.get(id(sd_o_), False))
             opp.door_open = bool(opp.attn is not None and float(opp.attn.door.weight.abs().sum()) > 0)
         # the last rollout's buffers are let go before the new ones are made: the input buffer alone is 4.7 GiB with
         # 6,800 players, and two of them alive at once is what filled the card (15.8 GB) and broke the cap (2026-10-06)
@@ -1756,8 +1765,10 @@ def main():
                     lo, _, h_opp = opp.step(x, h_opp, sm=SM_O, xl=xlu_)
                     act_o = draw(opp, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
-            if NO_SW:                                                    # (--no-switch) off, but for an anchor's seats (the control keeps its legs)
-                act[:, L_HEAD] = torch.where(snap_players & bool(snaps and vs_anchor), act[:, L_HEAD], torch.zeros_like(act[:, L_HEAD]))
+            if NO_SW:                                                    # (--no-switch) off for his seats, and for the league's when its network
+                act[:, L_HEAD] = torch.where(snap_players & bool(snaps) & (not OPP_NS[0]), act[:, L_HEAD], torch.zeros_like(act[:, L_HEAD]))
+                #                                                          is a step-6 one (its file's env_vars: NO_SWITCH=1); v0.3.4's snapshots and
+                #                                                          the control keep their own switch and legs, as they were trained
             b_obs[t], b_act[t], b_val[t] = x, act, val
             if AUX_TW and t >= T - AUX_TW:                               # (--aux-tail) his memory as he played the rollout's last frames
                 b_ht[t - (T - AUX_TW)] = pol.zl.half().cpu()             # (--slow-mem: what the outputs read; h with it off)
