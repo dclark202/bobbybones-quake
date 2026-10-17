@@ -218,10 +218,13 @@ def play(job):
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
-        al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev])
+        xlu_ = None                                                             # (--legs-feat, --legs-guide) the branch's inputs of this frame
+        if getattr(E, "LEGS_IN", False) and (getattr(pol, "needs_xl", False) or getattr(opp_pol, "needs_xl", False)):
+            xlu_ = env.legs_prep()                                              # (nothing between here and the step changes a target)
+        al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev])
         a[ev, :al.shape[1]] = al
         if opp_pol is not None:
-            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od])
+            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od])
             a[od, :ao.shape[1]] = ao
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()

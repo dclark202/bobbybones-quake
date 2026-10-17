@@ -335,7 +335,7 @@ def fast_seq(cell_, e, h0, done):
     return out.reshape(L * S, -1).index_select(0, flat).view(B, T, -1).transpose(0, 1).contiguous()
 
 
-def seq(mod, lay, e, dn, st0, cell_, h0, ev, stats=None):
+def seq(mod, lay, e, dn, st0, cell_, h0, ev, stats=None, xg=None):
     """the learning step over a rollout's whole sequences, the same numbers as live() frame by frame, under the gradient.
       e    [T, B, enc]  the encoder's output (the attention part's added)
       dn   [T, B]       1 - done (a reset after that frame)
@@ -344,6 +344,7 @@ def seq(mod, lay, e, dn, st0, cell_, h0, ev, stats=None):
       cell_             his fast GRU (nn.GRUCell; its weights are used as they are)
       h0   [B, fast]    his fast memory at the rollout's start
       ev   [J, B, ev]   the events of each tick (J = T / every)
+      xg   [T, B, enc]  (--legs-feat; None: nothing) added to the fast GRU's input only (the running mean reads e)
     T must be a whole number of ticks and the rollout must start on a tick's boundary (the trainer's global frame count), so
     the running mean is empty at its start. The fast GRU runs in segments of `every` frames (one fused call each), the head's
     tick between. -> dict: hs [T, B, fast] (the fast memory after each frame, before its reset), tadd [T, B, n_target], wadd
@@ -370,7 +371,10 @@ def seq(mod, lay, e, dn, st0, cell_, h0, ev, stats=None):
         pd = torch.cat([ones, dseg[:K - 1]], 0) if j == 0 else torch.cat([dn[f0 - 1:f0], dseg[:K - 1]], 0)
         alive = torch.cumprod(pd, 0)                                     # [K, B]
         pl = (plan0 if j == 0 else P_l[-1])[None] * alive[..., None]
-        hseg = fast_seq(cell_, e[f0:f0 + K] + mod.plan_in(pl), h, 1.0 - dseg)
+        xf_ = e[f0:f0 + K] + mod.plan_in(pl)
+        if xg is not None:                                               # (--legs-feat) what only the fast GRU reads beside: the legs' features
+            xf_ = xf_ + xg[f0:f0 + K]
+        hseg = fast_seq(cell_, xf_, h, 1.0 - dseg)
         hs_l.append(hseg)
         h = hseg[-1] * dseg[-1][:, None]
         # the tick at frame f0 + K - 1: the store and the slow state cleared where a reset came since the last tick

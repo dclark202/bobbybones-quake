@@ -65,6 +65,14 @@ class Policy:
         self.legsP = None                                    # (LEGS_IN, B-253) his legs' branch, if the network has it inside
         if "legs.0.weight" in sd:
             self.legsP = tuple(sd[k_] for k_ in ("legs.0.weight", "legs.0.bias", "legs.2.weight", "legs.2.bias", "legs.4.weight", "legs.4.bias"))
+        self.uni = ck.get("legs_unify")                      # (--legs-feat, --legs-guide; sim/legs_unify.py) the parts, skipped while at zero
+        self.uniD = self.uniG = None
+        if self.uni is not None:
+            assert self.legsP is not None, "a network with legs_unify has the legs' branch inside"
+            if self.uni.get("feat") and "legs_door.weight" in sd and (np.abs(sd["legs_door.weight"]).sum() + np.abs(sd["legs_door.bias"]).sum()) > 0:
+                self.uniD = (sd["legs_door.weight"], sd["legs_door.bias"])
+            if self.uni.get("guide") and "legs_guide" in sd and np.abs(sd["legs_guide"]).sum() > 0:
+                self.uniG = np.asarray(sd["legs_guide"], np.float32)
         self.slow = ck.get("slow")                           # (--slow-mem) the slow memory: its layout and weights; the memory array
         self.W = self.H                                      # a seat carries is wider (sim/slowmem.py: [fast | slow | sum | count | frames])
         if self.slow is not None:
@@ -81,6 +89,11 @@ class Policy:
             o_ = np.concatenate([[0], np.cumsum(self.dims)])
             self.head_si = slice(int(o_[10]), int(o_[11]))  # the intention's logits and his way's (none before stage B)
             self.head_sw = slice(int(o_[12]), int(o_[13])) if len(self.dims) > 12 else slice(0, 0)
+
+    @property
+    def needs_xl(self):
+        """(--legs-feat, --legs-guide) act() needs the branch's inputs (xl=, the simulator's legs_prep() of the frame)"""
+        return self.uniD is not None or self.uniG is not None
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)
@@ -121,8 +134,17 @@ class Policy:
         w0, b0, w1, b1, wp, bp = self.legsP
         return (np.tanh(np.tanh(np.asarray(xl, np.float32) @ w0.T + b0) @ w1.T + b1) @ wp.T + bp).astype(np.float32)
 
-    def act(self, obs, h, events=None):
-        """events [B, 32]: the head's tick events (events()); None: zeros"""
+    def act(self, obs, h, events=None, xl=None):
+        """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
+        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame"""
+        dadd = gadd = None
+        if self.needs_xl:
+            import legs_unify as LU_
+            assert xl is not None, "this network's legs_door or guide is open: give act() the branch's inputs (xl=env.legs_prep())"
+            ok_ = LU_.np_way(xl)
+            h2_, lgl_ = LU_.np_branch(self.legsP, xl)
+            dadd = LU_.np_door(self.uniD[0], self.uniD[1], h2_, ok_) if self.uniD is not None else None
+            gadd = LU_.np_guide_add(self.uni, self.uniG, lgl_, ok_, sum(self.dims)) if self.uniG is not None else None
         hh = None
         if self.head is not None:
             hh, h = h[:, self.head_at:], h[:, :self.head_at]
@@ -144,6 +166,8 @@ class Policy:
         if hh is not None:                                   # (v0.4) the plan of the head's last tick: e + plan_in(plan)
             o_ = self.hm._np_off(self.head)["plan"]
             xf = x + self.hm.np_plan_in(self.headP, hh[:, o_[0]:o_[1]])
+        if dadd is not None:                                 # (--legs-feat) only his fast GRU reads the legs' features
+            xf = xf + dadd
         gi = xf @ self.wih.T + self.bih
         gh = h @ self.whh.T + self.bhh
         H = self.H
@@ -161,6 +185,8 @@ class Policy:
             logits[:, self.head_si] += t_add
             logits[:, self.head_sw] += w_add
             h = np.concatenate([h, hh], 1)
+        if gadd is not None:                                 # (--legs-guide) the branch's choice on his movement outputs
+            logits = logits + gadd
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         u_ = [self.rng.random((len(logits), 1)) for _ in self.dims]       # (one number a player and output, in the outputs' order)
         out = np.zeros((len(logits), len(self.dims)), np.int64)

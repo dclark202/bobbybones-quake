@@ -439,3 +439,68 @@ The synthetic input log is left out of the proof (it repeats a session's seat); 
 - `plugins/duelbot.py`: the events for the tick, from the same hooks as the simulator. The 1v1 plugin is primary; the
   free-for-all plugin may break (owner, 2026-10-16), but say so.
 - `sim/test_suite.py` / `tools/duel_eval.py`' `Policy`: the same numpy path, so the checks can play a v0.4 network.
+
+## 6. Unified movement, steps 3 and 4 as built (branch um34, 2026-10-16 night)
+
+Toward one movement network: his legs' branch (LEGS_IN, B-253; `legs.0/2/4`, 61 -> 256 -> 256 -> 17, the width read from
+its weights) reaches the rest of his network in two more ways, each behind a trainer flag that is off by default and each
+starting exactly where the network was. The sums are in `sim/legs_unify.py` (numpy at the top, torch in its `t_`
+functions), which the trainer, `sim/test_suite.py`'s Policy and `plugins/netpass.py` all call.
+
+- **Step 3, `--legs-feat 1`**: the branch's second hidden layer (256, after its tanh) goes through `legs_door` (Linear
+  256 -> 256, zeros) and is added to his fast GRU's input on every frame, whether his legs drive or not. Only the fast GRU
+  reads it (the slow memory, the head's running mean and the attention part see the encoder's numbers as before; with
+  the head, `sim/head.py`'s `seq` takes it as `xg`). **Detached**: the branch is not moved by this lesson (with
+  `--legs-learn` it still learns from its own draws). Chosen as the safer first step: a gradient into the branch from
+  his whole loss would change what his legs do on the 54% of his time they drive, through a door nobody has measured
+  yet; it can be opened later behind its own flag.
+- **Step 4, `--legs-guide 1`**: his movement outputs (LEGS_TAKES: 0, 1, 2, 3, 7, 8) get `w_j` times the branch's choice
+  mapped onto their bins as log-probabilities, `w` a learnt number per output from 0: p ~ p_own x p_branch^w. The map is
+  the one `_legs_step()` uses: forward and sideways bin for bin, the branch's jump (2) onto his vertical key's first two
+  bins (crouch reads the floor, a log-probability of -10), the branch's nine turn bins onto his 23 by duel_env's `t_turn`
+  (nearest of TURN; bins sharing one of his are summed; the hand rule's "rest" is not in the map), walk and zoom "off"
+  for certain. Added on every frame; it counts only where his own outputs drive, because `head_masks` already drops the
+  frames his legs moved him. Detached from the branch as well.
+- Both act only on rows where the branch has a way (its inputs not all zero: `legs_prep()` gives zeros elsewhere).
+  `legs_door` and `legs_guide` are in the main optimiser group at the main rate and their gradient is clipped on its
+  own, so the rest's clip is as without them. A checkpoint carries the layout as `legs_unify`; a resume keeps the parts,
+  a flag adds them at zero, and a league file or the control without them is given them at zero (`load_net`). The door
+  is made without a random draw (`fork_rng`), so the rollout's draws are the ones without the part.
+- **Counters** (`unify` in each record): `door_norm`, `door_bias`, `door_share` (the share of the fast GRU input's
+  variance, summed over its 256 numbers, that comes through the door, on 2,048 seats of the rollout's last frame), `way`;
+  the guide's `w`, and on the first pass for each guided output the frames his own output counted with the branch having
+  a way (`frames`), `agree` (his choice was the branch's likeliest, mapped) and `p_same` (the chance a draw of the branch's
+  equals his): the convergence measure for step 5; `first_err` (the first piece's largest |log p - log p at play| before
+  any step) and `moved`.
+- **Numpy side**: `sim/export_duel.py` writes `legs_unify` (text), `legs_door_w`, `legs_door_b`, `legs_guide`;
+  `netpass.step(..., xl=)` and `Policy.act(..., xl=)` take the branch's inputs (the simulator's `legs_prep()` of the frame,
+  before the step) and skip the parts while they are at zero, so an exact-start network needs nothing new.
+  `tools/duel_eval.py` passes `xl` when a side needs it. **The plugins do not pass `xl` yet**: a network whose parts are
+  open stops with a clear message in `netpass.step` until `duelbot.py` / `ffabot.py` call `legs_prep()` before the
+  network's step.
+- `tools/unify_init.py widen <in> <out> --feat --guide` converts a network (parts at zero); `wake` makes a test copy with
+  the parts at random; `same <a> <b> --frames 2000 [--npz b.npz]` compares (torch forward written from the trainer's sums,
+  `test_suite.Policy`, `netpass`).
+
+**Proofs** (CPU, one simulator worker, Blood Run, 4 matches, 32 frames a rollout, v0.3.1b's switches, seeded; with
+`MKL_CBWR=COMPATIBLE`, without which two runs of the same code part after the first update, and a fake clock so both
+make the same number of updates):
+- Both flags off: the first update bit for bit the base branch's (60 tensors, the record), also without `MKL_CBWR`; six
+  updates bit for bit with it.
+- Both on, v0.3.1b's `policy_end.pt` converted (parts at zero): over 2,000 frames x 32 seats with resets (1% a frame) and
+  one row in eight with no way, the converted network answers exactly as the original in torch (memory and logits 0) and
+  in numpy (memory 0, choices 0 of 832,000 different); `netpass` equals `test_suite.Policy` exactly. In the trainer its
+  first rollout is the original's (every rollout counter the same; only the learning step's numbers differ, since the
+  parts learn from the first step on).
+- Woken at random (door share 61%, w 0.1 to 0.7): the rollout's step and the learning pass agree to 4.8e-6 in log p, as
+  with the parts at zero. Torch against numpy, the parts alone: door 2.6e-6, guide 1.8e-5 on values up to 12 (2.6e-6 as
+  chances); after the tiny training run below: door 6.6e-7, guide 5.6e-8. The whole network differs by 2.3e-5 in memory
+  and 1.1e-5 in chances, as it does with the parts at zero (2.9e-5, 8.8e-6: torch's and numpy's sums of the encoder
+  and the attention part, before these parts).
+- A tiny training run (181 updates of 256 frames, 6 Adam steps each, from the converted network): `door_norm` 0.07 ->
+  0.89, `door_share` 0.0007 -> 0.09, `w` from 0 to about +-0.003; an old anchor loads with the parts at zero and plays.
+- `tools/duel_eval.py` plays a woken network against the original with the real simulator (`legs_prep()` for `xl`).
+
+**Open**: the door at the main rate opens fast (9% of the GRU input's variance in 1,086 Adam steps, about one real
+update: a rate share of its own, as the head's, may be wanted before a run); the guide's mapping leaves out the turn's
+hand rule; step 5 (his hands' movement outputs left to the branch once `agree` is high) is not built.

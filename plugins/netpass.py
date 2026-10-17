@@ -56,7 +56,24 @@ def load(path):
         base = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
         P["_head"] = (lay, {k[len("head."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("head.")}, head_,
                       head_.np_state_width(lay), base)
+    P["_uni"] = None                                         # (--legs-feat, --legs-guide) (layout, door or None, guide weights or None):
+    if "legs_unify" in P:                                    # None while both parts are at zero (they add nothing then)
+        if "/sim" not in sys.path and os.path.isdir("/sim"):
+            sys.path.insert(0, "/sim")
+        import legs_unify as LU_                             # sim/legs_unify.py: numpy only at the top
+        lay = LU_.as_layout(P["legs_unify"])
+        D = (P["legs_door_w"], P["legs_door_b"]) if "legs_door_w" in P and (np.abs(P["legs_door_w"]).sum() + np.abs(P["legs_door_b"]).sum()) > 0 else None
+        G = np.asarray(P["legs_guide"], np.float32) if "legs_guide" in P and np.abs(P["legs_guide"]).sum() > 0 else None
+        if D is not None or G is not None:
+            assert "legs_w0" in P, "a network with legs_unify has the legs' branch inside"
+            P["_uni"] = (lay, D, G, LU_)
     return P, A
+
+
+def needs_xl(P):
+    """(--legs-feat, --legs-guide) step() needs the branch's inputs (xl=, the simulator's legs_prep() of the frame,
+    before the step and before legs_feed)"""
+    return P.get("_uni") is not None
 
 
 def width(P):
@@ -130,12 +147,21 @@ def legs_feed(P, env, E):
         env.legs_lg = legs_logits(P, env.legs_prep())
 
 
-def step(P, A, obs, h, rng, events=None):
+def step(P, A, obs, h, rng, events=None, xl=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
     and the new memory.
     events [B, 32] (v0.4, a network with a head): what the head is told on its tick (the simulator's head_events(),
-    fetched when head_due() says the coming frame ticks); None: zeros. Read on the tick frames only."""
+    fetched when head_due() says the coming frame ticks); None: zeros. Read on the tick frames only.
+    xl [B, the branch's inputs] (--legs-feat, --legs-guide, needs_xl(P)): the simulator's legs_prep() rows of this frame."""
+    dadd = gadd = None
+    if P.get("_uni") is not None:                            # (--legs-feat, --legs-guide) the branch on this frame's inputs
+        lay_u, D_u, G_u, LU_ = P["_uni"]
+        assert xl is not None, "this network's legs_door or guide is open: give step() the branch's inputs (xl=env.legs_prep())"
+        ok_ = LU_.np_way(xl)
+        h2_, lgl_ = LU_.np_branch(tuple(P[k_] for k_ in ("legs_w0", "legs_b0", "legs_w1", "legs_b1", "legs_wp", "legs_bp")), xl)
+        dadd = LU_.np_door(D_u[0], D_u[1], h2_, ok_) if D_u is not None else None
+        gadd = LU_.np_guide_add(lay_u, G_u, lgl_, ok_, int(np.sum(P["action_dims"]))) if G_u is not None else None
     hh = None
     if "_head" in P:                                         # (v0.4) the head's state at the end of the array
         hh = h[:, P["_head"][4]:]
@@ -160,6 +186,8 @@ def step(P, A, obs, h, rng, events=None):
         hlay, hW, hm = P["_head"][:3]
         o_ = hm._np_off(hlay)["plan"]
         xf = x + hm.np_plan_in(hW, hh[:, o_[0]:o_[1]])
+    if dadd is not None:                                     # (--legs-feat) only his fast GRU reads the legs' features
+        xf = xf + dadd
     gi = xf @ P["wih"].T + P["bih"]
     gh = h @ P["whh"].T + P["bhh"]
     H = h.shape[1]
@@ -178,6 +206,8 @@ def step(P, A, obs, h, rng, events=None):
         logits[:, si] += t_add
         logits[:, sw] += w_add
         h = np.concatenate([h, hh], 1)
+    if gadd is not None:                                     # (--legs-guide) the branch's choice on his movement outputs
+        logits = logits + gadd
     return draw(P, logits, rng), h
 
 
