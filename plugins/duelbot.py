@@ -917,7 +917,8 @@ class duelbot(minqlx.Plugin):
         simulator's checks, the attention part of v0.2 included; one sampled choice per output, as in training). (v0.4) A
         network with a head is told the tick's events on the frames its head ticks (head_events)."""
         ev = self.head_events(self.env) if _net.head_due(self.P, self.h)[0] else None
-        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev)
+        xl = self.env.legs_prep()[:1] if _net.needs_xl(self.P) else None    # (--legs-feat, --legs-guide) the legs' inputs of this frame
+        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl)
         return [int(v) for v in acts[0]]
 
     # ------------------------------------------------------------------ v0.4: the head's events (sim/duel_env.py HEAD_EVENTS)

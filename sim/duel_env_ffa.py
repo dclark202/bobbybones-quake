@@ -716,6 +716,18 @@ LEGS_TURN_ADD = LEGS and float(os.environ.get("LEGS_TURN_ADD") or 0.0) > 0
 TA_BINS = np.array([0.0, -0.5, 0.5, -1.0, 1.0, -2.0, 2.0, -4.0, 4.0, -8.0, 8.0, -15.0, 15.0], np.float32)   # degrees a frame (0 first)
 TA_SHUT = 20.0 + float(np.log(len(TA_BINS) - 1))            # the shut start's bias of "0" over the others (weights 0): P(not 0) ~ e^-20
 PLAY_VARS = PLAY_VARS + ("LEGS_TURN_ADD",)
+# v0.3.3, one movement network step 2 (the same way as LEGS_TURN_ADD): LEGS_KEYS_ADD=1 (with LEGS; a PLAY_VAR) gives five
+# more outputs at the end (KA_HEAD to KA_HEAD + 4, two choices each: 0 "my legs'", 1 "mine"), one for each of the legs'
+# other outputs (KA_COLS: forward/back, sideways, jump/crouch, walk, zoom), drawn every frame. On the frames his legs carry
+# him, where the choice is 1 his own output of that column takes the place of the legs' (his own outputs are drawn on
+# every frame anyway); the result goes through his finger limits as any key of his (_legs_step is before them). Elsewhere
+# the five do nothing. A network without them is given them shut (weights 0, the bias of 0 KA_SHUT over 1: "mine" with
+# the chance e^-30, which a float32 draw never gives) and the trainer's --keys-add-open opens them on a clock. With it off
+# ACTION_DIMS and everything else are as before.
+LEGS_KEYS_ADD = LEGS and float(os.environ.get("LEGS_KEYS_ADD") or 0.0) > 0
+KA_COLS = (0, 1, 2, 7, 8)                                   # forward/back, sideways, jump/crouch, walk, zoom
+KA_SHUT = 30.0
+PLAY_VARS = PLAY_VARS + ("LEGS_KEYS_ADD",)
 
 
 def turn_sum(turn, add):
@@ -1238,6 +1250,9 @@ assert len(ACTION_DIMS) == WAY_HEAD + 1
 TA_HEAD = len(ACTION_DIMS)                             # (LEGS_TURN_ADD) his turn correction while his legs carry him: the last output
 if LEGS_TURN_ADD:
     ACTION_DIMS = ACTION_DIMS + (len(TA_BINS),)
+KA_HEAD = len(ACTION_DIMS)                             # (LEGS_KEYS_ADD) the first of his five choices "my legs' / mine" on his legs
+if LEGS_KEYS_ADD:
+    ACTION_DIMS = ACTION_DIMS + (2,) * len(KA_COLS)
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 MEM_COLS = np.array([0, 1] + [2 + int(w) for w in OBS_W])  # the columns of e_got that are inputs (see N_MEM)
@@ -2680,6 +2695,8 @@ class DuelEnv:
                                                           # with the enemy in view; times he reached one; the sum of his speed on the way (not yet at it)
                           auto_switch=0,                  # AUTO_SWITCH: weapon changes the game made for him on an empty weapon
                           turn_add=np.zeros(3),           # LEGS_TURN_ADD: frames his legs carried him (counted seats), of them with a correction, its size (sum)
+                          keys_add=np.zeros(1 + len(KA_COLS)),   # LEGS_KEYS_ADD: frames his legs carried him (counted seats), of them his own output
+                          #                                 in place of the legs' for each of KA_COLS
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
@@ -3577,9 +3594,16 @@ class DuelEnv:
             self.legs_lab = ch.astype(np.int8)               # the four choices where the movement network has a way, -1 elsewhere
             self.legs_wh = ok & self.legs_held               # a withheld stretch: the label is there, his own outputs stay
             ok = ok & ~self.legs_held
+        own_ = a[:, list(KA_COLS)].copy() if LEGS_KEYS_ADD and a.shape[1] >= KA_HEAD + len(KA_COLS) else None
         a[ok, :4] = ch[ok]
         a[ok, 7:9] = 0
         self.legs_on = ok
+        if own_ is not None:                                 # (LEGS_KEYS_ADD) where he chose "mine", his own output in place of the legs'
+            mine_ = ok[:, None] & (a[:, KA_HEAD:KA_HEAD + len(KA_COLS)] == 1)
+            for j_, c_ in enumerate(KA_COLS):
+                a[mine_[:, j_], c_] = own_[mine_[:, j_], j_]
+            k_ = ok & self._counted(np.arange(n))
+            self.stats["keys_add"] += np.concatenate([[k_.sum()], (mine_ & k_[:, None]).sum(0)]).astype(np.float64)
         if LEGS_TURN_ADD and a.shape[1] > TA_HEAD:           # his correction on top of the legs' turn (step() adds it to the command)
             self.ta_add = np.where(ok, TA_BINS[np.clip(a[:, TA_HEAD], 0, len(TA_BINS) - 1)], 0.0).astype(np.float32)
             c_ = ok & self._counted(np.arange(n))

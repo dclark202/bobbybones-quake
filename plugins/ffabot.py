@@ -372,10 +372,10 @@ class ffabot(duelbot):
         self.sess, self.frames_f = None, None
 
     # ------------------------------------------------------------------ the network for several seats at once
-    def act_batch(self, obs, seats):
+    def act_batch(self, obs, seats, xl=None):
         """one pass of the network for all the Bobbys alive (plugins/netpass.py: the same sums as the simulator's checks,
         the attention part of v0.2 included; sampled, as in training)"""
-        out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng)
+        out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng, xl=xl)
         return out
 
     # ------------------------------------------------------------------ the simulator's senses for every seat
@@ -721,7 +721,8 @@ class ffabot(duelbot):
                     "{} {:.3f}".format(k_, v_ / max(1, c_.get("observe", 1))) for k_, v_ in sorted(c_.items()))))
                 self.calls.clear()
         t_ = time.perf_counter()
-        acts = self.act_batch(obs[live_bots], live_bots)
+        acts = self.act_batch(obs[live_bots], live_bots,      # (--legs-feat, --legs-guide) the legs' inputs of this frame
+                              xl=env.legs_prep()[live_bots] if _net.needs_xl(self.P) else None)
         self.t_net, self.t_live = time.perf_counter() - t_, len(live_bots)
         if acts.shape[1] > 10 and hasattr(env, "intend"):
             choice = np.zeros(SEATS, np.int64)

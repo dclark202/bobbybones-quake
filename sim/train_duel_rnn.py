@@ -710,6 +710,18 @@ def main():
                     "--fade-start; -1: where this process starts, so a resume must pass the first start's minute, which the trainer prints)")
     ap.add_argument("--turn-add-to", type=float, default=4.68, help="... where the line ends: the bias of 0 over the others (with the "
                                                                     "weights at 0, 4.68 draws a correction on 10%% of his frames on his legs)")
+    ap.add_argument("--keys-add-open", type=float, default=0.0,
+                    help="(LEGS_KEYS_ADD) his five choices 'my legs' / mine' on his legs (forward/back, sideways, jump/crouch, walk, "
+                         "zoom) start shut (the bias of 'my legs' at duel_env's KA_SHUT over 'mine'). They are opened over this many "
+                         "minutes counted from --keys-add-start, as --turn-add-open: before every rollout each bias is held at or "
+                         "under a line falling from KA_SHUT to --keys-add-to (never raised). 0 = off: as the checkpoint has them")
+    ap.add_argument("--keys-add-start", type=float, default=-1.0, help="... the minute of training the opening counts from (-1: where "
+                    "this process starts; a resume must pass the first start's minute, which the trainer prints)")
+    ap.add_argument("--keys-add-to", type=float, default=2.94, help="... where the line ends: the bias of 'my legs' over 'mine' (with "
+                                                                    "the weights at 0, 2.94 gives 'mine' on 5%% of the frames on his legs)")
+    ap.add_argument("--legs-door-lr-scale", type=float, default=0.25,
+                    help="(--legs-feat, --legs-guide) legs_door and the guide's weights in an optimiser group of their own at this share "
+                         "of the rate (through the rate schedule)")
     ap.add_argument("--gate-from", type=float, default=-6.0, help="... where the line begins (at -6 a look at such a token weighs a "
                                                                  "four-hundredth of what it weighs at 0)")
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
@@ -732,7 +744,9 @@ def main():
     KEY_HEADS = (0, 1, 2, 6)                                 # forward, strafe, vertical, weapon key: the left hand's outputs
     I_HEAD = getattr(E_, "INTENT_HEAD", len(ACTION_DIMS) - 1)                # the intention; (LEGS) the switch to his legs and the
     L_HEAD, L_TAKES = (E_.LEGS_HEAD, tuple(E_.LEGS_TAKES)) if len(ACTION_DIMS) > getattr(E_, "LEGS_HEAD", 99) else (-1, ())   # outputs they take
-    TA_HEAD = E_.TA_HEAD if len(ACTION_DIMS) > getattr(E_, "TA_HEAD", 99) else -1     # (LEGS_TURN_ADD) his turn correction on his legs: counted
+    TA_HEAD = E_.TA_HEAD if getattr(E_, "LEGS_TURN_ADD", False) and len(ACTION_DIMS) > getattr(E_, "TA_HEAD", 99) else -1
+    KA_ON = bool(getattr(E_, "LEGS_KEYS_ADD", False)) and len(ACTION_DIMS) >= getattr(E_, "KA_HEAD", 99) + 5     # (LEGS_KEYS_ADD)
+    KA_HEAD, KA_COLS = (E_.KA_HEAD, tuple(E_.KA_COLS)) if KA_ON else (-1, ())       # his five "my legs' / mine" on his legs and their columns     # (LEGS_TURN_ADD) his turn correction on his legs: counted
     #                                                          on the frames his legs moved him only
     W_HEAD = E_.WAY_HEAD if len(ACTION_DIMS) > getattr(E_, "WAY_HEAD", 99) else -1     # (WAYS) his way to his target: read with the intention,
     W_ON = bool(getattr(E_, "WAYS", False))                                             # ... and with the switch off never (the output is there)
@@ -772,16 +786,25 @@ def main():
     HAND_HEAD = 6                                            # ... the weapon key's output, where its choices begin among all outputs' and
     HAND_O, HAND_D = sum(ACTION_DIMS[:HAND_HEAD]), ACTION_DIMS[HAND_HEAD]      # how many they are ("keep", then a choice a weapon)
 
-    def head_masks(dc, lv, ll, lo):
+    def head_masks(dc, lv, ll, lo, act=None):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
-        intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his)"""
+        intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his).
+        (LEGS_KEYS_ADD) act: his choices [..., outputs]: on his legs his own output of a column counts where he chose "mine"
+        for it; the five choices count on his legs (the keys' on the frames his hand reads them)"""
         out = []
+        mine_ = {}
+        if KA_ON:
+            assert act is not None, "LEGS_KEYS_ADD: head_masks needs his choices"
+            mine_ = {c_: (act[..., KA_HEAD + i_] == 1).to(lo.dtype) for i_, c_ in enumerate(KA_COLS)}
         for j in range(len(ACTION_DIMS)):
             m = dc if j in KEY_HEADS else (lv if j == I_HEAD else (ll if j == L_HEAD else None))
             if j == W_HEAD:                                      # (WAYS) his way: on the frames the intention was read; on none with the switch off
                 m = lv if W_ON else lv * 0.0
             if j in L_TAKES:
-                m = (1.0 - lo) if m is None else m * (1.0 - lo)
+                g_ = (1.0 - lo) if j not in mine_ else (1.0 - lo) + lo * mine_[j]      # (LEGS_KEYS_ADD) and where "mine" took it
+                m = g_ if m is None else m * g_
+            if KA_ON and KA_HEAD <= j < KA_HEAD + len(KA_COLS):  # (LEGS_KEYS_ADD) "my legs' / mine": on his legs
+                m = lo * dc if KA_COLS[j - KA_HEAD] in KEY_HEADS else lo
             if j == TA_HEAD:                                     # (LEGS_TURN_ADD) his correction: only where it was added to his legs' turn
                 m = lo
             out.append(m)
@@ -1216,6 +1239,20 @@ def main():
     if UNI_GUIDE:
         UGM = LU_.GuideMaps(UNI, dev)
 
+    if KA_ON:                                                # (LEGS_KEYS_ADD) a network without the five (the control, older league files,
+        load_net8_ = load_net                                # the start before conversion) gets them shut: weights 0, the bias of "my
+        KA_O = int(sum(ACTION_DIMS[:KA_HEAD]))               # legs'" at KA_SHUT over "mine"; it answers as it did
+
+        def load_net(net, sd):
+            if "pi.weight" in sd and sd["pi.weight"].shape[0] == KA_O:
+                sd = dict(sd)
+                k_ = 2 * len(KA_COLS)
+                b_ = torch.zeros(k_, dtype=sd["pi.bias"].dtype, device=sd["pi.bias"].device)
+                b_[0::2] = float(E_.KA_SHUT)
+                sd["pi.weight"] = torch.cat([sd["pi.weight"], sd["pi.weight"].new_zeros(k_, sd["pi.weight"].shape[1])], 0)
+                sd["pi.bias"] = torch.cat([sd["pi.bias"], b_], 0)
+            load_net8_(net, sd)
+
     if TA_HEAD >= 0:                                         # (LEGS_TURN_ADD) a network without the correction (the control, older league
         load_net5_ = load_net                                # files, the start before conversion) gets it shut: weights 0, the bias of
         TA_O = int(sum(ACTION_DIMS[:TA_HEAD]))               # its 0 at TA_SHUT over the others; it answers as it did
@@ -1259,10 +1296,14 @@ def main():
             " (not with map cells: those networks keep the frame-by-frame step)" if HAS_CELLS else ""), flush=True)
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
-    opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))],
+    opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))
+                            and not (UNI_ON and n_.startswith(UNI_PFX))],
                            lr=a.lr, eps=1e-5)                # (LEGS_IN: not the branch; --head: not the head)
     if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
         opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
+    if UNI_ON:                                               # (--legs-door-lr-scale) legs_door and the guide's weights in a group of their own
+        opt.add_param_group({"params": [p_ for n_, p_ in pol.named_parameters() if n_.startswith(UNI_PFX)],
+                             "lr": a.lr * a.legs_door_lr_scale, "lr_scale": a.legs_door_lr_scale})
     if LEGS_LEARN and dev.type == "cuda":                    # (--legs-learn) the branch's sums in full float32 (torch's default; said, so
         torch.backends.cuda.matmul.allow_tf32 = False        # nothing elsewhere turns it on: its draws are the simulator's from these logits)
     if LEGS_LEARN:                                           # (--legs-learn) the branch in a group of its own; every setting of the rate
@@ -1362,7 +1403,9 @@ def main():
     snaps = []                                                         # frozen past policies (state dicts)
     if a.resume:                                                       # the league survives a restart
         import glob
-        for f in sorted(glob.glob(os.path.join(out, "snapshots", "snap_*.pt")))[-8:]:
+        import re as re_                                               # (by the minute in the name: from minute 10,000 the names have five
+        for f in sorted(glob.glob(os.path.join(out, "snapshots", "snap_*.pt")),          # digits and sort before the four-digit ones as text)
+                        key=lambda f_: (int((re_.findall(r"\d+", os.path.basename(f_)) or ["0"])[0]), f_))[-8:]:
             snaps.append(torch.load(f, weights_only=False, map_location=dev)["model"])
     anchors, vs_anchor = [], False                                     # ... and opponents that never leave it (--anchor-p)
     if a.anchor_p > 0:
@@ -1437,6 +1480,19 @@ def main():
         GATE_M = pol.attn.gate < 0
     assert a.gate_open <= 0 or (GATE_M is not None and a.gate_from <= 0), \
         "--gate-open: the network has no gated attention part (tools/targets_init.py makes one), or --gate-from is above 0"
+    ka0 = a.keys_add_start if a.keys_add_start >= 0 else elapsed0       # (--keys-add-open) the minute its clock counts from
+    assert a.keys_add_open <= 0 or KA_ON, "--keys-add-open: the simulator has no choices 'mine' on his legs (set LEGS_KEYS_ADD=1 with LEGS=1)"
+    if KA_ON:
+        KA_O = int(sum(ACTION_DIMS[:KA_HEAD]))
+
+        def ka_over():
+            """(LEGS_KEYS_ADD) the bias of "my legs'" over "mine", for each of the five"""
+            b_ = pol.pi.bias[KA_O:KA_O + 2 * len(KA_COLS)].detach().view(-1, 2)
+            return b_[:, 0] - b_[:, 1]
+        print("keys on his legs (LEGS_KEYS_ADD): {} choices 'mine' for the columns {}, the bias of 'my legs' now {} over 'mine'{}".format(
+            len(KA_COLS), list(KA_COLS), [round(float(x_), 2) for x_ in ka_over()],
+            ", opened to {:g} over {:g} min counted from minute {:.2f} (--keys-add-start; this process starts at {:.2f})".format(
+                a.keys_add_to, a.keys_add_open, ka0, elapsed0) if a.keys_add_open > 0 else " (left as they are: no --keys-add-open)"), flush=True)
     ta0 = a.turn_add_start if a.turn_add_start >= 0 else elapsed0       # (--turn-add-open) the minute its clock counts from
     assert a.turn_add_open <= 0 or TA_HEAD >= 0, "--turn-add-open: the simulator has no turn correction (set LEGS_TURN_ADD=1 with LEGS=1)"
     if TA_HEAD >= 0:
@@ -1472,6 +1528,13 @@ def main():
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
             with torch.no_grad():
                 pol.attn.gate[GATE_M] = pol.attn.gate[GATE_M].clamp(min=g_now)
+        if a.keys_add_open > 0 and KA_ON:                                # (--keys-add-open) before the rollout, as the turn's below
+            kf_ = min(1.0, max(0.0, mins - ka0) / a.keys_add_open)
+            if kf_ < 1.0 or update == 1:
+                k_now = float(E_.KA_SHUT) + (a.keys_add_to - float(E_.KA_SHUT)) * kf_
+                with torch.no_grad():
+                    b_ = pol.pi.bias[KA_O:KA_O + 2 * len(KA_COLS)].view(-1, 2)
+                    b_[:, 0] -= (b_[:, 0] - b_[:, 1] - k_now).clamp(min=0.0)
         if a.turn_add_open > 0 and TA_HEAD >= 0:                         # (--turn-add-open) before the rollout: it is played and learnt
             tf_ = min(1.0, max(0.0, mins - ta0) / a.turn_add_open)      # from at one bias
             if tf_ < 1.0 or update == 1:
@@ -1652,7 +1715,7 @@ def main():
             # an output's part counts only on the frames its choice was read: the intention's when it was read, the left
             # hand's (keys, weapon key) on the one frame in four it decides on (until 2026-10-08 all four were counted and
             # three were noise), the switch to his legs when it was read, what his legs take only while he moves himself
-            b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo)))
+            b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo, act)))
             if LEGS_LEARN:                                               # (--legs-learn) the branch's own draws (before the hand rule) join
                 b_lr[t] = torch.from_numpy(np.concatenate([r[16] for r in res])).to(dev)        # what he did on the frames his legs moved him
                 with torch.no_grad():
@@ -1967,7 +2030,7 @@ def main():
                 dst = ds                                                 # what the teachers' losses read
                 if UNI_GUIDE and epoch == 0:                             # (--legs-guide) his own choice against the branch's (switch off)
                     with torch.no_grad():
-                        hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk])
+                        hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk])
                         for i_, (o_, mp_) in enumerate(UGM.mapped(UG_[1])):
                             m_ = (1.0 if hmu_[o_] is None else hmu_[o_]) * UG_[2] * b_w[:, chunk]
                             ug_acc[i_] += torch.stack([m_.sum(), ((mp_.argmax(-1) == b_act[:, chunk, o_]).float() * m_).sum(),
@@ -1982,7 +2045,7 @@ def main():
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
-                hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk])
+                hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A)
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
                 ent = sum(w_ * dd.entropy() * (1.0 if hm[j] is None else hm[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
@@ -2751,6 +2814,12 @@ def main():
                                      first_err=float(ll_acc[4]), entropy=round(float(ll_acc[5] / max(1.0, float(ll_acc[1]))), 4),
                                      grad=round(float(ll_acc[6] / max(1.0, float(ll_acc[7]))), 4),
                                      moved_max=round(max(mv_), 7), moved_rel=round(mr_, 8))
+        if KA_ON:                                                        # (LEGS_KEYS_ADD) the share of his frames on his legs his own output took
+            KA_ = np.atleast_1d(agg.get("keys_add", np.zeros(1 + len(KA_COLS))))     # each column, the five biases, the weights' largest
+            with torch.no_grad():
+                kw_ = pol.pi.weight[KA_O:KA_O + 2 * len(KA_COLS)]
+            rec["keys_add"] = dict(frames=int(KA_[0]), cols=list(KA_COLS), share=[round(float(x_ / max(1.0, float(KA_[0]))), 5) for x_ in KA_[1:]],
+                                   shut=[round(float(x_), 3) for x_ in ka_over()], w=round(float(kw_.abs().max()), 6))
         if TA_HEAD >= 0:                                                 # (LEGS_TURN_ADD) his correction: the share of his frames on his legs
             TA_ = np.atleast_1d(agg.get("turn_add", np.zeros(3)))        # it was not 0 on, its mean size there, the bias of 0 over the others
             with torch.no_grad():

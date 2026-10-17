@@ -1,7 +1,7 @@
 """One movement network, steps 3 and 4 (sim/legs_unify.py): give a network the trainer's --legs-feat / --legs-guide parts at
 zero, and prove that it answers as before (or that the numpy side answers as torch with the parts woken).
 
-    python tools/unify_init.py widen <in.pt> <out.pt> [--feat] [--guide]
+    python tools/unify_init.py widen <in.pt> <out.pt> [--feat] [--guide] [--keys]   (--keys: LEGS_KEYS_ADD's five, shut)
     python tools/unify_init.py wake <in.pt> <out.pt> [--scale 0.05]       (a test copy: the parts at random)
     python tools/unify_init.py same <a.pt> <b.pt> [--frames 2000] [--players 32] [--npz <b's policy.npz>]
 
@@ -38,11 +38,33 @@ def _layout(ck, feat, guide):
     return LU_.layout(ck["action_dims"], E_.TURN, M_.TURN_BINS, feat, guide)
 
 
-def widen(src, dst, feat=True, guide=True):
+def add_keys(ck):
+    """(LEGS_KEYS_ADD, step 2) his five choices "my legs' / mine" on his legs added shut at the end of his outputs: weights
+    0, the bias of "my legs'" at KA_SHUT over "mine" (as the trainer's load_net gives a network without them)"""
+    import importlib
+    import torch
+    os.environ["LEGS_KEYS_ADD"] = "1"
+    E_ = importlib.import_module(ck.get("env_module") or "duel_env")
+    sd = ck["model"]
+    dims = [int(d) for d in ck["action_dims"]]
+    k_ = 2 * len(E_.KA_COLS)
+    assert sd["pi.weight"].shape[0] == sum(dims), (sd["pi.weight"].shape, dims)
+    b_ = torch.zeros(k_, dtype=sd["pi.bias"].dtype)
+    b_[0::2] = float(E_.KA_SHUT)
+    sd["pi.weight"] = torch.cat([sd["pi.weight"], sd["pi.weight"].new_zeros(k_, sd["pi.weight"].shape[1])], 0)
+    sd["pi.bias"] = torch.cat([sd["pi.bias"], b_], 0)
+    ck["action_dims"] = tuple(dims) + (2,) * len(E_.KA_COLS)
+    ck["env_vars"] = dict(ck.get("env_vars") or {}, LEGS_KEYS_ADD="1")
+
+
+def widen(src, dst, feat=True, guide=True, keys=False):
     import torch
     ck = torch.load(src, weights_only=False, map_location="cpu")
     sd = ck["model"]
     assert "legs.0.weight" in sd, "the network has no legs' branch inside (LEGS_IN)"
+    if keys:
+        add_keys(ck)
+        sd = ck["model"]
     old = ck.get("legs_unify") or {}
     lay = _layout(ck, feat or old.get("feat", 0), guide or old.get("guide", 0))
     if lay["feat"] and "legs_door.weight" not in sd:
@@ -52,7 +74,8 @@ def widen(src, dst, feat=True, guide=True):
         sd["legs_guide"] = torch.zeros(len(lay["outs"]))
     ck["legs_unify"] = lay
     torch.save(ck, dst)
-    print("{} -> {}: feat {}, guide {} (at zero)".format(os.path.basename(src), os.path.basename(dst), lay["feat"], lay["guide"]))
+    print("{} -> {}: feat {}, guide {} (at zero){}; {} outputs".format(os.path.basename(src), os.path.basename(dst), lay["feat"], lay["guide"],
+                                                                     ", keys shut" if keys else "", len(ck["action_dims"])))
 
 
 def wake(src, dst, scale=0.05, seed=3):
@@ -170,7 +193,7 @@ def same(a, b, frames=2000, players=32, npz=None):
     rng = np.random.default_rng(1)
     ha, hb, hta, htb = pa.zeros(players), pb.zeros(players), pa.zeros(players), pb.zeros(players)
     hn = pb.zeros(players)
-    w = dict(part_door=0.0, part_guide=0.0, part_guide_p=0.0, tb_np_p=0.0, np_mem=0.0, np_acts=0, t_mem=0.0, t_logit=0.0, tb_np_mem=0.0, tb_np_logit=0.0, npass_mem=0.0, npass_acts=0, ways=0)
+    w = dict(b_extra_not0=0, part_door=0.0, part_guide=0.0, part_guide_p=0.0, tb_np_p=0.0, np_mem=0.0, np_acts=0, t_mem=0.0, t_logit=0.0, tb_np_mem=0.0, tb_np_logit=0.0, npass_mem=0.0, npass_acts=0, ways=0)
     for f_ in range(frames):
         obs = (rng.standard_normal((players, n_in)) * 2.0).astype(np.float32)
         xl = rng.standard_normal((players, n_l)).astype(np.float32)
@@ -183,12 +206,14 @@ def same(a, b, frames=2000, players=32, npz=None):
         pa.rng, pb.rng = np.random.default_rng(1000 + f_), np.random.default_rng(1000 + f_)
         aa, ha = pa.act(obs, ha, xl=xl)
         ab, hb = pb.act(obs, hb, xl=xl)
+        k_ = min(aa.shape[1], ab.shape[1])                   # (b may have more outputs: LEGS_KEYS_ADD's five, compared as "my legs'")
         w["np_mem"] = max(w["np_mem"], float(np.abs(ha - hb).max()))
-        w["np_acts"] += int((aa != ab).sum())
+        w["np_acts"] += int((aa[:, :k_] != ab[:, :k_]).sum())
+        w["b_extra_not0"] += int((ab[:, k_:] != 0).sum())
         la, hta = ta.step(obs, hta, xl)
         lb, htb = tb.step(obs, htb, xl)
         w["t_mem"] = max(w["t_mem"], float(np.abs(hta - htb).max()))
-        w["t_logit"] = max(w["t_logit"], float(np.abs(la - lb).max()))
+        w["t_logit"] = max(w["t_logit"], float(np.abs(la - lb[:, :la.shape[1]]).max()))
         lt_, ht_ = tb.step(obs, hb_in, xl)                   # b in torch on numpy's memory (teacher-forced)
         import legs_unify as LU_                             # ... and the parts alone: torch's against sim/legs_unify.py's numpy sums
         ok_ = LU_.np_way(xl)
@@ -208,7 +233,7 @@ def same(a, b, frames=2000, players=32, npz=None):
             an_, hn = N_.step(NP[0], NP[1], obs, hn, np.random.default_rng(1000 + f_), xl=xl)
             w["npass_mem"] = max(w["npass_mem"], float(np.abs(hn - hb).max()))
             w["npass_acts"] += int((an_ != ab).sum())
-    w["choices"] = frames * players * aa.shape[1]
+    w["choices"] = frames * players * min(aa.shape[1], ab.shape[1])
     print("{} and {}: {} frames x {} seats, {} with a way; {}".format(os.path.basename(a), os.path.basename(b), frames, players, w["ways"],
                                                                        ", ".join("{} {:.3g}".format(k_, v_) for k_, v_ in w.items() if k_ != "ways")))
     return w
@@ -220,12 +245,12 @@ if __name__ == "__main__":
     def opt(name, default):
         return type(default)(args[args.index(name) + 1]) if name in args else default
     if args[0] == "widen":
-        widen(args[1], args[2], "--feat" in args, "--guide" in args)
+        widen(args[1], args[2], "--feat" in args, "--guide" in args, "--keys" in args)
     elif args[0] == "wake":
         wake(args[1], args[2], opt("--scale", 0.05))
     elif args[0] == "same":
         w_ = same(args[1], args[2], opt("--frames", 2000), opt("--players", 32), opt("--npz", ""))
-        ok_ = w_["np_mem"] == 0 and w_["np_acts"] == 0 and w_["t_mem"] == 0 and w_["t_logit"] == 0
+        ok_ = w_["np_mem"] == 0 and w_["np_acts"] == 0 and w_["t_mem"] == 0 and w_["t_logit"] == 0 and w_["b_extra_not0"] == 0
         print("exact" if ok_ else "not exact", "| torch against numpy (b): memory {:.2e}, logits {:.2e}, chances {:.2e}; the parts: door {:.2e}, "
               "guide {:.2e} (as chances {:.2e})".format(w_["tb_np_mem"], w_["tb_np_logit"], w_["tb_np_p"], w_["part_door"], w_["part_guide"],
                                                        w_["part_guide_p"]))

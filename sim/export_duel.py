@@ -72,8 +72,13 @@ if "legs.0.weight" in sd:                                    # (the movement net
     assert int(lz_["w0"].shape[1]) == int(sd["legs.0.weight"].shape[1]), \
         "the branch has {} inputs, the legs' network {} {} (the three of a look point: LEGS_LOOK, movement_env.N_C2)".format(  # 61, or 64
             sd["legs.0.weight"].shape[1], a.legs, lz_["w0"].shape[1])
-if str(env_vars.get("LEGS_TURN_ADD", "0")) not in ("0", "", "0.0"):  # (v0.3.2) his turn correction on his legs is his last output
-    assert len(ck["action_dims"]) == 14, "LEGS_TURN_ADD=1 and {} outputs (the correction is the fourteenth)".format(len(ck["action_dims"]))
+def on_(k_):
+    return str(env_vars.get(k_, "0")) not in ("0", "", "0.0")
+
+
+if on_("LEGS_TURN_ADD") or on_("LEGS_KEYS_ADD"):              # (v0.3.2) his turn correction on his legs is the fourteenth output; (v0.3.3,
+    n_ = 13 + int(on_("LEGS_TURN_ADD")) + 5 * int(on_("LEGS_KEYS_ADD"))       # LEGS_KEYS_ADD) the five "my legs' / mine" follow
+    assert len(ck["action_dims"]) == n_, "LEGS_TURN_ADD / LEGS_KEYS_ADD and {} outputs ({} expected)".format(len(ck["action_dims"]), n_)
 uni = {}                                                     # (--legs-feat, --legs-guide) the layout as text, legs_door, the guide's weights
 if ck.get("legs_unify") is not None:
     assert legs_in, "a network with legs_unify has the legs' branch inside"
