@@ -209,8 +209,9 @@ class banter(minqlx.Plugin):
             lad = minqlx.Plugin._loaded_plugins.get("ladder")      # (owner, 2026-10-16) after a full duel BobbyBones says his
             if voice(p) == 0 and lad is not None and time.time() - getattr(lad, "full_duel_t", 0.0) < 10.0:   # rating and record
                 try:
-                    self.say(p.id, lad.end_line(), delay)
-                    delay += 1.2 + self.rng.random()
+                    for line_ in lad.end_lines():            # (one chat line each: a long one is cut off)
+                        self.say(p.id, line_, delay)
+                        delay += 1.2 + self.rng.random()
                 except Exception:                            # noqa: BLE001
                     pass
 
