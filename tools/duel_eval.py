@@ -222,10 +222,10 @@ def play(job):
         if getattr(E, "LEGS_IN", False) and (getattr(pol, "needs_xl", False) or getattr(opp_pol, "needs_xl", False)):
             xlu_ = env.legs_prep()                                              # (nothing between here and the step changes a target)
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev])
-        a[ev, :al.shape[1]] = al
+        a[ev, :min(al.shape[1], a.shape[1])] = al[:, :a.shape[1]]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od])
-            a[od, :ao.shape[1]] = ao
+            a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
         if getattr(E, "LEGS_IN", False) and (pol.legsP is not None or (opp_pol is not None and opp_pol.legsP is not None)):

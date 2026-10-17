@@ -68,6 +68,12 @@ if "legs.0.weight" in sd:                                    # (the movement net
     assert legs, "this network has its legs inside (LEGS_IN): give --legs <the movement network's run> as well"   # finds his ways with it)
     legs_in = {"legs_w0": sd["legs.0.weight"], "legs_b0": sd["legs.0.bias"], "legs_w1": sd["legs.2.weight"], "legs_b1": sd["legs.2.bias"],
                "legs_wp": sd["legs.4.weight"], "legs_bp": sd["legs.4.bias"]}
+    lz_ = np.load(os.path.join(ROOT, "data", "sim_runs", a.legs, "policy.npz"))     # (v0.3.2) the branch reads the inputs the legs' file makes:
+    assert int(lz_["w0"].shape[1]) == int(sd["legs.0.weight"].shape[1]), \
+        "the branch has {} inputs, the legs' network {} {} (the three of a look point: LEGS_LOOK, movement_env.N_C2)".format(  # 61, or 64
+            sd["legs.0.weight"].shape[1], a.legs, lz_["w0"].shape[1])
+if str(env_vars.get("LEGS_TURN_ADD", "0")) not in ("0", "", "0.0"):  # (v0.3.2) his turn correction on his legs is his last output
+    assert len(ck["action_dims"]) == 14, "LEGS_TURN_ADD=1 and {} outputs (the correction is the fourteenth)".format(len(ck["action_dims"]))
 uni = {}                                                     # (--legs-feat, --legs-guide) the layout as text, legs_door, the guide's weights
 if ck.get("legs_unify") is not None:
     assert legs_in, "a network with legs_unify has the legs' branch inside"

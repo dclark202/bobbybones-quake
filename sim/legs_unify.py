@@ -81,7 +81,7 @@ def np_way(xl):
 def np_branch(W6, xl):
     """the branch on its inputs: (the second hidden layer [B, 256], the logits [B, 17]). W6: w0, b0, w1, b1, wp, bp"""
     w0, b0, w1, b1, wp, bp = W6
-    x = np.asarray(xl, np.float32)
+    x = np.asarray(xl, np.float32)[:, :w0.shape[1]]          # (a branch without the three inputs of a look point: the old inputs come first)
     h2 = np.tanh(np.tanh(x @ w0.T + b0) @ w1.T + b1)
     return h2, h2 @ wp.T + bp
 
@@ -118,7 +118,7 @@ def t_branch(legs, xl):
     """(detached) the branch's second hidden layer and logits: legs is the trainer's nn.Sequential (legs.0 .. legs.4)"""
     import torch
     with torch.no_grad(), torch.autocast(device_type=xl.device.type, enabled=False):
-        h2 = legs[:4](xl.float())
+        h2 = legs[:4](xl[..., :legs[0].in_features].float())   # (a branch narrower than the inputs: the old ones come first)
         return h2, legs[4](h2)
 
 
