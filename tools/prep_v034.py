@@ -31,8 +31,8 @@ ap.add_argument("--from", dest="src", required=True)
 ap.add_argument("--league", required=True)
 ap.add_argument("--run", default="duel_gru_v0_3_4")
 ap.add_argument("--force", action="store_true")
-ap.add_argument("--cmd-template", default="")
-ap.add_argument("--cmd-out", default="")
+ap.add_argument("--cmd-template", action="append", default=[], help="(one or more, each with its --cmd-out)")
+ap.add_argument("--cmd-out", action="append", default=[])
 ap.add_argument("--until", default="2026-10-18 12:00")
 ap.add_argument("--setup-min", type=float, default=10.0, help="minutes from now to the trainer's first update (the simulators' start)")
 a = ap.parse_args()
@@ -80,12 +80,13 @@ for f_ in snaps + anchors:
     assert sd["enc.0.weight"].shape == ck["model"]["enc.0.weight"].shape, "{}: another encoder".format(f_)
     shutil.copy(f_, os.path.join(out, "snapshots", os.path.basename(f_)))
     print("league: {} ({} output rows, the branch {} inputs)".format(os.path.basename(f_), rows, wl))
-if a.cmd_template:
+assert len(a.cmd_template) == len(a.cmd_out), "a --cmd-out for each --cmd-template"
+for tp_, op_ in zip(a.cmd_template, a.cmd_out):
     until = datetime.datetime.strptime(a.until, "%Y-%m-%d %H:%M")
     mins = int((until - datetime.datetime.now()).total_seconds() / 60.0 - a.setup_min)
     assert mins > 30, "--until is {} minutes away".format(mins)
-    t_ = open(a.cmd_template, encoding="utf-8").read()
+    t_ = open(tp_, encoding="utf-8").read()
     assert "{MINUTES}" in t_, "the template has no {MINUTES}"
-    open(a.cmd_out, "w", encoding="utf-8", newline=chr(13) + chr(10)).write(t_.replace("{MINUTES}", str(mins)))
-    print("wrote {} (--minutes {}: to {})".format(a.cmd_out, mins, a.until))
+    open(op_, "w", encoding="utf-8", newline=chr(13) + chr(10)).write(t_.replace("{MINUTES}", str(mins)))
+    print("wrote {} (--minutes {}: to {}; a later restart from it: lower --minutes to what is left)".format(op_, mins, a.until))
 print("ready:", out)

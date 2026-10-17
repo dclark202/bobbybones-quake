@@ -544,3 +544,47 @@ text order put the newest first on a restart); `tools/unify_init.py widen --keys
   3.2 over 2 minutes and his own columns take 0 to 10% of his frames on his legs; `legs_door` at 0.25 of the rate: share
   0.002 of the GRU input's variance (0.03 at the full rate in about as many steps); an old anchor and v0.3.2's snapshots load.
   The template's own arguments (small) run from the prepared start.
+
+## 8. v0.3.4 as built (branch v034 from v033, 2026-10-17)
+
+Why: the legs see everything relative to his view, so his turn correction was undone the next frame (its use fell from 10%
+to 3.8% and the legs' share rose from 54 to 63%); walking needs the jump off; the guide of step 4 acted only where he drives
+himself and could never meet the legs. Each part has its own switch, off by default, and starts exactly where the network was.
+
+- **A, `--legs-gate 1`**: where he drives himself, his outputs 0, 1, 2, 3, 7, 8 get g(h) x the legs' choice mapped onto their
+  bins (the guide's map) plus a motor layer of the legs' 256 numbers; g is a linear layer of his memory; both at zero, the
+  legs detached. `--legs-guide` still works (A is its general form; leave it off).
+- **B, `--legs-residual 1`** (with `--legs-learn`): on his legs the legs' 17 logits become (1 - a(h)) x theirs + W h,
+  a = clamp(linear(h), 0, 1) per choice, W at zero; the simulator draws his legs' choice from them; they learn through the
+  legs' term of the PPO ratio (on legs frames only; his own movement outputs stay masked there); `--legs-residual-ent` (0.1)
+  on that term's entropy. The clamp passes its gradient straight through (the value is the clamp's): a plain clamp died at
+  0 in a test. Walk and zoom stay off on his legs (LEGS_KEYS_ADD off). The turn correction stays as in v0.3.2.
+- **C, `--solo-self-drive 1`** (sets duel_env's SOLO_SELF): in item and jump runs the legs' choices are not taken (they are
+  still worked out, so the random numbers are the same) and the switch's lesson is silent there; the switch input reads
+  "off" there. **`--switch-fade 1`**: a bias off the switch's "legs" choice (the learner's alone), +0.25 after each update
+  whose mean speed over the ground in his runs is at least 325, up to 8; saved in the checkpoint (`switch_fade`) and in
+  policy.npz; netpass and test_suite take it off too. Counters `solo` (frames, speed, switch_games, fade).
+- **D, `WALK_NO_JUMP=1`** (a PLAY_VAR): where the walk key is on as his hands and legs leave it, the jump is let go before
+  the finger limits (simulator, both plugins). Counter `walk_jump` (both asked).
+- **E, `HOP_QUIET=1`** (a PLAY_VAR; pay change approved by the owner): HOP_PAY nothing while he heard the enemy in the last
+  4 s, believes him within 700 units, or holds a place. Equilibrium: both sides are paid less for noisy speed near each other,
+  so quieter approaches near the enemy; goals 1 and 3.
+- Plugins: `legs_feed(..., rows=)` reads the frame's memory for B; the fade; WALK_NO_JUMP. `tools/unify_init.py widen --gate
+  --residual`; `tools/prep_v034.py`.
+
+**Proofs** (CPU, seeded):
+- Every new switch off against branch v033: `ident16` IDENTICAL on Blood Run and Aerowalk for duel_env and duel_env_ffa
+  (v0.3.2's switches); `ffa_check` identical over 3,000 frames (off, and with D, E and SOLO_SELF on); the trainer six
+  updates bit for bit (`MKL_CBWR=COMPATIBLE`, fixed update count; v0.3.2's switch save and switches).
+- v0.3.2's `policy_switch.pt` converted (door, gate, motor, residual at zero): over 2,000 frames x 32 seats with resets
+  exactly the original in torch and numpy (memory, logits, choices, the legs' logits his legs draw from); `netpass` =
+  `test_suite.Policy` exactly. In the trainer the first rollout is the original's (only the learning step's numbers differ).
+- The simulator, the converted network playing itself (600 frames, 24 players, Blood Run): IDENTICAL to the original; with
+  D on IDENTICAL (walk and jump were never asked together: 0 of 14,400 seat-frames; 1 of 14,400 in another sample); with E
+  on, the states and inputs IDENTICAL and only the pay differs (hop pay 5.57 -> 1.07: 65 take-offs silenced).
+- C: with no runs, SOLO_SELF on and off IDENTICAL; with runs, the first difference is on a seat in a run, and the other
+  seats then part only through the simulator's shared random numbers.
+- Woken parts: the rollout's step and the learning pass agree to 3.3e-6 in log p (the legs' term too); torch against numpy:
+  door 3.1e-6, gate and motor 2.9e-5 (6.6e-6 as chances for the whole network, its usual gap).
+- Small training runs (v0.3.2's switches, its league, v0.3.1's end as anchor): the gate, the motor layer and the residual
+  move, the fade rises with his run speed and is saved; the control loads in `tools/duel_eval.py` beside the learner.
