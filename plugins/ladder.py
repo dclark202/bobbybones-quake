@@ -364,17 +364,19 @@ class ladder(minqlx.Plugin):
         cur = "^2{}^7 ^5{}^7 | ".format(ver, self.wld(rec.get(ver, [0, 0, 0]))) if ver else ""
         return "^3Duel record^7 (full games): {}all versions ^5{}^7".format(cur, self.wld(rec["all"]))
 
-    def end_line(self):
+    def end_lines(self):
         """what Bobby says after a finished duel (owner, 2026-10-16: "he should also tell his elo and overall record at the
-        end of a duel match"): the board's rating of the network playing now and the record, this game included"""
+        end of a duel match"; on two lines, the chat box cut one off): the board's rating of the network playing now, then
+        the record, this game included"""
         rec = self.duel_record()
         bobby = self.bobby_key()
         p = self.table.players.get(bobby) if bobby else None
-        rate = ""
+        out = []
         if p is not None:
             n, of = self.table.rank(bobby, bobby)
-            rate = "my rating ^2{:.0f}^7 (rank ^3{}^7 of {}) | ".format(p["r"], n, of)
-        return rate + "duel record ^5{}^7".format(self.wld(rec["all"]))
+            out.append("my rating ^2{:.0f}^7 (rank ^3{}^7 of {})".format(p["r"], n, of))
+        out.append("my duel record ^5{}^7".format(self.wld(rec["all"])))
+        return out
 
     def on_game_start(self, data):
         """a real game began: in 1v1 mode it is a duel between the person and Bobby, written down at its end. Who plays
