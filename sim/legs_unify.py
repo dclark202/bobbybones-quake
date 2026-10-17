@@ -207,8 +207,11 @@ class GuideMaps:
 
 
 def t_residual(res_a, res, lgl, z):
-    """(v0.3.4 B) the legs' logits as his legs draw from them: (1 - clamp(res_a(z), 0, 1)) x lgl + res(z)"""
+    """(v0.3.4 B) the legs' logits as his legs draw from them: (1 - clamp(res_a(z), 0, 1)) x lgl + res(z). The clamp's
+    gradient passes straight through (the value is the clamp's to the bit: x - x.detach() is 0): a plain clamp at its
+    start value 0 dies the first time a step takes it below 0 (seen in a test of 2026-10-17: it stood still from there)"""
     import torch
-    a = res_a(z).clamp(0.0, 1.0)
+    x = res_a(z)
+    a = x.clamp(0.0, 1.0).detach() + (x - x.detach())
     a = torch.repeat_interleave(a, torch.tensor(BDIMS, device=a.device), dim=-1)
     return (1.0 - a) * lgl + res(z)

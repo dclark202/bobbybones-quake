@@ -1301,7 +1301,7 @@ def main():
                          if k_.startswith(("legs_gate.", "legs_motor.", "legs_res_a.", "legs_res.")) and k_ not in sd})
             load_net7_(net, dict(sd, **add_) if add_ else sd)
 
-    if UNI_GUIDE:
+    if UNI_GUIDE or UNI_GATE:                                # (--legs-gate maps the legs' choice as the guide does)
         UGM = LU_.GuideMaps(UNI, dev)
 
     if KA_ON:                                                # (LEGS_KEYS_ADD) a network without the five (the control, older league files,
