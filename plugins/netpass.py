@@ -113,12 +113,13 @@ def describe(P, A):
 
 
 def legs_logits(P, xl):
-    """(LEGS_IN, B-253) his legs' branch: the movement network's inputs [B, 61] as the simulator's legs_prep() gives them
+    """(LEGS_IN, B-253) his legs' branch: the movement network's inputs [B, 61; 64 with LEGS_LOOK's] as legs_prep() gives them
     -> its logits [B, 17] (forward 3, sideways 3, jump 2, turn 9), which the simulator samples his legs' choices from
     (env.legs_lg before its _legs_step). None for a network without the branch (the simulator then works them out)."""
     if "legs_w0" not in P:
         return None
     x = np.asarray(xl, np.float32)
+    x = x[:, :P["legs_w0"].shape[1]]                         # (a branch without the three inputs of a look point: the old inputs come first)
     return (np.tanh(np.tanh(x @ P["legs_w0"].T + P["legs_b0"]) @ P["legs_w1"].T + P["legs_b1"]) @ P["legs_wp"].T + P["legs_bp"]).astype(np.float32)
 
 

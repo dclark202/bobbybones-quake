@@ -1341,6 +1341,8 @@ class duelbot(minqlx.Plugin):
         if rules2:
             env.duck[i] = a[2] == 2
         cmd = np.array([E.TURN[a[3]], E.PITCH[a[4]]], np.float32)
+        if getattr(E, "LEGS_TURN_ADD", False) and len(a) > E.TA_HEAD and getattr(env, "ta_add", None) is not None:
+            cmd[0] = float(E.turn_sum(cmd[:1], env.ta_add[i:i + 1])[0])     # (LEGS_TURN_ADD) on his legs: their turn plus his correction
         zs = float(E.ZOOM) if (rules2 and hasattr(env, "zoom") and env.zoom[i]) else 1.0     # zoomed: the hand turns the view less
         cmd = cmd * zs
         if hasattr(env, "turn_dir"):                         # (the simulator's step keeps these: the movement network is shown

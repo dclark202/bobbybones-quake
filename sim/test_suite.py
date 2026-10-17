@@ -119,6 +119,7 @@ class Policy:
         if self.legsP is None:
             return None
         w0, b0, w1, b1, wp, bp = self.legsP
+        xl = np.asarray(xl, np.float32)[:, :w0.shape[1]]     # (a branch without the three inputs of a look point: the old inputs come first)
         return (np.tanh(np.tanh(np.asarray(xl, np.float32) @ w0.T + b0) @ w1.T + b1) @ wp.T + bp).astype(np.float32)
 
     def act(self, obs, h, events=None):

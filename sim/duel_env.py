@@ -702,6 +702,30 @@ INTENT_HEAD, LEGS_HEAD, LEGS_TAKES = 10, 11, (0, 1, 2, 3, 7, 8)
 LEGS_IN = LEGS and float(os.environ.get("LEGS_IN") or 0.0) > 0
 LEGS_IN_CHECK = LEGS_IN and float(os.environ.get("LEGS_IN_CHECK") or 0.0) > 0
 PLAY_VARS = PLAY_VARS + ("LEGS_IN",)
+# v0.3.2 (the owner's play test of 2026-10-16: on his legs, 54% of his time, he has "blinders": they own his view's turn and
+# know nothing of the enemy). LEGS_TURN_ADD=1 (with LEGS; a PLAY_VAR): one more output, the last (TA_HEAD: his own turn
+# correction, the TA_BINS degrees a frame, the first of them 0), drawn every frame. On the frames his legs carry him his
+# view's turn command is the legs' turn plus his correction (cut to the largest turn of TURN); the sum then goes through
+# his mouse as any turn of his does (inertia, the flick cap, hand noise, the pad, the jerk's price): the same hand limits
+# as now. On every other frame the output does nothing (the trainer counts it on the frames his legs moved him only).
+# A network without the output (an older one, a league file, the control) gives 0 there, which is no correction. The
+# converted start has the output shut (its weights 0, the bias of "0" TA_SHUT above the others: another bin is drawn
+# with the chance e^-20) and the trainer's --turn-add-open opens it on a clock (as --gate-open). With it off ACTION_DIMS
+# and everything else are as before.
+LEGS_TURN_ADD = LEGS and float(os.environ.get("LEGS_TURN_ADD") or 0.0) > 0
+TA_BINS = np.array([0.0, -0.5, 0.5, -1.0, 1.0, -2.0, 2.0, -4.0, 4.0, -8.0, 8.0, -15.0, 15.0], np.float32)   # degrees a frame (0 first)
+TA_SHUT = 20.0 + float(np.log(len(TA_BINS) - 1))            # the shut start's bias of "0" over the others (weights 0): P(not 0) ~ e^-20
+PLAY_VARS = PLAY_VARS + ("LEGS_TURN_ADD",)
+
+
+def turn_sum(turn, add):
+    """(LEGS_TURN_ADD) his view's turn command: the legs' (or his own) turn plus his correction, cut to the largest turn
+    a command can ask for; where the correction is 0 the turn is left exactly as it was"""
+    t_ = np.asarray(turn, np.float32)
+    a_ = np.asarray(add, np.float32)
+    return np.where(a_ != 0.0, np.clip(t_ + a_, -float(TURN[-1]), float(TURN[-1])), t_).astype(np.float32)
+
+
 N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE) + N_LEGS + N_EN
 # AUTO_SWITCH (owner, 2026-10-10: "if you run out of ammo it moves you to a different weapon. Give him that setting and
 # use the weapon swaps from quake live"): the trigger pressed on an empty weapon brings up the highest weapon of the
@@ -1211,6 +1235,9 @@ CLAW_ON_DEATH = False                                  # the trip's pay was also
                                                        # launcher 92% of the time (v9 night, 2026-10-07). Now only a trip given up is clawed back (owner)
 ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2, len(INTENTS), 2, N_WAYS)  # ..., walk, zoom, lift the mouse, intention, his legs (LEGS), his way (WAYS)
 assert len(ACTION_DIMS) == WAY_HEAD + 1
+TA_HEAD = len(ACTION_DIMS)                             # (LEGS_TURN_ADD) his turn correction while his legs carry him: the last output
+if LEGS_TURN_ADD:
+    ACTION_DIMS = ACTION_DIMS + (len(TA_BINS),)
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 MEM_COLS = np.array([0, 1] + [2 + int(w) for w in OBS_W])  # the columns of e_got that are inputs (see N_MEM)
@@ -2312,6 +2339,7 @@ class DuelEnv:
         self.legs = np.zeros(self.n, bool)                  # LEGS: his switch as it stands (his legs, not his own movement),
         self.legs_on = np.zeros(self.n, bool)               # ... the movement network moved him this frame,
         self.legs_live = np.zeros(self.n, bool)             # ... the switch was read this frame
+        self.ta_add = np.zeros(self.n, np.float32)          # LEGS_TURN_ADD: his correction of this frame on top of his legs' turn (degrees)
         self.legs_tick = 0
         self.legs_no = np.zeros(self.n, np.int64)           # ... readings of "my own movement" in a row (LEGS_OFF)
         self.legs_lab = np.full((self.n, 4), -1, np.int8)   # LEGS_LABEL: the movement network's four choices of this frame (-1: no label)
@@ -2633,6 +2661,7 @@ class DuelEnv:
                           hold_frames=np.zeros(6),        # TARGETS: frames his intention is a holding place, of them on his legs, standing at it,
                                                           # with the enemy in view; times he reached one; the sum of his speed on the way (not yet at it)
                           auto_switch=0,                  # AUTO_SWITCH: weapon changes the game made for him on an empty weapon
+                          turn_add=np.zeros(3),           # LEGS_TURN_ADD: frames his legs carried him (counted seats), of them with a correction, its size (sum)
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
@@ -3466,6 +3495,8 @@ class DuelEnv:
         view turn in a (walk and zoom let go). Called before the finger limits: its keys pass through his hand as his do."""
         n = self.n
         who = self.script == 0
+        if LEGS_TURN_ADD:                                    # (LEGS_TURN_ADD) this frame's correction: none until his legs carry him
+            self.ta_add = np.zeros(n, np.float32)
         self.legs_tick += 1
         live = who & ((self.legs_tick + np.arange(n)) % LEGS_EVERY == 0)
         ask = a[:, LEGS_HEAD] == 1
@@ -3512,6 +3543,10 @@ class DuelEnv:
         a[ok, :4] = ch[ok]
         a[ok, 7:9] = 0
         self.legs_on = ok
+        if LEGS_TURN_ADD and a.shape[1] > TA_HEAD:           # his correction on top of the legs' turn (step() adds it to the command)
+            self.ta_add = np.where(ok, TA_BINS[np.clip(a[:, TA_HEAD], 0, len(TA_BINS) - 1)], 0.0).astype(np.float32)
+            c_ = ok & self._counted(np.arange(n))
+            self.stats["turn_add"] += (int(c_.sum()), int((c_ & (self.ta_add != 0)).sum()), float(np.abs(self.ta_add[c_]).sum()))
 
     def _legs_who(self, on):
         """the seats his legs carry when the switch is on for the players on (bool [players]): those with a target (the
@@ -7060,6 +7095,8 @@ class DuelEnv:
         prev = self.state.copy()
         # mouse: the chosen turn speed is followed with a little inertia; jerky commands cost a little
         cmd = np.stack([TURN[a[:, 3]], PITCH[a[:, 4]]], 1)
+        if LEGS_TURN_ADD and a.shape[1] > TA_HEAD:          # (LEGS_TURN_ADD) on his legs: their turn plus his correction (_legs_step)
+            cmd[:, 0] = turn_sum(cmd[:, 0], self.ta_add)
         cmd = cmd * np.where(self.zoom, ZOOM, 1.0).astype(np.float32)[:, None]      # zoomed: the same hand movement turns less
         jerk = np.abs(cmd - self.cmd).sum(1)
         self.cmd = cmd

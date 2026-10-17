@@ -692,6 +692,16 @@ def main():
                          "to 0 (never lowered: a gate already further open stays until the line passes it). At 0 it stays 0 and is "
                          "saved so; a resume goes on from the clock. 0 = off: the gate is left as the checkpoint has it. The "
                          "league's files keep their own gates")
+    ap.add_argument("--turn-add-open", type=float, default=0.0,
+                    help="(LEGS_TURN_ADD) his turn correction on his legs starts shut (the bias of its choice 0 at duel_env's TA_SHUT "
+                         "over the others: another choice drawn with the chance e^-20, which no update finds by trying). It is opened "
+                         "over this many minutes, counted from --turn-add-start: before every rollout that bias is held at or under a value "
+                         "falling in a straight line from TA_SHUT to --turn-add-to (never raised: a bias already lower stays). After that "
+                         "it is the network's own. 0 = off: the bias is left as the checkpoint has it. The league's files keep theirs")
+    ap.add_argument("--turn-add-start", type=float, default=-1.0, help="... the minute of training the opening counts from (as "
+                    "--fade-start; -1: where this process starts, so a resume must pass the first start's minute, which the trainer prints)")
+    ap.add_argument("--turn-add-to", type=float, default=4.68, help="... where the line ends: the bias of 0 over the others (with the "
+                                                                    "weights at 0, 4.68 draws a correction on 10%% of his frames on his legs)")
     ap.add_argument("--gate-from", type=float, default=-6.0, help="... where the line begins (at -6 a look at such a token weighs a "
                                                                  "four-hundredth of what it weighs at 0)")
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
@@ -714,6 +724,8 @@ def main():
     KEY_HEADS = (0, 1, 2, 6)                                 # forward, strafe, vertical, weapon key: the left hand's outputs
     I_HEAD = getattr(E_, "INTENT_HEAD", len(ACTION_DIMS) - 1)                # the intention; (LEGS) the switch to his legs and the
     L_HEAD, L_TAKES = (E_.LEGS_HEAD, tuple(E_.LEGS_TAKES)) if len(ACTION_DIMS) > getattr(E_, "LEGS_HEAD", 99) else (-1, ())   # outputs they take
+    TA_HEAD = E_.TA_HEAD if len(ACTION_DIMS) > getattr(E_, "TA_HEAD", 99) else -1     # (LEGS_TURN_ADD) his turn correction on his legs: counted
+    #                                                          on the frames his legs moved him only
     W_HEAD = E_.WAY_HEAD if len(ACTION_DIMS) > getattr(E_, "WAY_HEAD", 99) else -1     # (WAYS) his way to his target: read with the intention,
     W_ON = bool(getattr(E_, "WAYS", False))                                             # ... and with the switch off never (the output is there)
 
@@ -762,6 +774,8 @@ def main():
                 m = lv if W_ON else lv * 0.0
             if j in L_TAKES:
                 m = (1.0 - lo) if m is None else m * (1.0 - lo)
+            if j == TA_HEAD:                                     # (LEGS_TURN_ADD) his correction: only where it was added to his legs' turn
+                m = lo
             out.append(m)
         return out
 
@@ -1139,6 +1153,32 @@ def main():
                 sd.update({k_: torch.from_numpy(np.asarray(v_)) for k_, v_ in LEGS_SD.items()})
             load_net1_(net, sd)
 
+    if TA_HEAD >= 0:                                         # (LEGS_TURN_ADD) a network without the correction (the control, older league
+        load_net5_ = load_net                                # files, the start before conversion) gets it shut: weights 0, the bias of
+        TA_O = int(sum(ACTION_DIMS[:TA_HEAD]))               # its 0 at TA_SHUT over the others; it answers as it did
+
+        def load_net(net, sd):
+            if "pi.weight" in sd and sd["pi.weight"].shape[0] == TA_O:
+                sd = dict(sd)
+                k_ = ACTION_DIMS[TA_HEAD]
+                b_ = torch.zeros(k_, dtype=sd["pi.bias"].dtype, device=sd["pi.bias"].device)
+                b_[0] = float(E_.TA_SHUT)
+                sd["pi.weight"] = torch.cat([sd["pi.weight"], sd["pi.weight"].new_zeros(k_, sd["pi.weight"].shape[1])], 0)
+                sd["pi.bias"] = torch.cat([sd["pi.bias"], b_], 0)
+            load_net5_(net, sd)
+
+    if LEGS_IN:                                              # (LEGS_IN) a branch narrower than the movement network's inputs (a league file
+        load_net6_ = load_net                                # of v0.3.1 beside legs with the inputs of a look point, movement_env.N_C2): the
+        #                                                      new inputs at zero weight, so it answers as its own legs (tools/legs_look_init.py
+        #                                                      also folds the change of the input statistics in; this does not)
+
+        def load_net(net, sd):
+            if getattr(net, "legs", None) is not None and "legs.0.weight" in sd and sd["legs.0.weight"].shape[1] < LEGS_D:
+                sd = dict(sd)
+                w_ = sd["legs.0.weight"]
+                sd["legs.0.weight"] = torch.cat([w_, w_.new_zeros(w_.shape[0], LEGS_D - w_.shape[1])], 1)
+            load_net6_(net, sd)
+
     pol = Policy().to(dev)
     if LEGS_IN:
         with torch.no_grad():
@@ -1323,6 +1363,15 @@ def main():
         GATE_M = pol.attn.gate < 0
     assert a.gate_open <= 0 or (GATE_M is not None and a.gate_from <= 0), \
         "--gate-open: the network has no gated attention part (tools/targets_init.py makes one), or --gate-from is above 0"
+    ta0 = a.turn_add_start if a.turn_add_start >= 0 else elapsed0       # (--turn-add-open) the minute its clock counts from
+    assert a.turn_add_open <= 0 or TA_HEAD >= 0, "--turn-add-open: the simulator has no turn correction (set LEGS_TURN_ADD=1 with LEGS=1)"
+    if TA_HEAD >= 0:
+        TB_ = pol.pi.bias[TA_O:TA_O + ACTION_DIMS[TA_HEAD]].detach()
+        print("turn correction (LEGS_TURN_ADD): {} choices, the bias of 0 now {:.2f} over the others{}".format(
+            ACTION_DIMS[TA_HEAD], float(TB_[0] - TB_[1:].mean()),
+            ", opened to {:g} over {:g} min counted from minute {:.2f} (--turn-add-start; this process starts at {:.2f})".format(
+                a.turn_add_to, a.turn_add_open, ta0, elapsed0) if a.turn_add_open > 0 else
+            " (left as it is: no --turn-add-open)"), flush=True)
     if a.gate_open > 0:
         print("gate: {} tokens (lowest now {:.2f}) open from {:g} to 0 over {:g} min, counted from minute {:.2f} (this process starts at {:.2f})".format(
             int(GATE_M.sum()), float(pol.attn.gate.min()), a.gate_from, a.gate_open, fade0, elapsed0), flush=True)
@@ -1349,6 +1398,15 @@ def main():
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
             with torch.no_grad():
                 pol.attn.gate[GATE_M] = pol.attn.gate[GATE_M].clamp(min=g_now)
+        if a.turn_add_open > 0 and TA_HEAD >= 0:                         # (--turn-add-open) before the rollout: it is played and learnt
+            tf_ = min(1.0, max(0.0, mins - ta0) / a.turn_add_open)      # from at one bias
+            if tf_ < 1.0 or update == 1:
+                t_now = float(E_.TA_SHUT) + (a.turn_add_to - float(E_.TA_SHUT)) * tf_
+                with torch.no_grad():                                    # (the bias of 0 over the mean of the others)
+                    b_ = pol.pi.bias[TA_O:TA_O + ACTION_DIMS[TA_HEAD]]
+                    over_ = float(b_[0] - b_[1:].mean())
+                    if over_ > t_now:
+                        b_[0] -= over_ - t_now
         close_p = max(a.close_floor, 1.0 - 0.8 * mins / a.close_minutes)
         round_len = 15.0 + 105.0 * (1.0 - (max(close_p, 0.2) - 0.2) / 0.8)
         dmg_reward = 0.004 * max(0.25, close_p)                         # damage shaping fades with the curriculum
@@ -2564,6 +2622,14 @@ def main():
                                      first_err=float(ll_acc[4]), entropy=round(float(ll_acc[5] / max(1.0, float(ll_acc[1]))), 4),
                                      grad=round(float(ll_acc[6] / max(1.0, float(ll_acc[7]))), 4),
                                      moved_max=round(max(mv_), 7), moved_rel=round(mr_, 8))
+        if TA_HEAD >= 0:                                                 # (LEGS_TURN_ADD) his correction: the share of his frames on his legs
+            TA_ = np.atleast_1d(agg.get("turn_add", np.zeros(3)))        # it was not 0 on, its mean size there, the bias of 0 over the others
+            with torch.no_grad():
+                tb_ = pol.pi.bias[TA_O:TA_O + ACTION_DIMS[TA_HEAD]]
+                tw_ = pol.pi.weight[TA_O:TA_O + ACTION_DIMS[TA_HEAD]]
+            rec["turn_add"] = dict(frames=int(TA_[0]), share=round(float(TA_[1] / max(1.0, float(TA_[0]))), 5),
+                                   size=round(float(TA_[2] / max(1.0, float(TA_[1]))), 3), shut=round(float(tb_[0] - tb_[1:].mean()), 3),
+                                   w=round(float(tw_.abs().max()), 6))
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:
