@@ -2317,7 +2317,7 @@ def main():
             rec["long"] = dict(share=round(long_c, 3), gap=round(long_gap, 4))
         if HEADL:                                                        # (--head) the plan's size, plan_in, the head's part of his target, its
             ha_ = hd_acc.numpy()                                         # values' and win head's losses, the read, its step (first pass)
-            rs_ = torch.stack(HO_[1]).sum(0).numpy() if HO_[1] else np.zeros(3)
+            rs_ = torch.stack(HO_[1]).sum(0).cpu().numpy() if HO_[1] else np.zeros(3)
             with torch.no_grad():
                 pi_o = pol.head.plan_in(HS.plan[:2048]).abs().mean()
                 en_o = pol.enc(b_obs[T - 1, :2048].float()).abs().mean()
