@@ -83,7 +83,7 @@ class ffabot(duelbot):
         self.next_summary = time.time() + 60
         self.score = {}
 
-    WELCOME = "^2!bots <0-4>^7 sets how many of me play. ^2!map <name>^7 changes the map (^2!maps^7 lists them), ^2!mode duel^7 is one against one."
+    WELCOME = duelbot.WELCOME                              # (owner, 2026-10-16: one welcome for both modes)
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game. ^2!bots <0-4>^7 sets how many of me play; people get the other seats (six play, the rest spectate).",
             "^3Commands:^7 ^2F3^7 readies you up: when more than half of the people are ready a real game starts (10 min, machine gun at spawn; the scoreboard and a vote for the next map at its end). ^2!map <name>^7 changes the map (^2!maps^7 lists them), ^2!map testlab^7 is 1v1 with ^2!reflex^7 and ^2!movement^7. ^2!mode ffa|duel^7 switches the mode.",

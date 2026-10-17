@@ -144,8 +144,8 @@ def is_bot(p):
 
 
 class ladder(minqlx.Plugin):
-    WELCOME = ("^3See how I rank on the leaderboard:^7 ^2!bobby^7 shows my rating and rank, ^2!top^7 the board, ^2!elo^7 yours. "
-               "Every frag between you and me counts.")
+    WELCOME = ("^3This server has a local leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the whole board). "
+               "Every frag between you and me counts ^6(including warmup)^7")
     HELP = ("^3Leaderboard:^7 every frag between a person and me counts, in warmup and in games. ^2!bobby^7 my rating and rank, "
             "^2!top^7 the board, ^2!elo^7 yours (ranked from {} frags with me; the board shows the name you play under).".format(_ra.MIN_FRAGS))
 
@@ -318,6 +318,66 @@ class ladder(minqlx.Plugin):
         self.table.save()
 
     # ------------------------------------------------------------------ finished duels (duels.jsonl)
+    @staticmethod
+    def version_of(net):
+        """the docs' version name of a run (as sim/export_duel.py: duel_gru_v0_3_1b -> v0.3.1, duel_gru_v15c -> v0.1)"""
+        import re
+        m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", str(net))
+        return "v" + m.group(1).replace("_", ".") if m else "v0.1" if net == "duel_gru_v15c" else str(net)
+
+    def duel_record(self):
+        """(owner, 2026-10-16) Bobby's record in full duel games against people: real games (kind "game"), no forfeits,
+        the owner's games included (owner, 2026-10-16). Returns {version: [won, lost, drawn]} with "all" for every version together."""
+        path = os.path.join(D, "duels.jsonl")
+        try:
+            mt = os.path.getmtime(path)
+        except OSError:
+            return {"all": [0, 0, 0]}
+        if getattr(self, "_rec", None) and self._rec[0] == mt:
+            return self._rec[1]
+        out = {"all": [0, 0, 0]}
+        with open(path) as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if d.get("kind") != "game" or d.get("forfeit"):
+                    continue
+                p_, b_ = d["score"]
+                k_ = 0 if b_ > p_ else 1 if b_ < p_ else 2
+                for v_ in ("all", self.version_of(d.get("net", ""))):
+                    out.setdefault(v_, [0, 0, 0])[k_] += 1
+        self._rec = (mt, out)
+        return out
+
+    @staticmethod
+    def wld(r):
+        """won-lost, and -drawn only if there was a draw"""
+        return "{}-{}".format(r[0], r[1]) + ("-{}".format(r[2]) if r[2] else "")
+
+    def record_line(self):
+        """the welcome's line: "Duel record (full games): v0.3.1 0-0 | all versions 0-37" (the network playing now first)"""
+        rec = self.duel_record()
+        pl = self.bot_plugin()
+        ver = pl.bot_version() if pl is not None and hasattr(pl, "bot_version") else None
+        cur = "^2{}^7 ^5{}^7 | ".format(ver, self.wld(rec.get(ver, [0, 0, 0]))) if ver else ""
+        return "^3Duel record^7 (full games): {}all versions ^5{}^7".format(cur, self.wld(rec["all"]))
+
+    def end_lines(self):
+        """what Bobby says after a finished duel (owner, 2026-10-16: "he should also tell his elo and overall record at the
+        end of a duel match"; on two lines, the chat box cut one off): the board's rating of the network playing now, then
+        the record, this game included"""
+        rec = self.duel_record()
+        bobby = self.bobby_key()
+        p = self.table.players.get(bobby) if bobby else None
+        out = []
+        if p is not None:
+            n, of = self.table.rank(bobby, bobby)
+            out.append("my rating ^2{:.0f}^7 (rank ^3{}^7 of {})".format(p["r"], n, of))
+        out.append("my duel record ^5{}^7".format(self.wld(rec["all"])))
+        return out
+
     def on_game_start(self, data):
         """a real game began: in 1v1 mode it is a duel between the person and Bobby, written down at its end. Who plays
         is read in the frames after (at the start the game's bots are between teams for a moment)."""
@@ -352,6 +412,8 @@ class ladder(minqlx.Plugin):
             limit = float(minqlx.get_cvar("timelimit") or 0) * 60.0
             forfeit = d.get("left") or "forfeit" in msg or ("limit hit" not in msg and limit > 0 and secs < limit - 5)
             self.note_duel(d["key"], d["owner"], secs / 60.0, d["score"][0], d["score"][1], forfeit, "game", net=d["net"])
+            if not forfeit:
+                self.full_duel_t = time.time()               # (plugins/banter.py: Bobby says his rating and record after his gg)
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
@@ -370,12 +432,18 @@ class ladder(minqlx.Plugin):
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
     # ------------------------------------------------------------------ QLStats (docs/design/QLSTATS.md); all of it behind QL_ON
-    QL_WELCOME = ("^3Ratings:^7 I look up your public QLStats rating (your Steam id goes to qlstats.net) to see how strong my "
+    QL_WELCOME = ("I look up your public ^5QLStats^7 rating (your Steam id goes to qlstats.net) to see how strong my "
                   "opponents are. ^2!qlstats off^7 stops it.")
 
     def welcome_lines(self, player):
         """what a person is told about the leaderboard on joining (duelbot.on_player_loaded)"""
         out = [self.WELCOME]
+        try:
+            rec_ = self.record_line()
+            if rec_:
+                out.append(rec_)
+        except Exception:                                    # noqa: BLE001
+            pass
         try:
             if QL_ON and not is_bot(player) and self.key(player) not in self.ql_off:
                 out.append(self.QL_WELCOME)

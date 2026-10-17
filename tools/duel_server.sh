@@ -70,7 +70,7 @@ LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # 
 PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live; banlist: the owner's !kick and !ban; ladder: the leaderboard
 if [ -n "$FFA" ]; then PLUGINS="botctl, banlist, ladder, banter, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
 [ -n "$PLUGINS_EXTRA" ] && PLUGINS="$PLUGINS, $PLUGINS_EXTRA"
-docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" -e FFA_OBSDUMP="${FFA_OBSDUMP:-}" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" -e FFA_OBSDUMP="${FFA_OBSDUMP:-}" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $DOCKER_EXTRA "$IMAGE" +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"
