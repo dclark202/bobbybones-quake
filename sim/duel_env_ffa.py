@@ -1031,6 +1031,12 @@ PLAY_VARS = PLAY_VARS + ("WALK_NO_JUMP",)
 # runs (run_k >= 0: no enemy) his legs do not carry him: he drives himself. The legs are still worked out as before (the
 # simulator's random numbers are the same), only their choices are not taken there; the switch input reads "off" there.
 SOLO_SELF = float(os.environ.get("SOLO_SELF") or 0.0) > 0
+# v0.3.5, one movement network step 6: NO_SWITCH=1 (a PLAY_VAR) retires the switch to his legs: it is read as "my own
+# movement" for every seat on every frame (the output stays in ACTION_DIMS, so every other output's draw is as before);
+# his own network always drives. The legs' network is still worked out by whoever feeds it (legs_prep) for the parts that
+# read it (legs_door, the gate and its motor layer), never to move him.
+NO_SWITCH = float(os.environ.get("NO_SWITCH") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("NO_SWITCH",)
 
 
 def walk_no_jump(a):
@@ -3581,6 +3587,8 @@ class DuelEnv:
         view turn in a (walk and zoom let go). Called before the finger limits: its keys pass through his hand as his do."""
         n = self.n
         who = self.script == 0
+        if NO_SWITCH:                                        # (NO_SWITCH) the switch is off for every seat
+            a[:, LEGS_HEAD] = 0
         if SOLO_SELF:                                        # (SOLO_SELF) his runs this frame (an item run, a jump run: no enemy)
             self.solo_now = who & (self.run_k[:n] >= 0)
             c_ = self.solo_now & self._counted(np.arange(n)) & (self.hp > 0)

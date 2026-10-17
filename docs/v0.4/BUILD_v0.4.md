@@ -588,3 +588,26 @@ himself and could never meet the legs. Each part has its own switch, off by defa
   door 3.1e-6, gate and motor 2.9e-5 (6.6e-6 as chances for the whole network, its usual gap).
 - Small training runs (v0.3.2's switches, its league, v0.3.1's end as anchor): the gate, the motor layer and the residual
   move, the fade rises with his run speed and is saved; the control loads in `tools/duel_eval.py` beside the learner.
+
+## 9. v0.3.5 as built: step 6, the switch retired (branch v035 from v034, 2026-10-17)
+
+- **`--no-switch 1`** (trainer): the switch output is still drawn (it stays in ACTION_DIMS: taking it out would move every
+  later output's random number) and then set off for his seats and the league's snapshots; an anchor's seats (the control)
+  keep their own switch and legs. The simulators are not told (duel_env's `NO_SWITCH`, a PLAY_VAR, would take the control's
+  legs too); the checkpoint's env_vars carry `NO_SWITCH=1`, so `test_suite.Policy`, `netpass` and the plugins set his switch
+  off after drawing it (on a server the simulator's own clamp applies as well). The switch's lesson is dropped.
+- **The branch learns from his own loss**: with the switch retired its own PPO term is empty (the legs never draw), so
+  `legs_door` and the gate's motor layer read the branch under the gradient (no longer detached), at `--legs-learn 1.0` (the
+  full rate). Needs `--legs-feat` or `--legs-gate`.
+- **Kept, unused**: the residual (B) and the turn correction (they act only while the legs drive): kept so that the file
+  loads beside the league's and a step back is a change of switches only. `--switch-fade` and `--solo-self-drive` have
+  nothing left to do (the first is refused with `--no-switch`).
+- `tools/prep_v035.py`: a v0.3.4 save -> NO_SWITCH=1 in env_vars, no fade, weights untouched; the league copied.
+
+**Proofs** (CPU): every switch off, against branch v034: `ident16` IDENTICAL (both modules, Blood Run, Aerowalk), the
+trainer six updates bit for bit with v0.3.4's own settings. v0.3.4's start against its step-6 conversion, 2,000 frames x
+32 seats, resets, the same draws: memory identical; on the 32,120 rows where the v0.3.4 network's switch was off every
+choice identical; on the 31,880 where it was on, every choice but the switch identical; `netpass` = `test_suite` exactly.
+In the simulator the converted network's play parts from the original's at the first frame the legs drove (frame 1:
+they carried him on 90.8% of the seat-frames of that sample; 65.6% of his game time in v0.3.4's run at update 5). The
+small run: his own legs' share 0 on every update, the branch moves (largest step 0.0125 in 74 updates), the control loads.

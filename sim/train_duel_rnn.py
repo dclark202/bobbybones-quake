@@ -738,6 +738,10 @@ def main():
                     help="(v0.3.4 C) 1: a bias taken off the switch's 'legs' choice, from 0 (or the checkpoint's), raised by "
                          "--switch-fade-step after each update in which his own speed in the runs is at least --switch-fade-speed, "
                          "up to --switch-fade-max. Saved in the checkpoint and in policy.npz (the plugins take it off too)")
+    ap.add_argument("--no-switch", type=int, default=0,
+                    help="(v0.3.5, step 6) 1: the switch to his legs retired (sets duel_env's NO_SWITCH): his own network always "
+                         "drives, the switch's lesson is dropped, and the legs' branch is no longer detached in legs_door and the "
+                         "gate's motor layer: it learns from his own loss through them, at --legs-learn of the rate")
     ap.add_argument("--switch-fade-step", type=float, default=0.25)
     ap.add_argument("--switch-fade-speed", type=float, default=325.0)
     ap.add_argument("--switch-fade-max", type=float, default=8.0)
@@ -758,6 +762,7 @@ def main():
     a = ap.parse_args()
     if a.solo_self_drive:                                    # (v0.3.4 C) read by the simulators (spawned with this environment)
         os.environ["SOLO_SELF"] = "1"
+
 
     import torch
     import torch.nn as nn
@@ -824,6 +829,8 @@ def main():
             m = dc if j in KEY_HEADS else (lv if j == I_HEAD else (ll if j == L_HEAD else None))
             if j == L_HEAD and so is not None and a.solo_self_drive:     # (--solo-self-drive) not in his runs
                 m = m * (1.0 - so)
+            if j == L_HEAD and NO_SW:                            # (--no-switch) the switch's lesson dropped
+                m = ll * 0.0
             if j == W_HEAD:                                      # (WAYS) his way: on the frames the intention was read; on none with the switch off
                 m = lv if W_ON else lv * 0.0
             if j in L_TAKES:
@@ -1047,6 +1054,13 @@ def main():
     UNI_FEAT, UNI_GUIDE = bool(UNI and UNI["feat"]), bool(UNI and UNI["guide"])
     UNI_GATE, UNI_RES = bool(UNI and UNI.get("gate")), bool(UNI and UNI.get("residual"))      # (v0.3.4 A, B)
     UNI_ON = UNI_FEAT or UNI_GUIDE or UNI_GATE or UNI_RES
+    NO_SW = bool(a.no_switch)                                # (--no-switch, v0.3.5) his legs never drive: the switch is drawn as before and
+    #                                                          set off for his seats and the league's snapshots (an anchor, the control, keeps
+    #                                                          its own); the simulators are not told (NO_SWITCH there would take the control's
+    #                                                          legs too); the checkpoint's env_vars carry NO_SWITCH=1 for the checks and plugins
+    assert not NO_SW or (a.legs_learn > 0 and (UNI_FEAT or UNI_GATE)), \
+        "--no-switch: with --legs-learn and --legs-feat or --legs-gate (the branch learns only through them then)"
+    assert not (NO_SW and a.switch_fade), "--no-switch: --switch-fade has nothing left to fade"
     assert not UNI_RES or a.legs_learn > 0, "--legs-residual: with --legs-learn (its parts learn from the legs' draws, as the branch)"
     UNI_SAVE = {"legs_unify": UNI} if UNI_ON else {}
     UNI_PFX = ("legs_door.", "legs_guide", "legs_gate.", "legs_motor.", "legs_res_a.", "legs_res.")                  # (their names: in the main optimiser group, clipped on their own)
@@ -1143,7 +1157,7 @@ def main():
             GRU's input or None, what the guide adds to his logits or None); the branch's numbers detached"""
             if not UNI_ON or xl is None:
                 return None, None
-            h2, lgl = LU_.t_branch(self.legs, xl)
+            h2, lgl = LU_.t_branch(self.legs, xl, grad=NO_SW)  # (--no-switch: under the gradient, the branch learns through them)
             ok = LU_.t_way(xl)
             dadd = self.legs_door(h2) * ok[..., None] if UNI_FEAT else None
             if not (UNI_GUIDE or UNI_GATE):
@@ -1460,7 +1474,7 @@ def main():
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
-                        env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
+                        env_vars=dict({k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)}, **({"NO_SWITCH": "1"} if NO_SW else {})),
                         round_secs=ROUND_SECS_CK, arena_secs=float(a.arena_len),
                         game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
                         game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS", "OVERTIME", "STYLE_P") if os.environ.get(k_)},   # games: their clock and score
@@ -1742,6 +1756,8 @@ def main():
                     lo, _, h_opp = opp.step(x, h_opp, sm=SM_O, xl=xlu_)
                     act_o = draw(opp, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
+            if NO_SW:                                                    # (--no-switch) off, but for an anchor's seats (the control keeps its legs)
+                act[:, L_HEAD] = torch.where(snap_players & bool(snaps and vs_anchor), act[:, L_HEAD], torch.zeros_like(act[:, L_HEAD]))
             b_obs[t], b_act[t], b_val[t] = x, act, val
             if AUX_TW and t >= T - AUX_TW:                               # (--aux-tail) his memory as he played the rollout's last frames
                 b_ht[t - (T - AUX_TW)] = pol.zl.half().cpu()             # (--slow-mem: what the outputs read; h with it off)

@@ -81,6 +81,7 @@ class Policy:
             r_ = tuple(sd[k_] for k_ in ("legs_res_a.weight", "legs_res_a.bias", "legs_res.weight", "legs_res.bias"))
             self.uniR = r_ if sum(float(np.abs(x_).sum()) for x_ in r_) > 0 else None
         self.fade = float(ck.get("switch_fade", 0.0))        # (--switch-fade) taken off the switch's "legs" choice
+        self.no_switch = str((ck.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")   # (v0.3.5) the switch retired
         self.last_zo = None                                  # (--legs-residual) what his outputs read on the last act(), for legs_logits()
         self.slow = ck.get("slow")                           # (--slow-mem) the slow memory: its layout and weights; the memory array
         self.W = self.H                                      # a seat carries is wider (sim/slowmem.py: [fast | slow | sum | count | frames])
@@ -224,6 +225,8 @@ class Policy:
                 one(j, logits[:, o_[j]:o_[j + 1]])
         for p_, c_ in self.order:                                        # (--ordered-heads) after the one before, its table's row added
             one(int(c_), logits[:, o_[c_]:o_[c_ + 1]] + self.orderT[int(c_)][out[:, int(p_)]])
+        if self.no_switch and out.shape[1] > 11:             # (NO_SWITCH) drawn as before, then off: his own network drives
+            out[:, 11] = 0
         return out, h
 
 

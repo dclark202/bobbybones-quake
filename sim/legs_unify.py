@@ -148,10 +148,12 @@ def t_way(xl):
     return (xl.abs().amax(-1) > 0).float()
 
 
-def t_branch(legs, xl):
-    """(detached) the branch's second hidden layer and logits: legs is the trainer's nn.Sequential (legs.0 .. legs.4)"""
+def t_branch(legs, xl, grad=False):
+    """(detached; grad: under the gradient, v0.3.5's --no-switch) the branch's second hidden layer and logits: legs is the
+    trainer's nn.Sequential (legs.0 .. legs.4)"""
+    import contextlib
     import torch
-    with torch.no_grad(), torch.autocast(device_type=xl.device.type, enabled=False):
+    with (contextlib.nullcontext() if grad else torch.no_grad()), torch.autocast(device_type=xl.device.type, enabled=False):
         h2 = legs[:4](xl[..., :legs[0].in_features].float())   # (a branch narrower than the inputs: the old ones come first)
         return h2, legs[4](h2)
 

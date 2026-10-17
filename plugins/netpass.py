@@ -232,7 +232,12 @@ def step(P, A, obs, h, rng, events=None, xl=None):
     if float(P.get("switch_fade", 0.0)) > 0:                 # (--switch-fade) off the switch's "legs" choice, as in training
         logits = logits.copy()
         logits[:, int(np.sum(P["action_dims"][:11])) + 1] -= float(P["switch_fade"])
-    return draw(P, logits, rng), h
+    out = draw(P, logits, rng)
+    if P.get("_no_switch") is None:                          # (v0.3.5, NO_SWITCH) the switch retired: drawn as before, then off
+        P["_no_switch"] = str(json.loads(str(P["env_vars"])).get("NO_SWITCH", "0")) not in ("0", "", "0.0") if "env_vars" in P else False
+    if P["_no_switch"] and out.shape[1] > 11:
+        out[:, 11] = 0
+    return out, h
 
 
 def draw(P, logits, rng):
