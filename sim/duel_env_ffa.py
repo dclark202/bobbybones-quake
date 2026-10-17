@@ -1013,6 +1013,34 @@ SPEED_LO, SPEED_HI = 320.0, 480.0
 #                 Counters: hop_pay (the sum), hop_n (take-offs that paid), hop_takeoffs (his take-offs with nobody in
 #                 view, paid or not), hop_chains (chains begun: first take-offs). 0 = off.
 HOP_PAY = float(os.environ.get("HOP_PAY") or 0.0)
+#   HOP_QUIET=1   (v0.3.4, a pay change the owner approved on 2026-10-17) HOP_PAY pays nothing on the frames where, by his own
+#                 senses, the enemy is near: he heard him in the last HOP_QUIET_HEARD seconds (the hearing clock of the belief
+#                 inputs, v02_ht), or believes him within HOP_QUIET_NEAR units (v02_bel), or his intention is one of the map's
+#                 holding places. Equilibrium in self-play: both sides are paid less for noisy speed near each other, so
+#                 the approaches near the enemy get quieter while speed away from him is paid as before (goals 1 and 3:
+#                 speed and movement where it is free, positioning near the enemy). Counter: hop_quiet (take-offs it silenced).
+HOP_QUIET = float(os.environ.get("HOP_QUIET") or 0.0) > 0
+HOP_QUIET_HEARD, HOP_QUIET_NEAR = 4.0, 700.0
+PLAY_VARS = PLAY_VARS + ("HOP_QUIET",)
+# v0.3.4 D: WALK_NO_JUMP=1 (a PLAY_VAR; the owner's hard rule of 2026-10-17: in the game a held walk key does not stop a
+# jump, so walking means jump off): wherever his walk key is on as his hands and legs leave it, before the finger limits,
+# his jump (the vertical key's 1) is let go. Counter: walk_jump (frames of policy seats with both asked, before the rule).
+WALK_NO_JUMP = float(os.environ.get("WALK_NO_JUMP") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("WALK_NO_JUMP",)
+# v0.3.4 C: SOLO_SELF=1 (a training switch, not a PLAY_VAR: the trainer's --solo-self-drive sets it) in item runs and jump
+# runs (run_k >= 0: no enemy) his legs do not carry him: he drives himself. The legs are still worked out as before (the
+# simulator's random numbers are the same), only their choices are not taken there; the switch input reads "off" there.
+SOLO_SELF = float(os.environ.get("SOLO_SELF") or 0.0) > 0
+
+
+def walk_no_jump(a):
+    """(WALK_NO_JUMP) a [players, outputs], in place: where the walk key (7) is on, the jump (vertical key 1) let go.
+    Returns the rows that had both."""
+    if a.shape[1] <= 7:
+        return np.zeros(len(a), bool)
+    both = (a[:, 7] == 1) & (a[:, 2] == 1)
+    a[both, 2] = 0
+    return both
 HOP_GROUND, HOP_SLOW, HOP_GIVEN, HOP_VZ = 0.4, 250.0, 40.0, 400.0     # (a jump gives 275 upward, 385 soon after another; a pad more)
 #   GAME_P, LATE_P, WIN_PAY   stage B part 4 (docs/design/V02_STAGE_B.md; the owner, 2026-10-11: whole games "Yes", a frag
 #                 paid by what it moves his chance of winning "yes", late-game rounds from drawn states "yes, up to 25%").
@@ -2372,6 +2400,7 @@ class DuelEnv:
         self.legs = np.zeros(self.n, bool)                  # LEGS: his switch as it stands (his legs, not his own movement),
         self.legs_on = np.zeros(self.n, bool)               # ... the movement network moved him this frame,
         self.legs_live = np.zeros(self.n, bool)             # ... the switch was read this frame
+        self.solo_now = np.zeros(self.n, bool)              # SOLO_SELF: in a run this frame (his legs' choices not taken)
         self.ta_add = np.zeros(self.n, np.float32)          # LEGS_TURN_ADD: his correction of this frame on top of his legs' turn (degrees)
         self.legs_tick = 0
         self.legs_no = np.zeros(self.n, np.int64)           # ... readings of "my own movement" in a row (LEGS_OFF)
@@ -2695,6 +2724,9 @@ class DuelEnv:
                                                           # with the enemy in view; times he reached one; the sum of his speed on the way (not yet at it)
                           auto_switch=0,                  # AUTO_SWITCH: weapon changes the game made for him on an empty weapon
                           turn_add=np.zeros(3),           # LEGS_TURN_ADD: frames his legs carried him (counted seats), of them with a correction, its size (sum)
+                          walk_jump=0,                    # frames of policy seats with walk and jump both asked (before WALK_NO_JUMP)
+                          solo=np.zeros(2),               # SOLO_SELF: frames he drove himself in runs (counted seats, alive), his speed there (sum)
+                          hop_quiet=0,                    # HOP_QUIET: take-offs whose pay it silenced
                           keys_add=np.zeros(1 + len(KA_COLS)),   # LEGS_KEYS_ADD: frames his legs carried him (counted seats), of them his own output
                           #                                 in place of the legs' for each of KA_COLS
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
@@ -3549,6 +3581,10 @@ class DuelEnv:
         view turn in a (walk and zoom let go). Called before the finger limits: its keys pass through his hand as his do."""
         n = self.n
         who = self.script == 0
+        if SOLO_SELF:                                        # (SOLO_SELF) his runs this frame (an item run, a jump run: no enemy)
+            self.solo_now = who & (self.run_k[:n] >= 0)
+            c_ = self.solo_now & self._counted(np.arange(n)) & (self.hp > 0)
+            self.stats["solo"] += (float(c_.sum()), float(np.hypot(self.state[c_, 3], self.state[c_, 4]).sum()))
         if LEGS_TURN_ADD:                                    # (LEGS_TURN_ADD) this frame's correction: none until his legs carry him
             self.ta_add = np.zeros(n, np.float32)
         self.legs_tick += 1
@@ -3595,6 +3631,8 @@ class DuelEnv:
             self.legs_wh = ok & self.legs_held               # a withheld stretch: the label is there, his own outputs stay
             ok = ok & ~self.legs_held
         own_ = a[:, list(KA_COLS)].copy() if LEGS_KEYS_ADD and a.shape[1] >= KA_HEAD + len(KA_COLS) else None
+        if SOLO_SELF:                                        # (SOLO_SELF) in his runs his legs' choices are not taken: he drives himself
+            ok = ok & ~self.solo_now
         a[ok, :4] = ch[ok]
         a[ok, 7:9] = 0
         self.legs_on = ok
@@ -4917,7 +4955,7 @@ class DuelEnv:
         if getattr(self, "_pm", None) is not None:           # the projectiles he sees beyond the nearest two, and what each is about to do
             out[:, JL.N_JUMP + 6:N_V15 - N_LEGS - N_EN] = self._pm
         if LEGS:                                             # his legs: the switch as it stands, and that they carried him on the last frame
-            out[:, N_V15 - N_EN - 2], out[:, N_V15 - N_EN - 1] = self.legs, self.legs_on
+            out[:, N_V15 - N_EN - 2], out[:, N_V15 - N_EN - 1] = (self.legs & ~self.solo_now) if SOLO_SELF else self.legs, self.legs_on
         if EN_ON:                                            # his intention is the enemy (FIGHT_TARGET, HUNT)
             out[:, N_V15 - 1] = self.intent == EN_INTENT
         return out
@@ -7143,6 +7181,11 @@ class DuelEnv:
             a[sc] = self._script_actions(sc)
         if LEGS and a.shape[1] > LEGS_HEAD:
             self._legs_step(a)
+        if a.shape[1] > 7:                                   # (walk and jump both asked by a policy seat: counted; WALK_NO_JUMP lets the jump go)
+            wj_ = (a[:, 7] == 1) & (a[:, 2] == 1) & (self.script == 0)
+            self.stats["walk_jump"] += int(wj_.sum())
+            if WALK_NO_JUMP:
+                walk_no_jump(a)
         if self.key_limits:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
@@ -7273,6 +7316,14 @@ class DuelEnv:
                     & ((prev[:, 6] > 0.5) | (prev[:, 5] <= 0.0)))          # a take-off: from the floor, or touched inside the frame
             can_ = off_ & human & (self.hp > 0) & ((pkind == NORMAL) | in_run)
             hop_ = HOP_PAY * np.where(can_ & (self.hop_best > 0), np.maximum(0.0, hc_ - self.hop_best), 0.0)   # (the first sets the best)
+            if HOP_QUIET:                                    # (HOP_QUIET) nothing while the enemy is near by his own senses
+                q_ = (self.v02_ht < HOP_QUIET_HEARD).any(1) if getattr(self, "v02_ht", None) is not None else np.zeros(len(hop_), bool)
+                if getattr(self, "v02_bel", None) is not None:
+                    q_ = q_ | (np.asarray(self.v02_bel_ok, bool) & (np.linalg.norm(self.v02_bel - s[:, :3], axis=1) < HOP_QUIET_NEAR))
+                if self.hold_n:
+                    q_ = q_ | ((self.intent >= HOLD_INTENT) & (self.intent < HOLD_INTENT + HOLD_SLOTS))
+                self.stats["hop_quiet"] += int((q_ & (hop_ > 0)).sum())
+                hop_ = np.where(q_, 0.0, hop_)
             reward += hop_
             self.hop_best = np.where(off_, np.maximum(self.hop_best, hc_), self.hop_best).astype(np.float32)
             self.hop_sum = (self.hop_sum + hop_).astype(np.float32)

@@ -30,12 +30,13 @@ sys.path.insert(0, os.path.join(ROOT, "sim"))
 sys.path.insert(0, os.path.join(ROOT, "plugins"))
 
 
-def _layout(ck, feat, guide):
+def _layout(ck, feat, guide, gate=0, residual=0):
     import importlib
     import legs_unify as LU_
     import movement_env as M_
     E_ = importlib.import_module(ck.get("env_module") or "duel_env")
-    return LU_.layout(ck["action_dims"], E_.TURN, M_.TURN_BINS, feat, guide)
+    return LU_.layout(ck["action_dims"], E_.TURN, M_.TURN_BINS, feat, guide, gate=gate, residual=residual,
+                      mem=int(ck["model"]["gru.weight_hh"].shape[1]))
 
 
 def add_keys(ck):
@@ -57,7 +58,7 @@ def add_keys(ck):
     ck["env_vars"] = dict(ck.get("env_vars") or {}, LEGS_KEYS_ADD="1")
 
 
-def widen(src, dst, feat=True, guide=True, keys=False):
+def widen(src, dst, feat=True, guide=True, keys=False, gate=False, residual=False):
     import torch
     ck = torch.load(src, weights_only=False, map_location="cpu")
     sd = ck["model"]
@@ -66,16 +67,23 @@ def widen(src, dst, feat=True, guide=True, keys=False):
         add_keys(ck)
         sd = ck["model"]
     old = ck.get("legs_unify") or {}
-    lay = _layout(ck, feat or old.get("feat", 0), guide or old.get("guide", 0))
+    lay = _layout(ck, feat or old.get("feat", 0), guide or old.get("guide", 0), gate or old.get("gate", 0), residual or old.get("residual", 0))
     if lay["feat"] and "legs_door.weight" not in sd:
         sd["legs_door.weight"] = torch.zeros(lay["enc"], lay["hid"])
         sd["legs_door.bias"] = torch.zeros(lay["enc"])
     if lay["guide"] and "legs_guide" not in sd:
         sd["legs_guide"] = torch.zeros(len(lay["outs"]))
+    H = int(sd["gru.weight_hh"].shape[1])
+    for n_, o_, i_, on_ in (("legs_gate", len(lay["outs"]), H, lay["gate"]), ("legs_motor", lay["motor"], lay["hid"], lay["gate"]),
+                            ("legs_res_a", len(lay["bdims"]), H, lay["residual"]), ("legs_res", int(sum(lay["bdims"])), H, lay["residual"])):
+        if on_ and n_ + ".weight" not in sd:                 # (v0.3.4 A, B) at zero
+            sd[n_ + ".weight"] = torch.zeros(o_, i_)
+            sd[n_ + ".bias"] = torch.zeros(o_)
     ck["legs_unify"] = lay
     torch.save(ck, dst)
-    print("{} -> {}: feat {}, guide {} (at zero){}; {} outputs".format(os.path.basename(src), os.path.basename(dst), lay["feat"], lay["guide"],
-                                                                     ", keys shut" if keys else "", len(ck["action_dims"])))
+    print("{} -> {}: feat {}, guide {}, gate {}, residual {} (at zero){}; {} outputs".format(
+        os.path.basename(src), os.path.basename(dst), lay["feat"], lay["guide"], lay["gate"], lay["residual"],
+        ", keys shut" if keys else "", len(ck["action_dims"])))
 
 
 def wake(src, dst, scale=0.05, seed=3):
@@ -88,6 +96,14 @@ def wake(src, dst, scale=0.05, seed=3):
         sd["legs_door.bias"] = torch.randn(sd["legs_door.bias"].shape, generator=g) * scale
     if "legs_guide" in sd:
         sd["legs_guide"] = torch.rand(sd["legs_guide"].shape, generator=g) + 0.25
+    for n_ in ("legs_gate", "legs_motor", "legs_res_a", "legs_res"):
+        if n_ + ".weight" in sd:
+            sd[n_ + ".weight"] = torch.randn(sd[n_ + ".weight"].shape, generator=g) * scale
+            sd[n_ + ".bias"] = torch.randn(sd[n_ + ".bias"].shape, generator=g) * scale
+    if "legs_res_a.bias" in sd:                              # (a well inside (0, 1))
+        sd["legs_res_a.bias"] = torch.rand(sd["legs_res_a.bias"].shape, generator=g) * 0.6 + 0.2
+    if "--fade" in sys.argv:
+        ck["switch_fade"] = float(sys.argv[sys.argv.index("--fade") + 1])
     torch.save(ck, dst)
     print("{} -> {}: the parts woken (scale {})".format(os.path.basename(src), os.path.basename(dst), scale))
 
@@ -118,13 +134,23 @@ class TorchNet:
         self.legs = nn.Sequential(nn.Linear(sd["legs.0.weight"].shape[1], 256), nn.Tanh(), nn.Linear(256, 256), nn.Tanh(), nn.Linear(256, 17))
         self.legs.load_state_dict({k[5:]: v for k, v in sd.items() if k.startswith("legs.")})
         self.uni = LU_.as_layout(ck.get("legs_unify"))
-        self.door = self.gw = self.gm = None
+        self.door = self.gw = self.gm = self.gate = self.res = None
+        self.fade = float(ck.get("switch_fade", 0.0))
         if self.uni and self.uni["feat"]:
             self.door = nn.Linear(self.uni["hid"], self.uni["enc"])
             self.door.load_state_dict({"weight": sd["legs_door.weight"], "bias": sd["legs_door.bias"]})
-        if self.uni and self.uni["guide"]:
-            self.gw = sd["legs_guide"].float()
+        if self.uni and (self.uni["guide"] or self.uni.get("gate")):
+            self.gw = sd["legs_guide"].float() if self.uni["guide"] else None
             self.gm = LU_.GuideMaps(self.uni, "cpu")
+
+        def lin(n_):
+            l_ = nn.Linear(sd[n_ + ".weight"].shape[1], sd[n_ + ".weight"].shape[0])
+            l_.load_state_dict({"weight": sd[n_ + ".weight"], "bias": sd[n_ + ".bias"]})
+            return l_
+        if self.uni and self.uni.get("gate"):
+            self.gate = (lin("legs_gate"), lin("legs_motor"))
+        if self.uni and self.uni.get("residual"):
+            self.res = (lin("legs_res_a"), lin("legs_res"))
         self.dims = [int(d) for d in ck["action_dims"]]
 
     def step(self, obs, h, xl):
@@ -145,9 +171,17 @@ class TorchNet:
                 e = e + self.door(h2) * ok[:, None]
             hn = self.gru(e, torch.from_numpy(h))
             lg = self.pi(hn)
-            if self.gm is not None:
+            if self.gw is not None:
                 self.parts[1] = self.gm.add(self.gw, lgl, ok).numpy()
                 lg = lg + self.gm.add(self.gw, lgl, ok)
+            if self.gate is not None:                        # (v0.3.4 A)
+                ga_ = self.gm.add(self.gate[0](hn), lgl, ok) + self.gm.place(self.gate[1](h2) * ok[:, None])
+                self.parts.append(ga_.numpy())
+                lg = lg + ga_
+            if self.fade:
+                lg = lg.clone()
+                lg[:, int(sum(self.dims[:11])) + 1] -= self.fade
+            self.legs_lg = (LU_.t_residual(self.res[0], self.res[1], lgl, hn) if self.res is not None else lgl).numpy()
             return lg.numpy(), hn.numpy()
 
 
@@ -155,9 +189,15 @@ def _np_logits(pol, h_new, xl):
     """the numpy side's logits from its new memory: the outputs' layer and the guide (sim/legs_unify.py's numpy sums)"""
     import legs_unify as LU_
     lg = h_new @ pol.wp.T + pol.bp
+    ok = LU_.np_way(xl)
+    h2, lgl = LU_.np_branch(pol.legsP, xl)
     if pol.uniG is not None:
-        ok = LU_.np_way(xl)
-        lg = lg + LU_.np_guide_add(pol.uni, pol.uniG, LU_.np_branch(pol.legsP, xl)[1], ok, sum(pol.dims))
+        lg = lg + LU_.np_guide_add(pol.uni, pol.uniG, lgl, ok, sum(pol.dims))
+    if pol.uniT is not None:
+        lg = lg + LU_.np_gate_add(pol.uni, *pol.uniT, h_new, h2, lgl, ok, sum(pol.dims))
+    if pol.fade:
+        lg = lg.copy()
+        lg[:, int(sum(pol.dims[:11])) + 1] -= pol.fade
     return lg
 
 
@@ -181,6 +221,10 @@ def same(a, b, frames=2000, players=32, npz=None):
             pb.uniD = (sd["legs_door.weight"].numpy(), sd["legs_door.bias"].numpy())
         if pb.uni.get("guide"):
             pb.uniG = sd["legs_guide"].numpy().astype(np.float32)
+        if pb.uni.get("gate"):
+            pb.uniT = tuple(sd[k_].numpy() for k_ in ("legs_gate.weight", "legs_gate.bias", "legs_motor.weight", "legs_motor.bias"))
+        if pb.uni.get("residual"):
+            pb.uniR = tuple(sd[k_].numpy() for k_ in ("legs_res_a.weight", "legs_res_a.bias", "legs_res.weight", "legs_res.bias"))
     ta, tb = TorchNet(a), TorchNet(b)
     NP = None
     if npz:
@@ -188,12 +232,14 @@ def same(a, b, frames=2000, players=32, npz=None):
         NP = N_.load(npz)
         if NP[0].get("_uni") is None and pb.uni is not None:         # (forced as above)
             import legs_unify as LU_
-            NP[0]["_uni"] = (LU_.as_layout(NP[0]["legs_unify"]), pb.uniD, pb.uniG, LU_)
+            NP[0]["_uni"] = (LU_.as_layout(NP[0]["legs_unify"]), pb.uniD, pb.uniG, LU_, pb.uniT)
+            if pb.uniR is not None:
+                NP[0]["_res"] = (pb.uniR, LU_)
     n_in, n_l = len(pa.mean), pa.legsP[0].shape[1]
     rng = np.random.default_rng(1)
     ha, hb, hta, htb = pa.zeros(players), pb.zeros(players), pa.zeros(players), pb.zeros(players)
     hn = pb.zeros(players)
-    w = dict(b_extra_not0=0, part_door=0.0, part_guide=0.0, part_guide_p=0.0, tb_np_p=0.0, np_mem=0.0, np_acts=0, t_mem=0.0, t_logit=0.0, tb_np_mem=0.0, tb_np_logit=0.0, npass_mem=0.0, npass_acts=0, ways=0)
+    w = dict(legs_ab=0.0, legs_tn=0.0, legs_np_pass=0.0, part_gate=0.0, b_extra_not0=0, part_door=0.0, part_guide=0.0, part_guide_p=0.0, tb_np_p=0.0, np_mem=0.0, np_acts=0, t_mem=0.0, t_logit=0.0, tb_np_mem=0.0, tb_np_logit=0.0, npass_mem=0.0, npass_acts=0, ways=0)
     for f_ in range(frames):
         obs = (rng.standard_normal((players, n_in)) * 2.0).astype(np.float32)
         xl = rng.standard_normal((players, n_l)).astype(np.float32)
@@ -206,6 +252,7 @@ def same(a, b, frames=2000, players=32, npz=None):
         pa.rng, pb.rng = np.random.default_rng(1000 + f_), np.random.default_rng(1000 + f_)
         aa, ha = pa.act(obs, ha, xl=xl)
         ab, hb = pb.act(obs, hb, xl=xl)
+        w["legs_ab"] = max(w["legs_ab"], float(np.abs(pa.legs_logits(xl) - pb.legs_logits(xl, zo=hb)).max()))   # (the legs' logits his legs draw from)
         k_ = min(aa.shape[1], ab.shape[1])                   # (b may have more outputs: LEGS_KEYS_ADD's five, compared as "my legs'")
         w["np_mem"] = max(w["np_mem"], float(np.abs(ha - hb).max()))
         w["np_acts"] += int((aa[:, :k_] != ab[:, :k_]).sum())
@@ -215,6 +262,11 @@ def same(a, b, frames=2000, players=32, npz=None):
         w["t_mem"] = max(w["t_mem"], float(np.abs(hta - htb).max()))
         w["t_logit"] = max(w["t_logit"], float(np.abs(la - lb[:, :la.shape[1]]).max()))
         lt_, ht_ = tb.step(obs, hb_in, xl)                   # b in torch on numpy's memory (teacher-forced)
+        w["legs_tn"] = max(w["legs_tn"], float(np.abs(tb.legs_lg - pb.legs_logits(xl, zo=ht_)).max()))
+        if len(tb.parts) > 2:
+            import legs_unify as LU_
+            h2g_, lgg_ = LU_.np_branch(pb.legsP, xl)
+            w["part_gate"] = max(w["part_gate"], float(np.abs(tb.parts[2] - LU_.np_gate_add(pb.uni, *pb.uniT, ht_, h2g_, lgg_, LU_.np_way(xl), sum(pb.dims))).max()))
         import legs_unify as LU_                             # ... and the parts alone: torch's against sim/legs_unify.py's numpy sums
         ok_ = LU_.np_way(xl)
         h2_, lgl_ = LU_.np_branch(pb.legsP, xl)
@@ -233,6 +285,7 @@ def same(a, b, frames=2000, players=32, npz=None):
             an_, hn = N_.step(NP[0], NP[1], obs, hn, np.random.default_rng(1000 + f_), xl=xl)
             w["npass_mem"] = max(w["npass_mem"], float(np.abs(hn - hb).max()))
             w["npass_acts"] += int((an_ != ab).sum())
+            w["legs_np_pass"] = max(w["legs_np_pass"], float(np.abs(N_.legs_logits(NP[0], xl, zo=hn) - pb.legs_logits(xl, zo=hb)).max()))
     w["choices"] = frames * players * min(aa.shape[1], ab.shape[1])
     print("{} and {}: {} frames x {} seats, {} with a way; {}".format(os.path.basename(a), os.path.basename(b), frames, players, w["ways"],
                                                                        ", ".join("{} {:.3g}".format(k_, v_) for k_, v_ in w.items() if k_ != "ways")))
@@ -245,12 +298,12 @@ if __name__ == "__main__":
     def opt(name, default):
         return type(default)(args[args.index(name) + 1]) if name in args else default
     if args[0] == "widen":
-        widen(args[1], args[2], "--feat" in args, "--guide" in args, "--keys" in args)
+        widen(args[1], args[2], "--feat" in args, "--guide" in args, "--keys" in args, "--gate" in args, "--residual" in args)
     elif args[0] == "wake":
         wake(args[1], args[2], opt("--scale", 0.05))
     elif args[0] == "same":
         w_ = same(args[1], args[2], opt("--frames", 2000), opt("--players", 32), opt("--npz", ""))
-        ok_ = w_["np_mem"] == 0 and w_["np_acts"] == 0 and w_["t_mem"] == 0 and w_["t_logit"] == 0 and w_["b_extra_not0"] == 0
+        ok_ = w_["np_mem"] == 0 and w_["np_acts"] == 0 and w_["t_mem"] == 0 and w_["t_logit"] == 0 and w_["b_extra_not0"] == 0 and w_["legs_ab"] == 0
         print("exact" if ok_ else "not exact", "| torch against numpy (b): memory {:.2e}, logits {:.2e}, chances {:.2e}; the parts: door {:.2e}, "
               "guide {:.2e} (as chances {:.2e})".format(w_["tb_np_mem"], w_["tb_np_logit"], w_["tb_np_p"], w_["part_door"], w_["part_guide"],
                                                        w_["part_guide_p"]))

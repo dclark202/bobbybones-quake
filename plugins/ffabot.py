@@ -740,7 +740,7 @@ class ffabot(duelbot):
             A[:, 0] = A[:, 1] = 1
             A[live_bots] = acts
             if getattr(E, "LEGS", False) and A.shape[1] > getattr(E, "LEGS_HEAD", 99):
-                _net.legs_feed(self.P, env, E)                   # (LEGS_IN, B-253) his legs' choices from the branch of his network
+                _net.legs_feed(self.P, env, E, rows=live_bots)   # (LEGS_IN, B-253) his legs' choices from the branch of his network
                 env._legs_step(A)                                # his legs (duel_env's LEGS): every Bobby in one call, before the finger limits
                 self.legs_n = getattr(self, "legs_n", np.zeros(3))
                 on_ = env.legs_on[live_bots].astype(np.float64)
@@ -750,6 +750,8 @@ class ffabot(duelbot):
                     with open(os.path.join(D, "legs_status.txt"), "a") as f_:
                         f_.write("{} frames {} on his legs {:.3f} speed there {:.0f}\n".format(
                             time.strftime("%H:%M:%S"), int(self.legs_n[0]), self.legs_n[1] / self.legs_n[0], self.legs_n[2] / max(1.0, self.legs_n[1])))
+            if getattr(E, "WALK_NO_JUMP", False):            # (WALK_NO_JUMP) walking: the jump let go, before the finger limits
+                E.walk_no_jump(A)
             env.limit_keys(A, who=np.isin(np.arange(SEATS), live_bots))
             acts = A[live_bots]
         for a, k in zip(acts, live_bots):

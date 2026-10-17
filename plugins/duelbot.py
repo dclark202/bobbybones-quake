@@ -1321,7 +1321,7 @@ class duelbot(minqlx.Plugin):
             # network's choices of this frame take the place of his movement keys and view turn, before the finger limits
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             A[np.arange(env.n) != i, E.LEGS_HEAD] = 0
-            _net.legs_feed(self.P, env, E)                   # (LEGS_IN, B-253) his legs' choices from the branch of his network
+            _net.legs_feed(self.P, env, E, rows=[i])         # (LEGS_IN, B-253) his legs' choices from the branch of his network
             env._legs_step(A)
             a = A[i]
             self.legs_n = getattr(self, "legs_n", np.zeros(3))
@@ -1331,6 +1331,10 @@ class duelbot(minqlx.Plugin):
                 with open(os.path.join(D, "legs_status.txt"), "a") as f_:
                     f_.write("{} frames {} on his legs {:.3f} speed there {:.0f}\n".format(
                         time.strftime("%H:%M:%S"), int(self.legs_n[0]), self.legs_n[1] / self.legs_n[0], self.legs_n[2] / max(1.0, self.legs_n[1])))
+        if rules2 and not limited and getattr(E, "WALK_NO_JUMP", False):     # (WALK_NO_JUMP) walking: the jump let go, before the finger limits
+            A1_ = np.asarray(a, np.int64)[None].copy()
+            E.walk_no_jump(A1_)
+            a = A1_[0]
         if hand and not limited:                             # finger limits, as in training
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             env.limit_keys(A, who=np.arange(env.n) == i)

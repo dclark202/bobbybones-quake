@@ -33,7 +33,7 @@ BDIMS = (3, 3, 2, 9)                      # the branch's four choices: forward, 
 FLOOR = -10.0                             # the log-probability a bin the branch never gives reads
 
 
-def layout(action_dims, turn, turn_bins, feat, guide, enc=256, hid=256):
+def layout(action_dims, turn, turn_bins, feat, guide, enc=256, hid=256, gate=0, residual=0, mem=512):
     """the parts' layout: which are on, the mapping of each guided output ("M": [his bins, the branch's bins], or a
     column for an output the branch lets go: the chance of each of his bins)"""
     action_dims = [int(d) for d in action_dims]
@@ -52,8 +52,9 @@ def layout(action_dims, turn, turn_bins, feat, guide, enc=256, hid=256):
             m = np.zeros((hd, BDIMS[s]))
             m[np.arange(BDIMS[s]), np.arange(BDIMS[s])] = 1.0
         M.append(m.tolist())
-    return dict(version=1, feat=int(bool(feat)), guide=int(bool(guide)), enc=int(enc), hid=int(hid), outs=list(OUTS),
-                src=list(SRC), bdims=list(BDIMS), floor=FLOOR, M=M, action_dims=action_dims)
+    return dict(version=2, feat=int(bool(feat)), guide=int(bool(guide)), gate=int(bool(gate)), residual=int(bool(residual)),
+                enc=int(enc), hid=int(hid), mem=int(mem), outs=list(OUTS), src=list(SRC), bdims=list(BDIMS), floor=FLOOR, M=M,
+                action_dims=action_dims, motor=int(sum(action_dims[o] for o in OUTS)))
 
 
 def as_layout(x):
@@ -62,13 +63,18 @@ def as_layout(x):
         return None
     if isinstance(x, (str, bytes, np.ndarray)):
         x = json.loads(str(x))
-    return dict(x)
+    x = dict(x)
+    x.setdefault("gate", 0)
+    x.setdefault("residual", 0)
+    return x
 
 
 def describe(lay):
-    return "one movement network (steps 3, 4): {}{}".format(
-        "the legs' features into his fast GRU through legs_door" if lay["feat"] else "",
-        ("; " if lay["feat"] and lay["guide"] else "") + ("the legs' guide on his movement outputs {}".format(lay["outs"]) if lay["guide"] else ""))
+    p = ["the legs' features into his fast GRU through legs_door"] if lay["feat"] else []
+    p += ["the legs' guide on his movement outputs {}".format(lay["outs"])] if lay["guide"] else []
+    p += ["the gate g(h) and the motor layer on his own movement outputs (v0.3.4 A)"] if lay.get("gate") else []
+    p += ["the residual on his legs: (1 - a(h)) legs + W h (v0.3.4 B)"] if lay.get("residual") else []
+    return "one movement network: " + "; ".join(p)
 
 
 # ---- numpy ---------------------------------------------------------------------------------------------------------
@@ -92,7 +98,7 @@ def np_door(Wd, bd, h2, ok):
 
 
 def np_guide_add(lay, w, lgl, ok, total):
-    """what the guide adds to his logits [B, total]"""
+    """what the guide adds to his logits [B, total]. w: [6] (the static guide) or [B, 6] (the gate g(h), v0.3.4 A)"""
     off = np.concatenate([[0], np.cumsum(lay["action_dims"])]).astype(int)
     bo = np.concatenate([[0], np.cumsum(lay["bdims"])]).astype(int)
     add = np.zeros((len(lgl), total), np.float32)
@@ -104,8 +110,36 @@ def np_guide_add(lay, w, lgl, ok, total):
             l_ = lgl[:, bo[s]:bo[s + 1]].astype(np.float32)
             e_ = np.exp(l_ - l_.max(-1, keepdims=True))     # (softmax as torch works it out)
             q = (e_ / e_.sum(-1, keepdims=True)) @ M.T
-        add[:, off[o]:off[o + 1]] = w[i] * np.log(np.maximum(q, np.exp(lay["floor"]))) * ok[:, None]
+        wi = w[:, i:i + 1] if np.ndim(w) > 1 else w[i]
+        add[:, off[o]:off[o + 1]] = wi * np.log(np.maximum(q, np.exp(lay["floor"]))) * ok[:, None]
     return add
+
+
+def np_place(lay, v, total):
+    """(v0.3.4 A) the motor layer's numbers [B, motor] in their outputs' places in his logits [B, total], zeros elsewhere"""
+    off = np.concatenate([[0], np.cumsum(lay["action_dims"])]).astype(int)
+    add = np.zeros((len(v), total), np.float32)
+    j = 0
+    for o in lay["outs"]:
+        d = int(off[o + 1] - off[o])
+        add[:, off[o]:off[o + 1]] = v[:, j:j + d]
+        j += d
+    return add
+
+
+def np_gate_add(lay, Wg, bg, Wm, bm, z, h2, lgl, ok, total):
+    """(v0.3.4 A, --legs-gate) what the gate and the motor layer add to his logits [B, total]: g(z) times the legs' choice
+    mapped onto his bins, plus the motor layer of the legs' 256 numbers"""
+    g = z @ Wg.T + bg
+    return np_guide_add(lay, g, lgl, ok, total) + np_place(lay, (h2 @ Wm.T + bm) * ok[:, None], total)
+
+
+def np_residual(Wa, ba, Wr, br, lgl, z):
+    """(v0.3.4 B, --legs-residual) the legs' logits [B, 17] as his legs draw from them: (1 - a(z)) x the branch's + W z,
+    a = clamp(Wa z + ba, 0, 1), one for each of the four choices"""
+    a = np.clip(z @ Wa.T + ba, 0.0, 1.0)
+    a = np.repeat(a, BDIMS, axis=-1)
+    return ((1.0 - a) * lgl + (z @ Wr.T + br)).astype(np.float32)
 
 
 # ---- torch ---------------------------------------------------------------------------------------------------------
@@ -145,15 +179,36 @@ class GuideMaps:
             out.append((o, torch.log(q.clamp(min=float(np.exp(self.lay["floor"]))))))
         return out
 
+    def place(self, v):
+        """(v0.3.4 A) the motor layer's numbers [..., motor] in their outputs' places in his logits, zeros elsewhere"""
+        import torch
+        parts, j = [], 0
+        for o in range(len(self.off) - 1):
+            d = int(self.off[o + 1] - self.off[o])
+            if o in self.lay["outs"]:
+                parts.append(v[..., j:j + d])
+                j += d
+            else:
+                parts.append(torch.zeros(v.shape[:-1] + (d,), device=v.device, dtype=v.dtype))
+        return torch.cat(parts, -1)
+
     def add(self, w, lgl, ok):
-        """what the guide adds to his logits [..., total] (under the gradient of w only)"""
+        """what the guide adds to his logits [..., total] (under the gradient of w only). w: [6], or [..., 6] (the gate)"""
         import torch
         mp = dict(self.mapped(lgl))
         parts = []
         for o in range(len(self.off) - 1):
             if o in mp:
                 i = self.lay["outs"].index(o)
-                parts.append(w[i] * mp[o] * ok[..., None])
+                parts.append((w[..., i:i + 1] if w.dim() > 1 else w[i]) * mp[o] * ok[..., None])
             else:
                 parts.append(torch.zeros(lgl.shape[:-1] + (int(self.off[o + 1] - self.off[o]),), device=lgl.device))
         return torch.cat(parts, -1)
+
+
+def t_residual(res_a, res, lgl, z):
+    """(v0.3.4 B) the legs' logits as his legs draw from them: (1 - clamp(res_a(z), 0, 1)) x lgl + res(z)"""
+    import torch
+    a = res_a(z).clamp(0.0, 1.0)
+    a = torch.repeat_interleave(a, torch.tensor(BDIMS, device=a.device), dim=-1)
+    return (1.0 - a) * lgl + res(z)

@@ -128,7 +128,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (info["hand_lab"].astype(np.float16) if "hand_lab" in info else None),            # (--hand-teach) the target of his NEXT reading of the weapon key (zeros: none)
                          env.legs_prep() if legs_in else None,                                              # (LEGS_IN) the movement network's inputs of the next frame
                          (np.asarray(env.legs_raw, np.int8) if legs_in and getattr(env, "legs_raw", None) is not None    # (--legs-learn) the branch's own draws
-                          and len(env.legs_raw) == env.n else (np.full((env.n, 4), -1, np.int8) if legs_in else None))))  # of this frame (-1: none)
+                          and len(env.legs_raw) == env.n else (np.full((env.n, 4), -1, np.int8) if legs_in else None)),  # of this frame (-1: none)
+                         (env.solo_now.copy() if getattr(env, "solo_now", None) is not None else np.zeros(env.n, bool))))   # (SOLO_SELF) in his runs
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -719,6 +720,27 @@ def main():
                     "this process starts; a resume must pass the first start's minute, which the trainer prints)")
     ap.add_argument("--keys-add-to", type=float, default=2.94, help="... where the line ends: the bias of 'my legs' over 'mine' (with "
                                                                     "the weights at 0, 2.94 gives 'mine' on 5%% of the frames on his legs)")
+    ap.add_argument("--legs-gate", type=int, default=0,
+                    help="(v0.3.4 A; LEGS_IN) 1: his own movement outputs (0, 1, 2, 3, 7, 8) get g(h) x the legs' choice mapped onto "
+                         "their bins (as --legs-guide's) plus a motor layer of the legs' 256 numbers; g a linear layer of his memory, "
+                         "both at zero (sim/legs_unify.py). Counts where he drives himself. Saved in the checkpoint")
+    ap.add_argument("--legs-residual", type=int, default=0,
+                    help="(v0.3.4 B; LEGS_IN with --legs-learn) 1: on his legs the legs' logits become (1 - a(h)) x theirs + W h, "
+                         "a = clamp(linear(h), 0, 1) per choice, both at zero: the simulator draws his legs' choice from that, and "
+                         "it learns from those draws as the branch does. Saved in the checkpoint")
+    ap.add_argument("--legs-residual-ent", type=float, default=0.1,
+                    help="(--legs-residual) the exploration bonus on his legs' four choices: this times his own movement outputs' "
+                         "weights in --ent-heads")
+    ap.add_argument("--solo-self-drive", type=int, default=0,
+                    help="(v0.3.4 C) 1: in item runs and jump runs his legs do not carry him (duel_env's SOLO_SELF) and the switch's "
+                         "lesson is silent there")
+    ap.add_argument("--switch-fade", type=int, default=0,
+                    help="(v0.3.4 C) 1: a bias taken off the switch's 'legs' choice, from 0 (or the checkpoint's), raised by "
+                         "--switch-fade-step after each update in which his own speed in the runs is at least --switch-fade-speed, "
+                         "up to --switch-fade-max. Saved in the checkpoint and in policy.npz (the plugins take it off too)")
+    ap.add_argument("--switch-fade-step", type=float, default=0.25)
+    ap.add_argument("--switch-fade-speed", type=float, default=325.0)
+    ap.add_argument("--switch-fade-max", type=float, default=8.0)
     ap.add_argument("--legs-door-lr-scale", type=float, default=0.25,
                     help="(--legs-feat, --legs-guide) legs_door and the guide's weights in an optimiser group of their own at this share "
                          "of the rate (through the rate schedule)")
@@ -734,6 +756,8 @@ def main():
     ap.add_argument("--group", default="2", help="players per group, all against all (needs --env duel_env_ffa). Several "
                     "sizes separated by commas (2,3,4): the workers take them in turn, each with about as many players")
     a = ap.parse_args()
+    if a.solo_self_drive:                                    # (v0.3.4 C) read by the simulators (spawned with this environment)
+        os.environ["SOLO_SELF"] = "1"
 
     import torch
     import torch.nn as nn
@@ -786,7 +810,7 @@ def main():
     HAND_HEAD = 6                                            # ... the weapon key's output, where its choices begin among all outputs' and
     HAND_O, HAND_D = sum(ACTION_DIMS[:HAND_HEAD]), ACTION_DIMS[HAND_HEAD]      # how many they are ("keep", then a choice a weapon)
 
-    def head_masks(dc, lv, ll, lo, act=None):
+    def head_masks(dc, lv, ll, lo, act=None, so=None):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
         intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his).
         (LEGS_KEYS_ADD) act: his choices [..., outputs]: on his legs his own output of a column counts where he chose "mine"
@@ -798,6 +822,8 @@ def main():
             mine_ = {c_: (act[..., KA_HEAD + i_] == 1).to(lo.dtype) for i_, c_ in enumerate(KA_COLS)}
         for j in range(len(ACTION_DIMS)):
             m = dc if j in KEY_HEADS else (lv if j == I_HEAD else (ll if j == L_HEAD else None))
+            if j == L_HEAD and so is not None and a.solo_self_drive:     # (--solo-self-drive) not in his runs
+                m = m * (1.0 - so)
             if j == W_HEAD:                                      # (WAYS) his way: on the frames the intention was read; on none with the switch off
                 m = lv if W_ON else lv * 0.0
             if j in L_TAKES:
@@ -1009,19 +1035,24 @@ def main():
     # ones at zero; a flag adds its part to a network that has none, a resume keeps what the network has
     import legs_unify as LU_
     UNI = LU_.as_layout(UNI_CK)
-    if UNI is not None or a.legs_feat or a.legs_guide:
+    if UNI is not None or a.legs_feat or a.legs_guide or a.legs_gate or a.legs_residual:
         assert LEGS_IN, "--legs-feat / --legs-guide: his legs' branch must be inside (LEGS_IN=1 with LEGS=1 and --teacher)"
         assert not HAS_CELLS, "--legs-feat / --legs-guide: not for networks with the learned map cells (v8)"
         import movement_env as M_
         UNI = LU_.layout(ACTION_DIMS, E_.TURN, M_.TURN_BINS, (UNI or {}).get("feat", 0) or a.legs_feat,
-                         (UNI or {}).get("guide", 0) or a.legs_guide)
+                         (UNI or {}).get("guide", 0) or a.legs_guide, gate=(UNI or {}).get("gate", 0) or a.legs_gate,
+                         residual=(UNI or {}).get("residual", 0) or a.legs_residual, mem=H)
         assert tuple(UNI["outs"]) == tuple(L_TAKES), (UNI["outs"], L_TAKES)
         print(LU_.describe(UNI) + ("" if UNI_CK is not None else " (new: at zero)"), flush=True)
     UNI_FEAT, UNI_GUIDE = bool(UNI and UNI["feat"]), bool(UNI and UNI["guide"])
-    UNI_ON = UNI_FEAT or UNI_GUIDE
+    UNI_GATE, UNI_RES = bool(UNI and UNI.get("gate")), bool(UNI and UNI.get("residual"))      # (v0.3.4 A, B)
+    UNI_ON = UNI_FEAT or UNI_GUIDE or UNI_GATE or UNI_RES
+    assert not UNI_RES or a.legs_learn > 0, "--legs-residual: with --legs-learn (its parts learn from the legs' draws, as the branch)"
     UNI_SAVE = {"legs_unify": UNI} if UNI_ON else {}
-    UNI_PFX = ("legs_door.", "legs_guide")                  # (their names: in the main optimiser group, clipped on their own)
+    UNI_PFX = ("legs_door.", "legs_guide", "legs_gate.", "legs_motor.", "legs_res_a.", "legs_res.")                  # (their names: in the main optimiser group, clipped on their own)
     UGM = None                                               # (--legs-guide) the mapping matrices on the device (made with the network)
+    FADE = [0.0]                                             # (--switch-fade) the bias taken off the switch's "legs" choice now
+    SW_ON = int(np.sum(ACTION_DIMS[:L_HEAD])) + 1 if L_HEAD >= 0 else -1
     HD_I0 = sum(ACTION_DIMS[:I_HEAD])                        # (--head) where the intention's and the way's logits begin
     HD_W0 = sum(ACTION_DIMS[:W_HEAD]) if W_HEAD >= 0 else -1
 
@@ -1082,6 +1113,30 @@ def main():
                 nn.init.zeros_(self.legs_door.bias)
             if UNI_GUIDE:                                        # (--legs-guide) a weight per guided output, at zero
                 self.legs_guide = nn.Parameter(torch.zeros(len(UNI["outs"])))
+            with torch.random.fork_rng(devices=[]):              # (v0.3.4 A, B: made without a draw)
+                if UNI_GATE:                                     # (--legs-gate) g(h) per guided output, the motor layer
+                    self.legs_gate = nn.Linear(H, len(UNI["outs"]))
+                    self.legs_motor = nn.Linear(UNI["hid"], UNI["motor"])
+                if UNI_RES:                                      # (--legs-residual) a(h) per choice of the legs, W h on their 17
+                    self.legs_res_a = nn.Linear(H, len(UNI["bdims"]))
+                    self.legs_res = nn.Linear(H, int(sum(UNI["bdims"])))
+            for n_ in ("legs_gate", "legs_motor", "legs_res_a", "legs_res"):
+                if getattr(self, n_, None) is not None:
+                    nn.init.zeros_(getattr(self, n_).weight)
+                    nn.init.zeros_(getattr(self, n_).bias)
+            self.fade = None                                     # (--switch-fade) the learner's: set after it is made
+
+        def legs_comb(self, lgl, z):
+            """(--legs-residual) the legs' logits his legs draw from: (1 - a(z)) x the branch's + W z; the branch's alone without"""
+            return LU_.t_residual(self.legs_res_a, self.legs_res, lgl, z) if UNI_RES else lgl
+
+        def out_(self, lg, z, gfn):
+            """his logits: the parts that read his memory (--legs-guide, --legs-gate) and the switch's fade added"""
+            if gfn is not None:
+                lg = lg + gfn(z)
+            if self.fade is not None:
+                lg = lg - self.fade
+            return lg
 
         def uni_parts(self, xl):
             """(--legs-feat, --legs-guide) for the branch's inputs xl [..., its inputs]: (what legs_door adds to his fast
@@ -1091,8 +1146,16 @@ def main():
             h2, lgl = LU_.t_branch(self.legs, xl)
             ok = LU_.t_way(xl)
             dadd = self.legs_door(h2) * ok[..., None] if UNI_FEAT else None
-            gadd = UGM.add(self.legs_guide, lgl, ok) if UNI_GUIDE else None
-            return dadd, gadd
+            if not (UNI_GUIDE or UNI_GATE):
+                return dadd, None
+
+            def gfn(z):                                          # (what the guide and the gate add to his logits, from his memory z)
+                add = UGM.add(self.legs_guide, lgl, ok) if UNI_GUIDE else None
+                if UNI_GATE:
+                    g_ = UGM.add(self.legs_gate(z), lgl, ok) + UGM.place(self.legs_motor(h2) * ok[..., None])
+                    add = g_ if add is None else add + g_
+                return add
+            return dadd, gfn
 
         def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None):
             dadd, gadd = self.uni_parts(xl)                      # (--legs-feat, --legs-guide; xl: the branch's inputs of this frame)
@@ -1108,16 +1171,16 @@ def main():
                 _, ta_, wa_ = head_.live(self.head, hd, e, h, ev)
                 self.zl = h
                 lg_ = head_logits(self.pi(h), ta_, wa_)
-                return (lg_ if gadd is None else lg_ + gadd), self.v(h).squeeze(-1), h
+                return self.out_(lg_, h, gadd), self.v(h).squeeze(-1), h
             h = self.gru(e if dadd is None else e + dadd, h)     # (--legs-feat: only his fast GRU reads the legs' features)
             if sm is None or self.slow is None:
                 self.zl = h                                      # (what the outputs read: his memory, or with the slow one)
                 lg_ = self.pi(h)
-                return (lg_ if gadd is None else lg_ + gadd), self.v(h).squeeze(-1), h
+                return self.out_(lg_, h, gadd), self.v(h).squeeze(-1), h
             z = slowmem_.live(self.slow, sm, e, h)               # (--slow-mem) z = h + door(s); the slow GRU ticks on its frames
             self.zl = z
             lg_ = self.pi(z)
-            return (lg_ if gadd is None else lg_ + gadd), self.v(z).squeeze(-1), h
+            return self.out_(lg_, z, gadd), self.v(z).squeeze(-1), h
 
     ORDER = None                                             # (--ordered-heads) [(the output before, the output), ...] in the order drawn
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
@@ -1234,6 +1297,8 @@ def main():
                 add_.update({"legs_door." + k_: torch.zeros_like(v_) for k_, v_ in net.legs_door.state_dict().items()})
             if getattr(net, "legs_guide", None) is not None and "legs_guide" not in sd:
                 add_["legs_guide"] = torch.zeros_like(net.legs_guide)
+            add_.update({k_: torch.zeros_like(v_) for k_, v_ in net.state_dict().items()        # (v0.3.4 A, B)
+                         if k_.startswith(("legs_gate.", "legs_motor.", "legs_res_a.", "legs_res.")) and k_ not in sd})
             load_net7_(net, dict(sd, **add_) if add_ else sd)
 
     if UNI_GUIDE:
@@ -1329,8 +1394,22 @@ def main():
                 pol.legs_door.bias.copy_(torch.randn(pol.legs_door.bias.shape, generator=g_) * sw_)
             if UNI_GUIDE:
                 pol.legs_guide.copy_(torch.rand(pol.legs_guide.shape, generator=g_))
+            for n_ in ("legs_gate", "legs_motor", "legs_res_a", "legs_res"):
+                if getattr(pol, n_, None) is not None:
+                    for p_ in getattr(pol, n_).parameters():
+                        p_.copy_(torch.randn(p_.shape, generator=g_) * sw_)
+            if UNI_RES:                                          # (a well inside (0, 1): the clamp's both sides seen)
+                pol.legs_res_a.bias.copy_(torch.rand(pol.legs_res_a.bias.shape, generator=g_) * 0.6 + 0.2)
         print("UNIFY_WAKE: the parts woken at random (a test)", flush=True)
-    UNI_W0 = {n_: p_.detach().clone() for n_, p_ in pol.named_parameters() if n_.startswith(("legs_door.", "legs_guide"))}
+    UNI_W0 = {n_: p_.detach().clone() for n_, p_ in pol.named_parameters() if n_.startswith(UNI_PFX)}
+    if a.switch_fade:                                        # (--switch-fade) from the checkpoint's, or 0
+        assert L_HEAD >= 0, "--switch-fade: the simulator has no switch to his legs"
+        FADE[0] = float(ck.get("switch_fade", 0.0)) if a.resume and os.path.exists(os.path.join(out, "policy.pt")) else 0.0
+        FADE_V = torch.zeros(sum(ACTION_DIMS), device=dev)
+        FADE_V[SW_ON] = 1.0
+        pol.fade = FADE_V * FADE[0]
+        print("switch fade: {:g} off the switch's 'legs' (+{:g} after an update with his run speed >= {:g}, up to {:g})".format(
+            FADE[0], a.switch_fade_step, a.switch_fade_speed, a.switch_fade_max), flush=True)
 
     def norm(o):
         x = np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
@@ -1378,6 +1457,7 @@ def main():
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
                         hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE,
+                        **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
                         env_vars={k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)},
@@ -1414,6 +1494,7 @@ def main():
             anchors.append(torch.load(f, weights_only=False, map_location=dev)["model"])
         print("league anchors: {} (in {:.0%} of the rollouts)".format(len(anchors), a.anchor_p), flush=True)
     opp = copy.deepcopy(pol).eval()
+    opp.fade = None                                          # (--switch-fade: the learner's alone)
     last_snap = time.time()
     h = torch.zeros(N, H, device=dev)
     h_opp = torch.zeros(N, H, device=dev)
@@ -1584,6 +1665,7 @@ def main():
         b_live = torch.zeros(T, N, device=dev)                           # the intention head was read on that frame
         b_dec = torch.zeros(T, N, device=dev)                            # the left hand's outputs (keys, weapon key) were read on that frame
         b_ll = torch.zeros(T, N, device=dev)                             # (LEGS) the switch to his legs was read on that frame
+        b_so = torch.zeros(T, N, device=dev)                             # (--solo-self-drive) in his runs: the switch's lesson silent
         b_lo = torch.zeros(T, N, device=dev)                             # ... his legs moved him on that frame
         if LEGS_LEARN or UNI_ON:                                         # (--legs-learn) the branch's inputs (off the card: 0.9 GB at 10,080
             b_lx = torch.zeros(T, N, LEGS_D)                             # players), its own draws and their log-probability as it played
@@ -1677,9 +1759,9 @@ def main():
             if LEGS_IN:                                                  # (LEGS_IN) his legs' logits: the branch of each seat's network
                 with torch.no_grad():
                     xl_ = torch.from_numpy(legs_x).to(dev)
-                    lgl_ = legs_fwd(pol, xl_)
+                    lgl_ = pol.legs_comb(legs_fwd(pol, xl_), pol.zl)            # (--legs-residual: from his memory of this frame)
                     if snaps:
-                        lgl_ = torch.where(snap_players[:, None], legs_fwd(opp, xl_), lgl_)
+                        lgl_ = torch.where(snap_players[:, None], opp.legs_comb(legs_fwd(opp, xl_), opp.zl), lgl_)
                 if LEGS_LEARN or UNI_ON:
                     b_lx[t] = torch.from_numpy(legs_x)
                 lgn_ = lgl_.float().cpu().numpy()
@@ -1710,12 +1792,13 @@ def main():
             ll = torch.from_numpy(np.concatenate([r[9] for r in res]).astype(np.float32)).to(dev)
             lo = torch.from_numpy(np.concatenate([r[10] for r in res]).astype(np.float32)).to(dev)
             b_ll[t], b_lo[t] = ll, lo
+            b_so[t] = torch.from_numpy(np.concatenate([r[17] for r in res]).astype(np.float32)).to(dev)   # (--solo-self-drive)
             if LEGS_LAB:
                 b_lab[t] = torch.from_numpy(np.concatenate([r[13] for r in res])).to(dev)
             # an output's part counts only on the frames its choice was read: the intention's when it was read, the left
             # hand's (keys, weapon key) on the one frame in four it decides on (until 2026-10-08 all four were counted and
             # three were noise), the switch to his legs when it was read, what his legs take only while he moves himself
-            b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo, act)))
+            b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo, act, b_so[t])))
             if LEGS_LEARN:                                               # (--legs-learn) the branch's own draws (before the hand rule) join
                 b_lr[t] = torch.from_numpy(np.concatenate([r[16] for r in res])).to(dev)        # what he did on the frames his legs moved him
                 with torch.no_grad():
@@ -1864,13 +1947,13 @@ def main():
             if UNI_ON:                                                   # (--legs-feat, --legs-guide) the branch on this piece's inputs
                 xlc_ = b_lx[:, chunk.cpu()].to(dev)
                 dadd_, gadd_ = pol.uni_parts(xlc_)
-                UG_[0] = gadd_
                 if UNI_GUIDE:
                     UG_[1], UG_[2] = LU_.t_branch(pol.legs, xlc_)[1], LU_.t_way(xlc_)
             eg_ = e_ if dadd_ is None else e_ + dadd_                    # (only his fast GRU reads the legs' features)
 
-            def gd_(lg_):
-                return lg_ if gadd_ is None else lg_ + gadd_
+            def gd_(lg_, z_):                                    # (the parts that read his memory, the fade; UG_[0] for pi_t)
+                UG_[0] = gadd_(z_) if gadd_ is not None else None
+                return pol.out_(lg_, z_, (lambda _: UG_[0]) if UG_[0] is not None else None)
             if HEADL:                                                    # (--head) the fast GRU in segments of the head's ticks, the head between
                 t_ = time.time()
                 st0_ = {k_: v_[chunk] for k_, v_ in HD0.items()}        # (no ring; or the pass before the update's steps: the state played from)
@@ -1885,7 +1968,7 @@ def main():
                 ho_["hand_int"] = lg_h[..., HD_I0:HD_I0 + HEADL["n_target"]].detach()
                 HO_[0] = ho_
                 hd_secs[1] += time.time() - t_
-                return gd_(head_logits(lg_h, ho_["tadd"], ho_["wadd"])), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
+                return gd_(head_logits(lg_h, ho_["tadd"], ho_["wadd"]), hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk])
             else:
@@ -1898,7 +1981,7 @@ def main():
                 hs_a = torch.stack(hs_l)
             if SLOW:                                                     # (--slow-mem) every output (the guessing game's too) reads z
                 hs_a = slow_z(chunk, e_, hs_a)
-            return gd_(pol.pi(hs_a)), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
+            return gd_(pol.pi(hs_a), hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
 
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
         klh = np.zeros(len(ACTION_DIMS))
@@ -2030,7 +2113,7 @@ def main():
                 dst = ds                                                 # what the teachers' losses read
                 if UNI_GUIDE and epoch == 0:                             # (--legs-guide) his own choice against the branch's (switch off)
                     with torch.no_grad():
-                        hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk])
+                        hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
                         for i_, (o_, mp_) in enumerate(UGM.mapped(UG_[1])):
                             m_ = (1.0 if hmu_[o_] is None else hmu_[o_]) * UG_[2] * b_w[:, chunk]
                             ug_acc[i_] += torch.stack([m_.sum(), ((mp_.argmax(-1) == b_act[:, chunk, o_]).float() * m_).sum(),
@@ -2045,13 +2128,15 @@ def main():
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
-                hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A)
+                hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk])
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
                 ent = sum(w_ * dd.entropy() * (1.0 if hm[j] is None else hm[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's part of what he did, the same advantage
-                    lgl_ = legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev))
+                    lgl_ = pol.legs_comb(legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev)), hs_all)    # (--legs-residual)
                     lpl_, dsl_, msl_ = legs_lp(lgl_, b_lr[:, chunk], dc, b_lo[:, chunk])
+                    if UNI_RES and a.legs_residual_ent > 0:              # (--legs-residual-ent) on his legs, at his own outputs' weights
+                        ent = ent + a.legs_residual_ent * sum(w_ * d_.entropy() * m_ for w_, d_, m_ in zip(ent_heads[:4], dsl_, msl_))
                     lp = lp + lpl_
                     enl_ = sum(d_.entropy() * m_ for d_, m_ in zip(dsl_, msl_))        # (its entropy, for the record)
                     if a.legs_ent > 0:                                   # (--legs-ent) each choice at his own movement output's weight
@@ -2814,6 +2899,20 @@ def main():
                                      first_err=float(ll_acc[4]), entropy=round(float(ll_acc[5] / max(1.0, float(ll_acc[1]))), 4),
                                      grad=round(float(ll_acc[6] / max(1.0, float(ll_acc[7]))), 4),
                                      moved_max=round(max(mv_), 7), moved_rel=round(mr_, 8))
+        if a.solo_self_drive or a.switch_fade:                           # (v0.3.4 C) his own speed in the runs, the switch in games, the fade
+            SO_ = np.atleast_1d(agg.get("solo", np.zeros(2)))
+            sp_ = float(SO_[1] / SO_[0]) if SO_[0] > 0 else None
+            f0_ = FADE[0]
+            if a.switch_fade and sp_ is not None and sp_ >= a.switch_fade_speed:
+                FADE[0] = min(a.switch_fade_max, FADE[0] + a.switch_fade_step)
+                pol.fade = FADE_V * FADE[0]
+            rec["solo"] = dict(frames=int(SO_[0]), speed=round(sp_, 1) if sp_ is not None else None,
+                               switch_games=round(float(np.atleast_1d(agg.get("legs", np.zeros(8)))[4] / max(1.0, float(np.atleast_1d(agg.get("legs", np.zeros(8)))[5]))), 4),
+                               fade=round(f0_, 3), fade_next=round(FADE[0], 3))
+        if UNI_GATE or UNI_RES:                                          # (v0.3.4 A, B) the parts' sizes
+            with torch.no_grad():
+                rec["gate"] = {n_: round(float(sum(p_.abs().max() for p_ in getattr(pol, n_).parameters())), 6)
+                               for n_ in ("legs_gate", "legs_motor", "legs_res_a", "legs_res") if getattr(pol, n_, None) is not None}
         if KA_ON:                                                        # (LEGS_KEYS_ADD) the share of his frames on his legs his own output took
             KA_ = np.atleast_1d(agg.get("keys_add", np.zeros(1 + len(KA_COLS))))     # each column, the five biases, the weights' largest
             with torch.no_grad():

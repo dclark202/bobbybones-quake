@@ -87,6 +87,11 @@ if ck.get("legs_unify") is not None:
         uni.update(legs_door_w=sd["legs_door.weight"], legs_door_b=sd["legs_door.bias"])
     if "legs_guide" in sd:
         uni["legs_guide"] = sd["legs_guide"]
+    for n_ in ("legs_gate", "legs_motor", "legs_res_a", "legs_res"):     # (v0.3.4 A, B)
+        if n_ + ".weight" in sd:
+            uni.update({n_ + "_w": sd[n_ + ".weight"], n_ + "_b": sd[n_ + ".bias"]})
+if "switch_fade" in ck:                                      # (v0.3.4 C, --switch-fade) the bias taken off the switch's "legs" choice
+    uni["switch_fade"] = np.array(float(ck["switch_fade"]))
 slow = {}                                                    # (--slow-mem) the slow memory: its layout as text and its weights
 if ck.get("slow") is not None:
     slow = {"slow": np.array(json.dumps(ck["slow"]))}

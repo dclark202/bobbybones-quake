@@ -73,6 +73,15 @@ class Policy:
                 self.uniD = (sd["legs_door.weight"], sd["legs_door.bias"])
             if self.uni.get("guide") and "legs_guide" in sd and np.abs(sd["legs_guide"]).sum() > 0:
                 self.uniG = np.asarray(sd["legs_guide"], np.float32)
+        self.uniT = self.uniR = None                         # (v0.3.4 A, B) the gate and motor layer; the residual: skipped while at zero
+        if self.uni is not None and self.uni.get("gate") and "legs_gate.weight" in sd:
+            t_ = tuple(sd[k_] for k_ in ("legs_gate.weight", "legs_gate.bias", "legs_motor.weight", "legs_motor.bias"))
+            self.uniT = t_ if sum(float(np.abs(x_).sum()) for x_ in t_) > 0 else None
+        if self.uni is not None and self.uni.get("residual") and "legs_res.weight" in sd:
+            r_ = tuple(sd[k_] for k_ in ("legs_res_a.weight", "legs_res_a.bias", "legs_res.weight", "legs_res.bias"))
+            self.uniR = r_ if sum(float(np.abs(x_).sum()) for x_ in r_) > 0 else None
+        self.fade = float(ck.get("switch_fade", 0.0))        # (--switch-fade) taken off the switch's "legs" choice
+        self.last_zo = None                                  # (--legs-residual) what his outputs read on the last act(), for legs_logits()
         self.slow = ck.get("slow")                           # (--slow-mem) the slow memory: its layout and weights; the memory array
         self.W = self.H                                      # a seat carries is wider (sim/slowmem.py: [fast | slow | sum | count | frames])
         if self.slow is not None:
@@ -93,7 +102,7 @@ class Policy:
     @property
     def needs_xl(self):
         """(--legs-feat, --legs-guide) act() needs the branch's inputs (xl=, the simulator's legs_prep() of the frame)"""
-        return self.uniD is not None or self.uniG is not None
+        return self.uniD is not None or self.uniG is not None or self.uniT is not None
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)
@@ -127,18 +136,24 @@ class Policy:
             return None
         return env.head_events()
 
-    def legs_logits(self, xl):
+    def legs_logits(self, xl, zo=None):
         """(LEGS_IN) his legs' branch: the simulator's legs_prep() rows -> the logits [rows, 17]; None without the branch"""
         if self.legsP is None:
             return None
         w0, b0, w1, b1, wp, bp = self.legsP
         xl = np.asarray(xl, np.float32)[:, :w0.shape[1]]     # (a branch without the three inputs of a look point: the old inputs come first)
-        return (np.tanh(np.tanh(np.asarray(xl, np.float32) @ w0.T + b0) @ w1.T + b1) @ wp.T + bp).astype(np.float32)
+        lg = (np.tanh(np.tanh(np.asarray(xl, np.float32) @ w0.T + b0) @ w1.T + b1) @ wp.T + bp).astype(np.float32)
+        if self.uniR is not None:                            # (--legs-residual) from his memory of the frame (act()'s, or zo)
+            import legs_unify as LU_
+            zo = self.last_zo if zo is None else zo
+            assert zo is not None and len(zo) == len(lg), "the residual needs his memory of this frame (act() first)"
+            lg = LU_.np_residual(*self.uniR, lg, zo)
+        return lg
 
     def act(self, obs, h, events=None, xl=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
         --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame"""
-        dadd = gadd = None
+        dadd = gadd = h2_ = lgl_ = ok_ = None
         if self.needs_xl:
             import legs_unify as LU_
             assert xl is not None, "this network's legs_door or guide is open: give act() the branch's inputs (xl=env.legs_prep())"
@@ -188,7 +203,14 @@ class Policy:
             h = np.concatenate([h, hh], 1)
         if gadd is not None:                                 # (--legs-guide) the branch's choice on his movement outputs
             logits = logits + gadd
+        if self.uniT is not None:                            # (--legs-gate) g(zo) x the legs' choice, the motor layer
+            import legs_unify as LU_
+            logits = logits + LU_.np_gate_add(self.uni, *self.uniT, zo, h2_, lgl_, ok_, sum(self.dims))
+        self.last_zo = zo
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
+        if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
+            logits = logits.copy()
+            logits[:, int(o_[11]) + 1] -= self.fade
         u_ = [self.rng.random((len(logits), 1)) for _ in self.dims]       # (one number a player and output, in the outputs' order)
         out = np.zeros((len(logits), len(self.dims)), np.int64)
 

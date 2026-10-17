@@ -236,7 +236,7 @@ def play(job):
                 lg_ = np.zeros((n, 17), np.float32)
                 for m_, p_ in lgs_:
                     if p_.legsP is not None:
-                        lg_[m_] = p_.legs_logits(xl_[m_])
+                        lg_[m_] = p_.legs_logits(xl_[m_])          # (--legs-residual: from the memory of its act() above)
                     else:                                                       # (--legs-learn, B-253 stage b) a side without the branch (the
                         w0_, b0_, w1_, b1_, wp_, bp_ = env.teacher_w[:6]        # control) moves on the movement network's own sums, the other on
                         lg_[m_] = np.tanh(np.tanh(xl_[m_] @ w0_.T + b0_) @ w1_.T + b1_) @ wp_.T + bp_    # its learnt branch

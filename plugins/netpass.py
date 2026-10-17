@@ -64,16 +64,23 @@ def load(path):
         lay = LU_.as_layout(P["legs_unify"])
         D = (P["legs_door_w"], P["legs_door_b"]) if "legs_door_w" in P and (np.abs(P["legs_door_w"]).sum() + np.abs(P["legs_door_b"]).sum()) > 0 else None
         G = np.asarray(P["legs_guide"], np.float32) if "legs_guide" in P and np.abs(P["legs_guide"]).sum() > 0 else None
-        if D is not None or G is not None:
+        T = None                                             # (v0.3.4 A) the gate and the motor layer; B: the residual (skipped at zero)
+        if lay.get("gate") and "legs_gate_w" in P:
+            T = tuple(np.asarray(P[k_], np.float32) for k_ in ("legs_gate_w", "legs_gate_b", "legs_motor_w", "legs_motor_b"))
+            T = T if sum(float(np.abs(x_).sum()) for x_ in T) > 0 else None
+        if lay.get("residual") and "legs_res_w" in P:
+            R_ = tuple(np.asarray(P[k_], np.float32) for k_ in ("legs_res_a_w", "legs_res_a_b", "legs_res_w", "legs_res_b"))
+            P["_res"] = (R_, LU_) if sum(float(np.abs(x_).sum()) for x_ in R_) > 0 else None
+        if D is not None or G is not None or T is not None:
             assert "legs_w0" in P, "a network with legs_unify has the legs' branch inside"
-            P["_uni"] = (lay, D, G, LU_)
+            P["_uni"] = (lay, D, G, LU_, T)
     return P, A
 
 
 def needs_xl(P):
     """(--legs-feat, --legs-guide) step() needs the branch's inputs (xl=, the simulator's legs_prep() of the frame,
     before the step and before legs_feed)"""
-    return P.get("_uni") is not None
+    return P.get("_uni") is not None                        # (the door, the guide, the gate: open)
 
 
 def width(P):
@@ -129,7 +136,7 @@ def describe(P, A):
     return "attention part of {} tokens, door open (mean size of its weights {:.5f})".format(lay["tokens"], float(np.abs(A[1]["door.weight"]).mean())) + hd
 
 
-def legs_logits(P, xl):
+def legs_logits(P, xl, zo=None):
     """(LEGS_IN, B-253) his legs' branch: the movement network's inputs [B, 61; 64 with LEGS_LOOK's] as legs_prep() gives them
     -> its logits [B, 17] (forward 3, sideways 3, jump 2, turn 9), which the simulator samples his legs' choices from
     (env.legs_lg before its _legs_step). None for a network without the branch (the simulator then works them out)."""
@@ -137,15 +144,25 @@ def legs_logits(P, xl):
         return None
     x = np.asarray(xl, np.float32)
     x = x[:, :P["legs_w0"].shape[1]]                         # (a branch without the three inputs of a look point: the old inputs come first)
-    return (np.tanh(np.tanh(x @ P["legs_w0"].T + P["legs_b0"]) @ P["legs_w1"].T + P["legs_b1"]) @ P["legs_wp"].T + P["legs_bp"]).astype(np.float32)
+    lg = (np.tanh(np.tanh(x @ P["legs_w0"].T + P["legs_b0"]) @ P["legs_w1"].T + P["legs_b1"]) @ P["legs_wp"].T + P["legs_bp"]).astype(np.float32)
+    if P.get("_res") is not None and zo is not None:         # (--legs-residual) (1 - a(zo)) x the branch's + W zo, zo: his memory of the frame
+        R_, LU_ = P["_res"]
+        lg = LU_.np_residual(*R_, lg, zo)
+    return lg
 
 
-def legs_feed(P, env, E):
+def legs_feed(P, env, E, rows=None):
     """(LEGS_IN) the branch's logits handed to the simulator for its next _legs_step(): call right before it, after
     anything that changes a target (the intention). Does nothing for a network without the branch or a simulator
-    without the switch."""
+    without the switch. rows: (--legs-residual) the seats step() was given on this frame, in its order (their legs'
+    logits read his memory of the frame)."""
     if "legs_w0" in P and getattr(env, "legs_prep", None) is not None and getattr(E, "LEGS_IN", False):
-        env.legs_lg = legs_logits(P, env.legs_prep())
+        lg = legs_logits(P, env.legs_prep())
+        if P.get("_res") is not None and rows is not None and P.get("_zo") is not None:
+            R_, LU_ = P["_res"]
+            r_ = np.asarray(rows)
+            lg[r_] = LU_.np_residual(*R_, lg[r_], P["_zo"])
+        env.legs_lg = lg
 
 
 def step(P, A, obs, h, rng, events=None, xl=None):
@@ -157,7 +174,7 @@ def step(P, A, obs, h, rng, events=None, xl=None):
     xl [B, the branch's inputs] (--legs-feat, --legs-guide, needs_xl(P)): the simulator's legs_prep() rows of this frame."""
     dadd = gadd = None
     if P.get("_uni") is not None:                            # (--legs-feat, --legs-guide) the branch on this frame's inputs
-        lay_u, D_u, G_u, LU_ = P["_uni"]
+        lay_u, D_u, G_u, LU_, T_u = P["_uni"]
         assert xl is not None, "this network's legs_door or guide is open: give step() the branch's inputs (xl=env.legs_prep())"
         ok_ = LU_.np_way(xl)
         h2_, lgl_ = LU_.np_branch(tuple(P[k_] for k_ in ("legs_w0", "legs_b0", "legs_w1", "legs_b1", "legs_wp", "legs_bp")), xl)
@@ -209,6 +226,12 @@ def step(P, A, obs, h, rng, events=None, xl=None):
         h = np.concatenate([h, hh], 1)
     if gadd is not None:                                     # (--legs-guide) the branch's choice on his movement outputs
         logits = logits + gadd
+    if P.get("_uni") is not None and P["_uni"][4] is not None:     # (--legs-gate) g(zo) x the legs' choice, the motor layer
+        logits = logits + LU_.np_gate_add(lay_u, *T_u, zo, h2_, lgl_, ok_, int(np.sum(P["action_dims"])))
+    P["_zo"] = zo                                            # (--legs-residual: legs_feed's rows read it)
+    if float(P.get("switch_fade", 0.0)) > 0:                 # (--switch-fade) off the switch's "legs" choice, as in training
+        logits = logits.copy()
+        logits[:, int(np.sum(P["action_dims"][:11])) + 1] -= float(P["switch_fade"])
     return draw(P, logits, rng), h
 
 
