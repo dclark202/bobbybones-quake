@@ -27,7 +27,7 @@ SIM = os.path.join(ROOT, "sim")
 MAPS = os.path.join(ROOT, "data", "maps")
 CMD = os.environ.get("V036_CMD") or ""
 FRAMES = int(os.environ.get("T_FRAMES") or 40)
-N_NEW = 20 + 3 * 13                                        # (RL_AIM's N_RAIM and PREFIRE's N_PREF: v0.3.6's new inputs)
+N_NEW = 20 + 3 * 13 + 8                                    # (RL_AIM's N_RAIM, PREFIRE's N_PREF, EMERGE_IN's N_EMG: v0.3.6's new inputs)
 
 
 def run_env():
@@ -77,7 +77,7 @@ def dump(module, out):
 def sub(module, out, extra=None):
     e = dict(os.environ, **run_env())
     e.update(ROUTE_CACHE=CACHE, CUDA_VISIBLE_DEVICES="-1", OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1")
-    for k_ in ("RL_AIM", "PREFIRE"):
+    for k_ in ("RL_AIM", "PREFIRE", "EMERGE_IN"):
         e.pop(k_, None)
     e.update(extra or {})
     subprocess.run([sys.executable, os.path.abspath(__file__), "dump", module, out], check=True, env=e)
@@ -91,15 +91,16 @@ def ident():
     for new_, old_ in (("duel_env", "duel_env_v035"), ("duel_env_ffa", "duel_env_ffa_v035")):
         a = sub(old_, os.path.join(tmp, old_ + ".npz"))
         b = sub(new_, os.path.join(tmp, new_ + "_off.npz"))
-        c = sub(new_, os.path.join(tmp, new_ + "_on.npz"), dict(RL_AIM="1", PREFIRE="1"))
+        c = sub(new_, os.path.join(tmp, new_ + "_on.npz"), dict(RL_AIM="1", PREFIRE="1", EMERGE_IN="1"))
         k = a["obs"].shape[2]
         same_off = np.array_equal(a["obs"], b["obs"][:, :, :k]) and np.array_equal(a["rew"], b["rew"]) and not b["obs"][:, :, k:].any()
         same_on = np.array_equal(a["obs"], c["obs"][:, :, :k]) and np.array_equal(a["rew"], c["rew"])
         live = c["obs"][:, :, k:]
         print("{}: {} inputs -> {}; off: identical to {} and the new zeros: {}; on: the older inputs and rewards identical: {}; "
-              "new inputs nonzero in {:.0%} of player-frames (rocket aim {:.0%}, pre-fire {:.0%})".format(
+              "new inputs nonzero in {:.0%} of player-frames (rocket aim {:.0%}, pre-fire {:.0%}, emergence {:.0%})".format(
                   new_, k, b["obs"].shape[2], old_, same_off, same_on, float((live != 0).any(2).mean()),
-                  float((live[:, :, :20] != 0).any(2).mean()), float((live[:, :, 20:] != 0).any(2).mean())))
+                  float((live[:, :, :20] != 0).any(2).mean()), float((live[:, :, 20:59] != 0).any(2).mean()),
+                  float((live[:, :, 59:] != 0).any(2).mean())))
         ok &= same_off and same_on
     print("IDENT", "PASS" if ok else "FAIL")
     return ok
@@ -107,7 +108,7 @@ def ident():
 
 def hand():
     """hand-built states: two players on Blood Run, the rocket launcher, the enemy seen; the numbers checked by hand"""
-    os.environ.update(run_env(), ROUTE_CACHE=CACHE, RL_AIM="1", PREFIRE="1")
+    os.environ.update(run_env(), ROUTE_CACHE=CACHE, RL_AIM="1", PREFIRE="1", EMERGE_IN="1")
     sys.path.insert(0, SIM)
     import duel_env as E
     env = E.DuelEnv(os.path.join(MAPS, "bloodrun.bsp"), n_matches=1, seed=5, nav=os.path.join(MAPS, "nav_bloodrun_sim.json"), close_p=1.0)
@@ -152,7 +153,8 @@ def hand():
             o_ = env.observe()
         return o_
     o = see(True, 12)
-    k = E.OBS_DIM - E.N_RAIM - E.N_PREF
+    k = E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG
+    KP = k + E.N_RAIM + E.N_PREF                               # (the pre-fire inputs: k + N_RAIM to KP)
     ra = o[0, k:k + E.N_RAIM]
     s = env.state
     print("A {} B {} dist {:.0f}".format(np.round(s[0, :3]), np.round(s[1, :3]), float(np.linalg.norm(s[1, :3] - s[0, :3]))))
@@ -209,7 +211,7 @@ def hand():
     o3 = env.observe()
     checks.append(("no rocket launcher in hand: zeros", not o3[0, k:k + E.N_RAIM].any()))
     env.weapon[0] = E.RL
-    checks.append(("pre-fire off while the enemy is in view", not o[0, k + E.N_RAIM:].any()))
+    checks.append(("pre-fire off while the enemy is in view", not o[0, k + E.N_RAIM:KP].any()))
     # pre-fire: the enemy seen, then not (the belief of the last sighting); the list by the weapon, the ranking by hand
     import json as json_
     lists = {}
@@ -226,7 +228,7 @@ def hand():
             env.has[0, w_], env.ammo[0, w_] = w_ in haves, 10 if w_ in haves else 0
         env.weapon[0] = hand
         o_ = see(False, 1)
-        pf = o_[0, k + E.N_RAIM:].reshape(E.PF_SLOTS, E.PF_F)
+        pf = o_[0, k + E.N_RAIM:KP].reshape(E.PF_SLOTS, E.PF_F)
         if want is None:
             checks.append(("pre-fire, {}: zeros".format(name), not pf.any()))
             return
@@ -272,17 +274,120 @@ def hand():
     case("lightning in hand, plasma only", E.LG, (E.PG, E.LG), E.PG)
     case("lightning only", E.LG, (E.LG,), None)
     env.has[0, E.RL], env.ammo[0, E.RL], env.weapon[0] = True, 10, E.RL
-    checks.append(("pre-fire off while the enemy is in view", not see(True, 3)[0, k + E.N_RAIM:].any()))
+    checks.append(("pre-fire off while the enemy is in view", not see(True, 3)[0, k + E.N_RAIM:KP].any()))
+    emerge_cases(env, E, checks)
     bad = [n_ for n_, ok_ in checks if not ok_]
     for n_, ok_ in checks:
         print("  {:<70s} {}".format(n_, "ok" if ok_ else "FAIL"))
     print("HAND", "PASS" if not bad else "FAIL: " + "; ".join(bad))
 
 
+def _lines(env, a, b):
+    return env.w.lines(a, b) if env.sight is None else env.w.lines(a, b, mask=env.sight)
+
+
+def ref_point(env, E, bel, mepos, eye):
+    """the emergence point as the measuring version works it out (AWARE_LOG, one player at a time, plain Python):
+    (point, at the belief, the way's points, the step seconds) or None (no way)"""
+    R, W = env.route, env.v02_ways
+    fwd = [[] for _ in range(len(R.nodes))]
+    for b_, lst in enumerate(R.radj):
+        for a_, c_ in lst:
+            fwd[a_].append((b_, c_))
+    u, me = int(R.locate(bel[None].astype(np.float32))[0]), int(R.locate(mepos[None].astype(np.float32))[0])
+    if W[me, u] >= 255:
+        return None
+    path, cost = [u], []
+    for _ in range(96):
+        if u == me:
+            break
+        nxt, bc, lc = -1, 1e18, 0.0
+        for v_, c_ in fwd[u]:
+            wv = 0.0 if v_ == me else (W[me, v_] / 16.0 if W[me, v_] < 255 else 1e9)
+            if c_ + wv < bc:
+                nxt, bc, lc = v_, c_ + wv, c_
+        if nxt < 0 or nxt in path:
+            break
+        u = nxt
+        path.append(u)
+        cost.append(lc)
+    pt, at_bel = None, True
+    for k_ in range(len(path) - 1, -1, -1):
+        q_ = R.nodes[path[k_]].astype(np.float32) + np.array([0, 0, E.VIEW_H], np.float32)
+        if _lines(env, eye[None], q_[None])[0] >= 0.999:
+            pt, at_bel = q_, k_ == 0
+        else:
+            break
+    if pt is None:
+        pt, at_bel = R.nodes[path[-1]].astype(np.float32) + np.array([0, 0, E.VIEW_H], np.float32), False
+    return pt, at_bel, path, cost
+
+
+def emerge_cases(env, E, checks):
+    """EMERGE_IN by hand: the enemy believed out of sight behind a wall (the point must be the doorway: the last point of
+    the way he sees, with the next one toward the enemy hidden), and a way through a teleporter if the map has one"""
+    R = env.route
+    nodes = np.nonzero(~R.dead)[0]
+    rng = np.random.default_rng(7)
+    n = env.n
+    done = {"wall": False, "tele": False}
+
+    def run(a_, b_):
+        env.state[0, :3] = R.nodes[a_]
+        env.state[1, :3] = R.nodes[b_]
+        env.v02_bel = env.state[[1, 0], :3].copy().astype(np.float32)
+        env.v02_bel_ok = np.array([True, False])
+        env.v02_bt_now = np.array([0.5, 99.0], np.float32)
+        eye = env._eye(env.state)
+        yaw, pit = np.radians(env.yaw), np.radians(env.pitch)
+        for _ in range(E.EMG_EVERY):
+            o_ = env._emerge(eye, yaw, pit, np.zeros(n, bool))
+        return o_[0], eye[0]
+    for _ in range(3000):
+        if all(done.values()):
+            break
+        a_, b_ = int(rng.choice(nodes)), int(rng.choice(nodes))
+        d_ = float(np.linalg.norm(R.nodes[a_] - R.nodes[b_]))
+        if not 400.0 < d_ < 2000.0:
+            continue
+        env.state[0, :3] = R.nodes[a_]
+        eye0 = env._eye(env.state)[0]
+        r = ref_point(env, E, R.nodes[b_], R.nodes[a_], eye0)
+        if r is None:
+            continue
+        pt, at_bel, path, cost = r
+        tele = any(np.linalg.norm(R.nodes[path[j + 1]] - R.nodes[path[j]]) > 300.0 and cost[j] < 0.5 for j in range(len(path) - 1))
+        kind = "tele" if tele else "wall"
+        if done[kind] or at_bel:
+            continue
+        j_ = [int(np.linalg.norm(R.nodes[q] + [0, 0, E.VIEW_H] - pt) < 1e-3) for q in path].index(1)
+        if j_ == 0 or j_ == len(path) - 1:
+            continue
+        o, eye = run(a_, b_)
+        ey, ep = env._aim_at(eye, pt, np.radians(env.yaw[0]), np.radians(env.pitch[0]))
+        nxt_hidden = _lines(env, eye[None], (R.nodes[path[j_ - 1]] + [0, 0, E.VIEW_H]).astype(np.float32)[None])[0] < 0.999
+        exp = [1.0, np.sin(np.radians(ey)), np.cos(np.radians(ey)), np.clip(ey / 30, -1, 1), np.clip(ep / 15, -1, 1),
+               min(float(np.linalg.norm(pt - eye)) / 1500.0, 2.0), 0.0, 1.0]
+        good = bool(np.abs(env.emg_pt[0] - pt).max() < 1e-3) and all(abs(float(o[c_]) - e_) < 1e-3 for c_, e_ in enumerate(exp)) and nxt_hidden
+        checks.append(("emergence, {}: the point = the measuring version's, point {} of a way of {} ({:.0f} units from the belief), "
+                       "the next point toward the enemy hidden".format("through a teleporter" if tele else "behind a wall", j_, len(path),
+                                                                     float(np.linalg.norm(pt - R.nodes[b_]))), good))
+        done[kind] = True
+        if kind == "wall":                                   # the same with the enemy in view, and with a stale belief: zeros
+            env.v02_bel_ok = np.array([True, False])
+            o2 = env._emerge(eye[None].repeat(n, 0), np.radians(env.yaw), np.radians(env.pitch), np.ones(n, bool))
+            env.v02_bt_now = np.array([6.0, 99.0], np.float32)
+            o3 = env._emerge(eye[None].repeat(n, 0), np.radians(env.yaw), np.radians(env.pitch), np.zeros(n, bool))
+            checks.append(("emergence zeros with the enemy in view and with a belief over 5 s old", not o2[0].any() and not o3[0].any()))
+    if not done["tele"]:
+        print("  (no way through a teleporter met on this map in 3000 tries)")
+    checks.append(("emergence: a case behind a wall found", done["wall"]))
+
+
 def ffa():
     tmp = os.path.join(CACHE, "out")
     os.makedirs(tmp, exist_ok=True)
-    e = dict(os.environ, RL_AIM="1", PREFIRE="1", CUDA_VISIBLE_DEVICES="-1", OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1")
+    e = dict(os.environ, RL_AIM="1", PREFIRE="1", EMERGE_IN="1", CUDA_VISIBLE_DEVICES="-1", OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1")
     outs = []
     for mod in ("duel_env", "duel_env_ffa"):
         outs.append(os.path.join(tmp, "ffa_" + mod + ".npz"))

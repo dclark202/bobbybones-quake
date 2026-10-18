@@ -1005,7 +1005,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
     BEL_SEEN = [0]
 
@@ -1402,6 +1402,18 @@ def main():
                 "is" if d_ == 0 else "differs from", d_), flush=True)
         obs_mean, obs_var, obs_count = ck["obs_mean"], ck["obs_var"], ck["obs_count"]
         elapsed0 = ck.get("minutes", 0.0)
+        op_ = os.path.join(out, "opt.pt")                     # (2026-10-18) the optimizer's state from the last save, if it fits
+        if os.path.exists(op_):
+            try:
+                sc_ = [g_.get("lr_scale", 1.0) for g_ in opt.param_groups]      # (this run's scales: loading puts the saved ones back)
+                opt.load_state_dict(torch.load(op_, weights_only=False, map_location=dev))
+                for g_, c_ in zip(opt.param_groups, sc_):     # (the rates are this run's, not the saved ones)
+                    g_["lr_scale"], g_["lr"] = c_, a.lr * c_
+                print("optimizer: its state loaded from opt.pt", flush=True)
+            except Exception as e_:                           # noqa: BLE001  (another layout of groups: a cold start)
+                print("optimizer: opt.pt does not fit ({}): a cold start".format(str(e_)[:120]), flush=True)
+        else:
+            print("optimizer: no opt.pt, a cold start", flush=True)
     LEGS_W0 = [p_.detach().clone() for p_ in pol.legs.parameters()] if LEGS_LEARN else None    # (--legs-learn) where the branch starts in this process
     if UNI_ON and float(os.environ.get("UNIFY_WAKE") or 0) > 0:     # (a test only: the parts woken with random weights of this size)
         with torch.no_grad():
@@ -1484,6 +1496,9 @@ def main():
                         game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS", "OVERTIME", "STYLE_P") if os.environ.get(k_)},   # games: their clock and score
                         cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE),
                    path)
+        if os.path.basename(path) == "policy.pt":       # (2026-10-18) the optimizer's state beside it, for a resume
+            torch.save(opt.state_dict(), os.path.join(os.path.dirname(path), "opt.pt.tmp"))
+            os.replace(os.path.join(os.path.dirname(path), "opt.pt.tmp"), os.path.join(os.path.dirname(path), "opt.pt"))
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
     # (groups of more than two: every second member)
@@ -2941,6 +2956,22 @@ def main():
             rec["solo"] = dict(frames=int(SO_[0]), speed=round(sp_, 1) if sp_ is not None else None,
                                switch_games=round(float(np.atleast_1d(agg.get("legs", np.zeros(8)))[4] / max(1.0, float(np.atleast_1d(agg.get("legs", np.zeros(8)))[5]))), 4),
                                fade=round(f0_, 3), fade_next=round(FADE[0], 3))
+        if "aw_bel" in agg and float(np.atleast_1d(agg["aw_bel"])[0]) > 0:   # (AWARE_LOG) the awareness counters, his seats in games
+            B_, U_, V_, O_, S_ = (np.atleast_1d(agg[k_]) for k_ in ("aw_bel", "aw_tru", "aw_speed", "aw_off", "aw_snd"))
+            ns_ = float(S_[:21].sum())
+            cs_ = np.cumsum(S_[:21])
+            med_ = (float(np.searchsorted(cs_, ns_ / 2.0)) + 0.5) * 0.1 if ns_ > 0 else None
+            M_ = np.atleast_1d(agg.get("aw_emg", np.zeros(4)))
+            rec["aware"] = dict(look_on_belief=round(float(B_[1] / max(1.0, B_[0])), 4), look_on_truth=round(float(U_[1] / max(1.0, U_[0])), 4),
+                                look_on_emergence=dict(share=round(float(M_[1] / max(1.0, M_[0])), 4), frames=int(M_[0]), no_way=int(M_[2]),
+                                                       at_belief=round(float(M_[3] / max(1.0, M_[0])), 3)),
+                                sound_turn=dict(n=int(ns_), median_s=(round(med_, 2) if med_ is not None and med_ <= 2.0 else "never"),
+                                                within_1s=round(float(S_[:10].sum() / max(1.0, ns_)), 4), never=round(float(S_[20] / max(1.0, ns_)), 4),
+                                                already_facing=int(S_[21])),
+                                speed=dict(in_view=int(V_[1] / max(1.0, V_[0])), unseen_near=int(V_[3] / max(1.0, V_[2])), unseen_far=int(V_[5] / max(1.0, V_[4]))),
+                                share=dict(in_view=round(float(V_[0] / max(1.0, V_[0] + V_[2] + V_[4])), 3), unseen_near=round(float(V_[2] / max(1.0, V_[0] + V_[2] + V_[4])), 3)),
+                                takeoffs_per_min=dict(in_view=round(float(O_[0] / max(1e-9, V_[0] * DT_MIN)), 1), unseen_near=round(float(O_[1] / max(1e-9, V_[2] * DT_MIN)), 1),
+                                                      unseen_far=round(float(O_[2] / max(1e-9, V_[4] * DT_MIN)), 1)))
         if UNI_GATE or UNI_RES:                                          # (v0.3.4 A, B) the parts' sizes
             with torch.no_grad():
                 rec["gate"] = {n_: round(float(sum(p_.abs().max() for p_ in getattr(pol, n_).parameters())), 6)

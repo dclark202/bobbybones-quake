@@ -31,7 +31,8 @@ ONE = [("self", ("self", "weapons", "own hands", "his movement", "his legs", "st
 SPLIT = [("proj", ("projectiles",)), ("item", ("items", "more items", "v02 items")), ("place", ("v02 places",)),
          ("hold", ("b2 holds",))]                            # (stage B part 2: a token a holding place)
 LATE = [("stack", ("v031 enemy stack",)),                  # (v0.3.1, B-257: the enemy's stack believed; after the split kinds, so
-         ("rocket", ("v036 rocket aim",))]                   # that an older network's tokens keep their rows; v0.3.6: RL_AIM)
+         ("rocket", ("v036 rocket aim",)),                   # that an older network's tokens keep their rows; v0.3.6: RL_AIM,
+         ("emerge", ("v036 emergence",))]                    # EMERGE_IN)
 LATE_SPLIT = [("prefire", ("v036 prefire",))]               # (v0.3.6, PREFIRE: a token a pre-fire place; after the late kinds)
 # A layout may say "gated": the network then carries "gate" among its weights (not trained: a buffer), a number a token
 # (the summary token too) that is added to every look at that token before the softmax of both blocks. A network that

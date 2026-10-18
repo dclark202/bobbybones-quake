@@ -7,9 +7,9 @@
     python tools/v036_init.py prep --from <v0.3.5's save .pt> --league <v0.3.5's snapshots folder> [--run duel_gru_v0_3_6]
                               [--cmd-template <.cmd> --cmd-out <.cmd> --until "2026-10-19 12:00" --setup-min 10]
 
-widen / league: the 59 new inputs (N_RAIM 20, the group "v036 rocket aim"; N_PREF 39, "v036 prefire", at the end of the group
-module's 856) get zero weight in the old encoder and mean 0, spread 1 in the input statistics; the attention part gets their
-tokens (the kinds "rocket", one token, and "prefire", a token a place: tools/targets_init.py's widen_attn, a first layer and
+widen / league: the 67 new inputs (N_RAIM 20, the group "v036 rocket aim"; N_PREF 39, "v036 prefire"; N_EMG 8, "v036 emergence"; at
+the end of the group module's 864) get zero weight in the old encoder and mean 0, spread 1 in the input statistics; the attention part gets their
+tokens (the kinds "rocket" and "emerge", one token each, and "prefire", a token a place: tools/targets_init.py's widen_attn, a first layer and
 marks as sim/attn.py starts them) with their gate shut (attn.GATE_SHUT): nothing looks at them, and the encoder does not read
 them: every output is what it was. The older tokens keep their weights, marks and gates (v0.3.5's are open). Nothing else is
 touched (the legs' branch, its door and gate, the outputs, the value heads, env_vars). A file already of the new shape is
@@ -30,7 +30,7 @@ ROOT = os.path.dirname(HERE)
 SIM = os.path.join(ROOT, "sim")
 MODULE = os.environ.get("V036_ENV") or "duel_env_ffa"
 INPUTS = os.path.join(ROOT, "docs", "INPUTS.csv")
-NEW_KINDS = ["rocket", "prefire"]
+NEW_KINDS = ["rocket", "emerge", "prefire"]
 
 
 def _env():
@@ -52,8 +52,8 @@ def widen(ck, E):
     sd = ck["model"]
     old_n = int(sd["enc.0.weight"].shape[1])
     extra = E.OBS_DIM - old_n
-    assert extra in (0, E.N_RAIM + E.N_PREF), "the network has {} inputs, the simulator {} (this converter adds the {} of N_RAIM and N_PREF only)".format(
-        old_n, E.OBS_DIM, E.N_RAIM + E.N_PREF)
+    assert extra in (0, E.N_RAIM + E.N_PREF + E.N_EMG), "the network has {} inputs, the simulator {} (this converter adds the {} of N_RAIM, N_PREF and N_EMG only)".format(
+        old_n, E.OBS_DIM, E.N_RAIM + E.N_PREF + E.N_EMG)
     if extra == 0:
         assert ck.get("attn") is None or ck["attn"]["obs_dim"] == E.OBS_DIM
         return 0, []
@@ -160,7 +160,7 @@ def main_prep(argv):
     shutil.copy(a.src, os.path.join(out, "keep", "policy_v035_end.pt"))          # (the save as it was; the source is only read)
     ck = torch.load(a.src, weights_only=False, map_location="cpu")
     r = widen(ck, E)
-    assert r[0] == E.N_RAIM + E.N_PREF, "the save is not of v0.3.5's shape ({} inputs added)".format(r[0])
+    assert r[0] == E.N_RAIM + E.N_PREF + E.N_EMG, "the save is not of v0.3.5's shape ({} inputs added)".format(r[0])
     torch.save(ck, os.path.join(out, "policy.pt"))
     shutil.copy(os.path.join(out, "policy.pt"), os.path.join(out, "keep", "policy_start.pt"))
     say("start", os.path.join(out, "policy.pt"), ck, *r)

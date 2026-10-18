@@ -1020,8 +1020,16 @@ HOP_PAY = float(os.environ.get("HOP_PAY") or 0.0)
 #                 the approaches near the enemy get quieter while speed away from him is paid as before (goals 1 and 3:
 #                 speed and movement where it is free, positioning near the enemy). Counter: hop_quiet (take-offs it silenced).
 HOP_QUIET = float(os.environ.get("HOP_QUIET") or 0.0) > 0
-HOP_QUIET_HEARD, HOP_QUIET_NEAR = 4.0, 700.0
-PLAY_VARS = PLAY_VARS + ("HOP_QUIET",)
+# AWARE_LOG=1   (2026-10-18, the owner: "anything to help us confirm that he's doing the things we want him to") measuring
+#               only: counters of the awareness check (tools/awareness.py) in training, the counted seats in games (not runs):
+#               moving (250 u/s and over) with the enemy alive and not in view, his yaw within 30 degrees of the believed
+#               place (at most 5 s old) and of the true one; after a new enemy sound (none for 1 s before, not in view, not
+#               already faced) the time until he faces it (0.1 s bins to 2 s, then never); his speed and take-offs in view,
+#               unseen with the enemy near (heard within 2 s or believed within 700 units), unseen and far. Nothing is paid.
+AWARE_LOG = float(os.environ.get("AWARE_LOG") or 0.0) > 0
+HOP_QUIET_HEARD = float(os.environ.get("HOP_QUIET_HEARD") or 4.0)   # (2026-10-18: settings; the owner's run sets 1 s and 300 units)
+HOP_QUIET_NEAR = float(os.environ.get("HOP_QUIET_NEAR") or 700.0)
+PLAY_VARS = PLAY_VARS + ("HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR")
 # v0.3.4 D: WALK_NO_JUMP=1 (a PLAY_VAR; the owner's hard rule of 2026-10-17: in the game a held walk key does not stop a
 # jump, so walking means jump off): wherever his walk key is on as his hands and legs leave it, before the finger limits,
 # his jump (the vertical key's 1) is let go. Counter: walk_jump (frames of policy seats with both asked, before the rule).
@@ -1212,7 +1220,7 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
                  "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
-                 "r_long", "op_lab", "pf_node",
+                 "r_long", "op_lab", "pf_node", "emg_links",
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band")   # (HEAD_EVENTS)
 MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
@@ -1549,8 +1557,21 @@ PF_SLOTS, PF_F = 3, 13
 PF_KINDS = ("rl", "gl", "pg")                              # the lists, and the order of the fallback
 N_PREF = PF_SLOTS * PF_F
 PF_SELF, PF_LIFT, PF_TOL = 160.0, 2.0, 24.0
-PLAY_VARS = PLAY_VARS + ("RL_AIM", "PREFIRE")
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF
+# EMERGE_IN=1 (v0.3.6, the owner, 2026-10-18), the last N_EMG inputs: where the enemy he believes in would come into his view.
+# The walking map's way (walk, jump and teleporter links) from the believed place (v02_bel) to him, greedy by the table of
+# ways (N_V02's), then walked back from him to the last point of it that his eyes see (a clear line, the shots' mask): the
+# emergence point (the measuring version: AWARE_LOG's aw_emg). Worked out every EMG_EVERY frames a player (staggered) and
+# held between; its direction from his eyes is read every frame. Live only while the belief is fresh (EMG_FRESH seconds at
+# most) and the enemy is not in view; zeros otherwise. The inputs: live; sin and cos of the yaw from his facing to the point;
+# that yaw / 30 (-1 to 1); the pitch from his view / 15 (-1 to 1); the distance from his eyes / 1500 (to 2); the point is the
+# believed place itself (the whole way in sight); a way exists (0: none within the table's 16 s: the point inputs zeros).
+# A token of its own ("emerge", sim/attn.py's LATE): a part of no older token, so that an older network's tokens keep their
+# rows (tools/v036_init.py gives it with its gate shut). A game server's plugin needs nothing more (observe() keeps it).
+EMERGE_IN = float(os.environ.get("EMERGE_IN") or 0.0) > 0
+N_EMG = 8
+EMG_EVERY, EMG_FRESH, EMG_STEPS = 4, 5.0, 96
+PLAY_VARS = PLAY_VARS + ("RL_AIM", "PREFIRE", "EMERGE_IN")
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -2765,6 +2786,10 @@ class DuelEnv:
                           walk_jump=0,                    # frames of policy seats with walk and jump both asked (before WALK_NO_JUMP)
                           solo=np.zeros(2),               # SOLO_SELF: frames he drove himself in runs (counted seats, alive), his speed there (sum)
                           hop_quiet=0,                    # HOP_QUIET: take-offs whose pay it silenced
+                          aw_bel=np.zeros(2), aw_tru=np.zeros(2),   # AWARE_LOG: frames, of them within 30 degrees (belief; truth)
+                          aw_speed=np.zeros(6), aw_off=np.zeros(3),  # ... frames and speed sums, take-offs: in view, unseen near, far
+                          aw_snd=np.zeros(22),            # ... turns after a sound by 0.1 s to 2 s, never, already facing
+                          aw_emg=np.zeros(4),             # ... emergence point: frames, within 30 degrees (3D), no way, at the belief itself
                           keys_add=np.zeros(1 + len(KA_COLS)),   # LEGS_KEYS_ADD: frames his legs carried him (counted seats), of them his own output
                           #                                 in place of the legs' for each of KA_COLS
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
@@ -3791,6 +3816,128 @@ class DuelEnv:
         cg = np.zeros(self.n, bool) if self.clock_game is None else np.asarray(self.clock_game, bool)
         assert cg.shape == (self.n,), "clock_game: one flag a seat"
         return ct, cg
+
+    def _aware_log(self):
+        """(AWARE_LOG) the awareness counters of this frame (see AWARE_LOG); called after observe()"""
+        n, s = self.n, self.state
+        ar = np.arange(n)
+        opp = self._others_arr()[:, 0]
+        if getattr(self, "aw_pend", None) is None or len(self.aw_pend) != n:
+            self.aw_pend, self.aw_t0 = np.zeros(n, bool), np.zeros(n)
+            self.aw_pos, self.aw_last = np.zeros((n, 3)), np.full(n, -99.0)
+            self.aw_clock = 0.0
+        self.aw_clock += DT
+        t = self.aw_clock
+        alive = self.hp[:n] > 0
+        game = (self.script[:n] == 0) & (self.run_k[:n] < 0) & self._counted(ar)
+        inview = np.asarray(self.visible, bool)[:n] | np.asarray(self.acquired, bool)[:n]
+        en_alive = alive[opp]
+        yaw = np.asarray(self.yaw[:n], np.float64)
+
+        def off_(to):
+            d_ = np.asarray(to, np.float64)[:, :2] - s[:n, :2].astype(np.float64)
+            a_ = (np.degrees(np.arctan2(d_[:, 1], d_[:, 0])) - yaw + 180.0) % 360.0 - 180.0
+            return np.where(np.hypot(d_[:, 0], d_[:, 1]) >= 100.0, np.abs(a_), np.nan)
+        sp = np.hypot(s[:n, 3], s[:n, 4])
+        bel = getattr(self, "v02_bel", None)
+        if bel is not None:
+            bpos = np.asarray(bel, np.float64)[:n]
+            fresh = np.asarray(self.v02_bel_ok, bool)[:n] & (np.asarray(getattr(self, "v02_bt_now", np.zeros(n)))[:n] <= 5.0)
+        else:
+            bpos, fresh = np.zeros((n, 3)), np.zeros(n, bool)
+        base = game & alive & (sp >= 250.0) & ~inview & en_alive
+        ob = off_(bpos)
+        m_ = base & fresh & ~np.isnan(ob)
+        self.stats["aw_bel"] += (float(m_.sum()), float((m_ & (ob <= 30.0)).sum()))
+        ot = off_(s[opp, :3])
+        m_ = base & ~np.isnan(ot)
+        self.stats["aw_tru"] += (float(m_.sum()), float((m_ & (ot <= 30.0)).sum()))
+        R = self.route
+        W = getattr(self, "v02_ways", None)
+        self.aw_tick = getattr(self, "aw_tick", 0) + 1
+        if R is not None and W is not None and self.aw_tick % 8 == 0:
+            if getattr(R, "_fwd", None) is None:
+                R._fwd, R._from = [[] for _ in range(len(R.nodes))], getattr(R, "_from", {}) or {}
+                for b_, lst in enumerate(R.radj):
+                    for a_, c_ in lst:
+                        R._fwd[a_].append((b_, c_))
+            m_ = base & fresh
+            ids = np.nonzero(m_)[0]
+            if len(ids):
+                eb = R.locate(bpos[ids].astype(np.float32))
+                em = R.locate(s[ids, :3].astype(np.float32))
+                for j_, i_ in enumerate(ids):
+                    u, me = int(eb[j_]), int(em[j_])
+                    if W[me, u] >= 255:
+                        self.stats["aw_emg"][2] += 1.0
+                        continue
+                    path = [u]
+                    for _ in range(96):
+                        if u == me:
+                            break
+                        nxt, bc = -1, 1e18
+                        for v_, c_ in R._fwd[u]:
+                            wv = 0.0 if v_ == me else (W[me, v_] / 16.0 if W[me, v_] < 255 else 1e9)
+                            if c_ + wv < bc:
+                                nxt, bc = v_, c_ + wv
+                        if nxt < 0 or nxt in path:
+                            break
+                        u = nxt
+                        path.append(u)
+                    eye = s[i_, :3].astype(np.float32) + np.array([0, 0, VIEW_H], np.float32)
+                    pt, at_bel = None, True
+                    for k_ in range(len(path) - 1, -1, -1):
+                        q_ = R.nodes[path[k_]].astype(np.float32) + np.array([0, 0, VIEW_H], np.float32)
+                        if self.w.trace(eye, q_, mask=self.sight)["fraction"] >= 0.999:
+                            pt, at_bel = q_, k_ == 0
+                        else:
+                            break
+                    if pt is None:                           # (not even his own point: the first step of the way)
+                        pt = R.nodes[path[-1]].astype(np.float32) + np.array([0, 0, VIEW_H], np.float32)
+                    d_ = pt.astype(np.float64) - eye
+                    if np.hypot(d_[0], d_[1]) < 100.0:
+                        continue
+                    yr_, pr_ = np.radians(float(self.yaw[i_])), np.radians(float(self.pitch[i_]))
+                    dv_ = np.array([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)])
+                    cos_ = float(np.dot(dv_, d_) / max(1e-6, np.linalg.norm(d_)))
+                    self.stats["aw_emg"][0] += 1.0
+                    self.stats["aw_emg"][1] += float(cos_ >= np.cos(np.radians(30.0)))
+                    self.stats["aw_emg"][3] += float(at_bel)
+        ht_ = np.asarray(getattr(self, "v02_ht", np.full((n, 1), 99.0)))[:n]
+        near = ~inview & ((ht_ < 2.0).any(1) | (fresh & (np.linalg.norm(bpos - s[:n, :3], axis=1) < 700.0)))
+        sit = [inview, near, ~inview & ~near]
+        ga = game & alive
+        can_ = np.asarray(getattr(self, "aw_can", np.zeros(n, bool)), bool)[:n]
+        for k_, c_ in enumerate(sit):
+            self.stats["aw_speed"][2 * k_] += float((ga & c_).sum())
+            self.stats["aw_speed"][2 * k_ + 1] += float(sp[ga & c_].sum())
+            self.stats["aw_off"][k_] += float((ga & c_ & can_).sum())
+        snd = np.asarray(self.snd_t[:n], np.float64)
+        got = snd < 0.5 * DT
+        pain = np.asarray(getattr(self, "pain_t", np.full(n, 99.0))[:n], np.float64) < 0.5 * DT
+        heard = got.any(1) | pain
+        hpos = np.where(got.any(1)[:, None], np.asarray(self.snd_pos[:n], np.float64)[ar, got.argmax(1)], s[opp, :3])
+        drop = self.aw_pend & ~alive
+        self.aw_pend &= ~drop
+        if self.aw_pend.any():
+            op = off_(self.aw_pos)
+            dt_ = t - self.aw_t0
+            fin = self.aw_pend & ~np.isnan(op) & (op <= 30.0)
+            nev = self.aw_pend & ~fin & (dt_ > 2.0)
+            np.add.at(self.stats["aw_snd"], np.clip((dt_[fin] / 0.1).astype(np.int64), 0, 19), 1.0)
+            self.stats["aw_snd"][20] += float(nev.sum())
+            self.aw_pend &= ~(fin | nev)
+        new = heard & alive & game & ~inview & ~self.aw_pend & ((t - self.aw_last) >= 1.0)
+        self.aw_last = np.where(heard, t, self.aw_last)
+        if new.any():
+            oh = off_(hpos)
+            ok_ = new & ~np.isnan(oh)
+            fac = ok_ & (oh <= 30.0)
+            self.stats["aw_snd"][21] += float(fac.sum())
+            st_ = ok_ & ~fac
+            self.aw_pend |= st_
+            self.aw_t0 = np.where(st_, t, self.aw_t0)
+            self.aw_pos = np.where(st_[:, None], hpos, self.aw_pos)
 
     def _others_arr(self):
         """for every player, the other players of his group (one column each)"""
@@ -4861,7 +5008,8 @@ class DuelEnv:
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
-                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible)], 1)
+                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
+                              self._emerge(eye, yaw, pit, visible)], 1)
         return obs.astype(np.float32)
 
     def _proj(self, pos, eye, fdir, rot, vel):
@@ -5299,6 +5447,96 @@ class DuelEnv:
             blk[:, :S, 10 + kc_] = 1.0
             blk[:, :S] *= valid[:, :, None]
             out[ii] = blk.reshape(len(ii), -1)
+        return out
+
+    def _emg_fwd(self):
+        """(EMERGE_IN) the walking map's links forward, padded: [points, K] targets (-1: none) and their seconds"""
+        R = self.route
+        fwd = [[] for _ in range(len(R.nodes))]
+        for b_, lst in enumerate(R.radj):
+            for a_, c_ in lst:
+                fwd[a_].append((b_, c_))
+        K = max(1, max(len(f_) for f_ in fwd))
+        to = np.full((len(fwd), K), -1, np.int64)
+        co = np.full((len(fwd), K), 1e18, np.float64)
+        for a_, f_ in enumerate(fwd):
+            for j_, (b_, c_) in enumerate(f_):
+                to[a_, j_], co[a_, j_] = b_, c_
+        return to, co
+
+    def _emerge(self, eye, yaw, pit, visible):
+        """the inputs of N_EMG (see EMERGE_IN): the emergence point of the enemy he believes in. Keeps the point (emg_pt,
+        emg_ok: worked out, at the belief, a way) between its readings."""
+        n = self.n
+        out = np.zeros((n, N_EMG), np.float32)
+        if not EMERGE_IN:
+            return out
+        R, W = self.route, self.v02_ways
+        if R is None or W is None:
+            return out
+        if getattr(self, "emg_pt", None) is None or len(self.emg_pt) != n:
+            self.emg_pt, self.emg_ok = np.zeros((n, 3), np.float32), np.zeros((n, 3), bool)
+            self.emg_tick = 0
+        if getattr(self, "emg_links", None) is None:
+            self.emg_links = self._emg_fwd()
+        self.emg_tick += 1
+        bt = np.asarray(self.v02_bt_now, np.float32)[:n]
+        live = np.asarray(self.v02_bel_ok, bool)[:n] & (bt <= EMG_FRESH) & ~np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
+        self.emg_ok[~live] = False
+        due = np.nonzero(live & ((self.emg_tick + np.arange(n)) % EMG_EVERY == 0))[0]
+        if len(due):
+            to_, co_ = self.emg_links
+            bel = np.asarray(self.v02_bel, np.float32)[due]
+            u = R.locate(bel).astype(np.int64)
+            me = R.locate(self.state[due, :3]).astype(np.int64)
+            way = W[me, u] < 255
+            path = np.full((len(due), EMG_STEPS + 1), -1, np.int64)
+            path[:, 0] = u
+            cur, act = u.copy(), way & (u != me)
+            L = np.ones(len(due), np.int64)
+            for k_ in range(1, EMG_STEPS + 1):              # the greedy way: the link that leaves the least way to him
+                a_ = np.nonzero(act)[0]
+                if not len(a_):
+                    break
+                cand = to_[cur[a_]]
+                wv = np.where(cand == me[a_, None], 0.0, np.where(cand >= 0, W[me[a_, None], np.maximum(cand, 0)], 255).astype(np.float64))
+                wv = np.where(wv >= 255, 1e9, wv / 16.0)
+                c_ = np.where(cand >= 0, co_[cur[a_]] + wv, 1e18)
+                nx = cand[np.arange(len(a_)), c_.argmin(1)]
+                bad = (nx < 0) | (path[a_, :k_] == nx[:, None]).any(1)
+                ok_ = ~bad
+                path[a_[ok_], k_] = nx[ok_]
+                cur[a_[ok_]] = nx[ok_]
+                L[a_[ok_]] += 1
+                act[a_[bad]] = False
+                act[a_[ok_]] = nx[ok_] != me[a_[ok_]]
+            e_ = eye[due].astype(np.float32)
+            ii, kk = np.nonzero(path >= 0)
+            pts = (R.nodes[path[ii, kk]] + np.array([0, 0, VIEW_H], np.float32)).astype(np.float32)
+            fr = self.w.lines(e_[ii], pts) if self.sight is None else self.w.lines(e_[ii], pts, mask=self.sight)
+            vis = np.zeros(path.shape, bool)
+            vis[ii, kk] = fr >= 0.999
+            kk = np.arange(path.shape[1])[None, :]           # walked back from his own point while the eyes see it: the point is
+            brk = np.ones(path.shape, bool)                  # after the last break (a hidden point) on the way, or his own point
+            brk[:, 1:] = ~(vis[:, :-1] & vis[:, 1:])         # when he does not see even that
+            j_ = np.where(brk & (kk >= 1) & (kk <= (L - 1)[:, None]), kk, 0).max(1)
+            pt = (R.nodes[path[np.arange(len(due)), j_]] + np.array([0, 0, VIEW_H], np.float32)).astype(np.float32)
+            self.emg_pt[due] = np.where(way[:, None], pt, 0.0)
+            self.emg_ok[due, 0] = True
+            self.emg_ok[due, 1] = way & (j_ == 0) & vis[np.arange(len(due)), 0]
+            self.emg_ok[due, 2] = way
+        on = live & self.emg_ok[:, 0]
+        pw = on & self.emg_ok[:, 2]
+        ey, ep = self._aim_at(eye, self.emg_pt, yaw, pit)
+        d = np.linalg.norm(self.emg_pt - eye, axis=1)
+        out[:, 0] = on
+        out[:, 1] = np.sin(np.radians(ey)) * pw
+        out[:, 2] = np.cos(np.radians(ey)) * pw
+        out[:, 3] = np.clip(ey / 30.0, -1, 1) * pw
+        out[:, 4] = np.clip(ep / 15.0, -1, 1) * pw
+        out[:, 5] = np.minimum(d / 1500.0, 2.0) * pw
+        out[:, 6] = on & self.emg_ok[:, 1]
+        out[:, 7] = pw
         return out
 
     def note_hunt(self, valid):
@@ -7483,6 +7721,7 @@ class DuelEnv:
             self.stats["hop_takeoffs"] += int(can_.sum())
             self.stats["hop_chains"] += int((can_ & (self.hop_k == 0)).sum())
             self.hop_k = self.hop_k + can_
+            self.aw_can = can_                               # (AWARE_LOG) this frame's take-offs
         blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         if BLIND_RULE:                                       # (rockets by where they land, below; plasma and grenades free)
             bill = blind & np.isin(self.weapon, (MG, SG, LG, RG, HMG))
@@ -8468,6 +8707,8 @@ class DuelEnv:
             self.note_combat(dl_, st["dmg_taken"] + (0.0 if fall is None else fall), fr_, died)
             self.note_frame()
         obs = self.observe()
+        if AWARE_LOG:                                        # (AWARE_LOG) measuring only
+            self._aware_log()
         if MOMENTS:                                          # the rounds begun from a saved moment are put in place; this frame's
             self._moment_step(obs, done, died, info)         # moments are saved
         if HEAD_EVENTS:
