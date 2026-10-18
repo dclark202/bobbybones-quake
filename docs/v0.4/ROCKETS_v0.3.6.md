@@ -20,7 +20,7 @@ lead point on the enemy's body and the floor's angle under it. Splash is already
 | 3 | The nearest wall near the predicted spot: its direction and distance (if 1 and 2 test cleanly) | input |
 | 4 | Pre-fire points: the pros' blind-shot spots (`sim/pro_places`) nearest the enemy's believed route: yaw, pitch, distance, when the enemy could be there (rockets and grenades) | input token |
 | 5 | Blind rockets free (`BLIND_RL_DMG=0`). Equilibrium: both sides pre-fire more where it lands damage, approaches through doors get more dangerous for both. Goals: weapon use, counterplay | pay |
-| 6 | Rocket-jump runs (`RJ_RUN_P`, built: B-252; `RJ_CLEARED=1`) at **10% of his time, out of the 20% solo share**: item runs 5%, jump runs 5%, rocket-jump runs 10% (the owner, 2026-10-17) | solo runs |
+| 6 | Rocket-jump runs (`RJ_RUN_P`, built: B-252; `RJ_CLEARED=1`) at **10% of his time, out of the 20% solo share**: item runs 5%, jump runs 5%, rocket-jump runs 10% (the owner, 2026-10-17). **For this run's first stretch only** (the owner: "just for this one session to get him to learn it"): when his clears of the rocket jumps stop rising (three checks flat), the jumps he clears are opened on his ways in games (`RJ_OPEN`) and the rocket-jump runs drop to about 2%, then to 0 if a later check shows no loss | solo runs |
 
 New inputs start at zero weight and the new token with its door shut: he plays the same on the first frame (proved by
 fixed-seed replays). Ten updates and the check against the control before the run continues.
