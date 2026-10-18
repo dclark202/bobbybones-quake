@@ -7,8 +7,8 @@
     python tools/v036_init.py prep --from <v0.3.5's save .pt> --league <v0.3.5's snapshots folder> [--run duel_gru_v0_3_6]
                               [--cmd-template <.cmd> --cmd-out <.cmd> --until "2026-10-19 12:00" --setup-min 10]
 
-widen / league: the 50 new inputs (N_RAIM 20, the group "v036 rocket aim"; N_PREF 30, "v036 prefire", at the end of the group
-module's 847) get zero weight in the old encoder and mean 0, spread 1 in the input statistics; the attention part gets their
+widen / league: the 59 new inputs (N_RAIM 20, the group "v036 rocket aim"; N_PREF 39, "v036 prefire", at the end of the group
+module's 856) get zero weight in the old encoder and mean 0, spread 1 in the input statistics; the attention part gets their
 tokens (the kinds "rocket", one token, and "prefire", a token a place: tools/targets_init.py's widen_attn, a first layer and
 marks as sim/attn.py starts them) with their gate shut (attn.GATE_SHUT): nothing looks at them, and the encoder does not read
 them: every output is what it was. The older tokens keep their weights, marks and gates (v0.3.5's are open). Nothing else is

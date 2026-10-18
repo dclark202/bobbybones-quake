@@ -418,21 +418,24 @@ add("v036 rocket aim", "wall by him: distance", RV_ + "from that place to the ne
 add("v036 rocket aim", "wall by him: yaw", RV_ + "from his crosshair to the point the trace hit", "degrees / 30, -1 to 1", V36)
 add("v036 rocket aim", "wall by him: pitch", RV_ + "the same, up and down", "degrees / 15, -1 to 1", V36)
 assert len(rows) == E.OBS_DIM - E.N_PREF, (len(rows), E.OBS_DIM - E.N_PREF)
-PF_ = ("(PREFIRE; zeros with it off, with the enemy in view, with nothing believed of him, without a rocket or a grenade among his "
-       "weapons) of the pros' blind-shot places (sim/pro_places) the nearest to the enemy's believed way to him (least off the way first; "
-       "none within 160 units of him): ")
+PF_ = ("(PREFIRE; zeros with it off, with the enemy in view, with nothing believed of him, without rockets, grenades or plasma) "
+       "of the pros' blind-shot places of one weapon (sim/pro_places/<map>_rl/_gl/_pg.json: the weapon in his hand, else the first "
+       "of rockets, grenades, plasma he has) the nearest to the enemy's believed way to him (least off the way first; none within "
+       "160 units of him): ")
 for j in range(E.PF_SLOTS):
     nm_ = "pre-fire place {}".format(j + 1)
     add("v036 prefire", nm_ + ": yaw", PF_ + "from his crosshair to it", "degrees / 30, -1 to 1", V36)
     add("v036 prefire", nm_ + ": pitch", PF_ + "the same, up and down", "degrees / 15, -1 to 1", V36)
     add("v036 prefire", nm_ + ": distance", PF_ + "from his eyes", "units / 2000, to 1.5", V36)
     add("v036 prefire", nm_ + ": enemy could be there", PF_ + "the seconds of way from the believed place to it less the time since that belief (below 0: he could have passed it)", "seconds / 5, -1 to 1", V36)
-    add("v036 prefire", nm_ + ": rocket flight", PF_ + "a rocket's flight time there", "seconds / 1.5, 0 to 2", V36)
+    add("v036 prefire", nm_ + ": flight", PF_ + "the list's weapon's flight time there (a rocket 1000 u/s, a plasma cell 2000 u/s, a grenade along its low arc; 0 where none reaches)", "seconds / 1.5, 0 to 2", V36)
     add("v036 prefire", nm_ + ": clear", PF_ + "a clear line from his eyes to it", "0 or 1", V36)
     add("v036 prefire", nm_ + ": off the way", PF_ + "how many seconds longer the way from the believed place to him is through it", "seconds / 5, 0 to 1", V36)
-    add("v036 prefire", nm_ + ": pros' share", PF_ + "the share of the pros' blind shots that land there", "per cent / 15", V36)
-    add("v036 prefire", nm_ + ": grenade pitch", PF_ + "with grenades: from his crosshair to the low arc that lands a grenade there (0: none reaches)", "degrees / 15, -1 to 1", V36)
+    add("v036 prefire", nm_ + ": pros' share", PF_ + "the share of that weapon's pros' blind shots that land there", "per cent / 15", V36)
+    add("v036 prefire", nm_ + ": grenade pitch", PF_ + "the grenade list only: from his crosshair to the low arc that lands a grenade there (0: none reaches)", "degrees / 15, -1 to 1", V36)
     add("v036 prefire", nm_ + ": there", PF_ + "the slot holds a place", "0 or 1", V36)
+    for k_, w_ in zip(E.PF_KINDS, ("rockets", "grenades", "plasma")):
+        add("v036 prefire", nm_ + ": list {}".format(k_), PF_ + "the list is the {} places".format(w_), "0 or 1", V36)
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

@@ -1524,22 +1524,29 @@ PLAY_VARS = PLAY_VARS + ("HEAD_EVENTS",)
 RL_AIM = float(os.environ.get("RL_AIM") or 0.0) > 0
 N_RAIM = 20
 RAIM_FAR, RAIM_WALL, RAIM_WALL_N = 4096.0, 192.0, 8
-# PREFIRE=1, the last N_PREF inputs: the pros' blind-shot places (sim/pro_places/<map>.json, the places BLIND_PLACES and
-# v0.2's place inputs read) that lie on the enemy's believed way to him: with v0.2's belief of the enemy (v02_bel: seen or
-# heard in the last V02_KNOWN seconds, not known dead since), the enemy NOT in view, he alive and holding the rocket launcher
-# or the grenade launcher with ammunition (in his hand or not). The places are ranked by how far off the way they lie: the
-# seconds of way from the believed place to the place and from it to him, less the way from the believed place to him (the
-# walking map's table of ways, N_V02's), nearest the way first (ties: the nearer to the enemy); places within PF_SELF units
-# of him are left out (he would take his own splash). For each of the PF_SLOTS nearest (PF_F numbers; zeros in a slot
-# with none): yaw from his crosshair to it / 30 and pitch / 15 (-1 to 1; the point the pros' shots land, PF_LIFT above it);
-# its distance from his eyes / 2000 (to 1.5); when the enemy could be there: the seconds of way from the believed place to
-# it less the time since that belief / 5 (-1 to 1: below 0 he could have passed it); a rocket's flight there / 1.5 (0 to 2);
-# a clear line from his eyes (traced every frame); how far off the way / 5 seconds (0 to 1); the pros' share of their blind
-# shots there / 15 (as v0.2's); with the grenade launcher among his weapons (with grenades), the pitch from his crosshair to the low
-# arc that lands a grenade there / 15 (-1 to 1; 0 where none reaches, as the grenade arc inputs: lofted 0.2); that the slot
-# holds a place. A token a slot ("prefire").
+# PREFIRE=1, the last N_PREF inputs: the pros' blind-shot places of ONE weapon (the owner, 2026-10-18: rockets, grenades and
+# plasma are aimed differently; sim/pro_places/<map>_rl.json, _gl.json, _pg.json of tools/pro_places.py --weapon; the mixed
+# <map>.json that BLIND_PLACES and v0.2's place inputs read is not used here) that lie on the enemy's believed way to him:
+# with v0.2's belief of the enemy (v02_bel: seen or heard in the last V02_KNOWN seconds, not known dead since), the enemy NOT
+# in view, he alive. The list: the weapon in his hand when it is the rocket launcher, the grenade launcher or the plasma gun
+# with ammunition and the map has a list for it; with any other weapon in his hand (or the one in hand without a list) the
+# first of rockets, grenades, plasma that he has with ammunition and the map has a list for (PF_KINDS): a pre-fire is chosen
+# before the switch to the weapon that makes it, and the rockets are the pre-fire weapon first; none: zeros. Three numbers of
+# each slot say which list it is. The places are ranked by how far off the way they lie: the seconds of way from the believed
+# place to the place and from it to him, less the way from the believed place to him (the walking map's table of ways,
+# N_V02's), nearest the way first (ties: the nearer to the enemy); places within PF_SELF units of him are left out (his own
+# splash). For each of the PF_SLOTS nearest (PF_F numbers; zeros in a slot with none): yaw from his crosshair to it / 30 and
+# pitch / 15 (-1 to 1; the point the pros' shots land, PF_LIFT above it); its distance from his eyes / 2000 (to 1.5); when
+# the enemy could be there: the seconds of way from the believed place to it less the time since that belief / 5 (-1 to 1:
+# below 0 he could have passed it); the list's weapon's flight there / 1.5 (0 to 2: a rocket at 1000 units a second, a plasma
+# cell at 2000, a grenade along its low arc; 0 where no grenade reaches); a clear line from his eyes (traced every frame);
+# how far off the way / 5 seconds (0 to 1); that weapon's pros' share of their blind shots there / 15; the grenade list
+# only: the pitch from his crosshair to the low arc that lands a grenade there / 15 (-1 to 1; 0 where none reaches, as the
+# grenade arc inputs: lofted 0.2); that the slot holds a place; the list: rockets, grenades, plasma (one of three). A token a
+# slot ("prefire").
 PREFIRE = float(os.environ.get("PREFIRE") or 0.0) > 0
-PF_SLOTS, PF_F = 3, 10
+PF_SLOTS, PF_F = 3, 13
+PF_KINDS = ("rl", "gl", "pg")                              # the lists, and the order of the fallback
 N_PREF = PF_SLOTS * PF_F
 PF_SELF, PF_LIFT, PF_TOL = 160.0, 2.0, 24.0
 PLAY_VARS = PLAY_VARS + ("RL_AIM", "PREFIRE")
@@ -4973,6 +4980,7 @@ class DuelEnv:
                                      min(1.0, float(c_.get("push_share", 0.0) or 0.0) / 50.0), 1.0)
                     idx_[tuple(int(x_) for x_ in ci_[k_] - lo_)] = k_ + 1
                 self.v02_cell = (np.array(pc_["cell"], np.float32), lo_, dims_, idx_, rows_)
+        self.pf_map = name                                  # (PREFIRE: its lists of places a weapon are read at the first use)
         self.v02_pp = np.zeros((0, 3), np.float32)          # the pros' places: where,
         self.v02_pf = np.zeros((0, 4), np.float32)          # ... the share of their blind shots, met, hit, how standing there fares
         f_ = os.path.join(here_, name + ".json")
@@ -5203,62 +5211,94 @@ class DuelEnv:
         out[k, o + 4], out[k, o + 5] = np.clip(wy / 30.0, -1, 1) * hit, np.clip(wpi / 15.0, -1, 1) * hit
         return out
 
+    def _pf_load(self):
+        """(PREFIRE) the map's lists of places a weapon: {weapon: (places [P, 3], their share / 15 [P], walking-map points [P])}"""
+        out = {}
+        R = self.route
+        here_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_places")
+        for w_, k_ in zip((RL, GL, PG), PF_KINDS):
+            f_ = os.path.join(here_, "{}_{}.json".format(self.pf_map, k_))
+            pl_ = []
+            if os.path.exists(f_):
+                with open(f_, encoding="utf-8") as fh_:
+                    pl_ = json.load(fh_).get("places") or []
+            if pl_ and R is not None:
+                pp_ = np.array([p_["pos"] for p_ in pl_], np.float32).reshape(-1, 3)
+                sh_ = np.array([min(1.0, float(p_.get("share", 0.0) or 0.0) / 15.0) for p_ in pl_], np.float32)
+                out[w_] = (pp_, sh_, R.locate(pp_))
+        return out
+
     def _pref(self, pos, eye, yaw, pit, visible):
-        """the inputs of N_PREF (see PREFIRE): the pros' blind-shot places on the enemy's believed way to him. Reads the
-        belief _v02 made this frame (v02_bel, v02_bel_ok, v02_bt_now); keeps only the places' points of the walking map."""
+        """the inputs of N_PREF (see PREFIRE): the pros' blind-shot places of one weapon on the enemy's believed way to him.
+        Reads the belief _v02 made this frame (v02_bel, v02_bel_ok, v02_bt_now); keeps only the map's lists (pf_lists)."""
         n = self.n
         out = np.zeros((n, N_PREF), np.float32)
         if not PREFIRE:
             return out
-        P, R, W = len(self.v02_pp), self.route, self.v02_ways
-        if not P or R is None or W is None:
+        R, W = self.route, self.v02_ways
+        if R is None or W is None:
             return out
-        hasr = self.has[:n, RL].astype(bool) & (self.ammo[:n, RL] >= 1)
-        hasg = self.has[:n, GL].astype(bool) & (self.ammo[:n, GL] >= 1)
-        on = np.asarray(self.v02_bel_ok, bool)[:n] & ~np.asarray(visible, bool)[:n] & (self.hp[:n] > 0) & (hasr | hasg)
-        ii = np.nonzero(on)[0]
-        if not len(ii):
+        if getattr(self, "pf_lists", None) is None:
+            self.pf_lists = self._pf_load()
+        L = self.pf_lists
+        if not L:
             return out
-        if getattr(self, "pf_node", None) is None or len(self.pf_node) != P:
-            self.pf_node = R.locate(self.v02_pp)
-        pn = self.pf_node
-        p_, e_ = pos[ii], eye[ii].astype(np.float32)
-        na, nb = R.locate(p_), R.locate(np.asarray(self.v02_bel, np.float32)[ii])
-        wb = W[pn[None, :], nb[:, None]].astype(np.float32)          # the way from the believed place to each place (16ths of a second)
-        wm = W[na[:, None], pn[None, :]].astype(np.float32)          # ... from each place to him
-        wbm = W[na, nb].astype(np.float32)[:, None]                  # ... from the believed place to him
-        ok = (wb < 255) & (wm < 255) & (np.linalg.norm(self.v02_pp[None, :, :] - p_[:, None, :], axis=2) >= PF_SELF)
-        det = np.maximum(np.where(wbm < 255, wb + wm - wbm, wb + wm), 0.0) / 16.0
-        score = np.where(ok, det + 0.01 * wb / 16.0, np.inf)
-        S = min(PF_SLOTS, P)
-        order = np.argsort(score, axis=1, kind="stable")[:, :S]
-        ar = np.arange(len(ii))[:, None]
-        valid = np.isfinite(score[ar, order])
-        pp = (self.v02_pp[order] + np.array([0, 0, PF_LIFT], np.float32)).astype(np.float32)     # (k, S, 3)
-        ey, ep = self._aim_at(e_[:, None, :], pp, yaw[ii][:, None], pit[ii][:, None])
-        to = pp - e_[:, None, :]
-        d = np.linalg.norm(to, axis=2)
-        bt = np.asarray(self.v02_bt_now, np.float32)[ii]
-        since = bt - np.minimum(bt, 1.0)                     # (the believed place is where he was a second after the last news)
-        blk = np.zeros((len(ii), PF_SLOTS, PF_F), np.float32)
-        blk[:, :S, 0] = np.clip(ey / 30.0, -1, 1)
-        blk[:, :S, 1] = np.clip(ep / 15.0, -1, 1)
-        blk[:, :S, 2] = np.minimum(d / 2000.0, 1.5)
-        blk[:, :S, 3] = np.clip((wb[ar, order] / 16.0 - since[:, None]) / 5.0, -1, 1)
-        blk[:, :S, 4] = np.clip(d / float(P_SPEED[RL]) / 1.5, 0.0, 2.0)
-        blk[:, :S, 5] = self._v02_clear(np.repeat(e_, S, axis=0), pp.reshape(-1, 3)).reshape(len(ii), S)
-        blk[:, :S, 6] = np.minimum(det[ar, order] / 5.0, 1.0)
-        blk[:, :S, 7] = self.v02_pf[order, 0]
-        D = np.hypot(to[..., 0], to[..., 1]) + 1e-6          # (the grenade's low arc, as the grenade arc inputs)
-        v_, g_ = float(P_SPEED[GL]), 800.0
-        disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[..., 2] * v_ * v_)
-        reach = (disc >= 0.0) & hasg[ii][:, None]
-        th = np.arctan2(v_ * v_ - np.sqrt(np.maximum(disc, 0.0)), g_ * D)
-        epg = np.degrees(-(th - 0.2 * np.cos(th)) - pit[ii][:, None])
-        blk[:, :S, 8] = np.clip(epg / 15.0, -1, 1) * reach
-        blk[:, :S, 9] = 1.0
-        blk[:, :S] *= valid[:, :, None]
-        out[ii] = blk.reshape(len(ii), -1)
+        on = np.asarray(self.v02_bel_ok, bool)[:n] & ~np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
+        okw = {w_: self.has[:n, w_].astype(bool) & (self.ammo[:n, w_] >= 1) & (w_ in L) for w_ in (RL, GL, PG)}
+        pick = np.full(n, -1, np.int64)
+        for w_ in (PG, GL, RL):                              # the fallback: the first of PF_KINDS he has (rockets written last: first)
+            pick = np.where(okw[w_], w_, pick)
+        hand = self.weapon[:n]
+        for w_ in (RL, GL, PG):                              # the weapon in his hand, when it has a list
+            pick = np.where((hand == w_) & okw[w_], w_, pick)
+        pick = np.where(on, pick, -1)
+        S_ = PF_SLOTS
+        for w_, kc_ in zip((RL, GL, PG), range(3)):
+            ii = np.nonzero(pick == w_)[0]
+            if not len(ii):
+                continue
+            pps, shs, pn = L[w_]
+            S = min(S_, len(pps))
+            p_, e_ = pos[ii], eye[ii].astype(np.float32)
+            na, nb = R.locate(p_), R.locate(np.asarray(self.v02_bel, np.float32)[ii])
+            wb = W[pn[None, :], nb[:, None]].astype(np.float32)      # the way from the believed place to each place (16ths of a second)
+            wm = W[na[:, None], pn[None, :]].astype(np.float32)      # ... from each place to him
+            wbm = W[na, nb].astype(np.float32)[:, None]              # ... from the believed place to him
+            ok = (wb < 255) & (wm < 255) & (np.linalg.norm(pps[None, :, :] - p_[:, None, :], axis=2) >= PF_SELF)
+            det = np.maximum(np.where(wbm < 255, wb + wm - wbm, wb + wm), 0.0) / 16.0
+            score = np.where(ok, det + 0.01 * wb / 16.0, np.inf)
+            order = np.argsort(score, axis=1, kind="stable")[:, :S]
+            ar = np.arange(len(ii))[:, None]
+            valid = np.isfinite(score[ar, order])
+            pp = (pps[order] + np.array([0, 0, PF_LIFT], np.float32)).astype(np.float32)        # (k, S, 3)
+            ey, ep = self._aim_at(e_[:, None, :], pp, yaw[ii][:, None], pit[ii][:, None])
+            to = pp - e_[:, None, :]
+            d = np.linalg.norm(to, axis=2)
+            bt = np.asarray(self.v02_bt_now, np.float32)[ii]
+            since = bt - np.minimum(bt, 1.0)                 # (the believed place is where he was a second after the last news)
+            blk = np.zeros((len(ii), PF_SLOTS, PF_F), np.float32)
+            blk[:, :S, 0] = np.clip(ey / 30.0, -1, 1)
+            blk[:, :S, 1] = np.clip(ep / 15.0, -1, 1)
+            blk[:, :S, 2] = np.minimum(d / 2000.0, 1.5)
+            blk[:, :S, 3] = np.clip((wb[ar, order] / 16.0 - since[:, None]) / 5.0, -1, 1)
+            blk[:, :S, 5] = self._v02_clear(np.repeat(e_, S, axis=0), pp.reshape(-1, 3)).reshape(len(ii), S)
+            blk[:, :S, 6] = np.minimum(det[ar, order] / 5.0, 1.0)
+            blk[:, :S, 7] = shs[order]
+            if w_ == GL:                                     # (the grenade's low arc, as the grenade arc inputs)
+                D = np.hypot(to[..., 0], to[..., 1]) + 1e-6
+                v_, g_ = float(P_SPEED[GL]), 800.0
+                disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[..., 2] * v_ * v_)
+                reach = disc >= 0.0
+                th = np.arctan2(v_ * v_ - np.sqrt(np.maximum(disc, 0.0)), g_ * D)
+                epg = np.degrees(-(th - 0.2 * np.cos(th)) - pit[ii][:, None])
+                blk[:, :S, 8] = np.clip(epg / 15.0, -1, 1) * reach
+                blk[:, :S, 4] = np.clip(D / np.maximum(v_ * np.cos(th), 1.0) / 1.5, 0.0, 2.0) * reach
+            else:
+                blk[:, :S, 4] = np.clip(d / float(P_SPEED[w_]) / 1.5, 0.0, 2.0)
+            blk[:, :S, 9] = 1.0
+            blk[:, :S, 10 + kc_] = 1.0
+            blk[:, :S] *= valid[:, :, None]
+            out[ii] = blk.reshape(len(ii), -1)
         return out
 
     def note_hunt(self, valid):

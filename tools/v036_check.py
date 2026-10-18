@@ -27,6 +27,7 @@ SIM = os.path.join(ROOT, "sim")
 MAPS = os.path.join(ROOT, "data", "maps")
 CMD = os.environ.get("V036_CMD") or ""
 FRAMES = int(os.environ.get("T_FRAMES") or 40)
+N_NEW = 20 + 3 * 13                                        # (RL_AIM's N_RAIM and PREFIRE's N_PREF: v0.3.6's new inputs)
 
 
 def run_env():
@@ -64,6 +65,7 @@ def dump(module, out):
         a[:, 3] = np.abs(E.TURN[None, :] - np.clip(ey, -20, 20)[:, None]).argmin(1)
         if t == 2 and os.environ.get("T_GIVE_RL"):          # (the same to both simulators: rockets and grenades in hand, so the new inputs live)
             env.has[:, E.RL], env.ammo[:, E.RL], env.has[:, E.GL], env.ammo[:, E.GL] = True, 50, True, 50
+            env.has[:, E.PG], env.ammo[:, E.PG] = True, 50
             a[:, 6] = 1 + E.RL
         o, r, d, info = env.step(a)
         obs.append(o.copy())
@@ -208,43 +210,69 @@ def hand():
     checks.append(("no rocket launcher in hand: zeros", not o3[0, k:k + E.N_RAIM].any()))
     env.weapon[0] = E.RL
     checks.append(("pre-fire off while the enemy is in view", not o[0, k + E.N_RAIM:].any()))
-    # pre-fire: the enemy seen, then not (the belief of the last sighting); his own ranking by hand
-    o4 = see(False, 20)
-    pf = o4[0, k + E.N_RAIM:].reshape(E.PF_SLOTS, E.PF_F)
-    print("pre-fire (enemy out of view, believed {}):".format(bool(env.v02_bel_ok[0])))
-    print(np.round(pf, 3))
-    checks.append(("a belief", bool(env.v02_bel_ok[0])))
-    R, W, pp = env.route, env.v02_ways, env.v02_pp
-    me, bel = env.state[0, :3], env.v02_bel[0]
-    na, nb = int(R.locate(me[None])[0]), int(R.locate(bel[None])[0])
-    best = []
-    for q in range(len(pp)):
-        pn = int(R.locate(pp[q:q + 1])[0])
-        wb, wm, wbm = int(W[pn, nb]), int(W[na, pn]), int(W[na, nb])
-        if wb == 255 or wm == 255 or np.linalg.norm(pp[q] - me) < E.PF_SELF:
-            continue
-        det = max((wb + wm - (wbm if wbm < 255 else 0)), 0) / 16.0
-        best.append((det + 0.01 * wb / 16.0, q, det, wb / 16.0))
-    best.sort()
-    eye0 = env._eye(env.state)[0]
-    for j, (_, q, det, wbs) in enumerate(best[:E.PF_SLOTS]):
-        p_ = pp[q] + np.array([0, 0, E.PF_LIFT], np.float32)
-        ey, ep = env._aim_at(eye0, p_, np.radians(env.yaw[0]), np.radians(env.pitch[0]))
-        dd = float(np.linalg.norm(p_ - eye0))
+    # pre-fire: the enemy seen, then not (the belief of the last sighting); the list by the weapon, the ranking by hand
+    import json as json_
+    lists = {}
+    for w_, k_ in zip((E.RL, E.GL, E.PG), E.PF_KINDS):
+        f_ = os.path.join(SIM, "pro_places", "bloodrun_{}.json".format(k_))
+        pl_ = json_.load(open(f_, encoding="utf-8"))["places"]
+        lists[w_] = (np.array([q_["pos"] for q_ in pl_], np.float32), np.array([min(1.0, q_["share"] / 15.0) for q_ in pl_], np.float32))
+    R, W = env.route, env.v02_ways
+    see(False, 20)
+
+    def case(name, hand, haves, want):
+        """his weapon in hand, the weapons he has (with ammunition) -> the list expected (None: zeros), checked slot by slot"""
+        for w_ in (E.RL, E.GL, E.PG, E.LG):
+            env.has[0, w_], env.ammo[0, w_] = w_ in haves, 10 if w_ in haves else 0
+        env.weapon[0] = hand
+        o_ = see(False, 1)
+        pf = o_[0, k + E.N_RAIM:].reshape(E.PF_SLOTS, E.PF_F)
+        if want is None:
+            checks.append(("pre-fire, {}: zeros".format(name), not pf.any()))
+            return
+        pp, sh = lists[want]
+        me, bel = env.state[0, :3], env.v02_bel[0]
+        na, nb = int(R.locate(me[None])[0]), int(R.locate(bel[None])[0])
+        best = []
+        for q in range(len(pp)):
+            pn = int(R.locate(pp[q:q + 1])[0])
+            wb, wm, wbm = int(W[pn, nb]), int(W[na, pn]), int(W[na, nb])
+            if wb == 255 or wm == 255 or np.linalg.norm(pp[q] - me) < E.PF_SELF:
+                continue
+            det = max((wb + wm - (wbm if wbm < 255 else 0)), 0) / 16.0
+            best.append((det + 0.01 * wb / 16.0, q, det, wb / 16.0))
+        best.sort()
+        eye0 = env._eye(env.state)[0]
         bt = float(env.v02_bt_now[0])
-        exp = [np.clip(ey / 30, -1, 1), np.clip(ep / 15, -1, 1), min(dd / 2000, 1.5), np.clip((wbs - (bt - min(bt, 1))) / 5, -1, 1),
-               np.clip(dd / 1000 / 1.5, 0, 2), None, min(det / 5, 1), env.v02_pf[q, 0], 0.0, 1.0]
-        good = all(e_ is None or abs(float(pf[j, c_]) - float(e_)) < 1e-3 for c_, e_ in enumerate(exp))
-        checks.append(("pre-fire slot {} = by hand (place {}, off the way {:.2f} s)".format(j + 1, q, det), good))
-    checks.append(("pre-fire empty slots zero", len(best) >= E.PF_SLOTS or not pf[len(best):].any()))
-    env.has[0, E.GL], env.ammo[0, E.GL] = True, 10
-    o7 = see(False, 1)
-    pf7 = o7[0, k + E.N_RAIM:].reshape(E.PF_SLOTS, E.PF_F)
-    checks.append(("with grenades: the grenade pitch is live where a grenade reaches", bool((pf7[:, 8] != 0).any() or not pf7[:, 9].any())))
-    env.has[0, E.GL] = False
-    env.has[0, E.RL] = False
-    o5 = see(False, 1)
-    checks.append(("pre-fire off without rockets or grenades", not o5[0, k + E.N_RAIM:].any()))
+        good, slots = bool(env.v02_bel_ok[0]) and len(best) > 0, []
+        for j, (_, q, det, wbs) in enumerate(best[:E.PF_SLOTS]):
+            p_ = pp[q] + np.array([0, 0, E.PF_LIFT], np.float32)
+            ey, ep = env._aim_at(eye0, p_, np.radians(env.yaw[0]), np.radians(env.pitch[0]))
+            dd = float(np.linalg.norm(p_ - eye0))
+            gp, fl = 0.0, dd / {E.RL: 1000.0, E.PG: 2000.0}.get(want, 1.0)
+            if want == E.GL:                                 # the low arc by hand: tan(th) = (v^2 - sqrt(v^4 - g (g D^2 + 2 dz v^2))) / (g D)
+                D, dz, v, g = float(np.hypot(*(p_[:2] - eye0[:2]))), float(p_[2] - eye0[2]), 700.0, 800.0
+                disc = v ** 4 - g * (g * D * D + 2 * dz * v * v)
+                if disc >= 0:
+                    th = np.arctan2(v * v - np.sqrt(disc), g * D)
+                    gp, fl = np.degrees(-(th - 0.2 * np.cos(th)) - np.radians(env.pitch[0])) / 15.0, D / (v * np.cos(th))
+                else:
+                    fl = 0.0
+            exp = [np.clip(ey / 30, -1, 1), np.clip(ep / 15, -1, 1), min(dd / 2000, 1.5), np.clip((wbs - (bt - min(bt, 1))) / 5, -1, 1),
+                   np.clip(fl / 1.5, 0, 2), None, min(det / 5, 1), sh[q], np.clip(gp, -1, 1), 1.0] + [float(w_ == want) for w_ in (E.RL, E.GL, E.PG)]
+            good &= all(e_ is None or abs(float(pf[j, c_]) - float(e_)) < 1e-3 for c_, e_ in enumerate(exp))
+            slots.append(q)
+        good &= len(best) >= E.PF_SLOTS or not pf[len(best):].any()
+        checks.append(("pre-fire, {}: the {} list, slots = by hand (places {})".format(name, E.PF_KINDS[(E.RL, E.GL, E.PG).index(want)], slots), good))
+    case("rockets in hand", E.RL, (E.RL,), E.RL)
+    case("grenades in hand (rockets too)", E.GL, (E.RL, E.GL), E.GL)
+    case("plasma in hand", E.PG, (E.PG,), E.PG)
+    case("lightning in hand, all three", E.LG, (E.RL, E.GL, E.PG, E.LG), E.RL)
+    case("lightning in hand, grenades and plasma", E.LG, (E.GL, E.PG, E.LG), E.GL)
+    case("lightning in hand, plasma only", E.LG, (E.PG, E.LG), E.PG)
+    case("lightning only", E.LG, (E.LG,), None)
+    env.has[0, E.RL], env.ammo[0, E.RL], env.weapon[0] = True, 10, E.RL
+    checks.append(("pre-fire off while the enemy is in view", not see(True, 3)[0, k + E.N_RAIM:].any()))
     bad = [n_ for n_, ok_ in checks if not ok_]
     for n_, ok_ in checks:
         print("  {:<70s} {}".format(n_, "ok" if ok_ else "FAIL"))
@@ -262,7 +290,7 @@ def ffa():
     a, b = np.load(outs[0]), np.load(outs[1])
     same = all(np.array_equal(a[k], b[k]) for k in ("obs", "rew", "don"))
     print("TWO PLAYERS, RL_AIM and PREFIRE on: {} over 300 frames; the rocket aim inputs nonzero in {:.0%} of player-frames".format(
-        "identical to duel_env" if same else "DIFFERENT", float((a["obs"][:, :, -50:-30] != 0).any(2).mean())))
+        "identical to duel_env" if same else "DIFFERENT", float((a["obs"][:, :, -(N_NEW):-(N_NEW - 20)] != 0).any(2).mean())))
 
 
 def torch_check(path):
@@ -279,11 +307,11 @@ def torch_check(path):
         yt = m(torch.from_numpy(x)).numpy()
     yn = A.forward_np(lay, A.params_np(sd), x)
     x2 = x.copy()
-    x2[:, -50:] = np.random.default_rng(1).standard_normal((256, 50)) * 5
+    x2[:, -N_NEW:] = np.random.default_rng(1).standard_normal((256, N_NEW)) * 5
     with torch.no_grad():
         yt2 = m(torch.from_numpy(x2)).numpy()
-    print("torch attention part: missing {} unexpected {}; torch against numpy {:.2e}; the 50 new columns changed: the output moved {:.2e}".format(
-        missing, extra, float(np.abs(yt - yn).max()), float(np.abs(yt2 - yt).max())))
+    print("torch attention part: missing {} unexpected {}; torch against numpy {:.2e}; the {} new columns changed: the output moved {:.2e}".format(
+        missing, extra, float(np.abs(yt - yn).max()), N_NEW, float(np.abs(yt2 - yt).max())))
 
 
 if __name__ == "__main__":

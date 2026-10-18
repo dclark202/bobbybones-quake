@@ -1,0 +1,1389 @@
+{
+ "map": "hektik",
+ "weapon": "gl",
+ "shots": {
+  "rockets": 0,
+  "grenades": 985,
+  "plasma": 0
+ },
+ "weight": "a shot weighs 1",
+ "at_own_feet": {
+  "shots": 19,
+  "share": 1.9,
+  "under_units": 150.0,
+  "places": [
+   {
+    "pos": [
+     -545,
+     260,
+     256
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 3,
+     "plasma": 0
+    },
+    "share": 15.8,
+    "near": {
+     "item": "RG",
+     "units": 380,
+     "height": 208
+    }
+   },
+   {
+    "pos": [
+     -448,
+     541,
+     56
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 3,
+     "plasma": 0
+    },
+    "share": 15.8,
+    "near": {
+     "item": "RG",
+     "units": 74,
+     "height": 8
+    }
+   },
+   {
+    "pos": [
+     -184,
+     528,
+     270
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 2,
+     "plasma": 0
+    },
+    "share": 10.5,
+    "near": {
+     "item": "GL",
+     "units": 232,
+     "height": 22
+    }
+   },
+   {
+    "pos": [
+     -170,
+     202,
+     274
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 2,
+     "plasma": 0
+    },
+    "share": 10.5,
+    "near": {
+     "item": "GL",
+     "units": 131,
+     "height": 26
+    }
+   },
+   {
+    "pos": [
+     -875,
+     431,
+     160
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 1,
+     "plasma": 0
+    },
+    "share": 5.3,
+    "near": {
+     "item": "RG",
+     "units": 407,
+     "height": 112
+    }
+   },
+   {
+    "pos": [
+     -295,
+     657,
+     100
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 1,
+     "plasma": 0
+    },
+    "share": 5.3,
+    "near": {
+     "item": "RG",
+     "units": 237,
+     "height": 52
+    }
+   },
+   {
+    "pos": [
+     -102,
+     451,
+     -96
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 1,
+     "plasma": 0
+    },
+    "share": 5.3,
+    "near": {
+     "item": "GL",
+     "units": 371,
+     "height": -344
+    }
+   },
+   {
+    "pos": [
+     -42,
+     489,
+     256
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 1,
+     "plasma": 0
+    },
+    "share": 5.3,
+    "near": {
+     "item": "GL",
+     "units": 188,
+     "height": 8
+    }
+   }
+  ]
+ },
+ "radius": 128.0,
+ "in_places_share": 77.9,
+ "places": [
+  {
+   "id": 1,
+   "pos": [
+    -512,
+    478,
+    54
+   ],
+   "radius": 128.0,
+   "share": 9.95,
+   "shots": {
+    "rockets": 0,
+    "grenades": 98,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RG",
+    "units": 98,
+    "height": 6
+   },
+   "distance_median": 774,
+   "met_share": 14.3,
+   "hit_share": 32.7,
+   "fired_from": [
+    {
+     "pos": [
+      292,
+      162,
+      281
+     ],
+     "share": 43.9,
+     "near": {
+      "item": "RA",
+      "units": 28,
+      "height": 9
+     }
+    },
+    {
+     "pos": [
+      -178,
+      584,
+      259
+     ],
+     "share": 16.3,
+     "near": {
+      "item": "GL",
+      "units": 282,
+      "height": 11
+     }
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "pos": [
+    -124,
+    536,
+    232
+   ],
+   "radius": 128.0,
+   "share": 8.73,
+   "shots": {
+    "rockets": 0,
+    "grenades": 86,
+    "plasma": 0
+   },
+   "near": {
+    "item": "GL",
+    "units": 226,
+    "height": -16
+   },
+   "distance_median": 549,
+   "met_share": 17.4,
+   "hit_share": 32.6,
+   "fired_from": [
+    {
+     "pos": [
+      -328,
+      27,
+      259
+     ],
+     "share": 55.8,
+     "near": {
+      "item": "GL",
+      "units": 363,
+      "height": 11
+     }
+    },
+    {
+     "pos": [
+      -136,
+      11,
+      276
+     ],
+     "share": 11.6,
+     "near": {
+      "item": "GL",
+      "units": 304,
+      "height": 28
+     }
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "pos": [
+    -358,
+    619,
+    46
+   ],
+   "radius": 128.0,
+   "share": 7.01,
+   "shots": {
+    "rockets": 0,
+    "grenades": 69,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RG",
+    "units": 160,
+    "height": -2
+   },
+   "distance_median": 570,
+   "met_share": 20.3,
+   "hit_share": 33.3,
+   "fired_from": [
+    {
+     "pos": [
+      -148,
+      217,
+      261
+     ],
+     "share": 27.5,
+     "near": {
+      "item": "GL",
+      "units": 106,
+      "height": 13
+     }
+    },
+    {
+     "pos": [
+      101,
+      343,
+      -140
+     ],
+     "share": 30.4,
+     "near": {
+      "item": "LG",
+      "units": 209,
+      "height": -124
+     }
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "pos": [
+    -505,
+    -91,
+    216
+   ],
+   "radius": 128.0,
+   "share": 5.69,
+   "shots": {
+    "rockets": 0,
+    "grenades": 56,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RL2",
+    "units": 277,
+    "height": -32
+   },
+   "distance_median": 735,
+   "met_share": 10.7,
+   "hit_share": 25.0,
+   "fired_from": [
+    {
+     "pos": [
+      261,
+      147,
+      282
+     ],
+     "share": 35.7,
+     "near": {
+      "item": "RA",
+      "units": 52,
+      "height": 10
+     }
+    },
+    {
+     "pos": [
+      -142,
+      435,
+      256
+     ],
+     "share": 21.4,
+     "near": {
+      "item": "GL",
+      "units": 129,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "pos": [
+    -525,
+    -363,
+    201
+   ],
+   "radius": 128.0,
+   "share": 4.57,
+   "shots": {
+    "rockets": 0,
+    "grenades": 45,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RL2",
+    "units": 119,
+    "height": -47
+   },
+   "distance_median": 851,
+   "met_share": 13.3,
+   "hit_share": 26.7,
+   "fired_from": [
+    {
+     "pos": [
+      -154,
+      328,
+      259
+     ],
+     "share": 53.3,
+     "near": {
+      "item": "GL",
+      "units": 53,
+      "height": 11
+     }
+    },
+    {
+     "pos": [
+      -75,
+      514,
+      256
+     ],
+     "share": 37.8,
+     "near": {
+      "item": "GL",
+      "units": 204,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "pos": [
+    302,
+    -252,
+    -21
+   ],
+   "radius": 128.0,
+   "share": 4.37,
+   "shots": {
+    "rockets": 0,
+    "grenades": 43,
+    "plasma": 0
+   },
+   "near": {
+    "item": "MH",
+    "units": 254,
+    "height": 171
+   },
+   "distance_median": 816,
+   "met_share": 9.3,
+   "hit_share": 25.6,
+   "fired_from": [
+    {
+     "pos": [
+      -47,
+      523,
+      256
+     ],
+     "share": 23.3,
+     "near": {
+      "item": "GL",
+      "units": 219,
+      "height": 8
+     }
+    },
+    {
+     "pos": [
+      157,
+      318,
+      -146
+     ],
+     "share": 14.0,
+     "near": {
+      "item": "LG",
+      "units": 181,
+      "height": -130
+     }
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "pos": [
+    -633,
+    590,
+    50
+   ],
+   "radius": 128.0,
+   "share": 3.96,
+   "shots": {
+    "rockets": 0,
+    "grenades": 39,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RG",
+    "units": 122,
+    "height": 2
+   },
+   "distance_median": 662,
+   "met_share": 17.9,
+   "hit_share": 28.2,
+   "fired_from": [
+    {
+     "pos": [
+      -179,
+      539,
+      256
+     ],
+     "share": 30.8,
+     "near": {
+      "item": "GL",
+      "units": 239,
+      "height": 8
+     }
+    },
+    {
+     "pos": [
+      38,
+      508,
+      -42
+     ],
+     "share": 33.3,
+     "near": {
+      "item": "LG",
+      "units": 259,
+      "height": -26
+     }
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "pos": [
+    -125,
+    604,
+    61
+   ],
+   "radius": 128.0,
+   "share": 3.86,
+   "shots": {
+    "rockets": 0,
+    "grenades": 38,
+    "plasma": 0
+   },
+   "near": {
+    "item": "GL",
+    "units": 347,
+    "height": -187
+   },
+   "distance_median": 578,
+   "met_share": 15.8,
+   "hit_share": 18.4,
+   "fired_from": [
+    {
+     "pos": [
+      -971,
+      494,
+      160
+     ],
+     "share": 10.5,
+     "near": {
+      "item": "RG",
+      "units": 479,
+      "height": 112
+     }
+    },
+    {
+     "pos": [
+      -175,
+      -4,
+      272
+     ],
+     "share": 28.9,
+     "near": {
+      "item": "GL",
+      "units": 324,
+      "height": 24
+     }
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "pos": [
+    357,
+    -38,
+    -22
+   ],
+   "radius": 128.0,
+   "share": 3.65,
+   "shots": {
+    "rockets": 0,
+    "grenades": 36,
+    "plasma": 0
+   },
+   "near": {
+    "item": "MH",
+    "units": 259,
+    "height": 170
+   },
+   "distance_median": 651,
+   "met_share": 8.3,
+   "hit_share": 16.7,
+   "fired_from": [
+    {
+     "pos": [
+      -228,
+      -388,
+      48
+     ],
+     "share": 27.8,
+     "near": {
+      "item": "YA",
+      "units": 28,
+      "height": 0
+     }
+    },
+    {
+     "pos": [
+      -122,
+      183,
+      264
+     ],
+     "share": 13.9,
+     "near": {
+      "item": "GL",
+      "units": 132,
+      "height": 16
+     }
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "pos": [
+    -349,
+    96,
+    234
+   ],
+   "radius": 128.0,
+   "share": 3.55,
+   "shots": {
+    "rockets": 0,
+    "grenades": 35,
+    "plasma": 0
+   },
+   "near": {
+    "item": "GL",
+    "units": 327,
+    "height": -14
+   },
+   "distance_median": 486,
+   "met_share": 17.1,
+   "hit_share": 17.1,
+   "fired_from": [
+    {
+     "pos": [
+      -904,
+      468,
+      163
+     ],
+     "share": 14.3,
+     "near": {
+      "item": "RG",
+      "units": 422,
+      "height": 115
+     }
+    },
+    {
+     "pos": [
+      -141,
+      526,
+      256
+     ],
+     "share": 22.9,
+     "near": {
+      "item": "GL",
+      "units": 218,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "pos": [
+    -968,
+    550,
+    141
+   ],
+   "radius": 128.0,
+   "share": 3.15,
+   "shots": {
+    "rockets": 0,
+    "grenades": 31,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RG",
+    "units": 466,
+    "height": 93
+   },
+   "distance_median": 962,
+   "met_share": 3.2,
+   "hit_share": 38.7,
+   "fired_from": [
+    {
+     "pos": [
+      -181,
+      23,
+      272
+     ],
+     "share": 51.6,
+     "near": {
+      "item": "GL",
+      "units": 300,
+      "height": 24
+     }
+    },
+    {
+     "pos": [
+      -196,
+      547,
+      256
+     ],
+     "share": 19.4,
+     "near": {
+      "item": "GL",
+      "units": 253,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "pos": [
+    -576,
+    225,
+    37
+   ],
+   "radius": 128.0,
+   "share": 2.44,
+   "shots": {
+    "rockets": 0,
+    "grenades": 24,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RG",
+    "units": 357,
+    "height": -11
+   },
+   "distance_median": 533,
+   "met_share": 16.7,
+   "hit_share": 37.5,
+   "fired_from": [
+    {
+     "pos": [
+      -178,
+      500,
+      259
+     ],
+     "share": 75.0,
+     "near": {
+      "item": "GL",
+      "units": 203,
+      "height": 11
+     }
+    },
+    {
+     "pos": [
+      -186,
+      634,
+      256
+     ],
+     "share": 8.3,
+     "near": {
+      "item": "GL",
+      "units": 332,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "pos": [
+    -56,
+    497,
+    -44
+   ],
+   "radius": 128.0,
+   "share": 2.03,
+   "shots": {
+    "rockets": 0,
+    "grenades": 20,
+    "plasma": 0
+   },
+   "near": {
+    "item": "LG",
+    "units": 340,
+    "height": -28
+   },
+   "distance_median": 536,
+   "met_share": 15.0,
+   "hit_share": 20.0,
+   "fired_from": [
+    {
+     "pos": [
+      -322,
+      46,
+      265
+     ],
+     "share": 20.0,
+     "near": {
+      "item": "GL",
+      "units": 344,
+      "height": 17
+     }
+    },
+    {
+     "pos": [
+      260,
+      153,
+      280
+     ],
+     "share": 25.0,
+     "near": {
+      "item": "RA",
+      "units": 53,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "pos": [
+    -509,
+    223,
+    233
+   ],
+   "radius": 128.0,
+   "share": 1.93,
+   "shots": {
+    "rockets": 0,
+    "grenades": 19,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RG",
+    "units": 399,
+    "height": 185
+   },
+   "distance_median": 612,
+   "met_share": 5.3,
+   "hit_share": 10.5,
+   "fired_from": [
+    {
+     "pos": [
+      -316,
+      -336,
+      52
+     ],
+     "share": 36.8,
+     "near": {
+      "item": "YA",
+      "units": 122,
+      "height": 4
+     }
+    },
+    {
+     "pos": [
+      -156,
+      125,
+      273
+     ],
+     "share": 31.6,
+     "near": {
+      "item": "GL",
+      "units": 196,
+      "height": 25
+     }
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "pos": [
+    -201,
+    286,
+    233
+   ],
+   "radius": 128.0,
+   "share": 1.73,
+   "shots": {
+    "rockets": 0,
+    "grenades": 17,
+    "plasma": 0
+   },
+   "near": {
+    "item": "GL",
+    "units": 102,
+    "height": -15
+   },
+   "distance_median": 362,
+   "met_share": 23.5,
+   "hit_share": 41.2,
+   "fired_from": [
+    {
+     "pos": [
+      -42,
+      879,
+      56
+     ],
+     "share": 23.5,
+     "near": {
+      "item": "RL",
+      "units": 500,
+      "height": -192
+     }
+    },
+    {
+     "pos": [
+      -456,
+      48,
+      256
+     ],
+     "share": 23.5,
+     "near": {
+      "item": "RL2",
+      "units": 402,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "pos": [
+    58,
+    1034,
+    44
+   ],
+   "radius": 128.0,
+   "share": 1.73,
+   "shots": {
+    "rockets": 0,
+    "grenades": 17,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RL",
+    "units": 346,
+    "height": -204
+   },
+   "distance_median": 694,
+   "met_share": 11.8,
+   "hit_share": 17.6,
+   "fired_from": [
+    {
+     "pos": [
+      -165,
+      382,
+      260
+     ],
+     "share": 47.1,
+     "near": {
+      "item": "GL",
+      "units": 94,
+      "height": 12
+     }
+    },
+    {
+     "pos": [
+      -434,
+      483,
+      56
+     ],
+     "share": 5.9,
+     "near": {
+      "item": "RG",
+      "units": 122,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "pos": [
+    191,
+    -95,
+    -203
+   ],
+   "radius": 128.0,
+   "share": 1.62,
+   "shots": {
+    "rockets": 0,
+    "grenades": 16,
+    "plasma": 0
+   },
+   "near": {
+    "item": "MH",
+    "units": 25,
+    "height": -11
+   },
+   "distance_median": 415,
+   "met_share": 18.8,
+   "hit_share": 31.2,
+   "fired_from": [
+    {
+     "pos": [
+      99,
+      300,
+      -143
+     ],
+     "share": 37.5,
+     "near": {
+      "item": "LG",
+      "units": 224,
+      "height": -127
+     }
+    },
+    {
+     "pos": [
+      -160,
+      -25,
+      -152
+     ],
+     "share": 6.2,
+     "near": {
+      "item": "SG",
+      "units": 102,
+      "height": -24
+     }
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "pos": [
+    -82,
+    -144,
+    -157
+   ],
+   "radius": 128.0,
+   "share": 1.52,
+   "shots": {
+    "rockets": 0,
+    "grenades": 15,
+    "plasma": 0
+   },
+   "near": {
+    "item": "SG",
+    "units": 52,
+    "height": -29
+   },
+   "distance_median": 794,
+   "met_share": 46.7,
+   "hit_share": 26.7,
+   "fired_from": [
+    {
+     "pos": [
+      64,
+      512,
+      256
+     ],
+     "share": 40.0,
+     "near": {
+      "item": "GL",
+      "units": 261,
+      "height": 8
+     }
+    },
+    {
+     "pos": [
+      -92,
+      209,
+      -152
+     ],
+     "share": 6.7,
+     "near": {
+      "item": "SG",
+      "units": 323,
+      "height": -24
+     }
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "pos": [
+    114,
+    -126,
+    248
+   ],
+   "radius": 128.0,
+   "share": 1.52,
+   "shots": {
+    "rockets": 0,
+    "grenades": 15,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RA",
+    "units": 336,
+    "height": -24
+   },
+   "distance_median": 426,
+   "met_share": 40.0,
+   "hit_share": 20.0,
+   "fired_from": [
+    {
+     "pos": [
+      -169,
+      242,
+      257
+     ],
+     "share": 40.0,
+     "near": {
+      "item": "GL",
+      "units": 96,
+      "height": 9
+     }
+    },
+    {
+     "pos": [
+      -334,
+      117,
+      256
+     ],
+     "share": 6.7,
+     "near": {
+      "item": "GL",
+      "units": 302,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "pos": [
+    -135,
+    677,
+    233
+   ],
+   "radius": 128.0,
+   "share": 1.32,
+   "shots": {
+    "rockets": 0,
+    "grenades": 13,
+    "plasma": 0
+   },
+   "near": {
+    "item": "GL",
+    "units": 367,
+    "height": -15
+   },
+   "distance_median": 564,
+   "met_share": 15.4,
+   "hit_share": 15.4,
+   "fired_from": [
+    {
+     "pos": [
+      -191,
+      157,
+      264
+     ],
+     "share": 69.2,
+     "near": {
+      "item": "GL",
+      "units": 178,
+      "height": 16
+     }
+    },
+    {
+     "pos": [
+      -233,
+      2,
+      272
+     ],
+     "share": 15.4,
+     "near": {
+      "item": "GL",
+      "units": 337,
+      "height": 24
+     }
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "pos": [
+    -72,
+    85,
+    -142
+   ],
+   "radius": 128.0,
+   "share": 1.22,
+   "shots": {
+    "rockets": 0,
+    "grenades": 12,
+    "plasma": 0
+   },
+   "near": {
+    "item": "SG",
+    "units": 202,
+    "height": -14
+   },
+   "distance_median": 482,
+   "met_share": 25.0,
+   "hit_share": 33.3,
+   "fired_from": [
+    {
+     "pos": [
+      -133,
+      103,
+      272
+     ],
+     "share": 8.3,
+     "near": {
+      "item": "GL",
+      "units": 212,
+      "height": 24
+     }
+    },
+    {
+     "pos": [
+      -121,
+      917,
+      56
+     ],
+     "share": 8.3,
+     "near": {
+      "item": "RG",
+      "units": 519,
+      "height": 8
+     }
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "pos": [
+    229,
+    723,
+    233
+   ],
+   "radius": 128.0,
+   "share": 1.02,
+   "shots": {
+    "rockets": 0,
+    "grenades": 10,
+    "plasma": 0
+   },
+   "near": {
+    "item": "GA",
+    "units": 312,
+    "height": 137
+   },
+   "distance_median": 394,
+   "met_share": 40.0,
+   "hit_share": 0.0,
+   "fired_from": [
+    {
+     "pos": [
+      -102,
+      464,
+      256
+     ],
+     "share": 30.0,
+     "near": {
+      "item": "GL",
+      "units": 152,
+      "height": 8
+     }
+    },
+    {
+     "pos": [
+      71,
+      805,
+      64
+     ],
+     "share": 20.0,
+     "near": {
+      "item": "GA",
+      "units": 419,
+      "height": -32
+     }
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "pos": [
+    -519,
+    58,
+    234
+   ],
+   "radius": 128.0,
+   "share": 0.81,
+   "shots": {
+    "rockets": 0,
+    "grenades": 8,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RL2",
+    "units": 423,
+    "height": -14
+   },
+   "distance_median": 768,
+   "met_share": 25.0,
+   "hit_share": 37.5,
+   "fired_from": [
+    {
+     "pos": [
+      196,
+      512,
+      256
+     ],
+     "share": 25.0,
+     "near": {
+      "item": "LG",
+      "units": 308,
+      "height": 272
+     }
+    },
+    {
+     "pos": [
+      -304,
+      -244,
+      40
+     ],
+     "share": 12.5,
+     "near": {
+      "item": "YA",
+      "units": 190,
+      "height": -8
+     }
+    }
+   ]
+  },
+  {
+   "id": 24,
+   "pos": [
+    -494,
+    683,
+    33
+   ],
+   "radius": 128.0,
+   "share": 0.51,
+   "shots": {
+    "rockets": 0,
+    "grenades": 5,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RG",
+    "units": 109,
+    "height": -15
+   },
+   "distance_median": 660,
+   "met_share": 0.0,
+   "hit_share": 20.0,
+   "fired_from": [
+    {
+     "pos": [
+      -889,
+      504,
+      160
+     ],
+     "share": 20.0,
+     "near": {
+      "item": "RG",
+      "units": 400,
+      "height": 112
+     }
+    },
+    {
+     "pos": [
+      65,
+      403,
+      -129
+     ],
+     "share": 40.0,
+     "near": {
+      "item": "LG",
+      "units": 230,
+      "height": -113
+     }
+    }
+   ]
+  }
+ ]
+}
