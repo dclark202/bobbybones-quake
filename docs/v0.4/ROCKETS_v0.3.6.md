@@ -4,6 +4,12 @@ A run between the one movement network (v0.3.5, step 6 of [UNIFIED_MOVEMENT.md](
 goes ahead only if the movement work holds: Sunday's play test and v0.3.5's checks against the control. It changes nothing
 of the head's plan, except that the head is built and pretrained on v0.3.6's inputs.
 
+**Status (2026-10-18 noon): built, ready, waits for the owner's call** (branch `v036`, not merged): `RL_AIM` (20 inputs: the
+backstop, the floor aim point, the nearest wall) and `PREFIRE` (a token of the pros' blind-shot places from
+`sim/pro_places`, one list per weapon: rockets, grenades, plasma), blind rockets free, rocket-jump runs at 10% with a taper,
+the new token opening over eight hours; the conversion proven on a copy of a save. Still to come: the emergence point as an
+input (B-262), the fixed-seed replays while nothing trains, the inputs in a real game (B-264).
+
 ## Why
 
 He aims rockets at the enemy's body. Rockets are 20% of his time in hand and 13% of his frags (lightning 69%), and he fires

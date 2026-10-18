@@ -20,12 +20,12 @@ Every step:
 
 | Step | Change | Switch | Built | Its gate |
 |---|---|---|---|---|
-| 1 | Legs that look: while they drive, his view stays within about 30 degrees of where he believes the enemy, from his own senses only. Plus the turn correction: his own network adds to the legs' turn, starting at zero. | `LEGS_LOOK`, `LEGS_TURN_ADD` | v0.3.2, 2026-10-16 night | legs speed and jumps cleared within 2 points of v0.3.1's; the share of moving time with the view on the believed enemy rises; the checks hold against v0.3.1's end |
-| 2 | Corrections on all the legs' outputs: keys, walk, zoom, the same way as the turn | (with step 1's design) | after v0.3.2's report: it extends step 1's correction | the walking share rises; damage taken while on the legs falls; the checks hold |
-| 3 | The legs' 256-number layer feeds his memory through a door that starts shut | `--legs-feat` | building 2026-10-16 night | his own speed and hop chains on the frames he moves himself rise; the checks hold |
-| 4 | When his own network drives, the legs' choice is a guide: his logits + w × the legs' logits, w learnt from 0 | `--legs-guide` | building 2026-10-16 night | the agreement between his own choice and the legs' on switch-off frames rises (the convergence measure) |
-| 5 | Retire the switch: first a bias toward the legs as the guide, then the switch output removed; one set of keys and one turn | to build | after 3 and 4 have run | the checks hold with the switch gone; speed within 2 points |
-| 6 | Clean-up: the legs branch is a layer of his network at the full learning rate; the legs' inputs are a token or a group of the encoder | to build | after 5 | v0.4's head is built on top of this |
+| 1 | Legs that look: while they drive, his view stays within about 30 degrees of where he believes the enemy, from his own senses only. Plus the turn correction: his own network adds to the legs' turn, starting at zero. | `LEGS_LOOK`, `LEGS_TURN_ADD` | **v0.3.2** (2026-10-16 night to 10-17 07:25): level; the look-aware legs did not learn to look and were left out | legs speed and jumps cleared within 2 points of v0.3.1's; the share of moving time with the view on the believed enemy rises; the checks hold against v0.3.1's end |
+| 2 | Corrections on all the legs' outputs: keys, walk, zoom, the same way as the turn | `LEGS_KEYS_ADD` | **v0.3.3** (2026-10-17 07:27), stopped after five updates; never used again, leaves in 6b | the walking share rises; damage taken while on the legs falls; the checks hold |
+| 3 | The legs' 256-number layer feeds his memory through a door that starts shut | `--legs-feat` | **in v0.3.4 and v0.3.5** (`legs_door`) | his own speed and hop chains on the frames he moves himself rise; the checks hold |
+| 4 | When his own network drives, the legs' choice is a guide: his logits + w × the legs' logits, w learnt from 0 | `--legs-guide` | **in v0.3.4 and v0.3.5** as part A: a gate on the legs' output and a motor line from their layer into his movement outputs | the agreement between his own choice and the legs' on switch-off frames rises (the convergence measure) |
+| 5 | Retire the switch: first a bias toward the legs as the guide, then the switch output removed; one set of keys and one turn | `--switch-fade`, `--no-switch` | the fade (v0.3.4's stage 2) **failed**: at its full bias the switch stayed on 35 to 39% of game time; the switch output **removed in v0.3.5** (training since 2026-10-18 06:55) | the checks hold with the switch gone; speed within 2 points |
+| 6 | Clean-up: the legs branch is a layer of his network at the full learning rate; the legs' inputs are a token or a group of the encoder | `--legs-learn 1.0` | the legs part at the full rate in v0.3.5 since 2026-10-18 09:17; the legs' inputs as a token: to build | v0.4's head is built on top of this |
 | 6b | **Clean-up before v0.4's head** (the owner, 2026-10-17): retire what the bridge left unused once the switch is gone: the legs switch output, the turn-down dial and his residual (B), the turn correction (`LEGS_TURN_ADD`), the switch fade, the forced self-driving on solo runs, and the per-key overrides (`LEGS_KEYS_ADD`, never used); their switches and branches out of the trainer, simulator, plugins and export too | (removes switches) | at the start of v0.4's first run, before the head is added | a converter that drops them, the network answering as before on every frame (probabilities compared, since dropping an output shifts the random draws) |
 
 ## How long each step trains before the next
@@ -34,13 +34,11 @@ A step is ready for the next when two things hold:
 - its new part has moved and settled (the correction's size, the door's norm, the guide's w stop climbing from check to check)
 - three checks in a row, about 30 updates or 2 to 3 hours, read level or better against the control
 
-Steps 2 and 3 are tested while the run is paused, so they go in at the run's planned stops, not in the middle of a night.
-
-| When | What |
-|---|---|
-| Fri night to Sat 19:00 | v0.3.2 = step 1 (about 280 updates) |
-| Sat 19:00 | play test; the ten-update tests of step 2 and step 3, one after the other (about 3 hours of the card); the ones that hold go in as v0.3.3 overnight |
-| Sun to the week | step 4 tested and folded in the same way; steps 5 and 6 built and tested; then v0.4's head on one movement network |
+As it went (2026-10-18): v0.3.2 = step 1, Friday night; v0.3.3 = steps 2 and 3, stopped after five updates on Saturday
+morning; v0.3.4 = steps 3 and 4 with the dial B (removed Saturday 18:30) and the switch fade, Saturday to Sunday 06:49;
+v0.3.5 = step 5 by removing the switch output, from Sunday 06:55. The run sheets: [../v0.3.2/RUN_v0.3.2.md](../v0.3.2/RUN_v0.3.2.md),
+[../v0.3.4/RUN_v0.3.4.md](../v0.3.4/RUN_v0.3.4.md), [../v0.3.5/RUN_v0.3.5.md](../v0.3.5/RUN_v0.3.5.md); the day's plan:
+[SCHEDULE_2026-10-18.md](SCHEDULE_2026-10-18.md).
 
 ## What is watched at every step
 
