@@ -167,3 +167,32 @@ person (it takes a seat, is counted by the leaderboard, is written to the sessio
 command), `!tloaded <client>` (the welcome), `!towner <client>`, `!tstate`, `!tframes` drive a test; everything goes to
 `testkit.jsonl` in the data folder.
 `IMAGE=qlbot:test NAME=qlpub DATA=data/pubtest PORT=27975 FFA=2 PLUGINS_EXTRA=testkit DOCKER_EXTRA="-e TESTKIT=1" bash tools/duel_server.sh - bloodrun`
+
+## A running trainer: pay weights changed without a restart (`live.json`, B-265, from v0.3.6)
+
+Between two updates (after one update's learning step, before the next rollout) the trainer reads
+`data/sim_runs/<run>/live.json` if it is there and has changed. Write the whole file at once (write it elsewhere and copy
+it over, so the trainer never reads half a file):
+
+```json
+{"ITEM_FLAT": "MH:0.25,RA:0.25,YA:0.12", "RAIL_FAR_PAY": 0.12, "DMG_TAKEN_W": 1.0}
+```
+
+- The values in force are the run's start (its `.cmd`'s `set` lines and its arguments) with the file laid over it: a name
+  left out of the file keeps its start value, so `{}` puts everything back. Deleting the file changes nothing.
+- Allowed names: the simulator's `LIVE_VARS` (`sim/duel_env.py`): `ITEM_FLAT` (the environment variable's string),
+  `SPEED_PAY`, `SPEED_PAY_RUN` (left out it follows `SPEED_PAY`, as at a start), `HOP_PAY`, `HOP_QUIET` (0/1),
+  `HOP_QUIET_HEARD`, `HOP_QUIET_NEAR`, `HIGH_PAY`, `HIGH_Z`, `RAIL_FAR_PAY`, `RAIL_FAR_LO`, `RAIL_FAR_HI`, `STACK_DIFF`,
+  `BLIND_RL_DMG`; and the trainer's `DMG_TAKEN_W` (`--dmg-taken-w`) and `DMG_REWARD` (`--dmg-reward`; 0 = the curriculum's).
+  Numbers of 0 or more. Any other name, a value that is not a number, or a file that is not one JSON object: the whole
+  file is refused and nothing is applied.
+- Not allowed on purpose: whatever is read at the start only (`SHOT_COST`, `SHOT_W`, `WIN_PAY` make tables when a
+  simulator is built), every input, output, round-kind, map and league setting. Those still need a restart.
+- To see it took effect: the trainer prints `live: from update N ... changed {...}; in force {...}` (or `REFUSED` and
+  the reason); that update's line in `metrics.jsonl` has `"live": {"applied": {...}, "from_update": N, "in_force": {...}}`
+  (or `{"refused": "...", "from_update": N}`); `live_applied.json` beside it holds the file and the values in force;
+  checkpoints saved from then on carry them (`live` in the checkpoint) and their `env_vars` have the current values of the
+  `PLAY_VARS` among them (`RAIL_FAR_*`, `HOP_QUIET*`). Every simulator applies the same values before the same rollout.
+- A restart (`--resume`) starts from the `.cmd` and reads a `live.json` still in the folder again before its first
+  rollout (it says so at its start): the file stays in force over restarts until it is changed. Put a change that should
+  last into the `.cmd` as well, so the run sheet stays true.

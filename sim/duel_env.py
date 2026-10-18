@@ -1244,6 +1244,64 @@ RAIL_FAR_HI = float(os.environ.get("RAIL_FAR_HI") or 900.0)
 RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
              "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
 PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
+# B-265 (v0.3.6, the owner's go of 2026-10-18: "If a hot reload would allow for stuff like changing pay weights mid session
+# then yes"): the pay weights a running trainer may change between two rollouts (its run folder's live.json; the trainer's
+# own two, DMG_TAKEN_W and DMG_REWARD, are not module globals and are handled there). Each is a module global read only
+# when the pay is worked out, nothing is made of it at import or in __init__: live_set() sets it in this process exactly as
+# the import does from the environment (and the environment with it). Left out on purpose: anything read at import or in
+# __init__ (SHOT_COST and SHOT_W make per-map tables; WIN_PAY its tables), every input, output, round-kind and map switch.
+LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR",
+             "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG")
+
+
+def live_values(get):
+    """(B-265) the module globals of LIVE_VARS as the import works them out, from get(name) -> the environment's string or
+    None. Raises ValueError on a value the import could not read (the trainer refuses the file then)."""
+    v = {}
+    flat_ = (get("ITEM_FLAT") or "").strip()
+    v["ITEM_FLAT"] = {k_: float(v_) for k_, v_ in (x_.split(":") for x_ in flat_.split(",") if ":" in x_)}
+    if flat_ and not v["ITEM_FLAT"]:
+        raise ValueError("ITEM_FLAT {!r}: no NAME:value pair".format(flat_))
+    v["SPEED_PAY"] = float(get("SPEED_PAY") or 0.0)
+    v["SPEED_PAY_RUN"] = float(get("SPEED_PAY_RUN") or v["SPEED_PAY"])
+    v["HOP_PAY"] = float(get("HOP_PAY") or 0.0)
+    v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
+    v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
+    v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
+    v["HIGH_PAY"] = float(get("HIGH_PAY") or 0.0)
+    v["HIGH_Z"] = float(get("HIGH_Z") or 128.0)
+    v["RAIL_FAR_PAY"] = float(get("RAIL_FAR_PAY") or 0.0)
+    v["RAIL_FAR_LO"] = float(get("RAIL_FAR_LO") or 600.0)
+    v["RAIL_FAR_HI"] = float(get("RAIL_FAR_HI") or 900.0)
+    v["STACK_DIFF"] = float(get("STACK_DIFF") or 0.0)
+    v["BLIND_RL_DMG"] = float(get("BLIND_RL_DMG") or 6.0)
+    for k_, x_ in v.items():
+        for y_ in (x_.values() if isinstance(x_, dict) else (x_,)):
+            if not np.isfinite(float(y_)):
+                raise ValueError("{}: not a finite number".format(k_))
+    if v["RAIL_FAR_HI"] <= v["RAIL_FAR_LO"]:
+        raise ValueError("RAIL_FAR_HI must be above RAIL_FAR_LO")
+    return v
+
+
+def live_set(vals):
+    """(B-265) vals {name of LIVE_VARS: the environment's string, or None = unset}: the environment and the module globals
+    of this process set as if it had started so; returns the globals in force (live_now)"""
+    bad_ = [k_ for k_ in vals if k_ not in LIVE_VARS]
+    assert not bad_, "not a live name: {}".format(bad_)
+    for k_, x_ in vals.items():
+        if x_ is None:
+            os.environ.pop(k_, None)
+        else:
+            os.environ[k_] = str(x_)
+    globals().update(live_values(os.environ.get))
+    return live_now()
+
+
+def live_now():
+    """(B-265) the LIVE_VARS globals in force in this process"""
+    g_ = globals()
+    return {k_: (dict(g_[k_]) if isinstance(g_[k_], dict) else g_[k_]) for k_ in LIVE_VARS}
 #   TRICKS=1      the scripted opponents of docs/SCOPE_v15.md (the personas holder, lobber, watcher) get what they need:
 #                 ways to places that are not items (the spawn points, posts to watch an item from). Off: none of it is
 #                 built, and those personas play as the plain item runner.
