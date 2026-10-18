@@ -68,11 +68,44 @@ if "legs.0.weight" in sd:                                    # (the movement net
     assert legs, "this network has its legs inside (LEGS_IN): give --legs <the movement network's run> as well"   # finds his ways with it)
     legs_in = {"legs_w0": sd["legs.0.weight"], "legs_b0": sd["legs.0.bias"], "legs_w1": sd["legs.2.weight"], "legs_b1": sd["legs.2.bias"],
                "legs_wp": sd["legs.4.weight"], "legs_bp": sd["legs.4.bias"]}
+    lz_ = np.load(os.path.join(ROOT, "data", "sim_runs", a.legs, "policy.npz"))     # (v0.3.2) the branch reads the inputs the legs' file makes:
+    assert int(lz_["w0"].shape[1]) == int(sd["legs.0.weight"].shape[1]), \
+        "the branch has {} inputs, the legs' network {} {} (the three of a look point: LEGS_LOOK, movement_env.N_C2)".format(  # 61, or 64
+            sd["legs.0.weight"].shape[1], a.legs, lz_["w0"].shape[1])
+def on_(k_):
+    return str(env_vars.get(k_, "0")) not in ("0", "", "0.0")
+
+
+if on_("LEGS_TURN_ADD") or on_("LEGS_KEYS_ADD"):              # (v0.3.2) his turn correction on his legs is the fourteenth output; (v0.3.3,
+    n_ = 13 + int(on_("LEGS_TURN_ADD")) + 5 * int(on_("LEGS_KEYS_ADD"))       # LEGS_KEYS_ADD) the five "my legs' / mine" follow
+    assert len(ck["action_dims"]) == n_, "LEGS_TURN_ADD / LEGS_KEYS_ADD and {} outputs ({} expected)".format(len(ck["action_dims"]), n_)
+uni = {}                                                     # (--legs-feat, --legs-guide) the layout as text, legs_door, the guide's weights
+if ck.get("legs_unify") is not None:
+    assert legs_in, "a network with legs_unify has the legs' branch inside"
+    uni = {"legs_unify": np.array(json.dumps(ck["legs_unify"]))}
+    if "legs_door.weight" in sd:
+        uni.update(legs_door_w=sd["legs_door.weight"], legs_door_b=sd["legs_door.bias"])
+    if "legs_guide" in sd:
+        uni["legs_guide"] = sd["legs_guide"]
+    for n_ in ("legs_gate", "legs_motor", "legs_res_a", "legs_res"):     # (v0.3.4 A, B)
+        if n_ + ".weight" in sd:
+            uni.update({n_ + "_w": sd[n_ + ".weight"], n_ + "_b": sd[n_ + ".bias"]})
+if "switch_fade" in ck:                                      # (v0.3.4 C, --switch-fade) the bias taken off the switch's "legs" choice
+    uni["switch_fade"] = np.array(float(ck["switch_fade"]))
 slow = {}                                                    # (--slow-mem) the slow memory: its layout as text and its weights
 if ck.get("slow") is not None:
     slow = {"slow": np.array(json.dumps(ck["slow"]))}
     slow.update({k: v for k, v in sd.items() if k.startswith("slow.")})
     assert "slow.door.weight" in slow, "the checkpoint names a slow memory and has no weights for it"
+order = {}                                                   # (v0.4, --ordered-heads) the order as text, the tables under "order.t<output>.weight"
+if ck.get("ordered"):
+    order = {"ordered": np.array(json.dumps(ck["ordered"]))}
+    order.update({k: v for k, v in sd.items() if k.startswith("order.")})
+head = {}                                                    # (v0.4) the head (sim/head.py): its layout as text and its weights under "head.<name>"
+if ck.get("head") is not None:                               # (plugins/netpass.py gives both to head.np_tick; its values, win bands and
+    head = {"head": np.array(json.dumps(ck["head"]))}        # guesses are the trainer's alone and stay behind, as the aux layers)
+    head.update({k: v for k, v in sd.items() if k.startswith("head.") and not k.startswith(("head.v_short.", "head.v_long.", "head.win.", "head.aux."))})
+    assert "head.plan_in.weight" in head and "head.target.weight" in head, "the checkpoint names a head and has no weights for it"
 np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"], b1=sd["enc.2.bias"],
          wih=sd["gru.weight_ih"], whh=sd["gru.weight_hh"], bih=sd["gru.bias_ih"], bhh=sd["gru.bias_hh"],
          wp=sd["pi.weight"], bp=sd["pi.bias"], obs_mean=ck["obs_mean"], obs_var=ck["obs_var"],
@@ -80,7 +113,8 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
          env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
-         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **legs, **legs_in, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
-      "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "")
+      "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",
+      "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "")

@@ -702,6 +702,42 @@ INTENT_HEAD, LEGS_HEAD, LEGS_TAKES = 10, 11, (0, 1, 2, 3, 7, 8)
 LEGS_IN = LEGS and float(os.environ.get("LEGS_IN") or 0.0) > 0
 LEGS_IN_CHECK = LEGS_IN and float(os.environ.get("LEGS_IN_CHECK") or 0.0) > 0
 PLAY_VARS = PLAY_VARS + ("LEGS_IN",)
+# v0.3.2 (the owner's play test of 2026-10-16: on his legs, 54% of his time, he has "blinders": they own his view's turn and
+# know nothing of the enemy). LEGS_TURN_ADD=1 (with LEGS; a PLAY_VAR): one more output, the last (TA_HEAD: his own turn
+# correction, the TA_BINS degrees a frame, the first of them 0), drawn every frame. On the frames his legs carry him his
+# view's turn command is the legs' turn plus his correction (cut to the largest turn of TURN); the sum then goes through
+# his mouse as any turn of his does (inertia, the flick cap, hand noise, the pad, the jerk's price): the same hand limits
+# as now. On every other frame the output does nothing (the trainer counts it on the frames his legs moved him only).
+# A network without the output (an older one, a league file, the control) gives 0 there, which is no correction. The
+# converted start has the output shut (its weights 0, the bias of "0" TA_SHUT above the others: another bin is drawn
+# with the chance e^-20) and the trainer's --turn-add-open opens it on a clock (as --gate-open). With it off ACTION_DIMS
+# and everything else are as before.
+LEGS_TURN_ADD = LEGS and float(os.environ.get("LEGS_TURN_ADD") or 0.0) > 0
+TA_BINS = np.array([0.0, -0.5, 0.5, -1.0, 1.0, -2.0, 2.0, -4.0, 4.0, -8.0, 8.0, -15.0, 15.0], np.float32)   # degrees a frame (0 first)
+TA_SHUT = 20.0 + float(np.log(len(TA_BINS) - 1))            # the shut start's bias of "0" over the others (weights 0): P(not 0) ~ e^-20
+PLAY_VARS = PLAY_VARS + ("LEGS_TURN_ADD",)
+# v0.3.3, one movement network step 2 (the same way as LEGS_TURN_ADD): LEGS_KEYS_ADD=1 (with LEGS; a PLAY_VAR) gives five
+# more outputs at the end (KA_HEAD to KA_HEAD + 4, two choices each: 0 "my legs'", 1 "mine"), one for each of the legs'
+# other outputs (KA_COLS: forward/back, sideways, jump/crouch, walk, zoom), drawn every frame. On the frames his legs carry
+# him, where the choice is 1 his own output of that column takes the place of the legs' (his own outputs are drawn on
+# every frame anyway); the result goes through his finger limits as any key of his (_legs_step is before them). Elsewhere
+# the five do nothing. A network without them is given them shut (weights 0, the bias of 0 KA_SHUT over 1: "mine" with
+# the chance e^-30, which a float32 draw never gives) and the trainer's --keys-add-open opens them on a clock. With it off
+# ACTION_DIMS and everything else are as before.
+LEGS_KEYS_ADD = LEGS and float(os.environ.get("LEGS_KEYS_ADD") or 0.0) > 0
+KA_COLS = (0, 1, 2, 7, 8)                                   # forward/back, sideways, jump/crouch, walk, zoom
+KA_SHUT = 30.0
+PLAY_VARS = PLAY_VARS + ("LEGS_KEYS_ADD",)
+
+
+def turn_sum(turn, add):
+    """(LEGS_TURN_ADD) his view's turn command: the legs' (or his own) turn plus his correction, cut to the largest turn
+    a command can ask for; where the correction is 0 the turn is left exactly as it was"""
+    t_ = np.asarray(turn, np.float32)
+    a_ = np.asarray(add, np.float32)
+    return np.where(a_ != 0.0, np.clip(t_ + a_, -float(TURN[-1]), float(TURN[-1])), t_).astype(np.float32)
+
+
 N_V15 = JL.N_JUMP + 6 + 9 * N_PROJ_MORE + 3 * (2 + N_PROJ_MORE) + N_LEGS + N_EN
 # AUTO_SWITCH (owner, 2026-10-10: "if you run out of ammo it moves you to a different weapon. Give him that setting and
 # use the weapon swaps from quake live"): the trigger pressed on an empty weapon brings up the highest weapon of the
@@ -816,6 +852,16 @@ RULE_WALK = float(os.environ.get("RULE_WALK") or 0.0) > 0
 #                 else is taught. 0: off. A training switch: not a PLAY_VAR. Counted: stats["rule_contest"] (frames silenced,
 #                 frames the rule named an item for one of his seats).
 RULE_CONTEST = float(os.environ.get("RULE_CONTEST") or 0.0)
+#   RULE_HUNT=<points>   (2026-10-16; the owner: "Silence the item lesson when hunting is reasonable", for the hunt, HUNT, which
+#                 the item rule never names and so taught down on every reading: 1.2% of his intentions at update 10 of
+#                 duel_gru_v0_3_1b, 0.1% at update 40) the item rule's lesson is SILENT (a negative label, as RULE_CONTEST) on the
+#                 frames where, for one of his seats in a game: neither the mega nor the red armor is up or due within his way
+#                 to it and 3 s (the rule's own "soon"), he owns a big weapon with ammunition (rockets, rail, lightning), the enemy is not in
+#                 view, and his own stack (health + armor) is above the enemy's as he believes it (EN_STACK, his inputs) by
+#                 this many points or more. There his choice is his own, by what it pays him. Nothing is paid, nothing else is
+#                 taught. 0: off. A training switch: not a PLAY_VAR. Counted: stats["rule_hunt"] (frames silenced, frames the
+#                 rule named an item for one of his seats).
+RULE_HUNT = float(os.environ.get("RULE_HUNT") or 0.0)
 #   RULE_BLIND=<seconds>   (2026-10-13; the owner: "he does not change aggression/decisions based on the enemy location or
 #                 knowledge") the rule's lesson is SILENT (a negative label) on the frames he has a belief of the enemy's place
 #                 fresher than this many seconds (his own inputs' belief, the frame before: never the truth): with nobody known
@@ -967,6 +1013,40 @@ SPEED_LO, SPEED_HI = 320.0, 480.0
 #                 Counters: hop_pay (the sum), hop_n (take-offs that paid), hop_takeoffs (his take-offs with nobody in
 #                 view, paid or not), hop_chains (chains begun: first take-offs). 0 = off.
 HOP_PAY = float(os.environ.get("HOP_PAY") or 0.0)
+#   HOP_QUIET=1   (v0.3.4, a pay change the owner approved on 2026-10-17) HOP_PAY pays nothing on the frames where, by his own
+#                 senses, the enemy is near: he heard him in the last HOP_QUIET_HEARD seconds (the hearing clock of the belief
+#                 inputs, v02_ht), or believes him within HOP_QUIET_NEAR units (v02_bel), or his intention is one of the map's
+#                 holding places. Equilibrium in self-play: both sides are paid less for noisy speed near each other, so
+#                 the approaches near the enemy get quieter while speed away from him is paid as before (goals 1 and 3:
+#                 speed and movement where it is free, positioning near the enemy). Counter: hop_quiet (take-offs it silenced).
+HOP_QUIET = float(os.environ.get("HOP_QUIET") or 0.0) > 0
+HOP_QUIET_HEARD, HOP_QUIET_NEAR = 4.0, 700.0
+PLAY_VARS = PLAY_VARS + ("HOP_QUIET",)
+# v0.3.4 D: WALK_NO_JUMP=1 (a PLAY_VAR; the owner's hard rule of 2026-10-17: in the game a held walk key does not stop a
+# jump, so walking means jump off): wherever his walk key is on as his hands and legs leave it, before the finger limits,
+# his jump (the vertical key's 1) is let go. Counter: walk_jump (frames of policy seats with both asked, before the rule).
+WALK_NO_JUMP = float(os.environ.get("WALK_NO_JUMP") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("WALK_NO_JUMP",)
+# v0.3.4 C: SOLO_SELF=1 (a training switch, not a PLAY_VAR: the trainer's --solo-self-drive sets it) in item runs and jump
+# runs (run_k >= 0: no enemy) his legs do not carry him: he drives himself. The legs are still worked out as before (the
+# simulator's random numbers are the same), only their choices are not taken there; the switch input reads "off" there.
+SOLO_SELF = float(os.environ.get("SOLO_SELF") or 0.0) > 0
+# v0.3.5, one movement network step 6: NO_SWITCH=1 (a PLAY_VAR) retires the switch to his legs: it is read as "my own
+# movement" for every seat on every frame (the output stays in ACTION_DIMS, so every other output's draw is as before);
+# his own network always drives. The legs' network is still worked out by whoever feeds it (legs_prep) for the parts that
+# read it (legs_door, the gate and its motor layer), never to move him.
+NO_SWITCH = float(os.environ.get("NO_SWITCH") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("NO_SWITCH",)
+
+
+def walk_no_jump(a):
+    """(WALK_NO_JUMP) a [players, outputs], in place: where the walk key (7) is on, the jump (vertical key 1) let go.
+    Returns the rows that had both."""
+    if a.shape[1] <= 7:
+        return np.zeros(len(a), bool)
+    both = (a[:, 7] == 1) & (a[:, 2] == 1)
+    a[both, 2] = 0
+    return both
 HOP_GROUND, HOP_SLOW, HOP_GIVEN, HOP_VZ = 0.4, 250.0, 40.0, 400.0     # (a jump gives 275 upward, 385 soon after another; a pad more)
 #   GAME_P, LATE_P, WIN_PAY   stage B part 4 (docs/design/V02_STAGE_B.md; the owner, 2026-10-11: whole games "Yes", a frag
 #                 paid by what it moves his chance of winning "yes", late-game rounds from drawn states "yes, up to 25%").
@@ -1132,7 +1212,8 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
                  "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
-                 "r_long", "op_lab")
+                 "r_long", "op_lab",
+                 "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band")   # (HEAD_EVENTS)
 MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
@@ -1200,6 +1281,12 @@ CLAW_ON_DEATH = False                                  # the trip's pay was also
                                                        # launcher 92% of the time (v9 night, 2026-10-07). Now only a trip given up is clawed back (owner)
 ACTION_DIMS = (3, 3, 3, len(TURN), len(PITCH), 2, 1 + NW, 2, 2, 2, len(INTENTS), 2, N_WAYS)  # ..., walk, zoom, lift the mouse, intention, his legs (LEGS), his way (WAYS)
 assert len(ACTION_DIMS) == WAY_HEAD + 1
+TA_HEAD = len(ACTION_DIMS)                             # (LEGS_TURN_ADD) his turn correction while his legs carry him: the last output
+if LEGS_TURN_ADD:
+    ACTION_DIMS = ACTION_DIMS + (len(TA_BINS),)
+KA_HEAD = len(ACTION_DIMS)                             # (LEGS_KEYS_ADD) the first of his five choices "my legs' / mine" on his legs
+if LEGS_KEYS_ADD:
+    ACTION_DIMS = ACTION_DIMS + (2,) * len(KA_COLS)
 N_WALL, N_FLOOR, N_PROJ = 16, 8, 2
 SLOTS = ("MH", "RA", "RL", "RG", "LG", "SG", "GL", "PG", "HMG")   # nearest item of each kind is an input
 MEM_COLS = np.array([0, 1] + [2 + int(w) for w in OBS_W])  # the columns of e_got that are inputs (see N_MEM)
@@ -1361,6 +1448,58 @@ ES_BAND_VAR = 25.0 ** 2 / 12.0                             # the spread of a hea
 # and opens it out of "nothing" (--from-nothing). A game server's plugin: intent_release() calls note_hunt().
 HUNT = float(os.environ.get("HUNT") or 0.0) > 0
 EN_ON = FIGHT_TARGET or HUNT
+# v0.4, the head (docs/v0.4/BUILD_v0.4.md section 3), HEAD_EVENTS=1 (a PLAY_VAR, off by default): what happened to him since
+# the head last asked, as he could know it (never more than his inputs could tell him). head_events() gives [players, 32]
+# float32 (HEAD_EVENT_COLS) and starts the count again; the trainer asks on the head's ticks. Fed by hooks that a game
+# server's plugin calls too (it never calls step()):
+#   note_combat(dealt, taken, frag, died)   dmg_dealt, dmg_taken (points; kept / 100), frag, died: step() from its books
+#                                           of the frame (info["aux"]'s columns of the same names), once a frame
+#   note_frame()                            en_seen (frames with an enemy noticed, as a share of the frames counted here),
+#                                           en_pain (and en_heard: the pain sound is an event sound), weapon_change,
+#                                           takeoff, fall_land: once a frame, after the senses, the pain sound and the
+#                                           weapon in hand are set for the frame
+#   _hear()                                 en_heard: the enemy's event sounds he hears (a shot, a pickup of a big item or
+#                                           a weapon, a jump, a teleport); never the steady hum or running steps (hear())
+#   note_take(i, it)                        took_*: his own pickup; en_took_*: another's pickup he saw (noticed in view) or
+#                                           heard (HEAR_EVT), not in movement rounds and solo rooms
+#   note_respawn(k, who)                    resp_*: an item's return heard (HEAR_EVT)
+#   note_event(i, name, value)              anything else, by column name (adds)
+# A round's end (done) starts a player's count again at the next step (the frame that ended it is still in the count, for
+# a tick on that frame). Off: nothing of this is computed or kept, the simulator is today's.
+# With it on, also the win label in info["aux"] (labels only, never inputs; AUX_COLS' last two):
+#   win_game    the number of the whole game (GAME_P) or mid-game start (MID_START_P) the frame just played belongs to (a
+#               running number of this simulator, from 0); -1: none (a normal round, an item run, a late round, a spawn start)
+#   win_band    on the frame that ends such a game (done): the band of his final score margin (his frags less the best of
+#               the others', a mid-game start's saved score included, overtime played out): 0 for -5 or less, 1 for -4 to -1,
+#               2 level, 3 for 1 to 4, 4 for 5 or more (WIN_BAND_EDGES); -1 on every other frame
+HEAD_EVENTS = float(os.environ.get("HEAD_EVENTS") or 0.0) > 0
+HEAD_EVENT_COLS = ("dmg_dealt", "dmg_taken", "frag", "died", "en_seen", "en_heard",
+                   "took_mh", "took_ra", "took_ya", "took_rl", "took_rg", "took_lg", "took_small",
+                   "en_took_mh", "en_took_ra", "en_took_ya", "en_took_rl", "en_took_rg", "en_took_lg", "en_took_small",
+                   "resp_mh", "resp_ra", "resp_ya", "resp_wp", "en_pain", "weapon_change", "takeoff", "fall_land",
+                   "took_pg", "took_gl", "en_took_pg", "en_took_gl")
+#   dmg_dealt, dmg_taken  points (health and armor together) / 100: dealt to other players; taken from anything (enemies,
+#                         his own splash, lava, falls)
+#   frag, died            frags he made of another player; his deaths of anything (counts)
+#   en_seen               the share of the frames with an enemy noticed in view (his reaction time and acquire delay, as
+#                         the inputs); en_heard: the enemy's event sounds he heard (see _hear() above, and his pain
+#                         sounds), a count capped at HEAD_HEARD_CAP a tick
+#   took_*                his pickups by class: mega, red armor, yellow armor, rocket launcher, railgun, lightning gun,
+#                         plasma gun (took_pg), grenade launcher (took_gl), small = everything else (health, shards, green
+#                         armor, ammunition, the shotgun, the heavy machine gun)
+#   en_took_*             the same classes, for the pickups of others he saw or heard
+#   resp_*                the returns he heard: mega, red armor, yellow armor, any weapon
+#   en_pain               the enemy's pain sounds he heard; weapon_change: the weapon in his hand changed (not at a spawn)
+#   takeoff               he left the ground going up (over 100 u/s: a jump, a jump pad); fall_land: he landed
+#                         HEAD_FALL_DROP units or more below where he left the ground
+N_HEAD_EVENTS = 32
+assert len(HEAD_EVENT_COLS) == N_HEAD_EVENTS
+HEAD_COL = {k_: i_ for i_, k_ in enumerate(HEAD_EVENT_COLS)}
+HEAD_FALL_DROP = 64.0
+HEAD_HEARD_CAP = 8.0                                       # en_heard: at most this many a tick (a tick is 8 frames)
+WIN_BAND_EDGES = (-4.5, -0.5, 0.5, 4.5)                    # margin -> band: np.digitize(margin, WIN_BAND_EDGES)
+WIN_KINDS = (1, 3)                                         # self.game: a whole game, a mid-game start
+PLAY_VARS = PLAY_VARS + ("HEAD_EVENTS",)
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
@@ -1400,6 +1539,8 @@ AUX_COLS = ("en_fwd", "en_left", "en_up", "en_alive", "en_in_view", "mega_s", "r
             "x", "y", "z", "yaw", "pitch", "died", "eye_h",
             "en_target", "en_band", "en_weapon", "mega_take", "red_take",
             "en_near")
+if HEAD_EVENTS:                                            # (HEAD_EVENTS) the win label: see there
+    AUX_COLS = AUX_COLS + ("win_game", "win_band")
 #   en_near                  (--aux-heads near) the landmark nearest the enemy where he truly is, a number of INTENTS as
 #                            en_target: of the targets with a row of the route field on this map (the items; with TARGETS
 #                            the map's holding places) the one with the least seconds of way FROM his place (route.T[row,
@@ -2247,6 +2388,8 @@ class DuelEnv:
         self.legs = np.zeros(self.n, bool)                  # LEGS: his switch as it stands (his legs, not his own movement),
         self.legs_on = np.zeros(self.n, bool)               # ... the movement network moved him this frame,
         self.legs_live = np.zeros(self.n, bool)             # ... the switch was read this frame
+        self.solo_now = np.zeros(self.n, bool)              # SOLO_SELF: in a run this frame (his legs' choices not taken)
+        self.ta_add = np.zeros(self.n, np.float32)          # LEGS_TURN_ADD: his correction of this frame on top of his legs' turn (degrees)
         self.legs_tick = 0
         self.legs_no = np.zeros(self.n, np.int64)           # ... readings of "my own movement" in a row (LEGS_OFF)
         self.legs_lab = np.full((self.n, 4), -1, np.int8)   # LEGS_LABEL: the movement network's four choices of this frame (-1: no label)
@@ -2568,10 +2711,17 @@ class DuelEnv:
                           hold_frames=np.zeros(6),        # TARGETS: frames his intention is a holding place, of them on his legs, standing at it,
                                                           # with the enemy in view; times he reached one; the sum of his speed on the way (not yet at it)
                           auto_switch=0,                  # AUTO_SWITCH: weapon changes the game made for him on an empty weapon
+                          turn_add=np.zeros(3),           # LEGS_TURN_ADD: frames his legs carried him (counted seats), of them with a correction, its size (sum)
+                          walk_jump=0,                    # frames of policy seats with walk and jump both asked (before WALK_NO_JUMP)
+                          solo=np.zeros(2),               # SOLO_SELF: frames he drove himself in runs (counted seats, alive), his speed there (sum)
+                          hop_quiet=0,                    # HOP_QUIET: take-offs whose pay it silenced
+                          keys_add=np.zeros(1 + len(KA_COLS)),   # LEGS_KEYS_ADD: frames his legs carried him (counted seats), of them his own output
+                          #                                 in place of the legs' for each of KA_COLS
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
                           rule_contest=np.zeros(2),                     # (RULE_CONTEST) frames the rule's lesson was silenced; frames it named an item
+                          rule_hunt=np.zeros(2),                        # (RULE_HUNT) the same
                           rule_blind=np.zeros(2),                       # (RULE_BLIND) the same, for a fresh belief of the enemy's place
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
@@ -2652,6 +2802,8 @@ class DuelEnv:
             self._spawn(i, avoid=None if i % 2 == 0 else self.w.state()[i - 1, :3])
         self.state = self.w.state()
         self.visible = np.zeros(n, bool)
+        if HEAD_EVENTS:                                      # (HEAD_EVENTS) the head's events and the win label
+            self._head_init()
 
     # ---------------------------------------------------------------- spawning / helpers
     def _acq_need(self):
@@ -3398,6 +3550,14 @@ class DuelEnv:
         view turn in a (walk and zoom let go). Called before the finger limits: its keys pass through his hand as his do."""
         n = self.n
         who = self.script == 0
+        if NO_SWITCH:                                        # (NO_SWITCH) the switch is off for every seat
+            a[:, LEGS_HEAD] = 0
+        if SOLO_SELF:                                        # (SOLO_SELF) his runs this frame (an item run, a jump run: no enemy)
+            self.solo_now = who & (self.run_k[:n] >= 0)
+            c_ = self.solo_now & self._counted(np.arange(n)) & (self.hp > 0)
+            self.stats["solo"] += (float(c_.sum()), float(np.hypot(self.state[c_, 3], self.state[c_, 4]).sum()))
+        if LEGS_TURN_ADD:                                    # (LEGS_TURN_ADD) this frame's correction: none until his legs carry him
+            self.ta_add = np.zeros(n, np.float32)
         self.legs_tick += 1
         live = who & ((self.legs_tick + np.arange(n)) % LEGS_EVERY == 0)
         ask = a[:, LEGS_HEAD] == 1
@@ -3441,9 +3601,22 @@ class DuelEnv:
             self.legs_lab = ch.astype(np.int8)               # the four choices where the movement network has a way, -1 elsewhere
             self.legs_wh = ok & self.legs_held               # a withheld stretch: the label is there, his own outputs stay
             ok = ok & ~self.legs_held
+        own_ = a[:, list(KA_COLS)].copy() if LEGS_KEYS_ADD and a.shape[1] >= KA_HEAD + len(KA_COLS) else None
+        if SOLO_SELF:                                        # (SOLO_SELF) in his runs his legs' choices are not taken: he drives himself
+            ok = ok & ~self.solo_now
         a[ok, :4] = ch[ok]
         a[ok, 7:9] = 0
         self.legs_on = ok
+        if own_ is not None:                                 # (LEGS_KEYS_ADD) where he chose "mine", his own output in place of the legs'
+            mine_ = ok[:, None] & (a[:, KA_HEAD:KA_HEAD + len(KA_COLS)] == 1)
+            for j_, c_ in enumerate(KA_COLS):
+                a[mine_[:, j_], c_] = own_[mine_[:, j_], j_]
+            k_ = ok & self._counted(np.arange(n))
+            self.stats["keys_add"] += np.concatenate([[k_.sum()], (mine_ & k_[:, None]).sum(0)]).astype(np.float64)
+        if LEGS_TURN_ADD and a.shape[1] > TA_HEAD:           # his correction on top of the legs' turn (step() adds it to the command)
+            self.ta_add = np.where(ok, TA_BINS[np.clip(a[:, TA_HEAD], 0, len(TA_BINS) - 1)], 0.0).astype(np.float32)
+            c_ = ok & self._counted(np.arange(n))
+            self.stats["turn_add"] += (int(c_.sum()), int((c_ & (self.ta_add != 0)).sum()), float(np.abs(self.ta_add[c_]).sum()))
 
     def _legs_who(self, on):
         """the seats his legs carry when the switch is on for the players on (bool [players]): those with a target (the
@@ -4159,6 +4332,10 @@ class DuelEnv:
         idx = np.arange(self.n) if who is None else np.asarray(who)
         near = np.linalg.norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
         self.resp_t[idx[near], cat] = 0.0
+        if self._hd_live():                                  # (HEAD_EVENTS) mega, red, yellow, a weapon: heard back
+            hc_ = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab == "YA" else 3 if kind == "wp" else -1
+            if hc_ >= 0:
+                self.hd_ev[idx[near], HEAD_COL["resp_mh"] + hc_] += 1.0
 
     def _rule_contested(self, lab):
         """(RULE_CONTEST) the players for whom the item the rule names (lab) is nearer, by RULE_CONTEST seconds of way or more,
@@ -4195,6 +4372,14 @@ class DuelEnv:
             Tn = np.where(((self.script == 0) & ~self.jrun)[None, :], self.route_o.T[:len(self.route_goal), node], Tn)
         if OPENINGS:                                         # (the opening names by the same ways)
             self.rule_tn = Tn
+        if RULE_HUNT > 0:                                    # (RULE_HUNT: is a mega or red armor up or due, by the same ways)
+            big_ = np.zeros(n, bool)
+            grp_ = np.arange(n) // (self._others_arr().shape[1] + 1)
+            for gi, lab in enumerate(self.route_goal):
+                if lab in ("MH", "RA"):
+                    gu_, gb_ = self._goal_state(gi, grp_)
+                    big_ |= (gu_ | (gb_ < Tn[gi] + 3.0)) & (Tn[gi] < 1e8)
+            self.rule_big = big_
         grp = np.arange(n) // (self._others_arr().shape[1] + 1)
         best_t = np.full(n, 1e9, np.float32)
         for gi, lab in enumerate(self.route_goal):
@@ -4383,6 +4568,8 @@ class DuelEnv:
             self.snd_kind[lis] = np.asarray(kind)[ok] if np.ndim(kind) else kind
         self.v02_ht[lis, self._slot(src)] = 0.0              # (N_V02: when and about where he last heard that player)
         self.v02_hp[lis, self._slot(src)] = self.snd_pos[lis, cat]
+        if self._hd_live():                                  # (HEAD_EVENTS) he heard an enemy's event sound
+            np.add.at(self.hd_ev[:, HEAD_COL["en_heard"]], lis, 1.0)
 
     def _item_block(self, ids, rank, pos, eye, fdir, up, rot):
         """inputs for the rank-th nearest item of a group: where it is, and whether it is up (only while seen)"""
@@ -4694,7 +4881,7 @@ class DuelEnv:
         if getattr(self, "_pm", None) is not None:           # the projectiles he sees beyond the nearest two, and what each is about to do
             out[:, JL.N_JUMP + 6:N_V15 - N_LEGS - N_EN] = self._pm
         if LEGS:                                             # his legs: the switch as it stands, and that they carried him on the last frame
-            out[:, N_V15 - N_EN - 2], out[:, N_V15 - N_EN - 1] = self.legs, self.legs_on
+            out[:, N_V15 - N_EN - 2], out[:, N_V15 - N_EN - 1] = (self.legs & ~self.solo_now) if SOLO_SELF else self.legs, self.legs_on
         if EN_ON:                                            # his intention is the enemy (FIGHT_TARGET, HUNT)
             out[:, N_V15 - 1] = self.intent == EN_INTENT
         return out
@@ -4921,6 +5108,15 @@ class DuelEnv:
         counted by every other player who hears it (as the pickup sound: HEAR_EVT) or has him in view. A game server's
         plugin calls it at every pickup."""
         self.v02_took[i, it] = 0.0
+        if self._hd_live():                                  # (HEAD_EVENTS) his pickup by class; another's, seen or heard
+            c_ = self._hd_class(it)
+            self.hd_ev[i, HEAD_COL["took_" + c_]] += 1.0
+            if int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
+                a2_ = getattr(self, "acq2", None)
+                for j in self._mates(i):
+                    sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
+                    if sees or np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT:
+                        self.hd_ev[j, HEAD_COL["en_took_" + c_]] += 1.0
         lab = self.item_def[it][4]
         if EN_STACK and self.item_def[it][0] in ("hp", "ar") and int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
             kd_, val_, _, cap_, _ = self.item_def[it]        # (B-257) every health and armor pickup heard or seen: the belief of his stack
@@ -4938,6 +5134,147 @@ class DuelEnv:
             sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
             if sees or np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT:
                 self.v02_pk[j, self._slot(i), k] += 1.0
+
+    # ---------------------------------------------------------------- the head's events and the win label (HEAD_EVENTS)
+    def _head_init(self):
+        """(HEAD_EVENTS) the books: per player the events since the head last asked (hd_ev, the frames counted in it), the
+        rows to start again at the next step (a round ended), what the frame before showed (on the ground, where, where he
+        left the ground, the weapon in hand); the win label's game numbers (now; of the frame being played) and band"""
+        n = self.n
+        s = self.state
+        self.hd_ev = np.zeros((n, N_HEAD_EVENTS), np.float32)
+        self.hd_frames = np.zeros(n, np.float32)
+        self.hd_clear = np.zeros(n, bool)
+        self.hd_gr = s[:, 6] > 0.5
+        self.hd_pos = s[:, :3].astype(np.float32).copy()
+        self.hd_z0 = s[:, 2].astype(np.float32).copy()
+        self.hd_w = np.array(self.weapon, copy=True)
+        self.hd_gid = np.full(n, -1, np.int64)
+        self.hd_gid_ran = np.full(n, -1, np.int64)
+        self.hd_band = np.full(n, -1, np.int64)
+        self.hd_next = 0
+
+    def _hd_live(self):
+        return HEAD_EVENTS and getattr(self, "hd_ev", None) is not None
+
+    def _hd_begin(self):
+        """(HEAD_EVENTS) a step's start: the players whose round ended in the step before start their count again (from
+        the state they begin in), and the game of the frame about to be played is noted (win_game)"""
+        c = self.hd_clear
+        if c.any():
+            s = self.state
+            self.hd_ev[c] = 0.0
+            self.hd_frames[c] = 0.0
+            self.hd_gr[c] = s[c, 6] > 0.5
+            self.hd_pos[c] = s[c, :3]
+            self.hd_z0[c] = s[c, 2]
+            self.hd_w[c] = self.weapon[c]
+            c[:] = False
+        self.hd_gid_ran = self.hd_gid.copy()
+        self.hd_band[:] = -1
+
+    def _hd_game(self, q, kd):
+        """(HEAD_EVENTS) the seats q begin a round of game kind kd (self.game): a new game number for a whole game or a
+        mid-game start, none for the rest"""
+        if not self._hd_live():
+            return
+        q = np.asarray(q, np.int64)
+        if kd in WIN_KINDS:
+            self.hd_gid[q] = self.hd_next
+            self.hd_next += 1
+        else:
+            self.hd_gid[q] = -1
+
+    def _hd_result(self, m):
+        """(HEAD_EVENTS) the whole game or mid-game start of match m is over (before its score is cleared): the band of
+        each seat's final margin, his frags less the best of the others'"""
+        if not self._hd_live() or int(self.game[m]) not in WIN_KINDS:
+            return
+        q = self._seats(m)
+        f = self.frags_r[q].astype(np.float64)
+        for j_, i in enumerate(q):
+            d = f[j_] - np.delete(f, j_).max()
+            self.hd_band[int(i)] = int(np.digitize(d, WIN_BAND_EDGES))
+
+    def _hd_end(self, done):
+        """(HEAD_EVENTS) a step's end: the rounds that ended start their count at the next step; a seat in no whole game
+        or mid-game start now has no game number"""
+        if not self._hd_live():
+            return
+        done = np.asarray(done, bool)
+        self.hd_clear |= done
+        g_ = self._others_arr().shape[1] + 1
+        off = ~np.isin(np.repeat(self.game, g_), WIN_KINDS)
+        self.hd_gid[done & off] = -1
+
+    def note_event(self, i, name, value=1.0):
+        """(HEAD_EVENTS) add value to the column name (HEAD_EVENT_COLS) of the head's events of player i (a number or an
+        array of them): for anything a game server's plugin knows that no other hook brings"""
+        if not self._hd_live():
+            return
+        np.add.at(self.hd_ev[:, HEAD_COL[name]], np.asarray(i, np.int64), np.asarray(value, np.float32))
+
+    def note_combat(self, dealt, taken, frag, died):
+        """(HEAD_EVENTS) a frame's fighting, a value a player: the damage he dealt to other players and the damage he took
+        from anything (points, health and armor together), the frags he made of another player, his deaths of anything.
+        step() calls it from its books of the frame; a game server's plugin once a frame from the game's counts"""
+        if not self._hd_live():
+            return
+        e, C = self.hd_ev, HEAD_COL
+        e[:, C["dmg_dealt"]] += np.asarray(dealt, np.float32) / 100.0
+        e[:, C["dmg_taken"]] += np.asarray(taken, np.float32) / 100.0
+        e[:, C["frag"]] += np.asarray(frag, np.float32)
+        e[:, C["died"]] += np.asarray(died, np.float32)
+
+    def note_frame(self):
+        """(HEAD_EVENTS) once a frame, after the senses (acquired, seen_t; in a group acq2, seen2), the pain sound (pain_t)
+        and the weapon in hand (weapon) are set for it, and the state is the frame's: the frame is counted, with an enemy
+        noticed in view or not; a fresh pain sound (also an event sound heard); a change of
+        the weapon in hand; take-offs and landings from a fall. A spawn or a teleport (over 200 units in a frame) counts
+        for none of the last three"""
+        if not self._hd_live():
+            return
+        e, C, n = self.hd_ev, HEAD_COL, self.n
+        self.hd_frames += 1.0
+        a2_ = getattr(self, "acq2", None)
+        acq_ = np.asarray(a2_, bool).any(1) if a2_ is not None else np.asarray(self.acquired, bool)[:n]
+        pain_ = np.asarray(self.pain_t)[:n] < 0.5 * DT
+        e[:, C["en_seen"]] += acq_
+        e[:, C["en_pain"]] += pain_
+        e[:, C["en_heard"]] += pain_
+        s = self.state
+        gr_ = s[:, 6] > 0.5
+        pos_ = s[:, :3]
+        moved_ = np.linalg.norm(pos_ - self.hd_pos, axis=1) > 200.0
+        e[:, C["takeoff"]] += self.hd_gr & ~gr_ & (s[:, 5] > 100) & ~moved_
+        e[:, C["fall_land"]] += ~self.hd_gr & gr_ & (self.hd_z0 - pos_[:, 2] >= HEAD_FALL_DROP) & ~moved_
+        e[:, C["weapon_change"]] += (self.weapon != self.hd_w) & ~moved_ & (self.hp > 0)
+        self.hd_z0 = np.where(gr_ | moved_, pos_[:, 2], self.hd_z0).astype(np.float32)
+        self.hd_gr = gr_
+        self.hd_pos = pos_.astype(np.float32).copy()
+        self.hd_w = np.array(self.weapon, copy=True)
+
+    def head_events(self):
+        """(HEAD_EVENTS) [players, N_HEAD_EVENTS] float32: the head's events since the last call (see HEAD_EVENT_COLS;
+        en_seen as a share of the frames counted); the count starts again. Zeros with the switch off"""
+        if not self._hd_live():
+            return np.zeros((self.n, N_HEAD_EVENTS), np.float32)
+        out = self.hd_ev.copy()
+        out[:, HEAD_COL["en_seen"]] /= np.maximum(self.hd_frames, 1.0)
+        out[:, HEAD_COL["en_heard"]] = np.minimum(out[:, HEAD_COL["en_heard"]], HEAD_HEARD_CAP)
+        self.hd_ev[:] = 0.0
+        self.hd_frames[:] = 0.0
+        self.hd_clear[:] = False
+        return out
+
+    def _hd_class(self, it):
+        """(HEAD_EVENTS) item it's class, the end of its took_* and en_took_* names: mh, ra, ya, rl, rg, lg, pg, gl, small"""
+        kind, val, _, _, lab = self.item_def[it]
+        if lab in ("MH", "RA", "YA"):
+            return lab.lower()
+        if kind == "wp" and val in (RL, RG, LG, PG, GL):
+            return ("rl", "rg", "lg", "pg", "gl")[(RL, RG, LG, PG, GL).index(val)]
+        return "small"
 
     def _v02_clear(self, a, b):
         """is the line a -> b clear, for many pairs, as the eye sees (the sight mask); b may lie V02_SEE_TOL deep in a wall"""
@@ -5773,6 +6110,7 @@ class DuelEnv:
         self.item_up[m], self.item_t[m] = True, 0.0
         self.contest_t[m] = -1.0
         self.stats["games"][15] += 1
+        self._hd_game(q, 2 if late else 1)                  # (HEAD_EVENTS) the win label's game number
         if MOMENTS:
             self._moment_game(m, late)
         if late:
@@ -5893,6 +6231,7 @@ class DuelEnv:
 
     def _game_end(self, m):
         """the whole game or late round of match m is over, at the limit (level is a draw: no overtime): into the counters"""
+        self._hd_result(m)                                   # (HEAD_EVENTS) the win label: the band of the final margin
         if OVERTIME:
             self._ot_over(m)
         if MOMENTS and self.game[m] > 2:                     # (a round begun from a saved moment: its own counters)
@@ -6186,6 +6525,7 @@ class DuelEnv:
             for m, mo, kd in self.mom_put:
                 self._moment_set(m, mo, obs)
                 self.game[m] = kd                            # 3 a mid-game start, 4 a spawn start
+                self._hd_game(self._seats(m), kd)            # (HEAD_EVENTS) the win label's game number
                 self.g_end[m] = GAME_FRAMES if kd == 3 else min(GAME_FRAMES, int(self.g_tick[m]) + SPAWN_FRAMES)
                 self.g_snap[m] = -1
                 if OVERTIME:
@@ -6749,17 +7089,27 @@ class DuelEnv:
                 out[i_, c_] = 1.0
         if died is not None:
             out[:, C["died"]] = died
+        if "win_game" in C and self._hd_live():             # (HEAD_EVENTS) the win label (labels only)
+            out[:, C["win_game"]] = self.hd_gid_ran
+            out[:, C["win_band"]] = self.hd_band
         return out
 
     def step(self, actions):
         a = np.array(actions, copy=True)
         n = self.n
+        if HEAD_EVENTS:                                      # (HEAD_EVENTS) the rows of ended rounds start again; this frame's game
+            self._hd_begin()
         ar = np.arange(n)
         sc = np.nonzero(self.script > 0)[0]
         if len(sc):
             a[sc] = self._script_actions(sc)
         if LEGS and a.shape[1] > LEGS_HEAD:
             self._legs_step(a)
+        if a.shape[1] > 7:                                   # (walk and jump both asked by a policy seat: counted; WALK_NO_JUMP lets the jump go)
+            wj_ = (a[:, 7] == 1) & (a[:, 2] == 1) & (self.script == 0)
+            self.stats["walk_jump"] += int(wj_.sum())
+            if WALK_NO_JUMP:
+                walk_no_jump(a)
         if self.key_limits:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
@@ -6773,6 +7123,15 @@ class DuelEnv:
             rc_ = self._rule_contested(self.intent_teach) & human
             self.stats["rule_contest"] += (float(rc_.sum()), float(((self.intent_teach > 0) & human).sum()))
             self.intent_teach = np.where(rc_, -1, self.intent_teach)
+        if RULE_HUNT > 0 and EN_STACK and len(self.hp) == 2 * len(self.kind):   # ... and where hunting is reasonable (RULE_HUNT; duels)
+            en_ = self._others_arr()[:, 0]
+            bel_ = self.es_h[ar, self._slot(en_)] + self.es_a[ar, self._slot(en_)]
+            game_ = np.repeat(self.kind, len(self.hp) // len(self.kind)) == NORMAL
+            vis_ = np.asarray(self.visible, bool)[:n] if getattr(self, "visible", None) is not None else np.zeros(n, bool)
+            rh_ = human & game_ & (self.run_k < 0) & (self.intent_teach > 0) & ~getattr(self, "rule_big", np.ones(n, bool)) \
+                & (self.has[:, [RL, RG, LG]] & (self.ammo[:, [RL, RG, LG]] > 0)).any(1) & ~vis_ & (self.hp > 0) & (self.hp + self.armor >= bel_ + RULE_HUNT)
+            self.stats["rule_hunt"] += (float(rh_.sum()), float(((self.intent_teach > 0) & human).sum()))
+            self.intent_teach = np.where(rh_, -1, self.intent_teach)
         if RULE_BLIND > 0:                                   # ... and where he has a fresh belief of the enemy's place (RULE_BLIND)
             bt_ = getattr(self, "v02_bt_now", None)
             if bt_ is not None and len(bt_) == n:
@@ -6811,6 +7170,8 @@ class DuelEnv:
         prev = self.state.copy()
         # mouse: the chosen turn speed is followed with a little inertia; jerky commands cost a little
         cmd = np.stack([TURN[a[:, 3]], PITCH[a[:, 4]]], 1)
+        if LEGS_TURN_ADD and a.shape[1] > TA_HEAD:          # (LEGS_TURN_ADD) on his legs: their turn plus his correction (_legs_step)
+            cmd[:, 0] = turn_sum(cmd[:, 0], self.ta_add)
         cmd = cmd * np.where(self.zoom, ZOOM, 1.0).astype(np.float32)[:, None]      # zoomed: the same hand movement turns less
         jerk = np.abs(cmd - self.cmd).sum(1)
         self.cmd = cmd
@@ -6879,6 +7240,14 @@ class DuelEnv:
                     & ((prev[:, 6] > 0.5) | (prev[:, 5] <= 0.0)))          # a take-off: from the floor, or touched inside the frame
             can_ = off_ & human & (self.hp > 0) & ((pkind == NORMAL) | in_run)
             hop_ = HOP_PAY * np.where(can_ & (self.hop_best > 0), np.maximum(0.0, hc_ - self.hop_best), 0.0)   # (the first sets the best)
+            if HOP_QUIET:                                    # (HOP_QUIET) nothing while the enemy is near by his own senses
+                q_ = (self.v02_ht < HOP_QUIET_HEARD).any(1) if getattr(self, "v02_ht", None) is not None else np.zeros(len(hop_), bool)
+                if getattr(self, "v02_bel", None) is not None:
+                    q_ = q_ | (np.asarray(self.v02_bel_ok, bool) & (np.linalg.norm(self.v02_bel - s[:, :3], axis=1) < HOP_QUIET_NEAR))
+                if self.hold_n:
+                    q_ = q_ | ((self.intent >= HOLD_INTENT) & (self.intent < HOLD_INTENT + HOLD_SLOTS))
+                self.stats["hop_quiet"] += int((q_ & (hop_ > 0)).sum())
+                hop_ = np.where(q_, 0.0, hop_)
             reward += hop_
             self.hop_best = np.where(off_, np.maximum(self.hop_best, hc_), self.hop_best).astype(np.float32)
             self.hop_sum = (self.hop_sum + hop_).astype(np.float32)
@@ -7860,7 +8229,20 @@ class DuelEnv:
         if HAND_TEACH:                                       # (HAND_TEACH) the pros' shares as the target of his next reading of
             info["hand_lab"] = self.hand_lab.copy()          # the weapon key, for the trainer's --hand-teach
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
+        if HEAD_EVENTS:                                      # (HEAD_EVENTS) the frame's events for the head
+            dl_ = np.zeros(n, np.float32)
+            for (i_, v_), d_ in st["by"].items():
+                if i_ != v_:
+                    dl_[i_] += d_
+            fr_ = np.zeros(n, np.float32)
+            for e_ in events:
+                if e_["killer"] >= 0 and e_["killer"] != e_["victim"]:
+                    fr_[e_["killer"]] += 1.0
+            self.note_combat(dl_, st["dmg_taken"] + (0.0 if fall is None else fall), fr_, died)
+            self.note_frame()
         obs = self.observe()
         if MOMENTS:                                          # the rounds begun from a saved moment are put in place; this frame's
             self._moment_step(obs, done, died, info)         # moments are saved
+        if HEAD_EVENTS:
+            self._hd_end(done)
         return obs, reward.astype(np.float32), done, info

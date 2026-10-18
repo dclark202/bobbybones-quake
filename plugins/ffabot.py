@@ -122,7 +122,6 @@ class ffabot(duelbot):
         for p in self.bobbys() + self.people():
             self.match["base"][p.id] = (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken)
         self.record(event="match_start", minutes=mins, people=len(self.people()), bots=len(self.bobbys()))
-        self.msg("^3Game on: {} minutes, everybody against everybody, machine gun at spawn.^7".format(mins))
 
     def on_game_end(self, data):
         """the end of a real game. The game's own end follows (owner, 2026-10-12: "the usual 'view the results and vote on
@@ -372,10 +371,10 @@ class ffabot(duelbot):
         self.sess, self.frames_f = None, None
 
     # ------------------------------------------------------------------ the network for several seats at once
-    def act_batch(self, obs, seats):
+    def act_batch(self, obs, seats, xl=None):
         """one pass of the network for all the Bobbys alive (plugins/netpass.py: the same sums as the simulator's checks,
         the attention part of v0.2 included; sampled, as in training)"""
-        out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng)
+        out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng, xl=xl)
         return out
 
     # ------------------------------------------------------------------ the simulator's senses for every seat
@@ -721,7 +720,8 @@ class ffabot(duelbot):
                     "{} {:.3f}".format(k_, v_ / max(1, c_.get("observe", 1))) for k_, v_ in sorted(c_.items()))))
                 self.calls.clear()
         t_ = time.perf_counter()
-        acts = self.act_batch(obs[live_bots], live_bots)
+        acts = self.act_batch(obs[live_bots], live_bots,      # (--legs-feat, --legs-guide) the legs' inputs of this frame
+                              xl=env.legs_prep()[live_bots] if _net.needs_xl(self.P) else None)
         self.t_net, self.t_live = time.perf_counter() - t_, len(live_bots)
         if acts.shape[1] > 10 and hasattr(env, "intend"):
             choice = np.zeros(SEATS, np.int64)
@@ -739,7 +739,7 @@ class ffabot(duelbot):
             A[:, 0] = A[:, 1] = 1
             A[live_bots] = acts
             if getattr(E, "LEGS", False) and A.shape[1] > getattr(E, "LEGS_HEAD", 99):
-                _net.legs_feed(self.P, env, E)                   # (LEGS_IN, B-253) his legs' choices from the branch of his network
+                _net.legs_feed(self.P, env, E, rows=live_bots)   # (LEGS_IN, B-253) his legs' choices from the branch of his network
                 env._legs_step(A)                                # his legs (duel_env's LEGS): every Bobby in one call, before the finger limits
                 self.legs_n = getattr(self, "legs_n", np.zeros(3))
                 on_ = env.legs_on[live_bots].astype(np.float64)
@@ -749,6 +749,8 @@ class ffabot(duelbot):
                     with open(os.path.join(D, "legs_status.txt"), "a") as f_:
                         f_.write("{} frames {} on his legs {:.3f} speed there {:.0f}\n".format(
                             time.strftime("%H:%M:%S"), int(self.legs_n[0]), self.legs_n[1] / self.legs_n[0], self.legs_n[2] / max(1.0, self.legs_n[1])))
+            if getattr(E, "WALK_NO_JUMP", False):            # (WALK_NO_JUMP) walking: the jump let go, before the finger limits
+                E.walk_no_jump(A)
             env.limit_keys(A, who=np.isin(np.arange(SEATS), live_bots))
             acts = A[live_bots]
         for a, k in zip(acts, live_bots):

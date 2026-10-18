@@ -277,7 +277,7 @@ class duelbot(minqlx.Plugin):
         self.sess_opp = opp.id
         self.sess_person = not is_bot(opp)
         self.sess_t0 = time.time()
-        self.h[:] = 0                                        # a new opponent: fresh memory
+        self.head_clear()                                    # a new opponent: fresh memory
         self.gclock = None                                   # (a whole-games network: and a new clock, clock_frame)
         self.score = dict(bobby=0, opp=0)
         self.tot = {}
@@ -501,7 +501,6 @@ class duelbot(minqlx.Plugin):
             self.real_game = True
             self.go_f3 = now                                 # frame() says "allready" once the game has run his "readyup"
             self.set_cvar("timelimit", "10")
-            self.msg("^3Game on:^7 1v1 against BobbyBones, 10 minutes, then the scoreboard and the map vote.")
 
     def on_stats(self, stats):
         """the game's own table for a player at the end of a game (or when he leaves): shots, hits, damage, kills and time
@@ -914,9 +913,44 @@ class duelbot(minqlx.Plugin):
 
     def act(self, obs):
         """one frame of the network for the one Bobby of a 1v1 server (plugins/netpass.py: the same sums as the
-        simulator's checks, the attention part of v0.2 included; one sampled choice per output, as in training)"""
-        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng)
+        simulator's checks, the attention part of v0.2 included; one sampled choice per output, as in training). (v0.4) A
+        network with a head is told the tick's events on the frames its head ticks (head_events)."""
+        ev = self.head_events(self.env) if _net.head_due(self.P, self.h)[0] else None
+        xl = self.env.legs_prep()[:1] if _net.needs_xl(self.P) else None    # (--legs-feat, --legs-guide) the legs' inputs of this frame
+        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl)
         return [int(v) for v in acts[0]]
+
+    # ------------------------------------------------------------------ v0.4: the head's events (sim/duel_env.py HEAD_EVENTS)
+    # The head (sim/head.py) is told on each of its ticks what happened to him since the last one: the simulator's
+    # head_events(), [players, 32] (HEAD_EVENT_COLS). step() fills its books; a plugin feeds the same books through the
+    # simulator's own hooks: hear(), _hear(), note_take() and note_respawn() (called above as before: they count the sounds,
+    # pickups and returns), and once a frame note_combat() (the damage he dealt and took, his frags, his deaths: from the
+    # game's counts) and note_frame() (the frame, the enemy noticed, the pain sound, his weapon, take-offs and landings),
+    # in head_note(). With a simulator without HEAD_EVENTS (or the switch off: the network was trained without it) the
+    # events are zeros, as the trainer's are then.
+    def head_events(self, env):
+        """the tick's events for seat 0 [1, 32] (zeros without HEAD_EVENTS)"""
+        if getattr(self.E, "HEAD_EVENTS", False) and hasattr(env, "head_events"):
+            return np.asarray(env.head_events(), np.float32)[:1]
+        return np.zeros((1, int(getattr(self.E, "N_HEAD_EVENTS", 32))), np.float32)
+
+    def head_note(self, env, dealt=0.0, taken=0.0):
+        """once a frame, at its end (as step() does at its end): the frame's fighting and the frame itself in the head's books.
+        dealt, taken: points (health and armor) Bobby dealt to the opponent and took from anything; his frags and deaths since
+        the last call are counted at the deaths (hd_frag, hd_died)"""
+        if not (getattr(self.E, "HEAD_EVENTS", False) and hasattr(env, "note_combat")):
+            return
+        fr_, di_ = self.__dict__.pop("hd_frag", 0), self.__dict__.pop("hd_died", 0)
+        env.note_combat(np.array([dealt, 0.0], np.float32), np.array([taken, 0.0], np.float32),
+                        np.array([fr_, 0.0], np.float32), np.array([di_, 0.0], np.float32))
+        env.note_frame()
+
+    def head_clear(self):
+        """a fresh memory (a new opponent, a new game, a new life of an older run): netpass.clear (the head's tick clock kept,
+        as in training); the head's books start over"""
+        _net.clear(self.P, self.h)
+        if getattr(self.E, "HEAD_EVENTS", False) and hasattr(self.env, "head_events"):
+            self.env.head_events()
 
     # ------------------------------------------------------------------ v0.2: what step() keeps for the last 143 inputs
     # The simulator's observe() builds them (N_V02) and keeps their clocks, but a plugin never calls step(): the noise he
@@ -990,7 +1024,7 @@ class duelbot(minqlx.Plugin):
             else:
                 c = GameClock(key, now)
             self.gclock = c
-            self.h[:] = 0                                    # a new game, a new memory
+            self.head_clear()                                # a new game, a new memory
             self.log("clock: {} ({}, limit {:.0f} s, overtime {:.0f} s): clock, score and memory start".format(why, key[0], c.length, c.ot))
         level, extra = None, True
         if c.real:
@@ -1286,7 +1320,7 @@ class duelbot(minqlx.Plugin):
             # network's choices of this frame take the place of his movement keys and view turn, before the finger limits
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             A[np.arange(env.n) != i, E.LEGS_HEAD] = 0
-            _net.legs_feed(self.P, env, E)                   # (LEGS_IN, B-253) his legs' choices from the branch of his network
+            _net.legs_feed(self.P, env, E, rows=[i])         # (LEGS_IN, B-253) his legs' choices from the branch of his network
             env._legs_step(A)
             a = A[i]
             self.legs_n = getattr(self, "legs_n", np.zeros(3))
@@ -1296,6 +1330,10 @@ class duelbot(minqlx.Plugin):
                 with open(os.path.join(D, "legs_status.txt"), "a") as f_:
                     f_.write("{} frames {} on his legs {:.3f} speed there {:.0f}\n".format(
                         time.strftime("%H:%M:%S"), int(self.legs_n[0]), self.legs_n[1] / self.legs_n[0], self.legs_n[2] / max(1.0, self.legs_n[1])))
+        if rules2 and not limited and getattr(E, "WALK_NO_JUMP", False):     # (WALK_NO_JUMP) walking: the jump let go, before the finger limits
+            A1_ = np.asarray(a, np.int64)[None].copy()
+            E.walk_no_jump(A1_)
+            a = A1_[0]
         if hand and not limited:                             # finger limits, as in training
             A = np.tile(np.asarray(a, np.int64), (env.n, 1))
             env.limit_keys(A, who=np.arange(env.n) == i)
@@ -1307,6 +1345,8 @@ class duelbot(minqlx.Plugin):
         if rules2:
             env.duck[i] = a[2] == 2
         cmd = np.array([E.TURN[a[3]], E.PITCH[a[4]]], np.float32)
+        if getattr(E, "LEGS_TURN_ADD", False) and len(a) > E.TA_HEAD and getattr(env, "ta_add", None) is not None:
+            cmd[0] = float(E.turn_sum(cmd[:1], env.ta_add[i:i + 1])[0])     # (LEGS_TURN_ADD) on his legs: their turn plus his correction
         zs = float(E.ZOOM) if (rules2 and hasattr(env, "zoom") and env.zoom[i]) else 1.0     # zoomed: the hand turns the view less
         cmd = cmd * zs
         if hasattr(env, "turn_dir"):                         # (the simulator's step keeps these: the movement network is shown
@@ -1521,7 +1561,7 @@ class duelbot(minqlx.Plugin):
                         self.record(event="style", style=st_)
                 if who == "bobby":
                     if not getattr(self, "rules2", False):
-                        self.h[:] = 0                        # older runs: memory per life. Newer: kept for the session
+                        self.head_clear()                    # older runs: memory per life. Newer: kept for the session
                     for env in (self.env, self.renv):
                         env.mv[:] = 0
                         env.cool[:] = 0
@@ -1531,6 +1571,8 @@ class duelbot(minqlx.Plugin):
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
                 self.score[other] += 1
+                k_ = "hd_died" if who == "bobby" else "hd_frag"         # (v0.4) for the head's events (head_note)
+                self.__dict__[k_] = self.__dict__.get(k_, 0) + 1
                 if hasattr(self.env, "note_death"):          # who knows of this death, and what he then forgets
                     self.env.note_death(0 if who == "bobby" else 1, 1 if who == "bobby" else 0)
                 if self.room is not None and self.room.get("started"):
@@ -1581,7 +1623,7 @@ class duelbot(minqlx.Plugin):
             if hasattr(env, "_v02_round"):                   # in training: clock, score and memory start over and nothing is
                 self.sess_t0 = now                           # believed. (Ten minutes are five of his rounds: the share of the
                 self.round_base = (self.score["bobby"], self.score["opp"])     # round left runs out with the game.)
-                self.h[:] = 0
+                self.head_clear()
                 self.new_game_in(env)
                 self.log("a game began: his round starts with it")
         if bs.health <= 0:                                   # tap fire to respawn
@@ -1592,6 +1634,7 @@ class duelbot(minqlx.Plugin):
             self.shot_made = {}
             self.v02_tick(env, E)                            # (v0.2: the new inputs' clocks go on while he is dead)
             self.log_frame(now, env, 0, bobby, opp, bs, os_, [0, 0, 0, 0], self.drill)
+            self.head_note(env)                              # (v0.4: the head's books count the frames he is dead too, as step())
             return
         if self.drill and not hasattr(E, "NW") and now > self.top_up:    # older simulator: drills had endless ammo
             self.top_up = now + 2
@@ -1645,7 +1688,7 @@ class duelbot(minqlx.Plugin):
                 if now - self.sess_t0 > self.round_secs:                  # the round as in training (see setup)
                     self.sess_t0 = now                                   # clock, score and memory start over
                     self.round_base = (self.score["bobby"], self.score["opp"])
-                    self.h[:] = 0
+                    self.head_clear()
                 env.round_t[0] = now - self.sess_t0
                 if hasattr(env, "v02_left"):                             # (v0.2) the share of his round left, by the same clock
                     env.v02_left = min(1.0, max(0.0, 1.0 - (now - self.sess_t0) / max(1.0, self.round_secs)))
@@ -1738,6 +1781,11 @@ class duelbot(minqlx.Plugin):
                 near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < E.HEAR_EVT
                 if (dealt > 0 or (es_ and dmg.get("opp", 0) > 0)) and os_.health > 0 and near_:
                     env.pain_t[0], env.pain_b[0] = 0.0, min(3, int(os_.health) // 25)
+        if getattr(E, "HEAD_EVENTS", False):                 # (v0.4) the frame in the head's books: what he dealt by the game's count of his
+            dd_ = int(bobby.stats.damage_dealt)              # damage (never the opponent's own splash or falls), what he took from anything
+            hdl_ = max(0, dd_ - self.__dict__.get("hd_dealt0", dd_))
+            self.hd_dealt0 = dd_
+            self.head_note(env, float(hdl_), float(dmg.get("bobby", 0)))
         if self.arena:
             self.arena["dmg"][0] += dmg.get("opp", 0)
             self.arena["dmg"][1] += dmg.get("bobby", 0)

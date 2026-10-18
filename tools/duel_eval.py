@@ -101,16 +101,24 @@ class SeatClock:
             self.ct += self.E.DT
             self.env.v02_left = np.clip(1.0 - self.ct.astype(np.float64) / max(self.rounds[0], 1e-3), 0.0, 1.0)
 
-    def after(self, t, events, mem):
+    def after(self, t, events, mem, pols=(None, None)):
+        """mem: each side's memory array (None: a scripted side), pols: the Policy of each (v0.4: a head's tick clock is kept
+        by Policy.clear)"""
         env = self.env
+
+        def wipe(j, h_):
+            if pols[j] is not None:
+                pols[j].clear(h_)
+            else:
+                h_[:] = 0.0
         if not self.own:
             if (t + 1) % self.wrap[0] == 0:
                 self.ct[:] = 0.0
                 env.round_t[:] = 0.0
                 env.frags_r[:] = 0
-                for h_ in mem:
+                for j_, h_ in enumerate(mem):
                     if h_ is not None:
-                        h_[:] = 0.0
+                        wipe(j_, h_)
             return
         for e in events:                                     # a game seat's score: a death that is nobody's frag is a point off
             v, k = int(e["victim"]), int(e["killer"])
@@ -124,7 +132,7 @@ class SeatClock:
                 self.ct[seats] = 0.0
                 self._zero(seats)
                 if mem[s_] is not None:
-                    mem[s_][:] = 0.0
+                    wipe(s_, mem[s_])
 
     def told(self):
         return dict(he=dict(round_secs=self.rounds[0], whole_game=bool(self.game[0])),
@@ -207,11 +215,17 @@ def play(job):
                lives=np.zeros((2, NS_)))
     for t in range(frames):
         a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
-        al, h = pol.act(obs[ev][:, idx], h)
-        a[ev, :al.shape[1]] = al
+        hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
+        if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
+            hev_ = env.head_events()
+        xlu_ = None                                                             # (--legs-feat, --legs-guide) the branch's inputs of this frame
+        if getattr(E, "LEGS_IN", False) and (getattr(pol, "needs_xl", False) or getattr(opp_pol, "needs_xl", False)):
+            xlu_ = env.legs_prep()                                              # (nothing between here and the step changes a target)
+        al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev])
+        a[ev, :min(al.shape[1], a.shape[1])] = al[:, :a.shape[1]]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
-            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2)
-            a[od, :ao.shape[1]] = ao
+            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od])
+            a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
         if getattr(E, "LEGS_IN", False) and (pol.legsP is not None or (opp_pol is not None and opp_pol.legsP is not None)):
@@ -222,7 +236,7 @@ def play(job):
                 lg_ = np.zeros((n, 17), np.float32)
                 for m_, p_ in lgs_:
                     if p_.legsP is not None:
-                        lg_[m_] = p_.legs_logits(xl_[m_])
+                        lg_[m_] = p_.legs_logits(xl_[m_])          # (--legs-residual: from the memory of its act() above)
                     else:                                                       # (--legs-learn, B-253 stage b) a side without the branch (the
                         w0_, b0_, w1_, b1_, wp_, bp_ = env.teacher_w[:6]        # control) moves on the movement network's own sums, the other on
                         lg_[m_] = np.tanh(np.tanh(xl_[m_] @ w0_.T + b0_) @ w1_.T + b1_) @ wp_.T + bp_    # its learnt branch
@@ -300,7 +314,7 @@ def play(job):
             c["lives"][s_] += new[m].sum()
         was = alive.copy()
         hp0, ar0, has0 = env.hp.copy(), env.armor.copy(), env.has[:, big].copy()
-        sc_.after(t, info["events"], (h, h2 if opp_pol is not None else None))    # a round seat's clock, score and memory start over; a game seat's never
+        sc_.after(t, info["events"], (h, h2 if opp_pol is not None else None), (pol, opp_pol))    # a round seat's clock, score and memory start over; a game seat's never
     flip = slice(None, None, -1) if swap else slice(None)
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),
