@@ -1229,6 +1229,21 @@ MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' 
 #                 below that. Own splash and falls are not changed. 0 = off.
 HIGH_PAY = float(os.environ.get("HIGH_PAY") or 0.0)
 HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
+#   RAIL_FAR_PAY  (v0.3.6, the owner's go of 2026-10-18; a PLAY_VAR, 0 = off) the long-range rail: every railgun hit of a
+#                 player on another pays the shooter RAIL_FAR_PAY x clip((d - RAIL_FAR_LO) / (RAIL_FAR_HI - RAIL_FAR_LO), 0, 1)
+#                 and takes the same from the one hit (zero-sum); d = the 3D distance between the two players' origins (the
+#                 state's x, y, z, not the eyes) at the hit; once a hit, whatever its damage. Its own term of the pay: not
+#                 in `dealt` (his feedback inputs), not in the damage taken, not in r_long (combat pay, as HIGH_PAY).
+#                 Equilibrium in self-play: each side is paid for its long rail hits what it pays for the other's, so a far
+#                 rail fight is worth more to the one who wins it and long sight lines get more dangerous for both (goals 2
+#                 and 3: weapon use, positioning: keep out of long lines without the rail, hold them with it).
+#                 Counters always on (stats "rail", RAIL_COLS): the counted seats in games.
+RAIL_FAR_PAY = float(os.environ.get("RAIL_FAR_PAY") or 0.0)
+RAIL_FAR_LO = float(os.environ.get("RAIL_FAR_LO") or 600.0)
+RAIL_FAR_HI = float(os.environ.get("RAIL_FAR_HI") or 900.0)
+RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
+             "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
+PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
 #   TRICKS=1      the scripted opponents of docs/SCOPE_v15.md (the personas holder, lobber, watcher) get what they need:
 #                 ways to places that are not items (the spawn points, posts to watch an item from). Off: none of it is
 #                 built, and those personas play as the plain item runner.
@@ -2813,6 +2828,7 @@ class DuelEnv:
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
+                          rail=np.zeros(len(RAIL_COLS)),                # (RAIL_FAR_PAY) the rail by range, the counted seats in games: RAIL_COLS
                           rule_contest=np.zeros(2),                     # (RULE_CONTEST) frames the rule's lesson was silenced; frames it named an item
                           rule_hunt=np.zeros(2),                        # (RULE_HUNT) the same
                           rule_blind=np.zeros(2),                       # (RULE_BLIND) the same, for a fresh belief of the enemy's place
@@ -4251,6 +4267,38 @@ class DuelEnv:
                 if self.script[i_] == 0:
                     self.stats["high_pay"] += f_ * self.dmg_reward
         return None if plus is None else (plus, minus)
+
+    def _rail(self, s, st, do_fire, do_w, reward):
+        """(RAIL_FAR_PAY) the long-range rail: the zero-sum pay of this frame's rail hits (with the switch on) into reward,
+        and the counters (always): by range to the enemy (origin to origin), < RAIL_FAR_LO, up to RAIL_FAR_HI, beyond;
+        shots and hits, frames with the rail in hand (the enemy alive; and of them in view), the pay got and lost.
+        Counted: policy seats in games (not runs), as the awareness counters (_counted)."""
+        n = self.n
+        ar = np.arange(n)
+        R = self.stats["rail"]
+        opp = self._others_arr()[:, 0]
+        cnt = (self.script[:n] == 0) & (self.run_k[:n] < 0) & self._counted(ar)
+        d_en = np.linalg.norm(s[opp, :3] - s[:n, :3], axis=1)
+        band = np.where(d_en < RAIL_FAR_LO, 0, np.where(d_en <= RAIL_FAR_HI, 1, 2))
+        alive = self.hp[:n] > 0
+        R[0] += int((cnt & alive).sum())
+        sh_ = cnt & np.asarray(do_fire, bool)[:n] & (np.asarray(do_w)[:n] == RG)
+        np.add.at(R, 1 + band[sh_], 1)
+        hand_ = cnt & alive & (self.weapon[:n] == RG) & (self.hp[opp] > 0)
+        np.add.at(R, 7 + band[hand_], 1)
+        np.add.at(R, 10 + band[hand_ & np.asarray(self.visible, bool)[:n]], 1)
+        for i_, v_ in st.get("rail", ()):
+            d_ = float(np.linalg.norm(s[i_, :3] - s[v_, :3]))
+            if cnt[i_]:
+                R[4 + (0 if d_ < RAIL_FAR_LO else 1 if d_ <= RAIL_FAR_HI else 2)] += 1
+            if RAIL_FAR_PAY > 0:
+                b_ = RAIL_FAR_PAY * min(1.0, max(0.0, (d_ - RAIL_FAR_LO) / max(1e-6, RAIL_FAR_HI - RAIL_FAR_LO)))
+                reward[i_] += b_
+                reward[v_] -= b_
+                if cnt[i_]:
+                    R[13] += b_
+                if cnt[v_]:
+                    R[14] += b_
 
     def _mates(self, i):
         """the other players of player i's group"""
@@ -6183,6 +6231,8 @@ class DuelEnv:
         self.stats["dmg_h"] += float(dmg) * (self.script[i] == 0)
         self.stats["dmg_from_script"] += float(dmg) * (self.script[v] == 0 and self.script[i] != 0)
         st["attacker"][v] = i
+        if wpn == RG and int(i) != int(v):                  # (RAIL_FAR_PAY) the rail hits of this frame: (shooter, victim)
+            st.setdefault("rail", []).append((int(i), int(v)))
         self._book(st, i, v, dmg, wpn)
         st["kicked"] = True
         self.stats["dmg"] += dmg
@@ -8145,6 +8195,7 @@ class DuelEnv:
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
         if high_ is not None:                                # (HIGH_PAY) a hit from above is worth more to both, one from below less
             reward += self.dmg_reward * (high_[0] - self.dmg_taken_w * high_[1])
+        self._rail(s, st, do_fire, do_w, reward)            # (RAIL_FAR_PAY) the long rail's pay (switch on) and its counters (always)
         if STYLE_P > 0:                                      # playing styles: his weapon, at its distance (see STYLES)
             live = (pkind == NORMAL) & (self.script == 0) & (self.hp > 0) & (self.run_k < 0)
             sw = STYLE_W[self.style]

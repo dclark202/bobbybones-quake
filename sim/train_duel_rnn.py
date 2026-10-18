@@ -2972,6 +2972,18 @@ def main():
                                 share=dict(in_view=round(float(V_[0] / max(1.0, V_[0] + V_[2] + V_[4])), 3), unseen_near=round(float(V_[2] / max(1.0, V_[0] + V_[2] + V_[4])), 3)),
                                 takeoffs_per_min=dict(in_view=round(float(O_[0] / max(1e-9, V_[0] * DT_MIN)), 1), unseen_near=round(float(O_[1] / max(1e-9, V_[2] * DT_MIN)), 1),
                                                       unseen_far=round(float(O_[2] / max(1e-9, V_[4] * DT_MIN)), 1)))
+        if "rail" in agg and float(np.atleast_1d(agg["rail"])[0]) > 0:   # (RAIL_FAR_PAY) the rail by range to the enemy, his counted seats in games
+            RR_ = np.atleast_1d(agg["rail"]).astype(np.float64)          # (the simulator's RAIL_COLS)
+            lm_ = max(1e-9, float(RR_[0]) * DT_MIN)                      # his minutes alive in games (the counted seats)
+            bd_ = ("near", "mid", "far")
+            rec["rail"] = dict(pay=float(getattr(E_, "RAIL_FAR_PAY", 0.0)), band=[float(getattr(E_, "RAIL_FAR_LO", 600.0)), float(getattr(E_, "RAIL_FAR_HI", 900.0))],
+                               minutes=round(float(RR_[0]) * DT_MIN, 1),
+                               shots={b_: int(RR_[1 + k_]) for k_, b_ in enumerate(bd_)}, hits={b_: int(RR_[4 + k_]) for k_, b_ in enumerate(bd_)},
+                               hit_rate={b_: round(float(RR_[4 + k_] / max(1.0, RR_[1 + k_])), 3) for k_, b_ in enumerate(bd_)},
+                               shots_per_min=round(float(RR_[1:4].sum() / lm_), 3),
+                               in_hand={b_: round(float(RR_[7 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},        # share of his time: the rail in hand, the enemy at that range
+                               in_hand_in_view={b_: round(float(RR_[10 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},   # ... and in view
+                               pay_got_per_min=round(float(RR_[13] / lm_), 4), pay_lost_per_min=round(float(RR_[14] / lm_), 4))
         if UNI_GATE or UNI_RES:                                          # (v0.3.4 A, B) the parts' sizes
             with torch.no_grad():
                 rec["gate"] = {n_: round(float(sum(p_.abs().max() for p_ in getattr(pol, n_).parameters())), 6)
