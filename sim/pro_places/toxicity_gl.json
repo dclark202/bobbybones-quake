@@ -1,8 +1,177 @@
 {
  "map": "toxicity",
  "weapon": "gl",
- "places": [],
- "blind_shots": 223,
- "min_shots": 1000,
- "note": "too few blind shots of this weapon on this map for a list of places"
+ "shots": {
+  "rockets": 0,
+  "grenades": 219,
+  "plasma": 0
+ },
+ "weight": "a shot weighs 1",
+ "at_own_feet": {
+  "shots": 4,
+  "share": 1.8,
+  "under_units": 150.0,
+  "places": [
+   {
+    "pos": [
+     3,
+     1359,
+     1222
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 2,
+     "plasma": 0
+    },
+    "share": 50.0,
+    "near": {
+     "item": "GL",
+     "units": 315,
+     "height": -50
+    }
+   },
+   {
+    "pos": [
+     -842,
+     1889,
+     1248
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 1,
+     "plasma": 0
+    },
+    "share": 25.0,
+    "near": {
+     "item": "PG",
+     "units": 375,
+     "height": 248
+    }
+   },
+   {
+    "pos": [
+     -343,
+     1249,
+     1254
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 1,
+     "plasma": 0
+    },
+    "share": 25.0,
+    "near": {
+     "item": "MH",
+     "units": 103,
+     "height": 22
+    }
+   }
+  ]
+ },
+ "radius": 128.0,
+ "in_places_share": 99.1,
+ "places": [
+  {
+   "id": 1,
+   "pos": [
+    85,
+    1204,
+    1185
+   ],
+   "radius": 128.0,
+   "share": 15.53,
+   "shots": {
+    "rockets": 0,
+    "grenades": 34,
+    "plasma": 0
+   },
+   "near": {
+    "item": "GL",
+    "units": 469,
+    "height": -87
+   },
+   "distance_median": 500,
+   "met_share": 8.8,
+   "hit_share": 5.9,
+   "fired_from": [
+    {
+     "pos": [
+      -399,
+      1291,
+      1247
+     ],
+     "share": 47.1,
+     "near": {
+      "item": "MH",
+      "units": 60,
+      "height": 15
+     }
+    },
+    {
+     "pos": [
+      -68,
+      1250,
+      1208
+     ],
+     "share": 11.8,
+     "near": {
+      "item": "MH",
+      "units": 323,
+      "height": -24
+     }
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "pos": [
+    -1011,
+    1251,
+    1142
+   ],
+   "radius": 128.0,
+   "share": 9.13,
+   "shots": {
+    "rockets": 0,
+    "grenades": 20,
+    "plasma": 0
+   },
+   "near": {
+    "item": "RL2",
+    "units": 405,
+    "height": -34
+   },
+   "distance_median": 643,
+   "met_share": 10.0,
+   "hit_share": 5.0,
+   "fired_from": [
+    {
+     "pos": [
+      -74,
+      1208,
+      1213
+     ],
+     "share": 30.0,
+     "near": {
+      "item": "MH",
+      "units": 332,
+      "height": -19
+     }
+    },
+    {
+     "pos": [
+      -1388,
+      1568,
+      1134
+     ],
+     "share": 10.0,
+     "near": {
+      "item": "RG",
+      "units": 407,
+      "height": -66
+     }
+    }
+   ]
+  }
+ ]
 }

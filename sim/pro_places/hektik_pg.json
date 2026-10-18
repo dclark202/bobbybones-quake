@@ -1,8 +1,77 @@
 {
  "map": "hektik",
  "weapon": "pg",
- "places": [],
- "blind_shots": 81,
- "min_shots": 1000,
- "note": "too few blind shots of this weapon on this map for a list of places"
+ "shots": {
+  "rockets": 0,
+  "grenades": 0,
+  "plasma": 79
+ },
+ "weight": "a stream weighs 1, spread over its cells (PG_STAND 64, PG_LAND 256); 23 streams",
+ "at_own_feet": {
+  "shots": 2,
+  "share": 2.5,
+  "under_units": 150.0,
+  "places": [
+   {
+    "pos": [
+     142,
+     24,
+     272
+    ],
+    "shots": {
+     "rockets": 0,
+     "grenades": 0,
+     "plasma": 2
+    },
+    "share": 100.0,
+    "near": {
+     "item": "RA",
+     "units": 208,
+     "height": 0
+    }
+   }
+  ]
+ },
+ "radius": 128.0,
+ "in_places_share": 99.4,
+ "places": [
+  {
+   "id": 1,
+   "pos": [
+    353,
+    -116,
+    -155
+   ],
+   "radius": 128.0,
+   "share": 8.32,
+   "shots": {
+    "rockets": 0,
+    "grenades": 0,
+    "plasma": 12
+   },
+   "near": {
+    "item": "MH",
+    "units": 181,
+    "height": 37
+   },
+   "distance_median": 278,
+   "met_share": 0.0,
+   "hit_share": 0.0,
+   "fired_from": [
+    {
+     "pos": [
+      69,
+      -93,
+      -163
+     ],
+     "share": 100.0,
+     "near": {
+      "item": "MH",
+      "units": 112,
+      "height": 29
+     }
+    }
+   ]
+  }
+ ]
 }

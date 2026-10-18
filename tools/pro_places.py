@@ -9,8 +9,11 @@ view, for the "place tokens" a model can aim at.
 --weapon (v0.3.6, the owner, 2026-10-18: rockets, grenades and plasma are aimed differently): from the same yardsticks, the
 places of one weapon's blind shots alone (the mixed files above, which BLIND_PLACES and v0.2's inputs read, are not touched):
 the same search (RADIUS, KEEP, FEET_R, the share threshold), each place with its landing middle, its share of that weapon's
-weight, its shots, met and hit and its fired_from spots; no cells, no standing_there, no picture. A map with under MIN_SHOTS
-blind shots of that weapon (rows: rockets, grenades, plasma cells) gets an empty list. The weight: a rocket 1, a grenade 1;
+weight, its shots, met and hit and its fired_from spots; no cells, no standing_there, no picture. Rockets: a map with under
+MIN_SHOTS blind rockets gets an empty list. Grenades and plasma (the owner, 2026-10-18: all the data there is, no minimum):
+every map with any such blind shots gets a list; the search stops early when what is left weighs under LEFT_MIN of the
+weapon's weight on the map, and a place of under PLACE_MIN shots (rows) is passed over (its shots set aside), so a map with
+few shots has fewer places; the first place is kept whatever it holds: only a map with none at all has an empty list. The weight: a rocket 1, a grenade 1;
 plasma by the stream (PG_STREAM): consecutive plasma rows of the file (one demo's shots in order) fired from within
 PG_STAND units of the one before and landing within PG_LAND of it are one stream, and a stream weighs 1 in all, spread evenly
 over its cells: a place is where streams are aimed, not where the longest one was held (a second of plasma is ten cells).
@@ -69,6 +72,7 @@ FEET_R = 150.0                                                 # a shot that lan
 MIN_SIGHT = 30                                                 # sightings a place or a cell needs for its numbers
 MIN_SHOTS = 1000                                               # blind shots a map needs for a list of places at all
 W_CODE = dict(rl=0, gl=5, pg=6)                                # --weapon: the simulator's numbers
+LEFT_MIN, PLACE_MIN = 0.01, 20                                 # --weapon gl, pg: stop when less than this share of the weight is left, or a place has fewer shots
 PG_STAND, PG_LAND = 64.0, 256.0                                # --weapon pg: one stream while he stands within, and it lands within, these of the cell before
 CELL, CELL_Z = 256.0, 128.0
 WEAPONS = ("rl", "rg", "lg", "mg", "sg", "gl", "pg", "hmg", "g")           # the simulator's order (duel_env.WEAPONS)
@@ -142,9 +146,9 @@ def streams(rows):
     return 1.0 / n[bid], len(n)
 
 
-def places(shots, items=(), keep=KEEP, row_w=None):
+def places(shots, items=(), keep=KEEP, row_w=None, small=False):
     """rows of weapon, landing (3), stood (3), met, hit -> the places, the heaviest first. row_w: a weight a row (--weapon)
-    in place of WEIGHT's by weapon"""
+    in place of WEIGHT's by weapon. small: (--weapon gl, pg) also stop at LEFT_MIN and PLACE_MIN"""
     shots = np.asarray(shots, np.float64).reshape(-1, 9)
     k0 = np.isin(shots[:, 0], list(WEIGHT))
     shots = shots[k0]
@@ -159,9 +163,16 @@ def places(shots, items=(), keep=KEEP, row_w=None):
     total = float(wt.sum())
     left = np.ones(len(shots), bool)
     out = []
-    while len(out) < keep and left.any():
+    tries = 0
+    while len(out) < keep and left.any() and tries < 20 * keep:
+        tries += 1
+        if small and out and float(wt[left].sum()) < LEFT_MIN * total:
+            break
         c, m = heaviest(land, wt, left)
-        if wt[m].sum() < 0.002 * total:
+        if small and out and int(m.sum()) < PLACE_MIN:       # (a place of too few shots: passed over, its shots set aside;
+            left &= ~m                                        # the first place is kept whatever it holds: no empty list)
+            continue
+        if not small and wt[m].sum() < 0.002 * total:
             break
         left &= ~m
         # where they were fired from
@@ -430,10 +441,10 @@ def by_weapon(a):
             out = os.path.join(ROOT, "sim", "pro_places", "{}_{}.json".format(mp, w))
             if a.out:
                 out = a.out.replace(".json", "_{}.json".format(w))
-            if len(rows) < MIN_SHOTS:
+            if (len(rows) < MIN_SHOTS and w == "rl") or not len(rows):
                 res = dict(map=mp, weapon=w, places=[], blind_shots=int(len(rows)), min_shots=MIN_SHOTS,
                            note="too few blind shots of this weapon on this map for a list of places")
-                line.append("{} {} (of {} shots: under {})".format(w, 0, len(rows), MIN_SHOTS))
+                line.append("{} {} (of {} shots{})".format(w, 0, len(rows), ": under {}".format(MIN_SHOTS) if len(rows) else ""))
             else:
                 if items is None:
                     items = map_items(mp)
@@ -442,7 +453,7 @@ def by_weapon(a):
                     how = "a stream weighs 1, spread over its cells (PG_STAND {:g}, PG_LAND {:g}); {} streams".format(PG_STAND, PG_LAND, nb)
                 else:
                     rw, how = np.ones(len(rows)), "a shot weighs 1"
-                res = dict(map=mp, weapon=w, **places(rows, items, a.keep, row_w=rw))
+                res = dict(map=mp, weapon=w, **places(rows, items, a.keep, row_w=rw, small=w != "rl"))
                 res["weight"] = how
                 line.append("{} {} (of {} shots{})".format(w, len(res["places"]), len(rows), ", {} streams".format(nb) if code == W_CODE["pg"] else ""))
             os.makedirs(os.path.dirname(out), exist_ok=True)
