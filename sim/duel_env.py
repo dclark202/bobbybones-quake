@@ -1212,7 +1212,7 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
                  "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
-                 "r_long", "op_lab",
+                 "r_long", "op_lab", "pf_node",
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band")   # (HEAD_EVENTS)
 MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
@@ -1500,7 +1500,50 @@ HEAD_HEARD_CAP = 8.0                                       # en_heard: at most t
 WIN_BAND_EDGES = (-4.5, -0.5, 0.5, 4.5)                    # margin -> band: np.digitize(margin, WIN_BAND_EDGES)
 WIN_KINDS = (1, 3)                                         # self.game: a whole game, a mid-game start
 PLAY_VARS = PLAY_VARS + ("HEAD_EVENTS",)
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES
+# v0.3.6 (docs/v0.4/ROCKETS_v0.3.6.md items 1 to 4; the owner, 2026-10-17: rockets are aimed at things, the floor under the
+# enemy, a wall, around a door, and splash is what to expect). Two switches, both PLAY_VARS and off by default; with them
+# off their inputs are zeros and nothing else changes (nothing they work out is kept or read by anything else, and they draw
+# no random numbers). Both come after N_ES at the end of the inputs; each has a token of its own in the attention part
+# (sim/attn.py's LATE kinds "rocket" and "prefire"; tools/v036_init.py gives an older network them with their gate shut).
+# A game server's plugin needs nothing more: they are made in observe() from what it keeps for the older inputs (the
+# state, his weapon and hands, the enemy's known place, v0.2's belief, the walking map and its ways: tools/prep_ways.py).
+# RL_AIM=1, the last N_RAIM inputs but N_PREF: with the rocket launcher in his hand (and alive)
+#   the backstop (5): that it is on; where a rocket fired now along his view would explode (a trace from his eyes with the
+#     shots' mask, RAIM_FAR at most): its distance / 2000 (capped at 2: nothing within RAIM_FAR), its height against his
+#     eyes / 300 (-1 to 1); with the enemy in view (as the lead inputs: noticed, his reaction time late), that distance less
+#     the enemy's / 500 (-1 to 1: below 0 it bursts before him) and the splash he would take there: 1 - the distance from
+#     the burst to him / the rocket's splash radius (0 to 1; 0 = out of it).
+#   the floor aim point (9), with the enemy in view: the floor under where he will be when a rocket fired now reaches that
+#     floor (the lead inputs' flight time, worked out to the floor point; the enemy's own fall in the air as there; the floor
+#     traced straight down from above that place, 1024 units, the shots' mask): that it is on; yaw from his crosshair to it
+#     coarse (/ 30) and fine (/ 2); pitch coarse (/ 15) and fine (/ 2); a floor found; the enemy's feet above that floor then
+#     / 200 (0 to 2: knocked or jumping high); the flight time / 1.5 (0 to 2); a clear line from his eyes to that point.
+#   the nearest wall by that place (6), with the enemy in view: RAIM_WALL_N level traces from the predicted place (at the
+#     height of his middle, RAIM_WALL units at most): that one hit; its way from that place in his own frame (sin, cos);
+#     its distance / RAIM_WALL; yaw (/ 30) and pitch (/ 15) from his crosshair to the point it hit.
+RL_AIM = float(os.environ.get("RL_AIM") or 0.0) > 0
+N_RAIM = 20
+RAIM_FAR, RAIM_WALL, RAIM_WALL_N = 4096.0, 192.0, 8
+# PREFIRE=1, the last N_PREF inputs: the pros' blind-shot places (sim/pro_places/<map>.json, the places BLIND_PLACES and
+# v0.2's place inputs read) that lie on the enemy's believed way to him: with v0.2's belief of the enemy (v02_bel: seen or
+# heard in the last V02_KNOWN seconds, not known dead since), the enemy NOT in view, he alive and holding the rocket launcher
+# or the grenade launcher with ammunition (in his hand or not). The places are ranked by how far off the way they lie: the
+# seconds of way from the believed place to the place and from it to him, less the way from the believed place to him (the
+# walking map's table of ways, N_V02's), nearest the way first (ties: the nearer to the enemy); places within PF_SELF units
+# of him are left out (he would take his own splash). For each of the PF_SLOTS nearest (PF_F numbers; zeros in a slot
+# with none): yaw from his crosshair to it / 30 and pitch / 15 (-1 to 1; the point the pros' shots land, PF_LIFT above it);
+# its distance from his eyes / 2000 (to 1.5); when the enemy could be there: the seconds of way from the believed place to
+# it less the time since that belief / 5 (-1 to 1: below 0 he could have passed it); a rocket's flight there / 1.5 (0 to 2);
+# a clear line from his eyes (traced every frame); how far off the way / 5 seconds (0 to 1); the pros' share of their blind
+# shots there / 15 (as v0.2's); with the grenade launcher among his weapons (with grenades), the pitch from his crosshair to the low
+# arc that lands a grenade there / 15 (-1 to 1; 0 where none reaches, as the grenade arc inputs: lofted 0.2); that the slot
+# holds a place. A token a slot ("prefire").
+PREFIRE = float(os.environ.get("PREFIRE") or 0.0) > 0
+PF_SLOTS, PF_F = 3, 10
+N_PREF = PF_SLOTS * PF_F
+PF_SELF, PF_LIFT, PF_TOL = 160.0, 2.0, 24.0
+PLAY_VARS = PLAY_VARS + ("RL_AIM", "PREFIRE")
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -4810,7 +4853,8 @@ class DuelEnv:
                               self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir),
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
-                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp)], 1)
+                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
+                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible)], 1)
         return obs.astype(np.float32)
 
     def _proj(self, pos, eye, fdir, rot, vel):
@@ -5072,6 +5116,149 @@ class DuelEnv:
         out[:, 5] = (h + a) < ES_WEAK
         grp = ar // (self._others_arr().shape[1] + 1)
         out[np.isin(self.kind[grp], (MOVE, SOLO))] = 0.0     # (no enemy about)
+        return out
+
+    @staticmethod
+    def _aim_at(e, p, yaw, pit):
+        """degrees from his crosshair (yaw, pit in radians) to the points p seen from the eyes e: (yaw, pitch; + = left, down)"""
+        to = p - e
+        hd = np.hypot(to[..., 0], to[..., 1]) + 1e-6
+        ey = np.degrees((np.arctan2(to[..., 1], to[..., 0]) - yaw + np.pi) % (2 * np.pi) - np.pi)
+        ep = np.degrees(-np.arctan2(to[..., 2], hd) - pit)
+        return ey, ep
+
+    def _raim(self, eye, yaw, pit, fdir, known, opp_vel, visible, opp):
+        """the inputs of N_RAIM (see RL_AIM): with the rocket launcher in his hand, the backstop; with the enemy in view
+        too, the floor aim point and the nearest wall by it. Reads only; keeps nothing."""
+        n = self.n
+        out = np.zeros((n, N_RAIM), np.float32)
+        if not RL_AIM:
+            return out
+        ii = np.nonzero((self.weapon[:n] == RL) & (self.hp[:n] > 0))[0]
+        if not len(ii):
+            return out
+        e_ = eye[ii].astype(np.float32)
+        f_ = fdir[ii].astype(np.float32)
+        kn = known[ii].astype(np.float32)
+        vis = np.asarray(visible, bool)[ii]
+        # ---- the backstop: where a rocket fired now along his view would burst
+        fr = self.w.rays_each(e_, f_[:, None, :], RAIM_FAR, mask=self.sight)[:, 0]
+        bd = fr * RAIM_FAR
+        bp = e_ + f_ * bd[:, None]
+        out[ii, 0] = 1.0
+        out[ii, 1] = np.minimum(bd / 2000.0, 2.0)
+        out[ii, 2] = np.clip((bp[:, 2] - e_[:, 2]) / 300.0, -1.0, 1.0)
+        out[ii, 3] = np.clip((bd - np.linalg.norm(kn - e_, axis=1)) / 500.0, -1.0, 1.0) * vis
+        out[ii, 4] = np.clip(1.0 - np.linalg.norm(bp - kn, axis=1) / P_RADIUS[RL], 0.0, 1.0) * vis * (fr < 1.0)
+        jj = np.nonzero(vis)[0]
+        if not len(jj):
+            return out
+        # ---- the floor aim point: the floor under where he will be when the rocket gets there
+        k = ii[jj]
+        e2, kn2, ov = e_[jj], kn[jj], opp_vel[k].astype(np.float32)
+        air = self.state[opp[k], 6] < 0.5
+        feet = kn2 - np.array([0, 0, 24.0], np.float32)
+        c_ = float(P_SPEED[RL])
+        t = np.linalg.norm(feet - e2, axis=1) / c_
+        for _ in range(3):                                   # the flight time and his place by then, each from the other
+            t = np.minimum(t, 3.0)
+            dz = np.where(air, ov[:, 2] * t - 400.0 * t * t, 0.0)
+            m = feet + np.stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)
+            aimz = np.minimum(m[:, 2], feet[:, 2])           # (aimed at the floor: no higher than his feet now)
+            t = np.linalg.norm(np.stack([m[:, 0], m[:, 1], aimz], 1) - e2, axis=1) / c_
+        t = np.minimum(t, 3.0)
+        dz = np.where(air, ov[:, 2] * t - 400.0 * t * t, 0.0)
+        m = (feet + np.stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)).astype(np.float32)
+        top = np.maximum(m[:, 2], feet[:, 2]) + 40.0
+        st = np.stack([m[:, 0], m[:, 1], top], 1).astype(np.float32)
+        frd = self.w.rays(st, np.array([[0, 0, -1.0]], np.float32), 1024.0, mask=self.sight)[:, 0]
+        found = frd < 1.0
+        fz = np.where(found, top - frd * 1024.0, m[:, 2])
+        fp = np.stack([m[:, 0], m[:, 1], fz + PF_LIFT], 1).astype(np.float32)
+        ey, ep = self._aim_at(e2, fp, yaw[k], pit[k])
+        o = 5
+        out[k, o] = 1.0
+        out[k, o + 1], out[k, o + 2] = np.clip(ey / 30.0, -1, 1), np.clip(ey / 2.0, -1, 1)
+        out[k, o + 3], out[k, o + 4] = np.clip(ep / 15.0, -1, 1), np.clip(ep / 2.0, -1, 1)
+        out[k, o + 5] = found
+        out[k, o + 6] = np.clip((m[:, 2] - fz) / 200.0, 0.0, 2.0) * found
+        out[k, o + 7] = np.clip(t / 1.5, 0.0, 2.0)
+        out[k, o + 8] = self._v02_clear(e2, fp)
+        # ---- the nearest wall by that place, at the height of his middle
+        o = 14
+        mid = (fp + np.array([0, 0, 24.0 - PF_LIFT], np.float32)).astype(np.float32)
+        an = np.linspace(0.0, 2 * np.pi, RAIM_WALL_N, endpoint=False)
+        dw = np.stack([np.cos(an), np.sin(an), np.zeros(RAIM_WALL_N)], 1).astype(np.float32)
+        fw = self.w.rays_each(mid, np.repeat(dw[None], len(k), 0), RAIM_WALL, mask=self.sight)
+        j_ = fw.argmin(1)
+        fmin = fw[np.arange(len(k)), j_]
+        hit = fmin < 1.0
+        dist = fmin * RAIM_WALL
+        wp = mid + dw[j_] * dist[:, None]
+        rel = an[j_] - yaw[k]
+        wy, wpi = self._aim_at(e2, wp, yaw[k], pit[k])
+        out[k, o] = hit
+        out[k, o + 1], out[k, o + 2] = np.sin(rel) * hit, np.cos(rel) * hit
+        out[k, o + 3] = np.where(hit, dist / RAIM_WALL, 1.0)
+        out[k, o + 4], out[k, o + 5] = np.clip(wy / 30.0, -1, 1) * hit, np.clip(wpi / 15.0, -1, 1) * hit
+        return out
+
+    def _pref(self, pos, eye, yaw, pit, visible):
+        """the inputs of N_PREF (see PREFIRE): the pros' blind-shot places on the enemy's believed way to him. Reads the
+        belief _v02 made this frame (v02_bel, v02_bel_ok, v02_bt_now); keeps only the places' points of the walking map."""
+        n = self.n
+        out = np.zeros((n, N_PREF), np.float32)
+        if not PREFIRE:
+            return out
+        P, R, W = len(self.v02_pp), self.route, self.v02_ways
+        if not P or R is None or W is None:
+            return out
+        hasr = self.has[:n, RL].astype(bool) & (self.ammo[:n, RL] >= 1)
+        hasg = self.has[:n, GL].astype(bool) & (self.ammo[:n, GL] >= 1)
+        on = np.asarray(self.v02_bel_ok, bool)[:n] & ~np.asarray(visible, bool)[:n] & (self.hp[:n] > 0) & (hasr | hasg)
+        ii = np.nonzero(on)[0]
+        if not len(ii):
+            return out
+        if getattr(self, "pf_node", None) is None or len(self.pf_node) != P:
+            self.pf_node = R.locate(self.v02_pp)
+        pn = self.pf_node
+        p_, e_ = pos[ii], eye[ii].astype(np.float32)
+        na, nb = R.locate(p_), R.locate(np.asarray(self.v02_bel, np.float32)[ii])
+        wb = W[pn[None, :], nb[:, None]].astype(np.float32)          # the way from the believed place to each place (16ths of a second)
+        wm = W[na[:, None], pn[None, :]].astype(np.float32)          # ... from each place to him
+        wbm = W[na, nb].astype(np.float32)[:, None]                  # ... from the believed place to him
+        ok = (wb < 255) & (wm < 255) & (np.linalg.norm(self.v02_pp[None, :, :] - p_[:, None, :], axis=2) >= PF_SELF)
+        det = np.maximum(np.where(wbm < 255, wb + wm - wbm, wb + wm), 0.0) / 16.0
+        score = np.where(ok, det + 0.01 * wb / 16.0, np.inf)
+        S = min(PF_SLOTS, P)
+        order = np.argsort(score, axis=1, kind="stable")[:, :S]
+        ar = np.arange(len(ii))[:, None]
+        valid = np.isfinite(score[ar, order])
+        pp = (self.v02_pp[order] + np.array([0, 0, PF_LIFT], np.float32)).astype(np.float32)     # (k, S, 3)
+        ey, ep = self._aim_at(e_[:, None, :], pp, yaw[ii][:, None], pit[ii][:, None])
+        to = pp - e_[:, None, :]
+        d = np.linalg.norm(to, axis=2)
+        bt = np.asarray(self.v02_bt_now, np.float32)[ii]
+        since = bt - np.minimum(bt, 1.0)                     # (the believed place is where he was a second after the last news)
+        blk = np.zeros((len(ii), PF_SLOTS, PF_F), np.float32)
+        blk[:, :S, 0] = np.clip(ey / 30.0, -1, 1)
+        blk[:, :S, 1] = np.clip(ep / 15.0, -1, 1)
+        blk[:, :S, 2] = np.minimum(d / 2000.0, 1.5)
+        blk[:, :S, 3] = np.clip((wb[ar, order] / 16.0 - since[:, None]) / 5.0, -1, 1)
+        blk[:, :S, 4] = np.clip(d / float(P_SPEED[RL]) / 1.5, 0.0, 2.0)
+        blk[:, :S, 5] = self._v02_clear(np.repeat(e_, S, axis=0), pp.reshape(-1, 3)).reshape(len(ii), S)
+        blk[:, :S, 6] = np.minimum(det[ar, order] / 5.0, 1.0)
+        blk[:, :S, 7] = self.v02_pf[order, 0]
+        D = np.hypot(to[..., 0], to[..., 1]) + 1e-6          # (the grenade's low arc, as the grenade arc inputs)
+        v_, g_ = float(P_SPEED[GL]), 800.0
+        disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[..., 2] * v_ * v_)
+        reach = (disc >= 0.0) & hasg[ii][:, None]
+        th = np.arctan2(v_ * v_ - np.sqrt(np.maximum(disc, 0.0)), g_ * D)
+        epg = np.degrees(-(th - 0.2 * np.cos(th)) - pit[ii][:, None])
+        blk[:, :S, 8] = np.clip(epg / 15.0, -1, 1) * reach
+        blk[:, :S, 9] = 1.0
+        blk[:, :S] *= valid[:, :, None]
+        out[ii] = blk.reshape(len(ii), -1)
         return out
 
     def note_hunt(self, valid):

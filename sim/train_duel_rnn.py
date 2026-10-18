@@ -750,6 +750,10 @@ def main():
                          "of the rate (through the rate schedule)")
     ap.add_argument("--gate-from", type=float, default=-6.0, help="... where the line begins (at -6 a look at such a token weighs a "
                                                                  "four-hundredth of what it weighs at 0)")
+    ap.add_argument("--gate-start", type=float, default=-1.0,
+                    help="(v0.3.6) the minute of training --gate-open's line counts from (default: --fade-start, as before): a run "
+                         "that gives new tokens to a network whose older ones were opened already (tools/v036_init.py) starts their "
+                         "line at its own first minute, not at the teachers' fade start (which would open them at once)")
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
                     help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
     ap.add_argument("--bot-p", type=float, default=0.5, help="share of normal rounds against the scripted fighter")
@@ -1001,7 +1005,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
     BEL_SEEN = [0]
 
@@ -1603,9 +1607,10 @@ def main():
             ", opened to {:g} over {:g} min counted from minute {:.2f} (--turn-add-start; this process starts at {:.2f})".format(
                 a.turn_add_to, a.turn_add_open, ta0, elapsed0) if a.turn_add_open > 0 else
             " (left as it is: no --turn-add-open)"), flush=True)
+    gate0 = a.gate_start if a.gate_start >= 0 else fade0                 # (--gate-start) the minute the gate's line counts from
     if a.gate_open > 0:
         print("gate: {} tokens (lowest now {:.2f}) open from {:g} to 0 over {:g} min, counted from minute {:.2f} (this process starts at {:.2f})".format(
-            int(GATE_M.sum()), float(pol.attn.gate.min()), a.gate_from, a.gate_open, fade0, elapsed0), flush=True)
+            int(GATE_M.sum()), float(pol.attn.gate.min()), a.gate_from, a.gate_open, gate0, elapsed0), flush=True)
     if os.environ.get("STYLE_MIX"):                                      # (STYLE_MIX) what the simulators draw, said once
         sc_ = getattr(E_, "STYLE_CUM", None)
         if sc_ is None or not getattr(E_, "STYLE_P", 0.0) > 0:
@@ -1625,7 +1630,7 @@ def main():
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
         if a.gate_open > 0 and bool(GATE_M.any()):                       # (--gate-open) before the rollout: it is played and learnt
-            gf_ = min(1.0, max(0.0, mins - fade0) / a.gate_open)        # from at one gate
+            gf_ = min(1.0, max(0.0, mins - gate0) / a.gate_open)        # from at one gate
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
             with torch.no_grad():
                 pol.attn.gate[GATE_M] = pol.attn.gate[GATE_M].clamp(min=g_now)
