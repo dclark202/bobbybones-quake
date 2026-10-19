@@ -429,6 +429,24 @@ API void qsim_rays_each(int n, const float *origins, int k, const float *dirs, f
     }
 }
 
+/* one ray an origin, each with its own direction and length (n x 3, n x 3, n): the same trace as qsim_rays_each_m with
+   k = 1 and that length, ray by ray (a projectile's step: one call a frame for all, not one a projectile). mask < 0:
+   what stops a player (MASK_PLAYERSOLID, as qsim_rays_each) */
+API void qsim_rays_md(int n, const float *origins, const float *dirs, const float *maxdists, int mask, float *out) {
+    static const vec3_t mins = {-1, -1, -1}, maxs = {1, 1, 1};
+    int i;
+    trace_t tr;
+    if (mask < 0) mask = MASK_PLAYERSOLID;
+    for (i = 0; i < n; i++) {
+        const float *o = origins + i * 3;
+        float maxdist = maxdists[i];
+        vec3_t end;
+        VectorMA(o, maxdist, dirs + i * 3, end);
+        world_trace(&tr, o, end, mins, maxs, mask);
+        out[i] = tr.fraction;
+    }
+}
+
 /* box trace: out = fraction, endpos xyz, plane normal xyz, startsolid, allsolid (9 floats) */
 API void qsim_trace(const float *start, const float *end, const float *mins, const float *maxs, float *out) {
     trace_t tr;

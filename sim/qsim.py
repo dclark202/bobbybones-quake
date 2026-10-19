@@ -59,6 +59,31 @@ def _lib():
     return lib
 
 
+def _fast(lib):
+    """(sim speed, 2026-10-19) the traces called many times a frame, as function objects of their own whose array
+    arguments are plain addresses (c_void_p): numpy's ndpointer check costs about 2.5 us an argument. The callers pass
+    C-contiguous arrays of the right type (np.ascontiguousarray) and keep them alive over the call; the C side and its
+    numbers are the same functions as lib's."""
+    P, I, F = ctypes.c_void_p, ctypes.c_int, ctypes.c_float
+    sig = dict(qsim_rays=[I, P, I, P, F, P], qsim_rays_each=[I, P, I, P, F, P], qsim_trace=[P, P, P, P, P])
+    if hasattr(lib, "qsim_version"):
+        sig.update(qsim_rays_m=[I, P, I, P, F, I, P], qsim_rays_each_m=[I, P, I, P, F, I, P], qsim_trace_m=[P, P, P, P, I, P],
+                   qsim_lines_m=[I, P, P, I, P], qsim_contents_n=[I, P, P])
+    if hasattr(lib, "qsim_rays_md"):                         # the library of 2026-10-19: one ray an origin, each its own length
+        sig.update(qsim_rays_md=[I, P, P, P, I, P])
+    out = {}
+    for name, at in sig.items():
+        f = lib[name]                                        # (a new function object: lib's own keeps its ndpointer types)
+        f.argtypes, f.restype = at, None
+        out[name] = f
+    return out
+
+
+def _p(a):
+    """the address of a C-contiguous array's data (for _fast's functions)"""
+    return a.ctypes.data
+
+
 SOLID = 1                                                    # CONTENTS_SOLID: what stops a shot, a missile and the eye in the game
 LAVA, SLIME, WATER = 8, 16, 32                               # liquid contents (qsim_contents)
 QL_FWD_RATE, QL_FWD_TOP = 0.2059, 640.0                     # Quake Live's push with the forward key alone: rate a second and
@@ -93,6 +118,7 @@ class World:
                          ("gametype" not in e or "duel" in e["gametype"]) and
                          e.get("notfree", "0").strip() in ("", "0")]
         self.new = hasattr(self.lib, "qsim_version")         # the library of 2026-10-09
+        self.fast = _fast(self.lib)
         self.solids = []
         self._out = np.zeros((self.n, 8), np.float32)
         self.triggers = self._add_triggers()
@@ -196,10 +222,11 @@ class World:
         origins = np.ascontiguousarray(origins, np.float32)
         dirs = np.ascontiguousarray(dirs, np.float32)
         out = np.zeros((len(origins), len(dirs)), np.float32)
+        assert origins.size == 3 * len(origins) and dirs.size == 3 * len(dirs)     # (what the C side reads)
         if mask is None:
-            self.lib.qsim_rays(len(origins), origins, len(dirs), dirs, float(maxdist), out)
+            self.fast["qsim_rays"](len(origins), _p(origins), len(dirs), _p(dirs), float(maxdist), _p(out))
         else:
-            self.lib.qsim_rays_m(len(origins), origins, len(dirs), dirs, float(maxdist), int(mask), out)
+            self.fast["qsim_rays_m"](len(origins), _p(origins), len(dirs), _p(dirs), float(maxdist), int(mask), _p(out))
         return out
 
     def rays_each(self, origins, dirs, maxdist, mask=None):
@@ -207,10 +234,25 @@ class World:
         origins = np.ascontiguousarray(origins, np.float32)
         dirs = np.ascontiguousarray(dirs, np.float32)
         out = np.zeros(dirs.shape[:2], np.float32)
+        assert origins.size == 3 * len(origins) and dirs.size == 3 * len(origins) * dirs.shape[1]     # (what the C side reads)
         if mask is None:
-            self.lib.qsim_rays_each(len(origins), origins, dirs.shape[1], dirs, float(maxdist), out)
+            self.fast["qsim_rays_each"](len(origins), _p(origins), dirs.shape[1], _p(dirs), float(maxdist), _p(out))
         else:
-            self.lib.qsim_rays_each_m(len(origins), origins, dirs.shape[1], dirs, float(maxdist), int(mask), out)
+            self.fast["qsim_rays_each_m"](len(origins), _p(origins), dirs.shape[1], _p(dirs), float(maxdist), int(mask), _p(out))
+        return out
+
+    def rays_md(self, origins, dirs, maxdists, mask=SOLID):
+        """one ray an origin, each with its own length: origins n x 3, dirs n x 3, maxdists n -> n hit fractions; the
+        same numbers as rays_each(origins[q:q + 1], dirs[q:q + 1, None], float(maxdists[q]), mask)[0, 0] for every q"""
+        origins = np.ascontiguousarray(origins, np.float32).reshape(-1, 3)
+        dirs = np.ascontiguousarray(dirs, np.float32).reshape(-1, 3)
+        md = np.ascontiguousarray(maxdists, np.float32).reshape(-1)
+        assert len(dirs) == len(origins) == len(md)
+        if "qsim_rays_md" not in self.fast:                  # (a library before 2026-10-19: one call a ray)
+            return np.array([self.rays_each(origins[q:q + 1], dirs[q:q + 1, None, :], float(md[q]), mask=mask)[0, 0]
+                             for q in range(len(md))], np.float32).reshape(-1)
+        out = np.zeros(len(md), np.float32)
+        self.fast["qsim_rays_md"](len(md), _p(origins), _p(dirs), _p(md), -1 if mask is None else int(mask), _p(out))
         return out
 
     def lines(self, starts, ends, mask=SOLID):
@@ -218,14 +260,15 @@ class World:
         starts = np.ascontiguousarray(starts, np.float32).reshape(-1, 3)
         ends = np.ascontiguousarray(ends, np.float32).reshape(-1, 3)
         out = np.zeros(len(starts), np.float32)
-        self.lib.qsim_lines_m(len(starts), starts, ends, int(mask), out)
+        assert len(ends) == len(starts)
+        self.fast["qsim_lines_m"](len(starts), _p(starts), _p(ends), int(mask), _p(out))
         return out
 
     def contents_n(self, points):
         """the contents at n points (LAVA, SLIME, WATER, ...)"""
         points = np.ascontiguousarray(points, np.float32).reshape(-1, 3)
         out = np.zeros(len(points), np.int32)
-        self.lib.qsim_contents_n(len(points), points, out)
+        self.fast["qsim_contents_n"](len(points), _p(points), _p(out))
         return out
 
     PLAYER_MINS = np.array([-15, -15, -24], np.float32)
@@ -236,14 +279,15 @@ class World:
         mask None: what stops a player; SOLID: what stops a shot, a missile and the eye"""
         out = np.zeros(9, np.float32)
         z = np.zeros(3, np.float32)
+        a_ = np.ascontiguousarray(start, np.float32)
+        b_ = np.ascontiguousarray(end, np.float32)
+        lo_ = z if mins is None else np.ascontiguousarray(mins, np.float32)
+        hi_ = z if maxs is None else np.ascontiguousarray(maxs, np.float32)
+        assert a_.size >= 3 and b_.size >= 3 and lo_.size >= 3 and hi_.size >= 3
         if mask is None:
-            self.lib.qsim_trace(np.asarray(start, np.float32), np.asarray(end, np.float32),
-                                z if mins is None else np.asarray(mins, np.float32),
-                                z if maxs is None else np.asarray(maxs, np.float32), out)
+            self.fast["qsim_trace"](_p(a_), _p(b_), _p(lo_), _p(hi_), _p(out))
         else:
-            self.lib.qsim_trace_m(np.asarray(start, np.float32), np.asarray(end, np.float32),
-                                  z if mins is None else np.asarray(mins, np.float32),
-                                  z if maxs is None else np.asarray(maxs, np.float32), int(mask), out)
+            self.fast["qsim_trace_m"](_p(a_), _p(b_), _p(lo_), _p(hi_), int(mask), _p(out))
         return dict(fraction=float(out[0]), endpos=out[1:4].copy(), normal=out[4:7].copy(),
                     startsolid=bool(out[7]), allsolid=bool(out[8]))
 
