@@ -990,6 +990,34 @@ GL_QL = float(os.environ.get("GL_QL") or 0.0) > 0
 #                 Off: the simulator is v0.3's.
 RL_QL = float(os.environ.get("RL_QL") or 0.0) > 0
 RL_EYE, RL_AHEAD, RL_BOX, RL_KNOCK_BASE, RL_KNOCK_SELF, RL_KNOCK_OTHER = 26.5, 41.0, 0.5, 100.0, 1.1, 0.9
+#   MISSILE_POINT=1  (B-267's finding, 2026-10-19) rockets, grenades and plasma fly as a point, as in Quake 3 (fire_rocket,
+#                 fire_grenade and fire_plasma leave the missile's mins and maxs at zero; G_RunMissile traces a point).
+#                 Until now each frame's step was qsim_rays_md's trace of a 2 x 2 x 2 box (the wall sensors' box): a rocket
+#                 met a step's nosing a unit early and blew up about a unit further from the face. With the switch the
+#                 projectiles' frame is Quake 3's (_fly_point): a point trace a frame; a grenade follows its parabola
+#                 exactly (TR_GRAVITY: the frame's move is v t - 400 t^2, not the Euler step that falls 0.25 units a frame
+#                 more); an impact (a wall, a player) blows up at the trace's end cut to whole units toward the missile's
+#                 trBase (SnapVectorTowards: the muzzle, or a grenade's last bounce); a grenade's fuse blast at its place
+#                 cut to whole units (SnapVector), after that frame's bounce; a bounce reflects the velocity of "the moment
+#                 of the hit" (as Quake Live takes it, measured: see _fly_point), keeps GL_BOUNCE of it, puts the grenade
+#                 one unit off the surface and loses the rest of the frame (trTime = level.time; GL_QL's "rest of the
+#                 frame" is not used); when the surface faces up (normal z > 0.2) and less than 40 u/s is left it lies
+#                 still (TR_STATIONARY) one unit off the surface, cut to whole units (as weaponlab5's grenade at rest).
+#                 Checked on weaponlab5 (data/weaponlab5, 2026-10-10): 37 bounces of 37 within 0.2 units and 1 u/s of
+#                 the game's (switch off: none within 0.2, 3 within 1 u/s). Not modelled: a missile that meets a sky
+#                 surface (SURF_NOIMPACT) vanishes in the game; here it still blows up there (the library gives no
+#                 surface flags). RL_QL's first stretch (a point trace already) is as it was. On a server the game does
+#                 its own physics: the plugins need nothing. Off: the simulator is today's.
+MISSILE_POINT = float(os.environ.get("MISSILE_POINT") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("MISSILE_POINT",)
+# (MISSILE_POINT with RL_QL) RL_QL's fitted numbers for a point: a box's trace met the floor about a unit sooner and blew
+# up about a unit further from it, so the fit of 2026-10-15 is taken again on the same rjlab records (tools/rj_compare.py,
+# the test map's 486 jumps and Blood Run's 90; branch v037-missile, 2026-10-19): the first stretch one unit longer (42;
+# 41 put 22 blasts a frame late), the splash box grown 1.5 a side (Quake 3's absmin / absmax grow by 1: damage exact in
+# 398 of 486 with 1, 410 with 1.5, as with the box and 0.5), the muzzle's height as before (26.5; 26: rise within 5% in
+# 471 of 486 against 479)
+RL_AHEAD_PT, RL_BOX_PT, RL_EYE_PT = 42.0, 1.5, RL_EYE
+PLAYER_MASK = 0x2010001                                 # MASK_PLAYERSOLID (what a trace with mask=None stops at), for qsim_lines_m
 START_GUN_P = float(os.environ.get("START_GUN_P") or 0.0)
 #   START_GUN_W   "rl:0.5,pg:0.25,gl:0.25": which weapons those lives begin with and their shares, among the ones the map
 #                 has (owner, 2026-10-10 17:35: rockets too, "50%/25%/25% rockets/plasma/grenades"). Unset: grenades and
@@ -2947,6 +2975,8 @@ class DuelEnv:
         self.rv = np.zeros((n, K, 3), np.float32)
         self.ra = np.zeros((n, K), bool)
         self.rnew = np.zeros((n, K), bool)              # appeared this frame (move from the next)
+        self.rbase = np.zeros((n, K, 3), np.float32)    # (MISSILE_POINT) its trBase: the muzzle, or a grenade's last bounce
+        self.rrest = np.zeros((n, K), bool)             # (MISSILE_POINT) a grenade lying still (TR_STATIONARY)
         self.rw = np.zeros((n, K), np.int64)            # weapon that fired it
         self.rage = np.zeros((n, K), np.float32)        # seconds in flight (grenade fuse)
         self.weapon = np.zeros(n, np.int64)
@@ -6516,6 +6546,88 @@ class DuelEnv:
             if self.hp[v] <= 0:
                 st["killer"][v] = i
 
+    def _fly_point(self, alive, s, st):
+        """(MISSILE_POINT) the projectiles' frame as Quake 3's G_RunMissile, G_MissileImpact, G_BounceMissile and
+        G_ExplodeMissile do it (see MISSILE_POINT): a point trace from where it is to where its trajectory puts it at the
+        frame's end, then the impact, the bounce, the fuse"""
+        owner, slot = alive
+        wp = self.rw[owner, slot]
+        grav = np.where(wp == GL, 800.0, 0.0).astype(np.float32)
+        still = self.rrest[owner, slot]
+        grav = np.where(still, 0.0, grav).astype(np.float32)       # TR_STATIONARY: a grenade at rest does not fall
+        v0 = self.rv[owner, slot].copy()                           # the velocity at the frame's start
+        self.rv[owner, slot, 2] -= grav * DT
+        self.rage[owner, slot] += DT
+        p0 = self.rp[owner, slot].copy()
+        p1r = p0 + v0 * DT                                         # TR_LINEAR, or TR_GRAVITY's exact parabola
+        p1r[:, 2] -= 0.5 * grav * DT * DT
+        fr = self.w.lines(p0, p1r, mask=PLAYER_MASK if self.sight is None else self.sight)     # a point (mins, maxs 0)
+        hitpt = (p0 + (p1r - p0) * fr[:, None]).astype(np.float32)
+        fuse = np.array([P_FUSE[int(x)] for x in wp], np.float32)
+        timeout = (fuse > 0) & (self.rage[owner, slot] >= fuse)
+        wall = fr < 1
+        self.rp[owner, slot] = hitpt
+        for q in range(len(owner)):
+            i, k, wq = owner[q], slot[q], int(wp[q])
+            dq = p1r[q] - p0[q]
+            dn = float(np.linalg.norm(dq))
+            dirq = (dq / dn).astype(np.float32) if dn > 1e-9 else np.array([0.0, 0.0, -1.0], np.float32)
+            d_on, ep = None, hitpt[q]
+            for v_ in self._mates(int(i)):                         # the first body on the way (the trace's end there,
+                if bool(self._seg_box(p0[q:q + 1], hitpt[q:q + 1], s[v_:v_ + 1, :3],          # its box entered 1/8 short)
+                                      np.where(self.duck[v_:v_ + 1], TOP_DUCK, TOP))[0]):
+                    e_ = self._box_entry(p0[q], hitpt[q], s[v_, :3], TOP_DUCK if self.duck[v_] else TOP)
+                    if d_on is None or np.linalg.norm(e_ - p0[q]) < np.linalg.norm(ep - p0[q]):
+                        d_on, ep = int(v_), e_
+            if d_on is not None or (wall[q] and wq != GL):         # G_MissileImpact: the blast at the end, cut toward trBase
+                self.ra[i, k] = False
+                ep = self._snap_towards(ep, self.rbase[i, k])
+                self._explode(i, wq, ep, d_on, dirq if d_on is not None else None, s, st, back=None)
+                continue
+            if wall[q]:                                            # G_BounceMissile
+                tr = self.w.trace(p0[q], p1r[q], mask=self.sight)
+                nrm = np.asarray(tr["normal"], np.float32)
+                vh = v0[q].copy()
+                # the velocity at "the moment of the hit" as Quake Live takes it: the frame's start plus the part of
+                # the frame NOT flown, in whole ms (weaponlab5's 37 bounces after a first one, each put in at the game's
+                # place and velocity of the frame before: new place within 0.2 units and new velocity within 1 u/s in
+                # all 37, mean 0.2; Quake 3's G_BounceMissile takes the part flown, which the record does not follow)
+                vh[2] -= float(grav[q]) * (math.floor(1000.0 * DT * (1.0 - float(fr[q])) + 1e-6) / 1000.0)
+                vq = ((vh - 2.0 * float(vh @ nrm) * nrm) * GL_BOUNCE).astype(np.float32)
+                if nrm[2] > 0.2 and float(np.linalg.norm(vq)) < 40.0:
+                    self.rv[i, k] = 0.0                            # it lies one unit off the surface, cut to whole units
+                    self.rrest[i, k] = True                        # (weaponlab5: at rest at -761.0, 513.0 over a floor at 512)
+                    self.rp[i, k] = np.trunc(hitpt[q] + nrm)
+                else:
+                    self.rv[i, k] = vq                             # one unit off the surface; the rest of the frame is lost
+                    self.rp[i, k] = hitpt[q] + nrm
+                self.rbase[i, k] = self.rp[i, k]
+            if timeout[q]:                                         # G_ExplodeMissile: where it is, SnapVector
+                self.ra[i, k] = False
+                self._explode(i, wq, np.trunc(self.rp[i, k]).astype(np.float32), None, None, s, st, back=None)
+
+    @staticmethod
+    def _box_entry(p0, p1, c, top):
+        """where the segment p0 -> p1 enters the player box at c (its top `top` above the origin), backed off by
+        SURFACE_CLIP_EPSILON (0.125) as the game's trace ends; p0 itself when it starts inside"""
+        lo = c + MINS - 0.125
+        hi = (c + MAXS + 0.125).copy()
+        hi[2] = c[2] + top + 0.125
+        d = p1 - p0
+        tn = 0.0
+        for a_ in range(3):
+            if abs(float(d[a_])) < 1e-9:
+                continue
+            t0, t1 = (lo[a_] - p0[a_]) / d[a_], (hi[a_] - p0[a_]) / d[a_]
+            tn = max(tn, float(min(t0, t1)))
+        return (p0 + d * min(1.0, tn)).astype(np.float32)
+
+    @staticmethod
+    def _snap_towards(v, to):
+        """Quake 3's SnapVectorTowards: each axis cut to a whole unit ((int), toward zero), plus one where `to` lies above"""
+        t_ = np.trunc(np.asarray(v, np.float64))
+        return np.where(np.asarray(to, np.float64) <= np.asarray(v, np.float64), t_, t_ + 1.0).astype(np.float32)
+
     def _explode(self, i, wpn, ep, direct_on, hit_dir, s, st, back=None):
         """projectile of player i (weapon wpn) explodes at ep; direct_on = player hit directly or None;
         back = the way it flew (RL_QL: the blast point is cut to whole units toward where it came from)"""
@@ -6590,15 +6702,16 @@ class DuelEnv:
         if direct_on is not None:                         # a direct hit: 100, pushed by 100 x 0.9 (W_KNOCK)
             victims.append((direct_on, float(W_DMG[wpn]), float(W_DMG[wpn] * W_KNOCK[wpn]), hit_dir, True))
         R = P_RADIUS[wpn]
+        box_ = RL_BOX_PT if MISSILE_POINT else RL_BOX
         for v in [i] + [int(x) for x in self.others[i]]:  # (RL_QL) splash on everybody in the group, the owner too
             if v == direct_on:
                 continue
             c = s[v, :3]
-            hi_ = c + MAXS + RL_BOX
+            hi_ = c + MAXS + box_
             if self.duck[v]:
                 hi_ = hi_.copy()
-                hi_[2] = c[2] + TOP_DUCK + RL_BOX
-            near = np.clip(ep, c + MINS - RL_BOX, hi_)
+                hi_[2] = c[2] + TOP_DUCK + box_
+            near = np.clip(ep, c + MINS - box_, hi_)
             d = float(np.linalg.norm(ep - near))
             if d < R and (self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999
                           or (GL_QL and any(self.w.trace(ep, c + np.array([ox_, oy_, 0.0], np.float32), mask=self.sight)["fraction"] >= 0.999
@@ -8478,29 +8591,35 @@ class DuelEnv:
                         k = slot[0]
                         self.rp[i, k] = eye[i] + fdir[i] * 14.0
                         self.rv[i, k] = fdir[i] * P_SPEED[wpn]
+                        self.rbase[i, k], self.rrest[i, k] = self.rp[i, k], False      # (MISSILE_POINT) its trBase
                         if RL_QL and wpn == RL:             # (RL_QL) the muzzle at the first of the frame's three moves
+                            ahead_, eye_ = (RL_AHEAD_PT, RL_EYE_PT) if MISSILE_POINT else (RL_AHEAD, RL_EYE)
                             o_ = prev[i, :3] + (s[i, :3] - prev[i, :3]) / 3.0
-                            mz_ = np.trunc(o_ + np.array([0.0, 0.0, RL_EYE - (VIEW_H - VIEW_H_DUCK) * float(self.duck[i])],
+                            mz_ = np.trunc(o_ + np.array([0.0, 0.0, eye_ - (VIEW_H - VIEW_H_DUCK) * float(self.duck[i])],
                                                          np.float32) + fdir[i] * 14.0).astype(np.float32)
-                            a_ = mz_ + fdir[i] * (RL_AHEAD + DT * P_SPEED[wpn])
+                            a_ = mz_ + fdir[i] * (ahead_ + DT * P_SPEED[wpn])
                             tr_ = self.w.trace(mz_, a_, mask=self.sight)
-                            span_ = RL_AHEAD + DT * P_SPEED[wpn]
-                            near_ = mz_ + fdir[i] * min(RL_AHEAD, tr_["fraction"] * span_)
+                            span_ = ahead_ + DT * P_SPEED[wpn]
+                            near_ = mz_ + fdir[i] * min(ahead_, tr_["fraction"] * span_)
                             opp_rl = vs_                    # (RL_QL) whom it can meet within its first stretch
                             got_ = [q_ for q_ in opp_rl if bool(self._seg_box(mz_[None], near_[None].astype(np.float32),
                                                                               s[q_:q_ + 1, :3],
                                                                               np.where(self.duck[q_:q_ + 1], TOP_DUCK, TOP))[0])]
-                            if got_ or tr_["fraction"] * span_ <= RL_AHEAD:     # it meets something within its first stretch
+                            if got_ or tr_["fraction"] * span_ <= ahead_:     # it meets something within its first stretch
                                 self.stats[name + "_shots"] += hm
                                 self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
                                 dv_ = min(got_, key=lambda q_: float(np.linalg.norm(s[q_, :3] - mz_))) if got_ else None
+                                if MISSILE_POINT and got_:      # (MISSILE_POINT) the trace's end at the body it met
+                                    near_ = self._box_entry(mz_, near_.astype(np.float32), s[dv_, :3],
+                                                            TOP_DUCK if self.duck[dv_] else TOP)
                                 self._explode(i, wpn, near_.astype(np.float32), dv_,
                                               fdir[i] if got_ else None, s, st, back=fdir[i])
                                 continue
-                            # at this frame's end it is RL_AHEAD beyond the muzzle: placed so that the flight below
+                            # at this frame's end it is ahead_ beyond the muzzle: placed so that the flight below
                             # (one frame, this one) ends there
                             self.ra[i, k], self.rnew[i, k], self.rw[i, k], self.rage[i, k] = True, False, wpn, 0.0
-                            self.rp[i, k] = mz_ + fdir[i] * (RL_AHEAD - DT * P_SPEED[wpn])
+                            self.rp[i, k] = mz_ + fdir[i] * (ahead_ - DT * P_SPEED[wpn])
+                            self.rbase[i, k] = mz_                  # (MISSILE_POINT) its trBase: the muzzle
                             self.stats[name + "_shots"] += hm
                             self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
                             continue
@@ -8556,7 +8675,9 @@ class DuelEnv:
         fresh = self.rnew.copy()
         self.rnew[:] = False
         alive = np.nonzero(self.ra & ~fresh)
-        if len(alive[0]):
+        if MISSILE_POINT and len(alive[0]):
+            self._fly_point(alive, s, st)                    # (MISSILE_POINT) as Quake 3's G_RunMissile
+        elif len(alive[0]):
             owner, slot = alive
             wp = self.rw[owner, slot]
             grav = np.where(wp == GL, 800.0, 0.0).astype(np.float32)
