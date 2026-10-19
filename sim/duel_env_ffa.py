@@ -1081,6 +1081,56 @@ def walk_no_jump(a):
     a[both, 2] = 0
     return both
 HOP_GROUND, HOP_SLOW, HOP_GIVEN, HOP_VZ = 0.4, 250.0, 40.0, 400.0     # (a jump gives 275 upward, 385 soon after another; a pad more)
+# v0.3.7 (the owner's go of 2026-10-19), three switches, all off (or as today) by default:
+#   JUMP_EVERY=<share> (a PLAY_VAR, live; 1 = always) the jump key read from his output on every frame (on that share of the
+#                 frames between his hand's readings, drawn per seat and frame from a random stream of its own): his left hand
+#                 still decides its other keys
+#                 (forward and back, strafe, crouch, walk, the weapon key) once in KEY_EVERY frames, but whether the jump is
+#                 down is taken from his vertical output (none, jump, crouch: "jump" or not) on every frame. Humans time a
+#                 press to the millisecond; the finger limit is how often, not when: the thumb's FINGER_HOLD and the hand's
+#                 KEY_RATE budget count every press and release as before. Crouch stays his hand's last reading (a jump asked
+#                 in between wins, as in one reading). The trainer credits the vertical output on the hand's frames as
+#                 before, and on the frames between for its jump bit alone (train_duel_rnn's JumpCat: the value 3 = "not
+#                 jump"). Off: the 4-frame grid of v0.3.6 (he could not time a jump to a landing better than 0 to 3 frames).
+#                 Set (any value, 0 too) it is on: a network trained on the grid has never been asked for its jump between the
+#                 hand's readings (v0.3.6 read at JUMP_EVERY=1 pressed 44 times a minute instead of 24 and ran 6% slower,
+#                 RESULTS 2026-10-19), so a run can start at a small share and raise it in live.json (B-265); at 0 everything
+#                 is as off. key_jump [players]: this frame his jump was read between the hand's readings (the worker sends
+#                 key_dec + 2 key_jump to the trainer). Counter: stats["jump_every"] (JE_COLS), the network's seats.
+#   AUTO_HOP=0|1  (a PLAY_VAR, 1 = today) the movement code's pm_autoHop (qsim QL_PARAMS auto_hop): 1, a jump key held over a
+#                 landing jumps again (the game's cg_autoHop 1); 0, a jump needs a new press (released and pressed again).
+#                 sim/export_duel.py writes it into every policy.npz and the plugins put the bot's cg_autoHop to match.
+#   HOP_CHAIN     (a pay; live, B-265; 0 = off) a chain of hops: jumps that each take off within HOP_CHAIN_MS of the last
+#                 landing (any floor; a take-off as HOP_PAY's: the jump key down, rising at a jump's speed). A hop in a chain
+#                 is paid when its take-off speed over the ground is at least the chain's best take-off so far less
+#                 HOP_CHAIN_TOL (kept or gained); one that loses more ends the chain and begins a new one, unpaid. The pay of
+#                 the k-th hop of a chain (k >= 2): HOP_CHAIN x min(HOP_CHAIN_CAP, 1 + HOP_CHAIN_STEP x (k - 2)) x
+#                 clip((speed - SPEED_LO) / (SPEED_HI - SPEED_LO), 0, 1): 1, 1.5, 2, 2.5, 3 (the cap) for the 2nd to 6th
+#                 hop, nothing for hopping under 320. The test is against the chain's running best, so speed lost and won
+#                 back pays nothing more: a setback past the tolerance ends the chain and its multiplier. A chain also ends on
+#                 the ground for longer than HOP_CHAIN_MS, with speed given in one frame (over HOP_GIVEN: a teleporter, a pad,
+#                 a blast), at a death, and whenever the enemy is in his view (the awareness counters' notion: `visible`, or
+#                 aimed at / acquired): the owner, 2026-10-19, "you really dont want to jump in fights it makes you easy to
+#                 hit". A hop in view pays nothing, begins no chain and keeps none, so a chain cannot be carried through a
+#                 fight for its multiplier: the pay is for traversal with the enemy unseen. Paid to the network's seats in
+#                 games (under HOP_QUIET not where it silences HOP_PAY) and in item runs; not in jump runs and rocket jump
+#                 runs, whose take-off is the pros' place and its approach, not a chain. Beside HOP_PAY, which pays the speed a
+#                 chain gains above its best (at most 160 units' worth a chain): HOP_CHAIN pays each hop that keeps the speed, by
+#                 the chain's length; on a gaining hop each pays its own part (the gain, the hop). HOP_CHAIN alone: HOP_PAY=0
+#                 (both live). Not in r_long, nothing of it in `dealt`. Counters: stats["hop_chain"] (HC_COLS, then a
+#                 histogram of the chains' lengths as they end, 1 to HC_BINS and over), the network's seats alive.
+JE_ON = (os.environ.get("JUMP_EVERY") or "").strip() != ""     # (the machinery: the trainer's JumpCat, the codes sent with key_dec)
+JUMP_EVERY = min(1.0, max(0.0, float(os.environ.get("JUMP_EVERY") or 0.0)))    # (the share; read at every frame: live)
+AUTO_HOP = float(os.environ.get("AUTO_HOP") or 1.0) > 0
+PLAY_VARS = PLAY_VARS + ("JUMP_EVERY", "AUTO_HOP")
+JE_COLS = ("frames_between", "presses_between", "presses_grid", "releases_between", "releases_grid")
+HOP_CHAIN = float(os.environ.get("HOP_CHAIN") or 0.0)
+HOP_CHAIN_MS = float(os.environ.get("HOP_CHAIN_MS") or 150.0)
+HOP_CHAIN_TOL = float(os.environ.get("HOP_CHAIN_TOL") or 15.0)
+HOP_CHAIN_STEP = float(os.environ.get("HOP_CHAIN_STEP") or 0.5)
+HOP_CHAIN_CAP = float(os.environ.get("HOP_CHAIN_CAP") or 3.0)
+HC_COLS = ("takeoffs", "starts", "gained", "kept", "lost", "paid", "pay", "kept_unpaid", "takeoffs_view", "ended_view", "frames_view", "frames")
+HC_BINS = 16
 #   GAME_P, LATE_P, WIN_PAY   stage B part 4 (docs/design/V02_STAGE_B.md; the owner, 2026-10-11: whole games "Yes", a frag
 #                 paid by what it moves his chance of winning "yes", late-game rounds from drawn states "yes, up to 25%").
 #                 Training switches, all off by default. Duels on a real map only: a group of more than two, the test
@@ -1314,7 +1364,8 @@ PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
 # the import does from the environment (and the environment with it). Left out on purpose: anything read at import or in
 # __init__ (SHOT_COST and SHOT_W make per-map tables; WIN_PAY its tables), every input, output, round-kind and map switch.
 LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR",
-             "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG")
+             "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG",
+             "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY")     # (v0.3.7)
 
 
 def live_values(get):
@@ -1338,12 +1389,22 @@ def live_values(get):
     v["RAIL_FAR_HI"] = float(get("RAIL_FAR_HI") or 900.0)
     v["STACK_DIFF"] = float(get("STACK_DIFF") or 0.0)
     v["BLIND_RL_DMG"] = float(get("BLIND_RL_DMG") or 6.0)
+    v["JUMP_EVERY"] = min(1.0, max(0.0, float(get("JUMP_EVERY") or 0.0)))
+    if v["JUMP_EVERY"] > 0 and not JE_ON:
+        raise ValueError("JUMP_EVERY: the run did not start with it set (JUMP_EVERY=0 at the start makes it live)")
+    v["HOP_CHAIN"] = float(get("HOP_CHAIN") or 0.0)
+    v["HOP_CHAIN_MS"] = float(get("HOP_CHAIN_MS") or 150.0)
+    v["HOP_CHAIN_TOL"] = float(get("HOP_CHAIN_TOL") or 15.0)
+    v["HOP_CHAIN_STEP"] = float(get("HOP_CHAIN_STEP") or 0.5)
+    v["HOP_CHAIN_CAP"] = float(get("HOP_CHAIN_CAP") or 3.0)
     for k_, x_ in v.items():
         for y_ in (x_.values() if isinstance(x_, dict) else (x_,)):
             if not np.isfinite(float(y_)):
                 raise ValueError("{}: not a finite number".format(k_))
     if v["RAIL_FAR_HI"] <= v["RAIL_FAR_LO"]:
         raise ValueError("RAIL_FAR_HI must be above RAIL_FAR_LO")
+    if v["HOP_CHAIN_MS"] < 0 or v["HOP_CHAIN_TOL"] < 0 or v["HOP_CHAIN_STEP"] < 0 or v["HOP_CHAIN_CAP"] < 1.0:
+        raise ValueError("HOP_CHAIN_MS, _TOL, _STEP must be 0 or more and HOP_CHAIN_CAP 1 or more")
     return v
 
 
@@ -2273,6 +2334,9 @@ class DuelEnv:
             self.w.set_params3(QL_FWD, QL_LAND)
         if QL_JUMP or hasattr(self.w.lib, "qsim_params4"):
             self.w.set_params4(QL_JUMP)
+        if not AUTO_HOP:                                     # (AUTO_HOP=0) a jump held over a landing does not jump again (World() set 1)
+            from qsim import QL_PARAMS
+            self.w.set_params(**dict(QL_PARAMS, auto_hop=0))
         self.lava_t = np.zeros(self.n, np.float32)          # seconds until lava or slime hurts him again (LAVA)
         self.pvs = None                                      # (HEAR_QL) the map's visibility data
         if HEAR_QL:
@@ -3059,6 +3123,17 @@ class DuelEnv:
         self.hop_gnd = np.zeros(n, np.int64)                # ... his frames on the ground since he landed
         self.hop_k = np.zeros(n, np.int64)                  # ... the chain's take-offs so far that could be paid
         self.hop_sp = np.zeros(n, np.float32)               # ... his speed over the ground a frame ago
+        self.hc_len = np.zeros(n, np.int64)                 # (HOP_CHAIN) the hops of his chain so far (0: none)
+        self.hc_best = np.zeros(n, np.float32)              # ... its best take-off speed over the ground
+        self.hc_gnd = np.zeros(n, np.int64)                 # ... his frames on the ground since he landed
+        self.hc_sp = np.zeros(n, np.float32)                # ... his speed over the ground a frame ago
+        if HOP_CHAIN > 0:                                    # (a run that turns it on by live.json gets the counter at its first frame)
+            self.stats["hop_chain"] = np.zeros(len(HC_COLS) + HC_BINS)
+        self.key_jump = np.zeros(n, bool)                   # (JUMP_EVERY) this frame his jump was read between the hand's readings
+        self.je_rng = None
+        if JE_ON:
+            self.stats["jump_every"] = np.zeros(len(JE_COLS))
+            self.je_rng = np.random.default_rng(seed + 7771)  # (its own stream: the simulator's own draws are as without it)
         # The game's pay (v0.2): the part of the last frame's reward that pays for items and stack, per player. In it: a
         # pickup's pay (item_reward: health, armor, a new weapon, a dropped one; the items room's), what an enemy's mega
         # or red costs (item_loss), the way to his chosen item (intent_seek, what a trip given up gives back, the price of
@@ -7977,6 +8052,62 @@ class DuelEnv:
         return out
 
     # ---------------------------------------------------------------- step
+    def _hop_quiet(self, s):
+        """(HOP_QUIET) bool [players]: by his own senses the enemy is near (heard in the last HOP_QUIET_HEARD seconds, believed
+        within HOP_QUIET_NEAR units) or his intention is one of the map's holding places"""
+        q_ = (self.v02_ht < HOP_QUIET_HEARD).any(1) if getattr(self, "v02_ht", None) is not None else np.zeros(self.n, bool)
+        if getattr(self, "v02_bel", None) is not None:
+            q_ = q_ | (np.asarray(self.v02_bel_ok, bool) & (np.linalg.norm(self.v02_bel - s[:, :3], axis=1) < HOP_QUIET_NEAR))
+        if self.hold_n:
+            q_ = q_ | ((self.intent >= HOLD_INTENT) & (self.intent < HOLD_INTENT + HOLD_SLOTS))
+        return q_
+
+    def _hop_chain(self, s, prev, jump, human, pkind, in_run):
+        """(HOP_CHAIN) this frame's chains of hops: the state after the frame s, before it prev, the jump key as moved (jump:
+        upmove), the network's seats (human), the round kinds and runs. Returns the pay [players] float32 (see HOP_CHAIN)."""
+        n = self.n
+        st = self.stats.get("hop_chain")
+        if st is None:                                       # (turned on by live.json in a running simulator)
+            st = self.stats["hop_chain"] = np.zeros(len(HC_COLS) + HC_BINS)
+        C = {k_: i_ for i_, k_ in enumerate(HC_COLS)}
+        H0 = len(HC_COLS)
+        hv = np.hypot(s[:, 3], s[:, 4]).astype(np.float32)
+        up = human & (self.hp > 0)
+        L = self.hc_len
+        giv = (hv > self.hc_sp + HOP_GIVEN) & (L > 0)        # speed given in one frame: not a hop's
+        self.hc_sp = hv
+        gr = s[:, 6] > 0.5
+        self.hc_gnd = np.where(gr, self.hc_gnd + 1, 0)
+        long_ = gr & (self.hc_gnd * DT * 1000.0 > HOP_CHAIN_MS + 0.5)    # on the ground too long since the landing
+        inv_ = np.asarray(self.visible, bool)[:n] | np.asarray(getattr(self, "acquired", np.zeros(n, bool)), bool)[:n]   # the enemy in his view
+        end_ = (L > 0) & (giv | long_ | ~up | inv_)
+        st[C["ended_view"]] += float(((L > 0) & inv_ & ~giv & ~long_ & up).sum())
+        np.add.at(st, H0 + np.minimum(L[end_], HC_BINS) - 1, 1.0)
+        L = np.where(end_, 0, L)
+        best = np.where(end_, 0.0, self.hc_best).astype(np.float32)
+        off_all = ((jump > 0) & ~gr & (s[:, 5] > 100.0) & (s[:, 5] < HOP_VZ) & ((prev[:, 6] > 0.5) | (prev[:, 5] <= 0.0)) & up)   # a take-off
+        off = off_all & ~inv_                                # (in view: nothing begins, nothing is kept)
+        ch_ = off & (L > 0)                                  # ... in a chain: its landing was at most HOP_CHAIN_MS before
+        gain = ch_ & (hv > best)
+        kept = ch_ & ~gain & (hv >= best - HOP_CHAIN_TOL)
+        lost = ch_ & ~gain & ~kept
+        np.add.at(st, H0 + np.minimum(L[lost], HC_BINS) - 1, 1.0)
+        start = off & ~gain & ~kept                          # a chain begins (or begins again after a loss): unpaid
+        L = np.where(gain | kept, L + 1, np.where(start, 1, L))
+        self.hc_best = np.where(gain | start, hv, best).astype(np.float32)
+        self.hc_len = L
+        ok = ((pkind == NORMAL) & ~in_run & ~inv_) | (in_run & ~self.jrun & ~self.rjrun & ~inv_)    # games with nobody in view, item runs
+        if HOP_QUIET:
+            ok = ok & ~self._hop_quiet(s)
+        mult = np.minimum(HOP_CHAIN_CAP, 1.0 + HOP_CHAIN_STEP * (L - 2))
+        sp_ = np.clip((hv - SPEED_LO) / (SPEED_HI - SPEED_LO), 0.0, 1.0)
+        pd_ = (gain | kept) & ok & (sp_ > 0)
+        pay = np.where(pd_, HOP_CHAIN * mult * sp_, 0.0).astype(np.float32)
+        st[[C["takeoffs"], C["starts"], C["gained"], C["kept"], C["lost"], C["paid"], C["pay"], C["kept_unpaid"]]] += (
+            off.sum(), start.sum(), gain.sum(), kept.sum(), lost.sum(), pd_.sum(), float(pay.sum()), ((gain | kept) & ~pd_).sum())
+        st[[C["takeoffs_view"], C["frames_view"], C["frames"]]] += ((off_all & inv_).sum(), (up & inv_).sum(), up.sum())
+        return pay
+
     def limit_keys(self, a, who=None):
         """finger limits (see FINGER_HOLD): turns the requested keys and weapon choice into what one hand can do.
         Changes a[:, :3] and a[:, 6] in place."""
@@ -7988,7 +8119,15 @@ class DuelEnv:
         cols = [0, 1, 2, 6]
         self.stats["key_asked"] += int(((a[:, :3] != self.key_last) & who[:, None] & dec[:, None]).sum())
         self.key_req = np.where(dec[:, None], a[:, cols], self.key_req)
-        a[:, cols] = np.where(who[:, None], self.key_req, a[:, cols])
+        if JE_ON and getattr(self, "je_rng", None) is not None:      # (JUMP_EVERY) the jump read between the hand's readings: down where he
+            btw_ = who & ~dec & (self.je_rng.random(len(a)) < JUMP_EVERY)   # asks for it now, his hand's crouch (its last reading) kept
+            self.key_jump = btw_.copy()                      # where he does not
+            v_ = np.where(btw_, np.where(a[:, 2] == 1, 1, np.where(self.key_req[:, 2] == 2, 2, 0)), self.key_req[:, 2])
+            self.stats["key_asked"] += int((((v_ == 1) != (self.key_last[:, 2] == 1)) & btw_).sum())
+            a[:, cols] = np.where(who[:, None], self.key_req, a[:, cols])
+            a[:, 2] = np.where(who, v_, a[:, 2])
+        else:
+            a[:, cols] = np.where(who[:, None], self.key_req, a[:, cols])
         self.key_tok = np.minimum(KEY_BURST, self.key_tok + KEY_RATE * DT).astype(np.float32)
         self.key_hold += 1
         ready = self.key_hold >= FINGER_HOLD[None, :]
@@ -8007,6 +8146,10 @@ class DuelEnv:
         # thumb: jump key down or up
         j_now, j_want = last[:, 2] == 1, a[:, 2] == 1
         j_new = np.where(act(THUMB, j_now != j_want), j_want, j_now)
+        if JE_ON and "jump_every" in self.stats:            # (JUMP_EVERY) the thumb's presses and releases, between the hand's readings and on them
+            btw_ = who & ~dec & self.key_jump
+            self.stats["jump_every"] += np.array([btw_.sum(), (btw_ & j_new & ~j_now).sum(), (who & dec & j_new & ~j_now).sum(),
+                                                  (btw_ & ~j_new & j_now).sum(), (who & dec & ~j_new & j_now).sum()], np.float64)
         # index finger: a weapon key first, then strafe right
         w_want = (a[:, 6] > 0) & (a[:, 6] - 1 != self.weapon)
         w_ok = act(INDEX, w_want)
@@ -8281,11 +8424,7 @@ class DuelEnv:
             can_ = off_ & human & (self.hp > 0) & ((pkind == NORMAL) | in_run)
             hop_ = HOP_PAY * np.where(can_ & (self.hop_best > 0), np.maximum(0.0, hc_ - self.hop_best), 0.0)   # (the first sets the best)
             if HOP_QUIET:                                    # (HOP_QUIET) nothing while the enemy is near by his own senses
-                q_ = (self.v02_ht < HOP_QUIET_HEARD).any(1) if getattr(self, "v02_ht", None) is not None else np.zeros(len(hop_), bool)
-                if getattr(self, "v02_bel", None) is not None:
-                    q_ = q_ | (np.asarray(self.v02_bel_ok, bool) & (np.linalg.norm(self.v02_bel - s[:, :3], axis=1) < HOP_QUIET_NEAR))
-                if self.hold_n:
-                    q_ = q_ | ((self.intent >= HOLD_INTENT) & (self.intent < HOLD_INTENT + HOLD_SLOTS))
+                q_ = self._hop_quiet(s)
                 self.stats["hop_quiet"] += int((q_ & (hop_ > 0)).sum())
                 hop_ = np.where(q_, 0.0, hop_)
             reward += hop_
@@ -8297,6 +8436,8 @@ class DuelEnv:
             self.stats["hop_chains"] += int((can_ & (self.hop_k == 0)).sum())
             self.hop_k = self.hop_k + can_
             self.aw_can = can_                               # (AWARE_LOG) this frame's take-offs
+        if HOP_CHAIN > 0:                                    # chains of hops kept at speed (see HOP_CHAIN)
+            reward += self._hop_chain(s, prev, jump, human, pkind, in_run)
         blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         if BLIND_RULE:                                       # (rockets by where they land, below; plasma and grenades free)
             bill = blind & np.isin(self.weapon, (MG, SG, LG, RG, HMG))

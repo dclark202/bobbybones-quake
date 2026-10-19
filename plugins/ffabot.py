@@ -511,8 +511,8 @@ class ffabot(duelbot):
             self.next_check = now + 4
             last = max(bobbys, key=lambda p: max([k for k, n in enumerate(BOT_NAMES) if n in p.clean_name] or [99]))
             minqlx.console_command("clientkick {}".format(last.id))  # the last in the names' order leaves first
-        for b_ in bobbys:                                    # (BOBBY_AUTOHOP: duelbot.give_autohop)
-            _duel.give_autohop(b_, now, self.log)
+        for b_ in bobbys:                                    # (the network's AUTO_HOP, or BOBBY_AUTOHOP: duelbot.give_autohop)
+            _duel.give_autohop(b_, now, self.log, want=_duel.autohop_want(getattr(self, "P", None)))
         env, E = self.env, self.E
         here = {p.id: p for p in bobbys + people}
         for cid in [c for c in self.seat if c not in here]:

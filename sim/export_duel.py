@@ -46,6 +46,8 @@ env_vars = dict(ck.get("env_vars") or {})
 if "STYLE_P" in (ck.get("game_vars") or {}):                # (v0.3 on) trained with no styles, or with this share: the plugins draw by it
     env_vars["STYLE_P"] = str(ck["game_vars"]["STYLE_P"])
 env_vars.update(dict(x.split("=", 1) for x in a.set))
+env_vars.setdefault("AUTO_HOP", "1")                         # (v0.3.7) always said: the plugins put the bot's cg_autoHop to it (a checkpoint
+#                                                              that does not say was trained with the simulator's auto-hop, 1)
 round_secs = a.round_secs or float(ck.get("round_secs") or 0.0)
 legs = {}
 if str(env_vars.get("LEGS", "0")) not in ("0", "", "0.0"):   # a network with legs is nothing without their network
