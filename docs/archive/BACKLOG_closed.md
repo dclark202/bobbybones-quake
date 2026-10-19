@@ -6,7 +6,7 @@ open work is in [../BACKLOG.md](../BACKLOG.md). A closed item's result is in the
 
 Three were closed in the tidy-up of 2026-10-10 although their status still says open: B-24 (the trainer has these
 numbers: `acc_visible`, `aim_err_visible`, `on_target_visible`), B-69 (the public server is rented and running:
-[../guides/HOSTING.md](../guides/HOSTING.md)), B-142 (arena1 is dropped: B-162).
+`guides/HOSTING.md` (kept outside the repo since 2026-10-19)), B-142 (arena1 is dropped: B-162).
 
 | ID | P | Status | Item | Why / evidence |
 |---|---|---|---|---|

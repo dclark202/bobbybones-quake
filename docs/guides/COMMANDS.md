@@ -105,13 +105,13 @@ the people who come. A new network of Bobby has its own row and starts at the la
 is his number that moves, not the people's, when he has got better or worse.
 
 On the PC: `python tools/elo.py` prints the board and, per network and person, the frags made and taken with a 95%
-range (the files come with the daily `tools/pull_sessions.sh`).
+range (it reads the leaderboard's files, `ratings.json` and `frags.jsonl`, copied from a server's data folder).
 
 The server's owner (the Steam ID of `QLX_OWNER`) is marked in the leaderboard's files, so that his games, which may be
 tests, can be set apart: `"owner": 1` on his frag lines, `"owner": true` on his row (2026-10-12; `docs/guides/LOGS.md`).
 The board and the commands show him as anybody else.
 
-**The QLStats lookup** (off unless the server is started with `QLSTATS=1`; `docs/design/QLSTATS.md`, `docs/guides/HOSTING.md`).
+**The QLStats lookup** (off unless the server is started with `QLSTATS=1`; `docs/design/QLSTATS.md`).
 At a person's first join of a day the server asks qlstats.net for his public rating (his Steam id is in the request) and
 keeps the answer by his anonymous key. A person is told so in the welcome ("Ratings: I look up your public QLStats
 rating (your Steam id goes to qlstats.net) ... !qlstats off stops it.") and can switch it off for himself.
