@@ -497,7 +497,36 @@ def way_measure(store, keep=50, least=30, same=200.0):
     return out
 
 
-def gru_seq(cell, e, h0, done):
+def gru_layout(done_h, dev):
+    """(--learn-nosync) gru_seq's cut of the stretches worked out on the host from the done flags done_h [T, B] (a CPU
+    tensor): the same integers gru_seq works out on the card, sent over without waiting for it -> dict(reset, S, L, flat,
+    nz, h0rows) (flat, nz, h0rows on dev)"""
+    import torch
+    T, B = done_h.shape
+    dn = done_h > 0.5
+    st = torch.ones(T, B, dtype=torch.bool)
+    st[1:] = dn[:-1]
+    if not bool(st[1:].any()):
+        return dict(reset=False)
+    stb = st.t().reshape(-1)
+    sid = torch.cumsum(stb.long(), 0) - 1
+    S = int(sid[-1]) + 1
+    idx = torch.arange(B * T)
+    first = idx[stb]
+    pos = idx - first[sid]
+    L = int(pos.max()) + 1
+    flat = pos * S + sid
+    from0 = (first % T) == 0
+    nz = torch.nonzero(from0).squeeze(1)
+    h0rows = first[from0] // T
+    pin = dev.type == "cuda"
+
+    def up(x):
+        return (x.pin_memory() if pin else x).to(dev, non_blocking=pin)
+    return dict(reset=True, S=S, L=L, flat=up(flat), nz=up(nz), h0rows=up(h0rows))
+
+
+def gru_seq(cell, e, h0, done, lay=None):
     """(--fast-gru, B-237) his memory over whole sequences by the library's GRU (cuDNN on the card), the same numbers as
     stepping the GRUCell frame by frame with the memory reset after every frame whose done flag is set:
         h_t = cell(e_t, h_{t-1} * (1 - done_{t-1})),  h_{-1} = h0
@@ -508,10 +537,20 @@ def gru_seq(cell, e, h0, done):
     -> [T, B, H] the memory after each frame (before its reset), as the frame-by-frame loop's.
     Each player's frames are cut into stretches at his resets; a stretch starts from h0 (the rollout's first) or from
     zeros (after a reset), so the cut is exact. The stretches are laid side by side, padded at their ends to the
-    longest; a GRU only looks back, so the padding changes nothing that is read out (and gets no gradient)."""
+    longest; a GRU only looks back, so the padding changes nothing that is read out (and gets no gradient).
+      lay   (--learn-nosync) gru_layout()'s cut of these players, made on the host: the same integers, no waits for the card"""
     import torch
     T, B = done.shape
     w = [cell.weight_ih, cell.weight_hh, cell.bias_ih, cell.bias_hh]
+    if lay is not None:
+        if not lay["reset"]:
+            return torch._VF.gru(e, h0[None].contiguous(), w, True, 1, 0.0, cell.training, False, False)[0]
+        S, L, flat = lay["S"], lay["L"], lay["flat"]
+        ef = e.transpose(0, 1).reshape(B * T, e.shape[-1])
+        P = ef.new_zeros(L * S, e.shape[-1]).index_copy(0, flat, ef).view(L, S, e.shape[-1])
+        hi = h0.new_zeros(S, h0.shape[-1]).index_copy(0, lay["nz"], h0[lay["h0rows"]])
+        out = torch._VF.gru(P, hi[None], w, True, 1, 0.0, cell.training, False, False)[0]
+        return out.reshape(L * S, -1).index_select(0, flat).view(B, T, -1).transpose(0, 1).contiguous()
     dn = done.detach() > 0.5
     st = torch.ones(T, B, dtype=torch.bool, device=e.device)       # a stretch starts here: the first frame, or after a reset
     st[1:] = dn[:-1]
@@ -706,6 +745,18 @@ def main():
                          "can be larger; the pass's time goes with the number of pieces). 1 (default): the learning step's pieces")
     ap.add_argument("--overlap-priority", choices=("high", "equal"), default="high",
                     help="(--overlap) the rollout's stream on the card: high (above the learning step's, as first built) or equal")
+    ap.add_argument("--learn-nosync", type=int, default=0,
+                    help="(2026-10-19) 1: the learning step without its waits for the card, the same numbers (bit for bit on the CPU): "
+                         "Adam's step counts kept on the host (opt.pt loaded onto the card put them there: two waits a parameter "
+                         "every step), torch.distributions' argument checks off (a wait a distribution and a log-probability), each "
+                         "piece's players' indices taken to the host once an epoch, the host buffers' pieces sent from pinned memory "
+                         "without waiting, the fast GRU's cut and the advantages' frames worked out on the host, the counters summed "
+                         "on the card and read once an update, the teachers' distributions made only for the outputs they read. "
+                         "0 (default): as before")
+    ap.add_argument("--adam-fused", type=int, default=0,
+                    help="(2026-10-19) 1: torch's fused Adam (one kernel a group, its step counts on the card as the fused kernel "
+                         "wants them): rounding differs from the default (foreach) Adam's, so not the same numbers; for an A/B. "
+                         "opt.pt carries over both ways. 0 (default): as before")
     ap.add_argument("--aux", type=float, default=0.0,
                     help="stage B, part 1: the weight of the things he is asked to foretell from his memory (0 = off). Four small output "
                          "layers on his memory: where the unseen enemy is, where he next appears, how the fight ends, when the big items "
@@ -1481,7 +1532,7 @@ def main():
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))
                             and not (UNI_ON and n_.startswith(UNI_PFX))],
-                           lr=a.lr, eps=1e-5)                # (LEGS_IN: not the branch; --head: not the head)
+                           lr=a.lr, eps=1e-5, **({"fused": True} if a.adam_fused else {}))   # (LEGS_IN: not the branch; --head: not the head)
     if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
         opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
     if UNI_ON:                                               # (--legs-door-lr-scale) legs_door and the guide's weights in a group of their own
@@ -1516,7 +1567,18 @@ def main():
                 opt.load_state_dict(os_)
                 for g_, c_ in zip(opt.param_groups, sc_):     # (the rates are this run's, not the saved ones)
                     g_["lr_scale"], g_["lr"] = c_, a.lr * c_
-                print("optimizer: its state loaded from opt.pt", flush=True)
+                    if a.adam_fused:                          # (--adam-fused: the saved groups' own flag would put it back)
+                        g_["fused"], g_["foreach"] = True, None
+                n_st_ = 0
+                for st_ in opt.state.values():                # (a step count loaded onto the card: the default Adam reads it with
+                    if torch.is_tensor(st_.get("step")):      # .item(), a wait for the card a parameter twice every step)
+                        if a.adam_fused:
+                            st_["step"] = st_["step"].to(device=dev, dtype=torch.float32)
+                        elif a.learn_nosync and st_["step"].device.type != "cpu":
+                            st_["step"] = st_["step"].cpu()
+                            n_st_ += 1
+                print("optimizer: its state loaded from opt.pt{}".format(
+                    " (--learn-nosync: {} step counts moved to the host)".format(n_st_) if a.learn_nosync else ""), flush=True)
             except Exception as e_:                           # noqa: BLE001  (another layout of groups: a cold start)
                 print("optimizer: opt.pt does not fit ({}): a cold start".format(str(e_)[:120]), flush=True)
         else:
@@ -1779,6 +1841,79 @@ def main():
               "stale); the rollout's thread {}, switch interval {:g} ms; its inputs on the host ({:.2f} GB a buffer, two)".format(
                   "on its own stream of the card" if RS is not None else "on the CPU", a.overlap_switch_ms,
                   N * T * OBS_DIM * (2 if a.obs_half else 4) / 1e9), flush=True)
+    NOSYNC = bool(a.learn_nosync)                                        # (--learn-nosync) the learning step without its waits for the card
+    CHK_ = [None, None]                                                  # ... the piece's players on the host, and the card's index they are
+    XL_ = [None, None]                                                   # ... the card's index and the legs' inputs sent over for it
+    PIN = NOSYNC and dev.type == "cuda"
+    ADEV = dev if NOSYNC else None                                       # ... where the learning step's counters are summed (None: the host)
+    if NOSYNC:
+        torch.distributions.Distribution.set_default_validate_args(False)    # (the checks only raise on bad numbers: each waits for the card)
+        print("learn-nosync: the learning step's waits for the card taken out (the same numbers)", flush=True)
+
+    def FV_(t_):
+        """a counter's number: float(t_) (a wait for the card), or with --learn-nosync the number left on the card in float64"""
+        return t_.detach().double() if NOSYNC else float(t_)
+
+    def up_(x_):
+        """(--learn-nosync) a host tensor to the card from pinned memory, without waiting"""
+        return (x_.pin_memory() if PIN else x_).to(dev, non_blocking=PIN)
+
+    def BC_(y_, w_, n_):
+        """a counter of the classes y_ weighted by w_ (float64), n_ classes, on the host: torch.bincount(...).cpu(); with
+        --learn-nosync summed on the card by index_add_ (bincount waits for the card to learn its length)"""
+        if not NOSYNC:
+            return torch.bincount(y_, weights=w_, minlength=n_).cpu()
+        return torch.zeros(n_, dtype=torch.float64, device=y_.device).index_add_(0, y_, w_)
+
+    def HC_(t_):
+        """a counter's numbers into a host counter: t_.cpu(), or with --learn-nosync left on the card (the counters are there)"""
+        return t_ if NOSYNC else t_.cpu()
+
+    def hchunk(chunk):
+        """the piece's players' indices on the host: chunk.cpu(), or (--learn-nosync) the host copy made once an epoch"""
+        return CHK_[0] if (NOSYNC and CHK_[1] is chunk) else chunk.cpu()
+
+    def hsel(src, dim, chunk, ih_=None):
+        """the rows of these players (axis dim) of src, on the card: as src[:, ih_].to(dev) (dim 1) and
+        src.index_select(0, ih_).to(dev) (dim 0), ih_ the players on the host (chunk.cpu() if not given); with --learn-nosync
+        gathered into pinned memory and sent without waiting"""
+        if not NOSYNC:
+            ih_ = chunk.cpu() if ih_ is None else ih_
+            return (src[:, ih_] if dim == 1 else src.index_select(0, ih_)).to(dev)
+        if src.device == dev:
+            return src.index_select(dim, chunk)
+        ih_ = hchunk(chunk) if ih_ is None else ih_
+        sh_ = list(src.shape)
+        sh_[dim] = len(ih_)
+        b_ = torch.empty(sh_, dtype=src.dtype, pin_memory=PIN)
+        torch.index_select(src, dim, ih_, out=b_)
+        return b_.to(dev, non_blocking=PIN)
+
+    def legs_x_of(chunk):
+        """(LEGS_IN) the legs' inputs of these players on the card (--learn-nosync: sent once a piece, kept for its other reads)"""
+        if NOSYNC and XL_[0] is chunk:
+            return XL_[1]
+        x_ = hsel(b_lx, 1, chunk)
+        if NOSYNC:
+            XL_[:] = [chunk, x_]
+        return x_
+
+    class LazyDists:
+        """(--learn-nosync) dists(logits), each output's distribution made when it is first read (a teacher reads one or two)"""
+
+        def __init__(self, lg_):
+            self.parts, self.d = lg_.split(ACTION_DIMS, -1), {}
+
+        def __getitem__(self, j_):
+            if j_ not in self.d:
+                self.d[j_] = torch.distributions.Categorical(logits=self.parts[j_])
+            return self.d[j_]
+
+        def __len__(self):
+            return len(self.parts)
+
+        def __iter__(self):
+            return (self[j_] for j_ in range(len(self.parts)))
     CARRY = dict(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp)    # from rollout to rollout
 
     def pre_rollout(upd):
@@ -2239,6 +2374,8 @@ def main():
             for g in opt.param_groups:
                 g["lr"] = lr_now * g.get("lr_scale", 1.0)
         n_mb = a.minibatches
+        DN_H = b_done.cpu() if NOSYNC else None                          # (--learn-nosync) the done flags and the learner's frames on the
+        WP_H = (b_w > 0).cpu() if NOSYNC else None                       # host, once an update (gru_layout, the advantages' frames)
         kick = a.teach * max(0.0, 1.0 - (mins - fade0) / a.teach_minutes)
         if a.teach_warm > 0:
             kick *= min(1.0, max(0.0, mins - fade0) / a.teach_warm)
@@ -2280,16 +2417,16 @@ def main():
         def seq_pass(chunk, hh):
             """his outputs over the rollout's whole sequences for these players: the encoder, the attention part and the output
             layers in one go each, only his memory frame by frame -> (logits, value, memories, the two long values or None)"""
-            xs_ = b_obs[:, chunk].float() if not OVL else b_obs.index_select(0, chunk.cpu()).to(dev).float().transpose(0, 1).contiguous()
+            xs_ = b_obs[:, chunk].float() if not OVL else hsel(b_obs, 0, chunk).float().transpose(0, 1).contiguous()
             e_ = pol.enc(xs_)
             if pol.attn is not None:
                 if ATT_MEM:                                              # (--attn-mem-query) the query reads h_{t-1} as he played it
-                    e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM), hm=b_hq[:, chunk.cpu()].to(dev).float().reshape(-1, H)).view(T, len(chunk), -1)
+                    e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM), hm=hsel(b_hq, 1, chunk).float().reshape(-1, H)).view(T, len(chunk), -1)
                 else:
                     e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM)).view(T, len(chunk), -1)
             dadd_ = gadd_ = None
             if UNI_ON:                                                   # (--legs-feat, --legs-guide) the branch on this piece's inputs
-                xlc_ = b_lx[:, chunk.cpu()].to(dev)
+                xlc_ = legs_x_of(chunk)
                 dadd_, gadd_ = pol.uni_parts(xlc_)
                 if UNI_GUIDE:
                     UG_[1], UG_[2] = LU_.t_branch(pol.legs, xlc_)[1], LU_.t_way(xlc_)
@@ -2314,7 +2451,7 @@ def main():
                 hd_secs[1] += time.time() - t_
                 return gd_(head_logits(lg_h, ho_["tadd"], ho_["wadd"]), hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
-                hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk])
+                hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk], lay=gru_layout(DN_H[:, hchunk(chunk)], dev) if NOSYNC else None)
             else:
                 dn_ = (1.0 - b_done[:, chunk])[..., None]
                 hs_l = []
@@ -2329,12 +2466,13 @@ def main():
 
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
         OVK_ = [0.0]                                                     # (decoupled) KL(played || now) in the last pass
-        klh = np.zeros(len(ACTION_DIMS))
+        klh = np.zeros(len(ACTION_DIMS)) if not NOSYNC else torch.zeros(len(ACTION_DIMS), dtype=torch.float64, device=dev)
         old_h = None
         if not DEC and a.kl_heads and (update % a.kl_heads == 0 or update <= 20):    # the log-probability of what he did, per head, before the update
             with torch.no_grad():
                 old_h = torch.zeros(T, N, len(ACTION_DIMS), device=dev)
-                for chunk in torch.arange(N, device=dev).chunk(n_mb):
+                for chunk, ch_h in zip(torch.arange(N, device=dev).chunk(n_mb), torch.arange(N).chunk(n_mb)):
+                    CHK_[:] = [ch_h, chunk]                              # (--learn-nosync: the piece's players on the host)
                     hh = h0[chunk]
                     lgs = []
                     if HAS_CELLS:
@@ -2363,7 +2501,7 @@ def main():
             AUX_Y, AUX_M, AUX_C = torch.cat(ys_, 1), torch.cat(ms_, 1), torch.cat(cs_, 1)      # (off the card: a piece goes over with its minibatch)
             ys_ = ms_ = cs_ = None
             aux_secs = time.time() - t_aux
-            ax_s, ax_n, ax_w = torch.zeros(len(AUX_MI), dtype=torch.float64), torch.zeros(6, dtype=torch.float64), 0.0
+            ax_s, ax_n, ax_w = torch.zeros(len(AUX_MI), dtype=torch.float64, device=ADEV), torch.zeros(6, dtype=torch.float64, device=ADEV), 0.0
             if AUX_Q:                                                    # (2026-10-12) the labels of the questions beside the four, the same way
                 t_aux = time.time()
                 ks_, ms_ = [], []
@@ -2381,11 +2519,11 @@ def main():
                         ms_.append(m_)
                     AUX_N, AUX_NM = torch.cat(ks_, 1), torch.cat(ms_, 1)
                     ks_ = ms_ = None
-                    nx_s, nx_n = torch.zeros(6, dtype=torch.float64), torch.zeros(4, dtype=torch.float64)      # sums: 2 losses, 4 x called right; weights
-                    nx_h = [torch.zeros(AUX_NN["target"], dtype=torch.float64) for _ in range(4)]             # how often each landmark is the true one
+                    nx_s, nx_n = torch.zeros(6, dtype=torch.float64, device=ADEV), torch.zeros(4, dtype=torch.float64, device=ADEV)      # sums: 2 losses, 4 x called right; weights
+                    nx_h = [torch.zeros(AUX_NN["target"], dtype=torch.float64, device=ADEV) for _ in range(4)]             # how often each landmark is the true one
                 guess_secs = time.time() - t_aux
-                gx_s, gx_n = torch.zeros(11, dtype=torch.float64), torch.zeros(6, dtype=torch.float64)      # sums: 5 losses, 5 x called right, the target
-                gx_h = [torch.zeros(n_, dtype=torch.float64) for n_ in AUX_KN]                              # unseen; weights; how often each answer is true
+                gx_s, gx_n = torch.zeros(11, dtype=torch.float64, device=ADEV), torch.zeros(6, dtype=torch.float64, device=ADEV)      # sums: 5 losses, 5 x called right, the target
+                gx_h = [torch.zeros(n_, dtype=torch.float64, device=ADEV) for n_ in AUX_KN]                              # unseen; weights; how often each answer is true
         if AUX_W > 0 and AUX2:                                           # (v0.2.2) the labels again, by aux2_labels: the tail of the rollout before,
             AX2_ = aux2_labels(b_aux, b_done.cpu(), b_bel, AUX_IX, AUX_FR, AUX_FW if AUX_Q else 0,   # his life's first seconds, the enemy unseen
                                AUX_NW if "near" in AUX_Q else 0, bool(AUX_Q), "near" in AUX_Q, AUX_FRESH, AUX_UNSEEN, AUX_TW, AUX_TAILD, AUX_LIFE)
@@ -2401,13 +2539,13 @@ def main():
                 AUX_TAILD.update(h=b_ht, w=b_w[T - AUX_TW:].cpu())
             AX2_ = None
         if AUX_W > 0 and AUX_MEAS:                                       # (--aux-measure) bands: nothing believed, believed 0-2 s ago, 2-7.5 s, 7.5-20 s;
-            mb_s = torch.zeros(4, 4, dtype=torch.float64)                # frames, his memory's error, the belief's (nothing believed: the zero
+            mb_s = torch.zeros(4, 4, dtype=torch.float64, device=ADEV)                # frames, his memory's error, the belief's (nothing believed: the zero
             AUX_BL = b_bel[:T]                                           # answer's), frames his memory was nearer
-        ll_acc = torch.zeros(8, dtype=torch.float64)                     # (--legs-learn) the learner's frames, of them the branch's (turn), its
+        ll_acc = torch.zeros(8, dtype=torch.float64, device=ADEV)                     # (--legs-learn) the learner's frames, of them the branch's (turn), its
         #                                                                  KL in the last pass (sum, pieces), the first piece's largest |log p - log p
         #                                                                  at play| before any step, its entropy (sum), the gradient's size (sum, count)
         ll_first = [True]
-        ug_acc = torch.zeros(len(L_TAKES), 3, dtype=torch.float64)      # (--legs-guide) by guided output, the first pass: the frames his own
+        ug_acc = torch.zeros(len(L_TAKES), 3, dtype=torch.float64, device=ADEV)      # (--legs-guide) by guided output, the first pass: the frames his own
         #                                                                  output counted with the branch having a way, of them his choice the
         #                                                                  branch's likeliest, the chance a draw of the branch's equals his
         ug_first = [None]                                                # (--legs-feat, --legs-guide) the first piece's largest |log p - log p
@@ -2451,7 +2589,7 @@ def main():
                         hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
                         lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                         if LEGS_LEARN:
-                            lgl_ = pol.legs_comb(legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev)), hs_)
+                            lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
                             lp_ = lp_ + legs_lp(lgl_, b_lr[:, chunk], b_dec[:, chunk], b_lo[:, chunk])[0]
                         w_ = b_w[:, chunk]
                         SK_ += torch.stack([w_.sum(), ((b_logp[:, chunk] - lp_) * w_).sum()]).double().cpu()
@@ -2467,7 +2605,9 @@ def main():
                 if a.kl_heads and (update % a.kl_heads == 0 or update <= 20):
                     old_h = torch.zeros(T, N, len(ACTION_DIMS), device=dev)
                 t_px = time.time()
-                for chunk in torch.arange(N, device=dev).chunk(max(1, n_mb // max(1, a.overlap_prox_merge))):
+                for chunk, ch_h in zip(torch.arange(N, device=dev).chunk(max(1, n_mb // max(1, a.overlap_prox_merge))),
+                                       torch.arange(N).chunk(max(1, n_mb // max(1, a.overlap_prox_merge)))):
+                    CHK_[:] = [ch_h, chunk]                              # (--learn-nosync: the piece's players on the host)
                     lg_, v_, hs_, v2_ = seq_pass(chunk, h0[chunk])
                     if ORDER:
                         lg_ = ord_lg(pol, lg_, b_act[:, chunk])
@@ -2479,7 +2619,7 @@ def main():
                             old_h[:, chunk, j] = l_
                         lp_ = lp_ + l_ * (1.0 if hm_[j] is None else hm_[j])
                     if LEGS_LEARN:                                       # (the legs' part, as in the learning passes)
-                        lgl_ = pol.legs_comb(legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev)), hs_)
+                        lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
                         lp_ = lp_ + legs_lp(lgl_, b_lr[:, chunk], b_dec[:, chunk], b_lo[:, chunk])[0]
                     LP_PX[:, chunk] = lp_
                     V_PX[:, chunk] = v_
@@ -2514,7 +2654,7 @@ def main():
                     hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
                     lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                     if LEGS_LEARN:                                       # (the legs' part of the ratio, as in the learning passes)
-                        lgl_ = pol.legs_comb(legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev)), hs_)
+                        lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
                         lp_ = lp_ + legs_lp(lgl_, b_lr[:, chunk], b_dec[:, chunk], b_lo[:, chunk])[0]
                     w_ = b_w[:, chunk]
                     d_ = b_logp[:, chunk] - lp_
@@ -2524,7 +2664,10 @@ def main():
         for epoch in range(3):
             HO_[2] = epoch == 0
             perm = torch.randperm(N, device=dev)
-            for chunk in perm.chunk(n_mb):                               # whole sequences per player
+            perm_h = perm.cpu().chunk(n_mb) if NOSYNC else None          # (--learn-nosync) the pieces' players on the host, once an epoch
+            for k_mb, chunk in enumerate(perm.chunk(n_mb)):              # whole sequences per player
+                if NOSYNC:
+                    CHK_[:] = [perm_h[k_mb], chunk]
                 hh = h0[chunk]
                 lgs, vals, hs = [], [], []
                 if HAS_CELLS:
@@ -2546,15 +2689,15 @@ def main():
                         hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
                         for i_, (o_, mp_) in enumerate(UGM.mapped(UG_[1])):
                             m_ = (1.0 if hmu_[o_] is None else hmu_[o_]) * UG_[2] * b_w[:, chunk]
-                            ug_acc[i_] += torch.stack([m_.sum(), ((mp_.argmax(-1) == b_act[:, chunk, o_]).float() * m_).sum(),
-                                                       ((ds[o_].probs * mp_.exp()).sum(-1) * m_).sum()]).double().cpu()
+                            ug_acc[i_] += HC_(torch.stack([m_.sum(), ((mp_.argmax(-1) == b_act[:, chunk, o_]).float() * m_).sum(),
+                                                       ((ds[o_].probs * mp_.exp()).sum(-1) * m_).sum()]).double())
                 if a.teach_trunk < 1.0 and (kick > 0 or wk > 0 or ik > 0):
                     hs_ = hs_all                                         # the same outputs, the shared layers held back
-                    dst = dists(pi_t(a.teach_trunk * hs_ + (1.0 - a.teach_trunk) * hs_.detach()))
+                    dst = (LazyDists if NOSYNC else dists)(pi_t(a.teach_trunk * hs_ + (1.0 - a.teach_trunk) * hs_.detach()))
                 dstm = dst                                               # ... and what the movement teacher's loss reads (--teach-trunk-move)
                 if kick > 0 and a.teach_trunk_move >= 0 and a.teach_trunk_move != a.teach_trunk:
                     tm_ = a.teach_trunk_move
-                    dstm = ds if tm_ >= 1.0 else dists(pi_t(tm_ * hs_all + (1.0 - tm_) * hs_all.detach()))
+                    dstm = ds if tm_ >= 1.0 else (LazyDists if NOSYNC else dists)(pi_t(tm_ * hs_all + (1.0 - tm_) * hs_all.detach()))
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
@@ -2563,7 +2706,7 @@ def main():
                 ent = sum(w_ * dd.entropy() * (1.0 if hm[j] is None else hm[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's part of what he did, the same advantage
-                    lgl_ = pol.legs_comb(legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev)), hs_all)    # (--legs-residual)
+                    lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_all)    # (--legs-residual)
                     lpl_, dsl_, msl_ = legs_lp(lgl_, b_lr[:, chunk], dc, b_lo[:, chunk])
                     if UNI_RES and a.legs_residual_ent > 0:              # (--legs-residual-ent) on his legs, at his own outputs' weights
                         ent = ent + a.legs_residual_ent * sum(w_ * d_.entropy() * m_ for w_, d_, m_ in zip(ent_heads[:4], dsl_, msl_))
@@ -2574,21 +2717,22 @@ def main():
                         #                                                  sideways, jump as his vertical key, turn) times --legs-ent
                     with torch.no_grad():
                         if epoch == 0:
-                            ll_acc[0] += float(wgt.sum())
-                            ll_acc[1] += float((msl_[3] * wgt).sum())
-                            ll_acc[5] += float((enl_ * wgt).sum())
+                            ll_acc[0] += FV_(wgt.sum())
+                            ll_acc[1] += FV_((msl_[3] * wgt).sum())
+                            ll_acc[5] += FV_((enl_ * wgt).sum())
                         if ll_first[0]:                                  # (before any step: the ratio's legs part is 1 to rounding)
-                            ll_acc[4] = float(((lpl_ - b_llp[:, chunk]).abs() * (wgt > 0)).max())
+                            ll_acc[4] = FV_(((lpl_ - b_llp[:, chunk]).abs() * (wgt > 0)).max())
                             ll_first[0] = False
                         if epoch == 2:
-                            ll_acc[2] += float(((b_llp[:, chunk] - lpl_) * wgt).sum() / wgt.sum().clamp(min=1.0))
+                            ll_acc[2] += FV_(((b_llp[:, chunk] - lpl_) * wgt).sum() / wgt.sum().clamp(min=1.0))
                             ll_acc[3] += 1.0
                 if UNI_ON and ug_first[0] is None:                       # (before any step: the pass's log p is the rollout's to rounding)
                     with torch.no_grad():
-                        ug_first[0] = float(((lp - (LP_PX[:, chunk] if DEC else b_logp[:, chunk])).abs() * (wgt > 0)).max())   # (decoupled: the proximal pass's)
+                        ug_first[0] = FV_(((lp - (LP_PX[:, chunk] if DEC else b_logp[:, chunk])).abs() * (wgt > 0)).max())   # (decoupled: the proximal pass's)
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
-                ad = (ad - (ad * wgt).sum() / wsum) / (ad[wgt > 0].std() + 1e-8)
+                ad = (ad - (ad * wgt).sum() / wsum) / ((ad[wgt > 0] if not NOSYNC else          # (--learn-nosync: the same frames, found on the host)
+                                                        ad.reshape(-1).index_select(0, up_(WP_H[:, hchunk(chunk)].reshape(-1).nonzero().squeeze(1)))).std() + 1e-8)
                 if DEC:                                                  # (decoupled PPO) the ratio against the learner before this update,
                     ratio = (lp - LP_PX[:, chunk]).exp()                 # the frames weighted by pi_prox / pi_played (capped)
                     isw = ISW[:, chunk]
@@ -2596,26 +2740,26 @@ def main():
                         with torch.no_grad():                            # the learner's own step, KL(prox || now), per head too)
                             iw_ = isw * wgt
                             iws_ = iw_.sum().clamp(min=1e-6)
-                            kl_sum += float(((LP_PX[:, chunk] - lp) * iw_).sum() / iws_)
-                            cf_sum += float((((ratio - 1.0).abs() > clip).float() * iw_).sum() / iws_)
+                            kl_sum += FV_(((LP_PX[:, chunk] - lp) * iw_).sum() / iws_)
+                            cf_sum += FV_((((ratio - 1.0).abs() > clip).float() * iw_).sum() / iws_)
                             kl_n += 1
-                            OVK_[0] += float(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)     # KL(played || now), as plain PPO's kl
+                            OVK_[0] += FV_(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)     # KL(played || now), as plain PPO's kl
                             if old_h is not None:
                                 for j, dd in enumerate(ds):
                                     mk_ = 1.0 if hm[j] is None else hm[j]
-                                    klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * iw_).sum() / iws_)
+                                    klh[j] += FV_(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * iw_).sum() / iws_)
                     pg = -(isw * torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
                 else:
                     ratio = (lp - b_logp[:, chunk]).exp()
                     if epoch == 2:
                         with torch.no_grad():
-                            kl_sum += float(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)
-                            cf_sum += float((((ratio - 1.0).abs() > clip).float() * wgt).sum() / wsum)
+                            kl_sum += FV_(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)
+                            cf_sum += FV_((((ratio - 1.0).abs() > clip).float() * wgt).sum() / wsum)
                             kl_n += 1
                             if old_h is not None:
                                 for j, dd in enumerate(ds):
                                     mk_ = 1.0 if hm[j] is None else hm[j]
-                                    klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * wgt).sum() / wsum)
+                                    klh[j] += FV_(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * wgt).sum() / wsum)
                     pg = -(torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
                 vl = (0.5 * (v - ret[:, chunk]).pow(2) * wgt).sum() / wsum
                 if LONG:
@@ -2667,13 +2811,13 @@ def main():
                             hd_acc[10] += float((hi_c.norm(dim=-1) * ir_).sum())
                             hd_acc[11] += float(ir_.sum())
                 if AUX_W > 0:                                            # (--aux) what he is asked to foretell from his memory
-                    ci_ = chunk.cpu()
-                    ay_, am_, ac_ = AUX_Y[:, ci_].to(dev).float(), AUX_M[:, ci_].to(dev), AUX_C[:, ci_].to(dev).long()
+                    ci_ = hchunk(chunk)
+                    ay_, am_, ac_ = hsel(AUX_Y, 1, chunk, ci_).float(), hsel(AUX_M, 1, chunk, ci_), hsel(AUX_C, 1, chunk, ci_).long()
                     hx_ = hs_all if a.aux_trunk >= 1.0 else a.aux_trunk * hs_all + (1.0 - a.aux_trunk) * hs_all.detach()   # (as --teach-trunk)
                     wa_ = wgt                                            # (the learner's frames; --aux-tail: the rollout before's last frames in front)
                     if AUX_TWN:
-                        hx_ = torch.cat([AUX_TH[:, ci_].to(dev).float(), hx_])
-                        wa_ = torch.cat([AUX_TWG[:, ci_].to(dev), wgt])
+                        hx_ = torch.cat([hsel(AUX_TH, 1, chunk, ci_).float(), hx_])
+                        wa_ = torch.cat([hsel(AUX_TWG, 1, chunk, ci_), wgt])
                     wm_ = am_.float() * wa_[..., None]                   # a label is there, on the learner's frames
                     wn_ = wm_.sum((0, 1)).clamp(min=1.0)
                     o_fi = aux_o("fight", hx_)
@@ -2688,8 +2832,8 @@ def main():
                                fight=(ce_ * wm_[..., 2]).sum() / wn_[2] + (e_dm.pow(2) * wm_[..., 3]).sum() / wn_[3],
                                items=(e_it[..., 0].pow(2) * wm_[..., 4]).sum() / wn_[4] + (e_it[..., 1].pow(2) * wm_[..., 5]).sum() / wn_[5])
                     if AUX_Q:                                            # (2026-10-12) what the enemy goes for, how strong he is, who takes the big items
-                        ak_ = AUX_K[:, ci_].to(dev).long()
-                        wk_ = AUX_KM[:, ci_].to(dev).float() * wa_[..., None]        # a label is there, on the learner's frames
+                        ak_ = hsel(AUX_K, 1, chunk, ci_).long()
+                        wk_ = hsel(AUX_KM, 1, chunk, ci_).float() * wa_[..., None]        # a label is there, on the learner's frames
                         wkn_ = wk_.sum((0, 1)).clamp(min=1.0)
                         og_ = {h_: aux_o(h_, hx_) for h_ in AUX_Q}
                         cg_ = {}                                         # label j: its outputs, its loss frame by frame, the true answer
@@ -2700,8 +2844,8 @@ def main():
                         for h_ in AUX_Q:
                             al_[h_] = sum((cg_[j_][1] * wk_[..., j_]).sum() / wkn_[j_] for j_ in range(5) if AUX_KO[j_][0] == h_)
                     if "near" in AUX_Q:                                  # (near) two answers over the intentions: now, later
-                        an_ = AUX_N[:, ci_].to(dev).long().clamp(max=AUX_NN["target"] - 1)
-                        wr_ = AUX_NM[:, ci_].to(dev).float() * wa_[..., None]
+                        an_ = hsel(AUX_N, 1, chunk, ci_).long().clamp(max=AUX_NN["target"] - 1)
+                        wr_ = hsel(AUX_NM, 1, chunk, ci_).float() * wa_[..., None]
                         wrn_ = wr_.sum((0, 1)).clamp(min=1.0)
                         on_ = og_["near"].view(og_["near"].shape[0], og_["near"].shape[1], 2, AUX_NN["target"])
                         cn_ = nn.functional.cross_entropy(on_.reshape(-1, AUX_NN["target"]), an_.reshape(-1), reduction="none").view(an_.shape)
@@ -2716,42 +2860,46 @@ def main():
                                                e_dm.pow(2), e_dm.abs() * 100.0, ay_[..., 5].abs() * 100.0,
                                                e_it[..., 0].pow(2), e_it[..., 0].abs() * 40.0, ay_[..., 6].abs() * 40.0,
                                                e_it[..., 1].pow(2), e_it[..., 1].abs() * 40.0, ay_[..., 7].abs() * 40.0], -1)
-                            ax_s += (mv_ * wm_[..., AUX_MI]).sum((0, 1)).double().cpu()
-                            ax_n += wm_.sum((0, 1)).double().cpu()
-                            ax_w += float(wgt.sum())
+                            ax_s += HC_((mv_ * wm_[..., AUX_MI]).sum((0, 1)).double())
+                            ax_n += HC_(wm_.sum((0, 1)).double())
+                            ax_w += FV_(wgt.sum())
                             if AUX_MEAS:                                 # (--aux-measure) his memory against his belief inputs, where place is asked
-                                bl_ = AUX_BL[:, ci_].to(dev)
+                                bl_ = hsel(AUX_BL, 1, chunk, ci_)
                                 wp_ = wm_[AUX_TWN:, :, 0]
                                 tr_ = ay_[AUX_TWN:, :, 0:3] * 1500.0
                                 hd_ = e_pl[AUX_TWN:].norm(dim=-1) * 1500.0
                                 ok_ = bl_[..., 0] > 0.5
                                 be_ = torch.where(ok_, (bl_[..., 1:4] * 1500.0 - tr_).norm(dim=-1), tr_.norm(dim=-1))
                                 bd_ = torch.full(ok_.shape, 3, dtype=torch.long, device=dev)
-                                bd_[bl_[..., 4] < 0.99999] = 2
-                                bd_[bl_[..., 4] * AUX_BEL_AGE < 2.0] = 1
-                                bd_[~ok_] = 0
+                                if not NOSYNC:
+                                    bd_[bl_[..., 4] < 0.99999] = 2
+                                    bd_[bl_[..., 4] * AUX_BEL_AGE < 2.0] = 1
+                                    bd_[~ok_] = 0
+                                else:                                    # (--learn-nosync: the same, without a boolean index's wait)
+                                    bd_.masked_fill_(bl_[..., 4] < 0.99999, 2)
+                                    bd_.masked_fill_(bl_[..., 4] * AUX_BEL_AGE < 2.0, 1)
+                                    bd_.masked_fill_(~ok_, 0)
                                 for b_ in range(4):
                                     w_ = wp_ * (bd_ == b_).float()
-                                    mb_s[b_] += torch.stack([w_.sum(), (hd_ * w_).sum(), (be_ * w_).sum(), ((hd_ < be_).float() * w_).sum()]).double().cpu()
+                                    mb_s[b_] += HC_(torch.stack([w_.sum(), (hd_ * w_).sum(), (be_ * w_).sum(), ((hd_ < be_).float() * w_).sum()]).double())
                             if AUX_Q:
                                 for j_, (o_, c_, y_) in cg_.items():
                                     r_ = (o_.argmax(-1) == y_).float()
-                                    gx_s[j_] += float((c_ * wk_[..., j_]).sum())
-                                    gx_s[5 + j_] += float((r_ * wk_[..., j_]).sum())
-                                    gx_h[j_] += torch.bincount(y_.reshape(-1), weights=wk_[..., j_].reshape(-1).double(), minlength=AUX_KN[j_]).cpu()
+                                    gx_s[j_] += FV_((c_ * wk_[..., j_]).sum())
+                                    gx_s[5 + j_] += FV_((r_ * wk_[..., j_]).sum())
+                                    gx_h[j_] += BC_(y_.reshape(-1), wk_[..., j_].reshape(-1).double(), AUX_KN[j_])
                                     if j_ == 0:                          # ... the target on the frames the enemy is not in view
-                                        gx_s[10] += float((r_ * wk_[..., 5]).sum())
-                                        gx_h[5] += torch.bincount(y_.reshape(-1), weights=wk_[..., 5].reshape(-1).double(), minlength=AUX_KN[5]).cpu()
-                                gx_n += wk_.sum((0, 1)).double().cpu()
+                                        gx_s[10] += FV_((r_ * wk_[..., 5]).sum())
+                                        gx_h[5] += BC_(y_.reshape(-1), wk_[..., 5].reshape(-1).double(), AUX_KN[5])
+                                gx_n += HC_(wk_.sum((0, 1)).double())
                                 if "near" in AUX_Q:
                                     rn_ = (on_.argmax(-1) == an_).float()        # [T, players, 2]
                                     for j_ in range(4):                          # now, later; the same with the enemy not in view
-                                        nx_s[2 + j_] += float((rn_[..., j_ % 2] * wr_[..., j_]).sum())
-                                        nx_h[j_] += torch.bincount(an_[..., j_ % 2].reshape(-1), weights=wr_[..., j_].reshape(-1).double(),
-                                                                   minlength=AUX_NN["target"]).cpu()
-                                    nx_s[0] += float((cn_[..., 0] * wr_[..., 0]).sum())
-                                    nx_s[1] += float((cn_[..., 1] * wr_[..., 1]).sum())
-                                    nx_n += wr_.sum((0, 1)).double().cpu()
+                                        nx_s[2 + j_] += FV_((rn_[..., j_ % 2] * wr_[..., j_]).sum())
+                                        nx_h[j_] += BC_(an_[..., j_ % 2].reshape(-1), wr_[..., j_].reshape(-1).double(), AUX_NN["target"])
+                                    nx_s[0] += FV_((cn_[..., 0] * wr_[..., 0]).sum())
+                                    nx_s[1] += FV_((cn_[..., 1] * wr_[..., 1]).sum())
+                                    nx_n += HC_(wr_.sum((0, 1)).double())
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
                     tl = b_teach[:, chunk]
                     tm = (tl[..., 0] >= 0).float() * wgt
@@ -2841,7 +2989,7 @@ def main():
                     print("legs inside: the first backward reached {} of the branch's {} tensors ({})".format(
                         LEGS_SAID[0], len(list(pol.legs.parameters())), "learning: all" if LEGS_LEARN else "frozen: none"), flush=True)
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's gradient is clipped on its own: the
-                    ll_acc[6] += float(nn.utils.clip_grad_norm_(pol.legs.parameters(), 0.5))    # rest's step is as without it
+                    ll_acc[6] += FV_(nn.utils.clip_grad_norm_(pol.legs.parameters(), 0.5))    # rest's step is as without it
                     ll_acc[7] += 1.0
                 if HEADL:                                                # (--head) the head's gradient is clipped on its own: the rest's
                     hd_acc[12] += float(nn.utils.clip_grad_norm_(pol.head.parameters(), 0.5))       # step is as without it
@@ -2862,6 +3010,22 @@ def main():
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
+        if NOSYNC:                                                       # (--learn-nosync) the counters summed on the card, read once
+            CHK_[:] = [None, None]
+            XL_[:] = [None, None]
+            kl_sum, cf_sum, OVK_[0] = float(kl_sum), float(cf_sum), float(OVK_[0])
+            klh = klh.cpu().numpy()
+            ll_acc, ug_acc = ll_acc.cpu(), ug_acc.cpu()
+            if torch.is_tensor(ug_first[0]):
+                ug_first[0] = float(ug_first[0])
+            if AUX_W > 0:
+                ax_s, ax_n, ax_w = ax_s.cpu(), ax_n.cpu(), float(ax_w)
+                if AUX_MEAS:
+                    mb_s = mb_s.cpu()
+                if AUX_Q:
+                    gx_s, gx_n, gx_h = gx_s.cpu(), gx_n.cpu(), [x_.cpu() for x_ in gx_h]
+                    if "near" in AUX_Q:
+                        nx_s, nx_n, nx_h = nx_s.cpu(), nx_n.cpu(), [x_.cpu() for x_ in nx_h]
         if SLOW:                                                         # (--slow-mem) the rollout's ticks join the ring
             RING.push(SL_PEND)
             SL_PEND = []
