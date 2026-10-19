@@ -1258,11 +1258,49 @@ RAIL_START_COLS = ("rail starts begun", "asked for with no mid moment saved: a w
                    "seconds to that first shot, summed", "placements that took another pair (a line or the room not clear)",
                    "the start distance, summed", "rail starts ended in the second half of the matches (the first seat is his)",
                    "of those: he won", "level", "he lost")
-MOMENT_P = MID_START_P + SPAWN_START_P + RAIL_START_P
+#   PRO_START_P=<share>   (v0.3.7, the owner's go of 2026-10-19: "this is what I thought they were. Can we do that instead?")
+#                 pro starts: rounds that begin at a moment of a pros' duel on this map (sim/pro_moments/<map>.npz of
+#                 tools/pro_moments.py: every few seconds of the demos' live games, both players in play, the items' states
+#                 known). A share of the games' time beside GAME_P, MID_START_P and the rest, counted like them (a round's kind
+#                 is drawn by share / length; the length is the map's moments' mean of the game time left). The round begins
+#                 as a whole game does (_game_start: both seats networks, the round's reset: nothing is known, the memory
+#                 empty) and is then put at the moment (after the reset, as a late round's draw is):
+#                   the two players   each seat one of the two pros, which drawn evenly (zero-sum: the seats are alike):
+#                                   place, speed (the game's), view (yaw and pitch), health, armor, the weapons he owns
+#                                   (those the map has, the machine gun and the gauntlet always), their ammunition (at most
+#                                   AMMO_MAX), the weapon in hand (ready: no switch, no reload), the seconds of his life;
+#                                   one pro's stack is read from the demo's player state, the other's worked out (see
+#                                   tools/pro_moments.py: no demo holds the other player's stats)
+#                   the game        the score (frags each), the clock (the game's frame), WIN_PAY's chance from them, the
+#                                   items: each there or back in its seconds; dropped weapons and rockets in the air: none
+#                   his knowledge   what that pro could know and nothing else: the items he took himself are known to him
+#                                   (when back: the item belief, the v0.2 "when he last took it", the mega and red clocks),
+#                                   as _late_start does for its taker; of the enemy nothing (where, his stack: EN_STACK's
+#                                   "nothing known"); the senses fill it from the first frame (the enemy is often in
+#                                   view: a moment needs him sent, so in the PVS). No warm-in: nothing he could not know is
+#                                   given, and the network's memory starts empty as at every round.
+#                 Then it is a mid-game start: game kind 3 (PRO_START_LEN=0, the default: to the game's limit, overtime as
+#                 there) or kind 4 for PRO_START_LEN seconds; normal pay (WIN_PAY from the chance at the moment). No moment
+#                 is saved from it (mid or spawn). A map without the file has none: its share goes to the other kinds by
+#                 their shares. A training switch (a curriculum), not a PLAY_VAR: the servers need nothing.
+#                 Counters: stats["pro_start"] (PRO_START_COLS).
+PRO_START_P = float(os.environ.get("PRO_START_P") or 0.0)
+PRO_START_LEN = float(os.environ.get("PRO_START_LEN") or 0.0)
+PRO_KIND = 3 if PRO_START_LEN <= 0 else 4                 # (the game kind of its frames: a mid-game start's, or a spawn start's)
+PRO_FRAMES = int(round(PRO_START_LEN / DT))
+PRO_EARLY = 10.0                                           # (the counters: a start's first seconds)
+PRO_START_COLS = ("pro starts begun", "pro starts ended", "frames of matches in pro starts", "of them in a start's first PRO_EARLY seconds",
+                  "pro starts ended in the second half of the matches (the first seat is his)", "of those: he won", "level", "he lost",
+                  "frags in pro starts (all seats)", "frags of the counted seats", "big pickups (mega, red, yellow) in pro starts, all seats",
+                  "... of the counted seats", "pickups of any item, all seats", "the first seat's lead at the start, summed (abs)",
+                  "counted seats begun", "of them with the worked-out stack (the demo's other player)", "the clock at the start, summed",
+                  "his share of the frags in the ended starts (counted seats), summed", "ended starts with a frag")
+MOMENT_P = MID_START_P + SPAWN_START_P + RAIL_START_P + PRO_START_P
 MOMENTS = MOMENT_P > 0
-assert MID_START_P >= 0 and SPAWN_START_P >= 0 and RAIL_START_P >= 0 and GAME_P + LATE_P + MOMENT_P <= 1.0 + 1e-9, \
-    "GAME_P, LATE_P, MID_START_P, SPAWN_START_P and RAIL_START_P are shares of the games' time"
-assert not MOMENTS or GAME_P > 0, "MID_START_P, SPAWN_START_P and RAIL_START_P begin from moments of whole games: GAME_P must be on"
+assert MID_START_P >= 0 and SPAWN_START_P >= 0 and RAIL_START_P >= 0 and PRO_START_P >= 0 and GAME_P + LATE_P + MOMENT_P <= 1.0 + 1e-9, \
+    "GAME_P, LATE_P, MID_START_P, SPAWN_START_P, RAIL_START_P and PRO_START_P are shares of the games' time"
+assert MID_START_P + SPAWN_START_P + RAIL_START_P <= 0 or GAME_P > 0, \
+    "MID_START_P, SPAWN_START_P and RAIL_START_P begin from moments of whole games: GAME_P must be on"
 MID_LO, MID_HI, MID_PER_GAME = 60.0, 480.0, 2
 MID_MEAN = GAME_LEN - 0.5 * (MID_LO + MID_HI)             # a mid-game start's length on average (for the shares)
 RAIL_MEAN = MID_MEAN if RAIL_START_LEN <= 0 else min(RAIL_START_LEN, GAME_LEN - MID_HI)   # a rail start's length on average
@@ -1284,7 +1322,8 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
                  "r_long", "op_lab", "pf_node", "emg_links",
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
-                 "rail_m", "rail_t0", "rail_shot", "rail_pairs")    # (RAIL_START_P)
+                 "rail_m", "rail_t0", "rail_shot", "rail_pairs",    # (RAIL_START_P)
+                 "pro_mm", "pro_t0", "pro_s0")                     # (PRO_START_P)
 MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
@@ -3086,6 +3125,8 @@ class DuelEnv:
             self._moment_init(seed)
         if RAIL_START_P > 0:                                 # (RAIL_START_P) the pros' long rail places of this map
             self._rail_start_init(bsp)
+        if PRO_START_P > 0:                                  # (PRO_START_P) the moments of the pros' duels on this map
+            self._pro_start_init(bsp)
         if OPENINGS:                                         # (OPENINGS) the pros' openings by spawn point
             self._open_init(bsp)
         for i in range(n):
@@ -7303,6 +7344,7 @@ class DuelEnv:
         self.stats["moments"] = np.zeros(len(MOMENT_COLS))
         self.rail_m = np.zeros(self.M, bool)                 # (RAIL_START_P) match m is in a rail start
         self.rail_pairs = None                               # ... the map's pairs of places (None: no rail starts here)
+        self.pro_mo = None                                   # (PRO_START_P) the map's pro moments (None: no pro starts here)
 
     def _rail_start_init(self, bsp):
         """(RAIL_START_P) the map's pairs of places (sim/rail_pairs/<map>.json; none on a map without a railgun), the books"""
@@ -7316,6 +7358,128 @@ class DuelEnv:
             pr_ = json.load(fh_)
         if pr_.get("pairs"):
             self.rail_pairs = np.array([p_[:10] for p_ in pr_["pairs"]], np.float32)
+
+    def _pro_start_init(self, bsp):
+        """(PRO_START_P) the map's moments of the pros' duels (sim/pro_moments/<map>.npz; none: no pro starts here), each
+        of the file's items matched to this simulator's (same class, within PRO_ITEM_R units), the books"""
+        self.stats["pro_start"] = np.zeros(len(PRO_START_COLS))
+        self.pro_mm = np.zeros(self.M, bool)                 # match m is in a pro start
+        self.pro_t0 = np.zeros(self.M, np.int64)             # ... the game's frame it began at
+        self.pro_s0 = np.zeros(self.n, np.float32)           # ... each seat's score at its start
+        self._pro_put = []
+        f_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_moments", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
+        if not os.path.exists(f_) or getattr(self, "lab", None) is not None:
+            return
+        z_ = np.load(f_)
+        if not len(z_["clock"]):
+            return
+        P = {k_: np.asarray(z_[k_]) for k_ in z_.files}
+        cls_ = [e_["classname"] for e_ in self.w.entities if e_.get("classname") in ITEM_DEFS and "origin" in e_]
+        fcls, fpos = [str(c_) for c_ in P["item_cls"]], P["item_pos"].astype(np.float32)
+        imap = np.full(self.nI, -1, np.int64)
+        used = set()
+        for j_ in range(self.nI):
+            cand = [c_ for c_ in range(len(fcls)) if fcls[c_] == cls_[j_] and c_ not in used]
+            if cand:
+                d_ = [float(np.linalg.norm(fpos[c_] - self.item_pos[j_])) for c_ in cand]
+                if min(d_) <= 48.0:
+                    imap[j_] = cand[int(np.argmin(d_))]
+                    used.add(int(imap[j_]))
+        if (imap < 0).any() and any(self.item_def[j_][4] in ("MH", "RA", "YA") for j_ in np.nonzero(imap < 0)[0]):
+            print("pro starts: the items of {} do not match this simulator's (a big item missing): none here".format(f_), flush=True)
+            return
+        P["imap"] = imap
+        P["item_left"] = P["item_left"].astype(np.float32)
+        self.pro_mo = P                                      # (a dict: no array of it is taken into a saved moment)
+        self.pro_mean = float(np.mean(GAME_LEN - P["clock"])) if PRO_START_LEN <= 0 else \
+            float(np.mean(np.minimum(PRO_START_LEN, GAME_LEN - P["clock"])))
+
+    def _pro_start(self, m, k):
+        """(PRO_START_P) match m, just begun as a whole game (its round's reset done), is put at pro moment k: which seat
+        plays which pro drawn evenly; places, speeds, views, stacks, weapons, the score, the clock and the items as the
+        moment has them; each seat knows the items its pro took (when they are back) and nothing of the enemy"""
+        P, rng, PS_ = self.pro_mo, self.rng_mom, self.stats["pro_start"]
+        q = [int(x) for x in self._seats(m)]
+        flip = int(rng.random() < 0.5)
+        ok_w = np.zeros(NW, bool)
+        ok_w[self.map_weapons] = True
+        ok_w[MG] = ok_w[G] = True
+        tick = int(min(GAME_FRAMES - 1, max(1, round(float(P["clock"][k]) / DT))))
+        for j_, i in enumerate(q):
+            s_ = j_ ^ flip                                   # (the pro this seat plays: 0 the demo's player, 1 his enemy)
+            p_, v_ = P["pos"][k, s_].astype(np.float64), P["vel"][k, s_].astype(np.float64)
+            yaw_, pit_ = float(P["yaw"][k, s_]), float(np.clip(P["pitch"][k, s_], -89.0, 89.0))
+            self.w.reset(i, (p_[0], p_[1], p_[2]), (v_[0], v_[1], v_[2]), yaw_)
+            self.yaw[i], self.pitch[i] = yaw_, pit_
+            self.hp[i] = float(np.clip(P["hp"][k, s_], 1.0, 200.0))
+            self.armor[i] = float(np.clip(P["armor"][k, s_], 0.0, 200.0))
+            has_ = P["has"][k, s_].astype(bool) & ok_w
+            has_[MG] = has_[G] = True
+            self.has[i] = has_
+            self.ammo[i] = np.where(has_, np.minimum(P["ammo"][k, s_].astype(np.float32), AMMO_MAX), 0.0)
+            self.ammo[i, G] = 0.0
+            w_ = int(P["weapon"][k, s_])
+            self.weapon[i] = w_ if 0 <= w_ < NW and has_[w_] else MG
+            self.life_t[i] = float(max(0.0, P["life"][k, s_]))
+            self.first_wp[i] = bool(has_[[RL, RG, LG, SG, GL, PG, HMG]].any())
+            self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
+            self.cool[i], self.fire_cd[i] = 0.0, 0.0
+            self.fire_q[i] = False
+            self.zoom[i], self.duck[i] = False, False
+            self.ra[i] = False
+            self.vis_run[i], self.acquired[i], self.visible[i] = 0, False, False
+            self.frags_r[i] = float(P["score"][k, s_])
+            self.pro_s0[i] = self.frags_r[i]
+            if bool(self._counted(i)):
+                PS_[14] += 1
+                PS_[15] += float(P["est"][k, s_] > 0)
+        qa = np.array(q)
+        self.g_tick[m], self.round_t[m] = tick, np.float32(tick * DT)
+        self.game[m] = PRO_KIND
+        self._hd_game(qa, PRO_KIND)                          # (HEAD_EVENTS) the win label's game number
+        self.g_end[m] = GAME_FRAMES if PRO_START_LEN <= 0 else min(GAME_FRAMES, tick + PRO_FRAMES)
+        self.g_snap[m] = -1                                  # (no moment is saved from it)
+        if OVERTIME:
+            self.g_ot[m] = 0
+        self.stats["games"][15] -= 1                         # (_game_start counted a whole game begun)
+        d = int(self.frags_r[q[0]] - self.frags_r[q[1]])
+        self.g_p[m] = float(self._win_p(d, GAME_LEN - tick * DT)) if self.win_tab is not None else 0.5
+        im_, L_, W_ = P["imap"], P["item_left"][k], P["item_who"][k]
+        for it in range(self.nI):
+            c_ = int(im_[it])
+            left = float(L_[c_]) if c_ >= 0 else 0.0
+            resp = float(self.item_def[it][2])
+            left = min(max(left, 0.0), resp)
+            self.item_up[m, it], self.item_t[m, it] = left <= 0.0, left
+            if left <= 0.0:
+                continue
+            for g, ri in enumerate(self.route_item):         # (not "taken since the last look": nobody hears it now)
+                if ri == it and self.bel_prev is not None and self.bel_prev.shape[0] == self.M and g < self.bel_prev.shape[1]:
+                    self.bel_prev[m, g] = False
+            who = int(W_[c_]) if c_ >= 0 else -1
+            if who < 0:
+                continue
+            i = q[who ^ flip]                                # (the seat that plays the pro who took it: he knows when it is back)
+            lab = self.item_def[it][4]
+            self.v02_took[i, it] = resp - left
+            if lab in ("MH", "RA"):
+                self.it_t[i, 0 if lab == "MH" else 1] = resp - left
+            for g, ri in enumerate(self.route_item):
+                if ri == it and g < self.bel_t.shape[1]:
+                    self.bel_t[i, g] = resp - left
+        if EN_STACK:                                         # (B-257) nothing is known of the enemy's stack
+            self._es_set(qa, slice(None), spawn=False)
+        for h_ in self.opp_hist:                             # (what was on its way to his eyes was of the spawn places)
+            h_[1][qa] = False
+        for q_ in getattr(self, "v02_q", ()):
+            q_[0][qa] = False
+            q_[1][qa] = False
+        self.pro_mm[m] = True
+        self.pro_t0[m] = tick
+        PS_[0] += 1
+        PS_[13] += abs(float(d))
+        PS_[16] += tick * DT
 
     def _moment_game(self, m, late):
         """a whole game or a late round begins in match m: its limit, and a whole game's frames for the mid-game moments"""
@@ -7331,13 +7495,18 @@ class DuelEnv:
         kp0 = float(self.kind_p[0])
         rm, rs = kp0 * MID_START_P / MID_MEAN, kp0 * SPAWN_START_P / SPAWN_START_LEN
         rr = kp0 * RAIL_START_P / RAIL_MEAN if self.rail_pairs is not None else 0.0     # (RAIL_START_P: rail range starts)
-        if rg + rl + rm + rs + rr <= 0:
+        rp = kp0 * PRO_START_P / self.pro_mean if PRO_START_P > 0 and self.pro_mo is not None else 0.0     # (PRO_START_P: pro starts)
+        if rg + rl + rm + rs + rr + rp <= 0:
             return False
-        u = self.rng.random() * (r0 + rg + rl + rx + rm + rs + rr)
-        if u >= rg + rl + rm + rs + rr:
+        u = self.rng.random() * (r0 + rg + rl + rx + rm + rs + rr + rp)
+        if u >= rg + rl + rm + rs + rr + rp:
             return False
         if u < rg + rl:
             self._game_start(m, late=bool(u >= rg))
+            return True
+        if u >= rg + rl + rm + rs + rr:                      # (PRO_START_P) a pro start: a whole game's start, then the moment
+            self._game_start(m, late=False)                  # (after the round's reset: _pro_start)
+            self._pro_put.append((int(m), int(self.rng_mom.integers(len(self.pro_mo["clock"])))))
             return True
         kd = 3 if u < rg + rl + rm else 4 if u < rg + rl + rm + rs else 5
         bank = self.mom_bank[0 if kd == 4 else 1]            # (the bank: spawn moments, mid-game moments; a rail start: a mid moment)
@@ -7434,7 +7603,12 @@ class DuelEnv:
                 info["aux"][qq] = self.aux()[qq]
             if "hand_lab" in info:
                 info["hand_lab"][qq] = self.hand_lab[qq]
-        MS[5:7] += (float(((self.game == 3) & ~self.rail_m).sum()), float(((self.game == 4) & ~self.rail_m).sum()))
+        nr_ = ~self.rail_m if PRO_START_P <= 0 else ~(self.rail_m | self.pro_mm)     # (rail starts and pro starts count apart)
+        MS[5:7] += (float(((self.game == 3) & nr_).sum()), float(((self.game == 4) & nr_).sum()))
+        if PRO_START_P > 0 and self.pro_mm.any():            # (PRO_START_P) the pro starts' frames
+            PS_ = self.stats["pro_start"]
+            PS_[2] += float(self.pro_mm.sum())
+            PS_[3] += float((self.pro_mm & ((self.g_tick - self.pro_t0) * DT < PRO_EARLY)).sum())
         if self.rail_m.any():                                # (RAIL_START_P) the rail starts' frames
             RS = self.stats["rail_start"]
             RS[3] += float(self.rail_m.sum())
@@ -7443,7 +7617,7 @@ class DuelEnv:
         g_ = self._others_arr().shape[1] + 1
         for v in np.nonzero((self.rsp_born if RESPAWN_QL else died) & ~done)[0]:    # a respawn in a whole game or a mid-game start: the spawn moment
             m = self._match_of(v)
-            if self.game[m] not in (1, 3) or self.rail_m[m]:    # (not from a rail start: its places were put there)
+            if self.game[m] not in (1, 3) or self.rail_m[m] or (PRO_START_P > 0 and self.pro_mm[m]):   # (not from a rail or pro start)
                 continue
             if OVERTIME and self.g_tick[m] >= GAME_FRAMES:  # (OVERTIME) moments are taken before the limit only
                 continue
@@ -7523,6 +7697,24 @@ class DuelEnv:
         q = self._seats(m)
         MS = self.stats["moments"]
         kd = int(self.game[m])
+        if PRO_START_P > 0 and self.pro_mm[m]:               # (PRO_START_P) a pro start: its own counters
+            PS_ = self.stats["pro_start"]
+            PS_[1] += 1
+            got_ = self.frags_r[q] - self.pro_s0[q]
+            PS_[8] += float(got_.sum())
+            cq_ = self._counted(q)
+            PS_[9] += float(got_[cq_].sum())
+            if got_.sum() > 0:
+                PS_[18] += 1
+                PS_[17] += float(got_[cq_].sum() / got_.sum()) if cq_.sum() == 1 else 0.5
+            if m * 2 >= self.M:
+                d = float(self.frags_r[int(q[0])] - self.frags_r[int(q[1])])
+                PS_[4] += 1
+                PS_[5 if d > 0 else 6 if d == 0 else 7] += 1
+            self.pro_mm[m] = False
+            self.game[m] = 0
+            self.g_win[q], self.g_flat[q] = 0.0, 0.0
+            return
         if self.rail_m[m]:                                   # (RAIL_START_P) a rail start: its own counters
             RS = self.stats["rail_start"]
             RS[2] += 1
@@ -7563,6 +7755,8 @@ class DuelEnv:
                 rs_ = float(self.kind_p[0]) * SPAWN_START_P / SPAWN_START_LEN if MOMENTS else 0.0
                 if MOMENTS and self.rail_pairs is not None:  # (RAIL_START_P: rail range starts)
                     rs_ += float(self.kind_p[0]) * RAIL_START_P / RAIL_MEAN
+                if PRO_START_P > 0 and self.pro_mo is not None:     # (PRO_START_P: pro starts)
+                    rs_ += float(self.kind_p[0]) * PRO_START_P / self.pro_mean
                 other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
         p = self.item_run_p + pj + pr
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
@@ -8723,6 +8917,12 @@ class DuelEnv:
                     self._hear(0, np.array([i]), 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "ar" else 3)
                 if took:
                     self.note_take(int(i), int(it))          # (N_V02: when he last took it; who heard or saw a big one taken)
+                    if PRO_START_P > 0 and self.pro_mm[self._match_of(int(i))]:      # (PRO_START_P) the pro starts' pickups
+                        PS_ = self.stats["pro_start"]
+                        PS_[12] += 1
+                        if lab in ("MH", "RA", "YA"):
+                            PS_[10] += 1
+                            PS_[11] += float(self._counted(int(i)))
                     if int(it) in self.big_ids:              # (--aux, "who gets there first") the mega or the red armor: who took it
                         self.aux_take.append((int(i), self.big_ids.index(int(it))))
                     if WAY_MEASURE and int(it) in self.route_item:
@@ -9261,6 +9461,10 @@ class DuelEnv:
             for m_ in self._late_m:
                 self._late_start(m_)
             self._late_m = []
+        if PRO_START_P > 0 and self._pro_put:                # ... and for the pro starts: the moment of a pros' duel
+            for m_, k_ in self._pro_put:
+                self._pro_start(m_, k_)
+            self._pro_put = []
         if len(dead) or len(out) or len(ends) or self._replaced:
             self.state = s = self.w.state()
             self._replaced = False

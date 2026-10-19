@@ -1827,7 +1827,7 @@ def main():
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_far", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
                 "rj_tries", "rj_over", "rj_frames", "rj_shots",
-                "hurt_dmg", "legs", "games", "open", "moments", "overtime", "rail_start")
+                "hurt_dmg", "legs", "games", "open", "moments", "overtime", "rail_start", "pro_start")
     LIVE_PATH = os.path.join(out, "live.json")                         # (B-265) pay weights changed while the run trains
     LIVE_ON = hasattr(E_, "live_set")
     LIVE_START = {k_: os.environ.get(k_) for k_ in getattr(E_, "LIVE_VARS", ())}      # the run's start: its environment
@@ -3504,6 +3504,22 @@ def main():
             rec["rail_start"] = dict(rs_rec(rs_), p=float(getattr(E_, "RAIL_START_P", 0.0)), secs=float(getattr(E_, "RAIL_START_LEN", 0.0)),
                                      by_map={k_: rs_rec(np.atleast_1d(v_["rail_start"]).astype(np.float64))
                                              for k_, v_ in agg_map.items() if "rail_start" in v_})
+        if "pro_start" in agg:                                           # (PRO_START_P) pro starts: rounds begun at moments of the pros' duels
+            ps_ = np.atleast_1d(agg["pro_start"]).astype(np.float64)     # (the simulator's PRO_START_COLS)
+
+            def ps_rec(x_):
+                return dict(begun=int(x_[0]), ended=int(x_[1]),
+                            time_share=round(float(x_[2] / max(1.0, T * n_groups)), 4),                    # of all the groups' time
+                            early_share=round(float(x_[3] / max(1.0, T * n_groups)), 4),                   # ... in a start's first 10 s
+                            frags=int(x_[8]), frags_counted=int(x_[9]), big_pickups=int(x_[10]), big_pickups_counted=int(x_[11]),
+                            pickups=int(x_[12]), start_lead=round(float(x_[13] / max(1.0, x_[0])), 2),
+                            start_clock=round(float(x_[16] / max(1.0, x_[0])), 1),
+                            counted_seats=int(x_[14]), worked_out_stack=round(float(x_[15] / max(1.0, x_[14])), 3),
+                            frag_share_counted=round(float(x_[17] / max(1.0, x_[18])), 3),
+                            league=dict(games=int(x_[4]), won=int(x_[5]), drawn=int(x_[6]), lost=int(x_[7])))
+            rec["pro_start"] = dict(ps_rec(ps_), p=float(getattr(E_, "PRO_START_P", 0.0)), secs=float(getattr(E_, "PRO_START_LEN", 0.0)),
+                                    by_map={k_: ps_rec(np.atleast_1d(v_["pro_start"]).astype(np.float64))
+                                            for k_, v_ in agg_map.items() if "pro_start" in v_})
         if "overtime" in agg:                                            # (OVERTIME) games level at the limit played on, 120 s a period
             ot_ = np.atleast_1d(agg["overtime"]).astype(np.float64)      # (the simulator's OT_COLS)
             rec["overtime"] = dict(games=int(ot_[0]), periods=int(ot_[1]), ended_with_a_lead=int(ot_[2]), level_at_the_cap=int(ot_[3]),
