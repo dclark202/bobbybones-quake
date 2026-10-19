@@ -93,13 +93,20 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                  env.hand_lab.astype(np.float16) if getattr(E_, "HAND_TEACH", False) else None,         # (--hand-teach) the first frame's label (none yet)
                  env.legs_prep() if legs_in else None))     # (LEGS_IN) the movement network's inputs of the frame about to be played
     last = {k: np.copy(v) for k, v in env.stats.items()}
+    tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)      # (time.rollout_parts) this worker's seconds, since the last "times"
+    t_idle = time.perf_counter()
     while True:
         cmd, data = remote.recv()
+        t_got = time.perf_counter()
+        tw_["idle"] += t_got - t_idle                        # (waiting for the trainer: its network, the other workers)
         if cmd == "step":
             if isinstance(data, tuple):                      # (LEGS_IN) the actions and the branch's logits [players, 17]
                 env.legs_lg = data[1]
                 data = data[0]
             obs, rew, done, info = env.step(data)
+            t_st = time.perf_counter()
+            tw_["step"] += t_st - t_got
+            tw_["frames"] += 1
             delta = {k: env.stats[k] - last[k] for k in env.stats}
             last = {k: np.copy(v) for k, v in env.stats.items()}
             s = env.state
@@ -117,6 +124,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             hint_kill = [e for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and G == 2 and int(env.kind[e["killer"] // G]) == 0]
             delta["match_of_kill"] = [e["killer"] // G for e in hint_kill]
             delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in hint_kill]
+            lx_ = env.legs_prep() if legs_in else None       # (LEGS_IN) the movement network's inputs of the next frame
+            t_lp = time.perf_counter()
+            tw_["legs_prep"] += t_lp - t_st
             remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy(),
                          env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool),
                          env.legs_live.copy() if hasattr(env, "legs_live") else np.zeros(env.n, bool),      # (LEGS) the switch was read,
@@ -126,10 +136,14 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (np.concatenate([info["legs_lab"], info["legs_held"][:, None]], 1).astype(np.int8)    # (--legs-teach) his legs' four choices
                           if "legs_lab" in info else None),                                               # (-1: no label), the stretch withheld; None: the simulator gives none
                          (info["hand_lab"].astype(np.float16) if "hand_lab" in info else None),            # (--hand-teach) the target of his NEXT reading of the weapon key (zeros: none)
-                         env.legs_prep() if legs_in else None,                                              # (LEGS_IN) the movement network's inputs of the next frame
+                         lx_,                                                                               # (LEGS_IN) the movement network's inputs of the next frame
                          (np.asarray(env.legs_raw, np.int8) if legs_in and getattr(env, "legs_raw", None) is not None    # (--legs-learn) the branch's own draws
                           and len(env.legs_raw) == env.n else (np.full((env.n, 4), -1, np.int8) if legs_in else None)),  # of this frame (-1: none)
                          (env.solo_now.copy() if getattr(env, "solo_now", None) is not None else np.zeros(env.n, bool))))   # (SOLO_SELF) in his runs
+            tw_["send"] += time.perf_counter() - t_lp        # (the reply's pickling and the pipe)
+        elif cmd == "times":                                 # (time.rollout_parts) this worker's seconds since the last call, then anew
+            remote.send(dict(tw_))
+            tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
@@ -143,6 +157,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             remote.send(np.asarray(env.head_events(), np.float32) if hasattr(env, "head_events") else None)   # simulator has none: zeros)
         elif cmd == "close":
             break
+        t_idle = time.perf_counter()
 
 
 def jump_far_rec(agg, agg_map):
@@ -1863,7 +1878,9 @@ def main():
         t_roll = time.time()                                             # (the record's "time": the rollout's seconds, the learning step's)
         if dev.type == "cuda":
             torch.cuda.reset_peak_memory_stats()
+        RP_ = dict(net=0.0, legs_net=0.0, send=0.0, wait=0.0, gather=0.0)   # (time.rollout_parts) the trainer's seconds of the rollout by part
         for t in range(T):
+            tp0_ = time.perf_counter()
             if keep_raw:
                 raw.append(obs if obs_count < OBS_FREEZE else obs[np.random.rand(len(obs)) < 0.005])
             x = torch.from_numpy(norm(obs)).to(dev)
@@ -1919,6 +1936,8 @@ def main():
             if AUX_W > 0:
                 b_aux[t] = torch.from_numpy(aux)
             an = act.cpu().numpy()
+            tp1_ = time.perf_counter()
+            RP_["net"] += tp1_ - tp0_                                    # (his network on the card and its draws, the frame's buffers)
             if LEGS_IN:                                                  # (LEGS_IN) his legs' logits: the branch of each seat's network
                 with torch.no_grad():
                     xl_ = torch.from_numpy(legs_x).to(dev)
@@ -1928,12 +1947,19 @@ def main():
                 if LEGS_LEARN or UNI_ON:
                     b_lx[t] = torch.from_numpy(legs_x)
                 lgn_ = lgl_.float().cpu().numpy()
+                tp2_ = time.perf_counter()
+                RP_["legs_net"] += tp2_ - tp1_
                 for w_, p in enumerate(pipes):
                     p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])))
             else:
+                tp2_ = time.perf_counter()
                 for w_, p in enumerate(pipes):
                     p.send(("step", an[w_off[w_]:w_off[w_ + 1]]))
+            tp3_ = time.perf_counter()
+            RP_["send"] += tp3_ - tp2_
             res = [p.recv() for p in pipes]
+            tp4_ = time.perf_counter()
+            RP_["wait"] += tp4_ - tp3_                                   # (the slowest worker's step and its reply: pickling, the pipe)
             obs = np.concatenate([r[0] for r in res])
             if LEGS_IN:
                 legs_x = legs_cat([(r[15], r[0]) for r in res])
@@ -1997,6 +2023,14 @@ def main():
                 for mk, ek in zip(r[3]["match_of_kill"], r[3]["even_kill"]):
                     if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
+            RP_["gather"] += time.perf_counter() - tp4_                  # (the replies put together and onto the card, the counters)
+        for p in pipes:                                                  # (time.rollout_parts) the workers' own seconds of this rollout
+            p.send(("times", None))
+        tw_all_ = [p.recv() for p in pipes]
+        RP_ = {k_: round(v_, 2) for k_, v_ in RP_.items()}
+        for k_ in ("step", "legs_prep", "send", "idle"):                 # (the workers': mean and slowest, seconds of the rollout)
+            v_ = [float(x_.get(k_, 0.0)) for x_ in tw_all_]
+            RP_["worker_" + k_] = [round(float(np.mean(v_)), 2), round(float(np.max(v_)), 2)] if v_ else None
         with torch.no_grad():
             if HEADL:                                                    # (--head) the frame after the rollout: never a tick (T is whole ticks)
                 _, vT_, hT_ = pol.step(torch.from_numpy(norm(obs)).to(dev), h, hd=HS.peek(),
@@ -2774,7 +2808,8 @@ def main():
                    vs_snapshot_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and not vs_anchor else None,
                    vs_anchor_kill_share=round(lk[0] / max(1, lk[0] + lk[1]), 3) if snaps and vs_anchor else None,
                    league_size=len(snaps), entropy=round(float(en), 3), close_p=round(close_p, 2),
-                   time=dict(rollout=round(t_learn - t_roll, 1), learn=round(t_end - t_learn, 1)),                 # seconds of this update
+                   time=dict(rollout=round(t_learn - t_roll, 1), learn=round(t_end - t_learn, 1),                 # seconds of this update
+                             rollout_parts=RP_),                                                                       # ... the rollout's by part
                    gpu=dict(peak_gb=round(torch.cuda.max_memory_allocated() / 1e9, 2), held_gb=round(torch.cuda.memory_reserved() / 1e9, 2))
                    if dev.type == "cuda" else None)                    # the card's memory at its peak in this update
         if SLOW:                                                         # (--slow-mem) its door, what comes through it beside his fast memory,

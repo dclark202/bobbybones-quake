@@ -435,7 +435,12 @@ class MoveEnv:
         def rot(v):                                          # world xy -> view frame (forward, left)
             return np.stack([c * v[:, 0] + si * v[:, 1], -si * v[:, 0] + c * v[:, 1], v[:, 2]], 1)
         f = self.field
-        idx, _ = f.locate(pos)
+        pre_ = getattr(self, "pre", None)                     # (duel_env's legs: the nearest nodes and the wall and floor rays its
+        self.pre = None                                       # caller worked out already for exactly these players; used once)
+        if pre_ is not None and pre_[0] is not None:
+            idx = pre_[0]
+        else:
+            idx, _ = f.locate(pos)
         wps, kinds = [], []
         cur = idx
         for _ in range(4):
@@ -454,8 +459,12 @@ class MoveEnv:
         dirs = np.stack([c[:, None] * wd[None, :, 0] - si[:, None] * wd[None, :, 1],
                          si[:, None] * wd[None, :, 0] + c[:, None] * wd[None, :, 1],
                          np.zeros((self.n, N_WALL), np.float32)], 2)
-        walls = self.w.rays_each(pos, dirs, 512.0)
-        floors = self._floor_rays(pos, c, si)
+        if pre_ is not None and pre_[1] is not None:
+            walls = pre_[1]
+            floors = self._floor_rays(pos, c, si, fr=pre_[2])
+        else:
+            walls = self.w.rays_each(pos, dirs, 512.0)
+            floors = self._floor_rays(pos, c, si)
         obs = np.concatenate([rot(vel) / 400.0, ground[:, None], np.concatenate(wps, 1), np.stack(kinds, 1) / 2.0,
                               goal, (self.phi / 10.0)[:, None], walls, floors], 1)
         if getattr(self, "jump_obs", False):                   # v15: the jump ahead on his way (sim/jump_links.py)
@@ -486,13 +495,14 @@ class MoveEnv:
             obs = obs + self.rng.normal(0, self.obs_noise, obs.shape)
         return obs.astype(np.float32)
 
-    def _floor_rays(self, pos, c, si):
+    def _floor_rays(self, pos, c, si, fr=None):
+        """fr: the rays' fractions [players, N_FLOOR] when the caller traced these very rays already"""
         off = np.stack([c[:, None] * self.floor_off[None, :, 0] - si[:, None] * self.floor_off[None, :, 1],
                         si[:, None] * self.floor_off[None, :, 0] + c[:, None] * self.floor_off[None, :, 1]], 2)
         starts = np.concatenate([pos[:, None, :2] + off, np.repeat(pos[:, None, 2:3], N_FLOOR, 1)], 2)
         down = np.array([[0, 0, -1.0]], np.float32)
         st = starts.reshape(-1, 3).astype(np.float32)
-        fr = self.w.rays(st, down, 256.0).reshape(-1)
+        fr = self.w.rays(st, down, 256.0).reshape(-1) if fr is None else np.asarray(fr, np.float32).reshape(-1)
         if getattr(self, "v14", False):                        # lava or slime where the ray ends: no floor there
             end = st + np.array([0, 0, -1.0], np.float32)[None, :] * (fr * 256.0 - 4.0)[:, None]
             fr = np.where((self.w.contents_n(end) & HAZARD) != 0, 1.0, fr)

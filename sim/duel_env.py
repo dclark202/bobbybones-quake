@@ -3691,7 +3691,7 @@ class DuelEnv:
         T.n, T.state, T.yaw = len(ri), s[ri], self.yaw[ri]
         self._teacher_hand(T, ri)
         T.goal = np.maximum(tg, 0).astype(np.int32)
-        T.phi = T.field.potential(T.goal, s[ri, :3])[0]
+        T.phi, idx_ = T.field.potential(T.goal, s[ri, :3])
         ok = (tg >= 0) & (T.phi < 1e8)                       # (no way in its own walking map: the walking teacher's keys stay)
         if not ok.any():
             return
@@ -3706,6 +3706,7 @@ class DuelEnv:
                 T.look_on = T.stand = None
             lg = np.asarray(lg_in, np.float32)[ri]
         else:
+            T.pre = self._legs_pre(ri, T, idx_)
             x = np.clip((T.observe() - mean) / np.sqrt(var + 1e-8), -10, 10).astype(np.float32)
             if md_ == "collect":                             # (LEGS_IN) legs_prep(): the inputs, no sums, no draws
                 if c2_:
@@ -3749,6 +3750,18 @@ class DuelEnv:
             return
         self.teach[ri[ok], :4] = np.stack(out, 1)[ok]
         self.stats["move_teach_frames"] += int(ok.sum())
+
+    def _legs_pre(self, ri, T, idx):
+        """what the movement network's observe() of the players ri would work out again (sim speed, 2026-10-19): the
+        nearest nodes of its field (idx, from potential() of this very state) and the wall and floor rays, when observe()
+        traced the same rays (the same position and view of every one of them, and the same ray layout). The rays are a
+        function of the position and the view alone: the inputs are bit for bit those it would trace itself."""
+        r_ = getattr(self, "_obs_rays", None)
+        if (r_ is None or len(r_[0]) != self.n or N_WALL != len(T.wall_dirs) or N_FLOOR != len(T.floor_off)
+                or not np.array_equal(r_[0][ri], self.state[ri, :3]) or not np.array_equal(r_[1][ri], self.yaw[ri])
+                or not (np.array_equal(T.wall_dirs[:, :2], self.wall_dirs) and np.array_equal(T.floor_off, self.floor_off))):
+            return (idx, None, None)
+        return (idx, r_[2][ri], r_[3][ri])
 
     def _legs_count(self, sp):
         """(LEGS_LABEL, LEGS_KEEP) stats["legs_keep"], columns 1 to 6: the frames with a label, apart for the stretches his
@@ -4997,9 +5010,17 @@ class DuelEnv:
     def _los(self, a, b):
         """line of sight a -> b for many pairs (point traces)"""
         out = np.zeros(len(a), bool)
-        for k in range(len(a)):
-            out[k] = np.linalg.norm(b[k] - a[k]) < 1 or self.w.trace(a[k], b[k], mask=self.sight)["fraction"] >= 0.999
-        return out
+        if self.sight is None or not len(a):                 # (the one call below needs a mask)
+            for k in range(len(a)):
+                out[k] = np.linalg.norm(b[k] - a[k]) < 1 or self.w.trace(a[k], b[k], mask=self.sight)["fraction"] >= 0.999
+            return out
+        a32, b32 = np.asarray(a, np.float32).reshape(-1, 3), np.asarray(b, np.float32).reshape(-1, 3)
+        fr = self.w.lines(a32, b32, mask=self.sight)         # (the same point traces, one call: qsim_lines_m)
+        dv = np.linalg.norm(np.asarray(b) - np.asarray(a), axis=1)
+        close = dv < 1
+        for k in np.nonzero(np.abs(dv - 1.0) < 1e-3)[0]:     # (at the edge: the pair's own norm, as before)
+            close[k] = np.linalg.norm(b[k] - a[k]) < 1
+        return close | (fr >= 0.999)
 
     @staticmethod
     def _seg_box(p0, p1, c, top=None):
@@ -5056,6 +5077,7 @@ class DuelEnv:
         starts = np.concatenate([pos[:, None, :2] + off, np.repeat(pos[:, None, 2:3], N_FLOOR, 1)], 2)
         floors = self.w.rays(starts.reshape(-1, 3).astype(np.float32), np.array([[0, 0, -1.0]], np.float32),
                              256.0).reshape(n, N_FLOOR)
+        self._obs_rays = (pos.copy(), self.yaw.copy(), self.walls, floors)    # (the same rays his legs' inputs trace: _legs_pre)
         if self.fov_sight and not GROUND_SENSE:              # a floor spot is seen if the line from the eyes to it is in view
             fa = (np.linspace(0, 2 * np.pi, N_FLOOR, endpoint=False) + np.pi) % (2 * np.pi) - np.pi
             down = np.arctan2(VIEW_H + floors * 256.0, 96.0)             # how far below the horizon that spot lies
@@ -8341,9 +8363,7 @@ class DuelEnv:
             step_len = np.linalg.norm(vel, axis=1) * DT + 1e-6
             p1r = p0 + vel * DT
             dirs = (p1r - p0) / step_len[:, None]
-            fr = np.empty(len(owner), np.float32)
-            for q in range(len(owner)):                     # per-projectile step length (speeds differ)
-                fr[q] = self.w.rays_each(p0[q:q + 1], dirs[q:q + 1, None, :], float(step_len[q]), mask=self.sight)[0, 0]
+            fr = self.w.rays_md(p0, dirs, step_len, mask=self.sight)     # per-projectile step length (speeds differ)
             hitpt = p0 + (p1r - p0) * fr[:, None]
             opp = owner ^ 1
             direct = self._seg_box(p0, hitpt, s[opp, :3], np.where(self.duck[opp], TOP_DUCK, TOP))
