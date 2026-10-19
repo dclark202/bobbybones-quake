@@ -950,6 +950,11 @@ def main():
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
+    if os.environ.get("TRAINER_MASK"):                                   # (2026-10-18, after the BIOS update) the workers keep the mask
+        import pin as pin_                                               # they were started with; the trainer itself (its learning step's
+        ok_ = pin_.pin_mask(int(os.environ["TRAINER_MASK"], 16))         # main thread) goes to the mask named here: the performance cores
+        print("trainer process mask {} ({}); the {} workers keep the start mask".format(
+            os.environ["TRAINER_MASK"], "set" if ok_ else "NOT SET", len(pipes)), flush=True)
     if a.teacher_skip:
         print("no key labels in the runs of: {}".format(a.teacher_skip), flush=True)
     obs = np.concatenate([f[0] for f in first])
