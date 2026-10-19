@@ -179,6 +179,7 @@ rep('''        s = self.state
         k_ = np.repeat(self.kind, 2)[lis]
         alone = ((k_ == MOVE) | (k_ == SOLO) | ((k_ == COURSE) & ~self.gun[lis]))
         d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
+        d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         seen = self.acquired[lis] & ~alone
         ok = (seen | (d < HEAR_EVT)) & ~alone & (self.hp[lis] > 0)
         self.shot_t[lis[ok]] = 0.0''', '''        s = self.state
@@ -187,6 +188,7 @@ rep('''        s = self.state
         k_ = np.repeat(self.kind, self.G)[lis]
         alone = ((k_ == MOVE) | (k_ == SOLO) | ((k_ == COURSE) & ~self.gun[lis]))
         d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
+        d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         acq_p = self.acquired[lis] if self.G == 2 else self.acq2[lis, (self.slot[src] - self.slot[lis]) % self.G - 1]
         seen = acq_p & ~alone
         ok = (seen | (d < HEAR_EVT)) & ~alone & (self.hp[lis] > 0)
@@ -380,6 +382,8 @@ rep('''        opp_all = ar ^ 1
         if len(hurt):
             lis_ = hurt ^ 1
             near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
+            if HEAR_QL:                                      # (HEAR_QL) where the game sends it
+                near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
             self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
         dealt = np.zeros(n, np.float32)                     # per attacker (see _book)
@@ -390,6 +394,8 @@ rep('''        opp_all = ar ^ 1
             lis_ = self.others[hurt].reshape(-1)
             hurt = np.repeat(hurt, self.G - 1)
             near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
+            if HEAR_QL:                                      # (HEAR_QL) where the game sends it
+                near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
             self.pain_src[lis_[near_]] = hurt[near_]
             self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
@@ -465,7 +471,13 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
             if len(cand):
                 vis[cand] = self._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
             vis &= (pkind != MOVE) & (pkind != SOLO) & ((pkind != COURSE) | self.gun)   # movement / solo / course: no other player
+            if RESPAWN_QL:                                   # (RESPAWN_QL) a body waiting to respawn is out of play: not seen
+                vis &= self.rsp_wait[opp] <= 0
             heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
+            if RESPAWN_QL:                                   # (RESPAWN_QL) ... nor heard
+                heard &= self.rsp_wait[opp] <= 0
+            if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
+                heard &= self._hear_ok(ar, opp)
             self.vis2[:, k_] = vis
             if SURPRISE_MS > 0:                              # off the crosshair and unexpected: noticed later
                 ecc_ = np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0)))

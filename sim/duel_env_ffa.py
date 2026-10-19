@@ -1474,6 +1474,43 @@ N_PAD = 2
 # fire, and the hum tells which of the two it is: 2 more inputs.
 EAR_RANGE, EAR_NOISE, HUM_RANGE = 1000.0, 10.0, 500.0
 N_EAR = 7 + 2
+# The game's rules for hearing and for a respawn (B-270, 2026-10-19; docs/v0.4/FIDELITY_AUDIT.md gaps 3, 4 and 9). All off
+# by default; off, the simulator is what it was (fixed runs of the trainer's workers, bit for bit).
+#   HEAR_QL=1        (a PLAY_VAR) a sound is heard only where the game sends it: a Quake 3 / Quake Live server sends a client
+#                    an entity, and so its events (steps, jumps, shots, pickups, pain), only when the entity's box touches a
+#                    cluster in the potentially-visible set (PVS) of the client's eye (sim/pvs.py reads it from the map's
+#                    .bsp). Checked on the pros' own demos (twelve maps, 6.8 million frames): when the server sent the enemy
+#                    his box was in the PVS on 99.3% of the frames; in the gaps when it did not, 9% (places guessed between
+#                    two sightings). The spheres (EAR_RANGE, HEAR_EVT, HEAR, HUM_RANGE) stay as the reach;
+#                    a sound outside the PVS is silent, however near (within 1,000 units, 27% of the pros' frames and 31%
+#                    on our servers' duels are walled off; Lost World 56%). A death is known to every other player (the obituary is a broadcast
+#                    event). An item's sounds (taken, back) are tested at the item's place.
+#   HEAR_QL_RANGE=u  (a PLAY_VAR, with HEAR_QL) every sphere becomes u units (Quake 3's client: the volume falls to nothing at
+#                    1,330 units; Quake Live's client is closed). 0 (the default): the simulator's spheres.
+#   RESPAWN_QL=s     (a PLAY_VAR; 1 = 2.1 s) a player killed in a fight round (not an item run, a jump run, a drill or the
+#                    lab) is out of play for s seconds before he is back at a spawn point: not seen, not heard, not hurt
+#                    (a shot or a rocket stops on his body and does nothing), takes nothing, presses nothing (keys, mouse,
+#                    trigger and weapon key have no effect; his view stays where it was). His inputs go on from where his
+#                    body lies, with the dead flag on, as a game server's plugin shows him while dead. The spawn point is
+#                    chosen at the wait's end by the enemy's place then (_spawn's rule, the far half from the enemy, which
+#                    fits the pros' respawns best). Measured (the pros' demos, twelve maps, and our servers): the game lets a
+#                    player back 2.1 s after his death at the earliest and forces it at 4.5 s; Bobby taps fire and is
+#                    back in 2.1 to 2.4 s (median 2.125). Pay unchanged: the death costs what it did, the wait pays nothing.
+#                    Counters: rsp_waits (deaths that waited), rsp_wait_frames (player-frames out of play).
+HEAR_QL = float(os.environ.get("HEAR_QL") or 0.0) > 0
+HEAR_QL_RANGE = float(os.environ.get("HEAR_QL_RANGE") or 0.0)
+if HEAR_QL and HEAR_QL_RANGE > 0:
+    EAR_RANGE = HUM_RANGE = HEAR_EVT = HEAR = HEAR_QL_RANGE
+#   SPAWN_QL=1       (a PLAY_VAR) the spawn points are the game's: info_player_start counts as one (Quake 3's g_client.c spawns
+#                    it as an info_player_deathmatch; the simulator left it out). Of the twelve maps only Furious Heights
+#                    (16, 352, 24: 7.2% of the pros' 2,047 respawns there) and Dismemberment (666, 1036, -8: 23.8% of 1,188)
+#                    have one. The rule (_spawn: random among the far half of the points from the enemy) is unchanged:
+#                    of the rules tried on 14,937 respawns of the pros (spectators' demos, the enemy's place known) it fits
+#                    best (86.9% inside the half; Quake 3's far half from the death place 70.2%; uniform 50%).
+SPAWN_QL = float(os.environ.get("SPAWN_QL") or 0.0) > 0
+RESPAWN_QL = float(os.environ.get("RESPAWN_QL") or 0.0)
+RESPAWN_QL_FRAMES = int(round((2.1 if RESPAWN_QL == 1.0 else RESPAWN_QL) / DT)) if RESPAWN_QL > 0 else 0
+PLAY_VARS = PLAY_VARS + ("HEAR_QL", "HEAR_QL_RANGE", "RESPAWN_QL", "SPAWN_QL")
 # More of what a player sees and remembers (2026-10-06, after an audit of the inputs):
 #   hazards: 8 directions round him at 96 and at 224 units, is the floor there lava (hurts) 16, a deadly drop 16.
 #     Only inside his field of view, like the floor readings. Before, a deadly drop read like any ledge.
@@ -2237,6 +2274,12 @@ class DuelEnv:
         if QL_JUMP or hasattr(self.w.lib, "qsim_params4"):
             self.w.set_params4(QL_JUMP)
         self.lava_t = np.zeros(self.n, np.float32)          # seconds until lava or slime hurts him again (LAVA)
+        self.pvs = None                                      # (HEAR_QL) the map's visibility data
+        if HEAR_QL:
+            import pvs as PVS_
+            self.pvs = PVS_.Vis(bsp)
+        self.rsp_wait = np.zeros(self.n, np.int64)          # (RESPAWN_QL) frames until he is back; 0: in play
+        self.rsp_born = np.zeros(self.n, bool)              # (RESPAWN_QL) back at a spawn point on this frame
         self.rng = np.random.default_rng(seed)
         self.substeps = tuple(substeps)
         self.dmg_reward = dmg_reward
@@ -2254,8 +2297,11 @@ class DuelEnv:
         self.loadout_p = (0.4, 0.2, 0.2, 0.2)           # ..., and both players with the same single weapon
         self.load_sets = [None] * (group * n_matches)
         self.item_reward = 0.0                          # optional shaping: reward per 100 points of health/armor picked up
-        self.spawns = np.array([e["origin"] for e in self.w.spawns()], np.float32)
-        self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in self.w.spawns()], np.float32)
+        sp_ = self.w.spawns()
+        if SPAWN_QL:                                         # (SPAWN_QL) the game spawns info_player_start as a spawn point too
+            sp_ = sp_ + [e for e in self.w.entities if e.get("classname") == "info_player_start" and "origin" in e]
+        self.spawns = np.array([e["origin"] for e in sp_], np.float32)
+        self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in sp_], np.float32)
         self.close_p = close_p
         self.level = 0.95                               # pitch eases back toward level (1.0 = off). 0.99 let it drift to floor/sky
         self.drill_p = 0.0                              # share of rounds where both players have ONE weapon
@@ -2980,6 +3026,8 @@ class DuelEnv:
             self.stats[wn + "_hits"] = 0
             self.stats[wn + "_frags"] = 0
         self.stats["hurt_dmg"], self.stats["void_deaths"] = 0.0, 0
+        if RESPAWN_QL:                                       # (RESPAWN_QL) deaths that waited, player-frames out of play
+            self.stats["rsp_waits"], self.stats["rsp_wait_frames"] = 0, 0
         # (HAND_TEACH) the weapon in his hand with nobody in view: the pros' table for this map, what is kept a player, the counters
         self.hand_tab = None                                # [state, band, weapon] the pros' shares (None: no sim/pro_hand.json)
         hnd_f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_hand.json")
@@ -3059,6 +3107,7 @@ class DuelEnv:
     def _fresh(self, i, yaw):
         self.yaw[i], self.pitch[i] = yaw, 0.0
         self.lava_t[i] = 0.0
+        self.rsp_wait[i] = 0                                 # (RESPAWN_QL) a new life is in play
         if STYLE_P > 0 and self.script[i] == 0:              # a new life: his playing style (here since 2026-10-08: in
             u_ = self.rng.random()                           # _spawn it missed arena1)
             self.style[i] = int(self.rng.integers(1, len(STYLES))) if u_ < STYLE_P else 0
@@ -4169,6 +4218,9 @@ class DuelEnv:
         d = np.linalg.norm(s[oth, :3] - s[:, None, :3], axis=2)
         hum = ((self.weapon == RG) | (self.weapon == LG))[oth] & (d < HUM_RANGE)       # the weapon's hum, always there
         ok = ((noisy[oth] & (d < EAR_RANGE)) | hum) & (self.hp[oth] > 0) & (self.hp > 0)[:, None]
+        if HEAR_QL:                                          # (HEAR_QL) only what the game sends him
+            g_ = self._hear_ok(np.broadcast_to(np.arange(n)[:, None], oth.shape), oth)
+            ok, hum = ok & g_, hum & g_
         d = np.where(ok, d, 1e9)
         k = d.argmin(1)
         ar = np.arange(n)
@@ -4188,6 +4240,39 @@ class DuelEnv:
         dh_ = np.sqrt(np.maximum(dist * dist - dz_ * dz_, 0.0))     # what the sound tells him: direction, height, loudness)
         self.v02_ht[got, self._slot(src)] = 0.0
         self.v02_hp[got, self._slot(src)] = s[got, :3] + np.stack([np.cos(ang) * dh_, np.sin(ang) * dh_, dz_], 1)
+
+    def _hear_ok(self, lis, src=None, pos=None):
+        """(HEAR_QL) the game sends player lis the sounds of player src (his box) or of the point pos (an item's place): his
+        eye's cluster sees one of theirs in the map's PVS (sim/pvs.py). Arrays of one shape (pos: one point or one a lis);
+        True everywhere with HEAR_QL off"""
+        lis = np.asarray(lis)
+        if not HEAR_QL or self.pvs is None or lis.size == 0:
+            return np.ones(lis.shape, bool)
+        key_ = (id(self.state), self.duck.tobytes())
+        if getattr(self, "_pvs_key", None) != key_:           # every player's eye cluster and box clusters, once a frame
+            self._pvs_key = key_
+            self._pvs_eye = self.pvs.clusters(self._eye(self.state))
+            self._pvs_box = self.pvs.box_clusters(self.state[:, :3])
+        ce = self._pvs_eye[lis.reshape(-1)]
+        if src is not None:
+            ok = self.pvs.sees(ce[:, None], self._pvs_box[np.asarray(src).reshape(-1)]).any(1)
+        else:
+            pc = self.pvs.clusters(np.asarray(pos, np.float32).reshape(-1, 3))
+            ok = self.pvs.sees(ce, np.broadcast_to(pc, ce.shape))
+        return ok.reshape(lis.shape)
+
+    def _hear1(self, j, i):
+        """(HEAR_QL) one listener j, one player i: see _hear_ok"""
+        return (not HEAR_QL) or bool(self._hear_ok(np.array([int(j)]), np.array([int(i)]))[0])
+
+    def _wait_on(self, v):
+        """(RESPAWN_QL) player v has just died: in a fight round (not an item run, a jump run, a drill, the lab) he is out
+        of play for RESPAWN_QL_FRAMES before he respawns (step: the waits run down); False: he respawns now"""
+        if not RESPAWN_QL or int(self.kind[self._match_of(v)]) != NORMAL or self.run_k[v] >= 0 or self.jrun[v] or self.rjrun[v]:
+            return False
+        self.rsp_wait[v] = RESPAWN_QL_FRAMES
+        self.stats["rsp_waits"] += 1
+        return True
 
     def _more(self, pos, rot, c, si, visible, opp_vel, seen_t):
         """the inputs of N_MORE"""
@@ -4596,6 +4681,8 @@ class DuelEnv:
             for m, g in zip(*np.nonzero(self.bel_prev & ~up)):     # taken since the last look: who is in earshot knows
                 q = np.arange(m * gsz, (m + 1) * gsz)
                 near = np.linalg.norm(pos[q] - self.item_pos[items[g]], axis=1) < HEAR_EVT
+                if HEAR_QL:                                  # (HEAR_QL) heard where the game sends it (at the item's place)
+                    near &= self._hear_ok(q, pos=self.item_pos[items[g]])
                 self.bel_t[q[near], g] = 0.0
         self.bel_prev = up.copy()
         self.bel_tick += 1
@@ -4644,7 +4731,7 @@ class DuelEnv:
         s = self.state
         self.it_t[i, k] = 0.0
         for j in self._mates(i):
-            if np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT:
+            if np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
                 self.it_t[j, k] = 0.0
                 self.e_got[j, self._slot(i), k] = 1.0
 
@@ -4652,7 +4739,7 @@ class DuelEnv:
         """player v died: his killer knows, and those in earshot"""
         s = self.state
         for j in self._mates(v):
-            if j == killer or np.linalg.norm(s[j, :3] - s[v, :3]) < HEAR_EVT:
+            if j == killer or np.linalg.norm(s[j, :3] - s[v, :3]) < HEAR_EVT or HEAR_QL:     # (HEAR_QL: the obituary goes to all)
                 self.e_life[j, self._slot(v)] = 0.0
                 self.e_got[j, self._slot(v)] = 0.0
                 self._v02_void(j, v)
@@ -4776,6 +4863,8 @@ class DuelEnv:
         cat = 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "wp" else 3
         idx = np.arange(self.n) if who is None else np.asarray(who)
         near = np.linalg.norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
+        if HEAR_QL:                                          # (HEAR_QL) heard where the game sends it (at the item's place)
+            near &= self._hear_ok(idx, pos=self.item_pos[k])
         self.resp_t[idx[near], cat] = 0.0
         if self._hd_live():                                  # (HEAD_EVENTS) mega, red, yellow, a weapon: heard back
             hc_ = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab == "YA" else 3 if kind == "wp" else -1
@@ -4945,6 +5034,7 @@ class DuelEnv:
         k_ = np.repeat(self.kind, self.G)[lis]
         alone = ((k_ == MOVE) | (k_ == SOLO) | ((k_ == COURSE) & ~self.gun[lis]))
         d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
+        d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         acq_p = self.acquired[lis] if self.G == 2 else self.acq2[lis, (self.slot[src] - self.slot[lis]) % self.G - 1]
         seen = acq_p & ~alone
         ok = (seen | (d < HEAR_EVT)) & ~alone & (self.hp[lis] > 0)
@@ -5009,6 +5099,10 @@ class DuelEnv:
             kind = np.repeat(np.asarray(kind), self.G - 1)
         k_ = np.repeat(self.kind, self.G)[src]
         ok = (np.linalg.norm(s[src, :3] - s[lis, :3], axis=1) < HEAR_EVT) & (k_ != MOVE) & (k_ != SOLO)
+        if HEAR_QL:                                          # (HEAR_QL) where the game sends it
+            ok &= self._hear_ok(lis, src)
+        if RESPAWN_QL:                                       # (RESPAWN_QL) a body waiting to respawn makes no sound
+            ok &= self.rsp_wait[src] <= 0
         src, lis = src[ok], lis[ok]
         if not len(src):
             return
@@ -5882,7 +5976,7 @@ class DuelEnv:
                 a2_ = getattr(self, "acq2", None)
                 for j in self._mates(i):
                     sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-                    if sees or np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT:
+                    if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT and self._hear1(j, i)):
                         self.hd_ev[j, HEAD_COL["en_took_" + c_]] += 1.0
         lab = self.item_def[it][4]
         if EN_STACK and self.item_def[it][0] in ("hp", "ar") and int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
@@ -5890,7 +5984,7 @@ class DuelEnv:
             a2_ = getattr(self, "acq2", None)
             for j in self._mates(i):
                 sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-                if sees or np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT:
+                if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT and self._hear1(j, i)):
                     self._es_take(j, self._slot(i), kd_, float(val_), float(cap_))
         k = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab in ("YA", "GA") else -1
         if k < 0 or int(self.kind[self._match_of(i)]) in (MOVE, SOLO):     # (alone on the map: nobody else is about)
@@ -5899,7 +5993,7 @@ class DuelEnv:
         a2_ = getattr(self, "acq2", None)
         for j in self._mates(i):
             sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-            if sees or np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT:
+            if sees or (np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT and self._hear1(j, i)):
                 self.v02_pk[j, self._slot(i), k] += 1.0
 
     # ---------------------------------------------------------------- the head's events and the win label (HEAD_EVENTS)
@@ -6397,6 +6491,8 @@ class DuelEnv:
     # ---------------------------------------------------------------- damage helpers
     def _hit(self, i, v, wpn, dmg, kdir, st):
         """player i's weapon wpn hits player v for dmg, pushing along kdir"""
+        if RESPAWN_QL and self.rsp_wait[v] > 0:             # (RESPAWN_QL) a body waiting to respawn: the shot stops on it, nothing more
+            return
         kf = W_KNOCK[wpn]
         self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
         st["dmg_taken"][v] += self._damage(v, dmg)
@@ -6455,6 +6551,8 @@ class DuelEnv:
                 kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
                 victims.append((v, P_SPLASH[wpn] * f_, P_SPLASH[wpn] * f_, kdir, False))
         for v, dmg, kpts, kdir, is_direct in victims:
+            if RESPAWN_QL and self.rsp_wait[v] > 0:         # (RESPAWN_QL) a body waiting to respawn: the blast does nothing to it
+                continue
             take = dmg * (SELF_FACTOR if v == i else 1.0)
             kf = W_KNOCK[wpn] if is_direct else (SPLASH_KNOCK_SELF if v == i else SPLASH_KNOCK)
             self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * kpts / 200.0), int(min(200, kpts)))
@@ -6513,6 +6611,8 @@ class DuelEnv:
                 kp = int(RL_KNOCK_BASE * f_ * (RL_KNOCK_SELF if v == i else RL_KNOCK_OTHER))
                 victims.append((v, float(int(P_SPLASH[wpn] * f_)), float(kp), kdir, False))
         for v, dmg, kpts, kdir, is_direct in victims:
+            if RESPAWN_QL and self.rsp_wait[v] > 0:         # (RESPAWN_QL) a body waiting to respawn: the blast does nothing to it
+                continue
             take = float(max(1, int(dmg * SELF_FACTOR) if v == i else int(dmg)))     # G_Damage: at least 1
             if kpts > 0:
                 self.w.knockback(int(v), np.asarray(kdir, np.float32) * (5.0 * kpts), int(min(200, kpts)))
@@ -7341,7 +7441,7 @@ class DuelEnv:
             RS[4] += float((self.rail_m & ((self.g_tick - self.rail_t0) * DT < RAIL_EARLY)).sum())
         bok = getattr(self, "v02_bel_ok", None)
         g_ = self._others_arr().shape[1] + 1
-        for v in np.nonzero(died & ~done)[0]:                # a respawn in a whole game or a mid-game start: the spawn moment
+        for v in np.nonzero((self.rsp_born if RESPAWN_QL else died) & ~done)[0]:    # a respawn in a whole game or a mid-game start: the spawn moment
             m = self._match_of(v)
             if self.game[m] not in (1, 3) or self.rail_m[m]:    # (not from a rail start: its places were put there)
                 continue
@@ -8093,13 +8193,21 @@ class DuelEnv:
         jump = np.where(a[:, 2] == 1, 127, np.where(a[:, 2] == 2, -127, 0)).astype(np.int32)   # jump / crouch
         self.duck = (a[:, 2] == 2) & (self.hp > 0)
         fire = a[:, 5] == 1
+        out_ = (self.rsp_wait > 0) if RESPAWN_QL else None   # (RESPAWN_QL) waiting to respawn: nothing he presses has an effect
+        if out_ is not None and out_.any():
+            fwd, side, jump, fire = np.where(out_, 0, fwd), np.where(out_, 0, side), np.where(out_, 0, jump), fire & ~out_
+            self.stats["rsp_wait_frames"] += int(out_.sum())
         prev = self.state.copy()
         # mouse: the chosen turn speed is followed with a little inertia; jerky commands cost a little
         cmd = np.stack([TURN[a[:, 3]], PITCH[a[:, 4]]], 1)
         if LEGS_TURN_ADD and a.shape[1] > TA_HEAD:          # (LEGS_TURN_ADD) on his legs: their turn plus his correction (_legs_step)
             cmd[:, 0] = turn_sum(cmd[:, 0], self.ta_add)
         cmd = cmd * np.where(self.zoom, ZOOM, 1.0).astype(np.float32)[:, None]      # zoomed: the same hand movement turns less
+        if out_ is not None and out_.any():                  # (RESPAWN_QL) ... nor his mouse
+            cmd = np.where(out_[:, None], 0.0, cmd).astype(cmd.dtype)
         jerk = np.abs(cmd - self.cmd).sum(1)
+        if out_ is not None:                                 # (RESPAWN_QL: and costs nothing)
+            jerk = np.where(out_, 0.0, jerk).astype(jerk.dtype)
         self.cmd = cmd
         sg_ = np.sign(cmd[:, 0])
         ch_ = (sg_ != 0) & (self.turn_dir != 0) & (sg_ != self.turn_dir)
@@ -8116,9 +8224,13 @@ class DuelEnv:
             turn, dpit = self.pad_turn(turn, dpit, (a[:, 9] == 1) if a.shape[1] > 9 else np.zeros(n, bool), zs, self.script == 0)
         else:
             turn, dpit = self.mv[:, 0], self.mv[:, 1]
+        if out_ is not None and out_.any():                  # (RESPAWN_QL) his view stays where it was
+            turn, dpit = np.where(out_, 0.0, turn).astype(np.float32), np.where(out_, 0.0, dpit).astype(np.float32)
         # weapon switch (only to weapons owned)
         want = np.where(a[:, 6] == 0, self.weapon, a[:, 6].astype(np.int64) - 1)
         want = np.where(self.has[ar, want], want, self.weapon)
+        if out_ is not None:                                 # (RESPAWN_QL) ... and his weapon key does nothing
+            want = np.where(out_, self.weapon, want)
         sw = want != self.weapon
         self.weapon = want
         # as in the game: a weapon change only starts once the reload from the last shot is over
@@ -8150,6 +8262,8 @@ class DuelEnv:
         land = (prev[:, 6] < 0.5) & (s[:, 6] > 0.5)
         delta = prev[:, 5] ** 2 * 0.0001
         fall = np.where(land & (prev[:, 5] < 0), np.where(delta > FALL_FAR, 10.0, np.where(delta > FALL_MED, 5.0, 0.0)), 0.0)
+        if out_ is not None:                                 # (RESPAWN_QL) a body waiting to respawn takes no fall damage
+            fall = np.where(out_, 0.0, fall)
         fallers = np.nonzero(fall > 0)[0]
         reward -= SWITCH_COST * sw
         if HOP_PAY:                                          # speed gained from hop to hop (see HOP_PAY)
@@ -8302,7 +8416,10 @@ class DuelEnv:
         if self.human_aim:                                  # nobody fires on the exact frame the reload ends
             slow = shoot & (W_REFIRE[self.weapon] >= 0.4) & (self.script == 0)
             self.cool = self.cool + slow * np.minimum(self.rng.exponential(RELOAD_JITTER, n), RELOAD_JITTER_MAX).astype(np.float32)
-        reward -= FIRE_TOGGLE_COST * (fire != self.fire_prev)
+        if out_ is not None:                                 # (RESPAWN_QL) a body waiting to respawn pays nothing for the trigger
+            reward -= FIRE_TOGGLE_COST * ((fire != self.fire_prev) & ~out_)
+        else:
+            reward -= FIRE_TOGGLE_COST * (fire != self.fire_prev)
         self.fire_prev = fire.copy()
         use = shoot & (self.weapon != G)                    # ammo is finite in every round kind
         if getattr(self, "inf_ammo", False):               # test-suite aim rooms: ammo never runs out
@@ -8494,6 +8611,8 @@ class DuelEnv:
             lis_ = self.others[hurt].reshape(-1)
             hurt = np.repeat(hurt, self.G - 1)
             near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
+            if HEAR_QL:                                      # (HEAR_QL) where the game sends it
+                near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
             self.pain_src[lis_[near_]] = hurt[near_]
             self.pain_b[lis_[near_]] = np.minimum(3, (self.hp[hurt[near_]] // 25).astype(np.int64))
@@ -8901,10 +9020,20 @@ class DuelEnv:
             self.stats["know_frames"] += int(on.sum())
 
         # deaths, frags, respawns
+        if RESPAWN_QL:                                       # (RESPAWN_QL) the waits run down; at a wait's end he is back at a spawn
+            self.rsp_born[:] = False                         # point chosen now, by where the enemy is now (see _spawn)
+            back_ = np.nonzero(self.rsp_wait > 0)[0]
+            self.rsp_wait[back_] -= 1
+            for v in back_[self.rsp_wait[back_] == 0]:
+                self._spawn(int(v), avoid=s[self._others_arr()[v, 0], :3])
+                self.rsp_born[v] = True
+                self.state = s = self.w.state()
         done = np.zeros(n, bool)                            # end of the round (memory and returns reset here only)
         died = np.zeros(n, bool)
         events = []
         dead = np.nonzero(self.hp <= 0)[0]
+        if RESPAWN_QL:                                       # (RESPAWN_QL) a body waiting to respawn does not die again
+            dead = dead[self.rsp_wait[dead] <= 0]
         for v in dead:
             k = st["killer"][v] if st["killer"][v] >= 0 else attacker[v]
             gm_ = GAME_ON and bool(self.game[self._match_of(v)])    # a whole game or a late round (GAME_P): the game's score,
@@ -8959,11 +9088,15 @@ class DuelEnv:
             if self.rjrun[v]:                               # (a rocket jump run: the next try)
                 self._rj_place(int(v))
                 continue
+            if self._wait_on(int(v)):                       # (RESPAWN_QL) out of play for the game's respawn wait
+                continue
             self._spawn(int(v), avoid=s[self.foe[v], :3], close=True if self.kind[v // self.G] in (AIM, DRILL) else None)
             if self.goal[v] >= 0:
                 self._new_goal(int(v))
         lo, hi = self.w.bounds()
         out = np.nonzero(s[:, 2] < lo[2] - 64)[0]            # fell out of the map: a suicide
+        if RESPAWN_QL:                                       # (RESPAWN_QL: not a body waiting to respawn)
+            out = out[self.rsp_wait[out] <= 0]
         for v in out:
             if not died[v]:
                 gm_ = GAME_ON and bool(self.game[self._match_of(v)])
@@ -8978,6 +9111,8 @@ class DuelEnv:
                     r_long[v] -= float(self.intent_paid[v] - min(self.intent_fast[v], self.intent_paid[v]))
                 died[v] = True
                 self.stats["suicides"] += 1
+                if self._wait_on(int(v)):                   # (RESPAWN_QL) out of play for the game's respawn wait
+                    continue
                 self._spawn(int(v), avoid=s[self.foe[v], :3])
                 if self.jrun[v]:                            # (a jump run: the next try)
                     self._jump_place(int(v))
@@ -9148,7 +9283,13 @@ class DuelEnv:
             if len(cand):
                 vis[cand] = self._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
             vis &= (pkind != MOVE) & (pkind != SOLO) & ((pkind != COURSE) | self.gun)   # movement / solo / course: no other player
+            if RESPAWN_QL:                                   # (RESPAWN_QL) a body waiting to respawn is out of play: not seen
+                vis &= self.rsp_wait[opp] <= 0
             heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
+            if RESPAWN_QL:                                   # (RESPAWN_QL) ... nor heard
+                heard &= self.rsp_wait[opp] <= 0
+            if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
+                heard &= self._hear_ok(ar, opp)
             self.vis2[:, k_] = vis
             if SURPRISE_MS > 0:                              # off the crosshair and unexpected: noticed later
                 ecc_ = np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0)))
