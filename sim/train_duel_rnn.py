@@ -107,7 +107,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             t_st = time.perf_counter()
             tw_["step"] += t_st - t_got
             tw_["frames"] += 1
-            delta = {k: env.stats[k] - last[k] for k in env.stats}
+            delta = {k: env.stats[k] - last.get(k, 0) for k in env.stats}     # (a counter that begins in a running simulator: HOP_CHAIN by live.json)
             last = {k: np.copy(v) for k, v in env.stats.items()}
             s = env.state
             delta["air_fast"] = int(((np.hypot(s[:, 3], s[:, 4]) > 330) & (s[:, 6] < 0.5)).sum())
@@ -128,7 +128,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             t_lp = time.perf_counter()
             tw_["legs_prep"] += t_lp - t_st
             remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy(),
-                         env.key_dec.copy() if hasattr(env, "key_dec") else np.ones(env.n, bool),
+                         (env.key_dec.copy() if getattr(env, "je_rng", None) is None else (env.key_dec + 2 * env.key_jump).astype(np.int8))   # (JUMP_EVERY: 2 = the
+                         if hasattr(env, "key_dec") else np.ones(env.n, bool),                               # jump alone was read)
                          env.legs_live.copy() if hasattr(env, "legs_live") else np.zeros(env.n, bool),      # (LEGS) the switch was read,
                          env.legs_on.copy() if hasattr(env, "legs_on") else np.zeros(env.n, bool),          # his legs moved him
                          np.asarray(info.get("r_long", np.zeros(env.n, np.float32)), np.float32),           # (v0.2) the part of this frame's pay that is for items and stack
@@ -936,6 +937,8 @@ def main():
     E_ = importlib.import_module(a.env)
     ACTION_DIMS, OBS_DIM, PERSONAS, WEAPONS = E_.ACTION_DIMS, E_.OBS_DIM, E_.PERSONAS, E_.WEAPONS
     KEY_HEADS = (0, 1, 2, 6)                                 # forward, strafe, vertical, weapon key: the left hand's outputs
+    V_HEAD = 2                                               # (JUMP_EVERY) the vertical key (none, jump, crouch): its jump bit is read on every
+    JE = bool(getattr(E_, "JE_ON", False))                   # frame, the rest on the hand's (see JumpCat, head_masks)
     I_HEAD = getattr(E_, "INTENT_HEAD", len(ACTION_DIMS) - 1)                # the intention; (LEGS) the switch to his legs and the
     L_HEAD, L_TAKES = (E_.LEGS_HEAD, tuple(E_.LEGS_TAKES)) if len(ACTION_DIMS) > getattr(E_, "LEGS_HEAD", 99) else (-1, ())   # outputs they take
     TA_HEAD = E_.TA_HEAD if getattr(E_, "LEGS_TURN_ADD", False) and len(ACTION_DIMS) > getattr(E_, "TA_HEAD", 99) else -1
@@ -980,11 +983,13 @@ def main():
     HAND_HEAD = 6                                            # ... the weapon key's output, where its choices begin among all outputs' and
     HAND_O, HAND_D = sum(ACTION_DIMS[:HAND_HEAD]), ACTION_DIMS[HAND_HEAD]      # how many they are ("keep", then a choice a weapon)
 
-    def head_masks(dc, lv, ll, lo, act=None, so=None):
+    def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
         intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his).
         (LEGS_KEYS_ADD) act: his choices [..., outputs]: on his legs his own output of a column counts where he chose "mine"
-        for it; the five choices count on his legs (the keys' on the frames his hand reads them)"""
+        for it; the five choices count on his legs (the keys' on the frames his hand reads them).
+        (JUMP_EVERY) the vertical key counts on every frame (on the frames between the hand's readings its stored choice is
+        the jump bit alone: JumpCat); ent=True: the masks of the exploration bonus, where it stays on the hand's frames"""
         out = []
         mine_ = {}
         if KA_ON:
@@ -992,6 +997,8 @@ def main():
             mine_ = {c_: (act[..., KA_HEAD + i_] == 1).to(lo.dtype) for i_, c_ in enumerate(KA_COLS)}
         for j in range(len(ACTION_DIMS)):
             m = dc if j in KEY_HEADS else (lv if j == I_HEAD else (ll if j == L_HEAD else None))
+            if JE and j == V_HEAD and not ent:                   # (JUMP_EVERY) the jump read on every frame
+                m = None
             if j == L_HEAD and so is not None and a.solo_self_drive:     # (--solo-self-drive) not in his runs
                 m = m * (1.0 - so)
             if j == L_HEAD and NO_SW:                            # (--no-switch) the switch's lesson dropped
@@ -1374,6 +1381,7 @@ def main():
         assert min(min(p_) for p_ in ORDER) >= 0, "--ordered-heads: the simulator has no way or legs output"
     ORDER = [tuple(int(v_) for v_ in p_) for p_ in ORDER] if ORDER else None
     OFFS = np.concatenate([[0], np.cumsum(ACTION_DIMS)]).astype(int)
+    assert not (JE and ORDER and any(V_HEAD in p_ for p_ in ORDER)), "JUMP_EVERY: the vertical key's stored choice can be 3 (not jump): it cannot be in --ordered-heads"
     if ORDER:
         print("ordered heads: " + " -> ".join(str(c_) for c_ in [ORDER[0][0]] + [c_ for _, c_ in ORDER]) + " (each read with the one drawn before)", flush=True)
     ORDER_SAVE = {"ordered": [list(p_) for p_ in ORDER]} if ORDER else {}
@@ -1393,8 +1401,27 @@ def main():
             act[..., c_] = torch.distributions.Categorical(logits=l_).sample()
         return act, dists(ord_lg(net, lg, act))
 
+    class JumpCat(torch.distributions.Categorical):
+        """(JUMP_EVERY) the vertical key's distribution (none, jump, crouch) with two more values to score: 3 = "not jump"
+        (none or crouch), his choice on a frame where only its jump bit was read; 4 = nothing of it was read (log 1).
+        Sampling and entropy are the plain three."""
+
+        def log_prob(self, value):
+            v_ = value.long()
+            lp_ = self.logits.gather(-1, v_.clamp(0, 2).unsqueeze(-1)).squeeze(-1)
+            lp_ = torch.where(v_ == 3, torch.logsumexp(self.logits[..., [0, 2]], -1), lp_)
+            return torch.where(v_ == 4, torch.zeros_like(lp_), lp_)
+
     def dists(logits):
+        if JE:
+            return [(JumpCat if j_ == V_HEAD else torch.distributions.Categorical)(logits=l) for j_, l in enumerate(logits.split(ACTION_DIMS, -1))]
         return [torch.distributions.Categorical(logits=l) for l in logits.split(ACTION_DIMS, -1)]
+
+    def jump_only(act_v, code_):
+        """(JUMP_EVERY) the vertical key's stored choice by the frame's code (1: the hand read it, 2: the jump alone, 0: nothing):
+        as drawn, its jump bit (1, or 3 = not jump), or 4 (not read)"""
+        return torch.where(code_ == 1, act_v, torch.where(code_ == 2, torch.where(act_v == 1, act_v, torch.full_like(act_v, 3)),
+                                                          torch.full_like(act_v, 4)))
 
     def legs_fwd(net, xl):
         """(LEGS_IN) the branch's logits in full float32 (never under the attention part's half precision, no TF32: a rounded
@@ -1407,7 +1434,7 @@ def main():
         lg [..., 17], counted on the frames his legs moved him (lo) and the branch drew; its three keys only on the frames
         his hand read them (dc), as his own keys. -> (the sum [...], the four distributions, the four masks)"""
         on = lo * (raw[..., 0] >= 0).float()
-        ms = [on * dc if k_ else on for k_ in LEGS_KEYS]
+        ms = [on * dc if k_ else on for k_ in LEGS_KEYS]     # (JUMP_EVERY: its jump between the hand's readings is not counted)
         ds = [torch.distributions.Categorical(logits=l_) for l_ in lg.float().split(LEGS_DIMS, -1)]
         rl = raw.long().clamp(min=0)
         return sum(d_.log_prob(rl[..., j_]) * ms[j_] for j_, d_ in enumerate(ds)), ds, ms
@@ -1675,7 +1702,8 @@ def main():
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
-                        env_vars=dict({k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)}, **({"NO_SWITCH": "1"} if NO_SW else {})),
+                        env_vars=dict({k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)}, **({"NO_SWITCH": "1"} if NO_SW else {}),
+                                      **({"AUTO_HOP": "1" if E_.AUTO_HOP else "0"} if hasattr(E_, "AUTO_HOP") else {})),    # (v0.3.7: always said)
                         round_secs=ROUND_SECS_CK, arena_secs=float(a.arena_len),
                         game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
                         game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS", "OVERTIME", "STYLE_P") if os.environ.get(k_)},   # games: their clock and score
@@ -1921,7 +1949,7 @@ def main():
 
         def __getitem__(self, j_):
             if j_ not in self.d:
-                self.d[j_] = torch.distributions.Categorical(logits=self.parts[j_])
+                self.d[j_] = (JumpCat if (JE and j_ == V_HEAD) else torch.distributions.Categorical)(logits=self.parts[j_])
             return self.d[j_]
 
         def __len__(self):
@@ -2191,6 +2219,9 @@ def main():
             b_live[t] = live
             b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
             dec = torch.from_numpy(np.concatenate([r[8] for r in res]).astype(np.float32)).to(dev)
+            if JE:                                                       # (JUMP_EVERY) the code: 1 the hand read, 2 the jump alone was read
+                jcode = dec.long()
+                dec = (jcode == 1).float()
             b_dec[t] = dec
             ll = torch.from_numpy(np.concatenate([r[9] for r in res]).astype(np.float32)).to(dev)
             lo = torch.from_numpy(np.concatenate([r[10] for r in res]).astype(np.float32)).to(dev)
@@ -2201,6 +2232,10 @@ def main():
             # an output's part counts only on the frames its choice was read: the intention's when it was read, the left
             # hand's (keys, weapon key) on the one frame in four it decides on (until 2026-10-08 all four were counted and
             # three were noise), the switch to his legs when it was read, what his legs take only while he moves himself
+            if JE:                                                       # (JUMP_EVERY) between the hand's readings only the jump bit was his
+                av_ = jump_only(act[:, V_HEAD], jcode)
+                b_act[t, :, V_HEAD] = av_.to(b_act.device)
+                lps[V_HEAD] = ds[V_HEAD].log_prob(av_)
             b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo, act, b_so[t])))
             if LEGS_LEARN:                                               # (--legs-learn) the branch's own draws (before the hand rule) join
                 b_lr[t] = torch.from_numpy(np.concatenate([r[16] for r in res])).to(dev)        # what he did on the frames his legs moved him
@@ -2737,7 +2772,8 @@ def main():
                 dc = b_dec[:, chunk]
                 hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk])
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
-                ent = sum(w_ * dd.entropy() * (1.0 if hm[j] is None else hm[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
+                hme = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk], ent=True) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
+                ent = sum(w_ * dd.entropy() * (1.0 if hme[j] is None else hme[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's part of what he did, the same advantage
                     lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_all)    # (--legs-residual)
@@ -3444,6 +3480,31 @@ def main():
             pm_ = max(1e-9, NP * T * DT_MIN)
             rec["hop"] = dict(pay_per_player_min=round(float(agg["hop_pay"] / pm_), 4), paying_per_min=round(float(agg.get("hop_n", 0) / pm_), 2),
                               takeoffs_per_min=round(float(agg.get("hop_takeoffs", 0) / pm_), 2), chains_per_min=round(float(agg.get("hop_chains", 0) / pm_), 2))
+        if "hop_chain" in agg:                                           # (HOP_CHAIN) chains of hops: how many, how long, what they paid
+            hc_ = np.atleast_1d(agg["hop_chain"]).astype(np.float64)
+            C_ = {k_: i_ for i_, k_ in enumerate(E_.HC_COLS)}
+            hh_ = hc_[len(E_.HC_COLS):]                                  # ended chains by length 1 .. HC_BINS (and over)
+            ln_ = np.arange(1, len(hh_) + 1)
+            n2_ = hh_[1:].sum()                                          # (a chain: two hops or more)
+            cs_ = np.cumsum(hh_[1:]) / max(1.0, n2_)
+            ch_ = max(1.0, hc_[C_["gained"]] + hc_[C_["kept"]] + hc_[C_["lost"]])
+            pm_ = max(1e-9, NP * T * DT_MIN)
+            rec["hop_chain"] = dict(chains_per_min=round(float(n2_ / pm_), 3), mean_len=round(float((hh_[1:] * ln_[1:]).sum() / max(1.0, n2_)), 2),
+                                    p95_len=int(ln_[1:][min(len(cs_) - 1, int(np.searchsorted(cs_, 0.95)))]) if n2_ > 0 else 0,
+                                    pay_per_player_min=round(float(hc_[C_["pay"]] / pm_), 4), paid_per_min=round(float(hc_[C_["paid"]] / pm_), 2),
+                                    takeoffs_per_min=round(float(hc_[C_["takeoffs"]] / pm_), 2),
+                                    gained=round(float(hc_[C_["gained"]] / ch_), 3), kept=round(float(hc_[C_["kept"]] / ch_), 3),
+                                    lost=round(float(hc_[C_["lost"]] / ch_), 3), unpaid=round(float(hc_[C_["kept_unpaid"]] / max(1.0, hc_[C_["gained"]] + hc_[C_["kept"]])), 3),
+                                    in_view=dict(takeoffs_per_min=round(float(hc_[C_["takeoffs_view"]] / max(1e-9, hc_[C_["frames_view"]] * DT_MIN)), 2),   # (the owner, 2026-10-19:
+                                                 unseen_takeoffs_per_min=round(float(hc_[C_["takeoffs"]] / max(1e-9, (hc_[C_["frames"]] - hc_[C_["frames_view"]]) * DT_MIN)), 2),   # no jumping in fights)
+                                                 share_of_time=round(float(hc_[C_["frames_view"]] / max(1.0, hc_[C_["frames"]])), 3),
+                                                 chains_ended=int(hc_[C_["ended_view"]])))
+        if "jump_every" in agg:                                          # (JUMP_EVERY) the thumb between the hand's readings and on them
+            je_ = np.atleast_1d(agg["jump_every"]).astype(np.float64)
+            pm_ = max(1e-9, NP * T * DT_MIN)
+            rec["jump_every"] = dict(presses_per_min=round(float((je_[1] + je_[2]) / pm_), 2),
+                                     presses_between=round(float(je_[1] / max(1.0, je_[1] + je_[2])), 3),
+                                     releases_between=round(float(je_[3] / max(1.0, je_[3] + je_[4])), 3))
         if "games" in agg:                                               # (GAME_P, LATE_P, WIN_PAY) the whole games and late rounds that ended in this rollout
             g_ = np.atleast_1d(agg["games"]).astype(np.float64)        # (the simulator's GAMES_COLS)
             n_, l_ = max(1.0, g_[0] + g_[1]), max(1.0, g_[4])

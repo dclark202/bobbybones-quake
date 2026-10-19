@@ -50,18 +50,42 @@ AUTOHOP = os.environ.get("BOBBY_AUTOHOP", "0") not in ("", "0")
 _autohop_next = {}
 
 
-def give_autohop(p, now, log=None):
-    """put cg_autoHop 1 in a Bobby's userinfo (at most every 10 s a player), when BOBBY_AUTOHOP is on"""
-    if not AUTOHOP or p is None or now < _autohop_next.get(p.id, 0.0):
+_autohop_said = set()
+
+
+def autohop_want(P):
+    """(v0.3.7) the auto-hop a network was trained with: its policy.npz's env_vars AUTO_HOP (sim/export_duel.py writes it
+    into every file from v0.3.7 on) -> True / False; None for an older file that does not say (BOBBY_AUTOHOP decides)"""
+    try:
+        ev_ = json.loads(str(P["env_vars"])) if P is not None and "env_vars" in P else {}
+    except Exception:  # noqa: BLE001
+        return None
+    if "AUTO_HOP" not in ev_:
+        return None
+    return str(ev_["AUTO_HOP"]).strip() not in ("0", "", "0.0")
+
+
+def give_autohop(p, now, log=None, want=None):
+    """put cg_autoHop in a Bobby's userinfo (at most every 10 s a player): want True / False, the network's own setting
+    (autohop_want: a server cannot play him with another than he trained with; BOBBY_AUTOHOP is overruled, and said so
+    once); want None (an older file), cg_autoHop 1 when BOBBY_AUTOHOP is on, as before"""
+    if want is None and not AUTOHOP:
+        return
+    if p is None or now < _autohop_next.get(p.id, 0.0):
         return
     _autohop_next[p.id] = now + 10.0
+    val = "1" if (AUTOHOP if want is None else want) else "0"
+    if want is not None and "BOBBY_AUTOHOP" in os.environ and bool(want) != AUTOHOP and "said" not in _autohop_said:
+        _autohop_said.add("said")
+        if log:
+            log("BOBBY_AUTOHOP={} overruled: the network was trained with AUTO_HOP={}".format(os.environ["BOBBY_AUTOHOP"], val))
     try:
         cv = p.cvars
-        if str(cv.get("cg_autoHop", "")) != "1":
-            cv["cg_autoHop"] = "1"
+        if str(cv.get("cg_autoHop", "")) != val:
+            cv["cg_autoHop"] = val
             p.cvars = cv
             if log:
-                log("cg_autoHop 1 given to client {}".format(p.id))
+                log("cg_autoHop {} given to client {}".format(val, p.id))
     except Exception:  # noqa: BLE001
         pass
 D = "/tmp/practice"
@@ -1503,7 +1527,7 @@ class duelbot(minqlx.Plugin):
                 self.next_check = now + 5
                 minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
             return
-        give_autohop(bobby, now, self.log)
+        give_autohop(bobby, now, self.log, want=autohop_want(getattr(self, "P", None)))
         if human is not None and filler is not None:
             if now > self.next_check:
                 self.next_check = now + 5
