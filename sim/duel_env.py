@@ -1225,12 +1225,49 @@ MID_START_P = float(os.environ.get("MID_START_P") or 0.0)
 SPAWN_START_P = float(os.environ.get("SPAWN_START_P") or 0.0)
 SPAWN_START_LEN = float(os.environ.get("SPAWN_START_LEN") or 10.0)
 SPAWN_START_BEL = float(os.environ.get("SPAWN_START_BEL") or 1.0) > 0
-MOMENT_P = MID_START_P + SPAWN_START_P
+#   RAIL_START_P=<share>   (v0.3.6, the owner's go of 2026-10-19: "let's plan to add some rail practice tonight") rail range
+#                 starts: a share of the games' time, beside MID_START_P and counted like it (a round's kind is drawn by
+#                 share / length), in rounds that begin as a mid-game start does (a saved mid moment: score, clock, stacks,
+#                 items, what each knows) with the two players put at long range instead, where the pros fired the rail:
+#                 a pair of places (the shooter's and the enemy's) of sim/rail_pairs/<map>.json (tools/rail_pairs.py: the
+#                 pros' rail shots at 600 to 1100 units in the demos, each place let down onto the floor and the lines between
+#                 them checked in this simulator), which seat stands at which end drawn evenly (zero-sum: the two seats are
+#                 alike). Both get the railgun in hand, ready to fire, with at least RAIL_START_AMMO slugs; the rest of each
+#                 one's stack is the moment's. Each keeps the pros' horizontal speed at that frame (at most 320) and looks
+#                 toward the other within RAIL_START_YAW degrees (a uniform draw; pitch level): he has to notice and aim as
+#                 ever (the reaction, acquire and surprise delays start at nothing seen; the sightings on their way are void).
+#                 Rockets in the air from the moment are gone. Then it is a normal duel with normal pay: to the game's limit
+#                 like a mid-game start (RAIL_START_LEN=0, the default; overtime as there) or for RAIL_START_LEN seconds of
+#                 that game (as a spawn start). Its frames are a mid-game start's (game kind 3; with RAIL_START_LEN a spawn
+#                 start's, kind 4) for everything that reads the kind (overtime, the head's win label), but not counted as
+#                 one (stats["moments"]), and no moment is saved from it. A map with no railgun
+#                 or no pairs (Lost World has no railgun) has none: its share goes to the other kinds by their shares.
+#                 What the first frame's inputs show is the moment's (a frame of 25 ms before the change; the next frame's
+#                 are the new places'). A training switch (a curriculum), not a PLAY_VAR: the servers need nothing.
+#                 Counters: stats["rail_start"] (RAIL_START_COLS), the counted seats as RAIL_COLS's.
+RAIL_START_P = float(os.environ.get("RAIL_START_P") or 0.0)
+RAIL_START_LEN = float(os.environ.get("RAIL_START_LEN") or 0.0)
+RAIL_START_YAW = float(os.environ.get("RAIL_START_YAW") or 45.0)
+RAIL_START_AMMO = float(os.environ.get("RAIL_START_AMMO") or 10.0)
+RAIL_EARLY = 10.0                                          # (the counters: a start's first seconds)
+RAIL_TRIES = 16                                            # pairs tried at a start before the last one drawn stands
+RAIL_START_COLS = ("rail starts begun", "asked for with no mid moment saved: a whole game or another kind instead", "rail starts ended",
+                   "frames of matches in rail starts", "of them in a start's first RAIL_EARLY seconds",
+                   "rail shots in rail starts (counted seats): near", "mid", "far", "hits: near", "mid", "far",
+                   "frags by the rail: near", "mid", "far", "counted seats begun", "of them with a rail shot in the first RAIL_EARLY s",
+                   "seconds to that first shot, summed", "placements that took another pair (a line or the room not clear)",
+                   "the start distance, summed", "rail starts ended in the second half of the matches (the first seat is his)",
+                   "of those: he won", "level", "he lost")
+MOMENT_P = MID_START_P + SPAWN_START_P + RAIL_START_P
 MOMENTS = MOMENT_P > 0
-assert MID_START_P >= 0 and SPAWN_START_P >= 0 and GAME_P + LATE_P + MOMENT_P <= 1.0 + 1e-9, "GAME_P, LATE_P, MID_START_P and SPAWN_START_P are shares of the games' time"
-assert not MOMENTS or GAME_P > 0, "MID_START_P and SPAWN_START_P begin from moments of whole games: GAME_P must be on"
+assert MID_START_P >= 0 and SPAWN_START_P >= 0 and RAIL_START_P >= 0 and GAME_P + LATE_P + MOMENT_P <= 1.0 + 1e-9, \
+    "GAME_P, LATE_P, MID_START_P, SPAWN_START_P and RAIL_START_P are shares of the games' time"
+assert not MOMENTS or GAME_P > 0, "MID_START_P, SPAWN_START_P and RAIL_START_P begin from moments of whole games: GAME_P must be on"
 MID_LO, MID_HI, MID_PER_GAME = 60.0, 480.0, 2
 MID_MEAN = GAME_LEN - 0.5 * (MID_LO + MID_HI)             # a mid-game start's length on average (for the shares)
+RAIL_MEAN = MID_MEAN if RAIL_START_LEN <= 0 else min(RAIL_START_LEN, GAME_LEN - MID_HI)   # a rail start's length on average
+RAIL_FRAMES = int(round(RAIL_START_LEN / DT))
+RAIL_KIND = 3 if RAIL_START_LEN <= 0 else 4               # (the game kind of its frames: a mid-game start's, or a spawn start's)
 SPAWN_BANK, MID_BANK = 256, 64
 SPAWN_FRAMES = int(round(SPAWN_START_LEN / DT))
 MOMENT_COLS = ("mid-game starts begun", "spawn starts begun", "mid-game starts ended", "spawn starts ended",
@@ -1246,7 +1283,8 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
                  "r_long", "op_lab", "pf_node", "emg_links",
-                 "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band")   # (HEAD_EVENTS)
+                 "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
+                 "rail_m", "rail_t0", "rail_shot", "rail_pairs")    # (RAIL_START_P)
 MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
@@ -2980,6 +3018,8 @@ class DuelEnv:
         self._es_init()
         if MOMENTS:                                          # (MID_START_P, SPAWN_START_P) the saved moments of whole games
             self._moment_init(seed)
+        if RAIL_START_P > 0:                                 # (RAIL_START_P) the pros' long rail places of this map
+            self._rail_start_init(bsp)
         if OPENINGS:                                         # (OPENINGS) the pros' openings by spawn point
             self._open_init(bsp)
         for i in range(n):
@@ -4343,10 +4383,27 @@ class DuelEnv:
         hand_ = cnt & alive & (self.weapon[:n] == RG) & (self.hp[opp] > 0)
         np.add.at(R, 7 + band[hand_], 1)
         np.add.at(R, 10 + band[hand_ & np.asarray(self.visible, bool)[:n]], 1)
+        rs_ = None
+        if RAIL_START_P > 0 and MOMENTS and self.rail_m.any():     # (RAIL_START_P) the rail starts' own counters
+            RS = self.stats["rail_start"]
+            rs_ = np.repeat(self.rail_m, n // self.M)
+            s0_ = sh_ & rs_
+            np.add.at(RS, 5 + band[s0_], 1)
+            f0_ = s0_ & ~self.rail_shot
+            if f0_.any():
+                t_ = (self.g_tick[ar[f0_] // (n // self.M)] - self.rail_t0[ar[f0_] // (n // self.M)]) * DT
+                e_ = t_ < RAIL_EARLY
+                RS[15] += float(e_.sum())
+                RS[16] += float(t_[e_].sum())
+                self.rail_shot[ar[f0_]] = True
         for i_, v_ in st.get("rail", ()):
             d_ = float(np.linalg.norm(s[i_, :3] - s[v_, :3]))
             if cnt[i_]:
                 R[4 + (0 if d_ < RAIL_FAR_LO else 1 if d_ <= RAIL_FAR_HI else 2)] += 1
+                if rs_ is not None and rs_[i_]:
+                    b0_ = 0 if d_ < RAIL_FAR_LO else 1 if d_ <= RAIL_FAR_HI else 2
+                    RS[8 + b0_] += 1
+                    RS[11 + b0_] += int(self.hp[v_] <= 0)
             if RAIL_FAR_PAY > 0:
                 b_ = RAIL_FAR_PAY * min(1.0, max(0.0, (d_ - RAIL_FAR_LO) / max(1e-6, RAIL_FAR_HI - RAIL_FAR_LO)))
                 reward[i_] += b_
@@ -7038,6 +7095,21 @@ class DuelEnv:
         self.g_end = np.full(self.M, GAME_FRAMES, np.int64)
         self.g_snap = np.full((self.M, MID_PER_GAME), -1, np.int64)
         self.stats["moments"] = np.zeros(len(MOMENT_COLS))
+        self.rail_m = np.zeros(self.M, bool)                 # (RAIL_START_P) match m is in a rail start
+        self.rail_pairs = None                               # ... the map's pairs of places (None: no rail starts here)
+
+    def _rail_start_init(self, bsp):
+        """(RAIL_START_P) the map's pairs of places (sim/rail_pairs/<map>.json; none on a map without a railgun), the books"""
+        self.stats["rail_start"] = np.zeros(len(RAIL_START_COLS))
+        self.rail_t0 = np.zeros(self.M, np.int64)            # the game's frame the start began at
+        self.rail_shot = np.zeros(self.n, bool)              # a counted seat has fired the rail since the start
+        f_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rail_pairs", os.path.splitext(os.path.basename(bsp))[0].lower() + ".json")
+        if RG not in self.map_weapons or not os.path.exists(f_):
+            return
+        with open(f_, encoding="utf-8") as fh_:
+            pr_ = json.load(fh_)
+        if pr_.get("pairs"):
+            self.rail_pairs = np.array([p_[:10] for p_ in pr_["pairs"]], np.float32)
 
     def _moment_game(self, m, late):
         """a whole game or a late round begins in match m: its limit, and a whole game's frames for the mid-game moments"""
@@ -7052,20 +7124,21 @@ class DuelEnv:
         r0, rg, rl, rx = self._game_rates()
         kp0 = float(self.kind_p[0])
         rm, rs = kp0 * MID_START_P / MID_MEAN, kp0 * SPAWN_START_P / SPAWN_START_LEN
-        if rg + rl + rm + rs <= 0:
+        rr = kp0 * RAIL_START_P / RAIL_MEAN if self.rail_pairs is not None else 0.0     # (RAIL_START_P: rail range starts)
+        if rg + rl + rm + rs + rr <= 0:
             return False
-        u = self.rng.random() * (r0 + rg + rl + rx + rm + rs)
-        if u >= rg + rl + rm + rs:
+        u = self.rng.random() * (r0 + rg + rl + rx + rm + rs + rr)
+        if u >= rg + rl + rm + rs + rr:
             return False
         if u < rg + rl:
             self._game_start(m, late=bool(u >= rg))
             return True
-        kd = 3 if u < rg + rl + rm else 4
-        bank = self.mom_bank[1 if kd == 3 else 0]            # (the bank: spawn moments, mid-game moments)
+        kd = 3 if u < rg + rl + rm else 4 if u < rg + rl + rm + rs else 5
+        bank = self.mom_bank[0 if kd == 4 else 1]            # (the bank: spawn moments, mid-game moments; a rail start: a mid moment)
         if kd == 4 and self.mom_first and m * 2 >= self.M:   # (the first seat is his there: he is the one who spawns)
             bank = [b_ for b_ in bank if b_["who"] == 0]
         if not bank:                                         # nothing saved yet (a process's first minutes): a whole game or one of
-            self.stats["moments"][4] += 1                    # the other kinds, by their shares of the time (drawn by the rates the
+            self.stats["moments" if kd < 5 else "rail_start"][4 if kd < 5 else 1] += 1     # the other kinds, by their shares of the time (drawn by the rates the
             kp = np.asarray(self.kind_p, np.float64)         # short kinds would take nearly every start, and a whole game at every
             oth = kp0 * max(0.0, 1.0 - GAME_P - LATE_P - MOMENT_P) + float(kp[1:].sum())      # ask would leave none for later)
             if self.rng_mom.random() * (kp0 * GAME_P + oth) >= kp0 * GAME_P:
@@ -7132,6 +7205,16 @@ class DuelEnv:
             qq = []
             for m, mo, kd in self.mom_put:
                 self._moment_set(m, mo, obs)
+                if kd == 5:                                  # (RAIL_START_P) a rail start: a mid-game start's frames, at long range
+                    self.game[m] = RAIL_KIND                 # (to the limit: a mid-game start's kind; RAIL_START_LEN: a spawn start's)
+                    self._hd_game(self._seats(m), RAIL_KIND)
+                    self.g_end[m] = GAME_FRAMES if RAIL_START_LEN <= 0 else min(GAME_FRAMES, int(self.g_tick[m]) + RAIL_FRAMES)
+                    self.g_snap[m] = -1
+                    if OVERTIME:
+                        self.g_ot[m] = 0
+                    self._rail_place(m)
+                    qq += [int(i) for i in self._seats(m)]
+                    continue
                 self.game[m] = kd                            # 3 a mid-game start, 4 a spawn start
                 self._hd_game(self._seats(m), kd)            # (HEAD_EVENTS) the win label's game number
                 self.g_end[m] = GAME_FRAMES if kd == 3 else min(GAME_FRAMES, int(self.g_tick[m]) + SPAWN_FRAMES)
@@ -7145,12 +7228,16 @@ class DuelEnv:
                 info["aux"][qq] = self.aux()[qq]
             if "hand_lab" in info:
                 info["hand_lab"][qq] = self.hand_lab[qq]
-        MS[5:7] += (float((self.game == 3).sum()), float((self.game == 4).sum()))
+        MS[5:7] += (float(((self.game == 3) & ~self.rail_m).sum()), float(((self.game == 4) & ~self.rail_m).sum()))
+        if self.rail_m.any():                                # (RAIL_START_P) the rail starts' frames
+            RS = self.stats["rail_start"]
+            RS[3] += float(self.rail_m.sum())
+            RS[4] += float((self.rail_m & ((self.g_tick - self.rail_t0) * DT < RAIL_EARLY)).sum())
         bok = getattr(self, "v02_bel_ok", None)
         g_ = self._others_arr().shape[1] + 1
         for v in np.nonzero(died & ~done)[0]:                # a respawn in a whole game or a mid-game start: the spawn moment
             m = self._match_of(v)
-            if self.game[m] not in (1, 3):
+            if self.game[m] not in (1, 3) or self.rail_m[m]:    # (not from a rail start: its places were put there)
                 continue
             if OVERTIME and self.g_tick[m] >= GAME_FRAMES:  # (OVERTIME) moments are taken before the limit only
                 continue
@@ -7166,6 +7253,56 @@ class DuelEnv:
             self._moment_keep(1, self._moment_take(int(m), obs))
             MS[8] += 1
 
+    def _rail_place(self, m):
+        """(RAIL_START_P) match m, just made a saved mid moment, is put at long range: a pair of the pros' rail places (the
+        ends drawn evenly between the two seats), both with the rail in hand and ready, the pros' horizontal speed,
+        looking toward the other within RAIL_START_YAW degrees; nothing of the other is seen yet. A pair whose lines or
+        room are not clear here is passed over for another (up to RAIL_TRIES; the last one drawn stands if none is)"""
+        rng, RS = self.rng_mom, self.stats["rail_start"]
+        q = [int(x) for x in self._seats(m)]
+        P = self.rail_pairs
+        for _ in range(RAIL_TRIES):
+            r_ = P[int(rng.integers(len(P)))]
+            ends = [(r_[0:3], r_[6:8]), (r_[3:6], r_[8:10])]
+            if rng.random() < 0.5:
+                ends = ends[::-1]
+            pa, pb = ends[0][0].astype(np.float32), ends[1][0].astype(np.float32)
+            room = all(not self.w.trace(p_, p_, MINS, MAXS)["startsolid"] for p_ in (pa, pb))
+            lines = bool(self._los(np.stack([pa, pb]) + np.array([0, 0, VIEW_H], np.float32),
+                                   np.stack([pb, pa]) + np.array([0, 0, 8.0], np.float32)).all())
+            if room and lines:
+                break
+            RS[17] += 1
+        for j_, i in enumerate(q):
+            p_, v_ = ends[j_][0], ends[j_][1]
+            o_ = ends[1 - j_][0]
+            face = math.degrees(math.atan2(float(o_[1] - p_[1]), float(o_[0] - p_[0]))) + float(rng.uniform(-RAIL_START_YAW, RAIL_START_YAW))
+            self.w.reset(i, (float(p_[0]), float(p_[1]), float(p_[2])), (float(v_[0]), float(v_[1]), 0.0), face)
+            self.yaw[i], self.pitch[i] = face, 0.0
+            self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
+            self.has[i, RG] = True
+            self.ammo[i, RG] = max(float(self.ammo[i, RG]), RAIL_START_AMMO)
+            self.weapon[i] = RG
+            self.cool[i], self.fire_cd[i] = 0.0, 0.0
+            self.fire_q[i] = False
+            self.zoom[i], self.duck[i] = False, False
+            self.ra[i] = False                               # (the moment's rockets in the air were fired from elsewhere)
+            self.vis_run[i], self.acquired[i], self.visible[i] = 0, False, False
+        qa = np.array(q)
+        for h_ in self.opp_hist:                             # (what was on its way to his eyes was of the places before)
+            h_[1][qa] = False
+        for q_ in getattr(self, "v02_q", ()):
+            q_[0][qa] = False
+            q_[1][qa] = False
+        self.state = self.w.state()
+        self.rail_m[m] = True
+        self.rail_t0[m] = int(self.g_tick[m])
+        self.rail_shot[qa] = False
+        RS[0] += 1
+        RS[14] += float(self._counted(qa).sum())
+        RS[18] += float(np.linalg.norm(ends[0][0] - ends[1][0]))
+
     def _moment_keep(self, kd, mo):
         bank, cap = self.mom_bank[kd], (SPAWN_BANK, MID_BANK)[kd]
         if len(bank) < cap:
@@ -7180,6 +7317,18 @@ class DuelEnv:
         q = self._seats(m)
         MS = self.stats["moments"]
         kd = int(self.game[m])
+        if self.rail_m[m]:                                   # (RAIL_START_P) a rail start: its own counters
+            RS = self.stats["rail_start"]
+            RS[2] += 1
+            if m * 2 >= self.M:
+                d = float(self.frags_r[int(q[0])] - self.frags_r[int(q[1])])
+                RS[19] += 1
+                RS[20 if d > 0 else 21 if d == 0 else 22] += 1
+            self.rail_m[m] = False
+            self.rail_shot[q] = False
+            self.game[m] = 0
+            self.g_win[q], self.g_flat[q] = 0.0, 0.0
+            return
         MS[kd - 1] += 1
         if kd == 3 and m * 2 >= self.M:
             d = float(self.frags_r[int(q[0])] - self.frags_r[int(q[1])])
@@ -7206,6 +7355,8 @@ class DuelEnv:
                 r0_, rg_, rl_, _ = self._game_rates()
                 rm_ = float(self.kind_p[0]) * MID_START_P / MID_MEAN if MOMENTS else 0.0          # (the rounds begun from saved moments)
                 rs_ = float(self.kind_p[0]) * SPAWN_START_P / SPAWN_START_LEN if MOMENTS else 0.0
+                if MOMENTS and self.rail_pairs is not None:  # (RAIL_START_P: rail range starts)
+                    rs_ += float(self.kind_p[0]) * RAIL_START_P / RAIL_MEAN
                 other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
         p = self.item_run_p + pj + pr
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):

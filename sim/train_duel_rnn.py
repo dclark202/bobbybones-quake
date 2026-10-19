@@ -1715,7 +1715,7 @@ def main():
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_far", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
                 "rj_tries", "rj_over", "rj_frames", "rj_shots",
-                "hurt_dmg", "legs", "games", "open", "moments", "overtime")
+                "hurt_dmg", "legs", "games", "open", "moments", "overtime", "rail_start")
     LIVE_PATH = os.path.join(out, "live.json")                         # (B-265) pay weights changed while the run trains
     LIVE_ON = hasattr(E_, "live_set")
     LIVE_START = {k_: os.environ.get(k_) for k_ in getattr(E_, "LIVE_VARS", ())}      # the run's start: its environment
@@ -3003,6 +3003,24 @@ def main():
                                   league_mid=dict(games=int(mo_[11]), won=int(mo_[12]), drawn=int(mo_[13]), lost=int(mo_[14])),
                                   by_map={k_: [int(x_) for x_ in np.atleast_1d(v_["moments"])[[0, 1, 4, 7, 8]]]     # mid begun, spawn begun, none saved, saved spawn, saved mid
                                           for k_, v_ in agg_map.items() if "moments" in v_})
+        if "rail_start" in agg:                                          # (RAIL_START_P) rail range starts: both at long range, the rail in hand
+            rs_ = np.atleast_1d(agg["rail_start"]).astype(np.float64)    # (the simulator's RAIL_START_COLS)
+            bd_ = ("near", "mid", "far")
+
+            def rs_rec(x_):
+                return dict(begun=int(x_[0]), ended=int(x_[2]), no_moment_yet=int(x_[1]),
+                            time_share=round(float(x_[3] / max(1.0, T * n_groups)), 4),                    # of all the groups' time
+                            early_share=round(float(x_[4] / max(1.0, T * n_groups)), 4),                   # ... in a start's first 10 s
+                            shots={b_: int(x_[5 + k_]) for k_, b_ in enumerate(bd_)}, hits={b_: int(x_[8 + k_]) for k_, b_ in enumerate(bd_)},
+                            frags={b_: int(x_[11 + k_]) for k_, b_ in enumerate(bd_)},
+                            hit_rate={b_: round(float(x_[8 + k_] / max(1.0, x_[5 + k_])), 3) for k_, b_ in enumerate(bd_)},
+                            first_shot_10s=round(float(x_[15] / max(1.0, x_[14])), 3),                     # counted seats with a rail shot within 10 s,
+                            first_shot_s=round(float(x_[16] / max(1.0, x_[15])), 2),                       # ... and the seconds to it
+                            start_distance=int(x_[18] / max(1.0, x_[0])), other_pair=int(x_[17]),
+                            league=dict(games=int(x_[19]), won=int(x_[20]), drawn=int(x_[21]), lost=int(x_[22])))
+            rec["rail_start"] = dict(rs_rec(rs_), p=float(getattr(E_, "RAIL_START_P", 0.0)), secs=float(getattr(E_, "RAIL_START_LEN", 0.0)),
+                                     by_map={k_: rs_rec(np.atleast_1d(v_["rail_start"]).astype(np.float64))
+                                             for k_, v_ in agg_map.items() if "rail_start" in v_})
         if "overtime" in agg:                                            # (OVERTIME) games level at the limit played on, 120 s a period
             ot_ = np.atleast_1d(agg["overtime"]).astype(np.float64)      # (the simulator's OT_COLS)
             rec["overtime"] = dict(games=int(ot_[0]), periods=int(ot_[1]), ended_with_a_lead=int(ot_[2]), level_at_the_cap=int(ot_[3]),

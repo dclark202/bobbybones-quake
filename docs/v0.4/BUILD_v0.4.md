@@ -636,3 +636,29 @@ A tiny trainer (one simulator, 4 players, 32 frames, 11 updates): the same value
 the changed file applied from the next update in the simulator and the trainer (`rec["live"]`, `live_applied.json`, the
 checkpoint's `live` and `env_vars` RAIL_FAR_PAY=0.12), a file with an unknown name refused and the values kept.
 `tools/v036_check.py ident` PASS, `ffa` identical at two players.
+
+## 11. v0.3.6 rail range starts (branch v036-rail from v036, 2026-10-19; the owner's go: "let's plan to add some rail practice tonight")
+
+- **`RAIL_START_P`** (a training switch, off by default; not a PLAY_VAR: the plugins need nothing): a share of the games'
+  time, beside `MID_START_P` and counted like it, in rounds that begin as a mid-game start (a saved mid moment: score,
+  clock, stacks, items, what each knows) with both players put at long range where the pros fired the rail: a pair of
+  places from `sim/rail_pairs/<map>.json` (`tools/rail_pairs.py`), the ends drawn evenly between the seats (zero-sum).
+  Both get the rail in hand, ready, at least `RAIL_START_AMMO` (10) slugs, the pros' horizontal speed at that frame (at
+  most 320), a view toward the other within `RAIL_START_YAW` (45) degrees, pitch level, nothing of the other seen yet (the
+  reaction, acquire and surprise delays run as ever). Then a normal duel with normal pay: to the game's limit
+  (`RAIL_START_LEN=0`, the default: a mid-game start's kind) or for `RAIL_START_LEN` seconds (a spawn start's kind). No
+  moment is saved from it. Lost World has no railgun: no rail starts there. The first frame's inputs are the moment's (one
+  frame of 25 ms). Counters: `rec["rail_start"]` (begun, time share, shots / hits / frags by range, the share of seats with
+  a rail shot within 10 s and the seconds to it, the league half's results), by map.
+- **The pairs** (`tools/rail_pairs.py`): from the light demo sets, every frame where the demo's player holds the rail,
+  fires, has the enemy noticed and in the demo (one a 1.5 s), both places let down onto the floor in the simulator (with
+  the map's solid pieces, as `SOLIDS=1`), no solid, lava or slime, both lines clear for the eye and the player's mask,
+  600 to 1100 units after the drop; at most 3,000 a map. Campgrounds (5 light sets) is filled up from the yardsticks'
+  view rows (a rail shot at that distance, the enemy a place where the pros stood with an enemy in view at that distance).
+  Pairs: Blood Run 3,000, Aerowalk 3,000, Sinister 1,122, Furious Heights 1,624, Battleforged 1,355, Campgrounds 30 + 1,447
+  derived, Hektik 2,371, Toxicity 1,084, Cure 710, Lost World none; medians 760 to 820 units.
+- **Proofs** (CPU, scratch, the run's `.cmd`): off (unset and `RAIL_START_P=0`) against branch v036 (4d886a1), both modules,
+  Blood Run and Aerowalk, whole games cut short so that games end and new ones are drawn: inputs, rewards, done and every
+  counter identical; `tools/make_ffa_env.py` regenerated. 400 starts on each of the nine maps with pairs: every place out of
+  solids, on the floor, out of lava and slime, both lines clear, 600 to 1100 units, the rail in hand and ready. A short play
+  on Blood Run with a scripted aimer: the counters fill.
