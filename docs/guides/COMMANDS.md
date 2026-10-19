@@ -181,11 +181,16 @@ it over, so the trainer never reads half a file):
 - The values in force are the run's start (its `.cmd`'s `set` lines and its arguments) with the file laid over it: a name
   left out of the file keeps its start value, so `{}` puts everything back. Deleting the file changes nothing.
 - Allowed names: the simulator's `LIVE_VARS` (`sim/duel_env.py`): `ITEM_FLAT` (the environment variable's string),
-  `SPEED_PAY`, `SPEED_PAY_RUN` (left out it follows `SPEED_PAY`, as at a start), `HOP_PAY`, `HOP_QUIET` (0/1),
+  `SPEED_PAY`, `SPEED_PAY_RUN` (see below), `HOP_PAY`, `HOP_QUIET` (0/1),
   `HOP_QUIET_HEARD`, `HOP_QUIET_NEAR`, `HIGH_PAY`, `HIGH_Z`, `RAIL_FAR_PAY`, `RAIL_FAR_LO`, `RAIL_FAR_HI`, `STACK_DIFF`,
   `BLIND_RL_DMG`; and the trainer's `DMG_TAKEN_W` (`--dmg-taken-w`) and `DMG_REWARD` (`--dmg-reward`; 0 = the curriculum's).
   Numbers of 0 or more. Any other name, a value that is not a number, or a file that is not one JSON object: the whole
   file is refused and nothing is applied.
+- `SPEED_PAY` (the speed pay in games) and `SPEED_PAY_RUN` (in item and jump runs) are set apart: `SPEED_PAY_RUN` in the
+  file sets the runs' number alone, e.g. `{"SPEED_PAY": 0.35, "SPEED_PAY_RUN": 0.5}`; a run whose `.cmd` sets
+  `SPEED_PAY_RUN` (v0.3.5's and v0.3.6's: 0.3) keeps that value when the file changes `SPEED_PAY` only; with
+  `SPEED_PAY_RUN` neither in the `.cmd` nor in the file it follows `SPEED_PAY` (the start rule). A change pays from the
+  next rollout on: `speed_pay_per_player_min` and `speed_pay_run_per_player_min` in `v14` of `metrics.jsonl`.
 - Not allowed on purpose: whatever is read at the start only (`SHOT_COST`, `SHOT_W`, `WIN_PAY` make tables when a
   simulator is built), every input, output, round-kind, map and league setting. Those still need a restart.
 - To see it took effect: the trainer prints `live: from update N ... changed {...}; in force {...}` (or `REFUSED` and

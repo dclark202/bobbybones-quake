@@ -892,6 +892,31 @@ JUMPS = float(os.environ.get("JUMPS") or 0.0) > 0
 #                 does not come to the take-off in half of the tries: its own way goes round them from where his tries
 #                 begin. A jump it goes for and seldom lands keeps its labels: they show the way, not the one execution).
 JUMP_ALL = float(os.environ.get("JUMP_ALL") or 0.0) > 0
+#   JUMP_WEIGHT=1 (v0.3.6, the owner's go of 2026-10-18) a jump run's jump is drawn with weight max(JUMP_W_FLOOR, 1 - his
+#                 success there) instead of every jump as often as any other: the jumps he fails get most of the practice,
+#                 the ones he makes still some. His success: per jump of this map in each simulator, a running average of
+#                 "over" per try (over as the counters have it: at the take-off, then within 110 units of the landing on
+#                 the floor or at the item), prior 0.5; a try's weight is 1 / (tries + 2) at first (the prior counts two
+#                 tries), then that of an exponential average with a half-life of JUMP_W_HALF tries. A try counts when the
+#                 next one begins (over or not: a fall short, his time over, a death, the item reached) or at once when he
+#                 gets over; a try cut by the run's end counts nothing. The counted seats only (count_even): his own tries.
+#                 The estimate lives in the process (a restart begins at the prior again). A training switch: not a PLAY_VAR.
+#   JUMP_FAR_P    (v0.3.6, the owner's go of 2026-10-18; his value 0.5) the share of jump runs' tries that begin further back:
+#                 JUMP_FAR_LO to JUMP_FAR_HI seconds of way before the take-off (3 to 5; with less way to it, from the
+#                 farthest fifth of what there is), on the same way as the near start (the jump the first one ahead, the
+#                 item behind it the nearest of its kind), and moving along the way at JUMP_FAR_SPEED (300 units a second:
+#                 about his speed in games), so that he builds the jump's speed himself. The near start is as before (a
+#                 second or two of way, standing). Its try's time: twice the way's seconds and JUMP_TRY_SLACK, as before.
+#                 Counted: stats["jump_far"] (JUMP_FAR_COLS). A training switch: not a PLAY_VAR.
+JUMP_WEIGHT = float(os.environ.get("JUMP_WEIGHT") or 0.0) > 0
+JUMP_W_FLOOR = float(os.environ.get("JUMP_W_FLOOR") or 0.1)
+JUMP_W_HALF = float(os.environ.get("JUMP_W_HALF") or 200.0)
+JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
+JUMP_FAR_LO = float(os.environ.get("JUMP_FAR_LO") or 3.0)
+JUMP_FAR_HI = float(os.environ.get("JUMP_FAR_HI") or 5.0)
+JUMP_FAR_SPEED = float(os.environ.get("JUMP_FAR_SPEED") or 300.0)
+JUMP_FAR_COLS = ("near tries", "near over", "far tries", "far over")
+assert 0.0 <= JUMP_FAR_P <= 1.0 and 0.0 < JUMP_W_FLOOR <= 1.0 and JUMP_W_HALF > 0 and JUMP_FAR_HI > JUMP_FAR_LO
 #   JUMP_OPEN     "aerowalk:1;bloodrun:1,26": per map, the jumps (their numbers in its list) that his ways take in games and
 #                 item runs too: the inputs of his way, its pay, the item rule and the item runs' targets follow the
 #                 walking map with those jumps (route_o). Scripted players keep the walking map's ways. A jump is opened
@@ -2539,6 +2564,12 @@ class DuelEnv:
         self.jrun_new = np.zeros(self.n, bool)              # ... the try began this frame
         self.jrun_it = np.full(self.n, -1, np.int64)        # ... the item that is its target
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
+        self.jrun_far = np.zeros(self.n, bool)              # ... (JUMP_FAR_P) it began far back, moving
+        self.jrun_open = np.zeros(self.n, bool)             # ... (JUMP_WEIGHT) its outcome is not in his success yet
+        self.jw_s = np.full(64, 0.5)                        # (JUMP_WEIGHT) per jump of this map: his success, his tries counted
+        self.jw_n = np.zeros(64)
+        self.jfield_land = set()                            # the sets of ways (jfields) whose goal row leads to a jump's landing first
+        self.jump_far = {}                                  # (JUMP_FAR_P) (jump, its entry in jump_tries) -> the far starting spots
         self._replaced = False                              # a try began inside this step: the state is read again at its end
         self.count_even = False                             # the jump counters count the even seats only (the trainer: those are always his)
         self.spam_places = np.zeros((0, 3), np.float32)     # BLIND_PLACES: where the pros' blind shots land on this map
@@ -2641,7 +2672,10 @@ class DuelEnv:
                         continue
                     X_.T[g_] = np.where(X_.T[g_] < 1e8, X_.T[g_] + J_.T[g_, nb_], X_.T[g_]).astype(X_.T.dtype)   # (... and the rest from there)
                     self.jump_tries[k_] = [(g_, st_, len(self.jfields))]
+                    self.jfield_land.add(len(self.jfields))
                     self.jfields.append(X_)
+                if JUMP_FAR_P > 0:
+                    self._jump_far_spots()
         self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
         self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
         self.rj_run_p = RJ_RUN_P
@@ -2851,6 +2885,7 @@ class DuelEnv:
                           high=np.zeros(3), high_dmg=np.zeros(3),       # B-160: frames with his enemy in view, and damage dealt, standing lower by 48 units or more, level, higher
                           sc_frags_w=np.zeros(NW),                      # frags made by scripted players, by weapon
                           jump_tries=np.zeros(64), jump_over=np.zeros(64), jump_short=np.zeros(64),   # JUMPS: per jump of this map
+                          jump_far=np.zeros(len(JUMP_FAR_COLS)),        # JUMP_FAR_P: tries and over by start (JUMP_FAR_COLS; counted seats)
                           jump_frames=0, start_gun=0,          # frames in jump runs; lives begun with a weapon in hand (START_GUN_P)
                           rj_tries=np.zeros(64), rj_over=np.zeros(64), rj_frames=0, rj_shots=0,   # RJ_RUN_P: per rocket jump of this map; frames, rockets fired
                           start_gun_w=np.zeros(len(WEAPONS)),  # ... by weapon
@@ -7295,16 +7330,35 @@ class DuelEnv:
         """a jump run: player i begins a try a second or two of way before the take-off of one of the pros' jumps (every
         jump as often as any other), with the item behind it as his target; the item is put back if it was taken"""
         ks = list(self.jump_tries)
-        k = int(ks[int(self.rng.integers(len(ks)))])
-        g, st, f = self.jump_tries[k][int(self.rng.integers(len(self.jump_tries[k])))]
+        if JUMP_WEIGHT and self.jrun_open[i]:                # (JUMP_WEIGHT) the try before, not over: into his success
+            self._jump_learn(int(self.jrun_k[i]), False)
+        self.jrun_open[i] = JUMP_WEIGHT and bool(self._counted(i))
+        if JUMP_WEIGHT:                                      # (JUMP_WEIGHT) the jumps he fails more often
+            w_ = np.maximum(JUMP_W_FLOOR, 1.0 - self.jw_s[np.minimum(np.array(ks, np.int64), 63)])
+            k = int(ks[int(self.rng.choice(len(ks), p=w_ / w_.sum()))])
+        else:
+            k = int(ks[int(self.rng.integers(len(ks)))])
+        e = int(self.rng.integers(len(self.jump_tries[k])))
+        g, st, f = self.jump_tries[k][e]
         J = self.jfields[f]
         self.jrun_f[i] = f
+        far = JUMP_FAR_P > 0 and self.rng.random() < JUMP_FAR_P and len(self.jump_far.get((k, e), ())) > 0
+        if far:                                              # (JUMP_FAR_P) further back, moving along the way
+            st = self.jump_far[(k, e)]
         node = int(st[int(self.rng.integers(len(st)))])
         nx = int(J.next[g, node])
         p, q = J.nodes[node], (J.nodes[nx] if nx >= 0 else J.goals[g])
         face = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])) + float(self.rng.uniform(-40, 40))
-        self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), face)
+        vel = (0, 0, 0)
+        if far:
+            d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
+            d_ = d_ / max(1e-6, float(np.hypot(*d_)))
+            vel = (float(d_[0] * JUMP_FAR_SPEED), float(d_[1] * JUMP_FAR_SPEED), 0.0)
+        self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
         self._fresh(i, face)
+        self.jrun_far[i] = far
+        if far:
+            self.sp_hist[i] = JUMP_FAR_SPEED                 # (his speed of the last frames: what he moves at, not a gain)
         m = self._match_of(i)
         self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
         if g < self.bel_t.shape[1]:
@@ -7319,6 +7373,48 @@ class DuelEnv:
         self.jrun_past[i] = False
         if self._counted(i):
             self.stats["jump_tries"][min(k, 63)] += 1
+            self.stats["jump_far"][2 if far else 0] += 1
+
+    def _jump_learn(self, k, over):
+        """(JUMP_WEIGHT) one try at jump k into his success there (see JUMP_WEIGHT)"""
+        k = min(int(k), 63)
+        a_ = max(1.0 / (self.jw_n[k] + 2.0), 1.0 - 0.5 ** (1.0 / JUMP_W_HALF))
+        self.jw_s[k] += a_ * (float(over) - self.jw_s[k])
+        self.jw_n[k] += 1.0
+
+    def _jump_far_spots(self):
+        """(JUMP_FAR_P) per jump and entry of jump_tries: the spots JUMP_FAR_LO to JUMP_FAR_HI seconds of way before its
+        take-off whose way to the entry's goal has that jump as the first one ahead (and, for an item, leads to the nearest
+        of its kind); with less way, the farthest fifth of what there is"""
+        R_ = self.route
+        for k, ents in self.jump_tries.items():
+            for e, (g, st, f) in enumerate(ents):
+                X = self.jfields[f]
+                nxt, jl = X.next[g], X.jlink[g]
+                n_ = len(nxt)
+                cur = np.arange(n_)
+                hit = np.full(n_, -1, np.int64)              # the take-off spot of the first jump ahead, if it is jump k
+                live = X.T[g] < 1e8
+                for _ in range(400):
+                    j_ = jl[cur]
+                    at_ = live & (j_ >= 0)
+                    hit[at_ & (j_ == k)] = cur[at_ & (j_ == k)]
+                    live &= ~at_ & (nxt[cur] >= 0)
+                    if not live.any():
+                        break
+                    cur = np.where(live, nxt[cur], cur)
+                ok = (hit >= 0) & ~R_.dead
+                if f not in self.jfield_land:
+                    same_ = self.intent_more.get(INTENTS.index(self.route_goal[g]), np.array([g], np.int64))
+                    ok &= X.T[g] <= X.T[same_].min(0) + 1e-6
+                if not ok.any():
+                    continue
+                tt = np.where(ok, X.T[g] - X.T[g, np.maximum(hit, 0)], -1.0)
+                sel = np.nonzero(ok & (tt >= JUMP_FAR_LO) & (tt <= JUMP_FAR_HI))[0]
+                if not len(sel):
+                    sel = np.nonzero(ok & (tt >= 0.8 * float(tt.max())) & (tt > 0))[0]
+                if len(sel):
+                    self.jump_far[(k, e)] = sel.astype(np.int64)
 
     def _rj_step(self, rr, s, prev, reward, r_long):
         """(RJ_RUN_P) the players rr of rocket jump runs this frame: he arrives when he comes down within RJ_LAND of the
@@ -8565,6 +8661,12 @@ class DuelEnv:
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
                     self.jrun_over[jr[ov_]] = True
+                    for i_ in (jr[ov_ & self.jrun_open[jr]] if JUMP_WEIGHT else ()):   # (JUMP_WEIGHT) over: into his success
+                        self._jump_learn(int(self.jrun_k[i_]), True)
+                        self.jrun_open[i_] = False
+                    oc_ = ov_ & self._counted(jr)
+                    self.stats["jump_far"][1] += int((oc_ & ~self.jrun_far[jr]).sum())
+                    self.stats["jump_far"][3] += int((oc_ & self.jrun_far[jr]).sum())
                     past_ = ov_ | ((np.linalg.norm(p_ - B_, axis=1) < 110.0) & landed_)     # landed at the jump's landing, over it or
                     self.jrun_past[jr[past_]] = True                                        # round it: from here the plain ways with
                     self.jrun_f[jr[past_]] = 0                                              # the pros' jumps, to the item
@@ -8751,6 +8853,7 @@ class DuelEnv:
             self.drop_w[m] = -1
             self.run_k[self._seats(int(m))] = -1
             self.jrun[self._seats(int(m))] = False
+            self.jrun_open[self._seats(int(m))] = False      # (JUMP_WEIGHT: a try cut by the run's end counts nothing)
             self.rjrun[self._seats(int(m))] = False
             self.cf_side[self._seats(int(m))] = 0
             self.cf_t[m] = -1.0

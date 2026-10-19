@@ -145,6 +145,21 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             break
 
 
+def jump_far_rec(agg, agg_map):
+    """(JUMP_FAR_P, v0.3.6) the jump runs' tries by start, near (standing, a second or two of way) and far (moving, 3 to 5 s
+    of way): tries begun and over per try (an over may come in the update after its try began: a small count can read
+    above 1), all maps and by map [near tries, near over, far tries, far over]"""
+    def one_(v_):
+        x_ = np.atleast_1d(v_.get("jump_far", np.zeros(4))).astype(np.float64)
+        x_ = x_ if len(x_) == 4 else np.zeros(4)
+        return x_
+    a_ = one_(agg)
+    return dict(near_tries=int(a_[0]), near_over=round(float(a_[1] / max(1.0, a_[0])), 3),
+                far_tries=int(a_[2]), far_over=round(float(a_[3] / max(1.0, a_[2])), 3),
+                by_map={m_: [int(x_[0]), round(float(x_[1] / max(1.0, x_[0])), 2), int(x_[2]), round(float(x_[3] / max(1.0, x_[2])), 2)]
+                        for m_, x_ in ((m_, one_(v_)) for m_, v_ in agg_map.items()) if x_[0] + x_[2] > 0})
+
+
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD")                 # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward
 
 
@@ -1686,7 +1701,7 @@ def main():
     WAY_KEEP, WAY_MIN = 50, int(os.environ.get("WAY_TRIPS_MIN") or 30)   # ... the newest kept a pair; a pair counts from this many
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
-                "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
+                "jump_tries", "jump_over", "jump_short", "jump_far", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
                 "rj_tries", "rj_over", "rj_frames", "rj_shots",
                 "hurt_dmg", "legs", "games", "open", "moments", "overtime")
     LIVE_PATH = os.path.join(out, "live.json")                         # (B-265) pay weights changed while the run trains
@@ -2607,6 +2622,7 @@ def main():
                             jump_tries=int(np.sum(agg.get("jump_tries", 0))),                                                             # ... tries begun, the share that got over, that fell short
                             jump_over=round(float(np.sum(agg.get("jump_over", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
                             jump_short=round(float(np.sum(agg.get("jump_short", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
+                            jump_far=jump_far_rec(agg, agg_map),                                                                         # (JUMP_FAR_P) tries and over by start
                             jumps={m_: [[int(t_), round(float(o_ / max(1.0, t_)), 2)] for t_, o_ in                                       # ... per map and jump (its place in the map's list): tries, over
                                         zip(np.atleast_1d(v_.get("jump_tries", np.zeros(1))), np.atleast_1d(v_.get("jump_over", np.zeros(1))))][:int(np.max(np.nonzero(np.atleast_1d(v_.get("jump_tries", np.zeros(1))))[0], initial=-1)) + 1]
                                    for m_, v_ in agg_map.items() if float(np.sum(v_.get("jump_tries", 0))) > 0},
