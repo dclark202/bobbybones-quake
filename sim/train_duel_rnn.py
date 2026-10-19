@@ -1467,7 +1467,14 @@ def main():
         if os.path.exists(op_):
             try:
                 sc_ = [g_.get("lr_scale", 1.0) for g_ in opt.param_groups]      # (this run's scales: loading puts the saved ones back)
-                opt.load_state_dict(torch.load(op_, weights_only=False, map_location=dev))
+                os_ = torch.load(op_, weights_only=False, map_location=dev)
+                for g_, s_ in zip(opt.param_groups, os_["param_groups"]):   # (torch checks the groups' sizes only: a moment of
+                    for p_, i_ in zip(g_["params"], s_["params"]):           # another shape, or of another parameter, is refused here)
+                        m_ = os_["state"].get(i_)
+                        if m_ is not None and tuple(m_["exp_avg"].shape) != tuple(p_.shape):
+                            raise ValueError("a saved moment of shape {} for a parameter of shape {} (tools/v036_init.py opt "
+                                             "converts a widened network's)".format(tuple(m_["exp_avg"].shape), tuple(p_.shape)))
+                opt.load_state_dict(os_)
                 for g_, c_ in zip(opt.param_groups, sc_):     # (the rates are this run's, not the saved ones)
                     g_["lr_scale"], g_["lr"] = c_, a.lr * c_
                 print("optimizer: its state loaded from opt.pt", flush=True)
