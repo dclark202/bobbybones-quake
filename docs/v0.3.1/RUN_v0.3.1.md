@@ -4,7 +4,9 @@
 together with the pay changes". v0.3.1 is v0.3 resumed from its 18:00 stop with two changes: the new pay and the faster
 learning step. Everything else planned for v0.3.1 (the believed stack, hunt, the legs inside the network, rocket jumps,
 the rail) is built beside it and comes in a later run: [MANIFEST_v0.3.1.md](MANIFEST_v0.3.1.md) sections 6 and 6b.
-Status: **started 2026-10-15 20:53 on the owner's go** ("Start the run"), to 16:00 Friday. Folder: `duel_gru_v0_3_1`. The plans in full: [PROPOSAL_v0.3.1.md](PROPOSAL_v0.3.1.md).*
+Status: **started 2026-10-15 20:53 on the owner's go** ("Start the run"), to 16:00 Friday. **Over** (2026-10-18 note): restarted Friday morning
+from save 140 as `duel_gru_v0_3_1b` with his legs learning, the game's physics, the hunt and the believed stack, which ended
+at 63.8% against v0.3's end (RESULTS 2026-10-16 19:30); that end is v0.3.1 on the public server and the control since. Folder: `duel_gru_v0_3_1`. The plans in full: [PROPOSAL_v0.3.1.md](PROPOSAL_v0.3.1.md).*
 
 ## Why
 

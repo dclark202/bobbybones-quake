@@ -89,8 +89,8 @@ real game (`why`: `time`, or `stopped` for a game thrown back to warmup). No nam
 
 ## The archive's index (`tools/session_index.py`)
 
-`sessions.csv` in the session archive (`T:\quake-sessions\public`), a row per packed session, written by the daily
-`tools/pull_sessions.sh`: `session` (the folder's name), `kind` (`ffa`, `human`: a 1v1 with a person, `spar`), `map`,
+`sessions.csv` in a session archive (a folder of packed sessions, `<name>.tar.gz`), a row per packed session, written by
+`tools/session_index.py <archive>`: `session` (the folder's name), `kind` (`ffa`, `human`: a 1v1 with a person, `spar`), `map`,
 `policy`, `started` and `ended` (PC time: the first and last frame with a person in the game), `minutes` (time covered
 by frames), `people_max` (most people in the game at once), `persons` (different people with a frag made or taken in
 that time, by the leaderboard's keys), `frags`, `deaths`, `mb`. The raw logs of the server (`logs\logs_<time>.tar.gz`:
@@ -98,8 +98,7 @@ that time, by the leaderboard's keys), `frags`, `deaths`, `mb`. The raw logs of 
 
 ## The leaderboard (`plugins/ladder.py`)
 
-Its files in a server's data folder (`data/duellive/` on the public server), copied to the session archive by the daily
-`tools/pull_sessions.sh` and never removed from the server:
+Its files in a server's data folder (`data/duellive/`):
 
 - `frags.jsonl`: one line per counted frag (a person and BobbyBones, either way): `t`, `map`, `state` (`warmup`,
   `in_progress`, ...), `mode` (`ffa` or `duel`), `net` (the run of the network that played), `killer`, `victim` (a
@@ -118,7 +117,7 @@ Its files in a server's data folder (`data/duellive/` on the public server), cop
   spawn, the score counted from deaths). A game thrown back to warmup leaves no line.
 - `salt.txt`: the salt of the keys. Whoever has it and a Steam id can make that person's key: it is as private as the
   bans, is copied to the archive by the daily pull and never goes into the repo.
-- Only on a server started with `QLSTATS=1` (`docs/guides/HOSTING.md`): `qlstats.json`: `players`: key -> `t`, `status`
+- Only on a server started with `QLSTATS=1` (`docs/design/QLSTATS.md`): `qlstats.json`: `players`: key -> `t`, `status`
   (`ok`, `none`: no rating there, `untracked`, `deactivated`, `error`), `duel` and `ffa` (`r`, `rd`, `games`; `null`
   without rated games; `rd` is `null` when only QLStats's `/elo` answered), `team` (20 games or more in a team mode),
   `err` (an error's class name, e.g. `ReadTimeout`, `http503`, `notjson`), `tried` (when a later request failed: the
