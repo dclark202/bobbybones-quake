@@ -1,0 +1,126 @@
+{
+ "respawn_seen": {
+  "GA": {
+   "n": 3726,
+   "median": 24.98,
+   "p10": 24.97,
+   "p90": 25.1
+  },
+  "GL": {
+   "n": 2444,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 4.98
+  },
+  "LG": {
+   "n": 3757,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 24.362000000000002
+  },
+  "MH": {
+   "n": 1883,
+   "median": 34.98,
+   "p10": 34.97,
+   "p90": 34.98
+  },
+  "RA": {
+   "n": 2358,
+   "median": 24.98,
+   "p10": 24.97,
+   "p90": 24.98
+  },
+  "RG": {
+   "n": 4208,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 27.679000000000006
+  },
+  "RL": {
+   "n": 5844,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 5.263999999999996
+  },
+  "SG": {
+   "n": 712,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 4.98
+  },
+  "YA": {
+   "n": 2012,
+   "median": 24.98,
+   "p10": 24.97,
+   "p90": 52.429
+  },
+  "ammo_bullets": {
+   "n": 320,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "ammo_lightning": {
+   "n": 383,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "ammo_rockets": {
+   "n": 489,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "ammo_shells": {
+   "n": 438,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "item_health": {
+   "n": 4874,
+   "median": 34.98,
+   "p10": 34.97,
+   "p90": 34.98
+  },
+  "item_health_small": {
+   "n": 3786,
+   "median": 34.85,
+   "p10": 34.675,
+   "p90": 34.98
+  }
+ },
+ "map": "aerowalk",
+ "version": 1,
+ "moments": 5000,
+ "every": 4.0,
+ "life": 2.0,
+ "demos": 150,
+ "counts": {
+  "demo items without a simulator item": 272,
+  "simulator items never seen (taken as there)": 2,
+  "item frames sent outside the PVS": 92503,
+  "item frames sent in the PVS": 42906455,
+  "exact takes": 42370,
+  "takes worked out": 4425,
+  "unknown windows": 497,
+  "pain heard: in its band": 6826,
+  "pain heard: over its band": 3286,
+  "pain heard: the worked-out health under its band": 2654,
+  "frames looked at": 20068,
+  "within the seconds after a respawn": 1424,
+  "moments": 12517,
+  "the enemy not sent": 3248,
+  "a teleporter step": 1466,
+  "his player dead": 676,
+  "a place the simulator does not hold": 199,
+  "demos": 150,
+  "demos with moments": 149,
+  "a big item's state not known": 417,
+  "a cut near": 105,
+  "the two within 48 units": 16,
+  "no game": 1
+ },
+ "seconds": 266
+}
