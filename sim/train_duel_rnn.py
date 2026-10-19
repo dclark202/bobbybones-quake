@@ -685,6 +685,27 @@ def main():
                     help="(--overlap) pieces of players (every --minibatches-th player, spread over every simulator) on which the "
                          "staleness is measured before the learning step: overlap.kl_stale, the KL from the network that played to the "
                          "one that learns, its share of frames outside the clip, its value error. 0: not measured")
+    ap.add_argument("--overlap-ppo", choices=("decoupled", "plain"), default="decoupled",
+                    help="(--overlap) decoupled (default): decoupled PPO (Hilton et al. 2021): before the learning step the learner's own "
+                         "network (the proximal one: pol before this update) gives its log-probabilities and values on the whole batch; "
+                         "the clip is taken around it (ratio pi / pi_prox) and the loss weighted by pi_prox / pi_played (capped at "
+                         "--overlap-is-cap); the advantages' baseline and the value targets are its values (--overlap-prox-values). "
+                         "plain: the ratio against the network that played, as first built (its clip, around a network one update "
+                         "old, pulls the learner back towards it: the GPU dry run of 2026-10-18)")
+    ap.add_argument("--step-kl-pieces", type=int, default=0,
+                    help="(without --overlap; a diagnostic) pieces of players (as --overlap-kl-pieces) on which the last update's step is "
+                         "measured on this rollout's fresh frames: step_kl, the mean log p(now) - log p(before the last update) of what he "
+                         "did (KL(now || before)); the counterpart of --overlap's kl_stale. 0 (default): not measured, nothing kept")
+    ap.add_argument("--overlap-is-cap", type=float, default=2.0,
+                    help="(--overlap-ppo decoupled) the cap on the weight pi_prox / pi_played (truncated importance weights)")
+    ap.add_argument("--overlap-prox-values", type=int, default=1,
+                    help="(--overlap-ppo decoupled) 1 (default): the advantages and value targets with the proximal network's values "
+                         "(the last frame's bootstrap stays the played network's); 0: with the played network's values")
+    ap.add_argument("--overlap-prox-merge", type=int, default=1,
+                    help="(--overlap-ppo decoupled) the proximal pass in --minibatches / this many pieces (it keeps no graph, so a piece "
+                         "can be larger; the pass's time goes with the number of pieces). 1 (default): the learning step's pieces")
+    ap.add_argument("--overlap-priority", choices=("high", "equal"), default="high",
+                    help="(--overlap) the rollout's stream on the card: high (above the learning step's, as first built) or equal")
     ap.add_argument("--aux", type=float, default=0.0,
                     help="stage B, part 1: the weight of the things he is asked to foretell from his memory (0 = off). Four small output "
                          "layers on his memory: where the unseen enemy is, where he next appears, how the fight ends, when the big items "
@@ -1738,6 +1759,7 @@ def main():
     if LIVE_ON and os.path.exists(LIVE_PATH):
         print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
     OVL = bool(a.overlap)                                                # (--overlap, B-266) learn while the next games play
+    DEC = OVL and a.overlap_ppo == "decoupled"                           # (--overlap-ppo) decoupled PPO around the learner's own network
     ACT = RS = STOP = None
     OBS_POOL = [None, None]                                              # (--overlap) the host's two input buffers [players, steps, inputs]
     if OVL:
@@ -1746,8 +1768,13 @@ def main():
         sys.setswitchinterval(max(1e-5, a.overlap_switch_ms / 1000.0))
         ACT = copy.deepcopy(pol)                                         # the network that plays: pol as it was before each learning step
         ACT.requires_grad_(False)
-        RS = torch.cuda.Stream(priority=-1) if dev.type == "cuda" else None    # the rollout's own stream on the card, of high priority
+        RS = (torch.cuda.Stream(priority=-1 if a.overlap_priority == "high" else 0)    # the rollout's own stream on the card
+              if dev.type == "cuda" else None)
         STOP = threading.Event()
+        print("overlap: PPO {}{}; the rollout's stream priority {}".format(
+            a.overlap_ppo, " (clip around the learner before the update, weights pi_prox/pi_played capped at {:g}, the baseline {})".format(
+                a.overlap_is_cap, "the learner's values" if a.overlap_prox_values else "the played values") if DEC else "",
+            a.overlap_priority), flush=True)
         print("overlap (B-266): the rollout of update n+1 plays while update n learns, with the network of before update n (one update "
               "stale); the rollout's thread {}, switch interval {:g} ms; its inputs on the host ({:.2f} GB a buffer, two)".format(
                   "on its own stream of the card" if RS is not None else "on the CPU", a.overlap_switch_ms,
@@ -2106,6 +2133,7 @@ def main():
         return box["R"]
 
     PEND, R, t_prev = None, None, None                                   # (--overlap) the rollout in flight; the last rollout's buffers
+    PREV_SD = [None]                                                     # (--step-kl-pieces) pol before the last update's learning
     while time.time() - t_start < a.minutes * 60:
         update += 1
         ovl_wait = 0.0
@@ -2171,30 +2199,37 @@ def main():
         T_ROLL = t_learn - t_roll if not OVL else R["t_done"] - t_roll   # the rollout's seconds (--overlap: its thread's own)
         if OVL and dev.type == "cuda":
             torch.cuda.reset_peak_memory_stats()
-        adv = torch.zeros(T, N, device=dev)
-        last = torch.zeros(N, device=dev)
-        for t in reversed(range(T)):
-            nonterm = 1.0 - b_done[t]
-            dl = b_rew[t] + gamma * b_val[t + 1] * nonterm - b_val[t]
-            last = dl + gamma * lam * nonterm * last
-            adv[t] = last
-        ret = adv + b_val[:T]
-        long_c, long_gap = 0.0, 0.0
-        if LONG:                                                         # the pay for items and stack: what counting it two minutes ahead adds
-            long_c = min(1.0, max(0.0, mins - fade0) / a.long_ramp) if a.long_ramp > 0 else 1.0
-            adv2 = torch.zeros(T, N, 2, device=dev)
-            last2 = torch.zeros(N, 2, device=dev)
-            g2 = torch.tensor([gamma, a.long_gamma], device=dev)
+        def gae_():
+            """the advantages and value targets from b_val (b_val2) -> (adv, ret, ret2, long_c, long_gap)"""
+            ret2 = None
+            adv = torch.zeros(T, N, device=dev)
+            last = torch.zeros(N, device=dev)
             for t in reversed(range(T)):
-                nt2 = (1.0 - b_done[t])[:, None]
-                dl2 = b_rl[t][:, None] + g2 * b_val2[t + 1] * nt2 - b_val2[t]
-                last2 = dl2 + g2 * lam * nt2 * last2
-                adv2[t] = last2
-            ret2 = adv2 + b_val2[:T]
-            long_gap = float((adv2[..., 1] - adv2[..., 0]).abs().mean() / (adv.abs().mean() + 1e-8))
-            if a.long_cap > 0 and long_c * long_gap > a.long_cap:
-                long_c = a.long_cap / long_gap
-            adv = adv + long_c * (adv2[..., 1] - adv2[..., 0])
+                nonterm = 1.0 - b_done[t]
+                dl = b_rew[t] + gamma * b_val[t + 1] * nonterm - b_val[t]
+                last = dl + gamma * lam * nonterm * last
+                adv[t] = last
+            ret = adv + b_val[:T]
+            long_c, long_gap = 0.0, 0.0
+            if LONG:                                                         # the pay for items and stack: what counting it two minutes ahead adds
+                long_c = min(1.0, max(0.0, mins - fade0) / a.long_ramp) if a.long_ramp > 0 else 1.0
+                adv2 = torch.zeros(T, N, 2, device=dev)
+                last2 = torch.zeros(N, 2, device=dev)
+                g2 = torch.tensor([gamma, a.long_gamma], device=dev)
+                for t in reversed(range(T)):
+                    nt2 = (1.0 - b_done[t])[:, None]
+                    dl2 = b_rl[t][:, None] + g2 * b_val2[t + 1] * nt2 - b_val2[t]
+                    last2 = dl2 + g2 * lam * nt2 * last2
+                    adv2[t] = last2
+                ret2 = adv2 + b_val2[:T]
+                long_gap = float((adv2[..., 1] - adv2[..., 0]).abs().mean() / (adv.abs().mean() + 1e-8))
+                if a.long_cap > 0 and long_c * long_gap > a.long_cap:
+                    long_c = a.long_cap / long_gap
+                adv = adv + long_c * (adv2[..., 1] - adv2[..., 0])
+            return adv, ret, ret2, long_c, long_gap
+        ret2 = None
+        if not DEC:
+            adv, ret, ret2, long_c, long_gap = gae_()
         frac = min(1.0, mins / a.lr_minutes) if a.lr_minutes > 0 else min(1.0, (time.time() - t_start) / (a.minutes * 60))
         for g in opt.param_groups:                                       # (--legs-learn: the branch's group keeps its share, lr_scale)
             g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac) * g.get("lr_scale", 1.0)
@@ -2293,9 +2328,10 @@ def main():
             return gd_(pol.pi(hs_a), hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
 
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
+        OVK_ = [0.0]                                                     # (decoupled) KL(played || now) in the last pass
         klh = np.zeros(len(ACTION_DIMS))
         old_h = None
-        if a.kl_heads and (update % a.kl_heads == 0 or update <= 20):    # the log-probability of what he did, per head, before the update
+        if not DEC and a.kl_heads and (update % a.kl_heads == 0 or update <= 20):    # the log-probability of what he did, per head, before the update
             with torch.no_grad():
                 old_h = torch.zeros(T, N, len(ACTION_DIMS), device=dev)
                 for chunk in torch.arange(N, device=dev).chunk(n_mb):
@@ -2400,8 +2436,74 @@ def main():
                 o_ = o_ + ad_
             return o_
 
+        SK_ = None
+        if a.step_kl_pieces > 0 and not OVL:                             # (--step-kl-pieces) the last update's step on this rollout's frames:
+            with torch.no_grad():                                        # pol before the last update put in place for the pass, then back
+                cur_ = {k_: v_.detach().clone() for k_, v_ in pol.state_dict().items()}
+                if PREV_SD[0] is not None:
+                    pol.load_state_dict(PREV_SD[0])
+                    SK_ = torch.zeros(2, dtype=torch.float64)
+                    for k_ in range(min(a.step_kl_pieces, n_mb)):
+                        chunk = torch.arange(k_, N, n_mb, device=dev)
+                        lg_, v_, hs_, _ = seq_pass(chunk, h0[chunk])
+                        if ORDER:
+                            lg_ = ord_lg(pol, lg_, b_act[:, chunk])
+                        hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
+                        lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
+                        if LEGS_LEARN:
+                            lgl_ = pol.legs_comb(legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev)), hs_)
+                            lp_ = lp_ + legs_lp(lgl_, b_lr[:, chunk], b_dec[:, chunk], b_lo[:, chunk])[0]
+                        w_ = b_w[:, chunk]
+                        SK_ += torch.stack([w_.sum(), ((b_logp[:, chunk] - lp_) * w_).sum()]).double().cpu()
+                    pol.load_state_dict(cur_)
+                PREV_SD[0] = cur_
         OV_ = None                                                       # (--overlap) the staleness: the network that played (ACT, one update
-        if OVL and a.overlap_kl_pieces > 0:                              # behind) against the one that learns, before any step of this update,
+        LP_PX = ISW = IS_ = None                                         # (decoupled) the learner's log p before the update, the capped weights
+        if DEC:                                                          # (--overlap-ppo decoupled) the proximal pass: pol before any step of
+            with torch.no_grad():                                        # this update on the whole batch: its log p of what he did (as the
+                LP_PX = torch.zeros(T, N, device=dev)                    # learning passes count it), its values; per head for kl_heads
+                V_PX = torch.zeros(T, N, device=dev)
+                V2_PX = torch.zeros(T, N, 2, device=dev) if LONG else None
+                if a.kl_heads and (update % a.kl_heads == 0 or update <= 20):
+                    old_h = torch.zeros(T, N, len(ACTION_DIMS), device=dev)
+                t_px = time.time()
+                for chunk in torch.arange(N, device=dev).chunk(max(1, n_mb // max(1, a.overlap_prox_merge))):
+                    lg_, v_, hs_, v2_ = seq_pass(chunk, h0[chunk])
+                    if ORDER:
+                        lg_ = ord_lg(pol, lg_, b_act[:, chunk])
+                    hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
+                    lp_ = 0
+                    for j, dd in enumerate(dists(lg_)):
+                        l_ = dd.log_prob(b_act[:, chunk, j])
+                        if old_h is not None:
+                            old_h[:, chunk, j] = l_
+                        lp_ = lp_ + l_ * (1.0 if hm_[j] is None else hm_[j])
+                    if LEGS_LEARN:                                       # (the legs' part, as in the learning passes)
+                        lgl_ = pol.legs_comb(legs_fwd(pol, b_lx[:, chunk.cpu()].to(dev)), hs_)
+                        lp_ = lp_ + legs_lp(lgl_, b_lr[:, chunk], b_dec[:, chunk], b_lo[:, chunk])[0]
+                    LP_PX[:, chunk] = lp_
+                    V_PX[:, chunk] = v_
+                    if LONG:
+                        V2_PX[:, chunk] = v2_
+                lg_ = v_ = hs_ = v2_ = lp_ = None
+                w_ = b_w
+                d_ = b_logp - LP_PX                                      # log p(played) - log p(learner before the update)
+                r_ = (-d_).clamp(max=30.0).exp()                         # pi_prox / pi_played
+                ISW = r_.clamp(max=a.overlap_is_cap)
+                OV_ = torch.stack([w_.sum(), (d_ * w_).sum(), (((r_ - 1.0).abs() > clip).float() * w_).sum(), ((r_ - 1.0).abs() * w_).sum(),
+                                   ((V_PX - b_val[:T]).abs() * w_).sum(), (r_.clamp(max=1e3) * w_).sum()]).double().cpu()
+                IS_ = [float((ISW * w_).sum() / w_.sum().clamp(min=1.0)), float((r_ * (w_ > 0)).max()),
+                       float(((r_ > a.overlap_is_cap).float() * w_).sum() / w_.sum().clamp(min=1.0)),
+                       float(((r_ < 1.0 / a.overlap_is_cap).float() * w_).sum() / w_.sum().clamp(min=1.0))]
+                d_ = r_ = None
+                if a.overlap_prox_values:                                # the baseline and the targets: the learner's values (the last
+                    b_val[:T] = V_PX                                     # frame's bootstrap, b_val[T], stays the played network's)
+                    if LONG:
+                        b_val2[:T] = V2_PX
+                V_PX = V2_PX = None
+                IS_.append(time.time() - t_px)
+            adv, ret, ret2, long_c, long_gap = gae_()
+        if OVL and not DEC and a.overlap_kl_pieces > 0:                  # behind) against the one that learns, before any step of this update,
             OV_ = torch.zeros(6, dtype=torch.float64)                    # on pieces of every n_mb-th player (all simulators): the learner's
             with torch.no_grad():                                        # frames; sums of log p(played) - log p(now), of frames outside the
                 for k_ in range(min(a.overlap_kl_pieces, n_mb)):         # clip, of |ratio - 1|, of |value now - value played|, of the ratio
@@ -2483,21 +2585,38 @@ def main():
                             ll_acc[3] += 1.0
                 if UNI_ON and ug_first[0] is None:                       # (before any step: the pass's log p is the rollout's to rounding)
                     with torch.no_grad():
-                        ug_first[0] = float(((lp - b_logp[:, chunk]).abs() * (wgt > 0)).max())
+                        ug_first[0] = float(((lp - (LP_PX[:, chunk] if DEC else b_logp[:, chunk])).abs() * (wgt > 0)).max())   # (decoupled: the proximal pass's)
                 wsum = wgt.sum().clamp(min=1.0)
                 ad = adv[:, chunk]
                 ad = (ad - (ad * wgt).sum() / wsum) / (ad[wgt > 0].std() + 1e-8)
-                ratio = (lp - b_logp[:, chunk]).exp()
-                if epoch == 2:
-                    with torch.no_grad():
-                        kl_sum += float(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)
-                        cf_sum += float((((ratio - 1.0).abs() > clip).float() * wgt).sum() / wsum)
-                        kl_n += 1
-                        if old_h is not None:
-                            for j, dd in enumerate(ds):
-                                mk_ = 1.0 if hm[j] is None else hm[j]
-                                klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * wgt).sum() / wsum)
-                pg = -(torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
+                if DEC:                                                  # (decoupled PPO) the ratio against the learner before this update,
+                    ratio = (lp - LP_PX[:, chunk]).exp()                 # the frames weighted by pi_prox / pi_played (capped)
+                    isw = ISW[:, chunk]
+                    if epoch == 2:                                       # (the measures on the played frames: weighted by isw, they are
+                        with torch.no_grad():                            # the learner's own step, KL(prox || now), per head too)
+                            iw_ = isw * wgt
+                            iws_ = iw_.sum().clamp(min=1e-6)
+                            kl_sum += float(((LP_PX[:, chunk] - lp) * iw_).sum() / iws_)
+                            cf_sum += float((((ratio - 1.0).abs() > clip).float() * iw_).sum() / iws_)
+                            kl_n += 1
+                            OVK_[0] += float(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)     # KL(played || now), as plain PPO's kl
+                            if old_h is not None:
+                                for j, dd in enumerate(ds):
+                                    mk_ = 1.0 if hm[j] is None else hm[j]
+                                    klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * iw_).sum() / iws_)
+                    pg = -(isw * torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
+                else:
+                    ratio = (lp - b_logp[:, chunk]).exp()
+                    if epoch == 2:
+                        with torch.no_grad():
+                            kl_sum += float(((b_logp[:, chunk] - lp) * wgt).sum() / wsum)
+                            cf_sum += float((((ratio - 1.0).abs() > clip).float() * wgt).sum() / wsum)
+                            kl_n += 1
+                            if old_h is not None:
+                                for j, dd in enumerate(ds):
+                                    mk_ = 1.0 if hm[j] is None else hm[j]
+                                    klh[j] += float(((old_h[:, chunk, j] - dd.log_prob(A[..., j])) * mk_ * wgt).sum() / wsum)
+                    pg = -(torch.min(ratio * ad, ratio.clamp(1 - clip, 1 + clip) * ad) * wgt).sum() / wsum
                 vl = (0.5 * (v - ret[:, chunk]).pow(2) * wgt).sum() / wsum
                 if LONG:
                     vl = vl + (0.5 * (v2_all - ret2[:, chunk]).pow(2).sum(-1) * wgt).sum() / wsum
@@ -3284,11 +3403,14 @@ def main():
             rec["turn_add"] = dict(frames=int(TA_[0]), share=round(float(TA_[1] / max(1.0, float(TA_[0]))), 5),
                                    size=round(float(TA_[2] / max(1.0, float(TA_[1]))), 3), shut=round(float(tb_[0] - tb_[1:].mean()), 3),
                                    w=round(float(tw_.abs().max()), 6))
+        if SK_ is not None:                                              # (--step-kl-pieces)
+            rec["step_kl"] = round(float(SK_[1]) / max(1.0, float(SK_[0])), 6)
         if LIVE_REC is not None:                                         # (B-265) live.json applied or refused before this rollout
             rec["live"] = LIVE_REC
         if OVL:                                                          # (--overlap) how stale the rollout was, and where the time went
             ow_ = max(1.0, float(OV_[0])) if OV_ is not None else 1.0
             rec["overlap"] = dict(
+                ppo=a.overlap_ppo,
                 kl_stale=round(float(OV_[1]) / ow_, 6) if OV_ is not None else None,      # mean log p(played) - log p(learner before this update)
                 clip_stale=round(float(OV_[2]) / ow_, 4) if OV_ is not None else None,    # the share of frames already outside the clip
                 ratio_dev=round(float(OV_[3]) / ow_, 4) if OV_ is not None else None,     # mean |ratio - 1| before any step
@@ -3297,7 +3419,12 @@ def main():
                 frames=int(OV_[0]) if OV_ is not None else 0,
                 wait=round(ovl_wait, 1),                                                   # the main thread's wait for this rollout
                 update_s=round(t_end - t_prev, 1) if t_prev is not None else None,         # seconds from the last update's end to this one's
-                switch_ms=a.overlap_switch_ms, next_in_flight=PEND is not None)
+                switch_ms=a.overlap_switch_ms, priority=a.overlap_priority, next_in_flight=PEND is not None)
+            if DEC:                                                      # (decoupled) the weights pi_prox / pi_played: their mean after the
+                rec["overlap"].update(                                   # cap, the largest before it, the shares above the cap and below 1/cap;
+                    is_mean=round(IS_[0], 4), is_max=round(IS_[1], 3), is_capped=round(IS_[2], 4), is_low=round(IS_[3], 4),
+                    is_cap=a.overlap_is_cap, prox_values=bool(a.overlap_prox_values), prox_s=round(IS_[4], 1),
+                    kl_played=round(OVK_[0] / max(1, kl_n), 5))          # KL(played || after the update) (kl is the learner's own step)
             t_prev = t_end
         log.write(json.dumps(rec) + "\n")
         log.flush()
