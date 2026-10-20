@@ -1415,7 +1415,7 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
                  "rail_m", "rail_t0", "rail_shot", "rail_pairs",    # (RAIL_START_P)
                  "pro_mm", "pro_t0", "pro_s0")                     # (PRO_START_P)
-MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
+MOMENT_HIST = ("opp_hist", "v02_q", "drift_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
 #                 for less: by HIGH_PAY (0.25 = a quarter) at HIGH_Z units of height between the two, in proportion
@@ -1904,7 +1904,39 @@ EMERGE_IN = float(os.environ.get("EMERGE_IN") or 0.0) > 0
 N_EMG = 8
 EMG_EVERY, EMG_FRESH, EMG_STEPS = 4, 5.0, 96
 PLAY_VARS = PLAY_VARS + ("RL_AIM", "PREFIRE", "EMERGE_IN")
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG
+# DRIFT_IN=1 (v0.3.8, the owner, 2026-10-20: "promising"; a PLAY_VAR, off by default), the last N_DRIFT inputs: how fast the
+# enemy slides across his screen. The crosshair-to-enemy angles he already reads (opp_feat's coarse and fine yaw and pitch)
+# are where the enemy is against the crosshair; a person also sees directly how fast that gap changes. The rate is the
+# frame-to-frame change of exactly those perceived angles (the "known" enemy: his reaction and focus delays, the sight
+# error PERCEPT_SIGMA / PERCEPT_TAU with the flinch, PERCEPT_SPEED, ZOOM_PERCEPT), his own view turn included as on a
+# screen, in degrees a second. No truth: the sight error's own wander passes into the rate (at aim level 3 about 13 deg/s
+# a frame on the raw rate, about 5 on the smoothed one, measured on testlab). On top of it, all named and all placeholders
+# until pro-play measurements set them (the owner's standing policy of 2026-10-20):
+#   DRIFT_DELAY  ms more before a motion is read than a place (0: the place's own delays only, which the rate inherits)
+#   DRIFT_SIGMA  deg/s, a slowly wandering error on the rate (correlation time DRIFT_TAU s) beyond what the sight error gives
+#   DRIFT_WEBER  the rate is read this share off (a wandering scale error, correlation time DRIFT_TAU): speed discrimination
+#                in people is 5 to 10 % at best (Weber fraction), 0.10 a placeholder
+#   DRIFT_MIN    deg/s: a slower slide is not noticed (reads 0); 2 a placeholder (a still-ish target)
+#   DRIFT_SMOOTH s: the smoothed pair's decay (a person's motion sense integrates over about 0.1 s)
+# Zeros with the enemy not in view (as he knows it: the delayed sighting), while dead, on the first frame of a sighting (no
+# rate before two perceived frames), on a frame where the delay picked changes (focus), on a teleport or a respawn of either
+# (a jump of 64 units in a frame) and when the attended enemy changes (groups). The inputs: the rate yaw / 180 and pitch / 90
+# (clipped to -1..1; the sign of the angle inputs: + yaw = the enemy moves left of the crosshair, + pitch = down), then the
+# same smoothed. A token of its own ("drift", sim/attn.py's LATE2, after every older kind: older networks keep their rows;
+# tools/v038_init.py gives it with its gate shut). A plugin needs nothing more than observe() once a frame (it keeps the
+# state; the plugins clear it where they clear opp_hist and on frames without observe()).
+DRIFT_IN = float(os.environ.get("DRIFT_IN") or 0.0) > 0
+N_DRIFT = 4
+DRIFT_DELAY = float(os.environ.get("DRIFT_DELAY") or 0.0)
+DRIFT_SIGMA = float(os.environ.get("DRIFT_SIGMA") or 0.0)
+DRIFT_WEBER = float(os.environ.get("DRIFT_WEBER") or 0.10)
+DRIFT_MIN = float(os.environ.get("DRIFT_MIN") or 2.0)
+DRIFT_TAU = float(os.environ.get("DRIFT_TAU") or 0.15)
+DRIFT_SMOOTH = float(os.environ.get("DRIFT_SMOOTH") or 0.1)
+DRIFT_JUMP = 64.0
+DRIFT_SCALE = (180.0, 90.0)
+PLAY_VARS = PLAY_VARS + ("DRIFT_IN", "DRIFT_DELAY", "DRIFT_SIGMA", "DRIFT_WEBER", "DRIFT_MIN", "DRIFT_TAU", "DRIFT_SMOOTH")
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -5374,10 +5406,14 @@ class DuelEnv:
         while len(self.opp_hist) > keep:
             self.opp_hist.pop(0)
         known, visible, _, seen_t = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.react_frames)]
+        if DRIFT_IN:                                         # (DRIFT_IN) which old sighting is read: a change of it is no motion
+            self._drift_pick = np.full(n, max(0, len(self.opp_hist) - 1 - self.react_frames) - len(self.opp_hist), np.int64)
         rf_ = self.react_frames if self.react_seat is None else self.react_seat     # (SEAT_DELAYS) one number, or one a seat
         if self.react_seat is not None:                      # ... each seat by its own delay (react_frames is the largest)
             pk_ = np.maximum(0, len(self.opp_hist) - 1 - rf_)
             known, visible, seen_t = (np.stack([h_[j_] for h_ in self.opp_hist])[pk_, np.arange(n)] for j_ in (0, 1, 3))
+            if DRIFT_IN:
+                self._drift_pick = np.asarray(pk_, np.int64) - len(self.opp_hist)
         if self.focus_on:                                    # the delay per player: sharp while focus lasts, then dull
             self.focus = np.where(self.acquired, self.focus - DT, self.focus + FOCUS_REFILL * DT)
             self.focus = np.clip(self.focus, -0.5, FOCUS_SECS).astype(np.float32)
@@ -5385,6 +5421,8 @@ class DuelEnv:
             dly = np.where(self.script == 0, np.maximum(dly, 1), rf_)
             L_ = len(self.opp_hist)
             pick = np.maximum(0, L_ - 1 - dly)
+            if DRIFT_IN:
+                self._drift_pick = np.asarray(pick - L_, np.int64)
             ar_ = np.arange(n)
             known = np.stack([h_[0] for h_ in self.opp_hist])[pick, ar_]
             visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
@@ -5509,8 +5547,73 @@ class DuelEnv:
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
-                              self._emerge(eye, yaw, pit, visible)], 1)
+                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp)], 1)
         return obs.astype(np.float32)
+
+    def _drift(self, ey, ep, visible, pos, known, opp):
+        """the inputs of N_DRIFT (see DRIFT_IN): the perceived crosshair-to-enemy angle's rate, raw and smoothed. Keeps the
+        last frame's perceived angles and the noises' states (drift_*), and the rates on their way (drift_q, DRIFT_DELAY)"""
+        n = self.n
+        out = np.zeros((n, N_DRIFT), np.float32)
+        if not DRIFT_IN:
+            return out
+        if getattr(self, "drift_ang", None) is None or len(self.drift_ang) != n:
+            self.drift_ang, self.drift_s = np.zeros((n, 2), np.float32), np.zeros((n, 2), np.float32)
+            self.drift_ok, self.drift_sok = np.zeros(n, bool), np.zeros(n, bool)
+            self.drift_pos, self.drift_kn = np.zeros((n, 3), np.float32), np.zeros((n, 3), np.float32)
+            self.drift_pk, self.drift_foe = np.zeros(n, np.int64), np.full(n, -1, np.int64)
+            self.drift_wn, self.drift_an = np.zeros((n, 2), np.float32), np.zeros((n, 2), np.float32)
+            self.drift_q = []
+        ang = np.stack([ey, ep], 1).astype(np.float32)
+        pk = getattr(self, "_drift_pick", None)
+        pk = np.zeros(n, np.int64) if pk is None else np.asarray(pk, np.int64).reshape(n)
+        self._drift_pick = None
+        foe = np.asarray(opp, np.int64).reshape(n)
+        now = np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
+        ok = (now & self.drift_ok & (pk == self.drift_pk) & (foe == self.drift_foe)
+              & (np.linalg.norm(pos - self.drift_pos, axis=1) < DRIFT_JUMP) & (np.linalg.norm(known - self.drift_kn, axis=1) < DRIFT_JUMP))
+        d_ = ang - self.drift_ang
+        d_[:, 0] = (d_[:, 0] + 180.0) % 360.0 - 180.0
+        rate = d_ / DT                                       # degrees a second, as the perceived picture moved
+        rho = math.exp(-DT / max(DRIFT_TAU, 1e-3))
+        if DRIFT_WEBER > 0 or DRIFT_SIGMA > 0:               # the motion sense's own errors: a scale error and a wander, both slow
+            z_ = self.rng.normal(0, 1, (n, 4)).astype(np.float32)
+            self.drift_wn = (rho * self.drift_wn + math.sqrt(1 - rho * rho) * DRIFT_WEBER * z_[:, :2]).astype(np.float32)
+            self.drift_an = (rho * self.drift_an + math.sqrt(1 - rho * rho) * DRIFT_SIGMA * z_[:, 2:]).astype(np.float32)
+            rate = rate * (1.0 + self.drift_wn) + self.drift_an
+        rate = np.where(ok[:, None], rate, 0.0).astype(np.float32)
+        a_ = math.exp(-DT / max(DRIFT_SMOOTH, 1e-3))
+        self.drift_s = np.where(ok[:, None], np.where(self.drift_sok[:, None], a_ * self.drift_s + (1 - a_) * rate, rate), 0.0).astype(np.float32)
+        self.drift_sok = ok.copy()
+        self.drift_ang, self.drift_ok, self.drift_pk, self.drift_foe = ang, now, pk, foe
+        self.drift_pos, self.drift_kn = pos.astype(np.float32).copy(), known.astype(np.float32).copy()
+        sm = self.drift_s
+        if DRIFT_MIN > 0:                                    # too slow to be noticed
+            rate = np.where(np.abs(rate) < DRIFT_MIN, 0.0, rate)
+            sm = np.where(np.abs(sm) < DRIFT_MIN, 0.0, sm)
+        sc = np.array(DRIFT_SCALE, np.float32)
+        cur = np.concatenate([np.clip(rate / sc, -1, 1), np.clip(sm / sc, -1, 1)], 1).astype(np.float32)
+        dq = int(round(DRIFT_DELAY / 1000.0 / DT))
+        if dq <= 0:
+            return cur
+        self.drift_q.append((cur, ok.copy()))                # read DRIFT_DELAY later; zeros if the sighting broke in between
+        while len(self.drift_q) > dq + 1:
+            self.drift_q.pop(0)
+        if len(self.drift_q) <= dq:
+            return out
+        held = np.stack([q_[1] for q_ in self.drift_q]).all(0)
+        return np.where(held[:, None], self.drift_q[0][0], 0.0).astype(np.float32)
+
+    def drift_clear(self, seats=None):
+        """(DRIFT_IN) no rate until two new perceived frames: a plugin calls it where it clears opp_hist, and on a frame
+        without observe()"""
+        if getattr(self, "drift_ang", None) is None:
+            return
+        s_ = slice(None) if seats is None else seats
+        self.drift_ok[s_], self.drift_sok[s_] = False, False
+        self.drift_s[s_] = 0.0
+        for q_ in getattr(self, "drift_q", []):
+            q_[1][s_] = False
 
     def _proj(self, pos, eye, fdir, rot, vel):
         """the enemy projectiles he sees (PROJ_SEE): inside his view cone, within PROJ_FAR, the line from his eyes clear.

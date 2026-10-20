@@ -1115,6 +1115,8 @@ class duelbot(minqlx.Plugin):
             env.v02_loud = (env.v02_loud * (1.0 - E.DT / E.V02_LOUD_T)).astype(np.float32)
         if getattr(E, "EN_STACK", False) and hasattr(env, "_es_update"):
             env._es_update()                                 # (B-257) the belief of the enemy's stack goes on too
+        if getattr(E, "DRIFT_IN", False) and hasattr(env, "drift_clear"):
+            env.drift_clear()                                # (DRIFT_IN) a frame with no picture: no rate across it
 
     def time_note(self, total):
         """DUEL_TIMING=1: the plugin's time for a frame on which the network ran: the whole frame hook, of it building
@@ -1601,6 +1603,8 @@ class duelbot(minqlx.Plugin):
                         env.cool[:] = 0
                         env.seen_t[:] = 9.0
                         env.opp_hist = []
+                        if hasattr(env, "drift_clear"):
+                            env.drift_clear()                # (DRIFT_IN) no rate from the life before
                     minqlx.set_bot_substeps(bobby.id, 3)
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
