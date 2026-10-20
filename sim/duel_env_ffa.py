@@ -1936,6 +1936,28 @@ DRIFT_SMOOTH = float(os.environ.get("DRIFT_SMOOTH") or 0.1)
 DRIFT_JUMP = 64.0
 DRIFT_SCALE = (180.0, 90.0)
 PLAY_VARS = PLAY_VARS + ("DRIFT_IN", "DRIFT_DELAY", "DRIFT_SIGMA", "DRIFT_WEBER", "DRIFT_MIN", "DRIFT_TAU", "DRIFT_SMOOTH")
+# The senses as a person has them (v0.3.8; the input audit of 2026-10-20: scratch patches measured on v0.3.7's network, then
+# made switches here). All PLAY_VARS, all off by default; off, the simulator is what it was (fixed runs, bit for bit).
+#   HEAR_FIX=1       (with HEAR_QL for the walls) hearing by the game's events. Footsteps are events: one every HF_STEP_DT
+#                    seconds (0.55) while a player is on the ground faster than HF_STEP_SPEED (150 units a second), not
+#                    crouched; the first at once. A jump (off the ground, going up) is one too; in the air there is no
+#                    step. The enemy's believed place (known) is set from a sound only on a footstep or a jump of his on
+#                    that frame (no longer from every frame he runs faster than 250 units a second), with one direction
+#                    error a sound (HF_DIR degrees, 10) and one error of the distance along it (HF_LOUD, a share: 0.3),
+#                    the height HF_UP units off (40). The ear inputs (N_EAR): the same footsteps in place of every running
+#                    frame (shots, jumps and landings as before); an event's own direction error (HF_DIR) and loudness
+#                    error (HF_LOUD), once a sound; the closing-speed column 0 (a sound does not tell it); a weapon's hum
+#                    (heard every frame) has a direction error that drifts (HF_HUM_TAU seconds, 1) instead of a fresh one a
+#                    frame. The plugins make the same events (_hf_steps) and place the enemy by the same rule (_hf_place).
+HEAR_FIX = float(os.environ.get("HEAR_FIX") or 0.0) > 0
+HF_STEP_DT = float(os.environ.get("HF_STEP_DT") or 0.55)
+HF_STEP_SPEED = float(os.environ.get("HF_STEP_SPEED") or 150.0)
+HF_DIR = float(os.environ.get("HF_DIR") or 10.0)
+HF_LOUD = float(os.environ.get("HF_LOUD") or 0.3)
+HF_HUM_TAU = float(os.environ.get("HF_HUM_TAU") or 1.0)
+HF_UP = float(os.environ.get("HF_UP") or 40.0)                       # (units: the height error of a sound)
+HF_STEP_FRAMES = max(1, int(round(HF_STEP_DT / DT)))
+PLAY_VARS = PLAY_VARS + ("HEAR_FIX", "HF_STEP_DT", "HF_STEP_SPEED", "HF_DIR", "HF_LOUD", "HF_HUM_TAU", "HF_UP")
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
@@ -2693,6 +2715,9 @@ class DuelEnv:
         self.ear = np.zeros((self.n, 4), np.float32)        # last sound heard: direction (world, radians), height, loudness, closing
         self.ear_t = np.full(self.n, 99.0, np.float32)      # seconds since
         self.ear_hum = np.full(self.n, -1, np.int64)        # the humming weapon heard with it (RG, LG) or -1
+        self.hf_cnt = np.full(self.n, -1, np.int64)         # (HEAR_FIX) frames since his last footstep (-1: not running)
+        self.hf_ev = np.zeros(self.n, bool)                 # (HEAR_FIX) he made a footstep or a jump this frame
+        self.hf_hum = np.zeros(self.n, np.float32)          # (HEAR_FIX) the drifting direction error on a hum (degrees)
         self.stack_p = 0.0                                  # v9: share of spawns with a random stack (health 100-200, armor 0-150)
         self.near_item_p = 0.0                              # v9: share of spawns within 2 s of the mega or the red armor
         self.intent_paid = np.zeros(self.n, np.float32)     # what the current trip has paid (taken back if abandoned)
@@ -4440,9 +4465,19 @@ class DuelEnv:
         src = oth[got, k[got]]
         to = s[src, :3] - s[got, :3]
         dist = d[got, k[got]]
-        ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
-        up = np.clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
-        close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
+        if HEAR_FIX:                                         # (HEAR_FIX) an event's own errors, once a sound; a hum's direction
+            z_ = self.rng.normal(0, 1, (len(got), 4))        # error drifts; the distance as loud as it sounds; no closing speed
+            rho_ = math.exp(-DT / max(HF_HUM_TAU, 1e-3))
+            self.hf_hum[got] = (rho_ * self.hf_hum[got] + math.sqrt(1.0 - rho_ * rho_) * HF_DIR * z_[:, 0]).astype(np.float32)
+            only_hum_ = hum[got, k[got]] & ~noisy[oth][got, k[got]]
+            ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(np.where(only_hum_, self.hf_hum[got], HF_DIR * z_[:, 1]))
+            up = np.clip((to[:, 2] + HF_UP * z_[:, 2]) / 200.0, -1.5, 1.5)
+            dist = np.clip(dist * (1.0 + HF_LOUD * z_[:, 3]), 0.0, EAR_RANGE)
+            close = np.zeros(len(got))
+        else:
+            ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
+            up = np.clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
+            close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
         self.ear[got] = np.stack([ang, up, 1.0 - dist / EAR_RANGE, np.clip(close / 400.0, -1.5, 1.5)], 1)
         self.ear_t[got] = 0.0
         self.ear_hum[got] = np.where(hum[got, k[got]], self.weapon[src], -1)
@@ -4451,6 +4486,31 @@ class DuelEnv:
         self.v02_ht[got, self._slot(src)] = 0.0
         self.v02_hp[got, self._slot(src)] = s[got, :3] + np.stack([np.cos(ang) * dh_, np.sin(ang) * dh_, dz_], 1)
 
+    def _hf_steps(self, ground, ground_was, vel, duck, alive):
+        """(HEAR_FIX) this frame's footsteps and jumps, for every player: a footstep every HF_STEP_FRAMES frames while on
+        the ground faster than HF_STEP_SPEED, not crouched (the first at once); a jump: off the ground, going up. Keeps
+        hf_cnt, sets hf_ev (a footstep or a jump: what tells the enemy's place); returns the footsteps. The plugins call it
+        once a frame for all seats, as step() does."""
+        ground, ground_was, duck, alive = (np.asarray(x_, bool) for x_ in (ground, ground_was, duck, alive))
+        vel = np.asarray(vel, np.float32)
+        run_ = ground & (np.hypot(vel[:, 0], vel[:, 1]) > HF_STEP_SPEED) & ~duck & alive
+        cnt_ = np.where(run_, self.hf_cnt + 1, -1)
+        foot_ = run_ & ((self.hf_cnt < 0) | (cnt_ >= HF_STEP_FRAMES))
+        self.hf_cnt = np.where(foot_, 0, cnt_).astype(np.int64)
+        self.hf_ev = foot_ | (ground_was & ~ground & (vel[:, 2] > 100.0) & alive)
+        return foot_
+
+    def _hf_place(self, hh, src):
+        """(HEAR_FIX) where players hh place the enemies src they heard: HF_DIR degrees off across, HF_LOUD of the distance
+        off along (one draw a sound), the height HF_UP units off"""
+        s = self.state
+        z_ = self.rng.normal(0, 1, (len(hh), 3))
+        tv_ = s[src, :3] - s[hh, :3]
+        dh_ = np.hypot(tv_[:, 0], tv_[:, 1]) + 1e-6
+        a_ = np.arctan2(tv_[:, 1], tv_[:, 0]) + np.radians(HF_DIR * z_[:, 0])
+        r_ = dh_ * np.maximum(0.2, 1.0 + HF_LOUD * z_[:, 1])
+        return np.stack([s[hh, 0] + np.cos(a_) * r_, s[hh, 1] + np.sin(a_) * r_, s[src, 2] + HF_UP * z_[:, 2]], 1).astype(np.float32)
+
     def _hear_ok(self, lis, src=None, pos=None):
         """(HEAR_QL) the game sends player lis the sounds of player src (his box) or of the point pos (an item's place): his
         eye's cluster sees one of theirs in the map's PVS (sim/pvs.py). Arrays of one shape (pos: one point or one a lis);
@@ -4458,7 +4518,7 @@ class DuelEnv:
         lis = np.asarray(lis)
         if not HEAR_QL or self.pvs is None or lis.size == 0:
             return np.ones(lis.shape, bool)
-        key_ = (id(self.state), self.duck.tobytes())
+        key_ = (id(self.state), self.state[:, :3].tobytes(), self.duck.tobytes())     # (the places too: a plugin writes the state in place)
         if getattr(self, "_pvs_key", None) != key_:           # every player's eye cluster and box clusters, once a frame
             self._pvs_key = key_
             self._pvs_eye = self.pvs.clusters(self._eye(self.state))
@@ -9086,8 +9146,12 @@ class DuelEnv:
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
         if self.rj_live:                                     # (RJ_RUN_P) rockets fired in rocket jump runs
             self.stats["rj_shots"] += int((shoot & (self.weapon == RL) & self.rjrun & self._counted(ar)).sum())
-        self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
-                  ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
+        if HEAR_FIX:                                         # (HEAR_FIX) shots, jumps and landings, footsteps as events
+            foot_ = self._hf_steps(s[:, 6] > 0.5, prev[:, 6] > 0.5, s[:, 3:6], self.duck, self.hp > 0)
+            self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) | foot_)
+        else:
+            self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
+                      ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
         self.note_noise(shoot & (self.weapon != G), (prev[:, 6] > 0.5) != (s[:, 6] > 0.5),      # (N_V02: the same events, for the one who makes them)
                         (s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck)
         self.note_shots(np.nonzero(shoot & (self.weapon != G))[0])
@@ -9936,6 +10000,8 @@ class DuelEnv:
             if RESPAWN_QL:                                   # (RESPAWN_QL) a body waiting to respawn is out of play: not seen
                 vis &= self.rsp_wait[opp] <= 0
             heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
+            if HEAR_FIX:                                     # (HEAR_FIX) only a footstep or a jump of his on this frame tells
+                heard = (~vis) & (dist < HEAR) & self.hf_ev[opp] & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
             if RESPAWN_QL:                                   # (RESPAWN_QL) ... nor heard
                 heard &= self.rsp_wait[opp] <= 0
             if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
@@ -9949,7 +10015,9 @@ class DuelEnv:
             acq = vis & (self.vis_run2[:, k_] >= self._acq_need() + self.acq_extra2[:, k_])
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
-            if heard.any():
+            if heard.any() and HEAR_FIX:                     # (HEAR_FIX) placed by the sound: its direction and loudness
+                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard])
+            elif heard.any():
                 self.known2[heard, k_] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                     np.array([1, 1, 0], np.float32)
             self.seen2[:, k_] = np.where(acq | heard, 0.0, self.seen2[:, k_] + DT)

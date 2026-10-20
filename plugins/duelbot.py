@@ -1301,6 +1301,11 @@ class duelbot(minqlx.Plugin):
             vis[cand] = env._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
         env.visible = vis
         heard = (~vis) & alive & (dist < E.HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250)
+        hf_ = getattr(E, "HEAR_FIX", False)
+        if hf_:                                              # (HEAR_FIX) a footstep or a jump of his on this frame, where the
+            heard = (~vis) & alive & (dist < E.HEAR) & env.hf_ev[opp]     # game sends it (as step())
+            if getattr(E, "HEAR_QL", False):
+                heard &= env._hear_ok(np.arange(n), opp)
         if hasattr(env, "vis_run"):                          # newer rules: an enemy is noticed only after a moment in view
             need_ = max(1, env.acquire_frames - env.react_frames)
             if getattr(E, "SURPRISE_MS", 0) > 0 and hasattr(env, "acq_extra"):    # off the crosshair and unexpected: noticed later (as in training)
@@ -1311,7 +1316,9 @@ class duelbot(minqlx.Plugin):
             vis = vis & (env.vis_run >= need_)
             env.acquired = vis
         env.known[vis] = s[opp[vis], :3]
-        if heard.any():
+        if heard.any() and hf_:                              # (HEAR_FIX) placed by the sound, as step() places him
+            env.known[heard] = env._hf_place(np.nonzero(heard)[0], opp[heard])
+        elif heard.any():
             env.known[heard] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
         env.seen_t = np.where(vis | heard, 0.0, env.seen_t + E.DT).astype(np.float32)
@@ -1696,6 +1703,9 @@ class duelbot(minqlx.Plugin):
                 steps_ = noisy & ~env.duck
                 shot_ = np.array([bool(self.shot_made.get((id(env), 0), False)), ofire_], bool)
                 heard_ = shot_ | hop_ | steps_
+                if getattr(E, "HEAR_FIX", False):            # (HEAR_FIX) footsteps as events, as step() makes them
+                    foot_ = env._hf_steps(gr_, gr_ if was_ is None else was_, st_[:, 3:6], env.duck, env.hp > 0)
+                    heard_ = shot_ | hop_ | foot_
                 heard_[0] = False
                 env.hear(heard_)
                 env.note_noise(shot_, hop_, steps_)

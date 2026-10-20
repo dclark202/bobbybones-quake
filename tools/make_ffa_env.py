@@ -474,6 +474,8 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
             if RESPAWN_QL:                                   # (RESPAWN_QL) a body waiting to respawn is out of play: not seen
                 vis &= self.rsp_wait[opp] <= 0
             heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
+            if HEAR_FIX:                                     # (HEAR_FIX) only a footstep or a jump of his on this frame tells
+                heard = (~vis) & (dist < HEAR) & self.hf_ev[opp] & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
             if RESPAWN_QL:                                   # (RESPAWN_QL) ... nor heard
                 heard &= self.rsp_wait[opp] <= 0
             if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
@@ -487,7 +489,9 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
             acq = vis & (self.vis_run2[:, k_] >= self._acq_need() + self.acq_extra2[:, k_])
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
-            if heard.any():
+            if heard.any() and HEAR_FIX:                     # (HEAR_FIX) placed by the sound: its direction and loudness
+                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard])
+            elif heard.any():
                 self.known2[heard, k_] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \\
                     np.array([1, 1, 0], np.float32)
             self.seen2[:, k_] = np.where(acq | heard, 0.0, self.seen2[:, k_] + DT)
