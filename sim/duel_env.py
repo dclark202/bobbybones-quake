@@ -1965,6 +1965,87 @@ FIRE_QL = float(os.environ.get("FIRE_QL") or 0.0) > 0
 HS_W = np.array([k_ != "proj" for k_ in W_KIND], bool)    # (FIRE_QL) the instant weapons
 FIRE_MZ, FIRE_FLY = 5.0, 0.050                            # (FIRE_QL) the plasma's and the grenade's muzzle and first flight
 PLAY_VARS = PLAY_VARS + ("FIRE_QL",)
+# The senses as a person has them (v0.3.8; the input audit of 2026-10-20: scratch patches measured on v0.3.7's network, then
+# made switches here). All PLAY_VARS, all off by default; off, the simulator is what it was (fixed runs, bit for bit).
+#   HEAR_FIX=1       (with HEAR_QL for the walls) hearing by the game's events. Footsteps are events: one every HF_STEP_DT
+#                    seconds (0.55) while a player is on the ground faster than HF_STEP_SPEED (150 units a second), not
+#                    crouched; the first at once. A jump (off the ground, going up) is one too; in the air there is no
+#                    step. The enemy's believed place (known) is set from a sound only on a footstep or a jump of his on
+#                    that frame (no longer from every frame he runs faster than 250 units a second), with one direction
+#                    error a sound (HF_DIR degrees, 10) and one error of the distance along it (HF_LOUD, a share: 0.3),
+#                    the height HF_UP units off (40). The ear inputs (N_EAR): the same footsteps in place of every running
+#                    frame (shots, jumps and landings as before); an event's own direction error (HF_DIR) and loudness
+#                    error (HF_LOUD), once a sound; the closing-speed column 0 (a sound does not tell it); a weapon's hum
+#                    (heard every frame) has a direction error that drifts (HF_HUM_TAU seconds, 1) instead of a fresh one a
+#                    frame. The plugins make the same events (_hf_steps) and place the enemy by the same rule (_hf_place).
+HEAR_FIX = float(os.environ.get("HEAR_FIX") or 0.0) > 0
+HF_STEP_DT = float(os.environ.get("HF_STEP_DT") or 0.55)
+HF_STEP_SPEED = float(os.environ.get("HF_STEP_SPEED") or 150.0)
+HF_DIR = float(os.environ.get("HF_DIR") or 10.0)
+HF_LOUD = float(os.environ.get("HF_LOUD") or 0.3)
+HF_HUM_TAU = float(os.environ.get("HF_HUM_TAU") or 1.0)
+HF_UP = float(os.environ.get("HF_UP") or 40.0)                       # (units: the height error of a sound)
+HF_STEP_FRAMES = max(1, int(round(HF_STEP_DT / DT)))
+PLAY_VARS = PLAY_VARS + ("HEAR_FIX", "HF_STEP_DT", "HF_STEP_SPEED", "HF_DIR", "HF_LOUD", "HF_HUM_TAU", "HF_UP")
+#   VEL_FIX=1        the enemy's velocity as a person reads it, wherever his inputs use it (the velocity inputs, his speed when
+#                    last seen, the believed place v02_bel that is made of it, the lead of a rocket or a plasma ball, the
+#                    rocket's floor aim point): VEL_DELAY_MS old (200: the same as before, now a setting), times a scale error
+#                    that drifts (VEL_WEBER, a share of the speed, 0.2; VEL_TAU seconds, 0.3), and below VEL_MIN units a
+#                    second (30) read as standing still.
+#   RANGE_FIX=1      the distance to an enemy in view judged by eye: his place (as the sight error leaves it) moved along
+#                    the line from the eyes by a share of the distance that drifts (RANGE_WEBER, 0.15; RANGE_TAU seconds,
+#                    0.5; at most half the distance); every input built on that place takes it (his place, his apparent
+#                    size, the lead's flight time, the grenade arc, the rocket aim, the believed place).
+#                    Both are kept in observe(): the plugins have them as they are.
+VEL_FIX = float(os.environ.get("VEL_FIX") or 0.0) > 0
+VEL_DELAY_MS = float(os.environ.get("VEL_DELAY_MS") or 200.0)
+VEL_WEBER = float(os.environ.get("VEL_WEBER") or 0.2)
+VEL_TAU = float(os.environ.get("VEL_TAU") or 0.3)
+VEL_MIN = float(os.environ.get("VEL_MIN") or 30.0)
+RANGE_FIX = float(os.environ.get("RANGE_FIX") or 0.0) > 0
+RANGE_WEBER = float(os.environ.get("RANGE_WEBER") or 0.15)
+RANGE_TAU = float(os.environ.get("RANGE_TAU") or 0.5)
+PLAY_VARS = PLAY_VARS + ("VEL_FIX", "VEL_DELAY_MS", "VEL_WEBER", "VEL_TAU", "VEL_MIN", "RANGE_FIX", "RANGE_WEBER", "RANGE_TAU")
+#   PROJ_FIX=1       (with PROJ_SEE) an enemy projectile as a person sees it: noticed only after PROJ_NOTICE_MS (100) in his
+#                    sight on end (the view cone, a clear line); what he reads of it (place, speed, and the closest pass and
+#                    its time worked out from them) is PROJ_READ_MS (100) old; a grenade's fuse only if he has seen it on
+#                    every frame since it left (else the fuse input reads 0, as at its end). A projectile is followed by its
+#                    slot (a new one when the slot's age goes back); the plugins keep a projectile in one slot while it
+#                    flies (sync_world), as the simulator does.
+PROJ_FIX = float(os.environ.get("PROJ_FIX") or 0.0) > 0
+PROJ_NOTICE_MS = float(os.environ.get("PROJ_NOTICE_MS") or 100.0)
+PROJ_READ_MS = float(os.environ.get("PROJ_READ_MS") or 100.0)
+PLAY_VARS = PLAY_VARS + ("PROJ_FIX", "PROJ_NOTICE_MS", "PROJ_READ_MS")
+#   SENSE_MINOR=1    the small ones, together: (a) the enemy's facing, crouch, being in the air and weapon in hand are read
+#                    as he was one reaction time ago (the same old sighting as his place: opp_hist's pick; sm_hist keeps
+#                    them), his facing with an error that drifts (SM_FACE_DEG, 15 degrees; SM_FACE_TAU, 0.5 s): the enemy
+#                    inputs (his facing from where he was seen then), his body inputs, the weapon seen in his hands, and the in-air of the lead and the rocket aim;
+#                    (b) a dropped weapon's time left only for a player who saw or heard the death (the killer, the dead,
+#                    one with the dead in view or within earshot: drop_kn), else 0; (c) only a railgun's or a lightning
+#                    gun's line is seen as a trail (no machine gun, shotgun or heavy machine gun lines); (d) a big item's
+#                    pickup known only by its sound (not seen) starts his item clock with an error (SM_ITEM_SD, 0.75 s):
+#                    it_t (the mega and the red armor) and ITEM_BELIEF's bel_t. All kept by the simulator's own calls,
+#                    which the plugins make too (observe, note_pickup, note_shots); the duel plugin shows a dropped
+#                    weapon's time to both (in a duel the killer and the dead know of every death that drops one).
+SENSE_MINOR = float(os.environ.get("SENSE_MINOR") or 0.0) > 0
+SM_FACE_DEG = float(os.environ.get("SM_FACE_DEG") or 15.0)
+SM_FACE_TAU = float(os.environ.get("SM_FACE_TAU") or 0.5)
+SM_ITEM_SD = float(os.environ.get("SM_ITEM_SD") or 0.75)
+PLAY_VARS = PLAY_VARS + ("SENSE_MINOR", "SM_FACE_DEG", "SM_FACE_TAU", "SM_ITEM_SD")
+#   HAND_BAND=1      a hand's bandwidth (the owner, 2026-10-20: "some kind of low pass filter on his LG aim"; every weapon,
+#                    the hand is the same): the view's velocity follows the hand's (mv, after its smoothing and the flick
+#                    cap) through a low-pass whose cutoff rises with the view's own speed, per axis: HB_FC Hz (4.0) plus
+#                    HB_BETA Hz (0.5) for every degree a frame it turns (the one-euro filter's rule): small corrections are
+#                    smoothed, a flick is let through. Sized offline on save 220's own commands while firing lightning
+#                    (aim tables of 2026-10-20): yaw acceleration rms 4,600 -> 2,610 deg/s2, reversals 8.3 -> 4.8 a
+#                    second, the view rate's power above 4 Hz 0.43 -> 0.27 (the pros: 2,455, 4.6, 0.29); a small step
+#                    (0.8 deg/frame) at 50% / 90% in 50 / 100 ms (25 / 50 today), a flick (20 deg/frame) 66% -> 60% of its
+#                    turn in 8 frames. The hand noise then rides on the filtered velocity. hb keeps the view's velocity; it
+#                    is reset with mv. Scripted players are not filtered. The plugins call the same _hand_band.
+HAND_BAND = float(os.environ.get("HAND_BAND") or 0.0) > 0
+HB_FC = float(os.environ.get("HB_FC") or 4.0)
+HB_BETA = float(os.environ.get("HB_BETA") or 0.5)
+PLAY_VARS = PLAY_VARS + ("HAND_BAND", "HB_FC", "HB_BETA")
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
@@ -2608,6 +2689,7 @@ class DuelEnv:
         self.drop_pos = np.zeros((n_matches, DROP_MAX, 3), np.float32)  # weapons that dead players left (see DROPS):
         self.drop_w = np.full((n_matches, DROP_MAX), -1, np.int64)      # which weapon (-1: nothing in that slot)
         self.drop_t = np.zeros((n_matches, DROP_MAX), np.float32)       # seconds until it is gone
+        self.drop_kn = np.zeros((self.n, DROP_MAX), bool)                # (SENSE_MINOR) he saw or heard the death that left it
         self.slot_items = [[k for k, d in enumerate(self.item_def) if d[4] == lab] for lab in SLOTS]
         # Weapons that lie on this map: nobody spawns with a weapon the map does not have (no heavy machine gun
         # on Aerowalk, for instance). A map without weapon pickups (the test map) allows all.
@@ -2704,6 +2786,9 @@ class DuelEnv:
         self.ear = np.zeros((self.n, 4), np.float32)        # last sound heard: direction (world, radians), height, loudness, closing
         self.ear_t = np.full(self.n, 99.0, np.float32)      # seconds since
         self.ear_hum = np.full(self.n, -1, np.int64)        # the humming weapon heard with it (RG, LG) or -1
+        self.hf_cnt = np.full(self.n, -1, np.int64)         # (HEAR_FIX) frames since his last footstep (-1: not running)
+        self.hf_ev = np.zeros(self.n, bool)                 # (HEAR_FIX) he made a footstep or a jump this frame
+        self.hf_hum = np.zeros(self.n, np.float32)          # (HEAR_FIX) the drifting direction error on a hum (degrees)
         self.stack_p = 0.0                                  # v9: share of spawns with a random stack (health 100-200, armor 0-150)
         self.near_item_p = 0.0                              # v9: share of spawns within 2 s of the mega or the red armor
         self.intent_paid = np.zeros(self.n, np.float32)     # what the current trip has paid (taken back if abandoned)
@@ -3049,6 +3134,8 @@ class DuelEnv:
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
         self.vel_frames = VEL_REACT_FRAMES              # delay on the enemy's velocity (see observe)
+        if VEL_FIX:                                     # (VEL_FIX) the delay as set
+            self.vel_frames = max(0, int(round(VEL_DELAY_MS / 1000.0 / DT)))
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
         self.fov_sight = True                           # geometry only inside the field of view
@@ -3134,6 +3221,7 @@ class DuelEnv:
         self.yaw = np.zeros(n, np.float32)
         self.pitch = np.zeros(n, np.float32)
         self.mv = np.zeros((n, 2), np.float32)          # mouse velocity (yaw, pitch) in degrees per frame
+        self.hb = np.zeros((n, 2), np.float32)          # (HAND_BAND) the view's velocity after the hand's bandwidth
         self.sp_hist = np.zeros((n, 4), np.float32)     # his speed over the ground one to four frames ago (see N_V14; a plugin keeps it itself)
         self.wet = np.zeros(n, np.int8)                 # how deep he stands in water, slime or lava: feet 1, waist 2, head 3 (LAVA)
         self.cmd = np.zeros((n, 2), np.float32)         # last turn command (for the jerk cost)
@@ -3337,6 +3425,7 @@ class DuelEnv:
             if STYLE_W[self.style[i]] >= 0 and int(STYLE_W[self.style[i]]) not in self.map_weapons:
                 self.style[i] = 0                            # (no rail life on a map without a railgun)
         self.mv[i] = 0.0
+        self.hb[i] = 0.0
         self.cmd[i] = 0.0
         self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
@@ -3481,6 +3570,7 @@ class DuelEnv:
         k = int(ok[C["cprog"][ok].argmax()]) if len(ok) else 0
         self.w.reset(i, (C["cps"][k, 0], C["cps"][k, 1], C["cps"][k, 2] + 2.0), (0, 0, 0), float(C["cyaw"][k]))
         self.yaw[i], self.pitch[i], self.mv[i] = float(C["cyaw"][k]), 0.0, 0.0
+        self.hb[i] = 0.0
         self.hp[i], self.armor[i] = (1.0 if C["mortal"] else SPAWN_HP), 0.0
         if self.gun[i]:
             self._gun_arm(i)
@@ -4393,6 +4483,16 @@ class DuelEnv:
         """for every player, the other players of his group (one column each)"""
         return (np.arange(self.n) ^ 1)[:, None]
 
+    def _hand_band(self, who):
+        """(HAND_BAND) players who: their view's velocity (hb) one frame on toward the hand's (mv) through a first-order
+        low-pass whose cutoff is HB_FC + HB_BETA x |hb| Hz (|hb| in degrees a frame), per axis. -> hb (all players).
+        step() and the plugins' drive() call it after the flick cap, before the hand noise"""
+        fc = HB_FC + HB_BETA * np.abs(self.hb)
+        k = (1.0 - np.exp(-2.0 * np.pi * fc * DT)).astype(np.float32)
+        new = self.hb + k * (self.mv - self.hb)
+        self.hb = np.where(np.asarray(who, bool)[:, None], new, self.hb).astype(np.float32)
+        return self.hb
+
     def pad_turn(self, turn, dpit, lift, zs, who):
         """the mouse pad (see PAD_DEG): what is left of this frame's view movement. turn, dpit in degrees, lift =
         he asks to lift the mouse, zs = zoom scale (zoomed, the same hand movement turns the view less), who = the
@@ -4432,9 +4532,19 @@ class DuelEnv:
         src = oth[got, k[got]]
         to = s[src, :3] - s[got, :3]
         dist = d[got, k[got]]
-        ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
-        up = np.clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
-        close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
+        if HEAR_FIX:                                         # (HEAR_FIX) an event's own errors, once a sound; a hum's direction
+            z_ = self.rng.normal(0, 1, (len(got), 4))        # error drifts; the distance as loud as it sounds; no closing speed
+            rho_ = math.exp(-DT / max(HF_HUM_TAU, 1e-3))
+            self.hf_hum[got] = (rho_ * self.hf_hum[got] + math.sqrt(1.0 - rho_ * rho_) * HF_DIR * z_[:, 0]).astype(np.float32)
+            only_hum_ = hum[got, k[got]] & ~noisy[oth][got, k[got]]
+            ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(np.where(only_hum_, self.hf_hum[got], HF_DIR * z_[:, 1]))
+            up = np.clip((to[:, 2] + HF_UP * z_[:, 2]) / 200.0, -1.5, 1.5)
+            dist = np.clip(dist * (1.0 + HF_LOUD * z_[:, 3]), 0.0, EAR_RANGE)
+            close = np.zeros(len(got))
+        else:
+            ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
+            up = np.clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
+            close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
         self.ear[got] = np.stack([ang, up, 1.0 - dist / EAR_RANGE, np.clip(close / 400.0, -1.5, 1.5)], 1)
         self.ear_t[got] = 0.0
         self.ear_hum[got] = np.where(hum[got, k[got]], self.weapon[src], -1)
@@ -4443,6 +4553,31 @@ class DuelEnv:
         self.v02_ht[got, self._slot(src)] = 0.0
         self.v02_hp[got, self._slot(src)] = s[got, :3] + np.stack([np.cos(ang) * dh_, np.sin(ang) * dh_, dz_], 1)
 
+    def _hf_steps(self, ground, ground_was, vel, duck, alive):
+        """(HEAR_FIX) this frame's footsteps and jumps, for every player: a footstep every HF_STEP_FRAMES frames while on
+        the ground faster than HF_STEP_SPEED, not crouched (the first at once); a jump: off the ground, going up. Keeps
+        hf_cnt, sets hf_ev (a footstep or a jump: what tells the enemy's place); returns the footsteps. The plugins call it
+        once a frame for all seats, as step() does."""
+        ground, ground_was, duck, alive = (np.asarray(x_, bool) for x_ in (ground, ground_was, duck, alive))
+        vel = np.asarray(vel, np.float32)
+        run_ = ground & (np.hypot(vel[:, 0], vel[:, 1]) > HF_STEP_SPEED) & ~duck & alive
+        cnt_ = np.where(run_, self.hf_cnt + 1, -1)
+        foot_ = run_ & ((self.hf_cnt < 0) | (cnt_ >= HF_STEP_FRAMES))
+        self.hf_cnt = np.where(foot_, 0, cnt_).astype(np.int64)
+        self.hf_ev = foot_ | (ground_was & ~ground & (vel[:, 2] > 100.0) & alive)
+        return foot_
+
+    def _hf_place(self, hh, src):
+        """(HEAR_FIX) where players hh place the enemies src they heard: HF_DIR degrees off across, HF_LOUD of the distance
+        off along (one draw a sound), the height HF_UP units off"""
+        s = self.state
+        z_ = self.rng.normal(0, 1, (len(hh), 3))
+        tv_ = s[src, :3] - s[hh, :3]
+        dh_ = np.hypot(tv_[:, 0], tv_[:, 1]) + 1e-6
+        a_ = np.arctan2(tv_[:, 1], tv_[:, 0]) + np.radians(HF_DIR * z_[:, 0])
+        r_ = dh_ * np.maximum(0.2, 1.0 + HF_LOUD * z_[:, 1])
+        return np.stack([s[hh, 0] + np.cos(a_) * r_, s[hh, 1] + np.sin(a_) * r_, s[src, 2] + HF_UP * z_[:, 2]], 1).astype(np.float32)
+
     def _hear_ok(self, lis, src=None, pos=None):
         """(HEAR_QL) the game sends player lis the sounds of player src (his box) or of the point pos (an item's place): his
         eye's cluster sees one of theirs in the map's PVS (sim/pvs.py). Arrays of one shape (pos: one point or one a lis);
@@ -4450,7 +4585,7 @@ class DuelEnv:
         lis = np.asarray(lis)
         if not HEAR_QL or self.pvs is None or lis.size == 0:
             return np.ones(lis.shape, bool)
-        key_ = (id(self.state), self.duck.tobytes())
+        key_ = (id(self.state), self.state[:, :3].tobytes(), self.duck.tobytes())     # (the places too: a plugin writes the state in place)
         if getattr(self, "_pvs_key", None) != key_:           # every player's eye cluster and box clusters, once a frame
             self._pvs_key = key_
             self._pvs_eye = self.pvs.clusters(self._eye(self.state))
@@ -4545,7 +4680,18 @@ class DuelEnv:
                          ((self.ear_hum == RG) & (self.ear_t < 0.5)).astype(np.float32),
                          ((self.ear_hum == LG) & (self.ear_t < 0.5)).astype(np.float32)], 1).astype(np.float32)
 
-    def _drop_weapon(self, v):
+    def _death_seen(self, j, v, killer):
+        """(SENSE_MINOR) player j knows of v's death: he is v or the killer, has v in view, or is within earshot"""
+        if j == v or j == killer:
+            return True
+        return self._sees(j, v) or (np.linalg.norm(self.state[j, :3] - self.state[v, :3]) < HEAR_EVT and self._hear1(j, v))
+
+    def _sees(self, j, v):
+        """player j has player v in view (noticed)"""
+        a2_ = getattr(self, "acq2", None)
+        return bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(v) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
+
+    def _drop_weapon(self, v, killer=-1):
         """player v, killed by another player, leaves the weapon he held (see DROPS)"""
         w = int(self.weapon[v])
         if ALWAYS[w] or self.ammo[v, w] <= 0:
@@ -4569,6 +4715,9 @@ class DuelEnv:
         free = np.nonzero(self.drop_w[m] < 0)[0]
         j = int(free[0]) if len(free) else int(self.drop_t[m].argmin())
         self.drop_pos[m, j], self.drop_w[m, j], self.drop_t[m, j] = p1, w, DROP_LIFE
+        if SENSE_MINOR:                                      # (SENSE_MINOR) its time is known to those who saw or heard the death
+            for q_ in self._seats(m):
+                self.drop_kn[q_, j] = self._death_seen(int(q_), int(v), int(killer))
         self.stats["drops"] += 1
 
     def _drops_step(self, reward):
@@ -4647,6 +4796,8 @@ class DuelEnv:
         out[:, 3] = ok
         out[:, 4], out[:, 5], out[:, 6] = ok & (wj == RL), ok & (wj == LG), ok & (wj == RG)
         out[:, 7] = np.where(ok, self.drop_t[grp][ar, j] / DROP_LIFE, 0.0)
+        if SENSE_MINOR:                                      # (SENSE_MINOR) only if he saw or heard the death
+            out[:, 7] *= self.drop_kn[ar, j]
         return out
 
     def _teach_drop(self, ri, pos, tp):
@@ -4892,6 +5043,14 @@ class DuelEnv:
                 if HEAR_QL:                                  # (HEAR_QL) heard where the game sends it (at the item's place)
                     near &= self._hear_ok(q, pos=self.item_pos[items[g]])
                 self.bel_t[q[near], g] = 0.0
+                if SENSE_MINOR:                                  # (SENSE_MINOR) heard, not seen: his clock starts a little off
+                    ip_ = self.item_pos[items[g]]
+                    took_ = np.linalg.norm(pos[q] - ip_, axis=1) < 120.0         # (the one who took it)
+                    kn_ = np.asarray(self.known, np.float32)[q]
+                    saw_ = np.asarray(self.acquired, bool)[q] & (np.linalg.norm(kn_ - ip_, axis=1) < 150.0)
+                    hq_ = q[near & ~took_ & ~saw_]
+                    if len(hq_):
+                        self.bel_t[hq_, g] = self.rng.normal(0, SM_ITEM_SD, len(hq_)).astype(np.float32)
         self.bel_prev = up.copy()
         self.bel_tick += 1
         if self.bel_tick % 4:                                # the look at the items' places: ten times a second
@@ -4941,6 +5100,8 @@ class DuelEnv:
         for j in self._mates(i):
             if np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
                 self.it_t[j, k] = 0.0
+                if SENSE_MINOR and not self._sees(j, i):
+                    self.it_t[j, k] = float(self.rng.normal(0, SM_ITEM_SD))   # (SENSE_MINOR) heard, not seen: a little off
                 self.e_got[j, self._slot(i), k] = 1.0
 
     def note_death(self, v, killer):
@@ -5248,7 +5409,7 @@ class DuelEnv:
         self.shot_w[lis[ok]] = self.weapon[src[ok]]
         self.shot_seen[lis[ok]] = seen[ok]
         # the line of a hitscan shot (not rockets, grenades, plasma: those are projectiles he sees anyway)
-        hit = np.isin(self.weapon[src], (RG, LG, MG, HMG, SG)) & ~alone & (self.hp[lis] > 0)
+        hit = np.isin(self.weapon[src], (RG, LG) if SENSE_MINOR else (RG, LG, MG, HMG, SG)) & ~alone & (self.hp[lis] > 0)
         if hit.any():
             sh, li = src[hit], lis[hit]
             eye = self._eye(s)
@@ -5282,6 +5443,8 @@ class DuelEnv:
         trail = np.concatenate([np.clip(rot(self.trail_p - eye) / 500.0, -4, 4) * on[:, None], fade[:, None]], 1)
         v_ = visible.astype(np.float32)
         body = np.stack([self.duck[opp].astype(np.float32) * v_, (self.state[opp, 6] < 0.5).astype(np.float32) * v_], 1)
+        if SENSE_MINOR:                                      # (SENSE_MINOR) as seen a reaction time ago
+            body = np.stack([self._sm_e["duck"].astype(np.float32) * v_, self._sm_e["air"].astype(np.float32) * v_], 1)
         hand = np.concatenate([(self.key_last - np.array([1, 1, 0]))[:, :2].astype(np.float32),
                                (self.key_last[:, 2:3] == 1).astype(np.float32) - (self.key_last[:, 2:3] == 2).astype(np.float32),
                                (self.key_tok / KEY_BURST)[:, None],
@@ -5457,13 +5620,17 @@ class DuelEnv:
             visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
             seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
+        if SENSE_MINOR:                                      # (SENSE_MINOR) his facing, crouch, air and weapon as seen with his place
+            self._sm_note(opp, rf_, pick if self.focus_on else None)
+        if VEL_FIX:                                          # (VEL_FIX) read as a person reads it
+            opp_vel = self._vel_percept(opp_vel)
         self.ear_t += DT
         self.resp_t += DT
         self.it_t += DT                                      # the memory aids (N_MEM) keep their own time here, so the
         self.e_life += DT                                    # game-server plugin, which does not call step(), has them too
         self.life_t += DT
         v_ = np.nonzero(visible)[0]
-        self.e_got[v_, self._slot(opp[v_]), 2 + self.weapon[opp[v_]]] = 1.0     # the weapon seen in the enemy's hands
+        self.e_got[v_, self._slot(opp[v_]), 2 + (self._sm_e["weapon"][v_] if SENSE_MINOR else self.weapon[opp[v_]])] = 1.0     # the weapon seen in the enemy's hands
         if self.percept_sigma > 0:                           # the enemy is seen a little off from where he is
             rho = math.exp(-DT / PERCEPT_TAU)
             self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
@@ -5485,6 +5652,9 @@ class DuelEnv:
             d_ = np.linalg.norm(t_, axis=1)
             off = np.tan(np.radians(self.percept)) * d_[:, None] * (visible & (self.script == 0))[:, None]
             known = known + np.stack([-t_[:, 1] / hd_ * off[:, 0], t_[:, 0] / hd_ * off[:, 0], off[:, 1]], 1).astype(np.float32)
+        if RANGE_FIX:                                        # (RANGE_FIX) his distance judged by eye
+            self._rf_known0 = known.copy()                   # (the place before it: DRIFT_IN's jump test, see _drift)
+            known = self._range_percept(known, eye, visible)
         rel = rot(known - pos) / 1000.0
         exact = visible.astype(np.float32)
         ovel = rot(opp_vel) / 400.0 * exact[:, None]
@@ -5597,7 +5767,11 @@ class DuelEnv:
         pk = getattr(self, "_drift_pick", None)
         pk = np.zeros(n, np.int64) if pk is None else np.asarray(pk, np.int64).reshape(n)
         self._drift_pick = None
-        foe = np.asarray(opp, np.int64).reshape(n)
+        k0_ = getattr(self, "_rf_known0", None) if RANGE_FIX else None
+        if k0_ is not None and len(k0_) == n:                # (RANGE_FIX with DRIFT_IN, the v0.3.8 merge) the jump test on the place
+            known = k0_                                      # before the distance error: that error slides the place along the line
+        self._rf_known0 = None                               # from his eyes by tens of units a frame at long range (the angle stays
+        foe = np.asarray(opp, np.int64).reshape(n)           # as it is) and read as a new sighting (DRIFT_JUMP), the rate zeroed
         now = np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
         ok = (now & self.drift_ok & (pk == self.drift_pk) & (foe == self.drift_foe)
               & (np.linalg.norm(pos - self.drift_pos, axis=1) < DRIFT_JUMP) & (np.linalg.norm(known - self.drift_kn, axis=1) < DRIFT_JUMP))
@@ -5633,6 +5807,53 @@ class DuelEnv:
         held = np.stack([q_[1] for q_ in self.drift_q]).all(0)
         return np.where(held[:, None], self.drift_q[0][0], 0.0).astype(np.float32)
 
+    def _sm_note(self, opp, rf_, pick):
+        """(SENSE_MINOR) keeps every player's facing, crouch, air and weapon a frame (sm_hist, beside opp_hist and as long)
+        and reads the enemy's at the sighting his place is read from (opp_hist's pick: pick, else rf_ frames back), and his
+        place then (for the facing input); his facing with a drifting error (sm_face). -> self._sm_e, per player. Called once a frame by observe()"""
+        n = self.n
+        if getattr(self, "sm_hist", None) is None or getattr(self, "sm_face", None) is None or len(self.sm_face) != n:
+            self.sm_hist, self.sm_face = [], np.zeros(n, np.float32)
+        self.sm_hist.append((self.yaw[:n].astype(np.float32).copy(), np.asarray(self.duck[:n], bool).copy(),
+                             (self.state[:n, 6] < 0.5).copy(), np.asarray(self.weapon[:n], np.int64).copy(),
+                             self.state[:n, :3].astype(np.float32).copy()))
+        L_ = len(self.opp_hist)
+        while len(self.sm_hist) > L_:
+            self.sm_hist.pop(0)
+        while len(self.sm_hist) < L_:                       # (newer than opp_hist: the oldest stands for the frames before)
+            self.sm_hist.insert(0, self.sm_hist[0])
+        ar = np.arange(n)
+        pk = np.asarray(pick, np.int64) if pick is not None else np.broadcast_to(np.maximum(0, L_ - 1 - np.asarray(rf_, np.int64)), (n,))
+        H = [np.stack([h_[k_] for h_ in self.sm_hist]) for k_ in range(5)]
+        rho = math.exp(-DT / max(SM_FACE_TAU, 1e-3))
+        self.sm_face = (rho * self.sm_face + math.sqrt(1.0 - rho * rho) * SM_FACE_DEG * self.rng.normal(0, 1, n)).astype(np.float32)
+        o_ = np.asarray(opp, np.int64)
+        self._sm_e = dict(yaw=H[0][pk, o_] + self.sm_face, duck=H[1][pk, o_], air=H[2][pk, o_], weapon=H[3][pk, o_], pos=H[4][pk, o_])
+
+    def _vel_percept(self, v):
+        """(VEL_FIX) the enemy's velocity as he reads it: times a drifting scale error (VEL_WEBER, VEL_TAU), a speed below
+        VEL_MIN read as none. Keeps the error (vf_w); called once a frame by observe()"""
+        n = len(v)
+        if getattr(self, "vf_w", None) is None or len(self.vf_w) != n:
+            self.vf_w = np.zeros(n, np.float32)
+        rho = math.exp(-DT / max(VEL_TAU, 1e-3))
+        self.vf_w = (rho * self.vf_w + math.sqrt(1.0 - rho * rho) * VEL_WEBER * self.rng.normal(0, 1, n)).astype(np.float32)
+        v = np.asarray(v, np.float32) * (1.0 + self.vf_w)[:, None]
+        if VEL_MIN > 0:
+            v = np.where(np.linalg.norm(v, axis=1, keepdims=True) < VEL_MIN, 0.0, v)
+        return v.astype(np.float32)
+
+    def _range_percept(self, known, eye, visible):
+        """(RANGE_FIX) the place of an enemy in view moved along the line from his eyes by a drifting share of the distance
+        (RANGE_WEBER, RANGE_TAU; at most half). Keeps the error (rf_e); called once a frame by observe()"""
+        n = len(known)
+        if getattr(self, "rf_e", None) is None or len(self.rf_e) != n:
+            self.rf_e = np.zeros(n, np.float32)
+        rho = math.exp(-DT / max(RANGE_TAU, 1e-3))
+        self.rf_e = (rho * self.rf_e + math.sqrt(1.0 - rho * rho) * RANGE_WEBER * self.rng.normal(0, 1, n)).astype(np.float32)
+        g_ = (np.asarray(visible, bool)[:n] & (self.script[:n] == 0)).astype(np.float32) * np.clip(self.rf_e, -0.5, 0.5)
+        return (known + (known - eye) * g_[:, None]).astype(np.float32)
+
     def drift_clear(self, seats=None):
         """(DRIFT_IN) no rate until two new perceived frames: a plugin calls it where it clears opp_hist, and on a frame
         without observe()"""
@@ -5659,6 +5880,10 @@ class DuelEnv:
         if len(ii):
             clear = (self.w.lines(eye[ii], P[ii, kk]) if self.sight is None else self.w.lines(eye[ii], P[ii, kk], mask=self.sight)) >= 0.999
             see[ii[~clear], kk[~clear]] = False
+        if PROJ_FIX:                                         # (PROJ_FIX) noticed late, read late, the fuse only if followed
+            P, V, G, see = self._proj_fix(P, V, A, G, see)
+            to = P - eye[:, None, :]
+            dist = np.linalg.norm(to, axis=2) + 1e-6
         d = np.where(see, dist, 1e9)
         order = np.argsort(d, axis=1)[:, :S6]
         ar = np.arange(n)
@@ -5679,6 +5904,37 @@ class DuelEnv:
             more[:, j, 1] = t_ / 2.0 * ok
             more[:, j, 2] = np.clip(near / rad[w_], 0.0, 3.0) / 3.0 * ok
         return base[:, :N_PROJ].reshape(n, -1), np.concatenate([base[:, N_PROJ:].reshape(n, -1), more.reshape(n, -1)], 1)
+
+    def _proj_fix(self, P, V, A, G, see):
+        """(PROJ_FIX) per player and enemy projectile slot: frames it has flown (pf_life) and been in his sight on end
+        (pf_run), the slots' ages (pf_age: a new projectile when it goes back), the last frames' readings (pf_hist).
+        -> the place, speed and age PROJ_READ_MS old, the age 99 where he has not followed it since it left (its fuse
+        unknown), and seen only after PROJ_NOTICE_MS in sight on end. Called once a frame by observe()"""
+        if getattr(self, "pf_run", None) is None or self.pf_run.shape != see.shape:
+            self.pf_run, self.pf_life = np.zeros(see.shape, np.int64), np.zeros(see.shape, np.int64)
+            self.pf_age, self.pf_hist = np.zeros(see.shape, np.float32), []
+        new_ = A & (G < self.pf_age - 1e-4)
+        self.pf_life = np.where(A, np.where(new_, 1, self.pf_life + 1), 0)
+        self.pf_run = np.where(see, np.where(new_, 1, self.pf_run + 1), 0)
+        self.pf_age = np.where(A, G, 0.0).astype(np.float32)
+        self.pf_hist.append((P.copy(), V.copy(), A.copy(), G.copy(), self.pf_run >= self.pf_life))
+        dq = max(0, int(round(PROJ_READ_MS / 1000.0 / DT)))
+        while len(self.pf_hist) > dq + 1:
+            self.pf_hist.pop(0)
+        P0, V0, A0, G0, Y0 = self.pf_hist[0]
+        need = max(int(round(PROJ_NOTICE_MS / 1000.0 / DT)), dq + 1)
+        see = see & A0 & (self.pf_run >= need)
+        self._pf_last = see
+        return P0, V0, np.where(Y0, G0, 99.0).astype(np.float32), see
+
+    def proj_clear(self, seats=None):
+        """(PROJ_FIX) nothing followed: a plugin calls it where it clears opp_hist (a new life)"""
+        if getattr(self, "pf_run", None) is None:
+            return
+        s_ = slice(None) if seats is None else seats
+        self.pf_run[s_] = 0
+        for h_ in self.pf_hist:
+            h_[4][s_] = False
 
     def _v15(self, pos, yaw, pit, eye, known, seen_t, visible):
         """the inputs of N_V15: the jump ahead on his way in a jump run (see JUMPS), and with the grenade launcher in his
@@ -5944,7 +6200,7 @@ class DuelEnv:
         # ---- the floor aim point: the floor under where he will be when the rocket gets there
         k = ii[jj]
         e2, kn2, ov = e_[jj], kn[jj], opp_vel[k].astype(np.float32)
-        air = self.state[opp[k], 6] < 0.5
+        air = self._sm_e["air"][k] if SENSE_MINOR else self.state[opp[k], 6] < 0.5
         feet = kn2 - np.array([0, 0, 24.0], np.float32)
         c_ = float(P_SPEED[RL])
         t = np.linalg.norm(feet - e2, axis=1) / c_
@@ -6617,7 +6873,7 @@ class DuelEnv:
         on = visible & (cs > 0) & (self.hp > 0)
         c_ = np.maximum(cs, 1.0)
         r0 = known + np.array([0, 0, 4.0], np.float32) - eye
-        air = self.state[opp, 6] < 0.5
+        air = self._sm_e["air"] if SENSE_MINOR else self.state[opp, 6] < 0.5
         t = np.linalg.norm(r0, axis=1) / c_
         for _ in range(3):                                   # the flight time and the enemy's place by then, each from the other
             t = np.minimum(t, 3.0)
@@ -6703,9 +6959,11 @@ class DuelEnv:
             far = np.where(see, far, UNSEEN).astype(np.float32)
         # the enemy while in view: weapon in hand, whether he faces this player, damage dealt to him this life
         v_ = visible.astype(np.float32)[:, None]
-        oy = np.radians(self.yaw[opp])
+        oy = np.radians(self._sm_e["yaw"] if SENSE_MINOR else self.yaw[opp])     # (SENSE_MINOR: as seen, a little off)
         back = np.arctan2(pos[:, 1] - self.state[opp, 1], pos[:, 0] - self.state[opp, 0]) - oy
-        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self.weapon[opp]][:, OBS_W] * v_,
+        if SENSE_MINOR:                                      # (SENSE_MINOR) from where he was seen, as his facing
+            back = np.arctan2(pos[:, 1] - self._sm_e["pos"][:, 1], pos[:, 0] - self._sm_e["pos"][:, 0]) - oy
+        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self._sm_e["weapon"] if SENSE_MINOR else self.weapon[opp]][:, OBS_W] * v_,
                                 np.stack([np.sin(back), np.cos(back)], 1) * v_,
                                 np.minimum(self.dmg_life / 200.0, 2.0)[:, None]], 1)
         # nearest teleporter (entrance and exit) and jump pad
@@ -7737,6 +7995,7 @@ class DuelEnv:
             self.life_t[i] = float(max(0.0, P["life"][k, s_]))
             self.first_wp[i] = bool(has_[[RL, RG, LG, SG, GL, PG, HMG]].any())
             self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.hb[i] = 0.0
             self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
             self.cool[i], self.fire_cd[i] = 0.0, 0.0
             self.fire_q[i] = False
@@ -7974,6 +8233,7 @@ class DuelEnv:
             self.w.reset(i, (float(p_[0]), float(p_[1]), float(p_[2])), (float(v_[0]), float(v_[1]), 0.0), face)
             self.yaw[i], self.pitch[i] = face, 0.0
             self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.hb[i] = 0.0
             self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
             self.has[i, RG] = True
             self.ammo[i, RG] = max(float(self.ammo[i, RG]), RAIL_START_AMMO)
@@ -8831,9 +9091,15 @@ class DuelEnv:
         if self.human_aim:
             zs = np.where(self.zoom, ZOOM, 1.0).astype(np.float32)
             self.mv[:, 0] = np.clip(self.mv[:, 0], -TURN_CAP * zs, TURN_CAP * zs)
-            jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
-            jit[self.script > 0] = 0.0
-            turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
+            if HAND_BAND:                                    # (HAND_BAND) the view follows the hand within its bandwidth
+                v_ = np.where((self.script > 0)[:, None], self.mv, self._hand_band(self.script == 0))
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(v_) + MOTOR_BASE * zs[:, None])
+                jit[self.script > 0] = 0.0
+                turn, dpit = v_[:, 0] + jit[:, 0], v_[:, 1] + jit[:, 1]
+            else:
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
+                jit[self.script > 0] = 0.0
+                turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
             turn, dpit = self.pad_turn(turn, dpit, (a[:, 9] == 1) if a.shape[1] > 9 else np.zeros(n, bool), zs, self.script == 0)
         else:
             turn, dpit = self.mv[:, 0], self.mv[:, 1]
@@ -9084,8 +9350,12 @@ class DuelEnv:
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
         if self.rj_live:                                     # (RJ_RUN_P) rockets fired in rocket jump runs
             self.stats["rj_shots"] += int((shoot & (self.weapon == RL) & self.rjrun & self._counted(ar)).sum())
-        self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
-                  ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
+        if HEAR_FIX:                                         # (HEAR_FIX) shots, jumps and landings, footsteps as events
+            foot_ = self._hf_steps(s[:, 6] > 0.5, prev[:, 6] > 0.5, s[:, 3:6], self.duck, self.hp > 0)
+            self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) | foot_)
+        else:
+            self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
+                      ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
         self.note_noise(shoot & (self.weapon != G), (prev[:, 6] > 0.5) != (s[:, 6] > 0.5),      # (N_V02: the same events, for the one who makes them)
                         (s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck)
         self.note_shots(np.nonzero(shoot & (self.weapon != G))[0])
@@ -9707,7 +9977,7 @@ class DuelEnv:
                 if not (gm_ and WIN_PAY):
                     reward[k] += 1.0
                 if DROPS:
-                    self._drop_weapon(int(v))
+                    self._drop_weapon(int(v), int(k))
                 self.frags_r[k] += 1
                 self.stats["frags"] += 1
                 self.stats[WEAPONS[kill_w.get(v, 0)] + "_frags"] += int(self.script[k] == 0)
@@ -9930,6 +10200,8 @@ class DuelEnv:
             vis &= self.rsp_wait[opp] <= 0
         self.visible = vis
         heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
+        if HEAR_FIX:                                         # (HEAR_FIX) only a footstep or a jump of his on this frame tells
+            heard = (~vis) & (dist < HEAR) & self.hf_ev[opp] & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
         if RESPAWN_QL:                                       # (RESPAWN_QL) ... nor heard
             heard &= self.rsp_wait[opp] <= 0
         if HEAR_QL:                                          # (HEAR_QL) only what the game sends him
@@ -9952,7 +10224,9 @@ class DuelEnv:
         acq = vis & (self.vis_run >= self._acq_need() + self.acq_extra)
         self.acquired = acq
         self.known[acq] = s[opp[acq], :3]
-        if heard.any():
+        if heard.any() and HEAR_FIX:                         # (HEAR_FIX) placed by the sound: its direction and loudness
+            self.known[heard] = self._hf_place(np.nonzero(heard)[0], opp[heard])
+        elif heard.any():
             self.known[heard] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
         self.seen_t = np.where(acq | heard, 0.0, self.seen_t + DT)
