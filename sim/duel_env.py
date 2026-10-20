@@ -399,6 +399,12 @@ STACK_BARE_MAX = float(os.environ.get("STACK_BARE_MAX") or 4.0)   # (v0.3.1's pa
 BIG_PICK = float(os.environ.get("BIG_PICK") or 0.0)
 SELF_DEBT = float(os.environ.get("SELF_DEBT") or 0.0) > 0
 BIG_ONCE = float(os.environ.get("BIG_ONCE") or 0.0) > 0
+# BIG_PICK_SEQ = "0.10,0.06,0.05" (v0.3.8, the owner 2026-10-19; live): in place of BIG_PICK and BIG_ONCE, the big three paid
+#           a life by the order he gets them: the first of the rocket launcher, lightning gun and railgun the first number,
+#           the second the second, the third the third (missing numbers: nothing). A weapon he held already or got earlier
+#           in the life pays nothing (BIG_PICK's rules, held weapons too: a rail start's railgun is one of his). Paid to
+#           him only, nothing taken from the enemy (as BIG_PICK). Counters: stats["big_seq"] (pickups by order, pay by order).
+BIG_PICK_SEQ = tuple(float(x_) for x_ in (os.environ.get("BIG_PICK_SEQ") or "").split(",") if x_.strip())
 STACK_DIFF = float(os.environ.get("STACK_DIFF") or 0.0)
 ITEM_FLAT = {k_: float(v_) for k_, v_ in (x_.split(":") for x_ in (os.environ.get("ITEM_FLAT") or "").split(",") if ":" in x_)}
 # The walking teacher inside normal games (the fallback of 2026-10-07, off by default): while he holds none of the big
@@ -1432,7 +1438,9 @@ PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
 # __init__ (SHOT_COST and SHOT_W make per-map tables; WIN_PAY its tables), every input, output, round-kind and map switch.
 LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR",
              "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG",
-             "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY")     # (v0.3.7)
+             "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY",    # (v0.3.7)
+             "BIG_PICK_SEQ")                                                                                        # (v0.3.8)
+LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
 def live_values(get):
@@ -1464,8 +1472,11 @@ def live_values(get):
     v["HOP_CHAIN_TOL"] = float(get("HOP_CHAIN_TOL") or 15.0)
     v["HOP_CHAIN_STEP"] = float(get("HOP_CHAIN_STEP") or 0.5)
     v["HOP_CHAIN_CAP"] = float(get("HOP_CHAIN_CAP") or 3.0)
+    v["BIG_PICK_SEQ"] = tuple(float(x_) for x_ in (get("BIG_PICK_SEQ") or "").split(",") if x_.strip())
+    if len(v["BIG_PICK_SEQ"]) > 3 or any(x_ < 0 for x_ in v["BIG_PICK_SEQ"]):
+        raise ValueError("BIG_PICK_SEQ: at most three numbers of 0 or more")
     for k_, x_ in v.items():
-        for y_ in (x_.values() if isinstance(x_, dict) else (x_,)):
+        for y_ in (x_.values() if isinstance(x_, dict) else x_ if isinstance(x_, tuple) else (x_,)):
             if not np.isfinite(float(y_)):
                 raise ValueError("{}: not a finite number".format(k_))
     if v["RAIL_FAR_HI"] <= v["RAIL_FAR_LO"]:
@@ -4504,7 +4515,13 @@ class DuelEnv:
             if not self.first_wp[i]:
                 self.first_wp[i] = True
                 self.stats["first_wp"] += np.array([float(self.life_t[i]), 1.0])
-            if BIG_PICK > 0:                                 # (v0.3.1) the big three once a life, nothing else
+            if BIG_PICK_SEQ:                                 # (v0.3.8) the big three a life by order
+                b_ = (RL, LG, RG).index(int(w)) if int(w) in (RL, LG, RG) else -1
+                if b_ >= 0:
+                    p_ = self._big_seq(i, b_, had)
+                    reward[i] += p_
+                    self.r_long[i] += p_
+            elif BIG_PICK > 0:                               # (v0.3.1) the big three once a life, nothing else
                 b_ = (RL, LG, RG).index(int(w)) if int(w) in (RL, LG, RG) else -1
                 if b_ >= 0 and not self.big_got[i, b_] and not (BIG_ONCE and self.big_got[i].any()):
                     reward[i] += BIG_PICK
@@ -8285,6 +8302,23 @@ class DuelEnv:
             q_ = q_ | ((self.intent >= HOLD_INTENT) & (self.intent < HOLD_INTENT + HOLD_SLOTS))
         return q_
 
+    def _big_seq(self, i, b_, had):
+        """(BIG_PICK_SEQ) player i picks up the big weapon b_ (0 rocket launcher, 1 lightning gun, 2 railgun; had: he held
+        it before the pickup): the pay by order, and the weapon marked as got this life"""
+        st = self.stats.get("big_seq")
+        if st is None:                                       # (also when turned on by live.json in a running simulator)
+            st = self.stats["big_seq"] = np.zeros(6)
+        own_ = self.big_got[i] | self.has[i, [RL, LG, RG]]
+        own_[b_] = self.big_got[i, b_] or had
+        self.big_got[i, b_] = True
+        if own_[b_]:
+            return 0.0
+        k_ = int(own_.sum())                                 # the big ones he had before: 0 = this is his first
+        p_ = float(BIG_PICK_SEQ[k_]) if k_ < len(BIG_PICK_SEQ) else 0.0
+        st[k_] += 1
+        st[3 + k_] += p_
+        return p_
+
     def _hop_chain(self, s, prev, jump, human, pkind, in_run):
         """(HOP_CHAIN) this frame's chains of hops: the state after the frame s, before it prev, the jump key as moved (jump:
         upmove), the network's seats (human), the round kinds and runs. Returns the pay [players] float32 (see HOP_CHAIN)."""
@@ -9117,12 +9151,15 @@ class DuelEnv:
                         self.self_debt[i] -= back_
                         pts_ -= back_
                     pay_ = self.item_reward * pts_ / 100.0
-                    if BIG_PICK > 0 and kind == "wp":                       # (v0.3.1) the big three once a life, nothing else
+                    if BIG_PICK_SEQ and kind == "wp":                       # (v0.3.8) the big three a life by order
+                        b_ = (RL, LG, RG).index(int(val)) if int(val) in (RL, LG, RG) else -1
+                        pay_ = self._big_seq(i, b_, had_wp) if b_ >= 0 else 0.0
+                    elif BIG_PICK > 0 and kind == "wp":                     # (v0.3.1) the big three once a life, nothing else
                         b_ = (RL, LG, RG).index(int(val)) if int(val) in (RL, LG, RG) else -1
                         pay_ = BIG_PICK if b_ >= 0 and not self.big_got[i, b_] else 0.0
                         if b_ >= 0:
                             self.big_got[i, b_] = True
-                    if BIG_ONCE and kind == "wp" and BIG_PICK > 0 and pay_ > 0 and self.big_got[i].sum() > 1:
+                    if BIG_ONCE and kind == "wp" and BIG_PICK > 0 and not BIG_PICK_SEQ and pay_ > 0 and self.big_got[i].sum() > 1:
                         pay_ = 0.0                                          # (BIG_ONCE) only the first of the three pays
                     if ITEM_FLAT and lab in ITEM_FLAT and not own_:
                         pay_ += ITEM_FLAT[lab]

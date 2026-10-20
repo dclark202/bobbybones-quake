@@ -198,7 +198,7 @@ def live_read(path, E_, start, trainer_start):
     for k_, x_ in raw_.items():
         if isinstance(x_, bool) or not isinstance(x_, (int, float, str)):
             return None, None, "{}: {!r} is not a number or a string".format(k_, x_)
-        if k_ != "ITEM_FLAT":
+        if k_ not in getattr(E_, "LIVE_STR", ("ITEM_FLAT",)):          # (ITEM_FLAT, BIG_PICK_SEQ: the environment's string)
             try:
                 f_ = float(x_)
             except ValueError:
@@ -3480,6 +3480,13 @@ def main():
             pm_ = max(1e-9, NP * T * DT_MIN)
             rec["hop"] = dict(pay_per_player_min=round(float(agg["hop_pay"] / pm_), 4), paying_per_min=round(float(agg.get("hop_n", 0) / pm_), 2),
                               takeoffs_per_min=round(float(agg.get("hop_takeoffs", 0) / pm_), 2), chains_per_min=round(float(agg.get("hop_chains", 0) / pm_), 2))
+        if "big_seq" in agg:                                             # (BIG_PICK_SEQ) the big three by order a life: pickups and pay a player-minute
+            bs_ = np.atleast_1d(agg["big_seq"]).astype(np.float64)
+            pm_ = max(1e-9, NP * T * DT_MIN)
+            rec["big_seq"] = dict(sizes=list(getattr(E_, "BIG_PICK_SEQ", ())),
+                                  pickups_per_player_min=[round(float(x_ / pm_), 4) for x_ in bs_[:3]],     # first, second, third
+                                  pay_per_player_min=round(float(bs_[3:].sum() / pm_), 4),
+                                  pay_by_order_per_player_min=[round(float(x_ / pm_), 4) for x_ in bs_[3:]])
         if "hop_chain" in agg:                                           # (HOP_CHAIN) chains of hops: how many, how long, what they paid
             hc_ = np.atleast_1d(agg["hop_chain"]).astype(np.float64)
             C_ = {k_: i_ for i_, k_ in enumerate(E_.HC_COLS)}
