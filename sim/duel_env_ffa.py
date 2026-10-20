@@ -1936,6 +1936,35 @@ DRIFT_SMOOTH = float(os.environ.get("DRIFT_SMOOTH") or 0.1)
 DRIFT_JUMP = 64.0
 DRIFT_SCALE = (180.0, 90.0)
 PLAY_VARS = PLAY_VARS + ("DRIFT_IN", "DRIFT_DELAY", "DRIFT_SIGMA", "DRIFT_WEBER", "DRIFT_MIN", "DRIFT_TAU", "DRIFT_SMOOTH")
+# FIRE_QL=1 (v0.3.8, off by default; a PLAY_VAR: the plugins follow it; meant with RL_QL and MISSILE_POINT): every
+# weapon fires on the frame of the command, as Quake Live does for a driven bot, not one frame later (fire_q; the rocket
+# already does under RL_QL). How the game makes the shot (minqlx/botctl.c: the frame's command is moved as three, the
+# press in each, the pitch final from the first and the yaw a share of the turn on each, y0 + turn * 8/25 on the first;
+# the game fires in the first, after its 8 ms of movement, before G_RunFrame, so at the frame start's level time):
+#   instant weapons (rail, lightning, machine guns, shotgun, gauntlet): from the eye after the first substep, along its
+#     yaw and the final pitch, at the enemy where he stood at the frame's start, with the crouch he had then (the
+#     game's own bot is moved after ours in its frame; a person's last command is at or before it: where his inputs
+#     showed him);
+#   rocket (with RL_QL): RL_QL's launch along that same yaw and pitch (RL_QL alone: the final yaw);
+#   plasma and grenade: from the muzzle FIRE_MZ ahead of that eye (cut to whole units toward zero), its velocity cut
+#     to whole units too (Quake 3's SnapVector on trBase and trDelta; the rocket's velocity as well), on the command's
+#     frame, FIRE_FLY of flight at the frame's end (the game's 25 ms prestep and the frame: a driven bot's command runs
+#     before G_RunFrame, at the frame start's level time). Fitted on weaponlab5's 29 grenades (2026-10-10, an AI-driven
+#     bot: made inside G_RunFrame, so 25 ms of flight at that frame's end): a 26-unit eye, 5 units ahead, cut toward
+#     zero, velocity cut, 25 ms: every first position within 0.43 units (mean 0.09; the record has one decimal); 14
+#     ahead with 17 ms: 3.7 off. RL_QL's own fit agrees: 14 + 42 units at 1000 u/s = 5 + 51. A grenade's fuse counts
+#     from the frame's start; what the first part of that flight meets (the enemy where he ends the frame, a wall) it
+#     meets on this frame;
+#   machine guns: the scatter of Quake 3's Bullet_Fire (a random angle, each axis a uniform share of it), MG_SPREAD wide
+#     (its width not measured in the game: weaponlab3's machine guns at 400 units hit with every bullet);
+#   shotgun: the pellets that hit are the expected share rounded, not a random draw: the game's pattern is fixed
+#     (weaponlab3, 2026-10-03: 100, 60 and 25 damage at 100, 300 and 600 units on every repeat; the rounded share of the
+#     simulator's spread gives exactly 100, 60, 25).
+# The plugins send every press at once (duelbot.drive: no press_q hold; the rocket's only with RL_QL).
+FIRE_QL = float(os.environ.get("FIRE_QL") or 0.0) > 0
+HS_W = np.array([k_ != "proj" for k_ in W_KIND], bool)    # (FIRE_QL) the instant weapons
+FIRE_MZ, FIRE_FLY = 5.0, 0.050                            # (FIRE_QL) the plasma's and the grenade's muzzle and first flight
+PLAY_VARS = PLAY_VARS + ("FIRE_QL",)
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
@@ -6881,6 +6910,44 @@ class DuelEnv:
             tn = max(tn, float(min(t0, t1)))
         return (p0 + d * min(1.0, tn)).astype(np.float32)
 
+    def _fire_launch(self, i, k, wpn, eye, fd, s, st):
+        """(FIRE_QL) player i's plasma ball or grenade into slot k on the frame of the command (self.rv[i, k] its velocity,
+        the grenade's lofted): from the game's muzzle, FIRE_FLY of flight by the frame's end. Placed where it is
+        FIRE_FLY - DT after the launch so that this frame's flight (below in step) carries it to the end; what the
+        stretch before that meets it meets now: the first body on it (where it ends the frame) or, for plasma, a wall.
+        A grenade that meets a wall there leaves from the muzzle and bounces in the flight (25 ms late: a wall closer
+        than about 24 units)."""
+        g_ = 800.0 if wpn == GL else 0.0
+        mz = np.trunc(eye + fd * FIRE_MZ).astype(np.float32)        # Quake 3's SnapVector on the muzzle
+        v0 = np.trunc(self.rv[i, k]).astype(np.float32)            # ... and on its velocity
+        ta = FIRE_FLY - DT
+        pa = (mz + v0 * ta).astype(np.float32)
+        pa[2] -= 0.5 * g_ * ta * ta
+        self.rbase[i, k], self.rrest[i, k], self.rage[i, k] = mz, False, 0.0
+        if ta > 0:
+            fr = float(self.w.lines(mz[None], pa[None], mask=PLAYER_MASK if self.sight is None else self.sight)[0]) \
+                if MISSILE_POINT else float(self.w.trace(mz, pa, mask=self.sight)["fraction"])
+            hp_ = (mz + (pa - mz) * fr).astype(np.float32)
+            d_on, ep = None, hp_
+            for v_ in self._mates(int(i)):
+                if bool(self._seg_box(mz[None], hp_[None], s[v_:v_ + 1, :3], np.where(self.duck[v_:v_ + 1], TOP_DUCK, TOP))[0]):
+                    e_ = self._box_entry(mz, hp_, s[v_, :3], TOP_DUCK if self.duck[v_] else TOP)
+                    if d_on is None or np.linalg.norm(e_ - mz) < np.linalg.norm(ep - mz):
+                        d_on, ep = int(v_), e_
+            dq = pa - mz
+            dirq = (dq / max(1e-6, float(np.linalg.norm(dq)))).astype(np.float32)
+            if d_on is not None or (fr < 1 and wpn != GL):           # it meets him, or the plasma a wall: the blast now
+                self._explode(i, wpn, self._snap_towards(ep, mz) if MISSILE_POINT else ep, d_on,
+                              dirq if d_on is not None else None, s, st, back=None if MISSILE_POINT else dirq)
+                return
+            if fr < 1:                                               # a grenade at a wall within the first stretch
+                self.rp[i, k], self.rv[i, k] = mz, v0
+                self.ra[i, k], self.rnew[i, k], self.rw[i, k] = True, False, wpn
+                return
+        self.rp[i, k] = pa
+        self.rv[i, k] = v0 - np.array([0.0, 0.0, g_ * ta], np.float32)
+        self.ra[i, k], self.rnew[i, k], self.rw[i, k] = True, False, wpn
+
     @staticmethod
     def _snap_towards(v, to):
         """Quake 3's SnapVectorTowards: each axis cut to a whole unit ((int), toward zero), plus one where `to` lies above"""
@@ -8818,6 +8885,7 @@ class DuelEnv:
         fwd = (a[:, 0].astype(np.int32) - 1) * key
         side = (a[:, 1].astype(np.int32) - 1) * key
         jump = np.where(a[:, 2] == 1, 127, np.where(a[:, 2] == 2, -127, 0)).astype(np.int32)   # jump / crouch
+        hs_duck0 = self.duck.copy() if FIRE_QL else None     # (FIRE_QL) the crouch each had at the frame's start
         self.duck = (a[:, 2] == 2) & (self.hp > 0)
         fire = a[:, 5] == 1
         out_ = (self.rsp_wait > 0) if RESPAWN_QL else None   # (RESPAWN_QL) waiting to respawn: nothing he presses has an effect
@@ -8870,10 +8938,13 @@ class DuelEnv:
         lev = np.where(self.seen_t > 0.5, self.level, 1.0)
         p1 = np.clip(self.pitch * lev + dpit, -89, 89)
         done_ms = 0
+        hs_s1 = None                                         # (FIRE_QL) the state after the frame's first substep
         for ms in self.substeps:
             done_ms += ms
             f = done_ms / 25.0
             self.w.step(moves, np.stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32), ms)
+            if FIRE_QL and hs_s1 is None:
+                hs_s1, hs_yaw1 = self.w.state(), y0 + turn * f
         self.pitch = p1
         self.state = s = self.w.state()
         self.yaw = s[:, 7].copy()
@@ -9024,6 +9095,8 @@ class DuelEnv:
         if self.courses and (self.course >= 0).any() and self._course_step(reward):
             self.state = s = self.w.state()
             self.yaw = s[:, 7].copy()
+            if FIRE_QL:                                      # (a course moved him: the frame's end then)
+                hs_s1, hs_yaw1 = s, self.yaw.copy()
         # fire: a shot leaves one frame after the command
         self.cool = np.maximum(0.0, self.cool - DT)
         self.fire_cd = np.maximum(0.0, self.fire_cd - DT)
@@ -9083,6 +9156,15 @@ class DuelEnv:
             self.fire_q, self.fire_w = shoot & ~now_rl, self.weapon.copy()
         else:
             self.fire_q, self.fire_w = shoot, self.weapon.copy()
+        tg_, dk_ = s, self.duck                              # where the enemy's box is for an instant shot (FIRE_QL: the frame's start)
+        if FIRE_QL:                                          # (FIRE_QL) an instant shot leaves on the frame of the command
+            now_hs = shoot & (HS_W[self.weapon] | (self.weapon == PG) | (self.weapon == GL))
+            if now_hs.any():
+                do_fire = do_fire | now_hs
+                do_w = np.where(now_hs, self.weapon, do_w)
+            self.fire_q = self.fire_q & ~now_hs
+            hs_now = now_hs | (now_rl if RL_QL else False)   # (and with RL_QL the rocket's way too) these shots: the first substep's view
+            tg_, dk_ = prev, hs_duck0
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
         if self.rj_live:                                     # (RJ_RUN_P) rockets fired in rocket jump runs
             self.stats["rj_shots"] += int((shoot & (self.weapon == RL) & self.rjrun & self._counted(ar)).sum())
@@ -9095,6 +9177,10 @@ class DuelEnv:
             yr, pr = np.radians(self.yaw), np.radians(self.pitch)
             fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
             eye = self._eye(s)
+            if FIRE_QL and hs_now.any():                     # (FIRE_QL) the eye and the yaw of the frame's first substep, the final pitch
+                yr = np.where(hs_now, np.radians(hs_yaw1), yr)
+                fdir[hs_now] = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)[hs_now]
+                eye[hs_now] = self._eye(hs_s1)[hs_now]
             for i in np.nonzero(do_fire)[0]:
                 wpn = int(do_w[i])
                 hm = int(self.script[i] == 0)               # statistics count policy players only
@@ -9108,6 +9194,8 @@ class DuelEnv:
                         self.rp[i, k] = eye[i] + fdir[i] * 14.0
                         self.rv[i, k] = fdir[i] * P_SPEED[wpn]
                         self.rbase[i, k], self.rrest[i, k] = self.rp[i, k], False      # (MISSILE_POINT) its trBase
+                        if FIRE_QL and wpn == RL:           # (FIRE_QL) the velocity cut to whole units (SnapVector on trDelta)
+                            self.rv[i, k] = np.trunc(self.rv[i, k])
                         if RL_QL and wpn == RL:             # (RL_QL) the muzzle at the first of the frame's three moves
                             ahead_, eye_ = (RL_AHEAD_PT, RL_EYE_PT) if MISSILE_POINT else (RL_AHEAD, RL_EYE)
                             o_ = prev[i, :3] + (s[i, :3] - prev[i, :3]) / 3.0
@@ -9143,6 +9231,11 @@ class DuelEnv:
                             d_ = fdir[i].copy()
                             d_[2] += 0.2
                             self.rv[i, k] = d_ / np.linalg.norm(d_) * P_SPEED[wpn]
+                        if FIRE_QL and wpn != RL:           # (FIRE_QL) plasma and grenades as the game launches them
+                            self._fire_launch(i, k, wpn, eye[i], fdir[i], s, st)
+                            self.stats[name + "_shots"] += hm
+                            self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
+                            continue
                         # measured: rockets and grenades do not move on the frame they appear, plasma does
                         self.ra[i, k], self.rnew[i, k], self.rw[i, k], self.rage[i, k] = True, wpn != PG, wpn, 0.0
                         self.stats[name + "_shots"] += hm
@@ -9152,9 +9245,9 @@ class DuelEnv:
                     self.stats[name + "_shots"] += hm * SG_PELLETS
                     self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
                     for v in vs_:
-                        to = s[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
+                        to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
                         d = float(np.linalg.norm(to)) + 1e-6
-                        if self.w.trace(eye[i], s[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
+                        if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                             continue
                         hd = math.hypot(to[0], to[1]) + 1e-6
                         ex = math.degrees(((math.atan2(to[1], to[0]) - yr[i]) + math.pi) % (2 * math.pi) - math.pi)
@@ -9162,7 +9255,7 @@ class DuelEnv:
                         wx, wy = math.degrees(math.atan2(15.0, d)), math.degrees(math.atan2(28.0, d))
                         p = (_phi((wx - ex) / SG_SIGMA) - _phi((-wx - ex) / SG_SIGMA)) * \
                             (_phi((wy - eyv) / SG_SIGMA) - _phi((-wy - eyv) / SG_SIGMA))
-                        hits = int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
+                        hits = int(round(SG_PELLETS * min(1.0, max(0.0, p)))) if FIRE_QL else int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
                         if hits:
                             self.stats[name + "_hits"] += hm * hits
                             self._hit(i, v, wpn, W_DMG[wpn] * hits, fdir[i], st)
@@ -9173,17 +9266,22 @@ class DuelEnv:
                     u_ = np.cross(fd, np.array([0.0, 0.0, 1.0], np.float32))
                     u_ = u_ / (np.linalg.norm(u_) + 1e-6)
                     v_ = np.cross(fd, u_)
-                    ra_, th_ = math.tan(math.radians(MG_SPREAD)) * self.rng.random(), self.rng.random() * 2 * math.pi
-                    fd = fd + (u_ * math.cos(th_) + v_ * math.sin(th_)) * ra_
+                    if FIRE_QL:                             # (FIRE_QL) Quake 3's Bullet_Fire: a random angle, each axis a uniform share
+                        th_ = self.rng.random() * 2 * math.pi
+                        a_, b_ = math.cos(th_) * (2.0 * self.rng.random() - 1.0), math.sin(th_) * (2.0 * self.rng.random() - 1.0)
+                        fd = fd + (u_ * a_ + v_ * b_) * math.tan(math.radians(MG_SPREAD))
+                    else:
+                        ra_, th_ = math.tan(math.radians(MG_SPREAD)) * self.rng.random(), self.rng.random() * 2 * math.pi
+                        fd = fd + (u_ * math.cos(th_) + v_ * math.sin(th_)) * ra_
                     fd = (fd / np.linalg.norm(fd)).astype(np.float32)
                 fr = self.w.rays_each(eye[i:i + 1], fd[None, None, :], rng_, mask=self.sight)[0, 0]
                 end = eye[i] + fd * rng_ * fr
                 self.stats[name + "_shots"] += hm
                 self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
-                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], s[v:v + 1, :3],
-                                                            np.where(self.duck[v:v + 1], TOP_DUCK, TOP))[0])]
+                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 1, :3],
+                                                            np.where(dk_[v:v + 1], TOP_DUCK, TOP))[0])]
                 if got:                                     # the nearest player on the line takes the shot
-                    v = min(got, key=lambda q: float(np.linalg.norm(s[q, :3] - eye[i])))
+                    v = min(got, key=lambda q: float(np.linalg.norm(tg_[q, :3] - eye[i])))
                     self.stats[name + "_hits"] += hm
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)
 

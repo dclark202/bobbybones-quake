@@ -324,9 +324,9 @@ rep('''                name = WEAPONS[wpn]
                 vs_ = [int(x) for x in self.others[i]]
 ''')
 rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
-                    to = s[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
+                    to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
                     d = float(np.linalg.norm(to)) + 1e-6
-                    if self.w.trace(eye[i], s[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
+                    if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                         continue
                     hd = math.hypot(to[0], to[1]) + 1e-6
                     ex = math.degrees(((math.atan2(to[1], to[0]) - yr[i]) + math.pi) % (2 * math.pi) - math.pi)
@@ -334,15 +334,15 @@ rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * 
                     wx, wy = math.degrees(math.atan2(15.0, d)), math.degrees(math.atan2(28.0, d))
                     p = (_phi((wx - ex) / SG_SIGMA) - _phi((-wx - ex) / SG_SIGMA)) * \\
                         (_phi((wy - eyv) / SG_SIGMA) - _phi((-wy - eyv) / SG_SIGMA))
-                    hits = int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
+                    hits = int(round(SG_PELLETS * min(1.0, max(0.0, p)))) if FIRE_QL else int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
                     if hits:
                         self.stats[name + "_hits"] += hm * hits
                         self._hit(i, v, wpn, W_DMG[wpn] * hits, fdir[i], st)
                     continue''', '''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
                     for v in vs_:
-                        to = s[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
+                        to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
                         d = float(np.linalg.norm(to)) + 1e-6
-                        if self.w.trace(eye[i], s[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
+                        if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                             continue
                         hd = math.hypot(to[0], to[1]) + 1e-6
                         ex = math.degrees(((math.atan2(to[1], to[0]) - yr[i]) + math.pi) % (2 * math.pi) - math.pi)
@@ -350,18 +350,18 @@ rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * 
                         wx, wy = math.degrees(math.atan2(15.0, d)), math.degrees(math.atan2(28.0, d))
                         p = (_phi((wx - ex) / SG_SIGMA) - _phi((-wx - ex) / SG_SIGMA)) * \\
                             (_phi((wy - eyv) / SG_SIGMA) - _phi((-wy - eyv) / SG_SIGMA))
-                        hits = int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
+                        hits = int(round(SG_PELLETS * min(1.0, max(0.0, p)))) if FIRE_QL else int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
                         if hits:
                             self.stats[name + "_hits"] += hm * hits
                             self._hit(i, v, wpn, W_DMG[wpn] * hits, fdir[i], st)
                     continue''')
-rep('''                if bool(self._seg_box(eye[i:i + 1], end[None], s[v:v + 1, :3],
-                                      np.where(self.duck[v:v + 1], TOP_DUCK, TOP))[0]):
+rep('''                if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 1, :3],
+                                      np.where(dk_[v:v + 1], TOP_DUCK, TOP))[0]):
                     self.stats[name + "_hits"] += hm
-                    self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''', '''                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], s[v:v + 1, :3],
-                                                            np.where(self.duck[v:v + 1], TOP_DUCK, TOP))[0])]
+                    self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''', '''                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 1, :3],
+                                                            np.where(dk_[v:v + 1], TOP_DUCK, TOP))[0])]
                 if got:                                     # the nearest player on the line takes the shot
-                    v = min(got, key=lambda q: float(np.linalg.norm(s[q, :3] - eye[i])))
+                    v = min(got, key=lambda q: float(np.linalg.norm(tg_[q, :3] - eye[i])))
                     self.stats[name + "_hits"] += hm
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''')
 rep('''            opp = owner ^ 1

@@ -1448,7 +1448,10 @@ class duelbot(minqlx.Plugin):
         press = fire and (ready or not (rules2 and refire[w] >= 0.4))
         if hasattr(env, "fire_q"):                           # the simulator's shot leaves one frame after the command
             self.press_q = getattr(self, "press_q", {})
-            if getattr(E, "RL_QL", False) and w == getattr(E, "RL", -1):
+            rl_ = w == getattr(E, "RL", -1)
+            if (getattr(E, "RL_QL", False) and rl_) or (getattr(E, "FIRE_QL", False) and not rl_):
+                # (FIRE_QL) the same for every other weapon (rail, lightning, machine guns, shotgun, gauntlet, plasma,
+                # grenades): the game fires on the command's frame, as the simulator does with the switch on.
                 # (RL_QL, B-268) a rocket leaves on the command's frame, as in the simulator since v0.3.1: pressed now, no
                 # hold. A press held from the frame before was for another weapon (the simulator fires it with that one);
                 # here it would go out with the rocket launcher, so it is dropped (on a switch frame the game would only
