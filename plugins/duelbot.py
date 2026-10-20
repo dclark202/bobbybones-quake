@@ -1302,6 +1302,8 @@ class duelbot(minqlx.Plugin):
                 env.drop_pos[0, j] = p_
                 env.drop_w[0, j] = w_
                 env.drop_t[0, j] = t_
+                if hasattr(env, "drop_kn"):                  # (SENSE_MINOR) in a duel both know of the death that left it
+                    env.drop_kn[:, j] = True
         return taken
 
     @staticmethod

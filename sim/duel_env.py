@@ -1987,6 +1987,22 @@ PROJ_FIX = float(os.environ.get("PROJ_FIX") or 0.0) > 0
 PROJ_NOTICE_MS = float(os.environ.get("PROJ_NOTICE_MS") or 100.0)
 PROJ_READ_MS = float(os.environ.get("PROJ_READ_MS") or 100.0)
 PLAY_VARS = PLAY_VARS + ("PROJ_FIX", "PROJ_NOTICE_MS", "PROJ_READ_MS")
+#   SENSE_MINOR=1    the small ones, together: (a) the enemy's facing, crouch, being in the air and weapon in hand are read
+#                    as he was one reaction time ago (the same old sighting as his place: opp_hist's pick; sm_hist keeps
+#                    them), his facing with an error that drifts (SM_FACE_DEG, 15 degrees; SM_FACE_TAU, 0.5 s): the enemy
+#                    inputs (his facing from where he was seen then), his body inputs, the weapon seen in his hands, and the in-air of the lead and the rocket aim;
+#                    (b) a dropped weapon's time left only for a player who saw or heard the death (the killer, the dead,
+#                    one with the dead in view or within earshot: drop_kn), else 0; (c) only a railgun's or a lightning
+#                    gun's line is seen as a trail (no machine gun, shotgun or heavy machine gun lines); (d) a big item's
+#                    pickup known only by its sound (not seen) starts his item clock with an error (SM_ITEM_SD, 0.75 s):
+#                    it_t (the mega and the red armor) and ITEM_BELIEF's bel_t. All kept by the simulator's own calls,
+#                    which the plugins make too (observe, note_pickup, note_shots); the duel plugin shows a dropped
+#                    weapon's time to both (in a duel the killer and the dead know of every death that drops one).
+SENSE_MINOR = float(os.environ.get("SENSE_MINOR") or 0.0) > 0
+SM_FACE_DEG = float(os.environ.get("SM_FACE_DEG") or 15.0)
+SM_FACE_TAU = float(os.environ.get("SM_FACE_TAU") or 0.5)
+SM_ITEM_SD = float(os.environ.get("SM_ITEM_SD") or 0.75)
+PLAY_VARS = PLAY_VARS + ("SENSE_MINOR", "SM_FACE_DEG", "SM_FACE_TAU", "SM_ITEM_SD")
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
@@ -2630,6 +2646,7 @@ class DuelEnv:
         self.drop_pos = np.zeros((n_matches, DROP_MAX, 3), np.float32)  # weapons that dead players left (see DROPS):
         self.drop_w = np.full((n_matches, DROP_MAX), -1, np.int64)      # which weapon (-1: nothing in that slot)
         self.drop_t = np.zeros((n_matches, DROP_MAX), np.float32)       # seconds until it is gone
+        self.drop_kn = np.zeros((self.n, DROP_MAX), bool)                # (SENSE_MINOR) he saw or heard the death that left it
         self.slot_items = [[k for k, d in enumerate(self.item_def) if d[4] == lab] for lab in SLOTS]
         # Weapons that lie on this map: nobody spawns with a weapon the map does not have (no heavy machine gun
         # on Aerowalk, for instance). A map without weapon pickups (the test map) allows all.
@@ -4607,7 +4624,18 @@ class DuelEnv:
                          ((self.ear_hum == RG) & (self.ear_t < 0.5)).astype(np.float32),
                          ((self.ear_hum == LG) & (self.ear_t < 0.5)).astype(np.float32)], 1).astype(np.float32)
 
-    def _drop_weapon(self, v):
+    def _death_seen(self, j, v, killer):
+        """(SENSE_MINOR) player j knows of v's death: he is v or the killer, has v in view, or is within earshot"""
+        if j == v or j == killer:
+            return True
+        return self._sees(j, v) or (np.linalg.norm(self.state[j, :3] - self.state[v, :3]) < HEAR_EVT and self._hear1(j, v))
+
+    def _sees(self, j, v):
+        """player j has player v in view (noticed)"""
+        a2_ = getattr(self, "acq2", None)
+        return bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(v) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
+
+    def _drop_weapon(self, v, killer=-1):
         """player v, killed by another player, leaves the weapon he held (see DROPS)"""
         w = int(self.weapon[v])
         if ALWAYS[w] or self.ammo[v, w] <= 0:
@@ -4631,6 +4659,9 @@ class DuelEnv:
         free = np.nonzero(self.drop_w[m] < 0)[0]
         j = int(free[0]) if len(free) else int(self.drop_t[m].argmin())
         self.drop_pos[m, j], self.drop_w[m, j], self.drop_t[m, j] = p1, w, DROP_LIFE
+        if SENSE_MINOR:                                      # (SENSE_MINOR) its time is known to those who saw or heard the death
+            for q_ in self._seats(m):
+                self.drop_kn[q_, j] = self._death_seen(int(q_), int(v), int(killer))
         self.stats["drops"] += 1
 
     def _drops_step(self, reward):
@@ -4709,6 +4740,8 @@ class DuelEnv:
         out[:, 3] = ok
         out[:, 4], out[:, 5], out[:, 6] = ok & (wj == RL), ok & (wj == LG), ok & (wj == RG)
         out[:, 7] = np.where(ok, self.drop_t[grp][ar, j] / DROP_LIFE, 0.0)
+        if SENSE_MINOR:                                      # (SENSE_MINOR) only if he saw or heard the death
+            out[:, 7] *= self.drop_kn[ar, j]
         return out
 
     def _teach_drop(self, ri, pos, tp):
@@ -4954,6 +4987,14 @@ class DuelEnv:
                 if HEAR_QL:                                  # (HEAR_QL) heard where the game sends it (at the item's place)
                     near &= self._hear_ok(q, pos=self.item_pos[items[g]])
                 self.bel_t[q[near], g] = 0.0
+                if SENSE_MINOR:                                  # (SENSE_MINOR) heard, not seen: his clock starts a little off
+                    ip_ = self.item_pos[items[g]]
+                    took_ = np.linalg.norm(pos[q] - ip_, axis=1) < 120.0         # (the one who took it)
+                    kn_ = np.asarray(self.known, np.float32)[q]
+                    saw_ = np.asarray(self.acquired, bool)[q] & (np.linalg.norm(kn_ - ip_, axis=1) < 150.0)
+                    hq_ = q[near & ~took_ & ~saw_]
+                    if len(hq_):
+                        self.bel_t[hq_, g] = self.rng.normal(0, SM_ITEM_SD, len(hq_)).astype(np.float32)
         self.bel_prev = up.copy()
         self.bel_tick += 1
         if self.bel_tick % 4:                                # the look at the items' places: ten times a second
@@ -5003,6 +5044,8 @@ class DuelEnv:
         for j in self._mates(i):
             if np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
                 self.it_t[j, k] = 0.0
+                if SENSE_MINOR and not self._sees(j, i):
+                    self.it_t[j, k] = float(self.rng.normal(0, SM_ITEM_SD))   # (SENSE_MINOR) heard, not seen: a little off
                 self.e_got[j, self._slot(i), k] = 1.0
 
     def note_death(self, v, killer):
@@ -5310,7 +5353,7 @@ class DuelEnv:
         self.shot_w[lis[ok]] = self.weapon[src[ok]]
         self.shot_seen[lis[ok]] = seen[ok]
         # the line of a hitscan shot (not rockets, grenades, plasma: those are projectiles he sees anyway)
-        hit = np.isin(self.weapon[src], (RG, LG, MG, HMG, SG)) & ~alone & (self.hp[lis] > 0)
+        hit = np.isin(self.weapon[src], (RG, LG) if SENSE_MINOR else (RG, LG, MG, HMG, SG)) & ~alone & (self.hp[lis] > 0)
         if hit.any():
             sh, li = src[hit], lis[hit]
             eye = self._eye(s)
@@ -5344,6 +5387,8 @@ class DuelEnv:
         trail = np.concatenate([np.clip(rot(self.trail_p - eye) / 500.0, -4, 4) * on[:, None], fade[:, None]], 1)
         v_ = visible.astype(np.float32)
         body = np.stack([self.duck[opp].astype(np.float32) * v_, (self.state[opp, 6] < 0.5).astype(np.float32) * v_], 1)
+        if SENSE_MINOR:                                      # (SENSE_MINOR) as seen a reaction time ago
+            body = np.stack([self._sm_e["duck"].astype(np.float32) * v_, self._sm_e["air"].astype(np.float32) * v_], 1)
         hand = np.concatenate([(self.key_last - np.array([1, 1, 0]))[:, :2].astype(np.float32),
                                (self.key_last[:, 2:3] == 1).astype(np.float32) - (self.key_last[:, 2:3] == 2).astype(np.float32),
                                (self.key_tok / KEY_BURST)[:, None],
@@ -5519,6 +5564,8 @@ class DuelEnv:
             visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
             seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
+        if SENSE_MINOR:                                      # (SENSE_MINOR) his facing, crouch, air and weapon as seen with his place
+            self._sm_note(opp, rf_, pick if self.focus_on else None)
         if VEL_FIX:                                          # (VEL_FIX) read as a person reads it
             opp_vel = self._vel_percept(opp_vel)
         self.ear_t += DT
@@ -5527,7 +5574,7 @@ class DuelEnv:
         self.e_life += DT                                    # game-server plugin, which does not call step(), has them too
         self.life_t += DT
         v_ = np.nonzero(visible)[0]
-        self.e_got[v_, self._slot(opp[v_]), 2 + self.weapon[opp[v_]]] = 1.0     # the weapon seen in the enemy's hands
+        self.e_got[v_, self._slot(opp[v_]), 2 + (self._sm_e["weapon"][v_] if SENSE_MINOR else self.weapon[opp[v_]])] = 1.0     # the weapon seen in the enemy's hands
         if self.percept_sigma > 0:                           # the enemy is seen a little off from where he is
             rho = math.exp(-DT / PERCEPT_TAU)
             self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
@@ -5698,6 +5745,29 @@ class DuelEnv:
             return out
         held = np.stack([q_[1] for q_ in self.drift_q]).all(0)
         return np.where(held[:, None], self.drift_q[0][0], 0.0).astype(np.float32)
+
+    def _sm_note(self, opp, rf_, pick):
+        """(SENSE_MINOR) keeps every player's facing, crouch, air and weapon a frame (sm_hist, beside opp_hist and as long)
+        and reads the enemy's at the sighting his place is read from (opp_hist's pick: pick, else rf_ frames back), and his
+        place then (for the facing input); his facing with a drifting error (sm_face). -> self._sm_e, per player. Called once a frame by observe()"""
+        n = self.n
+        if getattr(self, "sm_hist", None) is None or getattr(self, "sm_face", None) is None or len(self.sm_face) != n:
+            self.sm_hist, self.sm_face = [], np.zeros(n, np.float32)
+        self.sm_hist.append((self.yaw[:n].astype(np.float32).copy(), np.asarray(self.duck[:n], bool).copy(),
+                             (self.state[:n, 6] < 0.5).copy(), np.asarray(self.weapon[:n], np.int64).copy(),
+                             self.state[:n, :3].astype(np.float32).copy()))
+        L_ = len(self.opp_hist)
+        while len(self.sm_hist) > L_:
+            self.sm_hist.pop(0)
+        while len(self.sm_hist) < L_:                       # (newer than opp_hist: the oldest stands for the frames before)
+            self.sm_hist.insert(0, self.sm_hist[0])
+        ar = np.arange(n)
+        pk = np.asarray(pick, np.int64) if pick is not None else np.broadcast_to(np.maximum(0, L_ - 1 - np.asarray(rf_, np.int64)), (n,))
+        H = [np.stack([h_[k_] for h_ in self.sm_hist]) for k_ in range(5)]
+        rho = math.exp(-DT / max(SM_FACE_TAU, 1e-3))
+        self.sm_face = (rho * self.sm_face + math.sqrt(1.0 - rho * rho) * SM_FACE_DEG * self.rng.normal(0, 1, n)).astype(np.float32)
+        o_ = np.asarray(opp, np.int64)
+        self._sm_e = dict(yaw=H[0][pk, o_] + self.sm_face, duck=H[1][pk, o_], air=H[2][pk, o_], weapon=H[3][pk, o_], pos=H[4][pk, o_])
 
     def _vel_percept(self, v):
         """(VEL_FIX) the enemy's velocity as he reads it: times a drifting scale error (VEL_WEBER, VEL_TAU), a speed below
@@ -6069,7 +6139,7 @@ class DuelEnv:
         # ---- the floor aim point: the floor under where he will be when the rocket gets there
         k = ii[jj]
         e2, kn2, ov = e_[jj], kn[jj], opp_vel[k].astype(np.float32)
-        air = self.state[opp[k], 6] < 0.5
+        air = self._sm_e["air"][k] if SENSE_MINOR else self.state[opp[k], 6] < 0.5
         feet = kn2 - np.array([0, 0, 24.0], np.float32)
         c_ = float(P_SPEED[RL])
         t = np.linalg.norm(feet - e2, axis=1) / c_
@@ -6742,7 +6812,7 @@ class DuelEnv:
         on = visible & (cs > 0) & (self.hp > 0)
         c_ = np.maximum(cs, 1.0)
         r0 = known + np.array([0, 0, 4.0], np.float32) - eye
-        air = self.state[opp, 6] < 0.5
+        air = self._sm_e["air"] if SENSE_MINOR else self.state[opp, 6] < 0.5
         t = np.linalg.norm(r0, axis=1) / c_
         for _ in range(3):                                   # the flight time and the enemy's place by then, each from the other
             t = np.minimum(t, 3.0)
@@ -6828,9 +6898,11 @@ class DuelEnv:
             far = np.where(see, far, UNSEEN).astype(np.float32)
         # the enemy while in view: weapon in hand, whether he faces this player, damage dealt to him this life
         v_ = visible.astype(np.float32)[:, None]
-        oy = np.radians(self.yaw[opp])
+        oy = np.radians(self._sm_e["yaw"] if SENSE_MINOR else self.yaw[opp])     # (SENSE_MINOR: as seen, a little off)
         back = np.arctan2(pos[:, 1] - self.state[opp, 1], pos[:, 0] - self.state[opp, 0]) - oy
-        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self.weapon[opp]][:, OBS_W] * v_,
+        if SENSE_MINOR:                                      # (SENSE_MINOR) from where he was seen, as his facing
+            back = np.arctan2(pos[:, 1] - self._sm_e["pos"][:, 1], pos[:, 0] - self._sm_e["pos"][:, 0]) - oy
+        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self._sm_e["weapon"] if SENSE_MINOR else self.weapon[opp]][:, OBS_W] * v_,
                                 np.stack([np.sin(back), np.cos(back)], 1) * v_,
                                 np.minimum(self.dmg_life / 200.0, 2.0)[:, None]], 1)
         # nearest teleporter (entrance and exit) and jump pad
@@ -9767,7 +9839,7 @@ class DuelEnv:
                 if not (gm_ and WIN_PAY):
                     reward[k] += 1.0
                 if DROPS:
-                    self._drop_weapon(int(v))
+                    self._drop_weapon(int(v), int(k))
                 self.frags_r[k] += 1
                 self.stats["frags"] += 1
                 self.stats[WEAPONS[kill_w.get(v, 0)] + "_frags"] += int(self.script[k] == 0)
