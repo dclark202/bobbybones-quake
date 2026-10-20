@@ -303,6 +303,8 @@ class ffabot(duelbot):
         env.hp[k], env.armor[k] = 0.0, 0.0
         env.yaw[k], env.pitch[k] = 0.0, 0.0
         env.mv[k], env.cool[k] = 0.0, 0.0
+        if hasattr(env, "hb"):
+            env.hb[k] = 0.0                                  # (HAND_BAND) the view's velocity too
         self.h[k] = 0.0
         self.want_w.pop((id(env), k), None)
         self.prev.pop(k, None), self.ammo_prev.pop(k, None), self.tot.pop(k, None)
@@ -588,6 +590,8 @@ class ffabot(duelbot):
                                                              # maps, in real games too: owner, 2026-10-07)
                     env.life_t[k], env.flinch[k], env.focus[k] = 0.0, 0.0, E.FOCUS_SECS
                     env.mv[k], env.cool[k] = 0.0, 0.0
+                    if hasattr(env, "hb"):
+                        env.hb[k] = 0.0                                  # (HAND_BAND) the view's velocity too
                     self.want_w.pop((id(env), k), None)
                     minqlx.set_bot_substeps(p.id, 3)
                     # his playing style for this life: one of the map's at random (owner, 2026-10-08: "for now spawn at

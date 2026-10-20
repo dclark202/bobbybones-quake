@@ -1421,8 +1421,9 @@ class duelbot(minqlx.Plugin):
         turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
         if rules2 and env.human_aim:                         # flick cap and hand noise, as in training
             env.mv[i, 0] = np.clip(env.mv[i, 0], -E.TURN_CAP * zs, E.TURN_CAP * zs)
-            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(env.mv[i]) + E.MOTOR_BASE * zs)
-            turn, dpit = float(env.mv[i, 0] + jit[0]), float(env.mv[i, 1] + jit[1])
+            v_ = env._hand_band(np.arange(env.n) == i)[i] if getattr(E, "HAND_BAND", False) else env.mv[i]   # (HAND_BAND) as in training
+            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(v_) + E.MOTOR_BASE * zs)
+            turn, dpit = float(v_[0] + jit[0]), float(v_[1] + jit[1])
         if rules2 and hasattr(env, "pad_turn"):               # the mouse pad: an edge, and lifting the mouse, as in training
             full = lambda v, t=np.float32: np.full(env.n, v, t)      # noqa: E731
             t_, p_ = env.pad_turn(full(turn), full(dpit), full(len(a) > 9 and a[9] == 1, bool), full(zs),
@@ -1630,6 +1631,8 @@ class duelbot(minqlx.Plugin):
                         self.head_clear()                    # older runs: memory per life. Newer: kept for the session
                     for env in (self.env, self.renv):
                         env.mv[:] = 0
+                        if hasattr(env, "hb"):
+                            env.hb[:] = 0                    # (HAND_BAND) the view's velocity too
                         env.cool[:] = 0
                         env.seen_t[:] = 9.0
                         env.opp_hist = []
@@ -1969,6 +1972,8 @@ class duelbot(minqlx.Plugin):
                     minqlx.set_view(human.id, 0.0, face)
                     minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, float(self.rng.uniform(-180, 180)))
                     env.mv[:] = 0
+                    if hasattr(env, "hb"):
+                        env.hb[:] = 0                        # (HAND_BAND) the view's velocity too
                     return True
         return False
 
@@ -2075,6 +2080,8 @@ class duelbot(minqlx.Plugin):
             r["home"], r["zone"] = [float(v) for v in spots[i]], [b[0] + 48, b[1] + 48, b[2] - 48, b[3] - 48]
             r["hard"] = [b[0] - 64, b[1] - 64, b[2] + 64, b[3] + 64]
         self.renv.mv[:] = 0
+        if hasattr(self.renv, "hb"):
+            self.renv.hb[:] = 0
 
     def lab_keep(self, p, pos, human=False):
         """fights: a player who respawned elsewhere on the lab map is moved back into the environment box"""
@@ -2317,6 +2324,8 @@ class duelbot(minqlx.Plugin):
                 self.put(human, pk["subject"], pk["yaw"], human=True)
                 self.put(bobby, pk["target"], pk["target_yaw"])
                 env.mv[:] = 0
+                if hasattr(env, "hb"):
+                    env.hb[:] = 0                            # (HAND_BAND) the view's velocity too
             b_ = pk["bounds"]
             if not (b_[0] <= hpos[0] <= b_[2] and b_[1] <= hpos[1] <= b_[3]) and hs.health > 0:
                 self.put(human, pk["subject"], pk["yaw"], human=True)

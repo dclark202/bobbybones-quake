@@ -2003,6 +2003,20 @@ SM_FACE_DEG = float(os.environ.get("SM_FACE_DEG") or 15.0)
 SM_FACE_TAU = float(os.environ.get("SM_FACE_TAU") or 0.5)
 SM_ITEM_SD = float(os.environ.get("SM_ITEM_SD") or 0.75)
 PLAY_VARS = PLAY_VARS + ("SENSE_MINOR", "SM_FACE_DEG", "SM_FACE_TAU", "SM_ITEM_SD")
+#   HAND_BAND=1      a hand's bandwidth (the owner, 2026-10-20: "some kind of low pass filter on his LG aim"; every weapon,
+#                    the hand is the same): the view's velocity follows the hand's (mv, after its smoothing and the flick
+#                    cap) through a low-pass whose cutoff rises with the view's own speed, per axis: HB_FC Hz (4.0) plus
+#                    HB_BETA Hz (0.5) for every degree a frame it turns (the one-euro filter's rule): small corrections are
+#                    smoothed, a flick is let through. Sized offline on save 220's own commands while firing lightning
+#                    (aim tables of 2026-10-20): yaw acceleration rms 4,600 -> 2,610 deg/s2, reversals 8.3 -> 4.8 a
+#                    second, the view rate's power above 4 Hz 0.43 -> 0.27 (the pros: 2,455, 4.6, 0.29); a small step
+#                    (0.8 deg/frame) at 50% / 90% in 50 / 100 ms (25 / 50 today), a flick (20 deg/frame) 66% -> 60% of its
+#                    turn in 8 frames. The hand noise then rides on the filtered velocity. hb keeps the view's velocity; it
+#                    is reset with mv. Scripted players are not filtered. The plugins call the same _hand_band.
+HAND_BAND = float(os.environ.get("HAND_BAND") or 0.0) > 0
+HB_FC = float(os.environ.get("HB_FC") or 4.0)
+HB_BETA = float(os.environ.get("HB_BETA") or 0.5)
+PLAY_VARS = PLAY_VARS + ("HAND_BAND", "HB_FC", "HB_BETA")
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
@@ -3196,6 +3210,7 @@ class DuelEnv:
         self.yaw = np.zeros(n, np.float32)
         self.pitch = np.zeros(n, np.float32)
         self.mv = np.zeros((n, 2), np.float32)          # mouse velocity (yaw, pitch) in degrees per frame
+        self.hb = np.zeros((n, 2), np.float32)          # (HAND_BAND) the view's velocity after the hand's bandwidth
         self.sp_hist = np.zeros((n, 4), np.float32)     # his speed over the ground one to four frames ago (see N_V14; a plugin keeps it itself)
         self.wet = np.zeros(n, np.int8)                 # how deep he stands in water, slime or lava: feet 1, waist 2, head 3 (LAVA)
         self.cmd = np.zeros((n, 2), np.float32)         # last turn command (for the jerk cost)
@@ -3399,6 +3414,7 @@ class DuelEnv:
             if STYLE_W[self.style[i]] >= 0 and int(STYLE_W[self.style[i]]) not in self.map_weapons:
                 self.style[i] = 0                            # (no rail life on a map without a railgun)
         self.mv[i] = 0.0
+        self.hb[i] = 0.0
         self.cmd[i] = 0.0
         self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
@@ -3549,6 +3565,7 @@ class DuelEnv:
         k = int(ok[C["cprog"][ok].argmax()]) if len(ok) else 0
         self.w.reset(i, (C["cps"][k, 0], C["cps"][k, 1], C["cps"][k, 2] + 2.0), (0, 0, 0), float(C["cyaw"][k]))
         self.yaw[i], self.pitch[i], self.mv[i] = float(C["cyaw"][k]), 0.0, 0.0
+        self.hb[i] = 0.0
         self.hp[i], self.armor[i] = (1.0 if C["mortal"] else SPAWN_HP), 0.0
         if self.gun[i]:
             self._gun_arm(i)
@@ -4473,6 +4490,16 @@ class DuelEnv:
     def _others_arr(self):
         """for every player, the other players of his group (one column each)"""
         return self.others
+
+    def _hand_band(self, who):
+        """(HAND_BAND) players who: their view's velocity (hb) one frame on toward the hand's (mv) through a first-order
+        low-pass whose cutoff is HB_FC + HB_BETA x |hb| Hz (|hb| in degrees a frame), per axis. -> hb (all players).
+        step() and the plugins' drive() call it after the flick cap, before the hand noise"""
+        fc = HB_FC + HB_BETA * np.abs(self.hb)
+        k = (1.0 - np.exp(-2.0 * np.pi * fc * DT)).astype(np.float32)
+        new = self.hb + k * (self.mv - self.hb)
+        self.hb = np.where(np.asarray(who, bool)[:, None], new, self.hb).astype(np.float32)
+        return self.hb
 
     def pad_turn(self, turn, dpit, lift, zs, who):
         """the mouse pad (see PAD_DEG): what is left of this frame's view movement. turn, dpit in degrees, lift =
@@ -7980,6 +8007,7 @@ class DuelEnv:
             self.life_t[i] = float(max(0.0, P["life"][k, s_]))
             self.first_wp[i] = bool(has_[[RL, RG, LG, SG, GL, PG, HMG]].any())
             self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.hb[i] = 0.0
             self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
             self.cool[i], self.fire_cd[i] = 0.0, 0.0
             self.fire_q[i] = False
@@ -8217,6 +8245,7 @@ class DuelEnv:
             self.w.reset(i, (float(p_[0]), float(p_[1]), float(p_[2])), (float(v_[0]), float(v_[1]), 0.0), face)
             self.yaw[i], self.pitch[i] = face, 0.0
             self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.hb[i] = 0.0
             self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
             self.has[i, RG] = True
             self.ammo[i, RG] = max(float(self.ammo[i, RG]), RAIL_START_AMMO)
@@ -9073,9 +9102,15 @@ class DuelEnv:
         if self.human_aim:
             zs = np.where(self.zoom, ZOOM, 1.0).astype(np.float32)
             self.mv[:, 0] = np.clip(self.mv[:, 0], -TURN_CAP * zs, TURN_CAP * zs)
-            jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
-            jit[self.script > 0] = 0.0
-            turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
+            if HAND_BAND:                                    # (HAND_BAND) the view follows the hand within its bandwidth
+                v_ = np.where((self.script > 0)[:, None], self.mv, self._hand_band(self.script == 0))
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(v_) + MOTOR_BASE * zs[:, None])
+                jit[self.script > 0] = 0.0
+                turn, dpit = v_[:, 0] + jit[:, 0], v_[:, 1] + jit[:, 1]
+            else:
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
+                jit[self.script > 0] = 0.0
+                turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
             turn, dpit = self.pad_turn(turn, dpit, (a[:, 9] == 1) if a.shape[1] > 9 else np.zeros(n, bool), zs, self.script == 0)
         else:
             turn, dpit = self.mv[:, 0], self.mv[:, 1]
