@@ -1958,6 +1958,25 @@ HF_HUM_TAU = float(os.environ.get("HF_HUM_TAU") or 1.0)
 HF_UP = float(os.environ.get("HF_UP") or 40.0)                       # (units: the height error of a sound)
 HF_STEP_FRAMES = max(1, int(round(HF_STEP_DT / DT)))
 PLAY_VARS = PLAY_VARS + ("HEAR_FIX", "HF_STEP_DT", "HF_STEP_SPEED", "HF_DIR", "HF_LOUD", "HF_HUM_TAU", "HF_UP")
+#   VEL_FIX=1        the enemy's velocity as a person reads it, wherever his inputs use it (the velocity inputs, his speed when
+#                    last seen, the believed place v02_bel that is made of it, the lead of a rocket or a plasma ball, the
+#                    rocket's floor aim point): VEL_DELAY_MS old (200: the same as before, now a setting), times a scale error
+#                    that drifts (VEL_WEBER, a share of the speed, 0.2; VEL_TAU seconds, 0.3), and below VEL_MIN units a
+#                    second (30) read as standing still.
+#   RANGE_FIX=1      the distance to an enemy in view judged by eye: his place (as the sight error leaves it) moved along
+#                    the line from the eyes by a share of the distance that drifts (RANGE_WEBER, 0.15; RANGE_TAU seconds,
+#                    0.5; at most half the distance); every input built on that place takes it (his place, his apparent
+#                    size, the lead's flight time, the grenade arc, the rocket aim, the believed place).
+#                    Both are kept in observe(): the plugins have them as they are.
+VEL_FIX = float(os.environ.get("VEL_FIX") or 0.0) > 0
+VEL_DELAY_MS = float(os.environ.get("VEL_DELAY_MS") or 200.0)
+VEL_WEBER = float(os.environ.get("VEL_WEBER") or 0.2)
+VEL_TAU = float(os.environ.get("VEL_TAU") or 0.3)
+VEL_MIN = float(os.environ.get("VEL_MIN") or 30.0)
+RANGE_FIX = float(os.environ.get("RANGE_FIX") or 0.0) > 0
+RANGE_WEBER = float(os.environ.get("RANGE_WEBER") or 0.15)
+RANGE_TAU = float(os.environ.get("RANGE_TAU") or 0.5)
+PLAY_VARS = PLAY_VARS + ("VEL_FIX", "VEL_DELAY_MS", "VEL_WEBER", "VEL_TAU", "VEL_MIN", "RANGE_FIX", "RANGE_WEBER", "RANGE_TAU")
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
@@ -3045,6 +3064,8 @@ class DuelEnv:
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
         self.vel_frames = VEL_REACT_FRAMES              # delay on the enemy's velocity (see observe)
+        if VEL_FIX:                                     # (VEL_FIX) the delay as set
+            self.vel_frames = max(0, int(round(VEL_DELAY_MS / 1000.0 / DT)))
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
         self.fov_sight = True                           # geometry only inside the field of view
@@ -5488,6 +5509,8 @@ class DuelEnv:
             visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
             seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
+        if VEL_FIX:                                          # (VEL_FIX) read as a person reads it
+            opp_vel = self._vel_percept(opp_vel)
         self.ear_t += DT
         self.resp_t += DT
         self.it_t += DT                                      # the memory aids (N_MEM) keep their own time here, so the
@@ -5516,6 +5539,8 @@ class DuelEnv:
             d_ = np.linalg.norm(t_, axis=1)
             off = np.tan(np.radians(self.percept)) * d_[:, None] * (visible & (self.script == 0))[:, None]
             known = known + np.stack([-t_[:, 1] / hd_ * off[:, 0], t_[:, 0] / hd_ * off[:, 0], off[:, 1]], 1).astype(np.float32)
+        if RANGE_FIX:                                        # (RANGE_FIX) his distance judged by eye
+            known = self._range_percept(known, eye, visible)
         rel = rot(known - pos) / 1000.0
         exact = visible.astype(np.float32)
         ovel = rot(opp_vel) / 400.0 * exact[:, None]
@@ -5663,6 +5688,30 @@ class DuelEnv:
             return out
         held = np.stack([q_[1] for q_ in self.drift_q]).all(0)
         return np.where(held[:, None], self.drift_q[0][0], 0.0).astype(np.float32)
+
+    def _vel_percept(self, v):
+        """(VEL_FIX) the enemy's velocity as he reads it: times a drifting scale error (VEL_WEBER, VEL_TAU), a speed below
+        VEL_MIN read as none. Keeps the error (vf_w); called once a frame by observe()"""
+        n = len(v)
+        if getattr(self, "vf_w", None) is None or len(self.vf_w) != n:
+            self.vf_w = np.zeros(n, np.float32)
+        rho = math.exp(-DT / max(VEL_TAU, 1e-3))
+        self.vf_w = (rho * self.vf_w + math.sqrt(1.0 - rho * rho) * VEL_WEBER * self.rng.normal(0, 1, n)).astype(np.float32)
+        v = np.asarray(v, np.float32) * (1.0 + self.vf_w)[:, None]
+        if VEL_MIN > 0:
+            v = np.where(np.linalg.norm(v, axis=1, keepdims=True) < VEL_MIN, 0.0, v)
+        return v.astype(np.float32)
+
+    def _range_percept(self, known, eye, visible):
+        """(RANGE_FIX) the place of an enemy in view moved along the line from his eyes by a drifting share of the distance
+        (RANGE_WEBER, RANGE_TAU; at most half). Keeps the error (rf_e); called once a frame by observe()"""
+        n = len(known)
+        if getattr(self, "rf_e", None) is None or len(self.rf_e) != n:
+            self.rf_e = np.zeros(n, np.float32)
+        rho = math.exp(-DT / max(RANGE_TAU, 1e-3))
+        self.rf_e = (rho * self.rf_e + math.sqrt(1.0 - rho * rho) * RANGE_WEBER * self.rng.normal(0, 1, n)).astype(np.float32)
+        g_ = (np.asarray(visible, bool)[:n] & (self.script[:n] == 0)).astype(np.float32) * np.clip(self.rf_e, -0.5, 0.5)
+        return (known + (known - eye) * g_[:, None]).astype(np.float32)
 
     def drift_clear(self, seats=None):
         """(DRIFT_IN) no rate until two new perceived frames: a plugin calls it where it clears opp_hist, and on a frame
