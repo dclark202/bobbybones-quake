@@ -4,11 +4,10 @@ BobbyBones is a Quake Live duel bot trained from scratch by reinforcement learni
 games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
 on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
 
-## Play against him in Quake Live
+## Play against
 
-Run him on your own server (below, "Run it"): `tools/duel_server.sh` starts a private Quake Live server with BobbyBones on
-it; the chat commands are in [docs/guides/COMMANDS.md](docs/guides/COMMANDS.md). A public server is run separately; its
-setup is not part of this repo.
+Join server `Duel BobbyBones the self taught Quake bot | US Chicago` in Quake Live
+
 
 ## Architecture
 
