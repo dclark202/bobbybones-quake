@@ -1977,6 +1977,16 @@ RANGE_FIX = float(os.environ.get("RANGE_FIX") or 0.0) > 0
 RANGE_WEBER = float(os.environ.get("RANGE_WEBER") or 0.15)
 RANGE_TAU = float(os.environ.get("RANGE_TAU") or 0.5)
 PLAY_VARS = PLAY_VARS + ("VEL_FIX", "VEL_DELAY_MS", "VEL_WEBER", "VEL_TAU", "VEL_MIN", "RANGE_FIX", "RANGE_WEBER", "RANGE_TAU")
+#   PROJ_FIX=1       (with PROJ_SEE) an enemy projectile as a person sees it: noticed only after PROJ_NOTICE_MS (100) in his
+#                    sight on end (the view cone, a clear line); what he reads of it (place, speed, and the closest pass and
+#                    its time worked out from them) is PROJ_READ_MS (100) old; a grenade's fuse only if he has seen it on
+#                    every frame since it left (else the fuse input reads 0, as at its end). A projectile is followed by its
+#                    slot (a new one when the slot's age goes back); the plugins keep a projectile in one slot while it
+#                    flies (sync_world), as the simulator does.
+PROJ_FIX = float(os.environ.get("PROJ_FIX") or 0.0) > 0
+PROJ_NOTICE_MS = float(os.environ.get("PROJ_NOTICE_MS") or 100.0)
+PROJ_READ_MS = float(os.environ.get("PROJ_READ_MS") or 100.0)
+PLAY_VARS = PLAY_VARS + ("PROJ_FIX", "PROJ_NOTICE_MS", "PROJ_READ_MS")
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
@@ -5739,6 +5749,10 @@ class DuelEnv:
         if len(ii):
             clear = (self.w.lines(eye[ii], P[ii, kk]) if self.sight is None else self.w.lines(eye[ii], P[ii, kk], mask=self.sight)) >= 0.999
             see[ii[~clear], kk[~clear]] = False
+        if PROJ_FIX:                                         # (PROJ_FIX) noticed late, read late, the fuse only if followed
+            P, V, G, see = self._proj_fix(P, V, A, G, see)
+            to = P - eye[:, None, :]
+            dist = np.linalg.norm(to, axis=2) + 1e-6
         d = np.where(see, dist, 1e9)
         order = np.argsort(d, axis=1)[:, :S6]
         ar = np.arange(n)
@@ -5759,6 +5773,37 @@ class DuelEnv:
             more[:, j, 1] = t_ / 2.0 * ok
             more[:, j, 2] = np.clip(near / rad[w_], 0.0, 3.0) / 3.0 * ok
         return base[:, :N_PROJ].reshape(n, -1), np.concatenate([base[:, N_PROJ:].reshape(n, -1), more.reshape(n, -1)], 1)
+
+    def _proj_fix(self, P, V, A, G, see):
+        """(PROJ_FIX) per player and enemy projectile slot: frames it has flown (pf_life) and been in his sight on end
+        (pf_run), the slots' ages (pf_age: a new projectile when it goes back), the last frames' readings (pf_hist).
+        -> the place, speed and age PROJ_READ_MS old, the age 99 where he has not followed it since it left (its fuse
+        unknown), and seen only after PROJ_NOTICE_MS in sight on end. Called once a frame by observe()"""
+        if getattr(self, "pf_run", None) is None or self.pf_run.shape != see.shape:
+            self.pf_run, self.pf_life = np.zeros(see.shape, np.int64), np.zeros(see.shape, np.int64)
+            self.pf_age, self.pf_hist = np.zeros(see.shape, np.float32), []
+        new_ = A & (G < self.pf_age - 1e-4)
+        self.pf_life = np.where(A, np.where(new_, 1, self.pf_life + 1), 0)
+        self.pf_run = np.where(see, np.where(new_, 1, self.pf_run + 1), 0)
+        self.pf_age = np.where(A, G, 0.0).astype(np.float32)
+        self.pf_hist.append((P.copy(), V.copy(), A.copy(), G.copy(), self.pf_run >= self.pf_life))
+        dq = max(0, int(round(PROJ_READ_MS / 1000.0 / DT)))
+        while len(self.pf_hist) > dq + 1:
+            self.pf_hist.pop(0)
+        P0, V0, A0, G0, Y0 = self.pf_hist[0]
+        need = max(int(round(PROJ_NOTICE_MS / 1000.0 / DT)), dq + 1)
+        see = see & A0 & (self.pf_run >= need)
+        self._pf_last = see
+        return P0, V0, np.where(Y0, G0, 99.0).astype(np.float32), see
+
+    def proj_clear(self, seats=None):
+        """(PROJ_FIX) nothing followed: a plugin calls it where it clears opp_hist (a new life)"""
+        if getattr(self, "pf_run", None) is None:
+            return
+        s_ = slice(None) if seats is None else seats
+        self.pf_run[s_] = 0
+        for h_ in self.pf_hist:
+            h_[4][s_] = False
 
     def _v15(self, pos, yaw, pit, eye, known, seen_t, visible):
         """the inputs of N_V15: the jump ahead on his way in a jump run (see JUMPS), and with the grenade launcher in his

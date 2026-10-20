@@ -1232,8 +1232,29 @@ class duelbot(minqlx.Plugin):
         live_ = {m_[0] for m_ in ms}
         for num_ in [n_ for n_ in born if n_ not in live_]:
             del born[num_]
+        pf_ = getattr(E, "PROJ_FIX", False)
+        if pf_ and not hasattr(self, "pf_slots"):
+            self.pf_slots = {}
         for slot, owner in enumerate(ids):
             k = 0
+            if pf_:                                          # (PROJ_FIX) a projectile keeps its slot while it flies, as in the simulator
+                prev_ = self.pf_slots.get((id(env), slot), {})
+                mine_ = [m_ for m_ in ms if m_[1] == owner and m_[2] in kinds]
+                cur_ = {m_[0]: prev_[m_[0]] for m_ in mine_ if m_[0] in prev_}
+                free_ = [q_ for q_ in range(E.K) if q_ not in cur_.values()]
+                for m_ in mine_:
+                    if m_[0] not in cur_ and free_:
+                        cur_[m_[0]] = free_.pop(0)
+                self.pf_slots[(id(env), slot)] = cur_
+                for num, own, weapon, x, y, z, vx, vy, vz in mine_:
+                    if num in cur_:
+                        k_ = cur_[num]
+                        env.rp[slot, k_], env.rv[slot, k_], env.ra[slot, k_] = (x, y, z), (vx, vy, vz), True
+                        if hasattr(env, "rw"):
+                            env.rw[slot, k_] = kinds[weapon]
+                        if hasattr(env, "rage"):
+                            env.rage[slot, k_] = now_ - born.setdefault(num, now_)
+                continue
             for num, own, weapon, x, y, z, vx, vy, vz in ms:
                 if own == owner and weapon in kinds and k < E.K:
                     env.rp[slot, k] = (x, y, z)
@@ -1612,6 +1633,8 @@ class duelbot(minqlx.Plugin):
                         env.opp_hist = []
                         if hasattr(env, "drift_clear"):
                             env.drift_clear()                # (DRIFT_IN) no rate from the life before
+                        if hasattr(env, "proj_clear"):
+                            env.proj_clear()                 # (PROJ_FIX) nothing followed from the life before
                     minqlx.set_bot_substeps(bobby.id, 3)
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
