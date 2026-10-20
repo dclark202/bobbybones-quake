@@ -4,6 +4,8 @@
 strategy side"; "add this as the candidate v0.4 model to start with"). Not built; the full proposal it narrows is
 [PROPOSAL_v0.4.md](PROPOSAL_v0.4.md) (its section 13). Decided first: the learning step by the library's GRU (B-237).*
 
+**Before the head** (the owner, 2026-10-16 and 2026-10-17): one movement network ([UNIFIED_MOVEMENT.md](UNIFIED_MOVEMENT.md), B-259), and then its clean-up (step 6b there): the bridge's parts that no longer act once the legs switch is gone (the switch, the turn-down dial and residual, the turn correction, the fade, the solo self-driving, the key overrides) are removed from the network and the code, with the network proven to answer as before. Only then the head.
+
 ## The shape
 
 One network in two parts. **The hands** run every frame (40 a second): aim, keys, movement, rocket jumps. **The head**

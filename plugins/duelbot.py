@@ -501,7 +501,6 @@ class duelbot(minqlx.Plugin):
             self.real_game = True
             self.go_f3 = now                                 # frame() says "allready" once the game has run his "readyup"
             self.set_cvar("timelimit", "10")
-            self.msg("^3Game on:^7 1v1 against BobbyBones, 10 minutes, then the scoreboard and the map vote.")
 
     def on_stats(self, stats):
         """the game's own table for a player at the end of a game (or when he leaves): shots, hits, damage, kills and time

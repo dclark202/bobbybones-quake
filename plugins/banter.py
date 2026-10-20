@@ -6,6 +6,8 @@ they use to show respect, 'I goofed', etc.").
 Each of the four bots has a voice of its own (the names are duelbot.BOT_NAMES, in the order they join): BobbyBones the
 pupil, Mr Skeleton the bone jokes, THE JUGGERNAUT in capitals, Dr Evil the plan.
 
+- In the countdown before a game (only with a person playing) every bot says a short "glhf" line, once per countdown
+  (owner, 2026-10-18: "a few 'glhf' type messages that he will choose from during the countdown").
 - At a game's end every bot says a line, by where it finished (first, in the middle, last), a second or two apart.
 - During a game, and only with a person playing: after three frags without dying (pleased with itself), after dying by
   its own hand or the map ("I goofed"), after the same person has fragged it three times without an answer (respect, by
@@ -26,6 +28,7 @@ import minqlx
 
 NAMES = ("BobbyBones", "Mr Skeleton", "THE JUGGERNAUT", "Dr Evil")     # (duelbot.BOT_NAMES; kept in step by hand)
 EACH, ALL, CHANCE = 75.0, 20.0, 0.7
+GLHF = ("glhf", "gl hf", "good luck, have fun", "glhf ^3:)^7", "gl", "hf", "^2glhf^7", "gl hf ^3:)^7")   # the countdown's lines, any bot
 FAR = 1500.0                                                           # a rail frag from this far is worth a smile
 
 LINES = (
@@ -123,6 +126,8 @@ class banter(minqlx.Plugin):
         self.owed = {}                                       # (bot id, person's steam id) -> frags by him without an answer
         self.add_hook("frame", self.on_frame)
         self.add_hook("game_end", self.on_game_end)
+        self.add_hook("game_countdown", self.on_countdown)
+        self.glhf_t = 0.0                                    # when the bots last wished luck (once per countdown)
         self.add_hook("map", self.on_map)
         self.add_command("banter", self.cmd_banter, 5)
         lad = minqlx.Plugin._loaded_plugins.get("ladder")
@@ -191,6 +196,20 @@ class banter(minqlx.Plugin):
                 self.say(killer.id, self.pick(killer, "rail"), 0.8)
             elif self.run[killer.id] == 3 and self.may(killer, now):
                 self.say(killer.id, self.pick(killer, "streak"), 0.8)
+
+    # ------------------------------------------------------------------ the countdown
+    def on_countdown(self):
+        now = time.time()
+        if now - self.glhf_t < 30.0:                         # once per countdown
+            return
+        if not any(not is_bot(q) and q.team != "spectator" for q in self.players()):
+            return                                           # nobody to hear it
+        self.glhf_t = now
+        delay = 1.0 + self.rng.random()
+        for p in self.players():
+            if voice(p) is not None and p.team != "spectator":
+                self.say(p.id, self.rng.choice(GLHF), delay)
+                delay += 0.8 + self.rng.random()
 
     # ------------------------------------------------------------------ a game's end
     def on_game_end(self, data):
