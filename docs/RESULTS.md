@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-20](results/2026-10-20.md)
+
+- 17:10 — v0.3.7 ends at 71.7% against v0.3.6; the day's audits find the rail held back by a one-frame shot delay, his senses leaking, his aim ~50 ms quicker than the pros; v0.3.8 starts with all of it fixed
+
 ## [2026-10-18](results/2026-10-18.md)
 
 - 12:20 — The speed pay in games (0.05) is 2 to 3% of the frag pay and has not raised his trip speed; save 60 reads 45.0% against v0.3.1's end; what did not work this weekend
