@@ -405,9 +405,9 @@ rep('''        opp_all = ar ^ 1
         dealt = dealt_to.sum(1)
         self.dmg_on += dealt_to
         opp_all = np.where((attacker >= 0) & (attacker != ar), attacker, self.foe)     # a hit is felt from the attacker's side''')
-rep('''            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, 2, axis=0) & (self.hp > 0)[:, None]
+rep('''            touch = (dxy < 36) & (dz < PICK_Z) & np.repeat(self.item_up, 2, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
-                m = i // 2''', '''            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, self.G, axis=0) & (self.hp > 0)[:, None]
+                m = i // 2''', '''            touch = (dxy < 36) & (dz < PICK_Z) & np.repeat(self.item_up, self.G, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
                 m = i // self.G''')
 rep('''            self._spawn(int(v), avoid=s[v ^ 1, :3], close=True if self.kind[v // 2] in (AIM, DRILL) else None)''',

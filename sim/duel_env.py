@@ -2046,6 +2046,24 @@ HAND_BAND = float(os.environ.get("HAND_BAND") or 0.0) > 0
 HB_FC = float(os.environ.get("HB_FC") or 4.0)
 HB_BETA = float(os.environ.get("HB_BETA") or 0.5)
 PLAY_VARS = PLAY_VARS + ("HAND_BAND", "HB_FC", "HB_BETA")
+# DUEL_QL=1 (v0.3.8, off by default; a PLAY_VAR): the duel factory's numbers where they differ from free-for-all's, in
+#                    which every lab measurement before 2026-10-19 was made (the game's settings dump on the servers, which
+#                    run the duel factory: docs/v0.3.7/REPORT_PLAYTEST_2026-10-19.md section 1). (a) With QL_JUMP, no jump
+#                    within DQ_JUMP_MS (50) of the last (pmove_JumpTimeDeltaMin: free-for-all 100). (b) With QL_MOVE,
+#                    wading at DQ_WADE (0.75: free-for-all's 0.8 is qsim.QL_WADE). (c) An item (and a dropped weapon) is
+#                    taken with his origin at most DQ_PICK_Z (51) above or below its resting origin (free-for-all's
+#                    g_itemHeight 35, duel's 15): 4,656 duel pickups of 2026-10-19/20 (play tests and the public server)
+#                    reach 48.5 / 50.4 / 55 (99% / 99.9% / the highest, one) above it, the 7,767 free-for-all pickups of
+#                    2026-10-12 63.7 / 64.7 / 66.6; the simulator's 56 lies between. Horizontally both modes are the same
+#                    (dx, dy 99% 39): dxy < 36 stays. The game's crouch step jump (free-for-all on, duel off) is not in the
+#                    simulator (its jumps never look at the crouch): duel-like already. The plugins and the servers need
+#                    nothing: the server's game is the truth.
+DUEL_QL = float(os.environ.get("DUEL_QL") or 0.0) > 0
+DQ_JUMP_MS = float(os.environ.get("DQ_JUMP_MS") or 50.0)
+DQ_WADE = float(os.environ.get("DQ_WADE") or 0.75)
+DQ_PICK_Z = float(os.environ.get("DQ_PICK_Z") or 51.0)
+PICK_Z = DQ_PICK_Z if DUEL_QL else 56.0                    # an item's reach in height (|dz| under it)
+PLAY_VARS = PLAY_VARS + ("DUEL_QL", "DQ_JUMP_MS", "DQ_WADE", "DQ_PICK_Z")
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
@@ -2549,14 +2567,14 @@ class DuelEnv:
         assert self.new_lib or not (QL_MOVE or SOLIDS), "QL_MOVE and SOLIDS need the simulator library of 2026-10-09"
         if self.new_lib:                                     # (the library keeps these between worlds of one process: set both ways)
             from qsim import QL_STEP, QL_WADE
-            self.w.set_params2(QL_WADE, QL_STEP) if QL_MOVE else self.w.set_params2()
+            self.w.set_params2(DQ_WADE if DUEL_QL else QL_WADE, QL_STEP) if QL_MOVE else self.w.set_params2()
             self.w.add_solids() if SOLIDS else self.w.lib.qsim_clear_solids()
         if QL_FLOAT or hasattr(self.w.lib, "qsim_snap"):
             self.w.set_snap(not QL_FLOAT)
         if QL_FWD or QL_LAND or hasattr(self.w.lib, "qsim_params3"):
             self.w.set_params3(QL_FWD, QL_LAND)
         if QL_JUMP or hasattr(self.w.lib, "qsim_params4"):
-            self.w.set_params4(QL_JUMP)
+            self.w.set_params4(QL_JUMP, min_ms=DQ_JUMP_MS if DUEL_QL else 100.0)
         if not AUTO_HOP:                                     # (AUTO_HOP=0) a jump held over a landing does not jump again (World() set 1)
             from qsim import QL_PARAMS
             self.w.set_params(**dict(QL_PARAMS, auto_hop=0))
@@ -4729,7 +4747,7 @@ class DuelEnv:
         for m, j in zip(*np.nonzero(self.drop_w >= 0)):
             q = self._seats(int(m))
             d = s[q, :3] - self.drop_pos[m, j][None, :]
-            near = np.nonzero((np.hypot(d[:, 0], d[:, 1]) < 36) & (np.abs(d[:, 2]) < 56) & (self.hp[q] > 0))[0]
+            near = np.nonzero((np.hypot(d[:, 0], d[:, 1]) < 36) & (np.abs(d[:, 2]) < PICK_Z) & (self.hp[q] > 0))[0]
             if not len(near):
                 continue
             i = int(q[near[np.hypot(d[near, 0], d[near, 1]).argmin()]])
@@ -9593,7 +9611,7 @@ class DuelEnv:
         if self.nI:
             dxy = np.linalg.norm(s[:, None, :2] - self.item_pos[None, :, :2], axis=2)
             dz = np.abs(s[:, None, 2] - self.item_pos[None, :, 2])
-            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, 2, axis=0) & (self.hp > 0)[:, None]
+            touch = (dxy < 36) & (dz < PICK_Z) & np.repeat(self.item_up, 2, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
                 m = i // 2
                 if not self.item_up[m, it]:
