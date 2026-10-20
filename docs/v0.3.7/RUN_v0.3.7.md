@@ -1,7 +1,9 @@
 # v0.3.7 on one page: what changes from v0.3.6
 
 *Working document, started 2026-10-19 10:15, filled in as tonight's tests report. Folder `duel_gru_v0_3_7`. Starts on the
-owner's go after the ~19:30 play test, from v0.3.6's save of about 16:00 (optimizer kept: a safe restart). Naming (owner,
+owner's go after the ~19:30 play test (about 21:00 Mon), from v0.3.6's save 260 of 15:46 (optimizer kept: a safe restart);
+runs to **16:00 Tue** (about 19 h; the owner's default stop from now on), play test about 19:30 Tue; the rocket-jump
+specialist trains on the card in the gap. Naming (owner,
 2026-10-19): every stop for a play test bumps the last digit. Status: **planned**.*
 
 **Marks:** ✅ built and proven identical with its switch off · 🧪 to be tested tonight · ❓ owner's decision · ⏸ not in v0.3.7
@@ -23,12 +25,13 @@ owner's go after the ~19:30 play test, from v0.3.6's save of about 16:00 (optimi
 
 | Change | Switch | State |
 |---|---|---|
-| Respawn waits 2.1 s after a death, as the game does (was instant) | `RESPAWN_QL=1` | ✅ ❓ |
-| The maps' start points used as spawns too (Furious Heights 7% of pro respawns) | `SPAWN_QL=1` | ✅ ❓ |
-| Jump key read every frame (his other keys stay on the four-frame grid; the finger limit stays) | `JUMP_EVERY=1` | being built 🧪 |
-| Auto-hop (holding jump re-jumps on landing) set to what the game does, the same in training and on the servers | `AUTO_HOP=0/1` | being built; the setting from tonight's measurement 🧪 ❓ |
+| Respawn waits 2.1 s after a death, as the game does (was instant) | `RESPAWN_QL=1` | ✅ in (owner, 2026-10-19) |
+| The maps' start points used as spawns too (Furious Heights 7% of pro respawns) | `SPAWN_QL=1` | ✅ in (owner, 2026-10-19) |
+| Jump key read every frame (other keys stay on the four-frame grid; finger limit stays). A jump 1 frame late after landing: 456 → 598 u/s after 4 s. v0.3.6 was never asked between readings: at 1 from the start it jumps 44/min (24 now) and runs 6% slower, so start at a share and raise it live | `JUMP_EVERY=0.25` → 0.5 → 1 | ✅ yes: 25% at the start, stepped up live to 50% and 100% over the first hours (owner) |
+| Duel movement: no speed from the forward key alone (`pmove_BunnyHop 0` in the game's duel preset; measured 2026-10-19: the simulator matches duel 1,362 of 1,372 with it, 1,202 without) | `QL_FWD=0` | ✅ yes (owner: "make it match the duel mode, that's his eventual final place") |
+| Auto-hop (holding jump re-jumps on landing) set to what the game does; the export carries it and the servers' bot follows it | `AUTO_HOP=0/1` | ✅; setting from tonight's measurement 🧪 ❓ |
 | Stairs, ledges, splash on steps; Blood Run's stairs-to-yellow jump (the game's step jump is missing in the simulator) | B-267 | measured tonight 🧪; fixes later ⏸ |
-| Missiles as a point, not a small box (rockets hit step edges early: 39 of 216 on stairs) | `MISSILE_POINT=1` | being built 🧪 ❓ |
+| Missiles as a point, not a small box: rocket blasts on stairs at the game's point 214 of 216 (was 0; 50 were early); grenade rest error 67 → 12 units | `MISSILE_POINT=1` | ✅ in (owner, 2026-10-19) |
 | Hearing through the map's visibility data | `HEAR_QL` | ⏸ until measured in the game |
 | Rockets left a frame late on the servers (a plugin bug) | B-268 | servers only, before he plays there |
 
@@ -44,25 +47,30 @@ owner's go after the ~19:30 play test, from v0.3.6's save of about 16:00 (optimi
 
 ## 3. Run composition
 
-| Round kind | v0.3.6 | v0.3.7 (proposed) |
-|---|---|---|
-| Whole games | 70% | 66% |
-| Mid-game starts (moments of his own games) | 10% | 0% (replaced) |
-| Pro starts (real moments of pro duels: positions, stacks, weapons, items, score, clock) | – | 10% (being built 🧪 ❓) |
-| Rail range starts (15 s, at pro rail spots, rail in hand) | – | 4% |
-| Item runs | 10% | 10% |
-| Jump runs (weighted to his misses, half from far back) | 10% | 10% |
-| Rocket-jump runs | – | share ❓ |
-| **Reminder (owner, 2026-10-19): balance these shares together before the start** | | ❓ |
+Set by the owner, 2026-10-19 (shares of all his playing time):
+
+| Round kind | v0.3.6 | v0.3.7 | Switch |
+|---|---|---|---|
+| Whole games (self-play, the league) | 70% | 70% | `GAME_P=0.7778` (of the games' time) |
+| Mid-game starts (moments of his own games) | 10% | 0% (replaced) | `MID_START_P=0` |
+| Pro starts (real moments of pro duels) | – | 10% | `PRO_START_P=0.1111` |
+| Rail range starts (15 s, at pro rail spots, rail in hand) | – | 10% (the rocket jumps' 5% too: owner) | `RAIL_START_P=0.1111`, `RAIL_START_LEN=15` |
+| Item runs (movement) | 10% | 5% | `ITEM_RUN_P=0.05` |
+| Jump runs (weighted to his misses, half from far back) | 10% | 5% | `JUMP_RUN_P=0.05` |
+| Rocket-jump runs | – | 0% ⏸ (owner, 2026-10-19: needs more work: a rocket-jump teacher first) | `RJ_RUN_P=0` |
+| League: the last 3 best models, 8% each of his games (v0.3.4's, v0.3.5's, v0.3.6's ends) | v0.3.1's end 25% | 24% | `--anchor-p 0.24` |
+| End-of-day check: 80 games against the previous best, 80 against v0.3.1's end (control); in-day checks alternate the two; a day-end joins the league only at ≥50% against the previous best | | ✅ agreed |
 
 ## 4. Training and pay changes
 
 | Change | Switch | State |
 |---|---|---|
 | Rail range starts (far rail is viable at his aim limits: 44% at 900 units against a strafer, the pros 40%) | `RAIL_START_P=0.05`, `RAIL_START_LEN=15` | ✅ ❓ |
-| Rocket-jump runs | `RJ_RUN_P` | built in v0.3.6 ❓ |
-| Chain-hop bonus: each hop that keeps or gains speed, a growing multiplier, reset on a loss | `HOP_CHAIN` | being built; size 🧪 ❓ |
-| Pay kept from v0.3.6: items 0.35/0.35/0.18, damage taken 0.75, speed pay 0.25 games / 0.4 runs, long-range rail 0.12, blind rockets free | | ❓ keep |
+| Rocket-jump runs: not in v0.3.7 (owner). In the dry run he fired a rocket in under 1 of 200 tries and made 0.1-0.3%: nothing to learn from yet. Next: a rocket-jump specialist trained on its own, used as a teacher | | ⏸ |
+| Chain-hop bonus: each hop that keeps speed (within 15) pays more, ×1 to ×3; a loss, 150 ms on the ground or the enemy in view ends the chain; nothing paid in view. A good hopper unseen ~0.4–0.75 a minute, below a frag | `HOP_CHAIN=0.005` (HOP_PAY 0.003 kept) | ✅ yes (owner, 2026-10-19) |
+| Item pay kept at 0.35/0.35/0.18 (owner, 2026-10-19: "leave the pay weights as is") | `ITEM_FLAT` | ✅ |
+| **Rail backup (owner's standing OK for v0.3.7, flagged when used):** if stalled at about update 80 (first shot within 10 s under 40%, hits past 900 under 20%, far rail in games not up): (1) long-range rail pay 0.12 → 0.25 live; (2) rail shot price ×0.5 and (3) rail starts facing within 15°, 30 s, at the next save; (4) rail starts 10 → 15%. A rail teacher (5) only with his go | | ✅ |
+| Pay kept from v0.3.6: items 0.35/0.35/0.18, damage taken 0.75, speed pay 0.25 games / 0.4 runs, long-range rail 0.12, blind rockets free | | ✅ kept (owner) |
 
 ## 5. Tonight's tests (results filled in)
 
@@ -76,5 +84,5 @@ owner's go after the ~19:30 play test, from v0.3.6's save of about 16:00 (optimi
 
 ## Files
 
-Code: branch `v036-day2` (+ `v037-hop`). The full write-up for tonight: the v0.3.7 report (sent at the play test).
+Code: branch `v037` (v036-day2 + v037-hop + v037-missile + v037-prostart). The full write-up for tonight: the v0.3.7 report (sent at the play test).
 Audit of the simulator against the game: [../v0.4/FIDELITY_AUDIT.md](../v0.4/FIDELITY_AUDIT.md).
