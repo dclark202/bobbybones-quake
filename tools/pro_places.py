@@ -4,6 +4,19 @@ view, for the "place tokens" a model can aim at.
     python tools/pro_places.py                         the ten maps -> sim/pro_places/<map>.json and a list on stdout
     python tools/pro_places.py --picture               also docs/design/places/<map>.png (the system Python: matplotlib)
     python tools/pro_places.py --map bloodrun --shots his.npy --out his.json      another player's blind shots, the same way
+    python tools/pro_places.py --weapon rl,gl,pg [--map ...]   (v0.3.6) a list a weapon -> sim/pro_places/<map>_<w>.json
+
+--weapon (v0.3.6, the owner, 2026-10-18: rockets, grenades and plasma are aimed differently): from the same yardsticks, the
+places of one weapon's blind shots alone (the mixed files above, which BLIND_PLACES and v0.2's inputs read, are not touched):
+the same search (RADIUS, KEEP, FEET_R, the share threshold), each place with its landing middle, its share of that weapon's
+weight, its shots, met and hit and its fired_from spots; no cells, no standing_there, no picture. Rockets: a map with under
+MIN_SHOTS blind rockets gets an empty list. Grenades and plasma (the owner, 2026-10-18: all the data there is, no minimum):
+every map with any such blind shots gets a list; the search stops early when what is left weighs under LEFT_MIN of the
+weapon's weight on the map, and a place of under PLACE_MIN shots (rows) is passed over (its shots set aside), so a map with
+few shots has fewer places; the first place is kept whatever it holds: only a map with none at all has an empty list. The weight: a rocket 1, a grenade 1;
+plasma by the stream (PG_STREAM): consecutive plasma rows of the file (one demo's shots in order) fired from within
+PG_STAND units of the one before and landing within PG_LAND of it are one stream, and a stream weighs 1 in all, spread evenly
+over its cells: a place is where streams are aimed, not where the longest one was held (a second of plasma is ten cells).
 
 Reads <demo root>/yardsticks/blind_<map>.npy, written by tools/pro_yardsticks.py (run that first): a row a blind shot
 (no enemy in his view for a second or more): weapon, where it landed, where he stood, whether the enemy came into view
@@ -58,6 +71,9 @@ RADIUS, GRID, KEEP = 128.0, 64.0, 24
 FEET_R = 150.0                                                 # a shot that lands this near himself is no place to aim at (a rocket jump)
 MIN_SIGHT = 30                                                 # sightings a place or a cell needs for its numbers
 MIN_SHOTS = 1000                                               # blind shots a map needs for a list of places at all
+W_CODE = dict(rl=0, gl=5, pg=6)                                # --weapon: the simulator's numbers
+LEFT_MIN, PLACE_MIN = 0.01, 20                                 # --weapon gl, pg: stop when less than this share of the weight is left, or a place has fewer shots
+PG_STAND, PG_LAND = 64.0, 256.0                                # --weapon pg: one stream while he stands within, and it lands within, these of the cell before
 CELL, CELL_Z = 256.0, 128.0
 WEAPONS = ("rl", "rg", "lg", "mg", "sg", "gl", "pg", "hmg", "g")           # the simulator's order (duel_env.WEAPONS)
 W_SAYS = dict(rl="rockets", rg="rail", lg="lightning", mg="machine gun", sg="shotgun", gl="grenades", pg="plasma", hmg="heavy machine gun",
@@ -117,23 +133,46 @@ def own_feet(shots, items, keep=8):
     return sorted(out, key=lambda o: -o["share"])
 
 
-def places(shots, items=(), keep=KEEP):
-    """rows of weapon, landing (3), stood (3), met, hit -> the places, the heaviest first"""
+def streams(rows):
+    """(--weapon pg) the weight of each plasma row: a stream (see the top) weighs 1 in all; and the number of streams"""
+    rows = np.asarray(rows, np.float64).reshape(-1, 9)
+    if not len(rows):
+        return np.zeros(0), 0
+    new = np.ones(len(rows), bool)
+    new[1:] = ((np.linalg.norm(np.diff(rows[:, 4:7], axis=0), axis=1) >= PG_STAND)
+               | (np.linalg.norm(np.diff(rows[:, 1:4], axis=0), axis=1) >= PG_LAND))
+    bid = np.cumsum(new) - 1
+    n = np.bincount(bid)
+    return 1.0 / n[bid], len(n)
+
+
+def places(shots, items=(), keep=KEEP, row_w=None, small=False):
+    """rows of weapon, landing (3), stood (3), met, hit -> the places, the heaviest first. row_w: a weight a row (--weapon)
+    in place of WEIGHT's by weapon. small: (--weapon gl, pg) also stop at LEFT_MIN and PLACE_MIN"""
     shots = np.asarray(shots, np.float64).reshape(-1, 9)
-    shots = shots[np.isin(shots[:, 0], list(WEIGHT))]
+    k0 = np.isin(shots[:, 0], list(WEIGHT))
+    shots = shots[k0]
+    rw = None if row_w is None else np.asarray(row_w, np.float64)[k0]
     feet = np.linalg.norm(shots[:, 1:4] - shots[:, 4:7], axis=1) < FEET_R
     jumps = own_feet(shots[feet], items)
     n_all = len(shots)
     shots = shots[~feet]
     wq = shots[:, 0].astype(np.int64)
     land, stood, met, hit = shots[:, 1:4], shots[:, 4:7], shots[:, 7], shots[:, 8]
-    wt = np.array([WEIGHT[int(x)] for x in wq])
+    wt = np.array([WEIGHT[int(x)] for x in wq]) if rw is None else rw[~feet]
     total = float(wt.sum())
     left = np.ones(len(shots), bool)
     out = []
-    while len(out) < keep and left.any():
+    tries = 0
+    while len(out) < keep and left.any() and tries < 20 * keep:
+        tries += 1
+        if small and out and float(wt[left].sum()) < LEFT_MIN * total:
+            break
         c, m = heaviest(land, wt, left)
-        if wt[m].sum() < 0.002 * total:
+        if small and out and int(m.sum()) < PLACE_MIN:       # (a place of too few shots: passed over, its shots set aside;
+            left &= ~m                                        # the first place is kept whatever it holds: no empty list)
+            continue
+        if not small and wt[m].sum() < 0.002 * total:
             break
         left &= ~m
         # where they were fired from
@@ -328,8 +367,11 @@ def main():
     ap.add_argument("--out", default=None, help="where the places go (one map; default sim/pro_places/<map>.json)")
     ap.add_argument("--picture", action="store_true")
     ap.add_argument("--keep", type=int, default=KEEP)
+    ap.add_argument("--weapon", default="", help="(v0.3.6) rl,gl,pg: a list a weapon, sim/pro_places/<map>_<w>.json (the mixed files untouched)")
     a = ap.parse_args()
     sys.path.insert(0, HERE)
+    if a.weapon:
+        return by_weapon(a)
     for mp in a.map.split(","):
         f = a.shots or os.path.join(demo_root(), "yardsticks", "blind_{}.npy".format(mp))
         if not os.path.exists(f):
@@ -381,6 +423,43 @@ def main():
             png = os.path.join(ROOT, "docs", "design", "places", mp + ".png")
             picture(mp, res, shots, png)
             print("  picture: " + os.path.relpath(png, ROOT).replace("\\", "/"))
+
+
+def by_weapon(a):
+    """--weapon: a list of places a weapon and map (see the top); the counts on stdout"""
+    for mp in a.map.split(","):
+        f = a.shots or os.path.join(demo_root(), "yardsticks", "blind_{}.npy".format(mp))
+        if not os.path.exists(f):
+            print("{}: {} is not there (run tools/pro_yardsticks.py first)".format(mp, f))
+            continue
+        shots = np.load(f)
+        items = None
+        line = []
+        for w in a.weapon.split(","):
+            code = W_CODE[w]
+            rows = shots[shots[:, 0] == code]
+            out = os.path.join(ROOT, "sim", "pro_places", "{}_{}.json".format(mp, w))
+            if a.out:
+                out = a.out.replace(".json", "_{}.json".format(w))
+            if (len(rows) < MIN_SHOTS and w == "rl") or not len(rows):
+                res = dict(map=mp, weapon=w, places=[], blind_shots=int(len(rows)), min_shots=MIN_SHOTS,
+                           note="too few blind shots of this weapon on this map for a list of places")
+                line.append("{} {} (of {} shots{})".format(w, 0, len(rows), ": under {}".format(MIN_SHOTS) if len(rows) else ""))
+            else:
+                if items is None:
+                    items = map_items(mp)
+                if code == W_CODE["pg"]:
+                    rw, nb = streams(rows)
+                    how = "a stream weighs 1, spread over its cells (PG_STAND {:g}, PG_LAND {:g}); {} streams".format(PG_STAND, PG_LAND, nb)
+                else:
+                    rw, how = np.ones(len(rows)), "a shot weighs 1"
+                res = dict(map=mp, weapon=w, **places(rows, items, a.keep, row_w=rw, small=w != "rl"))
+                res["weight"] = how
+                line.append("{} {} (of {} shots{})".format(w, len(res["places"]), len(rows), ", {} streams".format(nb) if code == W_CODE["pg"] else ""))
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            with open(out, "w", encoding="utf-8") as fh:
+                json.dump(res, fh, indent=1)
+        print("{}: places {}".format(mp, "; ".join(line)), flush=True)
 
 
 if __name__ == "__main__":

@@ -133,10 +133,71 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         elif cmd == "curriculum":
             env.close_p, env.round_len, env.dmg_reward, env.intent_seek = data
             remote.send(True)
+        elif cmd == "live":                                  # (B-265, live.json) pay weights changed between two rollouts: the
+            vals_, dtw_ = data                               # module's globals as an import with that environment makes them,
+            now_ = E_.live_set(vals_)                        # and the damage-taken weight of this simulator
+            if dtw_ is not None:
+                env.dmg_taken_w = float(dtw_)
+            remote.send(dict(now_, DMG_TAKEN_W=float(env.dmg_taken_w)))
         elif cmd == "head_events":                           # (--head) the head's events since the last call, on its ticks (None: the
             remote.send(np.asarray(env.head_events(), np.float32) if hasattr(env, "head_events") else None)   # simulator has none: zeros)
         elif cmd == "close":
             break
+
+
+def jump_far_rec(agg, agg_map):
+    """(JUMP_FAR_P, v0.3.6) the jump runs' tries by start, near (standing, a second or two of way) and far (moving, 3 to 5 s
+    of way): tries begun and over per try (an over may come in the update after its try began: a small count can read
+    above 1), all maps and by map [near tries, near over, far tries, far over]"""
+    def one_(v_):
+        x_ = np.atleast_1d(v_.get("jump_far", np.zeros(4))).astype(np.float64)
+        x_ = x_ if len(x_) == 4 else np.zeros(4)
+        return x_
+    a_ = one_(agg)
+    return dict(near_tries=int(a_[0]), near_over=round(float(a_[1] / max(1.0, a_[0])), 3),
+                far_tries=int(a_[2]), far_over=round(float(a_[3] / max(1.0, a_[2])), 3),
+                by_map={m_: [int(x_[0]), round(float(x_[1] / max(1.0, x_[0])), 2), int(x_[2]), round(float(x_[3] / max(1.0, x_[2])), 2)]
+                        for m_, x_ in ((m_, one_(v_)) for m_, v_ in agg_map.items()) if x_[0] + x_[2] > 0})
+
+
+LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD")                 # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward
+
+
+def live_read(path, E_, start, trainer_start):
+    """(B-265) live.json -> (vals, trainer_vals, None) or (None, None, reason). The file is one JSON object {NAME: value}; a
+    name is one of the simulator's LIVE_VARS or LIVE_TRAINER, a value a number or (ITEM_FLAT) the string the environment
+    variable takes. The values in force are the run's start (its environment, its arguments) with the file laid over it:
+    a name left out of the file has its start value, so {} puts everything back. Anything else refuses the whole file."""
+    try:
+        raw_ = json.load(open(path, encoding="utf-8"))
+    except Exception as e_:
+        return None, None, "not JSON: {}".format(e_)
+    if not isinstance(raw_, dict):
+        return None, None, "not a JSON object"
+    allow_ = tuple(getattr(E_, "LIVE_VARS", ())) + LIVE_TRAINER
+    bad_ = sorted(k_ for k_ in raw_ if k_ not in allow_)
+    if bad_:
+        return None, None, "not allowed: {} (allowed: {})".format(bad_, list(allow_))
+    vals, tv = dict(start), dict(trainer_start)
+    for k_, x_ in raw_.items():
+        if isinstance(x_, bool) or not isinstance(x_, (int, float, str)):
+            return None, None, "{}: {!r} is not a number or a string".format(k_, x_)
+        if k_ != "ITEM_FLAT":
+            try:
+                f_ = float(x_)
+            except ValueError:
+                return None, None, "{}: {!r} is not a number".format(k_, x_)
+            if not np.isfinite(f_) or f_ < 0:
+                return None, None, "{}: {!r} is not a number of 0 or more".format(k_, x_)
+        if k_ in LIVE_TRAINER:
+            tv[k_] = float(x_)
+        else:
+            vals[k_] = str(x_)
+    try:
+        E_.live_values(vals.get)
+    except Exception as e_:
+        return None, None, "a value the simulator can not read: {}".format(e_)
+    return vals, tv, None
 
 
 def aux_labels(A, dn, ix, frames):
@@ -750,6 +811,10 @@ def main():
                          "of the rate (through the rate schedule)")
     ap.add_argument("--gate-from", type=float, default=-6.0, help="... where the line begins (at -6 a look at such a token weighs a "
                                                                  "four-hundredth of what it weighs at 0)")
+    ap.add_argument("--gate-start", type=float, default=-1.0,
+                    help="(v0.3.6) the minute of training --gate-open's line counts from (default: --fade-start, as before): a run "
+                         "that gives new tokens to a network whose older ones were opened already (tools/v036_init.py) starts their "
+                         "line at its own first minute, not at the teachers' fade start (which would open them at once)")
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
                     help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
     ap.add_argument("--bot-p", type=float, default=0.5, help="share of normal rounds against the scripted fighter")
@@ -885,6 +950,11 @@ def main():
                    daemon=True).start()
         pipes.append(p_main)
     first = [p.recv() for p in pipes]
+    if os.environ.get("TRAINER_MASK"):                                   # (2026-10-18, after the BIOS update) the workers keep the mask
+        import pin as pin_                                               # they were started with; the trainer itself (its learning step's
+        ok_ = pin_.pin_mask(int(os.environ["TRAINER_MASK"], 16))         # main thread) goes to the mask named here: the performance cores
+        print("trainer process mask {} ({}); the {} workers keep the start mask".format(
+            os.environ["TRAINER_MASK"], "set" if ok_ else "NOT SET", len(pipes)), flush=True)
     if a.teacher_skip:
         print("no key labels in the runs of: {}".format(a.teacher_skip), flush=True)
     obs = np.concatenate([f[0] for f in first])
@@ -1001,7 +1071,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
     BEL_SEEN = [0]
 
@@ -1398,6 +1468,25 @@ def main():
                 "is" if d_ == 0 else "differs from", d_), flush=True)
         obs_mean, obs_var, obs_count = ck["obs_mean"], ck["obs_var"], ck["obs_count"]
         elapsed0 = ck.get("minutes", 0.0)
+        op_ = os.path.join(out, "opt.pt")                     # (2026-10-18) the optimizer's state from the last save, if it fits
+        if os.path.exists(op_):
+            try:
+                sc_ = [g_.get("lr_scale", 1.0) for g_ in opt.param_groups]      # (this run's scales: loading puts the saved ones back)
+                os_ = torch.load(op_, weights_only=False, map_location=dev)
+                for g_, s_ in zip(opt.param_groups, os_["param_groups"]):   # (torch checks the groups' sizes only: a moment of
+                    for p_, i_ in zip(g_["params"], s_["params"]):           # another shape, or of another parameter, is refused here)
+                        m_ = os_["state"].get(i_)
+                        if m_ is not None and tuple(m_["exp_avg"].shape) != tuple(p_.shape):
+                            raise ValueError("a saved moment of shape {} for a parameter of shape {} (tools/v036_init.py opt "
+                                             "converts a widened network's)".format(tuple(m_["exp_avg"].shape), tuple(p_.shape)))
+                opt.load_state_dict(os_)
+                for g_, c_ in zip(opt.param_groups, sc_):     # (the rates are this run's, not the saved ones)
+                    g_["lr_scale"], g_["lr"] = c_, a.lr * c_
+                print("optimizer: its state loaded from opt.pt", flush=True)
+            except Exception as e_:                           # noqa: BLE001  (another layout of groups: a cold start)
+                print("optimizer: opt.pt does not fit ({}): a cold start".format(str(e_)[:120]), flush=True)
+        else:
+            print("optimizer: no opt.pt, a cold start", flush=True)
     LEGS_W0 = [p_.detach().clone() for p_ in pol.legs.parameters()] if LEGS_LEARN else None    # (--legs-learn) where the branch starts in this process
     if UNI_ON and float(os.environ.get("UNIFY_WAKE") or 0) > 0:     # (a test only: the parts woken with random weights of this size)
         with torch.no_grad():
@@ -1467,6 +1556,7 @@ def main():
     # games and mid-game starts (v0.2.2: one clock, one score, one memory a game), 120 otherwise (two-minute rounds)
     ROUND_SECS_CK = 600.0 if float(getattr(E_, "GAME_P", 0.0)) + float(getattr(E_, "MID_START_P", 0.0)) >= 0.99 else 120.0
 
+    LIVE_KEPT = None                                                     # (B-265) the live values in force, once a live.json is applied
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
@@ -1478,8 +1568,12 @@ def main():
                         round_secs=ROUND_SECS_CK, arena_secs=float(a.arena_len),
                         game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
                         game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS", "OVERTIME", "STYLE_P") if os.environ.get(k_)},   # games: their clock and score
-                        cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE),
+                        cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE,
+                        **({"live": LIVE_KEPT} if LIVE_KEPT is not None else {})),   # (B-265) once a live.json is applied: the values in force
                    path)
+        if os.path.basename(path) == "policy.pt":       # (2026-10-18) the optimizer's state beside it, for a resume
+            torch.save(opt.state_dict(), os.path.join(os.path.dirname(path), "opt.pt.tmp"))
+            os.replace(os.path.join(os.path.dirname(path), "opt.pt.tmp"), os.path.join(os.path.dirname(path), "opt.pt"))
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
     # (groups of more than two: every second member)
@@ -1603,9 +1697,10 @@ def main():
             ", opened to {:g} over {:g} min counted from minute {:.2f} (--turn-add-start; this process starts at {:.2f})".format(
                 a.turn_add_to, a.turn_add_open, ta0, elapsed0) if a.turn_add_open > 0 else
             " (left as it is: no --turn-add-open)"), flush=True)
+    gate0 = a.gate_start if a.gate_start >= 0 else fade0                 # (--gate-start) the minute the gate's line counts from
     if a.gate_open > 0:
         print("gate: {} tokens (lowest now {:.2f}) open from {:g} to 0 over {:g} min, counted from minute {:.2f} (this process starts at {:.2f})".format(
-            int(GATE_M.sum()), float(pol.attn.gate.min()), a.gate_from, a.gate_open, fade0, elapsed0), flush=True)
+            int(GATE_M.sum()), float(pol.attn.gate.min()), a.gate_from, a.gate_open, gate0, elapsed0), flush=True)
     if os.environ.get("STYLE_MIX"):                                      # (STYLE_MIX) what the simulators draw, said once
         sc_ = getattr(E_, "STYLE_CUM", None)
         if sc_ is None or not getattr(E_, "STYLE_P", 0.0) > 0:
@@ -1618,14 +1713,55 @@ def main():
     WAY_KEEP, WAY_MIN = 50, int(os.environ.get("WAY_TRIPS_MIN") or 30)   # ... the newest kept a pair; a pair counts from this many
     MAP_KEYS = ("players", "visible", "frags", "suicides", "pick_wp", "pick_mega", "pick_ra", "pick_ar", "stack_frames",
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
-                "jump_tries", "jump_over", "jump_short", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
+                "jump_tries", "jump_over", "jump_short", "jump_far", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
                 "rj_tries", "rj_over", "rj_frames", "rj_shots",
                 "hurt_dmg", "legs", "games", "open", "moments", "overtime")
+    LIVE_PATH = os.path.join(out, "live.json")                         # (B-265) pay weights changed while the run trains
+    LIVE_ON = hasattr(E_, "live_set")
+    LIVE_START = {k_: os.environ.get(k_) for k_ in getattr(E_, "LIVE_VARS", ())}      # the run's start: its environment
+    LIVE_TSTART = dict(DMG_TAKEN_W=float(a.dmg_taken_w), DMG_REWARD=float(a.dmg_reward))   # ... and its arguments
+    LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
+    if LIVE_ON and os.path.exists(LIVE_PATH):
+        print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
     while time.time() - t_start < a.minutes * 60:
         update += 1
         mins = elapsed0 + (time.time() - t_start) / 60
+        LIVE_REC = None
+        if os.path.exists(LIVE_PATH):                                    # (B-265) between two rollouts: a new or changed live.json
+            try:
+                st_ = os.stat(LIVE_PATH)
+                txt_ = open(LIVE_PATH, encoding="utf-8").read()
+            except OSError:
+                st_, txt_ = None, None
+            if txt_ is not None and (st_.st_mtime_ns, txt_) != LIVE_SEEN:
+                LIVE_SEEN = (st_.st_mtime_ns, txt_)
+                if not LIVE_ON:
+                    lv_, lt_, why_ = None, None, "the simulator module {} has no live names".format(a.env)
+                else:
+                    lv_, lt_, why_ = live_read(LIVE_PATH, E_, LIVE_START, LIVE_TSTART)
+                if why_ is not None:
+                    LIVE_REC = dict(refused=why_, from_update=update)
+                    print("live: {} REFUSED, nothing applied: {}".format(LIVE_PATH, why_), flush=True)
+                else:
+                    old_ = LIVE_KEPT or dict(sim=dict(LIVE_START), trainer=dict(LIVE_TSTART))
+                    ch_ = {k_: v_ for k_, v_ in lv_.items() if old_["sim"].get(k_) != v_}
+                    cht_ = {k_: v_ for k_, v_ in lt_.items() if old_["trainer"].get(k_) != v_}
+                    for p in pipes:                                      # every simulator, then this process: the same values
+                        p.send(("live", (lv_, lt_["DMG_TAKEN_W"])))
+                    now_ = [p.recv() for p in pipes]
+                    E_.live_set(lv_)                                     # (the environment too: the checkpoints' env_vars)
+                    a.dmg_taken_w, a.dmg_reward = lt_["DMG_TAKEN_W"], lt_["DMG_REWARD"]
+                    assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
+                    LIVE_KEPT = dict(sim=dict(lv_), trainer=dict(lt_), from_update=update)
+                    force_ = dict(now_[0], DMG_REWARD=a.dmg_reward)
+                    LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
+                    with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
+                        json.dump(dict(from_update=update, minutes=round(mins, 2), file=json.loads(txt_), in_force=force_), f_, indent=1)
+                    os.replace(os.path.join(out, "live_applied.json.tmp"), os.path.join(out, "live_applied.json"))
+                    print("live: from update {} (before its rollout) in every simulator: changed {}; in force {}".format(
+                        update, dict(ch_, **cht_) or "nothing", force_), flush=True)
         if a.gate_open > 0 and bool(GATE_M.any()):                       # (--gate-open) before the rollout: it is played and learnt
-            gf_ = min(1.0, max(0.0, mins - fade0) / a.gate_open)        # from at one gate
+            gf_ = min(1.0, max(0.0, mins - gate0) / a.gate_open)        # from at one gate
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
             with torch.no_grad():
                 pol.attn.gate[GATE_M] = pol.attn.gate[GATE_M].clamp(min=g_now)
@@ -2498,6 +2634,7 @@ def main():
                             jump_tries=int(np.sum(agg.get("jump_tries", 0))),                                                             # ... tries begun, the share that got over, that fell short
                             jump_over=round(float(np.sum(agg.get("jump_over", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
                             jump_short=round(float(np.sum(agg.get("jump_short", 0)) / max(1.0, float(np.sum(agg.get("jump_tries", 0))))), 3),
+                            jump_far=jump_far_rec(agg, agg_map),                                                                         # (JUMP_FAR_P) tries and over by start
                             jumps={m_: [[int(t_), round(float(o_ / max(1.0, t_)), 2)] for t_, o_ in                                       # ... per map and jump (its place in the map's list): tries, over
                                         zip(np.atleast_1d(v_.get("jump_tries", np.zeros(1))), np.atleast_1d(v_.get("jump_over", np.zeros(1))))][:int(np.max(np.nonzero(np.atleast_1d(v_.get("jump_tries", np.zeros(1))))[0], initial=-1)) + 1]
                                    for m_, v_ in agg_map.items() if float(np.sum(v_.get("jump_tries", 0))) > 0},
@@ -2936,6 +3073,34 @@ def main():
             rec["solo"] = dict(frames=int(SO_[0]), speed=round(sp_, 1) if sp_ is not None else None,
                                switch_games=round(float(np.atleast_1d(agg.get("legs", np.zeros(8)))[4] / max(1.0, float(np.atleast_1d(agg.get("legs", np.zeros(8)))[5]))), 4),
                                fade=round(f0_, 3), fade_next=round(FADE[0], 3))
+        if "aw_bel" in agg and float(np.atleast_1d(agg["aw_bel"])[0]) > 0:   # (AWARE_LOG) the awareness counters, his seats in games
+            B_, U_, V_, O_, S_ = (np.atleast_1d(agg[k_]) for k_ in ("aw_bel", "aw_tru", "aw_speed", "aw_off", "aw_snd"))
+            ns_ = float(S_[:21].sum())
+            cs_ = np.cumsum(S_[:21])
+            med_ = (float(np.searchsorted(cs_, ns_ / 2.0)) + 0.5) * 0.1 if ns_ > 0 else None
+            M_ = np.atleast_1d(agg.get("aw_emg", np.zeros(4)))
+            rec["aware"] = dict(look_on_belief=round(float(B_[1] / max(1.0, B_[0])), 4), look_on_truth=round(float(U_[1] / max(1.0, U_[0])), 4),
+                                look_on_emergence=dict(share=round(float(M_[1] / max(1.0, M_[0])), 4), frames=int(M_[0]), no_way=int(M_[2]),
+                                                       at_belief=round(float(M_[3] / max(1.0, M_[0])), 3)),
+                                sound_turn=dict(n=int(ns_), median_s=(round(med_, 2) if med_ is not None and med_ <= 2.0 else "never"),
+                                                within_1s=round(float(S_[:10].sum() / max(1.0, ns_)), 4), never=round(float(S_[20] / max(1.0, ns_)), 4),
+                                                already_facing=int(S_[21])),
+                                speed=dict(in_view=int(V_[1] / max(1.0, V_[0])), unseen_near=int(V_[3] / max(1.0, V_[2])), unseen_far=int(V_[5] / max(1.0, V_[4]))),
+                                share=dict(in_view=round(float(V_[0] / max(1.0, V_[0] + V_[2] + V_[4])), 3), unseen_near=round(float(V_[2] / max(1.0, V_[0] + V_[2] + V_[4])), 3)),
+                                takeoffs_per_min=dict(in_view=round(float(O_[0] / max(1e-9, V_[0] * DT_MIN)), 1), unseen_near=round(float(O_[1] / max(1e-9, V_[2] * DT_MIN)), 1),
+                                                      unseen_far=round(float(O_[2] / max(1e-9, V_[4] * DT_MIN)), 1)))
+        if "rail" in agg and float(np.atleast_1d(agg["rail"])[0]) > 0:   # (RAIL_FAR_PAY) the rail by range to the enemy, his counted seats in games
+            RR_ = np.atleast_1d(agg["rail"]).astype(np.float64)          # (the simulator's RAIL_COLS)
+            lm_ = max(1e-9, float(RR_[0]) * DT_MIN)                      # his minutes alive in games (the counted seats)
+            bd_ = ("near", "mid", "far")
+            rec["rail"] = dict(pay=float(getattr(E_, "RAIL_FAR_PAY", 0.0)), band=[float(getattr(E_, "RAIL_FAR_LO", 600.0)), float(getattr(E_, "RAIL_FAR_HI", 900.0))],
+                               minutes=round(float(RR_[0]) * DT_MIN, 1),
+                               shots={b_: int(RR_[1 + k_]) for k_, b_ in enumerate(bd_)}, hits={b_: int(RR_[4 + k_]) for k_, b_ in enumerate(bd_)},
+                               hit_rate={b_: round(float(RR_[4 + k_] / max(1.0, RR_[1 + k_])), 3) for k_, b_ in enumerate(bd_)},
+                               shots_per_min=round(float(RR_[1:4].sum() / lm_), 3),
+                               in_hand={b_: round(float(RR_[7 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},        # share of his time: the rail in hand, the enemy at that range
+                               in_hand_in_view={b_: round(float(RR_[10 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},   # ... and in view
+                               pay_got_per_min=round(float(RR_[13] / lm_), 4), pay_lost_per_min=round(float(RR_[14] / lm_), 4))
         if UNI_GATE or UNI_RES:                                          # (v0.3.4 A, B) the parts' sizes
             with torch.no_grad():
                 rec["gate"] = {n_: round(float(sum(p_.abs().max() for p_ in getattr(pol, n_).parameters())), 6)
@@ -2954,6 +3119,8 @@ def main():
             rec["turn_add"] = dict(frames=int(TA_[0]), share=round(float(TA_[1] / max(1.0, float(TA_[0]))), 5),
                                    size=round(float(TA_[2] / max(1.0, float(TA_[1]))), 3), shut=round(float(tb_[0] - tb_[1:].mean()), 3),
                                    w=round(float(tw_.abs().max()), 6))
+        if LIVE_REC is not None:                                         # (B-265) live.json applied or refused before this rollout
+            rec["live"] = LIVE_REC
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if update % 5 == 1:

@@ -892,6 +892,31 @@ JUMPS = float(os.environ.get("JUMPS") or 0.0) > 0
 #                 does not come to the take-off in half of the tries: its own way goes round them from where his tries
 #                 begin. A jump it goes for and seldom lands keeps its labels: they show the way, not the one execution).
 JUMP_ALL = float(os.environ.get("JUMP_ALL") or 0.0) > 0
+#   JUMP_WEIGHT=1 (v0.3.6, the owner's go of 2026-10-18) a jump run's jump is drawn with weight max(JUMP_W_FLOOR, 1 - his
+#                 success there) instead of every jump as often as any other: the jumps he fails get most of the practice,
+#                 the ones he makes still some. His success: per jump of this map in each simulator, a running average of
+#                 "over" per try (over as the counters have it: at the take-off, then within 110 units of the landing on
+#                 the floor or at the item), prior 0.5; a try's weight is 1 / (tries + 2) at first (the prior counts two
+#                 tries), then that of an exponential average with a half-life of JUMP_W_HALF tries. A try counts when the
+#                 next one begins (over or not: a fall short, his time over, a death, the item reached) or at once when he
+#                 gets over; a try cut by the run's end counts nothing. The counted seats only (count_even): his own tries.
+#                 The estimate lives in the process (a restart begins at the prior again). A training switch: not a PLAY_VAR.
+#   JUMP_FAR_P    (v0.3.6, the owner's go of 2026-10-18; his value 0.5) the share of jump runs' tries that begin further back:
+#                 JUMP_FAR_LO to JUMP_FAR_HI seconds of way before the take-off (3 to 5; with less way to it, from the
+#                 farthest fifth of what there is), on the same way as the near start (the jump the first one ahead, the
+#                 item behind it the nearest of its kind), and moving along the way at JUMP_FAR_SPEED (300 units a second:
+#                 about his speed in games), so that he builds the jump's speed himself. The near start is as before (a
+#                 second or two of way, standing). Its try's time: twice the way's seconds and JUMP_TRY_SLACK, as before.
+#                 Counted: stats["jump_far"] (JUMP_FAR_COLS). A training switch: not a PLAY_VAR.
+JUMP_WEIGHT = float(os.environ.get("JUMP_WEIGHT") or 0.0) > 0
+JUMP_W_FLOOR = float(os.environ.get("JUMP_W_FLOOR") or 0.1)
+JUMP_W_HALF = float(os.environ.get("JUMP_W_HALF") or 200.0)
+JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
+JUMP_FAR_LO = float(os.environ.get("JUMP_FAR_LO") or 3.0)
+JUMP_FAR_HI = float(os.environ.get("JUMP_FAR_HI") or 5.0)
+JUMP_FAR_SPEED = float(os.environ.get("JUMP_FAR_SPEED") or 300.0)
+JUMP_FAR_COLS = ("near tries", "near over", "far tries", "far over")
+assert 0.0 <= JUMP_FAR_P <= 1.0 and 0.0 < JUMP_W_FLOOR <= 1.0 and JUMP_W_HALF > 0 and JUMP_FAR_HI > JUMP_FAR_LO
 #   JUMP_OPEN     "aerowalk:1;bloodrun:1,26": per map, the jumps (their numbers in its list) that his ways take in games and
 #                 item runs too: the inputs of his way, its pay, the item rule and the item runs' targets follow the
 #                 walking map with those jumps (route_o). Scripted players keep the walking map's ways. A jump is opened
@@ -1020,8 +1045,16 @@ HOP_PAY = float(os.environ.get("HOP_PAY") or 0.0)
 #                 the approaches near the enemy get quieter while speed away from him is paid as before (goals 1 and 3:
 #                 speed and movement where it is free, positioning near the enemy). Counter: hop_quiet (take-offs it silenced).
 HOP_QUIET = float(os.environ.get("HOP_QUIET") or 0.0) > 0
-HOP_QUIET_HEARD, HOP_QUIET_NEAR = 4.0, 700.0
-PLAY_VARS = PLAY_VARS + ("HOP_QUIET",)
+# AWARE_LOG=1   (2026-10-18, the owner: "anything to help us confirm that he's doing the things we want him to") measuring
+#               only: counters of the awareness check (tools/awareness.py) in training, the counted seats in games (not runs):
+#               moving (250 u/s and over) with the enemy alive and not in view, his yaw within 30 degrees of the believed
+#               place (at most 5 s old) and of the true one; after a new enemy sound (none for 1 s before, not in view, not
+#               already faced) the time until he faces it (0.1 s bins to 2 s, then never); his speed and take-offs in view,
+#               unseen with the enemy near (heard within 2 s or believed within 700 units), unseen and far. Nothing is paid.
+AWARE_LOG = float(os.environ.get("AWARE_LOG") or 0.0) > 0
+HOP_QUIET_HEARD = float(os.environ.get("HOP_QUIET_HEARD") or 4.0)   # (2026-10-18: settings; the owner's run sets 1 s and 300 units)
+HOP_QUIET_NEAR = float(os.environ.get("HOP_QUIET_NEAR") or 700.0)
+PLAY_VARS = PLAY_VARS + ("HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR")
 # v0.3.4 D: WALK_NO_JUMP=1 (a PLAY_VAR; the owner's hard rule of 2026-10-17: in the game a held walk key does not stop a
 # jump, so walking means jump off): wherever his walk key is on as his hands and legs leave it, before the finger limits,
 # his jump (the vertical key's 1) is let go. Counter: walk_jump (frames of policy seats with both asked, before the rule).
@@ -1212,7 +1245,7 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
                  "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
-                 "r_long", "op_lab",
+                 "r_long", "op_lab", "pf_node", "emg_links",
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band")   # (HEAD_EVENTS)
 MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
@@ -1221,6 +1254,79 @@ MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' 
 #                 below that. Own splash and falls are not changed. 0 = off.
 HIGH_PAY = float(os.environ.get("HIGH_PAY") or 0.0)
 HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
+#   RAIL_FAR_PAY  (v0.3.6, the owner's go of 2026-10-18; a PLAY_VAR, 0 = off) the long-range rail: every railgun hit of a
+#                 player on another pays the shooter RAIL_FAR_PAY x clip((d - RAIL_FAR_LO) / (RAIL_FAR_HI - RAIL_FAR_LO), 0, 1)
+#                 and takes the same from the one hit (zero-sum); d = the 3D distance between the two players' origins (the
+#                 state's x, y, z, not the eyes) at the hit; once a hit, whatever its damage. Its own term of the pay: not
+#                 in `dealt` (his feedback inputs), not in the damage taken, not in r_long (combat pay, as HIGH_PAY).
+#                 Equilibrium in self-play: each side is paid for its long rail hits what it pays for the other's, so a far
+#                 rail fight is worth more to the one who wins it and long sight lines get more dangerous for both (goals 2
+#                 and 3: weapon use, positioning: keep out of long lines without the rail, hold them with it).
+#                 Counters always on (stats "rail", RAIL_COLS): the counted seats in games.
+RAIL_FAR_PAY = float(os.environ.get("RAIL_FAR_PAY") or 0.0)
+RAIL_FAR_LO = float(os.environ.get("RAIL_FAR_LO") or 600.0)
+RAIL_FAR_HI = float(os.environ.get("RAIL_FAR_HI") or 900.0)
+RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
+             "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
+PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
+# B-265 (v0.3.6, the owner's go of 2026-10-18: "If a hot reload would allow for stuff like changing pay weights mid session
+# then yes"): the pay weights a running trainer may change between two rollouts (its run folder's live.json; the trainer's
+# own two, DMG_TAKEN_W and DMG_REWARD, are not module globals and are handled there). Each is a module global read only
+# when the pay is worked out, nothing is made of it at import or in __init__: live_set() sets it in this process exactly as
+# the import does from the environment (and the environment with it). Left out on purpose: anything read at import or in
+# __init__ (SHOT_COST and SHOT_W make per-map tables; WIN_PAY its tables), every input, output, round-kind and map switch.
+LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR",
+             "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG")
+
+
+def live_values(get):
+    """(B-265) the module globals of LIVE_VARS as the import works them out, from get(name) -> the environment's string or
+    None. Raises ValueError on a value the import could not read (the trainer refuses the file then)."""
+    v = {}
+    flat_ = (get("ITEM_FLAT") or "").strip()
+    v["ITEM_FLAT"] = {k_: float(v_) for k_, v_ in (x_.split(":") for x_ in flat_.split(",") if ":" in x_)}
+    if flat_ and not v["ITEM_FLAT"]:
+        raise ValueError("ITEM_FLAT {!r}: no NAME:value pair".format(flat_))
+    v["SPEED_PAY"] = float(get("SPEED_PAY") or 0.0)
+    v["SPEED_PAY_RUN"] = float(get("SPEED_PAY_RUN") or v["SPEED_PAY"])
+    v["HOP_PAY"] = float(get("HOP_PAY") or 0.0)
+    v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
+    v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
+    v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
+    v["HIGH_PAY"] = float(get("HIGH_PAY") or 0.0)
+    v["HIGH_Z"] = float(get("HIGH_Z") or 128.0)
+    v["RAIL_FAR_PAY"] = float(get("RAIL_FAR_PAY") or 0.0)
+    v["RAIL_FAR_LO"] = float(get("RAIL_FAR_LO") or 600.0)
+    v["RAIL_FAR_HI"] = float(get("RAIL_FAR_HI") or 900.0)
+    v["STACK_DIFF"] = float(get("STACK_DIFF") or 0.0)
+    v["BLIND_RL_DMG"] = float(get("BLIND_RL_DMG") or 6.0)
+    for k_, x_ in v.items():
+        for y_ in (x_.values() if isinstance(x_, dict) else (x_,)):
+            if not np.isfinite(float(y_)):
+                raise ValueError("{}: not a finite number".format(k_))
+    if v["RAIL_FAR_HI"] <= v["RAIL_FAR_LO"]:
+        raise ValueError("RAIL_FAR_HI must be above RAIL_FAR_LO")
+    return v
+
+
+def live_set(vals):
+    """(B-265) vals {name of LIVE_VARS: the environment's string, or None = unset}: the environment and the module globals
+    of this process set as if it had started so; returns the globals in force (live_now)"""
+    bad_ = [k_ for k_ in vals if k_ not in LIVE_VARS]
+    assert not bad_, "not a live name: {}".format(bad_)
+    for k_, x_ in vals.items():
+        if x_ is None:
+            os.environ.pop(k_, None)
+        else:
+            os.environ[k_] = str(x_)
+    globals().update(live_values(os.environ.get))
+    return live_now()
+
+
+def live_now():
+    """(B-265) the LIVE_VARS globals in force in this process"""
+    g_ = globals()
+    return {k_: (dict(g_[k_]) if isinstance(g_[k_], dict) else g_[k_]) for k_ in LIVE_VARS}
 #   TRICKS=1      the scripted opponents of docs/SCOPE_v15.md (the personas holder, lobber, watcher) get what they need:
 #                 ways to places that are not items (the spawn points, posts to watch an item from). Off: none of it is
 #                 built, and those personas play as the plain item runner.
@@ -1500,7 +1606,70 @@ HEAD_HEARD_CAP = 8.0                                       # en_heard: at most t
 WIN_BAND_EDGES = (-4.5, -0.5, 0.5, 4.5)                    # margin -> band: np.digitize(margin, WIN_BAND_EDGES)
 WIN_KINDS = (1, 3)                                         # self.game: a whole game, a mid-game start
 PLAY_VARS = PLAY_VARS + ("HEAD_EVENTS",)
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES
+# v0.3.6 (docs/v0.4/ROCKETS_v0.3.6.md items 1 to 4; the owner, 2026-10-17: rockets are aimed at things, the floor under the
+# enemy, a wall, around a door, and splash is what to expect). Two switches, both PLAY_VARS and off by default; with them
+# off their inputs are zeros and nothing else changes (nothing they work out is kept or read by anything else, and they draw
+# no random numbers). Both come after N_ES at the end of the inputs; each has a token of its own in the attention part
+# (sim/attn.py's LATE kinds "rocket" and "prefire"; tools/v036_init.py gives an older network them with their gate shut).
+# A game server's plugin needs nothing more: they are made in observe() from what it keeps for the older inputs (the
+# state, his weapon and hands, the enemy's known place, v0.2's belief, the walking map and its ways: tools/prep_ways.py).
+# RL_AIM=1, the last N_RAIM inputs but N_PREF: with the rocket launcher in his hand (and alive)
+#   the backstop (5): that it is on; where a rocket fired now along his view would explode (a trace from his eyes with the
+#     shots' mask, RAIM_FAR at most): its distance / 2000 (capped at 2: nothing within RAIM_FAR), its height against his
+#     eyes / 300 (-1 to 1); with the enemy in view (as the lead inputs: noticed, his reaction time late), that distance less
+#     the enemy's / 500 (-1 to 1: below 0 it bursts before him) and the splash he would take there: 1 - the distance from
+#     the burst to him / the rocket's splash radius (0 to 1; 0 = out of it).
+#   the floor aim point (9), with the enemy in view: the floor under where he will be when a rocket fired now reaches that
+#     floor (the lead inputs' flight time, worked out to the floor point; the enemy's own fall in the air as there; the floor
+#     traced straight down from above that place, 1024 units, the shots' mask): that it is on; yaw from his crosshair to it
+#     coarse (/ 30) and fine (/ 2); pitch coarse (/ 15) and fine (/ 2); a floor found; the enemy's feet above that floor then
+#     / 200 (0 to 2: knocked or jumping high); the flight time / 1.5 (0 to 2); a clear line from his eyes to that point.
+#   the nearest wall by that place (6), with the enemy in view: RAIM_WALL_N level traces from the predicted place (at the
+#     height of his middle, RAIM_WALL units at most): that one hit; its way from that place in his own frame (sin, cos);
+#     its distance / RAIM_WALL; yaw (/ 30) and pitch (/ 15) from his crosshair to the point it hit.
+RL_AIM = float(os.environ.get("RL_AIM") or 0.0) > 0
+N_RAIM = 20
+RAIM_FAR, RAIM_WALL, RAIM_WALL_N = 4096.0, 192.0, 8
+# PREFIRE=1, the last N_PREF inputs: the pros' blind-shot places of ONE weapon (the owner, 2026-10-18: rockets, grenades and
+# plasma are aimed differently; sim/pro_places/<map>_rl.json, _gl.json, _pg.json of tools/pro_places.py --weapon; the mixed
+# <map>.json that BLIND_PLACES and v0.2's place inputs read is not used here) that lie on the enemy's believed way to him:
+# with v0.2's belief of the enemy (v02_bel: seen or heard in the last V02_KNOWN seconds, not known dead since), the enemy NOT
+# in view, he alive. The list: the weapon in his hand when it is the rocket launcher, the grenade launcher or the plasma gun
+# with ammunition and the map has a list for it; with any other weapon in his hand (or the one in hand without a list) the
+# first of rockets, grenades, plasma that he has with ammunition and the map has a list for (PF_KINDS): a pre-fire is chosen
+# before the switch to the weapon that makes it, and the rockets are the pre-fire weapon first; none: zeros. Three numbers of
+# each slot say which list it is. The places are ranked by how far off the way they lie: the seconds of way from the believed
+# place to the place and from it to him, less the way from the believed place to him (the walking map's table of ways,
+# N_V02's), nearest the way first (ties: the nearer to the enemy); places within PF_SELF units of him are left out (his own
+# splash). For each of the PF_SLOTS nearest (PF_F numbers; zeros in a slot with none): yaw from his crosshair to it / 30 and
+# pitch / 15 (-1 to 1; the point the pros' shots land, PF_LIFT above it); its distance from his eyes / 2000 (to 1.5); when
+# the enemy could be there: the seconds of way from the believed place to it less the time since that belief / 5 (-1 to 1:
+# below 0 he could have passed it); the list's weapon's flight there / 1.5 (0 to 2: a rocket at 1000 units a second, a plasma
+# cell at 2000, a grenade along its low arc; 0 where no grenade reaches); a clear line from his eyes (traced every frame);
+# how far off the way / 5 seconds (0 to 1); that weapon's pros' share of their blind shots there / 15; the grenade list
+# only: the pitch from his crosshair to the low arc that lands a grenade there / 15 (-1 to 1; 0 where none reaches, as the
+# grenade arc inputs: lofted 0.2); that the slot holds a place; the list: rockets, grenades, plasma (one of three). A token a
+# slot ("prefire").
+PREFIRE = float(os.environ.get("PREFIRE") or 0.0) > 0
+PF_SLOTS, PF_F = 3, 13
+PF_KINDS = ("rl", "gl", "pg")                              # the lists, and the order of the fallback
+N_PREF = PF_SLOTS * PF_F
+PF_SELF, PF_LIFT, PF_TOL = 160.0, 2.0, 24.0
+# EMERGE_IN=1 (v0.3.6, the owner, 2026-10-18), the last N_EMG inputs: where the enemy he believes in would come into his view.
+# The walking map's way (walk, jump and teleporter links) from the believed place (v02_bel) to him, greedy by the table of
+# ways (N_V02's), then walked back from him to the last point of it that his eyes see (a clear line, the shots' mask): the
+# emergence point (the measuring version: AWARE_LOG's aw_emg). Worked out every EMG_EVERY frames a player (staggered) and
+# held between; its direction from his eyes is read every frame. Live only while the belief is fresh (EMG_FRESH seconds at
+# most) and the enemy is not in view; zeros otherwise. The inputs: live; sin and cos of the yaw from his facing to the point;
+# that yaw / 30 (-1 to 1); the pitch from his view / 15 (-1 to 1); the distance from his eyes / 1500 (to 2); the point is the
+# believed place itself (the whole way in sight); a way exists (0: none within the table's 16 s: the point inputs zeros).
+# A token of its own ("emerge", sim/attn.py's LATE): a part of no older token, so that an older network's tokens keep their
+# rows (tools/v036_init.py gives it with its gate shut). A game server's plugin needs nothing more (observe() keeps it).
+EMERGE_IN = float(os.environ.get("EMERGE_IN") or 0.0) > 0
+N_EMG = 8
+EMG_EVERY, EMG_FRESH, EMG_STEPS = 4, 5.0, 96
+PLAY_VARS = PLAY_VARS + ("RL_AIM", "PREFIRE", "EMERGE_IN")
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -2377,6 +2546,12 @@ class DuelEnv:
         self.jrun_new = np.zeros(self.n, bool)              # ... the try began this frame
         self.jrun_it = np.full(self.n, -1, np.int64)        # ... the item that is its target
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
+        self.jrun_far = np.zeros(self.n, bool)              # ... (JUMP_FAR_P) it began far back, moving
+        self.jrun_open = np.zeros(self.n, bool)             # ... (JUMP_WEIGHT) its outcome is not in his success yet
+        self.jw_s = np.full(64, 0.5)                        # (JUMP_WEIGHT) per jump of this map: his success, his tries counted
+        self.jw_n = np.zeros(64)
+        self.jfield_land = set()                            # the sets of ways (jfields) whose goal row leads to a jump's landing first
+        self.jump_far = {}                                  # (JUMP_FAR_P) (jump, its entry in jump_tries) -> the far starting spots
         self._replaced = False                              # a try began inside this step: the state is read again at its end
         self.count_even = False                             # the jump counters count the even seats only (the trainer: those are always his)
         self.spam_places = np.zeros((0, 3), np.float32)     # BLIND_PLACES: where the pros' blind shots land on this map
@@ -2479,7 +2654,10 @@ class DuelEnv:
                         continue
                     X_.T[g_] = np.where(X_.T[g_] < 1e8, X_.T[g_] + J_.T[g_, nb_], X_.T[g_]).astype(X_.T.dtype)   # (... and the rest from there)
                     self.jump_tries[k_] = [(g_, st_, len(self.jfields))]
+                    self.jfield_land.add(len(self.jfields))
                     self.jfields.append(X_)
+                if JUMP_FAR_P > 0:
+                    self._jump_far_spots()
         self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
         self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
         self.rj_run_p = RJ_RUN_P
@@ -2689,6 +2867,7 @@ class DuelEnv:
                           high=np.zeros(3), high_dmg=np.zeros(3),       # B-160: frames with his enemy in view, and damage dealt, standing lower by 48 units or more, level, higher
                           sc_frags_w=np.zeros(NW),                      # frags made by scripted players, by weapon
                           jump_tries=np.zeros(64), jump_over=np.zeros(64), jump_short=np.zeros(64),   # JUMPS: per jump of this map
+                          jump_far=np.zeros(len(JUMP_FAR_COLS)),        # JUMP_FAR_P: tries and over by start (JUMP_FAR_COLS; counted seats)
                           jump_frames=0, start_gun=0,          # frames in jump runs; lives begun with a weapon in hand (START_GUN_P)
                           rj_tries=np.zeros(64), rj_over=np.zeros(64), rj_frames=0, rj_shots=0,   # RJ_RUN_P: per rocket jump of this map; frames, rockets fired
                           start_gun_w=np.zeros(len(WEAPONS)),  # ... by weapon
@@ -2715,11 +2894,16 @@ class DuelEnv:
                           walk_jump=0,                    # frames of policy seats with walk and jump both asked (before WALK_NO_JUMP)
                           solo=np.zeros(2),               # SOLO_SELF: frames he drove himself in runs (counted seats, alive), his speed there (sum)
                           hop_quiet=0,                    # HOP_QUIET: take-offs whose pay it silenced
+                          aw_bel=np.zeros(2), aw_tru=np.zeros(2),   # AWARE_LOG: frames, of them within 30 degrees (belief; truth)
+                          aw_speed=np.zeros(6), aw_off=np.zeros(3),  # ... frames and speed sums, take-offs: in view, unseen near, far
+                          aw_snd=np.zeros(22),            # ... turns after a sound by 0.1 s to 2 s, never, already facing
+                          aw_emg=np.zeros(4),             # ... emergence point: frames, within 30 degrees (3D), no way, at the belief itself
                           keys_add=np.zeros(1 + len(KA_COLS)),   # LEGS_KEYS_ADD: frames his legs carried him (counted seats), of them his own output
                           #                                 in place of the legs' for each of KA_COLS
                           legs_c2=np.zeros(3),            # LEGS_LOOK: frames his legs were asked with a look point, of them his view within
                                                           # 30 degrees of it; LEGS_STAND: frames they were told to stand at the goal
                           high_pay=0.0,                                 # (HIGH_PAY) what the height of his hits added to his pay
+                          rail=np.zeros(len(RAIL_COLS)),                # (RAIL_FAR_PAY) the rail by range, the counted seats in games: RAIL_COLS
                           rule_contest=np.zeros(2),                     # (RULE_CONTEST) frames the rule's lesson was silenced; frames it named an item
                           rule_hunt=np.zeros(2),                        # (RULE_HUNT) the same
                           rule_blind=np.zeros(2),                       # (RULE_BLIND) the same, for a fresh belief of the enemy's place
@@ -3742,6 +3926,128 @@ class DuelEnv:
         assert cg.shape == (self.n,), "clock_game: one flag a seat"
         return ct, cg
 
+    def _aware_log(self):
+        """(AWARE_LOG) the awareness counters of this frame (see AWARE_LOG); called after observe()"""
+        n, s = self.n, self.state
+        ar = np.arange(n)
+        opp = self._others_arr()[:, 0]
+        if getattr(self, "aw_pend", None) is None or len(self.aw_pend) != n:
+            self.aw_pend, self.aw_t0 = np.zeros(n, bool), np.zeros(n)
+            self.aw_pos, self.aw_last = np.zeros((n, 3)), np.full(n, -99.0)
+            self.aw_clock = 0.0
+        self.aw_clock += DT
+        t = self.aw_clock
+        alive = self.hp[:n] > 0
+        game = (self.script[:n] == 0) & (self.run_k[:n] < 0) & self._counted(ar)
+        inview = np.asarray(self.visible, bool)[:n] | np.asarray(self.acquired, bool)[:n]
+        en_alive = alive[opp]
+        yaw = np.asarray(self.yaw[:n], np.float64)
+
+        def off_(to):
+            d_ = np.asarray(to, np.float64)[:, :2] - s[:n, :2].astype(np.float64)
+            a_ = (np.degrees(np.arctan2(d_[:, 1], d_[:, 0])) - yaw + 180.0) % 360.0 - 180.0
+            return np.where(np.hypot(d_[:, 0], d_[:, 1]) >= 100.0, np.abs(a_), np.nan)
+        sp = np.hypot(s[:n, 3], s[:n, 4])
+        bel = getattr(self, "v02_bel", None)
+        if bel is not None:
+            bpos = np.asarray(bel, np.float64)[:n]
+            fresh = np.asarray(self.v02_bel_ok, bool)[:n] & (np.asarray(getattr(self, "v02_bt_now", np.zeros(n)))[:n] <= 5.0)
+        else:
+            bpos, fresh = np.zeros((n, 3)), np.zeros(n, bool)
+        base = game & alive & (sp >= 250.0) & ~inview & en_alive
+        ob = off_(bpos)
+        m_ = base & fresh & ~np.isnan(ob)
+        self.stats["aw_bel"] += (float(m_.sum()), float((m_ & (ob <= 30.0)).sum()))
+        ot = off_(s[opp, :3])
+        m_ = base & ~np.isnan(ot)
+        self.stats["aw_tru"] += (float(m_.sum()), float((m_ & (ot <= 30.0)).sum()))
+        R = self.route
+        W = getattr(self, "v02_ways", None)
+        self.aw_tick = getattr(self, "aw_tick", 0) + 1
+        if R is not None and W is not None and self.aw_tick % 8 == 0:
+            if getattr(R, "_fwd", None) is None:
+                R._fwd, R._from = [[] for _ in range(len(R.nodes))], getattr(R, "_from", {}) or {}
+                for b_, lst in enumerate(R.radj):
+                    for a_, c_ in lst:
+                        R._fwd[a_].append((b_, c_))
+            m_ = base & fresh
+            ids = np.nonzero(m_)[0]
+            if len(ids):
+                eb = R.locate(bpos[ids].astype(np.float32))
+                em = R.locate(s[ids, :3].astype(np.float32))
+                for j_, i_ in enumerate(ids):
+                    u, me = int(eb[j_]), int(em[j_])
+                    if W[me, u] >= 255:
+                        self.stats["aw_emg"][2] += 1.0
+                        continue
+                    path = [u]
+                    for _ in range(96):
+                        if u == me:
+                            break
+                        nxt, bc = -1, 1e18
+                        for v_, c_ in R._fwd[u]:
+                            wv = 0.0 if v_ == me else (W[me, v_] / 16.0 if W[me, v_] < 255 else 1e9)
+                            if c_ + wv < bc:
+                                nxt, bc = v_, c_ + wv
+                        if nxt < 0 or nxt in path:
+                            break
+                        u = nxt
+                        path.append(u)
+                    eye = s[i_, :3].astype(np.float32) + np.array([0, 0, VIEW_H], np.float32)
+                    pt, at_bel = None, True
+                    for k_ in range(len(path) - 1, -1, -1):
+                        q_ = R.nodes[path[k_]].astype(np.float32) + np.array([0, 0, VIEW_H], np.float32)
+                        if self.w.trace(eye, q_, mask=self.sight)["fraction"] >= 0.999:
+                            pt, at_bel = q_, k_ == 0
+                        else:
+                            break
+                    if pt is None:                           # (not even his own point: the first step of the way)
+                        pt = R.nodes[path[-1]].astype(np.float32) + np.array([0, 0, VIEW_H], np.float32)
+                    d_ = pt.astype(np.float64) - eye
+                    if np.hypot(d_[0], d_[1]) < 100.0:
+                        continue
+                    yr_, pr_ = np.radians(float(self.yaw[i_])), np.radians(float(self.pitch[i_]))
+                    dv_ = np.array([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)])
+                    cos_ = float(np.dot(dv_, d_) / max(1e-6, np.linalg.norm(d_)))
+                    self.stats["aw_emg"][0] += 1.0
+                    self.stats["aw_emg"][1] += float(cos_ >= np.cos(np.radians(30.0)))
+                    self.stats["aw_emg"][3] += float(at_bel)
+        ht_ = np.asarray(getattr(self, "v02_ht", np.full((n, 1), 99.0)))[:n]
+        near = ~inview & ((ht_ < 2.0).any(1) | (fresh & (np.linalg.norm(bpos - s[:n, :3], axis=1) < 700.0)))
+        sit = [inview, near, ~inview & ~near]
+        ga = game & alive
+        can_ = np.asarray(getattr(self, "aw_can", np.zeros(n, bool)), bool)[:n]
+        for k_, c_ in enumerate(sit):
+            self.stats["aw_speed"][2 * k_] += float((ga & c_).sum())
+            self.stats["aw_speed"][2 * k_ + 1] += float(sp[ga & c_].sum())
+            self.stats["aw_off"][k_] += float((ga & c_ & can_).sum())
+        snd = np.asarray(self.snd_t[:n], np.float64)
+        got = snd < 0.5 * DT
+        pain = np.asarray(getattr(self, "pain_t", np.full(n, 99.0))[:n], np.float64) < 0.5 * DT
+        heard = got.any(1) | pain
+        hpos = np.where(got.any(1)[:, None], np.asarray(self.snd_pos[:n], np.float64)[ar, got.argmax(1)], s[opp, :3])
+        drop = self.aw_pend & ~alive
+        self.aw_pend &= ~drop
+        if self.aw_pend.any():
+            op = off_(self.aw_pos)
+            dt_ = t - self.aw_t0
+            fin = self.aw_pend & ~np.isnan(op) & (op <= 30.0)
+            nev = self.aw_pend & ~fin & (dt_ > 2.0)
+            np.add.at(self.stats["aw_snd"], np.clip((dt_[fin] / 0.1).astype(np.int64), 0, 19), 1.0)
+            self.stats["aw_snd"][20] += float(nev.sum())
+            self.aw_pend &= ~(fin | nev)
+        new = heard & alive & game & ~inview & ~self.aw_pend & ((t - self.aw_last) >= 1.0)
+        self.aw_last = np.where(heard, t, self.aw_last)
+        if new.any():
+            oh = off_(hpos)
+            ok_ = new & ~np.isnan(oh)
+            fac = ok_ & (oh <= 30.0)
+            self.stats["aw_snd"][21] += float(fac.sum())
+            st_ = ok_ & ~fac
+            self.aw_pend |= st_
+            self.aw_t0 = np.where(st_, t, self.aw_t0)
+            self.aw_pos = np.where(st_[:, None], hpos, self.aw_pos)
+
     def _others_arr(self):
         """for every player, the other players of his group (one column each)"""
         return (np.arange(self.n) ^ 1)[:, None]
@@ -4017,6 +4323,38 @@ class DuelEnv:
                 if self.script[i_] == 0:
                     self.stats["high_pay"] += f_ * self.dmg_reward
         return None if plus is None else (plus, minus)
+
+    def _rail(self, s, st, do_fire, do_w, reward):
+        """(RAIL_FAR_PAY) the long-range rail: the zero-sum pay of this frame's rail hits (with the switch on) into reward,
+        and the counters (always): by range to the enemy (origin to origin), < RAIL_FAR_LO, up to RAIL_FAR_HI, beyond;
+        shots and hits, frames with the rail in hand (the enemy alive; and of them in view), the pay got and lost.
+        Counted: policy seats in games (not runs), as the awareness counters (_counted)."""
+        n = self.n
+        ar = np.arange(n)
+        R = self.stats["rail"]
+        opp = self._others_arr()[:, 0]
+        cnt = (self.script[:n] == 0) & (self.run_k[:n] < 0) & self._counted(ar)
+        d_en = np.linalg.norm(s[opp, :3] - s[:n, :3], axis=1)
+        band = np.where(d_en < RAIL_FAR_LO, 0, np.where(d_en <= RAIL_FAR_HI, 1, 2))
+        alive = self.hp[:n] > 0
+        R[0] += int((cnt & alive).sum())
+        sh_ = cnt & np.asarray(do_fire, bool)[:n] & (np.asarray(do_w)[:n] == RG)
+        np.add.at(R, 1 + band[sh_], 1)
+        hand_ = cnt & alive & (self.weapon[:n] == RG) & (self.hp[opp] > 0)
+        np.add.at(R, 7 + band[hand_], 1)
+        np.add.at(R, 10 + band[hand_ & np.asarray(self.visible, bool)[:n]], 1)
+        for i_, v_ in st.get("rail", ()):
+            d_ = float(np.linalg.norm(s[i_, :3] - s[v_, :3]))
+            if cnt[i_]:
+                R[4 + (0 if d_ < RAIL_FAR_LO else 1 if d_ <= RAIL_FAR_HI else 2)] += 1
+            if RAIL_FAR_PAY > 0:
+                b_ = RAIL_FAR_PAY * min(1.0, max(0.0, (d_ - RAIL_FAR_LO) / max(1e-6, RAIL_FAR_HI - RAIL_FAR_LO)))
+                reward[i_] += b_
+                reward[v_] -= b_
+                if cnt[i_]:
+                    R[13] += b_
+                if cnt[v_]:
+                    R[14] += b_
 
     def _mates(self, i):
         """the other players of player i's group"""
@@ -4810,7 +5148,9 @@ class DuelEnv:
                               self._v9(pos, rot), self._intent(pos, rot, known, seen_t), self._drops(pos, eye, rot, fdir),
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
-                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp)], 1)
+                              self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
+                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
+                              self._emerge(eye, yaw, pit, visible)], 1)
         return obs.astype(np.float32)
 
     def _proj(self, pos, eye, fdir, rot, vel):
@@ -4929,6 +5269,7 @@ class DuelEnv:
                                      min(1.0, float(c_.get("push_share", 0.0) or 0.0) / 50.0), 1.0)
                     idx_[tuple(int(x_) for x_ in ci_[k_] - lo_)] = k_ + 1
                 self.v02_cell = (np.array(pc_["cell"], np.float32), lo_, dims_, idx_, rows_)
+        self.pf_map = name                                  # (PREFIRE: its lists of places a weapon are read at the first use)
         self.v02_pp = np.zeros((0, 3), np.float32)          # the pros' places: where,
         self.v02_pf = np.zeros((0, 4), np.float32)          # ... the share of their blind shots, met, hit, how standing there fares
         f_ = os.path.join(here_, name + ".json")
@@ -5072,6 +5413,271 @@ class DuelEnv:
         out[:, 5] = (h + a) < ES_WEAK
         grp = ar // (self._others_arr().shape[1] + 1)
         out[np.isin(self.kind[grp], (MOVE, SOLO))] = 0.0     # (no enemy about)
+        return out
+
+    @staticmethod
+    def _aim_at(e, p, yaw, pit):
+        """degrees from his crosshair (yaw, pit in radians) to the points p seen from the eyes e: (yaw, pitch; + = left, down)"""
+        to = p - e
+        hd = np.hypot(to[..., 0], to[..., 1]) + 1e-6
+        ey = np.degrees((np.arctan2(to[..., 1], to[..., 0]) - yaw + np.pi) % (2 * np.pi) - np.pi)
+        ep = np.degrees(-np.arctan2(to[..., 2], hd) - pit)
+        return ey, ep
+
+    def _raim(self, eye, yaw, pit, fdir, known, opp_vel, visible, opp):
+        """the inputs of N_RAIM (see RL_AIM): with the rocket launcher in his hand, the backstop; with the enemy in view
+        too, the floor aim point and the nearest wall by it. Reads only; keeps nothing."""
+        n = self.n
+        out = np.zeros((n, N_RAIM), np.float32)
+        if not RL_AIM:
+            return out
+        ii = np.nonzero((self.weapon[:n] == RL) & (self.hp[:n] > 0))[0]
+        if not len(ii):
+            return out
+        e_ = eye[ii].astype(np.float32)
+        f_ = fdir[ii].astype(np.float32)
+        kn = known[ii].astype(np.float32)
+        vis = np.asarray(visible, bool)[ii]
+        # ---- the backstop: where a rocket fired now along his view would burst
+        fr = self.w.rays_each(e_, f_[:, None, :], RAIM_FAR, mask=self.sight)[:, 0]
+        bd = fr * RAIM_FAR
+        bp = e_ + f_ * bd[:, None]
+        out[ii, 0] = 1.0
+        out[ii, 1] = np.minimum(bd / 2000.0, 2.0)
+        out[ii, 2] = np.clip((bp[:, 2] - e_[:, 2]) / 300.0, -1.0, 1.0)
+        out[ii, 3] = np.clip((bd - np.linalg.norm(kn - e_, axis=1)) / 500.0, -1.0, 1.0) * vis
+        out[ii, 4] = np.clip(1.0 - np.linalg.norm(bp - kn, axis=1) / P_RADIUS[RL], 0.0, 1.0) * vis * (fr < 1.0)
+        jj = np.nonzero(vis)[0]
+        if not len(jj):
+            return out
+        # ---- the floor aim point: the floor under where he will be when the rocket gets there
+        k = ii[jj]
+        e2, kn2, ov = e_[jj], kn[jj], opp_vel[k].astype(np.float32)
+        air = self.state[opp[k], 6] < 0.5
+        feet = kn2 - np.array([0, 0, 24.0], np.float32)
+        c_ = float(P_SPEED[RL])
+        t = np.linalg.norm(feet - e2, axis=1) / c_
+        for _ in range(3):                                   # the flight time and his place by then, each from the other
+            t = np.minimum(t, 3.0)
+            dz = np.where(air, ov[:, 2] * t - 400.0 * t * t, 0.0)
+            m = feet + np.stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)
+            aimz = np.minimum(m[:, 2], feet[:, 2])           # (aimed at the floor: no higher than his feet now)
+            t = np.linalg.norm(np.stack([m[:, 0], m[:, 1], aimz], 1) - e2, axis=1) / c_
+        t = np.minimum(t, 3.0)
+        dz = np.where(air, ov[:, 2] * t - 400.0 * t * t, 0.0)
+        m = (feet + np.stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)).astype(np.float32)
+        top = np.maximum(m[:, 2], feet[:, 2]) + 40.0
+        st = np.stack([m[:, 0], m[:, 1], top], 1).astype(np.float32)
+        frd = self.w.rays(st, np.array([[0, 0, -1.0]], np.float32), 1024.0, mask=self.sight)[:, 0]
+        found = frd < 1.0
+        fz = np.where(found, top - frd * 1024.0, m[:, 2])
+        fp = np.stack([m[:, 0], m[:, 1], fz + PF_LIFT], 1).astype(np.float32)
+        ey, ep = self._aim_at(e2, fp, yaw[k], pit[k])
+        o = 5
+        out[k, o] = 1.0
+        out[k, o + 1], out[k, o + 2] = np.clip(ey / 30.0, -1, 1), np.clip(ey / 2.0, -1, 1)
+        out[k, o + 3], out[k, o + 4] = np.clip(ep / 15.0, -1, 1), np.clip(ep / 2.0, -1, 1)
+        out[k, o + 5] = found
+        out[k, o + 6] = np.clip((m[:, 2] - fz) / 200.0, 0.0, 2.0) * found
+        out[k, o + 7] = np.clip(t / 1.5, 0.0, 2.0)
+        out[k, o + 8] = self._v02_clear(e2, fp)
+        # ---- the nearest wall by that place, at the height of his middle
+        o = 14
+        mid = (fp + np.array([0, 0, 24.0 - PF_LIFT], np.float32)).astype(np.float32)
+        an = np.linspace(0.0, 2 * np.pi, RAIM_WALL_N, endpoint=False)
+        dw = np.stack([np.cos(an), np.sin(an), np.zeros(RAIM_WALL_N)], 1).astype(np.float32)
+        fw = self.w.rays_each(mid, np.repeat(dw[None], len(k), 0), RAIM_WALL, mask=self.sight)
+        j_ = fw.argmin(1)
+        fmin = fw[np.arange(len(k)), j_]
+        hit = fmin < 1.0
+        dist = fmin * RAIM_WALL
+        wp = mid + dw[j_] * dist[:, None]
+        rel = an[j_] - yaw[k]
+        wy, wpi = self._aim_at(e2, wp, yaw[k], pit[k])
+        out[k, o] = hit
+        out[k, o + 1], out[k, o + 2] = np.sin(rel) * hit, np.cos(rel) * hit
+        out[k, o + 3] = np.where(hit, dist / RAIM_WALL, 1.0)
+        out[k, o + 4], out[k, o + 5] = np.clip(wy / 30.0, -1, 1) * hit, np.clip(wpi / 15.0, -1, 1) * hit
+        return out
+
+    def _pf_load(self):
+        """(PREFIRE) the map's lists of places a weapon: {weapon: (places [P, 3], their share / 15 [P], walking-map points [P])}"""
+        out = {}
+        R = self.route
+        here_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_places")
+        for w_, k_ in zip((RL, GL, PG), PF_KINDS):
+            f_ = os.path.join(here_, "{}_{}.json".format(self.pf_map, k_))
+            pl_ = []
+            if os.path.exists(f_):
+                with open(f_, encoding="utf-8") as fh_:
+                    pl_ = json.load(fh_).get("places") or []
+            if pl_ and R is not None:
+                pp_ = np.array([p_["pos"] for p_ in pl_], np.float32).reshape(-1, 3)
+                sh_ = np.array([min(1.0, float(p_.get("share", 0.0) or 0.0) / 15.0) for p_ in pl_], np.float32)
+                out[w_] = (pp_, sh_, R.locate(pp_))
+        return out
+
+    def _pref(self, pos, eye, yaw, pit, visible):
+        """the inputs of N_PREF (see PREFIRE): the pros' blind-shot places of one weapon on the enemy's believed way to him.
+        Reads the belief _v02 made this frame (v02_bel, v02_bel_ok, v02_bt_now); keeps only the map's lists (pf_lists)."""
+        n = self.n
+        out = np.zeros((n, N_PREF), np.float32)
+        if not PREFIRE:
+            return out
+        R, W = self.route, self.v02_ways
+        if R is None or W is None:
+            return out
+        if getattr(self, "pf_lists", None) is None:
+            self.pf_lists = self._pf_load()
+        L = self.pf_lists
+        if not L:
+            return out
+        on = np.asarray(self.v02_bel_ok, bool)[:n] & ~np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
+        okw = {w_: self.has[:n, w_].astype(bool) & (self.ammo[:n, w_] >= 1) & (w_ in L) for w_ in (RL, GL, PG)}
+        pick = np.full(n, -1, np.int64)
+        for w_ in (PG, GL, RL):                              # the fallback: the first of PF_KINDS he has (rockets written last: first)
+            pick = np.where(okw[w_], w_, pick)
+        hand = self.weapon[:n]
+        for w_ in (RL, GL, PG):                              # the weapon in his hand, when it has a list
+            pick = np.where((hand == w_) & okw[w_], w_, pick)
+        pick = np.where(on, pick, -1)
+        S_ = PF_SLOTS
+        for w_, kc_ in zip((RL, GL, PG), range(3)):
+            ii = np.nonzero(pick == w_)[0]
+            if not len(ii):
+                continue
+            pps, shs, pn = L[w_]
+            S = min(S_, len(pps))
+            p_, e_ = pos[ii], eye[ii].astype(np.float32)
+            na, nb = R.locate(p_), R.locate(np.asarray(self.v02_bel, np.float32)[ii])
+            wb = W[pn[None, :], nb[:, None]].astype(np.float32)      # the way from the believed place to each place (16ths of a second)
+            wm = W[na[:, None], pn[None, :]].astype(np.float32)      # ... from each place to him
+            wbm = W[na, nb].astype(np.float32)[:, None]              # ... from the believed place to him
+            ok = (wb < 255) & (wm < 255) & (np.linalg.norm(pps[None, :, :] - p_[:, None, :], axis=2) >= PF_SELF)
+            det = np.maximum(np.where(wbm < 255, wb + wm - wbm, wb + wm), 0.0) / 16.0
+            score = np.where(ok, det + 0.01 * wb / 16.0, np.inf)
+            order = np.argsort(score, axis=1, kind="stable")[:, :S]
+            ar = np.arange(len(ii))[:, None]
+            valid = np.isfinite(score[ar, order])
+            pp = (pps[order] + np.array([0, 0, PF_LIFT], np.float32)).astype(np.float32)        # (k, S, 3)
+            ey, ep = self._aim_at(e_[:, None, :], pp, yaw[ii][:, None], pit[ii][:, None])
+            to = pp - e_[:, None, :]
+            d = np.linalg.norm(to, axis=2)
+            bt = np.asarray(self.v02_bt_now, np.float32)[ii]
+            since = bt - np.minimum(bt, 1.0)                 # (the believed place is where he was a second after the last news)
+            blk = np.zeros((len(ii), PF_SLOTS, PF_F), np.float32)
+            blk[:, :S, 0] = np.clip(ey / 30.0, -1, 1)
+            blk[:, :S, 1] = np.clip(ep / 15.0, -1, 1)
+            blk[:, :S, 2] = np.minimum(d / 2000.0, 1.5)
+            blk[:, :S, 3] = np.clip((wb[ar, order] / 16.0 - since[:, None]) / 5.0, -1, 1)
+            blk[:, :S, 5] = self._v02_clear(np.repeat(e_, S, axis=0), pp.reshape(-1, 3)).reshape(len(ii), S)
+            blk[:, :S, 6] = np.minimum(det[ar, order] / 5.0, 1.0)
+            blk[:, :S, 7] = shs[order]
+            if w_ == GL:                                     # (the grenade's low arc, as the grenade arc inputs)
+                D = np.hypot(to[..., 0], to[..., 1]) + 1e-6
+                v_, g_ = float(P_SPEED[GL]), 800.0
+                disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[..., 2] * v_ * v_)
+                reach = disc >= 0.0
+                th = np.arctan2(v_ * v_ - np.sqrt(np.maximum(disc, 0.0)), g_ * D)
+                epg = np.degrees(-(th - 0.2 * np.cos(th)) - pit[ii][:, None])
+                blk[:, :S, 8] = np.clip(epg / 15.0, -1, 1) * reach
+                blk[:, :S, 4] = np.clip(D / np.maximum(v_ * np.cos(th), 1.0) / 1.5, 0.0, 2.0) * reach
+            else:
+                blk[:, :S, 4] = np.clip(d / float(P_SPEED[w_]) / 1.5, 0.0, 2.0)
+            blk[:, :S, 9] = 1.0
+            blk[:, :S, 10 + kc_] = 1.0
+            blk[:, :S] *= valid[:, :, None]
+            out[ii] = blk.reshape(len(ii), -1)
+        return out
+
+    def _emg_fwd(self):
+        """(EMERGE_IN) the walking map's links forward, padded: [points, K] targets (-1: none) and their seconds"""
+        R = self.route
+        fwd = [[] for _ in range(len(R.nodes))]
+        for b_, lst in enumerate(R.radj):
+            for a_, c_ in lst:
+                fwd[a_].append((b_, c_))
+        K = max(1, max(len(f_) for f_ in fwd))
+        to = np.full((len(fwd), K), -1, np.int64)
+        co = np.full((len(fwd), K), 1e18, np.float64)
+        for a_, f_ in enumerate(fwd):
+            for j_, (b_, c_) in enumerate(f_):
+                to[a_, j_], co[a_, j_] = b_, c_
+        return to, co
+
+    def _emerge(self, eye, yaw, pit, visible):
+        """the inputs of N_EMG (see EMERGE_IN): the emergence point of the enemy he believes in. Keeps the point (emg_pt,
+        emg_ok: worked out, at the belief, a way) between its readings."""
+        n = self.n
+        out = np.zeros((n, N_EMG), np.float32)
+        if not EMERGE_IN:
+            return out
+        R, W = self.route, self.v02_ways
+        if R is None or W is None:
+            return out
+        if getattr(self, "emg_pt", None) is None or len(self.emg_pt) != n:
+            self.emg_pt, self.emg_ok = np.zeros((n, 3), np.float32), np.zeros((n, 3), bool)
+            self.emg_tick = 0
+        if getattr(self, "emg_links", None) is None:
+            self.emg_links = self._emg_fwd()
+        self.emg_tick += 1
+        bt = np.asarray(self.v02_bt_now, np.float32)[:n]
+        live = np.asarray(self.v02_bel_ok, bool)[:n] & (bt <= EMG_FRESH) & ~np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
+        self.emg_ok[~live] = False
+        due = np.nonzero(live & ((self.emg_tick + np.arange(n)) % EMG_EVERY == 0))[0]
+        if len(due):
+            to_, co_ = self.emg_links
+            bel = np.asarray(self.v02_bel, np.float32)[due]
+            u = R.locate(bel).astype(np.int64)
+            me = R.locate(self.state[due, :3]).astype(np.int64)
+            way = W[me, u] < 255
+            path = np.full((len(due), EMG_STEPS + 1), -1, np.int64)
+            path[:, 0] = u
+            cur, act = u.copy(), way & (u != me)
+            L = np.ones(len(due), np.int64)
+            for k_ in range(1, EMG_STEPS + 1):              # the greedy way: the link that leaves the least way to him
+                a_ = np.nonzero(act)[0]
+                if not len(a_):
+                    break
+                cand = to_[cur[a_]]
+                wv = np.where(cand == me[a_, None], 0.0, np.where(cand >= 0, W[me[a_, None], np.maximum(cand, 0)], 255).astype(np.float64))
+                wv = np.where(wv >= 255, 1e9, wv / 16.0)
+                c_ = np.where(cand >= 0, co_[cur[a_]] + wv, 1e18)
+                nx = cand[np.arange(len(a_)), c_.argmin(1)]
+                bad = (nx < 0) | (path[a_, :k_] == nx[:, None]).any(1)
+                ok_ = ~bad
+                path[a_[ok_], k_] = nx[ok_]
+                cur[a_[ok_]] = nx[ok_]
+                L[a_[ok_]] += 1
+                act[a_[bad]] = False
+                act[a_[ok_]] = nx[ok_] != me[a_[ok_]]
+            e_ = eye[due].astype(np.float32)
+            ii, kk = np.nonzero(path >= 0)
+            pts = (R.nodes[path[ii, kk]] + np.array([0, 0, VIEW_H], np.float32)).astype(np.float32)
+            fr = self.w.lines(e_[ii], pts) if self.sight is None else self.w.lines(e_[ii], pts, mask=self.sight)
+            vis = np.zeros(path.shape, bool)
+            vis[ii, kk] = fr >= 0.999
+            kk = np.arange(path.shape[1])[None, :]           # walked back from his own point while the eyes see it: the point is
+            brk = np.ones(path.shape, bool)                  # after the last break (a hidden point) on the way, or his own point
+            brk[:, 1:] = ~(vis[:, :-1] & vis[:, 1:])         # when he does not see even that
+            j_ = np.where(brk & (kk >= 1) & (kk <= (L - 1)[:, None]), kk, 0).max(1)
+            pt = (R.nodes[path[np.arange(len(due)), j_]] + np.array([0, 0, VIEW_H], np.float32)).astype(np.float32)
+            self.emg_pt[due] = np.where(way[:, None], pt, 0.0)
+            self.emg_ok[due, 0] = True
+            self.emg_ok[due, 1] = way & (j_ == 0) & vis[np.arange(len(due)), 0]
+            self.emg_ok[due, 2] = way
+        on = live & self.emg_ok[:, 0]
+        pw = on & self.emg_ok[:, 2]
+        ey, ep = self._aim_at(eye, self.emg_pt, yaw, pit)
+        d = np.linalg.norm(self.emg_pt - eye, axis=1)
+        out[:, 0] = on
+        out[:, 1] = np.sin(np.radians(ey)) * pw
+        out[:, 2] = np.cos(np.radians(ey)) * pw
+        out[:, 3] = np.clip(ey / 30.0, -1, 1) * pw
+        out[:, 4] = np.clip(ep / 15.0, -1, 1) * pw
+        out[:, 5] = np.minimum(d / 1500.0, 2.0) * pw
+        out[:, 6] = on & self.emg_ok[:, 1]
+        out[:, 7] = pw
         return out
 
     def note_hunt(self, valid):
@@ -5634,6 +6240,8 @@ class DuelEnv:
         self.stats["dmg_h"] += float(dmg) * (self.script[i] == 0)
         self.stats["dmg_from_script"] += float(dmg) * (self.script[v] == 0 and self.script[i] != 0)
         st["attacker"][v] = i
+        if wpn == RG and int(i) != int(v):                  # (RAIL_FAR_PAY) the rail hits of this frame: (shooter, victim)
+            st.setdefault("rail", []).append((int(i), int(v)))
         self._book(st, i, v, dmg, wpn)
         st["kicked"] = True
         self.stats["dmg"] += dmg
@@ -6638,16 +7246,35 @@ class DuelEnv:
         """a jump run: player i begins a try a second or two of way before the take-off of one of the pros' jumps (every
         jump as often as any other), with the item behind it as his target; the item is put back if it was taken"""
         ks = list(self.jump_tries)
-        k = int(ks[int(self.rng.integers(len(ks)))])
-        g, st, f = self.jump_tries[k][int(self.rng.integers(len(self.jump_tries[k])))]
+        if JUMP_WEIGHT and self.jrun_open[i]:                # (JUMP_WEIGHT) the try before, not over: into his success
+            self._jump_learn(int(self.jrun_k[i]), False)
+        self.jrun_open[i] = JUMP_WEIGHT and bool(self._counted(i))
+        if JUMP_WEIGHT:                                      # (JUMP_WEIGHT) the jumps he fails more often
+            w_ = np.maximum(JUMP_W_FLOOR, 1.0 - self.jw_s[np.minimum(np.array(ks, np.int64), 63)])
+            k = int(ks[int(self.rng.choice(len(ks), p=w_ / w_.sum()))])
+        else:
+            k = int(ks[int(self.rng.integers(len(ks)))])
+        e = int(self.rng.integers(len(self.jump_tries[k])))
+        g, st, f = self.jump_tries[k][e]
         J = self.jfields[f]
         self.jrun_f[i] = f
+        far = JUMP_FAR_P > 0 and self.rng.random() < JUMP_FAR_P and len(self.jump_far.get((k, e), ())) > 0
+        if far:                                              # (JUMP_FAR_P) further back, moving along the way
+            st = self.jump_far[(k, e)]
         node = int(st[int(self.rng.integers(len(st)))])
         nx = int(J.next[g, node])
         p, q = J.nodes[node], (J.nodes[nx] if nx >= 0 else J.goals[g])
         face = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])) + float(self.rng.uniform(-40, 40))
-        self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), face)
+        vel = (0, 0, 0)
+        if far:
+            d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
+            d_ = d_ / max(1e-6, float(np.hypot(*d_)))
+            vel = (float(d_[0] * JUMP_FAR_SPEED), float(d_[1] * JUMP_FAR_SPEED), 0.0)
+        self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
         self._fresh(i, face)
+        self.jrun_far[i] = far
+        if far:
+            self.sp_hist[i] = JUMP_FAR_SPEED                 # (his speed of the last frames: what he moves at, not a gain)
         m = self._match_of(i)
         self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
         if g < self.bel_t.shape[1]:
@@ -6662,6 +7289,48 @@ class DuelEnv:
         self.jrun_past[i] = False
         if self._counted(i):
             self.stats["jump_tries"][min(k, 63)] += 1
+            self.stats["jump_far"][2 if far else 0] += 1
+
+    def _jump_learn(self, k, over):
+        """(JUMP_WEIGHT) one try at jump k into his success there (see JUMP_WEIGHT)"""
+        k = min(int(k), 63)
+        a_ = max(1.0 / (self.jw_n[k] + 2.0), 1.0 - 0.5 ** (1.0 / JUMP_W_HALF))
+        self.jw_s[k] += a_ * (float(over) - self.jw_s[k])
+        self.jw_n[k] += 1.0
+
+    def _jump_far_spots(self):
+        """(JUMP_FAR_P) per jump and entry of jump_tries: the spots JUMP_FAR_LO to JUMP_FAR_HI seconds of way before its
+        take-off whose way to the entry's goal has that jump as the first one ahead (and, for an item, leads to the nearest
+        of its kind); with less way, the farthest fifth of what there is"""
+        R_ = self.route
+        for k, ents in self.jump_tries.items():
+            for e, (g, st, f) in enumerate(ents):
+                X = self.jfields[f]
+                nxt, jl = X.next[g], X.jlink[g]
+                n_ = len(nxt)
+                cur = np.arange(n_)
+                hit = np.full(n_, -1, np.int64)              # the take-off spot of the first jump ahead, if it is jump k
+                live = X.T[g] < 1e8
+                for _ in range(400):
+                    j_ = jl[cur]
+                    at_ = live & (j_ >= 0)
+                    hit[at_ & (j_ == k)] = cur[at_ & (j_ == k)]
+                    live &= ~at_ & (nxt[cur] >= 0)
+                    if not live.any():
+                        break
+                    cur = np.where(live, nxt[cur], cur)
+                ok = (hit >= 0) & ~R_.dead
+                if f not in self.jfield_land:
+                    same_ = self.intent_more.get(INTENTS.index(self.route_goal[g]), np.array([g], np.int64))
+                    ok &= X.T[g] <= X.T[same_].min(0) + 1e-6
+                if not ok.any():
+                    continue
+                tt = np.where(ok, X.T[g] - X.T[g, np.maximum(hit, 0)], -1.0)
+                sel = np.nonzero(ok & (tt >= JUMP_FAR_LO) & (tt <= JUMP_FAR_HI))[0]
+                if not len(sel):
+                    sel = np.nonzero(ok & (tt >= 0.8 * float(tt.max())) & (tt > 0))[0]
+                if len(sel):
+                    self.jump_far[(k, e)] = sel.astype(np.int64)
 
     def _rj_step(self, rr, s, prev, reward, r_long):
         """(RJ_RUN_P) the players rr of rocket jump runs this frame: he arrives when he comes down within RJ_LAND of the
@@ -7256,6 +7925,7 @@ class DuelEnv:
             self.stats["hop_takeoffs"] += int(can_.sum())
             self.stats["hop_chains"] += int((can_ & (self.hop_k == 0)).sum())
             self.hop_k = self.hop_k + can_
+            self.aw_can = can_                               # (AWARE_LOG) this frame's take-offs
         blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         if BLIND_RULE:                                       # (rockets by where they land, below; plasma and grenades free)
             bill = blind & np.isin(self.weapon, (MG, SG, LG, RG, HMG))
@@ -7583,6 +8253,7 @@ class DuelEnv:
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
         if high_ is not None:                                # (HIGH_PAY) a hit from above is worth more to both, one from below less
             reward += self.dmg_reward * (high_[0] - self.dmg_taken_w * high_[1])
+        self._rail(s, st, do_fire, do_w, reward)            # (RAIL_FAR_PAY) the long rail's pay (switch on) and its counters (always)
         if STYLE_P > 0:                                      # playing styles: his weapon, at its distance (see STYLES)
             live = (pkind == NORMAL) & (self.script == 0) & (self.hp > 0) & (self.run_k < 0)
             sw = STYLE_W[self.style]
@@ -7894,6 +8565,12 @@ class DuelEnv:
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
                     self.jrun_over[jr[ov_]] = True
+                    for i_ in (jr[ov_ & self.jrun_open[jr]] if JUMP_WEIGHT else ()):   # (JUMP_WEIGHT) over: into his success
+                        self._jump_learn(int(self.jrun_k[i_]), True)
+                        self.jrun_open[i_] = False
+                    oc_ = ov_ & self._counted(jr)
+                    self.stats["jump_far"][1] += int((oc_ & ~self.jrun_far[jr]).sum())
+                    self.stats["jump_far"][3] += int((oc_ & self.jrun_far[jr]).sum())
                     past_ = ov_ | ((np.linalg.norm(p_ - B_, axis=1) < 110.0) & landed_)     # landed at the jump's landing, over it or
                     self.jrun_past[jr[past_]] = True                                        # round it: from here the plain ways with
                     self.jrun_f[jr[past_]] = 0                                              # the pros' jumps, to the item
@@ -8080,6 +8757,7 @@ class DuelEnv:
             self.drop_w[m] = -1
             self.run_k[self._seats(int(m))] = -1
             self.jrun[self._seats(int(m))] = False
+            self.jrun_open[self._seats(int(m))] = False      # (JUMP_WEIGHT: a try cut by the run's end counts nothing)
             self.rjrun[self._seats(int(m))] = False
             self.cf_side[self._seats(int(m))] = 0
             self.cf_t[m] = -1.0
@@ -8241,6 +8919,8 @@ class DuelEnv:
             self.note_combat(dl_, st["dmg_taken"] + (0.0 if fall is None else fall), fr_, died)
             self.note_frame()
         obs = self.observe()
+        if AWARE_LOG:                                        # (AWARE_LOG) measuring only
+            self._aware_log()
         if MOMENTS:                                          # the rounds begun from a saved moment are put in place; this frame's
             self._moment_step(obs, done, died, info)         # moments are saved
         if HEAD_EVENTS:

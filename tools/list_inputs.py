@@ -296,7 +296,7 @@ add("his legs", "the switch to his legs is on", "the movement network moves him 
     "0 or 1", "v15b")
 add("his legs", "his legs carried him on the last frame", "", "0 or 1", "v15b")
 add("intention", "his intention is the enemy", "the ninth intention (FIGHT_TARGET; HUNT, v0.3.1: B-256): his way leads to where he believes the enemy is", "0 or 1", "v15f")     # ---- the enemy as a target (2026-10-11)
-assert len(rows) == E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES, (len(rows), E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES)
+assert len(rows) == E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG, (len(rows), E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG)
 # ---- v0.2 (2026-10-11): stage A of the attention model, five groups (N_V02 in sim/duel_env.py; the tokens are cut by these group names)
 V02 = "v0.2"
 add("v02 game", "time left in the round", "the share of the round's length still to play (on a game server: of the game's time limit)", "0 to 1", V02)
@@ -352,7 +352,7 @@ for j in range(1, E.V02_SLOTS + 1):
     add("v02 places", "place {}: outcome over expected standing there".format(j), "as for his cell, for a pro seen standing within 128 units of it; zero where it is not known", "/ 0.3, between -1 and 1", V02)
     add("v02 places", "place {}: nearest to the believed enemy".format(j), "of all the map's places this one is nearest to " + BEL.split(":")[0], "0 or 1", V02)
     add("v02 places", "place {}: slot holds a place".format(j), "", "0 or 1", V02)
-assert len(rows) == E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES, (len(rows), E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES)
+assert len(rows) == E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG, (len(rows), E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG)
 # ---- stage B part 2 (TARGETS; N_B2 in sim/duel_env.py): the map's holding places, slot by slot (a token each: the text before the colon)
 B2 = "stage B2"
 HOLD = ("one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: "
@@ -367,7 +367,7 @@ for j in range(1, E.HOLD_SLOTS + 1):
         "standing in its cell, less what his stack and the weapons would give anywhere", "/ 0.3, between -1 and 1", B2)
     add("b2 holds", "hold {}: his target".format(j), "his intention is this place (TARGETS)", "0 or 1", B2)
     add("b2 holds", "hold {}: slot holds a place".format(j), "", "0 or 1", B2)
-assert len(rows) == E.OBS_DIM - E.N_B3 - E.N_ES, (len(rows), E.OBS_DIM - E.N_B3 - E.N_ES)
+assert len(rows) == E.OBS_DIM - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG, (len(rows), E.OBS_DIM - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG)
 # ---- stage B part 3 (WAYS; N_B3 in sim/duel_env.py): his way to his target, and what the other ways are from where he stands (one token)
 B3 = "stage B3"
 WAYN = ("the shortest", "the second", "the third")
@@ -380,7 +380,7 @@ for j in range(1, E.N_WAYS):
 for j in range(1, E.N_WAYS):
     add("b3 ways", "{} way: differs".format(WAYN[j]), "from where he stands more than a quarter of that way's seconds lie farther than 128 units "
         "from the shortest way", "0 or 1", B3)
-assert len(rows) == E.OBS_DIM - E.N_ES, (len(rows), E.OBS_DIM - E.N_ES)
+assert len(rows) == E.OBS_DIM - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG, (len(rows), E.OBS_DIM - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG)
 # ---- v0.3.1, B-257 (EN_STACK; N_ES in sim/duel_env.py): the enemy's stack as he believes it, from his senses only (one token)
 ES_ = "v0.3.1"
 ESW = "(EN_STACK; zeros with it off, and in movement rounds) "
@@ -392,6 +392,62 @@ add("v031 enemy stack", "believed stack: spread", ESW + "how unsure he is: the s
     "while the enemy is out of view, toward an unseen enemy's)", "/ 150", ES_)
 add("v031 enemy stack", "believed stack: since pinned", ESW + "seconds since a spawn he knows of or a pain sound of the three low bands", "seconds / 30, capped at 1", ES_)
 add("v031 enemy stack", "believed stack: weak", ESW + "the expected health and armor together are under 80 (ES_WEAK)", "0 or 1", ES_)
+assert len(rows) == E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG, (len(rows), E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG)
+# ---- v0.3.6 (RL_AIM, PREFIRE; N_RAIM, N_PREF in sim/duel_env.py): what a rocket is aimed at (docs/v0.4/ROCKETS_v0.3.6.md items 1 to 4)
+V36 = "v0.3.6"
+RA_ = "(RL_AIM; zeros with it off) with the rocket launcher in his hand: "
+RV_ = "(RL_AIM; zeros with it off) with the rocket launcher in his hand and the enemy in view (noticed, his reaction time late): "
+add("v036 rocket aim", "backstop: on", RA_ + "these inputs are live", "0 or 1", V36)
+add("v036 rocket aim", "backstop: distance", RA_ + "where a rocket fired now along his view would burst (a trace from his eyes, the shots' mask)", "units / 2000, capped at 2 (nothing within 4096)", V36)
+add("v036 rocket aim", "backstop: height", RA_ + "that burst's height against his eyes", "units / 300, -1 to 1", V36)
+add("v036 rocket aim", "backstop: against the enemy", RV_ + "the burst's distance less the enemy's (below 0: it bursts before him)", "units / 500, -1 to 1", V36)
+add("v036 rocket aim", "backstop: splash on him", RV_ + "1 - the distance from that burst to him / the rocket's splash radius (120)", "0 to 1", V36)
+add("v036 rocket aim", "floor point: on", RV_ + "the floor aim point is live", "0 or 1", V36)
+add("v036 rocket aim", "floor point: yaw coarse", RV_ + "from his crosshair to the floor under where the enemy will be when a rocket fired now gets there (the lead's flight time, his fall in the air)", "degrees / 30, -1 to 1", V36)
+add("v036 rocket aim", "floor point: yaw fine", RV_ + "the same", "degrees / 2, -1 to 1", V36)
+add("v036 rocket aim", "floor point: pitch coarse", RV_ + "the same, up and down", "degrees / 15, -1 to 1", V36)
+add("v036 rocket aim", "floor point: pitch fine", RV_ + "the same", "degrees / 2, -1 to 1", V36)
+add("v036 rocket aim", "floor point: floor found", RV_ + "a floor within 1024 units under that place", "0 or 1", V36)
+add("v036 rocket aim", "floor point: his height over it", RV_ + "the enemy's feet above that floor by then (jumping, knocked up)", "units / 200, 0 to 2", V36)
+add("v036 rocket aim", "floor point: flight", RV_ + "the rocket's flight time to it", "seconds / 1.5, 0 to 2", V36)
+add("v036 rocket aim", "floor point: clear", RV_ + "a clear line from his eyes to it", "0 or 1", V36)
+add("v036 rocket aim", "wall by him: found", RV_ + "a wall within 192 units of the predicted place (8 level traces at the height of his middle)", "0 or 1", V36)
+add("v036 rocket aim", "wall by him: direction sin", RV_ + "the way from that place to the nearest wall, in his own frame", "sin", V36)
+add("v036 rocket aim", "wall by him: direction cos", RV_ + "the same", "cos", V36)
+add("v036 rocket aim", "wall by him: distance", RV_ + "from that place to the nearest wall (1: none)", "units / 192", V36)
+add("v036 rocket aim", "wall by him: yaw", RV_ + "from his crosshair to the point the trace hit", "degrees / 30, -1 to 1", V36)
+add("v036 rocket aim", "wall by him: pitch", RV_ + "the same, up and down", "degrees / 15, -1 to 1", V36)
+assert len(rows) == E.OBS_DIM - E.N_PREF - E.N_EMG, (len(rows), E.OBS_DIM - E.N_PREF - E.N_EMG)
+PF_ = ("(PREFIRE; zeros with it off, with the enemy in view, with nothing believed of him, without rockets, grenades or plasma) "
+       "of the pros' blind-shot places of one weapon (sim/pro_places/<map>_rl/_gl/_pg.json: the weapon in his hand, else the first "
+       "of rockets, grenades, plasma he has) the nearest to the enemy's believed way to him (least off the way first; none within "
+       "160 units of him): ")
+for j in range(E.PF_SLOTS):
+    nm_ = "pre-fire place {}".format(j + 1)
+    add("v036 prefire", nm_ + ": yaw", PF_ + "from his crosshair to it", "degrees / 30, -1 to 1", V36)
+    add("v036 prefire", nm_ + ": pitch", PF_ + "the same, up and down", "degrees / 15, -1 to 1", V36)
+    add("v036 prefire", nm_ + ": distance", PF_ + "from his eyes", "units / 2000, to 1.5", V36)
+    add("v036 prefire", nm_ + ": enemy could be there", PF_ + "the seconds of way from the believed place to it less the time since that belief (below 0: he could have passed it)", "seconds / 5, -1 to 1", V36)
+    add("v036 prefire", nm_ + ": flight", PF_ + "the list's weapon's flight time there (a rocket 1000 u/s, a plasma cell 2000 u/s, a grenade along its low arc; 0 where none reaches)", "seconds / 1.5, 0 to 2", V36)
+    add("v036 prefire", nm_ + ": clear", PF_ + "a clear line from his eyes to it", "0 or 1", V36)
+    add("v036 prefire", nm_ + ": off the way", PF_ + "how many seconds longer the way from the believed place to him is through it", "seconds / 5, 0 to 1", V36)
+    add("v036 prefire", nm_ + ": pros' share", PF_ + "the share of that weapon's pros' blind shots that land there", "per cent / 15", V36)
+    add("v036 prefire", nm_ + ": grenade pitch", PF_ + "the grenade list only: from his crosshair to the low arc that lands a grenade there (0: none reaches)", "degrees / 15, -1 to 1", V36)
+    add("v036 prefire", nm_ + ": there", PF_ + "the slot holds a place", "0 or 1", V36)
+    for k_, w_ in zip(E.PF_KINDS, ("rockets", "grenades", "plasma")):
+        add("v036 prefire", nm_ + ": list {}".format(k_), PF_ + "the list is the {} places".format(w_), "0 or 1", V36)
+assert len(rows) == E.OBS_DIM - E.N_EMG, (len(rows), E.OBS_DIM - E.N_EMG)
+EM_ = ("(EMERGE_IN; zeros with it off, with the enemy in view, with no belief of him in the last 5 s) where the enemy he believes "
+       "in would come into his view: the walking map's way from the believed place to him, walked back from him to the last point "
+       "his eyes see (worked out every 4 frames, held between): ")
+add("v036 emergence", "emergence: live", EM_ + "these inputs are live", "0 or 1", V36)
+add("v036 emergence", "emergence: yaw sin", EM_ + "the yaw from his facing to the point", "sin", V36)
+add("v036 emergence", "emergence: yaw cos", EM_ + "the same", "cos", V36)
+add("v036 emergence", "emergence: yaw", EM_ + "the same", "degrees / 30, -1 to 1", V36)
+add("v036 emergence", "emergence: pitch", EM_ + "from his view up and down to the point", "degrees / 15, -1 to 1", V36)
+add("v036 emergence", "emergence: distance", EM_ + "from his eyes", "units / 1500, to 2", V36)
+add("v036 emergence", "emergence: at the belief", EM_ + "the point is the believed place itself (he sees the whole way)", "0 or 1", V36)
+add("v036 emergence", "emergence: a way", EM_ + "a way from the believed place to him exists (0: the point inputs are zeros)", "0 or 1", V36)
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

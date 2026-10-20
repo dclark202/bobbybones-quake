@@ -611,3 +611,28 @@ choice identical; on the 31,880 where it was on, every choice but the switch ide
 In the simulator the converted network's play parts from the original's at the first frame the legs drove (frame 1:
 they carried him on 90.8% of the seat-frames of that sample; 65.6% of his game time in v0.3.4's run at update 5). The
 small run: his own legs' share 0 on every update, the branch moves (largest step 0.0125 in 74 updates), the control loads.
+
+## 10. v0.3.6 additions of 2026-10-18 afternoon (branch v036): the long rail and the hot reload
+
+The owner's word for v0.3.6's start (2026-10-18; on branch v0.4 this belongs in `ROCKETS_v0.3.6.md`'s list): v0.3.6
+includes **`RAIL_FAR_PAY=0.12`** (the 600 to 900 unit ramp) and **the hot reload** (`live.json`, B-265); **no rocket-jump
+runs at the start**.
+
+- **`RAIL_FAR_PAY`** (a PLAY_VAR, 0 = off; `RAIL_FAR_LO` 600, `RAIL_FAR_HI` 900): every rail hit of a player on another pays
+  the shooter `RAIL_FAR_PAY x clip((d - 600) / 300, 0, 1)` and takes the same from the one hit, d the 3D distance between
+  the two origins at the hit, once a hit. Its own term (`DuelEnv._rail`): not in `dealt`, the damage taken or r_long. Size:
+  at `--dmg-reward 0.005` a rail hit's damage (80) pays the shooter 0.40 and costs the one hit 0.40 x `--dmg-taken-w`; 0.12
+  is 30% more at 900 units and beyond, 15% at 750. Counters always on: `rec["rail"]` in `metrics.jsonl` (shots, hits and hit
+  rates by range to the enemy, the share of his time with the rail in hand by range and in view, pay got and lost a minute).
+- **The hot reload** (`sim/train_duel_rnn.py`: `live_read`, the worker's `"live"` command; `sim/duel_env.py`: `LIVE_VARS`,
+  `live_values`, `live_set`, `live_now`): how to use it in [COMMANDS.md](../guides/COMMANDS.md#a-running-trainer-pay-weights-changed-without-a-restart-livejson-b-265-from-v036).
+
+**Proofs** (CPU, scratch): RAIL_FAR_PAY unset / 0 / 0.12 on Blood Run (4 matches, 2,400 frames, rails given): inputs
+identical, pay identical off, with 0.12 different on 10 player-frames (5 hits at 600 to 900), each pair's sum 1.2e-7 at
+most; hand-built hits at 500 / 600 / 750 / 900 / 1000 / 1500 units: 0 / 0 / +-0.06 / +-0.12 / +-0.12 / +-0.12.
+`live_set` mid-game (frame 600 of 1,200): the same values change nothing frame for frame; new values (ITEM_FLAT 0.35 ->
+0.25, RAIL_FAR_PAY 0 -> 0.12) pay from that frame exactly as a simulator started with them, and the inputs are untouched.
+A tiny trainer (one simulator, 4 players, 32 frames, 11 updates): the same values recorded as applied with nothing changed,
+the changed file applied from the next update in the simulator and the trainer (`rec["live"]`, `live_applied.json`, the
+checkpoint's `live` and `env_vars` RAIL_FAR_PAY=0.12), a file with an unknown name refused and the values kept.
+`tools/v036_check.py ident` PASS, `ffa` identical at two players.
