@@ -3480,6 +3480,13 @@ def main():
             pm_ = max(1e-9, NP * T * DT_MIN)
             rec["hop"] = dict(pay_per_player_min=round(float(agg["hop_pay"] / pm_), 4), paying_per_min=round(float(agg.get("hop_n", 0) / pm_), 2),
                               takeoffs_per_min=round(float(agg.get("hop_takeoffs", 0) / pm_), 2), chains_per_min=round(float(agg.get("hop_chains", 0) / pm_), 2))
+        if "rg_far" in agg:                                              # (RG_FAR_PRICE) the far rail's fixed price
+            rf_ = np.atleast_1d(agg["rg_far"]).astype(np.float64)
+            pm_ = max(1e-9, NP * T * DT_MIN)
+            rec["rg_far"] = dict(price=float(getattr(E_, "RG_FAR_PRICE", 0.0)), dist=float(getattr(E_, "RG_FAR_DIST", 0.0)),
+                                 rail_shots_per_player_min=round(float(rf_[0] / pm_), 3), far_share=round(float(rf_[1] / max(1.0, rf_[0])), 3),
+                                 far_price_mean=round(float(rf_[2] / max(1.0, rf_[1])), 4),          # what a far shot cost
+                                 base_price_mean=round(float(rf_[3] / max(1.0, rf_[1])), 4))         # ... and what SHOT_COST would have asked
         if "big_seq" in agg:                                             # (BIG_PICK_SEQ) the big three by order a life: pickups and pay a player-minute
             bs_ = np.atleast_1d(agg["big_seq"]).astype(np.float64)
             pm_ = max(1e-9, NP * T * DT_MIN)

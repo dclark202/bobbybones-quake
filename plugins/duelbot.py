@@ -1383,6 +1383,8 @@ class duelbot(minqlx.Plugin):
         nine = hasattr(E, "NW")
         sm = np.where(np.abs(cmd) <= 1.0, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH) if hasattr(E, "MOUSE_SMOOTH_FINE") \
             else E.MOUSE_SMOOTH
+        if getattr(E, "ZOOM_PERCEPT", False):               # (ZOOM_PERCEPT) small in hand terms: 1 degree unzoomed, as in training
+            sm = np.where(np.abs(cmd) <= zs + 1e-6, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH)
         env.mv[i] = sm * env.mv[i] + (1.0 - sm) * cmd
         turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
         if rules2 and env.human_aim:                         # flick cap and hand noise, as in training

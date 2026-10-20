@@ -556,6 +556,13 @@ ITEM_BELIEF = float(os.environ.get("ITEM_BELIEF") or 0.0) > 0
 # and the three together held to 0.25 .. 3. With 0.10 and a factor of 1 a shot pays from one hit in ten on. In real games
 # he fired 53% of the time an enemy was in view (people 24%) and 0.2 s after one appeared (0.5 s). 0 = off.
 SHOT_COST = float(os.environ.get("SHOT_COST") or 0.0)
+# RG_FAR_PRICE (v0.3.8, the owner 2026-10-19: "0.010"; live; with SHOT_COST): a railgun shot fired while the nearest living
+#              enemy is more than RG_FAR_DIST units away (3D, origin to origin, as RAIL_FAR_PAY measures it) costs this
+#              fixed price in place of SHOT_COST's (no scarcity factor, no SHOT_W, no damage reward in it: today's base is
+#              0.10 x 0.0055 x 80 = 0.044 times the factor 0.25 .. 3). Nearer, or nobody alive to shoot at: SHOT_COST's price.
+#              0 = off. Counters: stats["rg_far"] (far rail shots, their price, what SHOT_COST would have priced them).
+RG_FAR_PRICE = float(os.environ.get("RG_FAR_PRICE") or 0.0)
+RG_FAR_DIST = float(os.environ.get("RG_FAR_DIST") or 700.0)
 # The switches that change what a trained network is given or how its outputs are carried out. The trainer writes the
 # ones that were set into the checkpoint, sim/export_duel.py into policy.npz, and the plugins set them before they load
 # this module (until 2026-10-08 none reached a server: INTENT_HOLD was 8 in training and 3 there).
@@ -1430,6 +1437,16 @@ RAIL_FAR_HI = float(os.environ.get("RAIL_FAR_HI") or 900.0)
 RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
              "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
 PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
+# ZOOM_PERCEPT (v0.3.8, the zoom check of 2026-10-19; a PLAY_VAR, 0 = off): zoomed as a person is. His hand noise already
+#              shrinks with the zoom (MOTOR_NOISE on the zoomed movement, MOTOR_BASE and TURN_CAP times ZOOM); two things
+#              did not: (1) the sight error PERCEPT_SIGMA (degrees) is ZOOM as large while zoomed (the target is drawn
+#              1/ZOOM = 2.5 times larger: the gap between crosshair and target is judged as well in screen terms; the
+#              flinch is not changed); (2) the faster follow of small corrections (MOUSE_SMOOTH_FINE) is for hand
+#              movements up to 1 degree unzoomed (in view degrees: up to ZOOM degrees while zoomed), not view movements
+#              up to 1 degree. The game: the owner's cg_zoomfov 42 against cg_fov 103 (0.41) with cg_zoomScaling 1 (the
+#              mouse turns the view by the same ratio) is ZOOM = 0.4.
+ZOOM_PERCEPT = float(os.environ.get("ZOOM_PERCEPT") or 0.0) > 0
+PLAY_VARS = PLAY_VARS + ("ZOOM_PERCEPT",)
 # B-265 (v0.3.6, the owner's go of 2026-10-18: "If a hot reload would allow for stuff like changing pay weights mid session
 # then yes"): the pay weights a running trainer may change between two rollouts (its run folder's live.json; the trainer's
 # own two, DMG_TAKEN_W and DMG_REWARD, are not module globals and are handled there). Each is a module global read only
@@ -1439,7 +1456,7 @@ PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
 LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR",
              "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG",
              "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY",    # (v0.3.7)
-             "BIG_PICK_SEQ")                                                                                        # (v0.3.8)
+             "BIG_PICK_SEQ", "RG_FAR_PRICE", "RG_FAR_DIST")                                                         # (v0.3.8)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1472,6 +1489,10 @@ def live_values(get):
     v["HOP_CHAIN_TOL"] = float(get("HOP_CHAIN_TOL") or 15.0)
     v["HOP_CHAIN_STEP"] = float(get("HOP_CHAIN_STEP") or 0.5)
     v["HOP_CHAIN_CAP"] = float(get("HOP_CHAIN_CAP") or 3.0)
+    v["RG_FAR_PRICE"] = float(get("RG_FAR_PRICE") or 0.0)
+    v["RG_FAR_DIST"] = float(get("RG_FAR_DIST") or 700.0)
+    if v["RG_FAR_PRICE"] < 0 or v["RG_FAR_DIST"] < 0:
+        raise ValueError("RG_FAR_PRICE and RG_FAR_DIST must be 0 or more")
     v["BIG_PICK_SEQ"] = tuple(float(x_) for x_ in (get("BIG_PICK_SEQ") or "").split(",") if x_.strip())
     if len(v["BIG_PICK_SEQ"]) > 3 or any(x_ < 0 for x_ in v["BIG_PICK_SEQ"]):
         raise ValueError("BIG_PICK_SEQ: at most three numbers of 0 or more")
@@ -5423,6 +5444,8 @@ class DuelEnv:
             rho = math.exp(-DT / PERCEPT_TAU)
             self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
             sig_ = (self.percept_sigma + self.flinch)[:, None]
+            if ZOOM_PERCEPT:                                 # (ZOOM_PERCEPT) zoomed: the target is judged on a larger picture
+                sig_ = (self.percept_sigma * np.where(np.asarray(self.zoom, bool)[:n], ZOOM, 1.0) + self.flinch)[:, None]
             if PERCEPT_SPEED > 0:                            # a target that crosses the view fast is judged worse
                 tb_ = known - eye
                 br_ = np.stack([np.degrees(np.arctan2(tb_[:, 1], tb_[:, 0])),
@@ -8386,6 +8409,23 @@ class DuelEnv:
             q_ = q_ | ((self.intent >= HOLD_INTENT) & (self.intent < HOLD_INTENT + HOLD_SLOTS))
         return q_
 
+    def _rg_far(self, s, sc_, w_, cost_):
+        """(RG_FAR_PRICE) the shot prices cost_ of the shooters sc_ (weapons w_) with the railgun's far shots at the fixed
+        price: the nearest living enemy past RG_FAR_DIST (3D, origin to origin)"""
+        st = self.stats.get("rg_far")
+        if st is None:                                       # (also when turned on by live.json in a running simulator)
+            st = self.stats["rg_far"] = np.zeros(4)
+        oth_ = self._others_arr()[sc_]
+        d_ = np.linalg.norm(s[oth_, :3] - s[sc_, None, :3], axis=2)
+        d_ = np.where(self.hp[oth_] > 0, d_, np.inf).min(1)
+        far_ = (w_ == RG) & np.isfinite(d_) & (d_ > RG_FAR_DIST)
+        st[0] += int(((w_ == RG) & np.isfinite(d_)).sum())  # rail shots with an enemy alive, far ones, their price, the
+        st[1] += int(far_.sum())                             # price SHOT_COST would have asked for them
+        st[3] += float(cost_[far_].sum())
+        cost_ = np.where(far_, np.float32(RG_FAR_PRICE), cost_).astype(cost_.dtype)
+        st[2] += float(cost_[far_].sum())
+        return cost_
+
     def _big_seq(self, i, b_, had):
         """(BIG_PICK_SEQ) player i picks up the big weapon b_ (0 rocket launcher, 1 lightning gun, 2 railgun; had: he held
         it before the pickup): the pay by order, and the weapon marked as got this life"""
@@ -8698,6 +8738,8 @@ class DuelEnv:
         self.rev_wait = np.where(ch_, self.t_rev, np.maximum(0.0, self.rev_wait - 1.0)).astype(np.float32)
         self.turn_dir = np.where(sg_ != 0, sg_, self.turn_dir).astype(np.float32)
         sm = np.where(np.abs(cmd) <= 1.0, MOUSE_SMOOTH_FINE, MOUSE_SMOOTH)   # small corrections follow faster
+        if ZOOM_PERCEPT:                                     # (ZOOM_PERCEPT) small in hand terms: 1 degree unzoomed
+            sm = np.where(np.abs(cmd) <= np.where(self.zoom, ZOOM, 1.0)[:, None] + 1e-6, MOUSE_SMOOTH_FINE, MOUSE_SMOOTH)
         self.mv = sm * self.mv + (1.0 - sm) * cmd
         if self.human_aim:
             zs = np.where(self.zoom, ZOOM, 1.0).astype(np.float32)
@@ -8919,6 +8961,8 @@ class DuelEnv:
                     fac_ = fac_ * np.clip(self.shot_way[w_, self.route.locate(s[sc_, :3])] / SHOT_NEAR_S, 0.5, 1.5)
                 fac_ = np.clip(fac_, 0.25, 3.0)
                 cost_ = SHOT_COST * self.dmg_reward * SHOT_DMG[w_] * fac_ * SHOT_W[w_]
+                if RG_FAR_PRICE > 0 and (w_ == RG).any():          # (RG_FAR_PRICE) the far rail at a fixed price
+                    cost_ = self._rg_far(s, sc_, w_, cost_)
                 reward[sc_] -= cost_
                 self.stats["shot_cost"] += float(cost_.sum())
                 self.stats["shot_n"] += len(sc_)
