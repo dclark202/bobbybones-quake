@@ -924,6 +924,15 @@ JUMP_ALL = float(os.environ.get("JUMP_ALL") or 0.0) > 0
 JUMP_WEIGHT = float(os.environ.get("JUMP_WEIGHT") or 0.0) > 0
 JUMP_W_FLOOR = float(os.environ.get("JUMP_W_FLOOR") or 0.1)
 JUMP_W_HALF = float(os.environ.get("JUMP_W_HALF") or 200.0)
+#   JUMP_W_DROP   (the owner, 2026-10-20: "any jump he's already making >80% of the time can go, and he should focus on the ones
+#                 that are really low") with JUMP_WEIGHT, a jump whose success (jw_s) is at this or above gets no tries (its
+#                 weight 0; if every jump of the map is there, all as often as any other). 0: off. A training switch.
+#   JUMP_OVER_PAY (the owner, 2026-10-20: "he needs better reinforcement for making that leap") paid once a try when he gets over
+#                 the jump in a jump run (over as the counters have it), never given back by a try that then ends without the
+#                 item. Jump runs only: he is alone there, so the equilibrium is simply to clear the gap; nothing in games
+#                 changes. 0: off. A training switch.
+JUMP_W_DROP = float(os.environ.get("JUMP_W_DROP") or 0.0)
+JUMP_OVER_PAY = float(os.environ.get("JUMP_OVER_PAY") or 0.0)
 JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
 JUMP_FAR_LO = float(os.environ.get("JUMP_FAR_LO") or 3.0)
 JUMP_FAR_HI = float(os.environ.get("JUMP_FAR_HI") or 5.0)
@@ -8394,6 +8403,10 @@ class DuelEnv:
         self.jrun_open[i] = JUMP_WEIGHT and bool(self._counted(i))
         if JUMP_WEIGHT:                                      # (JUMP_WEIGHT) the jumps he fails more often
             w_ = np.maximum(JUMP_W_FLOOR, 1.0 - self.jw_s[np.minimum(np.array(ks, np.int64), 63)])
+            if JUMP_W_DROP > 0:                              # (JUMP_W_DROP) the jumps he makes at this rate or more: no tries
+                w_ = np.where(self.jw_s[np.minimum(np.array(ks, np.int64), 63)] >= JUMP_W_DROP, 0.0, w_)
+                if w_.sum() <= 0:
+                    w_ = np.ones(len(ks))
             k = int(ks[int(self.rng.choice(len(ks), p=w_ / w_.sum()))])
         else:
             k = int(ks[int(self.rng.integers(len(ks)))])
@@ -9887,6 +9900,9 @@ class DuelEnv:
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
                     self.jrun_over[jr[ov_]] = True
+                    if JUMP_OVER_PAY > 0:                    # (JUMP_OVER_PAY) over the gap: paid once a try, kept
+                        reward[jr[ov_]] += JUMP_OVER_PAY
+                        r_long[jr[ov_]] += JUMP_OVER_PAY
                     for i_ in (jr[ov_ & self.jrun_open[jr]] if JUMP_WEIGHT else ()):   # (JUMP_WEIGHT) over: into his success
                         self._jump_learn(int(self.jrun_k[i_]), True)
                         self.jrun_open[i_] = False
