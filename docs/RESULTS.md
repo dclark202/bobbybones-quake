@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-21](results/2026-10-21.md)
+
+- 13:00 — v0.3.8 resumed from save 90 without the drift inputs; jumps opened in games by measured success, jump practice varied and fixed; hearing loosened; shares 70/20/10
+
 ## [2026-10-20](results/2026-10-20.md)
 
 - 17:10 — v0.3.7 ends at 71.7% against v0.3.6; the day's audits find the rail held back by a one-frame shot delay, his senses leaking, his aim ~50 ms quicker than the pros; v0.3.8 starts with all of it fixed
