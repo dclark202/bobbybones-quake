@@ -943,6 +943,15 @@ PRO_JSTART_P = float(os.environ.get("PRO_JSTART_P") or 0.0)
 JUMP_FOCUS = {p_.split(":")[0].strip(): {int(x_) for x_ in p_.split(":")[1].split(",") if x_.strip()}
               for p_ in (os.environ.get("JUMP_FOCUS") or "").split(";") if ":" in p_}
 JUMP_FOCUS_W = float(os.environ.get("JUMP_FOCUS_W") or 1.0)
+#   STUCK_STARTS=1 (the owner, 2026-10-21: the stuck spots as practice in "advanced movement") the spots where he gets stuck in
+#                 real games (sim/stuck_starts.json: map, start, his heading, the item he was going for) are tries of the jump
+#                 runs beside the jumps: he begins there standing (a little apart, his heading +-30 deg), and the try is over
+#                 when he reaches the first spot of his way STUCK_ESC units away (or 48 up or down), then he goes on to the item
+#                 as after a jump. They are drawn as the jumps are (JUMP_WEIGHT: the ones he fails more), counted at the end of
+#                 the map's jump list (v15.jumps). A training switch.
+STUCK_STARTS = float(os.environ.get("STUCK_STARTS") or 0.0) > 0
+STUCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stuck_starts.json")
+STUCK_ESC = float(os.environ.get("STUCK_ESC") or 200.0)
 JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
 JUMP_FAR_LO = float(os.environ.get("JUMP_FAR_LO") or 3.0)
 JUMP_FAR_HI = float(os.environ.get("JUMP_FAR_HI") or 5.0)
@@ -3039,6 +3048,7 @@ class DuelEnv:
                 self.jump_lab_off = np.zeros(len(self.jumps), bool)
                 mp_ = os.path.splitext(os.path.basename(bsp))[0]
                 self.jstart = {}                             # (PRO_JSTART_P) jump index -> the pros' run-up states
+                self.stuck_names = []                        # (STUCK_STARTS) [(index into the jump lists, its name)]
                 ps_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_jump_starts", mp_ + ".npz")
                 if PRO_JSTART_P > 0 and os.path.exists(ps_):
                     S_ = np.load(ps_)
@@ -3098,6 +3108,39 @@ class DuelEnv:
                     self.jfields.append(X_)
                 if JUMP_FAR_P > 0:
                     self._jump_far_spots()
+                self.n_real_jumps = len(self.jumps)
+                if STUCK_STARTS:                             # (STUCK_STARTS) the spots he gets stuck at, as tries after the jumps
+                    for sp_ in [x_ for x_ in json.load(open(STUCK_FILE)) if x_["map"] == mp_]:
+                        if sp_["goal"] not in self.route_goal:
+                            continue
+                        g_ = int(np.argmin([float(J_.T[q_, int(R_.locate(np.array([sp_["start"]], np.float32))[0])]) if lab_ == sp_["goal"]
+                                            else 1e9 for q_, lab_ in enumerate(self.route_goal)]))
+                        a_ = np.array(sp_["start"], np.float32)
+                        n0_ = int(R_.locate(a_[None])[0])
+                        if float(J_.T[g_, n0_]) >= 1e8:
+                            continue
+                        nd_, b_ = n0_, None                  # the escape: the first spot on his way at STUCK_ESC units from the start
+                        for _ in range(400):
+                            nx_ = int(J_.next[g_, nd_])
+                            if nx_ < 0:
+                                break
+                            nd_ = nx_
+                            if math.hypot(*(R_.nodes[nd_][:2] - a_[:2])) >= STUCK_ESC or abs(float(R_.nodes[nd_][2] - a_[2])) >= 48.0:
+                                b_ = np.array(R_.nodes[nd_], np.float32)
+                                break
+                        if b_ is None:
+                            b_ = np.array(R_.goals[g_], np.float32)
+                        k_ = len(self.jump_a)
+                        self.jump_a = np.concatenate([self.jump_a, a_[None]])
+                        self.jump_b = np.concatenate([self.jump_b, b_[None]])
+                        self.jump_lab_off = np.append(self.jump_lab_off, True)
+                        self.jfocus = np.append(self.jfocus, 1.0)
+                        self.jump_tries[k_] = [(g_, np.array([n0_]), 0)]
+                        jt_, rs_ = float(sp_.get("jitter", 24.0)), np.random.default_rng(7 + k_)    # (its own draws: the run's stream untouched)
+                        P_ = a_[None] + np.c_[rs_.uniform(-jt_, jt_, (64, 2)), np.zeros(64)].astype(np.float32)
+                        self.jstart[k_] = (P_, np.zeros((64, 3), np.float32),
+                                           (float(sp_["yaw"]) + rs_.uniform(-30, 30, 64)).astype(np.float32))
+                        self.stuck_names.append((k_, sp_["name"]))
         self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
         self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
         self.rj_run_p = RJ_RUN_P
@@ -8448,7 +8491,7 @@ class DuelEnv:
             d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
             d_ = d_ / max(1e-6, float(np.hypot(*d_)))
             vel = (float(d_[0] * JUMP_FAR_SPEED), float(d_[1] * JUMP_FAR_SPEED), 0.0)
-        pro_ = PRO_JSTART_P > 0 and k in self.jstart and self.rng.random() < PRO_JSTART_P
+        pro_ = k in self.jstart and (k >= getattr(self, "n_real_jumps", 10 ** 9) or (PRO_JSTART_P > 0 and self.rng.random() < PRO_JSTART_P))
         if pro_:                                             # (PRO_JSTART_P) a pro's own state before the take-off
             far = False
             P_, V_, Y_ = self.jstart[k]
