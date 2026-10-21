@@ -931,8 +931,18 @@ JUMP_W_HALF = float(os.environ.get("JUMP_W_HALF") or 200.0)
 #                 the jump in a jump run (over as the counters have it), never given back by a try that then ends without the
 #                 item. Jump runs only: he is alone there, so the equilibrium is simply to clear the gap; nothing in games
 #                 changes. 0: off. A training switch.
+#   PRO_JSTART_P  (the owner, 2026-10-20: "give him more a fighting chance with it") the share of a jump run's tries at a jump that
+#                 has the pros' run-ups (sim/pro_jump_starts/<map>.npz: pos, vel, yaw, lead in frames before the pros' take-off,
+#                 from plain jumps that landed) that begin in a pro's own state 0.2 to 1 s before the take-off: his speed and
+#                 line, so that he meets the edge as they do and learns to press jump there. 0: off. A training switch.
+#   JUMP_FOCUS    "aerowalk:1": jumps (by id) whose jump-run weight is multiplied by JUMP_FOCUS_W (the owner: "he should get it
+#                 tonight"). A training switch.
 JUMP_W_DROP = float(os.environ.get("JUMP_W_DROP") or 0.0)
 JUMP_OVER_PAY = float(os.environ.get("JUMP_OVER_PAY") or 0.0)
+PRO_JSTART_P = float(os.environ.get("PRO_JSTART_P") or 0.0)
+JUMP_FOCUS = {p_.split(":")[0].strip(): {int(x_) for x_ in p_.split(":")[1].split(",") if x_.strip()}
+              for p_ in (os.environ.get("JUMP_FOCUS") or "").split(";") if ":" in p_}
+JUMP_FOCUS_W = float(os.environ.get("JUMP_FOCUS_W") or 1.0)
 JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
 JUMP_FAR_LO = float(os.environ.get("JUMP_FAR_LO") or 3.0)
 JUMP_FAR_HI = float(os.environ.get("JUMP_FAR_HI") or 5.0)
@@ -3045,6 +3055,16 @@ class DuelEnv:
                             self.jump_tries.setdefault(k_, []).append((g_, st_, 0))
                 self.jfields = [J_]
                 self.jump_lab_off = np.zeros(len(self.jumps), bool)
+                mp_ = os.path.splitext(os.path.basename(bsp))[0]
+                self.jstart = {}                             # (PRO_JSTART_P) jump index -> the pros' run-up states
+                ps_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_jump_starts", mp_ + ".npz")
+                if PRO_JSTART_P > 0 and os.path.exists(ps_):
+                    S_ = np.load(ps_)
+                    for k_, j_ in enumerate(self.jumps):
+                        m_ = S_["jump_id"] == j_["id"]
+                        if m_.any():
+                            self.jstart[k_] = (S_["pos"][m_], S_["vel"][m_], S_["yaw"][m_])
+                self.jfocus = np.array([JUMP_FOCUS_W if j_["id"] in JUMP_FOCUS.get(mp_, ()) else 1.0 for j_ in self.jumps])
                 jl_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jump_labels.json")
                 if os.path.exists(jl_):
                     off_ = set(json.load(open(jl_)).get("off", {}).get(os.path.splitext(os.path.basename(bsp))[0], []))
@@ -8491,6 +8511,8 @@ class DuelEnv:
                 w_ = np.where(self.jw_s[np.minimum(np.array(ks, np.int64), 63)] >= JUMP_W_DROP, 0.0, w_)
                 if w_.sum() <= 0:
                     w_ = np.ones(len(ks))
+            if JUMP_FOCUS:                                   # (JUMP_FOCUS) the jumps the owner named: more tries
+                w_ = w_ * self.jfocus[np.array(ks, np.int64)]
             k = int(ks[int(self.rng.choice(len(ks), p=w_ / w_.sum()))])
         else:
             k = int(ks[int(self.rng.integers(len(ks)))])
@@ -8510,11 +8532,21 @@ class DuelEnv:
             d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
             d_ = d_ / max(1e-6, float(np.hypot(*d_)))
             vel = (float(d_[0] * JUMP_FAR_SPEED), float(d_[1] * JUMP_FAR_SPEED), 0.0)
-        self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
+        pro_ = PRO_JSTART_P > 0 and k in self.jstart and self.rng.random() < PRO_JSTART_P
+        if pro_:                                             # (PRO_JSTART_P) a pro's own state before the take-off
+            far = False
+            P_, V_, Y_ = self.jstart[k]
+            s_ = int(self.rng.integers(len(P_)))
+            face, vel = float(Y_[s_]), tuple(float(x_) for x_ in V_[s_])
+            self.w.reset(i, tuple(float(x_) for x_ in P_[s_]), vel, face)
+        else:
+            self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
         self._fresh(i, face)
         self.jrun_far[i] = far
         if far:
             self.sp_hist[i] = JUMP_FAR_SPEED                 # (his speed of the last frames: what he moves at, not a gain)
+        elif pro_:
+            self.sp_hist[i] = float(math.hypot(vel[0], vel[1]))
         m = self._match_of(i)
         self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
         if g < self.bel_t.shape[1]:
