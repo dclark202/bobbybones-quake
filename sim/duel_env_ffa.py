@@ -950,6 +950,21 @@ JUMP_FOCUS_W = float(os.environ.get("JUMP_FOCUS_W") or 1.0)
 #                 as after a jump. They are drawn as the jumps are (JUMP_WEIGHT: the ones he fails more), counted at the end of
 #                 the map's jump list (v15.jumps). A training switch.
 STUCK_STARTS = float(os.environ.get("STUCK_STARTS") or 0.0) > 0
+#   JUMP_PAST_PICK=1 (2026-10-21: Blood Run's jump id 2 starts 33 u from the red armor, its try's target: he took it within a few
+#                 frames, the try ended "arrived" before the jump, a new one began, ~16,000 tries a 40 s, each paying the pickup
+#                 and the arrival; under JUMP_WEIGHT it took 73% of all jump-run draws) a jump run's own target item cannot be
+#                 taken before he is past the jump (jrun_past: over it, or landed at its landing). A training switch.
+JUMP_PAST_PICK = float(os.environ.get("JUMP_PAST_PICK") or 0.0) > 0
+#   JUMP_KEEP_CLOSED=1 (the owner, 2026-10-21: "if a jump is failing in games remove that route from the games and put it back in
+#                 the trainer") JUMP_W_DROP drops only the jumps open in games (JUMP_OPEN) and the stuck spots: a jump closed in
+#                 games is practised whatever his success in the runs. A training switch.
+#   JUMP_VARY=1   (the owner, 2026-10-21: "make sure there's enough variance in position, look dir, speed, etc. for the jump
+#                 practice that he's learning generally how to make the jump") far starts at 220-420 u/s (not 300) and +-12 deg
+#                 off the way; near starts half the time already moving (0-350 u/s, +-15 deg); a pro's run-up start +-8 u in
+#                 place, +-8 deg and 0.9-1.1x in speed, +-20 deg in view. (Start spots were already many nodes along the way,
+#                 the view +-40 deg.) A training switch.
+JUMP_KEEP_CLOSED = float(os.environ.get("JUMP_KEEP_CLOSED") or 0.0) > 0
+JUMP_VARY = float(os.environ.get("JUMP_VARY") or 0.0) > 0
 STUCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stuck_starts.json")
 STUCK_ESC = float(os.environ.get("STUCK_ESC") or 200.0)
 JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
@@ -3084,6 +3099,7 @@ class DuelEnv:
                         if m_.any():
                             self.jstart[k_] = (S_["pos"][m_], S_["vel"][m_], S_["yaw"][m_])
                 self.jfocus = np.array([JUMP_FOCUS_W if j_["id"] in JUMP_FOCUS.get(mp_, ()) else 1.0 for j_ in self.jumps])
+                self.jdrop_ok = np.array([j_["id"] in self.jump_open for j_ in self.jumps], bool)   # (JUMP_KEEP_CLOSED)
                 jl_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jump_labels.json")
                 if os.path.exists(jl_):
                     off_ = set(json.load(open(jl_)).get("off", {}).get(os.path.splitext(os.path.basename(bsp))[0], []))
@@ -3162,6 +3178,7 @@ class DuelEnv:
                         self.jump_b = np.concatenate([self.jump_b, b_[None]])
                         self.jump_lab_off = np.append(self.jump_lab_off, True)
                         self.jfocus = np.append(self.jfocus, 1.0)
+                        self.jdrop_ok = np.append(self.jdrop_ok, True)
                         self.jump_tries[k_] = [(g_, np.array([n0_]), 0)]
                         jt_, rs_ = float(sp_.get("jitter", 24.0)), np.random.default_rng(7 + k_)    # (its own draws: the run's stream untouched)
                         P_ = a_[None] + np.c_[rs_.uniform(-jt_, jt_, (64, 2)), np.zeros(64)].astype(np.float32)
@@ -8580,7 +8597,10 @@ class DuelEnv:
         if JUMP_WEIGHT:                                      # (JUMP_WEIGHT) the jumps he fails more often
             w_ = np.maximum(JUMP_W_FLOOR, 1.0 - self.jw_s[np.minimum(np.array(ks, np.int64), 63)])
             if JUMP_W_DROP > 0:                              # (JUMP_W_DROP) the jumps he makes at this rate or more: no tries
-                w_ = np.where(self.jw_s[np.minimum(np.array(ks, np.int64), 63)] >= JUMP_W_DROP, 0.0, w_)
+                dr_ = self.jw_s[np.minimum(np.array(ks, np.int64), 63)] >= JUMP_W_DROP
+                if JUMP_KEEP_CLOSED:                         # (JUMP_KEEP_CLOSED) ... only those open in games (and the stuck spots)
+                    dr_ = dr_ & self.jdrop_ok[np.array(ks, np.int64)]
+                w_ = np.where(dr_, 0.0, w_)
                 if w_.sum() <= 0:
                     w_ = np.ones(len(ks))
             if JUMP_FOCUS:                                   # (JUMP_FOCUS) the jumps the owner named: more tries
@@ -8603,21 +8623,40 @@ class DuelEnv:
         if far:
             d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
             d_ = d_ / max(1e-6, float(np.hypot(*d_)))
-            vel = (float(d_[0] * JUMP_FAR_SPEED), float(d_[1] * JUMP_FAR_SPEED), 0.0)
+            sp_ = JUMP_FAR_SPEED
+            if JUMP_VARY:                                    # (JUMP_VARY) his speed and line along the way vary
+                sp_ = float(self.rng.uniform(220.0, 420.0))
+                a_ = math.radians(float(self.rng.uniform(-12, 12)))
+                d_ = np.array([d_[0] * math.cos(a_) - d_[1] * math.sin(a_), d_[0] * math.sin(a_) + d_[1] * math.cos(a_)])
+            vel = (float(d_[0] * sp_), float(d_[1] * sp_), 0.0)
+        elif JUMP_VARY and self.rng.random() < 0.5:          # (JUMP_VARY) a near start half the time already moving
+            d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
+            d_ = d_ / max(1e-6, float(np.hypot(*d_)))
+            a_ = math.radians(float(self.rng.uniform(-15, 15)))
+            sp_ = float(self.rng.uniform(0.0, 350.0))
+            vel = (float((d_[0] * math.cos(a_) - d_[1] * math.sin(a_)) * sp_), float((d_[0] * math.sin(a_) + d_[1] * math.cos(a_)) * sp_), 0.0)
         pro_ = k in self.jstart and (k >= getattr(self, "n_real_jumps", 10 ** 9) or (PRO_JSTART_P > 0 and self.rng.random() < PRO_JSTART_P))
         if pro_:                                             # (PRO_JSTART_P) a pro's own state before the take-off
             far = False
             P_, V_, Y_ = self.jstart[k]
             s_ = int(self.rng.integers(len(P_)))
+            pos_ = [float(x_) for x_ in P_[s_]]
             face, vel = float(Y_[s_]), tuple(float(x_) for x_ in V_[s_])
-            self.w.reset(i, tuple(float(x_) for x_ in P_[s_]), vel, face)
+            if JUMP_VARY and k < getattr(self, "n_real_jumps", 10 ** 9):   # (JUMP_VARY) around the pro's state, not on it
+                a_ = math.radians(float(self.rng.uniform(-8, 8)))
+                f_ = float(self.rng.uniform(0.9, 1.1))
+                vel = (f_ * (vel[0] * math.cos(a_) - vel[1] * math.sin(a_)), f_ * (vel[0] * math.sin(a_) + vel[1] * math.cos(a_)), vel[2])
+                face += float(self.rng.uniform(-20, 20))
+                pos_[0] += float(self.rng.uniform(-8, 8))
+                pos_[1] += float(self.rng.uniform(-8, 8))
+            self.w.reset(i, tuple(pos_), vel, face)
         else:
             self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
         self._fresh(i, face)
         self.jrun_far[i] = far
-        if far:
+        if far and not JUMP_VARY:
             self.sp_hist[i] = JUMP_FAR_SPEED                 # (his speed of the last frames: what he moves at, not a gain)
-        elif pro_:
+        elif pro_ or (JUMP_VARY and (vel[0] or vel[1])):
             self.sp_hist[i] = float(math.hypot(vel[0], vel[1]))
         m = self._match_of(i)
         self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
@@ -9833,6 +9872,8 @@ class DuelEnv:
                 took = False
                 if self.kind[m] != NORMAL and kind in ("wp", "am", "pack") and self.run_k[i] < 0:
                     continue                                  # aim / drill / movement rounds: no weapons or ammo (item runs: everything)
+                if JUMP_PAST_PICK and self.jrun[i] and not self.jrun_past[i] and it == self.jrun_it[i]:
+                    continue                                  # (JUMP_PAST_PICK) a jump run's own target: only once he is past the jump
                 gain = 0.0
                 if kind == "hp" and self.hp[i] < cap:
                     gain = min(cap, self.hp[i] + val) - self.hp[i]
