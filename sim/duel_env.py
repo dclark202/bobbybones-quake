@@ -969,6 +969,17 @@ JUMP_KEEP_CLOSED = float(os.environ.get("JUMP_KEEP_CLOSED") or 0.0) > 0
 #                 for it to be possible). 0: off. A training switch.
 JUMP_W_CAP = float(os.environ.get("JUMP_W_CAP") or 0.0)
 JUMP_VARY = float(os.environ.get("JUMP_VARY") or 0.0) > 0
+#   JUMP_SOLID_FIX=1 (2026-10-21: Aerowalk's jump 4 had one start spot and the player box was inside solid there: 20 of 20 tries
+#                 stood still; ~60 spots on nine maps were inside solid) a jump run's start spots (near and far) where the player
+#                 box is in something solid are left out; an entry left with none is moved to the nearest free spot (up to 32 u
+#                 up, 16 u aside, with a floor under it), or dropped. A training switch.
+JUMP_SOLID_FIX = float(os.environ.get("JUMP_SOLID_FIX") or 0.0) > 0
+#   JUMP_OVER_ANY=1 (the owner, 2026-10-21, on the video: Sinister 26 and Toxicity 10 "made it though and you marked it as a miss")
+#                 a try is over the jump when he touches the floor (or hops off it) within 110 u of its landing, no more than 40 u
+#                 below it (not in the air: a jump short passes near it), from a flight that left the floor at least 60% of the gap's length
+#                 from the landing and no more than 48 u below the lower of take-off and landing: his own take-off counts, not
+#                 only the pros'; a walk round does not (it touches the floor near the landing). A training switch.
+JUMP_OVER_ANY = float(os.environ.get("JUMP_OVER_ANY") or 0.0) > 0
 STUCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stuck_starts.json")
 STUCK_ESC = float(os.environ.get("STUCK_ESC") or 200.0)
 JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
@@ -3010,6 +3021,7 @@ class DuelEnv:
         self.jrun_t = np.zeros(self.n, np.float32)          # ... the seconds the try has left
         self.jrun_edge = np.zeros(self.n, bool)             # ... he has been at its take-off
         self.jrun_over = np.zeros(self.n, bool)             # ... he is over it
+        self.jrun_lift = np.zeros((self.n, 3), np.float32)  # ... (JUMP_OVER_ANY) where he last touched the floor
         self.jrun_new = np.zeros(self.n, bool)              # ... the try began this frame
         self.jrun_it = np.full(self.n, -1, np.int64)        # ... the item that is its target
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
@@ -3171,6 +3183,8 @@ class DuelEnv:
                         self.jstart[k_] = (P_, np.zeros((64, 3), np.float32),
                                            (float(sp_["yaw"]) + rs_.uniform(-30, 30, 64)).astype(np.float32))
                         self.stuck_names.append((k_, sp_["name"]))
+                if JUMP_SOLID_FIX:                           # (JUMP_SOLID_FIX) no start spot inside something solid
+                    self._jump_solid_fix()
         self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
         self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
         self.rj_run_p = RJ_RUN_P
@@ -8579,9 +8593,13 @@ class DuelEnv:
                 pos_[1] += float(self.rng.uniform(-8, 8))
             self.w.reset(i, tuple(pos_), vel, face)
         else:
+            if JUMP_SOLID_FIX and (f, node) in self.jnode_fix:    # (JUMP_SOLID_FIX) the free spot next to a solid one
+                p = self.jnode_fix[(f, node)]
             self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
         self._fresh(i, face)
         self.jrun_far[i] = far
+        if JUMP_OVER_ANY:                                    # (JUMP_OVER_ANY) he stands where he begins
+            self.jrun_lift[i] = pos_ if pro_ else (p[0], p[1], p[2] + 9.0)
         if far and not JUMP_VARY:
             self.sp_hist[i] = JUMP_FAR_SPEED                 # (his speed of the last frames: what he moves at, not a gain)
         elif pro_ or (JUMP_VARY and (vel[0] or vel[1])):
@@ -8601,6 +8619,65 @@ class DuelEnv:
         if self._counted(i):
             self.stats["jump_tries"][min(k, 63)] += 1
             self.stats["jump_far"][2 if far else 0] += 1
+
+    def _jump_solid_fix(self):
+        """(JUMP_SOLID_FIX) the near and far start spots of every jump's entries where the player box (as w.reset puts
+        him: 9 u above the node) is inside something solid are left out; an entry left with no near spot gets the nearest
+        free spot round its first one (stored in jnode_fix), or is dropped, and a jump with no entry left is not drawn"""
+        lo_, hi_ = np.array([-15.0, -15.0, -24.0]), np.array([15.0, 15.0, 32.0])
+
+        def free_(o_):
+            o_ = np.asarray(o_, np.float32)
+            return not self.w.trace(o_, o_ + np.array([0.0, 0.0, 0.1], np.float32), lo_, hi_)["startsolid"]
+
+        def floor_(o_):
+            o_ = np.asarray(o_, np.float32)
+            return self.w.trace(o_, o_ - np.array([0.0, 0.0, 48.0], np.float32), lo_, hi_)["fraction"] < 1.0
+
+        self.jnode_fix = {}
+        self.jsolid_log = []
+        for k_ in list(self.jump_tries):
+            keep_ = []
+            for e_, (g_, st_, f_) in enumerate(self.jump_tries[k_]):
+                J_ = self.jfields[f_]
+                ok_ = np.array([free_(J_.nodes[int(n_)] + np.array([0.0, 0.0, 9.0])) for n_ in st_], bool)
+                if (k_, e_) in self.jump_far:
+                    far_ = self.jump_far[(k_, e_)]
+                    fo_ = np.array([free_(J_.nodes[int(n_)] + np.array([0.0, 0.0, 9.0])) for n_ in far_], bool)
+                    if fo_.any():
+                        self.jump_far[(k_, e_)] = far_[fo_]
+                    else:
+                        del self.jump_far[(k_, e_)]
+                if ok_.any():
+                    if not ok_.all():
+                        self.jsolid_log.append((k_, e_, int((~ok_).sum()), len(ok_)))
+                    keep_.append((len(keep_), e_, (g_, np.asarray(st_)[ok_], f_)))
+                    continue
+                n0_ = int(st_[0])
+                p0_ = np.array(J_.nodes[n0_], np.float64) + np.array([0.0, 0.0, 9.0])
+                fix_ = None
+                for dz_ in range(0, 36, 4):
+                    for dx_, dy_ in ((0, 0), (8, 0), (-8, 0), (0, 8), (0, -8), (16, 0), (-16, 0), (0, 16), (0, -16),
+                                     (12, 12), (-12, 12), (12, -12), (-12, -12)):
+                        q_ = p0_ + np.array([dx_, dy_, dz_])
+                        if free_(q_) and floor_(q_):
+                            fix_ = q_
+                            break
+                    if fix_ is not None:
+                        break
+                if fix_ is None:
+                    self.jsolid_log.append((k_, e_, len(ok_), len(ok_), "dropped"))
+                    continue
+                self.jnode_fix[(f_, n0_)] = fix_ - np.array([0.0, 0.0, 9.0])
+                self.jsolid_log.append((k_, e_, len(ok_), len(ok_), "moved", [round(float(x_)) for x_ in fix_ - p0_]))
+                keep_.append((len(keep_), e_, (g_, np.array([n0_], np.int64), f_)))
+            if keep_:                                    # (the far spots follow their entries' new places)
+                self.jump_far = {(kk_, e_): v_ for (kk_, e_), v_ in self.jump_far.items() if kk_ != k_} | \
+                    {(k_, new_): self.jump_far[(k_, old_)] for new_, old_, _ in keep_ if (k_, old_) in self.jump_far}
+                self.jump_tries[k_] = [ent_ for _, _, ent_ in keep_]
+            else:
+                del self.jump_tries[k_]
+                self.jump_far = {(kk_, e_): v_ for (kk_, e_), v_ in self.jump_far.items() if kk_ != k_}
 
     def _jump_learn(self, k, over):
         """(JUMP_WEIGHT) one try at jump k into his success there (see JUMP_WEIGHT)"""
@@ -10056,6 +10133,14 @@ class DuelEnv:
                     self.jrun_edge[jr] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
+                    if JUMP_OVER_ANY:                        # (JUMP_OVER_ANY) over it from his own take-off
+                        L_ = self.jrun_lift[jr]
+                        gap_ = np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1])
+                        far_ = np.hypot(L_[:, 0] - B_[:, 0], L_[:, 1] - B_[:, 1]) >= 0.6 * gap_
+                        high_ = L_[:, 2] >= np.minimum(A_[:, 2], B_[:, 2]) - 48.0
+                        at_ = (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (p_[:, 2] >= B_[:, 2] - 40.0)
+                        ov_ |= ~self.jrun_over[jr] & at_ & far_ & high_ & landed_
+                        self.jrun_lift[jr[landed_]] = p_[landed_]
                     self.jrun_over[jr[ov_]] = True
                     if JUMP_OVER_PAY > 0:                    # (JUMP_OVER_PAY) over the gap: paid once a try, kept
                         reward[jr[ov_]] += JUMP_OVER_PAY
