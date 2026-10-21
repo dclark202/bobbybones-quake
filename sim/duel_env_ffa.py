@@ -964,6 +964,10 @@ JUMP_PAST_PICK = float(os.environ.get("JUMP_PAST_PICK") or 0.0) > 0
 #                 place, +-8 deg and 0.9-1.1x in speed, +-20 deg in view. (Start spots were already many nodes along the way,
 #                 the view +-40 deg.) A training switch.
 JUMP_KEEP_CLOSED = float(os.environ.get("JUMP_KEEP_CLOSED") or 0.0) > 0
+#   JUMP_W_CAP=<share> (2026-10-21: Blood Run's id 2, made ~1%, took two thirds of the map's tries once the others passed
+#                 JUMP_W_DROP) no one jump gets more than this share of a map's jump-run draws (when enough jumps are drawn
+#                 for it to be possible). 0: off. A training switch.
+JUMP_W_CAP = float(os.environ.get("JUMP_W_CAP") or 0.0)
 JUMP_VARY = float(os.environ.get("JUMP_VARY") or 0.0) > 0
 STUCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stuck_starts.json")
 STUCK_ESC = float(os.environ.get("STUCK_ESC") or 200.0)
@@ -8605,6 +8609,13 @@ class DuelEnv:
                     w_ = np.ones(len(ks))
             if JUMP_FOCUS:                                   # (JUMP_FOCUS) the jumps the owner named: more tries
                 w_ = w_ * self.jfocus[np.array(ks, np.int64)]
+            if JUMP_W_CAP > 0 and (w_ > 0).sum() * JUMP_W_CAP >= 1.0:     # (JUMP_W_CAP) no one jump above this share of the draws
+                for _ in range(4):
+                    p_ = w_ / w_.sum()
+                    if (p_ <= JUMP_W_CAP + 1e-9).all():
+                        break
+                    over_ = p_ > JUMP_W_CAP
+                    w_ = np.where(over_, JUMP_W_CAP * w_[~over_].sum() / max(1e-9, 1.0 - JUMP_W_CAP * over_.sum()), w_)
             k = int(ks[int(self.rng.choice(len(ks), p=w_ / w_.sum()))])
         else:
             k = int(ks[int(self.rng.integers(len(ks)))])
