@@ -979,7 +979,24 @@ JUMP_SOLID_FIX = float(os.environ.get("JUMP_SOLID_FIX") or 0.0) > 0
 #                 below it (not in the air: a jump short passes near it), from a flight that left the floor at least 60% of the gap's length
 #                 from the landing and no more than 48 u below the lower of take-off and landing: his own take-off counts, not
 #                 only the pros'; a walk round does not (it touches the floor near the landing). A training switch.
-JUMP_OVER_ANY = float(os.environ.get("JUMP_OVER_ANY") or 0.0) > 0
+#                 =2 (2026-10-21 evening: =1 counted hops onto the landing from beyond it and hops on a lower floor at its height:
+#                 Battleforged 3, Hektik 15, Aerowalk 17) the flight must leave the floor on the take-off's side (at least half the gap
+#                 back along the landing-to-take-off line) and within 48 u of the take-off's height; the landing ring is 128 u; and this
+#                 is the only rule (the old one, "at the take-off once, at the landing later", counted walks round: Hektik 15).
+JUMP_OVER_ANY = float(os.environ.get("JUMP_OVER_ANY") or 0.0)
+#   JUMP_RUNUP=<u/s> (the owner, 2026-10-21: Campgrounds' bridge-to-rail jump "is basically never going to work, you need two
+#                 hops"; "aerowalk red armor is easier with two hops") the jumps whose take-off needs this speed or more (the pros'
+#                 'need') begin their near tries JUMP_RUNUP_LO to JUMP_RUNUP_HI seconds of way back, moving along the way (220-420
+#                 u/s), room for a hop or two; for every jump: near start spots within 40 u of the take-off (on its lip: Toxicity 7
+#                 slid off every try) are left out (the run-up spots instead when none is left), and an entry with no far spots
+#                 gets them from every way that has the jump first (not only the ways to the nearest item: Cure 8, Blood Run 2).
+#                 0: off. A training switch.
+JUMP_RUNUP = float(os.environ.get("JUMP_RUNUP") or 0.0)
+JUMP_RUNUP_LO = float(os.environ.get("JUMP_RUNUP_LO") or 1.2)
+JUMP_RUNUP_HI = float(os.environ.get("JUMP_RUNUP_HI") or 2.5)
+#   PRO_JSTART_MAXLEAD=<frames> (PRO_JSTART_P) the pros' run-up states used: up to this many frames before their take-off
+#                 (the files hold 8 to 80; 40 = what was used before 2026-10-21 evening; 80: two seconds, their hops included).
+PRO_JSTART_MAXLEAD = int(os.environ.get("PRO_JSTART_MAXLEAD") or 40)
 STUCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stuck_starts.json")
 STUCK_ESC = float(os.environ.get("STUCK_ESC") or 200.0)
 JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
@@ -3111,7 +3128,7 @@ class DuelEnv:
                 if PRO_JSTART_P > 0 and os.path.exists(ps_):
                     S_ = np.load(ps_)
                     for k_, j_ in enumerate(self.jumps):
-                        m_ = S_["jump_id"] == j_["id"]
+                        m_ = (S_["jump_id"] == j_["id"]) & (S_["lead"] <= PRO_JSTART_MAXLEAD)
                         if m_.any():
                             self.jstart[k_] = (S_["pos"][m_], S_["vel"][m_], S_["yaw"][m_])
                 self.jfocus = np.array([JUMP_FOCUS_W if j_["id"] in JUMP_FOCUS.get(mp_, ()) else 1.0 for j_ in self.jumps])
@@ -3203,6 +3220,11 @@ class DuelEnv:
                         self.stuck_names.append((k_, sp_["name"]))
                 if JUMP_SOLID_FIX:                           # (JUMP_SOLID_FIX) no start spot inside something solid
                     self._jump_solid_fix()
+                self.jrunup = {}                             # (JUMP_RUNUP) (jump, entry) -> run-up start spots
+                self.jrunup_line = set()
+                if JUMP_RUNUP > 0:
+                    self._jump_runup()
+                    self._jump_runup_drop()
         self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
         self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
         self.rj_run_p = RJ_RUN_P
@@ -8641,12 +8663,17 @@ class DuelEnv:
         far = JUMP_FAR_P > 0 and self.rng.random() < JUMP_FAR_P and len(self.jump_far.get((k, e), ())) > 0
         if far:                                              # (JUMP_FAR_P) further back, moving along the way
             st = self.jump_far[(k, e)]
+        ru_ = JUMP_RUNUP > 0 and not far and (k, e) in self.jrunup
+        if ru_:                                              # (JUMP_RUNUP) a near try of a fast jump: room for a hop or two
+            st = self.jrunup[(k, e)]
         node = int(st[int(self.rng.integers(len(st)))])
         nx = int(J.next[g, node])
         p, q = J.nodes[node], (J.nodes[nx] if nx >= 0 else J.goals[g])
+        if ru_ and (k, e) in self.jrunup_line:               # (JUMP_RUNUP) a straight run-up: from a route node, at the take-off
+            p, q = self.route.nodes[node], self.jump_a[k]
         face = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])) + float(self.rng.uniform(-40, 40))
         vel = (0, 0, 0)
-        if far:
+        if far or ru_:
             d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
             d_ = d_ / max(1e-6, float(np.hypot(*d_)))
             sp_ = JUMP_FAR_SPEED
@@ -8686,7 +8713,7 @@ class DuelEnv:
             self.jrun_lift[i] = pos_ if pro_ else (p[0], p[1], p[2] + 9.0)
         if far and not JUMP_VARY:
             self.sp_hist[i] = JUMP_FAR_SPEED                 # (his speed of the last frames: what he moves at, not a gain)
-        elif pro_ or (JUMP_VARY and (vel[0] or vel[1])):
+        elif pro_ or ru_ or (JUMP_VARY and (vel[0] or vel[1])):
             self.sp_hist[i] = float(math.hypot(vel[0], vel[1]))
         m = self._match_of(i)
         self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
@@ -8762,6 +8789,122 @@ class DuelEnv:
             else:
                 del self.jump_tries[k_]
                 self.jump_far = {(kk_, e_): v_ for (kk_, e_), v_ in self.jump_far.items() if kk_ != k_}
+
+    def _jump_runup(self):
+        """(JUMP_RUNUP) per real jump and entry: the spots whose way has this jump first, by seconds of way to its
+        take-off (every way of the entry's field, not only those to the nearest item); run-up spots JUMP_RUNUP_LO to
+        JUMP_RUNUP_HI s back for the fast jumps and for entries whose near spots are all on the take-off's lip (those
+        left out); far spots (JUMP_FAR_LO to JUMP_FAR_HI s) where an entry has none. Spots in solid are left out."""
+        lo_, hi_ = np.array([-15.0, -15.0, -24.0]), np.array([15.0, 15.0, 32.0])
+        R_ = self.route
+        self.jrunup_log = []
+        self.jrunup_line = set()                         # (jump, entry): run-up spots on the jump's line (route nodes), run at A
+
+        def free_(n_, X_):
+            o_ = np.asarray(X_.nodes[int(n_)] + np.array([0.0, 0.0, 9.0]), np.float32)
+            return not self.w.trace(o_, o_ + np.array([0.0, 0.0, 0.1], np.float32), lo_, hi_)["startsolid"]
+
+        for k, ents in list(self.jump_tries.items()):
+            if k >= self.n_real_jumps:
+                continue
+            A_ = self.jump_a[k]
+            fast_ = float(self.jumps[k].get("need", 0.0)) >= JUMP_RUNUP
+            for e, (g, st, f) in enumerate(list(ents)):
+                X = self.jfields[f]
+                nxt, jl = X.next[g], X.jlink[g]
+                cur = np.arange(len(nxt))
+                hit = np.full(len(nxt), -1, np.int64)
+                live = X.T[g] < 1e8
+                for _ in range(400):
+                    j_ = jl[cur]
+                    at_ = live & (j_ >= 0)
+                    hit[at_ & (j_ == k)] = cur[at_ & (j_ == k)]
+                    live &= ~at_ & (nxt[cur] >= 0)
+                    if not live.any():
+                        break
+                    cur = np.where(live, nxt[cur], cur)
+                ok = (hit >= 0) & ~R_.dead
+                tt = np.where(ok, X.T[g] - X.T[g, np.maximum(hit, 0)], -1.0)
+
+                def pick_(a_, b_, fall_=True):
+                    sel_ = np.nonzero(ok & (tt >= a_) & (tt <= b_))[0]
+                    if fall_ and not len(sel_) and ok.any() and float(tt.max()) > 0:
+                        sel_ = np.nonzero(ok & (tt >= 0.8 * min(float(tt.max()), b_)) & (tt > 0))[0]
+                    return np.array([n_ for n_ in sel_ if free_(n_, X)], np.int64)
+
+                st_ = np.asarray(st)
+                off_ = np.array([math.hypot(float(X.nodes[int(n_)][0] - A_[0]), float(X.nodes[int(n_)][1] - A_[1])) >= 40.0
+                                 for n_ in st_], bool)
+                lip_ = not off_.any()
+                if off_.any() and not off_.all():
+                    self.jump_tries[k][e] = (g, st_[off_], f)
+                if fast_ or lip_:
+                    ru_ = pick_(JUMP_RUNUP_LO, JUMP_RUNUP_HI)
+                    kind_ = "way"
+                    if len(ru_) < 5:                         # (almost) no way leads in: a straight run-up behind the take-off,
+                        li_ = self._jump_line_spots(k)           # on the jump's line, level and clear, instead
+                        if len(li_) > len(ru_):
+                            ru_, kind_ = li_, "line"
+                            self.jrunup_line.add((k, e))
+                    if len(ru_):
+                        self.jrunup[(k, e)] = ru_
+                        fo_ = self.jump_far.get((k, e), ())       # far spots nearer than a run-up (JUMP_FAR's fall-back on a
+                        if len(fo_) and max(math.hypot(float(X.nodes[int(n_)][0] - A_[0]), float(X.nodes[int(n_)][1] - A_[1]))
+                                            for n_ in fo_) < 200.0:     # short way: Cure 8 began at 103 u half the time)
+                            del self.jump_far[(k, e)]
+                    elif lip_:                               # only a lip to start on and nothing behind it: not practised
+                        kind_ = "dropped"                    # (Toxicity 7: he slid off on every try)
+                    self.jrunup_log.append((int(self.jumps[k]["id"]), e, "fast" if fast_ else "lip", kind_, len(ru_)))
+                if lip_ and (k, e) not in self.jrunup:
+                    continue
+                if (k, e) not in self.jump_far:
+                    fa_ = pick_(JUMP_FAR_LO, JUMP_FAR_HI, False)     # (no fall-back: it gave spots by the edge)
+                    if len(fa_):
+                        self.jump_far[(k, e)] = fa_
+                        self.jrunup_log.append((int(self.jumps[k]["id"]), e, "far", len(fa_)))
+
+    def _jump_runup_drop(self):
+        """(JUMP_RUNUP) the entries logged "dropped" out of jump_tries (a jump with none left is not drawn)"""
+        for jid_, e_, _, kind_, _ in [x_ for x_ in self.jrunup_log if x_[3] == "dropped"]:
+            k_ = [i_ for i_, j_ in enumerate(self.jumps) if int(j_["id"]) == jid_][0]
+            self.jump_tries[k_][e_] = None
+        for k_ in list(self.jump_tries):
+            keep_ = [(i_, x_) for i_, x_ in enumerate(self.jump_tries[k_]) if x_ is not None]
+            if len(keep_) == len(self.jump_tries[k_]):
+                continue
+            fa_ = {(k_, new_): self.jump_far[(k_, old_)] for new_, (old_, _) in enumerate(keep_) if (k_, old_) in self.jump_far}
+            ru_ = {(k_, new_): self.jrunup[(k_, old_)] for new_, (old_, _) in enumerate(keep_) if (k_, old_) in self.jrunup}
+            li_ = {(k_, new_) for new_, (old_, _) in enumerate(keep_) if (k_, old_) in self.jrunup_line}
+            self.jump_far = {kk_: v_ for kk_, v_ in self.jump_far.items() if kk_[0] != k_} | fa_
+            self.jrunup = {kk_: v_ for kk_, v_ in self.jrunup.items() if kk_[0] != k_} | ru_
+            self.jrunup_line = {kk_ for kk_ in self.jrunup_line if kk_[0] != k_} | li_
+            if keep_:
+                self.jump_tries[k_] = [x_ for _, x_ in keep_]
+            else:
+                del self.jump_tries[k_]
+
+    def _jump_line_spots(self, k):
+        """(JUMP_RUNUP) the route's nodes 200 to 700 u behind jump k's take-off, within 50 deg of its line (landing to
+        take-off, carried on), within 40 u of its height, the player box free there and clear all the way to the take-off"""
+        lo_, hi_ = np.array([-15.0, -15.0, -24.0]), np.array([15.0, 15.0, 32.0])
+        A_, B_ = np.asarray(self.jump_a[k], np.float64), np.asarray(self.jump_b[k], np.float64)
+        u_ = (A_ - B_)[:2] / max(1e-6, float(np.hypot(*(A_ - B_)[:2])))
+        N_ = np.asarray(self.route.nodes, np.float64)
+        d_ = N_[:, :2] - A_[:2]
+        r_ = np.hypot(d_[:, 0], d_[:, 1])
+        cos_ = (d_ @ u_) / np.maximum(r_, 1e-6)
+        cand_ = np.nonzero((r_ >= 200.0) & (r_ <= 700.0) & (cos_ >= np.cos(np.radians(50.0))) & (np.abs(N_[:, 2] - A_[2]) <= 40.0)
+                           & ~self.route.dead)[0]
+        out_ = []
+        a9_ = (A_ + np.array([0.0, 0.0, 9.0])).astype(np.float32)
+        for n_ in cand_:
+            o_ = (N_[n_] + np.array([0.0, 0.0, 9.0])).astype(np.float32)
+            t0_ = self.w.trace(o_, o_ + np.array([0.0, 0.0, 0.1], np.float32), lo_, hi_)
+            if t0_["startsolid"]:
+                continue
+            if self.w.trace(o_, a9_, lo_, hi_)["fraction"] >= 0.999:
+                out_.append(int(n_))
+        return np.array(out_, np.int64)
 
     def _jump_learn(self, k, over):
         """(JUMP_WEIGHT) one try at jump k into his success there (see JUMP_WEIGHT)"""
@@ -10232,10 +10375,20 @@ class DuelEnv:
                     if JUMP_OVER_ANY:                        # (JUMP_OVER_ANY) over it from his own take-off
                         L_ = self.jrun_lift[jr]
                         gap_ = np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1])
-                        far_ = np.hypot(L_[:, 0] - B_[:, 0], L_[:, 1] - B_[:, 1]) >= 0.6 * gap_
-                        high_ = L_[:, 2] >= np.minimum(A_[:, 2], B_[:, 2]) - 48.0
-                        at_ = (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (p_[:, 2] >= B_[:, 2] - 40.0)
-                        ov_ |= ~self.jrun_over[jr] & at_ & far_ & high_ & landed_
+                        if JUMP_OVER_ANY >= 2:                   # (=2) from the take-off's side, at its height
+                            u_ = (A_[:, :2] - B_[:, :2]) / np.maximum(gap_, 1e-6)[:, None]
+                            far_ = ((L_[:, :2] - B_[:, :2]) * u_).sum(1) >= 0.5 * gap_
+                            high_ = np.abs(L_[:, 2] - A_[:, 2]) <= 48.0
+                            ring_ = 128.0
+                        else:
+                            far_ = np.hypot(L_[:, 0] - B_[:, 0], L_[:, 1] - B_[:, 1]) >= 0.6 * gap_
+                            high_ = L_[:, 2] >= np.minimum(A_[:, 2], B_[:, 2]) - 48.0
+                            ring_ = 110.0
+                        at_ = (np.linalg.norm(p_ - B_, axis=1) < ring_) & (p_[:, 2] >= B_[:, 2] - 40.0)
+                        if JUMP_OVER_ANY >= 2:                   # (=2) this rule alone: "been at the take-off, then at the landing
+                            ov_ = ~self.jrun_over[jr] & at_ & far_ & high_ & landed_    # some way" counted walks round (Hektik 15)
+                        else:
+                            ov_ |= ~self.jrun_over[jr] & at_ & far_ & high_ & landed_
                         self.jrun_lift[jr[landed_]] = p_[landed_]
                     self.jrun_over[jr[ov_]] = True
                     if JUMP_OVER_PAY > 0:                    # (JUMP_OVER_PAY) over the gap: paid once a try, kept
