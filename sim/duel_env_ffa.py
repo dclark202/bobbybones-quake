@@ -8609,13 +8609,14 @@ class DuelEnv:
                     w_ = np.ones(len(ks))
             if JUMP_FOCUS:                                   # (JUMP_FOCUS) the jumps the owner named: more tries
                 w_ = w_ * self.jfocus[np.array(ks, np.int64)]
-            if JUMP_W_CAP > 0 and (w_ > 0).sum() * JUMP_W_CAP >= 1.0:     # (JUMP_W_CAP) no one jump above this share of the draws
-                for _ in range(4):
+            if JUMP_W_CAP > 0 and (w_ > 0).sum() > 1:       # (JUMP_W_CAP) no one jump above this share of the draws
+                cap_ = max(JUMP_W_CAP, 1.5 / float((w_ > 0).sum()))      # (with few jumps left: 1.5x an even share)
+                for _ in range(6):
                     p_ = w_ / w_.sum()
-                    if (p_ <= JUMP_W_CAP + 1e-9).all():
+                    if (p_ <= cap_ + 1e-9).all():
                         break
-                    over_ = p_ > JUMP_W_CAP
-                    w_ = np.where(over_, JUMP_W_CAP * w_[~over_].sum() / max(1e-9, 1.0 - JUMP_W_CAP * over_.sum()), w_)
+                    over_ = p_ > cap_
+                    w_ = np.where(over_, cap_ * w_[~over_].sum() / max(1e-9, 1.0 - cap_ * over_.sum()), w_)
             k = int(ks[int(self.rng.choice(len(ks), p=w_ / w_.sum()))])
         else:
             k = int(ks[int(self.rng.integers(len(ks)))])
