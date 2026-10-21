@@ -1462,6 +1462,15 @@ HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
 RAIL_FAR_PAY = float(os.environ.get("RAIL_FAR_PAY") or 0.0)
 RAIL_FAR_LO = float(os.environ.get("RAIL_FAR_LO") or 600.0)
 RAIL_FAR_HI = float(os.environ.get("RAIL_FAR_HI") or 900.0)
+#   RAIL_STREAK_PAY (the owner, 2026-10-21: "a slight reward for stringing together consecutive hits on the rail") a rail hit that
+#                 follows a rail hit (his last rail shot hit too; a miss or his death ends the string) pays the shooter
+#                 RAIL_STREAK_PAY x (hits in the string - 1), at most RAIL_STREAK_CAP times, and takes the same from the one hit
+#                 (zero-sum, as RAIL_FAR_PAY; booked with it in the rail counters' pay got). Equilibrium in self-play: each side
+#                 is paid for its strings what it pays for the other's: a careful rail (a shot he will land) is worth more than
+#                 a hopeful one, and being railed twice costs more, so getting out of a railer's line after the first hit
+#                 matters (goals 2 and 4: weapon use, counterplay). 0: off. A training switch (pay only).
+RAIL_STREAK_PAY = float(os.environ.get("RAIL_STREAK_PAY") or 0.0)
+RAIL_STREAK_CAP = int(float(os.environ.get("RAIL_STREAK_CAP") or 3))
 RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
              "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
 PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
@@ -4996,6 +5005,26 @@ class DuelEnv:
                     R[13] += b_
                 if cnt[v_]:
                     R[14] += b_
+        if RAIL_STREAK_PAY > 0:                              # (RAIL_STREAK_PAY) rail hits in a row
+            if getattr(self, "rail_streak", None) is None:
+                self.rail_streak = np.zeros(n, np.int64)
+            hit_ = {}
+            for i_, v_ in st.get("rail", ()):
+                hit_[int(i_)] = int(v_)
+            shot_ = np.nonzero(np.asarray(do_fire, bool)[:n] & (np.asarray(do_w)[:n] == RG))[0]
+            for i_ in shot_:
+                i_ = int(i_)
+                if i_ in hit_:
+                    self.rail_streak[i_] += 1
+                    if self.rail_streak[i_] >= 2:
+                        b_ = RAIL_STREAK_PAY * min(int(self.rail_streak[i_]) - 1, RAIL_STREAK_CAP)
+                        reward[i_] += b_
+                        reward[hit_[i_]] -= b_
+                        if cnt[i_]:
+                            R[13] += b_
+                else:
+                    self.rail_streak[i_] = 0
+            self.rail_streak[~alive] = 0
 
     def _mates(self, i):
         """the other players of player i's group"""
