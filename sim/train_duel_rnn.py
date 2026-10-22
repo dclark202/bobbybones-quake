@@ -3693,6 +3693,26 @@ def main():
                                in_hand={b_: round(float(RR_[7 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},        # share of his time: the rail in hand, the enemy at that range
                                in_hand_in_view={b_: round(float(RR_[10 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},   # ... and in view
                                pay_got_per_min=round(float(RR_[13] / lm_), 4), pay_lost_per_min=round(float(RR_[14] / lm_), 4))
+        if "preaim" in agg and "preaim_x" in agg:                        # (PREAIM_PAY) fresh sightings by the weapon in hand, his counted seats in games
+            PA_ = np.asarray(agg["preaim"], np.float64).reshape(4, -1)   # (the simulator's stats["preaim"]: n, error summed, within 15 deg, q summed)
+            PX_ = np.atleast_1d(agg["preaim_x"]).astype(np.float64)      # (PREAIM_X_COLS)
+            wn_ = [(w_, k_) for k_, w_ in enumerate(E_.WEAPONS) if w_ != "hmg"]
+            pa_ = lambda r_, k_=None: float(PA_[r_].sum() if k_ is None else PA_[r_, k_])
+            rec["preaim"] = dict(pay=float(getattr(E_, "PREAIM_PAY", 0.0)), minutes=round(float(PX_[0]) * DT_MIN, 1),
+                                 per_min=round(pa_(0) / max(1e-9, float(PX_[0]) * DT_MIN), 3),
+                                 n=dict({w_: int(pa_(0, k_)) for w_, k_ in wn_}, all=int(pa_(0))),
+                                 err_mean=dict({w_: round(pa_(1, k_) / max(1.0, pa_(0, k_)), 2) for w_, k_ in wn_}, all=round(pa_(1) / max(1.0, pa_(0)), 2)),
+                                 within15=dict({w_: round(pa_(2, k_) / max(1.0, pa_(0, k_)), 3) for w_, k_ in wn_}, all=round(pa_(2) / max(1.0, pa_(0)), 3)),
+                                 q_mean=dict({w_: round(pa_(3, k_) / max(1.0, pa_(0, k_)), 3) for w_, k_ in wn_}, all=round(pa_(3) / max(1.0, pa_(0)), 3)),
+                                 pay_sum=round(float(PX_[1]), 6), pay_got_per_min=round(float(PX_[2]) / max(1e-9, float(PX_[0]) * DT_MIN), 4))
+        if "stagger" in agg:                                             # (STAGGER_START) the first whole games begun at a drawn point of the clock
+            SG_ = np.atleast_1d(agg["stagger"]).astype(np.float64)
+            rec["stagger"] = dict(games=int(SG_[0]), start_s_mean=round(float(SG_[1] / max(1.0, SG_[0])), 1))
+        if "jump_cost" in agg:                                           # (JUMP_COST) take-offs costed: per minute of a counted seat where it applies
+            JC_ = np.atleast_1d(agg["jump_cost"]).astype(np.float64)     # (the simulator's JC_COLS; alive, nobody in view, games and item runs)
+            jm_ = max(1e-9, float(JC_[0]) * DT_MIN)
+            rec["jump_cost"] = dict(cost=float(getattr(E_, "JUMP_COST", 0.0)), minutes=round(float(JC_[0]) * DT_MIN, 1),
+                                    takeoffs_per_player_min=round(float(JC_[1]) / jm_, 2), cost_per_player_min=round(float(JC_[2]) / jm_, 4))
         if UNI_GATE or UNI_RES:                                          # (v0.3.4 A, B) the parts' sizes
             with torch.no_grad():
                 rec["gate"] = {n_: round(float(sum(p_.abs().max() for p_ in getattr(pol, n_).parameters())), 6)

@@ -943,6 +943,11 @@ PRO_JSTART_P = float(os.environ.get("PRO_JSTART_P") or 0.0)
 JUMP_FOCUS = {p_.split(":")[0].strip(): {int(x_) for x_ in p_.split(":")[1].split(",") if x_.strip()}
               for p_ in (os.environ.get("JUMP_FOCUS") or "").split(";") if ":" in p_}
 JUMP_FOCUS_W = float(os.environ.get("JUMP_FOCUS_W") or 1.0)
+#   JUMP_SKIP     "aerowalk:16" (the owner, 2026-10-21: "aerowalk jump 16 is nonsensical"): per map ("map:id,id;map:id"), the pros'
+#                 jumps (by id) left out of the jump runs altogether: no tries, never drawn (the jump stays in his inputs, in
+#                 JUMP_OPEN and in the counters' list). Unset: nothing left out. A training switch.
+JUMP_SKIP = {p_.split(":")[0].strip(): {int(x_) for x_ in p_.split(":")[1].split(",") if x_.strip()}
+             for p_ in (os.environ.get("JUMP_SKIP") or "").split(";") if ":" in p_}
 #   STUCK_STARTS=1 (the owner, 2026-10-21: the stuck spots as practice in "advanced movement") the spots where he gets stuck in
 #                 real games (sim/stuck_starts.json: map, start, his heading, the item he was going for) are tries of the jump
 #                 runs beside the jumps: he begins there standing (a little apart, his heading +-30 deg), and the try is over
@@ -983,6 +988,10 @@ JUMP_SOLID_FIX = float(os.environ.get("JUMP_SOLID_FIX") or 0.0) > 0
 #                 Battleforged 3, Hektik 15, Aerowalk 17) the flight must leave the floor on the take-off's side (at least half the gap
 #                 back along the landing-to-take-off line) and within 48 u of the take-off's height; the landing ring is 128 u; and this
 #                 is the only rule (the old one, "at the take-off once, at the landing later", counted walks round: Hektik 15).
+#                 =3 (the owner, 2026-10-21, on Sinister 29: "attempt 3 is not really a success he lucked into it": a run-off dropped
+#                 onto the floor 122 u short) as =2, and where he comes down must be at least the gap less 64 u along the line from
+#                 the take-off to the landing (horizontal: dot(p - A, unit(B - A)) >= gap - 64): a drop short of it, inside the
+#                 ring, is not over.
 JUMP_OVER_ANY = float(os.environ.get("JUMP_OVER_ANY") or 0.0)
 #   JUMP_RUNUP=<u/s> (the owner, 2026-10-21: Campgrounds' bridge-to-rail jump "is basically never going to work, you need two
 #                 hops"; "aerowalk red armor is easier with two hops") the jumps whose take-off needs this speed or more (the pros'
@@ -1197,6 +1206,19 @@ def walk_no_jump(a):
     a[both, 2] = 0
     return both
 HOP_GROUND, HOP_SLOW, HOP_GIVEN, HOP_VZ = 0.4, 250.0, 40.0, 400.0     # (a jump gives 275 upward, 385 soon after another; a pad more)
+#   JUMP_COST=<c> (v0.3.9, live; the owner, 2026-10-21: "pay for hops that encourages NOT doing this [re-earning the 320->480 hop
+#                 pay by starting new chains] and also not just spamming hop. He should use jumping to get placed quickly.
+#                 Period.") a flat cost of c for every take-off of a network's seat (the take-off as HOP_CHAIN's, worked out on
+#                 its own: the jump key down, off the floor, rising at a jump's speed, 100 < vz < HOP_VZ, from the floor or
+#                 touching it inside the frame), alive, with no enemy in view (`visible`), in NORMAL rounds and item runs only
+#                 (not jump runs, rocket jump runs, the test map's rooms). Not in r_long, nothing in `dealt`. With HOP_PAY and
+#                 HOP_CHAIN off, jumping pays only through SPEED_PAY (speed over new ground on his way, not farmable), so a hop
+#                 that does not buy speed is a small loss. Equilibrium: hop when it makes the way faster, not otherwise (each
+#                 side alone pays its own; nothing passes between them: goal 1, speed and movement). With the enemy in view it
+#                 costs nothing (the owner, 2026-10-19: few jumps in fights, his own choice there). 0: off. Counted:
+#                 stats["jump_cost"] (JC_COLS, the counted seats).
+JUMP_COST = float(os.environ.get("JUMP_COST") or 0.0)
+JC_COLS = ("player-frames where it applies (alive, no enemy in view)", "take-offs costed", "cost summed")
 # v0.3.7 (the owner's go of 2026-10-19), three switches, all off (or as today) by default:
 #   JUMP_EVERY=<share> (a PLAY_VAR, live; 1 = always) the jump key read from his output on every frame (on that share of the
 #                 frames between his hand's readings, drawn per seat and frame from a random stream of its own): his left hand
@@ -1489,7 +1511,8 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "r_long", "op_lab", "pf_node", "emg_links",
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
                  "rail_m", "rail_t0", "rail_shot", "rail_pairs",    # (RAIL_START_P)
-                 "pro_mm", "pro_t0", "pro_s0")                     # (PRO_START_P)
+                 "pro_mm", "pro_t0", "pro_s0",                     # (PRO_START_P)
+                 "pa_closed", "pa_since", "pa_pos", "pa_life", "stag_first")    # (the pre-aim counters, STAGGER_START)
 MOMENT_HIST = ("opp_hist", "v02_q", "drift_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
@@ -1518,6 +1541,35 @@ RAIL_FAR_HI = float(os.environ.get("RAIL_FAR_HI") or 900.0)
 #                 matters (goals 2 and 4: weapon use, counterplay). 0: off. A training switch (pay only).
 RAIL_STREAK_PAY = float(os.environ.get("RAIL_STREAK_PAY") or 0.0)
 RAIL_STREAK_CAP = int(float(os.environ.get("RAIL_STREAK_CAP") or 3))
+#   PREAIM_PAY=<k> (v0.3.9, the owner, 2026-10-21, after his Blood Run duel against v0.3.8: pre-aiming, "looking where the enemy will
+#                 come from when it matters") a fresh sighting between the two players of a duel: the frame the line between them
+#                 opens (an eye to the other's body, 8 u above his origin, clear, as the sight test traces it, within 4000 u; no
+#                 view cone: either one's line will do) after it was shut for PREAIM_SHUT seconds (1.0) or more; both alive (and
+#                 not waiting to respawn); neither placed in the last PREAIM_SHUT seconds (a spawn, a run's or a moment's start,
+#                 a teleporter: a move of 100 u or more in one frame, or his life's clock begun again); only in games: NORMAL
+#                 rounds (whole games, mid-game and pro starts too), not one-weapon rounds, not item, jump or rocket jump runs,
+#                 not the test map's rooms. On that frame each player's error: the angle from his view (yaw and pitch) to the
+#                 other's chest (that same point 8 u above the origin), q = clip(1 - err / 60, 0, 1); player i is paid
+#                 k x (q_i - q_j) and j the same less (zero-sum, once a sighting; its own term, not in `dealt`, not in r_long,
+#                 as RAIL_FAR_PAY). Equilibrium in self-play: each side gains what the other loses by facing the corner the
+#                 other comes round, so both learn to hold their crosshair where the enemy will appear and to come round where
+#                 he is not looking (wide, from above, from another door), and a sighting that is the other's surprise is
+#                 worth more than his (goals 2, 3 and 4: weapon use, positioning, counterplay). 0: off. A training switch.
+#                 Counters always on (they read the state only: the random stream is the same): stats["preaim"] (4 x NW, by the
+#                 weapon in his hand: sightings, the error summed, within 15 deg, q summed) and stats["preaim_x"] (PREAIM_X_COLS)
+#                 for the counted seats (_counted, policy seats).
+PREAIM_PAY = float(os.environ.get("PREAIM_PAY") or 0.0)
+PREAIM_SHUT = float(os.environ.get("PREAIM_SHUT") or 1.0)
+PREAIM_X_COLS = ("seat-frames in games, both alive (counted seats)", "pay to every seat, summed (zero-sum: 0)", "pay to the counted seats",
+                 "pay, absolute, summed over every seat")
+#   STAGGER_START=1 (v0.3.9, the owner, 2026-10-21: the safe restart, "settings for the games that start next; no running game
+#                 cut off") the first whole game (GAME_P) of each match after a simulator is made begins at a drawn point of its
+#                 clock (0 to GAME_LEN seconds gone, uniform), 0-0, every item there, as a whole game's start is otherwise: the
+#                 games of a process do not all end together, ten minutes after a (re)start. A late round, a mid-game or a spawn
+#                 start, a pro start (its own clock) are as before; a match's later games begin at 0:00. Its own random stream
+#                 (stag_rng): the run's is untouched. Counted: stats["stagger"] (games so begun, their start seconds summed).
+#                 A training switch.
+STAGGER_START = float(os.environ.get("STAGGER_START") or 0.0) > 0
 RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
              "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
 PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
@@ -1540,7 +1592,8 @@ PLAY_VARS = PLAY_VARS + ("ZOOM_PERCEPT",)
 LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", "HOP_QUIET_HEARD", "HOP_QUIET_NEAR",
              "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG",
              "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY",    # (v0.3.7)
-             "BIG_PICK_SEQ", "RG_FAR_PRICE", "RG_FAR_DIST")                                                         # (v0.3.8)
+             "BIG_PICK_SEQ", "RG_FAR_PRICE", "RG_FAR_DIST",                                                         # (v0.3.8)
+             "JUMP_COST")                                                                                           # (v0.3.9)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1555,6 +1608,9 @@ def live_values(get):
     v["SPEED_PAY"] = float(get("SPEED_PAY") or 0.0)
     v["SPEED_PAY_RUN"] = float(get("SPEED_PAY_RUN") or v["SPEED_PAY"])
     v["HOP_PAY"] = float(get("HOP_PAY") or 0.0)
+    v["JUMP_COST"] = float(get("JUMP_COST") or 0.0)
+    if v["JUMP_COST"] < 0:
+        raise ValueError("JUMP_COST must be 0 or more")
     v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
     v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
     v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
@@ -2688,6 +2744,8 @@ class DuelEnv:
         self.rsp_wait = np.zeros(self.n, np.int64)          # (RESPAWN_QL) frames until he is back; 0: in play
         self.rsp_born = np.zeros(self.n, bool)              # (RESPAWN_QL) back at a spawn point on this frame
         self.rng = np.random.default_rng(seed)
+        self.stag_rng = np.random.default_rng([abs(int(seed)), 0x57A6])     # (STAGGER_START) its own stream: the run's untouched
+        self.stag_first = np.ones(self.M, bool)             # (STAGGER_START) the match's first whole game is still to come
         self.substeps = tuple(substeps)
         self.dmg_reward = dmg_reward
         self.loadout = loadout
@@ -3225,6 +3283,13 @@ class DuelEnv:
                 if JUMP_RUNUP > 0:
                     self._jump_runup()
                     self._jump_runup_drop()
+                sk_ = JUMP_SKIP.get(mp_, set())                  # (JUMP_SKIP) the jumps the owner left out of practice
+                for k_ in [k_ for k_ in list(self.jump_tries) if k_ < self.n_real_jumps and int(self.jumps[k_]["id"]) in sk_]:
+                    del self.jump_tries[k_]
+                    self.jump_far = {kk_: v_ for kk_, v_ in self.jump_far.items() if kk_[0] != k_}
+                    self.jrunup = {kk_: v_ for kk_, v_ in self.jrunup.items() if kk_[0] != k_}
+                    self.jrunup_line = {kk_ for kk_ in self.jrunup_line if kk_[0] != k_}
+                    self.jstart.pop(k_, None)
         self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
         self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
         self.rj_run_p = RJ_RUN_P
@@ -3496,6 +3561,11 @@ class DuelEnv:
             self.stats[wn + "_hits"] = 0
             self.stats[wn + "_frags"] = 0
         self.stats["hurt_dmg"], self.stats["void_deaths"] = 0.0, 0
+        self.stats["preaim"] = np.zeros((4, NW))         # (PREAIM_PAY) fresh sightings by the weapon in hand: n, error summed, within 15 deg, q summed
+        self.stats["preaim_x"] = np.zeros(len(PREAIM_X_COLS))
+        self.pa_closed = None                            # (PREAIM_PAY) the books, made at the first frame (_preaim)
+        if STAGGER_START:
+            self.stats["stagger"] = np.zeros(2)          # (STAGGER_START) games begun at a drawn point of the clock, their start seconds
         if RESPAWN_QL:                                       # (RESPAWN_QL) deaths that waited, player-frames out of play
             self.stats["rsp_waits"], self.stats["rsp_wait_frames"] = 0, 0
         # (HAND_TEACH) the weapon in his hand with nobody in view: the pros' table for this map, what is kept a player, the counters
@@ -5119,6 +5189,84 @@ class DuelEnv:
                 else:
                     self.rail_streak[i_] = 0
             self.rail_streak[~alive] = 0
+
+    def _preaim(self, s, reward):
+        """(PREAIM_PAY) the fresh sightings of this frame (see PREAIM_PAY): with the switch on, the zero-sum pay into
+        reward; the counters always (state read only, no random draw). Duels only (a group of two)"""
+        g_ = self._others_arr().shape[1] + 1
+        if g_ != 2 or self.lab is not None or self.fixed_kind is not None:
+            return
+        n, M = self.n, self.M
+        pos = np.asarray(s[:n, :3], np.float64)
+        if self.pa_closed is None:
+            self.pa_closed = np.zeros(M)                     # seconds the line between a match's two players has been shut
+            self.pa_since = np.zeros(n)                      # seconds since he was placed
+            self.pa_pos = pos.copy()
+            self.pa_life = np.asarray(self.life_t[:n], np.float64).copy()
+        moved = np.linalg.norm(pos - self.pa_pos, axis=1) >= 100.0
+        born = np.asarray(self.life_t[:n], np.float64) < self.pa_life
+        self.pa_since = np.where(moved | born, 0.0, self.pa_since + DT)
+        self.pa_pos = pos.copy()
+        self.pa_life = np.asarray(self.life_t[:n], np.float64).copy()
+        a_ = np.arange(0, n, g_)
+        b_ = a_ + 1
+        game = (self.kind[:M] == NORMAL) & (self.mode[:M] < 0) & (self.run_k[a_] < 0) & (self.run_k[b_] < 0)
+        alive = (self.hp[:n] > 0) & (self.rsp_wait[:n] <= 0)
+        both = game & alive[a_] & alive[b_]
+        op = np.zeros(M, bool)
+        c_ = np.nonzero(both)[0]
+        if len(c_):
+            vis_ = np.asarray(self.visible, bool)[:n]
+            kn_ = vis_[a_[c_]] | vis_[b_[c_]]                # in view: the line is clear
+            op[c_[kn_]] = True
+            r_ = c_[~kn_]
+            if len(r_):
+                eye = self._eye(s)
+                up_ = np.array([0, 0, 8.0], np.float32)
+                ia_, ib_ = a_[r_], b_[r_]
+                near_ = np.linalg.norm(s[ib_, :3] - eye[ia_], axis=1) < 4000
+                r_, ia_, ib_ = r_[near_], ia_[near_], ib_[near_]
+                if len(r_):
+                    l1_ = self._los(eye[ia_], s[ib_, :3] + up_)
+                    op[r_[l1_]] = True
+                    r2_ = ~l1_
+                    if r2_.any():
+                        l2_ = self._los(eye[ib_[r2_]], s[ia_[r2_], :3] + up_)
+                        op[r_[r2_][l2_]] = True
+        sh_ = PREAIM_SHUT - 1e-6
+        fresh = op & (self.pa_closed >= sh_) & (self.pa_since[a_] >= sh_) & (self.pa_since[b_] >= sh_)
+        self.pa_closed = np.where(~game, 0.0, np.where(op, 0.0, self.pa_closed + DT))
+        X_ = self.stats["preaim_x"]
+        cnt = (self.script[:n] == 0) & self._counted(np.arange(n))
+        X_[0] += float(cnt[a_[both]].sum() + cnt[b_[both]].sum())
+        f_ = np.nonzero(fresh)[0]
+        if not len(f_):
+            return
+        ii_ = np.concatenate([a_[f_], b_[f_]])
+        jj_ = np.concatenate([b_[f_], a_[f_]])
+        eye = self._eye(s)
+        yr, pr = np.radians(self.yaw[ii_]), np.radians(self.pitch[ii_])
+        fd_ = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
+        to_ = s[jj_, :3] + np.array([0, 0, 8.0], np.float32) - eye[ii_]
+        cos_ = (to_ * fd_).sum(1) / (np.linalg.norm(to_, axis=1) * np.linalg.norm(fd_, axis=1) + 1e-9)
+        err = np.degrees(np.arccos(np.clip(cos_, -1.0, 1.0)))
+        q = np.clip(1.0 - err / 60.0, 0.0, 1.0)
+        if PREAIM_PAY > 0:
+            k_ = len(f_)
+            d_ = PREAIM_PAY * (q[:k_] - q[k_:])
+            reward[a_[f_]] += d_.astype(reward.dtype)
+            reward[b_[f_]] -= d_.astype(reward.dtype)
+            pay_ = np.concatenate([d_, -d_])
+            X_[1] += float(pay_.sum())
+            X_[2] += float(pay_[cnt[ii_]].sum())
+            X_[3] += float(np.abs(pay_).sum())
+        P_ = self.stats["preaim"]
+        c2_ = cnt[ii_]
+        w_ = self.weapon[ii_][c2_]
+        np.add.at(P_[0], w_, 1.0)
+        np.add.at(P_[1], w_, err[c2_])
+        np.add.at(P_[2], w_, (err[c2_] <= 15.0).astype(np.float64))
+        np.add.at(P_[3], w_, q[c2_])
 
     def _mates(self, i):
         """the other players of player i's group"""
@@ -7853,6 +8001,14 @@ class DuelEnv:
         self._spawn(int(q[1]), avoid=self.w.state()[int(q[0]), :3])
         self.item_up[m], self.item_t[m] = True, 0.0
         self.contest_t[m] = -1.0
+        if STAGGER_START and not late and self.stag_first[m]:      # (STAGGER_START) the match's first whole game: a drawn point of its clock
+            t_ = int(self.stag_rng.integers(0, GAME_FRAMES + 1))
+            self.g_tick[m], self.round_t[m] = t_, np.float32(t_ * DT)
+            if self.win_tab is not None:
+                self.g_p[m] = float(self._win_p(np.zeros(1), np.array([GAME_LEN - t_ * DT]))[0])
+            self.stats["stagger"] += (1.0, t_ * DT)
+        if not late:
+            self.stag_first[m] = False
         self.stats["games"][15] += 1
         self._hd_game(q, 2 if late else 1)                  # (HEAD_EVENTS) the win label's game number
         if MOMENTS:
@@ -9667,6 +9823,17 @@ class DuelEnv:
             self.aw_can = can_                               # (AWARE_LOG) this frame's take-offs
         if HOP_CHAIN > 0:                                    # chains of hops kept at speed (see HOP_CHAIN)
             reward += self._hop_chain(s, prev, jump, human, pkind, in_run)
+        if JUMP_COST > 0 and self.lab is None and self.fixed_kind is None:     # (JUMP_COST) a flat cost a take-off, nobody in view
+            jc_ = self.stats.get("jump_cost")
+            if jc_ is None:                                  # (turned on by live.json in a running simulator: begins here)
+                jc_ = self.stats["jump_cost"] = np.zeros(len(JC_COLS))
+            nv_ = ~np.asarray(self.visible, bool)[:self.n]
+            ok_ = human & (self.hp > 0) & nv_ & (((pkind == NORMAL) & ~in_run) | (in_run & ~self.jrun & ~self.rjrun))
+            off_ = ((jump > 0) & (s[:, 6] < 0.5) & (s[:, 5] > 100.0) & (s[:, 5] < HOP_VZ)
+                    & ((prev[:, 6] > 0.5) | (prev[:, 5] <= 0.0)) & ok_)                 # a take-off: from the floor, or touched inside the frame
+            reward -= JUMP_COST * off_
+            c_ = self._counted(np.arange(self.n))
+            jc_ += (float((ok_ & c_).sum()), float((off_ & c_).sum()), JUMP_COST * float((off_ & c_).sum()))
         blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         if BLIND_RULE:                                       # (rockets by where they land, below; plasma and grenades free)
             bill = blind & np.isin(self.weapon, (MG, SG, LG, RG, HMG))
@@ -10387,6 +10554,8 @@ class DuelEnv:
                         at_ = (np.linalg.norm(p_ - B_, axis=1) < ring_) & (p_[:, 2] >= B_[:, 2] - 40.0)
                         if JUMP_OVER_ANY >= 2:                   # (=2) this rule alone: "been at the take-off, then at the landing
                             ov_ = ~self.jrun_over[jr] & at_ & far_ & high_ & landed_    # some way" counted walks round (Hektik 15)
+                            if JUMP_OVER_ANY >= 3:               # (=3) ... and down no shorter than the gap less 64 u from the take-off
+                                ov_ &= ((p_[:, :2] - A_[:, :2]) * -u_).sum(1) >= gap_ - 64.0
                         else:
                             ov_ |= ~self.jrun_over[jr] & at_ & far_ & high_ & landed_
                         self.jrun_lift[jr[landed_]] = p_[landed_]
@@ -10784,6 +10953,7 @@ class DuelEnv:
             self._note_close(vh, s, to, dist)
         self._teach_update()
         info = dict(events=events)
+        self._preaim(s, reward)                              # (PREAIM_PAY) fresh sightings: the counters, always; the pay with the switch on
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or
             info["legs_lab"], info["legs_held"] = self.legs_lab.copy(), self.legs_wh.copy()      # would have in a withheld stretch
