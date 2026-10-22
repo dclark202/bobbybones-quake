@@ -2078,7 +2078,10 @@ def main():
 
     # what a checkpoint says of his clock (the checks' tools and the export read it): 600 when the games' time is all whole
     # games and mid-game starts (v0.2.2: one clock, one score, one memory a game), 120 otherwise (two-minute rounds)
-    ROUND_SECS_CK = 600.0 if float(getattr(E_, "GAME_P", 0.0)) + float(getattr(E_, "MID_START_P", 0.0)) >= 0.99 else 120.0
+    # (2026-10-22: every game-clock kind counts: whole games, late rounds and every moment start, the pros' starts too;
+    # GAME_P + MID_START_P alone labelled v0.3.7 to v0.3.10 two-minute rounds)
+    ROUND_SECS_CK = 600.0 if (float(getattr(E_, "GAME_P", 0.0)) + float(getattr(E_, "LATE_P", 0.0))
+                              + float(getattr(E_, "MOMENT_P", getattr(E_, "MID_START_P", 0.0)))) >= 0.99 else 120.0
 
     LS = live_settings_init(out, E_)                                     # (the safe restart) <run>/live_settings.env: see LS_SPEC
     LIVE_KEPT = None                                                     # (B-265) the live values in force, once a live.json is applied

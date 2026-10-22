@@ -96,7 +96,10 @@ class SeatClock:
         if self.own:                                         # (as the simulator: a round's clock is a sum of float32 steps, a game's
             self.tick += 1                                   # is its frame count times the step)
             self.ct += self.E.DT
-            self.env.clock_t = np.where(self.gs, np.float32(self.tick * self.E.DT), self.ct)
+            tk_ = self.tick
+            if getattr(self.E, "OVERTIME", False) and tk_ > self.E.GAME_FRAMES:    # (OVERTIME) a period: the last OT_LEN s again
+                tk_ = int(self.env._ot_fold(tk_))
+            self.env.clock_t = np.where(self.gs, np.float32(tk_ * self.E.DT), self.ct)
         elif not self.left_full and hasattr(self.env, "v02_left"):      # (a frozen module of v0.2: the same rule through its v02_left)
             self.ct += self.E.DT
             self.env.v02_left = np.clip(1.0 - self.ct.astype(np.float64) / max(self.rounds[0], 1e-3), 0.0, 1.0)
@@ -217,7 +220,15 @@ def play(job):
     NS_, SZ_ = len(SN_), np.zeros(n, np.int64)
     sty = dict(alive=np.zeros((2, NS_)), vis=np.zeros((2, NS_)), hand=np.zeros((2, NS_, 3)), frags=np.zeros((2, NS_)), deaths=np.zeros((2, NS_)),
                lives=np.zeros((2, NS_)))
-    for t in range(frames):
+    # (OVERTIME, 2026-10-22) a game level at the limit goes on in periods of OT_LEN, up to OT_CAP, as in training and the game;
+    # a game decided keeps the score it had when it ended; the counters are the regulation minutes'
+    OT_ = bool(getattr(E, "OVERTIME", False))
+    end_ = frames
+    final = None
+    ot_n, reg_ = 0, None
+    t = -1
+    while t + 1 < end_:
+        t += 1
         a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
@@ -319,11 +330,31 @@ def play(job):
         was = alive.copy()
         hp0, ar0, has0 = env.hp.copy(), env.armor.copy(), env.has[:, big].copy()
         sc_.after(t, info["events"], (h, h2 if opp_pol is not None else None), (pol, opp_pol))    # a round seat's clock, score and memory start over; a game seat's never
+        if t + 1 == end_:
+            sp_ = score.reshape(-1, 2)
+            if final is None:                                   # the regulation limit
+                final = sp_.copy()
+                import copy as _cp
+                reg_ = (kills.copy(), _cp.deepcopy(c), _cp.deepcopy(sty), [list(x) for x in first],
+                        {k: np.array(env.stats[k], np.float64).copy() for k in SK})
+                live_ = final[:, 0] == final[:, 1]
+            else:                                               # a period's end: the games still in it take its score
+                final[live_] = sp_[live_]
+                live_ = live_ & (sp_[:, 0] == sp_[:, 1])
+            if OT_ and live_.any() and ot_n < int(getattr(E, "OT_CAP", 10)):
+                ot_n += 1
+                end_ += int(round(float(getattr(E, "OT_LEN", 120.0)) / E.DT))
+    if reg_ is not None:
+        kills, c, sty, first, st_reg = reg_
+        score = final.reshape(-1)
+    else:
+        st_reg = {k: np.array(env.stats[k], np.float64) for k in SK}
     flip = slice(None, None, -1) if swap else slice(None)
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
+                overtime_periods=ot_n,
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),
                 sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_,
-                st={k: (np.array(env.stats[k], np.float64) - st0[k]).tolist() for k in SK})
+                st={k: (st_reg[k] - st0[k]).tolist() for k in SK})
 
 
 def main():
