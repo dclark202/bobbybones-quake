@@ -181,7 +181,7 @@ rep('''        s = self.state
         d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
         d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         seen = self.acquired[lis] & ~alone
-        ok = (seen | (d < HEAR_EVT)) & ~alone & (self.hp[lis] > 0)
+        ok = (seen | (d < self._evt_reach(lis))) & ~alone & (self.hp[lis] > 0)
         self.shot_t[lis[ok]] = 0.0''', '''        s = self.state
         lis = self.others[src].reshape(-1)                  # every other member of the shooter's group
         src = np.repeat(src, self.G - 1)
@@ -191,7 +191,7 @@ rep('''        s = self.state
         d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         acq_p = self.acquired[lis] if self.G == 2 else self.acq2[lis, (self.slot[src] - self.slot[lis]) % self.G - 1]
         seen = acq_p & ~alone
-        ok = (seen | (d < HEAR_EVT)) & ~alone & (self.hp[lis] > 0)
+        ok = (seen | (d < self._evt_reach(lis))) & ~alone & (self.hp[lis] > 0)
         self.shot_src[lis[ok]] = src[ok]
         self.shot_t[lis[ok]] = 0.0''')
 rep('''            sh, li = src[hit], lis[hit]
@@ -381,7 +381,7 @@ rep('''        opp_all = ar ^ 1
         hurt = np.nonzero((dmg_taken > 0) & (self.hp > 0))[0]              # pain sounds: the opponent hears them within earshot
         if len(hurt):
             lis_ = hurt ^ 1
-            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
+            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
             if HEAR_QL:                                      # (HEAR_QL) where the game sends it
                 near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
@@ -393,7 +393,7 @@ rep('''        opp_all = ar ^ 1
         if len(hurt):
             lis_ = self.others[hurt].reshape(-1)
             hurt = np.repeat(hurt, self.G - 1)
-            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
+            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
             if HEAR_QL:                                      # (HEAR_QL) where the game sends it
                 near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
@@ -480,6 +480,8 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
                 heard &= self.rsp_wait[opp] <= 0
             if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
                 heard &= self._hear_ok(ar, opp)
+            if LG_DEAF:                                      # (LG_DEAF) his own lightning gun muffles the footsteps
+                heard &= dist < self._lgd_hear_reach(ar, opp)
             self.vis2[:, k_] = vis
             if SURPRISE_MS > 0:                              # off the crosshair and unexpected: noticed later
                 ecc_ = np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0)))
@@ -490,7 +492,7 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
             if heard.any() and HEAR_FIX:                     # (HEAR_FIX) placed by the sound: its direction and loudness
-                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard])
+                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard], muff=self._lgd_muff(ar[heard], opp[heard]))
             elif heard.any():
                 self.known2[heard, k_] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \\
                     np.array([1, 1, 0], np.float32)

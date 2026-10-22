@@ -406,6 +406,8 @@ class ffabot(duelbot):
                 heard = (~vis) & live[opp] & live & (dist < E.HEAR) & env.hf_ev[opp]
                 if getattr(E, "HEAR_QL", False):
                     heard &= env._hear_ok(ar, opp)
+            if getattr(E, "LG_DEAF", False):                 # (LG_DEAF) his own lightning gun muffles the footsteps (as step())
+                heard &= dist < env._lgd_hear_reach(ar, opp)
             env.vis2[:, k_] = vis
             need_ = max(1, env.acquire_frames - env.react_frames)
             if getattr(E, "SURPRISE_MS", 0) > 0 and hasattr(env, "acq_extra2"):   # off the crosshair and unexpected: noticed later (as in training)
@@ -418,7 +420,7 @@ class ffabot(duelbot):
             env.acq2[:, k_] = acq
             env.known2[acq, k_] = s[opp[acq], :3]
             if heard.any() and getattr(E, "HEAR_FIX", False):     # (HEAR_FIX) placed by the sound, as step() places him
-                env.known2[heard, k_] = env._hf_place(np.nonzero(heard)[0], opp[heard])
+                env.known2[heard, k_] = env._hf_place(np.nonzero(heard)[0], opp[heard], muff=env._lgd_muff(ar[heard], opp[heard]))                     if getattr(E, "LG_DEAF", False) else env._hf_place(np.nonzero(heard)[0], opp[heard])
             elif heard.any():
                 env.known2[heard, k_] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                     np.array([1, 1, 0], np.float32)
@@ -579,6 +581,9 @@ class ffabot(duelbot):
         shot_, hop_, steps_ = np.zeros(SEATS, bool), np.zeros(SEATS, bool), np.zeros(SEATS, bool)     # (v0.2: note_noise, below)
         gw_ = env.state[:, 6] > 0.5                          # (HEAR_FIX) on the ground the frame before
         hurt = {}
+        lgd_ = getattr(E, "LG_DEAF", False)
+        if lgd_:
+            env.lgd_fire[:] = False                          # (LG_DEAF) set below for the seats in play
         for k, p, st in seated:
             bot = is_bot(p)
             up = st.health > 0
@@ -611,6 +616,8 @@ class ffabot(duelbot):
             # sounds: running steps, shots, jumps, teleports; what people fire is read from their commands
             pos, ground = env.state[k, :3].copy(), float(env.state[k, 6])
             fire = bool(self.fired[k]) if bot else bool(minqlx.ran_usercmd(p.id)[1] & 1) and int(st.weapon) != QLNUM["g"]
+            if lgd_:                                         # (LG_DEAF) the trigger held on the LG (the game's weapon, the command
+                env.lgd_fire[k] = up and bool(minqlx.ran_usercmd(p.id)[1] & 1) and int(st.weapon) == QLNUM["lg"]    # that ran)
             noisy[k] = up and ((ground > 0.5 and math.hypot(env.state[k, 3], env.state[k, 4]) > 200.0) or fire)
             po = self.prev.get(k)
             # (v0.2) his noise of this frame as the simulator's step() counts it: a shot that left (a Bobby's by his own
@@ -651,7 +658,10 @@ class ffabot(duelbot):
             # arrays: a call per Bobby would add every seat's noise once per Bobby.
             if getattr(E, "HEAR_FIX", False):                # (HEAR_FIX) footsteps as events, as step() makes them
                 foot_ = env._hf_steps(env.state[:, 6] > 0.5, gw_, env.state[:, 3:6], env.duck, (env.hp > 0) & present)
-                env.hear((shot_ | hop_ | foot_) & present)
+                if lgd_:                                     # (LG_DEAF) the footsteps alone, for the muffling (as step())
+                    env.hear((shot_ | hop_ | foot_) & present, foot=foot_ & ~(shot_ | hop_) & present)
+                else:
+                    env.hear((shot_ | hop_ | foot_) & present)
             else:
                 env.hear((noisy | hop_) & present)
             env.note_noise(shot_ & present, hop_ & present, steps_ & present)
@@ -703,7 +713,7 @@ class ffabot(duelbot):
                     env.note_hit(k, took)
             if took > 0 and hasattr(env, "pain_t"):
                 for b in bot_seats:
-                    if b != k and float(np.linalg.norm(env.state[b, :3] - env.state[k, :3])) < E.HEAR_EVT:
+                    if b != k and float(np.linalg.norm(env.state[b, :3] - env.state[k, :3])) <                             (float(env._evt_reach(b)) if getattr(E, "LG_DEAF", False) else E.HEAR_EVT):     # (LG_DEAF: firing the LG, 1,000)
                         env.pain_t[b], env.pain_b[b] = 0.0, min(3, int(max(0, st.health)) // 25)
                         if getattr(E, "EN_STACK", False) and hasattr(env, "pain_src"):     # (B-257: whose pain it was, as step() keeps it)
                             env.pain_src[b] = k

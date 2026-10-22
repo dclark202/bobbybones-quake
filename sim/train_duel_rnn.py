@@ -4021,6 +4021,32 @@ def main():
             jm_ = max(1e-9, float(JC_[0]) * DT_MIN)
             rec["jump_cost"] = dict(cost=float(getattr(E_, "JUMP_COST", 0.0)), minutes=round(float(JC_[0]) * DT_MIN, 1),
                                     takeoffs_per_player_min=round(float(JC_[1]) / jm_, 2), cost_per_player_min=round(float(JC_[2]) / jm_, 4))
+        if "watch" in agg and "watch_x" in agg:                          # (WATCH_PAY) the look-back score at a fresh sighting by the weapon in hand
+            WA_ = np.asarray(agg["watch"], np.float64).reshape(2, -1)    # (the simulator's stats["watch"]: sightings, score summed; WATCH_X_COLS)
+            WX_ = np.atleast_1d(agg["watch_x"]).astype(np.float64)
+            wn_ = [(w_, k_) for k_, w_ in enumerate(E_.WEAPONS) if w_ != "hmg"]
+            rec["watch"] = dict(pay=float(getattr(E_, "WATCH_PAY", 0.0)), n=dict({w_: int(WA_[0, k_]) for w_, k_ in wn_}, all=int(WA_[0].sum())),
+                                score=dict({w_: round(float(WA_[1, k_] / max(1.0, WA_[0, k_])), 3) for w_, k_ in wn_},
+                                           all=round(float(WA_[1].sum() / max(1.0, WA_[0].sum())), 3)),
+                                pay_sum=round(float(WX_[1]), 6), pay_counted=round(float(WX_[2]), 5), pay_abs=round(float(WX_[3]), 5))
+        if "lg_quiet" in agg:                                            # (LG_QUIET_COST) the LG carried while the enemy is away, by his own senses
+            LQ_ = np.atleast_1d(agg["lg_quiet"]).astype(np.float64)      # (the simulator's LGQ_COLS; counted seats, alive, games)
+            LW_ = np.atleast_1d(agg.get("lg_quiet_w", np.zeros(len(E_.WEAPONS)))).astype(np.float64)
+            lqm_ = max(1e-9, float(LQ_[0]) * DT_MIN)
+            ws_ = LW_ / max(1.0, float(LW_.sum()))
+            ix_ = {w_: k_ for k_, w_ in enumerate(E_.WEAPONS)}
+            rec["lg_quiet"] = dict(cost=float(getattr(E_, "LG_QUIET_COST", 0.0)), minutes=round(float(LQ_[0]) * DT_MIN, 1),
+                                   cost_per_player_min=round(float(LQ_[3]) / lqm_, 4), quiet_share=round(float(LQ_[1] / max(1.0, LQ_[0])), 4),
+                                   lg_quiet_share=round(float(LQ_[2] / max(1.0, LQ_[0])), 4),     # of his time in games: the LG in hand while quiet
+                                   in_hand_quiet=dict(lg=round(float(ws_[ix_["lg"]]), 4), rl=round(float(ws_[ix_["rl"]]), 4), rg=round(float(ws_[ix_["rg"]]), 4),
+                                                      other=round(float(1.0 - ws_[ix_["lg"]] - ws_[ix_["rl"]] - ws_[ix_["rg"]]), 4)))
+        if "lg_late" in agg and "lg_late_n" in agg:                      # (LG_QUIET_COST) weapon changes in the 2 s before a fresh sighting
+            LL_ = np.asarray(agg["lg_late"], np.float64).reshape(len(E_.WEAPONS), -1)
+            ln_ = float(np.atleast_1d(agg["lg_late_n"])[0])
+            pr_ = sorted(((float(LL_[a_, b_]), E_.WEAPONS[a_] + ">" + E_.WEAPONS[b_]) for a_ in range(LL_.shape[0]) for b_ in range(LL_.shape[1])
+                          if LL_[a_, b_] > 0), reverse=True)[:8]
+            rec.setdefault("lg_quiet", {})["late"] = dict(sightings=int(ln_), per_sighting=round(float(LL_.sum()) / max(1.0, ln_), 4),
+                                                          top={k_: int(v_) for v_, k_ in pr_})
         if UNI_GATE or UNI_RES:                                          # (v0.3.4 A, B) the parts' sizes
             with torch.no_grad():
                 rec["gate"] = {n_: round(float(sum(p_.abs().max() for p_ in getattr(pol, n_).parameters())), 6)

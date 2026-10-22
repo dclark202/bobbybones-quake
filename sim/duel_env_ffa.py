@@ -1570,6 +1570,65 @@ PREAIM_X_COLS = ("seat-frames in games, both alive (counted seats)", "pay to eve
 #                 (stag_rng): the run's is untouched. Counted: stats["stagger"] (games so begun, their start seconds summed).
 #                 A training switch.
 STAGGER_START = float(os.environ.get("STAGGER_START") or 0.0) > 0
+#   LG_QUIET_COST=<c> (v0.3.10, live; the owner, 2026-10-22: "small noise pay for LG ... monitor over the first few hours and adjust
+#                 if needed") a cost of c a second while a network's seat (script 0) is alive with the lightning gun in hand and, by
+#                 HIS OWN SENSES, the enemy is away: not noticed in view (`acquired`, his own noticing after the reaction time) for
+#                 3 s or more (lgq_t, his own clock: seconds since he last had the enemy acquired) and nothing of the enemy heard in
+#                 the last 2 s (the newest of what reached his ears: ear_t, the ear inputs' clock that hear() resets on a footstep,
+#                 a jump or landing, a shot or the hum of a rail or a lightning gun; snd_t, the event sounds of _hear (the enemy's
+#                 pickups, shots, jumps, teleports); pain_t, the enemy's pain sound). The cost ramps with the time out of view:
+#                 r = clip((lgq_t - 3) / (10 - 3), 0, 1), c x r x DT a frame; a sound heard in the last 2 s holds it at 0 (it does
+#                 not start the ramp again). Games only: NORMAL rounds, whole games and pro starts (not one-weapon rounds, item,
+#                 jump or rocket jump runs, the test map's rooms). Not in r_long, nothing in `dealt`. Equilibrium in self-play: a
+#                 cost each side pays alone (nothing passes between them): rockets or the rail carried between fights, the LG
+#                 brought out when a close fight is heard or expected; the enemy's sounds become worth more (goals 2 and 4:
+#                 weapon use, counterplay). The escape is a switch while it is quiet (a switch takes time: not at contact). 0: off.
+#                 Counters while it is on (the counted seats): stats["lg_quiet"] (LGQ_COLS), stats["lg_quiet_w"] (quiet frames,
+#                 r > 0, by the weapon in hand), stats["lg_late"] (NW x NW: weapon changes in the 2 s before a fresh sighting, the
+#                 PREAIM_PAY event, from -> to) and stats["lg_late_n"] (those sightings). The clocks and the ring of the last
+#                 2 s (_watch_ring) are kept only while it (or WATCH_PAY) is on and only read the state: no random draw.
+LG_QUIET_COST = float(os.environ.get("LG_QUIET_COST") or 0.0)
+LGQ_UNSEEN, LGQ_FULL, LGQ_HEARD = 3.0, 10.0, 2.0          # (LG_QUIET_COST) out of view from 3 s, full at 10 s; a sound within 2 s holds it
+LGQ_COLS = ("player-frames where it applies (alive, games, counted seats)", "quiet frames (r > 0)", "quiet frames with the LG in hand",
+            "cost summed (counted seats)")
+#   WATCH_PAY=<k> (v0.3.10, live; the owner, 2026-10-22: "back pay for 'having been looking in the right direction prior to enemy
+#                 seen'. This is the first step into resurrecting the 'pay for knowing where the enemy is'") at each fresh
+#                 sighting (exactly PREAIM_PAY's event: the line between the two opens after PREAIM_SHUT s or more shut, both
+#                 alive, neither placed in the last PREAIM_SHUT s, games only), each of the two looks back over the previous
+#                 WATCH_WIN seconds (1.5 s, 60 frames): on every frame of it that he was alive, the line between them was shut
+#                 (the enemy hidden) and that came after his last placement, the angle between his view then (yaw and pitch)
+#                 and the direction from his eye then to the spot the enemy came out at (the enemy's chest, 8 u above his origin,
+#                 on the sighting frame); w = clip(1 - angle / 45, 0, 1). His score: the weighted mean of w over those frames,
+#                 the weights rising linearly from 0.5 (the oldest frame) to 1 (the last before the sighting); 0 when no frame
+#                 counts. Player i is paid k x (s_i - s_j) and j the same less (zero-sum, once a sighting, on the sighting frame;
+#                 not in `dealt`, not in r_long, as PREAIM_PAY). The pay reads the truth (where the enemy came out); his inputs
+#                 stay what he perceives. Equilibrium in self-play: watching an opening pays only if the enemy watched his
+#                 worse, so both learn to watch the openings the other comes out of and to come out of the ones not watched
+#                 (goals 3 and 4: positioning, counterplay). 0: off. Counters while it (or LG_QUIET_COST) is on: stats["watch"]
+#                 (2 x NW by the weapon in hand at the sighting: sightings, score summed) and stats["watch_x"] (WATCH_X_COLS),
+#                 the counted seats.
+WATCH_PAY = float(os.environ.get("WATCH_PAY") or 0.0)
+WATCH_WIN, WATCH_DEG, WATCH_RING = 60, 45.0, 80           # frames looked back (1.5 s), the angle where w reaches 0, the ring kept (2 s)
+WATCH_X_COLS = ("sightings (counted seats)", "pay to every seat, summed (zero-sum: 0)", "pay to the counted seats",
+                "pay, absolute, summed over every seat")
+#   LG_DEAF=1     (v0.3.10, a PLAY_VAR: the checkpoints, checks and plugins carry it; the owner's choice of 2026-10-22, from the game's
+#                 sound files: scratchpad lghum/REPORT.md) his own lightning gun muffles his hearing. While the weapon in his hand
+#                 is the LG (alive) and he is not firing it: an enemy footstep (a footstep alone, not a jump, a landing or a
+#                 shot) is heard only within LGD_STEP units (700; hear()'s 1,000 and the place-from-footsteps rule's HEAR 800
+#                 both cut to it), with LGD_DIR x (d / LGD_STEP)^2 degrees (8) more direction error and LGD_LOUD (0.1) more of
+#                 the distance as error (one draw a sound, as HEAR_FIX: the random stream is the same); the enemy's LG hum is not
+#                 heard (a rail's hum is). While he fires the LG (the trigger held with the LG in hand and ammunition: lgd_fire,
+#                 set by step() and by the plugins): footsteps within LGD_FIRE_STEP (500), every other sound of the enemy
+#                 (pickups, jumps, landings, shots, pain: hear(), _hear, note_shots, the pain sound, note_pickup, note_take, the
+#                 item belief) within LGD_FIRE_EVT (1,000) at most. Item returns, a death's obituary and his own sounds are as
+#                 before. The footstep rules need HEAR_FIX (on since v0.3.8). Off: the simulator as it was.
+LG_DEAF = float(os.environ.get("LG_DEAF") or 0.0) > 0
+LGD_STEP = float(os.environ.get("LGD_STEP") or 700.0)
+LGD_FIRE_STEP = float(os.environ.get("LGD_FIRE_STEP") or 500.0)
+LGD_FIRE_EVT = float(os.environ.get("LGD_FIRE_EVT") or 1000.0)
+LGD_DIR = float(os.environ.get("LGD_DIR") or 8.0)
+LGD_LOUD = float(os.environ.get("LGD_LOUD") or 0.1)
+PLAY_VARS = PLAY_VARS + ("LG_DEAF", "LGD_STEP", "LGD_FIRE_STEP", "LGD_FIRE_EVT", "LGD_DIR", "LGD_LOUD")
 RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
              "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
 PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
@@ -1593,7 +1652,8 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "HIGH_PAY", "HIGH_Z", "RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI", "STACK_DIFF", "BLIND_RL_DMG",
              "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY",    # (v0.3.7)
              "BIG_PICK_SEQ", "RG_FAR_PRICE", "RG_FAR_DIST",                                                         # (v0.3.8)
-             "JUMP_COST")                                                                                           # (v0.3.9)
+             "JUMP_COST",                                                                                           # (v0.3.9)
+             "LG_QUIET_COST", "WATCH_PAY")                                                                          # (v0.3.10)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1611,6 +1671,10 @@ def live_values(get):
     v["JUMP_COST"] = float(get("JUMP_COST") or 0.0)
     if v["JUMP_COST"] < 0:
         raise ValueError("JUMP_COST must be 0 or more")
+    v["LG_QUIET_COST"] = float(get("LG_QUIET_COST") or 0.0)
+    v["WATCH_PAY"] = float(get("WATCH_PAY") or 0.0)
+    if v["LG_QUIET_COST"] < 0 or v["WATCH_PAY"] < 0:
+        raise ValueError("LG_QUIET_COST and WATCH_PAY must be 0 or more")
     v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
     v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
     v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
@@ -2966,6 +3030,10 @@ class DuelEnv:
         self.ear_hum = np.full(self.n, -1, np.int64)        # the humming weapon heard with it (RG, LG) or -1
         self.hf_cnt = np.full(self.n, -1, np.int64)         # (HEAR_FIX) frames since his last footstep (-1: not running)
         self.hf_ev = np.zeros(self.n, bool)                 # (HEAR_FIX) he made a footstep or a jump this frame
+        self.hf_foot = np.zeros(self.n, bool)               # (HEAR_FIX) ... a footstep (LG_DEAF muffles these)
+        self.lgd_fire = np.zeros(self.n, bool)              # (LG_DEAF) he is firing the lightning gun (step() and the plugins set it)
+        self.lgq_t = None                                   # (LG_QUIET_COST) seconds since he last had the enemy acquired: made when on
+        self.wr_ = None                                     # (WATCH_PAY, LG_QUIET_COST) the ring of the last 2 s: made when on
         self.hf_hum = np.zeros(self.n, np.float32)          # (HEAR_FIX) the drifting direction error on a hum (degrees)
         self.stack_p = 0.0                                  # v9: share of spawns with a random stack (health 100-200, armor 0-150)
         self.near_item_p = 0.0                              # v9: share of spawns within 2 s of the mega or the red armor
@@ -4776,13 +4844,22 @@ class DuelEnv:
         self.pad_lift = np.where(start, PAD_LIFT, self.pad_lift)
         return moved.astype(np.float32), np.where(air, 0.0, dpit).astype(np.float32)
 
-    def hear(self, noisy):
-        """noisy: players who made a sound this frame. Everybody notes the nearest enemy he hears (see N_EAR)"""
+    def hear(self, noisy, foot=None):
+        """noisy: players who made a sound this frame. Everybody notes the nearest enemy he hears (see N_EAR). foot (LG_DEAF):
+        those of noisy whose sound was a footstep alone"""
         s, n = self.state, self.n
         oth = self._others_arr()
         d = np.linalg.norm(s[oth, :3] - s[:, None, :3], axis=2)
         hum = ((self.weapon == RG) | (self.weapon == LG))[oth] & (d < HUM_RANGE)       # the weapon's hum, always there
         ok = ((noisy[oth] & (d < EAR_RANGE)) | hum) & (self.hp[oth] > 0) & (self.hp > 0)[:, None]
+        if LG_DEAF:                                          # (LG_DEAF) his own lightning gun muffles footsteps and the enemy's LG hum
+            lv_ = self._lgd_lvl(np.arange(n))[:, None]
+            ft_ = (np.zeros(oth.shape, bool) if foot is None else np.asarray(foot, bool)[oth]) & noisy[oth]
+            r_ev_ = np.where(lv_ == 2, min(EAR_RANGE, LGD_FIRE_EVT), EAR_RANGE)
+            r_ft_ = np.where(lv_ == 2, min(EAR_RANGE, LGD_FIRE_STEP), np.where(lv_ == 1, min(EAR_RANGE, LGD_STEP), EAR_RANGE))
+            hum = hum & ~((self.weapon[oth] == LG) & (lv_ >= 1))
+            ok = (((noisy[oth] & ~ft_ & (d < r_ev_)) | (ft_ & (d < r_ft_))) | hum) & (self.hp[oth] > 0) & (self.hp > 0)[:, None]
+            muf_ = ft_ & (lv_ >= 1)
         if HEAR_QL:                                          # (HEAR_QL) only what the game sends him
             g_ = self._hear_ok(np.broadcast_to(np.arange(n)[:, None], oth.shape), oth)
             ok, hum = ok & g_, hum & g_
@@ -4800,9 +4877,16 @@ class DuelEnv:
             rho_ = math.exp(-DT / max(HF_HUM_TAU, 1e-3))
             self.hf_hum[got] = (rho_ * self.hf_hum[got] + math.sqrt(1.0 - rho_ * rho_) * HF_DIR * z_[:, 0]).astype(np.float32)
             only_hum_ = hum[got, k[got]] & ~noisy[oth][got, k[got]]
-            ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(np.where(only_hum_, self.hf_hum[got], HF_DIR * z_[:, 1]))
-            up = np.clip((to[:, 2] + HF_UP * z_[:, 2]) / 200.0, -1.5, 1.5)
-            dist = np.clip(dist * (1.0 + HF_LOUD * z_[:, 3]), 0.0, EAR_RANGE)
+            if LG_DEAF:                                      # (LG_DEAF) a muffled footstep: more error of direction and distance
+                mf_ = muf_[got, k[got]] & ~only_hum_
+                sd_ = HF_DIR + np.where(mf_, LGD_DIR * (dist / LGD_STEP) ** 2, 0.0)
+                ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(np.where(only_hum_, self.hf_hum[got], sd_ * z_[:, 1]))
+                up = np.clip((to[:, 2] + HF_UP * z_[:, 2]) / 200.0, -1.5, 1.5)
+                dist = np.clip(dist * (1.0 + (HF_LOUD + np.where(mf_, LGD_LOUD, 0.0)) * z_[:, 3]), 0.0, EAR_RANGE)
+            else:
+                ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(np.where(only_hum_, self.hf_hum[got], HF_DIR * z_[:, 1]))
+                up = np.clip((to[:, 2] + HF_UP * z_[:, 2]) / 200.0, -1.5, 1.5)
+                dist = np.clip(dist * (1.0 + HF_LOUD * z_[:, 3]), 0.0, EAR_RANGE)
             close = np.zeros(len(got))
         else:
             ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
@@ -4828,18 +4912,54 @@ class DuelEnv:
         foot_ = run_ & ((self.hf_cnt < 0) | (cnt_ >= HF_STEP_FRAMES))
         self.hf_cnt = np.where(foot_, 0, cnt_).astype(np.int64)
         self.hf_ev = foot_ | (ground_was & ~ground & (vel[:, 2] > 100.0) & alive)
+        self.hf_foot = foot_
         return foot_
 
-    def _hf_place(self, hh, src):
+    def _hf_place(self, hh, src, muff=None):
         """(HEAR_FIX) where players hh place the enemies src they heard: HF_DIR degrees off across, HF_LOUD of the distance
-        off along (one draw a sound), the height HF_UP units off"""
+        off along (one draw a sound), the height HF_UP units off. muff (LG_DEAF): the muffled footsteps among them, with
+        LGD_DIR x (d / LGD_STEP)^2 degrees and LGD_LOUD more"""
         s = self.state
         z_ = self.rng.normal(0, 1, (len(hh), 3))
         tv_ = s[src, :3] - s[hh, :3]
         dh_ = np.hypot(tv_[:, 0], tv_[:, 1]) + 1e-6
-        a_ = np.arctan2(tv_[:, 1], tv_[:, 0]) + np.radians(HF_DIR * z_[:, 0])
-        r_ = dh_ * np.maximum(0.2, 1.0 + HF_LOUD * z_[:, 1])
+        if muff is None:
+            a_ = np.arctan2(tv_[:, 1], tv_[:, 0]) + np.radians(HF_DIR * z_[:, 0])
+            r_ = dh_ * np.maximum(0.2, 1.0 + HF_LOUD * z_[:, 1])
+        else:
+            mf_ = np.asarray(muff, bool)
+            a_ = np.arctan2(tv_[:, 1], tv_[:, 0]) + np.radians((HF_DIR + np.where(mf_, LGD_DIR * (dh_ / LGD_STEP) ** 2, 0.0)) * z_[:, 0])
+            r_ = dh_ * np.maximum(0.2, 1.0 + (HF_LOUD + np.where(mf_, LGD_LOUD, 0.0)) * z_[:, 1])
         return np.stack([s[hh, 0] + np.cos(a_) * r_, s[hh, 1] + np.sin(a_) * r_, s[src, 2] + HF_UP * z_[:, 2]], 1).astype(np.float32)
+
+    def _lgd_lvl(self, lis):
+        """(LG_DEAF) listeners lis: 0 the LG not in his hand (or dead), 1 in hand, 2 firing it"""
+        lis = np.asarray(lis)
+        on_ = (self.weapon[lis] == LG) & (self.hp[lis] > 0)
+        return np.where(on_ & self.lgd_fire[lis], 2, np.where(on_, 1, 0))
+
+    def _evt_reach(self, lis):
+        """the reach of an enemy's event sound (HEAR_EVT) for listeners lis; with LG_DEAF, LGD_FIRE_EVT at most while he
+        fires the lightning gun. Off: HEAR_EVT itself"""
+        if not LG_DEAF:
+            return HEAR_EVT
+        return np.where(self._lgd_lvl(lis) == 2, min(HEAR_EVT, LGD_FIRE_EVT), HEAR_EVT)
+
+    def _lgd_hear_reach(self, lis, src):
+        """(LG_DEAF) how far listeners lis place the enemies src from a sound this frame (HEAR): a footstep alone within
+        LGD_STEP with his LG in hand, LGD_FIRE_STEP firing it; a jump within LGD_FIRE_EVT at most while firing"""
+        lv_ = self._lgd_lvl(lis)
+        ft_ = self.hf_foot[np.asarray(src)] if HEAR_FIX else np.ones(np.shape(lv_), bool)
+        r_ft_ = np.where(lv_ == 2, min(HEAR, LGD_FIRE_STEP), np.where(lv_ == 1, min(HEAR, LGD_STEP), HEAR))
+        r_ev_ = np.where(lv_ == 2, min(HEAR, LGD_FIRE_EVT), HEAR)
+        return np.where(ft_, r_ft_, r_ev_)
+
+    def _lgd_muff(self, lis, src):
+        """(LG_DEAF) which of the sounds of enemies src that listeners lis placed were muffled footsteps; None with it off"""
+        if not LG_DEAF:
+            return None
+        ft_ = self.hf_foot[np.asarray(src)] if HEAR_FIX else np.ones(len(np.atleast_1d(lis)), bool)
+        return ft_ & (self._lgd_lvl(lis) >= 1)
 
     def _hear_ok(self, lis, src=None, pos=None):
         """(HEAR_QL) the game sends player lis the sounds of player src (his box) or of the point pos (an item's place): his
@@ -5240,6 +5360,10 @@ class DuelEnv:
         cnt = (self.script[:n] == 0) & self._counted(np.arange(n))
         X_[0] += float(cnt[a_[both]].sum() + cnt[b_[both]].sum())
         f_ = np.nonzero(fresh)[0]
+        if WATCH_PAY > 0 or LG_QUIET_COST > 0:               # (WATCH_PAY, LG_QUIET_COST) the look-back and the late switches; the ring
+            self._watch(s, reward, f_, a_, b_, cnt, op)
+        else:
+            self.wr_ = None                                  # (both off, by a live setting: the ring begins again when one is on)
         if not len(f_):
             return
         ii_ = np.concatenate([a_[f_], b_[f_]])
@@ -5267,6 +5391,94 @@ class DuelEnv:
         np.add.at(P_[1], w_, err[c2_])
         np.add.at(P_[2], w_, (err[c2_] <= 15.0).astype(np.float64))
         np.add.at(P_[3], w_, q[c2_])
+
+    def _watch(self, s, reward, f_, a_, b_, cnt, op):
+        """(WATCH_PAY, LG_QUIET_COST; from _preaim) the matches f_ with a fresh sighting this frame: each seat's look-back
+        score (see WATCH_PAY) and the zero-sum pay with WATCH_PAY on; the weapon changes of the last 2 s (lg_late); then
+        this frame into the ring (state read only, no random draw)"""
+        n, L = self.n, WATCH_RING
+        if self.wr_ is None:                                 # (made when first on: a frame not yet kept counts as not alive)
+            self.wr_ = dict(h=0, yaw=np.zeros((L, n), np.float32), pit=np.zeros((L, n), np.float32),
+                            eye=np.zeros((L, n, 3), np.float32), alive=np.zeros((L, n), bool), hid=np.zeros((L, n), bool),
+                            w=np.full((L, n), -1, np.int64))
+        R_ = self.wr_
+        alive = (self.hp[:n] > 0) & (self.rsp_wait[:n] <= 0)
+        if len(f_):
+            ii_ = np.concatenate([a_[f_], b_[f_]])
+            jj_ = np.concatenate([b_[f_], a_[f_]])
+            k_ = np.arange(1, L + 1)                         # frames ago
+            ix_ = (R_["h"] - k_) % L
+            after_ = (k_[:, None] * DT) <= (self.pa_since[ii_][None, :] + 1e-6)     # after his last placement
+            c2_ = cnt[ii_]
+            if "watch" not in self.stats:
+                self.stats["watch"], self.stats["watch_x"] = np.zeros((2, NW)), np.zeros(len(WATCH_X_COLS))
+            # the look-back: the last WATCH_WIN frames
+            kw_ = ix_[:WATCH_WIN]
+            el_ = R_["alive"][kw_][:, ii_] & R_["hid"][kw_][:, ii_] & after_[:WATCH_WIN]
+            yr_, pr_ = np.radians(R_["yaw"][kw_][:, ii_]), np.radians(R_["pit"][kw_][:, ii_])
+            fd_ = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 2)
+            to_ = (s[jj_, :3] + np.array([0, 0, 8.0], np.float32))[None, :, :] - R_["eye"][kw_][:, ii_]
+            cos_ = (to_ * fd_).sum(2) / (np.linalg.norm(to_, axis=2) * np.linalg.norm(fd_, axis=2) + 1e-9)
+            ang_ = np.degrees(np.arccos(np.clip(cos_, -1.0, 1.0)))
+            w_ = np.clip(1.0 - ang_ / WATCH_DEG, 0.0, 1.0)
+            wt_ = (0.5 + 0.5 * (WATCH_WIN - k_[:WATCH_WIN]) / max(1, WATCH_WIN - 1))[:, None] * el_
+            sc_ = np.where(wt_.sum(0) > 0, (wt_ * w_).sum(0) / np.maximum(wt_.sum(0), 1e-9), 0.0)
+            X_ = self.stats["watch_x"]
+            if WATCH_PAY > 0:
+                m_ = len(f_)
+                d_ = WATCH_PAY * (sc_[:m_] - sc_[m_:])
+                reward[a_[f_]] += d_.astype(reward.dtype)
+                reward[b_[f_]] -= d_.astype(reward.dtype)
+                pay_ = np.concatenate([d_, -d_])
+                X_[1] += float(pay_.sum())
+                X_[2] += float(pay_[c2_].sum())
+                X_[3] += float(np.abs(pay_).sum())
+            X_[0] += float(c2_.sum())
+            W_ = self.stats["watch"]
+            wh_ = self.weapon[ii_][c2_]
+            np.add.at(W_[0], wh_, 1.0)
+            np.add.at(W_[1], wh_, sc_[c2_])
+            # the late switches: weapon changes in the last 2 s (the ring and this frame), his own frames alive after his placement
+            if "lg_late" not in self.stats:
+                self.stats["lg_late"], self.stats["lg_late_n"] = np.zeros((NW, NW)), np.zeros(1)
+            wseq_ = np.concatenate([self.weapon[ii_][None, :], R_["w"][ix_][:, ii_]], 0)       # now, 1 ago, ... L ago
+            aseq_ = np.concatenate([alive[ii_][None, :], R_["alive"][ix_][:, ii_] & after_], 0)
+            ch_ = (wseq_[:-1] != wseq_[1:]) & aseq_[:-1] & aseq_[1:] & (wseq_[1:] >= 0) & c2_[None, :]
+            t_, p_ = np.nonzero(ch_)
+            np.add.at(self.stats["lg_late"], (wseq_[t_ + 1, p_], wseq_[t_, p_]), 1.0)
+            self.stats["lg_late_n"][0] += float(c2_.sum())
+        hid_ = np.repeat(~op, 2)[:n]                         # the line between the two shut (as _preaim's op; duels)
+        h_ = R_["h"]
+        R_["yaw"][h_], R_["pit"][h_], R_["eye"][h_] = self.yaw[:n], self.pitch[:n], self._eye(s)[:n]
+        R_["alive"][h_], R_["hid"][h_], R_["w"][h_] = alive, hid_, self.weapon[:n]
+        R_["h"] = (h_ + 1) % L
+
+    def _lg_quiet(self, reward):
+        """(LG_QUIET_COST) the cost a frame of the lightning gun in hand while, by his own senses, the enemy is away (see
+        LG_QUIET_COST); the counters for the counted seats. State read only, no random draw"""
+        n = self.n
+        if self.lgq_t is None or len(self.lgq_t) != n:
+            self.lgq_t = np.zeros(n, np.float32)             # (begun when first on: he has just seen him, nothing is costed for 3 s)
+        acq_ = np.asarray(self.acquired, bool)[:n]
+        self.lgq_t = np.where(acq_, 0.0, self.lgq_t + DT).astype(np.float32)
+        heard_t = np.minimum(np.minimum(self.ear_t[:n], self.snd_t[:n].min(1)), self.pain_t[:n])
+        if self.lab is not None or self.fixed_kind is not None:
+            return
+        g_ = self._others_arr().shape[1] + 1
+        pk_ = np.repeat(self.kind, g_)[:n]
+        pm_ = np.repeat(self.mode, g_)[:n]
+        game = (pk_ == NORMAL) & (pm_ < 0) & (self.run_k[:n] < 0) & ~self.jrun[:n] & ~self.rjrun[:n]
+        ok_ = game & (self.script[:n] == 0) & (self.hp[:n] > 0) & (self.rsp_wait[:n] <= 0)
+        r_ = np.clip((self.lgq_t - LGQ_UNSEEN) / (LGQ_FULL - LGQ_UNSEEN), 0.0, 1.0) * (heard_t >= LGQ_HEARD) * ok_
+        lg_ = self.weapon[:n] == LG
+        cost_ = LG_QUIET_COST * r_ * lg_ * DT
+        reward[:n] -= cost_.astype(reward.dtype)
+        if "lg_quiet" not in self.stats:
+            self.stats["lg_quiet"], self.stats["lg_quiet_w"] = np.zeros(len(LGQ_COLS)), np.zeros(NW)
+        c_ = ok_ & self._counted(np.arange(n))
+        q_ = c_ & (r_ > 0)
+        self.stats["lg_quiet"] += (float(c_.sum()), float(q_.sum()), float((q_ & lg_).sum()), float(cost_[c_].sum()))
+        np.add.at(self.stats["lg_quiet_w"], self.weapon[:n][q_], 1.0)
 
     def _mates(self, i):
         """the other players of player i's group"""
@@ -5400,7 +5612,7 @@ class DuelEnv:
         if self.bel_prev is not None and self.bel_prev.shape == up.shape:
             for m, g in zip(*np.nonzero(self.bel_prev & ~up)):     # taken since the last look: who is in earshot knows
                 q = np.arange(m * gsz, (m + 1) * gsz)
-                near = np.linalg.norm(pos[q] - self.item_pos[items[g]], axis=1) < HEAR_EVT
+                near = np.linalg.norm(pos[q] - self.item_pos[items[g]], axis=1) < self._evt_reach(q)
                 if HEAR_QL:                                  # (HEAR_QL) heard where the game sends it (at the item's place)
                     near &= self._hear_ok(q, pos=self.item_pos[items[g]])
                 self.bel_t[q[near], g] = 0.0
@@ -5459,7 +5671,7 @@ class DuelEnv:
         s = self.state
         self.it_t[i, k] = 0.0
         for j in self._mates(i):
-            if np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
+            if np.linalg.norm(s[j, :3] - s[i, :3]) < self._evt_reach(j) and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
                 self.it_t[j, k] = 0.0
                 if SENSE_MINOR and not self._sees(j, i):
                     self.it_t[j, k] = float(self.rng.normal(0, SM_ITEM_SD))   # (SENSE_MINOR) heard, not seen: a little off
@@ -5767,7 +5979,7 @@ class DuelEnv:
         d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         acq_p = self.acquired[lis] if self.G == 2 else self.acq2[lis, (self.slot[src] - self.slot[lis]) % self.G - 1]
         seen = acq_p & ~alone
-        ok = (seen | (d < HEAR_EVT)) & ~alone & (self.hp[lis] > 0)
+        ok = (seen | (d < self._evt_reach(lis))) & ~alone & (self.hp[lis] > 0)
         self.shot_src[lis[ok]] = src[ok]
         self.shot_t[lis[ok]] = 0.0
         self.shot_w[lis[ok]] = self.weapon[src[ok]]
@@ -5835,6 +6047,8 @@ class DuelEnv:
             ok &= self._hear_ok(lis, src)
         if RESPAWN_QL:                                       # (RESPAWN_QL) a body waiting to respawn makes no sound
             ok &= self.rsp_wait[src] <= 0
+        if LG_DEAF:                                          # (LG_DEAF) firing the lightning gun: LGD_FIRE_EVT at most
+            ok &= np.linalg.norm(s[src, :3] - s[lis, :3], axis=1) < self._evt_reach(lis)
         src, lis = src[ok], lis[ok]
         if not len(src):
             return
@@ -6874,7 +7088,7 @@ class DuelEnv:
                 a2_ = getattr(self, "acq2", None)
                 for j in self._mates(i):
                     sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-                    if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT and self._hear1(j, i)):
+                    if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
                         self.hd_ev[j, HEAD_COL["en_took_" + c_]] += 1.0
         lab = self.item_def[it][4]
         if EN_STACK and self.item_def[it][0] in ("hp", "ar") and int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
@@ -6882,7 +7096,7 @@ class DuelEnv:
             a2_ = getattr(self, "acq2", None)
             for j in self._mates(i):
                 sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-                if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < HEAR_EVT and self._hear1(j, i)):
+                if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
                     self._es_take(j, self._slot(i), kd_, float(val_), float(cap_))
         k = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab in ("YA", "GA") else -1
         if k < 0 or int(self.kind[self._match_of(i)]) in (MOVE, SOLO):     # (alone on the map: nobody else is about)
@@ -6891,7 +7105,7 @@ class DuelEnv:
         a2_ = getattr(self, "acq2", None)
         for j in self._mates(i):
             sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-            if sees or (np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT and self._hear1(j, i)):
+            if sees or (np.linalg.norm(s[j, :3] - s[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
                 self.v02_pk[j, self._slot(i), k] += 1.0
 
     # ---------------------------------------------------------------- the head's events and the win label (HEAD_EVENTS)
@@ -9942,6 +10156,8 @@ class DuelEnv:
         do_fire, do_w = self.fire_q, self.fire_w
         ammo_ok = (self.ammo[ar, self.weapon] > 0) | (self.weapon == G)
         shoot = fire & (self.cool <= 1e-4) & ammo_ok & self.has[ar, self.weapon]
+        if LG_DEAF:                                          # (LG_DEAF) the trigger held on the lightning gun with ammunition: its loop plays
+            self.lgd_fire = fire & (self.weapon == LG) & ammo_ok & self.has[ar, self.weapon] & (self.hp > 0)
         if AUTO_SWITCH:                                      # the trigger on an empty weapon: the game brings up another (see AUTO_SWITCH)
             dry = np.nonzero(fire & (self.cool <= 1e-4) & ~ammo_ok & (self.script == 0) & (self.hp > 0))[0]
             if len(dry):
@@ -10009,7 +10225,11 @@ class DuelEnv:
             self.stats["rj_shots"] += int((shoot & (self.weapon == RL) & self.rjrun & self._counted(ar)).sum())
         if HEAR_FIX:                                         # (HEAR_FIX) shots, jumps and landings, footsteps as events
             foot_ = self._hf_steps(s[:, 6] > 0.5, prev[:, 6] > 0.5, s[:, 3:6], self.duck, self.hp > 0)
-            self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) | foot_)
+            if LG_DEAF:                                      # (LG_DEAF) the footsteps alone, for the muffling
+                nz_ = (shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5))
+                self.hear(nz_ | foot_, foot=foot_ & ~nz_)
+            else:
+                self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) | foot_)
         else:
             self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
                       ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
@@ -10188,7 +10408,7 @@ class DuelEnv:
         if len(hurt):
             lis_ = self.others[hurt].reshape(-1)
             hurt = np.repeat(hurt, self.G - 1)
-            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < HEAR_EVT
+            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
             if HEAR_QL:                                      # (HEAR_QL) where the game sends it
                 near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
@@ -10908,6 +11128,8 @@ class DuelEnv:
                 heard &= self.rsp_wait[opp] <= 0
             if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
                 heard &= self._hear_ok(ar, opp)
+            if LG_DEAF:                                      # (LG_DEAF) his own lightning gun muffles the footsteps
+                heard &= dist < self._lgd_hear_reach(ar, opp)
             self.vis2[:, k_] = vis
             if SURPRISE_MS > 0:                              # off the crosshair and unexpected: noticed later
                 ecc_ = np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0)))
@@ -10918,7 +11140,7 @@ class DuelEnv:
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
             if heard.any() and HEAR_FIX:                     # (HEAR_FIX) placed by the sound: its direction and loudness
-                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard])
+                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard], muff=self._lgd_muff(ar[heard], opp[heard]))
             elif heard.any():
                 self.known2[heard, k_] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                     np.array([1, 1, 0], np.float32)
@@ -10954,6 +11176,10 @@ class DuelEnv:
         self._teach_update()
         info = dict(events=events)
         self._preaim(s, reward)                              # (PREAIM_PAY) fresh sightings: the counters, always; the pay with the switch on
+        if LG_QUIET_COST > 0:                                # (LG_QUIET_COST) the lightning gun carried while the enemy is away
+            self._lg_quiet(reward)
+        else:
+            self.lgq_t = None                                # (off, by a live setting: his clock begins again when it is on)
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or
             info["legs_lab"], info["legs_held"] = self.legs_lab.copy(), self.legs_wh.copy()      # would have in a withheld stretch

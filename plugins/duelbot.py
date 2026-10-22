@@ -1329,6 +1329,8 @@ class duelbot(minqlx.Plugin):
             heard = (~vis) & alive & (dist < E.HEAR) & env.hf_ev[opp]     # game sends it (as step())
             if getattr(E, "HEAR_QL", False):
                 heard &= env._hear_ok(np.arange(n), opp)
+        if getattr(E, "LG_DEAF", False):                     # (LG_DEAF) his own lightning gun muffles the footsteps (as step())
+            heard &= dist < env._lgd_hear_reach(np.arange(n), opp)
         if hasattr(env, "vis_run"):                          # newer rules: an enemy is noticed only after a moment in view
             need_ = max(1, env.acquire_frames - env.react_frames)
             if getattr(E, "SURPRISE_MS", 0) > 0 and hasattr(env, "acq_extra"):    # off the crosshair and unexpected: noticed later (as in training)
@@ -1340,7 +1342,10 @@ class duelbot(minqlx.Plugin):
             env.acquired = vis
         env.known[vis] = s[opp[vis], :3]
         if heard.any() and hf_:                              # (HEAR_FIX) placed by the sound, as step() places him
-            env.known[heard] = env._hf_place(np.nonzero(heard)[0], opp[heard])
+            if getattr(E, "LG_DEAF", False):                 # (LG_DEAF) a muffled footstep is placed with more error
+                env.known[heard] = env._hf_place(np.nonzero(heard)[0], opp[heard], muff=env._lgd_muff(np.nonzero(heard)[0], opp[heard]))
+            else:
+                env.known[heard] = env._hf_place(np.nonzero(heard)[0], opp[heard])
         elif heard.any():
             env.known[heard] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
@@ -1723,6 +1728,10 @@ class duelbot(minqlx.Plugin):
             gr_ = st_[:, 6] > 0.5
             noisy = gr_ & (np.hypot(st_[:, 3], st_[:, 4]) > 200.0)
             ofire_ = bool(minqlx.ran_usercmd(opp.id)[1] & 1) and int(os_.weapon) != QLNUM["g"]
+            lgd_ = getattr(E, "LG_DEAF", False)
+            if lgd_:                                         # (LG_DEAF) the trigger held on the LG (the game's weapon in hand, the command
+                env.lgd_fire[0] = bool(minqlx.ran_usercmd(bobby.id)[1] & 1) and int(bs.weapon) == QLNUM["lg"]    # that ran), before
+                env.lgd_fire[1] = ofire_ and int(os_.weapon) == QLNUM["lg"]                                    # anything is heard
             if hasattr(env, "note_noise"):
                 # (v0.2) The noise of this frame as the simulator's step() has it, for both players in one call each:
                 # a shot with anything but the gauntlet, a jump or a landing, a frame of running steps (not crouched).
@@ -1734,11 +1743,15 @@ class duelbot(minqlx.Plugin):
                 steps_ = noisy & ~env.duck
                 shot_ = np.array([bool(self.shot_made.get((id(env), 0), False)), ofire_], bool)
                 heard_ = shot_ | hop_ | steps_
+                foot_ = None
                 if getattr(E, "HEAR_FIX", False):            # (HEAR_FIX) footsteps as events, as step() makes them
                     foot_ = env._hf_steps(gr_, gr_ if was_ is None else was_, st_[:, 3:6], env.duck, env.hp > 0)
                     heard_ = shot_ | hop_ | foot_
                 heard_[0] = False
-                env.hear(heard_)
+                if lgd_ and foot_ is not None:               # (LG_DEAF) the footsteps alone, for the muffling (as step())
+                    env.hear(heard_, foot=foot_ & ~(shot_ | hop_))
+                else:
+                    env.hear(heard_)
                 env.note_noise(shot_, hop_, steps_)
             else:
                 noisy[1] |= ofire_
@@ -1857,7 +1870,8 @@ class duelbot(minqlx.Plugin):
                 env.note_hit(0, took)                        # being shot at throws his aim off for a moment
             if hasattr(env, "pain_t"):                       # the opponent's pain sound, by his health after the hit
                 env.pain_t += E.DT                           # (EN_STACK: after any hurt the game plays it for, his own splash and falls too, as step())
-                near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < E.HEAR_EVT
+                near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < \
+                    (float(env._evt_reach(0)) if getattr(E, "LG_DEAF", False) else E.HEAR_EVT)     # (LG_DEAF: firing the LG, 1,000 at most)
                 if (dealt > 0 or (es_ and dmg.get("opp", 0) > 0)) and os_.health > 0 and near_:
                     env.pain_t[0], env.pain_b[0] = 0.0, min(3, int(os_.health) // 25)
         if getattr(E, "HEAD_EVENTS", False):                 # (v0.4) the frame in the head's books: what he dealt by the game's count of his
