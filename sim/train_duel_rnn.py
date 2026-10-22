@@ -181,7 +181,7 @@ def jump_far_rec(agg, agg_map):
                         for m_, x_ in ((m_, one_(v_)) for m_, v_ in agg_map.items()) if x_[0] + x_[2] > 0})
 
 
-LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY")     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11)
+LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK")     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -2251,7 +2251,7 @@ def main():
     LIVE_ON = hasattr(E_, "live_set")
     LIVE_START = {k_: os.environ.get(k_) for k_ in getattr(E_, "LIVE_VARS", ())}      # the run's start: its environment
     LIVE_TSTART = dict(DMG_TAKEN_W=float(a.dmg_taken_w), DMG_REWARD=float(a.dmg_reward),
-                       **({"INFO_PAY": float(a.info_pay)} if TRK_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on)
+                       **({"INFO_PAY": float(a.info_pay), "TRACK_W": float(a.track), "TRACK_TRUNK": float(a.track_trunk)} if TRK_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
         print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
@@ -2384,9 +2384,11 @@ def main():
                     E_.live_set(lv_)                                     # (the environment too: the checkpoints' env_vars)
                     a.dmg_taken_w, a.dmg_reward = lt_["DMG_TAKEN_W"], lt_["DMG_REWARD"]
                     a.info_pay = lt_.get("INFO_PAY", a.info_pay)         # (v0.3.11: read before each rollout)
+                    a.track = lt_.get("TRACK_W", a.track)                # (v0.3.11b: the lesson's weight, its warm-up as started)
+                    a.track_trunk = min(1.0, lt_.get("TRACK_TRUNK", a.track_trunk))   # (v0.3.11b: its share into his memory, at the next learning step)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
                     LIVE_KEPT = dict(sim=dict(lv_), trainer=dict(lt_), from_update=update)
-                    force_ = dict(now_[0], DMG_REWARD=a.dmg_reward, **({"INFO_PAY": a.info_pay} if TRK_ON else {}))
+                    force_ = dict(now_[0], DMG_REWARD=a.dmg_reward, **({"INFO_PAY": a.info_pay, "TRACK_W": a.track, "TRACK_TRUNK": a.track_trunk} if TRK_ON else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
                         json.dump(dict(from_update=update, minutes=round(mins, 2), file=json.loads(txt_), in_force=force_), f_, indent=1)
