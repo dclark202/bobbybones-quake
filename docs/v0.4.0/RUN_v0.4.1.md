@@ -14,11 +14,10 @@ for the enemy). Both are parts of the same network, trained together; the head t
 
 | Part | Detail | State |
 |---|---|---|
-| **The picture as an input** | the readout's answers (now and ahead, ~60 numbers, no gradient back) as one more attention token (`belief`), its gate shut at the start, opening over hours | ❓ |
+| **The picture as an input** | (the "now" part moved into v0.4.0 by the owner, 2026-10-22): here the prediction-ahead answers join it in the `belief` token | ❓ |
 | **The small slow head** | reads the belief token, his own stack, item timers, score and clock, the fast state (no gradient); a GRU of 256 ticking every 0.2 s; acts by a plan (64) into the fast memory and a bias on the intention head's choice, both starting at zero (an exact start) | ❓ |
-| **The hand-built belief retired** | the owner, 2026-10-22: "It shouldn't be a part of him, that didn't work": v0.2's rule-made belief inputs (last seen or heard place + 1 s of velocity, kept 20 s; ~20 inputs, and what the legs' look point and the hunt read) replaced by the readout's answers, not kept beside them; every reader of `v02_bel` moved to the readout | ❓ |
 | Size | ~0.6 M weights (v0.4's earlier candidate head: ~7 M); grows only on a measured need | – |
-| On a server | well under 1 ms a tick; the plugins need the readout and the head (not dropped at export, unlike v0.3.11 and v0.4.0): plugin work and an input check in a real game (`OBSDUMP`, as after every input change), budgeted as a build step of its own | ❓ |
+| On a server | well under 1 ms a tick; the head added to the plugins' forward pass (the readout is already there from v0.4.0) | ❓ |
 | The head's horizon | a goal choice pays off 30–60 s later: the head learns from the two-minute value output (γ 0.9998), not the main ~25 s one, or it undervalues timing plays | ❓ |
 | A start from the pros (only if needed) | the pros' next goal by situation (mega when the enemy is far, back off when weak) as a light prior on the head's bias, fading like the item rule; added only if the head is slow to find these by winning. The owner is wary of copying the pros' choices (HAND_TEACH): measure first | ⏸ |
 
@@ -26,7 +25,7 @@ for the enemy). Both are parts of the same network, trained together; the head t
 
 | Arm | What | Pass |
 |---|---|---|
-| A | the belief token only | step per update and aim unchanged; check ≥ level against v0.4.0's end |
+| A | the prediction-ahead answers into the belief token | step per update and aim unchanged; check ≥ level against v0.4.0's end |
 | B | the token + the small head | the same, and the decision report moves |
 
 ## What it should do
