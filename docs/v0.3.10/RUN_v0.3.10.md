@@ -45,7 +45,14 @@
 | Not yet: a mix of aim levels | still waiting for pre-aiming to settle | ⏸ |
 | Front/back hearing: not needed (the owner: "Quake live has doppler sound, you can hear coming/going") | – | ✖ dropped |
 
-## 4. Before the start
+## 4. Checks (fair: every old network at aim 4)
+
+| When | Against |
+|---|---|
+| Update 10 (the gate) | v0.3.9's end |
+| Every 20 from update 20 | v0.3.9's end and **the control, now v0.3.6's end** (the public server's network; the owner, 2026-10-22: v0.3.1 retired at 92.7%) in turn |
+
+## 5. Before the start
 
 Build both pays and LG_DEAF on `v0310` with every switch off identical to v0.3.9; unit checks of both pays (constructed angles,
 zero-sum); the plugins' LG_DEAF; the new lessons' gate: a check at update 10 against v0.3.9's end.
