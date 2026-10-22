@@ -1,7 +1,6 @@
 # v0.3.10 on one page: what changes from v0.3.9
 
-*Approved by the owner, 2026-10-22 morning ("Otherwise this looks good"). Starts after v0.3.9 ends at 16:00 Thu, from v0.3.9's end (optimizer kept,
-staggered starts). Branch `v0310` from `v039` (to make). Runs to **16:00 Fri 2026-10-23** (owner, 2026-10-22); the LG cost watched for the first ~5 hours with the owner before it runs overnight.*
+*Approved by the owner, 2026-10-22. **Schedule (owner, ~09:20):** v0.3.9 ends at noon ("It's a success, and we'll build ON IT"); v0.3.10 starts at noon from v0.3.9's noon save (optimizer kept, staggered starts) and runs 6–8 hours to see whether the look-back pay helps; meanwhile v0.3.11 (the knowledge pay) is built; if the look-back pay helps, v0.3.11 starts overnight from v0.3.10, watched; if v0.3.11 flops, back to v0.3.10 in the morning. Code: branch `v0310` (`9bb8f8a`).**16:00 Fri 2026-10-23** (owner, 2026-10-22); the LG cost watched for the first ~5 hours with the owner before it runs overnight.*
 
 **Marks:** ✅ built and proven identical with its switch off · ⏳ to build · 🧪 measured · ❓ owner's decision · ⏸ not in v0.3.10
 
@@ -21,20 +20,20 @@ staggered starts). Branch `v0310` from `v039` (to make). Runs to **16:00 Fri 202
 
 | Change | Detail | State |
 |---|---|---|
-| **LG noise cost** (`LG_QUIET_COST=0.004`, live) | While his lightning gun is in hand, he is alive, and **by his own senses** the enemy is away: not in view for 3 s or more and nothing of him heard in the last 2 s. Ramps with the quiet time: 0 at 3 s → full at 10 s; full = 0.004 a second (0.24 a minute; a frag is 1). Games and pro starts only (not jump practice). At today's 55% LG carrying out of contact: about 0.08–0.12 a minute. Escape: switch to rockets or rail while it is quiet (switching takes time: not at contact) | ⏳ |
+| ~~LG noise cost~~ (`LG_QUIET_COST=0`: **left out**, the owner: "it's a bandaid, not a principled approach"; the knowledge pay of v0.3.11 is to teach it) — as built: | While his lightning gun is in hand, he is alive, and **by his own senses** the enemy is away: not in view for 3 s or more and nothing of him heard in the last 2 s. Ramps with the quiet time: 0 at 3 s → full at 10 s; full = 0.004 a second (0.24 a minute; a frag is 1). Games and pro starts only (not jump practice). At today's 55% LG carrying out of contact: about 0.08–0.12 a minute. Escape: switch to rockets or rail while it is quiet (switching takes time: not at contact) | ✅ |
 | Equilibrium | rockets or rail carried between fights, the LG brought out when a close fight is heard or expected; the enemy's sounds become worth more. Goals: weapon use, counterplay | – |
-| **His own LG muffles his hearing** (`LG_DEAF=1`, a PLAY_VAR: the plugins too) | From the game's sound files (scratchpad `lghum/REPORT.md`): with the LG out (not firing) footsteps heard to 700 u (now 800), the enemy's LG hum not heard, +8° direction and +0.1 distance error on muffled footsteps; firing the LG: footsteps 500, other sounds 1,000. Small and realistic; the pros showed no measurable muffling | ⏳ |
+| **His own LG muffles his hearing** (`LG_DEAF=1`, a PLAY_VAR: the plugins too) | From the game's sound files (scratchpad `lghum/REPORT.md`): with the LG out (not firing) footsteps heard to 700 u (now 800), the enemy's LG hum not heard, +8° direction and +0.1 distance error on muffled footsteps; firing the LG: footsteps 500, other sounds 1,000. Small and realistic; the pros showed no measurable muffling | ✅ |
 | Watched, first ~5 hours with the owner | LG / RL share travelling unseen (target direction: pros 14% / 59%); weapon switches in the 2 s before contact (late switches); checks against v0.3.9's end. Proposed adjustments (live, on the owner's yes): cost ×2 if LG carrying has not moved; halved if the check drops or late switches climb | ❓ |
 
 ## 2. Watching the opening: back pay (the owner: "back pay for 'having been looking in the right direction prior to enemy seen'. This is the first step into resurrecting the 'pay for knowing where the enemy is'")
 
 | Change | Detail | State |
 |---|---|---|
-| **Look-back pay** (`WATCH_PAY=0.03`, live) | At each fresh sighting (the same event as the pre-aim pay: line of sight opens after 1 s+ closed, both alive, no respawn or teleport in the last 1 s; games and pro starts), look back over the previous **1.5 s**: for each frame he was alive and the enemy hidden, how close his view was to the spot the enemy came out at (the enemy's chest at the sighting, seen from where he stood then): w = 1 at 0°, falling to 0 at 45°. His score = the average over the window, later frames weighted more (weights rising linearly from 0.5 to 1). Zero-sum like the pre-aim pay: the better watcher of the two gets 0.03 × (the difference), the other loses as much. Paid once at the sighting; the learning carries it back to the turns that earned it | ⏳ |
+| **Look-back pay** (`WATCH_PAY=0.03`, live) | At each fresh sighting (the same event as the pre-aim pay: line of sight opens after 1 s+ closed, both alive, no respawn or teleport in the last 1 s; games and pro starts), look back over the previous **1.5 s**: for each frame he was alive and the enemy hidden, how close his view was to the spot the enemy came out at (the enemy's chest at the sighting, seen from where he stood then): w = 1 at 0°, falling to 0 at 45°. His score = the average over the window, later frames weighted more (weights rising linearly from 0.5 to 1). Zero-sum like the pre-aim pay: the better watcher of the two gets 0.03 × (the difference), the other loses as much. Paid once at the sighting; the learning carries it back to the turns that earned it | ✅ |
 | Why zero-sum | self-play stays balanced: watching an opening pays only if the enemy watched his worse, and the enemy learns to come from openings that are not watched (counterplay) | – |
 | Fairness | the pay reads the truth (where the enemy came out); his inputs stay what he perceives | – |
 | Size | at ~10 sightings a minute, at most ~0.3 a minute, typically far less: smaller than the pre-aim pay (0.05) | ❓ |
-| Counter | the look-back score by weapon, in metrics and on the watcher's line, beside the pre-aim numbers | ⏳ |
+| Counter | the look-back score by weapon, in metrics and on the watcher's line, beside the pre-aim numbers | ✅ |
 
 ## 3. Recommended beside them
 
