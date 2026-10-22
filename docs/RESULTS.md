@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-22](results/2026-10-22.md)
+
+- 12:10 — v0.3.9 (pre-aiming) the biggest step since v0.3.7: 65.2% against v0.3.8's end at equal delays, rail frags 3.9% → 9.5%; v0.3.10 (look-back pay) running, v0.3.11 (the knowledge pay) built
+
 ## [2026-10-21](results/2026-10-21.md)
 
 - 13:00 — v0.3.8 resumed from save 90 without the drift inputs; jumps opened in games by measured success, jump practice varied and fixed; hearing loosened; shares 70/20/10
