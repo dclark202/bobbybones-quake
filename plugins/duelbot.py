@@ -1114,6 +1114,8 @@ class duelbot(minqlx.Plugin):
             env.v02_loud = (env.v02_loud * (1.0 - E.DT / E.V02_LOUD_T)).astype(np.float32)
         if getattr(E, "EN_STACK", False) and hasattr(env, "_es_update"):
             env._es_update()                                 # (B-257) the belief of the enemy's stack goes on too
+        if getattr(E, "DRIFT_IN", False) and hasattr(env, "drift_clear"):
+            env.drift_clear()                                # (DRIFT_IN) a frame with no picture: no rate across it
 
     def time_note(self, total):
         """DUEL_TIMING=1: the plugin's time for a frame on which the network ran: the whole frame hook, of it building
@@ -1229,8 +1231,29 @@ class duelbot(minqlx.Plugin):
         live_ = {m_[0] for m_ in ms}
         for num_ in [n_ for n_ in born if n_ not in live_]:
             del born[num_]
+        pf_ = getattr(E, "PROJ_FIX", False)
+        if pf_ and not hasattr(self, "pf_slots"):
+            self.pf_slots = {}
         for slot, owner in enumerate(ids):
             k = 0
+            if pf_:                                          # (PROJ_FIX) a projectile keeps its slot while it flies, as in the simulator
+                prev_ = self.pf_slots.get((id(env), slot), {})
+                mine_ = [m_ for m_ in ms if m_[1] == owner and m_[2] in kinds]
+                cur_ = {m_[0]: prev_[m_[0]] for m_ in mine_ if m_[0] in prev_}
+                free_ = [q_ for q_ in range(E.K) if q_ not in cur_.values()]
+                for m_ in mine_:
+                    if m_[0] not in cur_ and free_:
+                        cur_[m_[0]] = free_.pop(0)
+                self.pf_slots[(id(env), slot)] = cur_
+                for num, own, weapon, x, y, z, vx, vy, vz in mine_:
+                    if num in cur_:
+                        k_ = cur_[num]
+                        env.rp[slot, k_], env.rv[slot, k_], env.ra[slot, k_] = (x, y, z), (vx, vy, vz), True
+                        if hasattr(env, "rw"):
+                            env.rw[slot, k_] = kinds[weapon]
+                        if hasattr(env, "rage"):
+                            env.rage[slot, k_] = now_ - born.setdefault(num, now_)
+                continue
             for num, own, weapon, x, y, z, vx, vy, vz in ms:
                 if own == owner and weapon in kinds and k < E.K:
                     env.rp[slot, k] = (x, y, z)
@@ -1278,6 +1301,8 @@ class duelbot(minqlx.Plugin):
                 env.drop_pos[0, j] = p_
                 env.drop_w[0, j] = w_
                 env.drop_t[0, j] = t_
+                if hasattr(env, "drop_kn"):                  # (SENSE_MINOR) in a duel both know of the death that left it
+                    env.drop_kn[:, j] = True
         return taken
 
     @staticmethod
@@ -1298,6 +1323,11 @@ class duelbot(minqlx.Plugin):
             vis[cand] = env._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
         env.visible = vis
         heard = (~vis) & alive & (dist < E.HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250)
+        hf_ = getattr(E, "HEAR_FIX", False)
+        if hf_:                                              # (HEAR_FIX) a footstep or a jump of his on this frame, where the
+            heard = (~vis) & alive & (dist < E.HEAR) & env.hf_ev[opp]     # game sends it (as step())
+            if getattr(E, "HEAR_QL", False):
+                heard &= env._hear_ok(np.arange(n), opp)
         if hasattr(env, "vis_run"):                          # newer rules: an enemy is noticed only after a moment in view
             need_ = max(1, env.acquire_frames - env.react_frames)
             if getattr(E, "SURPRISE_MS", 0) > 0 and hasattr(env, "acq_extra"):    # off the crosshair and unexpected: noticed later (as in training)
@@ -1308,7 +1338,9 @@ class duelbot(minqlx.Plugin):
             vis = vis & (env.vis_run >= need_)
             env.acquired = vis
         env.known[vis] = s[opp[vis], :3]
-        if heard.any():
+        if heard.any() and hf_:                              # (HEAR_FIX) placed by the sound, as step() places him
+            env.known[heard] = env._hf_place(np.nonzero(heard)[0], opp[heard])
+        elif heard.any():
             env.known[heard] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
         env.seen_t = np.where(vis | heard, 0.0, env.seen_t + E.DT).astype(np.float32)
@@ -1388,8 +1420,9 @@ class duelbot(minqlx.Plugin):
         turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
         if rules2 and env.human_aim:                         # flick cap and hand noise, as in training
             env.mv[i, 0] = np.clip(env.mv[i, 0], -E.TURN_CAP * zs, E.TURN_CAP * zs)
-            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(env.mv[i]) + E.MOTOR_BASE * zs)
-            turn, dpit = float(env.mv[i, 0] + jit[0]), float(env.mv[i, 1] + jit[1])
+            v_ = env._hand_band(np.arange(env.n) == i)[i] if getattr(E, "HAND_BAND", False) else env.mv[i]   # (HAND_BAND) as in training
+            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(v_) + E.MOTOR_BASE * zs)
+            turn, dpit = float(v_[0] + jit[0]), float(v_[1] + jit[1])
         if rules2 and hasattr(env, "pad_turn"):               # the mouse pad: an edge, and lifting the mouse, as in training
             full = lambda v, t=np.float32: np.full(env.n, v, t)      # noqa: E731
             t_, p_ = env.pad_turn(full(turn), full(dpit), full(len(a) > 9 and a[9] == 1, bool), full(zs),
@@ -1445,7 +1478,10 @@ class duelbot(minqlx.Plugin):
         press = fire and (ready or not (rules2 and refire[w] >= 0.4))
         if hasattr(env, "fire_q"):                           # the simulator's shot leaves one frame after the command
             self.press_q = getattr(self, "press_q", {})
-            if getattr(E, "RL_QL", False) and w == getattr(E, "RL", -1):
+            rl_ = w == getattr(E, "RL", -1)
+            if (getattr(E, "RL_QL", False) and rl_) or (getattr(E, "FIRE_QL", False) and not rl_):
+                # (FIRE_QL) the same for every other weapon (rail, lightning, machine guns, shotgun, gauntlet, plasma,
+                # grenades): the game fires on the command's frame, as the simulator does with the switch on.
                 # (RL_QL, B-268) a rocket leaves on the command's frame, as in the simulator since v0.3.1: pressed now, no
                 # hold. A press held from the frame before was for another weapon (the simulator fires it with that one);
                 # here it would go out with the rocket launcher, so it is dropped (on a switch frame the game would only
@@ -1597,9 +1633,15 @@ class duelbot(minqlx.Plugin):
                         self.head_clear()                    # older runs: memory per life. Newer: kept for the session
                     for env in (self.env, self.renv):
                         env.mv[:] = 0
+                        if hasattr(env, "hb"):
+                            env.hb[:] = 0                    # (HAND_BAND) the view's velocity too
                         env.cool[:] = 0
                         env.seen_t[:] = 9.0
                         env.opp_hist = []
+                        if hasattr(env, "drift_clear"):
+                            env.drift_clear()                # (DRIFT_IN) no rate from the life before
+                        if hasattr(env, "proj_clear"):
+                            env.proj_clear()                 # (PROJ_FIX) nothing followed from the life before
                     minqlx.set_bot_substeps(bobby.id, 3)
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
@@ -1691,6 +1733,9 @@ class duelbot(minqlx.Plugin):
                 steps_ = noisy & ~env.duck
                 shot_ = np.array([bool(self.shot_made.get((id(env), 0), False)), ofire_], bool)
                 heard_ = shot_ | hop_ | steps_
+                if getattr(E, "HEAR_FIX", False):            # (HEAR_FIX) footsteps as events, as step() makes them
+                    foot_ = env._hf_steps(gr_, gr_ if was_ is None else was_, st_[:, 3:6], env.duck, env.hp > 0)
+                    heard_ = shot_ | hop_ | foot_
                 heard_[0] = False
                 env.hear(heard_)
                 env.note_noise(shot_, hop_, steps_)
@@ -1929,6 +1974,8 @@ class duelbot(minqlx.Plugin):
                     minqlx.set_view(human.id, 0.0, face)
                     minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, float(self.rng.uniform(-180, 180)))
                     env.mv[:] = 0
+                    if hasattr(env, "hb"):
+                        env.hb[:] = 0                        # (HAND_BAND) the view's velocity too
                     return True
         return False
 
@@ -2035,6 +2082,8 @@ class duelbot(minqlx.Plugin):
             r["home"], r["zone"] = [float(v) for v in spots[i]], [b[0] + 48, b[1] + 48, b[2] - 48, b[3] - 48]
             r["hard"] = [b[0] - 64, b[1] - 64, b[2] + 64, b[3] + 64]
         self.renv.mv[:] = 0
+        if hasattr(self.renv, "hb"):
+            self.renv.hb[:] = 0
 
     def lab_keep(self, p, pos, human=False):
         """fights: a player who respawned elsewhere on the lab map is moved back into the environment box"""
@@ -2277,6 +2326,8 @@ class duelbot(minqlx.Plugin):
                 self.put(human, pk["subject"], pk["yaw"], human=True)
                 self.put(bobby, pk["target"], pk["target_yaw"])
                 env.mv[:] = 0
+                if hasattr(env, "hb"):
+                    env.hb[:] = 0                            # (HAND_BAND) the view's velocity too
             b_ = pk["bounds"]
             if not (b_[0] <= hpos[0] <= b_[2] and b_[1] <= hpos[1] <= b_[3]) and hs.health > 0:
                 self.put(human, pk["subject"], pk["yaw"], human=True)

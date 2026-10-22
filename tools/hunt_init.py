@@ -82,7 +82,7 @@ def widen(ck, E, stats=None):
     with torch.no_grad():                                     # "the enemy": a copy of "nothing", never chosen
         sd["pi.weight"][o + E.EN_INTENT] = sd["pi.weight"][o].clone()
         sd["pi.bias"][o + E.EN_INTENT] = sd["pi.bias"][o] + NEVER
-    j_ = E.OBS_DIM - getattr(E, "N_RAIM", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_EMG", 0) - E.N_ES - (E.N_B3 + E.N_B2 + E.N_V02) - 1  # the input "his intention is the enemy" (the last of N_V15)
+    j_ = E.OBS_DIM - getattr(E, "N_RAIM", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_EMG", 0) - getattr(E, "N_DRIFT", 0) - E.N_ES - (E.N_B3 + E.N_B2 + E.N_V02) - 1  # the input "his intention is the enemy" (the last of N_V15)
     at = ck.get("attn")
     if at is not None:
         hit = 0
@@ -135,7 +135,7 @@ def main_open(src, dst, s_, src_name="none"):
     if ck["model"]["enc.0.weight"].shape[1] != E.OBS_DIM or "hunt_init" not in ck:
         r = widen(ck, E)
     else:
-        r = (0, [], E.OBS_DIM - getattr(E, "N_RAIM", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_EMG", 0) - E.N_ES - (E.N_B3 + E.N_B2 + E.N_V02) - 1)
+        r = (0, [], E.OBS_DIM - getattr(E, "N_RAIM", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_EMG", 0) - getattr(E, "N_DRIFT", 0) - E.N_ES - (E.N_B3 + E.N_B2 + E.N_V02) - 1)
     sd = ck["model"]
     o = sum(E.ACTION_DIMS[:E.INTENT_HEAD])
     c_ = E.INTENTS.index(src_name)
@@ -181,7 +181,7 @@ def main_same(a, b, obs=None):
     if obs is None:
         rng = np.random.default_rng(5)
         X = rng.normal(0, 1, (512, len(pb.mean))) * np.sqrt(pb.var + 1e-8) + pb.mean
-        X[:, E.OBS_DIM - getattr(E, "N_RAIM", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_EMG", 0) - E.N_ES - (E.N_B3 + E.N_B2 + E.N_V02) - 1] = 0.0      # (his intention is the enemy: 0 while it is never chosen)
+        X[:, E.OBS_DIM - getattr(E, "N_RAIM", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_EMG", 0) - getattr(E, "N_DRIFT", 0) - E.N_ES - (E.N_B3 + E.N_B2 + E.N_V02) - 1] = 0.0      # (his intention is the enemy: 0 while it is never chosen)
     else:
         X = np.load(obs).astype(np.float64)
     worst, worst_lg = 0.0, 0.0

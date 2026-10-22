@@ -924,6 +924,81 @@ JUMP_ALL = float(os.environ.get("JUMP_ALL") or 0.0) > 0
 JUMP_WEIGHT = float(os.environ.get("JUMP_WEIGHT") or 0.0) > 0
 JUMP_W_FLOOR = float(os.environ.get("JUMP_W_FLOOR") or 0.1)
 JUMP_W_HALF = float(os.environ.get("JUMP_W_HALF") or 200.0)
+#   JUMP_W_DROP   (the owner, 2026-10-20: "any jump he's already making >80% of the time can go, and he should focus on the ones
+#                 that are really low") with JUMP_WEIGHT, a jump whose success (jw_s) is at this or above gets no tries (its
+#                 weight 0; if every jump of the map is there, all as often as any other). 0: off. A training switch.
+#   JUMP_OVER_PAY (the owner, 2026-10-20: "he needs better reinforcement for making that leap") paid once a try when he gets over
+#                 the jump in a jump run (over as the counters have it), never given back by a try that then ends without the
+#                 item. Jump runs only: he is alone there, so the equilibrium is simply to clear the gap; nothing in games
+#                 changes. 0: off. A training switch.
+#   PRO_JSTART_P  (the owner, 2026-10-20: "give him more a fighting chance with it") the share of a jump run's tries at a jump that
+#                 has the pros' run-ups (sim/pro_jump_starts/<map>.npz: pos, vel, yaw, lead in frames before the pros' take-off,
+#                 from plain jumps that landed) that begin in a pro's own state 0.2 to 1 s before the take-off: his speed and
+#                 line, so that he meets the edge as they do and learns to press jump there. 0: off. A training switch.
+#   JUMP_FOCUS    "aerowalk:1": jumps (by id) whose jump-run weight is multiplied by JUMP_FOCUS_W (the owner: "he should get it
+#                 tonight"). A training switch.
+JUMP_W_DROP = float(os.environ.get("JUMP_W_DROP") or 0.0)
+JUMP_OVER_PAY = float(os.environ.get("JUMP_OVER_PAY") or 0.0)
+PRO_JSTART_P = float(os.environ.get("PRO_JSTART_P") or 0.0)
+JUMP_FOCUS = {p_.split(":")[0].strip(): {int(x_) for x_ in p_.split(":")[1].split(",") if x_.strip()}
+              for p_ in (os.environ.get("JUMP_FOCUS") or "").split(";") if ":" in p_}
+JUMP_FOCUS_W = float(os.environ.get("JUMP_FOCUS_W") or 1.0)
+#   STUCK_STARTS=1 (the owner, 2026-10-21: the stuck spots as practice in "advanced movement") the spots where he gets stuck in
+#                 real games (sim/stuck_starts.json: map, start, his heading, the item he was going for) are tries of the jump
+#                 runs beside the jumps: he begins there standing (a little apart, his heading +-30 deg), and the try is over
+#                 when he reaches the first spot of his way STUCK_ESC units away (or 48 up or down), then he goes on to the item
+#                 as after a jump. They are drawn as the jumps are (JUMP_WEIGHT: the ones he fails more), counted at the end of
+#                 the map's jump list (v15.jumps). A training switch.
+STUCK_STARTS = float(os.environ.get("STUCK_STARTS") or 0.0) > 0
+#   JUMP_PAST_PICK=1 (2026-10-21: Blood Run's jump id 2 starts 33 u from the red armor, its try's target: he took it within a few
+#                 frames, the try ended "arrived" before the jump, a new one began, ~16,000 tries a 40 s, each paying the pickup
+#                 and the arrival; under JUMP_WEIGHT it took 73% of all jump-run draws) a jump run's own target item cannot be
+#                 taken before he is past the jump (jrun_past: over it, or landed at its landing). A training switch.
+JUMP_PAST_PICK = float(os.environ.get("JUMP_PAST_PICK") or 0.0) > 0
+#   JUMP_KEEP_CLOSED=1 (the owner, 2026-10-21: "if a jump is failing in games remove that route from the games and put it back in
+#                 the trainer") JUMP_W_DROP drops only the jumps open in games (JUMP_OPEN) and the stuck spots: a jump closed in
+#                 games is practised whatever his success in the runs. A training switch.
+#   JUMP_VARY=1   (the owner, 2026-10-21: "make sure there's enough variance in position, look dir, speed, etc. for the jump
+#                 practice that he's learning generally how to make the jump") far starts at 220-420 u/s (not 300) and +-12 deg
+#                 off the way; near starts half the time already moving (0-350 u/s, +-15 deg); a pro's run-up start +-8 u in
+#                 place, +-8 deg and 0.9-1.1x in speed, +-20 deg in view. (Start spots were already many nodes along the way,
+#                 the view +-40 deg.) A training switch.
+JUMP_KEEP_CLOSED = float(os.environ.get("JUMP_KEEP_CLOSED") or 0.0) > 0
+#   JUMP_W_CAP=<share> (2026-10-21: Blood Run's id 2, made ~1%, took two thirds of the map's tries once the others passed
+#                 JUMP_W_DROP) no one jump gets more than this share of a map's jump-run draws (when enough jumps are drawn
+#                 for it to be possible). 0: off. A training switch.
+JUMP_W_CAP = float(os.environ.get("JUMP_W_CAP") or 0.0)
+JUMP_VARY = float(os.environ.get("JUMP_VARY") or 0.0) > 0
+#   JUMP_SOLID_FIX=1 (2026-10-21: Aerowalk's jump 4 had one start spot and the player box was inside solid there: 20 of 20 tries
+#                 stood still; ~60 spots on nine maps were inside solid) a jump run's start spots (near and far) where the player
+#                 box is in something solid are left out; an entry left with none is moved to the nearest free spot (up to 32 u
+#                 up, 16 u aside, with a floor under it), or dropped. A training switch.
+JUMP_SOLID_FIX = float(os.environ.get("JUMP_SOLID_FIX") or 0.0) > 0
+#   JUMP_OVER_ANY=1 (the owner, 2026-10-21, on the video: Sinister 26 and Toxicity 10 "made it though and you marked it as a miss")
+#                 a try is over the jump when he touches the floor (or hops off it) within 110 u of its landing, no more than 40 u
+#                 below it (not in the air: a jump short passes near it), from a flight that left the floor at least 60% of the gap's length
+#                 from the landing and no more than 48 u below the lower of take-off and landing: his own take-off counts, not
+#                 only the pros'; a walk round does not (it touches the floor near the landing). A training switch.
+#                 =2 (2026-10-21 evening: =1 counted hops onto the landing from beyond it and hops on a lower floor at its height:
+#                 Battleforged 3, Hektik 15, Aerowalk 17) the flight must leave the floor on the take-off's side (at least half the gap
+#                 back along the landing-to-take-off line) and within 48 u of the take-off's height; the landing ring is 128 u; and this
+#                 is the only rule (the old one, "at the take-off once, at the landing later", counted walks round: Hektik 15).
+JUMP_OVER_ANY = float(os.environ.get("JUMP_OVER_ANY") or 0.0)
+#   JUMP_RUNUP=<u/s> (the owner, 2026-10-21: Campgrounds' bridge-to-rail jump "is basically never going to work, you need two
+#                 hops"; "aerowalk red armor is easier with two hops") the jumps whose take-off needs this speed or more (the pros'
+#                 'need') begin their near tries JUMP_RUNUP_LO to JUMP_RUNUP_HI seconds of way back, moving along the way (220-420
+#                 u/s), room for a hop or two; for every jump: near start spots within 40 u of the take-off (on its lip: Toxicity 7
+#                 slid off every try) are left out (the run-up spots instead when none is left), and an entry with no far spots
+#                 gets them from every way that has the jump first (not only the ways to the nearest item: Cure 8, Blood Run 2).
+#                 0: off. A training switch.
+JUMP_RUNUP = float(os.environ.get("JUMP_RUNUP") or 0.0)
+JUMP_RUNUP_LO = float(os.environ.get("JUMP_RUNUP_LO") or 1.2)
+JUMP_RUNUP_HI = float(os.environ.get("JUMP_RUNUP_HI") or 2.5)
+#   PRO_JSTART_MAXLEAD=<frames> (PRO_JSTART_P) the pros' run-up states used: up to this many frames before their take-off
+#                 (the files hold 8 to 80; 40 = what was used before 2026-10-21 evening; 80: two seconds, their hops included).
+PRO_JSTART_MAXLEAD = int(os.environ.get("PRO_JSTART_MAXLEAD") or 40)
+STUCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stuck_starts.json")
+STUCK_ESC = float(os.environ.get("STUCK_ESC") or 200.0)
 JUMP_FAR_P = float(os.environ.get("JUMP_FAR_P") or 0.0)
 JUMP_FAR_LO = float(os.environ.get("JUMP_FAR_LO") or 3.0)
 JUMP_FAR_HI = float(os.environ.get("JUMP_FAR_HI") or 5.0)
@@ -1415,7 +1490,7 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
                  "rail_m", "rail_t0", "rail_shot", "rail_pairs",    # (RAIL_START_P)
                  "pro_mm", "pro_t0", "pro_s0")                     # (PRO_START_P)
-MOMENT_HIST = ("opp_hist", "v02_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
+MOMENT_HIST = ("opp_hist", "v02_q", "drift_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
 #                 for less: by HIGH_PAY (0.25 = a quarter) at HIGH_Z units of height between the two, in proportion
@@ -1434,6 +1509,15 @@ HIGH_Z = float(os.environ.get("HIGH_Z") or 128.0)
 RAIL_FAR_PAY = float(os.environ.get("RAIL_FAR_PAY") or 0.0)
 RAIL_FAR_LO = float(os.environ.get("RAIL_FAR_LO") or 600.0)
 RAIL_FAR_HI = float(os.environ.get("RAIL_FAR_HI") or 900.0)
+#   RAIL_STREAK_PAY (the owner, 2026-10-21: "a slight reward for stringing together consecutive hits on the rail") a rail hit that
+#                 follows a rail hit (his last rail shot hit too; a miss or his death ends the string) pays the shooter
+#                 RAIL_STREAK_PAY x (hits in the string - 1), at most RAIL_STREAK_CAP times, and takes the same from the one hit
+#                 (zero-sum, as RAIL_FAR_PAY; booked with it in the rail counters' pay got). Equilibrium in self-play: each side
+#                 is paid for its strings what it pays for the other's: a careful rail (a shot he will land) is worth more than
+#                 a hopeful one, and being railed twice costs more, so getting out of a railer's line after the first hit
+#                 matters (goals 2 and 4: weapon use, counterplay). 0: off. A training switch (pay only).
+RAIL_STREAK_PAY = float(os.environ.get("RAIL_STREAK_PAY") or 0.0)
+RAIL_STREAK_CAP = int(float(os.environ.get("RAIL_STREAK_CAP") or 3))
 RAIL_COLS = ("frames", "shots_near", "shots_mid", "shots_far", "hits_near", "hits_mid", "hits_far",
              "hand_near", "hand_mid", "hand_far", "hand_view_near", "hand_view_mid", "hand_view_far", "pay_got", "pay_lost")
 PLAY_VARS = PLAY_VARS + ("RAIL_FAR_PAY", "RAIL_FAR_LO", "RAIL_FAR_HI")
@@ -1904,8 +1988,168 @@ EMERGE_IN = float(os.environ.get("EMERGE_IN") or 0.0) > 0
 N_EMG = 8
 EMG_EVERY, EMG_FRESH, EMG_STEPS = 4, 5.0, 96
 PLAY_VARS = PLAY_VARS + ("RL_AIM", "PREFIRE", "EMERGE_IN")
+# DRIFT_IN=1 (v0.3.8, the owner, 2026-10-20: "promising"; a PLAY_VAR, off by default), the last N_DRIFT inputs: how fast the
+# enemy slides across his screen. The crosshair-to-enemy angles he already reads (opp_feat's coarse and fine yaw and pitch)
+# are where the enemy is against the crosshair; a person also sees directly how fast that gap changes. The rate is the
+# frame-to-frame change of exactly those perceived angles (the "known" enemy: his reaction and focus delays, the sight
+# error PERCEPT_SIGMA / PERCEPT_TAU with the flinch, PERCEPT_SPEED, ZOOM_PERCEPT), his own view turn included as on a
+# screen, in degrees a second. No truth: the sight error's own wander passes into the rate (at aim level 3 about 13 deg/s
+# a frame on the raw rate, about 5 on the smoothed one, measured on testlab). On top of it, all named and all placeholders
+# until pro-play measurements set them (the owner's standing policy of 2026-10-20):
+#   DRIFT_DELAY  ms more before a motion is read than a place (0: the place's own delays only, which the rate inherits)
+#   DRIFT_SIGMA  deg/s, a slowly wandering error on the rate (correlation time DRIFT_TAU s) beyond what the sight error gives
+#   DRIFT_WEBER  the rate is read this share off (a wandering scale error, correlation time DRIFT_TAU): speed discrimination
+#                in people is 5 to 10 % at best (Weber fraction), 0.10 a placeholder
+#   DRIFT_MIN    deg/s: a slower slide is not noticed (reads 0); 2 a placeholder (a still-ish target)
+#   DRIFT_SMOOTH s: the smoothed pair's decay (a person's motion sense integrates over about 0.1 s)
+# Zeros with the enemy not in view (as he knows it: the delayed sighting), while dead, on the first frame of a sighting (no
+# rate before two perceived frames), on a frame where the delay picked changes (focus), on a teleport or a respawn of either
+# (a jump of 64 units in a frame) and when the attended enemy changes (groups). The inputs: the rate yaw / 180 and pitch / 90
+# (clipped to -1..1; the sign of the angle inputs: + yaw = the enemy moves left of the crosshair, + pitch = down), then the
+# same smoothed. A token of its own ("drift", sim/attn.py's LATE2, after every older kind: older networks keep their rows;
+# tools/v038_init.py gives it with its gate shut). A plugin needs nothing more than observe() once a frame (it keeps the
+# state; the plugins clear it where they clear opp_hist and on frames without observe()).
+DRIFT_IN = float(os.environ.get("DRIFT_IN") or 0.0) > 0
+N_DRIFT = 4
+DRIFT_DELAY = float(os.environ.get("DRIFT_DELAY") or 0.0)
+DRIFT_SIGMA = float(os.environ.get("DRIFT_SIGMA") or 0.0)
+DRIFT_WEBER = float(os.environ.get("DRIFT_WEBER") or 0.10)
+DRIFT_MIN = float(os.environ.get("DRIFT_MIN") or 2.0)
+DRIFT_TAU = float(os.environ.get("DRIFT_TAU") or 0.15)
+DRIFT_SMOOTH = float(os.environ.get("DRIFT_SMOOTH") or 0.1)
+DRIFT_JUMP = 64.0
+DRIFT_SCALE = (180.0, 90.0)
+PLAY_VARS = PLAY_VARS + ("DRIFT_IN", "DRIFT_DELAY", "DRIFT_SIGMA", "DRIFT_WEBER", "DRIFT_MIN", "DRIFT_TAU", "DRIFT_SMOOTH")
+# FIRE_QL=1 (v0.3.8, off by default; a PLAY_VAR: the plugins follow it; meant with RL_QL and MISSILE_POINT): every
+# weapon fires on the frame of the command, as Quake Live does for a driven bot, not one frame later (fire_q; the rocket
+# already does under RL_QL). How the game makes the shot (minqlx/botctl.c: the frame's command is moved as three, the
+# press in each, the pitch final from the first and the yaw a share of the turn on each, y0 + turn * 8/25 on the first;
+# the game fires in the first, after its 8 ms of movement, before G_RunFrame, so at the frame start's level time):
+#   instant weapons (rail, lightning, machine guns, shotgun, gauntlet): from the eye after the first substep, along its
+#     yaw and the final pitch, at the enemy where he stood at the frame's start, with the crouch he had then (the
+#     game's own bot is moved after ours in its frame; a person's last command is at or before it: where his inputs
+#     showed him);
+#   rocket (with RL_QL): RL_QL's launch along that same yaw and pitch (RL_QL alone: the final yaw);
+#   plasma and grenade: from the muzzle FIRE_MZ ahead of that eye (cut to whole units toward zero), its velocity cut
+#     to whole units too (Quake 3's SnapVector on trBase and trDelta; the rocket's velocity as well), on the command's
+#     frame, FIRE_FLY of flight at the frame's end (the game's 25 ms prestep and the frame: a driven bot's command runs
+#     before G_RunFrame, at the frame start's level time). Fitted on weaponlab5's 29 grenades (2026-10-10, an AI-driven
+#     bot: made inside G_RunFrame, so 25 ms of flight at that frame's end): a 26-unit eye, 5 units ahead, cut toward
+#     zero, velocity cut, 25 ms: every first position within 0.43 units (mean 0.09; the record has one decimal); 14
+#     ahead with 17 ms: 3.7 off. RL_QL's own fit agrees: 14 + 42 units at 1000 u/s = 5 + 51. A grenade's fuse counts
+#     from the frame's start; what the first part of that flight meets (the enemy where he ends the frame, a wall) it
+#     meets on this frame;
+#   machine guns: the scatter of Quake 3's Bullet_Fire (a random angle, each axis a uniform share of it), MG_SPREAD wide
+#     (its width not measured in the game: weaponlab3's machine guns at 400 units hit with every bullet);
+#   shotgun: the pellets that hit are the expected share rounded, not a random draw: the game's pattern is fixed
+#     (weaponlab3, 2026-10-03: 100, 60 and 25 damage at 100, 300 and 600 units on every repeat; the rounded share of the
+#     simulator's spread gives exactly 100, 60, 25).
+# The plugins send every press at once (duelbot.drive: no press_q hold; the rocket's only with RL_QL).
+FIRE_QL = float(os.environ.get("FIRE_QL") or 0.0) > 0
+HS_W = np.array([k_ != "proj" for k_ in W_KIND], bool)    # (FIRE_QL) the instant weapons
+FIRE_MZ, FIRE_FLY = 5.0, 0.050                            # (FIRE_QL) the plasma's and the grenade's muzzle and first flight
+PLAY_VARS = PLAY_VARS + ("FIRE_QL",)
+# The senses as a person has them (v0.3.8; the input audit of 2026-10-20: scratch patches measured on v0.3.7's network, then
+# made switches here). All PLAY_VARS, all off by default; off, the simulator is what it was (fixed runs, bit for bit).
+#   HEAR_FIX=1       (with HEAR_QL for the walls) hearing by the game's events. Footsteps are events: one every HF_STEP_DT
+#                    seconds (0.55) while a player is on the ground faster than HF_STEP_SPEED (150 units a second), not
+#                    crouched; the first at once. A jump (off the ground, going up) is one too; in the air there is no
+#                    step. The enemy's believed place (known) is set from a sound only on a footstep or a jump of his on
+#                    that frame (no longer from every frame he runs faster than 250 units a second), with one direction
+#                    error a sound (HF_DIR degrees, 10) and one error of the distance along it (HF_LOUD, a share: 0.3),
+#                    the height HF_UP units off (40). The ear inputs (N_EAR): the same footsteps in place of every running
+#                    frame (shots, jumps and landings as before); an event's own direction error (HF_DIR) and loudness
+#                    error (HF_LOUD), once a sound; the closing-speed column 0 (a sound does not tell it); a weapon's hum
+#                    (heard every frame) has a direction error that drifts (HF_HUM_TAU seconds, 1) instead of a fresh one a
+#                    frame. The plugins make the same events (_hf_steps) and place the enemy by the same rule (_hf_place).
+HEAR_FIX = float(os.environ.get("HEAR_FIX") or 0.0) > 0
+HF_STEP_DT = float(os.environ.get("HF_STEP_DT") or 0.55)
+HF_STEP_SPEED = float(os.environ.get("HF_STEP_SPEED") or 150.0)
+HF_DIR = float(os.environ.get("HF_DIR") or 10.0)
+HF_LOUD = float(os.environ.get("HF_LOUD") or 0.3)
+HF_HUM_TAU = float(os.environ.get("HF_HUM_TAU") or 1.0)
+HF_UP = float(os.environ.get("HF_UP") or 40.0)                       # (units: the height error of a sound)
+HF_STEP_FRAMES = max(1, int(round(HF_STEP_DT / DT)))
+PLAY_VARS = PLAY_VARS + ("HEAR_FIX", "HF_STEP_DT", "HF_STEP_SPEED", "HF_DIR", "HF_LOUD", "HF_HUM_TAU", "HF_UP")
+#   VEL_FIX=1        the enemy's velocity as a person reads it, wherever his inputs use it (the velocity inputs, his speed when
+#                    last seen, the believed place v02_bel that is made of it, the lead of a rocket or a plasma ball, the
+#                    rocket's floor aim point): VEL_DELAY_MS old (200: the same as before, now a setting), times a scale error
+#                    that drifts (VEL_WEBER, a share of the speed, 0.2; VEL_TAU seconds, 0.3), and below VEL_MIN units a
+#                    second (30) read as standing still.
+#   RANGE_FIX=1      the distance to an enemy in view judged by eye: his place (as the sight error leaves it) moved along
+#                    the line from the eyes by a share of the distance that drifts (RANGE_WEBER, 0.15; RANGE_TAU seconds,
+#                    0.5; at most half the distance); every input built on that place takes it (his place, his apparent
+#                    size, the lead's flight time, the grenade arc, the rocket aim, the believed place).
+#                    Both are kept in observe(): the plugins have them as they are.
+VEL_FIX = float(os.environ.get("VEL_FIX") or 0.0) > 0
+VEL_DELAY_MS = float(os.environ.get("VEL_DELAY_MS") or 200.0)
+VEL_WEBER = float(os.environ.get("VEL_WEBER") or 0.2)
+VEL_TAU = float(os.environ.get("VEL_TAU") or 0.3)
+VEL_MIN = float(os.environ.get("VEL_MIN") or 30.0)
+RANGE_FIX = float(os.environ.get("RANGE_FIX") or 0.0) > 0
+RANGE_WEBER = float(os.environ.get("RANGE_WEBER") or 0.15)
+RANGE_TAU = float(os.environ.get("RANGE_TAU") or 0.5)
+PLAY_VARS = PLAY_VARS + ("VEL_FIX", "VEL_DELAY_MS", "VEL_WEBER", "VEL_TAU", "VEL_MIN", "RANGE_FIX", "RANGE_WEBER", "RANGE_TAU")
+#   PROJ_FIX=1       (with PROJ_SEE) an enemy projectile as a person sees it: noticed only after PROJ_NOTICE_MS (100) in his
+#                    sight on end (the view cone, a clear line); what he reads of it (place, speed, and the closest pass and
+#                    its time worked out from them) is PROJ_READ_MS (100) old; a grenade's fuse only if he has seen it on
+#                    every frame since it left (else the fuse input reads 0, as at its end). A projectile is followed by its
+#                    slot (a new one when the slot's age goes back); the plugins keep a projectile in one slot while it
+#                    flies (sync_world), as the simulator does.
+PROJ_FIX = float(os.environ.get("PROJ_FIX") or 0.0) > 0
+PROJ_NOTICE_MS = float(os.environ.get("PROJ_NOTICE_MS") or 100.0)
+PROJ_READ_MS = float(os.environ.get("PROJ_READ_MS") or 100.0)
+PLAY_VARS = PLAY_VARS + ("PROJ_FIX", "PROJ_NOTICE_MS", "PROJ_READ_MS")
+#   SENSE_MINOR=1    the small ones, together: (a) the enemy's facing, crouch, being in the air and weapon in hand are read
+#                    as he was one reaction time ago (the same old sighting as his place: opp_hist's pick; sm_hist keeps
+#                    them), his facing with an error that drifts (SM_FACE_DEG, 15 degrees; SM_FACE_TAU, 0.5 s): the enemy
+#                    inputs (his facing from where he was seen then), his body inputs, the weapon seen in his hands, and the in-air of the lead and the rocket aim;
+#                    (b) a dropped weapon's time left only for a player who saw or heard the death (the killer, the dead,
+#                    one with the dead in view or within earshot: drop_kn), else 0; (c) only a railgun's or a lightning
+#                    gun's line is seen as a trail (no machine gun, shotgun or heavy machine gun lines); (d) a big item's
+#                    pickup known only by its sound (not seen) starts his item clock with an error (SM_ITEM_SD, 0.75 s):
+#                    it_t (the mega and the red armor) and ITEM_BELIEF's bel_t. All kept by the simulator's own calls,
+#                    which the plugins make too (observe, note_pickup, note_shots); the duel plugin shows a dropped
+#                    weapon's time to both (in a duel the killer and the dead know of every death that drops one).
+SENSE_MINOR = float(os.environ.get("SENSE_MINOR") or 0.0) > 0
+SM_FACE_DEG = float(os.environ.get("SM_FACE_DEG") or 15.0)
+SM_FACE_TAU = float(os.environ.get("SM_FACE_TAU") or 0.5)
+SM_ITEM_SD = float(os.environ.get("SM_ITEM_SD") or 0.75)
+PLAY_VARS = PLAY_VARS + ("SENSE_MINOR", "SM_FACE_DEG", "SM_FACE_TAU", "SM_ITEM_SD")
+#   HAND_BAND=1      a hand's bandwidth (the owner, 2026-10-20: "some kind of low pass filter on his LG aim"; every weapon,
+#                    the hand is the same): the view's velocity follows the hand's (mv, after its smoothing and the flick
+#                    cap) through a low-pass whose cutoff rises with the view's own speed, per axis: HB_FC Hz (4.0) plus
+#                    HB_BETA Hz (0.5) for every degree a frame it turns (the one-euro filter's rule): small corrections are
+#                    smoothed, a flick is let through. Sized offline on save 220's own commands while firing lightning
+#                    (aim tables of 2026-10-20): yaw acceleration rms 4,600 -> 2,610 deg/s2, reversals 8.3 -> 4.8 a
+#                    second, the view rate's power above 4 Hz 0.43 -> 0.27 (the pros: 2,455, 4.6, 0.29); a small step
+#                    (0.8 deg/frame) at 50% / 90% in 50 / 100 ms (25 / 50 today), a flick (20 deg/frame) 66% -> 60% of its
+#                    turn in 8 frames. The hand noise then rides on the filtered velocity. hb keeps the view's velocity; it
+#                    is reset with mv. Scripted players are not filtered. The plugins call the same _hand_band.
+HAND_BAND = float(os.environ.get("HAND_BAND") or 0.0) > 0
+HB_FC = float(os.environ.get("HB_FC") or 4.0)
+HB_BETA = float(os.environ.get("HB_BETA") or 0.5)
+PLAY_VARS = PLAY_VARS + ("HAND_BAND", "HB_FC", "HB_BETA")
+# DUEL_QL=1 (v0.3.8, off by default; a PLAY_VAR): the duel factory's numbers where they differ from free-for-all's, in
+#                    which every lab measurement before 2026-10-19 was made (the game's settings dump on the servers, which
+#                    run the duel factory: docs/v0.3.7/REPORT_PLAYTEST_2026-10-19.md section 1). (a) With QL_JUMP, no jump
+#                    within DQ_JUMP_MS (50) of the last (pmove_JumpTimeDeltaMin: free-for-all 100). (b) With QL_MOVE,
+#                    wading at DQ_WADE (0.75: free-for-all's 0.8 is qsim.QL_WADE). (c) An item (and a dropped weapon) is
+#                    taken with his origin at most DQ_PICK_Z (51) above or below its resting origin (free-for-all's
+#                    g_itemHeight 35, duel's 15): 4,656 duel pickups of 2026-10-19/20 (play tests and the public server)
+#                    reach 48.5 / 50.4 / 55 (99% / 99.9% / the highest, one) above it, the 7,767 free-for-all pickups of
+#                    2026-10-12 63.7 / 64.7 / 66.6; the simulator's 56 lies between. Horizontally both modes are the same
+#                    (dx, dy 99% 39): dxy < 36 stays. The game's crouch step jump (free-for-all on, duel off) is not in the
+#                    simulator (its jumps never look at the crouch): duel-like already. The plugins and the servers need
+#                    nothing: the server's game is the truth.
+DUEL_QL = float(os.environ.get("DUEL_QL") or 0.0) > 0
+DQ_JUMP_MS = float(os.environ.get("DQ_JUMP_MS") or 50.0)
+DQ_WADE = float(os.environ.get("DQ_WADE") or 0.75)
+DQ_PICK_Z = float(os.environ.get("DQ_PICK_Z") or 51.0)
+PICK_Z = DQ_PICK_Z if DUEL_QL else 56.0                    # an item's reach in height (|dz| under it)
+PLAY_VARS = PLAY_VARS + ("DUEL_QL", "DQ_JUMP_MS", "DQ_WADE", "DQ_PICK_Z")
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -2425,14 +2669,14 @@ class DuelEnv:
         assert self.new_lib or not (QL_MOVE or SOLIDS), "QL_MOVE and SOLIDS need the simulator library of 2026-10-09"
         if self.new_lib:                                     # (the library keeps these between worlds of one process: set both ways)
             from qsim import QL_STEP, QL_WADE
-            self.w.set_params2(QL_WADE, QL_STEP) if QL_MOVE else self.w.set_params2()
+            self.w.set_params2(DQ_WADE if DUEL_QL else QL_WADE, QL_STEP) if QL_MOVE else self.w.set_params2()
             self.w.add_solids() if SOLIDS else self.w.lib.qsim_clear_solids()
         if QL_FLOAT or hasattr(self.w.lib, "qsim_snap"):
             self.w.set_snap(not QL_FLOAT)
         if QL_FWD or QL_LAND or hasattr(self.w.lib, "qsim_params3"):
             self.w.set_params3(QL_FWD, QL_LAND)
         if QL_JUMP or hasattr(self.w.lib, "qsim_params4"):
-            self.w.set_params4(QL_JUMP)
+            self.w.set_params4(QL_JUMP, min_ms=DQ_JUMP_MS if DUEL_QL else 100.0)
         if not AUTO_HOP:                                     # (AUTO_HOP=0) a jump held over a landing does not jump again (World() set 1)
             from qsim import QL_PARAMS
             self.w.set_params(**dict(QL_PARAMS, auto_hop=0))
@@ -2565,6 +2809,7 @@ class DuelEnv:
         self.drop_pos = np.zeros((n_matches, DROP_MAX, 3), np.float32)  # weapons that dead players left (see DROPS):
         self.drop_w = np.full((n_matches, DROP_MAX), -1, np.int64)      # which weapon (-1: nothing in that slot)
         self.drop_t = np.zeros((n_matches, DROP_MAX), np.float32)       # seconds until it is gone
+        self.drop_kn = np.zeros((self.n, DROP_MAX), bool)                # (SENSE_MINOR) he saw or heard the death that left it
         self.slot_items = [[k for k, d in enumerate(self.item_def) if d[4] == lab] for lab in SLOTS]
         # Weapons that lie on this map: nobody spawns with a weapon the map does not have (no heavy machine gun
         # on Aerowalk, for instance). A map without weapon pickups (the test map) allows all.
@@ -2661,6 +2906,9 @@ class DuelEnv:
         self.ear = np.zeros((self.n, 4), np.float32)        # last sound heard: direction (world, radians), height, loudness, closing
         self.ear_t = np.full(self.n, 99.0, np.float32)      # seconds since
         self.ear_hum = np.full(self.n, -1, np.int64)        # the humming weapon heard with it (RG, LG) or -1
+        self.hf_cnt = np.full(self.n, -1, np.int64)         # (HEAR_FIX) frames since his last footstep (-1: not running)
+        self.hf_ev = np.zeros(self.n, bool)                 # (HEAR_FIX) he made a footstep or a jump this frame
+        self.hf_hum = np.zeros(self.n, np.float32)          # (HEAR_FIX) the drifting direction error on a hum (degrees)
         self.stack_p = 0.0                                  # v9: share of spawns with a random stack (health 100-200, armor 0-150)
         self.near_item_p = 0.0                              # v9: share of spawns within 2 s of the mega or the red armor
         self.intent_paid = np.zeros(self.n, np.float32)     # what the current trip has paid (taken back if abandoned)
@@ -2808,6 +3056,7 @@ class DuelEnv:
         self.jrun_t = np.zeros(self.n, np.float32)          # ... the seconds the try has left
         self.jrun_edge = np.zeros(self.n, bool)             # ... he has been at its take-off
         self.jrun_over = np.zeros(self.n, bool)             # ... he is over it
+        self.jrun_lift = np.zeros((self.n, 3), np.float32)  # ... (JUMP_OVER_ANY) where he last touched the floor
         self.jrun_new = np.zeros(self.n, bool)              # ... the try began this frame
         self.jrun_it = np.full(self.n, -1, np.int64)        # ... the item that is its target
         self.jrun_paid = np.zeros(self.n, np.float32)       # ... what its way has paid so far (given back if it ends without the item)
@@ -2872,6 +3121,18 @@ class DuelEnv:
                             self.jump_tries.setdefault(k_, []).append((g_, st_, 0))
                 self.jfields = [J_]
                 self.jump_lab_off = np.zeros(len(self.jumps), bool)
+                mp_ = os.path.splitext(os.path.basename(bsp))[0]
+                self.jstart = {}                             # (PRO_JSTART_P) jump index -> the pros' run-up states
+                self.stuck_names = []                        # (STUCK_STARTS) [(index into the jump lists, its name)]
+                ps_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_jump_starts", mp_ + ".npz")
+                if PRO_JSTART_P > 0 and os.path.exists(ps_):
+                    S_ = np.load(ps_)
+                    for k_, j_ in enumerate(self.jumps):
+                        m_ = (S_["jump_id"] == j_["id"]) & (S_["lead"] <= PRO_JSTART_MAXLEAD)
+                        if m_.any():
+                            self.jstart[k_] = (S_["pos"][m_], S_["vel"][m_], S_["yaw"][m_])
+                self.jfocus = np.array([JUMP_FOCUS_W if j_["id"] in JUMP_FOCUS.get(mp_, ()) else 1.0 for j_ in self.jumps])
+                self.jdrop_ok = np.array([j_["id"] in self.jump_open for j_ in self.jumps], bool)   # (JUMP_KEEP_CLOSED)
                 jl_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jump_labels.json")
                 if os.path.exists(jl_):
                     off_ = set(json.load(open(jl_)).get("off", {}).get(os.path.splitext(os.path.basename(bsp))[0], []))
@@ -2923,6 +3184,47 @@ class DuelEnv:
                     self.jfields.append(X_)
                 if JUMP_FAR_P > 0:
                     self._jump_far_spots()
+                self.n_real_jumps = len(self.jumps)
+                if STUCK_STARTS:                             # (STUCK_STARTS) the spots he gets stuck at, as tries after the jumps
+                    for sp_ in [x_ for x_ in json.load(open(STUCK_FILE)) if x_["map"] == mp_]:
+                        if sp_["goal"] not in self.route_goal:
+                            continue
+                        g_ = int(np.argmin([float(J_.T[q_, int(R_.locate(np.array([sp_["start"]], np.float32))[0])]) if lab_ == sp_["goal"]
+                                            else 1e9 for q_, lab_ in enumerate(self.route_goal)]))
+                        a_ = np.array(sp_["start"], np.float32)
+                        n0_ = int(R_.locate(a_[None])[0])
+                        if float(J_.T[g_, n0_]) >= 1e8:
+                            continue
+                        nd_, b_ = n0_, None                  # the escape: the first spot on his way at STUCK_ESC units from the start
+                        for _ in range(400):
+                            nx_ = int(J_.next[g_, nd_])
+                            if nx_ < 0:
+                                break
+                            nd_ = nx_
+                            if math.hypot(*(R_.nodes[nd_][:2] - a_[:2])) >= STUCK_ESC or abs(float(R_.nodes[nd_][2] - a_[2])) >= 48.0:
+                                b_ = np.array(R_.nodes[nd_], np.float32)
+                                break
+                        if b_ is None:
+                            b_ = np.array(R_.goals[g_], np.float32)
+                        k_ = len(self.jump_a)
+                        self.jump_a = np.concatenate([self.jump_a, a_[None]])
+                        self.jump_b = np.concatenate([self.jump_b, b_[None]])
+                        self.jump_lab_off = np.append(self.jump_lab_off, True)
+                        self.jfocus = np.append(self.jfocus, 1.0)
+                        self.jdrop_ok = np.append(self.jdrop_ok, True)
+                        self.jump_tries[k_] = [(g_, np.array([n0_]), 0)]
+                        jt_, rs_ = float(sp_.get("jitter", 24.0)), np.random.default_rng(7 + k_)    # (its own draws: the run's stream untouched)
+                        P_ = a_[None] + np.c_[rs_.uniform(-jt_, jt_, (64, 2)), np.zeros(64)].astype(np.float32)
+                        self.jstart[k_] = (P_, np.zeros((64, 3), np.float32),
+                                           (float(sp_["yaw"]) + rs_.uniform(-30, 30, 64)).astype(np.float32))
+                        self.stuck_names.append((k_, sp_["name"]))
+                if JUMP_SOLID_FIX:                           # (JUMP_SOLID_FIX) no start spot inside something solid
+                    self._jump_solid_fix()
+                self.jrunup = {}                             # (JUMP_RUNUP) (jump, entry) -> run-up start spots
+                self.jrunup_line = set()
+                if JUMP_RUNUP > 0:
+                    self._jump_runup()
+                    self._jump_runup_drop()
         self.rjs, self.rj_fields, self.rj_g, self.rj_start = [], [], [], []     # RJ_RUN_P: the map's rocket jumps, a try's ways,
         self.rj_open_field = None                           # ... the goal row that is the landing, the starting spots; RJ_OPEN
         self.rj_run_p = RJ_RUN_P
@@ -3006,6 +3308,8 @@ class DuelEnv:
         self.focus = np.full(self.n, FOCUS_SECS, np.float32)   # seconds of sharp tracking left
         self.focus_on = True
         self.vel_frames = VEL_REACT_FRAMES              # delay on the enemy's velocity (see observe)
+        if VEL_FIX:                                     # (VEL_FIX) the delay as set
+            self.vel_frames = max(0, int(round(VEL_DELAY_MS / 1000.0 / DT)))
         self.dmg_taken_w = DMG_TAKEN_W                  # weight of damage taken against damage dealt
         self.key_limits = True                          # finger limits on the movement keys (KEY_HOLD, KEY_RATE)
         self.fov_sight = True                           # geometry only inside the field of view
@@ -3091,6 +3395,7 @@ class DuelEnv:
         self.yaw = np.zeros(n, np.float32)
         self.pitch = np.zeros(n, np.float32)
         self.mv = np.zeros((n, 2), np.float32)          # mouse velocity (yaw, pitch) in degrees per frame
+        self.hb = np.zeros((n, 2), np.float32)          # (HAND_BAND) the view's velocity after the hand's bandwidth
         self.sp_hist = np.zeros((n, 4), np.float32)     # his speed over the ground one to four frames ago (see N_V14; a plugin keeps it itself)
         self.wet = np.zeros(n, np.int8)                 # how deep he stands in water, slime or lava: feet 1, waist 2, head 3 (LAVA)
         self.cmd = np.zeros((n, 2), np.float32)         # last turn command (for the jerk cost)
@@ -3294,6 +3599,7 @@ class DuelEnv:
             if STYLE_W[self.style[i]] >= 0 and int(STYLE_W[self.style[i]]) not in self.map_weapons:
                 self.style[i] = 0                            # (no rail life on a map without a railgun)
         self.mv[i] = 0.0
+        self.hb[i] = 0.0
         self.cmd[i] = 0.0
         self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
         self.hp[i], self.armor[i], self.cool[i] = SPAWN_HP, 0.0, 0.0
@@ -3444,6 +3750,7 @@ class DuelEnv:
         k = int(ok[C["cprog"][ok].argmax()]) if len(ok) else 0
         self.w.reset(i, (C["cps"][k, 0], C["cps"][k, 1], C["cps"][k, 2] + 2.0), (0, 0, 0), float(C["cyaw"][k]))
         self.yaw[i], self.pitch[i], self.mv[i] = float(C["cyaw"][k]), 0.0, 0.0
+        self.hb[i] = 0.0
         self.hp[i], self.armor[i] = (1.0 if C["mortal"] else SPAWN_HP), 0.0
         if self.gun[i]:
             self._gun_arm(i)
@@ -4369,6 +4676,16 @@ class DuelEnv:
         """for every player, the other players of his group (one column each)"""
         return self.others
 
+    def _hand_band(self, who):
+        """(HAND_BAND) players who: their view's velocity (hb) one frame on toward the hand's (mv) through a first-order
+        low-pass whose cutoff is HB_FC + HB_BETA x |hb| Hz (|hb| in degrees a frame), per axis. -> hb (all players).
+        step() and the plugins' drive() call it after the flick cap, before the hand noise"""
+        fc = HB_FC + HB_BETA * np.abs(self.hb)
+        k = (1.0 - np.exp(-2.0 * np.pi * fc * DT)).astype(np.float32)
+        new = self.hb + k * (self.mv - self.hb)
+        self.hb = np.where(np.asarray(who, bool)[:, None], new, self.hb).astype(np.float32)
+        return self.hb
+
     def pad_turn(self, turn, dpit, lift, zs, who):
         """the mouse pad (see PAD_DEG): what is left of this frame's view movement. turn, dpit in degrees, lift =
         he asks to lift the mouse, zs = zoom scale (zoomed, the same hand movement turns the view less), who = the
@@ -4408,9 +4725,19 @@ class DuelEnv:
         src = oth[got, k[got]]
         to = s[src, :3] - s[got, :3]
         dist = d[got, k[got]]
-        ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
-        up = np.clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
-        close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
+        if HEAR_FIX:                                         # (HEAR_FIX) an event's own errors, once a sound; a hum's direction
+            z_ = self.rng.normal(0, 1, (len(got), 4))        # error drifts; the distance as loud as it sounds; no closing speed
+            rho_ = math.exp(-DT / max(HF_HUM_TAU, 1e-3))
+            self.hf_hum[got] = (rho_ * self.hf_hum[got] + math.sqrt(1.0 - rho_ * rho_) * HF_DIR * z_[:, 0]).astype(np.float32)
+            only_hum_ = hum[got, k[got]] & ~noisy[oth][got, k[got]]
+            ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(np.where(only_hum_, self.hf_hum[got], HF_DIR * z_[:, 1]))
+            up = np.clip((to[:, 2] + HF_UP * z_[:, 2]) / 200.0, -1.5, 1.5)
+            dist = np.clip(dist * (1.0 + HF_LOUD * z_[:, 3]), 0.0, EAR_RANGE)
+            close = np.zeros(len(got))
+        else:
+            ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
+            up = np.clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
+            close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
         self.ear[got] = np.stack([ang, up, 1.0 - dist / EAR_RANGE, np.clip(close / 400.0, -1.5, 1.5)], 1)
         self.ear_t[got] = 0.0
         self.ear_hum[got] = np.where(hum[got, k[got]], self.weapon[src], -1)
@@ -4419,6 +4746,31 @@ class DuelEnv:
         self.v02_ht[got, self._slot(src)] = 0.0
         self.v02_hp[got, self._slot(src)] = s[got, :3] + np.stack([np.cos(ang) * dh_, np.sin(ang) * dh_, dz_], 1)
 
+    def _hf_steps(self, ground, ground_was, vel, duck, alive):
+        """(HEAR_FIX) this frame's footsteps and jumps, for every player: a footstep every HF_STEP_FRAMES frames while on
+        the ground faster than HF_STEP_SPEED, not crouched (the first at once); a jump: off the ground, going up. Keeps
+        hf_cnt, sets hf_ev (a footstep or a jump: what tells the enemy's place); returns the footsteps. The plugins call it
+        once a frame for all seats, as step() does."""
+        ground, ground_was, duck, alive = (np.asarray(x_, bool) for x_ in (ground, ground_was, duck, alive))
+        vel = np.asarray(vel, np.float32)
+        run_ = ground & (np.hypot(vel[:, 0], vel[:, 1]) > HF_STEP_SPEED) & ~duck & alive
+        cnt_ = np.where(run_, self.hf_cnt + 1, -1)
+        foot_ = run_ & ((self.hf_cnt < 0) | (cnt_ >= HF_STEP_FRAMES))
+        self.hf_cnt = np.where(foot_, 0, cnt_).astype(np.int64)
+        self.hf_ev = foot_ | (ground_was & ~ground & (vel[:, 2] > 100.0) & alive)
+        return foot_
+
+    def _hf_place(self, hh, src):
+        """(HEAR_FIX) where players hh place the enemies src they heard: HF_DIR degrees off across, HF_LOUD of the distance
+        off along (one draw a sound), the height HF_UP units off"""
+        s = self.state
+        z_ = self.rng.normal(0, 1, (len(hh), 3))
+        tv_ = s[src, :3] - s[hh, :3]
+        dh_ = np.hypot(tv_[:, 0], tv_[:, 1]) + 1e-6
+        a_ = np.arctan2(tv_[:, 1], tv_[:, 0]) + np.radians(HF_DIR * z_[:, 0])
+        r_ = dh_ * np.maximum(0.2, 1.0 + HF_LOUD * z_[:, 1])
+        return np.stack([s[hh, 0] + np.cos(a_) * r_, s[hh, 1] + np.sin(a_) * r_, s[src, 2] + HF_UP * z_[:, 2]], 1).astype(np.float32)
+
     def _hear_ok(self, lis, src=None, pos=None):
         """(HEAR_QL) the game sends player lis the sounds of player src (his box) or of the point pos (an item's place): his
         eye's cluster sees one of theirs in the map's PVS (sim/pvs.py). Arrays of one shape (pos: one point or one a lis);
@@ -4426,7 +4778,7 @@ class DuelEnv:
         lis = np.asarray(lis)
         if not HEAR_QL or self.pvs is None or lis.size == 0:
             return np.ones(lis.shape, bool)
-        key_ = (id(self.state), self.duck.tobytes())
+        key_ = (id(self.state), self.state[:, :3].tobytes(), self.duck.tobytes())     # (the places too: a plugin writes the state in place)
         if getattr(self, "_pvs_key", None) != key_:           # every player's eye cluster and box clusters, once a frame
             self._pvs_key = key_
             self._pvs_eye = self.pvs.clusters(self._eye(self.state))
@@ -4521,7 +4873,18 @@ class DuelEnv:
                          ((self.ear_hum == RG) & (self.ear_t < 0.5)).astype(np.float32),
                          ((self.ear_hum == LG) & (self.ear_t < 0.5)).astype(np.float32)], 1).astype(np.float32)
 
-    def _drop_weapon(self, v):
+    def _death_seen(self, j, v, killer):
+        """(SENSE_MINOR) player j knows of v's death: he is v or the killer, has v in view, or is within earshot"""
+        if j == v or j == killer:
+            return True
+        return self._sees(j, v) or (np.linalg.norm(self.state[j, :3] - self.state[v, :3]) < HEAR_EVT and self._hear1(j, v))
+
+    def _sees(self, j, v):
+        """player j has player v in view (noticed)"""
+        a2_ = getattr(self, "acq2", None)
+        return bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(v) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
+
+    def _drop_weapon(self, v, killer=-1):
         """player v, killed by another player, leaves the weapon he held (see DROPS)"""
         w = int(self.weapon[v])
         if ALWAYS[w] or self.ammo[v, w] <= 0:
@@ -4545,6 +4908,9 @@ class DuelEnv:
         free = np.nonzero(self.drop_w[m] < 0)[0]
         j = int(free[0]) if len(free) else int(self.drop_t[m].argmin())
         self.drop_pos[m, j], self.drop_w[m, j], self.drop_t[m, j] = p1, w, DROP_LIFE
+        if SENSE_MINOR:                                      # (SENSE_MINOR) its time is known to those who saw or heard the death
+            for q_ in self._seats(m):
+                self.drop_kn[q_, j] = self._death_seen(int(q_), int(v), int(killer))
         self.stats["drops"] += 1
 
     def _drops_step(self, reward):
@@ -4556,7 +4922,7 @@ class DuelEnv:
         for m, j in zip(*np.nonzero(self.drop_w >= 0)):
             q = self._seats(int(m))
             d = s[q, :3] - self.drop_pos[m, j][None, :]
-            near = np.nonzero((np.hypot(d[:, 0], d[:, 1]) < 36) & (np.abs(d[:, 2]) < 56) & (self.hp[q] > 0))[0]
+            near = np.nonzero((np.hypot(d[:, 0], d[:, 1]) < 36) & (np.abs(d[:, 2]) < PICK_Z) & (self.hp[q] > 0))[0]
             if not len(near):
                 continue
             i = int(q[near[np.hypot(d[near, 0], d[near, 1]).argmin()]])
@@ -4623,6 +4989,8 @@ class DuelEnv:
         out[:, 3] = ok
         out[:, 4], out[:, 5], out[:, 6] = ok & (wj == RL), ok & (wj == LG), ok & (wj == RG)
         out[:, 7] = np.where(ok, self.drop_t[grp][ar, j] / DROP_LIFE, 0.0)
+        if SENSE_MINOR:                                      # (SENSE_MINOR) only if he saw or heard the death
+            out[:, 7] *= self.drop_kn[ar, j]
         return out
 
     def _teach_drop(self, ri, pos, tp):
@@ -4731,6 +5099,26 @@ class DuelEnv:
                     R[13] += b_
                 if cnt[v_]:
                     R[14] += b_
+        if RAIL_STREAK_PAY > 0:                              # (RAIL_STREAK_PAY) rail hits in a row
+            if getattr(self, "rail_streak", None) is None:
+                self.rail_streak = np.zeros(n, np.int64)
+            hit_ = {}
+            for i_, v_ in st.get("rail", ()):
+                hit_[int(i_)] = int(v_)
+            shot_ = np.nonzero(np.asarray(do_fire, bool)[:n] & (np.asarray(do_w)[:n] == RG))[0]
+            for i_ in shot_:
+                i_ = int(i_)
+                if i_ in hit_:
+                    self.rail_streak[i_] += 1
+                    if self.rail_streak[i_] >= 2:
+                        b_ = RAIL_STREAK_PAY * min(int(self.rail_streak[i_]) - 1, RAIL_STREAK_CAP)
+                        reward[i_] += b_
+                        reward[hit_[i_]] -= b_
+                        if cnt[i_]:
+                            R[13] += b_
+                else:
+                    self.rail_streak[i_] = 0
+            self.rail_streak[~alive] = 0
 
     def _mates(self, i):
         """the other players of player i's group"""
@@ -4868,6 +5256,14 @@ class DuelEnv:
                 if HEAR_QL:                                  # (HEAR_QL) heard where the game sends it (at the item's place)
                     near &= self._hear_ok(q, pos=self.item_pos[items[g]])
                 self.bel_t[q[near], g] = 0.0
+                if SENSE_MINOR:                                  # (SENSE_MINOR) heard, not seen: his clock starts a little off
+                    ip_ = self.item_pos[items[g]]
+                    took_ = np.linalg.norm(pos[q] - ip_, axis=1) < 120.0         # (the one who took it)
+                    kn_ = np.asarray(self.known, np.float32)[q]
+                    saw_ = np.asarray(self.acquired, bool)[q] & (np.linalg.norm(kn_ - ip_, axis=1) < 150.0)
+                    hq_ = q[near & ~took_ & ~saw_]
+                    if len(hq_):
+                        self.bel_t[hq_, g] = self.rng.normal(0, SM_ITEM_SD, len(hq_)).astype(np.float32)
         self.bel_prev = up.copy()
         self.bel_tick += 1
         if self.bel_tick % 4:                                # the look at the items' places: ten times a second
@@ -4917,6 +5313,8 @@ class DuelEnv:
         for j in self._mates(i):
             if np.linalg.norm(s[j, :3] - s[i, :3]) < HEAR_EVT and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
                 self.it_t[j, k] = 0.0
+                if SENSE_MINOR and not self._sees(j, i):
+                    self.it_t[j, k] = float(self.rng.normal(0, SM_ITEM_SD))   # (SENSE_MINOR) heard, not seen: a little off
                 self.e_got[j, self._slot(i), k] = 1.0
 
     def note_death(self, v, killer):
@@ -5227,7 +5625,7 @@ class DuelEnv:
         self.shot_w[lis[ok]] = self.weapon[src[ok]]
         self.shot_seen[lis[ok]] = seen[ok]
         # the line of a hitscan shot (not rockets, grenades, plasma: those are projectiles he sees anyway)
-        hit = np.isin(self.weapon[src], (RG, LG, MG, HMG, SG)) & ~alone & (self.hp[lis] > 0)
+        hit = np.isin(self.weapon[src], (RG, LG) if SENSE_MINOR else (RG, LG, MG, HMG, SG)) & ~alone & (self.hp[lis] > 0)
         if hit.any():
             sh, li, acq_h = src[hit], lis[hit], acq_p[hit]
             eye = self._eye(s)
@@ -5261,6 +5659,8 @@ class DuelEnv:
         trail = np.concatenate([np.clip(rot(self.trail_p - eye) / 500.0, -4, 4) * on[:, None], fade[:, None]], 1)
         v_ = visible.astype(np.float32)
         body = np.stack([self.duck[opp].astype(np.float32) * v_, (self.state[opp, 6] < 0.5).astype(np.float32) * v_], 1)
+        if SENSE_MINOR:                                      # (SENSE_MINOR) as seen a reaction time ago
+            body = np.stack([self._sm_e["duck"].astype(np.float32) * v_, self._sm_e["air"].astype(np.float32) * v_], 1)
         hand = np.concatenate([(self.key_last - np.array([1, 1, 0]))[:, :2].astype(np.float32),
                                (self.key_last[:, 2:3] == 1).astype(np.float32) - (self.key_last[:, 2:3] == 2).astype(np.float32),
                                (self.key_tok / KEY_BURST)[:, None],
@@ -5417,10 +5817,14 @@ class DuelEnv:
         while len(self.opp_hist) > keep:
             self.opp_hist.pop(0)
         known, visible, _, seen_t = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.react_frames)]
+        if DRIFT_IN:                                         # (DRIFT_IN) which old sighting is read: a change of it is no motion
+            self._drift_pick = np.full(n, max(0, len(self.opp_hist) - 1 - self.react_frames) - len(self.opp_hist), np.int64)
         rf_ = self.react_frames if self.react_seat is None else self.react_seat     # (SEAT_DELAYS) one number, or one a seat
         if self.react_seat is not None:                      # ... each seat by its own delay (react_frames is the largest)
             pk_ = np.maximum(0, len(self.opp_hist) - 1 - rf_)
             known, visible, seen_t = (np.stack([h_[j_] for h_ in self.opp_hist])[pk_, np.arange(n)] for j_ in (0, 1, 3))
+            if DRIFT_IN:
+                self._drift_pick = np.asarray(pk_, np.int64) - len(self.opp_hist)
         if self.focus_on:                                    # the delay per player: sharp while focus lasts, then dull
             self.focus = np.where(self.acquired, self.focus - DT, self.focus + FOCUS_REFILL * DT)
             self.focus = np.clip(self.focus, -0.5, FOCUS_SECS).astype(np.float32)
@@ -5428,18 +5832,24 @@ class DuelEnv:
             dly = np.where(self.script == 0, np.maximum(dly, 1), rf_)
             L_ = len(self.opp_hist)
             pick = np.maximum(0, L_ - 1 - dly)
+            if DRIFT_IN:
+                self._drift_pick = np.asarray(pick - L_, np.int64)
             ar_ = np.arange(n)
             known = np.stack([h_[0] for h_ in self.opp_hist])[pick, ar_]
             visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
             seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
+        if SENSE_MINOR:                                      # (SENSE_MINOR) his facing, crouch, air and weapon as seen with his place
+            self._sm_note(opp, rf_, pick if self.focus_on else None)
+        if VEL_FIX:                                          # (VEL_FIX) read as a person reads it
+            opp_vel = self._vel_percept(opp_vel)
         self.ear_t += DT
         self.resp_t += DT
         self.it_t += DT                                      # the memory aids (N_MEM) keep their own time here, so the
         self.e_life += DT                                    # game-server plugin, which does not call step(), has them too
         self.life_t += DT
         v_ = np.nonzero(visible)[0]
-        self.e_got[v_, self._slot(opp[v_]), 2 + self.weapon[opp[v_]]] = 1.0     # the weapon seen in the enemy's hands
+        self.e_got[v_, self._slot(opp[v_]), 2 + (self._sm_e["weapon"][v_] if SENSE_MINOR else self.weapon[opp[v_]])] = 1.0     # the weapon seen in the enemy's hands
         if self.percept_sigma > 0:                           # the enemy is seen a little off from where he is
             rho = math.exp(-DT / PERCEPT_TAU)
             self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
@@ -5461,6 +5871,9 @@ class DuelEnv:
             d_ = np.linalg.norm(t_, axis=1)
             off = np.tan(np.radians(self.percept)) * d_[:, None] * (visible & (self.script == 0))[:, None]
             known = known + np.stack([-t_[:, 1] / hd_ * off[:, 0], t_[:, 0] / hd_ * off[:, 0], off[:, 1]], 1).astype(np.float32)
+        if RANGE_FIX:                                        # (RANGE_FIX) his distance judged by eye
+            self._rf_known0 = known.copy()                   # (the place before it: DRIFT_IN's jump test, see _drift)
+            known = self._range_percept(known, eye, visible)
         rel = rot(known - pos) / 1000.0
         exact = visible.astype(np.float32)
         ovel = rot(opp_vel) / 400.0 * exact[:, None]
@@ -5555,7 +5968,7 @@ class DuelEnv:
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
-                              self._emerge(eye, yaw, pit, visible)], 1)
+                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -5594,6 +6007,122 @@ class DuelEnv:
         out[:, 17] = (G - 2) / 4.0
         return out
 
+    def _drift(self, ey, ep, visible, pos, known, opp):
+        """the inputs of N_DRIFT (see DRIFT_IN): the perceived crosshair-to-enemy angle's rate, raw and smoothed. Keeps the
+        last frame's perceived angles and the noises' states (drift_*), and the rates on their way (drift_q, DRIFT_DELAY)"""
+        n = self.n
+        out = np.zeros((n, N_DRIFT), np.float32)
+        if not DRIFT_IN:
+            return out
+        if getattr(self, "drift_ang", None) is None or len(self.drift_ang) != n:
+            self.drift_ang, self.drift_s = np.zeros((n, 2), np.float32), np.zeros((n, 2), np.float32)
+            self.drift_ok, self.drift_sok = np.zeros(n, bool), np.zeros(n, bool)
+            self.drift_pos, self.drift_kn = np.zeros((n, 3), np.float32), np.zeros((n, 3), np.float32)
+            self.drift_pk, self.drift_foe = np.zeros(n, np.int64), np.full(n, -1, np.int64)
+            self.drift_wn, self.drift_an = np.zeros((n, 2), np.float32), np.zeros((n, 2), np.float32)
+            self.drift_q = []
+        ang = np.stack([ey, ep], 1).astype(np.float32)
+        pk = getattr(self, "_drift_pick", None)
+        pk = np.zeros(n, np.int64) if pk is None else np.asarray(pk, np.int64).reshape(n)
+        self._drift_pick = None
+        k0_ = getattr(self, "_rf_known0", None) if RANGE_FIX else None
+        if k0_ is not None and len(k0_) == n:                # (RANGE_FIX with DRIFT_IN, the v0.3.8 merge) the jump test on the place
+            known = k0_                                      # before the distance error: that error slides the place along the line
+        self._rf_known0 = None                               # from his eyes by tens of units a frame at long range (the angle stays
+        foe = np.asarray(opp, np.int64).reshape(n)           # as it is) and read as a new sighting (DRIFT_JUMP), the rate zeroed
+        now = np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
+        ok = (now & self.drift_ok & (pk == self.drift_pk) & (foe == self.drift_foe)
+              & (np.linalg.norm(pos - self.drift_pos, axis=1) < DRIFT_JUMP) & (np.linalg.norm(known - self.drift_kn, axis=1) < DRIFT_JUMP))
+        d_ = ang - self.drift_ang
+        d_[:, 0] = (d_[:, 0] + 180.0) % 360.0 - 180.0
+        rate = d_ / DT                                       # degrees a second, as the perceived picture moved
+        rho = math.exp(-DT / max(DRIFT_TAU, 1e-3))
+        if DRIFT_WEBER > 0 or DRIFT_SIGMA > 0:               # the motion sense's own errors: a scale error and a wander, both slow
+            z_ = self.rng.normal(0, 1, (n, 4)).astype(np.float32)
+            self.drift_wn = (rho * self.drift_wn + math.sqrt(1 - rho * rho) * DRIFT_WEBER * z_[:, :2]).astype(np.float32)
+            self.drift_an = (rho * self.drift_an + math.sqrt(1 - rho * rho) * DRIFT_SIGMA * z_[:, 2:]).astype(np.float32)
+            rate = rate * (1.0 + self.drift_wn) + self.drift_an
+        rate = np.where(ok[:, None], rate, 0.0).astype(np.float32)
+        a_ = math.exp(-DT / max(DRIFT_SMOOTH, 1e-3))
+        self.drift_s = np.where(ok[:, None], np.where(self.drift_sok[:, None], a_ * self.drift_s + (1 - a_) * rate, rate), 0.0).astype(np.float32)
+        self.drift_sok = ok.copy()
+        self.drift_ang, self.drift_ok, self.drift_pk, self.drift_foe = ang, now, pk, foe
+        self.drift_pos, self.drift_kn = pos.astype(np.float32).copy(), known.astype(np.float32).copy()
+        sm = self.drift_s
+        if DRIFT_MIN > 0:                                    # too slow to be noticed
+            rate = np.where(np.abs(rate) < DRIFT_MIN, 0.0, rate)
+            sm = np.where(np.abs(sm) < DRIFT_MIN, 0.0, sm)
+        sc = np.array(DRIFT_SCALE, np.float32)
+        cur = np.concatenate([np.clip(rate / sc, -1, 1), np.clip(sm / sc, -1, 1)], 1).astype(np.float32)
+        dq = int(round(DRIFT_DELAY / 1000.0 / DT))
+        if dq <= 0:
+            return cur
+        self.drift_q.append((cur, ok.copy()))                # read DRIFT_DELAY later; zeros if the sighting broke in between
+        while len(self.drift_q) > dq + 1:
+            self.drift_q.pop(0)
+        if len(self.drift_q) <= dq:
+            return out
+        held = np.stack([q_[1] for q_ in self.drift_q]).all(0)
+        return np.where(held[:, None], self.drift_q[0][0], 0.0).astype(np.float32)
+
+    def _sm_note(self, opp, rf_, pick):
+        """(SENSE_MINOR) keeps every player's facing, crouch, air and weapon a frame (sm_hist, beside opp_hist and as long)
+        and reads the enemy's at the sighting his place is read from (opp_hist's pick: pick, else rf_ frames back), and his
+        place then (for the facing input); his facing with a drifting error (sm_face). -> self._sm_e, per player. Called once a frame by observe()"""
+        n = self.n
+        if getattr(self, "sm_hist", None) is None or getattr(self, "sm_face", None) is None or len(self.sm_face) != n:
+            self.sm_hist, self.sm_face = [], np.zeros(n, np.float32)
+        self.sm_hist.append((self.yaw[:n].astype(np.float32).copy(), np.asarray(self.duck[:n], bool).copy(),
+                             (self.state[:n, 6] < 0.5).copy(), np.asarray(self.weapon[:n], np.int64).copy(),
+                             self.state[:n, :3].astype(np.float32).copy()))
+        L_ = len(self.opp_hist)
+        while len(self.sm_hist) > L_:
+            self.sm_hist.pop(0)
+        while len(self.sm_hist) < L_:                       # (newer than opp_hist: the oldest stands for the frames before)
+            self.sm_hist.insert(0, self.sm_hist[0])
+        ar = np.arange(n)
+        pk = np.asarray(pick, np.int64) if pick is not None else np.broadcast_to(np.maximum(0, L_ - 1 - np.asarray(rf_, np.int64)), (n,))
+        H = [np.stack([h_[k_] for h_ in self.sm_hist]) for k_ in range(5)]
+        rho = math.exp(-DT / max(SM_FACE_TAU, 1e-3))
+        self.sm_face = (rho * self.sm_face + math.sqrt(1.0 - rho * rho) * SM_FACE_DEG * self.rng.normal(0, 1, n)).astype(np.float32)
+        o_ = np.asarray(opp, np.int64)
+        self._sm_e = dict(yaw=H[0][pk, o_] + self.sm_face, duck=H[1][pk, o_], air=H[2][pk, o_], weapon=H[3][pk, o_], pos=H[4][pk, o_])
+
+    def _vel_percept(self, v):
+        """(VEL_FIX) the enemy's velocity as he reads it: times a drifting scale error (VEL_WEBER, VEL_TAU), a speed below
+        VEL_MIN read as none. Keeps the error (vf_w); called once a frame by observe()"""
+        n = len(v)
+        if getattr(self, "vf_w", None) is None or len(self.vf_w) != n:
+            self.vf_w = np.zeros(n, np.float32)
+        rho = math.exp(-DT / max(VEL_TAU, 1e-3))
+        self.vf_w = (rho * self.vf_w + math.sqrt(1.0 - rho * rho) * VEL_WEBER * self.rng.normal(0, 1, n)).astype(np.float32)
+        v = np.asarray(v, np.float32) * (1.0 + self.vf_w)[:, None]
+        if VEL_MIN > 0:
+            v = np.where(np.linalg.norm(v, axis=1, keepdims=True) < VEL_MIN, 0.0, v)
+        return v.astype(np.float32)
+
+    def _range_percept(self, known, eye, visible):
+        """(RANGE_FIX) the place of an enemy in view moved along the line from his eyes by a drifting share of the distance
+        (RANGE_WEBER, RANGE_TAU; at most half). Keeps the error (rf_e); called once a frame by observe()"""
+        n = len(known)
+        if getattr(self, "rf_e", None) is None or len(self.rf_e) != n:
+            self.rf_e = np.zeros(n, np.float32)
+        rho = math.exp(-DT / max(RANGE_TAU, 1e-3))
+        self.rf_e = (rho * self.rf_e + math.sqrt(1.0 - rho * rho) * RANGE_WEBER * self.rng.normal(0, 1, n)).astype(np.float32)
+        g_ = (np.asarray(visible, bool)[:n] & (self.script[:n] == 0)).astype(np.float32) * np.clip(self.rf_e, -0.5, 0.5)
+        return (known + (known - eye) * g_[:, None]).astype(np.float32)
+
+    def drift_clear(self, seats=None):
+        """(DRIFT_IN) no rate until two new perceived frames: a plugin calls it where it clears opp_hist, and on a frame
+        without observe()"""
+        if getattr(self, "drift_ang", None) is None:
+            return
+        s_ = slice(None) if seats is None else seats
+        self.drift_ok[s_], self.drift_sok[s_] = False, False
+        self.drift_s[s_] = 0.0
+        for q_ in getattr(self, "drift_q", []):
+            q_[1][s_] = False
+
     def _proj(self, pos, eye, fdir, rot, vel):
         """the enemy projectiles he sees (PROJ_SEE): inside his view cone, within PROJ_FAR, the line from his eyes clear.
         -> the old inputs for the nearest two (place, speed, kind), and N_V15's part: the same for the next four, then
@@ -5609,6 +6138,10 @@ class DuelEnv:
         if len(ii):
             clear = (self.w.lines(eye[ii], P[ii, kk]) if self.sight is None else self.w.lines(eye[ii], P[ii, kk], mask=self.sight)) >= 0.999
             see[ii[~clear], kk[~clear]] = False
+        if PROJ_FIX:                                         # (PROJ_FIX) noticed late, read late, the fuse only if followed
+            P, V, G, see = self._proj_fix(P, V, A, G, see)
+            to = P - eye[:, None, :]
+            dist = np.linalg.norm(to, axis=2) + 1e-6
         d = np.where(see, dist, 1e9)
         order = np.argsort(d, axis=1)[:, :S6]
         ar = np.arange(n)
@@ -5629,6 +6162,37 @@ class DuelEnv:
             more[:, j, 1] = t_ / 2.0 * ok
             more[:, j, 2] = np.clip(near / rad[w_], 0.0, 3.0) / 3.0 * ok
         return base[:, :N_PROJ].reshape(n, -1), np.concatenate([base[:, N_PROJ:].reshape(n, -1), more.reshape(n, -1)], 1)
+
+    def _proj_fix(self, P, V, A, G, see):
+        """(PROJ_FIX) per player and enemy projectile slot: frames it has flown (pf_life) and been in his sight on end
+        (pf_run), the slots' ages (pf_age: a new projectile when it goes back), the last frames' readings (pf_hist).
+        -> the place, speed and age PROJ_READ_MS old, the age 99 where he has not followed it since it left (its fuse
+        unknown), and seen only after PROJ_NOTICE_MS in sight on end. Called once a frame by observe()"""
+        if getattr(self, "pf_run", None) is None or self.pf_run.shape != see.shape:
+            self.pf_run, self.pf_life = np.zeros(see.shape, np.int64), np.zeros(see.shape, np.int64)
+            self.pf_age, self.pf_hist = np.zeros(see.shape, np.float32), []
+        new_ = A & (G < self.pf_age - 1e-4)
+        self.pf_life = np.where(A, np.where(new_, 1, self.pf_life + 1), 0)
+        self.pf_run = np.where(see, np.where(new_, 1, self.pf_run + 1), 0)
+        self.pf_age = np.where(A, G, 0.0).astype(np.float32)
+        self.pf_hist.append((P.copy(), V.copy(), A.copy(), G.copy(), self.pf_run >= self.pf_life))
+        dq = max(0, int(round(PROJ_READ_MS / 1000.0 / DT)))
+        while len(self.pf_hist) > dq + 1:
+            self.pf_hist.pop(0)
+        P0, V0, A0, G0, Y0 = self.pf_hist[0]
+        need = max(int(round(PROJ_NOTICE_MS / 1000.0 / DT)), dq + 1)
+        see = see & A0 & (self.pf_run >= need)
+        self._pf_last = see
+        return P0, V0, np.where(Y0, G0, 99.0).astype(np.float32), see
+
+    def proj_clear(self, seats=None):
+        """(PROJ_FIX) nothing followed: a plugin calls it where it clears opp_hist (a new life)"""
+        if getattr(self, "pf_run", None) is None:
+            return
+        s_ = slice(None) if seats is None else seats
+        self.pf_run[s_] = 0
+        for h_ in self.pf_hist:
+            h_[4][s_] = False
 
     def _v15(self, pos, yaw, pit, eye, known, seen_t, visible):
         """the inputs of N_V15: the jump ahead on his way in a jump run (see JUMPS), and with the grenade launcher in his
@@ -5894,7 +6458,7 @@ class DuelEnv:
         # ---- the floor aim point: the floor under where he will be when the rocket gets there
         k = ii[jj]
         e2, kn2, ov = e_[jj], kn[jj], opp_vel[k].astype(np.float32)
-        air = self.state[opp[k], 6] < 0.5
+        air = self._sm_e["air"][k] if SENSE_MINOR else self.state[opp[k], 6] < 0.5
         feet = kn2 - np.array([0, 0, 24.0], np.float32)
         c_ = float(P_SPEED[RL])
         t = np.linalg.norm(feet - e2, axis=1) / c_
@@ -6567,7 +7131,7 @@ class DuelEnv:
         on = visible & (cs > 0) & (self.hp > 0)
         c_ = np.maximum(cs, 1.0)
         r0 = known + np.array([0, 0, 4.0], np.float32) - eye
-        air = self.state[opp, 6] < 0.5
+        air = self._sm_e["air"] if SENSE_MINOR else self.state[opp, 6] < 0.5
         t = np.linalg.norm(r0, axis=1) / c_
         for _ in range(3):                                   # the flight time and the enemy's place by then, each from the other
             t = np.minimum(t, 3.0)
@@ -6654,9 +7218,11 @@ class DuelEnv:
             far = np.where(see, far, UNSEEN).astype(np.float32)
         # the enemy while in view: weapon in hand, whether he faces this player, damage dealt to him this life
         v_ = visible.astype(np.float32)[:, None]
-        oy = np.radians(self.yaw[opp])
+        oy = np.radians(self._sm_e["yaw"] if SENSE_MINOR else self.yaw[opp])     # (SENSE_MINOR: as seen, a little off)
         back = np.arctan2(pos[:, 1] - self.state[opp, 1], pos[:, 0] - self.state[opp, 0]) - oy
-        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self.weapon[opp]][:, OBS_W] * v_,
+        if SENSE_MINOR:                                      # (SENSE_MINOR) from where he was seen, as his facing
+            back = np.arctan2(pos[:, 1] - self._sm_e["pos"][:, 1], pos[:, 0] - self._sm_e["pos"][:, 0]) - oy
+        enemy = np.concatenate([np.eye(NW, dtype=np.float32)[self._sm_e["weapon"] if SENSE_MINOR else self.weapon[opp]][:, OBS_W] * v_,
                                 np.stack([np.sin(back), np.cos(back)], 1) * v_,
                                 np.minimum((self.dmg_life if self.G == 2 else self.dmg_on[ar, self.slot[opp]])
                                            / 200.0, 2.0)[:, None]], 1)
@@ -6777,6 +7343,44 @@ class DuelEnv:
             t0, t1 = (lo[a_] - p0[a_]) / d[a_], (hi[a_] - p0[a_]) / d[a_]
             tn = max(tn, float(min(t0, t1)))
         return (p0 + d * min(1.0, tn)).astype(np.float32)
+
+    def _fire_launch(self, i, k, wpn, eye, fd, s, st):
+        """(FIRE_QL) player i's plasma ball or grenade into slot k on the frame of the command (self.rv[i, k] its velocity,
+        the grenade's lofted): from the game's muzzle, FIRE_FLY of flight by the frame's end. Placed where it is
+        FIRE_FLY - DT after the launch so that this frame's flight (below in step) carries it to the end; what the
+        stretch before that meets it meets now: the first body on it (where it ends the frame) or, for plasma, a wall.
+        A grenade that meets a wall there leaves from the muzzle and bounces in the flight (25 ms late: a wall closer
+        than about 24 units)."""
+        g_ = 800.0 if wpn == GL else 0.0
+        mz = np.trunc(eye + fd * FIRE_MZ).astype(np.float32)        # Quake 3's SnapVector on the muzzle
+        v0 = np.trunc(self.rv[i, k]).astype(np.float32)            # ... and on its velocity
+        ta = FIRE_FLY - DT
+        pa = (mz + v0 * ta).astype(np.float32)
+        pa[2] -= 0.5 * g_ * ta * ta
+        self.rbase[i, k], self.rrest[i, k], self.rage[i, k] = mz, False, 0.0
+        if ta > 0:
+            fr = float(self.w.lines(mz[None], pa[None], mask=PLAYER_MASK if self.sight is None else self.sight)[0]) \
+                if MISSILE_POINT else float(self.w.trace(mz, pa, mask=self.sight)["fraction"])
+            hp_ = (mz + (pa - mz) * fr).astype(np.float32)
+            d_on, ep = None, hp_
+            for v_ in self._mates(int(i)):
+                if bool(self._seg_box(mz[None], hp_[None], s[v_:v_ + 1, :3], np.where(self.duck[v_:v_ + 1], TOP_DUCK, TOP))[0]):
+                    e_ = self._box_entry(mz, hp_, s[v_, :3], TOP_DUCK if self.duck[v_] else TOP)
+                    if d_on is None or np.linalg.norm(e_ - mz) < np.linalg.norm(ep - mz):
+                        d_on, ep = int(v_), e_
+            dq = pa - mz
+            dirq = (dq / max(1e-6, float(np.linalg.norm(dq)))).astype(np.float32)
+            if d_on is not None or (fr < 1 and wpn != GL):           # it meets him, or the plasma a wall: the blast now
+                self._explode(i, wpn, self._snap_towards(ep, mz) if MISSILE_POINT else ep, d_on,
+                              dirq if d_on is not None else None, s, st, back=None if MISSILE_POINT else dirq)
+                return
+            if fr < 1:                                               # a grenade at a wall within the first stretch
+                self.rp[i, k], self.rv[i, k] = mz, v0
+                self.ra[i, k], self.rnew[i, k], self.rw[i, k] = True, False, wpn
+                return
+        self.rp[i, k] = pa
+        self.rv[i, k] = v0 - np.array([0.0, 0.0, g_ * ta], np.float32)
+        self.ra[i, k], self.rnew[i, k], self.rw[i, k] = True, False, wpn
 
     @staticmethod
     def _snap_towards(v, to):
@@ -7651,6 +8255,7 @@ class DuelEnv:
             self.life_t[i] = float(max(0.0, P["life"][k, s_]))
             self.first_wp[i] = bool(has_[[RL, RG, LG, SG, GL, PG, HMG]].any())
             self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.hb[i] = 0.0
             self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
             self.cool[i], self.fire_cd[i] = 0.0, 0.0
             self.fire_q[i] = False
@@ -7888,6 +8493,7 @@ class DuelEnv:
             self.w.reset(i, (float(p_[0]), float(p_[1]), float(p_[2])), (float(v_[0]), float(v_[1]), 0.0), face)
             self.yaw[i], self.pitch[i] = face, 0.0
             self.mv[i], self.cmd[i] = 0.0, 0.0
+            self.hb[i] = 0.0
             self.turn_dir[i], self.rev_wait[i] = 0.0, 0.0
             self.has[i, RG] = True
             self.ammo[i, RG] = max(float(self.ammo[i, RG]), RAIL_START_AMMO)
@@ -8030,6 +8636,23 @@ class DuelEnv:
         self.jrun_open[i] = JUMP_WEIGHT and bool(self._counted(i))
         if JUMP_WEIGHT:                                      # (JUMP_WEIGHT) the jumps he fails more often
             w_ = np.maximum(JUMP_W_FLOOR, 1.0 - self.jw_s[np.minimum(np.array(ks, np.int64), 63)])
+            if JUMP_W_DROP > 0:                              # (JUMP_W_DROP) the jumps he makes at this rate or more: no tries
+                dr_ = self.jw_s[np.minimum(np.array(ks, np.int64), 63)] >= JUMP_W_DROP
+                if JUMP_KEEP_CLOSED:                         # (JUMP_KEEP_CLOSED) ... only those open in games (and the stuck spots)
+                    dr_ = dr_ & self.jdrop_ok[np.array(ks, np.int64)]
+                w_ = np.where(dr_, 0.0, w_)
+                if w_.sum() <= 0:
+                    w_ = np.ones(len(ks))
+            if JUMP_FOCUS:                                   # (JUMP_FOCUS) the jumps the owner named: more tries
+                w_ = w_ * self.jfocus[np.array(ks, np.int64)]
+            if JUMP_W_CAP > 0 and (w_ > 0).sum() > 1:       # (JUMP_W_CAP) no one jump above this share of the draws
+                cap_ = max(JUMP_W_CAP, 1.5 / float((w_ > 0).sum()))      # (with few jumps left: 1.5x an even share)
+                for _ in range(6):
+                    p_ = w_ / w_.sum()
+                    if (p_ <= cap_ + 1e-9).all():
+                        break
+                    over_ = p_ > cap_
+                    w_ = np.where(over_, cap_ * w_[~over_].sum() / max(1e-9, 1.0 - cap_ * over_.sum()), w_)
             k = int(ks[int(self.rng.choice(len(ks), p=w_ / w_.sum()))])
         else:
             k = int(ks[int(self.rng.integers(len(ks)))])
@@ -8040,20 +8663,58 @@ class DuelEnv:
         far = JUMP_FAR_P > 0 and self.rng.random() < JUMP_FAR_P and len(self.jump_far.get((k, e), ())) > 0
         if far:                                              # (JUMP_FAR_P) further back, moving along the way
             st = self.jump_far[(k, e)]
+        ru_ = JUMP_RUNUP > 0 and not far and (k, e) in self.jrunup
+        if ru_:                                              # (JUMP_RUNUP) a near try of a fast jump: room for a hop or two
+            st = self.jrunup[(k, e)]
         node = int(st[int(self.rng.integers(len(st)))])
         nx = int(J.next[g, node])
         p, q = J.nodes[node], (J.nodes[nx] if nx >= 0 else J.goals[g])
+        if ru_ and (k, e) in self.jrunup_line:               # (JUMP_RUNUP) a straight run-up: from a route node, at the take-off
+            p, q = self.route.nodes[node], self.jump_a[k]
         face = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])) + float(self.rng.uniform(-40, 40))
         vel = (0, 0, 0)
-        if far:
+        if far or ru_:
             d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
             d_ = d_ / max(1e-6, float(np.hypot(*d_)))
-            vel = (float(d_[0] * JUMP_FAR_SPEED), float(d_[1] * JUMP_FAR_SPEED), 0.0)
-        self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
+            sp_ = JUMP_FAR_SPEED
+            if JUMP_VARY:                                    # (JUMP_VARY) his speed and line along the way vary
+                sp_ = float(self.rng.uniform(220.0, 420.0))
+                a_ = math.radians(float(self.rng.uniform(-12, 12)))
+                d_ = np.array([d_[0] * math.cos(a_) - d_[1] * math.sin(a_), d_[0] * math.sin(a_) + d_[1] * math.cos(a_)])
+            vel = (float(d_[0] * sp_), float(d_[1] * sp_), 0.0)
+        elif JUMP_VARY and self.rng.random() < 0.5:          # (JUMP_VARY) a near start half the time already moving
+            d_ = np.array([q[0] - p[0], q[1] - p[1]], np.float64)
+            d_ = d_ / max(1e-6, float(np.hypot(*d_)))
+            a_ = math.radians(float(self.rng.uniform(-15, 15)))
+            sp_ = float(self.rng.uniform(0.0, 350.0))
+            vel = (float((d_[0] * math.cos(a_) - d_[1] * math.sin(a_)) * sp_), float((d_[0] * math.sin(a_) + d_[1] * math.cos(a_)) * sp_), 0.0)
+        pro_ = k in self.jstart and (k >= getattr(self, "n_real_jumps", 10 ** 9) or (PRO_JSTART_P > 0 and self.rng.random() < PRO_JSTART_P))
+        if pro_:                                             # (PRO_JSTART_P) a pro's own state before the take-off
+            far = False
+            P_, V_, Y_ = self.jstart[k]
+            s_ = int(self.rng.integers(len(P_)))
+            pos_ = [float(x_) for x_ in P_[s_]]
+            face, vel = float(Y_[s_]), tuple(float(x_) for x_ in V_[s_])
+            if JUMP_VARY and k < getattr(self, "n_real_jumps", 10 ** 9):   # (JUMP_VARY) around the pro's state, not on it
+                a_ = math.radians(float(self.rng.uniform(-8, 8)))
+                f_ = float(self.rng.uniform(0.9, 1.1))
+                vel = (f_ * (vel[0] * math.cos(a_) - vel[1] * math.sin(a_)), f_ * (vel[0] * math.sin(a_) + vel[1] * math.cos(a_)), vel[2])
+                face += float(self.rng.uniform(-20, 20))
+                pos_[0] += float(self.rng.uniform(-8, 8))
+                pos_[1] += float(self.rng.uniform(-8, 8))
+            self.w.reset(i, tuple(pos_), vel, face)
+        else:
+            if JUMP_SOLID_FIX and (f, node) in self.jnode_fix:    # (JUMP_SOLID_FIX) the free spot next to a solid one
+                p = self.jnode_fix[(f, node)]
+            self.w.reset(i, (p[0], p[1], p[2] + 9.0), vel, face)
         self._fresh(i, face)
         self.jrun_far[i] = far
-        if far:
+        if JUMP_OVER_ANY:                                    # (JUMP_OVER_ANY) he stands where he begins
+            self.jrun_lift[i] = pos_ if pro_ else (p[0], p[1], p[2] + 9.0)
+        if far and not JUMP_VARY:
             self.sp_hist[i] = JUMP_FAR_SPEED                 # (his speed of the last frames: what he moves at, not a gain)
+        elif pro_ or ru_ or (JUMP_VARY and (vel[0] or vel[1])):
+            self.sp_hist[i] = float(math.hypot(vel[0], vel[1]))
         m = self._match_of(i)
         self.item_up[m, self.route_item[g]], self.item_t[m, self.route_item[g]] = True, 0.0
         if g < self.bel_t.shape[1]:
@@ -8069,6 +8730,181 @@ class DuelEnv:
         if self._counted(i):
             self.stats["jump_tries"][min(k, 63)] += 1
             self.stats["jump_far"][2 if far else 0] += 1
+
+    def _jump_solid_fix(self):
+        """(JUMP_SOLID_FIX) the near and far start spots of every jump's entries where the player box (as w.reset puts
+        him: 9 u above the node) is inside something solid are left out; an entry left with no near spot gets the nearest
+        free spot round its first one (stored in jnode_fix), or is dropped, and a jump with no entry left is not drawn"""
+        lo_, hi_ = np.array([-15.0, -15.0, -24.0]), np.array([15.0, 15.0, 32.0])
+
+        def free_(o_):
+            o_ = np.asarray(o_, np.float32)
+            return not self.w.trace(o_, o_ + np.array([0.0, 0.0, 0.1], np.float32), lo_, hi_)["startsolid"]
+
+        def floor_(o_):
+            o_ = np.asarray(o_, np.float32)
+            return self.w.trace(o_, o_ - np.array([0.0, 0.0, 48.0], np.float32), lo_, hi_)["fraction"] < 1.0
+
+        self.jnode_fix = {}
+        self.jsolid_log = []
+        for k_ in list(self.jump_tries):
+            keep_ = []
+            for e_, (g_, st_, f_) in enumerate(self.jump_tries[k_]):
+                J_ = self.jfields[f_]
+                ok_ = np.array([free_(J_.nodes[int(n_)] + np.array([0.0, 0.0, 9.0])) for n_ in st_], bool)
+                if (k_, e_) in self.jump_far:
+                    far_ = self.jump_far[(k_, e_)]
+                    fo_ = np.array([free_(J_.nodes[int(n_)] + np.array([0.0, 0.0, 9.0])) for n_ in far_], bool)
+                    if fo_.any():
+                        self.jump_far[(k_, e_)] = far_[fo_]
+                    else:
+                        del self.jump_far[(k_, e_)]
+                if ok_.any():
+                    if not ok_.all():
+                        self.jsolid_log.append((k_, e_, int((~ok_).sum()), len(ok_)))
+                    keep_.append((len(keep_), e_, (g_, np.asarray(st_)[ok_], f_)))
+                    continue
+                n0_ = int(st_[0])
+                p0_ = np.array(J_.nodes[n0_], np.float64) + np.array([0.0, 0.0, 9.0])
+                fix_ = None
+                for dz_ in range(0, 36, 4):
+                    for dx_, dy_ in ((0, 0), (8, 0), (-8, 0), (0, 8), (0, -8), (16, 0), (-16, 0), (0, 16), (0, -16),
+                                     (12, 12), (-12, 12), (12, -12), (-12, -12)):
+                        q_ = p0_ + np.array([dx_, dy_, dz_])
+                        if free_(q_) and floor_(q_):
+                            fix_ = q_
+                            break
+                    if fix_ is not None:
+                        break
+                if fix_ is None:
+                    self.jsolid_log.append((k_, e_, len(ok_), len(ok_), "dropped"))
+                    continue
+                self.jnode_fix[(f_, n0_)] = fix_ - np.array([0.0, 0.0, 9.0])
+                self.jsolid_log.append((k_, e_, len(ok_), len(ok_), "moved", [round(float(x_)) for x_ in fix_ - p0_]))
+                keep_.append((len(keep_), e_, (g_, np.array([n0_], np.int64), f_)))
+            if keep_:                                    # (the far spots follow their entries' new places)
+                self.jump_far = {(kk_, e_): v_ for (kk_, e_), v_ in self.jump_far.items() if kk_ != k_} | \
+                    {(k_, new_): self.jump_far[(k_, old_)] for new_, old_, _ in keep_ if (k_, old_) in self.jump_far}
+                self.jump_tries[k_] = [ent_ for _, _, ent_ in keep_]
+            else:
+                del self.jump_tries[k_]
+                self.jump_far = {(kk_, e_): v_ for (kk_, e_), v_ in self.jump_far.items() if kk_ != k_}
+
+    def _jump_runup(self):
+        """(JUMP_RUNUP) per real jump and entry: the spots whose way has this jump first, by seconds of way to its
+        take-off (every way of the entry's field, not only those to the nearest item); run-up spots JUMP_RUNUP_LO to
+        JUMP_RUNUP_HI s back for the fast jumps and for entries whose near spots are all on the take-off's lip (those
+        left out); far spots (JUMP_FAR_LO to JUMP_FAR_HI s) where an entry has none. Spots in solid are left out."""
+        lo_, hi_ = np.array([-15.0, -15.0, -24.0]), np.array([15.0, 15.0, 32.0])
+        R_ = self.route
+        self.jrunup_log = []
+        self.jrunup_line = set()                         # (jump, entry): run-up spots on the jump's line (route nodes), run at A
+
+        def free_(n_, X_):
+            o_ = np.asarray(X_.nodes[int(n_)] + np.array([0.0, 0.0, 9.0]), np.float32)
+            return not self.w.trace(o_, o_ + np.array([0.0, 0.0, 0.1], np.float32), lo_, hi_)["startsolid"]
+
+        for k, ents in list(self.jump_tries.items()):
+            if k >= self.n_real_jumps:
+                continue
+            A_ = self.jump_a[k]
+            fast_ = float(self.jumps[k].get("need", 0.0)) >= JUMP_RUNUP
+            for e, (g, st, f) in enumerate(list(ents)):
+                X = self.jfields[f]
+                nxt, jl = X.next[g], X.jlink[g]
+                cur = np.arange(len(nxt))
+                hit = np.full(len(nxt), -1, np.int64)
+                live = X.T[g] < 1e8
+                for _ in range(400):
+                    j_ = jl[cur]
+                    at_ = live & (j_ >= 0)
+                    hit[at_ & (j_ == k)] = cur[at_ & (j_ == k)]
+                    live &= ~at_ & (nxt[cur] >= 0)
+                    if not live.any():
+                        break
+                    cur = np.where(live, nxt[cur], cur)
+                ok = (hit >= 0) & ~R_.dead
+                tt = np.where(ok, X.T[g] - X.T[g, np.maximum(hit, 0)], -1.0)
+
+                def pick_(a_, b_, fall_=True):
+                    sel_ = np.nonzero(ok & (tt >= a_) & (tt <= b_))[0]
+                    if fall_ and not len(sel_) and ok.any() and float(tt.max()) > 0:
+                        sel_ = np.nonzero(ok & (tt >= 0.8 * min(float(tt.max()), b_)) & (tt > 0))[0]
+                    return np.array([n_ for n_ in sel_ if free_(n_, X)], np.int64)
+
+                st_ = np.asarray(st)
+                off_ = np.array([math.hypot(float(X.nodes[int(n_)][0] - A_[0]), float(X.nodes[int(n_)][1] - A_[1])) >= 40.0
+                                 for n_ in st_], bool)
+                lip_ = not off_.any()
+                if off_.any() and not off_.all():
+                    self.jump_tries[k][e] = (g, st_[off_], f)
+                if fast_ or lip_:
+                    ru_ = pick_(JUMP_RUNUP_LO, JUMP_RUNUP_HI)
+                    kind_ = "way"
+                    if len(ru_) < 5:                         # (almost) no way leads in: a straight run-up behind the take-off,
+                        li_ = self._jump_line_spots(k)           # on the jump's line, level and clear, instead
+                        if len(li_) > len(ru_):
+                            ru_, kind_ = li_, "line"
+                            self.jrunup_line.add((k, e))
+                    if len(ru_):
+                        self.jrunup[(k, e)] = ru_
+                        fo_ = self.jump_far.get((k, e), ())       # far spots nearer than a run-up (JUMP_FAR's fall-back on a
+                        if len(fo_) and max(math.hypot(float(X.nodes[int(n_)][0] - A_[0]), float(X.nodes[int(n_)][1] - A_[1]))
+                                            for n_ in fo_) < 200.0:     # short way: Cure 8 began at 103 u half the time)
+                            del self.jump_far[(k, e)]
+                    elif lip_:                               # only a lip to start on and nothing behind it: not practised
+                        kind_ = "dropped"                    # (Toxicity 7: he slid off on every try)
+                    self.jrunup_log.append((int(self.jumps[k]["id"]), e, "fast" if fast_ else "lip", kind_, len(ru_)))
+                if lip_ and (k, e) not in self.jrunup:
+                    continue
+                if (k, e) not in self.jump_far:
+                    fa_ = pick_(JUMP_FAR_LO, JUMP_FAR_HI, False)     # (no fall-back: it gave spots by the edge)
+                    if len(fa_):
+                        self.jump_far[(k, e)] = fa_
+                        self.jrunup_log.append((int(self.jumps[k]["id"]), e, "far", len(fa_)))
+
+    def _jump_runup_drop(self):
+        """(JUMP_RUNUP) the entries logged "dropped" out of jump_tries (a jump with none left is not drawn)"""
+        for jid_, e_, _, kind_, _ in [x_ for x_ in self.jrunup_log if x_[3] == "dropped"]:
+            k_ = [i_ for i_, j_ in enumerate(self.jumps) if int(j_["id"]) == jid_][0]
+            self.jump_tries[k_][e_] = None
+        for k_ in list(self.jump_tries):
+            keep_ = [(i_, x_) for i_, x_ in enumerate(self.jump_tries[k_]) if x_ is not None]
+            if len(keep_) == len(self.jump_tries[k_]):
+                continue
+            fa_ = {(k_, new_): self.jump_far[(k_, old_)] for new_, (old_, _) in enumerate(keep_) if (k_, old_) in self.jump_far}
+            ru_ = {(k_, new_): self.jrunup[(k_, old_)] for new_, (old_, _) in enumerate(keep_) if (k_, old_) in self.jrunup}
+            li_ = {(k_, new_) for new_, (old_, _) in enumerate(keep_) if (k_, old_) in self.jrunup_line}
+            self.jump_far = {kk_: v_ for kk_, v_ in self.jump_far.items() if kk_[0] != k_} | fa_
+            self.jrunup = {kk_: v_ for kk_, v_ in self.jrunup.items() if kk_[0] != k_} | ru_
+            self.jrunup_line = {kk_ for kk_ in self.jrunup_line if kk_[0] != k_} | li_
+            if keep_:
+                self.jump_tries[k_] = [x_ for _, x_ in keep_]
+            else:
+                del self.jump_tries[k_]
+
+    def _jump_line_spots(self, k):
+        """(JUMP_RUNUP) the route's nodes 200 to 700 u behind jump k's take-off, within 50 deg of its line (landing to
+        take-off, carried on), within 40 u of its height, the player box free there and clear all the way to the take-off"""
+        lo_, hi_ = np.array([-15.0, -15.0, -24.0]), np.array([15.0, 15.0, 32.0])
+        A_, B_ = np.asarray(self.jump_a[k], np.float64), np.asarray(self.jump_b[k], np.float64)
+        u_ = (A_ - B_)[:2] / max(1e-6, float(np.hypot(*(A_ - B_)[:2])))
+        N_ = np.asarray(self.route.nodes, np.float64)
+        d_ = N_[:, :2] - A_[:2]
+        r_ = np.hypot(d_[:, 0], d_[:, 1])
+        cos_ = (d_ @ u_) / np.maximum(r_, 1e-6)
+        cand_ = np.nonzero((r_ >= 200.0) & (r_ <= 700.0) & (cos_ >= np.cos(np.radians(50.0))) & (np.abs(N_[:, 2] - A_[2]) <= 40.0)
+                           & ~self.route.dead)[0]
+        out_ = []
+        a9_ = (A_ + np.array([0.0, 0.0, 9.0])).astype(np.float32)
+        for n_ in cand_:
+            o_ = (N_[n_] + np.array([0.0, 0.0, 9.0])).astype(np.float32)
+            t0_ = self.w.trace(o_, o_ + np.array([0.0, 0.0, 0.1], np.float32), lo_, hi_)
+            if t0_["startsolid"]:
+                continue
+            if self.w.trace(o_, a9_, lo_, hi_)["fraction"] >= 0.999:
+                out_.append(int(n_))
+        return np.array(out_, np.int64)
 
     def _jump_learn(self, k, over):
         """(JUMP_WEIGHT) one try at jump k into his success there (see JUMP_WEIGHT)"""
@@ -8715,6 +9551,7 @@ class DuelEnv:
         fwd = (a[:, 0].astype(np.int32) - 1) * key
         side = (a[:, 1].astype(np.int32) - 1) * key
         jump = np.where(a[:, 2] == 1, 127, np.where(a[:, 2] == 2, -127, 0)).astype(np.int32)   # jump / crouch
+        hs_duck0 = self.duck.copy() if FIRE_QL else None     # (FIRE_QL) the crouch each had at the frame's start
         self.duck = (a[:, 2] == 2) & (self.hp > 0)
         fire = a[:, 5] == 1
         out_ = (self.rsp_wait > 0) if RESPAWN_QL else None   # (RESPAWN_QL) waiting to respawn: nothing he presses has an effect
@@ -8744,9 +9581,15 @@ class DuelEnv:
         if self.human_aim:
             zs = np.where(self.zoom, ZOOM, 1.0).astype(np.float32)
             self.mv[:, 0] = np.clip(self.mv[:, 0], -TURN_CAP * zs, TURN_CAP * zs)
-            jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
-            jit[self.script > 0] = 0.0
-            turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
+            if HAND_BAND:                                    # (HAND_BAND) the view follows the hand within its bandwidth
+                v_ = np.where((self.script > 0)[:, None], self.mv, self._hand_band(self.script == 0))
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(v_) + MOTOR_BASE * zs[:, None])
+                jit[self.script > 0] = 0.0
+                turn, dpit = v_[:, 0] + jit[:, 0], v_[:, 1] + jit[:, 1]
+            else:
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
+                jit[self.script > 0] = 0.0
+                turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
             turn, dpit = self.pad_turn(turn, dpit, (a[:, 9] == 1) if a.shape[1] > 9 else np.zeros(n, bool), zs, self.script == 0)
         else:
             turn, dpit = self.mv[:, 0], self.mv[:, 1]
@@ -8767,10 +9610,13 @@ class DuelEnv:
         lev = np.where(self.seen_t > 0.5, self.level, 1.0)
         p1 = np.clip(self.pitch * lev + dpit, -89, 89)
         done_ms = 0
+        hs_s1 = None                                         # (FIRE_QL) the state after the frame's first substep
         for ms in self.substeps:
             done_ms += ms
             f = done_ms / 25.0
             self.w.step(moves, np.stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32), ms)
+            if FIRE_QL and hs_s1 is None:
+                hs_s1, hs_yaw1 = self.w.state(), y0 + turn * f
         self.pitch = p1
         self.state = s = self.w.state()
         self.yaw = s[:, 7].copy()
@@ -8921,6 +9767,8 @@ class DuelEnv:
         if self.courses and (self.course >= 0).any() and self._course_step(reward):
             self.state = s = self.w.state()
             self.yaw = s[:, 7].copy()
+            if FIRE_QL:                                      # (a course moved him: the frame's end then)
+                hs_s1, hs_yaw1 = s, self.yaw.copy()
         # fire: a shot leaves one frame after the command
         self.cool = np.maximum(0.0, self.cool - DT)
         self.fire_cd = np.maximum(0.0, self.fire_cd - DT)
@@ -8980,11 +9828,24 @@ class DuelEnv:
             self.fire_q, self.fire_w = shoot & ~now_rl, self.weapon.copy()
         else:
             self.fire_q, self.fire_w = shoot, self.weapon.copy()
+        tg_, dk_ = s, self.duck                              # where the enemy's box is for an instant shot (FIRE_QL: the frame's start)
+        if FIRE_QL:                                          # (FIRE_QL) an instant shot leaves on the frame of the command
+            now_hs = shoot & (HS_W[self.weapon] | (self.weapon == PG) | (self.weapon == GL))
+            if now_hs.any():
+                do_fire = do_fire | now_hs
+                do_w = np.where(now_hs, self.weapon, do_w)
+            self.fire_q = self.fire_q & ~now_hs
+            hs_now = now_hs | (now_rl if RL_QL else False)   # (and with RL_QL the rocket's way too) these shots: the first substep's view
+            tg_, dk_ = prev, hs_duck0
         self._hear(1, np.nonzero(shoot & (self.weapon != G))[0])
         if self.rj_live:                                     # (RJ_RUN_P) rockets fired in rocket jump runs
             self.stats["rj_shots"] += int((shoot & (self.weapon == RL) & self.rjrun & self._counted(ar)).sum())
-        self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
-                  ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
+        if HEAR_FIX:                                         # (HEAR_FIX) shots, jumps and landings, footsteps as events
+            foot_ = self._hf_steps(s[:, 6] > 0.5, prev[:, 6] > 0.5, s[:, 3:6], self.duck, self.hp > 0)
+            self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) | foot_)
+        else:
+            self.hear((shoot & (self.weapon != G)) | ((prev[:, 6] > 0.5) != (s[:, 6] > 0.5)) |      # shots, jumps and landings,
+                      ((s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck))      # running steps (not walking, not crouched)
         self.note_noise(shoot & (self.weapon != G), (prev[:, 6] > 0.5) != (s[:, 6] > 0.5),      # (N_V02: the same events, for the one who makes them)
                         (s[:, 6] > 0.5) & (np.hypot(s[:, 3], s[:, 4]) > 200.0) & ~self.duck)
         self.note_shots(np.nonzero(shoot & (self.weapon != G))[0])
@@ -8992,6 +9853,10 @@ class DuelEnv:
             yr, pr = np.radians(self.yaw), np.radians(self.pitch)
             fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
             eye = self._eye(s)
+            if FIRE_QL and hs_now.any():                     # (FIRE_QL) the eye and the yaw of the frame's first substep, the final pitch
+                yr = np.where(hs_now, np.radians(hs_yaw1), yr)
+                fdir[hs_now] = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)[hs_now]
+                eye[hs_now] = self._eye(hs_s1)[hs_now]
             for i in np.nonzero(do_fire)[0]:
                 wpn = int(do_w[i])
                 hm = int(self.script[i] == 0)               # statistics count policy players only
@@ -9005,6 +9870,8 @@ class DuelEnv:
                         self.rp[i, k] = eye[i] + fdir[i] * 14.0
                         self.rv[i, k] = fdir[i] * P_SPEED[wpn]
                         self.rbase[i, k], self.rrest[i, k] = self.rp[i, k], False      # (MISSILE_POINT) its trBase
+                        if FIRE_QL and wpn == RL:           # (FIRE_QL) the velocity cut to whole units (SnapVector on trDelta)
+                            self.rv[i, k] = np.trunc(self.rv[i, k])
                         if RL_QL and wpn == RL:             # (RL_QL) the muzzle at the first of the frame's three moves
                             ahead_, eye_ = (RL_AHEAD_PT, RL_EYE_PT) if MISSILE_POINT else (RL_AHEAD, RL_EYE)
                             o_ = prev[i, :3] + (s[i, :3] - prev[i, :3]) / 3.0
@@ -9040,6 +9907,11 @@ class DuelEnv:
                             d_ = fdir[i].copy()
                             d_[2] += 0.2
                             self.rv[i, k] = d_ / np.linalg.norm(d_) * P_SPEED[wpn]
+                        if FIRE_QL and wpn != RL:           # (FIRE_QL) plasma and grenades as the game launches them
+                            self._fire_launch(i, k, wpn, eye[i], fdir[i], s, st)
+                            self.stats[name + "_shots"] += hm
+                            self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
+                            continue
                         # measured: rockets and grenades do not move on the frame they appear, plasma does
                         self.ra[i, k], self.rnew[i, k], self.rw[i, k], self.rage[i, k] = True, wpn != PG, wpn, 0.0
                         self.stats[name + "_shots"] += hm
@@ -9049,9 +9921,9 @@ class DuelEnv:
                     self.stats[name + "_shots"] += hm * SG_PELLETS
                     self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
                     for v in vs_:
-                        to = s[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
+                        to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
                         d = float(np.linalg.norm(to)) + 1e-6
-                        if self.w.trace(eye[i], s[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
+                        if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                             continue
                         hd = math.hypot(to[0], to[1]) + 1e-6
                         ex = math.degrees(((math.atan2(to[1], to[0]) - yr[i]) + math.pi) % (2 * math.pi) - math.pi)
@@ -9059,7 +9931,7 @@ class DuelEnv:
                         wx, wy = math.degrees(math.atan2(15.0, d)), math.degrees(math.atan2(28.0, d))
                         p = (_phi((wx - ex) / SG_SIGMA) - _phi((-wx - ex) / SG_SIGMA)) * \
                             (_phi((wy - eyv) / SG_SIGMA) - _phi((-wy - eyv) / SG_SIGMA))
-                        hits = int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
+                        hits = int(round(SG_PELLETS * min(1.0, max(0.0, p)))) if FIRE_QL else int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
                         if hits:
                             self.stats[name + "_hits"] += hm * hits
                             self._hit(i, v, wpn, W_DMG[wpn] * hits, fdir[i], st)
@@ -9070,17 +9942,22 @@ class DuelEnv:
                     u_ = np.cross(fd, np.array([0.0, 0.0, 1.0], np.float32))
                     u_ = u_ / (np.linalg.norm(u_) + 1e-6)
                     v_ = np.cross(fd, u_)
-                    ra_, th_ = math.tan(math.radians(MG_SPREAD)) * self.rng.random(), self.rng.random() * 2 * math.pi
-                    fd = fd + (u_ * math.cos(th_) + v_ * math.sin(th_)) * ra_
+                    if FIRE_QL:                             # (FIRE_QL) Quake 3's Bullet_Fire: a random angle, each axis a uniform share
+                        th_ = self.rng.random() * 2 * math.pi
+                        a_, b_ = math.cos(th_) * (2.0 * self.rng.random() - 1.0), math.sin(th_) * (2.0 * self.rng.random() - 1.0)
+                        fd = fd + (u_ * a_ + v_ * b_) * math.tan(math.radians(MG_SPREAD))
+                    else:
+                        ra_, th_ = math.tan(math.radians(MG_SPREAD)) * self.rng.random(), self.rng.random() * 2 * math.pi
+                        fd = fd + (u_ * math.cos(th_) + v_ * math.sin(th_)) * ra_
                     fd = (fd / np.linalg.norm(fd)).astype(np.float32)
                 fr = self.w.rays_each(eye[i:i + 1], fd[None, None, :], rng_, mask=self.sight)[0, 0]
                 end = eye[i] + fd * rng_ * fr
                 self.stats[name + "_shots"] += hm
                 self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
-                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], s[v:v + 1, :3],
-                                                            np.where(self.duck[v:v + 1], TOP_DUCK, TOP))[0])]
+                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 1, :3],
+                                                            np.where(dk_[v:v + 1], TOP_DUCK, TOP))[0])]
                 if got:                                     # the nearest player on the line takes the shot
-                    v = min(got, key=lambda q: float(np.linalg.norm(s[q, :3] - eye[i])))
+                    v = min(got, key=lambda q: float(np.linalg.norm(tg_[q, :3] - eye[i])))
                     self.stats[name + "_hits"] += hm
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)
 
@@ -9218,7 +10095,7 @@ class DuelEnv:
         if self.nI:
             dxy = np.linalg.norm(s[:, None, :2] - self.item_pos[None, :, :2], axis=2)
             dz = np.abs(s[:, None, 2] - self.item_pos[None, :, 2])
-            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, self.G, axis=0) & (self.hp > 0)[:, None]
+            touch = (dxy < 36) & (dz < PICK_Z) & np.repeat(self.item_up, self.G, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
                 m = i // self.G
                 if not self.item_up[m, it]:
@@ -9227,6 +10104,8 @@ class DuelEnv:
                 took = False
                 if self.kind[m] != NORMAL and kind in ("wp", "am", "pack") and self.run_k[i] < 0:
                     continue                                  # aim / drill / movement rounds: no weapons or ammo (item runs: everything)
+                if JUMP_PAST_PICK and self.jrun[i] and not self.jrun_past[i] and it == self.jrun_it[i]:
+                    continue                                  # (JUMP_PAST_PICK) a jump run's own target: only once he is past the jump
                 gain = 0.0
                 if kind == "hp" and self.hp[i] < cap:
                     gain = min(cap, self.hp[i] + val) - self.hp[i]
@@ -9493,7 +10372,28 @@ class DuelEnv:
                     self.jrun_edge[jr] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
+                    if JUMP_OVER_ANY:                        # (JUMP_OVER_ANY) over it from his own take-off
+                        L_ = self.jrun_lift[jr]
+                        gap_ = np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1])
+                        if JUMP_OVER_ANY >= 2:                   # (=2) from the take-off's side, at its height
+                            u_ = (A_[:, :2] - B_[:, :2]) / np.maximum(gap_, 1e-6)[:, None]
+                            far_ = ((L_[:, :2] - B_[:, :2]) * u_).sum(1) >= 0.5 * gap_
+                            high_ = np.abs(L_[:, 2] - A_[:, 2]) <= 48.0
+                            ring_ = 128.0
+                        else:
+                            far_ = np.hypot(L_[:, 0] - B_[:, 0], L_[:, 1] - B_[:, 1]) >= 0.6 * gap_
+                            high_ = L_[:, 2] >= np.minimum(A_[:, 2], B_[:, 2]) - 48.0
+                            ring_ = 110.0
+                        at_ = (np.linalg.norm(p_ - B_, axis=1) < ring_) & (p_[:, 2] >= B_[:, 2] - 40.0)
+                        if JUMP_OVER_ANY >= 2:                   # (=2) this rule alone: "been at the take-off, then at the landing
+                            ov_ = ~self.jrun_over[jr] & at_ & far_ & high_ & landed_    # some way" counted walks round (Hektik 15)
+                        else:
+                            ov_ |= ~self.jrun_over[jr] & at_ & far_ & high_ & landed_
+                        self.jrun_lift[jr[landed_]] = p_[landed_]
                     self.jrun_over[jr[ov_]] = True
+                    if JUMP_OVER_PAY > 0:                    # (JUMP_OVER_PAY) over the gap: paid once a try, kept
+                        reward[jr[ov_]] += JUMP_OVER_PAY
+                        r_long[jr[ov_]] += JUMP_OVER_PAY
                     for i_ in (jr[ov_ & self.jrun_open[jr]] if JUMP_WEIGHT else ()):   # (JUMP_WEIGHT) over: into his success
                         self._jump_learn(int(self.jrun_k[i_]), True)
                         self.jrun_open[i_] = False
@@ -9602,7 +10502,7 @@ class DuelEnv:
                 if not (gm_ and WIN_PAY):
                     reward[k] += 1.0
                 if DROPS:
-                    self._drop_weapon(int(v))
+                    self._drop_weapon(int(v), int(k))
                 self.frags_r[k] += 1
                 self.stats["frags"] += 1
                 self.stats[WEAPONS[kill_w.get(v, 0)] + "_frags"] += int(self.script[k] == 0)
@@ -9833,6 +10733,8 @@ class DuelEnv:
             if RESPAWN_QL:                                   # (RESPAWN_QL) a body waiting to respawn is out of play: not seen
                 vis &= self.rsp_wait[opp] <= 0
             heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
+            if HEAR_FIX:                                     # (HEAR_FIX) only a footstep or a jump of his on this frame tells
+                heard = (~vis) & (dist < HEAR) & self.hf_ev[opp] & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
             if RESPAWN_QL:                                   # (RESPAWN_QL) ... nor heard
                 heard &= self.rsp_wait[opp] <= 0
             if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
@@ -9846,7 +10748,9 @@ class DuelEnv:
             acq = vis & (self.vis_run2[:, k_] >= self._acq_need() + self.acq_extra2[:, k_])
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
-            if heard.any():
+            if heard.any() and HEAR_FIX:                     # (HEAR_FIX) placed by the sound: its direction and loudness
+                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard])
+            elif heard.any():
                 self.known2[heard, k_] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                     np.array([1, 1, 0], np.float32)
             self.seen2[:, k_] = np.where(acq | heard, 0.0, self.seen2[:, k_] + DT)

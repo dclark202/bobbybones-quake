@@ -31,9 +31,9 @@ def rep(a, b, count=1):
 
 
 # ---- constants
-rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG",
+rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT",
     "N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players\n"
-    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG")
+    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT")
 rep("        return (np.arange(self.n) ^ 1)[:, None]", "        return self.others")
 rep("        return [i ^ 1]", "        return [int(x) for x in self.others[i]]")
 rep("        return j % 2", "        return j % self.G")
@@ -237,7 +237,7 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
-                              self._emerge(eye, yaw, pit, visible)], 1)
+                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp)], 1)
         return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
@@ -246,7 +246,7 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
-                              self._emerge(eye, yaw, pit, visible)], 1)
+                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -324,9 +324,9 @@ rep('''                name = WEAPONS[wpn]
                 vs_ = [int(x) for x in self.others[i]]
 ''')
 rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
-                    to = s[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
+                    to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
                     d = float(np.linalg.norm(to)) + 1e-6
-                    if self.w.trace(eye[i], s[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
+                    if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                         continue
                     hd = math.hypot(to[0], to[1]) + 1e-6
                     ex = math.degrees(((math.atan2(to[1], to[0]) - yr[i]) + math.pi) % (2 * math.pi) - math.pi)
@@ -334,15 +334,15 @@ rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * 
                     wx, wy = math.degrees(math.atan2(15.0, d)), math.degrees(math.atan2(28.0, d))
                     p = (_phi((wx - ex) / SG_SIGMA) - _phi((-wx - ex) / SG_SIGMA)) * \\
                         (_phi((wy - eyv) / SG_SIGMA) - _phi((-wy - eyv) / SG_SIGMA))
-                    hits = int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
+                    hits = int(round(SG_PELLETS * min(1.0, max(0.0, p)))) if FIRE_QL else int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
                     if hits:
                         self.stats[name + "_hits"] += hm * hits
                         self._hit(i, v, wpn, W_DMG[wpn] * hits, fdir[i], st)
                     continue''', '''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
                     for v in vs_:
-                        to = s[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
+                        to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
                         d = float(np.linalg.norm(to)) + 1e-6
-                        if self.w.trace(eye[i], s[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
+                        if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                             continue
                         hd = math.hypot(to[0], to[1]) + 1e-6
                         ex = math.degrees(((math.atan2(to[1], to[0]) - yr[i]) + math.pi) % (2 * math.pi) - math.pi)
@@ -350,18 +350,18 @@ rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * 
                         wx, wy = math.degrees(math.atan2(15.0, d)), math.degrees(math.atan2(28.0, d))
                         p = (_phi((wx - ex) / SG_SIGMA) - _phi((-wx - ex) / SG_SIGMA)) * \\
                             (_phi((wy - eyv) / SG_SIGMA) - _phi((-wy - eyv) / SG_SIGMA))
-                        hits = int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
+                        hits = int(round(SG_PELLETS * min(1.0, max(0.0, p)))) if FIRE_QL else int(self.rng.binomial(SG_PELLETS, min(1.0, max(0.0, p))))
                         if hits:
                             self.stats[name + "_hits"] += hm * hits
                             self._hit(i, v, wpn, W_DMG[wpn] * hits, fdir[i], st)
                     continue''')
-rep('''                if bool(self._seg_box(eye[i:i + 1], end[None], s[v:v + 1, :3],
-                                      np.where(self.duck[v:v + 1], TOP_DUCK, TOP))[0]):
+rep('''                if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 1, :3],
+                                      np.where(dk_[v:v + 1], TOP_DUCK, TOP))[0]):
                     self.stats[name + "_hits"] += hm
-                    self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''', '''                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], s[v:v + 1, :3],
-                                                            np.where(self.duck[v:v + 1], TOP_DUCK, TOP))[0])]
+                    self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''', '''                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 1, :3],
+                                                            np.where(dk_[v:v + 1], TOP_DUCK, TOP))[0])]
                 if got:                                     # the nearest player on the line takes the shot
-                    v = min(got, key=lambda q: float(np.linalg.norm(s[q, :3] - eye[i])))
+                    v = min(got, key=lambda q: float(np.linalg.norm(tg_[q, :3] - eye[i])))
                     self.stats[name + "_hits"] += hm
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''')
 rep('''            opp = owner ^ 1
@@ -405,9 +405,9 @@ rep('''        opp_all = ar ^ 1
         dealt = dealt_to.sum(1)
         self.dmg_on += dealt_to
         opp_all = np.where((attacker >= 0) & (attacker != ar), attacker, self.foe)     # a hit is felt from the attacker's side''')
-rep('''            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, 2, axis=0) & (self.hp > 0)[:, None]
+rep('''            touch = (dxy < 36) & (dz < PICK_Z) & np.repeat(self.item_up, 2, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
-                m = i // 2''', '''            touch = (dxy < 36) & (dz < 56) & np.repeat(self.item_up, self.G, axis=0) & (self.hp > 0)[:, None]
+                m = i // 2''', '''            touch = (dxy < 36) & (dz < PICK_Z) & np.repeat(self.item_up, self.G, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
                 m = i // self.G''')
 rep('''            self._spawn(int(v), avoid=s[v ^ 1, :3], close=True if self.kind[v // 2] in (AIM, DRILL) else None)''',
@@ -474,6 +474,8 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
             if RESPAWN_QL:                                   # (RESPAWN_QL) a body waiting to respawn is out of play: not seen
                 vis &= self.rsp_wait[opp] <= 0
             heard = (~vis) & (dist < HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250) & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
+            if HEAR_FIX:                                     # (HEAR_FIX) only a footstep or a jump of his on this frame tells
+                heard = (~vis) & (dist < HEAR) & self.hf_ev[opp] & (pkind != MOVE) & (pkind != SOLO) & (pkind != COURSE)
             if RESPAWN_QL:                                   # (RESPAWN_QL) ... nor heard
                 heard &= self.rsp_wait[opp] <= 0
             if HEAR_QL:                                      # (HEAR_QL) only what the game sends him
@@ -487,7 +489,9 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
             acq = vis & (self.vis_run2[:, k_] >= self._acq_need() + self.acq_extra2[:, k_])
             self.acq2[:, k_] = acq
             self.known2[acq, k_] = s[opp[acq], :3]
-            if heard.any():
+            if heard.any() and HEAR_FIX:                     # (HEAR_FIX) placed by the sound: its direction and loudness
+                self.known2[heard, k_] = self._hf_place(np.nonzero(heard)[0], opp[heard])
+            elif heard.any():
                 self.known2[heard, k_] = s[opp[heard], :3] + self.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \\
                     np.array([1, 1, 0], np.float32)
             self.seen2[:, k_] = np.where(acq | heard, 0.0, self.seen2[:, k_] + DT)
