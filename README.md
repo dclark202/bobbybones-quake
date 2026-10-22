@@ -5,14 +5,10 @@ games against copies of itself in a fast simulator built on Quake 3's own moveme
 on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
 
 ## Play against him in Quake Live
-Join server `doppz's bot arena | duel & FFA | chicago` (or `connect 64.177.125.38:27970` in terminal). Chat commands
-- `!bots <0-4>` sets how many bots
-- `!map <name>` changes the map, `!maps` lists them
-- `!mode <ffa|duel>` to change the mode
-- `!note <text>` leaves a comment for the log.
-- The server also runs a dedicated elo ranking: `!bobby` shows his rating and rank, `!top` the whole board, `!elo` your rank
 
-We also have a [discord server](https://discord.gg/dH2mfzbMa)
+Run him on your own server (below, "Run it"): `tools/duel_server.sh` starts a private Quake Live server with BobbyBones on
+it; the chat commands are in [docs/guides/COMMANDS.md](docs/guides/COMMANDS.md). A public server is run separately; its
+setup is not part of this repo.
 
 ## Architecture
 

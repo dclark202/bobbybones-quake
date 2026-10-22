@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import time
 import zipfile
@@ -229,6 +230,8 @@ class duelbot(minqlx.Plugin):
         self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
+        self.add_command("aim", self.cmd_aim, 0, usage="[3|4|5|max]")
+        self.aim_want = None                                 # (!aim) the level asked for, put in at the next warmup
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
@@ -428,10 +431,15 @@ class duelbot(minqlx.Plugin):
     # the second line a person reads on joining (owner, 2026-10-09: a word about !bots; 2026-10-16: one line for both modes)
     WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2!mode <ffa|duel>^7, ^2!bots <0,1,2,3>^7 ^6(FFA only)^7"
 
+    AIM_WELCOME = ("^3My aim:^7 ^2!aim 3^7 easier, ^2!aim 4^7 normal ^6(default)^7, ^2!aim 5^7 sharp, "
+                   "^2!aim max^7 no human limits")
+
     def on_player_loaded(self, player):
         if not is_bot(player):
             player.tell("^3I'm ^5BobbyBones^3, the learning Quake bot.^7 Here's some commands")
             player.tell(self.WELCOME)
+            if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
+                player.tell(self.AIM_WELCOME)
             lad = minqlx.Plugin._loaded_plugins.get("ladder")
             if lad is not None:                              # owner, 2026-10-09: "see how I rank on the leaderboard"
                 for line in (lad.welcome_lines(player) if hasattr(lad, "welcome_lines") else [lad.WELCOME]):
@@ -525,7 +533,6 @@ class duelbot(minqlx.Plugin):
             self.real_game = True
             self.go_f3 = now                                 # frame() says "allready" once the game has run his "readyup"
             self.set_cvar("timelimit", "10")
-            self.msg("^3Game on:^7 1v1 against BobbyBones, 10 minutes, then the scoreboard and the map vote.")
 
     def on_stats(self, stats):
         """the game's own table for a player at the end of a game (or when he leaves): shots, hits, damage, kills and time
@@ -1498,6 +1505,88 @@ class duelbot(minqlx.Plugin):
         minqlx.set_bot_input(p.id, fwd, side, jump, 1 if press else 0, QLNUM[names[w]], pitch, yaw)
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 
+    # ------------------------------------------------------------------ !aim (owner, 2026-10-21)
+    # !aim 3|4|5|max sets his aim for the next game: the data folder holds one export per level (policy_l3.npz,
+    # policy_l4.npz, policy_l5.npz, policy_max.npz: the same network, AIM_LEVEL and the aim delays in env_vars changed),
+    # and the chosen one is copied over policy.npz and loaded at once when no game runs (warmup), else at the next
+    # warmup (a game in progress, its countdown, its end and the next map's load keep the aim they started with).
+    AIM_FILES = {"3": "policy_l3.npz", "4": "policy_l4.npz", "5": "policy_l5.npz", "max": "policy_max.npz"}
+
+    def aim_level(self):
+        """the aim level of the network loaded: "3", "4", "5", "max" (AIM_LEVEL in its env_vars; 40 is max)"""
+        try:
+            v = float(json.loads(str(self.P["env_vars"])).get("AIM_LEVEL", 3))
+        except Exception:                                    # noqa: BLE001 - no network loaded yet
+            return "?"
+        return "max" if v > 9 else "{:g}".format(v)
+
+    def aim_busy(self):
+        """a game (or its countdown or end), a test room, a timed duel or a map load: the aim stays as it is for now"""
+        try:
+            st = self.game.state if self.game is not None else None
+        except Exception:                                    # noqa: BLE001
+            st = None
+        return (not self.ready or st != "warmup" or self.real_game or bool(getattr(self, "go_f3", 0.0)) or self.after_game()
+                or self.room is not None or bool(self.queue) or bool(self.arena))
+
+    def aim_apply(self, level):
+        """copy the level's export over policy.npz and load it (setup(), as the hot reload does)"""
+        src, dst = os.path.join(D, self.AIM_FILES[level]), os.path.join(D, "policy.npz")
+        tmp = dst + ".aim.tmp"
+        shutil.copyfile(src, tmp)
+        os.replace(tmp, dst)
+        self.aim_want = None
+        self.end_session()
+        self.setup()
+        self.log("aim level {} loaded ({})".format(level, self.AIM_FILES[level]))
+
+    def cmd_aim(self, player, msg, channel):
+        """!aim: the aim level now (and the one asked for the next game). !aim 3|4|5|max: that level from the next game
+        (at once when no game runs)"""
+        cur = self.aim_level()
+        if len(msg) < 2:
+            want = self.aim_want if self.aim_want and self.aim_want != cur else None
+            player.tell("^3Aim level^7 ^2{}^7{} (^2!aim 3|4|5|max^7 to change)".format(
+                cur, ", ^2{}^7 from the next game".format(want) if want else ""))
+            return
+        lv = msg[1].lower().strip()
+        if lv not in self.AIM_FILES:
+            player.tell("^3Aim levels:^7 ^2!aim 3^7 easier, ^2!aim 4^7 normal, ^2!aim 5^7 sharp, ^2!aim max^7 no human limits")
+            return
+        if not os.path.exists(os.path.join(D, self.AIM_FILES[lv])):
+            player.tell("^3Aim {} is not on this server.^7".format(lv))
+            return
+        if lv == cur:
+            self.aim_want = None
+            self.msg("^3Aim level^7 ^2{}^7 stays.".format(lv))
+            return
+        if self.aim_busy():
+            self.aim_want = lv
+            self.msg("^3Aim level^7 ^2{}^7 from the next game (this one stays at ^2{}^7).".format(lv, cur))
+            return
+        try:
+            self.aim_apply(lv)
+            self.msg("^3Aim level now^7 ^2{}^7.".format(self.aim_level()))
+        except Exception as e:                               # noqa: BLE001
+            self.log("aim {}: {!r}".format(lv, e))
+            player.tell("^3Aim could not be changed.^7")
+
+    def aim_frame(self, now):
+        """a level asked for during a game goes in at the next warmup"""
+        if not self.aim_want or now < getattr(self, "aim_check", 0.0):
+            return
+        self.aim_check = now + 2.0
+        if self.aim_want == self.aim_level():
+            self.aim_want = None
+        elif not self.aim_busy():
+            lv = self.aim_want
+            try:
+                self.aim_apply(lv)
+                self.msg("^3Aim level now^7 ^2{}^7.".format(self.aim_level()))
+            except Exception as e:                           # noqa: BLE001
+                self.aim_want = None
+                self.log("aim {}: {!r}".format(lv, e))
+
     # ------------------------------------------------------------------ frame
     def on_frame(self):
         t0_ = time.perf_counter() if TIMING else 0.0
@@ -1548,6 +1637,7 @@ class duelbot(minqlx.Plugin):
                         self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
+        self.aim_frame(now)
         bobby, human, filler = self.cast()
         real_human = human is not None and not is_bot(human)
         if real_human:
