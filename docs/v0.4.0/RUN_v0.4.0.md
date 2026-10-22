@@ -1,0 +1,50 @@
+# v0.4.0 on one page: predict where the enemy is going (DRAFT)
+
+*2026-10-22: **proposed**, not built. The first step of v0.4 (the owner, 2026-10-22: "let's not call it v0.3.12 but v0.4.0
+instead. The goal now is to expand this network step by step until we have the type of truly reactive play (i.e., he seems
+to actually change his intention based on the enemy state)"). After v0.3.11 (to 16:00 Fri), a quick run. Design:
+[BELIEF_LOOP.md](BELIEF_LOOP.md). Next step: [RUN_v0.4.1.md](RUN_v0.4.1.md).*
+
+**Marks:** ✅ built and proven identical with its switch off · ⏳ building · 🧪 from the calibration · ❓ owner's decision · ⏸ later
+
+## The steps of v0.4 (the owner, 2026-10-22)
+
+| Version | Step | Reactive play it aims at |
+|---|---|---|
+| v0.3.11 (running) | the picture now: where the enemy is, how stacked, what he holds; taught and paid | – (the knowledge in his memory) |
+| **v0.4.0** | **the picture ahead: where he is going, what for, when he appears** | reading the enemy |
+| v0.4.1 | the picture fed back as an input; a small slow head reads it and steers his intention | changing his intention by the enemy's state |
+| v0.4.2+ | more intentions (contest, wait, stack up, ambush), a wider head, a store of the last minutes: each on a measured need | the strategy layer grown step by step |
+
+Held for now (the owner): rocket jumps and other movement work.
+
+## What changes in v0.4.0
+
+| Part | Detail | State |
+|---|---|---|
+| **Predict ahead** | new readout outputs: the enemy's place in 1, 2, 4 s (each with a spread), what he is going for next (mega, red, yellow, a big weapon, a holding place, "me", none; within 10 s), when he comes into view (bands: <1, 1–3, 3–6, >6 s, not within 10 s) | ❓ |
+| Graded and paid | as v0.3.11: a proper score once the future has played out in the rollout; zero-sum pay credited to the frame the prediction was made | ❓ |
+| Into his memory | the same small share as v0.3.11's lesson (10%), a warm-up | ❓ |
+| Nothing acts on it directly | the answers are not inputs yet (that is v0.4.1): v0.4.0 tests that he **can** read the enemy ahead without costing the hands | – |
+| Calibration | from the pros' demos: how predictable a pro is 1/2/4 s ahead; how guessable "what he goes for" is | 🧪 to do |
+| Size | +~0.05 M weights in the readout, dropped at export | – |
+
+## The equilibrium
+
+| Situation | What the zero-sum pay pushes toward |
+|---|---|
+| He reads the enemy's route | he gains |
+| He is predictable (same path, same timing, the item he always goes for) | the enemy reads him: he loses. Varied routes pay |
+| Both in view | little to predict either way |
+
+Goals moved: counterplay and positioning, item control against the enemy.
+
+## Pass (a quick run, a few hours)
+
+| What | Pass |
+|---|---|
+| Step per update, aim, hit rates | unchanged against v0.3.11's last updates |
+| Gate at update 10, checks every 20: **record, win rate, frag share**, whole ten-minute games with overtime | ≥ level against v0.3.11's end |
+| The prediction's error at 1/2/4 s | better than "he stays where he was" and approaching the pros' predictability |
+| "Going for" right | above the pattern-alone baseline from the demos |
+| The decision report (`tools/decision_report.py`) | measured against v0.3.10 and v0.3.11; v0.4.1 is where it should move |

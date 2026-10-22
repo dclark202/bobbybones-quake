@@ -1,7 +1,7 @@
 # The belief loop: one picture of the enemy, used by the hands and by the head
 
 *Design note, 2026-10-22 afternoon (while v0.3.11 trains). The owner: "the fast mechanical network and the strategy network
-need to share the same representation of the enemy, but act on it in different ways." Run card: [RUN_v0.3.12.md](RUN_v0.3.12.md).*
+need to share the same representation of the enemy, but act on it in different ways." Run cards: [RUN_v0.4.0.md](RUN_v0.4.0.md) (predict ahead), [RUN_v0.4.1.md](RUN_v0.4.1.md) (the picture steers his intention): the start of the strategy layer, grown step by step (named v0.4.0 and v0.4.1 by the owner).*
 
 ## Where we are
 
@@ -16,7 +16,7 @@ need to share the same representation of the enemy, but act on it in different w
 
 Tracking an unseen opponent is a recurrent loop, the one every tracker (a Kalman filter, a person) runs:
 
-| Step | A person | Bobby today | Bobby after v0.3.12 |
+| Step | A person | Bobby today | Bobby after v0.4.0 / v0.4.1 |
 |---|---|---|---|
 | **Predict** | "he was going toward mega; 2 s later he's about there" | implicit in the GRU | the readout also says where the enemy will be in 1, 2 and 4 s, and what he is going for |
 | **Update** | a sound, a glimpse, a pickup heard | the senses into the GRU | the same |
@@ -32,7 +32,7 @@ answers feed back into the next frame's decisions. Two things keep the loop hone
 
 ## Three parts, in order
 
-### 1. Predict ahead (v0.3.12, the main step)
+### 1. Predict ahead (v0.4.0)
 
 New readout outputs, graded and paid exactly as v0.3.11's (a proper score: confidently right best, confidently wrong worst):
 
@@ -51,7 +51,7 @@ New readout outputs, graded and paid exactly as v0.3.11's (a proper score: confi
 - **Calibration from the pros' demos** before the start: how predictable a pro is 1, 2, 4 s ahead (the spread to grade
   against), and how often "what he goes for" is guessable from the pattern alone.
 
-### 2. The picture as an input both sides read (v0.3.12, behind a switch)
+### 2. The picture as an input both sides read (v0.4.1)
 
 - The readout's answers (now and ahead, about 60 numbers) become **one more attention token**, `belief`, read by the fast
   network from the next frame on. Its gate starts shut (`--gate-open`, as for every new token since v0.2.1), so the start is
@@ -59,7 +59,7 @@ New readout outputs, graded and paid exactly as v0.3.11's (a proper score: confi
 - What the fast network should do with it: pre-aim at the predicted appearance (the pre-aim pay already pays this), turn
   toward the likely opening (the look-back pay), keep the quiet weapon out while the enemy is predicted far.
 
-### 3. A small slow head (v0.3.12 arm B, or v0.3.13): the simpler path to the strategy layer
+### 3. A small slow head (v0.4.1): the simpler path to the strategy layer
 
 v0.4's candidate head ([ARCHITECTURE.md](../v0.4/ARCHITECTURE.md) section 3) is about 7 M weights: a slow GRU of 1024, a store of
 three minutes of memories (224 slots), a plan of 256 into the fast GRU. Most of that size is there to **work out** the enemy and
@@ -104,4 +104,4 @@ toward the pros' with v0.3.11 alone, the small head can wait; if they stay flat,
 | The prediction lesson shakes the shared layers (the guessing game of 2026-10-12) | the same small share into memory (10%), a warm-up, the step per update and aim watched from update 1 |
 | Paying for prediction makes him predictable to himself and odd to others | zero-sum: being predictable costs him exactly what the enemy gains |
 | The slow head learns to ignore the belief | the belief token is its main input and the head is small; the decision report shows it |
-| Two new parts at once hide which one helped | arms: prediction alone (A), prediction + belief token + head (B), each ten updates and a check against the control before the start |
+| Two new parts at once hide which one helped | one step a version: prediction alone (v0.4.0), then the token and the head (v0.4.1, in arms), each ten updates and a check against the control before its start |
