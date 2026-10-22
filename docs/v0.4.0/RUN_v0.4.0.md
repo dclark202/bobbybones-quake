@@ -28,6 +28,7 @@ Held for now (the owner): rocket jumps and other movement work.
 | Nothing acts on it directly | the answers are not inputs yet (that is v0.4.1): v0.4.0 tests that he **can** read the enemy ahead without costing the hands | – |
 | Calibration | from the pros' demos: how predictable a pro is 1/2/4 s ahead; how guessable "what he goes for" is | 🧪 to do |
 | Size | +~0.05 M weights in the readout, dropped at export | – |
+| **Graded on the pros' games too** | the demo pipeline rebuilds a pro's inputs from his recording: the same readout graded on "from what this pro saw and heard, where was his opponent, where will he be", a small share into memory, a fading weight. Grounds the picture in how people move (self-play alone teaches him to predict Bobby) | ❓ behind a switch |
 
 ## The equilibrium
 
@@ -38,6 +39,15 @@ Held for now (the owner): rocket jumps and other movement work.
 | Both in view | little to predict either way |
 
 Goals moved: counterplay and positioning, item control against the enemy.
+
+## The pros' demos and real players (owner, 2026-10-22: "how do we use the pro demos here?")
+
+| Use | How | When |
+|---|---|---|
+| Calibration | how predictable a pro is 1/2/4 s ahead; how guessable "what he goes for" is | before the start |
+| Teach the picture on human opponents | the switch above | in v0.4.0's run |
+| The decision report's target | both players' stacks and places are in the demos: the report's rows filled in for the pros (measurement only) | before v0.4.1 |
+| A second check on real people | the public server's logs of people against Bobby: how well he predicts real players (a stable random id per person, no names) | once v0.4.0 runs |
 
 ## Pass (a quick run, a few hours)
 
