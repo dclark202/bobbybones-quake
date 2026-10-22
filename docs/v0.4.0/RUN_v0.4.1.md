@@ -16,6 +16,7 @@ for the enemy). Both are parts of the same network, trained together; the head t
 |---|---|---|
 | **The picture as an input** | the readout's answers (now and ahead, ~60 numbers, no gradient back) as one more attention token (`belief`), its gate shut at the start, opening over hours | ❓ |
 | **The small slow head** | reads the belief token, his own stack, item timers, score and clock, the fast state (no gradient); a GRU of 256 ticking every 0.2 s; acts by a plan (64) into the fast memory and a bias on the intention head's choice, both starting at zero (an exact start) | ❓ |
+| **The hand-built belief retired** | the owner, 2026-10-22: "It shouldn't be a part of him, that didn't work": v0.2's rule-made belief inputs (last seen or heard place + 1 s of velocity, kept 20 s; ~20 inputs, and what the legs' look point and the hunt read) replaced by the readout's answers, not kept beside them; every reader of `v02_bel` moved to the readout | ❓ |
 | Size | ~0.6 M weights (v0.4's earlier candidate head: ~7 M); grows only on a measured need | – |
 | On a server | well under 1 ms a tick; the plugins need the readout and the head (not dropped at export, unlike v0.3.11 and v0.4.0): plugin work and an input check in a real game (`OBSDUMP`, as after every input change), budgeted as a build step of its own | ❓ |
 | The head's horizon | a goal choice pays off 30–60 s later: the head learns from the two-minute value output (γ 0.9998), not the main ~25 s one, or it undervalues timing plays | ❓ |
