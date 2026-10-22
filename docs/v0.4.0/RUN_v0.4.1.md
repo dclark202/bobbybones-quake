@@ -48,6 +48,32 @@ for the enemy). Both are parts of the same network, trained together; the head t
 | The enemy going for mega, he is strong | contest it; weak: take the red armor across the map |
 | An item about to spawn, the enemy far | be there on time |
 
+## Targets: the decision report (the owner, 2026-10-22: "whatever we start doing in v0.4.x needs to target these findings")
+
+| Row (v0.3.10's end against v0.3.9's end, 80 whole games, `data/decision/v0310_end.txt`) | Baseline |
+|---|---|
+| Presses in when far behind (gap < −75) / dies within 10 s | 36% / 61% |
+| Presses in when far ahead (gap > 75) / the enemy dies within 10 s | 61% / 60% |
+| Closing against the gap (slope, u/s per 100 points) | 30.9 (v0.3.9: 26.7) |
+| Mega and red respawns: waiting / on time / late / **the enemy took it** / unused | 19 / 8 / 26 / **42** / 5% |
+| ... when the enemy is weak (< 100) | 20 / 9 / 30 / 35 / 6% (hardly different) |
+| Enemy within 600 u at his pickups: when he is weak / strong | 32% / 26% (he does not avoid contests when weak) |
+| Lost contests a game | 4.2 |
+| Deaths while weak (his stack < 100, the enemy's > 150) a game / share of his deaths | 4.4 / 38% |
+| After losing sight: toward the enemy when ahead / away when behind | 40% / 42% |
+
+What v0.4.1 must move (the head chooses):
+
+| Row | Target |
+|---|---|
+| Mega and red respawns: on time (8%), the enemy took it (42%) | on time up, the enemy's share down; more so when the enemy is weak (today no different) |
+| Enemy near his pickups when he is weak (32%) | down: when weak, take the item the enemy is not going for |
+| Lost contests (4.2 a game) | down |
+| Presses in when far behind (36%), deaths while weak (38% of deaths) | down |
+| Closing against the gap (30.9) | steeper: press when ahead, back off when behind |
+
+v0.4.1 passes when these move toward the pros' (the same report on the pros' demos, to be filled in).
+
 ## Measure: the decision report
 
 Fight or back off by the stack gap; items against the enemy's distance; timing; deaths while weak; where he goes after losing

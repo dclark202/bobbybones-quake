@@ -59,6 +59,32 @@ Goals moved: counterplay and positioning, item control against the enemy.
 | The decision report's target | both players' stacks and places are in the demos: the report's rows filled in for the pros (measurement only) | before v0.4.1 |
 | A second check on real people | the public server's logs of people against Bobby: how well he predicts real players (a stable random id per person, no names) | once v0.4.0 runs |
 
+## Targets: the decision report (the owner, 2026-10-22: "whatever we start doing in v0.4.x needs to target these findings")
+
+The report's baseline (`tools/decision_report.py` on branch `v0312`); every v0.4.x step is judged by the rows it should move.
+
+| Row (v0.3.10's end against v0.3.9's end, 80 whole games, `data/decision/v0310_end.txt`) | Baseline |
+|---|---|
+| Presses in when far behind (gap < −75) / dies within 10 s | 36% / 61% |
+| Presses in when far ahead (gap > 75) / the enemy dies within 10 s | 61% / 60% |
+| Closing against the gap (slope, u/s per 100 points) | 30.9 (v0.3.9: 26.7) |
+| Mega and red respawns: waiting / on time / late / **the enemy took it** / unused | 19 / 8 / 26 / **42** / 5% |
+| ... when the enemy is weak (< 100) | 20 / 9 / 30 / 35 / 6% (hardly different) |
+| Enemy within 600 u at his pickups: when he is weak / strong | 32% / 26% (he does not avoid contests when weak) |
+| Lost contests a game | 4.2 |
+| Deaths while weak (his stack < 100, the enemy's > 150) a game / share of his deaths | 4.4 / 38% |
+| After losing sight: toward the enemy when ahead / away when behind | 40% / 42% |
+
+What v0.4.0 should move (reading the enemy, nothing yet chooses for him):
+
+| Row | Why v0.4.0 | Direction |
+|---|---|---|
+| Presses in when far behind; deaths while weak | the readout's stack in his inputs (no longer the filter's, 40 points off) and where the enemy will appear | fewer presses and deaths when behind |
+| The enemy took the respawn (42%) | "what he is going for" tells him the enemy is headed to the item | down |
+| After losing sight, by the gap | where the enemy is going | toward when ahead, away when behind, more clearly |
+
+The item rows (timing, contests when weak) are mostly v0.4.1's: here they are measured, not expected to move much.
+
 ## Pass (a quick run, a few hours)
 
 | What | Pass |
