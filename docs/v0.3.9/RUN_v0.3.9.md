@@ -3,7 +3,7 @@
 *Decided 2026-10-21 night with the owner ("Start it up when you're ready and let it go til 4pm tomorrow"). Folder
 `duel_gru_v0_3_9`, from v0.3.8's end (save 506, optimizer kept); runs to **16:00 Thu 2026-10-22**. Code: branch `v039` (worktree
 `ql-bot-v039`). v0.3.8 ended early at save 506 (the owner: "a wash for trial and error of rail. This is the right direction to go").
-Status: **building** (the start waits for every change below to pass its tests).*
+Status: **running since 21:21 Wed** (code `fcad849`: the simulator `3ab47dc`, the safe restart `fcad849`), trainer to 16:00 Thu.*
 
 **Marks:** ✅ built and proven identical with its switch off · ⏳ building, tests pending · 🧪 measured · ❓ owner's decision during the run · ⏸ not in v0.3.9
 
@@ -22,18 +22,18 @@ Status: **building** (the start waits for every change below to pass its tests).
 
 | Change | Detail | State |
 |---|---|---|
-| Pre-aim pay (`PREAIM_PAY=0.05`) | At each **fresh sighting**: the line of sight between the two opens after at least 1 s closed (whichever way they face); both alive; neither respawned in the last 1 s; in games and pro starts only. Each crosshair's error at that very frame (before any reaction) scores q = 1 at 0°, falling straight to 0 at 60°. The better-placed player is paid 0.05 × (the difference), the other loses as much (zero-sum). About 10 sightings a minute: at most ~0.25 of a frag a minute. The pay reads the truth; his inputs stay what he perceives | ⏳ |
+| Pre-aim pay (`PREAIM_PAY=0.05`) | At each **fresh sighting**: the line of sight between the two opens after at least 1 s closed (whichever way they face); both alive; neither respawned in the last 1 s; in games and pro starts only. Each crosshair's error at that very frame (before any reaction) scores q = 1 at 0°, falling straight to 0 at 60°. The better-placed player is paid 0.05 × (the difference), the other loses as much (zero-sum). About 10 sightings a minute: at most ~0.25 of a frag a minute. The pay reads the truth; his inputs stay what he perceives | ✅ |
 | Equilibrium | crosshair on the likely sight lines when contact is near, and not walking into a held angle; avoiding sightings earns nothing. Goals: weapon use, counterplay | – |
-| Pre-aim counters | error, share within 15°, q, by weapon, in every update's metrics and on the watcher's line; the yardsticks above | ⏳ |
+| Pre-aim counters | error, share within 15°, q, by weapon, in every update's metrics and on the watcher's line; the yardsticks above | ✅ |
 
 ## 2. Jumping (the owner: "He should use jumping to get placed quickly. Period.")
 
 | Change | Detail | State |
 |---|---|---|
-| Hop pay off (`HOP_PAY` 0.003 → 0) | It paid speed gained from hop to hop above the chain's best; a chain ended after 0.4 s on the floor, under 250 u/s or with the enemy in view, and its best was forgotten, so every new chain re-earned the 320→480 gain: a loop (2.1 a player-minute in v0.3.8, more than his frags) | ⏳ |
-| Chain-hop pay off (`HOP_CHAIN` 0.005 → 0) | It paid each hop that kept speed over 320: a pay for the count of hops | ⏳ |
+| Hop pay off (`HOP_PAY` 0.003 → 0) | It paid speed gained from hop to hop above the chain's best; a chain ended after 0.4 s on the floor, under 250 u/s or with the enemy in view, and its best was forgotten, so every new chain re-earned the 320→480 gain: a loop (2.1 a player-minute in v0.3.8, more than his frags) | ✅ |
+| Chain-hop pay off (`HOP_CHAIN` 0.005 → 0) | It paid each hop that kept speed over 320: a pay for the count of hops | ✅ |
 | What pays for jumping now | Only the speed pay (`SPEED_PAY`, unchanged): new ground on the way to his chosen target, by its speed (nothing at 320, full at 480); per stretch of ground, so detours and zigzags earn nothing; a trip given up gives it back | – |
-| Jump cost (`JUMP_COST=0.004`, new) | Each take-off with no enemy in view, in games and item runs (not in jump practice): a hop that buys speed earns ~20× that back through the speed pay; one that doesn't is a small loss. At 38 take-offs a minute: ~0.15 a minute | ⏳ |
+| Jump cost (`JUMP_COST=0.004`, new) | Each take-off with no enemy in view, in games and item runs (not in jump practice): a hop that buys speed earns ~20× that back through the speed pay; one that doesn't is a small loss. At 38 take-offs a minute: ~0.15 a minute | ✅ |
 | Equilibrium | he jumps when it makes the way faster, otherwise not; nothing changes in fights (the cost is only with nobody in view). Goal: speed and movement | – |
 | Watched | speed with the enemy unseen and take-offs a minute; the cost up if he still spams, down if his speed falls (live, on the owner's yes) | ❓ |
 
@@ -41,11 +41,11 @@ Status: **building** (the start waits for every change below to pass its tests).
 
 | Change | Detail | State |
 |---|---|---|
-| Aim 4 | training at aim 4 (100 ms reaction, 160 ms acquire; v0.3.8: aim 3, 125/200); checks at aim 4, one bridge check at aim 3 | ⏳ |
-| Staggered starts (`STAGGER_START=1`) | each match's first game begins at a random point of its clock: no restart wave | ⏳ |
-| Safe restart (live settings) | changed settings reach the games as they start; no running game is cut off; each use on the owner's yes | ⏳ |
-| Jump practice: landing reach (`JUMP_OVER_ANY=3`) | a make must reach within 64 u of the landing's distance along the jump's line (Sinister 29's lucky drop) | ⏳ |
-| Jump practice: Aerowalk 16 out (`JUMP_SKIP=aerowalk:16`) | the owner: "nonsensical" | ⏳ |
+| Aim 4 | training at aim 4 (100 ms reaction, 160 ms acquire; v0.3.8: aim 3, 125/200); checks at aim 4, one bridge check at aim 3 | ✅ |
+| Staggered starts (`STAGGER_START=1`) | each match's first game begins at a random point of its clock: no restart wave | ✅ |
+| Safe restart (live settings) | changed settings reach the games as they start; no running game is cut off; each use on the owner's yes | ✅ |
+| Jump practice: landing reach (`JUMP_OVER_ANY=3`) | a make must reach within 64 u of the landing's distance along the jump's line (Sinister 29's lucky drop) | ✅ |
+| Jump practice: Aerowalk 16 out (`JUMP_SKIP=aerowalk:16`) | the owner: "nonsensical" | ✅ |
 | Rail streak pay removed (`RAIL_STREAK_PAY=0`) | the long-rail pay and the shot prices kept | – |
 | Rail shot price | if he fires the rail too freely: rg 0.2 → 0.5 by the safe restart (approved in advance by the owner) | ❓ |
 
