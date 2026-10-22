@@ -1,19 +1,21 @@
 # v0.3.11 on one page: the knowledge pay
 
-*2026-10-22: **first start** 13:37 from v0.3.10's save 70 (branch `v0311`); **second start (v0.3.11b)** ~17:30 from v0.3.10's end again
+*2026-10-22: **first start** 13:37 from v0.3.10's save 70 (branch `v0311`); **second start (v0.3.11b)** 17:33 from v0.3.10's end again
 with a slow opening (branch `v0311b`), after the first start's readings made the owner nervous. Runs to ~16:00 Fri (the owner
 stops it between noon and 16:00). Then v0.4.0 ([RUN_v0.4.0.md](../v0.4.0/RUN_v0.4.0.md)).*
 
 ## The two starts
 
-| | First start (13:37, `duel_gru_v0_3_11`) | Second start, v0.3.11b (~17:30, `duel_gru_v0_3_11b`) |
+| | First start (13:37–17:31, `duel_gru_v0_3_11`) | Second start, v0.3.11b (17:33, `duel_gru_v0_3_11b`) |
 |---|---|---|
 | From | v0.3.10's save 70, readout new (its last layer at zero) | v0.3.10's save 70 again, **with the readout layers the first start trained** (they read his memory and feed nothing; every other weight v0.3.10's, checked) |
 | The lesson | 0.3, 10% into his memory, full in 30 min | 0.3, **5%** into his memory, full in **3 h** |
 | The knowledge pay | 0.002 from minute 30, full at 1 h | **0.001** from **2 h**, full at **5 h** |
 | Live settings (no restart) | the pay only (`INFO_PAY`) | the pay, the lesson's weight and its memory share (`INFO_PAY`, `TRACK_W`, `TRACK_TRUNK` in `live.json`; `925fc45`) |
 | What it showed | gate at update 10 against v0.3.10's end **80-80**; update 40 **74-86** (46.2%, frag share 47.5%); step per update, aim and hit rates unchanged; pre-aim 0.36 → 0.38; the readout's error at 10 s+ unseen 935 → 478 u, at 0–2 s 634 → 144 u | – |
-| Kept | `duel_gru_v0_3_11/keep/policy_end_v0311a.pt`, `opt_end_v0311a.pt` | – |
+| League | anchors v0.3.8, v0.3.9, v0.3.10's ends + v0.3.10's last 8 snapshots | the same (the first start's snapshots kept apart, not in the league) |
+| Its timeline | – | lesson full at ~20:35; the pay starts ~19:35, full ~22:35 |
+| Stopped / kept | at save 70 (17:31), pre-aim 0.39, look-back 0.24 at the end; `duel_gru_v0_3_11/keep/policy_end_v0311a.pt`, `opt_end_v0311a.pt` | – |
 
 Why (the owner, ~17:10): "This seems safer. It might have worked out fine, but those initial readings are making me nervous."
 The pay at 0.002 was the largest of the shaping pays (0.41 a player-minute moved, mostly zero-mean noise; pre-aim ~0.10, look-back
