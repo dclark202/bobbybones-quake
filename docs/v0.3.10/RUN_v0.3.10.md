@@ -1,7 +1,7 @@
-# v0.3.10 on one page: what changes from v0.3.9 (DRAFT)
+# v0.3.10 on one page: what changes from v0.3.9
 
-*Draft, 2026-10-22 morning, for the owner's review. Starts after v0.3.9 ends at 16:00 Thu, from v0.3.9's end (optimizer kept,
-staggered starts). Branch `v0310` from `v039` (to make). Length: ❓ (proposed: overnight to 06:30 Fri, then the morning's call).*
+*Approved by the owner, 2026-10-22 morning ("Otherwise this looks good"). Starts after v0.3.9 ends at 16:00 Thu, from v0.3.9's end (optimizer kept,
+staggered starts). Branch `v0310` from `v039` (to make). Runs to **16:00 Fri 2026-10-23** (owner, 2026-10-22); the LG cost watched for the first ~5 hours with the owner before it runs overnight.*
 
 **Marks:** ✅ built and proven identical with its switch off · ⏳ to build · 🧪 measured · ❓ owner's decision · ⏸ not in v0.3.10
 
@@ -24,7 +24,7 @@ staggered starts). Branch `v0310` from `v039` (to make). Length: ❓ (proposed: 
 | **LG carrying cost** (`LG_QUIET_COST=0.004`, live) | While his lightning gun is in hand, he is alive, and **by his own senses** the enemy is away: not in view for 3 s or more and nothing of him heard in the last 2 s. Ramps with the quiet time: 0 at 3 s → full at 10 s; full = 0.004 a second (0.24 a minute; a frag is 1). Games and pro starts only (not jump practice). At today's 55% LG carrying out of contact: about 0.08–0.12 a minute. Escape: switch to rockets or rail while it is quiet (switching takes time: not at contact) | ⏳ |
 | Equilibrium | rockets or rail carried between fights, the LG brought out when a close fight is heard or expected; the enemy's sounds become worth more. Goals: weapon use, counterplay | – |
 | **His own LG muffles his hearing** (`LG_DEAF=1`, a PLAY_VAR: the plugins too) | From the game's sound files (scratchpad `lghum/REPORT.md`): with the LG out (not firing) footsteps heard to 700 u (now 800), the enemy's LG hum not heard, +8° direction and +0.1 distance error on muffled footsteps; firing the LG: footsteps 500, other sounds 1,000. Small and realistic; the pros showed no measurable muffling | ⏳ |
-| Watched, first hours | LG / RL share travelling unseen (target direction: pros 14% / 59%); weapon switches in the 2 s before contact (late switches); checks against v0.3.9's end. Adjust live: cost ×2 if LG carrying has not moved after ~3 h; halved if the check drops or late switches climb | ❓ |
+| Watched, first ~5 hours with the owner | LG / RL share travelling unseen (target direction: pros 14% / 59%); weapon switches in the 2 s before contact (late switches); checks against v0.3.9's end. Proposed adjustments (live, on the owner's yes): cost ×2 if LG carrying has not moved; halved if the check drops or late switches climb | ❓ |
 
 ## 2. Watching the opening: back pay (the owner: "back pay for 'having been looking in the right direction prior to enemy seen'. This is the first step into resurrecting the 'pay for knowing where the enemy is'")
 
@@ -40,11 +40,11 @@ staggered starts). Branch `v0310` from `v039` (to make). Length: ❓ (proposed: 
 
 | Change | Why | State |
 |---|---|---|
-| Checks against the previous best at **equal delays** (both at aim 4's 100/160 ms), the old rule's check (the old network at its trained delay) every other time | the overnight checks gave v0.3.9 a reaction-time edge: 71.9% at unequal delays, 65.2% equal | ❓ (changes the owner's rule of 2026-10-20) |
+| **Fair checks**: every old network in the checks plays at aim 4's delays (100/160 ms), like him (the owner, 2026-10-22: "we should do it by promoting the old networks to the level 4 aim"; replaces the rule of 2026-10-20) | the overnight checks gave v0.3.9 a reaction-time edge: 71.9% at unequal delays, 65.2% equal | ✅ decided |
 | Everything else as v0.3.9 | pre-aim pay 0.05, aim 4, hop and chain pays off, no jump cost, rail streak off, staggered starts, the safe restart | – |
 | Not yet: the enemy-tracking lesson (`strength` and the guessing game into his memory) | one step at a time: the look-back pay first, then the tracking lesson in v0.3.11 if it helps | ⏸ |
 | Not yet: a mix of aim levels | still waiting for pre-aiming to settle | ⏸ |
-| Not yet: front/back hearing (Quake 3's stereo has no front/back cue; his 3° direction is better than the game allows in front or behind) | a separate realism fix, measured first | ⏸ |
+| Front/back hearing: not needed (the owner: "Quake live has doppler sound, you can hear coming/going") | – | ✖ dropped |
 
 ## 4. Before the start
 
