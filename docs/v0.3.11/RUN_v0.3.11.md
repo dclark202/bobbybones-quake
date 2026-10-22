@@ -1,7 +1,24 @@
-# v0.3.11 on one page: the knowledge pay (DRAFT)
+# v0.3.11 on one page: the knowledge pay
 
-*2026-10-22: **built and tested** (branch `v0311`, `b0974cf`). Starts overnight from v0.3.10 **only if** v0.3.10's look-back pay is helping (the owner's evening call), behind a gate at
-update 10. If it flops: back to v0.3.10 in the morning.*
+*2026-10-22: **first start** 13:37 from v0.3.10's save 70 (branch `v0311`); **second start (v0.3.11b)** ~17:30 from v0.3.10's end again
+with a slow opening (branch `v0311b`), after the first start's readings made the owner nervous. Runs to ~16:00 Fri (the owner
+stops it between noon and 16:00). Then v0.4.0 ([RUN_v0.4.0.md](../v0.4.0/RUN_v0.4.0.md)).*
+
+## The two starts
+
+| | First start (13:37, `duel_gru_v0_3_11`) | Second start, v0.3.11b (~17:30, `duel_gru_v0_3_11b`) |
+|---|---|---|
+| From | v0.3.10's save 70, readout new (its last layer at zero) | v0.3.10's save 70 again, **with the readout layers the first start trained** (they read his memory and feed nothing; every other weight v0.3.10's, checked) |
+| The lesson | 0.3, 10% into his memory, full in 30 min | 0.3, **5%** into his memory, full in **3 h** |
+| The knowledge pay | 0.002 from minute 30, full at 1 h | **0.001** from **2 h**, full at **5 h** |
+| Live settings (no restart) | the pay only (`INFO_PAY`) | the pay, the lesson's weight and its memory share (`INFO_PAY`, `TRACK_W`, `TRACK_TRUNK` in `live.json`; `925fc45`) |
+| What it showed | gate at update 10 against v0.3.10's end **80-80**; update 40 **74-86** (46.2%, frag share 47.5%); step per update, aim and hit rates unchanged; pre-aim 0.36 → 0.38; the readout's error at 10 s+ unseen 935 → 478 u, at 0–2 s 634 → 144 u | – |
+| Kept | `duel_gru_v0_3_11/keep/policy_end_v0311a.pt`, `opt_end_v0311a.pt` | – |
+
+Why (the owner, ~17:10): "This seems safer. It might have worked out fine, but those initial readings are making me nervous."
+The pay at 0.002 was the largest of the shaping pays (0.41 a player-minute moved, mostly zero-mean noise; pre-aim ~0.10, look-back
+~0.08): halved "so he still knows that he has to actually score frags to win". **Standing rule from here** (the owner): every new
+lesson, pay or input opens over hours and is live-settable, and a request to add one at full strength gets pushed back on.
 
 **Marks:** ✅ built and proven identical with its switch off · ⏳ building · 🧪 from the calibration · ❓ owner's decision · ⏸ later
 
@@ -52,8 +69,8 @@ fights).
 | His estimate's error by time unseen (position median, the score, stack band right, weapon right), against his hand-built belief inputs (the bar: 445 u in 2026-10-14's test) and the pros' simple trackers | metrics.jsonl, the watcher's line |
 | The knowledge pay a player-minute; the share decided while hidden | metrics.jsonl |
 | Lightning carried out of contact (pros 14%), jump presses (pros ~24 a minute) | the watcher's line |
-| **Gate**: update 10 against v0.3.10's end (fair: both at aim 4) | the watcher; if under 45%: back to v0.3.10 (❓ automatic on the owner's yes before he sleeps) |
-| Every 20 updates: v0.3.10's end and the control (v0.3.6's end, the public server's network) in turn | the watcher |
+| **Gate**: update 10 against v0.3.10's end (fair: both at aim 4; whole ten-minute games with overtime: **record, win rate, frag share**) | the watcher; if under 45%: back to v0.3.10 (❓ automatic on the owner's yes before he sleeps) |
+| A check at the first save 20+ updates after the last, against v0.3.10's end; every fourth against the control (v0.3.6's end, the public server's network) | the watcher |
 
 ## Calibration (built 2026-10-22, code `b0974cf` on `v0311`; design notes `docs/v0.3.11/INFO_PAY.md` on that branch)
 
