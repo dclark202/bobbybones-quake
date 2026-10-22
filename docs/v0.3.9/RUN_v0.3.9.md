@@ -70,6 +70,7 @@ side, two-hop run-ups for fast jumps, the Aerowalk red armor's 2 s pro run-ups, 
 | Toxicity 7 and Furious Heights 20 starts by hand | not built | ⏸ |
 | The rocket-jump specialist (B-272) | after v0.3.9 | ⏸ |
 | Holding an angle and waiting (B-273) | v0.4's strategy layer | ⏸ |
+| Pay for watching the right area while the enemy is hidden (the owner, 2026-10-21: "if the enemy is hidden but is watching the right area that goes to him as pay"; on the table for later) | a denser lesson than the sighting pay; to be shaped so it pays the opening he will come through, not the wall he is behind (credited back from the next sighting) | ⏸ later |
 
 ## Files
 
