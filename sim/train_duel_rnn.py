@@ -95,6 +95,7 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     last = {k: np.copy(v) for k, v in env.stats.items()}
     tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)      # (time.rollout_parts) this worker's seconds, since the last "times"
     t_idle = time.perf_counter()
+    LSD = {} if os.environ.get("LIVE_DEBUG") == "1" else None        # (live_settings.env) LIVE_DEBUG=1: this worker's prints
     while True:
         cmd, data = remote.recv()
         t_got = time.perf_counter()
@@ -104,6 +105,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                 env.legs_lg = data[1]
                 data = data[0]
             obs, rew, done, info = env.step(data)
+            if LSD is not None:                              # (LIVE_DEBUG=1) the matches begun since the last live settings
+                ls_debug_step(LSD, env, done)
             t_st = time.perf_counter()
             tw_["step"] += t_st - t_got
             tw_["frames"] += 1
@@ -154,6 +157,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             if dtw_ is not None:
                 env.dmg_taken_w = float(dtw_)
             remote.send(dict(now_, DMG_TAKEN_W=float(env.dmg_taken_w)))
+        elif cmd == "live_settings":                         # (live_settings.env, the safe restart: see LS_SPEC) between two
+            remote.send(ls_worker(E_, env, data, bsp, move_only, LSD))     # rollouts: the module's values as its import makes them
         elif cmd == "head_events":                           # (--head) the head's events since the last call, on its ticks (None: the
             remote.send(np.asarray(env.head_events(), np.float32) if hasattr(env, "head_events") else None)   # simulator has none: zeros)
         elif cmd == "close":
@@ -214,6 +219,305 @@ def live_read(path, E_, start, trainer_start):
     except Exception as e_:
         return None, None, "a value the simulator can not read: {}".format(e_)
     return vals, tv, None
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The safe restart (live_settings.env; the owner, 2026-10-21: "you don't cut off any current games but change the ones
+# that will be starting"). <run>/live_settings.env holds NAME=VALUE lines (# comments; tools/live_set.py writes it). The
+# trainer reads it between two rollouts when its time stamp changes, checks every name against LS_SPEC, lays the file over
+# the run's start environment (a name left out has its start value: an empty file puts everything back; a deleted file
+# changes nothing) and sends the changes to every simulator. Two kinds of name:
+#   "start"  read by the simulator only when a match's round, whole game or jump-run try begins (the draw of the round's
+#            kind, the try's jump and its start). Set in every simulator between two rollouts, they reach exactly the
+#            rounds, games and tries that begin after that: none under way sees them. The owner's safe restart.
+#   "frame"  read on every frame while a game plays (the pays, the hearing). The module globals are shared by all of a
+#            simulator's matches (168 in a run), stepped in one call, and with whole ten-minute games there is never a
+#            moment when none of a simulator's matches is in a game: these are set between two rollouts for every match
+#            at once. No game is ended or cut off; the games under way go on with the new value from their next frame.
+# Each value is made as the module makes it at import (the same parse, the derived globals: HF_STEP_FRAMES, MOMENT_P,
+# SHOT_W's table in place; the LIVE_VARS by the module's own live_values). Refused whole, nothing changed: a name not in
+# the list or not in the simulator module, a value the module could not read, a change that would switch on or off a part
+# built at the start (GAME_ON, MOMENTS; PRO_START_P, PRO_JSTART_P, JUMP_FAR_P from 0), a name that live.json sets.
+# Logged: the run log ("live_settings: ..."), metrics.jsonl ("live_settings" on the next update's line),
+# <run>/live_settings.history.jsonl, the checkpoint ("live_settings": the file in force; env_vars and game_vars as set).
+# LIVE_DEBUG=1: every simulator prints what it set and, every 256 frames, how many of its matches have begun a round since.
+# Without the file none of this runs (no message, no draw).
+LS_SPEC = {                                                  # name -> (kind, parse)
+    "GAME_P": ("start", "share"), "PRO_START_P": ("start", "share"), "JUMP_RUN_P": ("start", "env_share"),
+    "JUMP_W_FLOOR": ("start", "floor"), "JUMP_W_CAP": ("start", "pos"), "JUMP_W_DROP": ("start", "pos"),
+    "JUMP_FOCUS_W": ("start", "pos"), "PRO_JSTART_P": ("start", "share"), "JUMP_FAR_P": ("start", "share"),
+    "RAIL_STREAK_PAY": ("frame", "pos"), "RAIL_STREAK_CAP": ("frame", "int"), "JUMP_OVER_PAY": ("frame", "pos"),
+    "SHOT_W": ("frame", "shot_w"), "PREAIM_PAY": ("frame", "pos"),
+    "HF_STEP_DT": ("frame", "above0"), "HF_STEP_SPEED": ("frame", "pos"), "HF_DIR": ("frame", "pos"),
+    "HF_LOUD": ("frame", "pos"), "HF_HUM_TAU": ("frame", "pos"), "HF_UP": ("frame", "pos"),
+}                                                            # ... and every name of the module's LIVE_VARS: ("frame", "live")
+LS_FROM_ZERO = ("PRO_START_P", "PRO_JSTART_P", "JUMP_FAR_P")  # their tables are built at the start only when they are on
+_LS_ORIG = {}                                                # this process's module values at import (before any change)
+
+
+def ls_names(E_):
+    """the names live_settings.env may set with this simulator module: {name: (kind, parse)}"""
+    d_ = {k_: v_ for k_, v_ in LS_SPEC.items() if k_ == "JUMP_RUN_P" or (hasattr(E_, k_) and
+          (v_[1] != "pos" or isinstance(getattr(E_, k_), float)))}            # (PREAIM_PAY: only where it is one float)
+    for k_ in getattr(E_, "LIVE_VARS", ()):
+        d_.setdefault(k_, ("frame", "live"))
+    return d_
+
+
+def ls_orig(E_):
+    """the module's values of the LS_SPEC names as the import made them (taken once a process, before anything is set)"""
+    if id(E_) not in _LS_ORIG:
+        _LS_ORIG[id(E_)] = {k_: (np.copy(getattr(E_, k_)) if isinstance(getattr(E_, k_), np.ndarray) else getattr(E_, k_))
+                            for k_ in LS_SPEC if hasattr(E_, k_)}
+    return _LS_ORIG[id(E_)]
+
+
+def ls_derive(E_, get):
+    """the module globals (and the simulator's own attributes) that the environment get(name) -> string or None makes, as
+    the import makes them -> (globals {name: value}, env {name: value}). Raises ValueError on a value or a change the
+    module could not take."""
+    o_, names = ls_orig(E_), ls_names(E_)
+    g, ev = {}, {}
+    for k_, (kind_, how_) in names.items():
+        if how_ == "live":
+            continue
+        s_ = get(k_)
+        if s_ is None:                                       # unset now and at the start: the import's value
+            if k_ == "JUMP_RUN_P":
+                ev[k_] = 0.0
+            elif k_ in o_:
+                g[k_] = o_[k_]
+            continue
+        s_ = str(s_).strip()
+        try:
+            if how_ == "shot_w":                             # (as the import: ones, then NAME:value pairs)
+                w_ = np.ones(len(E_.WEAPONS), np.float32)
+                for part_ in s_.split(","):
+                    if ":" in part_:
+                        w_[E_.WEAPONS.index(part_.split(":")[0].strip())] = float(part_.split(":")[1])
+                x_ = w_
+            elif how_ == "int":
+                x_ = int(float(s_))
+            else:
+                x_ = float(s_)
+        except (ValueError, IndexError) as e_:
+            raise ValueError("{}={!r}: the simulator can not read it ({})".format(k_, s_, e_))
+        for y_ in np.atleast_1d(x_):
+            if not np.isfinite(float(y_)) or float(y_) < 0:
+                raise ValueError("{}={!r}: not a number of 0 or more".format(k_, s_))
+        if how_ in ("share", "env_share", "floor") and x_ > 1.0:
+            raise ValueError("{}={!r}: a share, at most 1".format(k_, s_))
+        if how_ in ("floor", "above0") and x_ <= 0:
+            raise ValueError("{}={!r}: must be above 0".format(k_, s_))
+        if k_ in LS_FROM_ZERO and float(o_.get(k_, 0.0)) <= 0 and x_ > 0:
+            raise ValueError("{}: 0 at the start (its tables were not built): it can not be switched on in a running trainer".format(k_))
+        (ev if how_ == "env_share" else g)[k_] = x_
+    if "HF_STEP_DT" in g:                                    # (the derived globals, as the import makes them)
+        g["HF_STEP_FRAMES"] = max(1, int(round(float(g["HF_STEP_DT"]) / float(E_.DT))))
+    if "GAME_P" in g or "PRO_START_P" in g:
+        gp_ = float(g.get("GAME_P", getattr(E_, "GAME_P", 0.0)))
+        ps_ = float(g.get("PRO_START_P", getattr(E_, "PRO_START_P", 0.0)))
+        lp_ = float(getattr(E_, "LATE_P", 0.0))
+        mp_ = (float(getattr(E_, "MID_START_P", 0.0)) + float(getattr(E_, "SPAWN_START_P", 0.0))
+               + float(getattr(E_, "RAIL_START_P", 0.0)) + ps_)
+        if hasattr(E_, "GAME_ON") and (gp_ > 0 or lp_ > 0) != bool(E_.GAME_ON):
+            raise ValueError("GAME_P={}: whole games would be switched {} (built at the start)".format(gp_, "on" if gp_ > 0 else "off"))
+        if hasattr(E_, "MOMENTS") and (mp_ > 0) != bool(E_.MOMENTS):
+            raise ValueError("PRO_START_P={}: the moment starts (MOMENTS) would be switched {} (built at the start)".format(
+                ps_, "on" if mp_ > 0 else "off"))
+        if gp_ + lp_ + mp_ > 1.0 + 1e-9:
+            raise ValueError("GAME_P + LATE_P + the moment starts = {:.4f}: shares of the games' time, at most 1".format(gp_ + lp_ + mp_))
+        if hasattr(E_, "MOMENT_P"):
+            g["MOMENT_P"] = mp_
+    if any(v_[1] == "live" for v_ in names.values()):        # the module's own pay weights: its own parse (B-265)
+        try:
+            g.update(E_.live_values(get))
+        except Exception as e_:
+            raise ValueError("a value the simulator can not read: {}".format(e_))
+    return g, ev
+
+
+def ls_apply(E_, vals, env=None, move_only=False):
+    """vals {name: the environment's string, or None = unset}: checked first (ls_derive over this process's environment),
+    then the environment, the module globals and (env) the simulator's attributes set -> (the names set, the names left)"""
+    names = ls_names(E_)
+    bad_ = [k_ for k_ in vals if k_ not in names]
+    if bad_:
+        raise ValueError("not a live setting here: {}".format(bad_))
+    env_ = dict(os.environ)
+    for k_, x_ in vals.items():
+        if x_ is None:
+            env_.pop(k_, None)
+        else:
+            env_[k_] = str(x_)
+    g, ev = ls_derive(E_, env_.get)                          # (raises before anything is set)
+    for k_, x_ in vals.items():
+        if x_ is None:
+            os.environ.pop(k_, None)
+        else:
+            os.environ[k_] = str(x_)
+    for k_, x_ in g.items():
+        if isinstance(x_, np.ndarray) and isinstance(getattr(E_, k_, None), np.ndarray):
+            getattr(E_, k_)[...] = x_                        # (SHOT_W: the module's own table, in place)
+        else:
+            setattr(E_, k_, (dict(x_) if isinstance(x_, dict) else x_))
+    left = []
+    if env is not None:
+        if "JUMP_RUN_P" in vals:
+            if move_only:                                    # (--move-maps: its shares were worked out at the start)
+                left.append("JUMP_RUN_P")
+            else:
+                env.jump_run_p = float(ev.get("JUMP_RUN_P", 0.0))
+        if "JUMP_FOCUS_W" in vals and getattr(env, "jfocus", None) is not None and getattr(env, "jumps", None) is not None:
+            mp_ = os.path.splitext(os.path.basename(getattr(env, "_ls_bsp", "")))[0]     # (as __init__ makes it)
+            env.jfocus = np.array([E_.JUMP_FOCUS_W if j_["id"] in getattr(E_, "JUMP_FOCUS", {}).get(mp_, ()) else 1.0
+                                   for j_ in env.jumps])
+    return sorted(vals), left
+
+
+def ls_worker(E_, env, data, bsp, move_only, dbg):
+    """(the worker's "live_settings") set the values -> the reply: what was set, how its matches stood"""
+    env._ls_bsp = bsp
+    try:
+        set_, left_ = ls_apply(E_, data["vals"], env, move_only)
+    except Exception as e_:
+        return dict(ok=False, why=str(e_))
+    gm_ = np.asarray(getattr(env, "game", np.zeros(0)))
+    rep = dict(ok=True, seq=data["seq"], set=set_, left=left_, matches=int(env.M), in_games=int(np.count_nonzero(gm_)))
+    if dbg is not None:                                      # (LIVE_DEBUG=1)
+        dbg.update(seq=data["seq"], fresh=np.zeros(env.M, bool), frames=0)
+        now_ = {k_: (getattr(E_, k_).tolist() if isinstance(getattr(E_, k_, None), np.ndarray) else getattr(E_, k_, None))
+                for k_ in set_ if hasattr(E_, k_)}
+        if "JUMP_RUN_P" in set_:
+            now_["env.jump_run_p"] = float(getattr(env, "jump_run_p", -1))
+        print("LIVE_DEBUG {} seq {}: set {} (left {}); the module now {}; {} of {} matches in a whole game or late round".format(
+            os.path.basename(bsp), data["seq"], set_, left_, now_, rep["in_games"], env.M), flush=True)
+    return rep
+
+
+def ls_debug_step(dbg, env, done):
+    """(LIVE_DEBUG=1) after a step: the matches that have begun a new round (a game, a try) since the last settings"""
+    if not dbg or "fresh" not in dbg:
+        return
+    dbg["fresh"] |= np.asarray(done, bool).reshape(env.M, -1).any(1)
+    dbg["frames"] += 1
+    if dbg["frames"] % 256 == 0:
+        print("LIVE_DEBUG seq {}: {} frames on, {} of {} matches have begun a round under the new settings ({} still in the "
+              "round they had)".format(dbg["seq"], dbg["frames"], int(dbg["fresh"].sum()), env.M, int((~dbg["fresh"]).sum())), flush=True)
+
+
+def ls_parse(txt):
+    """live_settings.env -> ({name: value string}, None) or (None, reason)"""
+    vals = {}
+    for n_, line_ in enumerate(txt.splitlines(), 1):
+        s_ = line_.strip().lstrip("﻿")
+        if not s_ or s_.startswith("#"):
+            continue
+        if "=" not in s_:
+            return None, "line {}: {!r} is not NAME=VALUE".format(n_, s_)
+        k_, x_ = (t_.strip() for t_ in s_.split("=", 1))
+        if not k_ or not all(c_.isupper() or c_.isdigit() or c_ == "_" for c_ in k_):
+            return None, "line {}: {!r} is not a setting's name".format(n_, k_)
+        if not x_:
+            return None, "line {}: {} has no value (leave the line out for its start value)".format(n_, k_)
+        if k_ in vals:
+            return None, "line {}: {} is named twice".format(n_, k_)
+        vals[k_] = x_
+    return vals, None
+
+
+def live_settings_init(out, E_):
+    """the safe restart's books for this trainer (see LS_SPEC): the run's start environment of every live setting"""
+    ls_orig(E_)
+    nm_ = ls_names(E_)
+    return dict(path=os.path.join(out, "live_settings.env"), hist=os.path.join(out, "live_settings.history.jsonl"),
+                start={k_: os.environ.get(k_) for k_ in nm_}, now={k_: os.environ.get(k_) for k_ in nm_},
+                seen=None, text=None, seq=0, file={})
+
+
+def live_settings_poll(LS, pipes, E_, update, mins, live_start, live_path):
+    """between two rollouts: a new or changed live_settings.env -> into every simulator and this process -> the record for
+    the update's line (None: nothing new)"""
+    try:
+        st_ = os.stat(LS["path"])
+    except OSError:
+        return None                                          # (no file: nothing, as before)
+    key_ = (st_.st_mtime_ns, st_.st_size)
+    if key_ == LS["seen"]:
+        return None
+    LS["seen"] = key_
+    try:
+        txt_ = open(LS["path"], encoding="utf-8").read()
+    except (OSError, UnicodeDecodeError) as e_:
+        LS["seen"] = None
+        print("live_settings: {} could not be read ({}): tried again at the next update".format(LS["path"], e_), flush=True)
+        return None
+    if txt_ == LS["text"]:
+        return None
+    LS["text"] = txt_
+    hist_ = dict(time=time.strftime("%Y-%m-%d %H:%M:%S"), update=update, minutes=round(mins, 2))
+    vals, why_ = ls_parse(txt_)
+    names = ls_names(E_)
+    if why_ is None:
+        bad_ = sorted(k_ for k_ in vals if k_ not in names)
+        if bad_:
+            why_ = "not a live setting: {} (allowed: {})".format(bad_, sorted(names))
+    if why_ is None and os.path.exists(live_path):           # (one file a name: live.json sets its names at once)
+        try:
+            lj_ = json.load(open(live_path, encoding="utf-8"))
+            both_ = sorted(k_ for k_ in vals if isinstance(lj_, dict) and k_ in lj_)
+            if both_:
+                why_ = "named in live.json too: {} (one file a name)".format(both_)
+        except Exception:
+            pass
+    want = None
+    if why_ is None:
+        want = {k_: (vals[k_] if k_ in vals else LS["start"].get(k_)) for k_ in names}
+        env_ = {k_: x_ for k_, x_ in os.environ.items() if k_ not in names}
+        env_.update({k_: x_ for k_, x_ in want.items() if x_ is not None})
+        try:
+            ls_derive(E_, env_.get)
+        except ValueError as e_:
+            why_ = str(e_)
+    if why_ is not None:
+        print("live_settings: {} REFUSED at update {}, nothing changed: {}".format(LS["path"], update, why_), flush=True)
+        with open(LS["hist"], "a", encoding="utf-8") as f_:
+            f_.write(json.dumps(dict(hist_, refused=why_)) + "\n")
+        return dict(refused=why_, from_update=update)
+    ch_ = {k_: x_ for k_, x_ in want.items() if x_ != LS["now"].get(k_)}
+    LS["seq"] += 1
+    reps = []
+    if ch_:
+        for p in pipes:
+            p.send(("live_settings", dict(vals=ch_, seq=LS["seq"])))
+        reps = [p.recv() for p in pipes]
+        ls_apply(E_, ch_)                                    # (this process too: the checkpoints' env_vars and game_vars)
+        for k_ in ch_:
+            if k_ in live_start:                             # (live.json's start follows: a later live.json keeps these)
+                live_start[k_] = ch_[k_]
+    bad_ = [r_.get("why") for r_ in reps if not r_.get("ok")]
+    diff_ = {k_: [LS["now"].get(k_), ch_[k_]] for k_ in sorted(ch_)}
+    LS["now"].update(ch_)
+    LS["file"] = dict(vals)
+    rec = dict(from_update=update, seq=LS["seq"], changed=diff_,
+               at_next_round=sorted(k_ for k_ in ch_ if names[k_][0] == "start"),
+               at_once=sorted(k_ for k_ in ch_ if names[k_][0] != "start"),
+               matches=int(sum(r_.get("matches", 0) for r_ in reps)), in_games=int(sum(r_.get("in_games", 0) for r_ in reps)))
+    left_ = sorted({k_ for r_ in reps for k_ in r_.get("left", ())})
+    if left_:
+        rec["left_in_move_maps"] = left_
+    if bad_:
+        rec["failed"] = bad_
+    with open(LS["hist"], "a", encoding="utf-8") as f_:
+        f_.write(json.dumps(dict(hist_, file=vals, **rec)) + "\n")
+    show_ = ", ".join("{} {} -> {}".format(k_, "(unset)" if o_ is None else o_, "(unset)" if n_ is None else n_)
+                      for k_, (o_, n_) in diff_.items()) or "nothing"
+    print("live_settings: from update {} (seq {}): {}; at each match's next round, game or try: {}; at once (read every "
+          "frame): {}; {} of {} matches are in a whole game and go on{}{}".format(
+              update, LS["seq"], show_, rec["at_next_round"] or "-", rec["at_once"] or "-", rec["in_games"], rec["matches"],
+              "; not in the move-only maps: {}".format(left_) if left_ else "",
+              "; FAILED in {} simulators: {}".format(len(bad_), bad_[:2]) if bad_ else ""), flush=True)
+    return rec
 
 
 def aux_labels(A, dn, ix, frames):
@@ -1694,6 +1998,7 @@ def main():
     # games and mid-game starts (v0.2.2: one clock, one score, one memory a game), 120 otherwise (two-minute rounds)
     ROUND_SECS_CK = 600.0 if float(getattr(E_, "GAME_P", 0.0)) + float(getattr(E_, "MID_START_P", 0.0)) >= 0.99 else 120.0
 
+    LS = live_settings_init(out, E_)                                     # (the safe restart) <run>/live_settings.env: see LS_SPEC
     LIVE_KEPT = None                                                     # (B-265) the live values in force, once a live.json is applied
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
@@ -1708,7 +2013,8 @@ def main():
                         game_secs=float(getattr(E_, "GAME_LEN", 0.0)) if getattr(E_, "GAME_ON", False) else 0.0,      # (GAME_P, LATE_P) he has played whole
                         game_vars={k_: os.environ[k_] for k_ in ("GAME_P", "LATE_P", "WIN_PAY", "MID_START_P", "SPAWN_START_P", "SPAWN_START_LEN", "OPENINGS", "OVERTIME", "STYLE_P") if os.environ.get(k_)},   # games: their clock and score
                         cells=E_.MAX_CELLS if HAS_CELLS else 0, cell_dim=CELL_DIM if HAS_CELLS else 0, **AUX_SAVE,
-                        **({"live": LIVE_KEPT} if LIVE_KEPT is not None else {})),   # (B-265) once a live.json is applied: the values in force
+                        **({"live": LIVE_KEPT} if LIVE_KEPT is not None else {}),
+                        **({"live_settings": dict(LS["file"])} if LS["file"] else {})),   # (live_settings.env: the file in force)   # (B-265) once a live.json is applied: the values in force
                    path)
         if os.path.basename(path) == "policy.pt":       # (2026-10-18) the optimizer's state beside it, for a resume
             torch.save(opt.state_dict(), os.path.join(os.path.dirname(path), "opt.pt.tmp"))
@@ -2000,6 +2306,7 @@ def main():
                     os.replace(os.path.join(out, "live_applied.json.tmp"), os.path.join(out, "live_applied.json"))
                     print("live: from update {} (before its rollout) in every simulator: changed {}; in force {}".format(
                         update, dict(ch_, **cht_) or "nothing", force_), flush=True)
+        LS_REC = live_settings_poll(LS, pipes, E_, update, mins, LIVE_START, LIVE_PATH)   # (the safe restart: live_settings.env)
         if a.gate_open > 0 and bool(GATE_M.any()):                       # (--gate-open) before the rollout: it is played and learnt
             gf_ = min(1.0, max(0.0, mins - gate0) / a.gate_open)        # from at one gate
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
@@ -2044,7 +2351,7 @@ def main():
             load_net(opp, sd_o_)
             OPP_NS[0] = bool(SNAP_NS.get(id(sd_o_), False))
             opp.door_open = bool(opp.attn is not None and float(opp.attn.door.weight.abs().sum()) > 0)
-        return dict(mins=mins, live_rec=LIVE_REC, close_p=close_p, seek_now=seek_now, vs_anchor=vs_anchor,
+        return dict(mins=mins, live_rec=LIVE_REC, live_settings=LS_REC, close_p=close_p, seek_now=seek_now, vs_anchor=vs_anchor,
                     has_snaps=bool(snaps), n_snaps=len(snaps), opp_ns=bool(OPP_NS[0]))
 
     def rollout(net, onet, C, upd, keep_raw, has_snaps, opp_ns, stop=None):
@@ -2383,6 +2690,7 @@ def main():
             l_.append(p_)
             del l_[:-WAY_KEEP]
         mins, LIVE_REC, close_p, seek_now = RM["mins"], RM["live_rec"], RM["close_p"], RM["seek_now"]
+        LS_REC = RM.get("live_settings")                                # (live_settings.env) read before this rollout
         R_VA, R_SN, R_NS = RM["vs_anchor"], RM["has_snaps"], RM["n_snaps"]    # (the league of this rollout: --overlap changes it before the record)
         if obs_count < OBS_FREEZE:
             flat = np.concatenate(raw)
@@ -3735,6 +4043,8 @@ def main():
             rec["step_kl"] = round(float(SK_[1]) / max(1.0, float(SK_[0])), 6)
         if LIVE_REC is not None:                                         # (B-265) live.json applied or refused before this rollout
             rec["live"] = LIVE_REC
+        if LS_REC is not None:                                           # (the safe restart) live_settings.env read before this rollout
+            rec["live_settings"] = LS_REC
         if OVL:                                                          # (--overlap) how stale the rollout was, and where the time went
             ow_ = max(1.0, float(OV_[0])) if OV_ is not None else 1.0
             rec["overlap"] = dict(
