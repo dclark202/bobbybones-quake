@@ -23,6 +23,8 @@ for the enemy). Both are parts of the same network, trained together; the head t
 
 ## Rule-made strategy the head takes over (the owner, 2026-10-22: "Is there any other parts of him like this that might need revisiting?")
 
+*Timing (the owner, 2026-10-22): "those should be included eventually, that's probably at least v0.4.1 probably later": v0.4.1 at the earliest, more likely a later v0.4.x once the head has shown it chooses well.*
+
 | Part | Now | With the head |
 |---|---|---|
 | The item rule (the intention teacher, never under 10%) | a hand rule nudges which item he goes for, forever | its floor faded to zero as the decision report shows the head choosing well |
