@@ -2315,6 +2315,26 @@ if HEAD_EVENTS:                                            # (HEAD_EVENTS) the w
 #                            the map's holding places) the one with the least seconds of way FROM his place (route.T[row,
 #                            route.locate(place)]; of several items of a kind the nearest). Never 0 ("none") or "EN". -1,
 #                            nothing to say: a round without other players, no walking map, no landmark he can walk to
+# v0.3.11 (docs/v0.3.11/INFO_PAY.md; the owner, 2026-10-22: "keep a running estimate of position, stack, ownership of
+# weapons, direction, speed, etc of the enemy in memory ... paid proportional to how accurate this is"). TRACK_TRUTH=1 (a
+# training switch, off by default; off: info["aux"] has exactly the columns above) adds the truth the trainer's belief
+# readout (--track) is taught and scored on (--info-pay, in the trainer). Labels only, never inputs, never read by the
+# simulator itself:
+#   en_vfwd, en_vleft        the enemy's horizontal velocity turned to his facing (units a second)
+#   en_own_rl ... en_own_sg  1: the enemy owns the rocket launcher, railgun, lightning gun, plasma gun, grenade launcher, shotgun
+#   trk_on                   1: a duel's game (a whole game or a pro start; not a jump run, a lab, a drill) with both players
+#                            alive and in play: the frames the readout is taught and scored on (the same for both seats)
+#   unseen_s                 seconds since the enemy was last in his view (the simulator's own `visible`); TRACK_UNSEEN_CAP
+#                            from the enemy's spawn until he is seen (the counters by time unseen)
+#   bel_ok, bel_fwd, bel_left, bel_up, bel_age   his hand-built belief of v0.2's inputs (v02_bel, v02_bel_ok, v02_bt_now as
+#                            the last observe() left them: one frame old), turned to his facing: the bar the readout must beat
+#   es_stack                 the enemy's stack as EN_STACK's belief has it (health + armor; -1 with EN_STACK off)
+TRACK_TRUTH = float(os.environ.get("TRACK_TRUTH") or 0.0) > 0
+TRACK_OWN = ("rl", "rg", "lg", "pg", "gl", "sg")
+TRACK_UNSEEN_CAP = 60.0
+if TRACK_TRUTH:
+    AUX_COLS = AUX_COLS + ("en_vfwd", "en_vleft") + tuple("en_own_" + w_ for w_ in TRACK_OWN) + (
+        "trk_on", "unseen_s", "bel_ok", "bel_fwd", "bel_left", "bel_up", "bel_age", "es_stack")
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -9778,6 +9798,64 @@ class DuelEnv:
         self.key_last[:] = new
         a[:, :3] = new
 
+    def _trk_on(self, foe, grp):
+        """(TRACK_TRUTH) [n] bool: a duel's game with both players alive and in play (as PREAIM_PAY's `both`)"""
+        n = self.n
+        if self._others_arr().shape[1] != 1 or self.lab is not None or self.fixed_kind is not None:
+            return np.zeros(n, bool)
+        game = (self.kind[grp] == NORMAL) & (self.mode[grp] < 0) & (self.run_k[:n] < 0) & (self.run_k[foe] < 0)
+        rw_ = getattr(self, "rsp_wait", None)
+        alive = (self.hp[:n] > 0) & ((np.asarray(rw_[:n]) <= 0) if rw_ is not None else True)
+        return game & alive & alive[foe]
+
+    def _trk_step(self):
+        """(TRACK_TRUTH) once a frame, after the senses: the seconds since each player last had the enemy in view (60 from
+        the enemy's spawn until he is seen). State kept for aux() only: nothing else reads it"""
+        n = self.n
+        foe = getattr(self, "foe", None)
+        if foe is None:
+            foe = self._others_arr()[:, 0]
+        vis = np.asarray(self.visible, bool)[:n]
+        life = np.asarray(self.life_t[:n], np.float64)
+        if getattr(self, "trk_unseen", None) is None or len(self.trk_unseen) != n:
+            self.trk_unseen = np.full(n, TRACK_UNSEEN_CAP)
+            self.trk_life = life.copy()
+        born = life[foe] < self.trk_life[foe]                # (the enemy's life clock began again: he spawned)
+        gone = (self.hp[foe] <= 0) | born
+        u_ = np.where(vis, 0.0, np.minimum(self.trk_unseen + DT, TRACK_UNSEEN_CAP))
+        self.trk_unseen = np.where(gone & ~vis, TRACK_UNSEEN_CAP, u_)
+        self.trk_life = life.copy()
+
+    def _trk_cols(self, out, C, s, foe, grp, c, si):
+        """(TRACK_TRUTH) aux()'s columns of the belief readout (see TRACK_TRUTH): reads only"""
+        n = self.n
+        ar = np.arange(n)
+        vf_ = np.asarray(s[foe, 3:5], np.float64)
+        out[:, C["en_vfwd"]] = c * vf_[:, 0] + si * vf_[:, 1]
+        out[:, C["en_vleft"]] = -si * vf_[:, 0] + c * vf_[:, 1]
+        for w_ in TRACK_OWN:
+            out[:, C["en_own_" + w_]] = np.asarray(self.has[foe, WEAPONS.index(w_)], np.float32)
+        out[:, C["trk_on"]] = self._trk_on(foe, grp)
+        u_ = getattr(self, "trk_unseen", None)
+        out[:, C["unseen_s"]] = u_ if (u_ is not None and len(u_) == n) else TRACK_UNSEEN_CAP
+        bel_ = getattr(self, "v02_bel", None)
+        if bel_ is not None and len(bel_) == n:
+            d_ = np.asarray(bel_, np.float64) - s[:, :3]
+            ok_ = np.asarray(self.v02_bel_ok, bool)
+            out[:, C["bel_ok"]] = ok_
+            out[:, C["bel_fwd"]] = np.where(ok_, c * d_[:, 0] + si * d_[:, 1], 0.0)
+            out[:, C["bel_left"]] = np.where(ok_, -si * d_[:, 0] + c * d_[:, 1], 0.0)
+            out[:, C["bel_up"]] = np.where(ok_, d_[:, 2], 0.0)
+            bt_ = getattr(self, "v02_bt_now", None)
+            out[:, C["bel_age"]] = np.asarray(bt_, np.float32) if bt_ is not None and len(bt_) == n else -1.0
+        else:
+            out[:, C["bel_age"]] = -1.0
+        if EN_STACK and getattr(self, "es_h", None) is not None:
+            k_ = self._slot(foe)
+            out[:, C["es_stack"]] = self.es_h[ar, k_] + self.es_a[ar, k_]
+        else:
+            out[:, C["es_stack"]] = -1.0
+
     def aux(self, st=None, fall=None, events=(), died=None):
         """info["aux"] (see AUX_COLS): [players, len(AUX_COLS)] float32, the game as it truly stands now and, given step()'s
         books of the frame (st: the damage by attacker and by victim; fall: the fall damage; events: the frags; died), what
@@ -9831,6 +9909,8 @@ class DuelEnv:
                 nr_ = np.where(t_ < bt_, k_, nr_)
                 bt_ = np.minimum(bt_, t_)
         out[:, C["en_near"]] = np.where(about, nr_, -1)
+        if TRACK_TRUTH:                                      # (v0.3.11) the belief readout's truth (see TRACK_TRUTH)
+            self._trk_cols(out, C, s, foe, grp, c, si)
         if st is not None:
             for (i_, v_), d_ in st["by"].items():            # (the damage as booked per attacker: _book)
                 out[i_, C["dmg_dealt"]] += d_
@@ -11176,6 +11256,8 @@ class DuelEnv:
         self._teach_update()
         info = dict(events=events)
         self._preaim(s, reward)                              # (PREAIM_PAY) fresh sightings: the counters, always; the pay with the switch on
+        if TRACK_TRUTH:                                      # (TRACK_TRUTH) the seconds each has not seen the enemy, for info["aux"]
+            self._trk_step()
         if LG_QUIET_COST > 0:                                # (LG_QUIET_COST) the lightning gun carried while the enemy is away
             self._lg_quiet(reward)
         else:

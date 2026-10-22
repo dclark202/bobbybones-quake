@@ -181,7 +181,7 @@ def jump_far_rec(agg, agg_map):
                         for m_, x_ in ((m_, one_(v_)) for m_, v_ in agg_map.items()) if x_[0] + x_[2] > 0})
 
 
-LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD")                 # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward
+LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY")     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1111,6 +1111,25 @@ def main():
     ap.add_argument("--aux-measure", action="store_true",
                     help="v0.2.2: the record's aux.v022.memory_vs_belief: where his memory puts the unseen enemy against the place his belief "
                          "inputs give, on the same frames, by the belief's age")
+    # v0.3.11 (docs/v0.3.11/INFO_PAY.md): his belief of the enemy read out of his memory (sim/track.py), taught, and paid for
+    # being more right than the enemy's belief of him. Off (both 0, a network without track.* layers): the trainer as it was
+    ap.add_argument("--track", type=float, default=0.0,
+                    help="v0.3.11: the weight of the belief readout's lesson (the enemy's place with its spread, velocity, stack band, "
+                         "weapon in hand, weapons owned: sim/track.py; the truth from info['aux'] with TRACK_TRUTH=1; never an input). 0 = off")
+    ap.add_argument("--track-trunk", type=float, default=0.1, help="... the share of the lesson's gradient that reaches his memory and the "
+                                                                    "layers below it (as --aux-trunk)")
+    ap.add_argument("--track-parts", default="pos:1,vel:0.25,band:0.5,hand:0.25,own:0.25",
+                    help="... the parts' weights, in the lesson and in the pay's score alike")
+    ap.add_argument("--track-start", type=float, default=-1.0,
+                    help="... the run's minute the readout's lesson began (its warm-up and the pay's delay count from it; -1: this process's start)")
+    ap.add_argument("--track-warm", type=float, default=30.0, help="... minutes over which the lesson's weight rises from nothing")
+    ap.add_argument("--track-lr-scale", type=float, default=1.0, help="... the readout's own layers learn at this many times --lr (a group of their own)")
+    ap.add_argument("--info-pay", type=float, default=0.0,
+                    help="v0.3.11: the zero-sum pay for knowing where the enemy is: every --info-every frames, k * (his readout's score - "
+                         "the enemy's readout's score of him), both alive in a duel's game (a live name in live.json: INFO_PAY). 0 = off")
+    ap.add_argument("--info-every", type=int, default=20, help="... frames between two scorings (20: 0.5 s)")
+    ap.add_argument("--info-delay", type=float, default=60.0, help="... minutes after --track-start before the pay begins (the readout learns first)")
+    ap.add_argument("--info-warm", type=float, default=60.0, help="... minutes over which the pay then rises to --info-pay")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -1391,6 +1410,7 @@ def main():
     AUX_CK = ()                                              # (--aux) which of the layers of 2026-10-12 the network he resumes from has
     AUX_SAVE = {}                                            # (--aux) what is kept in a saved file beside the lesson's layers
     UNI_CK = None                                            # (--legs-feat, --legs-guide) the parts' layout: comes with the network
+    TRK_CK = None                                            # (--track, v0.3.11) the belief readout's layout: comes with the network
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
@@ -1400,6 +1420,7 @@ def main():
         if any(k_.startswith("aux.") for k_ in ck0_["model"]):
             AUX_SAVE = dict(aux_heads=ck0_.get("aux_heads"))
         AUX_CK = tuple(h_ for h_ in ("target", "strength", "first", "near") if "aux.{}.weight".format(h_) in ck0_["model"])
+        TRK_CK = ck0_.get("track") if any(k_.startswith("track.") for k_ in ck0_["model"]) else None
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
         ATT = dict(ATT, mem=H)
@@ -1499,6 +1520,35 @@ def main():
         print("aux (v0.2.2): tail {} ({} frames), fresh {} s, unseen {}, measure {}".format(bool(AUX_TAIL), AUX_TW, AUX_FRESH, bool(AUX_UNSEEN),
                                                                                            bool(AUX_MEAS)), flush=True)
 
+    # (--track, --info-pay; v0.3.11, docs/v0.3.11/INFO_PAY.md) the belief readout (sim/track.py): its layout comes with the
+    # network he resumes from, or is made new when the lesson or the pay is asked for (its last layer at zero). Off: nothing here
+    import track as track_
+    TRK_PARTS = track_.parse_weights(a.track_parts)
+    TRK_L = TRK_CK if TRK_CK is not None else (track_.layout(weights=TRK_PARTS) if (a.track > 0 or a.info_pay > 0) else None)
+    TRK = TRK_L is not None                                  # the readout's layers are in the network (kept as they are while off)
+    TRK_ON = TRK and (a.track > 0 or a.info_pay > 0)         # the truth is read from the simulators (TRACK_TRUTH=1)
+    if TRK:
+        TRK_L = dict(TRK_L, weights=TRK_PARTS)
+    TRK_SAVE = {"track": TRK_L} if TRK else {}
+    TRK_IX, TRK_TC, TRK_K = None, None, [0.0, 0.0]           # (the truth's columns; the pay's k and the lesson's weight of this rollout)
+    if TRK_ON:
+        assert groups == [2], "--track / --info-pay: duels only (--group 2): the pay pairs seat i with seat i ^ 1"
+        cols_ = tuple(getattr(E_, "AUX_COLS", ()))
+        need_ = track_.COLS + ("trk_on", "en_in_view", "unseen_s", "bel_ok", "bel_fwd", "bel_left", "bel_up", "bel_age", "es_stack")
+        assert all(c_ in cols_ for c_ in need_) and all(len(f) > 2 and f[2] is not None for f in first), \
+            "--track / --info-pay: the simulator {} gives no TRACK_TRUTH columns (set TRACK_TRUTH=1)".format(a.env)
+        TRK_IX = {k_: i_ for i_, k_ in enumerate(cols_)}
+        TRK_TC = [TRK_IX[c_] for c_ in track_.COLS]
+        if aux is None:
+            aux = np.concatenate([f[2] for f in first])
+        print("track (v0.3.11): the belief readout {} ({} -> {} -> {}); lesson {} (memory share {}, warm {} min), parts {}; info pay {} "
+              "every {} frames (after {} min, rising over {} min){}".format(
+                  "from the network" if TRK_CK is not None else "new (its last layer at zero)", H, TRK_L["hid"], TRK_L["d"], a.track,
+                  a.track_trunk, a.track_warm, TRK_PARTS, a.info_pay, a.info_every, a.info_delay, a.info_warm,
+                  "" if a.track_start < 0 else "; counted from minute {}".format(a.track_start)), flush=True)
+    elif TRK:
+        print("track (v0.3.11): the network's belief readout is kept as it is (no lesson, no pay)", flush=True)
+
     HEADL = HEAD_CK                                          # (--head) the network's own head, or a new one with its links at zero
     if HEADL is not None or a.head:
         import head as head_
@@ -1592,6 +1642,8 @@ def main():
                     nn.init.zeros_(l_.weight)                    # only the ones named in --aux-heads or in the network he resumes from
                     nn.init.zeros_(l_.bias)
                     setattr(self.aux, h_, l_)
+            if TRK:                                              # (--track, v0.3.11) the belief readout from his memory (sim/track.py):
+                self.track = track_.make_module(H, TRK_L)        # its last layer at zero, made without a draw of the random stream
             if ORDER:                                            # (--ordered-heads) a table a link: a row for each choice before, at zero
                 self.order = nn.Module()
                 for p_, c_ in ORDER:
@@ -1747,7 +1799,8 @@ def main():
         """a network's weights. Only the layers of --aux may be missing (they stay as they are: fresh in the learner) or
         left over (the lesson is off and they are not in this network)"""
         bad = net.load_state_dict(sd, strict=False)
-        odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.") and not k_.startswith("head.aux.")]
+        odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.") and not k_.startswith("head.aux.")
+               and not k_.startswith("track.")]                  # (v0.3.11: the belief readout, as the aux layers)
         assert not odd, "the network does not fit: {}".format(odd)
 
     HEAD_SHUT = ("plan_in.", "target.", "way.", "win.", "aux.")      # (--head) the links of a new head: zeros
@@ -1877,7 +1930,7 @@ def main():
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))
-                            and not (UNI_ON and n_.startswith(UNI_PFX))],
+                            and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith("track.")],
                            lr=a.lr, eps=1e-5, **({"fused": True} if a.adam_fused else {}))   # (LEGS_IN: not the branch; --head: not the head)
     if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
         opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
@@ -1888,6 +1941,15 @@ def main():
         torch.backends.cuda.matmul.allow_tf32 = False        # nothing elsewhere turns it on: its draws are the simulator's from these logits)
     if LEGS_LEARN:                                           # (--legs-learn) the branch in a group of its own; every setting of the rate
         opt.add_param_group({"params": list(pol.legs.parameters()), "lr": a.lr * a.legs_learn, "lr_scale": a.legs_learn})   # keeps its share
+    LEGS_GROUP = len(opt.param_groups) - 1                   # (the record's legs_learn rate: the branch's group, whatever comes after it)
+    TRK_GROUP = [False]
+
+    def trk_group():
+        """(--track) the belief readout in a group of its own, the last: an optimizer saved without it loads into the groups
+        before it, and one saved with it loads whole"""
+        if TRK and not TRK_GROUP[0]:
+            opt.add_param_group({"params": list(pol.track.parameters()), "lr": a.lr * a.track_lr_scale, "lr_scale": a.track_lr_scale})
+            TRK_GROUP[0] = True
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
@@ -1902,8 +1964,10 @@ def main():
         op_ = os.path.join(out, "opt.pt")                     # (2026-10-18) the optimizer's state from the last save, if it fits
         if os.path.exists(op_):
             try:
-                sc_ = [g_.get("lr_scale", 1.0) for g_ in opt.param_groups]      # (this run's scales: loading puts the saved ones back)
                 os_ = torch.load(op_, weights_only=False, map_location=dev)
+                if TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1:
+                    trk_group()                               # (--track: saved with the readout's group)
+                sc_ = [g_.get("lr_scale", 1.0) for g_ in opt.param_groups]      # (this run's scales: loading puts the saved ones back)
                 for g_, s_ in zip(opt.param_groups, os_["param_groups"]):   # (torch checks the groups' sizes only: a moment of
                     for p_, i_ in zip(g_["params"], s_["params"]):           # another shape, or of another parameter, is refused here)
                         m_ = os_["state"].get(i_)
@@ -1929,6 +1993,24 @@ def main():
                 print("optimizer: opt.pt does not fit ({}): a cold start".format(str(e_)[:120]), flush=True)
         else:
             print("optimizer: no opt.pt, a cold start", flush=True)
+    trk_group()                                              # (--track) the readout's group, if the optimizer's state did not bring it
+    TRK_T0 = float(a.track_start) if a.track_start >= 0 else float(elapsed0)    # (--track) the minute its lesson and pay count from
+    assert a.info_pay <= 0 or a.track > 0 or TRK_CK is not None, "--info-pay: with --track (a readout that learns) or one that has learnt"
+
+    def trk_pay_k(mins):
+        """(--info-pay) k at this minute: nothing until --info-delay minutes after the lesson's start, then rising over --info-warm"""
+        if not TRK_ON or a.info_pay <= 0:
+            return 0.0
+        x_ = mins - TRK_T0 - a.info_delay
+        if x_ <= 0:
+            return 0.0
+        return float(a.info_pay) * (min(1.0, x_ / a.info_warm) if a.info_warm > 0 else 1.0)
+
+    def trk_lesson_w(mins):
+        """(--track) the lesson's weight at this minute: rising from nothing over --track-warm from the lesson's start"""
+        if not TRK_ON or a.track <= 0:
+            return 0.0
+        return float(a.track) * (min(1.0, max(0.0, mins - TRK_T0) / a.track_warm) if a.track_warm > 0 else 1.0)
     LEGS_W0 = [p_.detach().clone() for p_ in pol.legs.parameters()] if LEGS_LEARN else None    # (--legs-learn) where the branch starts in this process
     if UNI_ON and float(os.environ.get("UNIFY_WAKE") or 0) > 0:     # (a test only: the parts woken with random weights of this size)
         with torch.no_grad():
@@ -2003,7 +2085,7 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
-                        hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE,
+                        hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE, **TRK_SAVE,
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
@@ -2165,7 +2247,8 @@ def main():
     LIVE_PATH = os.path.join(out, "live.json")                         # (B-265) pay weights changed while the run trains
     LIVE_ON = hasattr(E_, "live_set")
     LIVE_START = {k_: os.environ.get(k_) for k_ in getattr(E_, "LIVE_VARS", ())}      # the run's start: its environment
-    LIVE_TSTART = dict(DMG_TAKEN_W=float(a.dmg_taken_w), DMG_REWARD=float(a.dmg_reward))   # ... and its arguments
+    LIVE_TSTART = dict(DMG_TAKEN_W=float(a.dmg_taken_w), DMG_REWARD=float(a.dmg_reward),
+                       **({"INFO_PAY": float(a.info_pay)} if TRK_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
         print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
@@ -2297,9 +2380,10 @@ def main():
                     now_ = [p.recv() for p in pipes]
                     E_.live_set(lv_)                                     # (the environment too: the checkpoints' env_vars)
                     a.dmg_taken_w, a.dmg_reward = lt_["DMG_TAKEN_W"], lt_["DMG_REWARD"]
+                    a.info_pay = lt_.get("INFO_PAY", a.info_pay)         # (v0.3.11: read before each rollout)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
                     LIVE_KEPT = dict(sim=dict(lv_), trainer=dict(lt_), from_update=update)
-                    force_ = dict(now_[0], DMG_REWARD=a.dmg_reward)
+                    force_ = dict(now_[0], DMG_REWARD=a.dmg_reward, **({"INFO_PAY": a.info_pay} if TRK_ON else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
                         json.dump(dict(from_update=update, minutes=round(mins, 2), file=json.loads(txt_), in_force=force_), f_, indent=1)
@@ -2307,6 +2391,8 @@ def main():
                     print("live: from update {} (before its rollout) in every simulator: changed {}; in force {}".format(
                         update, dict(ch_, **cht_) or "nothing", force_), flush=True)
         LS_REC = live_settings_poll(LS, pipes, E_, update, mins, LIVE_START, LIVE_PATH)   # (the safe restart: live_settings.env)
+        if TRK_ON:                                                       # (--info-pay) the pay's k of this rollout (live.json's INFO_PAY, the delay, the ramp)
+            TRK_K[0] = trk_pay_k(mins)
         if a.gate_open > 0 and bool(GATE_M.any()):                       # (--gate-open) before the rollout: it is played and learnt
             gf_ = min(1.0, max(0.0, mins - gate0) / a.gate_open)        # from at one gate
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
@@ -2354,6 +2440,97 @@ def main():
         return dict(mins=mins, live_rec=LIVE_REC, live_settings=LS_REC, close_p=close_p, seek_now=seek_now, vs_anchor=vs_anchor,
                     has_snaps=bool(snaps), n_snaps=len(snaps), opp_ns=bool(OPP_NS[0]))
 
+    TRK_BINS = ("in_view", "0-2s", "2-5s", "5-10s", "10s+", "unseen_since_spawn")   # (--track) the counters by time unseen
+
+    def trk_stats_new():
+        """(--track) a rollout's counters of the readout: his seats (the learner's), on the frames it is scored"""
+        nb_ = len(TRK_BINS)
+        return dict(err=[[] for _ in range(nb_)], bel=[[] for _ in range(nb_)], n=np.zeros(nb_), ll=np.zeros((nb_, len(track_.PARTS))),
+                    band=np.zeros(nb_), hand=np.zeros(nb_), own=np.zeros(nb_), sd=np.zeros(nb_), bel_ok=np.zeros(nb_), score=np.zeros(nb_),
+                    pay_sum=0.0, pay_abs=0.0, pay_hidden=0.0, pay_mine=0.0, scorings=0, seats=0, pairs_on=0)
+
+    def trk_frame(net, aux_np, w_t, TS, k):
+        """(--track, --info-pay) a scoring frame: every seat's readout (the learner's network on every seat's own memory: the
+        league's seats are read by it too, so that both sides of a pair are judged by the same reader) against the truth of
+        aux_np (info["aux"] of the frame the network has just read); the pay k * (his score - the enemy's) where both are on
+        (zero-sum over each pair; nothing with k = 0); the counters into TS. -> the pay [N] on the card, or None"""
+        with torch.no_grad():
+            o_ = net.track(net.zl.float()).float()
+            y_ = torch.from_numpy(np.ascontiguousarray(aux_np[:, TRK_TC], dtype=np.float32)).to(o_.device)
+            on_np = aux_np[:, TRK_IX["trk_on"]] > 0.5
+            on_ = torch.from_numpy(on_np).to(o_.device)
+            ll_ = track_.loglik(o_, y_, floor=True)
+            sc_ = (ll_ * track_.wvec(TRK_PARTS, o_)).sum(-1)
+            pay_ = track_.pair_pay(sc_, on_, k) if k > 0 else None
+            llp_ = track_.loglik(o_, y_, floor=False).cpu().numpy()
+            mu_, sd_, bd_, hd_, ow_ = (x_.cpu().numpy() for x_ in track_.readable(o_))
+        sc_ = sc_.cpu().numpy()
+        en_ = np.arange(len(on_np)) ^ 1
+        both_ = on_np & on_np[en_]
+        me_ = both_ & (w_t.cpu().numpy() > 0)
+        TS["scorings"] += 1
+        TS["pairs_on"] += int(both_.sum()) // 2
+        TS["seats"] += int(me_.sum())
+        if pay_ is not None:
+            pn_ = pay_.cpu().numpy()
+            hid_ = (aux_np[:, TRK_IX["en_in_view"]] < 0.5) & (aux_np[en_, TRK_IX["en_in_view"]] < 0.5)
+            TS["pay_sum"] += float(pn_[both_].sum())
+            TS["pay_abs"] += float(np.abs(pn_[me_]).sum())
+            TS["pay_hidden"] += float(np.abs(pn_[me_ & hid_]).sum())
+            TS["pay_mine"] += float(pn_[me_].sum())
+        if not me_.any():
+            return pay_
+        ix_ = np.nonzero(me_)[0]
+        A_ = aux_np[ix_]
+        us_ = A_[:, TRK_IX["unseen_s"]]
+        b_ = np.where(A_[:, TRK_IX["en_in_view"]] > 0.5, 0, np.where(us_ >= E_.TRACK_UNSEEN_CAP - 1e-3, 5,
+                      1 + np.digitize(us_, (2.0, 5.0, 10.0))))
+        tr_ = A_[:, [TRK_IX["en_fwd"], TRK_IX["en_left"], TRK_IX["en_up"]]].astype(np.float64)
+        er_ = np.linalg.norm(mu_[ix_] - tr_, axis=1)
+        bok_ = A_[:, TRK_IX["bel_ok"]] > 0.5
+        bp_ = np.where(bok_[:, None], A_[:, [TRK_IX["bel_fwd"], TRK_IX["bel_left"], TRK_IX["bel_up"]]], 0.0)
+        be_ = np.linalg.norm(bp_ - tr_, axis=1)
+        y_ = A_[:, TRK_TC]
+        own_t = y_[:, 7:7 + len(track_.OWN)] > 0.5
+        for j_ in range(len(TRK_BINS)):
+            m_ = b_ == j_
+            if not m_.any():
+                continue
+            TS["err"][j_].append(er_[m_].astype(np.float32))
+            TS["bel"][j_].append(be_[m_].astype(np.float32))
+            TS["n"][j_] += m_.sum()
+            TS["ll"][j_] += llp_[ix_][m_].sum(0)
+            TS["band"][j_] += (bd_[ix_][m_] == np.round(y_[m_, 5])).sum()
+            TS["hand"][j_] += (hd_[ix_][m_] == np.round(y_[m_, 6])).sum()
+            TS["own"][j_] += ((ow_[ix_][m_] > 0.5) == own_t[m_]).all(1).sum()
+            TS["sd"][j_] += sd_[ix_][m_, 0].sum()
+            TS["bel_ok"][j_] += bok_[m_].sum()
+            TS["score"][j_] += sc_[ix_][m_].sum()
+        return pay_
+
+    def trk_stats_end(TS, k):
+        """(--track) a rollout's counters -> the record's numbers (medians of the place's error by time unseen, the belief
+        inputs' beside them; the mean plain log-likelihood of each part; called right; the pay)"""
+        if TS is None:
+            return None
+        mins_ = TS["seats"] * a.info_every * E_.DT / 60.0            # his seats' minutes of game time scored (a scoring stands for info_every frames)
+        out_ = dict(k=round(k, 5), scorings=TS["scorings"], seat_minutes=round(mins_, 1), by=dict())
+        for j_, nm_ in enumerate(TRK_BINS):
+            n_ = TS["n"][j_]
+            if n_ <= 0:
+                continue
+            e_, be_ = np.concatenate(TS["err"][j_]), np.concatenate(TS["bel"][j_])
+            out_["by"][nm_] = dict(share=round(float(n_ / max(1.0, TS["n"].sum())), 4), err_med=round(float(np.median(e_)), 1),
+                                   bel_med=round(float(np.median(be_)), 1), nearer=round(float((e_ < be_).mean()), 4),
+                                   bel_ok=round(float(TS["bel_ok"][j_] / n_), 4), sd_xy=round(float(TS["sd"][j_] / n_), 1),
+                                   nll={p_: round(float(-TS["ll"][j_, i_] / n_), 3) for i_, p_ in enumerate(track_.PARTS)},
+                                   band_right=round(float(TS["band"][j_] / n_), 4), hand_right=round(float(TS["hand"][j_] / n_), 4),
+                                   own_right=round(float(TS["own"][j_] / n_), 4), score=round(float(TS["score"][j_] / n_), 3))
+        if mins_ > 0:
+            out_["pay"] = dict(abs_per_player_min=round(TS["pay_abs"] / mins_, 4), net_per_player_min=round(TS["pay_mine"] / mins_, 4),
+                               hidden_share=round(TS["pay_hidden"] / max(1e-9, TS["pay_abs"]), 4), pairs_sum=float(TS["pay_sum"]))
+        return out_
+
     def rollout(net, onet, C, upd, keep_raw, has_snaps, opp_ns, stop=None):
         """one rollout of T frames: his seats played by `net`, the league's by `onet` (off: pol and opp; --overlap: the copy
         ACT, in the rollout's thread); C the carry from rollout to rollout (the simulators' last frame, the memories),
@@ -2394,6 +2571,11 @@ def main():
         b_teach = torch.zeros(T, N, 5, dtype=torch.long, device=dev)
         if AUX_W > 0:
             b_aux = torch.zeros(T + 1, N, len(AUX_COLS), dtype=torch.float16)    # (--aux) the simulator's truth, frame by frame
+        elif TRK_ON:                                                     # (--track, --info-pay) the same truth, for the readout alone
+            b_aux = torch.zeros(T + 1, N, len(E_.AUX_COLS), dtype=torch.float16)
+        TS_ = trk_stats_new() if TRK_ON else None                         # (--track) the readout's counters of this rollout
+        TK_ = float(TRK_K[0]) if TRK_ON else 0.0                          # (--info-pay) the pay's k in this rollout
+        if AUX_W > 0:
             b_ht = torch.zeros(AUX_TW, N, H, dtype=torch.float16) if AUX_TW else None      # (--aux-tail) his memory on the last frames
             b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
@@ -2482,8 +2664,11 @@ def main():
             b_teach[t] = torch.from_numpy(teach).to(dev)
             if HAND_LAB:
                 b_hand[t] = torch.from_numpy(hand).to(dev)
-            if AUX_W > 0:
+            if b_aux is not None:                                        # (--aux; --track)
                 b_aux[t] = torch.from_numpy(aux)
+            tpay_ = None
+            if TS_ is not None and t % a.info_every == 0:                # (--track, --info-pay) his readout scored, the pay (added
+                tpay_ = trk_frame(net, aux, b_w[t], TS_, TK_)           # to the reward of this frame's action, below)
             an = act.cpu().numpy()
             tp1_ = time.perf_counter()
             RP_["net"] += tp1_ - tp0_                                    # (his network on the card and its draws, the frame's buffers)
@@ -2513,6 +2698,8 @@ def main():
             if LEGS_IN:
                 legs_x = legs_cat([(r[15], r[0]) for r in res])
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
+            if tpay_ is not None:                                        # (--info-pay) zero-sum over each pair of seats
+                b_rew[t] += tpay_
             if LONG:
                 b_rl[t] = torch.from_numpy(np.concatenate([r[11] for r in res])).to(dev)
             d = torch.from_numpy(np.concatenate([r[2] for r in res]).astype(np.float32)).to(dev)
@@ -2553,7 +2740,7 @@ def main():
             teach = np.concatenate([r[5] for r in res])
             if HAND_LAB:
                 hand = np.concatenate([r[14] for r in res])
-            if AUX_W > 0:
+            if AUX_W > 0 or TRK_ON:
                 aux = np.concatenate([r[12] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
@@ -2595,8 +2782,9 @@ def main():
             b_val[T] = vT_
             if LONG:
                 b_val2[T] = net.v2(net.zl)
-        if AUX_W > 0:
+        if b_aux is not None:                                            # (--aux; --track)
             b_aux[T] = torch.from_numpy(aux)
+        if AUX_W > 0:
             if AUX_BEL:
                 b_bel[T] = torch.from_numpy(np.ascontiguousarray(obs[:, BEL_IX], dtype=np.float32))
         t_done = time.time() if OVL else None
@@ -2606,7 +2794,7 @@ def main():
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
-                    SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_)
+                    SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_))
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -2864,6 +3052,11 @@ def main():
                         lgk_ = ord_lg(pol, lgk_, b_act[:, chunk])
                     for j, dd in enumerate(dists(lgk_)):
                         old_h[:, chunk, j] = dd.log_prob(b_act[:, chunk, j])
+        trk_w = trk_lesson_w(mins) if TRK_ON else 0.0                    # (--track) the readout's lesson of this update: its truth and mask
+        if trk_w > 0:
+            TRK_Y = b_aux[:T][..., TRK_TC]                               # [T, N, 13] float16, off the card (a piece goes over with its minibatch)
+            TRK_M = b_aux[:T][..., TRK_IX["trk_on"]] > 0.5
+            tk_acc = torch.zeros(len(track_.PARTS) + 1, dtype=torch.float64, device=ADEV)    # first pass: the parts' loss sums, weights
         aux_w = 0.0
         if AUX_W > 0:                                                    # (--aux) the lesson's labels, by hindsight inside this rollout
             aux_w = AUX_W * (min(1.0, max(0.0, mins - fade0) / a.aux_warm) if a.aux_warm > 0 else 1.0)
@@ -3278,6 +3471,17 @@ def main():
                                     nx_s[0] += FV_((cn_[..., 0] * wr_[..., 0]).sum())
                                     nx_s[1] += FV_((cn_[..., 1] * wr_[..., 1]).sum())
                                     nx_n += HC_(wr_.sum((0, 1)).double())
+                if trk_w > 0:                                            # (--track) the readout's lesson: the enemy as the truth has him
+                    ci_ = hchunk(chunk)
+                    ty_ = hsel(TRK_Y, 1, chunk, ci_).float()
+                    tm_ = hsel(TRK_M, 1, chunk, ci_).float() * wgt       # (a duel's game, both alive, the learner's frames)
+                    hx_ = hs_all if a.track_trunk >= 1.0 else a.track_trunk * hs_all + (1.0 - a.track_trunk) * hs_all.detach()
+                    tl_, tp_ = track_.loss(pol.track(hx_.float()), ty_, TRK_PARTS, tm_)
+                    loss = loss + trk_w * tl_
+                    if epoch == 0:
+                        with torch.no_grad():
+                            n_ = tm_.sum()
+                            tk_acc += HC_(torch.cat([tp_ * n_, n_[None]]).double())
                 if kick > 0:                                             # imitate the movement teacher in movement rounds
                     tl = b_teach[:, chunk]
                     tm = (tl[..., 0] >= 0).float() * wgt
@@ -3374,17 +3578,23 @@ def main():
                     hd_acc[13] += 1.0
                 if UNI_ON:                                               # (--legs-feat, --legs-guide) their gradient clipped on its own: the
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if n_.startswith(UNI_PFX)], 0.5)    # rest's step is as without them
+                if TRK:                                                  # (--track) the readout's gradient clipped on its own: the rest's
+                    nn.utils.clip_grad_norm_(pol.track.parameters(), 0.5)    # step is as without it
                 if AUX:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.") and not n_.startswith(UNI_PFX)
-                                              and not (LEGS_LEARN and n_.startswith("legs.")) and not (HEADL and n_.startswith("head."))], 0.5)
+                                              and not (LEGS_LEARN and n_.startswith("legs.")) and not (HEADL and n_.startswith("head."))
+                                              and not n_.startswith("track.")], 0.5)
                     nn.utils.clip_grad_norm_(pol.aux.parameters(), 0.5)
                 elif LEGS_LEARN:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not n_.startswith(UNI_PFX)
-                                              and not (HEADL and n_.startswith("head."))], 0.5)
+                                              and not (HEADL and n_.startswith("head.")) and not n_.startswith("track.")], 0.5)
                 elif HEADL:
-                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("head.") and not n_.startswith(UNI_PFX)], 0.5)
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("head.") and not n_.startswith(UNI_PFX)
+                                              and not n_.startswith("track.")], 0.5)
                 elif UNI_ON:
-                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith(UNI_PFX)], 0.5)
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith(UNI_PFX) and not n_.startswith("track.")], 0.5)
+                elif TRK:
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("track.")], 0.5)
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
@@ -3396,6 +3606,8 @@ def main():
             ll_acc, ug_acc = ll_acc.cpu(), ug_acc.cpu()
             if torch.is_tensor(ug_first[0]):
                 ug_first[0] = float(ug_first[0])
+            if trk_w > 0:
+                tk_acc = tk_acc.cpu()
             if AUX_W > 0:
                 ax_s, ax_n, ax_w = ax_s.cpu(), ax_n.cpu(), float(ax_w)
                 if AUX_MEAS:
@@ -3669,6 +3881,11 @@ def main():
                 win_games=round(float((b_wg > -0.5).float().mean()), 4) if HD_WG >= 0 else 0.0,    # the share of frames in labelled games
                 opp_open=bool(snaps and opp.head_open),                                             # the league's network has an open head
                 ring=RINGH.L if RINGH is not None else 0, secs=[round(hd_secs[0], 2), round(hd_secs[1], 2)])
+        if TRK_ON:                                                       # (--track, --info-pay) the readout's lesson and its counters (the rollout's)
+            rec["track"] = dict(w=round(trk_w, 4), trunk=a.track_trunk, parts=TRK_PARTS, every=a.info_every, rollout=R["trk"])
+            if trk_w > 0 and float(tk_acc[-1]) > 0:
+                rec["track"]["loss"] = {p_: round(float(tk_acc[i_] / tk_acc[-1]), 4) for i_, p_ in enumerate(track_.PARTS)}
+                rec["track"]["frames"] = int(tk_acc[-1])
         if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
             def q_(i_, d_=4):
                 return round(float(ax_s[i_] / max(1.0, float(ax_n[int(AUX_MI[i_])]))), d_)
@@ -3957,7 +4174,7 @@ def main():
                 mv_ = [float((p_ - p0_).abs().max()) for p_, p0_ in zip(pol.legs.parameters(), LEGS_W0)]
                 mr_ = float(sum(float((p_ - p0_).abs().sum()) for p_, p0_ in zip(pol.legs.parameters(), LEGS_W0))
                             / max(1e-12, sum(float(p0_.abs().sum()) for p0_ in LEGS_W0)))
-            rec["legs_learn"] = dict(rate=a.legs_learn, lr=opt.param_groups[-1]["lr"], lr_rest=opt.param_groups[0]["lr"], ent_w=a.legs_ent,
+            rec["legs_learn"] = dict(rate=a.legs_learn, lr=opt.param_groups[LEGS_GROUP]["lr"], lr_rest=opt.param_groups[0]["lr"], ent_w=a.legs_ent,
                                      share=round(float(ll_acc[1] / max(1.0, float(ll_acc[0]))), 4),
                                      kl=round(float(ll_acc[2] / max(1.0, float(ll_acc[3]))), 6),
                                      first_err=float(ll_acc[4]), entropy=round(float(ll_acc[5] / max(1.0, float(ll_acc[1]))), 4),
