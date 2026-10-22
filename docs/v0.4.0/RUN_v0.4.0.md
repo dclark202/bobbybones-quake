@@ -35,13 +35,10 @@ Held for now (the owner): rocket jumps and other movement work.
 | Size | +~0.05 M weights in the readout (kept at export now: see the server row) | – |
 | **Graded on the pros' games too** | the demo pipeline rebuilds a pro's inputs from his recording: the same readout graded on "from what this pro saw and heard, where was his opponent, where will he be", a small share into memory, a fading weight. Grounds the picture in how people move (self-play alone teaches him to predict Bobby) | ❓ behind a switch |
 
-## Arms (ten updates each and a check against the control, from v0.3.11's end)
+## Start (the owner, 2026-10-22: "just do them together")
 
-| Arm | What |
-|---|---|
-| A | prediction ahead only |
-| B | the swap only (readout in, the old rule out) |
-| A + B | both: the run, if each passes alone |
+The prediction ahead and the swap go in together: ten updates and a check against the control before the start (the rule
+since 2026-10-13), no separate arms.
 
 ## The equilibrium
 
