@@ -1,7 +1,6 @@
 # v0.3.11 on one page: the knowledge pay (DRAFT)
 
-*Draft, 2026-10-22. Being built beside v0.3.10 (branch `v0311` from `v0310`); the numbers marked 🧪 are filled in from the pro-demo
-calibration. Starts overnight from v0.3.10 **only if** v0.3.10's look-back pay is helping (the owner's evening call), behind a gate at
+*2026-10-22: **built and tested** (branch `v0311`, `b0974cf`). Starts overnight from v0.3.10 **only if** v0.3.10's look-back pay is helping (the owner's evening call), behind a gate at
 update 10. If it flops: back to v0.3.10 in the morning.*
 
 **Marks:** ✅ built and proven identical with its switch off · ⏳ building · 🧪 from the calibration · ❓ owner's decision · ⏸ later
@@ -26,12 +25,12 @@ update 10. If it flops: back to v0.3.10 in the morning.*
 
 | Part | Detail | State |
 |---|---|---|
-| **1. His running estimate** (new outputs: guesses, not actions) | the enemy's **position** with an **uncertainty** (a spread: how sure he is), his **speed and direction**, his **stack** (health + armor in bands), the **weapons he owns**, the **weapon in his hand** | ⏳ |
-| **2. Taught directly** | each guess is graded against the truth every frame (the guessing game's machinery, revived): this is what makes his memory keep the record. Small weight into the shared layers, rising over the first hour (in 2026-10-12's test eight questions pulled ~5× as hard as four: the warm-up and a small weight guard against it) | ⏳ |
-| **3. The knowledge pay** (zero-sum, every 0.5 s) | each side's estimate scored against the truth with a score that grades the uncertainty too: **confidently right scores best, confidently wrong worst, honestly unsure in between** (the "weighted by uncertainty" part). Pay = k × (his score − the enemy's score) | ⏳ |
-| Size k | set so that tracking clearly better than the enemy is worth about as much as the pre-aim pay over a minute (~0.1–0.3 a player-minute) | 🧪 |
-| The score's spread scale | from the pros' demos: how far an unseen opponent moves in t seconds (the honest uncertainty a good tracker should hold) | 🧪 |
-| Where it's computed | in the trainer, from his estimate outputs and the truth columns the simulator writes (the simulator never sees his guesses) | ⏳ |
+| **1. His running estimate** (new outputs: guesses, not actions) | the enemy's **position** with an **uncertainty** (a spread: how sure he is), his **speed and direction**, his **stack** (health + armor in bands), the **weapons he owns**, the **weapon in his hand** | ✅ |
+| **2. Taught directly** | each guess is graded against the truth every frame (the guessing game's machinery, revived): this is what makes his memory keep the record. Small weight into the shared layers, rising over the first hour (in 2026-10-12's test eight questions pulled ~5× as hard as four: the warm-up and a small weight guard against it) | ✅ |
+| **3. The knowledge pay** (zero-sum, every 0.5 s) | each side's estimate scored against the truth with a score that grades the uncertainty too: **confidently right scores best, confidently wrong worst, honestly unsure in between** (the "weighted by uncertainty" part). Pay = k × (his score − the enemy's score) | ✅ |
+| Size k | set so that tracking clearly better than the enemy is worth about as much as the pre-aim pay over a minute (~0.1–0.3 a player-minute) | ✅ |
+| The score's spread scale | from the pros' demos: how far an unseen opponent moves in t seconds (the honest uncertainty a good tracker should hold) | ✅ |
+| Where it's computed | in the trainer, from his estimate outputs and the truth columns the simulator writes (the simulator never sees his guesses) | ✅ |
 | Fairness | the truth is used only to grade and pay; his inputs stay what he perceives | – |
 
 ## What the zero-sum makes him learn (the equilibrium)
@@ -56,11 +55,16 @@ fights).
 | **Gate**: update 10 against v0.3.10's end (fair: both at aim 4) | the watcher; if under 45%: back to v0.3.10 (❓ automatic on the owner's yes before he sleeps) |
 | Every 20 updates: v0.3.10's end and the control (v0.3.6's end, the public server's network) in turn | the watcher |
 
-## Calibration from the pro demos (filled in when the build reports)
+## Calibration (built 2026-10-22, code `b0974cf` on `v0311`; design notes `docs/v0.3.11/INFO_PAY.md` on that branch)
 
 | | |
 |---|---|
-| An unseen opponent's displacement against time unseen | 🧪 |
-| Simple trackers' error (last seen; last seen + heading; heading to the nearest likely item) | 🧪 |
-| His hand-built belief inputs' error now (v0.3.9) | 🧪 |
-| What the demos show of an unseen opponent's stack and weapons changing | 🧪 |
+| Pro demos | 1,043 duels with both players' recordings (~10,300 player-minutes), mostly Blood Run, Aerowalk, Lost World |
+| An unseen opponent's spread (per axis) against time unseen | 122 u (0–0.5 s) → 339 (1–2 s) → 478 (3–5 s) → 605 (10–15 s), levels off ~620 (a map's size) |
+| How often the opponent is unknown | 76% by sight alone, 63% with hearing (most of it within 2 s of a sound) |
+| Simple trackers, median error while unknown (sight + hearing) | last known place 229 u; + 1 s of velocity 204; **the pros' movement pattern 143**; a blind guess 585 |
+| Bobby now (v0.3.9 self-play) | his hand-built belief inputs **410 u** (89 u at 0–0.5 s → 727 at 7.5–10 s); his memory's old guess 577 u; his stack belief 47 points off |
+| Stack and weapon | knowing the last stack band and the weapon in hand are worth a lot (0.95 and 0.79 nats over the prior); owned weapons barely change while unseen |
+| Pay size k = 0.002 | a pattern-level tracker beats a last-known one by ~0.16 a player-minute (the pre-aim pay's scale); two equal trackers' noise ~0.5 a minute, zero mean |
+| Size | +0.14 M weights (~7% of 1.97 M), dropped at export: the servers' bot unchanged |
+| Tests | off = identical (simulator and trainer, to the bit); conversion of v0.3.9 identical in play; 18/18 unit checks; CPU trial runs: pay sums to exactly 0, the readout learns (weapon in hand, stack band, place 245 → 167 u in view) |
