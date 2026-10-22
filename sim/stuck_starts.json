@@ -1,0 +1,8 @@
+[
+ {"map": "furiousheights", "name": "under the yellow armor ledge", "start": [-1135, 1118, 47], "yaw": 0, "goal": "YA2", "jitter": 24,
+  "why": "30% of his stuck time in real games (2026-10-20): jumps over and over pressed against a 66 u ledge"},
+ {"map": "bloodrun", "name": "the dip before the yellow armor", "start": [440, 278, 480], "yaw": 180, "goal": "YA", "jitter": 24,
+  "why": "runs down into the dip, stops, backs up (pros' gap 26: he makes it 20% in games, people 68%)"},
+ {"map": "toxicity", "name": "the slime pit corner", "start": [-1329, 1955, 972], "yaw": 70, "goal": "RG", "jitter": 16,
+  "why": "pushes into the corner taking ~9 hp/s; the way out is east or south-east"}
+]

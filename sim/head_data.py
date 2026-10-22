@@ -1164,7 +1164,7 @@ def belief_cols(E):
     """the input columns of v0.2's belief: believes, where (forward, left, up: x 3), how old (the trainer's BEL_IX)"""
     if getattr(E, "N_V02", 0) <= 0:
         return None
-    o_ = E.OBS_DIM - getattr(E, "N_EMG", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_RAIM", 0) - getattr(E, "N_B3", 0) - getattr(E, "N_B2", 0) - getattr(E, "N_ES", 0) - E.N_V02 + E.V02_GAME + E.V02_POS
+    o_ = E.OBS_DIM - getattr(E, "N_DRIFT", 0) - getattr(E, "N_EMG", 0) - getattr(E, "N_PREF", 0) - getattr(E, "N_RAIM", 0) - getattr(E, "N_B3", 0) - getattr(E, "N_B2", 0) - getattr(E, "N_ES", 0) - E.N_V02 + E.V02_GAME + E.V02_POS
     return np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
 
 

@@ -153,7 +153,7 @@ def hand():
             o_ = env.observe()
         return o_
     o = see(True, 12)
-    k = E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG
+    k = E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG - getattr(E, "N_DRIFT", 0)
     KP = k + E.N_RAIM + E.N_PREF                               # (the pre-fire inputs: k + N_RAIM to KP)
     ra = o[0, k:k + E.N_RAIM]
     s = env.state

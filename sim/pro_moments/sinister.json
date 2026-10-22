@@ -1,0 +1,145 @@
+{
+ "respawn_seen": {
+  "GL": {
+   "n": 570,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 26.927000000000007
+  },
+  "LG": {
+   "n": 1319,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 39.45000000000001
+  },
+  "MH": {
+   "n": 1811,
+   "median": 34.98,
+   "p10": 34.97,
+   "p90": 34.98
+  },
+  "PG": {
+   "n": 284,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 4.98
+  },
+  "RA": {
+   "n": 2465,
+   "median": 24.98,
+   "p10": 24.97,
+   "p90": 49.97
+  },
+  "RG": {
+   "n": 1554,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 31.979000000000003
+  },
+  "RL": {
+   "n": 2703,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 41.49000000000001
+  },
+  "SG": {
+   "n": 581,
+   "median": 4.98,
+   "p10": 4.97,
+   "p90": 12.12
+  },
+  "YA": {
+   "n": 3155,
+   "median": 24.98,
+   "p10": 24.97,
+   "p90": 54.442
+  },
+  "ammo_bullets": {
+   "n": 28,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "ammo_cells": {
+   "n": 11,
+   "median": 39.97,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "ammo_lightning": {
+   "n": 135,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "ammo_rockets": {
+   "n": 17,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 40.047999999999995
+  },
+  "ammo_shells": {
+   "n": 20,
+   "median": 39.98,
+   "p10": 39.97,
+   "p90": 39.98
+  },
+  "item_armor_shard": {
+   "n": 4020,
+   "median": 24.9,
+   "p10": 24.85,
+   "p90": 25.23
+  },
+  "item_health": {
+   "n": 1511,
+   "median": 34.98,
+   "p10": 34.97,
+   "p90": 34.98
+  },
+  "item_health_large": {
+   "n": 236,
+   "median": 34.98,
+   "p10": 34.97,
+   "p90": 35.04
+  },
+  "item_health_small": {
+   "n": 2801,
+   "median": 34.9,
+   "p10": 34.83,
+   "p90": 34.98
+  }
+ },
+ "map": "sinister",
+ "version": 1,
+ "moments": 5000,
+ "every": 4.0,
+ "life": 2.0,
+ "demos": 150,
+ "counts": {
+  "demo items without a simulator item": 225,
+  "simulator items never seen (taken as there)": 0,
+  "item frames sent outside the PVS": 244671,
+  "item frames sent in the PVS": 44964449,
+  "exact takes": 34342,
+  "unknown windows": 674,
+  "takes worked out": 3527,
+  "pain heard: in its band": 4950,
+  "pain heard: over its band": 2117,
+  "pain heard: the worked-out health under its band": 1446,
+  "frames looked at": 18624,
+  "moments": 12939,
+  "a big item's state not known": 2335,
+  "the enemy not sent": 953,
+  "within the seconds after a respawn": 704,
+  "a teleporter step": 1251,
+  "a cut near": 87,
+  "demos": 150,
+  "demos with moments": 145,
+  "a place the simulator does not hold": 276,
+  "his player dead": 73,
+  "the two within 48 units": 6,
+  "no game": 4,
+  "layout: a big item not matched": 1
+ },
+ "seconds": 248
+}

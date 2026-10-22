@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import time
 import zipfile
@@ -50,18 +51,42 @@ AUTOHOP = os.environ.get("BOBBY_AUTOHOP", "0") not in ("", "0")
 _autohop_next = {}
 
 
-def give_autohop(p, now, log=None):
-    """put cg_autoHop 1 in a Bobby's userinfo (at most every 10 s a player), when BOBBY_AUTOHOP is on"""
-    if not AUTOHOP or p is None or now < _autohop_next.get(p.id, 0.0):
+_autohop_said = set()
+
+
+def autohop_want(P):
+    """(v0.3.7) the auto-hop a network was trained with: its policy.npz's env_vars AUTO_HOP (sim/export_duel.py writes it
+    into every file from v0.3.7 on) -> True / False; None for an older file that does not say (BOBBY_AUTOHOP decides)"""
+    try:
+        ev_ = json.loads(str(P["env_vars"])) if P is not None and "env_vars" in P else {}
+    except Exception:  # noqa: BLE001
+        return None
+    if "AUTO_HOP" not in ev_:
+        return None
+    return str(ev_["AUTO_HOP"]).strip() not in ("0", "", "0.0")
+
+
+def give_autohop(p, now, log=None, want=None):
+    """put cg_autoHop in a Bobby's userinfo (at most every 10 s a player): want True / False, the network's own setting
+    (autohop_want: a server cannot play him with another than he trained with; BOBBY_AUTOHOP is overruled, and said so
+    once); want None (an older file), cg_autoHop 1 when BOBBY_AUTOHOP is on, as before"""
+    if want is None and not AUTOHOP:
+        return
+    if p is None or now < _autohop_next.get(p.id, 0.0):
         return
     _autohop_next[p.id] = now + 10.0
+    val = "1" if (AUTOHOP if want is None else want) else "0"
+    if want is not None and "BOBBY_AUTOHOP" in os.environ and bool(want) != AUTOHOP and "said" not in _autohop_said:
+        _autohop_said.add("said")
+        if log:
+            log("BOBBY_AUTOHOP={} overruled: the network was trained with AUTO_HOP={}".format(os.environ["BOBBY_AUTOHOP"], val))
     try:
         cv = p.cvars
-        if str(cv.get("cg_autoHop", "")) != "1":
-            cv["cg_autoHop"] = "1"
+        if str(cv.get("cg_autoHop", "")) != val:
+            cv["cg_autoHop"] = val
             p.cvars = cv
             if log:
-                log("cg_autoHop 1 given to client {}".format(p.id))
+                log("cg_autoHop {} given to client {}".format(val, p.id))
     except Exception:  # noqa: BLE001
         pass
 D = "/tmp/practice"
@@ -205,6 +230,8 @@ class duelbot(minqlx.Plugin):
         self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
+        self.add_command("aim", self.cmd_aim, 0, usage="[3|4|5|max]")
+        self.aim_want = None                                 # (!aim) the level asked for, put in at the next warmup
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
@@ -404,10 +431,15 @@ class duelbot(minqlx.Plugin):
     # the second line a person reads on joining (owner, 2026-10-09: a word about !bots; 2026-10-16: one line for both modes)
     WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2!mode <ffa|duel>^7, ^2!bots <0,1,2,3>^7 ^6(FFA only)^7"
 
+    AIM_WELCOME = ("^3My aim:^7 ^2!aim 3^7 easier, ^2!aim 4^7 normal ^6(default)^7, ^2!aim 5^7 sharp, "
+                   "^2!aim max^7 no human limits")
+
     def on_player_loaded(self, player):
         if not is_bot(player):
             player.tell("^3I'm ^5BobbyBones^3, the learning Quake bot.^7 Here's some commands")
             player.tell(self.WELCOME)
+            if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
+                player.tell(self.AIM_WELCOME)
             lad = minqlx.Plugin._loaded_plugins.get("ladder")
             if lad is not None:                              # owner, 2026-10-09: "see how I rank on the leaderboard"
                 for line in (lad.welcome_lines(player) if hasattr(lad, "welcome_lines") else [lad.WELCOME]):
@@ -1090,6 +1122,8 @@ class duelbot(minqlx.Plugin):
             env.v02_loud = (env.v02_loud * (1.0 - E.DT / E.V02_LOUD_T)).astype(np.float32)
         if getattr(E, "EN_STACK", False) and hasattr(env, "_es_update"):
             env._es_update()                                 # (B-257) the belief of the enemy's stack goes on too
+        if getattr(E, "DRIFT_IN", False) and hasattr(env, "drift_clear"):
+            env.drift_clear()                                # (DRIFT_IN) a frame with no picture: no rate across it
 
     def time_note(self, total):
         """DUEL_TIMING=1: the plugin's time for a frame on which the network ran: the whole frame hook, of it building
@@ -1205,8 +1239,29 @@ class duelbot(minqlx.Plugin):
         live_ = {m_[0] for m_ in ms}
         for num_ in [n_ for n_ in born if n_ not in live_]:
             del born[num_]
+        pf_ = getattr(E, "PROJ_FIX", False)
+        if pf_ and not hasattr(self, "pf_slots"):
+            self.pf_slots = {}
         for slot, owner in enumerate(ids):
             k = 0
+            if pf_:                                          # (PROJ_FIX) a projectile keeps its slot while it flies, as in the simulator
+                prev_ = self.pf_slots.get((id(env), slot), {})
+                mine_ = [m_ for m_ in ms if m_[1] == owner and m_[2] in kinds]
+                cur_ = {m_[0]: prev_[m_[0]] for m_ in mine_ if m_[0] in prev_}
+                free_ = [q_ for q_ in range(E.K) if q_ not in cur_.values()]
+                for m_ in mine_:
+                    if m_[0] not in cur_ and free_:
+                        cur_[m_[0]] = free_.pop(0)
+                self.pf_slots[(id(env), slot)] = cur_
+                for num, own, weapon, x, y, z, vx, vy, vz in mine_:
+                    if num in cur_:
+                        k_ = cur_[num]
+                        env.rp[slot, k_], env.rv[slot, k_], env.ra[slot, k_] = (x, y, z), (vx, vy, vz), True
+                        if hasattr(env, "rw"):
+                            env.rw[slot, k_] = kinds[weapon]
+                        if hasattr(env, "rage"):
+                            env.rage[slot, k_] = now_ - born.setdefault(num, now_)
+                continue
             for num, own, weapon, x, y, z, vx, vy, vz in ms:
                 if own == owner and weapon in kinds and k < E.K:
                     env.rp[slot, k] = (x, y, z)
@@ -1254,6 +1309,8 @@ class duelbot(minqlx.Plugin):
                 env.drop_pos[0, j] = p_
                 env.drop_w[0, j] = w_
                 env.drop_t[0, j] = t_
+                if hasattr(env, "drop_kn"):                  # (SENSE_MINOR) in a duel both know of the death that left it
+                    env.drop_kn[:, j] = True
         return taken
 
     @staticmethod
@@ -1274,6 +1331,13 @@ class duelbot(minqlx.Plugin):
             vis[cand] = env._los(eye[cand], s[opp[cand], :3] + np.array([0, 0, 8.0], np.float32))
         env.visible = vis
         heard = (~vis) & alive & (dist < E.HEAR) & (np.hypot(s[opp, 3], s[opp, 4]) > 250)
+        hf_ = getattr(E, "HEAR_FIX", False)
+        if hf_:                                              # (HEAR_FIX) a footstep or a jump of his on this frame, where the
+            heard = (~vis) & alive & (dist < E.HEAR) & env.hf_ev[opp]     # game sends it (as step())
+            if getattr(E, "HEAR_QL", False):
+                heard &= env._hear_ok(np.arange(n), opp)
+        if getattr(E, "LG_DEAF", False):                     # (LG_DEAF) his own lightning gun muffles the footsteps (as step())
+            heard &= dist < env._lgd_hear_reach(np.arange(n), opp)
         if hasattr(env, "vis_run"):                          # newer rules: an enemy is noticed only after a moment in view
             need_ = max(1, env.acquire_frames - env.react_frames)
             if getattr(E, "SURPRISE_MS", 0) > 0 and hasattr(env, "acq_extra"):    # off the crosshair and unexpected: noticed later (as in training)
@@ -1284,7 +1348,12 @@ class duelbot(minqlx.Plugin):
             vis = vis & (env.vis_run >= need_)
             env.acquired = vis
         env.known[vis] = s[opp[vis], :3]
-        if heard.any():
+        if heard.any() and hf_:                              # (HEAR_FIX) placed by the sound, as step() places him
+            if getattr(E, "LG_DEAF", False):                 # (LG_DEAF) a muffled footstep is placed with more error
+                env.known[heard] = env._hf_place(np.nonzero(heard)[0], opp[heard], muff=env._lgd_muff(np.nonzero(heard)[0], opp[heard]))
+            else:
+                env.known[heard] = env._hf_place(np.nonzero(heard)[0], opp[heard])
+        elif heard.any():
             env.known[heard] = s[opp[heard], :3] + env.rng.normal(0, 80, (int(heard.sum()), 3)).astype(np.float32) * \
                 np.array([1, 1, 0], np.float32)
         env.seen_t = np.where(vis | heard, 0.0, env.seen_t + E.DT).astype(np.float32)
@@ -1358,12 +1427,15 @@ class duelbot(minqlx.Plugin):
         nine = hasattr(E, "NW")
         sm = np.where(np.abs(cmd) <= 1.0, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH) if hasattr(E, "MOUSE_SMOOTH_FINE") \
             else E.MOUSE_SMOOTH
+        if getattr(E, "ZOOM_PERCEPT", False):               # (ZOOM_PERCEPT) small in hand terms: 1 degree unzoomed, as in training
+            sm = np.where(np.abs(cmd) <= zs + 1e-6, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH)
         env.mv[i] = sm * env.mv[i] + (1.0 - sm) * cmd
         turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
         if rules2 and env.human_aim:                         # flick cap and hand noise, as in training
             env.mv[i, 0] = np.clip(env.mv[i, 0], -E.TURN_CAP * zs, E.TURN_CAP * zs)
-            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(env.mv[i]) + E.MOTOR_BASE * zs)
-            turn, dpit = float(env.mv[i, 0] + jit[0]), float(env.mv[i, 1] + jit[1])
+            v_ = env._hand_band(np.arange(env.n) == i)[i] if getattr(E, "HAND_BAND", False) else env.mv[i]   # (HAND_BAND) as in training
+            jit = self.rng.normal(0, 1, 2) * (E.MOTOR_NOISE * np.abs(v_) + E.MOTOR_BASE * zs)
+            turn, dpit = float(v_[0] + jit[0]), float(v_[1] + jit[1])
         if rules2 and hasattr(env, "pad_turn"):               # the mouse pad: an edge, and lifting the mouse, as in training
             full = lambda v, t=np.float32: np.full(env.n, v, t)      # noqa: E731
             t_, p_ = env.pad_turn(full(turn), full(dpit), full(len(a) > 9 and a[9] == 1, bool), full(zs),
@@ -1419,7 +1491,10 @@ class duelbot(minqlx.Plugin):
         press = fire and (ready or not (rules2 and refire[w] >= 0.4))
         if hasattr(env, "fire_q"):                           # the simulator's shot leaves one frame after the command
             self.press_q = getattr(self, "press_q", {})
-            if getattr(E, "RL_QL", False) and w == getattr(E, "RL", -1):
+            rl_ = w == getattr(E, "RL", -1)
+            if (getattr(E, "RL_QL", False) and rl_) or (getattr(E, "FIRE_QL", False) and not rl_):
+                # (FIRE_QL) the same for every other weapon (rail, lightning, machine guns, shotgun, gauntlet, plasma,
+                # grenades): the game fires on the command's frame, as the simulator does with the switch on.
                 # (RL_QL, B-268) a rocket leaves on the command's frame, as in the simulator since v0.3.1: pressed now, no
                 # hold. A press held from the frame before was for another weapon (the simulator fires it with that one);
                 # here it would go out with the rocket launcher, so it is dropped (on a switch frame the game would only
@@ -1429,6 +1504,88 @@ class duelbot(minqlx.Plugin):
                 press, self.press_q[(id(env), i)] = self.press_q.get((id(env), i), False), press
         minqlx.set_bot_input(p.id, fwd, side, jump, 1 if press else 0, QLNUM[names[w]], pitch, yaw)
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
+
+    # ------------------------------------------------------------------ !aim (owner, 2026-10-21)
+    # !aim 3|4|5|max sets his aim for the next game: the data folder holds one export per level (policy_l3.npz,
+    # policy_l4.npz, policy_l5.npz, policy_max.npz: the same network, AIM_LEVEL and the aim delays in env_vars changed),
+    # and the chosen one is copied over policy.npz and loaded at once when no game runs (warmup), else at the next
+    # warmup (a game in progress, its countdown, its end and the next map's load keep the aim they started with).
+    AIM_FILES = {"3": "policy_l3.npz", "4": "policy_l4.npz", "5": "policy_l5.npz", "max": "policy_max.npz"}
+
+    def aim_level(self):
+        """the aim level of the network loaded: "3", "4", "5", "max" (AIM_LEVEL in its env_vars; 40 is max)"""
+        try:
+            v = float(json.loads(str(self.P["env_vars"])).get("AIM_LEVEL", 3))
+        except Exception:                                    # noqa: BLE001 - no network loaded yet
+            return "?"
+        return "max" if v > 9 else "{:g}".format(v)
+
+    def aim_busy(self):
+        """a game (or its countdown or end), a test room, a timed duel or a map load: the aim stays as it is for now"""
+        try:
+            st = self.game.state if self.game is not None else None
+        except Exception:                                    # noqa: BLE001
+            st = None
+        return (not self.ready or st != "warmup" or self.real_game or bool(getattr(self, "go_f3", 0.0)) or self.after_game()
+                or self.room is not None or bool(self.queue) or bool(self.arena))
+
+    def aim_apply(self, level):
+        """copy the level's export over policy.npz and load it (setup(), as the hot reload does)"""
+        src, dst = os.path.join(D, self.AIM_FILES[level]), os.path.join(D, "policy.npz")
+        tmp = dst + ".aim.tmp"
+        shutil.copyfile(src, tmp)
+        os.replace(tmp, dst)
+        self.aim_want = None
+        self.end_session()
+        self.setup()
+        self.log("aim level {} loaded ({})".format(level, self.AIM_FILES[level]))
+
+    def cmd_aim(self, player, msg, channel):
+        """!aim: the aim level now (and the one asked for the next game). !aim 3|4|5|max: that level from the next game
+        (at once when no game runs)"""
+        cur = self.aim_level()
+        if len(msg) < 2:
+            want = self.aim_want if self.aim_want and self.aim_want != cur else None
+            player.tell("^3Aim level^7 ^2{}^7{} (^2!aim 3|4|5|max^7 to change)".format(
+                cur, ", ^2{}^7 from the next game".format(want) if want else ""))
+            return
+        lv = msg[1].lower().strip()
+        if lv not in self.AIM_FILES:
+            player.tell("^3Aim levels:^7 ^2!aim 3^7 easier, ^2!aim 4^7 normal, ^2!aim 5^7 sharp, ^2!aim max^7 no human limits")
+            return
+        if not os.path.exists(os.path.join(D, self.AIM_FILES[lv])):
+            player.tell("^3Aim {} is not on this server.^7".format(lv))
+            return
+        if lv == cur:
+            self.aim_want = None
+            self.msg("^3Aim level^7 ^2{}^7 stays.".format(lv))
+            return
+        if self.aim_busy():
+            self.aim_want = lv
+            self.msg("^3Aim level^7 ^2{}^7 from the next game (this one stays at ^2{}^7).".format(lv, cur))
+            return
+        try:
+            self.aim_apply(lv)
+            self.msg("^3Aim level now^7 ^2{}^7.".format(self.aim_level()))
+        except Exception as e:                               # noqa: BLE001
+            self.log("aim {}: {!r}".format(lv, e))
+            player.tell("^3Aim could not be changed.^7")
+
+    def aim_frame(self, now):
+        """a level asked for during a game goes in at the next warmup"""
+        if not self.aim_want or now < getattr(self, "aim_check", 0.0):
+            return
+        self.aim_check = now + 2.0
+        if self.aim_want == self.aim_level():
+            self.aim_want = None
+        elif not self.aim_busy():
+            lv = self.aim_want
+            try:
+                self.aim_apply(lv)
+                self.msg("^3Aim level now^7 ^2{}^7.".format(self.aim_level()))
+            except Exception as e:                           # noqa: BLE001
+                self.aim_want = None
+                self.log("aim {}: {!r}".format(lv, e))
 
     # ------------------------------------------------------------------ frame
     def on_frame(self):
@@ -1480,6 +1637,7 @@ class duelbot(minqlx.Plugin):
                         self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
+        self.aim_frame(now)
         bobby, human, filler = self.cast()
         real_human = human is not None and not is_bot(human)
         if real_human:
@@ -1509,7 +1667,7 @@ class duelbot(minqlx.Plugin):
                 self.next_check = now + 5
                 minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
             return
-        give_autohop(bobby, now, self.log)
+        give_autohop(bobby, now, self.log, want=autohop_want(getattr(self, "P", None)))
         if human is not None and filler is not None:
             if now > self.next_check:
                 self.next_check = now + 5
@@ -1571,9 +1729,15 @@ class duelbot(minqlx.Plugin):
                         self.head_clear()                    # older runs: memory per life. Newer: kept for the session
                     for env in (self.env, self.renv):
                         env.mv[:] = 0
+                        if hasattr(env, "hb"):
+                            env.hb[:] = 0                    # (HAND_BAND) the view's velocity too
                         env.cool[:] = 0
                         env.seen_t[:] = 9.0
                         env.opp_hist = []
+                        if hasattr(env, "drift_clear"):
+                            env.drift_clear()                # (DRIFT_IN) no rate from the life before
+                        if hasattr(env, "proj_clear"):
+                            env.proj_clear()                 # (PROJ_FIX) nothing followed from the life before
                     minqlx.set_bot_substeps(bobby.id, 3)
             if was and not up:
                 other = "opp" if who == "bobby" else "bobby"
@@ -1654,6 +1818,10 @@ class duelbot(minqlx.Plugin):
             gr_ = st_[:, 6] > 0.5
             noisy = gr_ & (np.hypot(st_[:, 3], st_[:, 4]) > 200.0)
             ofire_ = bool(minqlx.ran_usercmd(opp.id)[1] & 1) and int(os_.weapon) != QLNUM["g"]
+            lgd_ = getattr(E, "LG_DEAF", False)
+            if lgd_:                                         # (LG_DEAF) the trigger held on the LG (the game's weapon in hand, the command
+                env.lgd_fire[0] = bool(minqlx.ran_usercmd(bobby.id)[1] & 1) and int(bs.weapon) == QLNUM["lg"]    # that ran), before
+                env.lgd_fire[1] = ofire_ and int(os_.weapon) == QLNUM["lg"]                                    # anything is heard
             if hasattr(env, "note_noise"):
                 # (v0.2) The noise of this frame as the simulator's step() has it, for both players in one call each:
                 # a shot with anything but the gauntlet, a jump or a landing, a frame of running steps (not crouched).
@@ -1665,8 +1833,15 @@ class duelbot(minqlx.Plugin):
                 steps_ = noisy & ~env.duck
                 shot_ = np.array([bool(self.shot_made.get((id(env), 0), False)), ofire_], bool)
                 heard_ = shot_ | hop_ | steps_
+                foot_ = None
+                if getattr(E, "HEAR_FIX", False):            # (HEAR_FIX) footsteps as events, as step() makes them
+                    foot_ = env._hf_steps(gr_, gr_ if was_ is None else was_, st_[:, 3:6], env.duck, env.hp > 0)
+                    heard_ = shot_ | hop_ | foot_
                 heard_[0] = False
-                env.hear(heard_)
+                if lgd_ and foot_ is not None:               # (LG_DEAF) the footsteps alone, for the muffling (as step())
+                    env.hear(heard_, foot=foot_ & ~(shot_ | hop_))
+                else:
+                    env.hear(heard_)
                 env.note_noise(shot_, hop_, steps_)
             else:
                 noisy[1] |= ofire_
@@ -1785,7 +1960,8 @@ class duelbot(minqlx.Plugin):
                 env.note_hit(0, took)                        # being shot at throws his aim off for a moment
             if hasattr(env, "pain_t"):                       # the opponent's pain sound, by his health after the hit
                 env.pain_t += E.DT                           # (EN_STACK: after any hurt the game plays it for, his own splash and falls too, as step())
-                near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < E.HEAR_EVT
+                near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < \
+                    (float(env._evt_reach(0)) if getattr(E, "LG_DEAF", False) else E.HEAR_EVT)     # (LG_DEAF: firing the LG, 1,000 at most)
                 if (dealt > 0 or (es_ and dmg.get("opp", 0) > 0)) and os_.health > 0 and near_:
                     env.pain_t[0], env.pain_b[0] = 0.0, min(3, int(os_.health) // 25)
         if getattr(E, "HEAD_EVENTS", False):                 # (v0.4) the frame in the head's books: what he dealt by the game's count of his
@@ -1903,6 +2079,8 @@ class duelbot(minqlx.Plugin):
                     minqlx.set_view(human.id, 0.0, face)
                     minqlx.set_bot_input(bobby.id, 0, 0, 0, 0, 0, 0.0, float(self.rng.uniform(-180, 180)))
                     env.mv[:] = 0
+                    if hasattr(env, "hb"):
+                        env.hb[:] = 0                        # (HAND_BAND) the view's velocity too
                     return True
         return False
 
@@ -2009,6 +2187,8 @@ class duelbot(minqlx.Plugin):
             r["home"], r["zone"] = [float(v) for v in spots[i]], [b[0] + 48, b[1] + 48, b[2] - 48, b[3] - 48]
             r["hard"] = [b[0] - 64, b[1] - 64, b[2] + 64, b[3] + 64]
         self.renv.mv[:] = 0
+        if hasattr(self.renv, "hb"):
+            self.renv.hb[:] = 0
 
     def lab_keep(self, p, pos, human=False):
         """fights: a player who respawned elsewhere on the lab map is moved back into the environment box"""
@@ -2251,6 +2431,8 @@ class duelbot(minqlx.Plugin):
                 self.put(human, pk["subject"], pk["yaw"], human=True)
                 self.put(bobby, pk["target"], pk["target_yaw"])
                 env.mv[:] = 0
+                if hasattr(env, "hb"):
+                    env.hb[:] = 0                            # (HAND_BAND) the view's velocity too
             b_ = pk["bounds"]
             if not (b_[0] <= hpos[0] <= b_[2] and b_[1] <= hpos[1] <= b_[3]) and hs.health > 0:
                 self.put(human, pk["subject"], pk["yaw"], human=True)

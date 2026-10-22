@@ -111,6 +111,31 @@ def voice(p):
     return None
 
 
+def aim_level():
+    """BobbyBones's aim level on a 1v1 server ("3", "4", "5", "max"), None elsewhere (plugins/duelbot.py, !aim)"""
+    pl = minqlx.Plugin._loaded_plugins.get("duelbot")
+    try:
+        lv = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else None
+    except Exception:                                        # noqa: BLE001
+        lv = None
+    return lv if lv in ("3", "4", "5", "max") else None
+
+
+def aim_gg_line(level, person, bobby):
+    """after a full duel: what BobbyBones says about his aim, by the result (owner's wording, 2026-10-21); None on a draw"""
+    if level is None or person == bobby:
+        return None
+    if person > bobby:
+        if level in ("3", "4"):
+            return "Too easy at aim {}? Try ^2!aim {}^7 next game".format(level, int(level) + 1)
+        if level == "5":
+            return "You beat aim 5. Think you can take ^2!aim max^7?"
+        return "You beat me at max aim. Respect."
+    if level == "3":
+        return "That's my easiest aim. Rematch?"
+    return "Want a closer game? Try ^2!aim 3^7"
+
+
 def clean(s):
     return str(s).replace('"', "").replace(";", "").replace("%", "").replace("\n", " ")[:24]
 
@@ -210,6 +235,10 @@ class banter(minqlx.Plugin):
             if voice(p) is not None and p.team != "spectator":
                 self.say(p.id, self.rng.choice(GLHF), delay)
                 delay += 0.8 + self.rng.random()
+                lv = aim_level() if voice(p) == 0 else None  # (!aim, owner, 2026-10-21) BobbyBones says his aim level
+                if lv:
+                    self.say(p.id, "Aim level ^2{}^7 (^2!aim 3|4|5|max^7 to change)".format(lv), delay)
+                    delay += 0.8 + self.rng.random()
 
     # ------------------------------------------------------------------ a game's end
     def on_game_end(self, data):
@@ -229,6 +258,14 @@ class banter(minqlx.Plugin):
             if voice(p) == 0 and lad is not None and time.time() - getattr(lad, "full_duel_t", 0.0) < 10.0:   # rating and record
                 try:
                     for line_ in lad.end_lines():            # (one chat line each: a long one is cut off)
+                        self.say(p.id, line_, delay)
+                        delay += 1.2 + self.rng.random()
+                except Exception:                            # noqa: BLE001
+                    pass
+                try:                                         # (!aim, owner, 2026-10-21) a line by the result and his aim
+                    people = [q for q in table if not is_bot(q)]
+                    line_ = aim_gg_line(aim_level(), people[0].stats.score, p.stats.score) if len(people) == 1 else None
+                    if line_:
                         self.say(p.id, line_, delay)
                         delay += 1.2 + self.rng.random()
                 except Exception:                            # noqa: BLE001
