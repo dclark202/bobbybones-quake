@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-23](results/2026-10-23.md)
 
+- 14:30 — v0.4.0b (zones, speed + direction) passed; v0.4.1 connected the brain at 12:15; the pros' decision report; the public servers moved
 - 06:00 — v0.4.0 overnight: the hands at 55-57% against v0.3.10's end, the brain past the old belief everywhere, no gradient into the hands
 - 00:30 — Watching the right spot before a sighting makes the good pre-aims, but the watching pay barely built the habit
 
