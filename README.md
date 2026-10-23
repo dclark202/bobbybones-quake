@@ -12,6 +12,8 @@ Quake Live servers:
 - `Duel BobbyBones the self taught Quake bot | US Chicago` (`193.239.237.127:27970`)
 - `Duel BobbyBones the self taught Quake bot | EU Frankfurt` (`45.140.42.214:27970`)
 
+We keep a local elo rating to track the bot's skill. See the [leaderboard](https://dclark202.github.io/bobbybones-leaderboard/) 
+
 ## Via a local install
 
 The networks that have played on the public server are released as open weights, one
