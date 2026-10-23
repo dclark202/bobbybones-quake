@@ -36,9 +36,17 @@ qlstats.jsonl (every answer, appended). The Steam id is in the request and nowhe
 (an error is kept by its class name only: its text and the address hold the id). "!qlstats off" drops a person's stored
 answers and stops the lookups for him (qlstats_off.json, by key).
 
+One board for both public servers (owner, 2026-10-23; plugins/ratings.py has the scheme): a server that knows its name
+(LADDER_SRV, or one word in srv.txt in the data folder, e.g. "us") tags its frag and duel lines with it ("srv") and plays
+on board.json, the shared board that tools/board_merge.py writes into its data folder every few minutes, plus its own
+lines after the board's "upto" mark for it. The plugin never writes board.json; it looks for a new one every 30 s and at
+a map change. Without a name, or without a board that names this server, it is the local board it always was
+(ratings.json). ratings.json is still written: this server's view (the board and its own frags since).
+
 Load with QLX_PLUGINS="botctl, banlist, ladder, botmode, <duelbot|ffabot>". LADDER_TEST=1 (tests without a person) counts
 the second Bobby of a free-for-all as a person.
 """
+import copy
 import hashlib
 import importlib
 import json
@@ -57,6 +65,26 @@ except Exception:                                           # noqa: BLE001 - loa
 D = os.environ.get("LADDER_DIR", "/tmp/practice")
 TEST = bool(os.environ.get("LADDER_TEST"))
 TOP = 8
+PAGE = "dclark202.github.io/bobbybones-leaderboard"          # the public page of the shared board (published twice a day)
+BOARD_EVERY = 30.0                                           # seconds between looks for a new board.json
+
+
+def server_name():
+    """this server's name on the shared board: LADDER_SRV, else the first word of srv.txt in the data folder; None if
+    neither (a local board)"""
+    import re
+    v = (os.environ.get("LADDER_SRV") or "").strip()
+    if not v:
+        try:
+            with open(os.path.join(D, "srv.txt")) as f:
+                v = (f.read().split() or [""])[0]
+        except OSError:
+            v = ""
+    v = v.lower()
+    return v if re.match(r"^[a-z0-9]{1,8}$", v) else None
+
+
+SRV = server_name()
 
 # ---------------------------------------------------------------------- QLStats (off unless QLSTATS=1)
 QL_ON = os.environ.get("QLSTATS") == "1"
@@ -152,6 +180,10 @@ class ladder(minqlx.Plugin):
     def __init__(self):
         super().__init__()
         self.table = _ra.Table(os.path.join(D, "ratings.json"))
+        self.board, self.board_mt, self.board_up, self.next_board = None, None, {}, 0.0   # the shared board (see the top)
+        self.board_n = dict(loads=0, tail=0)
+        self.board_check()
+        minqlx.console_print("[ladder] board: {}\n".format(self.board_state()))
         self.prev = {}                                       # client id -> (steam id, kills, deaths) last frame
         self.next_save = 0.0
         self.seen = dict(deaths=0, own=0, paired=0, counted=0, unsure=0)   # since the plugin was loaded (see cmd_ladder)
@@ -233,8 +265,54 @@ class ladder(minqlx.Plugin):
             return bobby, "BobbyBones ({})".format(_ra.label(bobby[len(_ra.BOT):]))
         return self.key(p), p.clean_name[:24]
 
+    # ------------------------------------------------------------------ the shared board (several servers; see the top)
+    def board_check(self):
+        """take a new board.json if there is one: the board, then this server's own frags after its mark, in their order.
+        Only a stat of the file when nothing changed; a missing or broken board leaves the table as it is."""
+        if not SRV:
+            return
+        path = os.path.join(D, "board.json")
+        try:
+            mt = os.stat(path).st_mtime_ns
+        except OSError:
+            return
+        if mt == self.board_mt:
+            return
+        self.board_mt = mt
+        b = _ra.load_board(path)
+        up = ((b or {}).get("upto") or {}).get(SRV)
+        if b is None or not isinstance(up, dict):
+            minqlx.console_print("[ladder] board.json {}: the table stays as it is\n".format("broken" if b is None else "does not name this server"))
+            return
+        names = {k: p.get("name") for k, p in self.table.players.items()}     # (names of people new since the board)
+        t = _ra.Table()
+        t.path = self.table.path
+        t.players = copy.deepcopy(b["players"])
+        tail, _ = _ra.read_tail(os.path.join(D, "frags.jsonl"), int(up.get("frags") or 0))
+        _ra.replay(t, tail, names)
+        t.dirty = True
+        self.table, self.board, self.board_up = t, b, up
+        self.board_n["loads"] += 1
+        self.board_n["tail"] = len(tail)
+        self._rec = None
+
+    def board_state(self):
+        if not SRV:
+            return "local (no server name)"
+        if self.board is None:
+            return "server {}, no shared board yet: local".format(SRV)
+        return "server {}, shared board of {} UTC ({} rows, {} frags), {} of this server's frags on top; {} loads".format(
+            SRV, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(float(self.board.get("saved") or 0))),
+            len(self.board["players"]), self.board.get("n_frags", "?"), self.board_n["tail"], self.board_n["loads"])
+
     # ------------------------------------------------------------------ frags
     def on_frame(self):
+        if time.time() > self.next_board:
+            self.next_board = time.time() + BOARD_EVERY
+            try:
+                self.board_check()
+            except Exception as e:                           # noqa: BLE001 - the board is never worth a frame
+                minqlx.console_print("[ladder] board: {}\n".format(type(e).__name__))
         pl = self.bot_plugin()
         if pl is None or getattr(pl, "room", None) is not None:      # no network playing, or a test room (Bobby's body is a scripted target there)
             self.prev = {}
@@ -287,6 +365,8 @@ class ladder(minqlx.Plugin):
                         state=self.game.state if self.game is not None else None,
                         mode=getattr(pl, "FACTORY", "duel"), net=str(pl.P["run"]), killer=a[0], victim=b[0],
                         r=[round(ra["r"], 1), round(rb["r"], 1)])
+            if SRV:
+                line["srv"] = SRV
             person, row = (killer, ra) if b[0] == bobby else (victim, rb)
             if self.is_owner(person):                        # the owner's frags and his row are marked (see the top)
                 line["owner"] = 1
@@ -313,6 +393,10 @@ class ladder(minqlx.Plugin):
         self.prev = {}
         self.duel = None
         self.table.save()
+        try:
+            self.board_check()
+        except Exception as e:                               # noqa: BLE001
+            minqlx.console_print("[ladder] board: {}\n".format(type(e).__name__))
 
     def on_unload(self, plugin):
         self.table.save()
@@ -321,34 +405,35 @@ class ladder(minqlx.Plugin):
     @staticmethod
     def version_of(net):
         """the docs' version name of a run (as sim/export_duel.py: duel_gru_v0_3_1b -> v0.3.1, duel_gru_v15c -> v0.1)"""
-        import re
-        m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", str(net))
-        return "v" + m.group(1).replace("_", ".") if m else "v0.1" if net == "duel_gru_v15c" else str(net)
+        return _ra.version_of(net)
 
     def duel_record(self):
         """(owner, 2026-10-16) Bobby's record in full duel games against people: real games (kind "game"), no forfeits,
-        the owner's games included (owner, 2026-10-16). Returns {version: [won, lost, drawn]} with "all" for every version together."""
+        the owner's games included (owner, 2026-10-16). Returns {version: [won, lost, drawn]} with "all" for every version together.
+        With the shared board: the board's record of every server, and this server's own duels after its mark."""
         path = os.path.join(D, "duels.jsonl")
         try:
             mt = os.path.getmtime(path)
         except OSError:
+            mt = None
+        if mt is None and self.board is None:
             return {"all": [0, 0, 0]}
-        if getattr(self, "_rec", None) and self._rec[0] == mt:
+        if getattr(self, "_rec", None) and self._rec[0] == (mt, self.board_mt):
             return self._rec[1]
-        out = {"all": [0, 0, 0]}
-        with open(path) as f:
-            for line in f:
-                try:
-                    d = json.loads(line)
-                except ValueError:
-                    continue
-                if d.get("kind") != "game" or d.get("forfeit"):
-                    continue
-                p_, b_ = d["score"]
-                k_ = 0 if b_ > p_ else 1 if b_ < p_ else 2
-                for v_ in ("all", self.version_of(d.get("net", ""))):
-                    out.setdefault(v_, [0, 0, 0])[k_] += 1
-        self._rec = (mt, out)
+        if self.board is not None:
+            out = {k: list(v) for k, v in (self.board.get("duels") or {}).items()}
+            out.setdefault("all", [0, 0, 0])
+            lines, _ = _ra.read_tail(path, int(self.board_up.get("duels") or 0))
+        else:
+            out = {"all": [0, 0, 0]}
+            lines, _ = _ra.read_tail(path, 0)
+        for d in lines:
+            k_ = _ra.duel_result(d)
+            if k_ is None:
+                continue
+            for v_ in ("all", self.version_of(d.get("net", ""))):
+                out.setdefault(v_, [0, 0, 0])[k_] += 1
+        self._rec = ((mt, self.board_mt), out)
         return out
 
     @staticmethod
@@ -428,10 +513,13 @@ class ladder(minqlx.Plugin):
                 aim = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else ""
             except Exception:                                # noqa: BLE001
                 aim = ""
+            line = dict(t=round(time.time(), 2), map=(minqlx.get_cvar("mapname") or "").lower(), net=net, key=key,
+                        owner=int(bool(owner)), minutes=round(float(minutes), 2), score=[int(person), int(bobby)],
+                        forfeit=int(bool(forfeit)), kind=kind, aim=str(aim))
+            if SRV:
+                line["srv"] = SRV
             with open(os.path.join(D, "duels.jsonl"), "a") as f:
-                f.write(json.dumps(dict(t=round(time.time(), 2), map=(minqlx.get_cvar("mapname") or "").lower(), net=net, key=key,
-                                        owner=int(bool(owner)), minutes=round(float(minutes), 2), score=[int(person), int(bobby)],
-                                        forfeit=int(bool(forfeit)), kind=kind, aim=str(aim))) + "\n")
+                f.write(json.dumps(line) + "\n")
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
@@ -439,9 +527,13 @@ class ladder(minqlx.Plugin):
     QL_WELCOME = ("I look up your public ^5QLStats^7 rating (your Steam id goes to qlstats.net) to see how strong my "
                   "opponents are. ^2!qlstats off^7 stops it.")
 
+    SHARED_WELCOME = ("^3Both BobbyBones servers (US and EU) share one leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the "
+                      "whole board). Every frag between you and me counts ^6(including warmup)^7")
+    PAGE_LINE = "^3The leaderboard on the web^7 (updated twice a day): ^5" + PAGE
+
     def welcome_lines(self, player):
         """what a person is told about the leaderboard on joining (duelbot.on_player_loaded)"""
-        out = [self.WELCOME]
+        out = [self.SHARED_WELCOME, self.PAGE_LINE] if self.board is not None else [self.WELCOME]
         try:
             rec_ = self.record_line()
             if rec_:
@@ -643,10 +735,13 @@ class ladder(minqlx.Plugin):
             player.tell("^3The board is empty:^7 a person is ranked from {} frags with BobbyBones.".format(_ra.MIN_FRAGS))
             return minqlx.RET_STOP_ALL
         me = None if is_bot(player) else self.key(player)
-        player.tell("^3Leaderboard^7 ({} ranked; every frag between a person and BobbyBones counts):".format(len(rows)))
+        player.tell("^3Leaderboard^7 ({} ranked; every frag between a person and BobbyBones counts{}):".format(
+            len(rows), ", both servers" if self.board is not None else ""))
         for n, (k, p) in enumerate(rows, 1):
             if n <= TOP or k in (bobby, me):
                 player.tell(("^2" if k == bobby else "^5" if k == me else "") + self.line(n, p) + "^7")
+        if self.board is not None:
+            player.tell(self.PAGE_LINE)
         return minqlx.RET_STOP_ALL
 
     def cmd_elo(self, player, msg, channel):
@@ -683,4 +778,5 @@ class ladder(minqlx.Plugin):
         player.tell("ladder since its load: {} deaths seen, {} by his own hand or the map, {} paired with a killer ({} of them counted: "
                     "a person and Bobby), {} left out (more than one frag in a frame); {} rows in the table.".format(
                         s["deaths"], s["own"], s["paired"], s["counted"], s["unsure"], len(self.table.players)))
+        player.tell("board: " + self.board_state())
         return minqlx.RET_STOP_ALL
