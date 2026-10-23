@@ -8,7 +8,9 @@ on a real Quake Live server through a server plugin. All learning is from playin
 
 ## Online
 
-Join server `Duel BobbyBones the self taught Quake bot | US Chicago` in Quake Live (or `connect 64.177.125.38:27970` in the game's console)
+Quake Live servers:
+- `Duel BobbyBones the self taught Quake bot | US Chicago` (`193.239.237.127:27970`)
+- `Duel BobbyBones the self taught Quake bot | EU Frankfurt` (`45.140.42.214:27970`)
 
 ## Via a local install
 
