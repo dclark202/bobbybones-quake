@@ -23,6 +23,7 @@ change at a time. This is the first time the brain can change how he plays.
 | The brain stays honest | no game reward flows back into it: it learns from the truth only (a test proves the gradient is zero) | ❓ |
 | The brain learns more slowly once connected | so the hands are not chasing a moving input; its learning rate live | ❓ |
 | **New readout outputs, added untrained** (not inputs yet) | the zones (odds over ~16–24 map zones + the top two places: a split belief can't be one point); where the enemy will be in 1, 2, 4 s; what he is going for; when he appears; the item race for mega and red (his walking-time lead, the chance the enemy is there at the spawn). Lesson only, **no pay on the future** | ❓ |
+| **The velocity as speed + direction** (owner, 2026-10-22: "speed+direction separately makes sense. Probably both can be averaged over a short window") | the enemy nearly always moves ~340 u/s in an unknown direction: a Gaussian on zero can't say that (v0.4.0's flat ~13.8 nats, not a bug). Speed (± spread) and direction (a circular distribution) as two outputs, their truth averaged over a short window (~0.2 s, the brain's tick), a fresh last layer; lesson only | ❓ |
 | The check tools run the brain too | the checks, the decision report and the drift check must play the same network as training once the gate opens, or every number is wrong | ❓ |
 
 ## Tests before the start
