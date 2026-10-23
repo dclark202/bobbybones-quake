@@ -891,6 +891,7 @@ class duelbot(minqlx.Plugin):
             with open(bsp, "wb") as f:
                 f.write(data)
         self.P, self.attn = _net.load(os.path.join(D, "policy.npz"))     # (v0.2: with the attention part, if it has one)
+        self.mapname = mapname                               # (v0.4.1: the zones' map number of the brain's token, netpass.pose)
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
         if "legs" in self.P:                                 # his legs' network (duel_env's LEGS), exported beside the policy file
@@ -942,7 +943,11 @@ class duelbot(minqlx.Plugin):
         network with a head is told the tick's events on the frames its head ticks (head_events)."""
         ev = self.head_events(self.env) if _net.head_due(self.P, self.h)[0] else None
         xl = self.env.legs_prep()[:1] if _net.needs_xl(self.P) else None    # (--legs-feat, --legs-guide) the legs' inputs of this frame
-        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl)
+        pz = {}
+        if _net.needs_pose(self.P):                          # (v0.4.1) the brain's token: his place and view yaw as the game gives them
+            p_, z_ = _net.pose(self.P, self.env, self.mapname)    # (fill_player put them in the simulator this frame)
+            pz = dict(pose=p_[:1], zmap=z_[:1])
+        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **pz)
         return [int(v) for v in acts[0]]
 
     # ------------------------------------------------------------------ v0.4: the head's events (sim/duel_env.py HEAD_EVENTS)
@@ -1825,6 +1830,14 @@ class duelbot(minqlx.Plugin):
         h_in_ = self.h[0].copy() if self.sess else None      # (the memory the network answers from, for the input log)
         a = self.act(ob)
         self.t_net, self.t_live = time.perf_counter() - t_, 1
+        if os.environ.get("DUEL_OBSDUMP") and self.P.get("_brain") is not None:      # (v0.4.1) debugging: his pose, the enemy's true
+            B_, bl_, bt_, at_, _ = self.P["_brain"]                                   # place and the brain's answer (map coordinates)
+            tk_ = bt_.unpack(B_, bl_, self.h[:1, at_:])[1]                            # after the frame, to set the answer beside the truth
+            self.brain_dump = getattr(self, "brain_dump", [])
+            self.brain_dump.append(np.concatenate([env.state[0, :3], [env.yaw[0]], env.state[1, :3], [float(tk_.valid[0]), float(tk_.unseen[0])],
+                                                   tk_.P[0], [float(env.hp[1])]]).astype(np.float32))
+            if len(self.brain_dump) % 2000 == 0:
+                np.save("/tmp/practice/brain_dump.npy", np.array(self.brain_dump[-12000:]))
         if h_in_ is not None:
             self.inputs_log(now, ob[0], h_in_, a)
         if len(a) > 10 and hasattr(env, "intend"):           # the intention head (v8), as in training

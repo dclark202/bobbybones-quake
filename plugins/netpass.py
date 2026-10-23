@@ -12,6 +12,15 @@ plugins/ffabot.py import it; a test outside a server can too (it does not need m
 eighth frame and adds its target and way to the hands' intention and way: give step() the tick's events (events=,
 fetched when head_due(P, h) says the coming frame ticks) and clear a seat with clear(P, h, rows), not h[rows] = 0
 (clear keeps the head's tick clock, as the trainer's global frame count does).
+
+(v0.4.1) A network whose brain token is in the file (sim/export_duel.py: "btoken", "belief", "track", "track_z" and their
+weights) carries the brain's and the token's state at the very end of h (sim/btoken.py's packed layout, after the head's),
+as sim/test_suite.py's Policy does. While its gate is above zero, step() needs his pose of the frame (pose=, zmap=: the
+rows of pose(P, env, mapname), btoken.pose_from_env: his place and view yaw as the game gives them, the zones' map number):
+the brain reads the frame's normalised inputs, ticks every eighth of its frames, its readouts' answer is kept in map
+coordinates and turned to his facing every frame, and the token joins the attention part at the gate (forward_np's bt, bg).
+At gate 0 the brain is not stepped and the network answers exactly as without it. NET_BTOKEN_GATE=<g> in the environment
+overrides the file's gate when a plugin loads it.
 """
 import json
 import os
@@ -56,6 +65,20 @@ def load(path):
         base = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
         P["_head"] = (lay, {k[len("head."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("head.")}, head_,
                       head_.np_state_width(lay), base)
+    P["_brain"] = None                                       # (v0.4.1) the brain and its token: (brain weights, token layout, btoken, where
+    if "btoken" in P and "belief" in P:                      # its state starts in a seat's array, the gate); played only while the gate is open
+        if "/sim" not in sys.path and os.path.isdir("/sim"):
+            sys.path.insert(0, "/sim")
+        import btoken as btoken_                             # sim/btoken.py: numpy only (zonemap reads /sim/zones)
+        bl_ = json.loads(str(P["btoken"]))
+        if os.environ.get("NET_BTOKEN_GATE", "") != "":
+            bl_["gate"] = float(os.environ["NET_BTOKEN_GATE"])
+        assert "attn.btok_emb.weight" in P, "the file names a brain token and has no weights for its first layer"
+        assert A is not None or not float(bl_.get("gate", 0.0)) > 0, "the brain's token is open and the attention part is shut or missing"
+        B_ = btoken_.numpy_brain(P, json.loads(str(P["belief"])), json.loads(str(P["track"])) if "track" in P else None,
+                                 json.loads(str(P["track_z"])) if "track_z" in P else None)
+        base_ = (P["_slow"][3] if "_slow" in P else P["whh"].shape[1]) + (P["_head"][3] if "_head" in P else 0)
+        P["_brain"] = (B_, bl_, btoken_, base_, float(bl_.get("gate", 0.0)))
     P["_uni"] = None                                         # (--legs-feat, --legs-guide) (layout, door or None, guide weights or None):
     if "legs_unify" in P:                                    # None while both parts are at zero (they add nothing then)
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -87,7 +110,22 @@ def width(P):
     """the width of a seat's memory array: the fast memory, or the whole state with the slow memory (sim/slowmem.py), and
     the head's state after it (v0.4, sim/head.py)"""
     w = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
-    return w + (P["_head"][3] if "_head" in P else 0)
+    w = w + (P["_head"][3] if "_head" in P else 0)
+    if P.get("_brain") is not None:                          # (v0.4.1) the brain's and the token's packed state at the very end
+        w = P["_brain"][3] + P["_brain"][2].packed_width(P["_brain"][0]["H"])
+    return w
+
+
+def needs_pose(P):
+    """(v0.4.1) step() needs his pose (pose=, zmap=; see pose()): the brain's token is in the network and its gate open"""
+    return P.get("_brain") is not None and P["_brain"][4] > 0
+
+
+def pose(P, env, mapname=None):
+    """(v0.4.1) his place and view yaw [n, 4] and the zones' map number [n] for every seat of a plugin's simulator, as the
+    trainer reads them from info["aux"] (btoken.pose_from_env: env.state's place, env.yaw put in -180 .. 180; the map's
+    number from its name when the simulator keeps none). Call after the frame's players are filled in, before step()"""
+    return P["_brain"][2].pose_from_env(env, mapname)
 
 
 def clear(P, h, rows=None):
@@ -95,13 +133,17 @@ def clear(P, h, rows=None):
     rows: a bool mask or indices (None: all). The head's tick clock is kept (sim/head.py np_clear: the head ticks on
     the same frames whatever is cleared, as in training); everything else is zeros. For a network without a head the
     same as h[rows] = 0."""
-    if "_head" not in P:
-        h[slice(None) if rows is None else rows] = 0.0
-        return h
-    lay, _, hm, _, base = P["_head"]
     r = slice(None) if rows is None else rows
+    end = None
+    if P.get("_brain") is not None:                          # (v0.4.1) the brain and its answer, by the same flag (the trainer's reset:
+        B_, _, bt_, end, _ = P["_brain"]                     # btoken.packed_clear keeps its tick clock and the time since he noticed
+        bt_.packed_clear(h[:, end:], rows, B_["H"])          # the enemy, as test_suite's Policy.clear)
+    if "_head" not in P:
+        h[r, :end] = 0.0
+        return h
+    lay, _, hm, hw, base = P["_head"]
     h[r, :base] = 0.0
-    hm.np_clear(lay, h[:, base:], rows)                   # (a view: cleared in place)
+    hm.np_clear(lay, h[:, base:base + hw], rows)          # (a view: cleared in place)
     return h
 
 
@@ -110,8 +152,8 @@ def head_due(P, h):
     head_events()). All False for a network without a head."""
     if "_head" not in P:
         return np.zeros(len(h), bool)
-    lay, _, hm, _, base = P["_head"]
-    return hm.np_due(lay, h[:, base:])
+    lay, _, hm, hw, base = P["_head"]
+    return hm.np_due(lay, h[:, base:base + hw])
 
 
 def head_slices(P):
@@ -128,6 +170,11 @@ def describe(P, A):
     if "_head" in P:                                         # (v0.4)
         hd = ", head of {} ticking every {} frames, plan_in {}".format(P["_head"][0]["size"], P["_head"][0]["every"],
                                                                      "open" if np.abs(P["_head"][1]["plan_in.weight"]).sum() > 0 else "at zero")
+    if P.get("_brain") is not None:                          # (v0.4.1)
+        B_, bl_, _, _, g_ = P["_brain"]
+        hd += ", brain of {} ticking every {} frames (readouts {}), its token of {} numbers at gate {:.4f}{}".format(
+            B_["H"], B_["K"], "+".join(k_ for k_ in ("trk", "trz") if k_ in B_) or "none", bl_["dim"], g_,
+            " (shut: the brain is not stepped)" if not g_ > 0 else "")
     if "attn" not in P:
         return "no attention part" + hd
     lay = json.loads(str(P["attn"]))
@@ -165,13 +212,14 @@ def legs_feed(P, env, E, rows=None):
         env.legs_lg = lg
 
 
-def step(P, A, obs, h, rng, events=None, xl=None):
+def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
     and the new memory.
     events [B, 32] (v0.4, a network with a head): what the head is told on its tick (the simulator's head_events(),
     fetched when head_due() says the coming frame ticks); None: zeros. Read on the tick frames only.
-    xl [B, the branch's inputs] (--legs-feat, --legs-guide, needs_xl(P)): the simulator's legs_prep() rows of this frame."""
+    xl [B, the branch's inputs] (--legs-feat, --legs-guide, needs_xl(P)): the simulator's legs_prep() rows of this frame.
+    pose [B, 4], zmap [B] (v0.4.1, needs_pose(P)): these rows of pose(P, env, mapname) of this frame."""
     dadd = gadd = None
     if P.get("_uni") is not None:                            # (--legs-feat, --legs-guide) the branch on this frame's inputs
         lay_u, D_u, G_u, LU_, T_u = P["_uni"]
@@ -180,6 +228,10 @@ def step(P, A, obs, h, rng, events=None, xl=None):
         h2_, lgl_ = LU_.np_branch(tuple(P[k_] for k_ in ("legs_w0", "legs_b0", "legs_w1", "legs_b1", "legs_wp", "legs_bp")), xl)
         dadd = LU_.np_door(D_u[0], D_u[1], h2_, ok_) if D_u is not None else None
         gadd = LU_.np_guide_add(lay_u, G_u, lgl_, ok_, int(np.sum(P["action_dims"]))) if G_u is not None else None
+    hb = bst = bt = None
+    if P.get("_brain") is not None:                          # (v0.4.1) the brain's packed state, at the very end of the array
+        hb = h[:, P["_brain"][3]:]
+        h = h[:, :P["_brain"][3]]
     hh = None
     if "_head" in P:                                         # (v0.4) the head's state at the end of the array
         hh = h[:, P["_head"][4]:]
@@ -192,13 +244,23 @@ def step(P, A, obs, h, rng, events=None, xl=None):
         obs = obs[:, :len(mean)]
     x = np.clip((obs - mean) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
     xa = x
+    if needs_pose(P):                                        # (v0.4.1) the brain's last answer turned to his pose now (test_suite's token_pre)
+        B_, bl_, bt_m, _, _ = P["_brain"]
+        assert pose is not None and zmap is not None, "this network's brain token is open: give step() pose= and zmap= (netpass.pose)"
+        br_, tk_ = bt_m.unpack(B_, bl_, hb)
+        tk_.see(obs)
+        bt = tk_.features(np.asarray(pose, np.float32), np.asarray(zmap)).astype(np.float32)
+        bst = (br_, tk_)
     if "cell" in P:                                          # the learned map (v8): the last two inputs are cell numbers
         ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
         x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
     x = np.tanh(x @ P["w0"].T + P["b0"])
     x = np.tanh(x @ P["w1"].T + P["b1"])
     if A is not None:                                        # (v0.2) what the door lets through of the tokens
-        x = x + A[2](A[0], A[1], xa, hm=h)                    # (hm: "mem", his memory of the frame before)
+        if bt is None:
+            x = x + A[2](A[0], A[1], xa, hm=h)                # (hm: "mem", his memory of the frame before)
+        else:                                                # (v0.4.1) with the brain's token at its gate
+            x = x + A[2](A[0], A[1], xa, hm=h, bt=bt, bg=P["_brain"][4])
     xf = x
     if hh is not None:                                       # (v0.4) the head's plan of its last tick reaches the fast GRU: e + plan_in(plan)
         hlay, hW, hm = P["_head"][:3]
@@ -229,6 +291,13 @@ def step(P, A, obs, h, rng, events=None, xl=None):
     if P.get("_uni") is not None and P["_uni"][4] is not None:     # (--legs-gate) g(zo) x the legs' choice, the motor layer
         logits = logits + LU_.np_gate_add(lay_u, *T_u, zo, h2_, lgl_, ok_, int(np.sum(P["action_dims"])))
     P["_zo"] = zo                                            # (--legs-residual: legs_feed's rows read it)
+    if bst is not None:                                      # (v0.4.1) the brain reads the frame's normalised inputs; at its tick the readouts'
+        br_, tk_ = bst                                       # answer is kept in map coordinates (his pose of this frame): test_suite's token_post
+        tkd_ = br_.frame(xa)
+        if tkd_.any():
+            o1_, o2_ = br_.readouts(tkd_)
+            tk_.answer(tkd_, o1_, o2_, np.asarray(pose, np.float32)[tkd_], np.asarray(zmap)[tkd_])
+        hb = P["_brain"][2].pack(br_, tk_)
     if float(P.get("switch_fade", 0.0)) > 0:                 # (--switch-fade) off the switch's "legs" choice, as in training
         logits = logits.copy()
         logits[:, int(np.sum(P["action_dims"][:11])) + 1] -= float(P["switch_fade"])
@@ -237,6 +306,8 @@ def step(P, A, obs, h, rng, events=None, xl=None):
         P["_no_switch"] = str(json.loads(str(P["env_vars"])).get("NO_SWITCH", "0")) not in ("0", "", "0.0") if "env_vars" in P else False
     if P["_no_switch"] and out.shape[1] > 11:
         out[:, 11] = 0
+    if hb is not None:                                       # (v0.4.1) the brain's state back at the very end of the array
+        h = np.concatenate([h, np.asarray(hb, np.float32)], 1)
     return out, h
 
 

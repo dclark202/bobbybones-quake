@@ -15,7 +15,9 @@
 # Before the server starts, the map tables the simulator caches (tools/prep_ways.py: since v0.2 also the ways between any
 # two points, up to ten seconds a map at its first load) are made for the start map and the maps of !map; PREP=0 skips it,
 # PREP_MAPS="a b" names other maps. For checks: TIMING=1 (the plugin's time a frame, to timing.txt in the data folder),
-# OBSDUMP=1 / FFA_OBSDUMP=1 (his inputs, to obs_dump.npy there).
+# OBSDUMP=1 / FFA_OBSDUMP=1 (his inputs, to obs_dump.npy there; with a v0.4.1 brain in the 1v1 plugin also brain_dump.npy: his
+# pose, the enemy's true place and the brain's answer). BTOKEN_GATE=<g>: play the brain's token at this gate in place of the
+# file's (0: shut; plugins/netpass.py NET_BTOKEN_GATE).
 # QLSTATS=1 switches the leaderboard's QLStats lookup on (plugins/ladder.py; off by default: a person's Steam id then goes
 # to qlstats.net once a day, he is told so on joining and "!qlstats off" stops it); QLSTATS_URL=<address> another service
 # address (tests: a fake of one's own).
@@ -54,7 +56,7 @@ if [ "${PREP:-1}" != "0" ]; then
         || echo "map tables: not prepared (the server makes them at a map's first load)"
 fi
 if [ -n "$SPAR" ]; then
-    docker run -d --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" -e DUEL_TIMING="${TIMING:-}" \
+    docker run -d --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" -e DUEL_TIMING="${TIMING:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" "$IMAGE" +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs the game bot, skill ${SKILL:-5}, on $MAP)"; exit 0
 fi
@@ -70,7 +72,7 @@ LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # 
 PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live; banlist: the owner's !kick and !ban; ladder: the leaderboard
 if [ -n "$FFA" ]; then PLUGINS="botctl, banlist, ladder, banter, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
 [ -n "$PLUGINS_EXTRA" ] && PLUGINS="$PLUGINS, $PLUGINS_EXTRA"
-docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" -e FFA_OBSDUMP="${FFA_OBSDUMP:-}" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" -e FFA_OBSDUMP="${FFA_OBSDUMP:-}" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $DOCKER_EXTRA "$IMAGE" +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"

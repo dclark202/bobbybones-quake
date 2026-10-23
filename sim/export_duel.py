@@ -7,6 +7,12 @@ The simulator's switches the network was trained with and that change how it is 
 AIM_LEVEL, ...) go into the file as "env_vars", and the length of a training round as "round_secs": the plugins set them
 before they load the simulator (none of them reached a server until 2026-10-08). Newer checkpoints carry both; --set
 and --round-secs give or override them (the runs up to v12: --set INTENT_HOLD=8).
+
+(v0.4.1) A network with the brain's token (the checkpoint's "btoken", "belief", "track", "track_z" and the attention part's
+btok_emb, btok_mark) also gets the brain (belief.*), the two readouts the token is made of (track.*, trackz.*; not the readout
+ahead, which the token does not read), the layouts as text, and the token's layout with its gate: the checkpoint's gate as it
+was at that save, or --btoken-gate. plugins/netpass.py steps the brain while the gate is above zero. A network without the
+token is written exactly as before.
 """
 import argparse
 import datetime
@@ -28,6 +34,7 @@ ap.add_argument("--policy", default="policy.pt", help="the save of the run to ex
 ap.add_argument("--legs", default="", help="the movement network's run (duel_env's LEGS): its policy.npz goes beside the output as legs.npz")
 ap.add_argument("--version", default="", help="the version name the server's welcome shows (default: from the run's name, duel_gru_v0_3_1b -> v0.3.1)")
 ap.add_argument("--updated", default="", help="the date the welcome shows as last updated (default: today, the day of the export and upload)")
+ap.add_argument("--btoken-gate", type=float, default=-1.0, help="(v0.4.1) the brain token's gate in the file (-1: the checkpoint's own; 0: shut, the network as without it)")
 ap.add_argument("--round-secs", type=float, default=0.0, help="the length of a training round on the server's map (0: from the checkpoint, else the plugin's default)")
 a = ap.parse_args()
 
@@ -108,6 +115,20 @@ if ck.get("head") is not None:                               # (plugins/netpass.
     head = {"head": np.array(json.dumps(ck["head"]))}        # guesses are the trainer's alone and stay behind, as the aux layers)
     head.update({k: v for k, v in sd.items() if k.startswith("head.") and not k.startswith(("head.v_short.", "head.v_long.", "head.win.", "head.aux."))})
     assert "head.plan_in.weight" in head and "head.target.weight" in head, "the checkpoint names a head and has no weights for it"
+brain = {}                                                   # (v0.4.1) the brain, its two readouts and the token (sim/btoken.py); plugins/netpass.py
+if ck.get("btoken") is not None:                             # steps them as test_suite.Policy does (the readout ahead and the aux layers stay behind)
+    assert ck.get("belief") is not None and attn and "attn.btok_emb.weight" in attn, "the checkpoint names a brain token without its brain or its first layer"
+    bt_ = dict(ck["btoken"])
+    if a.btoken_gate >= 0:
+        bt_["gate"] = float(a.btoken_gate)
+    brain = {"btoken": np.array(json.dumps(bt_)), "belief": np.array(json.dumps(ck["belief"]))}
+    for k_ in ("track", "track_z"):
+        if ck.get(k_) is not None:
+            brain[k_] = np.array(json.dumps(ck[k_]))
+    brain.update({k: v for k, v in sd.items() if k.startswith(("belief.", "track.", "trackz."))})
+    assert "belief.gru.weight_ih" in brain and ("track.0.weight" in brain or "trackz.0.weight" in brain), "the brain's or its readouts' weights are missing"
+else:
+    assert a.btoken_gate < 0, "--btoken-gate: this network has no brain token"
 np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"], b1=sd["enc.2.bias"],
          wih=sd["gru.weight_ih"], whh=sd["gru.weight_hh"], bih=sd["gru.bias_ih"], bhh=sd["gru.bias_hh"],
          wp=sd["pi.weight"], bp=sd["pi.bias"], obs_mean=ck["obs_mean"], obs_var=ck["obs_var"],
@@ -115,8 +136,9 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
          env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
-         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",
-      "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "")
+      "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "",
+      "| brain: {} numbers in its token, gate {:.4f}".format(json.loads(str(brain["btoken"]))["dim"], json.loads(str(brain["btoken"]))["gate"]) if brain else "")
