@@ -8,7 +8,7 @@ You may use, share, modify and train them further, for any purpose, as long as y
 
 ## How to credit
 
-> BobbyBones by dclark202 (github.com/dclark202/bobbybones-quake)
+> BobbyBones by Duncan Clark (github.com/dclark202/bobbybones-quake)
 
 Name the version you used (for example "BobbyBones v0.3.10"), link the repository, and say if you changed or retrained
 the network.

@@ -32,9 +32,7 @@ docker build -t qlbot .
 bash tools/duel_server.sh - bloodrun               # "-": the network already in data/duellive; the map is any of the ten
 ```
 
-The server is not listed in the server browser. It also loads the repository's own maps (`maps/testlab/testlab.pk3`,
-`maps/arena1/arena1.pk3`); a client without them is dropped on joining, so copy both into the `baseq3` folder of your Quake
-Live install first. Then join with `connect 127.0.0.1:27970` in the game's console (from another machine: its address). At
+The server is not listed in the server browser and loads only the game's own duel maps. Join with `connect 127.0.0.1:27970` in the game's console (from another machine: its address). At
 the first start the map tables are worked out before the server comes up (a minute or two). `PORT=<udp port>` picks another
 port, `PASSWORD=<word>` sets a password, `bash tools/duel_server.sh stop` stops it.
 
@@ -46,7 +44,7 @@ In the game: `!map <name>` (`!maps` lists them), `!note <text>`, and with v0.3.1
 | reaction / to find a target, ms | 195 / 313 | 156 / 250 | 125 / 200 | 100 / 160 | 80 / 128 | 25 / 25, no human aim limits |
 
 The weights and the map files are under CC-BY-4.0 ([WEIGHTS_LICENSE.md](WEIGHTS_LICENSE.md)): use, change and retrain them
-as you like, with credit to "BobbyBones by dclark202 (github.com/dclark202/bobbybones-quake)".
+as you like, with credit to "BobbyBones by Duncan Clark (github.com/dclark202/bobbybones-quake)".
 
 ## Architecture
 
