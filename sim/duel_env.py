@@ -2303,6 +2303,32 @@ DQ_WADE = float(os.environ.get("DQ_WADE") or 0.75)
 DQ_PICK_Z = float(os.environ.get("DQ_PICK_Z") or 51.0)
 PICK_Z = DQ_PICK_Z if DUEL_QL else 56.0                    # an item's reach in height (|dz| under it)
 PLAY_VARS = PLAY_VARS + ("DUEL_QL", "DQ_JUMP_MS", "DQ_WADE", "DQ_PICK_Z")
+# v0.4.2a (docs/v0.4.0/RUN_v0.4.2a.md; the trainer's --rule-fade): what the simulator itself did with the old hand-built belief
+# of the unseen enemy (v02_bel, v02_bel_ok, the stack filter es_h + es_a) moves to the brain's answer on the fade's gate g.
+#   BRAIN_READ=1   (a PLAY_VAR) at each life's start (_fresh) a draw with chance g, his seat's (set_brain_g; the trainer sends his
+#                  g for his seats and the league file's for the league's), on its own random stream (brain_rng: the game's
+#                  stream is never touched, so g = 0 is exactly the simulator without it). A life drawn "on the brain" reads
+#                  the brain's answer of the frame (brain_in: the trainer's token answer, sent with the actions; in the checks
+#                  test_suite.Policy.brain_answer) in place of the rule in: the legs' look point (_legs_c2, LEGS_LOOK), the
+#                  hunt's target (_trip_goal, HUNT), the item lesson's silences (_rule_contested, RULE_CONTEST; RULE_HUNT by
+#                  the brain's stack band: its odds times BRAIN_BAND_MID), the openings' "enemy near the item" (_open_step).
+#                  The brain's place counts as believed while the answer is there and he saw or heard the enemy within
+#                  BRAIN_KNOWN seconds (the same raw clock as the rule's: V02_KNOWN; 0: whenever there is an answer). A life on
+#                  the brain with no answer believes nothing (it never falls back on the rule). Left on the rule: the
+#                  spawn-moment curriculum (_moment_step), AWARE_LOG, the readout's yardstick (aux).
+#                  Counted: stats["brain_lives"] (his lives begun, on the brain), stats["brain_read"] (per reader of
+#                  BRAIN_READERS: seats read, on the brain), stats["brain_err"] (per band of BRAIN_ERR_BINS, seconds since
+#                  seen, out of view, both believing: frames, the rule's place error, the brain's).
+#   BLIND_BRAIN=1  (a training switch: a pay; the owner's word 2026-10-23) BLIND_RULE's pre-fire exemption (a hitscan shot
+#                  within PREFIRE_R of where the enemy must be, in the first PREFIRE_T seconds unseen) and the blind rockets'
+#                  "near where he thinks the enemy is" / "on a way from there" read the brain's place for a life on the brain
+BRAIN_READ = float(os.environ.get("BRAIN_READ") or 0.0) > 0
+BLIND_BRAIN = float(os.environ.get("BLIND_BRAIN") or 0.0) > 0
+BRAIN_KNOWN = float(os.environ.get("BRAIN_KNOWN") or V02_KNOWN)
+BRAIN_BAND_MID = np.array([37.5, 100.0, 162.5, 250.0], np.float32)    # the stack bands' middles (under 75, 75-124, 125-200, over 200)
+BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
+BRAIN_ERR_BINS = ("0-2s", "2-5s", "5-10s", "10s+")
+PLAY_VARS = PLAY_VARS + ("BRAIN_READ", "BRAIN_KNOWN")
 OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
@@ -2876,6 +2902,7 @@ class DuelEnv:
         self.rsp_wait = np.zeros(self.n, np.int64)          # (RESPAWN_QL) frames until he is back; 0: in play
         self.rsp_born = np.zeros(self.n, bool)              # (RESPAWN_QL) back at a spawn point on this frame
         self.rng = np.random.default_rng(seed)
+        self.brain_seed = abs(int(seed))                     # (BRAIN_READ) the draws' own stream is made from it
         self.stag_rng = np.random.default_rng([abs(int(seed)), 0x57A6])     # (STAGGER_START) its own stream: the run's untouched
         self.stag_first = np.ones(self.M, bool)             # (STAGGER_START) the match's first whole game is still to come
         self.substeps = tuple(substeps)
@@ -3809,6 +3836,8 @@ class DuelEnv:
 
     def _fresh(self, i, yaw):
         self.yaw[i], self.pitch[i] = yaw, 0.0
+        if BRAIN_READ:                                       # (v0.4.2a) a new life: on the brain's answer with chance g
+            self.brain_draw(i)
         self.lava_t[i] = 0.0
         self.rsp_wait[i] = 0                                 # (RESPAWN_QL) a new life is in play
         if STYLE_P > 0 and self.script[i] == 0:              # a new life: his playing style (here since 2026-10-08: in
@@ -4431,6 +4460,130 @@ class DuelEnv:
         finally:
             T.field = F
 
+    def _brain_init(self):
+        """(BRAIN_READ) the brain's answer and the draws, made at their first use"""
+        if getattr(self, "brain_life", None) is None or len(self.brain_life) != self.n:
+            n = self.n
+            self.brain_g = np.zeros(n, np.float32)
+            self.brain_life = np.zeros(n, bool)
+            self.brain_bel = np.zeros((n, 3), np.float32)
+            self.brain_ok = np.zeros(n, bool)
+            self.brain_band = np.zeros((n, 4), np.float32)
+            self.brain_ztop = np.full(n, -1, np.int16)
+            self.brain_rng = np.random.default_rng([int(getattr(self, "brain_seed", 0)), 0xB4A1])
+            self.brain_tick = 0
+
+    def set_brain_g(self, g):
+        """(BRAIN_READ) each seat's chance that a life begun from now on reads the brain's answer: a number or [n]"""
+        self._brain_init()
+        self.brain_g[:] = np.clip(np.broadcast_to(np.asarray(g, np.float32), (self.n,)), 0.0, 1.0)
+
+    def brain_draw(self, i, on=None):
+        """(BRAIN_READ) a life of seat(s) i begins: drawn on the brain with chance brain_g (on: given, a plugin's own draw).
+        One number of brain_rng a seat whatever g is (g = 0: never on)."""
+        self._brain_init()
+        ii = np.atleast_1d(np.asarray(i, np.int64))
+        u = self.brain_rng.random(len(ii))
+        v = (u < self.brain_g[ii]) if on is None else np.broadcast_to(np.asarray(on, bool), (len(ii),))
+        self.brain_life[ii] = v
+        st = getattr(self, "stats", None)
+        if st is not None and getattr(self, "script", None) is not None and hasattr(self, "count_even"):
+            c = (self.script[ii] == 0) & self._counted(ii)
+            st.setdefault("brain_lives", np.zeros(2))
+            st["brain_lives"] += (float(c.sum()), float((c & v).sum()))
+
+    def brain_in(self, ans):
+        """(BRAIN_READ) the brain's answer of this frame for every seat (btoken.answer_of: bel [n, 3] map coordinates, ok [n],
+        band [n, 4] odds, ztop [n]); None leaves the last one"""
+        if ans is None:
+            return
+        self._brain_init()
+        self.brain_bel[:] = np.asarray(ans["bel"], np.float32)
+        self.brain_ok[:] = np.asarray(ans["ok"], bool)
+        self.brain_band[:] = np.asarray(ans["band"], np.float32)
+        self.brain_ztop[:] = np.asarray(ans.get("ztop", np.full(self.n, -1)), np.int16)
+
+    def _brain_count(self, key, rows):
+        """(BRAIN_READ) a reader read these seats: his seats counted, those on the brain"""
+        r = np.asarray(rows, np.int64)
+        if not len(r):
+            return
+        c = (self.script[r] == 0) & self._counted(r)
+        st = self.stats.setdefault("brain_read", np.zeros(2 * len(BRAIN_READERS)))
+        j = BRAIN_READERS.index(key)
+        st[2 * j] += float(c.sum())
+        st[2 * j + 1] += float((c & self.brain_life[r]).sum())
+
+    def _bel_src(self, key, rows=None):
+        """the believed place of the unseen enemy [n, 3] and that he believes one [n] as the reader `key` reads them: the
+        rule's (v02_bel, v02_bel_ok, kept by _v02 at the last observe(): the very objects, so a simulator without BRAIN_READ
+        or with no life on the brain is unchanged) or, for a life on the brain (BRAIN_READ), the brain's answer. rows: the
+        seats the reader reads (for the counters only)"""
+        bel, ok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
+        if not BRAIN_READ or bel is None or ok is None or len(bel) != self.n:
+            return bel, ok
+        self._brain_init()
+        self._brain_count(key, np.arange(self.n) if rows is None else rows)
+        on = self.brain_life
+        if not on.any():
+            return bel, ok
+        bt = getattr(self, "v02_bt_now", None)
+        win = (np.asarray(bt, np.float32) < BRAIN_KNOWN) if (BRAIN_KNOWN > 0 and bt is not None and len(bt) == self.n) else np.ones(self.n, bool)
+        return (np.where(on[:, None], self.brain_bel, np.asarray(bel, np.float32)).astype(np.float32),
+                np.where(on, self.brain_ok & win, np.asarray(ok, bool)))
+
+    def _stack_src(self, est, rows=None):
+        """(RULE_HUNT) the enemy's expected stack [n] as the silence reads it: the filter's (est) or, for a life on the brain,
+        the brain's stack band odds times BRAIN_BAND_MID (no answer: nothing to beat, never silent)"""
+        if not BRAIN_READ:
+            return est
+        self._brain_init()
+        self._brain_count("rule_hunt", np.arange(self.n) if rows is None else rows)
+        on = self.brain_life
+        if not on.any():
+            return est
+        bs = np.where(self.brain_ok, self.brain_band @ BRAIN_BAND_MID, np.inf)
+        return np.where(on, bs, est).astype(np.float32)
+
+    def _blind_src(self, rows):
+        """(BLIND_BRAIN) for the seats rows: (on the brain [m], the brain's place [m, 3], an answer there [m]); None: all on the rule"""
+        if not (BRAIN_READ and BLIND_BRAIN):
+            return None
+        self._brain_init()
+        r = np.asarray(rows, np.int64)
+        self._brain_count("blind", r)
+        on = self.brain_life[r]
+        if not on.any():
+            return None
+        return on, self.brain_bel[r], self.brain_ok[r]
+
+    def _brain_err_count(self):
+        """(BRAIN_READ) every eighth frame: the place error of the rule's belief and of the brain's answer, his seats in a
+        duel's game, the enemy alive and out of view, both believing; by the seconds since he saw him"""
+        self._brain_init()
+        self.brain_tick += 1
+        bel, ok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
+        if self.brain_tick % 8 or bel is None or ok is None or len(bel) != self.n or len(self.hp) != 2 * len(self.kind):
+            return
+        n = self.n
+        ar = np.arange(n)
+        en = self._others_arr()[:, 0]
+        vis = np.asarray(self.visible, bool)[:n] if getattr(self, "visible", None) is not None else np.zeros(n, bool)
+        m = ((self.script == 0) & self._counted(ar) & (self.kind[ar // (self._others_arr().shape[1] + 1)] == NORMAL) & (self.run_k < 0) & (self.hp > 0) & (self.hp[en] > 0)
+             & ~vis & np.asarray(ok, bool) & self.brain_ok)
+        if not m.any():
+            return
+        tr = self.state[en, :3]
+        er = np.linalg.norm(np.asarray(bel, np.float64) - tr, axis=1)
+        eb = np.linalg.norm(self.brain_bel.astype(np.float64) - tr, axis=1)
+        b = np.digitize(np.asarray(self.seen_t, np.float64), (2.0, 5.0, 10.0))
+        st = self.stats.setdefault("brain_err", np.zeros(3 * len(BRAIN_ERR_BINS)))
+        for k in range(len(BRAIN_ERR_BINS)):
+            mk = m & (b == k)
+            st[3 * k] += float(mk.sum())
+            st[3 * k + 1] += float(er[mk].sum())
+            st[3 * k + 2] += float(eb[mk].sum())
+
     def _legs_c2(self, ri, k, legs):
         """stage C part 2: what a movement network with the inputs for it is told about the players ri it is asked for:
         the look point, that one is given, that he is to stand at the goal. legs: its choices will move them (as the
@@ -4439,8 +4592,9 @@ class DuelEnv:
         m = len(ri)
         pt, on, st = np.zeros((m, 3), np.float32), np.zeros(m, bool), np.zeros(m, bool)
         if legs and LEGS_LOOK and getattr(self, "v02_bel", None) is not None:
-            on = np.asarray(self.v02_bel_ok, bool)[ri]
-            pt = np.where(on[:, None], self.v02_bel[ri], 0.0).astype(np.float32)
+            bel_, bok_ = self._bel_src("legs_look", ri)      # (BRAIN_READ: the brain's place for a life on it)
+            on = np.asarray(bok_, bool)[ri]
+            pt = np.where(on[:, None], bel_[ri], 0.0).astype(np.float32)
         if legs and LEGS_STAND and getattr(self, "hold_tg", None) and k is not None:      # (hold_tg: stage B part 2's places as his legs' goals)
             st = np.asarray(k)[ri] >= globals().get("HOLD_INTENT", 1 << 30)
         if on.any() or st.any():
@@ -5567,14 +5721,15 @@ class DuelEnv:
             w_ = np.nonzero(np.asarray(intent) == EN_INTENT)[0]
             if len(w_) and who is None and len(gi) == self.n:
                 who = np.arange(self.n)
-            bel_ = getattr(self, "v02_bel", None)            # (kept by _v02 at the last observe(): what his inputs show)
+            bel_, bok_ = (self._bel_src("hunt", np.asarray(who)[w_]) if (len(w_) and who is not None)    # (kept by _v02 at the last
+                          else (getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)))     # observe(): what his inputs show; BRAIN_READ)
             if len(w_) and who is not None and bel_ is None:
                 gi[w_] = -1
             elif len(w_) and who is not None:
                 p_ = np.asarray(who)[w_]
                 nr_ = len(self.route_goal) + (self.hold_n if len(T_) >= len(self.route_goal) + self.hold_n else 0)    # (items' rows and, with TARGETS, the places')
                 t_ = T_[:nr_, (self.route if R is None else R).locate(bel_[p_])]
-                gi[w_] = np.where(np.asarray(self.v02_bel_ok, bool)[p_] & (t_.min(0) < 1e8), t_.argmin(0), -1)
+                gi[w_] = np.where(np.asarray(bok_, bool)[p_] & (t_.min(0) < 1e8), t_.argmin(0), -1)
         elif FIGHT_TARGET:                                   # the enemy: the route goal nearest to where he believes him to be
             w_ = np.nonzero(np.asarray(intent) == EN_INTENT)[0]
             if len(w_) and who is None and len(gi) == self.n:
@@ -5881,7 +6036,7 @@ class DuelEnv:
         to the place they believe the enemy at (his own inputs' belief: v02_bel, the frame before) than to themselves"""
         out = np.zeros(self.n, bool)
         R = self.route
-        bel, ok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
+        bel, ok = self._bel_src("contest", np.nonzero(np.asarray(lab) > 0)[0])    # (BRAIN_READ: the brain's place for a life on it)
         if R is None or bel is None or ok is None or len(bel) != self.n:
             return out
         ok = np.asarray(ok, bool) & (lab > 0)
@@ -8105,14 +8260,19 @@ class DuelEnv:
         for k, i in enumerate(ii):
             L = np.asarray(self.w.trace(eye[k], eye[k] + fdir[k] * 4000.0, mask=self.sight)["endpos"], np.float32)
             B = self.known[i] + self.last_vel[i] * min(float(self.seen_t[i]), 1.0)
+            bk_ = True                                       # (BLIND_BRAIN) a life on the brain: its place (none: no "near" nor "way")
+            if BLIND_BRAIN:
+                bb_ = self._blind_src([i])
+                if bb_ is not None:
+                    B, bk_ = bb_[1][0], bool(bb_[2][0])
             how = 0
             if np.linalg.norm(L - s[i, :3]) < BLIND_JUMP:
                 how = 1
-            elif np.linalg.norm(L - B) < BLIND_NEAR:
+            elif bk_ and np.linalg.norm(L - B) < BLIND_NEAR:
                 how = 2
             elif len(self.spam_places) and float(np.linalg.norm(self.spam_places - L, axis=1).min()) < BLIND_PLACES:
                 how = 4                                      # (a place the pros fire at with nobody in view)
-            elif R is not None:
+            elif bk_ and R is not None:
                 nb, nl, me = (int(x) for x in R.locate(np.stack([B, L, s[i, :3]]).astype(np.float32)))
                 if np.linalg.norm(R.nodes[nl] - L) < BLIND_WAY_R:
                     tb = R.from_node(nb)
@@ -8487,7 +8647,7 @@ class DuelEnv:
         done = np.zeros((n, K), bool)                        # taken it in this life (or owns the weapon), whether he believes the
         near = np.zeros((n, K), bool)                        # enemy near it; tk: taken from its place in this life (the counters')
         tk = np.zeros((n, K), bool)
-        bel, bok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
+        bel, bok = self._bel_src("open", np.nonzero(on)[0])  # (BRAIN_READ: the brain's place for a life on it)
         for gi, lab in enumerate(self.route_goal):
             c_ = INTENTS.index(lab)
             it = self.route_item[gi]
@@ -10026,6 +10186,8 @@ class DuelEnv:
         if self.key_limits:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
+        if BRAIN_READ:                                       # (v0.4.2a) the rule's place error beside the brain's
+            self._brain_err_count()
         prev_int, prev_done = self.intent.copy(), self.intent_done.copy()
         self.intent_teach = self.intent_rule()
         self.intent_teach = np.where((np.repeat(self.kind, len(self.hp) // len(self.kind)) != NORMAL) & (self.run_k < 0), 0,
@@ -10039,6 +10201,8 @@ class DuelEnv:
         if RULE_HUNT > 0 and EN_STACK and len(self.hp) == 2 * len(self.kind):   # ... and where hunting is reasonable (RULE_HUNT; duels)
             en_ = self._others_arr()[:, 0]
             bel_ = self.es_h[ar, self._slot(en_)] + self.es_a[ar, self._slot(en_)]
+            if BRAIN_READ:                                   # (v0.4.2a) a life on the brain: the brain's stack band
+                bel_ = self._stack_src(bel_, np.nonzero(human & (self.intent_teach > 0))[0])
             game_ = np.repeat(self.kind, len(self.hp) // len(self.kind)) == NORMAL
             vis_ = np.asarray(self.visible, bool)[:n] if getattr(self, "visible", None) is not None else np.zeros(n, bool)
             rh_ = human & game_ & (self.run_k < 0) & (self.intent_teach > 0) & ~getattr(self, "rule_big", np.ones(n, bool)) \
@@ -10216,8 +10380,13 @@ class DuelEnv:
                 fd_ = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
                 to_ = (self.known[pf_] + self.last_vel[pf_] * np.minimum(self.seen_t[pf_], 1.0)[:, None]
                        + np.array([0, 0, 4.0], np.float32) - self._eye(s)[pf_])
+                bb_ = self._blind_src(pf_) if BLIND_BRAIN else None      # (BLIND_BRAIN) a life on the brain: its place
+                if bb_ is not None:
+                    to_ = np.where(bb_[0][:, None], bb_[1] + np.array([0, 0, 4.0], np.float32) - self._eye(s)[pf_], to_)
                 al_ = (to_ * fd_).sum(1)
                 near_ = (al_ > 0) & (np.linalg.norm(to_ - al_[:, None] * fd_, axis=1) <= PREFIRE_R)
+                if bb_ is not None:                          # (... with no answer there: no exemption)
+                    near_ &= ~(bb_[0] & ~bb_[2])
                 bill[pf_[near_]] = False
                 self.stats["prefire_frames"] += int(near_.sum())
             reward -= BLIND_FIRE_COST * bill

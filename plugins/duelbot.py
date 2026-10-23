@@ -948,6 +948,8 @@ class duelbot(minqlx.Plugin):
             p_, z_ = _net.pose(self.P, self.env, self.mapname)    # (fill_player put them in the simulator this frame)
             pz = dict(pose=p_[:1], zmap=z_[:1])
         acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **pz)
+        if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
+            _net.brain_feed(self.P, self.env, self.h, [0])
         return [int(v) for v in acts[0]]
 
     # ------------------------------------------------------------------ v0.4: the head's events (sim/duel_env.py HEAD_EVENTS)
@@ -2027,6 +2029,8 @@ class duelbot(minqlx.Plugin):
         once), his hands and mouse pad, and his playing style for this life (one of the map's, at random)"""
         if hasattr(env, "intent_new"):
             env.intent[k], env.intent_t[k], env.intent_new[k], env.intent_done[k] = 0, 0.0, True, False
+        if hasattr(_net, "brain_life"):                      # (v0.4.2a) this life on the brain's answer with chance g (the simulator's _fresh)
+            _net.brain_life(self.P, env, k)
         if hasattr(env, "key_tok"):
             env.key_last[k], env.key_hold[k], env.key_tok[k] = (1, 1, 0), 99, E.KEY_BURST
             env.key_req[k] = (1, 1, 0, 0)

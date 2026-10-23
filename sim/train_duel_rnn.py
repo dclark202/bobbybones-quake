@@ -101,7 +101,12 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         t_got = time.perf_counter()
         tw_["idle"] += t_got - t_idle                        # (waiting for the trainer: its network, the other workers)
         if cmd == "step":
-            if isinstance(data, tuple):                      # (LEGS_IN) the actions and the branch's logits [players, 17]
+            if isinstance(data, tuple) and len(data) == 3:   # (v0.4.2a, --rule-fade with BRAIN_READ) the brain's answer of this frame
+                env.brain_in(data[2])                        # too (the legs' logits or None)
+                if data[1] is not None:
+                    env.legs_lg = data[1]
+                data = data[0]
+            elif isinstance(data, tuple):                    # (LEGS_IN) the actions and the branch's logits [players, 17]
                 env.legs_lg = data[1]
                 data = data[0]
             obs, rew, done, info = env.step(data)
@@ -146,6 +151,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (env.solo_now.copy() if getattr(env, "solo_now", None) is not None else np.zeros(env.n, bool)),    # (SOLO_SELF) in his runs
                          (info["rj_lab"] if "rj_lab" in info else None)))                                    # (--rj-teach) "jump and fire now" for his NEXT frame
             tw_["send"] += time.perf_counter() - t_lp        # (the reply's pickling and the pipe)
+        elif cmd == "brain_g":                               # (v0.4.2a, --rule-fade with BRAIN_READ) each seat's chance that a life
+            env.set_brain_g(data)                            # begun from now on reads the brain's answer
+            remote.send(True)
         elif cmd == "times":                                 # (time.rollout_parts) this worker's seconds since the last call, then anew
             remote.send(dict(tw_))
             tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)
@@ -184,7 +192,7 @@ def jump_far_rec(agg, agg_map):
 
 BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
-                "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W")     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
+                "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN")   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1188,6 +1196,16 @@ def main():
     ap.add_argument("--btoken-start", type=float, default=-1.0, help="... the minute the delay counts from (-1: this process's start; pass it on every resume)")
     ap.add_argument("--btoken-gate", type=float, default=-1.0, help="... the gate to start this process at (-1: the network's own, 0 for a new token)")
     ap.add_argument("--btoken-lr-scale", type=float, default=1.0, help="... the token's own first layer and mark learn at this many times --lr")
+    # v0.4.2a (docs/v0.4.0/RUN_v0.4.2a.md; sim/rule_fade.py): the rule-made input columns faded out of the hands by a gate g
+    # (times 1 - g after the input scaling; the brain reads them unfaded); the simulator's readers of the old belief on the
+    # brain's answer for a life drawn with chance g (BRAIN_READ=1 in the simulator); g kept with each rollout, learnt at it
+    ap.add_argument("--rule-fade", type=int, default=0, help="v0.4.2a: 1 = the rule fade (a network without its entry gets it, shut; "
+                    "one that has it keeps it). 0 = off (a network that has it plays at g 0)")
+    ap.add_argument("--rule-fade-delay", type=float, default=60.0, help="... minutes after --rule-fade-start before g begins to rise")
+    ap.add_argument("--rule-fade-open", type=float, default=240.0, help="... minutes for g from 0 to 1 (live: FADE_OPEN; 0 holds it)")
+    ap.add_argument("--rule-fade-cap", type=float, default=1.0, help="... g is never above this (live: FADE_CAP; 0 shuts it at once)")
+    ap.add_argument("--rule-fade-start", type=float, default=-1.0, help="... the minute the delay counts from (-1: this process's start; pass it on every resume)")
+    ap.add_argument("--rule-fade-g", type=float, default=-1.0, help="... g to start this process at (-1: the network's own, 0 for a new entry)")
     ap.add_argument("--ahead", default="", help="v0.4.1: the brain's readout of what comes next (sim/ahead.py), its lesson by part, e.g. "
                     "fut:0.5,target:0.25,appear:0.25 (with --belief and --track). '' = off (a network that has it keeps it)")
     ap.add_argument("--ahead-warm", type=float, default=30.0, help="... minutes over which its lesson rises from nothing (from --ahead-start)")
@@ -1490,6 +1508,7 @@ def main():
     TRZ_CK = None                                            # (--track-z, v0.4.0) the readout's second part: comes with the network
     BTOK_CK = None                                           # (--btoken, v0.4.1) the brain's token: comes with the network
     AH_CK = None                                             # (--ahead, v0.4.1) the readout of what comes next: comes with the network
+    RF_CK = None                                             # (--rule-fade, v0.4.2a) the faded columns and the gate: come with the network
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
@@ -1504,6 +1523,7 @@ def main():
         TRZ_CK = ck0_.get("track_z") if any(k_.startswith("trackz.") for k_ in ck0_["model"]) else None
         BTOK_CK = ck0_.get("btoken") if any(k_.startswith("attn.btok_") for k_ in ck0_["model"]) else None
         AH_CK = ck0_.get("ahead") if any(k_.startswith("ahead.") for k_ in ck0_["model"]) else None
+        RF_CK = ck0_.get("rule_fade")
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
         ATT = dict(ATT, mem=H)
@@ -1672,6 +1692,27 @@ def main():
               + ("" if BTOK_ON else ": NOT fed in this run (--btoken 0): the gate stays shut"), flush=True)
     else:
         BTOK_G = [0.0]
+    import rule_fade as rfade_                               # (v0.4.2a) the rule fade (sim/rule_fade.py)
+    RF_L = RF_CK
+    RF_READ = bool(getattr(E_, "BRAIN_READ", False))         # (BRAIN_READ=1) the simulator's readers on the brain's answer, by the same gate
+    if RF_L is None and a.rule_fade:
+        RF_L = rfade_.layout(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "INPUTS.csv"),
+                             readers=RF_READ, blind=bool(getattr(E_, "BLIND_BRAIN", False)))
+    RF = RF_L is not None                                    # the network has the entry
+    RF_ON = RF and bool(a.rule_fade)                         # the gate moves in this run (off: g 0, the network without the fade)
+    if RF:
+        assert max(RF_L["cols"]) < OBS_DIM, "--rule-fade: the columns are past the network's inputs"
+        RF_L = dict(RF_L, readers=RF_READ, blind=bool(getattr(E_, "BLIND_BRAIN", False)))    # (what this run's simulator does)
+        RF_G = [float(a.rule_fade_g) if a.rule_fade_g >= 0 else float(RF_L.get("g", 0.0))]
+        if not RF_ON:
+            RF_G[0] = 0.0
+        print(rfade_.describe(dict(RF_L, g=RF_G[0])) + (" (from the network)" if RF_CK is not None else " (new: shut)")
+              + ("" if RF_ON else ": NOT moved in this run (--rule-fade 0): g stays 0"), flush=True)
+        if RF_READ:
+            assert RF_ON and BTOK_ON, "BRAIN_READ=1: with --rule-fade 1 and the brain's token fed (--btoken 1): the answer the simulators read is the token's"
+    else:
+        RF_G = [0.0]
+        assert not RF_READ, "BRAIN_READ=1 without --rule-fade: no brain's answer goes to the simulators"
     AH_PARTS = ahead_.parse_weights(a.ahead) if a.ahead else None
     AH_L = AH_CK
     if AH_L is None and a.ahead:
@@ -1850,6 +1891,19 @@ def main():
                     nn.init.zeros_(getattr(self, n_).weight)
                     nn.init.zeros_(getattr(self, n_).bias)
             self.fade = None                                     # (--switch-fade) the learner's: set after it is made
+            self.rfg = 0.0                                       # (--rule-fade, v0.4.2a) the gate: a plain number, not a weight (the
+            self.rf_m = None                                     # checkpoint's "rule_fade" carries it); the mask made for it
+
+        def hx(self, x):
+            """(--rule-fade) the inputs as the hands read them: the rule-made columns times (1 - rfg); x itself at 0"""
+            g_ = float(self.rfg)
+            if not RF or not g_ > 0:
+                return x
+            if self.rf_m is None or self.rf_m[0] != g_ or self.rf_m[1].device != x.device:
+                m_ = torch.ones(x.shape[-1], dtype=torch.float32)
+                m_[torch.as_tensor(RF_L["cols"], dtype=torch.long)] = float(np.float32(1.0 - g_))
+                self.rf_m = (g_, m_.to(x.device))
+            return x * self.rf_m[1].to(x.dtype)
 
         def legs_comb(self, lgl, z):
             """(--legs-residual) the legs' logits his legs draw from: (1 - a(z)) x the branch's + W z; the branch's alone without"""
@@ -1884,6 +1938,7 @@ def main():
 
         def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None, bt=None):
             dadd, gadd = self.uni_parts(xl)                      # (--legs-feat, --legs-guide; xl: the branch's inputs of this frame)
+            x = self.hx(x)                                       # (--rule-fade) the hands' inputs (the brain is given its own, unfaded)
             if HAS_CELLS:
                 ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
                 x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
@@ -2362,6 +2417,7 @@ def main():
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
                         hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE, **TRK_SAVE, **BEL_SAVE,
                         **({"btoken": dict(BTOK_L, gate=float(BTOK_G[0]))} if BTOK else {}),     # (v0.4.1: the gate as it is now)
+                        **({"rule_fade": dict(RF_L, g=float(RF_G[0]))} if RF else {}),          # (v0.4.2a: the fade's gate as it is now)
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
@@ -2393,6 +2449,7 @@ def main():
     learn = (~snap_players).float()                                    # trained on
     snaps = []                                                         # frozen past policies (state dicts)
     SNAP_G = {}                                                        # (v0.4.1) a league file's own gate of the brain token
+    SNAP_FG = {}                                                       # (v0.4.2a) ... and of the rule fade
     SNAP_NS = {}                                                       # (--no-switch) id(state dict) -> its switch is retired (a step-6 network)
     OPP_NS = [False]                                                   # ... the league network of this rollout's
     if a.resume:                                                       # the league survives a restart
@@ -2403,6 +2460,7 @@ def main():
             ck_ = torch.load(f, weights_only=False, map_location=dev)
             snaps.append(ck_["model"])
             SNAP_G[id(snaps[-1])] = float((ck_.get("btoken") or {}).get("gate", 0.0)) if any(k_.startswith("attn.btok_") for k_ in ck_["model"]) else 0.0
+            SNAP_FG[id(snaps[-1])] = float((ck_.get("rule_fade") or {}).get("g", 0.0))
             SNAP_NS[id(snaps[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")   # (--no-switch) a step-6 file
     anchors, vs_anchor = [], False                                     # ... and opponents that never leave it (--anchor-p)
     if a.anchor_p > 0:
@@ -2411,6 +2469,7 @@ def main():
             ck_ = torch.load(f, weights_only=False, map_location=dev)
             anchors.append(ck_["model"])
             SNAP_G[id(anchors[-1])] = float((ck_.get("btoken") or {}).get("gate", 0.0)) if any(k_.startswith("attn.btok_") for k_ in ck_["model"]) else 0.0
+            SNAP_FG[id(anchors[-1])] = float((ck_.get("rule_fade") or {}).get("g", 0.0))
             SNAP_NS[id(anchors[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")
         print("league anchors: {} (in {:.0%} of the rollouts)".format(len(anchors), a.anchor_p), flush=True)
     opp = copy.deepcopy(pol).eval()
@@ -2531,7 +2590,8 @@ def main():
                        **({"TRACK_Z_W": 1.0} if TRZ_ON else {}),
                        **({"BTOK_GATE_CAP": float(a.btoken_cap), "BTOK_GATE_OPEN": float(a.btoken_open)} if BTOK_ON else {}),
                        **({"BELIEF_LR": float(BEL_LR)} if BEL else {}), **({"AHEAD_W": 1.0} if AH_ON else {}),
-                       **({"RJ_TEACH_W": float(a.rj_teach)} if RJ_LAB else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
+                       **({"RJ_TEACH_W": float(a.rj_teach)} if RJ_LAB else {}),
+                       **({"FADE_CAP": float(a.rule_fade_cap), "FADE_OPEN": float(a.rule_fade_open)} if RF_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
         print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
@@ -2636,6 +2696,16 @@ def main():
             "--btoken with the zones: TRACK_Z=1 (the zones' map number comes from info['aux'])"
         CARRY["tok"] = btoken_.Token(N, BTOK_L)
         CARRY["btg"] = BTOK_G[0]
+    CARRY["rfg"] = RF_G[0]                                               # (v0.4.2a) the rule fade's gate of the coming rollout
+    RF_T0 = float(a.rule_fade_start) if a.rule_fade_start >= 0 else float(elapsed0)
+    RF_LAST = [None]                                                     # (the minute of the gate's last step)
+    RF_OPP = [0.0]                                                       # (the league network's own g in this rollout)
+    if RF_ON:
+        print("rule fade: g {:.4f} now; held until minute {:.1f} (--rule-fade-start {:.1f} + --rule-fade-delay {:g}), then 0 -> 1 over {:g} min, "
+              "never above {:g} (live: FADE_CAP, FADE_OPEN); the simulators' readers {}".format(
+                  RF_G[0], RF_T0 + a.rule_fade_delay, RF_T0, a.rule_fade_delay, a.rule_fade_open, a.rule_fade_cap,
+                  "on the brain's answer for a life drawn with chance g (BRAIN_READ=1{})".format(", the blind-fire exemption too (BLIND_BRAIN=1)" if RF_L["blind"] else "")
+                  if RF_READ else "on the rule (BRAIN_READ unset)"), flush=True)
     if BEL:                                                              # (--belief) the belief's live state of every seat (the learner's
         CARRY["bs"] = belief_.State(N, BEL_L, dev)                       # network on every seat, as the readout's counters read it)
 
@@ -2680,13 +2750,16 @@ def main():
                     BEL_LR_NOW[0] = float(lt_.get("BELIEF_LR", BEL_LR_NOW[0]))       # (... the brain's rate, at the next learning step)
                     AH_LIVE[0] = float(lt_.get("AHEAD_W", AH_LIVE[0]))               # (... a factor on the ahead lesson)
                     RJ_LIVE[0] = float(lt_.get("RJ_TEACH_W", RJ_LIVE[0]))            # (--rj-teach: the lesson's weight; its warm-up from the first minute above 0)
+                    a.rule_fade_cap = float(lt_.get("FADE_CAP", a.rule_fade_cap))    # (v0.4.2a: the rule fade's cap: 0 shuts it at once)
+                    a.rule_fade_open = float(lt_.get("FADE_OPEN", a.rule_fade_open)) # (... the minutes of its opening: 0 holds it)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
                     LIVE_KEPT = dict(sim=dict(lv_), trainer=dict(lt_), from_update=update)
                     force_ = dict(now_[0], DMG_REWARD=a.dmg_reward, **({"INFO_PAY": a.info_pay, "TRACK_W": a.track, "TRACK_TRUNK": a.track_trunk} if TRK_ON else {}),
                                   **({"TRACK_Z_W": TRZ_LIVE[0]} if TRZ_ON else {}),
                                   **({"BTOK_GATE_CAP": a.btoken_cap, "BTOK_GATE_OPEN": a.btoken_open} if BTOK_ON else {}),
                                   **({"BELIEF_LR": BEL_LR_NOW[0]} if BEL else {}), **({"AHEAD_W": AH_LIVE[0]} if AH_ON else {}),
-                                  **({"RJ_TEACH_W": RJ_LIVE[0]} if RJ_LAB else {}))
+                                  **({"RJ_TEACH_W": RJ_LIVE[0]} if RJ_LAB else {}),
+                                  **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
                         json.dump(dict(from_update=update, minutes=round(mins, 2), file=json.loads(txt_), in_force=force_), f_, indent=1)
@@ -2701,6 +2774,11 @@ def main():
             BTOK_LAST[0] = mins
             pol.attn.bgate = BTOK_G[0]
             CARRY["btg"] = BTOK_G[0]
+        if RF_ON:                                                        # (v0.4.2a) the rule fade's gate of this rollout: played and learnt at it
+            RF_G[0] = btoken_.gate_step(RF_G[0], mins, RF_LAST[0], RF_T0, a.rule_fade_delay, a.rule_fade_open, a.rule_fade_cap)
+            RF_LAST[0] = mins
+            pol.rfg = RF_G[0]
+            CARRY["rfg"] = RF_G[0]
         if a.gate_open > 0 and bool(GATE_M.any()):                       # (--gate-open) before the rollout: it is played and learnt
             gf_ = min(1.0, max(0.0, mins - gate0) / a.gate_open)        # from at one gate
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
@@ -2737,6 +2815,7 @@ def main():
             last_snap = time.time()
             snaps.append(copy.deepcopy(pol.state_dict()))
             SNAP_G[id(snaps[-1])] = float(BTOK_G[0])                     # (v0.4.1: the gate it played at)
+            SNAP_FG[id(snaps[-1])] = float(RF_G[0])                      # (v0.4.2a: the fade it played at)
             SNAP_NS[id(snaps[-1])] = NO_SW                               # (--no-switch: his own new snapshots are step-6 networks)
             snaps = snaps[-8:]
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
@@ -2746,8 +2825,16 @@ def main():
             load_net(opp, sd_o_)
             if BTOK:                                                     # (v0.4.1) the file's own gate (0: no token, or shut)
                 opp.attn.bgate = float(SNAP_G.get(id(sd_o_), 0.0)) if BTOK_ON else 0.0
+            if RF:                                                       # (v0.4.2a) the file's own fade (0: none)
+                opp.rfg = RF_OPP[0] = float(SNAP_FG.get(id(sd_o_), 0.0)) if RF_ON else 0.0
             OPP_NS[0] = bool(SNAP_NS.get(id(sd_o_), False))
             opp.door_open = bool(opp.attn is not None and float(opp.attn.door.weight.abs().sum()) > 0)
+        if RF_READ:                                                      # (v0.4.2a) each seat's chance of a life on the brain: his seats at his
+            gs_ = np.where(league & is_odd, RF_OPP[0] if snaps else RF_G[0], RF_G[0]).astype(np.float32)   # g, the league's at its file's
+            for w_, p in enumerate(pipes):
+                p.send(("brain_g", gs_[w_off[w_]:w_off[w_ + 1]]))
+            for p in pipes:
+                p.recv()
         return dict(mins=mins, live_rec=LIVE_REC, live_settings=LS_REC, close_p=close_p, seek_now=seek_now, vs_anchor=vs_anchor,
                     has_snaps=bool(snaps), n_snaps=len(snaps), opp_ns=bool(OPP_NS[0]))
 
@@ -3018,6 +3105,9 @@ def main():
         b_hq = torch.zeros(T, N, H, dtype=torch.float16) if ATT_MEM else None   # (--attn-mem-query) his memory of the frame before, as played
         TOK_ = C.get("tok")                                              # (v0.4.1) the brain token: its state, the numbers each frame as played
         b_btok, btg_ = None, float(C.get("btg", 0.0))
+        rfg_ = float(C.get("rfg", 0.0))                                  # (v0.4.2a) the rule fade's gate of this rollout
+        if RF:
+            net.rfg = rfg_                                               # (--overlap: the copy that plays has no gate of its own)
         if TOK_ is not None:
             net.attn.bgate = btg_                                        # (--overlap: the copy that plays has no gate of its own)
             b_btok = torch.zeros(N, T, BTOK_L["dim"], dtype=torch.float16) if OVL else torch.zeros(T, N, BTOK_L["dim"], dtype=torch.float16, device=dev)
@@ -3182,7 +3272,12 @@ def main():
                 tp2_ = time.perf_counter()
                 RP_["legs_net"] += tp2_ - tp1_
                 for w_, p in enumerate(pipes):
-                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])))
+                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])
+                            + ((TOK_.answer_rows(w_off[w_], w_off[w_ + 1]),) if RF_READ else ())))
+            elif RF_READ:                                                # (v0.4.2a, BRAIN_READ) the brain's answer goes with the actions
+                tp2_ = time.perf_counter()
+                for w_, p in enumerate(pipes):
+                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], None, TOK_.answer_rows(w_off[w_], w_off[w_ + 1]))))
             else:
                 tp2_ = time.perf_counter()
                 for w_, p in enumerate(pipes):
@@ -3305,7 +3400,7 @@ def main():
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
-                    b_btok=b_btok, btg=btg_)
+                    b_btok=b_btok, btg=btg_, rfg=rfg_)
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -3386,6 +3481,9 @@ def main():
         B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
         if BTOK:
             pol.attn.bgate = BTG_R if B_BTOK is not None else 0.0        # (learnt at the gate it was played at)
+        RFG_R = float(R.get("rfg") or 0.0)                               # (v0.4.2a) the rule fade's gate he played at: learnt at it
+        if RF:
+            pol.rfg = RFG_R
         if a.dump_acts:                                                  # (--dump-acts) the rollout as played, for a fixed-seed identity check
             torch.save(dict(act=b_act.cpu(), logp=b_logp.cpu(), val=b_val.cpu(), rew=b_rew.cpu(), done=b_done.cpu()),
                        "{}_{}.pt".format(a.dump_acts, update))
@@ -3517,7 +3615,8 @@ def main():
             layers in one go each, only his memory frame by frame -> (logits, value, memories, the two long values or None)"""
             xs_ = b_obs[:, chunk].float() if not OVL else hsel(b_obs, 0, chunk).float().transpose(0, 1).contiguous()
             if BEL:
-                XS_[0] = xs_                                             # (--belief) the same inputs, for the belief's lesson
+                XS_[0] = xs_                                             # (--belief) the same inputs, for the belief's lesson (unfaded)
+            xs_ = pol.hx(xs_)                                            # (--rule-fade) the hands' inputs
             e_ = pol.enc(xs_)
             if pol.attn is not None:
                 if ATT_MEM:                                              # (--attn-mem-query) the query reads h_{t-1} as he played it
@@ -4547,6 +4646,19 @@ def main():
                 vi_ = BTOK_L["feats"].index("valid")
                 rec["btoken"]["valid"] = round(float(bb_[..., vi_].mean()), 4)
                 rec["btoken"]["abs_mean"] = round(float(bb_.abs().mean()), 4)
+        if RF:                                                           # (v0.4.2a) the rule fade: the gate it was played and learnt at; the
+            rec["rule_fade"] = dict(g=round(RFG_R, 5), cap=a.rule_fade_cap, open_min=a.rule_fade_open, opp_g=round(RF_OPP[0], 5),
+                                    readers=RF_READ, blind=bool(RF_L["blind"]))      # simulators' readers: lives begun on the brain, each reader's
+            if RF_READ and "brain_lives" in agg:                         # frames on the brain, the place error of the answer each read
+                bl_ = np.atleast_1d(agg["brain_lives"]).astype(np.float64)
+                br_ = np.atleast_1d(agg.get("brain_read", np.zeros(2 * len(E_.BRAIN_READERS)))).astype(np.float64).reshape(-1, 2)
+                be_ = np.atleast_1d(agg.get("brain_err", np.zeros(3 * len(E_.BRAIN_ERR_BINS)))).astype(np.float64).reshape(-1, 3)
+                rec["rule_fade"].update(lives=int(bl_[0]), lives_on_brain=round(float(bl_[1] / max(1.0, bl_[0])), 4),
+                                        read_on_brain={k_: [int(br_[i_, 0]), round(float(br_[i_, 1] / max(1.0, br_[i_, 0])), 4)]
+                                                       for i_, k_ in enumerate(E_.BRAIN_READERS)},
+                                        err_by_unseen={k_: dict(n=int(be_[i_, 0]), rule=round(float(be_[i_, 1] / max(1.0, be_[i_, 0])), 1),
+                                                                brain=round(float(be_[i_, 2] / max(1.0, be_[i_, 0])), 1))
+                                                       for i_, k_ in enumerate(E_.BRAIN_ERR_BINS)})
         if ah_w > 0 and float(ah_acc[NPA_]) > 0:                         # (--ahead) its lesson's parts and the place's error by horizon
             ah_acc = ah_acc.cpu()
             rec["ahead"] = dict(w=round(ah_w, 4), parts=AH_PARTS, race=bool(AH_L.get("race")),

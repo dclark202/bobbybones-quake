@@ -170,6 +170,14 @@ def play(job):
         env.arena_len = 1e9
     env.round_t[:] = 1e9
     n = env.n
+    BR_ = bool(getattr(E, "BRAIN_READ", False))              # (v0.4.2a) the readers on the brain's answer: each side's lives drawn at
+    if BR_:                                                   # its own fade (a network without one, a scripted seat: the rule)
+        sw0_ = int(bool(swap) and opp_pol is not None)
+        g_ = np.zeros(n, np.float32)
+        g_[np.arange(sw0_, n, 2)] = pol.rfg if getattr(pol, "rf_read", False) else 0.0
+        if opp_pol is not None:
+            g_[np.arange(1 - sw0_, n, 2)] = opp_pol.rfg if getattr(opp_pol, "rf_read", False) else 0.0
+        env.set_brain_g(g_)
     obs, _, _, _ = env.step(np.zeros((n, len(E.ACTION_DIMS)), np.int64))
     env.round_len = env.arena_len = 1e9                          # one game, no restarts
     env.round_t[:] = 0.0
@@ -247,6 +255,14 @@ def play(job):
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}))
             a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
+        if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
+            ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
+            for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
+                an_ = p_.brain_answer(hs_) if hasattr(p_, "brain_answer") else None
+                if an_ is not None:
+                    for k_ in ans_:
+                        ans_[k_][m_] = an_[k_]
+            env.brain_in(ans_)
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
         if getattr(E, "LEGS_IN", False) and (pol.legsP is not None or (opp_pol is not None and opp_pol.legsP is not None)):
@@ -392,6 +408,8 @@ def main():
                     "sides got 47 percent of the frags on the even seats: B-220); give --procs an even number")
     ap.add_argument("--btoken-gate", type=float, default=None, help="(v0.4.1) play his brain token at this gate (default: his checkpoint's; 0: shut)")
     ap.add_argument("--opp-btoken-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--rule-fade-g", type=float, default=None, help="(v0.4.2a) play his rule fade at this gate (default: his checkpoint's; 0: none)")
+    ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
@@ -399,6 +417,11 @@ def main():
     pol = T.Policy(path, seed=1)
     if a.btoken_gate is not None:
         pol.set_gate(a.btoken_gate)
+    if a.rule_fade_g is not None:
+        pol.set_rule_fade(a.rule_fade_g)
+    if getattr(pol, "rf", None) is not None:
+        print("rule fade: g {:g} ({}); the simulator's readers {}".format(pol.rfg, "none" if pol.rfg <= 0 else "{} columns faded".format(len(pol.rf_cols)),
+              "on the brain's answer for a life drawn at g (BRAIN_READ=1)" if pol.rf_read else "on the rule"), flush=True)
     if getattr(pol, "btok", None) is not None:
         print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
@@ -410,11 +433,15 @@ def main():
         opp_pol = T.Policy(a.opp[7:], seed=2)
         if a.opp_btoken_gate is not None:
             opp_pol.set_gate(a.opp_btoken_gate)
+        if a.opp_rule_fade_g is not None:
+            opp_pol.set_rule_fade(a.opp_rule_fade_g)
         oo = names(a.opp_inputs)
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
+    if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp_pol) if p_ is not None) and "BRAIN_READ" not in envvars:
+        envvars["BRAIN_READ"] = "1"                              # (v0.4.2a) a network trained with the readers on the brain plays so
     delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,
               None if opp_pol is None else (opp_pol.react_ms if a.opp_react_ms is None else a.opp_react_ms),
               None if opp_pol is None else (opp_pol.acquire_ms if a.opp_acquire_ms is None else a.opp_acquire_ms))

@@ -383,6 +383,8 @@ class ffabot(duelbot):
             p_, z_ = _net.pose(self.P, self.env, self.mapname)
             pz = dict(pose=p_[seats], zmap=z_[seats])
         out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng, xl=xl, **pz)
+        if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
+            _net.brain_feed(self.P, self.env, self.h[seats], seats)
         return out
 
     # ------------------------------------------------------------------ the simulator's senses for every seat

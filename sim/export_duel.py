@@ -35,6 +35,7 @@ ap.add_argument("--legs", default="", help="the movement network's run (duel_env
 ap.add_argument("--version", default="", help="the version name the server's welcome shows (default: from the run's name, duel_gru_v0_3_1b -> v0.3.1)")
 ap.add_argument("--updated", default="", help="the date the welcome shows as last updated (default: today, the day of the export and upload)")
 ap.add_argument("--btoken-gate", type=float, default=-1.0, help="(v0.4.1) the brain token's gate in the file (-1: the checkpoint's own; 0: shut, the network as without it)")
+ap.add_argument("--rule-fade-g", type=float, default=-1.0, help="(v0.4.2a) the rule fade's gate in the file (-1: the checkpoint's own; 0: none)")
 ap.add_argument("--round-secs", type=float, default=0.0, help="the length of a training round on the server's map (0: from the checkpoint, else the plugin's default)")
 a = ap.parse_args()
 
@@ -129,6 +130,15 @@ if ck.get("btoken") is not None:                             # steps them as tes
     assert "belief.gru.weight_ih" in brain and ("track.0.weight" in brain or "trackz.0.weight" in brain), "the brain's or its readouts' weights are missing"
 else:
     assert a.btoken_gate < 0, "--btoken-gate: this network has no brain token"
+rfade = {}                                                   # (v0.4.2a, sim/rule_fade.py) the faded columns and the gate g; plugins/netpass.py
+if ck.get("rule_fade") is not None:                          # fades them as test_suite.Policy does (and with "readers", the simulator's
+    rf_ = dict(ck["rule_fade"])                              # readers take the brain's answer: BRAIN_READ in env_vars)
+    if a.rule_fade_g >= 0:
+        rf_["g"] = float(a.rule_fade_g)
+    assert not (rf_.get("readers") and float(rf_.get("g", 0.0)) > 0) or brain, "the rule fade's readers need the brain in the file"
+    rfade = {"rule_fade": np.array(json.dumps(rf_))}
+else:
+    assert a.rule_fade_g < 0, "--rule-fade-g: this network has no rule fade"
 np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"], b1=sd["enc.2.bias"],
          wih=sd["gru.weight_ih"], whh=sd["gru.weight_hh"], bih=sd["gru.bias_ih"], bhh=sd["gru.bias_hh"],
          wp=sd["pi.weight"], bp=sd["pi.bias"], obs_mean=ck["obs_mean"], obs_var=ck["obs_var"],
@@ -136,9 +146,11 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
          env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
-         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **rfade, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",
       "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "",
-      "| brain: {} numbers in its token, gate {:.4f}".format(json.loads(str(brain["btoken"]))["dim"], json.loads(str(brain["btoken"]))["gate"]) if brain else "")
+      "| brain: {} numbers in its token, gate {:.4f}".format(json.loads(str(brain["btoken"]))["dim"], json.loads(str(brain["btoken"]))["gate"]) if brain else "",
+      "| rule fade: {} columns, g {:.4f}, readers {}".format(len(json.loads(str(rfade["rule_fade"]))["cols"]), json.loads(str(rfade["rule_fade"]))["g"],
+                                                            bool(json.loads(str(rfade["rule_fade"])).get("readers"))) if rfade else "")
