@@ -14,7 +14,7 @@ stops it between noon and 16:00). Then v0.4.0 ([RUN_v0.4.0.md](../v0.4.0/RUN_v0.
 | Live settings (no restart) | the pay only (`INFO_PAY`) | the pay, the lesson's weight and its memory share (`INFO_PAY`, `TRACK_W`, `TRACK_TRUNK` in `live.json`; `925fc45`) |
 | What it showed | gate at update 10 against v0.3.10's end **80-80**; update 40 **74-86** (46.2%, frag share 47.5%); step per update, aim and hit rates unchanged; pre-aim 0.36 → 0.38; the readout's error at 10 s+ unseen 935 → 478 u, at 0–2 s 634 → 144 u | – |
 | League | anchors v0.3.8, v0.3.9, v0.3.10's ends + v0.3.10's last 8 snapshots | the same (the first start's snapshots kept apart, not in the league) |
-| Its timeline | – | lesson full at ~20:35; the pay starts ~19:35, full ~22:35 |
+| Its timeline | – | lesson full at ~20:35. **The pay held at 0** from 19:20 (`live.json` `{"INFO_PAY": 0}`; the owner: lesson-only overnight, a clean test of the lesson alone; the drift check put the first start's extra change in his goal choices out of view, where the pay pulls) |
 | Stopped / kept | at save 70 (17:31), pre-aim 0.39, look-back 0.24 at the end; `duel_gru_v0_3_11/keep/policy_end_v0311a.pt`, `opt_end_v0311a.pt` | – |
 
 Why (the owner, ~17:10): "This seems safer. It might have worked out fine, but those initial readings are making me nervous."

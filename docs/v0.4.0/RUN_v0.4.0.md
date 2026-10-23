@@ -1,97 +1,72 @@
-# v0.4.0 on one page: predict where the enemy is going, and the readout in place of the old belief rule (DRAFT)
+# v0.4.0 on one page: the brain, trained beside the hands (pretraining)
 
-*2026-10-22: **proposed**, not built. The first step of v0.4 (the owner, 2026-10-22: "let's not call it v0.3.12 but v0.4.0
-instead. The goal now is to expand this network step by step until we have the type of truly reactive play (i.e., he seems
-to actually change his intention based on the enemy state)"). After v0.3.11 (to 16:00 Fri), a quick run. Design:
-[BELIEF_LOOP.md](BELIEF_LOOP.md). Next step: [RUN_v0.4.1.md](RUN_v0.4.1.md).*
+*2026-10-22 night: **building** (branch `v040`), starts tonight when its tests pass, runs to about noon Fri. Then v0.4.1 connects the
+brain to the hands ([RUN_v0.4.1.md](RUN_v0.4.1.md)); v0.4.2 fades the old belief out and adds the strategy head
+([RUN_v0.4.2.md](RUN_v0.4.2.md)). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
 
-**Marks:** ✅ built and proven identical with its switch off · ⏳ building · 🧪 from the calibration · ❓ owner's decision · ⏸ later
+**Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
-## The steps of v0.4 (the owner, 2026-10-22)
+## Why: what v0.3.x settled (the owner, 2026-10-22)
 
-| Version | Step | Reactive play it aims at |
+> "close out v0.3.x as saying definitively that these two need to be separate networks, and start on v0.4 now as the brain."
+
+| Try | The enemy picture lived in | What happened |
 |---|---|---|
-| v0.3.11 (running) | the picture now: where the enemy is, how stacked, what he holds; taught and paid | – (the knowledge in his memory) |
-| **v0.4.0** | **the picture ahead: where he is going, what for, when he appears; and the readout's picture of now replaces the hand-built belief in his inputs** | reading the enemy |
-| v0.4.1 | the prediction ahead fed back too; a small slow head reads the picture and steers his intention | changing his intention by the enemy's state |
-| v0.4.2+ | more intentions (contest, wait, stack up, ambush), a wider head, a store of the last minutes: each on a measured need | the strategy layer grown step by step |
+| The guessing game (v0.2.1, 2026-10-12) | his play memory | learnt to answer; cost aim when it shaped his memory hard; no gain in play |
+| v0.3.11 first start (10% into his memory, pay 0.002, 30-min opening) | his play memory | the readout learnt fast (10 s+ unseen 935 → 478 u) but games against v0.3.10's end 80-80, 74-86, 77-83 (~48%); the drift check put the extra change in his goal choices out of view |
+| v0.3.11b (5%, pay 0.001 then 0, 3-h opening) | his play memory | gate 80-80; stopped after 2 h for this |
 
-Held for now (the owner): rocket jumps and other movement work.
+Twice the shared memory cost his play: the picture gets its own memory.
 
-## What changes in v0.4.0
+## The two parts
 
-| Part | Detail | State |
-|---|---|---|
-| **Predict ahead** | new readout outputs: the enemy's place in 1, 2, 4 s (each with a spread), what he is going for next (mega, red, yellow, a big weapon, a holding place, "me", none; within 10 s), when he comes into view (bands: <1, 1–3, 3–6, >6 s, not within 10 s) | ❓ |
-| Graded and paid | as v0.3.11: a proper score once the future has played out in the rollout; zero-sum pay credited to the frame the prediction was made | ❓ |
-| The pay every 0.2 s | the owner, 2026-10-22: the head's clock. v0.3.11 scores the pay every 0.5 s (`--info-every 20`; the lesson grades every frame): every 0.2 s (8 frames) with its size × 0.4, the same pay a minute, less noise a scoring; the interval a live setting too | ❓ |
-| Into his memory | the same small share as v0.3.11's lesson (10%), a warm-up | ❓ |
-| The prediction ahead is not an input yet | (that is v0.4.1): v0.4.0 tests that he **can** read the enemy ahead without costing the hands | – |
-| **The swap: readout in, the old rule out** | the owner, 2026-10-22: "We're training his network for making enemy location predictions now. Once it's trained sufficiently, we'll delete the old crappy rule and insert this in its place in the inputs" ("It shouldn't be a part of him, that didn't work"). v0.2's hand-built belief inputs (last seen or heard place + 1 s of velocity, kept 20 s; ~20 inputs) go to zero; the readout's picture of now (place, spread, velocity, stack band, weapon, weapons owned; no gradient back) comes in as a new attention token (`belief`) whose gate starts shut and opens over hours: an exact start, no jolt. The old rule's readers (the legs' look point, the hunt's target) move to the readout | ❓ |
-| **Also out: the stack filter** | `EN_STACK`'s hand-written filter of the enemy's stack (6 inputs: a spawn at 125, his hits, pickups heard, the pain sound, a drift) replaced the same way by the readout's stack band (the owner, 2026-10-22: revisit every rule-made belief; senses and human limits stay rule-made on purpose) | ❓ |
-| **Also out: the old guessing game** | `--aux 0.2` (place, landmark; cut off from his memory since 2026-10-14) is redundant with the readout: removed | ❓ |
-| When the readout is good enough | already better than the rule from 2 s unseen on (update 40: 2–5 s 399 u against 499); at 0–2 s still worse (190 against 142), which pre-aim needs: match the rule there by v0.3.11's end before the swap. With the enemy in view his sight inputs stay as they are | 🧪 |
-| **On a server** | the readout is no longer dropped at export: it runs every frame in the plugins' forward pass; plugin work and an input check in a real game (`OBSDUMP`, as after every input change), a build step of its own | ❓ |
-| Calibration | from the pros' demos: how predictable a pro is 1/2/4 s ahead; how guessable "what he goes for" is | 🧪 to do |
-| Size | +~0.05 M weights in the readout (kept at export now: see the server row) | – |
-| **Graded on the pros' games too** | the demo pipeline rebuilds a pro's inputs from his recording: the same readout graded on "from what this pro saw and heard, where was his opponent, where will he be", a small share into memory, a fading weight. Grounds the picture in how people move (self-play alone teaches him to predict Bobby) | ❓ behind a switch |
+| Part | What | Clock | Learns from | State |
+|---|---|---|---|---|
+| **The hands** | v0.3.10's end, exactly: aim, movement, weapons, goal choice. Trains on v0.3.10's settings (pre-aim pay, look-back pay, `LG_DEAF`, everything else) | every frame (40 Hz) | the game, as v0.3.10 | – |
+| **The brain** (new) | its own input layer on his senses → a GRU of 256 → the readout (the enemy's place ± spread, velocity, stack band, weapon in hand, weapons owned) | every 0.2 s (5 Hz, the future strategy head's clock), from an 8-frame summary (mean + max) so a one-frame sound or glimpse is never lost | the lesson only: its guesses graded against the truth. **No pay, no cost** | ⏳ |
+| The link | **none in v0.4.0**: nothing reads the brain; no gradient between the two | – | – | – |
 
-## Start (the owner, 2026-10-22: "just do them together")
+So v0.4.0 is two things at once: more training of v0.3.10 (the hands), and the brain's pretraining before they connect.
+Size: about 0.7 M weights more (input layer, GRU, readout); a few % more time an update (target).
 
-The prediction ahead and the swap go in together: ten updates and a check against the control before the start (the rule
-since 2026-10-13), no separate arms.
+## Tests before the start
 
-## The equilibrium
-
-| Situation | What the zero-sum pay pushes toward |
+| Test | Pass |
 |---|---|
-| He reads the enemy's route | he gains |
-| He is predictable (same path, same timing, the item he always goes for) | the enemy reads him: he loses. Varied routes pay |
-| Both in view | little to predict either way |
+| Identity | the hands' actions bit-identical to v0.3.10's end on a fixed replay, with the brain added |
+| Isolation | after a step of the lesson alone, every hands weight's gradient is exactly zero |
+| A one-frame event | changes the brain's tick input (the max summary) |
+| A CPU trial of a few updates | runs; the brain's errors fall |
+| A short GPU trial | update time and the card's memory |
 
-Goals moved: counterplay and positioning, item control against the enemy.
+## Measures (the watcher, every update)
 
-## The pros' demos and real players (owner, 2026-10-22: "how do we use the pro demos here?")
-
-| Use | How | When |
-|---|---|---|
-| Calibration | how predictable a pro is 1/2/4 s ahead; how guessable "what he goes for" is | before the start |
-| Teach the picture on human opponents | the switch above | in v0.4.0's run |
-| The decision report's target | both players' stacks and places are in the demos: the report's rows filled in for the pros (measurement only) | before v0.4.1 |
-| A second check on real people | the public server's logs of people against Bobby: how well he predicts real players (a stable random id per person, no names) | once v0.4.0 runs |
-
-## Targets: the decision report (the owner, 2026-10-22: "whatever we start doing in v0.4.x needs to target these findings")
-
-The report's baseline (`tools/decision_report.py` on branch `v0312`); every v0.4.x step is judged by the rows it should move.
-
-| Row (v0.3.10's end against v0.3.9's end, 80 whole games, `data/decision/v0310_end.txt`) | Baseline |
+| What | Notes |
 |---|---|
-| Presses in when far behind (gap < −75) / dies within 10 s | 36% / 61% |
-| Presses in when far ahead (gap > 75) / the enemy dies within 10 s | 61% / 60% |
-| Closing against the gap (slope, u/s per 100 points) | 30.9 (v0.3.9: 26.7) |
-| Mega and red respawns: waiting / on time / late / **the enemy took it** / unused | 19 / 8 / 26 / **42** / 5% |
-| ... when the enemy is weak (< 100) | 20 / 9 / 30 / 35 / 6% (hardly different) |
-| Enemy within 600 u at his pickups: when he is weak / strong | 32% / 26% (he does not avoid contests when weak) |
-| Lost contests a game | 4.2 |
-| Deaths while weak (his stack < 100, the enemy's > 150) a game / share of his deaths | 4.4 / 38% |
-| After losing sight: toward the enemy when ahead / away when behind | 40% / 42% |
+| The brain's position error by time unseen (in view, 0–2, 2–5, 5–10, 10 s+, since the enemy's respawn) | against its own trend and the pros' trackers (last known 229 u, +1 s velocity 204 u, the pros' pattern 143 u) |
+| Stack band right, weapon in hand right, weapons owned right | – |
+| The hands: step per update, aim, hit rates, pre-aim, look-back | should read as v0.3.10 |
+| Checks against v0.3.10's end: **record, win rate, frag share** (whole ten-minute games, overtime) | the hands are v0.3.10 training on: ~50% expected |
 
-What v0.4.0 should move (reading the enemy, nothing yet chooses for him):
+## Ready to connect? (the test at ~11:00 Fri, before v0.4.1)
 
-| Row | Why v0.4.0 | Direction |
-|---|---|---|
-| Presses in when far behind; deaths while weak | the readout's stack in his inputs (no longer the filter's, 40 points off) and where the enemy will appear | fewer presses and deaths when behind |
-| The enemy took the respawn (42%) | "what he is going for" tells him the enemy is headed to the item | down |
-| After losing sight, by the gap | where the enemy is going | toward when ahead, away when behind, more clearly |
+The brain's answers will replace the old rule-made belief (in v0.4.2), so it must beat that rule everywhere, not on average:
 
-The item rows (timing, contests when weak) are mostly v0.4.1's: here they are measured, not expected to move much.
-
-## Pass (a quick run, a few hours)
-
-| What | Pass |
+| Test | Pass |
 |---|---|
-| Step per update, aim, hit rates | unchanged against v0.3.11's last updates |
-| Gate at update 10, checks every 20: **record, win rate, frag share**, whole ten-minute games with overtime | ≥ level against v0.3.11's end |
-| The prediction's error at 1/2/4 s | better than "he stays where he was" and approaching the pros' predictability |
-| "Going for" right | above the pattern-alone baseline from the demos |
-| The decision report (`tools/decision_report.py`) | measured against v0.3.10 and v0.3.11; v0.4.1 is where it should move |
+| Position error 0–2 s unseen | at or under the old rule's ~142 u (pre-aim needs it) |
+| 2–5 s and 10 s+ | clearly under the old rule (~500 / ~780 u), heading toward the pros' 229 / 143 u |
+| The enemy's stack | the right band more often than the old filter (68%), a smaller error (the filter: 40 points off) |
+| Levelled off | errors flat over the last ~3 h (still falling fast: train longer, the hands lose nothing) |
+| Every map | no map where it is worse than the old rule |
+| Honest | its spread matches its real error |
+
+## Settings and files
+
+| | |
+|---|---|
+| Start | v0.3.10's end (`duel_gru_v0_3_10/keep/policy_end_v0310.pt`) + a fresh brain (`tools/belief_init.py add`) |
+| League | anchors v0.3.8, v0.3.9, v0.3.10 ends + v0.3.10's last 8 snapshots |
+| Run | `duel_gru_v0_4_0`, run file `ql-bot-v040/scratch/run_duel_gru_v0_4_0.cmd`, watcher `scratchpad/v040w` |
+| Flags | `--belief 256 --belief-every 8 --track 0.3 --info-pay 0`; `TRACK_TRUTH=1` |
+| Ends | about noon Fri (the owner) |
