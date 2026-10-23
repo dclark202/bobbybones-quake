@@ -1062,6 +1062,24 @@ RJ_OPEN_HP = float(os.environ.get("RJ_OPEN_HP") or 150.0)
 RJ_CLEARED = float(os.environ.get("RJ_CLEARED") or 0.0) > 0   # only the rocket jumps a scripted player clears (sim/rj_clear.json)
 RJ_BACK = tuple(float(x_) for x_ in (os.environ.get("RJ_BACK") or "30,90").split(","))   # units of way before the take-off a try begins (from, to)
 RJ_EDGE, RJ_LAND = 120.0, 110.0                       # (the take-off's reach about it, the landing's: as the jump runs')
+#   RJ_ONLY       "aerowalk:1" (the owner, 2026-10-23: rocket jump practice for Aerowalk's red armor only): per map the rocket
+#                 jumps (numbers in its list) the runs may take; the runs are on those maps only (on the others a draw that
+#                 would be a rocket jump run is what it would be without them), within RJ_CLEARED's list when that is on. With
+#                 it set the runs' ways are built at the start even at RJ_RUN_P=0, so that RJ_RUN_P can be opened from 0 by
+#                 live_settings.env (the trainer's LS_SPEC). RJ_OPEN is not limited by it. Unset: as before
+#   RJ_FROM_JUMP=1 (the owner, 2026-10-23: rocket jumps are part of the 10% of advanced movement): on a map with rocket
+#                 jump runs their share comes out of JUMP_RUN_P's (jump runs at JUMP_RUN_P - RJ_RUN_P, at least 0), so the runs
+#                 together stay at JUMP_RUN_P; on a map without them the jump runs keep JUMP_RUN_P. Off: on top, as before
+RJ_ONLY = os.environ.get("RJ_ONLY") or ""
+RJ_FROM_JUMP = float(os.environ.get("RJ_FROM_JUMP") or 0.0) > 0
+#   RJ_LOOK_CLEAR=1 (2026-10-23): RJ_LOOK_P's look-down is the pitch of the execution that cleared the link in this
+#                 simulator (sim/rj_clear.json "first": Aerowalk 1 at 70 degrees), not the pros' median (47 there, which does
+#                 not clear it in the run's physics); a link with no such entry keeps the pros'. Off: the pros', as before
+RJ_LOOK_CLEAR = float(os.environ.get("RJ_LOOK_CLEAR") or 0.0) > 0
+RJ_ONLY_MAP = {}
+for part_ in RJ_ONLY.split(";"):
+    if ":" in part_:
+        RJ_ONLY_MAP[part_.split(":")[0].strip()] = {int(x_) for x_ in part_.split(":")[1].split(",") if x_.strip()}
 PLAY_VARS = PLAY_VARS + ("RL_QL", "RJ_OPEN", "RJ_OPEN_COST", "RJ_OPEN_HP", "RJ_CLEARED")
 #   TEACH_BEST=1  the movement teacher's labels are its likeliest choice per output, not a sample of its choices (B-201: a
 #                 pupil of sampled labels learned its spread with it; tools/label_check.py --best says what they are worth)
@@ -2335,6 +2353,24 @@ TRACK_UNSEEN_CAP = 60.0
 if TRACK_TRUTH:
     AUX_COLS = AUX_COLS + ("en_vfwd", "en_vleft") + tuple("en_own_" + w_ for w_ in TRACK_OWN) + (
         "trk_on", "unseen_s", "bel_ok", "bel_fwd", "bel_left", "bel_up", "bel_age", "es_stack")
+# v0.4.0 brain, the zones and the velocity as speed and direction (the owner, 2026-10-23: "let's replace the 10+s range with
+# the distribution over locations"; 2026-10-22: "speed+direction separately makes sense. Probably both can be averaged over a
+# short window"). TRACK_Z=1 (a training switch, off by default, with TRACK_TRUTH only; off: info["aux"] as above) adds the
+# truth of the readout's new outputs (sim/track_z.py). Labels only, never inputs, never read by the simulator itself:
+#   en_zone                  the zone the enemy stands in (sim/zonemap.py: the map's sim/zones/<map>.json); -1 with no zones file
+#   zone_n                   the map's number of zones (0 with no file): the readout's zone odds are masked to it
+#   zone_map                 the map's number in zones.MAPS (-1: none)
+#   en_spd8                  the enemy's mean horizontal speed over the last TRACK_Z_WIN frames (8: 0.2 s, the brain's tick;
+#                            fewer since his spawn), units a second
+#   en_mvf8, en_mvl8         the enemy's mean horizontal velocity over the same frames, turned to his facing now (units a
+#                            second): its direction is the direction's truth, its size against en_spd8 how straight he went
+#   zone_seen                the zone the enemy stood in when he was last in his view (this life of the enemy's; -1: not
+#                            seen since the enemy's spawn): a bar for the readout's zones (the counters), never an input
+TRACK_Z = float(os.environ.get("TRACK_Z") or 0.0) > 0
+TRACK_Z_WIN = int(os.environ.get("TRACK_Z_WIN") or 8)
+if TRACK_Z:
+    assert TRACK_TRUTH, "TRACK_Z needs TRACK_TRUTH=1"
+    AUX_COLS = AUX_COLS + ("en_zone", "zone_n", "zone_map", "en_spd8", "en_mvf8", "en_mvl8", "zone_seen")
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -2913,6 +2949,11 @@ class DuelEnv:
             if tb_:
                 self.w_table = np.array(tb_["weapon_by_100_units"], np.float32)
         self.map_id = MAP_IDS.index(name) if name in MAP_IDS else -1
+        self.zones = None                               # (TRACK_Z) the map's zones (sim/zonemap.py), for the truth columns only
+        if TRACK_Z:
+            import zonemap as zones_
+            self.zones = zones_.load(name)
+            self.zone_map = zones_.MAPS.index(name) if name in zones_.MAPS else -1
         self.sc_style = 0                               # target movement: 0 random (training), else STYLES index
         self.close_band = (300.0, 700.0)                # distance of "close" spawns (test rooms set their own)
         self.fixed_kind = None                          # test rooms: (kind, scripted type for the odd player)
@@ -3393,7 +3434,8 @@ class DuelEnv:
         for part_ in RJ_OPEN.split(";"):
             if ":" in part_:
                 rj_open_[part_.split(":")[0].strip()] = part_.split(":")[1].strip()
-        if (RJ_RUN_P > 0 or mapn_ in rj_open_) and self.route is not None:
+        rj_runs_ = (RJ_RUN_P > 0 or RJ_ONLY_MAP) and (not RJ_ONLY_MAP or mapn_ in RJ_ONLY_MAP)   # (RJ_ONLY: the runs on its maps only)
+        if (rj_runs_ or mapn_ in rj_open_) and self.route is not None:
             RJ_ = RJM
             R_ = self.route
             rjs_ = RJ_.load(mapn_, only=RJ_.cleared(mapn_) if RJ_CLEARED else None)
@@ -3401,10 +3443,17 @@ class DuelEnv:
             items_ = [g_ for g_, lab_ in enumerate(self.route_goal) if INTENTS.index(lab_) not in self.intent_more
                       and 0 < INTENTS.index(lab_) < HOLD_INTENT]       # (a row of an item the map has once: its intention names it alone)
             keep_ = sorted({l_[3] for l_ in lk_})
-            if RJ_RUN_P > 0 and items_:
+            if RJ_ONLY_MAP:                                  # (RJ_ONLY) the runs' rocket jumps: its numbers only
+                keep_ = [k_ for k_ in keep_ if rjs_[k_]["id"] in RJ_ONLY_MAP.get(mapn_, ())]
+            if rj_runs_ and items_ and keep_:
                 self.rjs = [rjs_[k_] for k_ in keep_]
+                if RJ_LOOK_CLEAR:                            # (RJ_LOOK_CLEAR) the look-down of the execution that cleared it
+                    fc_ = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "rj_clear.json"))).get("first", {}).get(mapn_, {})
+                    for r_ in self.rjs:
+                        if str(r_["id"]) in fc_ and fc_[str(r_["id"])].get("pitch") is not None:
+                            r_["look"] = float(fc_[str(r_["id"])]["pitch"])
                 new_ = {k_: j_ for j_, k_ in enumerate(keep_)}
-                lk2_ = [(a_, b_, t_, new_[k_]) for a_, b_, t_, k_ in lk_]
+                lk2_ = [(a_, b_, t_, new_[k_]) for a_, b_, t_, k_ in lk_ if k_ in new_]   # (RJ_ONLY: its links only)
                 for j_, r_ in enumerate(self.rjs):
                     g_ = min(items_, key=lambda q_: float(np.linalg.norm(np.asarray(R_.goals[q_]) - r_["b"])))   # (the item nearest the landing: its row)
                     X_ = RJ_.field(R_, g_, [l_ for l_ in lk2_ if l_[3] == j_], self.rjs, goal=r_["b"])
@@ -8967,6 +9016,8 @@ class DuelEnv:
         """start an item run for match m in a share of the rounds (see RUN_LEN); returns its seats, or None"""
         pj = self.jump_run_p if self.jump_tries else 0.0     # (jump runs: a share of the playing time beside the item runs')
         pr = self.rj_run_p if self.rj_live else 0.0          # (RJ_RUN_P: rocket jump runs, the same)
+        if RJ_FROM_JUMP and pr > 0:                          # (RJ_FROM_JUMP) out of the jump runs' share, not on top of it
+            pj = max(0.0, pj - pr) if self.jump_tries else 0.0
         if self.item_run_p + pj + pr <= 0 or self.route is None or self.fixed_kind is not None or getattr(self, "lab_force", None):
             return None
         if self.lab is not None:
@@ -9379,7 +9430,7 @@ class DuelEnv:
         self._fresh(i, face)
         self.ra[i] = False                                  # (his rockets of the last try are gone with it)
         if self.rng.random() < RJ_LOOK_P:                   # (RJ_LOOK_P) his view already down at the pros' look-down
-            self.pitch[i] = float(np.clip(r["pitch"] + self.rng.uniform(-5, 5), 0.0, 89.0))
+            self.pitch[i] = float(np.clip(r.get("look", r["pitch"]) + self.rng.uniform(-5, 5), 0.0, 89.0))   # (RJ_LOOK_CLEAR: "look")
         self.hp[i], self.armor[i] = RJM.stack(r["stack"])
         self.has[i] = False
         self.ammo[i] = 0.0
@@ -9824,6 +9875,22 @@ class DuelEnv:
         gone = (self.hp[foe] <= 0) | born
         u_ = np.where(vis, 0.0, np.minimum(self.trk_unseen + DT, TRACK_UNSEEN_CAP))
         self.trk_unseen = np.where(gone & ~vis, TRACK_UNSEEN_CAP, u_)
+        if TRACK_Z:                                          # (TRACK_Z) every player's horizontal velocity, the last TRACK_Z_WIN frames
+            new_ = life < self.trk_life                      # (of his life: a spawn clears his rows)
+            if getattr(self, "trk_vh", None) is None or self.trk_vh.shape[1] != n:
+                self.trk_vh = np.zeros((TRACK_Z_WIN, n, 2))
+                self.trk_vc = np.zeros(n)
+                self.trk_vi = 0
+            self.trk_vh[:, new_] = 0.0
+            self.trk_vc[new_] = 0.0
+            self.trk_vh[self.trk_vi % TRACK_Z_WIN] = np.asarray(self.state[:n, 3:5], np.float64)
+            if getattr(self, "trk_zseen", None) is None or len(self.trk_zseen) != n:
+                self.trk_zseen = np.full(n, -1, np.int64)
+            if self.zones is not None:                       # (the zone he last saw the enemy in; the enemy's spawn forgets it)
+                zf_ = self.zones.locate(self.state[foe, :3])
+                self.trk_zseen = np.where(vis, zf_, np.where(gone, -1, self.trk_zseen))
+            self.trk_vi += 1
+            self.trk_vc = np.minimum(self.trk_vc + 1.0, TRACK_Z_WIN)
         self.trk_life = life.copy()
 
     def _trk_cols(self, out, C, s, foe, grp, c, si):
@@ -9855,6 +9922,20 @@ class DuelEnv:
             out[:, C["es_stack"]] = self.es_h[ar, k_] + self.es_a[ar, k_]
         else:
             out[:, C["es_stack"]] = -1.0
+        if TRACK_Z:                                          # (TRACK_Z) the zone the enemy stands in; his speed and way, 0.2 s
+            Z_ = self.zones
+            out[:, C["en_zone"]] = Z_.locate(s[foe, :3]) if Z_ is not None else -1
+            out[:, C["zone_n"]] = Z_.k if Z_ is not None else 0
+            out[:, C["zone_map"]] = self.zone_map
+            vh_ = getattr(self, "trk_vh", None)
+            if vh_ is not None and vh_.shape[1] == n:
+                cnt_ = np.maximum(self.trk_vc[foe], 1.0)
+                mv_ = vh_[:, foe].sum(0) / cnt_[:, None]
+                out[:, C["en_spd8"]] = np.linalg.norm(vh_[:, foe], axis=2).sum(0) / cnt_
+                out[:, C["en_mvf8"]] = c * mv_[:, 0] + si * mv_[:, 1]
+                out[:, C["en_mvl8"]] = -si * mv_[:, 0] + c * mv_[:, 1]
+            zs_ = getattr(self, "trk_zseen", None)
+            out[:, C["zone_seen"]] = zs_ if (zs_ is not None and len(zs_) == n) else -1
 
     def aux(self, st=None, fall=None, events=(), died=None):
         """info["aux"] (see AUX_COLS): [players, len(AUX_COLS)] float32, the game as it truly stands now and, given step()'s

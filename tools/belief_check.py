@@ -7,7 +7,7 @@
    gru_seq (the library's GRU cut at the resets).
 2. a one-frame spike: a single frame's input changed between two ticks changes that tick's input (the max part by the
    spike's full size), and nothing before it.
-3. isolation: the readout's lesson on the belief's state gives a gradient to the belief and the readout only (every
+3. isolation: the readout's lesson (both parts: sim/track.py and sim/track_z.py) on the belief's state gives a gradient to the belief and the readout only (every
    other parameter of a stand-in policy that reads the same inputs: no gradient at all).
 """
 import os
@@ -19,6 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "sim"))
 import belief as B                                             # noqa: E402
 import track as track_                                         # noqa: E402
+import track_z as trz_                                         # noqa: E402
 from train_duel_rnn import gru_seq, gru_layout                             # noqa: E402
 
 
@@ -95,8 +96,10 @@ def main():
     pol.belief = mod
     TL = track_.layout()
     pol.track = track_.make_module(H, TL)
+    pol.trackz = trz_.make_module(H, trz_.layout(inp=H))     # (2026-10-23: the readout's second part, its lesson beside)
     with torch.no_grad():
         pol.track[2].weight.normal_(0, 0.1)                     # (at zero, the first layer would get no gradient)
+        pol.trackz[2].weight.normal_(0, 0.1)
     xs = x.clone()
     h, hs = torch.zeros(n, 24), []
     for t in range(T):                                          # the policy's forward pass, in the same graph
@@ -107,13 +110,20 @@ def main():
     y = torch.zeros(T // K, n, len(track_.COLS))
     y[..., 0:3] = torch.randn(T // K, n, 3) * 500
     lo, _ = track_.loss(pol.track(bs), y, track_.DEFAULT_W, torch.ones(T // K, n))
+    yz = torch.zeros(T // K, n, len(trz_.COLS))
+    yz[..., 0] = torch.randint(0, 16, (T // K, n))
+    yz[..., 1] = 16
+    yz[..., 2] = 300 + 100 * torch.randn(T // K, n)
+    yz[..., 3:5] = 300 * torch.randn(T // K, n, 2)
+    lz, _ = trz_.loss(pol.trackz(bs), yz, trz_.DEFAULT_W, torch.ones(T // K, n))
+    lo = lo + lz
     names = [nm for nm, _ in pol.named_parameters()]
     gr = torch.autograd.grad(lo, [p for _, p in pol.named_parameters()], allow_unused=True)
-    bad = [nm for nm, g in zip(names, gr) if not nm.startswith(("belief.", "track.")) and g is not None and float(g.abs().sum()) != 0.0]
-    got = [nm for nm, g in zip(names, gr) if nm.startswith(("belief.", "track.")) and g is not None and float(g.abs().sum()) > 0.0]
+    bad = [nm for nm, g in zip(names, gr) if not nm.startswith(("belief.", "track.", "trackz.")) and g is not None and float(g.abs().sum()) != 0.0]
+    got = [nm for nm, g in zip(names, gr) if nm.startswith(("belief.", "track.", "trackz.")) and g is not None and float(g.abs().sum()) > 0.0]
     print("3. the lesson's gradient: {} of {} policy parameters reached ({}); belief and readout parameters reached: {} of {}".format(
-        len(bad), sum(not nm.startswith(("belief.", "track.")) for nm in names), bad or "none",
-        len(got), sum(nm.startswith(("belief.", "track.")) for nm in names)))
+        len(bad), sum(not nm.startswith(("belief.", "track.", "trackz.")) for nm in names), bad or "none",
+        len(got), sum(nm.startswith(("belief.", "track.", "trackz.")) for nm in names)))
     assert not bad
     print("belief_check: all passed")
 
