@@ -181,8 +181,9 @@ def jump_far_rec(agg, agg_map):
                         for m_, x_ in ((m_, one_(v_)) for m_, v_ in agg_map.items()) if x_[0] + x_[2] > 0})
 
 
-BRAIN_PFX = ("track.", "trackz.", "belief.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
-LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W")     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
+BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
+LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
+                "BELIEF_LR", "AHEAD_W")     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1161,6 +1162,21 @@ def main():
     ap.add_argument("--track-z-warm", type=float, default=60.0, help="... minutes over which its lesson rises from nothing (from --track-z-start)")
     ap.add_argument("--track-z-start", type=float, default=-1.0, help="... the minute its lesson counts from (-1: this process's start)")
     ap.add_argument("--track-z-lr-scale", type=float, default=-1.0, help="... its layers learn at this many times --lr (-1: as --track-lr-scale)")
+    # v0.4.1 (docs/v0.4.0/RUN_v0.4.1.md; sim/btoken.py): the brain's answer as one more token of the hands' attention, behind a gate
+    # that is shut (exactly: the token is not there) until it opens; the answers the hands saw are kept with the rollout
+    ap.add_argument("--btoken", type=int, default=0, help="v0.4.1: 1 = the brain's token in the hands' attention (a network without one gets it, "
+                    "its gate shut; a network that has one keeps it). 0 = off (a network that has one plays with its gate shut)")
+    ap.add_argument("--btoken-delay", type=float, default=60.0, help="... minutes after --btoken-start before the gate begins to open")
+    ap.add_argument("--btoken-open", type=float, default=240.0, help="... minutes for the gate from 0 to 1 (live: BTOK_GATE_OPEN; 0 holds it)")
+    ap.add_argument("--btoken-cap", type=float, default=1.0, help="... the gate is never above this (live: BTOK_GATE_CAP; 0 shuts it at once)")
+    ap.add_argument("--btoken-start", type=float, default=-1.0, help="... the minute the delay counts from (-1: this process's start; pass it on every resume)")
+    ap.add_argument("--btoken-gate", type=float, default=-1.0, help="... the gate to start this process at (-1: the network's own, 0 for a new token)")
+    ap.add_argument("--btoken-lr-scale", type=float, default=1.0, help="... the token's own first layer and mark learn at this many times --lr")
+    ap.add_argument("--ahead", default="", help="v0.4.1: the brain's readout of what comes next (sim/ahead.py), its lesson by part, e.g. "
+                    "fut:0.5,target:0.25,appear:0.25 (with --belief and --track). '' = off (a network that has it keeps it)")
+    ap.add_argument("--ahead-warm", type=float, default=30.0, help="... minutes over which its lesson rises from nothing (from --ahead-start)")
+    ap.add_argument("--ahead-start", type=float, default=-1.0, help="... the minute its lesson counts from (-1: this process's start)")
+    ap.add_argument("--ahead-lr-scale", type=float, default=-1.0, help="... its layers learn at this many times --lr (-1: as --track-lr-scale)")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -1451,6 +1467,8 @@ def main():
     TRK_CK = None                                            # (--track, v0.3.11) the belief readout's layout: comes with the network
     BEL_CK = None                                            # (--belief, v0.4.0 A) the belief memory's layout: comes with the network
     TRZ_CK = None                                            # (--track-z, v0.4.0) the readout's second part: comes with the network
+    BTOK_CK = None                                           # (--btoken, v0.4.1) the brain's token: comes with the network
+    AH_CK = None                                             # (--ahead, v0.4.1) the readout of what comes next: comes with the network
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
@@ -1463,6 +1481,8 @@ def main():
         TRK_CK = ck0_.get("track") if any(k_.startswith("track.") for k_ in ck0_["model"]) else None
         BEL_CK = ck0_.get("belief") if any(k_.startswith("belief.") for k_ in ck0_["model"]) else None
         TRZ_CK = ck0_.get("track_z") if any(k_.startswith("trackz.") for k_ in ck0_["model"]) else None
+        BTOK_CK = ck0_.get("btoken") if any(k_.startswith("attn.btok_") for k_ in ck0_["model"]) else None
+        AH_CK = ck0_.get("ahead") if any(k_.startswith("ahead.") for k_ in ck0_["model"]) else None
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
         ATT = dict(ATT, mem=H)
@@ -1613,6 +1633,40 @@ def main():
         TRZ_L = dict(TRZ_L, weights=TRZ_PARTS)
         TRK_SAVE["track_z"] = TRZ_L
     TRZ_LR = float(a.track_z_lr_scale) if a.track_z_lr_scale >= 0 else float(a.track_lr_scale)
+    import btoken as btoken_                                 # (v0.4.1) the brain's token (sim/btoken.py) and the readout ahead (sim/ahead.py)
+    import ahead as ahead_
+    BTOK_L = BTOK_CK
+    if BTOK_L is None and a.btoken:
+        assert BEL and TRK, "--btoken: with --belief and its readout (--track)"
+        BTOK_L = btoken_.layout(TRK_L, TRZ_L, BK, btoken_.seen_col(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "INPUTS.csv")))
+    BTOK = BTOK_L is not None                                # the token's layers are in the network
+    BTOK_ON = BTOK and bool(a.btoken)                        # it is made and fed in this run's rollouts
+    if BTOK:
+        assert ATT is not None, "--btoken: the network has no attention part"
+        ATT = dict(ATT, btok=int(BTOK_L["dim"]))
+        BTOK_G = [float(a.btoken_gate) if a.btoken_gate >= 0 else float(BTOK_L.get("gate", 0.0))]
+        if not BTOK_ON:
+            BTOK_G[0] = 0.0
+        print(btoken_.describe(dict(BTOK_L, gate=BTOK_G[0])) + (" (from the network)" if BTOK_CK is not None else " (new: shut)")
+              + ("" if BTOK_ON else ": NOT fed in this run (--btoken 0): the gate stays shut"), flush=True)
+    else:
+        BTOK_G = [0.0]
+    AH_PARTS = ahead_.parse_weights(a.ahead) if a.ahead else None
+    AH_L = AH_CK
+    if AH_L is None and a.ahead:
+        assert BEL, "--ahead: with --belief (it reads the belief's state)"
+        AH_L = ahead_.layout(ACTION_DIMS[I_HEAD], inp=int(BEL_L["hid"]), weights=AH_PARTS)
+    AH = AH_L is not None
+    if AH and AH_PARTS is None:
+        AH_PARTS = dict(AH_L["weights"])
+    AH_ON = AH and TRK_ON and bool(a.ahead)
+    AH_LR = float(a.ahead_lr_scale) if a.ahead_lr_scale >= 0 else float(a.track_lr_scale)
+    if AH:
+        AH_L = dict(AH_L, weights=AH_PARTS)
+        TRK_SAVE["ahead"] = AH_L
+        print("ahead (v0.4.1): the brain's readout of the enemy in {} s, what he goes for ({}), when he appears; {}; lesson {} rising over {} min, "
+              "its layers at {} times --lr".format(AH_L["horiz"], AH_L["n_target"], "from the network" if AH_CK is not None else "new (its last layer at zero)",
+                                                    AH_PARTS if AH_ON else "off", a.ahead_warm, AH_LR), flush=True)
     TRZ_TC, TRZ_MAPI = None, None
     TRZ_PRIOR = np.zeros((len(zonemap_.MAPS), trz_.MAX_Z))    # (the counters' map prior: how often the enemy stood in each zone, so far)
     TRK_IX, TRK_TC, TRK_K = None, None, [0.0, 0.0]           # (the truth's columns; the pay's k and the lesson's weight of this rollout)
@@ -1744,6 +1798,8 @@ def main():
                 self.belief = belief_.make_module(BEL_L)
             if TRZ:                                              # (--track-z) the readout's second part: its own random stream,
                 self.trackz = trz_.make_module(int(TRZ_L["inp"]), TRZ_L)    # its last layer at zero
+            if AH:                                               # (--ahead, v0.4.1) the readout of what comes next: its own stream, last layer at zero
+                self.ahead = ahead_.make_module(int(AH_L["inp"]), AH_L)
             if ORDER:                                            # (--ordered-heads) a table a link: a row for each choice before, at zero
                 self.order = nn.Module()
                 for p_, c_ in ORDER:
@@ -1804,14 +1860,14 @@ def main():
                 return add
             return dadd, gfn
 
-        def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None):
+        def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None, bt=None):
             dadd, gadd = self.uni_parts(xl)                      # (--legs-feat, --legs-guide; xl: the branch's inputs of this frame)
             if HAS_CELLS:
                 ids = x[:, -2:].long().clamp(0, E_.MAX_CELLS - 1)   # the last two inputs are cell numbers, not values
                 x = torch.cat([x[:, :-2], self.cell(ids[:, 0]), self.cell(ids[:, 1])], 1)
             e = self.enc(x)
             if self.attn is not None and (f is not None or self.door_open):
-                e = e + ((self.attn(x, hm=h) if ATT_MEM else self.attn(x)) if f is None else f)   # what the door lets through, added to
+                e = e + ((self.attn(x, hm=h, bt=bt) if ATT_MEM else self.attn(x, bt=bt)) if f is None else f)   # what the door lets through, added to
                 #                                                  the old encoder's (--attn-mem-query: h is his memory of the frame before)
             if hd is not None:                                   # (--head) his fast GRU reads the plan; the head ticks on its frames
                 h = self.gru(e + self.head.plan_in(hd.plan) if dadd is None else e + self.head.plan_in(hd.plan) + dadd, h)
@@ -1903,7 +1959,7 @@ def main():
             sd = {k_: v_ for k_, v_ in sd.items() if not k_.startswith(BRAIN_PFX)}   # memory beside one on the belief: left out;
         bad = net.load_state_dict(sd, strict=False)          # the learner's own readout reads every seat)
         odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.") and not k_.startswith("head.aux.")
-               and not k_.startswith(BRAIN_PFX)]     # (v0.3.11: the belief readout, as the aux layers; v0.4.0: the belief)
+               and not k_.startswith(BRAIN_PFX) and not k_.startswith("attn.btok_")]     # (v0.4.1: a file without the brain's token plays it shut)     # (v0.3.11: the belief readout, as the aux layers; v0.4.0: the belief)
         assert not odd, "the network does not fit: {}".format(odd)
 
     HEAD_SHUT = ("plan_in.", "target.", "way.", "win.", "aux.")      # (--head) the links of a new head: zeros
@@ -2033,7 +2089,7 @@ def main():
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))
-                            and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith(BRAIN_PFX)],
+                            and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith(BRAIN_PFX) and not n_.startswith("attn.btok_")],
                            lr=a.lr, eps=1e-5, **({"fused": True} if a.adam_fused else {}))   # (LEGS_IN: not the branch; --head: not the head)
     if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
         opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
@@ -2064,6 +2120,19 @@ def main():
         if TRZ and not TRZ_GROUP[0]:
             opt.add_param_group({"params": list(pol.trackz.parameters()), "lr": a.lr * TRZ_LR, "lr_scale": TRZ_LR})
             TRZ_GROUP[0] = True
+    V41_GROUP = [False]
+    N_V41 = int(BTOK) + int(AH)
+
+    def v41_group():
+        """(v0.4.1) the brain token's first layer and mark, then the readout ahead, in groups of their own after the others: an
+        optimizer saved without them (v0.4.0's) loads into the groups before them"""
+        if N_V41 and not V41_GROUP[0]:
+            if BTOK:
+                opt.add_param_group({"params": [p_ for n_, p_ in pol.named_parameters() if n_.startswith("attn.btok_")],
+                                     "lr": a.lr * a.btoken_lr_scale, "lr_scale": a.btoken_lr_scale})
+            if AH:
+                opt.add_param_group({"params": list(pol.ahead.parameters()), "lr": a.lr * AH_LR, "lr_scale": AH_LR})
+            V41_GROUP[0] = True
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
@@ -2079,7 +2148,11 @@ def main():
         if os.path.exists(op_):
             try:
                 os_ = torch.load(op_, weights_only=False, map_location=dev)
-                if TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ):
+                if N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41:
+                    trk_group()                               # (v0.4.1: saved with the token's and the ahead's groups, after the others)
+                    trz_group()
+                    v41_group()
+                elif TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ):
                     trk_group()                               # (--track: saved with the readout's group; --belief: and the belief's;
                     trz_group()                               # --track-z: and the second part's)
                 elif TRK and TRZ and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL):
@@ -2112,6 +2185,7 @@ def main():
             print("optimizer: no opt.pt, a cold start", flush=True)
     trk_group()                                              # (--track) the readout's group, if the optimizer's state did not bring it
     trz_group()                                              # (--track-z) the second part's, after it
+    v41_group()                                              # (v0.4.1) the token's and the ahead's, after them
     TRZ_T0 = float(a.track_z_start) if a.track_z_start >= 0 else float(elapsed0)
     TRZ_LIVE = [1.0]                                         # (live.json's TRACK_Z_W: a factor on the part's lesson, 1 at the start)
 
@@ -2120,6 +2194,21 @@ def main():
         if not TRZ_ON:
             return 0.0
         return TRZ_LIVE[0] * (min(1.0, max(0.0, mins - TRZ_T0) / a.track_z_warm) if a.track_z_warm > 0 else 1.0)
+    BEL_LR_NOW = [float(BEL_LR) if BEL else 0.0]             # (v0.4.1, live.json's BELIEF_LR) the brain's rate as a share of --lr
+    AH_LIVE = [1.0]                                          # (live.json's AHEAD_W: a factor on the ahead lesson)
+    AH_T0 = float(a.ahead_start) if a.ahead_start >= 0 else float(elapsed0)
+    BTOK_T0 = float(a.btoken_start) if a.btoken_start >= 0 else float(elapsed0)
+    BTOK_LAST = [None]                                       # (the minute of the gate's last step)
+    if BTOK_ON:
+        print("btoken: gate {:.4f} now; shut until minute {:.1f} (--btoken-start {:.1f} + --btoken-delay {:g}), then 0 -> 1 over {:g} min, "
+              "never above {:g} (live: BTOK_GATE_CAP, BTOK_GATE_OPEN; BELIEF_LR the brain's rate, now {:g})".format(
+                  BTOK_G[0], BTOK_T0 + a.btoken_delay, BTOK_T0, a.btoken_delay, a.btoken_open, a.btoken_cap, BEL_LR_NOW[0]), flush=True)
+
+    def ah_lesson_w(mins):
+        """(--ahead) the factor of its lesson at this minute: rising from nothing over --ahead-warm"""
+        if not AH_ON:
+            return 0.0
+        return AH_LIVE[0] * (min(1.0, max(0.0, mins - AH_T0) / a.ahead_warm) if a.ahead_warm > 0 else 1.0)
     TRK_T0 = float(a.track_start) if a.track_start >= 0 else float(elapsed0)    # (--track) the minute its lesson and pay count from
     assert a.info_pay <= 0 or a.track > 0 or TRK_CK is not None, "--info-pay: with --track (a readout that learns) or one that has learnt"
 
@@ -2222,6 +2311,7 @@ def main():
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
                         hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE, **TRK_SAVE, **BEL_SAVE,
+                        **({"btoken": dict(BTOK_L, gate=float(BTOK_G[0]))} if BTOK else {}),     # (v0.4.1: the gate as it is now)
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
@@ -2252,6 +2342,7 @@ def main():
     snap_players = torch.from_numpy(league & is_odd).to(dev)          # controlled by the snapshot
     learn = (~snap_players).float()                                    # trained on
     snaps = []                                                         # frozen past policies (state dicts)
+    SNAP_G = {}                                                        # (v0.4.1) a league file's own gate of the brain token
     SNAP_NS = {}                                                       # (--no-switch) id(state dict) -> its switch is retired (a step-6 network)
     OPP_NS = [False]                                                   # ... the league network of this rollout's
     if a.resume:                                                       # the league survives a restart
@@ -2261,6 +2352,7 @@ def main():
                         key=lambda f_: (int((re_.findall(r"\d+", os.path.basename(f_)) or ["0"])[0]), f_))[-8:]:
             ck_ = torch.load(f, weights_only=False, map_location=dev)
             snaps.append(ck_["model"])
+            SNAP_G[id(snaps[-1])] = float((ck_.get("btoken") or {}).get("gate", 0.0)) if any(k_.startswith("attn.btok_") for k_ in ck_["model"]) else 0.0
             SNAP_NS[id(snaps[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")   # (--no-switch) a step-6 file
     anchors, vs_anchor = [], False                                     # ... and opponents that never leave it (--anchor-p)
     if a.anchor_p > 0:
@@ -2268,6 +2360,7 @@ def main():
         for f in sorted(glob.glob(os.path.join(out, "snapshots", "anchor_*.pt"))):
             ck_ = torch.load(f, weights_only=False, map_location=dev)
             anchors.append(ck_["model"])
+            SNAP_G[id(anchors[-1])] = float((ck_.get("btoken") or {}).get("gate", 0.0)) if any(k_.startswith("attn.btok_") for k_ in ck_["model"]) else 0.0
             SNAP_NS[id(anchors[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")
         print("league anchors: {} (in {:.0%} of the rollouts)".format(len(anchors), a.anchor_p), flush=True)
     opp = copy.deepcopy(pol).eval()
@@ -2385,7 +2478,9 @@ def main():
     LIVE_START = {k_: os.environ.get(k_) for k_ in getattr(E_, "LIVE_VARS", ())}      # the run's start: its environment
     LIVE_TSTART = dict(DMG_TAKEN_W=float(a.dmg_taken_w), DMG_REWARD=float(a.dmg_reward),
                        **({"INFO_PAY": float(a.info_pay), "TRACK_W": float(a.track), "TRACK_TRUNK": float(a.track_trunk)} if TRK_ON else {}),
-                       **({"TRACK_Z_W": 1.0} if TRZ_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
+                       **({"TRACK_Z_W": 1.0} if TRZ_ON else {}),
+                       **({"BTOK_GATE_CAP": float(a.btoken_cap), "BTOK_GATE_OPEN": float(a.btoken_open)} if BTOK_ON else {}),
+                       **({"BELIEF_LR": float(BEL_LR)} if BEL else {}), **({"AHEAD_W": 1.0} if AH_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
         print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
@@ -2484,6 +2579,12 @@ def main():
         def __iter__(self):
             return (self[j_] for j_ in range(len(self.parts)))
     CARRY = dict(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp)    # from rollout to rollout
+    if BTOK_ON:                                                          # (v0.4.1) the brain token's state of every seat (numpy, on the host)
+        assert TRK_ON, "--btoken: with the readout's truth (TRACK_TRUTH=1): his own place and yaw come from info['aux']"
+        assert not any(f_.startswith("zone") or f_.startswith("ztop") for f_ in BTOK_L["feats"]) or "zone_map" in tuple(E_.AUX_COLS), \
+            "--btoken with the zones: TRACK_Z=1 (the zones' map number comes from info['aux'])"
+        CARRY["tok"] = btoken_.Token(N, BTOK_L)
+        CARRY["btg"] = BTOK_G[0]
     if BEL:                                                              # (--belief) the belief's live state of every seat (the learner's
         CARRY["bs"] = belief_.State(N, BEL_L, dev)                       # network on every seat, as the readout's counters read it)
 
@@ -2523,10 +2624,16 @@ def main():
                     a.track = lt_.get("TRACK_W", a.track)                # (v0.3.11b: the lesson's weight, its warm-up as started)
                     a.track_trunk = min(1.0, lt_.get("TRACK_TRUNK", a.track_trunk))   # (v0.3.11b: its share into his memory, at the next learning step)
                     TRZ_LIVE[0] = float(lt_.get("TRACK_Z_W", TRZ_LIVE[0]))   # (--track-z: a factor on its lesson; 0 pauses it)
+                    a.btoken_cap = float(lt_.get("BTOK_GATE_CAP", a.btoken_cap))     # (v0.4.1: the gate's cap: 0 shuts it at once)
+                    a.btoken_open = float(lt_.get("BTOK_GATE_OPEN", a.btoken_open))  # (... the minutes of its opening: 0 holds it)
+                    BEL_LR_NOW[0] = float(lt_.get("BELIEF_LR", BEL_LR_NOW[0]))       # (... the brain's rate, at the next learning step)
+                    AH_LIVE[0] = float(lt_.get("AHEAD_W", AH_LIVE[0]))               # (... a factor on the ahead lesson)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
                     LIVE_KEPT = dict(sim=dict(lv_), trainer=dict(lt_), from_update=update)
                     force_ = dict(now_[0], DMG_REWARD=a.dmg_reward, **({"INFO_PAY": a.info_pay, "TRACK_W": a.track, "TRACK_TRUNK": a.track_trunk} if TRK_ON else {}),
-                                  **({"TRACK_Z_W": TRZ_LIVE[0]} if TRZ_ON else {}))
+                                  **({"TRACK_Z_W": TRZ_LIVE[0]} if TRZ_ON else {}),
+                                  **({"BTOK_GATE_CAP": a.btoken_cap, "BTOK_GATE_OPEN": a.btoken_open} if BTOK_ON else {}),
+                                  **({"BELIEF_LR": BEL_LR_NOW[0]} if BEL else {}), **({"AHEAD_W": AH_LIVE[0]} if AH_ON else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
                         json.dump(dict(from_update=update, minutes=round(mins, 2), file=json.loads(txt_), in_force=force_), f_, indent=1)
@@ -2536,6 +2643,11 @@ def main():
         LS_REC = live_settings_poll(LS, pipes, E_, update, mins, LIVE_START, LIVE_PATH)   # (the safe restart: live_settings.env)
         if TRK_ON:                                                       # (--info-pay) the pay's k of this rollout (live.json's INFO_PAY, the delay, the ramp)
             TRK_K[0] = trk_pay_k(mins)
+        if BTOK_ON:                                                      # (v0.4.1) the brain token's gate of this rollout: played and learnt at it
+            BTOK_G[0] = btoken_.gate_step(BTOK_G[0], mins, BTOK_LAST[0], BTOK_T0, a.btoken_delay, a.btoken_open, a.btoken_cap)
+            BTOK_LAST[0] = mins
+            pol.attn.bgate = BTOK_G[0]
+            CARRY["btg"] = BTOK_G[0]
         if a.gate_open > 0 and bool(GATE_M.any()):                       # (--gate-open) before the rollout: it is played and learnt
             gf_ = min(1.0, max(0.0, mins - gate0) / a.gate_open)        # from at one gate
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
@@ -2571,6 +2683,7 @@ def main():
         if time.time() - last_snap > a.snapshot_min * 60:                # new league member
             last_snap = time.time()
             snaps.append(copy.deepcopy(pol.state_dict()))
+            SNAP_G[id(snaps[-1])] = float(BTOK_G[0])                     # (v0.4.1: the gate it played at)
             SNAP_NS[id(snaps[-1])] = NO_SW                               # (--no-switch: his own new snapshots are step-6 networks)
             snaps = snaps[-8:]
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
@@ -2578,6 +2691,8 @@ def main():
             vs_anchor = bool(anchors) and np.random.random() < a.anchor_p
             sd_o_ = anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))]
             load_net(opp, sd_o_)
+            if BTOK:                                                     # (v0.4.1) the file's own gate (0: no token, or shut)
+                opp.attn.bgate = float(SNAP_G.get(id(sd_o_), 0.0)) if BTOK_ON else 0.0
             OPP_NS[0] = bool(SNAP_NS.get(id(sd_o_), False))
             opp.door_open = bool(opp.attn is not None and float(opp.attn.door.weight.abs().sum()) > 0)
         return dict(mins=mins, live_rec=LIVE_REC, live_settings=LS_REC, close_p=close_p, seek_now=seek_now, vs_anchor=vs_anchor,
@@ -2846,6 +2961,12 @@ def main():
         else:
             b_obs = torch.zeros(T, N, OBS_DIM, device=dev, dtype=torch.float16 if a.obs_half else torch.float32)
         b_hq = torch.zeros(T, N, H, dtype=torch.float16) if ATT_MEM else None   # (--attn-mem-query) his memory of the frame before, as played
+        TOK_ = C.get("tok")                                              # (v0.4.1) the brain token: its state, the numbers each frame as played
+        b_btok, btg_ = None, float(C.get("btg", 0.0))
+        if TOK_ is not None:
+            net.attn.bgate = btg_                                        # (--overlap: the copy that plays has no gate of its own)
+            b_btok = torch.zeros(N, T, BTOK_L["dim"], dtype=torch.float16) if OVL else torch.zeros(T, N, BTOK_L["dim"], dtype=torch.float16, device=dev)
+            AUXC_ = tuple(E_.AUX_COLS)
         if LONG:
             b_rl = torch.zeros(T, N, device=dev)                             # the pay for items and stack, frame by frame
             b_val2 = torch.zeros(T + 1, N, 2, device=dev)                    # ... as he estimates it at --gamma and at --long-gamma
@@ -2919,6 +3040,16 @@ def main():
             if ATT_MEM:
                 b_hq[t] = h.half().cpu()
             ev_ = None
+            bt_t = None
+            if TOK_ is not None:                                         # (v0.4.1) the last tick's answer turned to his pose now
+                pose_, zm_ = btoken_.pose_from_aux(aux, AUXC_)
+                TOK_.see(obs)
+                bt16_ = torch.from_numpy(TOK_.features(pose_, zm_))
+                if OVL:
+                    b_btok[:, t] = bt16_
+                else:
+                    b_btok[t] = bt16_.to(dev)
+                bt_t = bt16_.to(dev).float()
             xlu_ = torch.from_numpy(legs_x).to(dev) if UNI_ON else None  # (--legs-feat, --legs-guide) the branch's inputs of this frame
             if HEADL and (HS.g + 1) % HD_K == 0:                         # (--head) a tick: the simulators' events since the last
                 ev_ = head_events()
@@ -2931,10 +3062,12 @@ def main():
                         HD_PEND.append((HS.u.half().cpu(), HS.r_tick.cpu()))
                     hd_secs[0] += time.time() - t_hd
                 else:
-                    logits, val, h = net.step(x, h, sm=SM, xl=xlu_)
+                    logits, val, h = net.step(x, h, sm=SM, xl=xlu_, bt=bt_t)
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
+                if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
+                    TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
                 #                                                          (--belief) every seat at once: the inputs as the update re-reads them
                 if LONG:
                     b_val2[t] = net.v2(net.zl)
@@ -2949,7 +3082,7 @@ def main():
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
                 elif has_snaps:
-                    lo, _, h_opp = onet.step(x, h_opp, sm=SM_O, xl=xlu_)
+                    lo, _, h_opp = onet.step(x, h_opp, sm=SM_O, xl=xlu_, bt=bt_t)
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
             if NO_SW:                                                    # (--no-switch) off for his seats, and for the league's when its network
@@ -3054,6 +3187,8 @@ def main():
             h_opp = h_opp * (1.0 - d)[:, None]
             if BS_ is not None:                                          # (--belief) ... and the belief's, by the same flag
                 BS_.reset(d)
+            if TOK_ is not None:                                         # (v0.4.1) ... and the token's answer
+                TOK_.reset(d.cpu().numpy())
             if SM is not None:                                           # (--slow-mem) ... and the slow memory's
                 SM.reset(d)
                 SM_O.reset(d)
@@ -3087,8 +3222,14 @@ def main():
                 _, vT_, hT_ = net.step(torch.from_numpy(norm(obs)).to(dev), h, hd=HS.peek(),
                                        xl=torch.from_numpy(legs_x).to(dev) if UNI_ON else None)
             else:
+                btT_ = None
+                if TOK_ is not None:                                     # (v0.4.1) the frame after: the token on a copy (the next rollout's first
+                    st_ = TOK_.state()                                   # frame makes it again from the same state)
+                    TOK_.see(obs)
+                    btT_ = torch.from_numpy(TOK_.features(*btoken_.pose_from_aux(aux, AUXC_))).to(dev).float()
+                    TOK_.load(st_)
                 _, vT_, hT_ = net.step(torch.from_numpy(norm(obs)).to(dev), h, sm=SM.peek() if SM is not None else None,
-                                       xl=torch.from_numpy(legs_x).to(dev) if UNI_ON else None)
+                                       xl=torch.from_numpy(legs_x).to(dev) if UNI_ON else None, bt=btT_)
             b_val[T] = vT_
             if LONG:
                 b_val2[T] = net.v2(net.zl)
@@ -3104,7 +3245,8 @@ def main():
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
-                    SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0)
+                    SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
+                    b_btok=b_btok, btg=btg_)
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -3181,6 +3323,9 @@ def main():
         b_ev, b_wg, b_wb, b_hand, h0, raw, agg, agg_map, lk = (R[k_] for k_ in ("b_ev", "b_wg", "b_wb", "b_hand", "h0", "raw", "agg", "agg_map", "lk"))
         keep_raw, t_roll = R["keep_raw"], R["t_roll"]
         BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
+        B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
+        if BTOK:
+            pol.attn.bgate = BTG_R if B_BTOK is not None else 0.0        # (learnt at the gate it was played at)
         if a.dump_acts:                                                  # (--dump-acts) the rollout as played, for a fixed-seed identity check
             torch.save(dict(act=b_act.cpu(), logp=b_logp.cpu(), val=b_val.cpu(), rew=b_rew.cpu(), done=b_done.cpu()),
                        "{}_{}.pt".format(a.dump_acts, update))
@@ -3246,6 +3391,10 @@ def main():
         if not DEC:
             adv, ret, ret2, long_c, long_gap = gae_()
         frac = min(1.0, mins / a.lr_minutes) if a.lr_minutes > 0 else min(1.0, (time.time() - t_start) / (a.minutes * 60))
+        if BEL:                                                          # (v0.4.1, live.json's BELIEF_LR) the brain's group's share
+            for g in opt.param_groups:
+                if any(p_ is pol.belief.inp.weight for p_ in g["params"]):
+                    g["lr_scale"] = BEL_LR_NOW[0]
         for g in opt.param_groups:                                       # (--legs-learn: the branch's group keeps its share, lr_scale)
             g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac) * g.get("lr_scale", 1.0)
         lr_now = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
@@ -3296,6 +3445,10 @@ def main():
 
         XS_ = [None]                                                     # (--belief) the last seq_pass's inputs [T, players, inputs]
 
+        def b_btok_of(chunk):
+            """(v0.4.1) the token of these players [T, players, F] on the card, from the rollout's buffer"""
+            return B_BTOK[:, chunk] if not OVL else hsel(B_BTOK, 0, chunk).transpose(0, 1).contiguous()
+
         def seq_pass(chunk, hh):
             """his outputs over the rollout's whole sequences for these players: the encoder, the attention part and the output
             layers in one go each, only his memory frame by frame -> (logits, value, memories, the two long values or None)"""
@@ -3305,9 +3458,13 @@ def main():
             e_ = pol.enc(xs_)
             if pol.attn is not None:
                 if ATT_MEM:                                              # (--attn-mem-query) the query reads h_{t-1} as he played it
-                    e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM), hm=hsel(b_hq, 1, chunk).float().reshape(-1, H)).view(T, len(chunk), -1)
+                    btm_ = b_btok_of(chunk).reshape(-1, B_BTOK.shape[-1]).float() if (B_BTOK is not None and BTG_R > 0) else None
+                    e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM), hm=hsel(b_hq, 1, chunk).float().reshape(-1, H), bt=btm_, bg=BTG_R).view(T, len(chunk), -1)
                 else:
-                    e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM)).view(T, len(chunk), -1)
+                    btc_ = None
+                    if B_BTOK is not None and BTG_R > 0:                 # (v0.4.1) the token's numbers as he saw them (none: shut, not there)
+                        btc_ = (b_btok_of(chunk)).reshape(-1, B_BTOK.shape[-1]).float()
+                    e_ = e_ + pol.attn(xs_.reshape(-1, OBS_DIM), bt=btc_, bg=BTG_R).view(T, len(chunk), -1)
             dadd_ = gadd_ = None
             if UNI_ON:                                                   # (--legs-feat, --legs-guide) the branch on this piece's inputs
                 xlc_ = legs_x_of(chunk)
@@ -3376,6 +3533,15 @@ def main():
         if trz_w > 0:
             TRZ_Y = b_aux[:T][..., TRZ_TC][torch.arange(BK - 1, T, BK)].contiguous()
             tz_acc = torch.zeros(len(trz_.PARTS) + 1, dtype=torch.float64, device=ADEV)
+        ah_w = ah_lesson_w(mins) if (AH_ON and trk_w > 0) else 0.0      # (--ahead) its lesson, with the readout's (TRACK_W 0 stops it too)
+        if ah_w > 0:
+            AH_C = [TRK_IX[c_] for c_ in ahead_.COLS]
+            ys_ = [ahead_.labels(b_aux[:, c0_:c0_ + 2048][..., AH_C].float(), b_done[:, c0_:c0_ + 2048].cpu(), ahead_.COLS, BK, AH_L["n_target"])
+                   for c0_ in range(0, N, 2048)]
+            AH_Y = [torch.cat([y_[i_] for y_ in ys_], 1) for i_ in range(6)]   # (off the card: a piece goes over with its minibatch)
+            ys_ = None
+            ah_acc = torch.zeros(10, dtype=torch.float64, device=ADEV)  # the parts' loss sums, their frames, the place's error at 1, 2, 4 s, frames
+        BTOK_ISO = None
         if trk_w > 0:
             TRK_Y = b_aux[:T][..., TRK_TC]                               # [T, N, 13] float16, off the card (a piece goes over with its minibatch)
             TRK_M = b_aux[:T][..., TRK_IX["trk_on"]] > 0.5
@@ -3799,6 +3965,13 @@ def main():
                                     nx_s[0] += FV_((cn_[..., 0] * wr_[..., 0]).sum())
                                     nx_s[1] += FV_((cn_[..., 1] * wr_[..., 1]).sum())
                                     nx_n += HC_(wr_.sum((0, 1)).double())
+                if BTOK and BTOK_ISO is None and BEL and torch.is_tensor(loss) and loss.requires_grad:   # (v0.4.1) the proof, every update: the
+                    bp_ = [(n_, p_) for n_, p_ in pol.named_parameters() if n_.startswith(BRAIN_PFX) and p_.requires_grad]      # game's losses
+                    gb_ = torch.autograd.grad(loss, [p_ for _, p_ in bp_], allow_unused=True, retain_graph=True)               # reach no weight
+                    br_ = [n_ for (n_, _), g_ in zip(bp_, gb_) if g_ is not None and float(g_.abs().sum()) != 0.0]            # of the brain
+                    BTOK_ISO = dict(brain_params=len(bp_), brain_reached=len(br_), gate=BTG_R)
+                    assert not br_, "the game's losses reached the brain: {}".format(br_[:5])
+                    gb_ = None
                 if trk_w > 0 and BEL:                                    # (--belief, v0.4.0 A) the readout's lesson on the belief's state at its
                     ci_ = hchunk(chunk)                                  # ticks, re-run from the rollout's start over the same inputs; nothing of
                     ty_ = hsel(TRK_Y, 1, chunk, ci_).float()             # the policy is in its graph (the inputs are numbers, not outputs)
@@ -3807,6 +3980,15 @@ def main():
                     bs_ = belief_.seq(pol.belief, XS_[0], b_done[:, chunk], BS0[chunk], BK,
                                       gru_fn=(lambda c_, e_, h_, d_: gru_seq(c_, e_, h_, d_, lay=lay_)) if a.fast_gru else None)
                     tl_, tp_ = track_.loss(pol.track(bs_), ty_, TRK_PARTS, tm_)
+                    if ah_w > 0:                                         # (--ahead) on the same state and ticks (the learner's frames)
+                        ay_ = tuple(hsel(y_, 1, chunk, ci_) for y_ in AH_Y)
+                        am_ = wgt.index_select(0, TRK_TFD)
+                        ao_ = pol.ahead(bs_)
+                        al_, ap_, an_ = ahead_.loss(ao_, AH_L, ay_, AH_PARTS, am_)
+                        tl_ = tl_ + (ah_w / trk_w) * al_
+                        if epoch == 0:
+                            with torch.no_grad():
+                                ah_acc += HC_(torch.cat([ap_ * an_, an_, ahead_.errors(ao_, ay_, am_) * an_[0], an_[0:1]]).double())
                     if trz_w > 0:                                        # (--track-z) the second part's lesson on the same state and frames
                         zl_, zp_ = trz_.loss(pol.trackz(bs_), hsel(TRZ_Y, 1, chunk, ci_).float(), TRZ_PARTS, tm_)
                         tl_ = tl_ + (trz_w / trk_w) * zl_                # (so that trk_w * tl_ is both lessons)
@@ -3947,6 +4129,8 @@ def main():
                     nn.utils.clip_grad_norm_(pol.belief.parameters(), 0.5)
                 if TRZ:                                                  # (--track-z) the second part's on its own
                     nn.utils.clip_grad_norm_(pol.trackz.parameters(), 0.5)
+                if AH:                                                   # (--ahead) on its own, as the readout's
+                    nn.utils.clip_grad_norm_(pol.ahead.parameters(), 0.5)
                 if AUX:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.") and not n_.startswith(UNI_PFX)
                                               and not (LEGS_LEARN and n_.startswith("legs.")) and not (HEADL and n_.startswith("head."))
@@ -4193,11 +4377,16 @@ def main():
                                    s=round(float(SM.s[:2048].abs().mean()), 4), ring=RING.L,
                                    ring_min=round(RING.L * SLOW["every"] * 0.025 / 60.0, 2),
                                    fold_s=round(sl_secs[0], 2), pass_s=round(sl_secs[1], 2))
+        BTOK_EFFECT = None                                               # (v0.4.1) the token's change to the door's output, below
         if pol.attn is not None:                                         # the door: its weights, and what comes through it beside the old encoder's
             with torch.no_grad():
                 xs_ = b_obs[T - 1, :2048].float() if not OVL else b_obs[:2048, T - 1].to(dev).float()
                 rec["door"] = dict(w=round(float(pol.attn.door.weight.abs().mean()), 6),
                                    share=round(float(pol.attn(xs_).abs().mean() / (pol.enc(xs_).abs().mean() + 1e-8)), 4))
+                if BTOK and B_BTOK is not None and BTG_R > 0:            # (v0.4.1) what the brain's token changes in what comes through the
+                    bs_ = (B_BTOK[T - 1, :2048] if not OVL else B_BTOK[:2048, T - 1]).to(dev).float()      # door, against the door's
+                    a0_ = pol.attn(xs_)                                  # own size (the last frame's first 2048 players)
+                    BTOK_EFFECT = round(float((pol.attn(xs_, bt=bs_, bg=BTG_R) - a0_).abs().mean() / (a0_.abs().mean() + 1e-8)), 4)
         if UNI_ON:                                                       # (--legs-feat, --legs-guide) the parts: legs_door's size and the share
             with torch.no_grad():                                        # of his fast GRU's input variance that comes through it; the guide's
                 rec_u = dict(first_err=ug_first[0])                      # weights and how often his own choice is the branch's (switch off)
@@ -4261,6 +4450,20 @@ def main():
                 rec["track"]["z_parts"] = TRZ_PARTS
                 if trz_w > 0 and float(tz_acc[-1]) > 0:
                     rec["track"]["z_loss"] = {p_: round(float(tz_acc[i_] / tz_acc[-1]), 4) for i_, p_ in enumerate(trz_.PARTS)}
+        if BTOK:                                                         # (v0.4.1) the brain token: the gate it was played and learnt at, the proof
+            rec["btoken"] = dict(gate=round(BTG_R, 5), fed=B_BTOK is not None, cap=a.btoken_cap, open_min=a.btoken_open,
+                                 belief_lr=BEL_LR_NOW[0] if BEL else None, iso=BTOK_ISO, effect=BTOK_EFFECT)
+            if B_BTOK is not None:
+                bb_ = B_BTOK[:, :256].float() if OVL else B_BTOK[:, :256].float().transpose(0, 1)
+                vi_ = BTOK_L["feats"].index("valid")
+                rec["btoken"]["valid"] = round(float(bb_[..., vi_].mean()), 4)
+                rec["btoken"]["abs_mean"] = round(float(bb_.abs().mean()), 4)
+        if ah_w > 0 and float(ah_acc[3]) > 0:                            # (--ahead) its lesson's parts and the place's error by horizon
+            ah_acc = ah_acc.cpu()
+            rec["ahead"] = dict(w=round(ah_w, 4), parts=AH_PARTS,
+                                loss={p_: round(float(ah_acc[i_] / max(1.0, float(ah_acc[3 + i_]))), 4) for i_, p_ in enumerate(ahead_.PARTS)},
+                                frames=[int(ah_acc[3 + i_]) for i_ in range(3)],
+                                err_units={"{:g}s".format(h_): round(float(ah_acc[6 + i_] / max(1.0, float(ah_acc[9]))), 1) for i_, h_ in enumerate(ahead_.HORIZ)})
         if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
             def q_(i_, d_=4):
                 return round(float(ax_s[i_] / max(1.0, float(ax_n[int(AUX_MI[i_])]))), d_)

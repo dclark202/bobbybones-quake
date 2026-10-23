@@ -236,10 +236,16 @@ def play(job):
         xlu_ = None                                                             # (--legs-feat, --legs-guide) the branch's inputs of this frame
         if getattr(E, "LEGS_IN", False) and (getattr(pol, "needs_xl", False) or getattr(opp_pol, "needs_xl", False)):
             xlu_ = env.legs_prep()                                              # (nothing between here and the step changes a target)
-        al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev])
+        pz_ = zz_ = None                                                        # (v0.4.1) his pose for a network whose brain token is open
+        if getattr(pol, "needs_pose", False) or getattr(opp_pol, "needs_pose", False):
+            import btoken as btoken_
+            pz_, zz_ = btoken_.pose_from_env(env, mp)
+        al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
+                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}))
         a[ev, :min(al.shape[1], a.shape[1])] = al[:, :a.shape[1]]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
-            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od])
+            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
+                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}))
             a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
@@ -384,11 +390,17 @@ def main():
     ap.add_argument("--opp-acquire-ms", type=float, default=None)
     ap.add_argument("--swap", action="store_true", help="two networks: every second process seats him on the odd seats (the same network on both "
                     "sides got 47 percent of the frags on the even seats: B-220); give --procs an even number")
+    ap.add_argument("--btoken-gate", type=float, default=None, help="(v0.4.1) play his brain token at this gate (default: his checkpoint's; 0: shut)")
+    ap.add_argument("--opp-btoken-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
     path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = T.Policy(path, seed=1)
+    if a.btoken_gate is not None:
+        pol.set_gate(a.btoken_gate)
+    if getattr(pol, "btok", None) is not None:
+        print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
     old = names(a.inputs)
     assert len(old) == len(pol.mean), "the network has {} inputs, {} lists {}".format(len(pol.mean), a.inputs, len(old))
@@ -396,6 +408,8 @@ def main():
     opp_pol, opp_idx, kind = None, None, a.opp
     if a.opp.startswith("policy:"):
         opp_pol = T.Policy(a.opp[7:], seed=2)
+        if a.opp_btoken_gate is not None:
+            opp_pol.set_gate(a.opp_btoken_gate)
         oo = names(a.opp_inputs)
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])

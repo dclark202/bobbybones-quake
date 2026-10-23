@@ -10,6 +10,7 @@ part D -> 2D -> D); block 2 is worked out for two rows only, the summary token a
 the door, a layer that starts at zero, and are added to what the old encoder gives his memory. With the door at zero
 the network is the old one exactly."""
 import csv
+import math
 import os
 
 import numpy as np
@@ -45,6 +46,13 @@ GATE_SHUT = -30.0
 # then also comes from his memory of the frame before (h_{t-1}, the fast GRU's state before this frame's step, read at half
 # precision so that the trainer can keep it for the learning step): q = Wq norm(x) + mq(h_{t-1}), the layer mq at zero to
 # begin with (the network answers exactly as without it). Not given h (forward(x) alone): as without it.
+# (v0.4.1, sim/btoken.py) A layout may say "btok": F. The network then has one more token, the brain's answer (F numbers a
+# frame, made outside: forward(x, bt=[B, F])), with its own first layer (btok_emb) and mark (btok_mark), appended after the
+# summary token (the read rows keep their numbers). Its gate is a plain number of the module, bgate in [0, 1] (not a weight,
+# not in the state dict: the checkpoint's "btoken" entry carries it): log(bgate) is added to every look at that token, so
+# its weight in each softmax is multiplied by exactly bgate. bgate 0 (or no bt given) is the network WITHOUT the token, the
+# same sums as before it existed (not a large negative number: the token is not there at all).
+BTOK_SEED = 4142
 
 
 def layout_from_csv(path):
@@ -159,21 +167,39 @@ def make_module(lay, out_dim=256, seed=0):
                 self.register_buffer("gate", torch.zeros(lay["tokens"]))
             else:
                 self.gate = None
+            self.bgate = 0.0                                     # ("btok", see there) shut: the token is not there
+            if lay.get("btok"):                                  # (made from a stream of its own: the global stream is untouched)
+                with torch.random.fork_rng(devices=[]):
+                    torch.manual_seed(BTOK_SEED)
+                    self.btok_emb = nn.Linear(int(lay["btok"]), D, bias=False)
+                    with torch.no_grad():
+                        self.btok_emb.weight.copy_(torch.randn(self.btok_emb.weight.shape) / max(1.0, float(lay["btok"])) ** 0.5)
+                    self.btok_mark = nn.Parameter(torch.randn(D) * 0.1)
             if lay.get("mem"):                                   # ("mem", see there) zeros: the exact start
                 self.mq = nn.Linear(int(lay["mem"]), len(lay["read"]) * D)
                 nn.init.zeros_(self.mq.weight)
                 nn.init.zeros_(self.mq.bias)
 
-        def forward(self, x, hm=None):
+        def forward(self, x, hm=None, bt=None, bg=None):
+            """bt [B, F]: the brain's token's numbers (a layout with "btok"); bg: its gate (default: self.bgate). With the gate
+            at 0 or no bt the token is left out: exactly the sums without it"""
+            g_b = float(self.bgate if bg is None else bg)
+            use_b = bt is not None and g_b > 0.0 and getattr(self, "btok_emb", None) is not None
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=AMP and x.is_cuda):
                 xp = torch.cat([x, x.new_zeros(x.shape[0], 1)], 1)
                 toks = [e(xp[:, getattr(self, "idx_" + k_["name"])]) for k_, e in zip(lay["kinds"], self.emb)]
                 t = torch.cat(toks + [x.new_zeros(x.shape[0], 1, D)], 1) + self.mark
-                t = self.b1(t, t, self.gate)
+                gate = self.gate
+                if use_b:                                        # ("btok") the brain's token, after the summary
+                    tb = (self.btok_emb(bt.float()) + self.btok_mark)[:, None]
+                    t = torch.cat([t, tb.to(t.dtype)], 1)
+                    g0 = gate if gate is not None else t.new_zeros(t.shape[1] - 1, dtype=torch.float32)
+                    gate = torch.cat([g0.float(), g0.new_full((1,), math.log(g_b), dtype=torch.float32)])
+                t = self.b1(t, t, gate)
                 qa = None
                 if hm is not None and getattr(self, "mq", None) is not None:
                     qa = self.mq(hm.half().float()).view(x.shape[0], len(self.read), D)
-                r = self.b2(t[:, self.read], t, self.gate, qa)
+                r = self.b2(t[:, self.read], t, gate, qa)
                 out = self.door(norm(r.reshape(x.shape[0], 2 * D)))
             return out.float()
 
@@ -210,7 +236,7 @@ def _block(P, b, xq, xall, heads, gate=None, qadd=None):
     return y + np.maximum(_norm(y) @ P[b + ".f1.weight"].T, 0.0) @ P[b + ".f2.weight"].T
 
 
-def forward_np(lay, P, x, hm=None):
+def forward_np(lay, P, x, hm=None, bt=None, bg=0.0):
     """the same sums as make_module().forward in numpy: x [B, obs_dim] normalised -> [B, out_dim]. hm [B, H]: his memory of
     the frame before (a layout with "mem"; read at half precision as the torch side does)"""
     x = np.asarray(x, np.float32)
@@ -221,6 +247,11 @@ def forward_np(lay, P, x, hm=None):
         toks.append(xp[:, idx] @ P["emb.{}.weight".format(i)].T)
     t = np.concatenate(toks + [np.zeros((len(x), 1, lay["D"]), np.float32)], 1) + P["mark"]
     gate = np.asarray(P["gate"], np.float32) if lay.get("gated") else None
+    if bt is not None and float(bg) > 0.0 and lay.get("btok") and "btok_emb.weight" in P:      # ("btok") the brain's token
+        tb = np.asarray(bt, np.float32) @ np.asarray(P["btok_emb.weight"], np.float32).T + P["btok_mark"]
+        t = np.concatenate([t, tb[:, None].astype(np.float32)], 1)
+        g0 = gate if gate is not None else np.zeros(t.shape[1] - 1, np.float32)
+        gate = np.concatenate([g0, np.array([math.log(float(bg))], np.float32)])
     t = _block(P, "b1", t, t, lay["heads"], gate)
     qa = None
     if hm is not None and lay.get("mem") and "mq.weight" in P:

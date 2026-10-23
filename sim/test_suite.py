@@ -62,6 +62,15 @@ class Policy:
             self.attP = attn_.params_np(sd)
             if not np.abs(self.attP["door.weight"]).sum() > 0:
                 self.attP = None
+        self.btok = None                                     # (v0.4.1, sim/btoken.py) the brain's token: played only while its gate is open
+        self.bgate = 0.0                                     # (gate 0: the network as it was, the brain not stepped)
+        bt_ = ck.get("btoken")
+        if bt_ is not None and self.attP is not None and "btok_emb.weight" in self.attP and ck.get("belief") is not None:
+            import btoken as btoken_
+            self.bgate = float(bt_.get("gate", 0.0))
+            self.btok = bt_
+            self.brainP = btoken_.numpy_brain(sd, ck["belief"], ck.get("track"), ck.get("track_z"))
+        self._bst = None                                     # (the brain and token state of the rows act() is called with)
         self.legsP = None                                    # (LEGS_IN, B-253) his legs' branch, if the network has it inside
         if "legs.0.weight" in sd:
             self.legsP = tuple(sd[k_] for k_ in ("legs.0.weight", "legs.0.bias", "legs.2.weight", "legs.2.bias", "legs.4.weight", "legs.4.bias"))
@@ -114,9 +123,44 @@ class Policy:
         import head as head_
         return head_
 
+    @property
+    def needs_pose(self):
+        """(v0.4.1) act() needs his pose (pose=, zmap=: btoken.pose_from_env of the frame, these rows): the brain's token is open"""
+        return self.btok is not None and self.bgate > 0
+
+    def token_pre(self, obs, pose, zmap):
+        """(v0.4.1) before a frame: the brain's last answer turned to his pose now, as the trainer makes it ([B, F] float32, the
+        numbers rounded to half precision); None while the gate is shut (the network without it). obs: the raw inputs"""
+        if self.btok is None or not self.bgate > 0:
+            return None
+        import btoken as btoken_
+        assert pose is not None and zmap is not None, "this network's brain token is open: give act() pose= and zmap= (btoken.pose_from_env)"
+        if self._bst is None or self._bst[0].n != len(obs):
+            self._bst = (btoken_.NpBrain(self.brainP, len(obs)), btoken_.Token(len(obs), self.btok))
+        self._bst[1].see(obs)
+        return self._bst[1].features(np.asarray(pose, np.float32), np.asarray(zmap)).astype(np.float32)
+
+    def token_post(self, xa, pose, zmap):
+        """(v0.4.1) after the frame: the brain reads the frame's normalised inputs xa; at its tick the readouts' answer is kept in
+        map coordinates (his pose of this frame)"""
+        br_, tk_ = self._bst
+        if br_.frame(xa):
+            o1_, o2_ = br_.readouts()
+            tk_.answer(None, o1_, o2_, np.asarray(pose, np.float32), np.asarray(zmap))
+
+    def set_gate(self, g):
+        """(v0.4.1, checks) play the brain's token at this gate (0: shut, the network without it)"""
+        assert g <= 0 or self.btok is not None, "this network has no brain token"
+        self.bgate = float(g)
+
     def clear(self, h, rows=None):
         """a seat's memory cleared (the trainer's `done`), in place; the head's tick clock kept (sim/head.py np_clear). For a
         network without a head the same as h[rows] = 0."""
+        if self._bst is not None:                            # (v0.4.1) the brain and its answer, by the same flag
+            d_ = np.zeros(self._bst[0].n)
+            d_[slice(None) if rows is None else rows] = 1.0
+            self._bst[0].reset(d_)
+            self._bst[1].reset(d_)
         r = slice(None) if rows is None else rows
         if self.head is None:
             h[r] = 0.0
@@ -151,7 +195,7 @@ class Policy:
             lg = LU_.np_residual(*self.uniR, lg, zo)
         return lg
 
-    def act(self, obs, h, events=None, xl=None):
+    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
         --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame"""
         dadd = gadd = h2_ = lgl_ = ok_ = None
@@ -172,13 +216,14 @@ class Policy:
             obs = obs[:, :len(self.mean)]
         x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
         xa = x
+        bt = self.token_pre(obs, pose, zmap)
         if self.cell is not None:
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
             x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
         x = np.tanh(x @ self.w0.T + self.b0)
         x = np.tanh(x @ self.w1.T + self.b1)
         if self.attP is not None:
-            x = x + self.attn_fwd(self.attn, self.attP, xa, hm=h)       # (hm: "mem", his memory of the frame before)
+            x = x + self.attn_fwd(self.attn, self.attP, xa, hm=h, bt=bt, bg=self.bgate if bt is not None else 0.0)   # (hm: "mem", his memory of the frame before)
         xf = x
         if hh is not None:                                   # (v0.4) the plan of the head's last tick: e + plan_in(plan)
             o_ = self.hm._np_off(self.head)["plan"]
@@ -208,6 +253,8 @@ class Policy:
             import legs_unify as LU_
             logits = logits + LU_.np_gate_add(self.uni, *self.uniT, zo, h2_, lgl_, ok_, sum(self.dims))
         self.last_zo = zo
+        if bt is not None:
+            self.token_post(xa, pose, zmap)
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()
