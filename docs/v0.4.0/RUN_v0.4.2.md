@@ -62,10 +62,11 @@ What v0.4.2 must move (the head chooses):
 
 | Row | Target |
 |---|---|
-| Mega and red respawns: on time (8%), the enemy took it (42%) | on time up, the enemy's share down; more so when the enemy is weak (today no different) |
+| Mega and red respawns: waiting (19%; the pros 12%) | down toward the pros. **Not** "the enemy took it" (42%): the pros' is 42% too (`data/decision/pros.txt`, 2026-10-23: in a duel each takes about half) |
 | Enemy near his pickups when he is weak (32%) | down: when weak, take the item the enemy is not going for |
 | Lost contests (4.2 a game) | down |
-| Presses in when far behind (36%), deaths while weak (38% of deaths) | down |
+| Presses in when far behind (36%; the pros 24%), deaths while weak (4.4 a game; the pros 3.3) | down toward the pros |
+| After losing sight, the gap slope (17.3; the pros 21.2) | up toward the pros |
 | Closing against the gap (30.9) | steeper: press when ahead, back off when behind |
 
 v0.4.2 passes when these move toward the pros' (the same report on the pros' demos, to be filled in).
