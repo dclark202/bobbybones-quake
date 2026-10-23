@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-23](results/2026-10-23.md)
+
+- 00:30 — Watching the right spot before a sighting makes the good pre-aims, but the watching pay barely built the habit
+
 ## [2026-10-22](results/2026-10-22.md)
 
 - 19:50 — v0.3.x closes: the enemy picture and the hands need separate memories; v0.4.0 (the brain) being built
