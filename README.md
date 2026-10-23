@@ -1,14 +1,16 @@
-## What it is
+# What it is
 
 BobbyBones is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
 games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
 on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
 
-## Play against
+# Play against him
+
+## Online
 
 Join server `Duel BobbyBones the self taught Quake bot | US Chicago` in Quake Live (or `connect 64.177.125.38:27970` in the game's console)
 
-## Play him locally
+## Via a local install
 
 The networks that have played on the public server are released as open weights, one
 [GitHub Release](https://github.com/dclark202/bobbybones-quake/releases) per model, tagged at the code the server ran it with
@@ -30,7 +32,7 @@ bash tools/duel_server.sh - bloodrun               # "-": the network already in
 The weights and the map files are under CC-BY-4.0 ([WEIGHTS_LICENSE.md](WEIGHTS_LICENSE.md)): use, change and retrain them
 as you like, with credit to "BobbyBones by Duncan Clark (github.com/dclark202/bobbybones-quake)".
 
-## Architecture
+# Architecture
 
 - **Simulator** (`sim/`): ioquake3's player movement and collision compiled into one library (`qsim.dll` / `libqsim.so`)
   with Quake Live's settings, loading the game's own maps. A numpy game layer (`sim/duel_env.py`) adds the weapons, items,
@@ -52,7 +54,7 @@ tools/     server scripts, evaluation, map and demo tools
 docs/      plan, backlog, results log, run reports
 ```
 
-## Fairness
+# Fairness
 
 He plays under a human's limits:
 - **Physics**: the same 125 fps movement as a human client.
@@ -60,19 +62,8 @@ He plays under a human's limits:
   sound. No wallhack, no health readout, item timers only from what he saw or heard.
 - **Reaction, aim, and inputs**: human-like reflexes, aim limitation, and keypresses per second 
 
-## Run it
 
-You need a Quake Live install (for the map files), Python with PyTorch, a C compiler and Docker.
-
-```bash
-sim/build.bat                                              # build the simulator (Windows)
-python sim/train_duel_rnn.py --run my_run --minutes 600    # train
-python tools/duel_eval.py --run my_run --opp nightmare --map bloodrun --games 32   # evaluate in the simulator
-docker build -t qlbot .                                    # game server image
-bash tools/duel_server.sh my_run bloodrun                  # private server on UDP 27970
-```
-
-## License
+# License
 
 GPL-3.0 (see `LICENSE`), as the bundled minqlx and ioquake3 code require. The released networks and map files: CC-BY-4.0
 (see `WEIGHTS_LICENSE.md`).
