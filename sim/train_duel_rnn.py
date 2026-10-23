@@ -143,7 +143,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          lx_,                                                                               # (LEGS_IN) the movement network's inputs of the next frame
                          (np.asarray(env.legs_raw, np.int8) if legs_in and getattr(env, "legs_raw", None) is not None    # (--legs-learn) the branch's own draws
                           and len(env.legs_raw) == env.n else (np.full((env.n, 4), -1, np.int8) if legs_in else None)),  # of this frame (-1: none)
-                         (env.solo_now.copy() if getattr(env, "solo_now", None) is not None else np.zeros(env.n, bool))))   # (SOLO_SELF) in his runs
+                         (env.solo_now.copy() if getattr(env, "solo_now", None) is not None else np.zeros(env.n, bool)),    # (SOLO_SELF) in his runs
+                         (info["rj_lab"] if "rj_lab" in info else None)))                                    # (--rj-teach) "jump and fire now" for his NEXT frame
             tw_["send"] += time.perf_counter() - t_lp        # (the reply's pickling and the pipe)
         elif cmd == "times":                                 # (time.rollout_parts) this worker's seconds since the last call, then anew
             remote.send(dict(tw_))
@@ -183,7 +184,7 @@ def jump_far_rec(agg, agg_map):
 
 BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
-                "BELIEF_LR", "AHEAD_W")     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
+                "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W")     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -253,6 +254,7 @@ LS_SPEC = {                                                  # name -> (kind, pa
     "SHOT_W": ("frame", "shot_w"), "PREAIM_PAY": ("frame", "pos"),
     "HF_STEP_DT": ("frame", "above0"), "HF_STEP_SPEED": ("frame", "pos"), "HF_DIR": ("frame", "pos"),
     "HF_LOUD": ("frame", "pos"), "HF_HUM_TAU": ("frame", "pos"), "HF_UP": ("frame", "pos"),
+    "RJ_TEACH_PITCH": ("frame", "pos"), "RJ_TEACH_R": ("frame", "pos"), "RJ_LOOK_FREE": ("frame", "pos"),   # (RJ_TEACH, 2026-10-23)
 }                                                            # ... and every name of the module's LIVE_VARS: ("frame", "live")
 LS_FROM_ZERO = ("PRO_START_P", "PRO_JSTART_P", "JUMP_FAR_P")  # their tables are built at the start only when they are on
 _LS_ORIG = {}                                                # this process's module values at import (before any change)
@@ -1000,6 +1002,20 @@ def main():
                                                                          "layers (as --teach-trunk); the weapon output's layer learns it in full")
     ap.add_argument("--hand-teach-warm", type=float, default=0.0, help="... minutes over which its weight rises from nothing, counted from "
                                                                        "--fade-start")
+    ap.add_argument("--rj-teach", type=float, default=0.0,
+                    help="(RJ_TEACH=1, the owner 2026-10-23) the rocket jump's moment as a lesson (0 = off): on the frames the simulator "
+                         "labels (a rocket jump practice try, on the floor at the take-off, the launcher ready, his view 60 degrees or more "
+                         "down) his vertical key toward 'jump' on the frames its jump is read and his trigger toward 'fire'; nothing else. "
+                         "Not paid. Live: RJ_TEACH_W in live.json is this weight")
+    ap.add_argument("--rj-teach-trunk", type=float, default=0.05, help="... the share of that lesson's gradient that reaches the shared "
+                                                                       "layers (as --teach-trunk); the two outputs' rows learn it in full")
+    ap.add_argument("--rj-teach-warm", type=float, default=120.0, help="... minutes over which its weight rises from nothing, from --rj-teach-start")
+    ap.add_argument("--rj-teach-start", type=float, default=-1.0, help="... the minute the warm-up counts from (-1: the first update of this "
+                                                                       "process with the weight above 0: a live opening starts weak)")
+    ap.add_argument("--rj-teach-done", type=float, default=0.25, help="... it fades out as he makes the jump: the weight is zero when his share of "
+                                                                      "tries that arrive (the last --rj-teach-window tries) is this or more")
+    ap.add_argument("--rj-teach-band", type=float, default=0.10, help="... and full at --rj-teach-done less this (linear between); 0: no fade")
+    ap.add_argument("--rj-teach-window", type=int, default=100, help="... the tries the share is taken over (none: full weight until 40 tries)")
     ap.add_argument("--near-item-p", type=float, default=0.0, help="share of spawns within 2 s of the mega or the red armor")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
@@ -1357,6 +1373,10 @@ def main():
     HAND_LAB = bool(getattr(E_, "HAND_TEACH", False))        # (--hand-teach) the simulators give the label of his weapon output (HAND_TEACH=1)
     assert a.hand_teach <= 0 or HAND_LAB, "--hand-teach: the simulator {} gives no labels (set HAND_TEACH=1; p_hand_env.py)".format(a.env)
     assert 0.0 <= a.hand_teach_trunk <= 1.0, "--hand-teach-trunk: a share, 0 to 1"
+    RJ_LAB = bool(getattr(E_, "RJ_TEACH", False))            # (--rj-teach) the simulators give the rocket jump's moment (RJ_TEACH=1)
+    assert a.rj_teach <= 0 or RJ_LAB, "--rj-teach: the simulator {} gives no labels (set RJ_TEACH=1)".format(a.env)
+    assert 0.0 <= a.rj_teach_trunk <= 1.0, "--rj-teach-trunk: a share, 0 to 1"
+    FIRE_HEAD = 5                                            # (--rj-teach) the trigger (no, fire)
     HAND_HEAD = 6                                            # ... the weapon key's output, where its choices begin among all outputs' and
     HAND_O, HAND_D = sum(ACTION_DIMS[:HAND_HEAD]), ACTION_DIMS[HAND_HEAD]      # how many they are ("keep", then a choice a weapon)
 
@@ -1444,6 +1464,7 @@ def main():
     obs = np.concatenate([f[0] for f in first])
     teach = np.concatenate([f[1] for f in first])
     hand = np.concatenate([f[3] for f in first]) if HAND_LAB else None      # (--hand-teach) the label of the frame about to be played
+    rjl = np.zeros(len(obs), np.int8) if RJ_LAB else None                    # (--rj-teach) ... the rocket jump's (none on the first frame)
 
     def legs_cat(parts):
         """(LEGS_IN) the workers' legs inputs as one array (a simulator without the movement network gives none: zeros)"""
@@ -2197,6 +2218,34 @@ def main():
         return TRZ_LIVE[0] * (min(1.0, max(0.0, mins - TRZ_T0) / a.track_z_warm) if a.track_z_warm > 0 else 1.0)
     BEL_LR_NOW = [float(BEL_LR) if BEL else 0.0]             # (v0.4.1, live.json's BELIEF_LR) the brain's rate as a share of --lr
     AH_LIVE = [1.0]                                          # (live.json's AHEAD_W: a factor on the ahead lesson)
+    RJ_LIVE = [float(a.rj_teach)]                            # (--rj-teach; live.json's RJ_TEACH_W: the lesson's weight)
+    RJ_T0 = [float(a.rj_teach_start) if a.rj_teach_start >= 0 else None]     # ... the minute its warm-up counts from
+    RJ_WIN = []                                              # ... [tries, arrived] of the last updates (the fade)
+    if RJ_LAB and a.resume and os.path.exists(os.path.join(out, "metrics.jsonl")):     # ... carried over a restart: the last update's window
+        try:
+            for ln_ in open(os.path.join(out, "metrics.jsonl"), encoding="utf-8").readlines()[-50:]:
+                if '"rj_teach"' in ln_:
+                    rw_ = json.loads(ln_).get("rj_teach", {})
+                    if rw_.get("window"):
+                        RJ_WIN[:] = [list(rw_["window"])]
+                    if RJ_T0[0] is None and rw_.get("start") is not None:
+                        RJ_T0[0] = float(rw_["start"])
+        except Exception as e_:
+            print("rj_teach: the last window not read from metrics.jsonl: {}".format(e_), flush=True)
+
+    def rj_teach_w(mins):
+        """(--rj-teach) the lesson's weight at this minute: the live weight, rising over --rj-teach-warm from its start, times
+        the fade by his share of tries that arrive (full at --rj-teach-done less --rj-teach-band, nothing at --rj-teach-done)"""
+        if not RJ_LAB or RJ_LIVE[0] <= 0:
+            return 0.0, 1.0
+        if RJ_T0[0] is None:
+            RJ_T0[0] = float(mins)
+        w_ = RJ_LIVE[0] * (min(1.0, max(0.0, mins - RJ_T0[0]) / a.rj_teach_warm) if a.rj_teach_warm > 0 else 1.0)
+        tr_, ov_ = (sum(x_[0] for x_ in RJ_WIN), sum(x_[1] for x_ in RJ_WIN))
+        f_ = 1.0
+        if tr_ >= 40 and a.rj_teach_band > 0:
+            f_ = float(np.clip((a.rj_teach_done - ov_ / tr_) / a.rj_teach_band, 0.0, 1.0))
+        return w_ * f_, f_
     AH_T0 = float(a.ahead_start) if a.ahead_start >= 0 else float(elapsed0)
     BTOK_T0 = float(a.btoken_start) if a.btoken_start >= 0 else float(elapsed0)
     BTOK_LAST = [None]                                       # (the minute of the gate's last step)
@@ -2481,7 +2530,8 @@ def main():
                        **({"INFO_PAY": float(a.info_pay), "TRACK_W": float(a.track), "TRACK_TRUNK": float(a.track_trunk)} if TRK_ON else {}),
                        **({"TRACK_Z_W": 1.0} if TRZ_ON else {}),
                        **({"BTOK_GATE_CAP": float(a.btoken_cap), "BTOK_GATE_OPEN": float(a.btoken_open)} if BTOK_ON else {}),
-                       **({"BELIEF_LR": float(BEL_LR)} if BEL else {}), **({"AHEAD_W": 1.0} if AH_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
+                       **({"BELIEF_LR": float(BEL_LR)} if BEL else {}), **({"AHEAD_W": 1.0} if AH_ON else {}),
+                       **({"RJ_TEACH_W": float(a.rj_teach)} if RJ_LAB else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
         print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
@@ -2579,7 +2629,7 @@ def main():
 
         def __iter__(self):
             return (self[j_] for j_ in range(len(self.parts)))
-    CARRY = dict(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp)    # from rollout to rollout
+    CARRY = dict(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl)    # from rollout to rollout
     if BTOK_ON:                                                          # (v0.4.1) the brain token's state of every seat (numpy, on the host)
         assert TRK_ON, "--btoken: with the readout's truth (TRACK_TRUTH=1): his own place and yaw come from info['aux']"
         assert not any(f_.startswith("zone") or f_.startswith("ztop") for f_ in BTOK_L["feats"]) or "zone_map" in tuple(E_.AUX_COLS), \
@@ -2629,12 +2679,14 @@ def main():
                     a.btoken_open = float(lt_.get("BTOK_GATE_OPEN", a.btoken_open))  # (... the minutes of its opening: 0 holds it)
                     BEL_LR_NOW[0] = float(lt_.get("BELIEF_LR", BEL_LR_NOW[0]))       # (... the brain's rate, at the next learning step)
                     AH_LIVE[0] = float(lt_.get("AHEAD_W", AH_LIVE[0]))               # (... a factor on the ahead lesson)
+                    RJ_LIVE[0] = float(lt_.get("RJ_TEACH_W", RJ_LIVE[0]))            # (--rj-teach: the lesson's weight; its warm-up from the first minute above 0)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
                     LIVE_KEPT = dict(sim=dict(lv_), trainer=dict(lt_), from_update=update)
                     force_ = dict(now_[0], DMG_REWARD=a.dmg_reward, **({"INFO_PAY": a.info_pay, "TRACK_W": a.track, "TRACK_TRUNK": a.track_trunk} if TRK_ON else {}),
                                   **({"TRACK_Z_W": TRZ_LIVE[0]} if TRZ_ON else {}),
                                   **({"BTOK_GATE_CAP": a.btoken_cap, "BTOK_GATE_OPEN": a.btoken_open} if BTOK_ON else {}),
-                                  **({"BELIEF_LR": BEL_LR_NOW[0]} if BEL else {}), **({"AHEAD_W": AH_LIVE[0]} if AH_ON else {}))
+                                  **({"BELIEF_LR": BEL_LR_NOW[0]} if BEL else {}), **({"AHEAD_W": AH_LIVE[0]} if AH_ON else {}),
+                                  **({"RJ_TEACH_W": RJ_LIVE[0]} if RJ_LAB else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
                         json.dump(dict(from_update=update, minutes=round(mins, 2), file=json.loads(txt_), in_force=force_), f_, indent=1)
@@ -2953,6 +3005,8 @@ def main():
         updated at the end -> the rollout's buffers and counts (None: stopped by `stop`)"""
         obs, teach, hand, aux, legs_x, scr, h, h_opp = (C[k_] for k_ in ("obs", "teach", "hand", "aux", "legs_x", "scr", "h", "h_opp"))
         b_hand = torch.zeros_like(B_HAND) if (OVL and B_HAND is not None) else B_HAND   # (--overlap: one a rollout)
+        rjl = C.get("rjl")
+        b_rj = torch.zeros(T, N, dtype=torch.int8, device=dev) if RJ_LAB else None     # (--rj-teach) the label of each frame's action
         b_rl = b_val2 = b_lx = b_lr = b_llp = b_aux = b_ht = b_bel = b_ev = b_wg = b_wb = None
         HD_RS0 = HD_PEND = HD0 = hd_secs = SL_RS0 = SL_PEND = SL_S0 = sl_secs = None
         if OVL:                                                          # (--overlap) on the host, a player's frames together: [players, steps,
@@ -3105,6 +3159,8 @@ def main():
             b_teach[t] = torch.from_numpy(teach).to(dev)
             if HAND_LAB:
                 b_hand[t] = torch.from_numpy(hand).to(dev)
+            if RJ_LAB:
+                b_rj[t] = torch.from_numpy(rjl).to(dev)
             if b_aux is not None:                                        # (--aux; --track)
                 b_aux[t] = torch.from_numpy(aux)
             tpay_ = None
@@ -3182,6 +3238,8 @@ def main():
             teach = np.concatenate([r[5] for r in res])
             if HAND_LAB:
                 hand = np.concatenate([r[14] for r in res])
+            if RJ_LAB:                                                   # (--rj-teach; a simulator without it: none)
+                rjl = np.concatenate([r[18] if r[18] is not None else np.zeros(len(r[2]), np.int8) for r in res]).astype(np.int8)
             if AUX_W > 0 or TRK_ON:
                 aux = np.concatenate([r[12] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
@@ -3240,11 +3298,11 @@ def main():
             if AUX_BEL:
                 b_bel[T] = torch.from_numpy(np.ascontiguousarray(obs[:, BEL_IX], dtype=np.float32))
         t_done = time.time() if OVL else None
-        C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp)
+        C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl)
         return dict(b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
-                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
+                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
                     b_btok=b_btok, btg=btg_)
@@ -3323,6 +3381,7 @@ def main():
         b_lr, b_llp, b_lab, b_iteach, b_teach, b_aux, b_ht, b_bel = (R[k_] for k_ in ("b_lr", "b_llp", "b_lab", "b_iteach", "b_teach", "b_aux", "b_ht", "b_bel"))
         b_ev, b_wg, b_wb, b_hand, h0, raw, agg, agg_map, lk = (R[k_] for k_ in ("b_ev", "b_wg", "b_wb", "b_hand", "h0", "raw", "agg", "agg_map", "lk"))
         keep_raw, t_roll = R["keep_raw"], R["t_roll"]
+        b_rj = R.get("b_rj")                                             # (--rj-teach)
         BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
         B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
         if BTOK:
@@ -3421,6 +3480,9 @@ def main():
         #                                                                  the chance he gives the label; its frames in withheld stretches, his likeliest right there
         lt_fr = torch.zeros(3, dtype=torch.float64, device=dev)          # ... the learner's frames, of them with a label, of those in withheld stretches
         hd_w = a.hand_teach * (min(1.0, max(0.0, mins - fade0) / a.hand_teach_warm) if a.hand_teach_warm > 0 else 1.0)   # (--hand-teach)
+        rj_w, rj_fade = rj_teach_w(mins)                                 # (--rj-teach)
+        rj_acc = torch.zeros(12, dtype=torch.float64, device=dev)        # ... the learner's labelled frames; [jump, fire]: read, the sum of his chance of
+        #                                                                  the label, he chose it, the loss; the loss of both, its frames
         hd_acc = torch.zeros(7, dtype=torch.float64, device=dev)         # ... the learner's frames, of them with a label, of those read by his hand; over the
         #                                                                  last: the sums of the loss, of the target's own entropy, of his chance of a choice
         #                                                                  other than "keep", of the target's
@@ -4098,6 +4160,28 @@ def main():
                             hd_acc += torch.stack([wgt.sum(), yl_.sum(), ym_.sum(), (-(Y_ * lq_).sum(-1) * ym_).sum(),
                                                    (-(Y_ * torch.log(Y_.clamp(min=1e-9))).sum(-1) * ym_).sum(),
                                                    ((1.0 - lq_[..., 0].exp()) * ym_).sum(), ((1.0 - Y_[..., 0]) * ym_).sum()]).double()
+                if RJ_LAB and b_rj is not None and (rj_w > 0 or epoch == 0):    # (--rj-teach) "jump and fire now" on the frames labelled
+                    yr_ = (b_rj[:, chunk] > 0).float() * wgt             # a label, on the learner's frames (zeros elsewhere: no sync with the card)
+                    Av_, Af_ = A[..., V_HEAD], A[..., FIRE_HEAD]
+                    mj_ = yr_ * (1.0 if hm[V_HEAD] is None else hm[V_HEAD])          # the jump: where his vertical key's jump was read
+                    if JE:
+                        mj_ = mj_ * (Av_ != 4).float()
+                    mf_ = yr_ * (1.0 if hm[FIRE_HEAD] is None else hm[FIRE_HEAD])    # the trigger: where it counts
+                    one_ = torch.ones_like(Av_)
+                    if rj_w > 0:
+                        tr_ = a.rj_teach_trunk                       # (as --teach-trunk: the two outputs, the shared layers held back)
+                        dsr_ = ds if tr_ >= 1.0 else dists(pi_t(tr_ * hs_all + (1.0 - tr_) * hs_all.detach()))
+                        rj_l = (-(dsr_[V_HEAD].log_prob(one_) * mj_).sum() / mj_.sum().clamp(min=1.0)
+                                - (dsr_[FIRE_HEAD].log_prob(one_) * mf_).sum() / mf_.sum().clamp(min=1.0))
+                        loss = loss + rj_w * rj_l
+                    if epoch == 0:                                   # how near he is, on frames this update has not yet learnt from
+                        with torch.no_grad():
+                            pj_ = ds[V_HEAD].log_prob(one_)
+                            pf_ = ds[FIRE_HEAD].log_prob(one_)
+                            rj_acc += torch.stack([yr_.sum(), mj_.sum(), (pj_.exp() * mj_).sum(), ((Av_ == 1).float() * mj_).sum(), (-pj_ * mj_).sum(),
+                                                   mf_.sum(), (pf_.exp() * mf_).sum(), ((Af_ == 1).float() * mf_).sum(), (-pf_ * mf_).sum(),
+                                                   ((Av_ == 1).float() * (Af_ == 1).float() * mj_ * mf_).sum(), (mj_ * mf_).sum(),
+                                                   torch.zeros((), device=yr_.device)]).double()
                 if demo_w > 0:                                           # imitate what pro players did in the same situation
                     d_obs, d_act, d_first = demo_batch()
                     dh = torch.zeros(d_obs.shape[1], H, device=dev)
@@ -4549,6 +4633,30 @@ def main():
                                                       belief=round(float(mb_s[:, 2].sum()) / max(1.0, float(mb_s[:, 0].sum())), 1),
                                                       memory_nearer=round(float(mb_s[:, 3].sum()) / max(1.0, float(mb_s[:, 0].sum())), 4))
             rec["aux"]["v022"] = v2_
+        if RJ_LAB:                                                       # (--rj-teach) the lesson, its frames, his agreement; the runs' counts
+            tr_n_, ov_n_ = float(np.sum(agg.get("rj_tries", 0))), float(np.sum(agg.get("rj_over", 0)))
+            RJ_WIN.append([tr_n_, ov_n_])
+            while len(RJ_WIN) > 1 and sum(x_[0] for x_ in RJ_WIN[1:]) >= a.rj_teach_window:
+                RJ_WIN.pop(0)
+            ra_ = rj_acc.cpu().numpy()
+            rn_ = np.zeros(7)
+            if np.size(agg.get("rj_near", 0)) == 7:
+                rn_ = np.asarray(agg["rj_near"], np.float64)
+            rec["rj_teach"] = dict(
+                w=round(float(rj_w), 5), live=RJ_LIVE[0], fade=round(float(rj_fade), 3), trunk=a.rj_teach_trunk,
+                start=None if RJ_T0[0] is None else round(RJ_T0[0], 2), warm=a.rj_teach_warm,
+                labelled=int(ra_[0]),                                                                       # the learner's labelled frames (first pass)
+                jump=dict(read=int(ra_[1]), p=round(float(ra_[2] / max(1.0, ra_[1])), 4), chose=round(float(ra_[3] / max(1.0, ra_[1])), 4),
+                          loss=round(float(ra_[4] / max(1.0, ra_[1])), 4)),                                   # his chance of the jump there, his choices
+                fire=dict(read=int(ra_[5]), p=round(float(ra_[6] / max(1.0, ra_[5])), 4), chose=round(float(ra_[7] / max(1.0, ra_[5])), 4),
+                          loss=round(float(ra_[8] / max(1.0, ra_[5])), 4)),
+                both=round(float(ra_[9] / max(1.0, ra_[10])), 4),                                            # jump and fire both, where both were read
+                tries=int(tr_n_), over=round(ov_n_ / max(1.0, tr_n_), 3), shots=int(agg.get("rj_shots", 0)),
+                near=dict(zip(("frames", "floor_edge", "floor_reach", "ready", "labelled"), (int(x_) for x_ in rn_[:5]))),   # (the simulators: his
+                pitch_reach=round(float(rn_[5] / max(1.0, rn_[2])), 1), pitch_edge=round(float(rn_[6] / max(1.0, rn_[1])), 1),   # frames in the
+                #                                                          tries; on the floor within 120 u of the take-off, within the label's
+                #                                                          reach, the launcher ready there, labelled; his mean view pitch there)
+                window=[float(sum(x_[0] for x_ in RJ_WIN)), float(sum(x_[1] for x_ in RJ_WIN))])
         if "qhand" in agg:                                               # (--hand-teach) the weapon in his hand with nobody in view for 1 s or more:
             QH_ = np.asarray(agg["qhand"], np.float64).reshape(3, 4, -1)      # the simulators' counters (his counted seats, in games), also with the lesson off
             QM_, QS_ = np.asarray(agg["qhand_meet"], np.float64), np.asarray(agg["qhand_sw"], np.float64)

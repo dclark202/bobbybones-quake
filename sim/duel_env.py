@@ -1076,6 +1076,23 @@ RJ_FROM_JUMP = float(os.environ.get("RJ_FROM_JUMP") or 0.0) > 0
 #                 simulator (sim/rj_clear.json "first": Aerowalk 1 at 70 degrees), not the pros' median (47 there, which does
 #                 not clear it in the run's physics); a link with no such entry keeps the pros'. Off: the pros', as before
 RJ_LOOK_CLEAR = float(os.environ.get("RJ_LOOK_CLEAR") or 0.0) > 0
+#   RJ_TEACH=1    (the owner, 2026-10-23: a lesson on the moment of the jump only) step() gives info["rj_lab"]: per player 1
+#                 where the label says "jump and fire now" for his NEXT frame, 0 elsewhere (int8). Given only in a rocket jump
+#                 run (RJ_RUN_P), alive and his own (no script), on the floor within RJ_TEACH_R units (horizontally; 30 in
+#                 height) of the try's take-off, the rocket launcher in hand with a rocket and ready to fire by the next frame,
+#                 his view RJ_TEACH_PITCH degrees or more down. Labels only: where he stands, how he looks and his air steering
+#                 stay his own, the pay is unchanged (the landing only). The trainer's --rj-teach (live RJ_TEACH_W) grades his
+#                 vertical key (jump) and his trigger toward it, each on the frames it is read. Off: no label, nothing else
+#                 changes (the label is never an input and draws nothing from the random stream)
+RJ_TEACH = float(os.environ.get("RJ_TEACH") or 0.0) > 0
+RJ_TEACH_R = float(os.environ.get("RJ_TEACH_R") or 48.0)
+RJ_TEACH_PITCH = float(os.environ.get("RJ_TEACH_PITCH") or 60.0)
+#   RJ_LOOK_FREE=1 (off by default; 2026-10-23, found building RJ_TEACH): in a rocket jump run his view does not ease back
+#                 toward level (the pull of 0.95 a frame with nobody in view, self.level): a try begun at 70 degrees down is at
+#                 54 when he lands from the placing with still hands, and his view at the take-off was 10 to 15 degrees down on
+#                 average in the tests, so RJ_TEACH's condition (60 or more) was met on no frame. Off: the pull, as before.
+#                 RJ_TEACH_PITCH, RJ_TEACH_R and RJ_LOOK_FREE are live (the trainer's live_settings.env, "frame")
+RJ_LOOK_FREE = float(os.environ.get("RJ_LOOK_FREE") or 0.0)
 RJ_ONLY_MAP = {}
 for part_ in RJ_ONLY.split(";"):
     if ":" in part_:
@@ -3476,6 +3493,7 @@ class DuelEnv:
                     self.rj_open_field = RJ_.linked_all(R_, lj_ + [(a_, b_, t_, k_ + len(js_)) for a_, b_, t_, k_ in lo_], js_ + rjs_,
                                                         RJ_OPEN_COST, n_plain=len(js_))
         self.rj_live = len(self.rjs) > 0
+        self.rj_lab = np.zeros(self.n, np.int8)            # (RJ_TEACH) "jump and fire now" for his next frame
         self.way = np.zeros(self.n, np.int64)               # WAYS: his way to his target (0 the shortest, 1 the second set, 2 the third),
         self.way_was = np.zeros(self.n, np.int64)           # ... as it was before this frame's reading,
         self.way_live = np.zeros(self.n, bool)              # ... it was read this frame (with the intention),
@@ -9344,6 +9362,34 @@ class DuelEnv:
                 r_long[i] += RJ_ARRIVE
             self._rj_place(i)
 
+    def rj_teach_label(self):
+        """(RJ_TEACH) per player 1 where the label says "jump and fire now" for the next frame (see RJ_TEACH), from the
+        state as the frame ends; reads only, changes nothing"""
+        lab = np.zeros(self.n, np.int8)
+        if not (self.rj_live and self.rjrun.any()):
+            self.rj_lab = lab
+            return lab
+        s = self.state
+        kk_ = self.rjrun_k
+        A_ = self.rj_a[np.minimum(kk_, len(self.rj_a) - 1)]
+        dxy_ = np.hypot(s[:, 0] - A_[:, 0], s[:, 1] - A_[:, 1])
+        dz_ = np.abs(s[:, 2] - A_[:, 2]) < 30.0
+        ar = np.arange(self.n)
+        own_ = self.rjrun & (self.script == 0) & (self.hp > 0)
+        floor_ = own_ & (s[:, 6] > 0.5) & dz_
+        near_ = floor_ & (dxy_ < RJ_TEACH_R)
+        ready_ = near_ & (self.weapon == RL) & (self.ammo[ar, RL] >= 1) & self.has[ar, RL] & (self.cool <= DT + 1e-4)
+        ok_ = ready_ & (self.pitch >= RJ_TEACH_PITCH)
+        lab[ok_] = 1
+        self.rj_lab = lab
+        if "rj_near" not in self.stats:                     # (counted seats) his frames in the tries, on the floor within RJ_EDGE of the
+            self.stats["rj_near"] = np.zeros(7)             # take-off, within RJ_TEACH_R, with the launcher ready, labelled; the sums of his
+        c_ = self._counted(ar)                              # view's pitch on the floor within RJ_TEACH_R and within RJ_EDGE
+        edge_ = floor_ & (dxy_ < RJ_EDGE)
+        self.stats["rj_near"] += np.array([(own_ & c_).sum(), (edge_ & c_).sum(), (near_ & c_).sum(), (ready_ & c_).sum(), (ok_ & c_).sum(),
+                                           self.pitch[near_ & c_].sum(), self.pitch[edge_ & c_].sum()], np.float64)
+        return lab
+
     def _rj_place(self, i):
         """a rocket jump run (RJ_RUN_P): player i begins a try 30 to 90 units of floor before the take-off of one of the pros'
         rocket jumps (every one as often as any other), facing its landing, the rocket launcher in his hand, the pros'
@@ -10089,6 +10135,8 @@ class DuelEnv:
         y0 = self.yaw.copy()
         # the view eases back toward level, but not while an enemy is in sight (no pull against vertical aim)
         lev = np.where(self.seen_t > 0.5, self.level, 1.0)
+        if RJ_LOOK_FREE > 0 and self.rj_live:                # (RJ_LOOK_FREE) not in a rocket jump run
+            lev = np.where(self.rjrun, 1.0, lev)
         p1 = np.clip(self.pitch * lev + dpit, -89, 89)
         done_ms = 0
         hs_s1 = None                                         # (FIRE_QL) the state after the frame's first substep
@@ -11262,6 +11310,8 @@ class DuelEnv:
         self._hand_step(done, died)                          # the weapon in his hand with nobody in view: the counters, always;
         if HAND_TEACH:                                       # (HAND_TEACH) the pros' shares as the target of his next reading of
             info["hand_lab"] = self.hand_lab.copy()          # the weapon key, for the trainer's --hand-teach
+        if RJ_TEACH:                                         # (RJ_TEACH) "jump and fire now" for his next frame, for the trainer's --rj-teach
+            info["rj_lab"] = self.rj_teach_label()
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
         if HEAD_EVENTS:                                      # (HEAD_EVENTS) the frame's events for the head
             dl_ = np.zeros(n, np.float32)
