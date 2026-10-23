@@ -852,6 +852,7 @@ class duelbot(minqlx.Plugin):
         self.alive = {}
         self.room, self.queue = None, []
         self.game_over_t, self.go_f3 = 0.0, 0.0              # a new map: a game's end sequence is over with it
+        self.aim_reset()
 
     # ------------------------------------------------------------------ setup
     FACTORY = "duel"                                         # (ffabot: "ffa")
@@ -1520,6 +1521,22 @@ class duelbot(minqlx.Plugin):
         except Exception:                                    # noqa: BLE001 - no network loaded yet
             return "?"
         return "max" if v > 9 else "{:g}".format(v)
+
+    AIM_DEFAULT = "4"
+
+    def aim_reset(self):
+        """a new map: back to the default aim (owner, 2026-10-22); policy.npz is loaded by setup() once the map is up"""
+        self.aim_want = None
+        src, dst = os.path.join(D, self.AIM_FILES[self.AIM_DEFAULT]), os.path.join(D, "policy.npz")
+        if self.aim_level() in (self.AIM_DEFAULT, "?") or not os.path.exists(src):
+            return
+        try:
+            tmp = dst + ".aim.tmp"
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dst)
+            self.log("new map: aim level back to {}".format(self.AIM_DEFAULT))
+        except Exception as e:                           # noqa: BLE001
+            self.log("aim reset: {!r}".format(e))
 
     def aim_busy(self):
         """a game (or its countdown or end), a test room, a timed duel or a map load: the aim stays as it is for now"""
