@@ -1655,7 +1655,8 @@ def main():
     AH_L = AH_CK
     if AH_L is None and a.ahead:
         assert BEL, "--ahead: with --belief (it reads the belief's state)"
-        AH_L = ahead_.layout(ACTION_DIMS[I_HEAD], inp=int(BEL_L["hid"]), weights=AH_PARTS)
+        AH_L = ahead_.layout(ACTION_DIMS[I_HEAD], inp=int(BEL_L["hid"]), weights=AH_PARTS,
+                             race="race_me_mh" in tuple(getattr(E_, "AUX_COLS", ())))      # (the item race: TRACK_RACE=1)
     AH = AH_L is not None
     if AH and AH_PARTS is None:
         AH_PARTS = dict(AH_L["weights"])
@@ -3535,12 +3536,16 @@ def main():
             tz_acc = torch.zeros(len(trz_.PARTS) + 1, dtype=torch.float64, device=ADEV)
         ah_w = ah_lesson_w(mins) if (AH_ON and trk_w > 0) else 0.0      # (--ahead) its lesson, with the readout's (TRACK_W 0 stops it too)
         if ah_w > 0:
-            AH_C = [TRK_IX[c_] for c_ in ahead_.COLS]
-            ys_ = [ahead_.labels(b_aux[:, c0_:c0_ + 2048][..., AH_C].float(), b_done[:, c0_:c0_ + 2048].cpu(), ahead_.COLS, BK, AH_L["n_target"])
-                   for c0_ in range(0, N, 2048)]
-            AH_Y = [torch.cat([y_[i_] for y_ in ys_], 1) for i_ in range(6)]   # (off the card: a piece goes over with its minibatch)
+            AHC_ = tuple(AH_L["cols"])
+            assert all(c_ in TRK_IX for c_ in AHC_), "--ahead: the simulator gives no {} (TRACK_RACE=1 for the race)".format(
+                [c_ for c_ in AHC_ if c_ not in TRK_IX])
+            AH_C = [TRK_IX[c_] for c_ in AHC_]
+            ys_ = [ahead_.labels(b_aux[:, c0_:c0_ + 2048][..., AH_C].float(), b_done[:, c0_:c0_ + 2048].cpu(), AHC_, BK, AH_L["n_target"],
+                                 race=bool(AH_L.get("race"))) for c0_ in range(0, N, 2048)]
+            AH_Y = [torch.cat([y_[i_] for y_ in ys_], 1) for i_ in range(len(ys_[0]))]   # (off the card: a piece goes over with its minibatch)
             ys_ = None
-            ah_acc = torch.zeros(10, dtype=torch.float64, device=ADEV)  # the parts' loss sums, their frames, the place's error at 1, 2, 4 s, frames
+            NPA_ = len(ahead_.PARTS)
+            ah_acc = torch.zeros(2 * NPA_ + 4, dtype=torch.float64, device=ADEV)  # the parts' loss sums, their frames, the place's error at 1, 2, 4 s, frames
         BTOK_ISO = None
         if trk_w > 0:
             TRK_Y = b_aux[:T][..., TRK_TC]                               # [T, N, 13] float16, off the card (a piece goes over with its minibatch)
@@ -3988,7 +3993,7 @@ def main():
                         tl_ = tl_ + (ah_w / trk_w) * al_
                         if epoch == 0:
                             with torch.no_grad():
-                                ah_acc += HC_(torch.cat([ap_ * an_, an_, ahead_.errors(ao_, ay_, am_) * an_[0], an_[0:1]]).double())
+                                ah_acc += HC_(torch.cat([ap_ * an_.clamp(min=1.0), an_, ahead_.errors(ao_, ay_, am_) * an_[0], an_[0:1]]).double())
                     if trz_w > 0:                                        # (--track-z) the second part's lesson on the same state and frames
                         zl_, zp_ = trz_.loss(pol.trackz(bs_), hsel(TRZ_Y, 1, chunk, ci_).float(), TRZ_PARTS, tm_)
                         tl_ = tl_ + (trz_w / trk_w) * zl_                # (so that trk_w * tl_ is both lessons)
@@ -4458,12 +4463,13 @@ def main():
                 vi_ = BTOK_L["feats"].index("valid")
                 rec["btoken"]["valid"] = round(float(bb_[..., vi_].mean()), 4)
                 rec["btoken"]["abs_mean"] = round(float(bb_.abs().mean()), 4)
-        if ah_w > 0 and float(ah_acc[3]) > 0:                            # (--ahead) its lesson's parts and the place's error by horizon
+        if ah_w > 0 and float(ah_acc[NPA_]) > 0:                         # (--ahead) its lesson's parts and the place's error by horizon
             ah_acc = ah_acc.cpu()
-            rec["ahead"] = dict(w=round(ah_w, 4), parts=AH_PARTS,
-                                loss={p_: round(float(ah_acc[i_] / max(1.0, float(ah_acc[3 + i_]))), 4) for i_, p_ in enumerate(ahead_.PARTS)},
-                                frames=[int(ah_acc[3 + i_]) for i_ in range(3)],
-                                err_units={"{:g}s".format(h_): round(float(ah_acc[6 + i_] / max(1.0, float(ah_acc[9]))), 1) for i_, h_ in enumerate(ahead_.HORIZ)})
+            rec["ahead"] = dict(w=round(ah_w, 4), parts=AH_PARTS, race=bool(AH_L.get("race")),
+                                loss={p_: round(float(ah_acc[i_] / max(1.0, float(ah_acc[NPA_ + i_]))), 4) for i_, p_ in enumerate(ahead_.PARTS)},
+                                frames=[int(ah_acc[NPA_ + i_]) for i_ in range(NPA_)],
+                                err_units={"{:g}s".format(h_): round(float(ah_acc[2 * NPA_ + i_] / max(1.0, float(ah_acc[-1]))), 1)
+                                           for i_, h_ in enumerate(ahead_.HORIZ)})
         if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
             def q_(i_, d_=4):
                 return round(float(ax_s[i_] / max(1.0, float(ax_n[int(AUX_MI[i_])]))), d_)

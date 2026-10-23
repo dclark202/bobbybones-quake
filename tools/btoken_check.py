@@ -211,6 +211,22 @@ def t_ahead():
     band = int(sum((200 - f_) * 0.025 >= e for e in ahead_.APPEAR))
     check("ahead: the appearance band", int(ap[kb, 1]) == band and am[kb, 1] == 1 and am[30, 1] == 0, (int(ap[kb, 1]), band))
     check("ahead: no appearance within 6 s counts only with 6 s of rollout left", am[0, 0] == 1 and int(ap[0, 0]) == 3 and am[W_last(T, K), 0] == 0)
+    # the race: the mega down for 2 s at tick 0 (back on frame 7 + 80), the enemy 0.5 s from it then; the red up
+    colsR = cols + ahead_.COLS_RACE
+    CR = {c: i for i, c in enumerate(colsR)}
+    auxR = torch.cat([aux, torch.zeros(T + 1, N, len(ahead_.COLS_RACE))], -1)
+    auxR[..., CR["race_me_mh"]], auxR[..., CR["race_en_mh"]] = 3.0, 5.0
+    auxR[..., CR["race_me_ra"]], auxR[..., CR["race_en_ra"]] = 30.0, 2.0          # (no way for him to the red: left out)
+    auxR[:, :, CR["mega_s"]] = torch.clamp(2.0 - 0.025 * (torch.arange(T + 1).float() - 7.0), min=0.0)[:, None]
+    auxR[87, :, CR["race_en_mh"]] = 0.5
+    yR = ahead_.labels(auxR, done, colsR, K, 17, race=True)
+    lead, lm, there, thm = yR[6:]
+    check("ahead: the race's lead (enemy's way - his, tens of s) and its mask", abs(float(lead[0, 0, 0]) - 0.2) < 1e-6 and lm[0, 0, 0] == 1 and lm[0, 0, 1] == 0)
+    check("ahead: the enemy there at the respawn", there[0, 0, 0] == 1 and thm[0, 0, 0] == 1 and thm[0, 0, 1] == 0 and thm[20, 0, 0] == 0)
+    LR = ahead_.layout(17, race=True)
+    mR = ahead_.make_module(256, LR)
+    lvR, pvR, nvR = ahead_.loss(mR(torch.zeros(T // K, N, 256)), LR, yR, ahead_.DEFAULT_W, torch.ones(T // K, N))
+    check("ahead: with the race the start's loss is finite", bool(torch.isfinite(lvR)) and float(nvR[3]) > 0, [round(float(x), 3) for x in pvR])
     m = ahead_.make_module(256, ahead_.layout(17))
     o = m(torch.zeros(T // K, N, 256))
     lv, pv, nv = ahead_.loss(o, ahead_.layout(17), (fut, fm, tg, tm, ap, am), ahead_.DEFAULT_W, torch.ones(T // K, N))

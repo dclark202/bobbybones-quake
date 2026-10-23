@@ -2371,6 +2371,19 @@ TRACK_Z_WIN = int(os.environ.get("TRACK_Z_WIN") or 8)
 if TRACK_Z:
     assert TRACK_TRUTH, "TRACK_Z needs TRACK_TRUTH=1"
     AUX_COLS = AUX_COLS + ("en_zone", "zone_n", "zone_map", "en_spd8", "en_mvf8", "en_mvl8", "zone_seen")
+# v0.4.1 (docs/v0.4.0/RUN_v0.4.1.md: the item race for the mega and the red armor). TRACK_RACE=1 (a training switch, off by
+# default, with TRACK_TRUTH only; off: info["aux"] as above) adds the truth of the brain's readout ahead (sim/ahead.py, the
+# trainer's --ahead); labels only, never inputs, never read by the simulator itself:
+#   race_me_mh, race_en_mh   the seconds of way (the walking map's route field, as en_near's) from him and from the enemy to
+#                            the mega (the nearest, where a map has several), capped at RACE_CAP (no way, no mega, no map)
+#   race_me_ra, race_en_ra   the same to the red armor
+# With mega_s / red_s (the seconds until it is back) the trainer makes his walking-time lead (race_en - race_me) and whether
+# the enemy is there when it comes back (race_en at that frame within RACE_THERE seconds; sim/ahead.py)
+TRACK_RACE = float(os.environ.get("TRACK_RACE") or 0.0) > 0
+RACE_CAP = 30.0
+if TRACK_RACE:
+    assert TRACK_TRUTH, "TRACK_RACE needs TRACK_TRUTH=1"
+    AUX_COLS = AUX_COLS + ("race_me_mh", "race_en_mh", "race_me_ra", "race_en_ra")
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -9893,6 +9906,25 @@ class DuelEnv:
             self.trk_vc = np.minimum(self.trk_vc + 1.0, TRACK_Z_WIN)
         self.trk_life = life.copy()
 
+    def _race_cols(self, out, C, s, foe):
+        """(TRACK_RACE) aux()'s columns of the item race (see TRACK_RACE): reads only"""
+        n = self.n
+        for k_, (cm_, ce_) in ((1, ("race_me_mh", "race_en_mh")), (2, ("race_me_ra", "race_en_ra"))):
+            out[:, C[cm_]] = RACE_CAP
+            out[:, C[ce_]] = RACE_CAP
+            if self.route is None:
+                continue
+            gs_ = self.intent_more.get(k_)
+            if gs_ is None:
+                gs_ = np.array([self.intent_gi[k_]] if self.intent_gi[k_] >= 0 else [], np.int64)
+            gs_ = gs_[gs_ < len(self.route.T)]
+            if not len(gs_):
+                continue
+            nm_ = self.route.locate(s[:n, :3])
+            ne_ = self.route.locate(s[foe, :3])
+            out[:, C[cm_]] = np.minimum(self.route.T[gs_][:, nm_].min(0), RACE_CAP)
+            out[:, C[ce_]] = np.minimum(self.route.T[gs_][:, ne_].min(0), RACE_CAP)
+
     def _trk_cols(self, out, C, s, foe, grp, c, si):
         """(TRACK_TRUTH) aux()'s columns of the belief readout (see TRACK_TRUTH): reads only"""
         n = self.n
@@ -9922,6 +9954,8 @@ class DuelEnv:
             out[:, C["es_stack"]] = self.es_h[ar, k_] + self.es_a[ar, k_]
         else:
             out[:, C["es_stack"]] = -1.0
+        if TRACK_RACE:                                       # (TRACK_RACE) the seconds of way to the mega and the red armor
+            self._race_cols(out, C, s, foe)
         if TRACK_Z:                                          # (TRACK_Z) the zone the enemy stands in; his speed and way, 0.2 s
             Z_ = self.zones
             out[:, C["en_zone"]] = Z_.locate(s[foe, :3]) if Z_ is not None else -1
