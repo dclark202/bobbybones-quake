@@ -1,6 +1,6 @@
 # v0.4.2a on one page: the old belief faded out of the hands
 
-*2026-10-23 17:00: **building** (owner, 2026-10-23: "v0.4.2a is the right start"; "from v0.4.2 we should be moving to use the brain to control the things that we previously hardwired"); draft 16:30 for the owner's review (tonight / Sat noon). Build Sat morning on the CPU while v0.4.1 finishes; start
+*2026-10-23 17:30: **built and tested on the CPU** (branch `v042a`, `c93617f` on v041-server `9c8651b`; all off by default: bit-identical to v0.4.1 off and at g = 0; the faded columns read their mean at g = 1, the brain's input unchanged, the readers on the brain on 100% of lives; server vs checks 0 differences at every gate and fade; 0 of 18 brain weights reached). The fade is **76 columns** (the list below adds up to 76, not 78). 17:00: building (owner, 2026-10-23: "v0.4.2a is the right start"; "from v0.4.2 we should be moving to use the brain to control the things that we previously hardwired"); draft 16:30 for the owner's review (tonight / Sat noon). Build Sat morning on the CPU while v0.4.1 finishes; start
 Sat ~12:30 from v0.4.1's end on the owner's go; 18–24 h. Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). After it: v0.4.2b, the strategy
 head ([RUN_v0.4.2.md](RUN_v0.4.2.md)). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
 
@@ -14,7 +14,7 @@ facts stay** (where and when he last saw or heard the enemy: the owner, 2026-10-
 simulator itself did with the old belief moves to the brain's answer on the same gate. One change: the brain's new outputs
 (1/2/4 s ahead, target, appear, item race) do not join here (below).
 
-## What fades (78 input columns; audit of 2026-10-23, `duel_env.py` in branch `v041`)
+## What fades (76 input columns; audit of 2026-10-23, `duel_env.py` in branch `v041`)
 
 | Group | Fades (rule-made) | Stays (raw) |
 |---|---|---|
