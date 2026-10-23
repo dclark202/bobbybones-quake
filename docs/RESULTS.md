@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-22](results/2026-10-22.md)
 
+- 19:50 — v0.3.x closes: the enemy picture and the hands need separate memories; v0.4.0 (the brain) being built
 - 16:30 — The decision report's baseline (v0.3.10): fights follow the stack gap, items do not; v0.3.10 beat v0.3.9 46-0-34 in whole games; v0.3.11 running
 - 12:10 — v0.3.9 (pre-aiming) the biggest step since v0.3.7: 65.2% against v0.3.8's end at equal delays, rail frags 3.9% → 9.5%; v0.3.10 (look-back pay) running, v0.3.11 (the knowledge pay) built
 
