@@ -1,6 +1,6 @@
 # v0.4.2a on one page: the old belief faded out of the hands
 
-*2026-10-23 16:30: **draft** for the owner's review (tonight / Sat noon). Build Sat morning on the CPU while v0.4.1 finishes; start
+*2026-10-23 17:00: **building** (owner, 2026-10-23: "v0.4.2a is the right start"; "from v0.4.2 we should be moving to use the brain to control the things that we previously hardwired"); draft 16:30 for the owner's review (tonight / Sat noon). Build Sat morning on the CPU while v0.4.1 finishes; start
 Sat ~12:30 from v0.4.1's end on the owner's go; 18–24 h. Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). After it: v0.4.2b, the strategy
 head ([RUN_v0.4.2.md](RUN_v0.4.2.md)). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
 
@@ -70,6 +70,6 @@ simulator itself did with the old belief moves to the brain's answer on the same
 
 | # | Decision | Proposed |
 |---|---|---|
-| 1 | The brain keeps the rule's columns as its own input during A | yes, its fade later |
-| 2 | The blind-fire exemption on the brain's place | yes |
-| 3 | The brain's new outputs into the head (v0.4.2b), not the hands' token | yes |
+| 1 | The brain keeps the rule's columns as its own input during A | yes, its fade later (to confirm Sat) |
+| 2 | The blind-fire exemption on the brain's place | faded onto the brain on the same gate (recommended 2026-10-23; built as a switch, his word before the start) |
+| 3 | The brain's new outputs into the head (v0.4.2b), not the hands' token | **yes** (owner, 2026-10-23: "The hands handle what to do *now*, the predictions drive strategy") |
