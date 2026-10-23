@@ -1130,6 +1130,17 @@ def main():
     ap.add_argument("--info-every", type=int, default=20, help="... frames between two scorings (20: 0.5 s)")
     ap.add_argument("--info-delay", type=float, default=60.0, help="... minutes after --track-start before the pay begins (the readout learns first)")
     ap.add_argument("--info-warm", type=float, default=60.0, help="... minutes over which the pay then rises to --info-pay")
+    # v0.4.0 stage A (the owner, 2026-10-22: "these two need to be separate networks"): the enemy tracked by a memory of its own
+    # (sim/belief.py); the readout reads it in place of his memory, its lesson reaches the belief and the readout only.
+    # Off (0, a network without belief.* layers): the trainer as it was
+    ap.add_argument("--belief", type=int, default=0,
+                    help="v0.4.0: the belief memory's size (256): its own input layer on the normalised inputs, a GRU that ticks every "
+                         "--belief-every frames on the mean and max of the frames since the last; the readout (--track) reads it. 0 = off "
+                         "(a network that has one keeps it, with the size it has)")
+    ap.add_argument("--belief-every", type=int, default=8, help="... frames between two ticks (8: 0.2 s); the readout is graded on the ticks")
+    ap.add_argument("--belief-lr-scale", type=float, default=-1.0,
+                    help="... the belief's own layers learn at this many times --lr (a group of their own, after the readout's); "
+                         "-1: as --track-lr-scale")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -1248,6 +1259,10 @@ def main():
     ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa: groups of more than two players)")
     ap.add_argument("--group", default="2", help="players per group, all against all (needs --env duel_env_ffa). Several "
                     "sizes separated by commas (2,3,4): the workers take them in turn, each with about as many players")
+    ap.add_argument("--max-updates", type=int, default=0, help="(checks) stop after this many updates (0: --minutes alone)")
+    ap.add_argument("--seed", type=int, default=-1, help="(checks) the trainer's own random streams (torch, numpy) seeded; -1: not (as before)")
+    ap.add_argument("--dump-acts", default="", help="(checks) after each update: <this>_<update>.pt with the rollout's actions, log p, "
+                                                    "values and rewards (a fixed-seed identity check of two runs)")
     a = ap.parse_args()
     if a.solo_self_drive:                                    # (v0.3.4 C) read by the simulators (spawned with this environment)
         os.environ["SOLO_SELF"] = "1"
@@ -1255,6 +1270,9 @@ def main():
 
     import torch
     import torch.nn as nn
+    if a.seed >= 0:                                          # (--seed) checks only: the simulators are seeded as always (3000 + worker)
+        torch.manual_seed(a.seed)
+        np.random.seed(a.seed)
     sys.path.insert(0, HERE)
     import importlib
     E_ = importlib.import_module(a.env)
@@ -1411,6 +1429,7 @@ def main():
     AUX_SAVE = {}                                            # (--aux) what is kept in a saved file beside the lesson's layers
     UNI_CK = None                                            # (--legs-feat, --legs-guide) the parts' layout: comes with the network
     TRK_CK = None                                            # (--track, v0.3.11) the belief readout's layout: comes with the network
+    BEL_CK = None                                            # (--belief, v0.4.0 A) the belief memory's layout: comes with the network
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
@@ -1421,6 +1440,7 @@ def main():
             AUX_SAVE = dict(aux_heads=ck0_.get("aux_heads"))
         AUX_CK = tuple(h_ for h_ in ("target", "strength", "first", "near") if "aux.{}.weight".format(h_) in ck0_["model"])
         TRK_CK = ck0_.get("track") if any(k_.startswith("track.") for k_ in ck0_["model"]) else None
+        BEL_CK = ck0_.get("belief") if any(k_.startswith("belief.") for k_ in ck0_["model"]) else None
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
         ATT = dict(ATT, mem=H)
@@ -1524,11 +1544,39 @@ def main():
     # network he resumes from, or is made new when the lesson or the pay is asked for (its last layer at zero). Off: nothing here
     import track as track_
     TRK_PARTS = track_.parse_weights(a.track_parts)
-    TRK_L = TRK_CK if TRK_CK is not None else (track_.layout(weights=TRK_PARTS) if (a.track > 0 or a.info_pay > 0) else None)
+    # (--belief, v0.4.0 A; sim/belief.py) the belief memory: its layout comes with the network, or is made new by --belief (its
+    # own start). With it the readout reads the belief's state, never his memory
+    import belief as belief_
+    BEL_L = BEL_CK
+    if BEL_L is None and a.belief > 0:
+        BEL_L = belief_.layout(OBS_DIM, hid=a.belief, every=a.belief_every)
+    BEL = BEL_L is not None
+    BK = int(BEL_L["every"]) if BEL else 0
+    if BEL:
+        assert int(BEL_L["obs_dim"]) == OBS_DIM, "the belief reads {} inputs, the simulator has {}".format(BEL_L["obs_dim"], OBS_DIM)
+        assert a.belief <= 0 or (int(a.belief) == int(BEL_L["hid"]) and int(a.belief_every) == BK), \
+            "--belief {} --belief-every {}: the network's belief is {} every {}".format(a.belief, a.belief_every, BEL_L["hid"], BK)
+        assert a.steps % BK == 0, "--steps {} is not a whole number of the belief's ticks ({})".format(a.steps, BK)
+        assert not HAS_CELLS, "--belief: not for networks with the learned map cells (v8)"
+        assert a.info_pay <= 0, "--info-pay with --belief: not built (the pay would score the belief's readout; v0.4.0 A runs with it 0)"
+        assert TRK_CK is None or TRK_CK.get("src") == "belief", \
+            "the network's readout reads his memory: give it a fresh one on the belief (tools/belief_init.py add --replace-track)"
+        print(belief_.describe(BEL_L) + (" (from the network)" if BEL_CK is not None else " (new)"), flush=True)
+    else:
+        assert TRK_CK is None or TRK_CK.get("src") != "belief", "the network's readout reads a belief memory it does not have"
+    BEL_SAVE = {"belief": BEL_L} if BEL else {}
+    BEL_LR = float(a.belief_lr_scale) if a.belief_lr_scale >= 0 else float(a.track_lr_scale)
+    TRK_L = TRK_CK if TRK_CK is not None else (track_.layout(weights=TRK_PARTS) if (a.track > 0 or a.info_pay > 0 or BEL) else None)
     TRK = TRK_L is not None                                  # the readout's layers are in the network (kept as they are while off)
     TRK_ON = TRK and (a.track > 0 or a.info_pay > 0)         # the truth is read from the simulators (TRACK_TRUTH=1)
     if TRK:
         TRK_L = dict(TRK_L, weights=TRK_PARTS)
+    if BEL:                                                  # (the layout says what the readout reads: tools and checks can tell)
+        TRK_L = dict(TRK_L, src="belief", inp=int(BEL_L["hid"]))
+        if a.track_trunk > 0:
+            print("track: --track-trunk {} is not used with --belief (the lesson reaches the belief and the readout only)".format(a.track_trunk), flush=True)
+    TRK_IN = int(BEL_L["hid"]) if BEL else H                 # what the readout reads: the belief's state, or his memory
+    TRK_EVERY = BK if BEL else a.info_every                  # the frames the readout is scored on in the rollout (the counters)
     TRK_SAVE = {"track": TRK_L} if TRK else {}
     TRK_IX, TRK_TC, TRK_K = None, None, [0.0, 0.0]           # (the truth's columns; the pay's k and the lesson's weight of this rollout)
     if TRK_ON:
@@ -1543,9 +1591,12 @@ def main():
             aux = np.concatenate([f[2] for f in first])
         print("track (v0.3.11): the belief readout {} ({} -> {} -> {}); lesson {} (memory share {}, warm {} min), parts {}; info pay {} "
               "every {} frames (after {} min, rising over {} min){}".format(
-                  "from the network" if TRK_CK is not None else "new (its last layer at zero)", H, TRK_L["hid"], TRK_L["d"], a.track,
-                  a.track_trunk, a.track_warm, TRK_PARTS, a.info_pay, a.info_every, a.info_delay, a.info_warm,
+                  "from the network" if TRK_CK is not None else "new (its last layer at zero)", TRK_IN, TRK_L["hid"], TRK_L["d"], a.track,
+                  a.track_trunk if not BEL else "none (--belief)", a.track_warm, TRK_PARTS, a.info_pay, a.info_every, a.info_delay, a.info_warm,
                   "" if a.track_start < 0 else "; counted from minute {}".format(a.track_start)), flush=True)
+        if BEL:
+            print("track (v0.4.0 A): the readout reads the belief memory's state ({}); lesson and counters on its ticks (every {} frames); "
+                  "the belief's and the readout's layers learn at {} and {} times --lr".format(TRK_IN, BK, BEL_LR, a.track_lr_scale), flush=True)
     elif TRK:
         print("track (v0.3.11): the network's belief readout is kept as it is (no lesson, no pay)", flush=True)
 
@@ -1643,7 +1694,9 @@ def main():
                     nn.init.zeros_(l_.bias)
                     setattr(self.aux, h_, l_)
             if TRK:                                              # (--track, v0.3.11) the belief readout from his memory (sim/track.py):
-                self.track = track_.make_module(H, TRK_L)        # its last layer at zero, made without a draw of the random stream
+                self.track = track_.make_module(TRK_IN, TRK_L)   # its last layer at zero, made without a draw of the random stream
+            if BEL:                                              # (--belief, v0.4.0 A) the belief memory: its own random stream
+                self.belief = belief_.make_module(BEL_L)
             if ORDER:                                            # (--ordered-heads) a table a link: a row for each choice before, at zero
                 self.order = nn.Module()
                 for p_, c_ in ORDER:
@@ -1798,9 +1851,12 @@ def main():
     def load_net(net, sd):
         """a network's weights. Only the layers of --aux may be missing (they stay as they are: fresh in the learner) or
         left over (the lesson is off and they are not in this network)"""
-        bad = net.load_state_dict(sd, strict=False)
+        own_ = net.state_dict()                              # (v0.4.0: a league file's readout of another shape, e.g. v0.3.11's on his
+        if any(k_.startswith(("track.", "belief.")) and k_ in own_ and tuple(v_.shape) != tuple(own_[k_].shape) for k_, v_ in sd.items()):
+            sd = {k_: v_ for k_, v_ in sd.items() if not k_.startswith(("track.", "belief."))}   # memory beside one on the belief: left out;
+        bad = net.load_state_dict(sd, strict=False)          # the learner's own readout reads every seat)
         odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.") and not k_.startswith("head.aux.")
-               and not k_.startswith("track.")]                  # (v0.3.11: the belief readout, as the aux layers)
+               and not k_.startswith(("track.", "belief."))]     # (v0.3.11: the belief readout, as the aux layers; v0.4.0: the belief)
         assert not odd, "the network does not fit: {}".format(odd)
 
     HEAD_SHUT = ("plan_in.", "target.", "way.", "win.", "aux.")      # (--head) the links of a new head: zeros
@@ -1930,7 +1986,7 @@ def main():
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))
-                            and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith("track.")],
+                            and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith(("track.", "belief."))],
                            lr=a.lr, eps=1e-5, **({"fused": True} if a.adam_fused else {}))   # (LEGS_IN: not the branch; --head: not the head)
     if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
         opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
@@ -1949,6 +2005,8 @@ def main():
         before it, and one saved with it loads whole"""
         if TRK and not TRK_GROUP[0]:
             opt.add_param_group({"params": list(pol.track.parameters()), "lr": a.lr * a.track_lr_scale, "lr_scale": a.track_lr_scale})
+            if BEL:                                          # (--belief, v0.4.0 A) the belief's own group, after the readout's
+                opt.add_param_group({"params": list(pol.belief.parameters()), "lr": a.lr * BEL_LR, "lr_scale": BEL_LR})
             TRK_GROUP[0] = True
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
@@ -1965,8 +2023,8 @@ def main():
         if os.path.exists(op_):
             try:
                 os_ = torch.load(op_, weights_only=False, map_location=dev)
-                if TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1:
-                    trk_group()                               # (--track: saved with the readout's group)
+                if TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL):
+                    trk_group()                               # (--track: saved with the readout's group; --belief: and the belief's)
                 sc_ = [g_.get("lr_scale", 1.0) for g_ in opt.param_groups]      # (this run's scales: loading puts the saved ones back)
                 for g_, s_ in zip(opt.param_groups, os_["param_groups"]):   # (torch checks the groups' sizes only: a moment of
                     for p_, i_ in zip(g_["params"], s_["params"]):           # another shape, or of another parameter, is refused here)
@@ -1997,9 +2055,16 @@ def main():
     TRK_T0 = float(a.track_start) if a.track_start >= 0 else float(elapsed0)    # (--track) the minute its lesson and pay count from
     assert a.info_pay <= 0 or a.track > 0 or TRK_CK is not None, "--info-pay: with --track (a readout that learns) or one that has learnt"
 
+    BEL_PAYNOTE = [False]
+
     def trk_pay_k(mins):
         """(--info-pay) k at this minute: nothing until --info-delay minutes after the lesson's start, then rising over --info-warm"""
         if not TRK_ON or a.info_pay <= 0:
+            return 0.0
+        if BEL:                                                  # (--belief: not built; a live INFO_PAY is not taken)
+            if not BEL_PAYNOTE[0]:
+                print("track: INFO_PAY {} with --belief is not built: the pay stays 0".format(a.info_pay), flush=True)
+                BEL_PAYNOTE[0] = True
             return 0.0
         x_ = mins - TRK_T0 - a.info_delay
         if x_ <= 0:
@@ -2088,7 +2153,7 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
-                        hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE, **TRK_SAVE,
+                        hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE, **TRK_SAVE, **BEL_SAVE,
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
@@ -2350,6 +2415,8 @@ def main():
         def __iter__(self):
             return (self[j_] for j_ in range(len(self.parts)))
     CARRY = dict(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp)    # from rollout to rollout
+    if BEL:                                                              # (--belief) the belief's live state of every seat (the learner's
+        CARRY["bs"] = belief_.State(N, BEL_L, dev)                       # network on every seat, as the readout's counters read it)
 
     def pre_rollout(upd):
         """what happens between two rollouts, before rollout `upd`: live.json, the gate's line, the biases' openings, the
@@ -2454,13 +2521,13 @@ def main():
                     band=np.zeros(nb_), hand=np.zeros(nb_), own=np.zeros(nb_), sd=np.zeros(nb_), bel_ok=np.zeros(nb_), score=np.zeros(nb_),
                     pay_sum=0.0, pay_abs=0.0, pay_hidden=0.0, pay_mine=0.0, scorings=0, seats=0, pairs_on=0)
 
-    def trk_frame(net, aux_np, w_t, TS, k):
+    def trk_frame(net, aux_np, w_t, TS, k, z=None):
         """(--track, --info-pay) a scoring frame: every seat's readout (the learner's network on every seat's own memory: the
         league's seats are read by it too, so that both sides of a pair are judged by the same reader) against the truth of
         aux_np (info["aux"] of the frame the network has just read); the pay k * (his score - the enemy's) where both are on
         (zero-sum over each pair; nothing with k = 0); the counters into TS. -> the pay [N] on the card, or None"""
         with torch.no_grad():
-            o_ = net.track(net.zl.float()).float()
+            o_ = net.track((net.zl if z is None else z).float()).float()       # (--belief: z the belief's state)
             y_ = torch.from_numpy(np.ascontiguousarray(aux_np[:, TRK_TC], dtype=np.float32)).to(o_.device)
             on_np = aux_np[:, TRK_IX["trk_on"]] > 0.5
             on_ = torch.from_numpy(on_np).to(o_.device)
@@ -2518,7 +2585,7 @@ def main():
         inputs' beside them; the mean plain log-likelihood of each part; called right; the pay)"""
         if TS is None:
             return None
-        mins_ = TS["seats"] * a.info_every * E_.DT / 60.0            # his seats' minutes of game time scored (a scoring stands for info_every frames)
+        mins_ = TS["seats"] * TRK_EVERY * E_.DT / 60.0            # his seats' minutes of game time scored (a scoring stands for info_every frames)
         out_ = dict(k=round(k, 5), scorings=TS["scorings"], seat_minutes=round(mins_, 1), by=dict())
         for j_, nm_ in enumerate(TRK_BINS):
             n_ = TS["n"][j_]
@@ -2584,6 +2651,11 @@ def main():
             b_ht = torch.zeros(AUX_TW, N, H, dtype=torch.float16) if AUX_TW else None      # (--aux-tail) his memory on the last frames
             b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
+        BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
+        bs0 = None
+        if BS_ is not None:
+            assert float(BS_.cnt.abs().max()) == 0.0, "the belief's rollout must start on a tick's boundary"
+            bs0 = BS_.s.clone()
         if HEADL:                                                        # (--head) the rollout's events, win labels; the ring folded and
             t_hd = time.time()                                           # re-run as the slow memory's; he plays from the state the update
             b_ev = torch.zeros(HD_J, N, HEADL["ev"], device=dev)         # re-runs; its start kept for the update
@@ -2634,6 +2706,8 @@ def main():
                     logits, val, h = net.step(x, h, sm=SM, xl=xlu_)
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
+                bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
+                #                                                          (--belief) every seat at once: the inputs as the update re-reads them
                 if LONG:
                     b_val2[t] = net.v2(net.zl)
                 if ORDER:                                                # (--ordered-heads) drawn in order
@@ -2672,8 +2746,9 @@ def main():
             if b_aux is not None:                                        # (--aux; --track)
                 b_aux[t] = torch.from_numpy(aux)
             tpay_ = None
-            if TS_ is not None and t % a.info_every == 0:                # (--track, --info-pay) his readout scored, the pay (added
-                tpay_ = trk_frame(net, aux, b_w[t], TS_, TK_)           # to the reward of this frame's action, below)
+            if TS_ is not None and (bt_ if BS_ is not None else t % a.info_every == 0):    # (--track, --info-pay) his readout scored, the pay
+                tpay_ = trk_frame(net, aux, b_w[t], TS_, TK_, z=BS_.s if BS_ is not None else None)    # (added to the reward of this
+                #                                                          frame's action, below; --belief: on its ticks, from its state)
             an = act.cpu().numpy()
             tp1_ = time.perf_counter()
             RP_["net"] += tp1_ - tp0_                                    # (his network on the card and its draws, the frame's buffers)
@@ -2749,6 +2824,8 @@ def main():
                 aux = np.concatenate([r[12] for r in res])
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
+            if BS_ is not None:                                          # (--belief) ... and the belief's, by the same flag
+                BS_.reset(d)
             if SM is not None:                                           # (--slow-mem) ... and the slow memory's
                 SM.reset(d)
                 SM_O.reset(d)
@@ -2799,7 +2876,7 @@ def main():
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
-                    SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_))
+                    SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0)
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -2838,7 +2915,8 @@ def main():
 
     PEND, R, t_prev = None, None, None                                   # (--overlap) the rollout in flight; the last rollout's buffers
     PREV_SD = [None]                                                     # (--step-kl-pieces) pol before the last update's learning
-    while time.time() - t_start < a.minutes * 60:
+    upd0_ = update
+    while time.time() - t_start < a.minutes * 60 and not (a.max_updates > 0 and update - upd0_ >= a.max_updates):
         update += 1
         ovl_wait = 0.0
         if not OVL:
@@ -2874,6 +2952,10 @@ def main():
         b_lr, b_llp, b_lab, b_iteach, b_teach, b_aux, b_ht, b_bel = (R[k_] for k_ in ("b_lr", "b_llp", "b_lab", "b_iteach", "b_teach", "b_aux", "b_ht", "b_bel"))
         b_ev, b_wg, b_wb, b_hand, h0, raw, agg, agg_map, lk = (R[k_] for k_ in ("b_ev", "b_wg", "b_wb", "b_hand", "h0", "raw", "agg", "agg_map", "lk"))
         keep_raw, t_roll = R["keep_raw"], R["t_roll"]
+        BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
+        if a.dump_acts:                                                  # (--dump-acts) the rollout as played, for a fixed-seed identity check
+            torch.save(dict(act=b_act.cpu(), logp=b_logp.cpu(), val=b_val.cpu(), rew=b_rew.cpu(), done=b_done.cpu()),
+                       "{}_{}.pt".format(a.dump_acts, update))
         if HEADL:
             HD_RS0, HD_PEND, HD0, hd_secs = R["HD_RS0"], R["HD_PEND"], R["HD0"], R["hd_secs"]
         if SLOW:
@@ -2898,7 +2980,7 @@ def main():
                 np.save(a.obs_dump, np.concatenate(dump))
                 print("wrote {} rows of raw inputs to {}".format(sum(len(d_) for d_ in dump), a.obs_dump), flush=True)
                 dump = []
-        if OVL and time.time() - t_start < a.minutes * 60:                # (--overlap) the next rollout plays while this update learns
+        if OVL and time.time() - t_start < a.minutes * 60 and not (a.max_updates > 0 and update - upd0_ >= a.max_updates):   # (--overlap) the next rollout plays while this update learns
             PEND = launch(update + 1)
         t_learn = time.time()
         T_ROLL = t_learn - t_roll if not OVL else R["t_done"] - t_roll   # the rollout's seconds (--overlap: its thread's own)
@@ -2984,10 +3066,14 @@ def main():
         UG_ = [None, None, None]                                         # (--legs-feat, --legs-guide) the last seq_pass's guide addition, the
         #                                                                  branch's logits and its "has a way" (for pi_t and the counters)
 
+        XS_ = [None]                                                     # (--belief) the last seq_pass's inputs [T, players, inputs]
+
         def seq_pass(chunk, hh):
             """his outputs over the rollout's whole sequences for these players: the encoder, the attention part and the output
             layers in one go each, only his memory frame by frame -> (logits, value, memories, the two long values or None)"""
             xs_ = b_obs[:, chunk].float() if not OVL else hsel(b_obs, 0, chunk).float().transpose(0, 1).contiguous()
+            if BEL:
+                XS_[0] = xs_                                             # (--belief) the same inputs, for the belief's lesson
             e_ = pol.enc(xs_)
             if pol.attn is not None:
                 if ATT_MEM:                                              # (--attn-mem-query) the query reads h_{t-1} as he played it
@@ -3061,6 +3147,11 @@ def main():
         if trk_w > 0:
             TRK_Y = b_aux[:T][..., TRK_TC]                               # [T, N, 13] float16, off the card (a piece goes over with its minibatch)
             TRK_M = b_aux[:T][..., TRK_IX["trk_on"]] > 0.5
+            if BEL:                                                      # (--belief) the ticks' frames only: what the belief's readout is graded on
+                TRK_TF = torch.arange(BK - 1, T, BK)
+                TRK_TFD = TRK_TF.to(dev)
+                TRK_Y, TRK_M = TRK_Y[TRK_TF].contiguous(), TRK_M[TRK_TF].contiguous()
+                BEL_ISO = None
             tk_acc = torch.zeros(len(track_.PARTS) + 1, dtype=torch.float64, device=ADEV)    # first pass: the parts' loss sums, weights
         aux_w = 0.0
         if AUX_W > 0:                                                    # (--aux) the lesson's labels, by hindsight inside this rollout
@@ -3476,7 +3567,33 @@ def main():
                                     nx_s[0] += FV_((cn_[..., 0] * wr_[..., 0]).sum())
                                     nx_s[1] += FV_((cn_[..., 1] * wr_[..., 1]).sum())
                                     nx_n += HC_(wr_.sum((0, 1)).double())
-                if trk_w > 0:                                            # (--track) the readout's lesson: the enemy as the truth has him
+                if trk_w > 0 and BEL:                                    # (--belief, v0.4.0 A) the readout's lesson on the belief's state at its
+                    ci_ = hchunk(chunk)                                  # ticks, re-run from the rollout's start over the same inputs; nothing of
+                    ty_ = hsel(TRK_Y, 1, chunk, ci_).float()             # the policy is in its graph (the inputs are numbers, not outputs)
+                    tm_ = hsel(TRK_M, 1, chunk, ci_).float() * wgt.index_select(0, TRK_TFD)
+                    lay_ = gru_layout(belief_.tick_resets(DN_H[:, ci_], BK)[1], dev) if (NOSYNC and a.fast_gru) else None
+                    bs_ = belief_.seq(pol.belief, XS_[0], b_done[:, chunk], BS0[chunk], BK,
+                                      gru_fn=(lambda c_, e_, h_, d_: gru_seq(c_, e_, h_, d_, lay=lay_)) if a.fast_gru else None)
+                    tl_, tp_ = track_.loss(pol.track(bs_), ty_, TRK_PARTS, tm_)
+                    if BEL_ISO is None:                                  # (the proof, every update: the lesson alone reaches no weight of the policy)
+                        nm_ = [n_ for n_, p_ in pol.named_parameters() if p_.requires_grad]
+                        gr_ = torch.autograd.grad(trk_w * tl_, [p_ for _, p_ in pol.named_parameters() if p_.requires_grad],
+                                                  allow_unused=True, retain_graph=True)
+                        pr_ = [n_ for n_, g_ in zip(nm_, gr_) if not n_.startswith(("belief.", "track.")) and g_ is not None
+                               and float(g_.abs().sum()) != 0.0]
+                        bn_ = [float(g_.norm()) for n_, g_ in zip(nm_, gr_) if n_.startswith("belief.") and g_ is not None]
+                        tn_ = [float(g_.norm()) for n_, g_ in zip(nm_, gr_) if n_.startswith("track.") and g_ is not None]
+                        BEL_ISO = dict(policy_params=sum(not n_.startswith(("belief.", "track.")) for n_ in nm_), policy_reached=len(pr_),
+                                       belief_grad=round(float(np.sqrt(np.sum(np.square(bn_)))), 6) if bn_ else 0.0,
+                                       track_grad=round(float(np.sqrt(np.sum(np.square(tn_)))), 6) if tn_ else 0.0)
+                        assert not pr_, "the belief's lesson reached the policy's weights: {}".format(pr_[:5])
+                        gr_ = None
+                    loss = loss + trk_w * tl_
+                    if epoch == 0:
+                        with torch.no_grad():
+                            n_ = tm_.sum()
+                            tk_acc += HC_(torch.cat([tp_ * n_, n_[None]]).double())
+                elif trk_w > 0:                                          # (--track) the readout's lesson: the enemy as the truth has him
                     ci_ = hchunk(chunk)
                     ty_ = hsel(TRK_Y, 1, chunk, ci_).float()
                     tm_ = hsel(TRK_M, 1, chunk, ci_).float() * wgt       # (a duel's game, both alive, the learner's frames)
@@ -3585,21 +3702,23 @@ def main():
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if n_.startswith(UNI_PFX)], 0.5)    # rest's step is as without them
                 if TRK:                                                  # (--track) the readout's gradient clipped on its own: the rest's
                     nn.utils.clip_grad_norm_(pol.track.parameters(), 0.5)    # step is as without it
+                if BEL:                                                  # (--belief) the belief's on its own, as the readout's
+                    nn.utils.clip_grad_norm_(pol.belief.parameters(), 0.5)
                 if AUX:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.") and not n_.startswith(UNI_PFX)
                                               and not (LEGS_LEARN and n_.startswith("legs.")) and not (HEADL and n_.startswith("head."))
-                                              and not n_.startswith("track.")], 0.5)
+                                              and not n_.startswith(("track.", "belief."))], 0.5)
                     nn.utils.clip_grad_norm_(pol.aux.parameters(), 0.5)
                 elif LEGS_LEARN:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not n_.startswith(UNI_PFX)
-                                              and not (HEADL and n_.startswith("head.")) and not n_.startswith("track.")], 0.5)
+                                              and not (HEADL and n_.startswith("head.")) and not n_.startswith(("track.", "belief."))], 0.5)
                 elif HEADL:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("head.") and not n_.startswith(UNI_PFX)
-                                              and not n_.startswith("track.")], 0.5)
+                                              and not n_.startswith(("track.", "belief."))], 0.5)
                 elif UNI_ON:
-                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith(UNI_PFX) and not n_.startswith("track.")], 0.5)
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith(UNI_PFX) and not n_.startswith(("track.", "belief."))], 0.5)
                 elif TRK:
-                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("track.")], 0.5)
+                    nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith(("track.", "belief."))], 0.5)
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
                 opt.step()
@@ -3887,7 +4006,8 @@ def main():
                 opp_open=bool(snaps and opp.head_open),                                             # the league's network has an open head
                 ring=RINGH.L if RINGH is not None else 0, secs=[round(hd_secs[0], 2), round(hd_secs[1], 2)])
         if TRK_ON:                                                       # (--track, --info-pay) the readout's lesson and its counters (the rollout's)
-            rec["track"] = dict(w=round(trk_w, 4), trunk=a.track_trunk, parts=TRK_PARTS, every=a.info_every, rollout=R["trk"])
+            rec["track"] = dict(w=round(trk_w, 4), trunk=a.track_trunk if not BEL else 0.0, parts=TRK_PARTS, every=TRK_EVERY, rollout=R["trk"],
+                                **({"src": "belief", "iso": BEL_ISO if trk_w > 0 else None} if BEL else {}))
             if trk_w > 0 and float(tk_acc[-1]) > 0:
                 rec["track"]["loss"] = {p_: round(float(tk_acc[i_] / tk_acc[-1]), 4) for i_, p_ in enumerate(track_.PARTS)}
                 rec["track"]["frames"] = int(tk_acc[-1])
