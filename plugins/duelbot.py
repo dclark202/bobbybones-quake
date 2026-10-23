@@ -230,7 +230,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
-        self.add_command("aim", self.cmd_aim, 0, usage="[3|4|5|max]")
+        self.add_command("aim", self.cmd_aim, 0, usage="[1|2|3|4|5|max]")
         self.aim_want = None                                 # (!aim) the level asked for, put in at the next warmup
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
@@ -431,8 +431,8 @@ class duelbot(minqlx.Plugin):
     # the second line a person reads on joining (owner, 2026-10-09: a word about !bots; 2026-10-16: one line for both modes)
     WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2!mode <ffa|duel>^7, ^2!bots <0,1,2,3>^7 ^6(FFA only)^7"
 
-    AIM_WELCOME = ("^3My aim:^7 ^2!aim 3^7 easier, ^2!aim 4^7 normal ^6(default)^7, ^2!aim 5^7 sharp, "
-                   "^2!aim max^7 no human limits")
+    AIM_WELCOME = ("^3My aim:^7 ^2!aim 1^7 or ^22^7 relaxed, ^2!aim 3^7 easier, ^2!aim 4^7 normal ^6(default)^7, "
+                   "^2!aim 5^7 sharp, ^2!aim max^7 no human limits")
 
     def on_player_loaded(self, player):
         if not is_bot(player):
@@ -1506,14 +1506,15 @@ class duelbot(minqlx.Plugin):
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 
     # ------------------------------------------------------------------ !aim (owner, 2026-10-21)
-    # !aim 3|4|5|max sets his aim for the next game: the data folder holds one export per level (policy_l3.npz,
+    # !aim 1|2|3|4|5|max sets his aim for the next game (1 and 2: owner, 2026-10-22): one export per level (policy_l1.npz to l5,
     # policy_l4.npz, policy_l5.npz, policy_max.npz: the same network, AIM_LEVEL and the aim delays in env_vars changed),
     # and the chosen one is copied over policy.npz and loaded at once when no game runs (warmup), else at the next
     # warmup (a game in progress, its countdown, its end and the next map's load keep the aim they started with).
-    AIM_FILES = {"3": "policy_l3.npz", "4": "policy_l4.npz", "5": "policy_l5.npz", "max": "policy_max.npz"}
+    AIM_FILES = {"1": "policy_l1.npz", "2": "policy_l2.npz", "3": "policy_l3.npz", "4": "policy_l4.npz", "5": "policy_l5.npz",
+                 "max": "policy_max.npz"}
 
     def aim_level(self):
-        """the aim level of the network loaded: "3", "4", "5", "max" (AIM_LEVEL in its env_vars; 40 is max)"""
+        """the aim level of the network loaded: "1" to "5", "max" (AIM_LEVEL in its env_vars; 40 is max)"""
         try:
             v = float(json.loads(str(self.P["env_vars"])).get("AIM_LEVEL", 3))
         except Exception:                                    # noqa: BLE001 - no network loaded yet
@@ -1541,17 +1542,18 @@ class duelbot(minqlx.Plugin):
         self.log("aim level {} loaded ({})".format(level, self.AIM_FILES[level]))
 
     def cmd_aim(self, player, msg, channel):
-        """!aim: the aim level now (and the one asked for the next game). !aim 3|4|5|max: that level from the next game
+        """!aim: the aim level now (and the one asked for the next game). !aim 1|2|3|4|5|max: that level from the next game
         (at once when no game runs)"""
         cur = self.aim_level()
         if len(msg) < 2:
             want = self.aim_want if self.aim_want and self.aim_want != cur else None
-            player.tell("^3Aim level^7 ^2{}^7{} (^2!aim 3|4|5|max^7 to change)".format(
+            player.tell("^3Aim level^7 ^2{}^7{} (^2!aim 1-5|max^7 to change)".format(
                 cur, ", ^2{}^7 from the next game".format(want) if want else ""))
             return
         lv = msg[1].lower().strip()
         if lv not in self.AIM_FILES:
-            player.tell("^3Aim levels:^7 ^2!aim 3^7 easier, ^2!aim 4^7 normal, ^2!aim 5^7 sharp, ^2!aim max^7 no human limits")
+            player.tell("^3Aim levels:^7 ^2!aim 1^7 or ^22^7 relaxed, ^2!aim 3^7 easier, ^2!aim 4^7 normal, ^2!aim 5^7 sharp, "
+                        "^2!aim max^7 no human limits")
             return
         if not os.path.exists(os.path.join(D, self.AIM_FILES[lv])):
             player.tell("^3Aim {} is not on this server.^7".format(lv))
