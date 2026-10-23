@@ -66,6 +66,10 @@ The brain's answers will replace the old rule-made belief (in v0.4.2), so it mus
 | Levelled off | errors flat over the last ~3 h (still falling fast: train longer, the hands lose nothing) |
 | Every map | no map where it is worse than the old rule |
 | Honest | its spread matches its real error |
+| **Zones (v0.4.0b)**: better than the point at long gaps | top-1 and top-2 zone right at 5–10 s and 10 s+ clearly above the zone of its own point estimate, the zone he was last seen in, and the map's commonest zone |
+| Zones: honest | its odds calibrated: of the times it says ~60%, right ~60% (within ~5 points over the bins) |
+| Zones: split beliefs | where the point is far off (> 600 u), the true zone still in its top two clearly more often than the point's zone gets it |
+| Zones: levelled off, every map | flat over the last ~2 h; no map where it is below the baselines |
 
 ## Settings and files
 
