@@ -32,7 +32,7 @@ before: the strategy head). Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). Design: [
 | The item rule (the intention teacher, never under 10%) | a hand rule nudges which item he goes for, forever | its floor faded to zero as the decision report shows the head choosing well |
 | The hunt (`HUNT`) | a rule sends his way toward where he believes the enemy (reads the readout from v0.4.0) | whether to hunt is the head's choice |
 | Item pays (pickups, the big-item order, item loss) | hand-shaped values of items whatever the situation | lowered step by step as the head learns their value from winning (the item-pay review of 2026-10-17 belongs here) |
-| The view's pull toward level (B-275) | with no enemy in view his pitch eases back to level (0.95 a frame): a crutch of 2026-10-03 that stops him holding a look up or down out of sight | phased out (owner, 2026-10-23: "I think it's done its part"): measured first, then a live factor 0.95 -> 1.0 over hours with checks, the plugins in the same batch |
+| The view's pull toward level (B-275) | with no enemy in view his pitch eases back to level (0.95 a frame): a crutch of 2026-10-03 that stops him holding a look up or down out of sight | phased out regardless of the drift measure (owner, 2026-10-23: "I think it's done its part"; "Let's just plan to phase it out regardless"): measured (RESULTS 2026-10-23 15:30), then a live factor 0.95 -> 0.98 -> 0.99 -> 0.995 -> 1.0, about 2 h a step, the control checks as usual, the plugins in the same batch |
 | Item timers (his own pickups) | rule-kept clocks: fair, a person keeps them too | kept; the enemy's side ("when is mega back after he took it") into the readout only if the report shows timing mistakes |
 
 ## What it should do
