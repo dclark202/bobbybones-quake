@@ -43,8 +43,8 @@ as you like, with credit to "BobbyBones by Duncan Clark (github.com/dclark202/bo
 - **Training** (`sim/train_duel_rnn.py`): PPO on whole ten-minute duels on ten of the game's duel maps, against a league
   of his own past snapshots and the previous best network.
 - **Game server**: a Docker image with the Quake Live dedicated server and [minqlx](https://github.com/MinoMino/minqlx).
-  A small C patch (`minqlx/botctl.c`) lets a plugin set a bot's keys and view each frame; `plugins/duelbot.py` and
-  `plugins/ffabot.py` rebuild the network's inputs from the live game and run it.
+  A small C patch (`minqlx/botctl.c`) lets a plugin set a bot's keys and view each frame; `plugins/duelbot.py` rebuilds
+  the network's inputs from the live game and runs it. The server plays 1v1 only, on the ten duel maps.
 
 ```
 sim/       simulator, game layer, trainer, export

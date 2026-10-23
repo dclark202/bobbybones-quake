@@ -182,9 +182,10 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
   `set_bot_substeps` (human physics), `ran_usercmd`, `view_angles`, `set_view`, `item_states`, `missiles`.
 - **Plugins**: `duelbot.py` plays a trained network (inputs rebuilt with the simulator's own `observe()`), runs
   the test rooms with a human as the subject, hot-reloads `policy.npz`, logs sessions. `weaponlab.py`,
-  `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs. `botmode.py` switches mode and map
-  (`!map` offers the ten duel maps of v14 and `testlab`; they come up in free-for-all with a map's duel items: a new map
-  needs its list in `plugins/duel_items.json`, from `plugins/maplab.py` and `tools/duel_items.py`). `banlist.py`: the
+  `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs. `botmode.py`: `!map` (the ten duel maps
+  only, in 1v1 with a map's duel items: a new map needs its list in `plugins/duel_items.json`, from `plugins/maplab.py` and
+  `tools/duel_items.py`); since 2026-10-23 (owner) the servers are 1v1 only: no free-for-all (`ffabot.py` is not loaded,
+  `!mode` says so), no `testlab` or `arena1` on `!map`, no Workshop item. `banlist.py`: the
   owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo). `ladder.py`: the
   leaderboard, local to a server (every frag between a person and Bobby, warmup included; Glicko-1 per frag in
   `ratings.py`; who made a frag is read from the kills and deaths counters each frame; `tools/elo.py` reads its files).

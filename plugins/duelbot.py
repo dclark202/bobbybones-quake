@@ -90,7 +90,7 @@ def give_autohop(p, now, log=None, want=None):
     except Exception:  # noqa: BLE001
         pass
 D = "/tmp/practice"
-MAPS = ("testlab", "bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")      # the only maps a player can pick with !map (owner, 2026-10-09): the duel maps he trained on or is checked on (botmode.py keeps a copy)
+MAPS = ("bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")      # the only maps a player can pick with !map: the ten duel maps he trains on (owner, 2026-10-23: no test maps, 1v1 only; botmode.py keeps a copy)
 QLNUM = {"rl": 5, "rg": 7, "lg": 6, "mg": 2, "sg": 3, "gl": 4, "pg": 8, "hmg": 14, "g": 1}
 QLNAME = {v: k for k, v in QLNUM.items()}
 SCHEMA = 3
@@ -412,8 +412,7 @@ class duelbot(minqlx.Plugin):
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
             "^3Play me:^7 join the game, I'm already in it. ^2F3^7 starts a real 10-minute game (the scoreboard and a vote for the next map at its end); ^2!duel [minutes]^7 a timed duel in warmup.",
-            "^3Help me learn:^7 ^2!map testlab^7, then ^2!reflex^7 or ^2!movement^7. ^2!match [minutes]^7 scores a game on any map.",
-            "^3Maps and modes:^7 ^2!maps^7 lists the maps, ^2!map <name>^7 changes it. ^2!mode ffa^7: up to four of me and people, six seats; ^2!bots <0-4>^7 sets how many of me play. ^2!mode duel^7: one against one.",
+            "^3Maps:^7 one against one on the ten duel maps: ^2!maps^7 lists them, ^2!map <name>^7 changes it. ^2!match [minutes]^7 scores a timed game.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def cmd_help(self, player, msg, channel):
@@ -424,12 +423,12 @@ class duelbot(minqlx.Plugin):
             player.tell(lad.HELP)
 
     def cmd_maps(self, player, msg, channel):
-        player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7. ^3testlab^7 has the aim and movement tests; the others are the game's duel maps.".format(", ".join(MAPS)))
+        player.tell("^3Maps:^7 {}. Change with ^2!map <name>^7.".format(", ".join(MAPS)))
 
     BOT_NAMES = BOT_NAMES                                 # (read by plugins/ladder.py)
 
-    # the second line a person reads on joining (owner, 2026-10-09: a word about !bots; 2026-10-16: one line for both modes)
-    WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2!mode <ffa|duel>^7, ^2!bots <0,1,2,3>^7 ^6(FFA only)^7"
+    # the second line a person reads on joining (owner, 2026-10-23: 1v1 only, no !mode or !bots)
+    WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2F3^7 starts a 10-minute game"
 
     AIM_WELCOME = ("^3My aim:^7 ^2!aim 1^7 or ^22^7 relaxed, ^2!aim 3^7 easier, ^2!aim 4^7 normal ^6(default)^7, "
                    "^2!aim 5^7 sharp, ^2!aim max^7 no human limits")
@@ -617,7 +616,7 @@ class duelbot(minqlx.Plugin):
                 self.arena_end("stopped")
             return
         if not self.lab:
-            player.tell("The arena is on the test map: !map testlab first.")
+            player.tell("The arena is on the test map, which this server does not offer.")
             return
         here = {k: v for k, v in (("box", "aim"), ("env", "env"), ("yard", "yard")) if v in self.lab}
         if not a or a[0] not in here:
@@ -685,7 +684,7 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab and "aim" not in self.lab:
-            player.tell("The training arena: play BobbyBones freely, or ^3!duel^7 for a timed five minutes. ^3!map testlab^7 has the test rooms.")
+            player.tell("The training arena: play BobbyBones freely, or ^3!duel^7 for a timed five minutes.")
             return
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
@@ -705,14 +704,14 @@ class duelbot(minqlx.Plugin):
     def cmd_reflex(self, player, msg, channel):
         """!reflex = !room reflex"""
         if not (self.lab and "aim" in self.lab):
-            player.tell("The reflex test is on the test lab: ^3!map testlab^7, then ^3!reflex")
+            player.tell("The reflex test is on the test map, which this server does not offer.")
             return
         return self.cmd_room(player, ["!room", "reflex"], channel)
 
     def cmd_movement(self, player, msg, channel):
         """!movement = every movement course in a row, timed (the test lab)"""
         if not (self.lab and self.lab.get("courses")):
-            player.tell("The movement courses are on the test lab: ^3!map testlab^7, then ^3!movement")
+            player.tell("The movement courses are on the test map, which this server does not offer.")
             return
         return self.cmd_room(player, ["!room", "moves"], channel)
 
@@ -759,7 +758,7 @@ class duelbot(minqlx.Plugin):
         specs = (LAB_SUITE if self.lab else SUITE) if a[0] == "suite" else [a]
         if a[0] == "reflex" and len(a) == 1:
             if not (self.lab and "aim" in self.lab):
-                player.tell("The reflex test runs on the test map: ^3!map testlab^7, then ^3!reflex")
+                player.tell("The reflex test runs on the test map, which this server does not offer.")
                 return
             specs = REFLEX
         if self.lab and a[0] == "moves":                     # every movement course in a row, timed
@@ -1638,7 +1637,8 @@ class duelbot(minqlx.Plugin):
                     return
                 self.setup()
             return
-        if (minqlx.get_cvar("mapname") or "").lower() not in MAPS:       # the game rotated to another map
+        if (minqlx.get_cvar("mapname") or "").lower() not in MAPS + (self.want_map,):   # the game rotated to another map (a local server
+                                                                         # started on the test map with LAB_MAP=testlab stays on it)
             if now > self.next_check:
                 self.next_check = now + 10
                 _pu.load_map(self.want_map, "duel")

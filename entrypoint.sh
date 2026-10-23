@@ -9,9 +9,9 @@ export QLX_LOG_DIR="${QLX_LOG_DIR:-/tmp/practice}"         # minqlx.log beside s
 # The map pool (the maps of the vote at a game's end) is set on the command line and not only in lab.cfg: the game reads
 # its pool before it runs lab.cfg, and the vote offered maps from the game's own list of 173 (owner, 2026-10-09: "End of
 # round voting has maps that shouldn't be playable").
-# The pool is the ten duel maps in the mode's own factory (owner, 2026-10-12): mappool_lab.txt for free-for-all,
-# mappool_lab_duel.txt for 1v1; the plugins change it on a running server at a mode switch (plugins/powerups.py map_pool).
-POOL=mappool_lab.txt; [ "${FACTORY:-duel}" = "duel" ] && POOL=mappool_lab_duel.txt
+# The pool is the ten duel maps in the duel factory (mappool_lab_duel.txt). The server is 1v1 only (owner, 2026-10-23: "we
+# can remove ffa entirely from the server"): FACTORY is no longer read.
+POOL=mappool_lab_duel.txt
 cd /ql
 ./run_server_x64_minqlx.sh \
     +set net_ip 0.0.0.0 \
@@ -31,5 +31,5 @@ cd /ql
     +set sv_mapPoolFile "$POOL" \
     +exec lab.cfg \
     "$@" \
-    +map "${LAB_MAP:-bloodrun}" "${FACTORY:-duel}" 2>&1 | tee -a /tmp/practice/server.log
+    +map "${LAB_MAP:-bloodrun}" duel 2>&1 | tee -a /tmp/practice/server.log
 exit ${PIPESTATUS[0]}
