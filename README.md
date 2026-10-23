@@ -14,11 +14,6 @@ The networks that have played on the public server are released as open weights,
 [GitHub Release](https://github.com/dclark202/bobbybones-quake/releases) per model, tagged at the code the server ran it with
 (each network needs its own version of the simulator and plugins).
 
-| Version | On the public server | What it added | Aim levels | Tag |
-|---|---|---|---|---|
-| v0.3.6 | 2026-10-19 to 2026-10-22 | Rockets: inputs for a rocket's lead, a pre-fire token, the point where an unseen enemy would come into view | one (100 ms reaction, 200 ms to find a target) | `v0.3.6` |
-| v0.3.10 | from 2026-10-22 | Pre-aiming at a fresh sighting and watching the opening before it; his own lightning gun masks his hearing as in the game | `!aim 1` to `5`, `max` | `v0.3.10` |
-
 You need Docker (on Windows, Docker Desktop and Git Bash) and Quake Live from Steam to join. The image build downloads the
 Quake Live dedicated server with steamcmd (the image is about 3.4 GB). From a release, download the model's
 `bobbybones-<version>-weights.zip` and `bobbybones-duel-maps.zip` and unpack both at the top of the repository:
@@ -31,17 +26,6 @@ unzip ~/Downloads/bobbybones-duel-maps.zip         # data/maps/nav_<map>_sim.jso
 docker build -t qlbot .
 bash tools/duel_server.sh - bloodrun               # "-": the network already in data/duellive; the map is any of the ten
 ```
-
-The server is not listed in the server browser and loads only the game's own duel maps. Join with `connect 127.0.0.1:27970` in the game's console (from another machine: its address). At
-the first start the map tables are worked out before the server comes up (a minute or two). `PORT=<udp port>` picks another
-port, `PASSWORD=<word>` sets a password, `bash tools/duel_server.sh stop` stops it.
-
-In the game: `!map <name>` (`!maps` lists them), `!note <text>`, and with v0.3.10 `!aim 1|2|3|4|5|max` for the next game
-(4 is the default and comes back at every map change):
-
-| `!aim` | 1 | 2 | 3 | 4 | 5 | max |
-|---|---|---|---|---|---|---|
-| reaction / to find a target, ms | 195 / 313 | 156 / 250 | 125 / 200 | 100 / 160 | 80 / 128 | 25 / 25, no human aim limits |
 
 The weights and the map files are under CC-BY-4.0 ([WEIGHTS_LICENSE.md](WEIGHTS_LICENSE.md)): use, change and retrain them
 as you like, with credit to "BobbyBones by Duncan Clark (github.com/dclark202/bobbybones-quake)".
