@@ -1,6 +1,6 @@
 # v0.4.0 on one page: the brain, trained beside the hands (pretraining)
 
-*2026-10-22 night: **building** (branch `v040`), starts tonight when its tests pass, runs to about noon Fri. Then v0.4.1 connects the
+*2026-10-22 night: **running** since 20:07 (branch `v040`, `5f49cad`; every test passed: the hands bit-identical to v0.3.10, no gradient into them, no measurable extra time), runs to about noon Fri. Then v0.4.1 connects the
 brain to the hands ([RUN_v0.4.1.md](RUN_v0.4.1.md)); v0.4.2 fades the old belief out and adds the strategy head
 ([RUN_v0.4.2.md](RUN_v0.4.2.md)). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
 
