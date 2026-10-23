@@ -240,6 +240,87 @@ def t_env(mp="bloodrun"):
     check("env: his pose from info['aux'] (training) = from the simulator (checks), 60 frames", bad == 0, "{} frames differ".format(bad))
 
 
+def t_brain(path):
+    """the checks' numpy brain and readouts (btoken.NpBrain) against the trainer's torch ones (belief.State, track, track_z) on
+    the same inputs, 64 frames with a reset"""
+    import belief as belief_
+    import track as track_
+    import track_z as trz_
+    ck = torch.load(path, weights_only=False, map_location="cpu")
+    sd = ck["model"]
+    BL = ck["belief"]
+    bm = belief_.make_module(BL)
+    bm.load_state_dict({k[7:]: v for k, v in sd.items() if k.startswith("belief.")})
+    tm = track_.make_module(int(ck["track"]["inp"]), ck["track"])
+    tm.load_state_dict({k[6:]: v for k, v in sd.items() if k.startswith("track.")})
+    zm = trz_.make_module(int(ck["track_z"]["inp"]), ck["track_z"])
+    zm.load_state_dict({k[7:]: v for k, v in sd.items() if k.startswith("trackz.")})
+    B = btoken_.numpy_brain({k: v.numpy() for k, v in sd.items()}, BL, ck["track"], ck["track_z"])
+    n = 32
+    st = belief_.State(n, BL, "cpu")
+    nb = btoken_.NpBrain(B, n)
+    g = torch.Generator().manual_seed(3)
+    worst = 0.0
+    for t in range(64):
+        x = torch.randn(n, BL["obs_dim"], generator=g)
+        xh = x.half().float()
+        with torch.no_grad():
+            tick = st.frame(bm, xh, (t + 1) % BL["every"] == 0)
+        tick2 = nb.frame(x.numpy())
+        assert tick == bool(np.all(tick2)) and (tick or not np.any(tick2))
+        if tick:
+            with torch.no_grad():
+                o1, o2 = tm(st.s).numpy(), zm(st.s).numpy()
+            p1, p2 = nb.readouts()
+            worst = max(worst, float(np.abs(o1 - p1).max()), float(np.abs(o2 - p2).max()))
+        if t == 30:
+            d = torch.zeros(n)
+            d[:5] = 1
+            st.reset(d)
+            nb.reset(d.numpy())
+    check("brain: the checks' numpy brain and readouts = the trainer's (64 frames, a reset)", worst < 1e-3, "max diff {:.2g}".format(worst))
+
+
+def t_shared(path):
+    """the checks' Policy with the token open: one object playing two sides (two memory arrays, as a check of a network
+    against itself) answers as two objects; a pack and unpack of the state changes nothing; a cleared seat starts over"""
+    import test_suite as T_
+    rng = np.random.default_rng(4)
+    A, B1, B2 = T_.Policy(path, seed=1), T_.Policy(path, seed=1), T_.Policy(path, seed=1)
+    for p_ in (A, B1, B2):
+        p_.set_gate(1.0)
+    n, D_ = 6, len(A.mean)
+    hA1, hA2, h1, h2 = A.zeros(n), A.zeros(n), B1.zeros(n), B2.zeros(n)
+    B2.rng = np.random.default_rng(99)
+    worst = 0.0
+    same = True
+    for t in range(40):
+        o1 = (rng.normal(size=(n, D_)) * np.sqrt(A.var) + A.mean).astype(np.float32)
+        o2 = (rng.normal(size=(n, D_)) * np.sqrt(A.var) + A.mean).astype(np.float32)
+        pz = np.c_[rng.uniform(-800, 800, (n, 3)), rng.uniform(-180, 180, n)].astype(np.float32)
+        zm = np.zeros(n, np.int64)
+        xl = rng.normal(size=(n, A.legsP[0].shape[1])).astype(np.float32) if A.legsP is not None else None
+        A.rng = np.random.default_rng(t)
+        a1, hA1 = A.act(o1, hA1, xl=xl, pose=pz, zmap=zm)
+        B1.rng = np.random.default_rng(t)
+        b1, h1 = B1.act(o1, h1, xl=xl, pose=pz, zmap=zm)
+        A.rng = np.random.default_rng(1000 + t)
+        a2, hA2 = A.act(o2, hA2, xl=xl, pose=pz, zmap=zm)
+        B2.rng = np.random.default_rng(1000 + t)
+        b2, h2 = B2.act(o2, h2, xl=xl, pose=pz, zmap=zm)
+        same = same and np.array_equal(a1, b1) and np.array_equal(a2, b2)
+        worst = max(worst, float(np.abs(hA1 - h1).max()), float(np.abs(hA2 - h2).max()))
+        if t == 20:
+            for p_, h_ in ((A, hA1), (B1, h1)):
+                p_.clear(h_, np.array([0, 1]))
+    check("checks: one Policy on two sides = two Policies (token open, 40 frames, a clear)", same and worst == 0.0, "max state diff {:.2g}".format(worst))
+    import btoken as btoken_
+    hb = h1[:, A.brain_at:]
+    br, tk = btoken_.unpack(A.brainP, A.btok, hb)
+    check("checks: the packed state round-trips", np.array_equal(btoken_.pack(br, tk).astype(np.float32), hb))
+    check("checks: the answers are there after 40 frames (valid)", bool(tk.valid[2:].all()) and int(br.gv[0]) == 40)
+
+
 def t_policy(path):
     ck = torch.load(path, weights_only=False, map_location="cpu")
     lay = ck["attn"]
@@ -269,6 +350,9 @@ if __name__ == "__main__":
     t_ahead()
     if a.policy:
         t_policy(a.policy)
+        if "btoken" in torch.load(a.policy, weights_only=False, map_location="cpu"):
+            t_brain(a.policy)
+            t_shared(a.policy)
     if a.env:
         t_env()
     print("{} of {} passed".format(sum(OK), len(OK)))

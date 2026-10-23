@@ -70,7 +70,6 @@ class Policy:
             self.bgate = float(bt_.get("gate", 0.0))
             self.btok = bt_
             self.brainP = btoken_.numpy_brain(sd, ck["belief"], ck.get("track"), ck.get("track_z"))
-        self._bst = None                                     # (the brain and token state of the rows act() is called with)
         self.legsP = None                                    # (LEGS_IN, B-253) his legs' branch, if the network has it inside
         if "legs.0.weight" in sd:
             self.legsP = tuple(sd[k_] for k_ in ("legs.0.weight", "legs.0.bias", "legs.2.weight", "legs.2.bias", "legs.4.weight", "legs.4.bias"))
@@ -108,6 +107,11 @@ class Policy:
             o_ = np.concatenate([[0], np.cumsum(self.dims)])
             self.head_si = slice(int(o_[10]), int(o_[11]))  # the intention's logits and his way's (none before stage B)
             self.head_sw = slice(int(o_[12]), int(o_[13])) if len(self.dims) > 12 else slice(0, 0)
+        self.brain_at = None                                 # (v0.4.1) the brain's and the token's state, at the end of a seat's array
+        if self.btok is not None:
+            import btoken as btoken_
+            self.brain_at = self.W
+            self.W = self.brain_at + btoken_.packed_width(self.brainP["H"])
 
     @property
     def needs_xl(self):
@@ -128,25 +132,28 @@ class Policy:
         """(v0.4.1) act() needs his pose (pose=, zmap=: btoken.pose_from_env of the frame, these rows): the brain's token is open"""
         return self.btok is not None and self.bgate > 0
 
-    def token_pre(self, obs, pose, zmap):
+    def token_pre(self, obs, pose, zmap, hb):
         """(v0.4.1) before a frame: the brain's last answer turned to his pose now, as the trainer makes it ([B, F] float32, the
-        numbers rounded to half precision); None while the gate is shut (the network without it). obs: the raw inputs"""
+        numbers rounded to half precision), and the unpacked state; (None, None) while the gate is shut (the network without
+        it). obs: the raw inputs; hb: the seats' packed brain state (the end of their arrays)"""
         if self.btok is None or not self.bgate > 0:
-            return None
+            return None, None
         import btoken as btoken_
         assert pose is not None and zmap is not None, "this network's brain token is open: give act() pose= and zmap= (btoken.pose_from_env)"
-        if self._bst is None or self._bst[0].n != len(obs):
-            self._bst = (btoken_.NpBrain(self.brainP, len(obs)), btoken_.Token(len(obs), self.btok))
-        self._bst[1].see(obs)
-        return self._bst[1].features(np.asarray(pose, np.float32), np.asarray(zmap)).astype(np.float32)
+        br_, tk_ = btoken_.unpack(self.brainP, self.btok, hb)
+        tk_.see(obs)
+        return tk_.features(np.asarray(pose, np.float32), np.asarray(zmap)).astype(np.float32), (br_, tk_)
 
-    def token_post(self, xa, pose, zmap):
+    def token_post(self, xa, pose, zmap, st):
         """(v0.4.1) after the frame: the brain reads the frame's normalised inputs xa; at its tick the readouts' answer is kept in
-        map coordinates (his pose of this frame)"""
-        br_, tk_ = self._bst
-        if br_.frame(xa):
-            o1_, o2_ = br_.readouts()
-            tk_.answer(None, o1_, o2_, np.asarray(pose, np.float32), np.asarray(zmap))
+        map coordinates (his pose of this frame) -> the packed state"""
+        import btoken as btoken_
+        br_, tk_ = st
+        tk = br_.frame(xa)
+        if tk.any():
+            o1_, o2_ = br_.readouts(tk)
+            tk_.answer(tk, o1_, o2_, np.asarray(pose, np.float32)[tk], np.asarray(zmap)[tk])
+        return btoken_.pack(br_, tk_).astype(np.float32)
 
     def set_gate(self, g):
         """(v0.4.1, checks) play the brain's token at this gate (0: shut, the network without it)"""
@@ -156,17 +163,15 @@ class Policy:
     def clear(self, h, rows=None):
         """a seat's memory cleared (the trainer's `done`), in place; the head's tick clock kept (sim/head.py np_clear). For a
         network without a head the same as h[rows] = 0."""
-        if self._bst is not None:                            # (v0.4.1) the brain and its answer, by the same flag
-            d_ = np.zeros(self._bst[0].n)
-            d_[slice(None) if rows is None else rows] = 1.0
-            self._bst[0].reset(d_)
-            self._bst[1].reset(d_)
         r = slice(None) if rows is None else rows
+        if self.brain_at is not None:                        # (v0.4.1) the brain and its answer, by the same flag (its own clear)
+            import btoken as btoken_
+            btoken_.packed_clear(h[:, self.brain_at:], rows, self.brainP["H"])
         if self.head is None:
-            h[r] = 0.0
+            h[r, :self.brain_at] = 0.0
             return h
         h[r, :self.head_at] = 0.0
-        self.hm.np_clear(self.head, h[:, self.head_at:], rows)
+        self.hm.np_clear(self.head, h[:, self.head_at:self.brain_at], rows)
         return h
 
     def head_due(self, h):
@@ -206,7 +211,9 @@ class Policy:
             h2_, lgl_ = LU_.np_branch(self.legsP, xl)
             dadd = LU_.np_door(self.uniD[0], self.uniD[1], h2_, ok_) if self.uniD is not None else None
             gadd = LU_.np_guide_add(self.uni, self.uniG, lgl_, ok_, sum(self.dims)) if self.uniG is not None else None
-        hh = None
+        hh = hb = None
+        if self.brain_at is not None:                        # (v0.4.1) the brain's packed state, at the end of the array
+            hb, h = h[:, self.brain_at:], h[:, :self.brain_at]
         if self.head is not None:
             hh, h = h[:, self.head_at:], h[:, :self.head_at]
         hf = h                                               # (--slow-mem) the whole state; h its fast part
@@ -216,7 +223,7 @@ class Policy:
             obs = obs[:, :len(self.mean)]
         x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
         xa = x
-        bt = self.token_pre(obs, pose, zmap)
+        bt, bst = self.token_pre(obs, pose, zmap, hb)
         if self.cell is not None:
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
             x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
@@ -254,7 +261,7 @@ class Policy:
             logits = logits + LU_.np_gate_add(self.uni, *self.uniT, zo, h2_, lgl_, ok_, sum(self.dims))
         self.last_zo = zo
         if bt is not None:
-            self.token_post(xa, pose, zmap)
+            hb = self.token_post(xa, pose, zmap, bst)
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()
@@ -274,6 +281,8 @@ class Policy:
             one(int(c_), logits[:, o_[c_]:o_[c_ + 1]] + self.orderT[int(c_)][out[:, int(p_)]])
         if self.no_switch and out.shape[1] > 11:             # (NO_SWITCH) drawn as before, then off: his own network drives
             out[:, 11] = 0
+        if hb is not None:                                   # (v0.4.1) the brain's state back at the end of the array
+            h = np.concatenate([h, hb.astype(np.float32)], 1)
         return out, h
 
 

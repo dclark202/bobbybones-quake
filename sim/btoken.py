@@ -330,24 +330,26 @@ class NpBrain:
         self.sum = np.zeros((n, H), np.float32)
         self.mx = np.full((n, H), self.FLOOR, np.float32)
         self.cnt = np.zeros(n, np.float32)
-        self.g = 0
+        self.gv = np.zeros(n, np.int64)              # each seat's frames (its tick every K of them)
 
     def frame(self, x):
-        """-> True if it ticked on this frame"""
+        """-> [n] bool: the seats that ticked on this frame"""
         if self.half:
             x = np.asarray(x, np.float32).astype(np.float16).astype(np.float32)
         u = np.tanh(x @ self.B["inp_w"].T + self.B["inp_b"])
-        self.sum += u
+        self.sum = self.sum + u
         self.mx = np.maximum(self.mx, u)
-        self.cnt += 1.0
-        self.g += 1
-        if self.g % self.B["K"] == 0:
-            self.s = np_gru(self.B, np.concatenate([self.sum / self.cnt[:, None], self.mx], 1).astype(np.float32), self.s)
-            self.sum[:] = 0.0
-            self.mx[:] = self.FLOOR
-            self.cnt[:] = 0.0
-            return True
-        return False
+        self.cnt = self.cnt + 1.0
+        self.gv = self.gv + 1
+        tk = self.gv % self.B["K"] == 0
+        if tk.any():
+            s2 = np_gru(self.B, np.concatenate([self.sum[tk] / self.cnt[tk, None], self.mx[tk]], 1).astype(np.float32), self.s[tk])
+            self.s = self.s.copy()
+            self.s[tk] = s2
+            self.sum[tk] = 0.0
+            self.mx[tk] = self.FLOOR
+            self.cnt[tk] = 0.0
+        return tk
 
     def reset(self, d):
         m = np.asarray(d) > 0.5
@@ -356,9 +358,10 @@ class NpBrain:
         self.cnt[m] = 0.0
         self.mx[m] = self.FLOOR
 
-    def readouts(self):
-        o1 = np_mlp(self.B["trk"], self.s) if "trk" in self.B else None
-        o2 = np_mlp(self.B["trz"], self.s) if "trz" in self.B else None
+    def readouts(self, rows=None):
+        s = self.s if rows is None else self.s[rows]
+        o1 = np_mlp(self.B["trk"], s) if "trk" in self.B else None
+        o2 = np_mlp(self.B["trz"], s) if "trz" in self.B else None
         return o1, o2
 
 
@@ -368,3 +371,76 @@ def gate_step(g, mins, last_mins, start, delay, open_min, cap):
     if mins >= start + delay and open_min > 0 and last_mins is not None:
         g = g + max(0.0, mins - max(last_mins, start + delay)) / open_min
     return float(min(max(g, 0.0), cap, 1.0))
+
+
+# ---- (the checks) the brain's and the token's state packed into a seat's memory array: each seat carries its own, so a
+# network that plays both sides of a check (one Policy object) keeps two separate states, and clearing a seat clears its own.
+# Layout: [s H | sum H | max - FLOOR H | count 1 | frames 1 | the token's TOKW]; zeros are the start state (no answer, the
+# time unseen at its cap, the max at its floor)
+TOK_F = (("valid", 1), ("age", 1), ("unseen_left", 1), ("P", 3), ("ls", 2), ("V", 2), ("lsv", 1), ("band", 4), ("hand", 9),
+         ("own", 6), ("zone", Z_MAX), ("zmap1", 1), ("spd", 2), ("eta", 2))
+TOKW = sum(w for _, w in TOK_F)
+
+
+def packed_width(H):
+    return 3 * int(H) + 2 + TOKW
+
+
+def unpack(B, L, arr):
+    """a packed state [n, packed_width] -> (NpBrain, Token) over those rows"""
+    H = B["H"]
+    n = len(arr)
+    br = NpBrain(B, n)
+    br.s = arr[:, :H].astype(np.float32).copy()
+    br.sum = arr[:, H:2 * H].astype(np.float32).copy()
+    br.mx = (arr[:, 2 * H:3 * H] + NpBrain.FLOOR).astype(np.float32)
+    br.cnt = arr[:, 3 * H].astype(np.float32).copy()
+    br.gv = arr[:, 3 * H + 1].astype(np.int64)
+    tk = Token(n, L)
+    o = 3 * H + 2
+    for k, w in TOK_F:
+        v = arr[:, o:o + w]
+        if k == "valid":
+            tk.valid = v[:, 0] > 0.5
+        elif k == "unseen_left":
+            tk.unseen = (UNSEEN_CAP - v[:, 0]).astype(np.float32)
+        elif k == "zmap1":
+            tk.zmap = np.round(v[:, 0]).astype(np.int64) - 1
+        elif k == "age":
+            tk.age = v[:, 0].astype(np.float32).copy()
+        elif k == "lsv":
+            tk.lsv = v[:, 0].astype(np.float32).copy()
+        else:
+            setattr(tk, k, v.astype(getattr(tk, k).dtype).copy())
+        o += w
+    return br, tk
+
+
+def pack(br, tk):
+    H = br.B["H"]
+    cols = [br.s, br.sum, br.mx - NpBrain.FLOOR, br.cnt[:, None], br.gv[:, None].astype(np.float32)]
+    for k, w in TOK_F:
+        if k == "valid":
+            v = tk.valid[:, None]
+        elif k == "unseen_left":
+            v = (UNSEEN_CAP - tk.unseen)[:, None]
+        elif k == "zmap1":
+            v = (tk.zmap + 1)[:, None]
+        elif k in ("age", "lsv"):
+            v = getattr(tk, k)[:, None]
+        else:
+            v = getattr(tk, k)
+        cols.append(np.asarray(v, np.float64).reshape(len(v), w))
+    out = np.concatenate([np.asarray(c, np.float64) for c in cols], 1)
+    assert out.shape[1] == 3 * H + 2 + TOKW
+    return out
+
+
+def packed_clear(arr, rows, H):
+    """a seat's brain and answer cleared (the trainer's reset), in place: the state, the frames gathered, no answer; the time
+    since he noticed the enemy and the tick clock kept"""
+    r = slice(None) if rows is None else rows
+    arr[r, :3 * H + 1] = 0.0
+    o = 3 * H + 2
+    arr[r, o] = 0.0                                   # valid
+    arr[r, o + 1] = 0.0                               # age

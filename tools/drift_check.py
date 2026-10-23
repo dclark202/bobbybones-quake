@@ -62,6 +62,9 @@ def step_logits(pol, obs, h, xl=None, pose=None, zmap=None):
     the draw (the head of v0.4 and ordered outputs are refused: their logits depend on draws)."""
     assert pol.head is None and not pol.order, "drift_check: networks with the v0.4 head or ordered outputs are not handled"
     dadd = gadd = h2_ = lgl_ = ok_ = None
+    hb = None
+    if getattr(pol, "brain_at", None) is not None:          # (v0.4.1) the brain's packed state at the end of the array
+        hb, h = h[:, pol.brain_at:], h[:, :pol.brain_at]
     if pol.needs_xl:
         import legs_unify as LU_
         assert xl is not None, "this network takes the legs' branch inputs: the recording has none"
@@ -76,7 +79,7 @@ def step_logits(pol, obs, h, xl=None, pose=None, zmap=None):
         obs = obs[:, :len(pol.mean)]
     x = np.clip((obs - pol.mean) / np.sqrt(pol.var + 1e-8), -10, 10).astype(np.float32)
     xa = x
-    bt = pol.token_pre(obs, pose, zmap) if hasattr(pol, "token_pre") else None      # (v0.4.1) the brain's token, if its gate is open
+    bt, bst = pol.token_pre(obs, pose, zmap, hb) if hb is not None else (None, None)   # (v0.4.1) the brain's token, if its gate is open
     if pol.cell is not None:
         ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(pol.cell) - 1)
         x = np.concatenate([x[:, :-2], pol.cell[ids[:, 0]], pol.cell[ids[:, 1]]], 1)
@@ -85,7 +88,7 @@ def step_logits(pol, obs, h, xl=None, pose=None, zmap=None):
     if pol.attP is not None:
         x = x + pol.attn_fwd(pol.attn, pol.attP, xa, hm=h, bt=bt, bg=pol.bgate if bt is not None else 0.0)
     if bt is not None:
-        pol.token_post(xa, pose, zmap)
+        hb = pol.token_post(xa, pose, zmap, bst)
     xf = x
     if dadd is not None:
         xf = xf + dadd
@@ -109,6 +112,8 @@ def step_logits(pol, obs, h, xl=None, pose=None, zmap=None):
         o_ = np.concatenate([[0], np.cumsum(pol.dims)]).astype(int)
         logits = logits.copy()
         logits[:, int(o_[11]) + 1] -= pol.fade
+    if hb is not None:
+        h = np.concatenate([h, hb.astype(np.float32)], 1)
     return np.asarray(logits, np.float32), h
 
 
