@@ -48,6 +48,12 @@ Size: about 0.7 M weights more (input layer, GRU, readout); a few % more time an
 | The hands: step per update, aim, hit rates, pre-aim, look-back | should read as v0.3.10 |
 | Checks against v0.3.10's end: **record, win rate, frag share** (whole ten-minute games, overtime) | the hands are v0.3.10 training on: ~50% expected |
 
+## Found during the run
+
+| When | What |
+|---|---|
+| 20:30 | **The velocity part's flat ~13.8 nats is not a bug** (debugger, branch `v040-veldbg`, `8cf1201`: a regression test only). Truth columns, mapping, fp16 store and gradient all check out. The enemy's velocity is near-unpredictable past ~0.4 s (the exact truth 0.4 s old is no better than the prior), he is in view ~15% of frames, and even perfect use of his late, noisy perceived velocity only reaches ~13.0 in view. The real limit is the output's shape: the enemy almost always moves ~340 u/s in an unknown direction, which a Gaussian centred on zero can't express; a speed + direction readout scores 13.40 unseen vs 13.9. ❓ for v0.4.1's new outputs (owner's word) |
+
 ## Ready to connect? (the test at ~11:00 Fri, before v0.4.1)
 
 The brain's answers will replace the old rule-made belief (in v0.4.2), so it must beat that rule everywhere, not on average:
