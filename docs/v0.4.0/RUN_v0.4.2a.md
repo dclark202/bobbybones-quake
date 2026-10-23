@@ -70,6 +70,6 @@ simulator itself did with the old belief moves to the brain's answer on the same
 
 | # | Decision | Proposed |
 |---|---|---|
-| 1 | The brain keeps the rule's columns as its own input during A | yes, its fade later (to confirm Sat) |
+| 1 | The brain keeps the rule's columns as its own input during A | **yes** (owner, 2026-10-23: "remove the hardcoded recommendation from the mechanical layer, keep them as inputs for the brain"); the brain's own fade later, after a measure of its error with them at their mean |
 | 2 | The blind-fire exemption on the brain's place | **yes** (owner, 2026-10-23: "no cost to spam/prefire where he expects the enemy is"): faded onto the brain on the same gate |
 | 3 | The brain's new outputs into the head (v0.4.2b), not the hands' token | **yes** (owner, 2026-10-23: "The hands handle what to do *now*, the predictions drive strategy") |

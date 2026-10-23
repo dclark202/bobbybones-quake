@@ -21,6 +21,7 @@ before: the strategy head). Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). Design: [
 | Size | ~0.6 M weights (v0.4's earlier candidate head: ~7 M); grows only on a measured need | – |
 | On a server | well under 1 ms a tick; the head added to the plugins' forward pass | ❓ |
 | The head's horizon | a goal choice pays off 30–60 s later: the head learns from the two-minute value output (γ 0.9998), not the main ~25 s one, or it undervalues timing plays | ❓ |
+| The blind-fire exemption on "will be" (owner, 2026-10-23: "it probably should be 'will be'") | v0.4.2a waives the out-of-view shot cost where the brain believes the enemy *is*; v0.4.2b extends it to where the brain predicts he *will be* in 1–4 s (the ahead outputs), with its equilibrium stated: still a cost waived, never a pay | ❓ |
 | A start from the pros (only if needed) | the pros' next goal by situation (mega when the enemy is far, back off when weak) as a light prior on the head's bias, fading like the item rule; added only if the head is slow to find these by winning. The owner is wary of copying the pros' choices (HAND_TEACH): measure first | ⏸ |
 
 ## Rule-made strategy the head takes over (the owner, 2026-10-22: "Is there any other parts of him like this that might need revisiting?")
