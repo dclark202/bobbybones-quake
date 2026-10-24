@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-24](results/2026-10-24.md)
+
+- 13:20 — The owner plays v0.4.1's end: Bobby wins a duel 10-8; item control the gap on Sinister and Campgrounds
+
 ## [2026-10-23](results/2026-10-23.md)
 
 - 21:30 — the owner's play test of v0.4.1 (save 110): "I can tell that he actually is keeping track of me, and it leads him to pushing more"
