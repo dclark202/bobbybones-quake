@@ -4863,6 +4863,21 @@ def main():
                                 pay_size=dict(win=round(float(g_[11] / n_), 3), flat=round(float(g_[12] / n_), 3)),  # the first seat's pay a game, without its sign
                                 by_map={m_: [int(x_) for x_ in np.atleast_1d(v_["games"])[[0, 1, 4, 5, 6, 7]]]       # whole, late; league: games, won, level, lost
                                         for m_, v_ in agg_map.items() if "games" in v_ and float(np.atleast_1d(v_["games"])[[0, 1]].sum()) > 0})
+        if "pay_terms" in agg and hasattr(E_, "PAY_TERMS"):              # (PAY_SPLIT, record only) his pay by term, his counted seats: a
+            PT_ = np.asarray(agg["pay_terms"], np.float64).reshape(3, -1)  # player-minute's worth in every round and in whole games, and the
+            pmh_ = max(1e-9, 0.5 * NP * T * DT_MIN)                      # share of the pay's size (|x| summed) by term
+            sz_ = max(1e-12, float(PT_[2].sum()))
+            rec["pay_terms"] = dict(per_player_min={k_: round(float(PT_[0, i_] / pmh_), 4) for i_, k_ in enumerate(E_.PAY_TERMS) if PT_[2, i_] > 0},
+                                    games={k_: round(float(PT_[1, i_] / pmh_), 4) for i_, k_ in enumerate(E_.PAY_TERMS) if PT_[1, i_] != 0},
+                                    size_share={k_: round(float(PT_[2, i_] / sz_), 4) for i_, k_ in enumerate(E_.PAY_TERMS) if PT_[2, i_] > 0},
+                                    total_per_player_min=round(float(PT_[0].sum() / pmh_), 4))
+        if "win_shadow" in agg:                                          # (WIN_SHADOW, record only) what WIN_PAY would have paid him in
+            WS_ = np.atleast_1d(agg["win_shadow"]).astype(np.float64)    # whole games beside the flat frag pay it would take out (WS_COLS)
+            wm_ = max(1e-9, float(WS_[4]) * DT_MIN)
+            rec["win_shadow"] = dict(minutes=round(float(WS_[4]) * DT_MIN, 1), win_per_player_min=round(float(WS_[0] / wm_), 4),
+                                     win_size_per_player_min=round(float(WS_[1] / wm_), 4), flat_per_player_min=round(float(WS_[2] / wm_), 4),
+                                     flat_size_per_player_min=round(float(WS_[3] / wm_), 4),
+                                     size_ratio_win_to_flat=round(float(WS_[1] / max(1e-9, WS_[3])), 4))
         if "open" in agg:                                                # (OPENINGS) the pros' spawn openings as the item rule's label, his seats
             def open_(o_):                                               # (the simulator's OPEN_COLS)
                 o_ = np.atleast_1d(o_).astype(np.float64)
