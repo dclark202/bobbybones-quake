@@ -1,5 +1,7 @@
 # v0.4.2 on one page: the old belief faded out of the hands
 
+**2026-10-24 12:00: the fade's steps halved** (owner): +0.05 every ~25 min (was +0.1), so a check (~70 min) judges about 0.15 of fade, not 0.3; fully faded about 19:00 if every check passes. The trainer moves g in steps (g = the cap; its own time ramp is ahead of it).
+
 **2026-10-24 11:57: the step bar loosened, the fade to 0.2** (owner: "within noise ... should be fine but 'looks like something bad happened' should be a flag. I think we can raise the gate here"): a check lets the fade step at games 50%+, or games 47.5%+ with a frag share of 48%+; the rollback rules unchanged. Update 10 at fade 0.1: 77-83 (48.1%), frag share 48.2%: a pass under the new bar; the cap raised 0.1 -> 0.2 by hand, the guard stepping again (+0.1 every ~25 min while checks pass).
 
 **2026-10-24 10:53: the guard's tie-break** (owner, after an outside review of the first try): a check under 45% games (or two under 50%) with a frag share of 48.5% or more holds the fade instead of rolling it back; stepping up still needs games 50%+. (It would have held the first try's update 10: 42.5%, frag share 49.1%.)
