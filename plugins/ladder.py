@@ -325,9 +325,14 @@ class ladder(minqlx.Plugin):
         m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", str(net))
         return "v" + m.group(1).replace("_", ".") if m else "v0.1" if net == "duel_gru_v15c" else str(net)
 
+    FORFEIT_WIN_MIN = 5.0                                  # (owner, 2026-10-24) minutes after which a quit while behind is his win
+
     def duel_record(self):
-        """(owner, 2026-10-16) Bobby's record in full duel games against people: real games (kind "game"), no forfeits,
-        the owner's games included (owner, 2026-10-16). Returns {version: [won, lost, drawn]} with "all" for every version together."""
+        """(owner, 2026-10-16) Bobby's record in full duel games against people: real games (kind "game"), the owner's games
+        included (owner, 2026-10-16). A forfeit (the person left before the end) counts as Bobby's win when it came after more than
+        FORFEIT_WIN_MIN minutes with Bobby ahead (owner, 2026-10-24: "if someone quits a duel and they are behind they are
+        forfeiting ... treat it as a win"); any other forfeit (the person ahead or level, or a short game) is left out ("If they are
+        ahead and they quit, it's not part of his w/l rate"). Returns {version: [won, lost, drawn]} with "all" for every version."""
         path = os.path.join(D, "duels.jsonl")
         try:
             mt = os.path.getmtime(path)
@@ -342,9 +347,12 @@ class ladder(minqlx.Plugin):
                     d = json.loads(line)
                 except ValueError:
                     continue
-                if d.get("kind") != "game" or d.get("forfeit"):
+                if d.get("kind") != "game":
                     continue
                 p_, b_ = d["score"]
+                if d.get("forfeit"):                         # (owner, 2026-10-24) a quit while behind, late enough: his win
+                    if not (b_ > p_ and float(d.get("minutes") or 0.0) > self.FORFEIT_WIN_MIN):
+                        continue
                 k_ = 0 if b_ > p_ else 1 if b_ < p_ else 2
                 for v_ in ("all", self.version_of(d.get("net", ""))):
                     out.setdefault(v_, [0, 0, 0])[k_] += 1
