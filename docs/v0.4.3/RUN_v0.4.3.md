@@ -8,6 +8,8 @@ before: the strategy head). Before it: [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) 
 
 *2026-10-24 12:15 (owner): scope: the head (with the brain's outputs and the "in control" readout as its inputs); the "will be" blind-fire exemption **kept in**; then in the run, one after the other: the item rule's floor faded, the level pull phased out. Building today on the CPU in parallel (branches `v043-head`, `v043-control`, `v043-rules`); "in control" tested offline on v0.4.2's saves (a probe on his frozen state). Start Sunday from v0.4.2's end on the owner's go.*
 
+The whole network as it will be: [ARCHITECTURE_v0.4.3.md](ARCHITECTURE_v0.4.3.md). The owner, 2026-10-24: "It's crucial we get 'in control' into the brain network"; it and pay by win chance are "going to be closely related".
+
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
 ## The two versions, each started and checked on its own (one change at a time)
