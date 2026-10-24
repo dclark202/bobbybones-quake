@@ -25,13 +25,13 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 |---|---|
 | On the public servers | **v0.3.6** (US and EU, duel only). The next push is the owner's call (before it: the hindsight review of games against people, the name `^6BOT ^5Bobby^2Bones`); the shared-board deploy waits for his go |
 | Behind us | v0.3.2 to v0.3.11: one movement network (the legs switch retired), rockets and pre-fire, the doorway watching; **v0.4.0/0.4.0b** the brain; **v0.4.1** the brain's token in the hands: 64 to 71% against v0.4.0b's end, 159-1 against v0.3.6 (ended 2026-10-24 07:12, update 320, `keep/policy_end_v041.pt`) |
-| The run now | **v0.4.2** (`duel_gru_v0_4_2`, since 2026-10-24 07:14): the old belief faded out of the hands; mega flat pay 0.35 (owner). The checks at the fade still shut read 42.5% (updates 10 and 30) against v0.4.1's end; a diagnostic of the checks is running; the fade is held shut until a check passes. Officially to Sunday noon, ended early on a good night. [v0.4.0/RUN_v0.4.2.md](v0.4.0/RUN_v0.4.2.md) |
-| Next | **v0.4.3**, the strategy head (card for the owner's review: [v0.4.0/RUN_v0.4.3.md](v0.4.0/RUN_v0.4.3.md)), then the win-chance rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) |
+| The run now | **v0.4.2** (`duel_gru_v0_4_2`, since 2026-10-24 07:14): the old belief faded out of the hands; mega flat pay 0.35 (owner). The checks at the fade still shut read 42.5% (updates 10 and 30) against v0.4.1's end; a diagnostic of the checks is running; the fade is held shut until a check passes. Officially to Sunday noon, ended early on a good night. [v0.4.2/RUN_v0.4.2.md](v0.4.2/RUN_v0.4.2.md) |
+| Next | **v0.4.3**, the strategy head (card for the owner's review: [v0.4.3/RUN_v0.4.3.md](v0.4.3/RUN_v0.4.3.md)), then the win-chance rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) |
 | Checks of a run | every 20 updates 160 ten-minute games on ten maps at aim level 4 against the previous best; every fourth against the long-term control (v0.3.10's end from v0.4.2); the same network against itself reads about 49%, ±4 points a check, a single map about ±10 |
 
 ## Now
 
-The generation's goals and rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) (the owner, 2026-10-24). The run now: **v0.4.2** ([v0.4.0/RUN_v0.4.2.md](v0.4.0/RUN_v0.4.2.md)).
+The generation's goals and rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) (the owner, 2026-10-24). The run now: **v0.4.2** ([v0.4.2/RUN_v0.4.2.md](v0.4.2/RUN_v0.4.2.md)).
 
 - v0.4.2: the fade (the rule columns out of the hands); B-275 (the level pull, out in v0.4.3).
 - v0.4.3: the head; B-280 ("in control" as a brain readout), B-279 (grenades and plasma as area denial), B-278 (items' worth in fights).

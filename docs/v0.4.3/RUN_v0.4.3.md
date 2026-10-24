@@ -2,9 +2,9 @@
 
 *2026-10-22: **proposed**, after v0.4.1 works (names, the owner, 2026-10-22 night: v0.4.0 the brain's pretraining, v0.4.1 the brain
 connected, v0.4.2 "the blending out of the old belief network while inserting the brain network", with what was called v0.4.1
-before: the strategy head). Before it: [RUN_v0.4.2.md](RUN_v0.4.2.md) (the old belief faded out) (numbers, the owner, 2026-10-23: "Can we just make these separate numbers: v0.4.2a -> v0.4.2; v0.4.2b -> v0.4.3"; what was v0.4.3 and on is v0.4.4 and on). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
+before: the strategy head). Before it: [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) (the old belief faded out) (numbers, the owner, 2026-10-23: "Can we just make these separate numbers: v0.4.2a -> v0.4.2; v0.4.2b -> v0.4.3"; what was v0.4.3 and on is v0.4.4 and on). Design: [BELIEF_LOOP.md](../v0.4.0/BELIEF_LOOP.md).*
 
-*2026-10-23 evening: the old belief's fade is v0.4.2, [RUN_v0.4.2.md](RUN_v0.4.2.md) (built and tested on the CPU; start Sat on the owner's go). This card, the head, is v0.4.3: build Sat-Sun, start Sun afternoon if v0.4.2 passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
+*2026-10-23 evening: the old belief's fade is v0.4.2, [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) (built and tested on the CPU; start Sat on the owner's go). This card, the head, is v0.4.3: build Sat-Sun, start Sun afternoon if v0.4.2 passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
@@ -12,7 +12,7 @@ before: the strategy head). Before it: [RUN_v0.4.2.md](RUN_v0.4.2.md) (the old b
 
 | Step | What | Pass before the next |
 |---|---|---|
-| **v0.4.2: the old belief out** ([RUN_v0.4.2.md](RUN_v0.4.2.md)) | the cross-fade: the old rule-made inputs (the extrapolated belief, ~20, and the stack filter, 6) times (1 − g) as a gate g opens over hours; **the raw sensed facts stay** (where and when he last saw or heard the enemy: the owner, 2026-10-22, "yes that seems right to me"); the brain's new outputs from v0.4.1 (zones, where he will be in 1/2/4 s, what he is going for, when he appears, the item race) join the `belief` token once they pass their own readiness test; the old rule's readers inside the simulator (the legs' look point, the hunt's target) move to the brain | games ≥ level against v0.4.1's end; the decision report's reading rows moving |
+| **v0.4.2: the old belief out** ([RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md)) | the cross-fade: the old rule-made inputs (the extrapolated belief, ~20, and the stack filter, 6) times (1 − g) as a gate g opens over hours; **the raw sensed facts stay** (where and when he last saw or heard the enemy: the owner, 2026-10-22, "yes that seems right to me"); the brain's new outputs from v0.4.1 (zones, where he will be in 1/2/4 s, what he is going for, when he appears, the item race) join the `belief` token once they pass their own readiness test; the old rule's readers inside the simulator (the legs' look point, the hunt's target) move to the brain | games ≥ level against v0.4.1's end; the decision report's reading rows moving |
 | **v0.4.3: the strategy head** (this card) | below | the decision report's item rows moving |
 
 ## The strategy head

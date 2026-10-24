@@ -1,8 +1,8 @@
 # v0.4.1 on one page: the brain connected to the hands
 
 *2026-10-23 12:15: **running** (`duel_gru_v0_4_1`, from v0.4.0b's end; gate shut 1 h, then capped at 10% until a check; to Sat noon). Update 10 (gate shut): 92-68 against v0.4.0b's end. Built 10:15 (branch `v041`, `f9fefcf`, on v0.4.0b's `49a105c`); start 12:00–14:00 from
-v0.4.0b's latest save on the owner's go, after the zones' readiness review ([RUN_v0.4.0.md](RUN_v0.4.0.md)). Next: [RUN_v0.4.2.md](RUN_v0.4.2.md) (the old belief faded out), then [RUN_v0.4.3.md](RUN_v0.4.3.md) (the strategy head).
-Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
+v0.4.0b's latest save on the owner's go, after the zones' readiness review ([RUN_v0.4.0.md](../v0.4.0/RUN_v0.4.0.md)). Next: [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) (the old belief faded out), then [RUN_v0.4.3.md](../v0.4.3/RUN_v0.4.3.md) (the strategy head).
+Design: [BELIEF_LOOP.md](../v0.4.0/BELIEF_LOOP.md).*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 

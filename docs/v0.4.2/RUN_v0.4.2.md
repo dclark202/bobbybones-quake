@@ -11,8 +11,8 @@
 *numbers, the owner, 2026-10-23: "Can we just make these separate numbers: v0.4.2a -> v0.4.2; v0.4.2b -> v0.4.3"; what was v0.4.3 and on is v0.4.4 and on.*
 
 *2026-10-23 17:30: **built and tested on the CPU** (branch `v042a`, `c93617f` on v041-server `9c8651b`; all off by default: bit-identical to v0.4.1 off and at g = 0; the faded columns read their mean at g = 1, the brain's input unchanged, the readers on the brain on 100% of lives; server vs checks 0 differences at every gate and fade; 0 of 18 brain weights reached). The fade is **76 columns** (the list below adds up to 76, not 78). 17:00: building (owner, 2026-10-23: "v0.4.2 is the right start"; "from v0.4.2 we should be moving to use the brain to control the things that we previously hardwired"); draft 16:30 for the owner's review (tonight / Sat noon). Build Sat morning on the CPU while v0.4.1 finishes; start
-Sat ~12:30 from v0.4.1's end on the owner's go; 18–24 h. Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). After it: v0.4.3, the strategy
-head ([RUN_v0.4.3.md](RUN_v0.4.3.md)). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
+Sat ~12:30 from v0.4.1's end on the owner's go; 18–24 h. Before it: [RUN_v0.4.1.md](../v0.4.1/RUN_v0.4.1.md). After it: v0.4.3, the strategy
+head ([RUN_v0.4.3.md](../v0.4.3/RUN_v0.4.3.md)). Design: [BELIEF_LOOP.md](../v0.4.0/BELIEF_LOOP.md).*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
