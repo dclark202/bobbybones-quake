@@ -230,7 +230,7 @@ class ladder(minqlx.Plugin):
                 return None                                  # one of the game's own bots (a spar)
             if TEST and len(names) > 1 and names[1] in p.clean_name:
                 return "test000002", "test player"
-            return bobby, "BobbyBones ({})".format(_ra.label(bobby[len(_ra.BOT):]))
+            return bobby, "^5B^7o^5bbyB^7o^5nes^7 ({})".format(_ra.label(bobby[len(_ra.BOT):]))
         return self.key(p), p.clean_name[:24]
 
     # ------------------------------------------------------------------ frags
@@ -633,7 +633,7 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         p = self.table.players.get(bobby) if bobby else None
         if p is None:
-            player.tell("^3BobbyBones has no rating yet:^7 it starts with the first frag between him and a person.")
+            player.tell("^5B^7o^5bbyB^7o^5nes^3 has no rating yet:^7 it starts with the first frag between him and a person.")
             return minqlx.RET_STOP_ALL
         n, of = self.table.rank(bobby, bobby)
         tot = p["won"] + p["lost"]
@@ -648,10 +648,10 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         rows = self.table.board(bobby)
         if not rows:
-            player.tell("^3The board is empty:^7 a person is ranked from {} frags with BobbyBones.".format(_ra.MIN_FRAGS))
+            player.tell("^3The board is empty:^7 a person is ranked from {} frags with ^5B^7o^5bbyB^7o^5nes^7.".format(_ra.MIN_FRAGS))
             return minqlx.RET_STOP_ALL
         me = None if is_bot(player) else self.key(player)
-        player.tell("^3Leaderboard^7 ({} ranked; every frag between a person and BobbyBones counts):".format(len(rows)))
+        player.tell("^3Leaderboard^7 ({} ranked; every frag between a person and ^5B^7o^5bbyB^7o^5nes^7 counts):".format(len(rows)))
         for n, (k, p) in enumerate(rows, 1):
             if n <= TOP or k in (bobby, me):
                 player.tell(("^2" if k == bobby else "^5" if k == me else "") + self.line(n, p) + "^7")
@@ -672,15 +672,15 @@ class ladder(minqlx.Plugin):
             p = self.table.players.get(k)
             ql = QL_ON and not is_bot(player) and not isinstance(player, minqlx.AbstractDummyPlayer)
             if p is None:
-                player.tell("^3You have no rating {}yet:^7 it starts with your first frag with BobbyBones, either way.".format("here " if ql else ""))
+                player.tell("^3You have no rating {}yet:^7 it starts with your first frag with ^5B^7o^5bbyB^7o^5nes^7, either way.".format("here " if ql else ""))
                 if ql:
                     self.ql_say(player, k)
                 return minqlx.RET_STOP_ALL
         n, of = self.table.rank(k, bobby)
         tot = p["won"] + p["lost"]
-        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after {} more frags with BobbyBones".format(max(0, _ra.MIN_FRAGS - tot))
+        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after {} more frags with ^5B^7o^5bbyB^7o^5nes^7".format(max(0, _ra.MIN_FRAGS - tot))
         # (with the QLStats line under it the two numbers are named apart: this one starts at 1500 and knows only frags with Bobby)
-        player.tell("^3{}^7{}: rating ^2{:.0f}^7 (+-{:.0f}), {}. Frags with BobbyBones: {} made, {} taken (a share of {:.0%}).".format(
+        player.tell("^3{}^7{}: rating ^2{:.0f}^7 (+-{:.0f}), {}. Frags with ^5B^7o^5bbyB^7o^5nes^7: {} made, {} taken (a share of {:.0%}).".format(
             p["name"], " here, against me" if ql else "", p["r"], 2 * p["rd"], where, p["won"], p["lost"], p["won"] / max(1, tot)))
         if ql:
             self.ql_say(player, k)
