@@ -8,6 +8,28 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-23](results/2026-10-23.md)
+
+- 21:30 — the owner's play test of v0.4.1 (save 110): "I can tell that he actually is keeping track of me, and it leads him to pushing more"
+- 15:30 — v0.4.1's gate check passed (85-75); the gate opening and the rocket-jump lesson on; the view's pull toward level measured (B-275 step 1)
+- 14:30 — v0.4.0b (zones, speed + direction) passed; v0.4.1 connected the brain at 12:15; the pros' decision report; the public servers moved
+- 06:00 — v0.4.0 overnight: the hands at 55-57% against v0.3.10's end, the brain past the old belief everywhere, no gradient into the hands
+- 00:30 — Watching the right spot before a sighting makes the good pre-aims, but the watching pay barely built the habit
+
+## [2026-10-22](results/2026-10-22.md)
+
+- 19:50 — v0.3.x closes: the enemy picture and the hands need separate memories; v0.4.0 (the brain) being built
+- 16:30 — The decision report's baseline (v0.3.10): fights follow the stack gap, items do not; v0.3.10 beat v0.3.9 46-0-34 in whole games; v0.3.11 running
+- 12:10 — v0.3.9 (pre-aiming) the biggest step since v0.3.7: 65.2% against v0.3.8's end at equal delays, rail frags 3.9% → 9.5%; v0.3.10 (look-back pay) running, v0.3.11 (the knowledge pay) built
+
+## [2026-10-21](results/2026-10-21.md)
+
+- 13:00 — v0.3.8 resumed from save 90 without the drift inputs; jumps opened in games by measured success, jump practice varied and fixed; hearing loosened; shares 70/20/10
+
+## [2026-10-20](results/2026-10-20.md)
+
+- 17:10 — v0.3.7 ends at 71.7% against v0.3.6; the day's audits find the rail held back by a one-frame shot delay, his senses leaking, his aim ~50 ms quicker than the pros; v0.3.8 starts with all of it fixed
+
 ## [2026-10-18](results/2026-10-18.md)
 
 - 12:20 — The speed pay in games (0.05) is 2 to 3% of the frag pay and has not raised his trip speed; save 60 reads 45.0% against v0.3.1's end; what did not work this weekend
