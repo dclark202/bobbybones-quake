@@ -198,6 +198,8 @@ LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK
                 "INTENT_TEACH_W")   # (v0.4.3: a factor on the item rule's weight, its floor included: 0 silences it)   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --control) a factor on the lesson "in control"   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 
+LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
+
 
 def live_read(path, E_, start, trainer_start):
     """(B-265) live.json -> (vals, trainer_vals, None) or (None, None, reason). The file is one JSON object {NAME: value}; a
@@ -966,6 +968,28 @@ def main():
                                                                 "goes on its forecast at its last tick in the rollout (a value at gamma 1)")
     ap.add_argument("--head-win-true", type=float, default=1.0, help="(--head) ... the weight of a tick with the true band beside one with a "
                                                                      "forecast for its target")
+    # v0.4.3 (docs/v0.4.3/RUN_v0.4.3.md, "The strategy head"; sim/head2.py): a small slow GRU ticking with the brain; a plan into
+    # his fast GRU's input and a bias on his intention's logits, both at zero to begin with; it learns from its own two-minute value
+    ap.add_argument("--head2", type=int, default=0, help="v0.4.3: 1 = the strategy head (sim/head2.py; a network without one gets one that answers "
+                                                         "exactly as before). A network that has one keeps it whatever this says; 0 and a network without: as before")
+    ap.add_argument("--head2-size", type=int, default=256, help="(--head2, a new head) its GRU's width")
+    ap.add_argument("--head2-inp", type=int, default=256, help="(--head2, a new head) the squeeze of its inputs before the GRU")
+    ap.add_argument("--head2-plan", type=int, default=64, help="(--head2, a new head) the plan's width")
+    ap.add_argument("--head2-ctrl", type=int, default=4, help="(--head2, a new head) the slot for the 'in control' readout (B-280; zeros without one)")
+    ap.add_argument("--head2-off", default="", help="(--head2, a new head) parts of its input left out (zeros), e.g. 'hands,ctrl' "
+                                                    "(of brain, trk, trz, ahead, ctrl, obs, hands)")
+    ap.add_argument("--head2-gamma", type=float, default=0.9998, help="(--head2, a new head) its value's and advantage's discount (0.9998: about two minutes)")
+    ap.add_argument("--head2-lr-scale", type=float, default=1.0, help="(--head2) its learning rate as a share of --lr (its own group; plan_in is in it)")
+    ap.add_argument("--head2-pg", type=float, default=1.0, help="(--head2) the weight of its own policy-gradient term (the bias on his intention, "
+                                                                 "its own advantage; live: H2_PG, a factor on it)")
+    ap.add_argument("--head2-v", type=float, default=0.5, help="(--head2) the weight of its value's lesson")
+    ap.add_argument("--head2-plan-grad", type=float, default=0.0, help="(--head2) the share of the hands' gradient that goes on into the head through the "
+                                                                       "plan (0: plan_in learns from the hands' loss, the head only from its own lessons; live: H2_PLAN_GRAD)")
+    ap.add_argument("--head2-delay", type=float, default=0.0, help="(--head2) minutes after --head2-start before its gate begins to open")
+    ap.add_argument("--head2-open", type=float, default=0.0, help="(--head2) minutes for its gate from 0 to 1 (0: held where it is; live: H2_GATE_OPEN)")
+    ap.add_argument("--head2-cap", type=float, default=1.0, help="(--head2) its gate is never above this (live: H2_GATE_CAP; 0 shuts it at once)")
+    ap.add_argument("--head2-start", type=float, default=-1.0, help="(--head2) the minute the delay counts from (-1: this process's start; pass it on every resume)")
+    ap.add_argument("--head2-gate", type=float, default=-1.0, help="(--head2) the gate to start this process at (-1: the network's own, 0 for a new head)")
     ap.add_argument("--run", default="duel_gru_v1")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--matches", type=int, default=128, help="matches per worker (2 players each)")
@@ -1547,6 +1571,7 @@ def main():
     AH_CK = None                                             # (--ahead, v0.4.1) the readout of what comes next: comes with the network
     CTL_CK = None                                            # (--control, v0.4.3) the readout "in control": comes with the network
     RF_CK = None                                             # (--rule-fade, v0.4.2a) the faded columns and the gate: come with the network
+    H2_CK = None                                             # (--head2, v0.4.3) the strategy head's layout: comes with the network
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
@@ -1563,6 +1588,7 @@ def main():
         AH_CK = ck0_.get("ahead") if any(k_.startswith("ahead.") for k_ in ck0_["model"]) else None
         CTL_CK = ck0_.get("control") if any(k_.startswith("control.") for k_ in ck0_["model"]) else None
         RF_CK = ck0_.get("rule_fade")
+        H2_CK = ck0_.get("head2") if any(k_.startswith("head2.") for k_ in ck0_["model"]) else None
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
         ATT = dict(ATT, mem=H)
@@ -1854,6 +1880,29 @@ def main():
         assert a.demo_coef <= 0, "--demo-coef with the head: the demo loss steps his memory without the plan (not built)"
         print(head_.describe(HEADL) + ("" if HEAD_CK is not None else " (new: its links at zero)"), flush=True)
     HEAD_SAVE = {"head": HEADL} if HEADL else {}             # (a checkpoint without the part is as it was)
+    H2L = H2_CK                                              # (--head2, v0.4.3) the network's own strategy head, or a new one at zero
+    if H2L is None and a.head2:
+        import head2 as head2_
+        assert BEL and TRK, "--head2: with the brain (--belief) and its readout (--track)"
+        H2L = head2_.layout(brain=int(BEL_L["hid"]), trk=int(TRK_L["d"]), trz=int(TRZ_L["d"]) if TRZ else 0, ahead=int(AH_L["d"]) if AH else 0,
+                            ctrl=a.head2_ctrl, hands=H, enc=256, size=a.head2_size, inp=a.head2_inp, plan=a.head2_plan,
+                            n_target=ACTION_DIMS[I_HEAD], every=BK, gamma=a.head2_gamma, on={p_: 0 for p_ in a.head2_off.split(",") if p_})
+    H2 = H2L is not None
+    if H2:
+        import head2 as head2_
+        assert BEL and TRK, "the strategy head reads the brain (--belief) and its readout (--track)"
+        w_ = H2L["widths"]
+        assert int(H2L["every"]) == BK and a.steps % BK == 0, "the strategy head ticks with the brain ({} frames; --steps a whole number of them)".format(BK)
+        assert w_["brain"] == int(BEL_L["hid"]) and w_["trk"] == int(TRK_L["d"]) and w_["hands"] == H and int(H2L["enc"]) == 256, \
+            "the strategy head's inputs do not fit the network: {}".format(w_)
+        assert w_["trz"] == (int(TRZ_L["d"]) if TRZ else 0) and w_["ahead"] == (int(AH_L["d"]) if AH else 0), \
+            "the strategy head reads the readouts {} / {}, the network has {} / {}".format(w_["trz"], w_["ahead"], TRZ_L and TRZ_L["d"], AH_L and AH_L["d"])
+        assert int(H2L["n_target"]) == ACTION_DIMS[I_HEAD], "the strategy head's bias ({}) does not fit the intention ({})".format(H2L["n_target"], ACTION_DIMS[I_HEAD])
+        assert not HEADL and not SLOW and not HAS_CELLS, "the strategy head with --head, --slow-mem or map cells: not built"
+        assert a.demo_coef <= 0, "--demo-coef with the strategy head: the demo loss steps his memory without its plan (not built)"
+        print(head2_.describe(H2L) + ("" if H2_CK is not None else " (new: its plan_in and target at zero)"), flush=True)
+    H2_SAVE = {"head2": H2L} if H2 else {}                   # (a checkpoint without the part is as it was)
+    H2_PG_ = [a.head2_pg, a.head2_plan_grad, 1.0]            # (--head2) its lesson's weight, the plan's gradient into it, live H2_PG's factor
     # (--legs-feat, --legs-guide; one movement network, steps 3 and 4: sim/legs_unify.py) the network's own parts, or new
     # ones at zero; a flag adds its part to a network that has none, a resume keeps what the network has
     import legs_unify as LU_
@@ -1967,6 +2016,9 @@ def main():
             self.fade = None                                     # (--switch-fade) the learner's: set after it is made
             self.rfg = 0.0                                       # (--rule-fade, v0.4.2a) the gate: a plain number, not a weight (the
             self.rf_m = None                                     # checkpoint's "rule_fade" carries it); the mask made for it
+            self.h2_open = H2                                    # (--head2) a league network whose head is shut (or none) skips it
+            if H2:                                               # (--head2, v0.4.3) sim/head2.py: plan_in and target at zero, the gate a buffer
+                self.head2 = head2_.make_module(H2L)
 
         def hx(self, x):
             """(--rule-fade) the inputs as the hands read them: the rule-made columns times (1 - rfg); x itself at 0"""
@@ -2010,7 +2062,7 @@ def main():
                 return add
             return dadd, gfn
 
-        def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None, bt=None):
+        def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None, bt=None, g2=None):
             dadd, gadd = self.uni_parts(xl)                      # (--legs-feat, --legs-guide; xl: the branch's inputs of this frame)
             x = self.hx(x)                                       # (--rule-fade) the hands' inputs (the brain is given its own, unfaded)
             if HAS_CELLS:
@@ -2026,10 +2078,15 @@ def main():
                 self.zl = h
                 lg_ = head_logits(self.pi(h), ta_, wa_)
                 return self.out_(lg_, h, gadd), self.v(h).squeeze(-1), h
-            h = self.gru(e if dadd is None else e + dadd, h)     # (--legs-feat: only his fast GRU reads the legs' features)
+            ein_ = e if dadd is None else e + dadd               # (--legs-feat: only his fast GRU reads the legs' features)
+            if g2 is not None:                                   # (--head2) the strategy head's plan into his fast GRU's input
+                ein_ = ein_ + g2[0]
+            h = self.gru(ein_, h)
             if sm is None or self.slow is None:
                 self.zl = h                                      # (what the outputs read: his memory, or with the slow one)
                 lg_ = self.pi(h)
+                if g2 is not None:                               # (--head2) ... and its bias on his intention's logits
+                    lg_ = head2_.add_bias(lg_, g2[1], HD_I0)
                 return self.out_(lg_, h, gadd), self.v(h).squeeze(-1), h
             z = slowmem_.live(self.slow, sm, e, h)               # (--slow-mem) z = h + door(s); the slow GRU ticks on its frames
             self.zl = z
@@ -2147,6 +2204,19 @@ def main():
                 net.head_open = any(float(p_.abs().sum()) > 0 for n_, p_ in net.head.named_parameters()
                                     if n_.startswith(("plan_in.", "target.", "way.")))
 
+    if H2:                                                   # (--head2) a network without the strategy head (the control, older league files,
+        load_net9_ = load_net                                # the start before conversion) gets one shut: plan_in, target and the gate at zero
+
+        def load_net(net, sd):
+            if getattr(net, "head2", None) is not None and "head2.gate" not in sd:
+                sd = dict(sd)
+                for k_, v_ in net.head2.state_dict().items():
+                    sd["head2." + k_] = torch.zeros_like(v_) if k_.startswith(("plan_in.", "target.", "gate")) else v_
+            load_net9_(net, sd)
+            if getattr(net, "head2", None) is not None:      # its head counts only if its gate is open and a link of it is not zero
+                net.h2_open = bool(float(net.head2.gate) > 0 and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters()
+                                                                     if n_.startswith(("plan_in.", "target."))))
+
     if SLOW:                                                 # (--slow-mem) a network without the part (the control, older league files, the
         load_net0_ = load_net                                # start before conversion) gets one with its door shut: it answers as it did
 
@@ -2240,7 +2310,8 @@ def main():
     with torch.no_grad():                                   # start out mostly keeping the current weapon
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))
-                            and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith(BRAIN_PFX) and not n_.startswith("attn.btok_")],
+                            and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith(BRAIN_PFX) and not n_.startswith("attn.btok_")
+                            and not (H2 and n_.startswith("head2."))],
                            lr=a.lr, eps=1e-5, **({"fused": True} if a.adam_fused else {}))   # (LEGS_IN: not the branch; --head: not the head)
     if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
         opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
@@ -2284,6 +2355,14 @@ def main():
             if AH:
                 opt.add_param_group({"params": list(pol.ahead.parameters()), "lr": a.lr * AH_LR, "lr_scale": AH_LR})
             V41_GROUP[0] = True
+    H2_GROUP = [False]
+
+    def h2_group():
+        """(--head2) the strategy head in a group of its own after all the others: an optimizer saved without it loads into the
+        groups before it"""
+        if H2 and not H2_GROUP[0]:
+            opt.add_param_group({"params": list(pol.head2.parameters()), "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
+            H2_GROUP[0] = True
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
@@ -2299,7 +2378,12 @@ def main():
         if os.path.exists(op_):
             try:
                 os_ = torch.load(op_, weights_only=False, map_location=dev)
-                if N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41:
+                if H2 and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 1:
+                    trk_group()                               # (v0.4.3: saved with the strategy head's group, the last)
+                    trz_group()
+                    v41_group()
+                    h2_group()
+                elif N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41:
                     trk_group()                               # (v0.4.1: saved with the token's and the ahead's groups, after the others)
                     trz_group()
                     v41_group()
@@ -2345,6 +2429,7 @@ def main():
     CTL_G0 = {}                                              # ... each rollout's first row, by its update
     CTL_T0 = float(a.control_start) if a.control_start >= 0 else float(elapsed0)
     CTL_LIVE = [1.0]                                         # (live.json's CONTROL_W: a factor on the lesson)
+    h2_group()                                               # (v0.4.3) the strategy head's, the last
     TRZ_T0 = float(a.track_z_start) if a.track_z_start >= 0 else float(elapsed0)
     TRZ_LIVE = [1.0]                                         # (live.json's TRACK_Z_W: a factor on the part's lesson, 1 at the start)
 
@@ -2517,7 +2602,7 @@ def main():
     def save(path, minutes):
         torch.save(dict(model=pol.state_dict(), obs_mean=obs_mean, obs_var=obs_var, obs_count=obs_count, map=a.map,
                         obs_dim=OBS_DIM, action_dims=ACTION_DIMS, env="duel", arch="gru" if ATT is None else "gru+attn", attn=ATT,
-                        hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **ORDER_SAVE, **UNI_SAVE, **TRK_SAVE, **BEL_SAVE,
+                        hidden=H, minutes=minutes, **SLOW_SAVE, **HEAD_SAVE, **H2_SAVE, **ORDER_SAVE, **UNI_SAVE, **TRK_SAVE, **BEL_SAVE,
                         **({"btoken": dict(BTOK_L, gate=float(BTOK_G[0]))} if BTOK else {}),     # (v0.4.1: the gate as it is now)
                         **({"rule_fade": dict(RF_L, g=float(RF_G[0]))} if RF else {}),          # (v0.4.2a: the fade's gate as it is now)
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
@@ -2585,6 +2670,19 @@ def main():
         RING = slowmem_.Ring(N, SLOW, a.steps // SLOW["every"], dev)
         print("slow memory: a ring of {} ticks x {} players x {} inputs at half precision on the host ({:.2f} GB)".format(
             RING.cap, N, SLOW["fast"] + SLOW["enc"], RING.u.numel() * 2 / 1e9), flush=True)
+    H2S = H2O = None                                         # (--head2) the strategy head's state of his seats and of the league's
+    H2_G, H2_LAST, H2_T0 = [0.0], [None], 0.0
+    if H2:
+        H2S, H2O = head2_.State(N, H2L, dev), head2_.State(N, H2L, dev)
+        H2_G[0] = float(a.head2_gate) if a.head2_gate >= 0 else float(pol.head2.gate)
+        with torch.no_grad():
+            pol.head2.gate.fill_(min(H2_G[0], a.head2_cap))
+        H2_G[0] = float(pol.head2.gate)
+        H2_T0 = float(a.head2_start) if a.head2_start >= 0 else float(elapsed0)
+        print("head2: gate {:.4f} now{}; lr x {}, its lesson x {}, value x {}, the plan's gradient into it x {}; ticks: u at half precision on "
+              "the host ({:.2f} GB a rollout)".format(H2_G[0], "; held until minute {:.1f}, then 0 -> 1 over {:g} min (never above {:g}; live: H2_GATE_CAP, "
+              "H2_GATE_OPEN)".format(H2_T0 + a.head2_delay, a.head2_open, a.head2_cap) if a.head2_open > 0 else " (held: --head2-open 0)",
+              a.head2_lr_scale, a.head2_pg, a.head2_v, a.head2_plan_grad, (a.steps // BK) * N * head2_.u_width(H2L) * 2 / 1e9), flush=True)
     HS = HS_O = RINGH = None                                 # (--head) the head's state of his seats and of the league's, its ring
     HD_K = HD_J = 0
     HD_WG = HD_WB = -1                                       # (--head) the win label's columns in info["aux"] (-1: none: never taught)
@@ -2859,6 +2957,10 @@ def main():
                     IT_LIVE[0] = float(lt_.get("INTENT_TEACH_W", IT_LIVE[0]))        # (v0.4.3: the item rule's factor, at the next learning step)
                     a.rule_fade_cap = float(lt_.get("FADE_CAP", a.rule_fade_cap))    # (v0.4.2a: the rule fade's cap: 0 shuts it at once)
                     a.rule_fade_open = float(lt_.get("FADE_OPEN", a.rule_fade_open)) # (... the minutes of its opening: 0 holds it)
+                    a.head2_cap = float(lt_.get("H2_GATE_CAP", a.head2_cap))         # (v0.4.3: the strategy head's gate: its cap, 0 shuts it at once)
+                    a.head2_open = float(lt_.get("H2_GATE_OPEN", a.head2_open))      # (... the minutes of its opening: 0 holds it)
+                    H2_PG_[2] = float(lt_.get("H2_PG", H2_PG_[2]))                   # (... a factor on its own lesson)
+                    H2_PG_[1] = float(lt_.get("H2_PLAN_GRAD", H2_PG_[1]))            # (... the plan's gradient into it)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
                     LIVE_KEPT = dict(sim=dict(lv_), trainer=dict(lt_), from_update=update)
                     force_ = dict(now_[0], DMG_REWARD=a.dmg_reward, **({"INFO_PAY": a.info_pay, "TRACK_W": a.track, "TRACK_TRUNK": a.track_trunk} if TRK_ON else {}),
@@ -2869,7 +2971,8 @@ def main():
                                   **({"RJ_COPY_W": RJC_LIVE[0]} if RJC_LAB else {}),
                                   **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
                                   **({"INTENT_TEACH_W": IT_LIVE[0]} if a.intent_teach > 0 else {}),
-                                  **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}))
+                                  **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}),
+                                  **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1]} if H2 else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
                         json.dump(dict(from_update=update, minutes=round(mins, 2), file=json.loads(txt_), in_force=force_), f_, indent=1)
@@ -2884,6 +2987,11 @@ def main():
             BTOK_LAST[0] = mins
             pol.attn.bgate = BTOK_G[0]
             CARRY["btg"] = BTOK_G[0]
+        if H2:                                                           # (v0.4.3) the strategy head's gate of this rollout: played and learnt at it
+            H2_G[0] = btoken_.gate_step(H2_G[0], mins, H2_LAST[0], H2_T0, a.head2_delay, a.head2_open, a.head2_cap)
+            H2_LAST[0] = mins
+            with torch.no_grad():
+                pol.head2.gate.fill_(H2_G[0])
         if RF_ON:                                                        # (v0.4.2a) the rule fade's gate of this rollout: played and learnt at it
             RF_G[0] = btoken_.gate_step(RF_G[0], mins, RF_LAST[0], RF_T0, a.rule_fade_delay, a.rule_fade_open, a.rule_fade_cap)
             RF_LAST[0] = mins
@@ -3257,6 +3365,15 @@ def main():
             b_ht = torch.zeros(AUX_TW, N, H, dtype=torch.float16) if AUX_TW else None      # (--aux-tail) his memory on the last frames
             b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
+        b_u2 = b_vh = b_lpi = h2s0 = None
+        if H2:                                                           # (--head2) its ticks' inputs (host, half precision), its value, the
+            b_u2 = torch.zeros(T // BK, N, head2_.u_width(H2L), dtype=torch.float16)      # intention's log-probability as played; the
+            b_vh = torch.zeros(T + 1, N, device=dev)                     # held outputs made again with the weights it plays with; its start
+            b_lpi = torch.zeros(T, N, device=dev)
+            H2S.refresh(net.head2)
+            if has_snaps and onet.h2_open:
+                H2O.refresh(onet.head2)
+            h2s0 = H2S.snap()
         BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
         if CTL_ON:                                                       # (--control) this rollout's first global row; the ring
             CTL_G0[upd] = CTL_G[0]
@@ -3325,12 +3442,23 @@ def main():
                         HD_PEND.append((HS.u.half().cpu(), HS.r_tick.cpu()))
                     hd_secs[0] += time.time() - t_hd
                 else:
-                    logits, val, h = net.step(x, h, sm=SM, xl=xlu_, bt=bt_t)
+                    logits, val, h = net.step(x, h, sm=SM, xl=xlu_, bt=bt_t, g2=H2S.adds(net.head2) if H2 else None)
+                    if H2:                                               # (--head2) its value of this frame (before its tick)
+                        b_vh[t] = head2_.value(net.head2, H2S.s, h)
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
                 if bt_ and CTL_ON and CTL_RING[0].kept(CTL_G0[upd] + t):  # (--control) the state of this tick, kept every --control-every ticks
                     CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if int(CTL_L["mem"]) == 0 else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
+                if H2 and bt_:                                           # (--head2) a tick with the brain's: what it knows, his stack, the hands' memory
+                    sb_ = BS_.s
+                    rd_ = dict(brain=sb_, trk=net.track(sb_), trz=net.trackz(sb_) if TRZ else None, ahead=net.ahead(sb_) if AH else None,
+                               ctrl=head2_.control_t(net, sb_), obs=x)
+                    u2_ = head2_.feats(H2L, hands=h, **rd_)
+                    b_u2[t // BK] = u2_.half().cpu()
+                    H2S.tick(net.head2, u2_)
+                    if has_snaps and onet.h2_open:                       # (the league's own head on the same brain's answer, its own hands)
+                        H2O.tick(onet.head2, head2_.feats(H2L, hands=h_opp, **rd_))
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
                     if BA_SEND:                                          # (v0.4.3, BLIND_AHEAD) ... and the readout ahead's places, kept so too
@@ -3344,12 +3472,14 @@ def main():
                     ds = dists(logits)
                     act = torch.stack([d.sample() for d in ds], -1)
                 lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
+                if H2:                                                   # (--head2) the intention as played, for its own ratio
+                    b_lpi[t] = lps[I_HEAD]
                 if has_snaps and HEADL:                                      # (--head) the league's network with its own head, if open
                     lo, _, h_opp = onet.step(x, h_opp, hd=HS_O if onet.head_open else None, ev=ev_, xl=xlu_)
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
                 elif has_snaps:
-                    lo, _, h_opp = onet.step(x, h_opp, sm=SM_O, xl=xlu_, bt=bt_t)
+                    lo, _, h_opp = onet.step(x, h_opp, sm=SM_O, xl=xlu_, bt=bt_t, g2=H2O.adds(onet.head2) if (H2 and onet.h2_open) else None)
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
             if NO_SW:                                                    # (--no-switch) off for his seats, and for the league's when its network
@@ -3476,6 +3606,9 @@ def main():
             if HS is not None:                                           # (--head) ... and the head's
                 HS.reset(d)
                 HS_O.reset(d)
+            if H2S is not None:                                          # (--head2) ... and the strategy head's
+                H2S.reset(d)
+                H2O.reset(d)
             for w_, r in enumerate(res):
                 for k, v in r[3].items():
                     if isinstance(v, list):
@@ -3510,7 +3643,10 @@ def main():
                     btT_ = torch.from_numpy(TOK_.features(*btoken_.pose_from_aux(aux, AUXC_))).to(dev).float()
                     TOK_.load(st_)
                 _, vT_, hT_ = net.step(torch.from_numpy(norm(obs)).to(dev), h, sm=SM.peek() if SM is not None else None,
-                                       xl=torch.from_numpy(legs_x).to(dev) if UNI_ON else None, bt=btT_)
+                                       xl=torch.from_numpy(legs_x).to(dev) if UNI_ON else None, bt=btT_,
+                                       g2=H2S.adds(net.head2) if H2 else None)
+                if H2:
+                    b_vh[T] = head2_.value(net.head2, H2S.s, hT_)
             b_val[T] = vT_
             if LONG:
                 b_val2[T] = net.v2(net.zl)
@@ -3533,7 +3669,8 @@ def main():
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
-                    b_btok=b_btok, btg=btg_, rfg=rfg_)
+                    b_btok=b_btok, btg=btg_, rfg=rfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0,
+                    h2g=float(net.head2.gate) if H2 else 0.0)
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -3613,6 +3750,10 @@ def main():
         b_rjc = R.get("b_rjc")                                           # (--rj-copy)
         CTL_B = R.pop("ctl_b", None)                                     # (--control) this rollout's labelled states
         BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
+        if H2:                                                           # (--head2) its ticks' inputs, values and the intention as played; learnt
+            B_U2, B_VH, B_LPI, H2_S0V0, H2G_R = R["b_u2"], R["b_vh"], R["b_lpi"], R["h2s0"], float(R["h2g"])    # at the gate it was played at
+            with torch.no_grad():
+                pol.head2.gate.fill_(H2G_R)
         B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
         if BTOK:
             pol.attn.bgate = BTG_R if B_BTOK is not None else 0.0        # (learnt at the gate it was played at)
@@ -3742,6 +3883,15 @@ def main():
             return z_
 
         HO_ = [None, [], False]                                          # (--head) the last seq_pass's head outputs; the read's numbers (first pass)
+        HO2_ = [None]                                                    # (--head2) the last seq_pass's strategy head outputs
+
+        def h2pi_(hs_):
+            """his logits from his memory, the strategy head's bias added as a number (the hands' loss never moves the head)"""
+            lg_ = pol.pi(hs_)
+            if H2:
+                HO2_[0]["hands_int"] = lg_[..., HD_I0:HD_I0 + int(H2L["n_target"])].detach()
+                lg_ = head2_.add_bias(lg_, HO2_[0]["bias"].detach(), HD_I0)
+            return lg_
         UG_ = [None, None, None]                                         # (--legs-feat, --legs-guide) the last seq_pass's guide addition, the
         #                                                                  branch's logits and its "has a way" (for pi_t and the counters)
 
@@ -3794,6 +3944,14 @@ def main():
                 HO_[0] = ho_
                 hd_secs[1] += time.time() - t_
                 return gd_(head_logits(lg_h, ho_["tadd"], ho_["wadd"]), hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
+            if H2:                                                       # (--head2) its sequence from the stored ticks, its plan into his fast GRU
+                ho2_ = head2_.seq(pol.head2, H2L, hsel(B_U2, 1, chunk).float(), 1.0 - b_done[:, chunk], H2_S0V0[0][chunk], H2_S0V0[1][chunk],
+                                  plan_grad=H2_PG_[1])
+                if HO_[2]:
+                    with torch.no_grad():
+                        ho2_["gin_share"] = ho2_["gin"].norm(dim=-1).mean() / (eg_.norm(dim=-1).mean() + 1e-8)
+                eg_ = eg_ + ho2_["gin"]
+                HO2_[0] = ho2_
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk], lay=gru_layout(DN_H[:, hchunk(chunk)], dev) if NOSYNC else None)
             else:
@@ -3806,7 +3964,7 @@ def main():
                 hs_a = torch.stack(hs_l)
             if SLOW:                                                     # (--slow-mem) every output (the guessing game's too) reads z
                 hs_a = slow_z(chunk, e_, hs_a)
-            return gd_(pol.pi(hs_a), hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
+            return gd_(h2pi_(hs_a), hs_a), pol.v(hs_a).squeeze(-1), hs_a, (pol.v2(hs_a) if LONG else None)
 
         kl_sum, cf_sum, kl_n = 0.0, 0.0, 0                              # the policy's step, measured in the last pass
         OVK_ = [0.0]                                                     # (decoupled) KL(played || now) in the last pass
@@ -3932,6 +4090,8 @@ def main():
         def pi_t(z_):
             """what the teachers' losses read: his logits from z_, the head's part added as it is but taught by them never (--head)"""
             lg_ = pol.pi(z_)
+            if H2:                                                       # (--head2) its bias as it is, taught by them never
+                lg_ = head2_.add_bias(lg_, HO2_[0]["bias"].detach(), HD_I0)
             lg_ = lg_ if not HEADL else head_logits(lg_, HO_[0]["tadd"].detach(), HO_[0]["wadd"].detach())
             return lg_ if UG_[0] is None else lg_ + UG_[0].detach()     # (--legs-guide: its part as it is, taught by them never)
 
@@ -4032,6 +4192,11 @@ def main():
                     r_ = (-d_).exp()
                     OV_ += torch.stack([w_.sum(), (d_ * w_).sum(), (((r_ - 1.0).abs() > clip).float() * w_).sum(), ((r_ - 1.0).abs() * w_).sum(),
                                         ((v_ - b_val[:T, chunk]).abs() * w_).sum(), (r_ * w_).sum()]).double().cpu()
+        if H2:                                                           # (--head2) its own advantage: GAE of his whole pay at its gamma, from its value
+            ADV_H, RET_H = head2_.gae(b_rew, B_VH, b_done, float(H2L["gamma"]), lam)
+            h2_acc = torch.zeros(12, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
+            #                                                              bias's (centred, on read frames), the hands' intention logits' (same), read
+            #                                                              frames, grad norm (sum, count), |gin| / |e| (sum, pieces), the ratio's clip share
         for epoch in range(3):
             HO_[2] = epoch == 0
             perm = torch.randperm(N, device=dev)
@@ -4144,6 +4309,34 @@ def main():
                                              (ds[W_HEAD].probs * wyf_[..., None]).sum((0, 1)),
                                              torch.stack([((A[..., W_HEAD] == j_).float() * wyf_).sum() for j_ in range(3)])]).double()
                 loss = pg + 0.5 * vl - ent_coef * en
+                if H2:                                                   # (--head2) its own lessons: the bias by its advantage (the hands' logits
+                    ho2_ = HO2_[0]                                       # as numbers), its value on every learner frame
+                    m2_ = lv * wgt
+                    ms2_ = m2_.sum().clamp(min=1.0)
+                    lpi_ = torch.log_softmax(ho2_["hands_int"] + ho2_["bias"], -1).gather(-1, A[..., I_HEAD:I_HEAD + 1]).squeeze(-1)
+                    r2_ = (lpi_ - B_LPI[:, chunk]).exp()
+                    ah_ = ADV_H[:, chunk]
+                    mu2_ = (ah_ * m2_).sum() / ms2_
+                    ah_ = (ah_ - mu2_) / (((ah_ - mu2_).pow(2) * m2_).sum() / ms2_).sqrt().clamp(min=1e-8)
+                    pg2_ = -(torch.min(r2_ * ah_, r2_.clamp(1 - clip, 1 + clip) * ah_) * m2_).sum() / ms2_
+                    vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
+                    vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
+                    loss = loss + H2_PG_[0] * H2_PG_[2] * pg2_ + a.head2_v * vl2_
+                    if epoch == 0:
+                        with torch.no_grad():
+                            bc_ = ho2_["bias"] - ho2_["bias"].mean(-1, keepdim=True)
+                            hc_ = ho2_["hands_int"] - ho2_["hands_int"].mean(-1, keepdim=True)
+                            h2_acc[0] += wgt.sum()
+                            h2_acc[1] += pg2_.detach() * ms2_
+                            h2_acc[2] += vl2_.detach() * wsum
+                            h2_acc[3] += ho2_["plan"][1:].norm(dim=-1).mean() * wsum
+                            h2_acc[4] += (bc_.norm(dim=-1) * m2_).sum()
+                            h2_acc[5] += (hc_.norm(dim=-1) * m2_).sum()
+                            h2_acc[6] += m2_.sum()
+                            if "gin_share" in ho2_:
+                                h2_acc[9] += ho2_["gin_share"]
+                                h2_acc[10] += 1.0
+                            h2_acc[11] += (((r2_ - 1.0).abs() > clip).float() * m2_).sum()
                 if HEADL:                                                # (--head) its values on its ticks; the win head's lesson
                     ho_ = HO_[0]
                     tf_ = torch.arange(HD_K - 1, T, HD_K, device=dev)
@@ -4474,6 +4667,13 @@ def main():
                                     float(((dd_[3].logits.argmax(-1) - da[..., 3]).abs() <= 1).float().mean())]
                 opt.zero_grad()
                 loss.backward()
+                H2GR_ = None
+                if H2:                                                   # (--head2) its gradient clipped on its own and kept out of the rest's clip
+                    h2_acc[7] += nn.utils.clip_grad_norm_(pol.head2.parameters(), 0.5).detach().double()
+                    h2_acc[8] += 1.0
+                    H2GR_ = [p_.grad for p_ in pol.head2.parameters()]
+                    for p_ in pol.head2.parameters():
+                        p_.grad = None
                 if LEGS_IN and not LEGS_SAID:                    # (LEGS_IN, stage a) said once: the frozen branch takes no gradient
                     LEGS_SAID.append(sum(int(p_.grad is not None and bool(p_.grad.abs().sum() > 0)) for p_ in pol.legs.parameters()))
                     print("legs inside: the first backward reached {} of the branch's {} tensors ({})".format(
@@ -4511,6 +4711,9 @@ def main():
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith(BRAIN_PFX)], 0.5)
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
+                if H2GR_ is not None:                                    # (--head2) its gradient back for the step
+                    for p_, g_ in zip(pol.head2.parameters(), H2GR_):
+                        p_.grad = g_
                 opt.step()
         if NOSYNC:                                                       # (--learn-nosync) the counters summed on the card, read once
             CHK_[:] = [None, None]
@@ -4785,6 +4988,22 @@ def main():
                                start=a.gate_from if a.gate_open > 0 else None)                                       # for (0 minutes: none)
         if LONG:
             rec["long"] = dict(share=round(long_c, 3), gap=round(long_gap, 4))
+        if H2:                                                           # (--head2) the strategy head: its gate, lessons, size of its outputs, step
+            ha2_ = h2_acc.cpu().numpy()
+            with torch.no_grad():
+                pin_ = pol.head2.plan_in.weight.norm()
+            rec["head2"] = dict(
+                gate=round(H2G_R, 5), cap=a.head2_cap, open_min=a.head2_open, pg_w=round(H2_PG_[0] * H2_PG_[2], 4), plan_grad=H2_PG_[1],
+                pg_loss=round(float(ha2_[1] / max(1.0, ha2_[6])), 5), v_loss=round(float(ha2_[2] / max(1.0, ha2_[0])), 5),
+                plan=round(float(ha2_[3] / max(1.0, ha2_[0])), 4),                                   # the plan's mean length (before the gate)
+                gin_share=round(float(ha2_[9] / max(1.0, ha2_[10])), 6),                              # |gate x plan_in(plan)| beside his fast GRU's input
+                bias=round(float(ha2_[4] / max(1.0, ha2_[6])), 5),                                    # the bias's centred length on read frames
+                bias_share=round(float(ha2_[4] / max(1e-9, ha2_[4] + ha2_[5])), 5),                   # ... beside the hands' own intention logits
+                clip_share=round(float(ha2_[11] / max(1.0, ha2_[6])), 4),
+                grad=round(float(ha2_[7] / max(1.0, ha2_[8])), 5),                                    # its gradient's norm before its clip (0.5)
+                plan_in_w=round(float(pin_), 6), target_w=round(float(pol.head2.target.weight.norm()), 6),
+                v=round(float(B_VH[:T].mean()), 4), ret=round(float(RET_H.mean()), 4), adv_sd=round(float(ADV_H.std()), 4),
+                lr=opt.param_groups[-1]["lr"], opp_open=bool(snaps and opp.h2_open))
         if HEADL:                                                        # (--head) the plan's size, plan_in, the head's part of his target, its
             ha_ = hd_acc.numpy()                                         # values' and win head's losses, the read, its step (first pass)
             rs_ = torch.stack(HO_[1]).sum(0).cpu().numpy() if HO_[1] else np.zeros(3)

@@ -72,6 +72,19 @@ def load(path):
         base = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
         P["_head"] = (lay, {k[len("head."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("head.")}, head_,
                       head_.np_state_width(lay), base)
+    P["_head2"] = None                                       # (v0.4.3) the strategy head: (layout, weights, head2, its state's width, where
+    if "head2" in P:                                         # its state starts, played: its gate open and its links not at zero; the readouts)
+        if "/sim" not in sys.path and os.path.isdir("/sim"):
+            sys.path.insert(0, "/sim")
+        import head2 as head2_                               # sim/head2.py: numpy only at the top
+        assert "_head" not in P, "a network with both heads: not built"
+        lay2 = json.loads(str(P["head2"]))
+        W2 = {k[len("head2."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("head2.")}
+        if os.environ.get("NET_HEAD2_GATE", "") != "":
+            W2["gate"] = np.array(np.float32(float(os.environ["NET_HEAD2_GATE"])))
+        base2 = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
+        P["_head2"] = (lay2, W2, head2_, head2_.np_state_width(lay2), base2, head2_.np_open(W2),
+                       head2_.mlp_of(P, "ahead"), head2_.mlp_of(P, "control"))
     P["_brain"] = None                                       # (v0.4.1) the brain and its token: (brain weights, token layout, btoken, where
     if "btoken" in P and "belief" in P:                      # its state starts in a seat's array, the gate); played only while the gate is open
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -84,7 +97,8 @@ def load(path):
         assert A is not None or not float(bl_.get("gate", 0.0)) > 0, "the brain's token is open and the attention part is shut or missing"
         B_ = btoken_.numpy_brain(P, json.loads(str(P["belief"])), json.loads(str(P["track"])) if "track" in P else None,
                                  json.loads(str(P["track_z"])) if "track_z" in P else None)
-        base_ = (P["_slow"][3] if "_slow" in P else P["whh"].shape[1]) + (P["_head"][3] if "_head" in P else 0)
+        base_ = (P["_slow"][3] if "_slow" in P else P["whh"].shape[1]) + (P["_head"][3] if "_head" in P else 0) \
+            + (P["_head2"][3] if P.get("_head2") is not None else 0)
         P["_brain"] = (B_, bl_, btoken_, base_, float(bl_.get("gate", 0.0)))
     P["_rfade"] = None                                       # (v0.4.2a) the rule fade: (the columns, g, the readers on the brain)
     if "rule_fade" in P:
@@ -123,7 +137,7 @@ def width(P):
     """the width of a seat's memory array: the fast memory, or the whole state with the slow memory (sim/slowmem.py), and
     the head's state after it (v0.4, sim/head.py)"""
     w = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
-    w = w + (P["_head"][3] if "_head" in P else 0)
+    w = w + (P["_head"][3] if "_head" in P else 0) + (P["_head2"][3] if P.get("_head2") is not None else 0)
     if P.get("_brain") is not None:                          # (v0.4.1) the brain's and the token's packed state at the very end
         w = P["_brain"][3] + P["_brain"][2].packed_width(P["_brain"][0]["H"])
     return w
@@ -132,7 +146,8 @@ def width(P):
 def brain_on(P):
     """(v0.4.1) the brain is stepped: its token's gate is open, or (v0.4.2a) the rule fade is above 0 with its readers on"""
     rf = P.get("_rfade")
-    return P.get("_brain") is not None and (P["_brain"][4] > 0 or (rf is not None and rf[2] and rf[1] > 0))
+    return P.get("_brain") is not None and (P["_brain"][4] > 0 or (rf is not None and rf[2] and rf[1] > 0)
+                                            or (P.get("_head2") is not None and P["_head2"][5]))    # (v0.4.3: the strategy head reads it)
 
 
 def needs_pose(P):
@@ -288,6 +303,10 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
     if P.get("_brain") is not None:                          # (v0.4.1) the brain's packed state, at the very end of the array
         hb = h[:, P["_brain"][3]:]
         h = h[:, :P["_brain"][3]]
+    h2s = None
+    if P.get("_head2") is not None:                          # (v0.4.3) the strategy head's state, before the brain's
+        h2s = h[:, P["_head2"][4]:]
+        h = h[:, :P["_head2"][4]]
     hh = None
     if "_head" in P:                                         # (v0.4) the head's state at the end of the array
         hh = h[:, P["_head"][4]:]
@@ -330,6 +349,10 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
         xf = x + hm.np_plan_in(hW, hh[:, o_[0]:o_[1]])
     if dadd is not None:                                     # (--legs-feat) only his fast GRU reads the legs' features
         xf = xf + dadd
+    b2 = None
+    if h2s is not None and P["_head2"][5]:                   # (v0.4.3) the strategy head's plan into his fast GRU, its bias on his intention
+        g2_, b2 = P["_head2"][2].np_adds(P["_head2"][1], P["_head2"][0], h2s)
+        xf = xf + g2_
     gi = xf @ P["wih"].T + P["bih"]
     gh = h @ P["whh"].T + P["bhh"]
     H = h.shape[1]
@@ -342,6 +365,8 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
     if "_slow" in P:                                         # (--slow-mem) the outputs read h + door(s); the slow GRU ticks on its frames
         zo, h = P["_slow"][2](P["_slow"][1], P["_slow"][0], x, h, hf)
     logits = zo @ P["wp"].T + P["bp"]
+    if b2 is not None:
+        logits[:, head_slices(P)[0]] += b2
     if hh is not None:                                       # (v0.4) the head ticks after the fast memory's step (on its frames) and its
         _, t_add, w_add, hh = hm.np_tick(hW, hlay, x, hfast, hh, events)    # target and way are added to the hands' (held between ticks)
         si, sw = head_slices(P)
@@ -359,7 +384,16 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
         if tkd_.any():
             o1_, o2_ = br_.readouts(tkd_)
             tk_.answer(tkd_, o1_, o2_, np.asarray(pose, np.float32)[tkd_], np.asarray(zmap)[tkd_])
+            if h2s is not None and P["_head2"][5]:           # (v0.4.3) the strategy head ticks with the brain, after the frame
+                lay2, W2, hm2, _, _, _, ah2, ct2 = P["_head2"]
+                sb_ = br_.s[tkd_]
+                u_ = hm2.np_feats(lay2, brain=sb_, trk=o1_, trz=o2_, ahead=hm2.np_mlp(ah2, sb_) if ah2 is not None else None,
+                                  ctrl=hm2.np_mlp(ct2, sb_) if ct2 is not None else None, obs=xa[tkd_], hands=hfast[tkd_])
+                h2s = h2s.copy()
+                h2s[tkd_] = hm2.np_tick(W2, lay2, u_, h2s[tkd_])
         hb = P["_brain"][2].pack(br_, tk_)
+    if h2s is not None:
+        h = np.concatenate([h, np.asarray(h2s, np.float32)], 1)
     if float(P.get("switch_fade", 0.0)) > 0:                 # (--switch-fade) off the switch's "legs" choice, as in training
         logits = logits.copy()
         logits[:, int(np.sum(P["action_dims"][:11])) + 1] -= float(P["switch_fade"])
