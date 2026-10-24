@@ -40,6 +40,11 @@ try:                                                        # the network's forw
 except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _net = importlib.import_module("netpass")
+try:                                                        # (B-283) the mind view's log (plugins/mindlog.py; !mind on|off)
+    _mind = importlib.import_module(__package__ + ".mindlog")
+except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    _mind = importlib.import_module("mindlog")
 
 sys.path.insert(0, "/sim")
 # DUEL_EARLY_BOBBY=1 (owner, 2026-10-24; tools/duel_server.sh sets it on a play-test server, not with PUBLIC=1): Bobby is added
@@ -239,6 +244,8 @@ class duelbot(minqlx.Plugin):
         self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
         self.add_command("aim", self.cmd_aim, 0, usage="[1|2|3|4|5|max]")
+        self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
+        self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
         self.aim_want = None                                 # (!aim) the level asked for, put in at the next warmup
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
@@ -1587,6 +1594,87 @@ class duelbot(minqlx.Plugin):
         self.setup()
         self.log("aim level {} loaded ({})".format(level, self.AIM_FILES[level]))
 
+    # ------------------------------------------------------------------ B-283: the mind view (plugins/mindlog.py, tools/mind_view.py)
+    # The owner's live view of what Bobby thinks, on a second monitor (2026-10-24: nothing in the game's centre print or
+    # chat). Off by default; "!mind on" (owner commands' level) writes one line at every tick of the brain (0.2 s) into
+    # /tmp/practice/mind.jsonl: both players' true places, the brain's believed place of the opponent and its readout ahead,
+    # the score, the clock, the win table's chance, "in control" when the network has it. The reply goes to him alone.
+    def cmd_mind(self, player, msg, channel):
+        """!mind on|off: the mind view's log (tools/mind_view.py draws it on a second screen)"""
+        on = len(msg) < 2 or msg[1].lower() not in ("off", "0", "stop")
+        if on and self.mind_w is None:
+            self.mind_w = _mind.Writer(os.path.join(D, "mind.jsonl"), log=self.log)
+            self.mind_map, self.mind_fr = None, 0
+            self.log("mind view: on (mind.jsonl in the data folder)")
+        elif not on and self.mind_w is not None:
+            self.mind_w.close()
+            self.mind_w = None
+            self.log("mind view: off")
+        P_ = getattr(self, "P", None)
+        R = _mind.readouts(P_) if P_ is not None else {}
+        brain = P_ is not None and _net.brain_on(P_)
+        line = "Mind view {}. Brain {}, ahead readout {}, in control {}.".format(
+            "on: open the viewer on your second screen" if on else "off", "on" if brain else "off",
+            "yes" if "ahead" in R else "no", "yes" if "control" in R else "n/a")
+        try:
+            player.tell(line)                                # (to him alone)
+        except Exception:                                    # noqa: BLE001 - the console (rcon) has no one to tell
+            channel.reply(line)
+
+    def mind_places(self, env):
+        """{target name: [x, y, z]}: the map's big items (the route goals' first item of each name) and holding places"""
+        pl = {}
+        for lab_, k_ in zip(getattr(env, "route_goal", []) or [], getattr(env, "route_item", []) or []):
+            if lab_ not in pl:
+                pl[lab_] = [float(v) for v in env.item_pos[k_]]
+        for i_, hp_ in enumerate(np.asarray(getattr(env, "hold_pos", np.zeros((0, 3))))[:8]):
+            pl["H{}".format(i_ + 1)] = [float(v) for v in hp_]
+        return pl
+
+    def mind_frame(self, env, now):
+        """(!mind on) once a frame after the network's step: a line at the brain's tick (every eighth frame without a brain)"""
+        try:
+            self.mind_fr += 1
+            P = self.P
+            br_ = tk_ = None
+            if _net.brain_on(P):
+                B_, bl_, bt_, at_, _ = P["_brain"]
+                br_, tk_ = bt_.unpack(B_, bl_, self.h[:1, at_:])
+                if int(br_.gv[0]) % int(B_["K"]) != 0:
+                    return                                   # not a tick of the brain
+            elif self.mind_fr % 8:
+                return
+            if self.mind_map != self.mapname:
+                self.mind_map = self.mapname
+                self.mind_pl = self.mind_places(env)
+                try:
+                    import zonemap as zm_
+                    self.mind_zones = zm_.load(self.mapname)
+                except Exception:                            # noqa: BLE001
+                    self.mind_zones = None
+                self.mind_w.write(_mind.meta(self.mapname, {k: v for k, v in self.mind_pl.items() if not k.startswith("H")},
+                                             [self.mind_pl["H{}".format(i_ + 1)] for i_ in range(8) if "H{}".format(i_ + 1) in self.mind_pl],
+                                             version=str(P.get("version", "")), note=str(P.get("run", ""))))
+            tok = None
+            if tk_ is not None:
+                tok = dict(ok=bool(tk_.valid[0]), P=tk_.P[0], ls=tk_.ls[0], unseen=float(tk_.unseen[0]), zone=tk_.zone[0])
+            seen = bool(tk_.unseen[0] < 0.1) if tk_ is not None else False
+            if getattr(self, "game_seat", False) and hasattr(env, "clock_t"):
+                left = max(0.0, GAME_SECS - float(env.clock_t[0]))
+            else:
+                left = max(0.0, float(self.round_secs) - float(env.round_t[0]))
+            me = [float(v) for v in env.state[0, :3]] + [float(env.yaw[0])]
+            en = [float(v) for v in env.state[1, :3]] + [float(env.yaw[1])]
+            rec = _mind.build(now, self.mapname, me, en, seen, tok, br_.s[0] if br_ is not None else None, P, self.mind_pl,
+                              (float(env.frags_r[0]), float(env.frags_r[1])), left, zones=self.mind_zones, frame=self.mind_fr)
+            rec["hp"] = [int(env.hp[0]), int(env.hp[1])]
+            self.mind_w.write(rec)
+        except Exception as e:                               # noqa: BLE001 - never in the way of play
+            if self.mind_w is not None:
+                self.log("mind view: {!r}; off".format(e))
+                self.mind_w.close()
+            self.mind_w = None
+
     def cmd_aim(self, player, msg, channel):
         """!aim: the aim level now (and the one asked for the next game). !aim 1|2|3|4|5|max: that level from the next game
         (at once when no game runs)"""
@@ -1968,6 +2056,8 @@ class duelbot(minqlx.Plugin):
         h_in_ = self.h[0].copy() if self.sess else None      # (the memory the network answers from, for the input log)
         a = self.act(ob)
         self.t_net, self.t_live = time.perf_counter() - t_, 1
+        if self.mind_w is not None:                          # (B-283) the mind view: a line at each tick of the brain
+            self.mind_frame(env, now)
         if os.environ.get("DUEL_OBSDUMP") and self.P.get("_brain") is not None:      # (v0.4.1) debugging: his pose, the enemy's true
             B_, bl_, bt_, at_, _ = self.P["_brain"]                                   # place and the brain's answer (map coordinates)
             tk_ = bt_.unpack(B_, bl_, self.h[:1, at_:])[1]                            # after the frame, to set the answer beside the truth
