@@ -12,7 +12,7 @@ Quake Live servers:
 
 We keep a local leaderboard across the two servers, see it [here](https://dclark202.github.io/bobbybones-leaderboard/) 
 
-## Run him instally
+## Run him locally
 
 The networks that have played on the public server are released as open weights, one
 [GitHub Release](https://github.com/dclark202/bobbybones-quake/releases) per model, tagged at the code the server ran it with
