@@ -42,6 +42,14 @@ except Exception:                                           # noqa: BLE001 - loa
     _net = importlib.import_module("netpass")
 
 sys.path.insert(0, "/sim")
+# DUEL_EARLY_BOBBY=1 (owner, 2026-10-24; tools/duel_server.sh sets it on a play-test server, not with PUBLIC=1): Bobby is added
+# inside the map hook, before any client is sent the new map's gamestate. The game drops bots on a map change and the frame
+# loop added him back ten seconds or more later (after setup()), when the person's game had loaded the map: with
+# cg_deferPlayers 1 (the default) a client that learns of a player after its load defers his model and, in a game without
+# teams, draws him with the model of the first player it has loaded, its own, until it loads the deferred models (ioquake3's
+# cg_players.c, CG_SetDeferredClientInfo; the owner: "it makes him *my* player model", spec and rejoin fixed it). A player
+# in the gamestate is loaded in full while the map loads, cg_forceEnemyModel included.
+EARLY_BOBBY = os.environ.get("DUEL_EARLY_BOBBY", "") == "1"
 TIMING = bool(os.environ.get("DUEL_TIMING"))                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
 # BOBBY_AUTOHOP=1 (B-258, off by default): the game re-jumps a held jump on landing (pmove_AutoHop 1) only for a player
 # whose userinfo carries cg_autoHop 1, which a person's game sends (the owner's config has it) and a bot's has not: on
@@ -852,6 +860,23 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
         self.game_over_t, self.go_f3 = 0.0, 0.0              # a new map: a game's end sequence is over with it
         self.aim_reset()
+        if EARLY_BOBBY:
+            self.add_early()
+
+    def add_early(self):
+        """(DUEL_EARLY_BOBBY) Bobby in the map's gamestate: added now, in the map hook, once a map; he stands still (zero
+        input) until setup() is done"""
+        try:
+            if any(is_bobby(p) for p in self.players()):
+                return
+            minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
+            ids = [p.id for p in self.players() if is_bobby(p)]
+            for i in ids:
+                minqlx.set_bot_input(i, 0, 0, 0, 0, 0, 0.0, 0.0)
+            self.log("map {}: BobbyBones added at the map's load (DUEL_EARLY_BOBBY), seat {}".format(
+                (minqlx.get_cvar("mapname") or "").lower(), ids or "not yet seen"))
+        except Exception as e:                               # noqa: BLE001
+            self.log("early add: {!r}".format(e))
 
     # ------------------------------------------------------------------ setup
     FACTORY = "duel"                                         # (ffabot: "ffa")
@@ -1625,6 +1650,10 @@ class duelbot(minqlx.Plugin):
     def frame(self):
         now = time.time()
         if not self.ready:
+            if EARLY_BOBBY:                                  # added at the map's load: no stale input from the last map
+                for p in self.players():
+                    if is_bobby(p):
+                        minqlx.set_bot_input(p.id, 0, 0, 0, 0, 0, 0.0, 0.0)
             if now > self.next_check:
                 self.next_check = now + 2
                 mapname = (minqlx.get_cvar("mapname") or "").lower()
