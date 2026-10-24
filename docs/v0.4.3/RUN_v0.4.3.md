@@ -6,6 +6,8 @@ before: the strategy head). Before it: [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) 
 
 *2026-10-23 evening: the old belief's fade is v0.4.2, [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) (built and tested on the CPU; start Sat on the owner's go). This card, the head, is v0.4.3: build Sat-Sun, start Sun afternoon if v0.4.2 passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
 
+*2026-10-24 12:15 (owner): scope: the head (with the brain's outputs and the "in control" readout as its inputs); the "will be" blind-fire exemption **kept in**; then in the run, one after the other: the item rule's floor faded, the level pull phased out. Building today on the CPU in parallel (branches `v043-head`, `v043-control`, `v043-rules`); "in control" tested offline on v0.4.2's saves (a probe on his frozen state). Start Sunday from v0.4.2's end on the owner's go.*
+
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
 ## The two versions, each started and checked on its own (one change at a time)
