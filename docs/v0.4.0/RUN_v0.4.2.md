@@ -1,110 +1,77 @@
-# v0.4.2 on one page: the old belief faded out (v0.4.2a), the strategy head (v0.4.2b) (DRAFT)
+# v0.4.2 on one page: the old belief faded out of the hands
 
-*2026-10-22: **proposed**, after v0.4.1 works (names, the owner, 2026-10-22 night: v0.4.0 the brain's pretraining, v0.4.1 the brain
-connected, v0.4.2 "the blending out of the old belief network while inserting the brain network", with what was called v0.4.1
-before: the strategy head). Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
+*numbers, the owner, 2026-10-23: "Can we just make these separate numbers: v0.4.2a -> v0.4.2; v0.4.2b -> v0.4.3"; what was v0.4.3 and on is v0.4.4 and on.*
 
-*2026-10-23 evening: step A has its own card, [RUN_v0.4.2a.md](RUN_v0.4.2a.md) (built and tested on the CPU; start Sat on the owner's go). Step B (this card's head) is v0.4.2b: build Sat-Sun, start Sun afternoon if A passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
+*2026-10-23 17:30: **built and tested on the CPU** (branch `v042a`, `c93617f` on v041-server `9c8651b`; all off by default: bit-identical to v0.4.1 off and at g = 0; the faded columns read their mean at g = 1, the brain's input unchanged, the readers on the brain on 100% of lives; server vs checks 0 differences at every gate and fade; 0 of 18 brain weights reached). The fade is **76 columns** (the list below adds up to 76, not 78). 17:00: building (owner, 2026-10-23: "v0.4.2 is the right start"; "from v0.4.2 we should be moving to use the brain to control the things that we previously hardwired"); draft 16:30 for the owner's review (tonight / Sat noon). Build Sat morning on the CPU while v0.4.1 finishes; start
+Sat ~12:30 from v0.4.1's end on the owner's go; 18–24 h. Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). After it: v0.4.3, the strategy
+head ([RUN_v0.4.3.md](RUN_v0.4.3.md)). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
-## Two steps, each started and checked on its own (one change at a time)
+## The step
 
-| Step | What | Pass before the next |
+The hands stop reading the old hand-built belief of the unseen enemy (the owner, 2026-10-22: a failed baseline, retired in v0.4)
+and rely on the brain's answer, which v0.4.1 connected. A fade gate takes the rule-made inputs down over hours; **the raw sensed
+facts stay** (where and when he last saw or heard the enemy: the owner, 2026-10-22, "yes that seems right to me"). Everything the
+simulator itself did with the old belief moves to the brain's answer on the same gate. One change: the brain's new outputs
+(1/2/4 s ahead, target, appear, item race) do not join here (below).
+
+## What fades (76 input columns; audit of 2026-10-23, `duel_env.py` in branch `v041`)
+
+| Group | Fades (rule-made) | Stays (raw) |
 |---|---|---|
-| **A. The old belief out, the brain's full picture in** | the cross-fade: the old rule-made inputs (the extrapolated belief, ~20, and the stack filter, 6) times (1 − g) as a gate g opens over hours; **the raw sensed facts stay** (where and when he last saw or heard the enemy: the owner, 2026-10-22, "yes that seems right to me"); the brain's new outputs from v0.4.1 (zones, where he will be in 1/2/4 s, what he is going for, when he appears, the item race) join the `belief` token once they pass their own readiness test; the old rule's readers inside the simulator (the legs' look point, the hunt's target) move to the brain | games ≥ level against v0.4.1's end; the decision report's reading rows moving |
-| **B. The strategy head** | below | the decision report's item rows moving |
+| The enemy as he believes him (21) | the believed place (3: last known + his last velocity carried forward), "believed" flag (1), the ways from the believed place to him, mega, red (3) | time since seen / heard, where heard, damage, life clock, death known, pickups and weapons seen (14) |
+| His position (10) | height above the believed enemy (1) | the other 9 |
+| The pros' places near him (96) | per place: distance from the believed enemy, nearest to him (16) | the other 80 |
+| The enemy's stack filter (6) | expected health, armor, sum, spread, weak (5) | time since pinned (a known spawn, a pain sound) (1) |
+| Pre-fire spots (39) | all: chosen by the believed way | – |
+| Where he may appear (8) | all: made from the believed place | – |
 
-## The strategy head (step B)
+## What changes
 
 | Part | Detail | State |
 |---|---|---|
-| **The brain's new outputs, read by the head** (owner, 2026-10-23: "The hands handle what to do *now*, the predictions drive strategy") | where the enemy will be in 1/2/4 s, what he is going for, when he appears, the item race: inputs of the head, not the hands' token; each joins after its readiness bar | ❓ |
-| **The small slow head** | reads the brain (its memory and its answers), his own stack, item timers, score and clock, the hands' memory (no gradient); a GRU of 256 ticking every 0.2 s with the brain; acts by a plan (64) into the hands' memory and a bias on the intention head's choice, both starting at zero (an exact start, proven by a test) | ❓ |
-| Size | ~0.6 M weights (v0.4's earlier candidate head: ~7 M); grows only on a measured need | – |
-| On a server | well under 1 ms a tick; the head added to the plugins' forward pass | ❓ |
-| The head's horizon | a goal choice pays off 30–60 s later: the head learns from the two-minute value output (γ 0.9998), not the main ~25 s one, or it undervalues timing plays | ❓ |
-| The blind-fire exemption on "will be" (owner, 2026-10-23: "it probably should be 'will be'") | v0.4.2a waives the out-of-view shot cost where the brain believes the enemy *is*; v0.4.2b extends it to where the brain predicts he *will be* in 1–4 s (the ahead outputs), with its equilibrium stated: still a cost waived, never a pay | ❓ |
-| A start from the pros (only if needed) | the pros' next goal by situation (mega when the enemy is far, back off when weak) as a light prior on the head's bias, fading like the item rule; added only if the head is slow to find these by winning. The owner is wary of copying the pros' choices (HAND_TEACH): measure first | ⏸ |
+| **The fade gate** | the 78 columns times (1 − g) **after** input scaling, so a faded column reads its average (raw "nothing" codes are not zero: a raw ×0 would mean "right here"); g recorded with each rollout and replayed in learning, as the token's gate is; exact at g = 0 (bit-identical, a test); live: pause, slow, close | ❓ |
+| **The ramp tied to the checks** (the owner, 2026-10-23: a dip "shouldn't persist for more than 20-30 updates") | shut 1 h, then +0.1 every ~25 min; a check under 50% holds it, a second in a row or one under 45% sends it back to the last passing level | ❓ |
+| **What the brain reads** ❓ | the brain itself reads the same inputs, these 78 among them. **Proposed:** the brain keeps the unfaded inputs in v0.4.2 (only the hands lose them), so its answers do not shift under the hands mid-fade; the brain's own fade is a later, measured step (its errors by time since seen as the bar) | ❓ |
+| **The brain's answer sent to the simulators** | the brain runs on the trainer, not in the simulators; its answer (place, odds, stack band) goes back with each frame's actions, so the simulator's readers below can use it (one frame late; it ticks every 0.2 s anyway) | ❓ |
+| The legs' look point (`LEGS_LOOK`), the hunt's target (`HUNT`) | from the brain's likeliest place, a life drawn with chance g; the old point otherwise | ❓ |
+| The item lesson's silences (`RULE_CONTEST`: the enemy believed nearer; `RULE_HUNT`: his stack beats the believed stack by 50) | the brain's place and stack band, same draw | ❓ |
+| Openings (where a fresh life heads: away from items near the believed enemy) | the brain's place, same draw | ❓ |
+| **The blind-fire cost's pre-fire exemption** (a pay ❓) | today: no cost for a shot at the rule's believed place out of view. Proposed: the brain's likeliest place, same draw. Equilibrium: unchanged in kind — he is never paid to fire, only spared the 0.003 cost where his own belief says the enemy is; with the brain's belief the exemption follows what he knows, not a rule (goal: counterplay, pre-fire on real reads) | ❓ |
+| Kept on the rule (not his knowledge) | spawn-moment choice for practice starts, the metrics and the brain's yardstick (the old rule's error beside the brain's in every report) | – |
+| On a server | the same fade in the plugins' forward pass (g and the column list in the export), the readers on the brain's answer (branch `v041-server` already runs the brain and token); a check of 0 differences server vs checks at g = 0, 0.5, 1 | ❓ |
+| Metrics | g; per reader, the share of lives on the brain; the brain's error beside the old rule's by time since seen | ❓ |
 
-## Rule-made strategy the head takes over (the owner, 2026-10-22: "Is there any other parts of him like this that might need revisiting?")
+## Not in this step
 
-*Timing (the owner, 2026-10-22): "those should be included eventually, that's probably at least v0.4.1 probably later" (said when the head was called v0.4.1): with the head at the earliest, more likely a later v0.4.x once it has shown it chooses well.*
+| Part | Where |
+|---|---|
+| The brain's new outputs (1/2/4 s ahead, target, appear, item race) as inputs | proposed: into the strategy head (v0.4.3) which needs them most, not the hands' token; each with its readiness bar |
+| The brain stops reading the rule's columns | after A, measured |
+| The view's pull toward level (B-275) | after v0.4.3's head |
 
-| Part | Now | With the head |
+## Before the start
+
+| Test | Pass |
+|---|---|
+| g = 0 is exactly v0.4.1's end (fixed-seed replay) | bit-identical |
+| 10 updates on a scratch copy at g = 0.5 (the new-lesson rule) | normal step per output; a check against v0.4.1's end ≥ 45% |
+| Server vs checks at g = 0, 0.5, 1 | 0 differences |
+
+## Pass (to v0.4.3)
+
+| Measure | Bar |
+|---|---|
+| Games against v0.4.1's end at g = 1 | level or better in 3+ checks |
+| The same save at g = 1 against g = 0 | g = 1 not worse |
+| The decision report's reading rows (after losing sight: the gap slope; pressing in when behind) | not worse; toward the pros |
+| The brain's errors | no rise above ~5% |
+
+## Owner's decisions (❓)
+
+| # | Decision | Proposed |
 |---|---|---|
-| The item rule (the intention teacher, never under 10%) | a hand rule nudges which item he goes for, forever | its floor faded to zero as the decision report shows the head choosing well |
-| The hunt (`HUNT`) | a rule sends his way toward where he believes the enemy (reads the readout from v0.4.0) | whether to hunt is the head's choice |
-| Item pays (pickups, the big-item order, item loss) | hand-shaped values of items whatever the situation | lowered step by step as the head learns their value from winning (the item-pay review of 2026-10-17 belongs here) |
-| The view's pull toward level (B-275) | with no enemy in view his pitch eases back to level (0.95 a frame): a crutch of 2026-10-03 that stops him holding a look up or down out of sight | phased out regardless of the drift measure (owner, 2026-10-23: "I think it's done its part"; "Let's just plan to phase it out regardless"): measured (RESULTS 2026-10-23 15:30), then a live factor 0.95 -> 0.98 -> 0.99 -> 0.995 -> 1.0, about 2 h a step, the control checks as usual, the plugins in the same batch |
-| Item timers (his own pickups) | rule-kept clocks: fair, a person keeps them too | kept; the enemy's side ("when is mega back after he took it") into the readout only if the report shows timing mistakes |
-
-## What it should do
-
-| Situation | The head's bias |
-|---|---|
-| Strong, the enemy weak and predicted near | toward "the enemy" as his target |
-| Weak, the enemy strong | toward the items the enemy is not going for, away from his predicted path |
-| The enemy going for mega, he is strong | contest it; weak: take the red armor across the map |
-| An item about to spawn, the enemy far | be there on time |
-
-## Targets: the decision report (the owner, 2026-10-22: "whatever we start doing in v0.4.x needs to target these findings")
-
-| Row (v0.3.10's end against v0.3.9's end, 80 whole games, `data/decision/v0310_end.txt`) | Baseline |
-|---|---|
-| Presses in when far behind (gap < −75) / dies within 10 s | 36% / 61% |
-| Presses in when far ahead (gap > 75) / the enemy dies within 10 s | 61% / 60% |
-| Closing against the gap (slope, u/s per 100 points) | 30.9 (v0.3.9: 26.7) |
-| Mega and red respawns: waiting / on time / late / **the enemy took it** / unused | 19 / 8 / 26 / **42** / 5% |
-| ... when the enemy is weak (< 100) | 20 / 9 / 30 / 35 / 6% (hardly different) |
-| Enemy within 600 u at his pickups: when he is weak / strong | 32% / 26% (he does not avoid contests when weak) |
-| Lost contests a game | 4.2 |
-| Deaths while weak (his stack < 100, the enemy's > 150) a game / share of his deaths | 4.4 / 38% |
-| After losing sight: toward the enemy when ahead / away when behind | 40% / 42% |
-
-What v0.4.2 must move (the head chooses):
-
-| Row | Target |
-|---|---|
-| Mega and red respawns: waiting (19%; the pros 12%) | down toward the pros. **Not** "the enemy took it" (42%): the pros' is 42% too (`data/decision/pros.txt`, 2026-10-23: in a duel each takes about half) |
-| Enemy near his pickups when he is weak (32%) | down: when weak, take the item the enemy is not going for |
-| Lost contests (4.2 a game) | down |
-| Presses in when far behind (36%; the pros 24%), deaths while weak (4.4 a game; the pros 3.3) | down toward the pros |
-| After losing sight, the gap slope (17.3; the pros 21.2) | up toward the pros |
-| Closing against the gap (30.9) | steeper: press when ahead, back off when behind |
-
-v0.4.2 passes when these move toward the pros' (the same report on the pros' demos, to be filled in).
-
-## Measure: the decision report
-
-Fight or back off by the stack gap; items against the enemy's distance; timing; deaths while weak; where he goes after losing
-sight; split by what he believes as well as by the truth. v0.4.2 passes when these move toward the pros' (`tools/decision_report.py`).
-
-## Play tests aimed at it
-
-The owner stays weak, or stacked, on purpose: does he press or back off; does he contest the item the owner goes for. The quick
-human check of "he changes his intention by the enemy's state" that no single number holds.
-
-## Growing the head (the owner, 2026-10-22: "slowly build out the size of the head to incorporate new pathologies that appear in practice")
-
-Each pathology seen in play tests or the people review becomes a **measured row** in the decision report first; the head grows
-(or gets a new intention) only to move that row, and the row says whether it worked.
-
-## Toward pay by win chance (v0.4.3 on; the owner, 2026-10-23)
-
-| Step | What | When |
-|---|---|---|
-| Measure (now, CPU; branch `winpay`) | his own win table beside the pros'; the pay ledger (each pay's share); each shaping pay's alignment with winning 30–120 s later; value readiness (does his value predict the result; does it rise at a mega by the mega's worth); a shadow win-chance counter | 2026-10-23 → |
-| Recalibrate | a shaping pay far from its measured worth set to it (a bridge before its fade, not an end) | before its fade |
-| Frag pay → win chance (`WIN_PAY`, built) | a cross-fade of the flat ±1 into the change of his win chance, check-tied; the head's long value rewired to include it | v0.4.3 |
-| Scaffolds faded | one or two a version: items, the item rule's floor, speed/hop, watching/pre-aim, stack difference, damage last | v0.4.3 on |
-| Stays | the fairness limits (aim, senses, his own item timers); movement practice's own pays (no score there) | – |
-
-## Then (v0.4.3 and on, each on a measured need)
-
-| Step | When |
-|---|---|
-| More intentions: contest, wait at an item, stack up, ambush the predicted opening (opened out of the choices they stand in for, never by a bias over all) | the head's bias cannot express the choice the report wants |
-| A wider slow memory | the head's value or the report stalls |
-| A store of the last minutes | he forgets the enemy's habits or item timings beyond a minute |
-| Rail angles held on purpose (B-273) | through a holding place chosen by the head |
+| 1 | The brain keeps the rule's columns as its own input during A | **yes** (owner, 2026-10-23: "remove the hardcoded recommendation from the mechanical layer, keep them as inputs for the brain"); the brain's own fade later, after a measure of its error with them at their mean |
+| 2 | The blind-fire exemption on the brain's place | **yes** (owner, 2026-10-23: "no cost to spam/prefire where he expects the enemy is"): faded onto the brain on the same gate |
+| 3 | The brain's new outputs into the head (v0.4.3), not the hands' token | **yes** (owner, 2026-10-23: "The hands handle what to do *now*, the predictions drive strategy") |

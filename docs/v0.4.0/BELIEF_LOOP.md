@@ -1,7 +1,7 @@
 # The belief loop: one picture of the enemy, used by the hands and by the head
 
 *Design note, 2026-10-22 afternoon (while v0.3.11 trains). The owner: "the fast mechanical network and the strategy network
-need to share the same representation of the enemy, but act on it in different ways." Run cards (names, the owner, 2026-10-22 night): [RUN_v0.4.0.md](RUN_v0.4.0.md) (the brain in its own memory, pretrained beside v0.3.10's hands), [RUN_v0.4.1.md](RUN_v0.4.1.md) (the brain connected to the hands), [RUN_v0.4.2.md](RUN_v0.4.2.md) (the old belief faded out; the strategy head). Since this note: the picture lives in a separate brain memory (GRU 256, every 0.2 s), not in his play memory; read the parts below with that.*
+need to share the same representation of the enemy, but act on it in different ways." Run cards (names, the owner, 2026-10-22 night): [RUN_v0.4.0.md](RUN_v0.4.0.md) (the brain in its own memory, pretrained beside v0.3.10's hands), [RUN_v0.4.1.md](RUN_v0.4.1.md) (the brain connected to the hands), [RUN_v0.4.2.md](RUN_v0.4.2.md) (the old belief faded out), [RUN_v0.4.3.md](RUN_v0.4.3.md) (the strategy head). Since this note: the picture lives in a separate brain memory (GRU 256, every 0.2 s), not in his play memory; read the parts below with that.*
 
 ## Where we are
 
