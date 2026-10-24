@@ -90,10 +90,10 @@ def duel_layout(mapname):
     return len(extra), len(missing)
 
 
-# The maps of the vote at a game's end: the ten duel maps he trains on, each in the mode's own factory (server/
-# mappool_lab.txt, mappool_lab_duel.txt; owner, 2026-10-12). The game reads its pool at the start (entrypoint.sh names
-# the file on the command line) and again on "reload_mappool": a mode switch on a running server changes it here.
-POOLS = {"ffa": "mappool_lab.txt", "duel": "mappool_lab_duel.txt"}
+# The maps of the vote at a game's end: the ten duel maps he trains on, in the duel factory (server/mappool_lab_duel.txt;
+# owner, 2026-10-12). The game reads its pool at the start (entrypoint.sh names the file on the command line) and again on
+# "reload_mappool". The free-for-all pool went with free-for-all on the servers (owner, 2026-10-23).
+POOLS = {"duel": "mappool_lab_duel.txt"}
 
 
 def map_pool(factory):

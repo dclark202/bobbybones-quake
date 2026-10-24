@@ -421,13 +421,17 @@ class ladder(minqlx.Plugin):
         """one finished duel between a person and Bobby: a real game of the 1v1 mode ("game", from on_game_end) or a
         timed one in warmup ("timed": !duel, from duelbot.arena_end). Keys only, no name."""
         try:
+            pl = self.bot_plugin()
             if net is None:
-                pl = self.bot_plugin()
                 net = str(pl.P["run"]) if pl is not None else ""
+            try:                                             # (owner, 2026-10-23) the aim level the duel was played at
+                aim = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else ""
+            except Exception:                                # noqa: BLE001
+                aim = ""
             with open(os.path.join(D, "duels.jsonl"), "a") as f:
                 f.write(json.dumps(dict(t=round(time.time(), 2), map=(minqlx.get_cvar("mapname") or "").lower(), net=net, key=key,
                                         owner=int(bool(owner)), minutes=round(float(minutes), 2), score=[int(person), int(bobby)],
-                                        forfeit=int(bool(forfeit)), kind=kind)) + "\n")
+                                        forfeit=int(bool(forfeit)), kind=kind, aim=str(aim))) + "\n")
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 

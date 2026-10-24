@@ -6,6 +6,8 @@ they use to show respect, 'I goofed', etc.").
 Each of the four bots has a voice of its own (the names are duelbot.BOT_NAMES, in the order they join): BobbyBones the
 pupil, Mr Skeleton the bone jokes, THE JUGGERNAUT in capitals, Dr Evil the plan.
 
+- In the countdown before a game (only with a person playing) every bot says a short "glhf" line, once per countdown
+  (owner, 2026-10-18: "a few 'glhf' type messages that he will choose from during the countdown").
 - At a game's end every bot says a line, by where it finished (first, in the middle, last), a second or two apart.
 - During a game, and only with a person playing: after three frags without dying (pleased with itself), after dying by
   its own hand or the map ("I goofed"), after the same person has fragged it three times without an answer (respect, by
@@ -26,6 +28,7 @@ import minqlx
 
 NAMES = ("BobbyBones", "Mr Skeleton", "THE JUGGERNAUT", "Dr Evil")     # (duelbot.BOT_NAMES; kept in step by hand)
 EACH, ALL, CHANCE = 75.0, 20.0, 0.7
+GLHF = ("glhf", "gl hf", "good luck, have fun", "glhf ^3:)^7", "gl", "hf", "^2glhf^7", "gl hf ^3:)^7")   # the countdown's lines, any bot
 FAR = 1500.0                                                           # a rail frag from this far is worth a smile
 
 LINES = (
@@ -108,6 +111,31 @@ def voice(p):
     return None
 
 
+def aim_level():
+    """BobbyBones's aim level on a 1v1 server ("1" to "5", "max"), None elsewhere (plugins/duelbot.py, !aim)"""
+    pl = minqlx.Plugin._loaded_plugins.get("duelbot")
+    try:
+        lv = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else None
+    except Exception:                                        # noqa: BLE001
+        lv = None
+    return lv if lv in ("1", "2", "3", "4", "5", "max") else None
+
+
+def aim_gg_line(level, person, bobby):
+    """after a full duel: what BobbyBones says about his aim, by the result (owner's wording, 2026-10-21); None on a draw"""
+    if level is None or person == bobby:
+        return None
+    if person > bobby:
+        if level in ("1", "2", "3", "4"):
+            return "Too easy at aim {}? Try ^2!aim {}^7 next game".format(level, int(level) + 1)
+        if level == "5":
+            return "You beat aim 5. Think you can take ^2!aim max^7?"
+        return "You beat me at max aim. Respect."
+    if level == "1":
+        return "That's my easiest aim. Rematch?"
+    return "Want a closer game? Try ^2!aim {}^7".format("5" if level == "max" else int(level) - 1)
+
+
 def clean(s):
     return str(s).replace('"', "").replace(";", "").replace("%", "").replace("\n", " ")[:24]
 
@@ -123,6 +151,8 @@ class banter(minqlx.Plugin):
         self.owed = {}                                       # (bot id, person's steam id) -> frags by him without an answer
         self.add_hook("frame", self.on_frame)
         self.add_hook("game_end", self.on_game_end)
+        self.add_hook("game_countdown", self.on_countdown)
+        self.glhf_t = 0.0                                    # when the bots last wished luck (once per countdown)
         self.add_hook("map", self.on_map)
         self.add_command("banter", self.cmd_banter, 5)
         lad = minqlx.Plugin._loaded_plugins.get("ladder")
@@ -192,6 +222,24 @@ class banter(minqlx.Plugin):
             elif self.run[killer.id] == 3 and self.may(killer, now):
                 self.say(killer.id, self.pick(killer, "streak"), 0.8)
 
+    # ------------------------------------------------------------------ the countdown
+    def on_countdown(self):
+        now = time.time()
+        if now - self.glhf_t < 30.0:                         # once per countdown
+            return
+        if not any(not is_bot(q) and q.team != "spectator" for q in self.players()):
+            return                                           # nobody to hear it
+        self.glhf_t = now
+        delay = 1.0 + self.rng.random()
+        for p in self.players():
+            if voice(p) is not None and p.team != "spectator":
+                self.say(p.id, self.rng.choice(GLHF), delay)
+                delay += 0.8 + self.rng.random()
+                lv = aim_level() if voice(p) == 0 else None  # (!aim, owner, 2026-10-21) BobbyBones says his aim level
+                if lv:
+                    self.say(p.id, "Aim level ^2{}^7 (^2!aim 1-5|max^7 to change)".format(lv), delay)
+                    delay += 0.8 + self.rng.random()
+
     # ------------------------------------------------------------------ a game's end
     def on_game_end(self, data):
         if isinstance(data, dict) and data.get("ABORTED"):
@@ -210,6 +258,14 @@ class banter(minqlx.Plugin):
             if voice(p) == 0 and lad is not None and time.time() - getattr(lad, "full_duel_t", 0.0) < 10.0:   # rating and record
                 try:
                     for line_ in lad.end_lines():            # (one chat line each: a long one is cut off)
+                        self.say(p.id, line_, delay)
+                        delay += 1.2 + self.rng.random()
+                except Exception:                            # noqa: BLE001
+                    pass
+                try:                                         # (!aim, owner, 2026-10-21) a line by the result and his aim
+                    people = [q for q in table if not is_bot(q)]
+                    line_ = aim_gg_line(aim_level(), people[0].stats.score, p.stats.score) if len(people) == 1 else None
+                    if line_:
                         self.say(p.id, line_, delay)
                         delay += 1.2 + self.rng.random()
                 except Exception:                            # noqa: BLE001

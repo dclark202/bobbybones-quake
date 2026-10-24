@@ -122,7 +122,6 @@ class ffabot(duelbot):
         for p in self.bobbys() + self.people():
             self.match["base"][p.id] = (p.stats.kills, p.stats.deaths, p.stats.damage_dealt, p.stats.damage_taken)
         self.record(event="match_start", minutes=mins, people=len(self.people()), bots=len(self.bobbys()))
-        self.msg("^3Game on: {} minutes, everybody against everybody, machine gun at spawn.^7".format(mins))
 
     def on_game_end(self, data):
         """the end of a real game. The game's own end follows (owner, 2026-10-12: "the usual 'view the results and vote on

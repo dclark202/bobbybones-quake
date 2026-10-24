@@ -49,6 +49,12 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   its end, with stages B and C (`docs/v0.2.1/PROPOSAL_v0.2.1.md`). Use these names in every report and give the old run name
   once where a folder carries it.
 - No personal data in the repo (Steam IDs, home IP, Windows usernames, passwords). The repo is public.
+- **The public server** (owner, 2026-10-19): a utility kept apart from the repo. Its setup, deploy and pull scripts and
+  community pages are in the git-ignored `private/` folder (`private/PUBLIC_SERVER.md` first; machine details in
+  `data/SERVER.md`, also untracked); never move them, or its address, hosting account, server name, Discord or config
+  values, into a tracked file. A network goes on it only on the owner's call (and only if it beats the control); touch
+  it only on his word, never restart it while he is on it, and use rcon there only when it is needed (gotchas below).
+  The repo is for the model, training and running BobbyBones locally.
 - The owner prefers concise answers and doable batches. Do not start a training run without his go-ahead when he
   has asked to test first.
 
@@ -61,9 +67,9 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   first, what did not work included. Add an entry with `python tools/add_result.py entry.md` (first line
   `## <date> <time> — <the finding>`; links written as from `docs/results/`). "RESULTS 2026-10-08 18:45" anywhere
   means the entry of that time in `docs/results/2026-10-08.md`.
-- `docs/v<model>/` (`v0.4/`, `v0.3/`, `v0.2.2/`, `v0.2.1/`, `v0.2/`; since the clean-up of 2026-10-15 everything before v0.2 (`docs/legacy/`, `docs/v0.1/`, the V16 design files, the old plans, the log before 2026-10-11, `INPUTS_v7` to `INPUTS_v15b.csv`, old evals and yardsticks) is kept locally in the git-ignored `data/docs_old/docs/`, same paths; a `docs/...` path below that is gone from the repo is there: owner, 2026-10-13, "group the docs in docs/ into sub folders by their model"): a model's run documents and its design proposals together. Older text and code comments that say `docs/runs/...` or `docs/design/<a model's file>` mean the model's folder. A run's own documents: `RUN_v<n>.md` (one page in plain words, the one the owner reads and gives his go on: owner, 2026-10-13, "your manifests are getting rather long and complicated and difficult for me to follow"; keep it to one page and current), `MANIFEST_v<n>.md` (the run in full, for the owner's go before a start; changes
+- `docs/v<model>/` (`v0.4/`, `v0.3.5/`, `v0.3.4/`, `v0.3.2/`, `v0.3.1/`, `v0.3/`, `v0.2.2/`, `v0.2.1/`, `v0.2/`; since the clean-up of 2026-10-15 everything before v0.2 (`docs/legacy/`, `docs/v0.1/`, the V16 design files, the old plans, the log before 2026-10-11, `INPUTS_v7` to `INPUTS_v15b.csv`, old evals and yardsticks) is kept locally in the git-ignored `data/docs_old/docs/`, same paths; a `docs/...` path below that is gone from the repo is there: owner, 2026-10-13, "group the docs in docs/ into sub folders by their model"): a model's run documents and its design proposals together. Older text and code comments that say `docs/runs/...` or `docs/design/<a model's file>` mean the model's folder. A run's own documents: `RUN_v<n>.md` (one page in plain words, the one the owner reads and gives his go on: owner, 2026-10-13, "your manifests are getting rather long and complicated and difficult for me to follow"; keep it to one page and current), `MANIFEST_v<n>.md` (the run in full, for the owner's go before a start; changes
   during the run go into its section 0), `MIDRUN_v<n>.md`, `REPORT_v<n>.md` (the full report, ending with what to try next).
-- `docs/guides/` (PLAYTEST, COMMANDS, HOSTING, COMMUNITY, LOGS: the schemas of recorded data, ATLAS), `docs/design/`
+- `docs/guides/` (PLAYTEST, COMMANDS, LOGS: the schemas of recorded data, ATLAS), `docs/design/`
   (what belongs to no one model: QLSTATS, the jumps' and places' pictures), `docs/archive/`.
 - `docs/INPUTS*.csv`, `docs/*.json`, `docs/MAPS.md`: data that tools and the Dockerfile read by path; they stay there
   until every path moves with them (B-203).
@@ -176,9 +182,10 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
   `set_bot_substeps` (human physics), `ran_usercmd`, `view_angles`, `set_view`, `item_states`, `missiles`.
 - **Plugins**: `duelbot.py` plays a trained network (inputs rebuilt with the simulator's own `observe()`), runs
   the test rooms with a human as the subject, hot-reloads `policy.npz`, logs sessions. `weaponlab.py`,
-  `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs. `botmode.py` switches mode and map
-  (`!map` offers the ten duel maps of v14 and `testlab`; they come up in free-for-all with a map's duel items: a new map
-  needs its list in `plugins/duel_items.json`, from `plugins/maplab.py` and `tools/duel_items.py`). `banlist.py`: the
+  `itemlab.py`, `movetest.py` are measurement tools. `botctl.py` records inputs. `botmode.py`: `!map` (the ten duel maps
+  only, in 1v1 with a map's duel items: a new map needs its list in `plugins/duel_items.json`, from `plugins/maplab.py` and
+  `tools/duel_items.py`); since 2026-10-23 (owner) the servers are 1v1 only: no free-for-all (`ffabot.py` is not loaded,
+  `!mode` says so), no `testlab` or `arena1` on `!map`, no Workshop item. `banlist.py`: the
   owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo). `ladder.py`: the
   leaderboard, local to a server (every frag between a person and Bobby, warmup included; Glicko-1 per frag in
   `ratings.py`; who made a frag is read from the kills and deaths counters each frame; `tools/elo.py` reads its files).

@@ -17,15 +17,16 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 2. **Self-play reinforcement learning**, seeded where needed by fading lessons from the pros' demos.
 3. **Measure against people**: play tests, the public server's logs, the pros' demos.
 
-## Status (2026-10-15)
+## Status (2026-10-18, noon)
 
 | What | Where it stands |
 |---|---|
-| On the public server | **v0.2** since 2026-10-12: free-for-all, two Bobbys, the ten duel maps in the vote, a leaderboard. [v0.2/REPORT_v0.2.md](v0.2/REPORT_v0.2.md) |
-| The run now | **v0.3** (`duel_gru_v0_3`), the new baseline: whole ten-minute games with overtime, mid-game starts, the pros' openings, places as targets, the real clock, no styles. Started 2026-10-14 20:17, runs to 18:00 on 2026-10-15 (the owner: so he plays enough whole games); evaluation by 19:00. [v0.3/RUN_v0.3.md](v0.3/RUN_v0.3.md), [v0.3/MIDRUN_v0.3.md](v0.3/MIDRUN_v0.3.md) |
-| Next | **v0.3.1**, the mechanical side (the owner, 2026-10-15): the learning step rebuilt, his legs inside the network, rocket jumps, rocket and projectile aim: [v0.3.1/PROPOSAL_v0.3.1.md](v0.3.1/PROPOSAL_v0.3.1.md). Then **v0.4**, the candidate (2026-10-15): the hands (v0.3, every frame, his legs inside) and the head (strategy, five times a second, a store of three minutes), about 9 M weights: [v0.4/CANDIDATE_v0.4.md](v0.4/CANDIDATE_v0.4.md). From the proposal: a bigger network (about 13.7 M weights), a store of his past read by attention, a judge of the game's result, the pay leaning on winning (B-250). [v0.4/PROPOSAL_v0.4.md](v0.4/PROPOSAL_v0.4.md), [v0.3/PLUTO.md](v0.3/PLUTO.md) |
-| Trials between | v0.2.1 stopped twice ([v0.2.1/AUDIT_v0.2.1.md](v0.2.1/AUDIT_v0.2.1.md)); the test runs of 2026-10-13 and 14 that led to v0.3 ([v0.2.2/NIGHT_1013.md](v0.2.2/NIGHT_1013.md)) |
-| Checks of a run | every tenth save plays the control in 160 ten-minute games on ten maps (level 50%, one check moves about ±3 points); the weapon in his hand at every check |
+| On the public server | **v0.3.1** since 2026-10-16 evening (the end of v0.3.1's restart, `duel_gru_v0_3_1b`: his legs learning, the game's physics, the hunt, the believed stack; 63.8% against v0.3's end). It is the control of every run since. [results/2026-10-16.md](results/2026-10-16.md), [v0.3.1/RUN_v0.3.1.md](v0.3.1/RUN_v0.3.1.md) |
+| The run now | **v0.3.5** (`duel_gru_v0_3_5`), since 2026-10-18 06:55: one movement network, the legs switch removed (B-259). 43 to 44% against v0.3.1's end for 40 updates, 45.7% at save 50 after the legs' learning rate went to 1.0, 45.0% at 60; he loses on speed in games. Trains to 19:00 Sunday, then the owner's play test; it resumes afterwards unless he decides otherwise. [v0.3.5/RUN_v0.3.5.md](v0.3.5/RUN_v0.3.5.md) |
+| Behind it | v0.3.2 (the turn correction): level; v0.3.3: stopped after five updates; v0.3.4 (the legs blended in): 57.5% at its best (save 223), the switch fade failed. [v0.3.2/RUN_v0.3.2.md](v0.3.2/RUN_v0.3.2.md), [v0.3.4/RUN_v0.3.4.md](v0.3.4/RUN_v0.3.4.md) |
+| Ready | **v0.3.6**, rockets and grenades (branch `v036`, not merged): the rocket aim inputs, the pre-fire token, the emergence point, blind rockets free, the long-range rail pay, the hot reload (B-265); no rocket-jump runs at its start. Starts the night of 2026-10-18 from v0.3.5's save, after the play test and the BIOS update, for several days (the owner). [v0.4/ROCKETS_v0.3.6.md](v0.4/ROCKETS_v0.3.6.md); what is left before strategy: [v0.4/MECHANICS_BEFORE_STRATEGY.md](v0.4/MECHANICS_BEFORE_STRATEGY.md) |
+| Then | **v0.4**: the movement bridge's clean-up (step 6b of [v0.4/UNIFIED_MOVEMENT.md](v0.4/UNIFIED_MOVEMENT.md)), then the head (strategy, five times a second, a store of three minutes) on one movement network: [v0.4/CANDIDATE_v0.4.md](v0.4/CANDIDATE_v0.4.md), [v0.4/PROPOSAL_v0.4.md](v0.4/PROPOSAL_v0.4.md) |
+| Checks of a run | every tenth save plays the control in 160 ten-minute games on ten maps, aim level 3 (the same network against itself reads 48.8%, a single map moves about ±10 points); the weapon in his hand at every check |
 
 ## Now
 
@@ -35,14 +36,15 @@ counterplay, beating people.
 
 The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
 
-- v0.3.1: B-237 (the learning step, first), B-253 (the legs inside), B-252 (rocket jumps), B-254 (rocket and projectile aim), B-251 (aim from the free-for-all games).
-- v0.4: B-250, B-240 (the enemy in his head), B-248 (slower memory).
-- 1, speed: B-211 (his legs in games), B-213, B-204.
+- One movement network: B-259 (v0.3.5 now), B-263 (the optimizer's state at restarts), B-261 (the emergence-point baseline, while nothing trains).
+- v0.3.6, rockets: B-252 (rocket jumps), B-254 (rocket aim, the pre-fire token), B-262 (the emergence point as an input), B-264 (its inputs in a real game).
+- v0.4: B-250, B-240 (the enemy in his head), B-248 (slower memory), B-256 (the hunt in the head).
+- 1, speed: B-213, B-204, B-258.
 - 2, rockets: B-210.
 - 3, plasma, grenades: B-189.
 - 4, game awareness: B-217 (predictable routes), B-216, B-221, B-191.
 - The checks and the demos: B-218, B-219, B-220, B-225, B-226.
-- Aim and the fights he takes: B-228, B-229, B-230, B-231.
+- Aim and the fights he takes: B-229, B-230, B-231.
 - The simulator and the maps: B-224, B-227.
 - Odd behaviour seen in runs and duels: B-214, B-215, B-192.
 
@@ -55,7 +57,8 @@ The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
 - **Pay is judged by its equilibrium and the five goals** (the owner, 2026-10-15, twice): whenever pay weights are discussed, the equilibrium they lead to in self-play (the zero-sum parts beside the parts both copies gain from) and how it aligns with the five goals (speed and movement, weapon use, positioning, counterplay, beating humans); any change must say how it gets closer to at least one of them.
 - **Aim level 3 from v0.3.1 on** (the owner, 2026-10-15: "Set it to 3 going forward"): level 1.5 (v0.2 and v0.3, B-228's step one)
   cost the rail most; training, the checks and the servers use 3.
-- **v0.3.1: build everything first, then train** (the owner, 2026-10-15: "No time set for starting yet"): one start from v0.3's 18:00 stop point once every part is built and proven alone ([v0.3.1/MANIFEST_v0.3.1.md](v0.3.1/MANIFEST_v0.3.1.md)).
+- **One movement network before v0.4's head** (the owner, 2026-10-16 and 2026-10-18): his legs and his own network become one driver; "Giving up on removing the switch is not an option." A clumsier v0.3.1 with one movement network is an acceptable result; fewer items are acceptable, judge by frags and wins.
+- **Duel is the main mode** (2026-10-16): changes that limit or break free-for-all are fine.
 - **Training partners**: himself, his league and the control; the game's bots are a benchmark only.
 - **Promotion**: a network goes on the public server only on the owner's word and only if it beats the control.
 - **Rounds**: whole ten-minute games and mid-game starts only, one against one (2026-10-13).

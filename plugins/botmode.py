@@ -1,9 +1,10 @@
-"""Switch a BobbyBones server between 1v1 (plugins/duelbot.py, the duel factory) and free-for-all (plugins/ffabot.py,
-the ffa factory) while it runs: !mode ffa|duel [bots], and !map <name>, which brings the map up in 1v1 (owner,
-2026-10-15: duel by default on every map; !mode ffa makes it free-for-all; the duel factory keeps two players active).
+"""The map command of a BobbyBones server, 1v1 only (owner, 2026-10-23: "I only really care about duel mode btw, we can
+remove ffa entirely from the server, and remove the two custom maps that we had built. It should just have duel mode on
+the 10 duel maps we've been training on.").
 
-Load first: QLX_PLUGINS="botctl, botmode, duelbot" (or ffabot). The switch unloads the one plugin, kicks the bots,
-changes the map with the other factory and loads the other plugin, which adds its own bots.
+!map <name> brings one of the ten duel maps up in the duel factory; !mode answers that the server plays 1v1 only. Until
+2026-10-23 this plugin switched a running server between 1v1 (plugins/duelbot.py) and free-for-all (plugins/ffabot.py);
+ffabot stays in the repo but no server loads it. Load before duelbot: QLX_PLUGINS="botctl, botmode, duelbot".
 """
 import importlib
 import os
@@ -18,9 +19,7 @@ except Exception:                                           # noqa: BLE001 - loa
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _pu = importlib.import_module("powerups")
 
-FFA_MAPS = ("bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")
-DUEL_MAPS = ("testlab",)      # the test map (reflex and movement tests); since 2026-10-15 (owner) !map brings every map up in 1v1, !mode ffa switches. duelbot.MAPS has the whole list
-PLUGIN = {"ffa": "ffabot", "duel": "duelbot"}
+MAPS = ("bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure")   # = duelbot.MAPS
 
 
 def is_bot(p):
@@ -29,73 +28,30 @@ def is_bot(p):
 
 class botmode(minqlx.Plugin):
     def __init__(self):
-        self.add_command("mode", self.cmd_mode, 0, usage="<ffa|duel> [bots 0-4]", priority=minqlx.PRI_HIGH)
-        self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(FFA_MAPS + DUEL_MAPS)), priority=minqlx.PRI_HIGH)
-        self.add_hook("map", self.on_map, priority=minqlx.PRI_LOW)
+        self.add_command("mode", self.cmd_mode, 0, priority=minqlx.PRI_HIGH)
+        self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(MAPS)), priority=minqlx.PRI_HIGH)
         self.last_switch = 0.0
-        self.pending = None                                  # the plugin to load once the new map is up
-
-    def on_map(self, mapname, factory):
-        """the other plugin is loaded only once the new map is in: a plugin adding bots while the map still loads
-        hung the server (2026-10-06, the switch to bloodrun)"""
-        if self.pending:
-            name, self.pending = self.pending, None
-            minqlx.load_plugin(name)
-
-    def current(self):
-        loaded = minqlx.Plugin._loaded_plugins
-        return "ffa" if "ffabot" in loaded else "duel" if "duelbot" in loaded else None
-
-    def switch(self, mode, mapname, bots=None, who="the server"):
-        if time.time() - self.last_switch < 15:
-            return "wait a moment: a switch is in progress"
-        self.last_switch = time.time()
-        cur = self.current()
-        if bots is not None:
-            os.environ["BOBBYS"] = str(bots)
-        os.environ["LAB_MAP"] = mapname
-        if cur == mode and minqlx.Plugin._loaded_plugins.get(PLUGIN[cur]) is not None:
-            minqlx.Plugin._loaded_plugins[PLUGIN[cur]].want_map = mapname   # the plugin stays loaded: left on its old map it pulled
-        if cur and cur != mode:                                              # the server straight back (bloodrun -> arena1, 2026-10-06)
-            plugin = minqlx.Plugin._loaded_plugins.get(PLUGIN[cur])
-            try:
-                plugin.end_session()
-            except Exception:                               # noqa: BLE001
-                pass
-            minqlx.unload_plugin(PLUGIN[cur])
-        for p in self.players():
-            if is_bot(p):
-                minqlx.console_command("clientkick {}".format(p.id))
-        if cur != mode:
-            self.pending = PLUGIN[mode]
-        _pu.load_map(mapname, "ffa" if mode == "ffa" else "duel")
-        self.msg("^3{} switched the server to {} on {}.^7".format(who, "free-for-all" if mode == "ffa" else "1v1", mapname))
-        return None
 
     def cmd_mode(self, player, msg, channel):
-        if len(msg) < 2 or msg[1].lower() not in PLUGIN:
-            return minqlx.RET_USAGE
-        mode = msg[1].lower()
-        bots = None
-        if len(msg) > 2:
-            if not msg[2].isdigit() or not 0 <= int(msg[2]) <= 4:
-                return minqlx.RET_USAGE
-            bots = int(msg[2])
-        mapname = (minqlx.get_cvar("mapname") or "campgrounds").lower()
-        if mode == self.current() and bots is None:
-            player.tell("The server is already in {} mode.".format("free-for-all" if mode == "ffa" else "1v1"))
-            return minqlx.RET_STOP_ALL
-        err = self.switch(mode, mapname, bots, player.clean_name)
-        if err:
-            player.tell("^3" + err)
+        player.tell("^3This server plays 1v1 only^7 (on the ten duel maps: ^2!maps^7 lists them).")
         return minqlx.RET_STOP_ALL
 
     def cmd_map(self, player, msg, channel):
-        if len(msg) < 2 or msg[1].lower() not in FFA_MAPS + DUEL_MAPS:
-            return minqlx.RET_USAGE
+        if len(msg) < 2 or msg[1].lower() not in MAPS:     # one usage line (RET_USAGE let duelbot's own !map print it again)
+            player.tell("Usage: ^6!map <{}>".format("|".join(MAPS)))
+            return minqlx.RET_STOP_ALL
         mapname = msg[1].lower()
-        mode = "duel"                                        # every map comes up in 1v1 (owner, 2026-10-15); !mode ffa for free-for-all
-        err = self.switch(mode, mapname, None, player.clean_name)
-        if err:
-            player.tell("^3" + err)
+        if time.time() - self.last_switch < 15:
+            player.tell("^3wait a moment: a map change is in progress")
+            return minqlx.RET_STOP_ALL
+        self.last_switch = time.time()
+        os.environ["LAB_MAP"] = mapname
+        duel = minqlx.Plugin._loaded_plugins.get("duelbot")
+        if duel is not None:                                 # the plugin stays loaded: left on its old map it pulled the server
+            duel.want_map = mapname                          # straight back (2026-10-06)
+        for p in self.players():                             # the game's own bots (a !spar opponent); Bobby comes back with the map
+            if is_bot(p):
+                minqlx.console_command("clientkick {}".format(p.id))
+        _pu.load_map(mapname, "duel")
+        self.msg("^3{} changed the map to {}.^7".format(player.clean_name, mapname))
         return minqlx.RET_STOP_ALL

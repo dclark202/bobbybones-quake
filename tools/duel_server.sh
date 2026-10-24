@@ -4,11 +4,15 @@
 # data/owner.env (git-ignored): QLX_OWNER=<SteamID64>
 #   bash tools/duel_server.sh <run> [map] [env module]     e.g. bash tools/duel_server.sh duel_gru_v2 bloodrun duel_env_v2
 #   bash tools/duel_server.sh -                             use the policy.npz already in data/duellive (no PyTorch needed)
-# The map defaults to arena1 (his training arena); testlab has the aim and movement tests.
+# The map defaults to bloodrun. The server is 1v1 only, on the ten duel maps he trains on (owner, 2026-10-23: "we can remove
+# ffa entirely from the server, and remove the two custom maps"): players pick among those ten with !map. The test maps
+# (testlab, arena1) are not loaded unless TESTMAPS=1, on a local server only and as its start map (bash tools/duel_server.sh
+# <run> testlab with TESTMAPS=1: the test rooms); !map never offers them (a client without their pk3 files is dropped on
+# joining a pure server).
 #   bash tools/duel_server.sh stop
 # Options: PASSWORD=<word>, RESTART=1 (restart after a crash or reboot), HOSTNAME_QL="<name in the server list>"
 # With SPAR=1 no port is opened and a Nightmare bot is the opponent (for measuring); SKILL=4 makes it Hardcore.
-# FFA=<n> runs the free-for-all plugin instead (plugins/ffabot.py): n Bobbys (1 to 4), six seats, !bots changes n.
+# FFA=<n> is no longer read (until 2026-10-23 it ran the free-for-all plugin, plugins/ffabot.py); the server starts in 1v1.
 # PORT=<udp port> for a second container (default 27970). PUBLIC=1 lists the server in the game's server browser (off by default).
 # A network with legs: EXPORT_ARGS="--legs <the movement network's run>" (v0.1, v0.2: move_v15n). A copy of a running
 # trainer's save: EXPORT_ARGS="--policy <full path of the copy> --legs move_v15n".
@@ -33,7 +37,7 @@ NAME="${NAME:-qlduel}"                 # container name (use another one for a s
 DATA="${DATA:-data/duellive}"          # where the policy and the logs go
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 [ "$1" = "stop" ] && { echo "duel server stopped"; exit 0; }
-RUN="${1:?run name}"; MAP="${2:-arena1}"; ENVMOD="${3:-duel_env}"
+RUN="${1:?run name}"; MAP="${2:-bloodrun}"; ENVMOD="${3:-duel_env}"
 PY="${PYTHON:-python}"
 IMAGE="${IMAGE:-qlbot}"
 mkdir -p $DATA
@@ -47,9 +51,10 @@ RESTART_OPT=""; [ -n "$RESTART" ] && RESTART_OPT="--restart unless-stopped"   # 
 # A local server with three Bobbys held 7 to 8 of the PC's 20 threads for a day with nobody on it (2026-10-08, B-153).
 ONE_THREAD="-e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e MKL_NUM_THREADS=1"
 # The map tables, made before the server takes players (a game server stands still while the simulator works one out at a
-# map's first load). A sparring server stays on its map; a play-test server offers the ten duel maps and the test map.
+# map's first load). A sparring server stays on its map; a play-test server offers the ten duel maps (and starts on the test map with TESTMAPS=1).
 if [ "${PREP:-1}" != "0" ]; then
-    ALL_MAPS="bloodrun aerowalk lostworld sinister furiousheights battleforged campgrounds hektik toxicity cure testlab"
+    ALL_MAPS="bloodrun aerowalk lostworld sinister furiousheights battleforged campgrounds hektik toxicity cure"
+    [ "$TESTMAPS" = "1" ] && ALL_MAPS="$ALL_MAPS testlab"
     [ -n "$SPAR" ] && ALL_MAPS=""
     docker run --rm $ONE_THREAD --entrypoint python3 -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" \
         -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" "$IMAGE" /tools/prep_ways.py "$MAP" ${PREP_MAPS:-$ALL_MAPS} \
@@ -64,15 +69,15 @@ QLX_OWNER=""
 [ -f data/owner.env ] && QLX_OWNER="$(grep '^QLX_OWNER=' data/owner.env | cut -d= -f2)"
 PW="${PASSWORD:-}"                     # no password by default; PASSWORD=<word> sets one
 PORT="${PORT:-27970}"
-# the public server takes arena1 and testlab from the Workshop item alone (server/workshop.txt), so that its pak list is exactly
-# what a joining client downloads (2026-10-06: players without the files in baseq3 were dropped on joining); local servers mount the repo's copies
-MAP_MOUNTS="-v $ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro -v $ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro"
-[ "$PUBLIC" = "1" ] && MAP_MOUNTS=""
+# the test maps only on a local server with TESTMAPS=1 (2026-10-06: players without the files in baseq3 were dropped on joining a
+# pure server; since 2026-10-23 no Workshop item either: server/workshop.txt is empty, the pak list is the game's own)
+MAP_MOUNTS=""
+[ "$TESTMAPS" = "1" ] && [ "$PUBLIC" != "1" ] && MAP_MOUNTS="-v $ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro -v $ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro"
 LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # PUBLIC=1: show in the server list (the rented server); local servers stay unlisted (Windows sets PUBLIC to a folder: an exact 1 is required)
-PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; FACTORY=duel; MODE="1v1"     # botmode: !mode ffa|duel and !map switch the mode live; banlist: the owner's !kick and !ban; ladder: the leaderboard
-if [ -n "$FFA" ]; then PLUGINS="botctl, banlist, ladder, banter, botmode, ffabot"; FACTORY=ffa; MODE="free-for-all with $FFA Bobbys"; fi
+PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; MODE="1v1"     # botmode: !map (the ten duel maps; !mode says 1v1 only); banlist: the owner's !kick and !ban; ladder: the leaderboard
+[ -n "$FFA" ] && echo "FFA=$FFA ignored: the server is 1v1 only (owner, 2026-10-23)"
 [ -n "$PLUGINS_EXTRA" ] && PLUGINS="$PLUGINS, $PLUGINS_EXTRA"
-docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e FACTORY="$FACTORY" -e BOBBYS="${FFA:-}" -e FFA_LOG_ALWAYS="${FFA_LOG_ALWAYS:-}" -e FFA_OBSDUMP="${FFA_OBSDUMP:-}" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $DOCKER_EXTRA "$IMAGE" +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"
