@@ -64,6 +64,7 @@ simulator itself did with the old belief moves to the brain's answer on the same
 | Measure | Bar |
 |---|---|
 | Games against v0.4.1's end at g = 1 | level or better in 3+ checks |
+| Games against the long-term control, **v0.3.10's end** (every 4th check; the owner, 2026-10-23 night: v0.3.6 retired after v0.4.1 beat it 160-0 at update 130; v0.4.1's own run keeps v0.3.6) | well ahead; any fall is read at once |
 | The same save at g = 1 against g = 0 | g = 1 not worse |
 | The decision report's reading rows (after losing sight: the gap slope; pressing in when behind) | not worse; toward the pros |
 | The brain's errors | no rise above ~5% |
