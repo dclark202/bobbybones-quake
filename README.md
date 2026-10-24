@@ -1,20 +1,18 @@
-# What it is
+# BobbyBones
 
 BobbyBones is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
 games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
 on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
 
-# Play against him
-
-## Online
+## Play him online
 
 Quake Live servers:
 - `Duel BobbyBones the self taught Quake bot | US Chicago` (`193.239.237.127:27970`)
 - `Duel BobbyBones the self taught Quake bot | EU Frankfurt` (`45.140.42.214:27970`)
 
-We keep a local elo rating to track the bot's skill. See the [leaderboard](https://dclark202.github.io/bobbybones-leaderboard/) 
+We keep a local leaderboard across the two servers, see it [here](https://dclark202.github.io/bobbybones-leaderboard/) 
 
-## Via a local install
+## Run him instally
 
 The networks that have played on the public server are released as open weights, one
 [GitHub Release](https://github.com/dclark202/bobbybones-quake/releases) per model, tagged at the code the server ran it with
