@@ -8752,7 +8752,7 @@ class DuelEnv:
             aw_, bw_ = gm * gw_, gm * gw_ + 1
             lw_ = GAME_LEN - self.g_tick[gm] * DT
             if OVERTIME:
-                lw_ = np.where(self.g_tick[gm] > GAME_FRAMES, GAME_LEN - self.round_t[gm].astype(np.float64), lw_)
+                lw_ = np.where(self.g_tick[gm] > GAME_FRAMES, self._ot_left(self.g_tick[gm], self.round_t[gm]), lw_)
             pw_ = self._win_p(self.frags_r[aw_] - self.frags_r[bw_], lw_, tab=self.ws_tab)
             yw_ = self.ws_scale * (pw_ - self.ws_p[gm])
             self.ws_p[gm] = pw_
@@ -8768,7 +8768,7 @@ class DuelEnv:
         a_, b_ = gm * g_, gm * g_ + 1
         left_ = GAME_LEN - self.g_tick[gm] * DT
         if OVERTIME:                                         # (OVERTIME) in a period: the seconds left in it
-            left_ = np.where(self.g_tick[gm] > GAME_FRAMES, GAME_LEN - self.round_t[gm].astype(np.float64), left_)
+            left_ = np.where(self.g_tick[gm] > GAME_FRAMES, self._ot_left(self.g_tick[gm], self.round_t[gm]), left_)
         p = self._win_p(self.frags_r[a_] - self.frags_r[b_], left_)
         pay = self.win_scale * (p - self.g_p[gm])
         self.g_p[gm] = p
@@ -8777,6 +8777,14 @@ class DuelEnv:
         self.win_pay[a_], self.win_pay[b_] = pay, -pay
         self.g_win[a_] += pay
         self.g_win[b_] -= pay
+
+    def _ot_left(self, tick, round_t):
+        """(OVERTIME, WIN_PAY / WIN_SHADOW) the seconds left in the period for frames past the limit: the folded clock's, except
+        on a period's last frame (tick GAME_FRAMES + k * OT_FRAMES), where the fold shows the next period's start (120 s) but
+        the period is over: 0 there, so a game decided in overtime pays its outcome (1 / 0, a draw 0.5) on its last frame
+        (until 2026-10-24 it read 120 s there: the last frame paid the wrong amount, even the wrong sign)"""
+        last_ = (np.asarray(tick, np.int64) - GAME_FRAMES) % OT_FRAMES == 0
+        return np.where(last_, 0.0, GAME_LEN - np.asarray(round_t).astype(np.float64))
 
     def _ot_fold(self, tick):
         """(OVERTIME) a game's frame past the limit as the plugin shows it: the last OT_LEN seconds again, period after
