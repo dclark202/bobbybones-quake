@@ -5,33 +5,32 @@ are being built today (branches `v043-head`, `v043-control`, `v043-rules`) and a
 
 ## The picture
 
+```mermaid
+flowchart TD
+    S["<b>His senses</b><br/>868 inputs every 25 ms<br/>sight, sound, his own state, items, clock, score<br/>(human delays and noise)"]
+    B["<b>THE BRAIN</b> · every 0.2 s · GRU 256<br/>learns only from the truth, in hindsight<br/>readouts: enemy place, zones, stack, weapon,<br/>where he will be in 1/2/4 s, his target,<br/>when he appears, the item race,<br/><b>NEW: in control</b>"]
+    H["<b>NEW: THE HEAD</b> · every 0.2 s · GRU 256<br/>learns from the pay (2-minute value)<br/>reads every brain readout + stack,<br/>item timers, score, clock"]
+    A["<b>THE HANDS</b> · every 25 ms<br/>learns from the pay<br/>encoder · attention · GRU 512 · 13 outputs"]
+    L["<b>Human limits</b><br/>reaction 100 ms, flick speed,<br/>hand noise, 8 key changes a second"]
+    G["<b>The game</b><br/>125 fps physics"]
+
+    S --> B
+    S --> A
+    B -- "token (69 numbers)" --> A
+    B -- "memory + all readouts" --> H
+    A -. "hands' memory (read only)" .-> H
+    H -- "plan (64 numbers)" --> A
+    H -- "bias on the item / place choice" --> A
+    A -- "keys, mouse, fire, weapon, target, way" --> L
+    L --> G
 ```
- his senses (868 inputs, every 25 ms: what he sees, hears, remembers; human delays and noise)
-        │
-        ├──────────────────────────────┐
-        ▼                              ▼
- ┌──────────────┐               ┌───────────────────────────────┐
- │  THE HANDS    │◄── token ─────│  THE BRAIN (every 0.2 s)       │
- │  (every 25 ms)│   (69 numbers)│  its own GRU 256               │
- │               │               │  readouts: where he is, zones, │
- │  encoder      │               │  his stack, weapon, ahead 1/2/4s│
- │  attention    │               │  his target, when he appears,  │
- │  GRU 512      │◄── plan ──┐   │  the item race,                │
- │  13 outputs   │◄── bias ─┐│   │  NEW: "in control"             │
- └──────┬───────┘          ││   └──────────────┬────────────────┘
-        │                  ││                  │ memory + all readouts
-        │                  ││                  ▼
-        │                  ││   ┌───────────────────────────────┐
-        │                  │└───│  NEW: THE HEAD (every 0.2 s)   │
-        │                  └────│  GRU 256: the plan             │
-        │                       │  + stack, item timers, score,  │
-        │                       │    clock, the hands' memory    │
-        ▼                       └───────────────────────────────┘
- keys, mouse, fire, weapon, item/place target, way
-        │
-        ▼
- human limits (reaction 100 ms, flick speed, hand noise, 8 key changes/s) ─► the game (125 fps physics)
-```
+
+In words, every 25 ms: his **senses** go to both the **brain** and the **hands**. Every 0.2 s:
+- the **brain** hands the hands its answer (the token);
+- the **head** reads the brain and sends the hands a plan and a nudge on which item or place to go for.
+
+The **hands** choose the keys and mouse, and the **human limits** shape them before they reach the **game**. No pay
+reaches the brain, and nothing flows back from the head into the brain.
 
 ## The parts
 
