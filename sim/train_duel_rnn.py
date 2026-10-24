@@ -1234,11 +1234,13 @@ def main():
     ap.add_argument("--control-warm", type=float, default=60.0, help="... minutes over which its lesson rises from nothing (from --control-start)")
     ap.add_argument("--control-start", type=float, default=-1.0, help="... the minute its warm-up counts from (-1: this process's start)")
     ap.add_argument("--control-every", type=int, default=5, help="... the brain's state kept every this many of its ticks (5: 1 s; the ring "
-                    "holds the horizon: about 0.5 GB on the host with 10,080 players)")
+                    "holds the horizon and a rollout: about 0.5 GB on the host with 10,080 players on the belief alone, 1.6 GB with the hands' "
+                    "memory (both, belief,both))")
     ap.add_argument("--control-hid", type=int, default=64, help="... its hidden layer")
-    ap.add_argument("--control-src", default="belief", choices=("belief", "both"), help="... what it reads: the brain's state "
-                    "(belief, 256) or the brain's state and his hands' memory, both detached (both, 256 + 512: the probe of "
-                    "2026-10-24 read more from his memory; the ring then holds three times as much)")
+    ap.add_argument("--control-src", default="belief", help="... what it reads: the brain's state (belief, 256) or the brain's "
+                    "state and his hands' memory, both detached (both, 256 + 512: the probe of 2026-10-24 read more from his memory; "
+                    "the ring then holds three times as much); belief,both: two readouts side by side on one ring, each scored and "
+                    "taught on its own (v0.4.2b)")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -1767,12 +1769,14 @@ def main():
         print("ahead (v0.4.1): the brain's readout of the enemy in {} s, what he goes for ({}), when he appears; {}; lesson {} rising over {} min, "
               "its layers at {} times --lr".format(AH_L["horiz"], AH_L["n_target"], "from the network" if AH_CK is not None else "new (its last layer at zero)",
                                                     AH_PARTS if AH_ON else "off", a.ahead_warm, AH_LR), flush=True)
-    CTL_L = CTL_CK                                           # (--control, v0.4.3) the readout "in control": its layout, from the network or new
+    if CTL_CK is not None and int(CTL_CK.get("version", 1)) != 2:  # (v0.4.2b) a one-readout layout of branch v043-control: not carried over
+        print("control: the network's readout (layout version {}) is left out; new readouts are made".format(CTL_CK.get("version", 1)), flush=True)
+        CTL_CK = None
+    CTL_L = CTL_CK                                           # (--control, v0.4.3) the readouts "in control": their layout, from the network or new
     if CTL_L is None and a.control > 0:
         assert BEL and TRK_ON, "--control: with --belief and --track (it reads the belief's state)"
         assert all(c_ in tuple(getattr(E_, "AUX_COLS", ())) for c_ in control_.COLS), "--control: the simulator gives no ctl_ columns (CONTROL_TRUTH=1)"
-        CTL_L = control_.layout(inp=int(BEL_L["hid"]) + (H if a.control_src == "both" else 0), hid=a.control_hid, every=a.control_every,
-                                src="belief+memory" if a.control_src == "both" else "belief",
+        CTL_L = control_.layout(srcs=a.control_src, bel=int(BEL_L["hid"]), mem=H, hid=a.control_hid, every=a.control_every,
                                 horizon_frames=int(E_.CONTROL_D), tick=int(BEL_L["every"]))
     CTL = CTL_L is not None
     CTL_ON = CTL and a.control > 0
@@ -1780,12 +1784,17 @@ def main():
         assert int(CTL_L["horizon"]) == int(E_.CONTROL_D) and int(CTL_L["tick"]) == int(BEL_L["every"]), \
             "--control: the readout was made for a horizon of {} frames and ticks of {}; the simulator's CONTROL_D is {}".format(
                 CTL_L["horizon"], CTL_L["tick"], E_.CONTROL_D)
+        assert tuple(control_.names(CTL_L)) == control_.parse_srcs(a.control_src), \
+            "--control-src {}: the network's readouts are {}".format(a.control_src, control_.names(CTL_L))
+        assert int(CTL_L["bel"]) == int(BEL_L["hid"]) and int(CTL_L["mem"]) in (0, H), "--control: the readouts' widths do not fit the network"
     if CTL:
         TRK_SAVE["control"] = CTL_L
-        print("control (v0.4.3): the brain's readout 'in control' ({} -> {} -> {}), {}; lesson {} (rate {} x weight, rising over {} min), "
-              "states every {} ticks over {} frames".format(CTL_L["inp"], CTL_L["hid"], CTL_L["d"], "from the network" if CTL_CK is not None else
-                                                            "new (its last layer at zero)", a.control if CTL_ON else "off",
-                                                            a.control_lr, a.control_warm, CTL_L["every"], CTL_L["horizon"]), flush=True)
+        print("control (v0.4.3/v0.4.2b): the brain's readouts 'in control' ({}), {}; lesson {} (rate {} x weight, rising over {} min "
+              "from minute {}), states every {} ticks over {} frames ({} wide)".format(
+                  ", ".join("{} {} -> {} -> {}".format(r_["name"], r_["inp"], r_["hid"], r_["d"]) for r_ in CTL_L["readouts"]),
+                  "from the network" if CTL_CK is not None else "new (their last layers at zero)", a.control if CTL_ON else "off",
+                  a.control_lr, a.control_warm, "this process's start" if a.control_start < 0 else a.control_start,
+                  CTL_L["every"], CTL_L["horizon"], CTL_L["width"]), flush=True)
     TRZ_TC, TRZ_MAPI = None, None
     TRZ_PRIOR = np.zeros((len(zonemap_.MAPS), trz_.MAX_Z))    # (the counters' map prior: how often the enemy stood in each zone, so far)
     TRK_IX, TRK_TC, TRK_K = None, None, [0.0, 0.0]           # (the truth's columns; the pay's k and the lesson's weight of this rollout)
@@ -2321,7 +2330,9 @@ def main():
     trk_group()                                              # (--track) the readout's group, if the optimizer's state did not bring it
     trz_group()                                              # (--track-z) the second part's, after it
     v41_group()                                              # (v0.4.1) the token's and the ahead's, after them
-    CTL_OPT = torch.optim.Adam(pol.control.parameters(), lr=a.control_lr) if CTL_ON else None   # (--control) its own, cold at a start
+    CTL_OPT = ({n_: torch.optim.Adam(pol.control[n_].parameters(), lr=a.control_lr) for n_ in control_.names(CTL_L)}
+               if CTL_ON else None)                          # (--control) each readout's own, cold at a start
+    CTL_GEN = torch.Generator().manual_seed(4046)            # ... the order of their minibatches: a stream of their own (his play's untouched)
     CTL_RING = [None]                                        # ... the brain's states as played, by global row (made at the first rollout)
     CTL_G = [0]                                              # ... the global row of the next rollout's first frame
     CTL_G0 = {}                                              # ... each rollout's first row, by its update
@@ -3239,7 +3250,9 @@ def main():
         if CTL_ON:                                                       # (--control) this rollout's first global row; the ring
             CTL_G0[upd] = CTL_G[0]
             if CTL_RING[0] is None:
-                CTL_RING[0] = control_.Ring(CTL_L, N)
+                CTL_RING[0] = control_.Ring(CTL_L, N, T)
+                print("control: the ring of states, {} slots of {} x {} ({:.2f} GB on the host)".format(
+                    CTL_RING[0].S, N, CTL_L["width"], CTL_RING[0].nbytes() / 1e9), flush=True)
         bs0 = None
         if BS_ is not None:
             assert float(BS_.cnt.abs().max()) == 0.0, "the belief's rollout must start on a tick's boundary"
@@ -3305,8 +3318,8 @@ def main():
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
-                if bt_ and CTL_ON:                                       # (--control) the state of this tick, kept every --control-every ticks
-                    CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if CTL_L["src"] == "belief" else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
+                if bt_ and CTL_ON and CTL_RING[0].kept(CTL_G0[upd] + t):  # (--control) the state of this tick, kept every --control-every ticks
+                    CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if int(CTL_L["mem"]) == 0 else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
                 #                                                          (--belief) every seat at once: the inputs as the update re-reads them
@@ -3493,14 +3506,18 @@ def main():
         if AUX_W > 0:
             if AUX_BEL:
                 b_bel[T] = torch.from_numpy(np.ascontiguousarray(obs[:, BEL_IX], dtype=np.float32))
+        ctl_b = None
         if CTL_ON:
             CTL_G[0] = CTL_G0[upd] + T                                   # (--control) the next rollout's rows follow on
+            if b_aux is not None:                                        # ... the rows whose label came in this rollout, taken out
+                ctl_b = control_.batch(CTL_RING[0], CTL_G0[upd], b_aux, TRK_IX, int(CTL_L["horizon"]))   # now, before the next
+            CTL_G0.pop(upd, None)                                        # rollout writes over the ring (with --overlap too)
         t_done = time.time() if OVL else None
         C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl, rjc=rjc)
         return dict(b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
-                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
+                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
                     b_btok=b_btok, btg=btg_, rfg=rfg_)
@@ -3581,6 +3598,7 @@ def main():
         keep_raw, t_roll = R["keep_raw"], R["t_roll"]
         b_rj = R.get("b_rj")                                             # (--rj-teach)
         b_rjc = R.get("b_rjc")                                           # (--rj-copy)
+        CTL_B = R.pop("ctl_b", None)                                     # (--control) this rollout's labelled states
         BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
         B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
         if BTOK:
@@ -4506,14 +4524,16 @@ def main():
             RINGH.push(HD_PEND)
             HD_PEND = []
         CTL_REC = None
-        if CTL_ON and b_aux is not None and update in CTL_G0:           # (--control) the labels of this rollout: of frames CONTROL_D rows back
-            g0_ = CTL_G0.pop(update)
-            for k_ in [k_ for k_ in CTL_G0 if k_ < update]:
-                CTL_G0.pop(k_)
+        if CTL_ON:                                                       # (--control) the labels of this rollout: of frames CONTROL_D rows back
+            t_ctl = time.time()
             cw_ = CTL_LIVE[0] * float(a.control) * (min(1.0, max(0.0, mins - CTL_T0) / a.control_warm) if a.control_warm > 0 else 1.0)
-            cb_ = control_.batch(CTL_RING[0], g0_, b_aux, TRK_IX, int(CTL_L["horizon"]))
-            if cb_ is not None:
-                CTL_REC = control_.record(control_.learn(pol.control, CTL_OPT, *cb_, lr=a.control_lr * cw_, dev=dev), cw_)
+            if CTL_B is not None:
+                CTL_REC = control_.record(control_.learn(pol.control, CTL_OPT, CTL_L, *CTL_B, lr=a.control_lr * cw_, dev=dev, gen=CTL_GEN),
+                                          cw_, CTL_L, ring_gb=CTL_RING[0].nbytes() / 1e9 if CTL_RING[0] is not None else None)
+            else:
+                CTL_REC = dict(w=round(float(cw_), 4), frames=0)        # (none yet: the first CONTROL_D rows of a process)
+            CTL_REC["secs"] = round(time.time() - t_ctl, 3)
+            CTL_B = None
         t_end = time.time()
         total += T * N
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
