@@ -1093,6 +1093,93 @@ RJ_TEACH_PITCH = float(os.environ.get("RJ_TEACH_PITCH") or 60.0)
 #                 average in the tests, so RJ_TEACH's condition (60 or more) was met on no frame. Off: the pull, as before.
 #                 RJ_TEACH_PITCH, RJ_TEACH_R and RJ_LOOK_FREE are live (the trainer's live_settings.env, "frame")
 RJ_LOOK_FREE = float(os.environ.get("RJ_LOOK_FREE") or 0.0)
+#   RJ_COPY=1     (the owner, 2026-10-23, "option 1": "one route that works that he has to use when he wants to get there") the
+#                 whole route as a lesson: step() gives info["rj_copy"], per player and output (int8, -1 = no label) the scripted
+#                 runner's choice for his NEXT frame in a rocket jump run (RJ_RUN_P), from the try's start to its landing: his
+#                 forward, side and vertical keys, the view's turn and pitch commands, the trigger, the weapon key (keep with the
+#                 launcher in hand, else the launcher), walk (on his way to the take-off) and zoom (off). The runner is the execution that cleared Aerowalk's
+#                 red armor (sim/rj_clear.json "first": standing at the take-off, the view down at 70 degrees toward the landing,
+#                 jump and fire on the same frame, forward held in the air), run as a policy on his state as the frame ends,
+#                 never a tape: facing the jump (the take-off toward the landing), he steps to the take-off with the keys
+#                 (aiming where his speed would stop him, Quake's friction), brings the view to the jump's yaw and RJ_COPY_PITCH
+#                 down with commands chosen through his own mouse (the smoothing, the flick cap, HAND_BAND's low-pass and the
+#                 ease toward level, a few frames ahead), and on the floor within RJ_COPY_R of the take-off, slower than
+#                 RJ_COPY_V, the view within RJ_COPY_YAW of the jump's yaw and RJ_COPY_PTOL of its pitch and the launcher ready
+#                 by the next frame: jump and fire; in the air from the take-off: forward, nothing else (a shot not yet fired:
+#                 fire within RJ_COPY_LATE frames of leaving the floor). The finger limits, the key rate and the mouse act on
+#                 the labels as on his own choices (a player who presses the labels is held to his hands: tools/rj_copy_check.py).
+#                 Silent: not in a try, dead, a scripted seat, 40 units or more below the take-off (fallen off), more than
+#                 RJ_COPY_FAR from it, or in the air without having left from it. Labels only, never an input, no draw from the
+#                 random stream; the pay is unchanged. Counted (his counted seats): stats["rj_copy"] = [labelled frames, tries
+#                 ended, arrived, died, health and armor lost in them, tries that lost RJ_COPY_BIG or more]. The trainer's
+#                 --rj-copy (live RJ_COPY_W). Meant with RJ_LOOK_FREE=1 (the pupil test, 2026-10-23: 80% of tries over with it,
+#                 50% with the ease toward level). Off: no label, nothing else changes
+RJ_COPY = float(os.environ.get("RJ_COPY") or 0.0) > 0
+RJ_COPY_PITCH = float(os.environ.get("RJ_COPY_PITCH") or 72.0)
+RJ_COPY_R = float(os.environ.get("RJ_COPY_R") or 24.0)
+RJ_COPY_V = float(os.environ.get("RJ_COPY_V") or 20.0)
+RJ_COPY_YAW = float(os.environ.get("RJ_COPY_YAW") or 5.0)
+RJ_COPY_PTOL = float(os.environ.get("RJ_COPY_PTOL") or 4.0)
+RJ_COPY_LATE = int(os.environ.get("RJ_COPY_LATE") or 2)
+RJ_COPY_FAR = float(os.environ.get("RJ_COPY_FAR") or 250.0)
+RJ_COPY_BIG = float(os.environ.get("RJ_COPY_BIG") or 60.0)
+RJ_COPY_DEAD = float(os.environ.get("RJ_COPY_DEAD") or 8.0)
+RJ_COPY_H = int(os.environ.get("RJ_COPY_H") or 4)
+RJ_COPY_VW = float(os.environ.get("RJ_COPY_VW") or 3.0)
+RJC_HEADS = 9                                          # (RJ_COPY) the outputs labelled: keys 0-2, turn 3, pitch 4, fire 5, weapon 6, walk 7, zoom 8
+#   ROUTE_COPY=aerowalk_ra[:circle|:hop2] (the owner, 2026-10-23 evening: "one route that works", in the jump runs, no rocket
+#                 jump) the whole route to Aerowalk's red armor over the pros' gap jump (sim/pro_gaps/aerowalk.json id 1) as a
+#                 lesson: step() gives info["rj_copy"] (as RJ_COPY: per player and output, int8, -1 = none) the scripted
+#                 runner's choice for his NEXT frame in a jump run's try at that jump, from the try's start to the armor. Two
+#                 routes (sim/route_copy_aerowalk_ra.json, from tools/route_copy_ref.py: the open-loop execution that clears
+#                 the gap from the most of 9 starts): "circle", a circle jump from a standing start about 95 units behind the
+#                 take-off, and "hop2", a circle-jump hop from about 330 back and the gap jump on its landing (the jump held:
+#                 AUTO_HOP). Each try draws one (a stream of its own, ROUTE_COPY_P the share of circle; ":circle" or ":hop2"
+#                 one only; the pupil test, tools/rj_copy_check.py --route, 2026-10-23: hop2 62 to 66% of tries at the armor in
+#                 three samples of about 350, circle 6%: the standing circle jump leaves at 370 u/s, the gap asks about 425, and
+#                 even the open loop with the view put exactly made it from 4 of its 9 starts; use ":hop2"). The runner as a
+#                 policy on his state as the frame ends: (0) away from the staging spot's level or 250 units from it: along his
+#                 try's way, running, the view toward the way two spots ahead (never across a jump: to the staging spot
+#                 instead); near it, on the floor, not in the maneuver: walk to the route's staging spot (where his speed would
+#                 stop him), the view to its start yaw; (1) at it,
+#                 slow and facing: the maneuver, its frame found by his place and velocity (the nearest of the next few
+#                 reference frames; off by more than ROUTE_COPY_TOL: back to 0): the reference's keys, its view yaw a few
+#                 frames ahead (and its turn rate) turned by the angle between his velocity and the reference's, the jump where the reference
+#                 jumps or he is past it; (2) the hop's flight (hop2): air strafing toward 60 units past the take-off (the
+#                 strafe key by the side his velocity must turn to, the view ROUTE_COPY_MARGIN degrees past the angle that
+#                 gains most: a hand a few degrees short of it gains nothing), the jump held as he comes down; (3) the gap's
+#                 flight (from the hop's landing, also when he touches down and leaves inside one frame): air strafing toward
+#                 the landing; (4) over it: walk onto the armor.
+#                 The view through his own mouse (RJ_COPY's chooser), the keys through his hand. Silent: another jump's
+#                 try, dead, a scripted seat, 64 units or more below the take-off on the floor, down off the landing's
+#                 ledge after the gap, more than ROUTE_COPY_FAR from the take-off. Labels only, never an input, no draw from
+#                 the simulator's random stream; the pay is unchanged. Counted (his counted seats): stats["route_copy"] =
+#                 per route [labelled frames, tries ended, over the gap, at the armor (the run's arrival), fallen short].
+#                 The trainer's --rj-copy (live RJ_COPY_W). Off: nothing changes
+ROUTE_COPY = os.environ.get("ROUTE_COPY") or ""
+ROUTE_COPY_P = float(os.environ.get("ROUTE_COPY_P") or 0.5)
+ROUTE_COPY_TOL = float(os.environ.get("ROUTE_COPY_TOL") or 40.0)
+ROUTE_COPY_FAR = float(os.environ.get("ROUTE_COPY_FAR") or 900.0)
+ROUTE_COPY_LEAD = int(os.environ.get("ROUTE_COPY_LEAD") or 2)
+ROUTE_COPY_HYST = float(os.environ.get("ROUTE_COPY_HYST") or 3.0)
+ROUTE_COPY_GAIN = float(os.environ.get("ROUTE_COPY_GAIN") or 0.6)
+ROUTE_COPY_HOPX = float(os.environ.get("ROUTE_COPY_HOPX") or 60.0)    # (hop2: the hop's flight aims this far past the take-off)
+ROUTE_COPY_MARGIN = float(os.environ.get("ROUTE_COPY_MARGIN") or 24.0)   # (degrees past the strafe angle that gains most: his
+#                                                        hand is a few degrees off, and short of that angle nothing is gained)
+ROUTE_COPY_STAGE = float(os.environ.get("ROUTE_COPY_STAGE") or 14.0)
+ROUTE_COPY_SYAW = float(os.environ.get("ROUTE_COPY_SYAW") or 8.0)
+RC_WISH, RC_DTS = 320.0, 0.008                         # (the strafe angle: Quake's wish speed, the move's step)
+
+
+def rc_steer(vel, tgt, side, ground, extra):
+    """(ROUTE_COPY) view yaws [k] for forward + the side key (side +1 = right, -1 = left): the wish direction at the angle
+    to the velocity that gains most, turned toward the side; extra degrees beyond it turn the velocity faster"""
+    v = np.hypot(vel[:, 0], vel[:, 1])
+    h = np.where(v > 30, np.degrees(np.arctan2(vel[:, 1], vel[:, 0])), tgt)
+    acc = np.where(ground, 10.0, 1.0) * RC_WISH * RC_DTS
+    th = np.where(v > RC_WISH - acc, np.degrees(np.arccos(np.clip((RC_WISH - acc) / np.maximum(v, 1e-3), -1.0, 1.0))), 0.0)
+    th = np.minimum(88.0, th + extra)
+    return h - side * th + side * 45.0
 RJ_ONLY_MAP = {}
 for part_ in RJ_ONLY.split(";"):
     if ":" in part_:
@@ -3521,7 +3608,50 @@ class DuelEnv:
                                                         RJ_OPEN_COST, n_plain=len(js_))
         self.rj_live = len(self.rjs) > 0
         self.rj_lab = np.zeros(self.n, np.int8)            # (RJ_TEACH) "jump and fire now" for his next frame
-        self.way = np.zeros(self.n, np.int64)               # WAYS: his way to his target (0 the shortest, 1 the second set, 2 the third),
+        self.rjc_lab = np.full((self.n, RJC_HEADS), -1, np.int8)   # (RJ_COPY) the runner's choice for his next frame (-1: none)
+        self.rjc_hp0 = np.zeros(self.n, np.float32)         # ... health and armor at the try's start
+        self.rjc_live = np.zeros(self.n, bool)              # ... a try counted and not yet ended
+        self.rjc_up = np.full(self.n, 99, np.int64)         # ... frames since he left the floor at the take-off (99: he did not)
+        self.rjc_ammo0 = np.zeros(self.n, np.float32)       # ... rockets at the try's start (fewer: the shot of this try is out)
+        self.rjc_go = np.zeros(self.n, bool)                # ... the label of the last frame was "jump and fire"
+        self.rc = None                                      # (ROUTE_COPY) the routes on this map (None: none)
+        if ROUTE_COPY and getattr(self, "jumps", None):
+            rn_ = ROUTE_COPY.split(":")[0].strip()
+            rp_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "route_copy_{}.json".format(rn_))
+            rd_ = json.load(open(rp_)) if os.path.exists(rp_) else None
+            ks_ = [k_ for k_, j_ in enumerate(self.jumps) if rd_ is not None and int(j_["id"]) == int(rd_["jump_id"])]
+            if rd_ is not None and rd_["map"] == mapn_.lower() and ks_ and rd_["routes"]:
+                want_ = ROUTE_COPY.split(":")[1].strip() if ":" in ROUTE_COPY else None
+                names_ = [nm_ for nm_ in ("circle", "hop2") if nm_ in rd_["routes"] and (want_ is None or nm_ == want_)]
+                assert names_, "ROUTE_COPY={}: no such route in {}".format(ROUTE_COPY, rp_)
+                rts_ = []
+                for nm_ in names_:
+                    R0_ = rd_["routes"][nm_]
+                    fr_ = R0_["frames"]
+                    j0_ = next((t_ for t_, x_ in enumerate(fr_) if x_["k"][2] == 1), len(fr_) - 1)   # (the first jump press)
+                    k0_ = next((t_ for t_, x_ in enumerate(fr_) if x_["k"][0] != 1 or x_["k"][1] != 1), 0)   # (the stand before it: left out,
+                    fr_ = fr_[k0_:j0_ + 1]                                                                       # the staging spot is it)
+                    rts_.append(dict(name=nm_, hops=int(R0_["P"]["hops"]), side=int(R0_["P"]["side"]),
+                                     p=np.array([x_["p"] for x_ in fr_], np.float32), v=np.array([x_["v"] for x_ in fr_], np.float32),
+                                     yaw=np.array([x_["yaw"] for x_ in fr_], np.float32), k=np.array([x_["k"] for x_ in fr_], np.int64),
+                                     start=np.array(R0_["start"], np.float32), syaw=float(R0_["start_yaw"])))
+                A_ = np.array(rd_["A"], np.float32)
+                B_ = np.array(rd_["B"], np.float32)
+                U_ = (B_ - A_)[:2] / np.linalg.norm((B_ - A_)[:2])
+                self.rc = dict(k=int(ks_[0]), routes=rts_, A=A_, B=B_, RA=np.array(rd_["RA"], np.float32), U=U_,
+                               hop_tgt=A_[:2] + U_ * ROUTE_COPY_HOPX)
+        self.rc_rng = np.random.default_rng(9173)           # (ROUTE_COPY) its own stream: which route a try takes
+        self.rc_r = np.full(self.n, -1, np.int64)           # ... the route of his try (-1: none)
+        self.rc_g = np.zeros(self.n, np.int64)              # ... the goal row of his try's ways
+        self.rc_ph = np.zeros(self.n, np.int64)             # ... the phase (0 to the staging spot, 1 the maneuver, 2 the hop's
+        self.rc_i = np.zeros(self.n, np.int64)              # flight, 3 the gap's, 4 over it); the reference frame
+        self.rc_side = np.ones(self.n, np.int64)            # ... the air strafe's side
+        self.rc_jmp = np.zeros(self.n, bool)                # ... the label of the last frame pressed the jump
+        self.rc_down = np.zeros(self.n, bool)               # ... (hop2) he touched the floor after the hop
+        self.rc_vz = np.zeros(self.n, np.float32)           # ... his upward speed as the last frame ended
+        self.rc_live = np.zeros(self.n, bool)               # ... a counted try not yet ended
+        self.rc_arr = np.zeros(self.n, bool)                # ... the try ends at the armor
+        self.way =np.zeros(self.n, np.int64)               # WAYS: his way to his target (0 the shortest, 1 the second set, 2 the third),
         self.way_was = np.zeros(self.n, np.int64)           # ... as it was before this frame's reading,
         self.way_live = np.zeros(self.n, bool)              # ... it was read this frame (with the intention),
         self.way_phi0 = np.ones((self.n, N_WAYS), np.float32)   # ... the whole way by each set when the target was chosen (the pay's scales)
@@ -9182,6 +9312,8 @@ class DuelEnv:
         if JUMP_WEIGHT and self.jrun_open[i]:                # (JUMP_WEIGHT) the try before, not over: into his success
             self._jump_learn(int(self.jrun_k[i]), False)
         self.jrun_open[i] = JUMP_WEIGHT and bool(self._counted(i))
+        if self.rc is not None:                              # (ROUTE_COPY) the try before ends; this one's route
+            self._rc_close(i)
         if JUMP_WEIGHT:                                      # (JUMP_WEIGHT) the jumps he fails more often
             w_ = np.maximum(JUMP_W_FLOOR, 1.0 - self.jw_s[np.minimum(np.array(ks, np.int64), 63)])
             if JUMP_W_DROP > 0:                              # (JUMP_W_DROP) the jumps he makes at this rate or more: no tries
@@ -9278,6 +9410,13 @@ class DuelEnv:
         if self._counted(i):
             self.stats["jump_tries"][min(k, 63)] += 1
             self.stats["jump_far"][2 if far else 0] += 1
+        if self.rc is not None:                              # (ROUTE_COPY) a try at the route's jump: one of its routes
+            on_ = k == self.rc["k"]
+            nr_ = len(self.rc["routes"])
+            self.rc_r[i] = (0 if nr_ == 1 or self.rc_rng.random() < ROUTE_COPY_P else 1) if on_ else -1
+            self.rc_ph[i], self.rc_i[i], self.rc_jmp[i], self.rc_down[i] = 0, 0, False, False
+            self.rc_g[i], self.rc_vz[i] = g, 0.0
+            self.rc_live[i], self.rc_arr[i] = on_ and bool(self._counted(i)), False
 
     def _jump_solid_fix(self):
         """(JUMP_SOLID_FIX) the near and far start spots of every jump's entries where the player box (as w.reset puts
@@ -9520,7 +9659,279 @@ class DuelEnv:
             if ov_[j]:
                 reward[i] += RJ_ARRIVE
                 r_long[i] += RJ_ARRIVE
+            if RJ_COPY:                                      # (RJ_COPY) the try's end: arrived or not
+                self._rjc_close(i, 1 if ov_[j] else 0)
             self._rj_place(i)
+
+    def _rjc_close(self, i, how):
+        """(RJ_COPY) player i's try ends: how = 0 not over, 1 arrived, 2 died; counted for his counted seats (stats["rj_copy"])"""
+        if not self.rjc_live[i]:
+            return
+        self.rjc_live[i] = False
+        if "rj_copy" not in self.stats:
+            self.stats["rj_copy"] = np.zeros(6)
+        lost_ = float(self.rjc_hp0[i]) - (0.0 if how == 2 else float(max(self.hp[i], 0.0) + self.armor[i]))
+        self.stats["rj_copy"] += np.array([0.0, 1.0, float(how == 1), float(how == 2), max(lost_, 0.0),
+                                           float(lost_ >= RJ_COPY_BIG)], np.float64)
+
+    def _rjc_pick(self, vel, hb, err, cands, lev, cap, pit, rate=None):
+        """(RJ_COPY) per player the command (an index into cands) that brings the view's error err (degrees) nearest zero
+        RJ_COPY_H frames ahead with it held, through his mouse as step() moves it: the smoothing (MOUSE_SMOOTH, the fine
+        one for small commands), the flick cap (cap; None: none), HAND_BAND's low-pass, and for the pitch (pit: his pitch,
+        lev: the ease toward level a frame) the ease; the error counted is where the view would come to rest: the error then
+        less RJ_COPY_VW frames of its velocity then (the smoothing's tail), of the pitch's beyond what holds it against the ease;
+        rate (degrees a frame, ROUTE_COPY's turning maneuver): the target moves at it, and the view should too"""
+        r_ = 0.0 if rate is None else np.asarray(rate, np.float32)[:, None]
+        c_ = cands[None, :].astype(np.float32)
+        m_ = np.repeat(vel[:, None], len(cands), 1).astype(np.float32)
+        h_ = np.repeat(hb[:, None], len(cands), 1).astype(np.float32)
+        e_ = np.repeat(err[:, None], len(cands), 1).astype(np.float32)
+        sm_ = np.where(np.abs(c_) <= 1.0, MOUSE_SMOOTH_FINE, MOUSE_SMOOTH).astype(np.float32)
+        p_ = None if pit is None else np.repeat(pit[:, None], len(cands), 1).astype(np.float32)
+        v_ = m_
+        for _ in range(max(1, RJ_COPY_H)):
+            m_ = sm_ * m_ + (1.0 - sm_) * c_
+            if cap is not None:
+                m_ = np.clip(m_, -cap, cap)
+            if HAND_BAND:
+                k_ = (1.0 - np.exp(-2.0 * np.pi * (HB_FC + HB_BETA * np.abs(h_)) * DT)).astype(np.float32)
+                h_ = h_ + k_ * (m_ - h_)
+                v_ = h_
+            else:
+                v_ = m_
+            if p_ is None:
+                e_ = e_ - v_ + r_
+            else:                                           # (the pitch: the ease toward level, then the movement)
+                p1_ = np.clip(p_ * lev[:, None] + v_, -89.0, 89.0)
+                e_ = e_ - (p1_ - p_)
+                p_ = p1_
+        hold_ = 0.0 if p_ is None else p_ * (1.0 - lev[:, None])      # (the pitch: the movement that holds it where it is)
+        return np.argmin(np.abs(e_ - RJ_COPY_VW * (v_ - hold_ - r_)), 1)
+
+    def rj_copy_label(self):
+        """(RJ_COPY) per player and output the scripted runner's choice for his next frame (see RJ_COPY; -1: no label), from
+        the state as the frame ends; reads only, changes nothing (no random draw)"""
+        n = self.n
+        lab = np.full((n, RJC_HEADS), -1, np.int8)
+        self.rjc_lab = lab
+        if not (self.rj_live and self.rjrun.any()):
+            self.rjc_up[:] = 99
+            return lab
+        s = self.state
+        ar = np.arange(n)
+        kk_ = np.minimum(self.rjrun_k, len(self.rj_a) - 1)
+        A_, B_ = self.rj_a[kk_], self.rj_b[kk_]
+        p_, v_ = s[:, :3], s[:, 3:6]
+        floor_ = s[:, 6] > 0.5
+        dxy_ = np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1])
+        own_ = self.rjrun & (self.script == 0) & (self.hp > 0)
+        # frames since he left the floor on the runner's "jump and fire" (the label of the last frame): 0 on the frame he is
+        # first in the air after it, counted on in the air; 99 on the floor, or in the air without it (a step down, a fall)
+        up_ = np.where(floor_, 99, np.where(self.rjc_up < 99, self.rjc_up + 1, np.where(self.rjc_go, 0, 99)))
+        self.rjc_up = np.where(own_, up_, 99).astype(np.int64)
+        flight_ = own_ & ~floor_ & (self.rjc_up < 99)       # in the air from the take-off
+        band_ = np.abs(p_[:, 2] - A_[:, 2]) < 64.0           # (the take-off is on a stair: 40 units of fall within 48 of it)
+        ground_ = floor_ & band_ & (dxy_ <= RJ_COPY_FAR)     # on his way to the take-off: on the floor about it,
+        near_air_ = ~floor_ & ~flight_ & band_ & (dxy_ <= RJ_COPY_FAR)   # or in the air there (a step down)
+        on_ = own_ & (flight_ | ground_ | near_air_) & ~(flight_ & (p_[:, 2] < A_[:, 2] - 64.0))
+        self.rjc_go = np.zeros(n, bool)
+        if not on_.any():
+            return lab
+        yaw0_ = np.degrees(np.arctan2(B_[:, 1] - A_[:, 1], B_[:, 0] - A_[:, 0]))
+        eyaw_ = ((yaw0_ - self.yaw + 180.0) % 360.0) - 180.0
+        epit_ = RJ_COPY_PITCH - self.pitch
+        lev_ = np.where(self.seen_t > 0.5, self.level, 1.0).astype(np.float32)
+        if RJ_LOOK_FREE > 0:
+            lev_ = np.where(self.rjrun, 1.0, lev_).astype(np.float32)
+        hb_ = self.hb if HAND_BAND else self.mv
+        ti_ = self._rjc_pick(self.mv[:, 0], hb_[:, 0], eyaw_, TURN, lev_, TURN_CAP if self.human_aim else None, None)
+        pi_ = self._rjc_pick(self.mv[:, 1], hb_[:, 1], epit_, PITCH, lev_, None, self.pitch.astype(np.float32))
+        # the keys on the floor: toward the take-off, aiming where his speed would stop him (Quake's friction: 6 a second, a
+        # stop speed of 100), in the view's frame (forward along the view's yaw, right 90 degrees to its right)
+        sp_ = np.hypot(v_[:, 0], v_[:, 1])
+        dst_ = np.maximum(sp_ - 100.0, 0.0) / 6.0 + np.minimum(sp_, 100.0) ** 2 / 1200.0
+        u_ = v_[:, :2] / np.maximum(sp_, 1e-3)[:, None]
+        stop_ = p_[:, :2] + u_ * dst_[:, None]
+        e_ = A_[:, :2] - stop_
+        yr_ = np.radians(self.yaw)
+        fe_ = e_[:, 0] * np.cos(yr_) + e_[:, 1] * np.sin(yr_)
+        se_ = e_[:, 0] * np.sin(yr_) - e_[:, 1] * np.cos(yr_)
+        fk_ = np.where(fe_ > RJ_COPY_DEAD, 2, np.where(fe_ < -RJ_COPY_DEAD, 0, 1))
+        sk_ = np.where(se_ > RJ_COPY_DEAD, 2, np.where(se_ < -RJ_COPY_DEAD, 0, 1))
+        ready_ = (self.weapon == RL) & (self.ammo[ar, RL] >= 1) & self.has[ar, RL] & (self.cool <= DT + 1e-4)
+        go_ = (on_ & ground_ & (dxy_ < RJ_COPY_R) & (sp_ < RJ_COPY_V) & (np.abs(eyaw_) < RJ_COPY_YAW)
+               & (np.abs(epit_) < RJ_COPY_PTOL) & ready_)
+        self.rjc_go = go_.copy()
+        # (within RJ_COPY_R he stops: no key until he is slow enough; further out the keys toward the take-off)
+        inr_ = dxy_ < RJ_COPY_R * 0.75
+        fk_ = np.where(inr_ & (np.hypot(e_[:, 0], e_[:, 1]) < RJ_COPY_R * 0.75), 1, fk_)
+        sk_ = np.where(inr_ & (np.hypot(e_[:, 0], e_[:, 1]) < RJ_COPY_R * 0.75), 1, sk_)
+        shot_ = self.ammo[ar, RL] < self.rjc_ammo0 - 0.5     # the try's rocket is out
+        late_ = flight_ & (self.rjc_up <= RJ_COPY_LATE) & ~shot_ & ready_
+        fwd_ = np.where(flight_, 2, np.where(go_, 2, fk_))
+        side_ = np.where(flight_ | go_, 1, sk_)
+        vert_ = np.where(go_ & ground_, 1, 0)
+        fire_ = (go_ | late_).astype(np.int64)
+        wpn_ = np.where(self.weapon == RL, 0, RL + 1)
+        walk_ = (~flight_ & ~go_).astype(np.int64)           # (on his way to the take-off he walks: slow enough to stop on it)
+        cols_ = (fwd_, side_, vert_, ti_, pi_, fire_, wpn_, walk_, np.zeros(n, np.int64))
+        for j_, c_ in enumerate(cols_):
+            lab[:, j_] = np.where(on_, c_, -1)
+        self.rjc_lab = lab
+        if "rj_copy" not in self.stats:
+            self.stats["rj_copy"] = np.zeros(6)
+        self.stats["rj_copy"][0] += float((on_ & self._counted(ar)).sum())
+        return lab
+
+    def _rc_close(self, i):
+        """(ROUTE_COPY) player i's try ends (a new one begins): counted for his counted seats"""
+        if self.rc_live[i] and self.rc_r[i] >= 0:
+            if "route_copy" not in self.stats:
+                self.stats["route_copy"] = np.zeros((len(self.rc["routes"]), 5))
+            fell_ = (not self.jrun_over[i]) and float(self.state[i, 2]) < min(float(self.rc["A"][2]), float(self.rc["B"][2])) - 90.0
+            self.stats["route_copy"][int(self.rc_r[i]), 1:5] += (1.0, float(self.jrun_over[i]), float(self.rc_arr[i]), float(fell_))
+        self.rc_live[i], self.rc_arr[i] = False, False
+
+    def route_copy_label(self):
+        """(ROUTE_COPY) per player and output the scripted runner's choice for his next frame (see ROUTE_COPY; -1: none),
+        from the state as the frame ends; changes only the runner's own bookkeeping (no random draw)"""
+        n = self.n
+        lab = np.full((n, RJC_HEADS), -1, np.int8)
+        C = self.rc
+        who = np.nonzero(self.jrun & (self.rc_r >= 0) & (self.jrun_k == C["k"]) & (self.script == 0) & (self.hp > 0))[0]
+        if not len(who):
+            return lab
+        s = self.state
+        A, B, RA = C["A"], C["B"], C["RA"]
+        p, v = s[who, :3], s[who, 3:6]
+        gr = s[who, 6] > 0.5
+        sp = np.hypot(v[:, 0], v[:, 1])
+        dA = np.hypot(p[:, 0] - A[0], p[:, 1] - A[1])
+        ph = self.rc_ph[who].copy()
+        # the phase from his state: in the air after the runner's jump, the hop's (hop2, not yet hopped) or the gap's flight
+        rts = C["routes"]
+        hops = np.array([rts[int(r_)]["hops"] for r_ in self.rc_r[who]])
+        up_ = ~gr & self.rc_jmp[who] & (v[:, 2] > 100.0)
+        ph = np.where(up_ & (ph <= 1) & (hops == 2), 2, ph)
+        ph = np.where(up_ & (ph <= 1) & (hops == 1), 3, ph)
+        bounce_ = (self.rc_vz[who] < 0.0) & (v[:, 2] > 100.0)               # (down and up again inside one frame: AUTO_HOP)
+        down_ = self.rc_down[who] | ((ph == 2) & gr)
+        ph = np.where((ph == 2) & ((down_ & ~gr & (v[:, 2] > 100.0)) | bounce_), 3, ph)   # (up again from the hop's landing: the gap jump)
+        over_ = gr & (np.linalg.norm(p - B, axis=1) < 110.0) & (p[:, 2] > B[2] - 40.0)
+        ph = np.where((ph == 3) & over_, 4, ph)
+        ph = np.where(self.jrun_over[who] | self.jrun_past[who], np.maximum(ph, 4), ph)
+        basin_ = np.array([np.hypot(*(rts[int(r_)]["start"][:2] - p[j_, :2])) < 250.0 for j_, r_ in enumerate(self.rc_r[who])])             & (np.abs(p[:, 2] - A[2]) < 40.0)                # (near the staging spot, on its level; elsewhere: along his try's way)
+        off_ = (dA > ROUTE_COPY_FAR) | ((ph == 3) & gr & ~over_)
+        off_ |= (ph == 4) & (p[:, 2] < B[2] - 40.0)
+        fwd = np.ones(len(who), np.int64)
+        side = np.ones(len(who), np.int64)
+        jmp = np.zeros(len(who), np.int64)
+        walk = np.zeros(len(who), np.int64)
+        tyaw = self.yaw[who].astype(np.float64).copy()
+        trate = np.zeros(len(who), np.float32)               # (the maneuver's turn rate, degrees a frame)
+        idx = self.rc_i[who].copy()
+        for j, i in enumerate(who):
+            R = rts[int(self.rc_r[i])]
+            if ph[j] <= 1 and not basin_[j]:                 # (far from the staging spot: along the way of his try, as fast as he
+                ph[j] = 0                                    # runs, the view toward the way two spots ahead)
+                X_ = self.jfields[int(self.jrun_f[i])] if int(self.jrun_f[i]) < len(self.jfields) else self.route
+                g_ = int(self.rc_g[i])
+                nd_ = int(X_.locate(p[j:j + 1])[0])
+                n1_ = int(X_.next[g_, nd_]) if g_ < X_.next.shape[0] else -1
+                n2_ = int(X_.next[g_, n1_]) if n1_ >= 0 else -1
+                q_ = X_.nodes[n2_ if n2_ >= 0 else (n1_ if n1_ >= 0 else nd_)]
+                ji_ = getattr(X_, "ji", None)
+                near_jump_ = ji_ is not None and g_ < ji_.shape[0] and int(ji_[g_, nd_]) == C["k"] and float(X_.jd[g_, nd_]) < 400.0
+                jl_ = getattr(X_, "jlink", None)
+                if jl_ is not None and g_ < jl_.shape[0] and (int(jl_[g_, nd_]) >= 0 or (n1_ >= 0 and int(jl_[g_, n1_]) >= 0)):
+                    near_jump_ = True                        # (the way's next step is a jump: not off the edge, to the staging spot)
+                if n1_ < 0 or near_jump_ or np.hypot(*(q_[:2] - p[j, :2])) < 8.0:
+                    q_ = R["start"]
+                tyaw[j] = math.degrees(math.atan2(q_[1] - p[j, 1], q_[0] - p[j, 0]))
+                fwd[j] = 2
+            elif ph[j] <= 1 and gr[j]:
+                d_ = np.linalg.norm(R["p"][:, :2] - p[j, :2], axis=1) + 0.1 * np.linalg.norm(R["v"][:, :2] - v[j, :2], axis=1)
+                if ph[j] == 1:                               # the maneuver: the nearest of the next few reference frames
+                    lo_ = int(idx[j])
+                    hi_ = min(len(d_), lo_ + 8)
+                    w_ = d_[lo_:hi_]
+                    t_ = lo_ + int(np.nonzero(w_ <= w_.min() + 1.0)[0].max())    # (of equals the furthest on)
+                    if d_[t_] > ROUTE_COPY_TOL:
+                        ph[j] = 0                            # off it: back to the staging spot
+                    else:
+                        idx[j] = t_
+                if ph[j] == 0:
+                    e_ = R["start"][:2] - p[j, :2]
+                    ey_ = ((R["syaw"] - float(self.yaw[i]) + 180.0) % 360.0) - 180.0
+                    if np.hypot(*e_) < ROUTE_COPY_STAGE and sp[j] < 30.0 and abs(ey_) < ROUTE_COPY_SYAW:
+                        ph[j], idx[j] = 1, 0                 # at the staging spot, slow and facing: the maneuver begins
+                    else:
+                        u_ = v[j, :2] / max(sp[j], 1e-3)
+                        st_ = np.maximum(sp[j] - 100.0, 0.0) / 6.0 + min(sp[j], 100.0) ** 2 / 1200.0
+                        e_ = R["start"][:2] - (p[j, :2] + u_ * st_)
+                        yr_ = math.radians(float(self.yaw[i]))
+                        fe_ = e_[0] * math.cos(yr_) + e_[1] * math.sin(yr_)
+                        se_ = e_[0] * math.sin(yr_) - e_[1] * math.cos(yr_)
+                        near_ = np.hypot(*e_) < ROUTE_COPY_STAGE * 0.75
+                        fwd[j] = 1 if near_ else (2 if fe_ > RJ_COPY_DEAD else (0 if fe_ < -RJ_COPY_DEAD else 1))
+                        side[j] = 1 if near_ else (2 if se_ > RJ_COPY_DEAD else (0 if se_ < -RJ_COPY_DEAD else 1))
+                        walk[j] = 1 if np.hypot(*(R["start"][:2] - p[j, :2])) < 160.0 else 0
+                        tyaw[j] = R["syaw"]
+                if ph[j] == 1:
+                    t_ = int(idx[j])
+                    fwd[j], side[j] = int(R["k"][t_, 0]), int(R["k"][t_, 1])
+                    last_ = len(R["p"]) - 1
+                    past_ = float(np.dot(p[j, :2] - R["p"][last_, :2], C["U"])) > -4.0
+                    jmp[j] = 1 if (t_ >= last_ or past_ or R["k"][t_, 2] == 1) else 0
+                    ty_ = float(R["yaw"][min(last_, t_ + ROUTE_COPY_LEAD)])
+                    trate[j] = float(R["yaw"][min(last_, t_ + 1)] - R["yaw"][t_]) if t_ < last_ else 0.0
+                    if sp[j] > 100.0 and np.hypot(*R["v"][t_, :2]) > 100.0:     # (turned as his velocity is turned from the reference's)
+                        dh_ = math.degrees(math.atan2(v[j, 1], v[j, 0]) - math.atan2(R["v"][t_, 1], R["v"][t_, 0]))
+                        ty_ += ((dh_ + 180.0) % 360.0) - 180.0
+                    tyaw[j] = ty_
+            elif ph[j] in (2, 3) or (ph[j] <= 1 and not gr[j]):
+                if ph[j] <= 1:                               # (in the air on his way to the staging spot or in the maneuver: as it was)
+                    fwd[j], side[j] = 1, 1
+                    tyaw[j] = R["syaw"] if ph[j] == 0 else float(R["yaw"][min(len(R["p"]) - 1, int(idx[j]) + ROUTE_COPY_LEAD)])
+                    if ph[j] == 1:
+                        fwd[j], side[j] = int(R["k"][int(idx[j]), 0]), int(R["k"][int(idx[j]), 1])
+                else:
+                    tg_ = C["hop_tgt"] if ph[j] == 2 else B[:2]
+                    tgt_ = math.degrees(math.atan2(tg_[1] - p[j, 1], tg_[0] - p[j, 0]))
+                    hv_ = math.degrees(math.atan2(v[j, 1], v[j, 0])) if sp[j] > 30 else tgt_
+                    err_ = ((tgt_ - hv_ + 180.0) % 360.0) - 180.0
+                    sd_ = int(self.rc_side[i])
+                    if abs(err_) > ROUTE_COPY_HYST:
+                        sd_ = 1 if err_ < 0 else -1
+                    self.rc_side[i] = sd_
+                    tyaw[j] = float(rc_steer(v[j:j + 1], np.array([tgt_]), sd_, np.array([False]), ROUTE_COPY_MARGIN + ROUTE_COPY_GAIN * abs(err_))[0])
+                    fwd[j], side[j] = 2, 1 + sd_
+                    if ph[j] == 2:                           # (the jump held as he comes down: the gap jump on the landing)
+                        jmp[j] = 1 if (v[j, 2] < 0.0 or gr[j]) else 0
+                if ph[j] == 2 and gr[j]:
+                    jmp[j] = 1
+            else:                                            # (4) over the gap: onto the armor
+                tyaw[j] = math.degrees(math.atan2(RA[1] - p[j, 1], RA[0] - p[j, 0]))
+                fwd[j] = 2
+        self.rc_ph[who], self.rc_i[who] = ph, idx
+        self.rc_vz[who] = v[:, 2]
+        self.rc_down[who] = down_ & (ph == 2)
+        self.rc_jmp[who] = (jmp == 1) & ~off_
+        ey = (((tyaw - self.yaw[who]) + 180.0) % 360.0) - 180.0
+        lev_ = np.where(self.seen_t[who] > 0.5, self.level, 1.0).astype(np.float32)
+        hb_ = self.hb if HAND_BAND else self.mv
+        ti = self._rjc_pick(self.mv[who, 0], hb_[who, 0], ey.astype(np.float32), TURN, lev_, TURN_CAP if self.human_aim else None, None, rate=trate)
+        pi = self._rjc_pick(self.mv[who, 1], hb_[who, 1], (0.0 - self.pitch[who]).astype(np.float32), PITCH, lev_, None,
+                            self.pitch[who].astype(np.float32))
+        wpn = np.zeros(len(who), np.int64)
+        cols = (fwd, side, jmp, ti, pi, np.zeros(len(who), np.int64), wpn, walk, np.zeros(len(who), np.int64))
+        for c_, x_ in enumerate(cols):
+            lab[who, c_] = np.where(off_, -1, x_)
+        cnt_ = ~off_ & self._counted(who)
+        if "route_copy" not in self.stats:
+            self.stats["route_copy"] = np.zeros((len(rts), 5))
+        np.add.at(self.stats["route_copy"][:, 0], self.rc_r[who][cnt_], 1.0)
+        return lab
 
     def rj_teach_label(self):
         """(RJ_TEACH) per player 1 where the label says "jump and fire now" for the next frame (see RJ_TEACH), from the
@@ -9586,6 +9997,9 @@ class DuelEnv:
         self._replaced = True
         if self._counted(i):
             self.stats["rj_tries"][min(k, 63)] += 1
+        if RJ_COPY:                                          # (RJ_COPY) the try's start: his stack and rockets, for its end
+            self.rjc_hp0[i], self.rjc_ammo0[i] = float(self.hp[i] + self.armor[i]), float(self.ammo[i, RL])
+            self.rjc_live[i], self.rjc_up[i], self.rjc_go[i] = bool(self._counted(i)), 99, False
 
     def _run_pick(self, i):
         """item run: the next target of player i, one of the big items lying there that he can walk to"""
@@ -11124,6 +11538,8 @@ class DuelEnv:
                         r_long[i] += RUN_ARRIVE
                         self.stats["move_arrive"] += 1
                     if self.jrun[i]:
+                        if self.rc is not None:              # (ROUTE_COPY) the try ends at the armor, or not
+                            self.rc_arr[i] = bool(arr[i])
                         self._jump_place(int(i))            # the next try
                     else:
                         self._run_pick(int(i))
@@ -11234,6 +11650,8 @@ class DuelEnv:
                 self._jump_place(int(v))
                 continue
             if self.rjrun[v]:                               # (a rocket jump run: the next try)
+                if RJ_COPY:                                  # (RJ_COPY) the try ends: he died
+                    self._rjc_close(int(v), 2)
                 self._rj_place(int(v))
                 continue
             if self._wait_on(int(v)):                       # (RESPAWN_QL) out of play for the game's respawn wait
@@ -11265,6 +11683,8 @@ class DuelEnv:
                 if self.jrun[v]:                            # (a jump run: the next try)
                     self._jump_place(int(v))
                 if self.rjrun[v]:                           # (a rocket jump run: the next try)
+                    if RJ_COPY:                              # (RJ_COPY) the try ends: he died
+                        self._rjc_close(int(v), 2)
                     self._rj_place(int(v))
                 if self.goal[v] >= 0:
                     self._new_goal(int(v))
@@ -11481,6 +11901,12 @@ class DuelEnv:
             info["hand_lab"] = self.hand_lab.copy()          # the weapon key, for the trainer's --hand-teach
         if RJ_TEACH:                                         # (RJ_TEACH) "jump and fire now" for his next frame, for the trainer's --rj-teach
             info["rj_lab"] = self.rj_teach_label()
+        if RJ_COPY or ROUTE_COPY:                            # (RJ_COPY, ROUTE_COPY) the runner's choice for his next frame, for the trainer's --rj-copy
+            lab_ = self.rj_copy_label() if RJ_COPY else np.full((n, RJC_HEADS), -1, np.int8)
+            if self.rc is not None:
+                l2_ = self.route_copy_label()
+                lab_ = np.where(l2_[:, :1] >= 0, l2_, lab_).astype(np.int8)
+            info["rj_copy"] = lab_
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
         if HEAD_EVENTS:                                      # (HEAD_EVENTS) the frame's events for the head
             dl_ = np.zeros(n, np.float32)
