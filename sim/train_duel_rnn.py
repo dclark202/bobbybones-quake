@@ -1236,6 +1236,9 @@ def main():
     ap.add_argument("--control-every", type=int, default=5, help="... the brain's state kept every this many of its ticks (5: 1 s; the ring "
                     "holds the horizon: about 0.5 GB on the host with 10,080 players)")
     ap.add_argument("--control-hid", type=int, default=64, help="... its hidden layer")
+    ap.add_argument("--control-src", default="belief", choices=("belief", "both"), help="... what it reads: the brain's state "
+                    "(belief, 256) or the brain's state and his hands' memory, both detached (both, 256 + 512: the probe of "
+                    "2026-10-24 read more from his memory; the ring then holds three times as much)")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -1768,7 +1771,8 @@ def main():
     if CTL_L is None and a.control > 0:
         assert BEL and TRK_ON, "--control: with --belief and --track (it reads the belief's state)"
         assert all(c_ in tuple(getattr(E_, "AUX_COLS", ())) for c_ in control_.COLS), "--control: the simulator gives no ctl_ columns (CONTROL_TRUTH=1)"
-        CTL_L = control_.layout(inp=int(BEL_L["hid"]), hid=a.control_hid, every=a.control_every,
+        CTL_L = control_.layout(inp=int(BEL_L["hid"]) + (H if a.control_src == "both" else 0), hid=a.control_hid, every=a.control_every,
+                                src="belief+memory" if a.control_src == "both" else "belief",
                                 horizon_frames=int(E_.CONTROL_D), tick=int(BEL_L["every"]))
     CTL = CTL_L is not None
     CTL_ON = CTL and a.control > 0
@@ -3302,7 +3306,7 @@ def main():
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
                 if bt_ and CTL_ON:                                       # (--control) the state of this tick, kept every --control-every ticks
-                    CTL_RING[0].push(CTL_G0[upd] + t, BS_.s)
+                    CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if CTL_L["src"] == "belief" else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
                 #                                                          (--belief) every seat at once: the inputs as the update re-reads them

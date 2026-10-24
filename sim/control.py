@@ -26,9 +26,10 @@ COLS = ("ctl_lab", "ctl_one", "ctl_mh", "ctl_ra", "ctl_age")
 OUTS = ("two", "one", "mh", "ra")      # (the head of v0.4.3 reads the four: sim/head2.py's "in control" slot)
 
 
-def layout(inp=256, hid=64, every=5, horizon_frames=3600, tick=8):
+def layout(inp=256, hid=64, every=5, horizon_frames=3600, tick=8, src="belief"):
+    """src: belief (the brain's state) or belief+memory (and his hands' GRU memory after it, both detached)"""
     return dict(version=1, inp=int(inp), hid=int(hid), d=len(OUTS), every=int(every), horizon=int(horizon_frames), tick=int(tick),
-                src="belief", outs=list(OUTS))
+                src=str(src), outs=list(OUTS))
 
 
 def make_module(L, seed=4044):
