@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-23](results/2026-10-23.md)
 
+- 21:30 — the owner's play test of v0.4.1 (save 110): "I can tell that he actually is keeping track of me, and it leads him to pushing more"
 - 15:30 — v0.4.1's gate check passed (85-75); the gate opening and the rocket-jump lesson on; the view's pull toward level measured (B-275 step 1)
 - 14:30 — v0.4.0b (zones, speed + direction) passed; v0.4.1 connected the brain at 12:15; the pros' decision report; the public servers moved
 - 06:00 — v0.4.0 overnight: the hands at 55-57% against v0.3.10's end, the brain past the old belief everywhere, no gradient into the hands
