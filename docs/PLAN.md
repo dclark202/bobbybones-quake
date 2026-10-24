@@ -19,34 +19,25 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 2. **Self-play reinforcement learning**, seeded where needed by fading lessons from the pros' demos.
 3. **Measure against people**: play tests, the public server's logs, the pros' demos.
 
-## Status (2026-10-18, noon)
+## Status (2026-10-24)
 
 | What | Where it stands |
 |---|---|
-| On the public server | **v0.3.1** since 2026-10-16 evening (the end of v0.3.1's restart, `duel_gru_v0_3_1b`: his legs learning, the game's physics, the hunt, the believed stack; 63.8% against v0.3's end). It is the control of every run since. [results/2026-10-16.md](results/2026-10-16.md), [v0.3.1/RUN_v0.3.1.md](v0.3.1/RUN_v0.3.1.md) |
-| The run now | **v0.3.5** (`duel_gru_v0_3_5`), since 2026-10-18 06:55: one movement network, the legs switch removed (B-259). 43 to 44% against v0.3.1's end for 40 updates, 45.7% at save 50 after the legs' learning rate went to 1.0, 45.0% at 60; he loses on speed in games. Trains to 19:00 Sunday, then the owner's play test; it resumes afterwards unless he decides otherwise. [v0.3.5/RUN_v0.3.5.md](v0.3.5/RUN_v0.3.5.md) |
-| Behind it | v0.3.2 (the turn correction): level; v0.3.3: stopped after five updates; v0.3.4 (the legs blended in): 57.5% at its best (save 223), the switch fade failed. [v0.3.2/RUN_v0.3.2.md](v0.3.2/RUN_v0.3.2.md), [v0.3.4/RUN_v0.3.4.md](v0.3.4/RUN_v0.3.4.md) |
-| Ready | **v0.3.6**, rockets and grenades (branch `v036`, not merged): the rocket aim inputs, the pre-fire token, the emergence point, blind rockets free, the long-range rail pay, the hot reload (B-265); no rocket-jump runs at its start. Starts the night of 2026-10-18 from v0.3.5's save, after the play test and the BIOS update, for several days (the owner). [v0.4/ROCKETS_v0.3.6.md](v0.4/ROCKETS_v0.3.6.md); what is left before strategy: [v0.4/MECHANICS_BEFORE_STRATEGY.md](v0.4/MECHANICS_BEFORE_STRATEGY.md) |
-| Then | **v0.4**: the movement bridge's clean-up (step 6b of [v0.4/UNIFIED_MOVEMENT.md](v0.4/UNIFIED_MOVEMENT.md)), then the head (strategy, five times a second, a store of three minutes) on one movement network: [v0.4/CANDIDATE_v0.4.md](v0.4/CANDIDATE_v0.4.md), [v0.4/PROPOSAL_v0.4.md](v0.4/PROPOSAL_v0.4.md) |
-| Checks of a run | every tenth save plays the control in 160 ten-minute games on ten maps, aim level 3 (the same network against itself reads 48.8%, a single map moves about ±10 points); the weapon in his hand at every check |
+| On the public servers | **v0.3.6** (US and EU, duel only). The next push is the owner's call (before it: the hindsight review of games against people, the name `^6BOT ^5Bobby^2Bones`); the shared-board deploy waits for his go |
+| Behind us | v0.3.2 to v0.3.11: one movement network (the legs switch retired), rockets and pre-fire, the doorway watching; **v0.4.0/0.4.0b** the brain; **v0.4.1** the brain's token in the hands: 64 to 71% against v0.4.0b's end, 159-1 against v0.3.6 (ended 2026-10-24 07:12, update 320, `keep/policy_end_v041.pt`) |
+| The run now | **v0.4.2** (`duel_gru_v0_4_2`, since 2026-10-24 07:14): the old belief faded out of the hands; mega flat pay 0.35 (owner). The checks at the fade still shut read 42.5% (updates 10 and 30) against v0.4.1's end; a diagnostic of the checks is running; the fade is held shut until a check passes. Officially to Sunday noon, ended early on a good night. [v0.4.0/RUN_v0.4.2.md](v0.4.0/RUN_v0.4.2.md) |
+| Next | **v0.4.3**, the strategy head (card for the owner's review: [v0.4.0/RUN_v0.4.3.md](v0.4.0/RUN_v0.4.3.md)), then the win-chance rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) |
+| Checks of a run | every 20 updates 160 ten-minute games on ten maps at aim level 4 against the previous best; every fourth against the long-term control (v0.3.10's end from v0.4.2); the same network against itself reads about 49%, ±4 points a check, a single map about ±10 |
 
 ## Now
 
 The generation's goals and rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) (the owner, 2026-10-24). The run now: **v0.4.2** ([v0.4.0/RUN_v0.4.2.md](v0.4.0/RUN_v0.4.2.md)).
 
-The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
-
-- One movement network: B-259 (v0.3.5 now), B-263 (the optimizer's state at restarts), B-261 (the emergence-point baseline, while nothing trains).
-- v0.3.6, rockets: B-252 (rocket jumps), B-254 (rocket aim, the pre-fire token), B-262 (the emergence point as an input), B-264 (its inputs in a real game).
-- v0.4: B-250, B-240 (the enemy in his head), B-248 (slower memory), B-256 (the hunt in the head).
-- 1, speed: B-213, B-204, B-258.
-- 2, rockets: B-210.
-- 3, plasma, grenades: B-189.
-- 4, game awareness: B-217 (predictable routes), B-216, B-221, B-191.
-- The checks and the demos: B-218, B-219, B-220, B-225, B-226.
-- Aim and the fights he takes: B-229, B-230, B-231.
-- The simulator and the maps: B-224, B-227.
-- Odd behaviour seen in runs and duels: B-214, B-215, B-192.
+- v0.4.2: the fade (the rule columns out of the hands); B-275 (the level pull, out in v0.4.3).
+- v0.4.3: the head; B-280 ("in control" as a brain readout), B-279 (grenades and plasma as area denial), B-278 (items' worth in fights).
+- Win-chance pay (v0.4.4 on): the overtime fix, his own win table, the cross-fade.
+- Open items: rocket jumps (B-252; the full-route copy built, off), failed movement jumps (the Aerowalk red-armor two-hop route copy, built), B-277 (too much jumping at times), B-276 (stuck behind the teleporter on Cure).
+- The full open list: [BACKLOG.md](BACKLOG.md).
 
 ## Standing decisions of the owner
 

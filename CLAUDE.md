@@ -6,6 +6,15 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 `ql-bot` folder in the owner's home directory.
 
 ## The owner's goals (read first)
+- **One goal: win games** (owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 and the priority
+  list of 2026-10-10 are retired). Goals are set per generation. **v0.4.x**: (1) fade out every hard-wired rule (the fairness
+  limits stay); (2) the brain manages the game state and the strategy; (3) pay by win chance only, every step on the way
+  scaffolded. Open items beside them: rocket jumps, failed movement jumps (Aerowalk's red armor), grenades less so. Every
+  change is stated by the equilibrium it leads to in self-play and the behaviour it brings out on the way; only winning
+  matters in the long run. The rounds: `docs/v0.4.0/PATH_v0.4.md`; where things stand: `docs/PLAN.md`.
+- **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
+  trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
+  a dip lasts 20 to 30 updates at most). Two new things open one after the other.
 - He wants genuine learned behavior (strafe jumping, weapon choice, item control, positioning), not hand-coded
   rules or knob tuning. Long-term focus: smooth, fast movement and good position and weapon choices, not just aim.
 - **Fair**: human physics (125 fps), human senses (sight with line of sight, sound), mouse-like aim with
@@ -16,7 +25,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.
-- **Goal 1 (2026-10-05)**: human-like play in one small arena, the yard (`arena1`, with items), showing
+- **Goal 1 (2026-10-05; history: the yard is dropped, see the one goal above)**: human-like play in one small arena, the yard (`arena1`, with items), showing
   knowledge of the map and efficient movement on it, one against one or all against all up to four players, and
   beating Nightmare there. See `docs/PLAN.md`. Method: tighten the human limits until the right play appears;
   do not add rewards for single behaviors without asking.
@@ -36,7 +45,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - No powerups anywhere (owner, 2026-10-09: no quad, no "protection", on any server or in training) and a map's
   **duel** items in every mode, free-for-all too: `plugins/powerups.py` does both on the servers; the simulator has
   always had a map's duel items and no powerups.
-- **His priority list for the next models (2026-10-10)**: strafe jumping and keeping speed; rockets; plasma and
+- **His priority list of 2026-10-10 (retired 2026-10-24 by the one goal; kept as history)**: strafe jumping and keeping speed; rockets; plasma and
   grenades, the shotgun less; then game awareness (not through a teleporter the enemy watches, not always the same
   path: it needs more model build-out and comes when the first two or three are there). Every plan addresses these
   and any odd behaviour seen in a run or in duels.
@@ -157,6 +166,27 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
 - **The guessing game's eight questions and the silent rule (2026-10-12 evening; `docs/v0.2.1/ENEMY_MODEL.md`)**: the trainer's `--aux-heads` names the questions of the `--aux` lesson: the first four (`place`, `appear`, `fight`, `items`: the default, with which the trainer is what it was) and `near` (the landmark the enemy is nearest to now and `--aux-near-frames` on: odds over the intention's list), `target` (the enemy's own intention), `strength` (his stack in four bands, the weapon in his hand), `first` (who takes the mega and the red armor within `--aux-first-frames`); their truth is six more columns of `info["aux"]`, labels only, never inputs. New questions' layers start at zero; a network carries its layers (`aux.*`, `aux_heads`) and the checks' tools and the export drop them. `--aux-warm <minutes>` counts from `--fade-start`: a restart that is a new stage (a new fade start) must pass `--aux-warm 0` or the lesson falls back to nothing. Eight questions pull on the shared layers about five times as hard as four at the same weight (his step 0.20 an update at 0.3 with no warm-up, against 0.06). `RULE_CONTEST=<seconds>` (a training switch): the item rule's label is silent where he believes the enemy nearer to the item it names. `PERCEPT_SPEED` (a `PLAY_VAR`, 0 at every aim level) is the one aim limit measured that lowers lightning and leaves rail (B-228).
 - **v0.3 (2026-10-14; `duel_gru_v0_3`, `docs/v0.3/RUN_v0.3.md`)**: `OVERTIME=1` (two more minutes while level at 10:00, at most ten periods, shown as the game's last two minutes again, as on the servers); `STYLE_P=0` in training, and `sim/export_duel.py` writes it so the plugins draw no style either. The plugins' `intent_release` handles a holding place as his target (an index past the item list before). The judge that sees the truth (`--priv-value`) and the slow memory (`--slow-mem`) were tried and left out (RESULTS 2026-10-14 20:15).
 - **v0.3.1's belief and hunt (2026-10-15 night; B-257, B-256; both off by default, off = today's simulator in fixed runs)**: 773 inputs in `duel_env`, 797 in the group module: the last six (`N_ES`, group `v031 enemy stack`, a token kind of its own, `stack`, in `sim/attn.py`'s `LATE`) are the enemy's stack as he believes it (`EN_STACK=1`): a filter from his senses only (a known spawn 125/0, his own hits through `note_dealt`, pickups heard or seen through `note_take`, the pain sound's band, over 100 ticking down, a drift to the unseen enemy's average `ES_MU_*`/`ES_SD_*` with `ES_TAU` while out of view); zeros with it off. `HUNT=1`: the intention "the enemy" (`EN_INTENT`, the ninth) leads his way and legs to the route goal nearest the place he believes the enemy at (`v02_bel`); reached when the enemy is in view, nothing paid for the way (`EN_ON` = `FIGHT_TARGET` or `HUNT`). `tools/hunt_init.py` (`widen`, `never`, `open --from-nothing s` / `--from <choice> s`, `same`) converts a network of v0.3's shape with both parts closed; v0.3 never chooses "nothing", so opened out of it the enemy stays unchosen. The plugins keep the belief (`note_dealt` from the game's damage count, the pain sound after any hurt, `_es_update` in `v02_tick`, `_es_set` for a newcomer) and the hunt's reach in `intent_release`.
+- **v0.3.2 to v0.3.11 (2026-10-16 to 10-23)**: one movement network: the legs switch is retired (the legs' share is 0; the
+  movement network `move_v17_look` remains only as an input, `LEGS_IN`, and its look point, `LEGS_LOOK`); rockets, pre-fire
+  and the emergence point as inputs (v0.3.6); the pay for watching the right doorway before a sighting (`OPENINGS`, v0.3.10);
+  the weapon teacher's weight is 0. **Live settings**: `<run>/live.json` (numbers; `ITEM_FLAT` as the string
+  `MH:0.35,RA:0.30,YA:0.15`) and `<run>/live_settings.env`, read between rollouts; a value of the wrong type refuses the whole
+  file (the trainer's log says REFUSED). Every version's end is kept as `keep/policy_end_<ver>.pt` with its optimizer.
+- **v0.4.x (2026-10-22 on; `docs/v0.4.0/`)**: 868 inputs, about 3 million weights. **v0.4.0/0.4.0b, the brain**: learned
+  predictions from his senses only (the enemy's place now and 1, 2, 4 s ahead, his stack band, who takes the next items),
+  labelled in hindsight (`RUN_v0.4.0.md`). **v0.4.1, the token**: the brain's answer into the hands (`btoken` in the checkpoint,
+  `--btoken-start`, live `BTOK_GATE_CAP`; the checks' `--btoken-gate`). **v0.4.2, the fade**: the 76 rule-made input columns
+  (`sim/rule_fade.py`) times (1 - g) in the hands only, the brain reads them unfaded (`--rule-fade*`, live `FADE_CAP`,
+  `FADE_OPEN`); `BRAIN_READ=1` puts the simulator's readers (legs' look, hunt, `RULE_CONTEST`, `RULE_HUNT`, openings) on the
+  brain's answer for a life drawn with chance g; `BLIND_BRAIN=1` frees pre-fire where the brain expects him; the checks play
+  each save at its own fade (`tools/duel_eval.py --rule-fade-g`). **Win-chance pay** (the generation's goal): `WIN_PAY`
+  (built, never run: a frame's pay = the change in his chance of winning, `sim/win_chance.json`; the last frame of an
+  overtime period reads 120 s instead of 0, to fix before use), `PAY_SPLIT` and `WIN_SHADOW` (record only, on in v0.4.2;
+  bit-identical off and on), `tools/win_table.py`, `pay_ledger.py`, `pay_align.py`, `value_ready.py`, `winpay_games.py`,
+  `winpay_ident.py`. Code: v0.4.2 runs from the worktree `ql-bot-v042a` (branch `v042a`, with `winpay` merged), not yet
+  merged into `v0.4`. The checks: every 20 updates 160 games against the previous best, every fourth against the long-term
+  control (v0.3.10's end from v0.4.2; a control swept 160-0 is replaced at the next version), with the training's input
+  switches (`RL_AIM`, `PREFIRE`, `EMERGE_IN`, `HOP_QUIET_HEARD`, `RJ_CLEARED` were missing until v0.4.1's end).
 - **After the wiring review (2026-10-08)**: the trainer credits the left hand's outputs (movement keys, weapon key) only on the frames the simulator reads them (`env.key_dec`, one in four) and keeps the input statistics frozen; `sim/renorm_policy.py` gives a network fresh input statistics without changing its output (run it when the maps or inputs change; sample from `train_duel_rnn.py --obs-dump`). Checkpoints carry `env_vars` (the simulator switches of `PLAY_VARS`) and the round lengths; `sim/export_duel.py` writes them into `policy.npz` (`--set NAME=VALUE` for runs before v13, e.g. `EXPORT_ARGS="--set INTENT_HOLD=8"` for the server scripts) and the plugins set them before loading the simulator. Checks: `tools/input_check.py` (dead inputs; the real game's inputs beside the simulator's), `tools/teacher_check.py` (can the walking teacher's own pupil reach every item), `tools/nav_prune.py` (takes the jump and drop links the walker cannot take out of a map's graph), `tools/shot_prices.py`.
 - **The map audit (2026-10-09)**: the game's maps set beside the simulator (RESULTS that day): `plugins/maplab.py` lists the
   real game's items per map and mode (`data/maplab/`; `tools/duel_items.py` -> `plugins/duel_items.json`), `plugins/poollab.py`

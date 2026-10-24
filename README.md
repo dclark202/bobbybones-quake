@@ -15,9 +15,11 @@ setup is not part of this repo.
 - **Simulator** (`sim/`): ioquake3's player movement and collision compiled into one library (`qsim.dll` / `libqsim.so`)
   with Quake Live's settings, loading the game's own maps. A numpy game layer (`sim/duel_env.py`) adds the weapons, items,
   sounds, clock and score as measured on a real server. It runs thousands of players at once on one PC.
-- **Network**: about 1.75 million weights. 791 inputs every 25 ms (what he sees, hears and remembers; [docs/INPUTS.csv](docs/INPUTS.csv)),
+- **Network**: about 3 million weights. 868 inputs every 25 ms (what he sees, hears and remembers; [docs/INPUTS.csv](docs/INPUTS.csv)),
   an encoder and attention over groups of inputs (the enemy, the items, the map's places), a GRU memory of 512, and
   outputs for keys, mouse, fire, weapon and the item or place he is heading for.
+  A part of it, the brain, learns to predict from his senses alone where the enemy is and will be, his health and armor,
+  and who takes the next items; the rest acts on those predictions.
 - **Training** (`sim/train_duel_rnn.py`): PPO on whole ten-minute duels on ten of the game's duel maps, against a league
   of his own past snapshots and the previous best network.
 - **Game server**: a Docker image with the Quake Live dedicated server and [minqlx](https://github.com/MinoMino/minqlx).
