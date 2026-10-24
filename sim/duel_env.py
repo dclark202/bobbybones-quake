@@ -1442,6 +1442,28 @@ GAMES_COLS = ("whole games ended", "late rounds ended", "of both: level at the l
               "his lead at the end, summed", "what WIN_PAY paid him in them", "what the flat pay for frags and deaths would have",
               "all that ended: the size of the first seat's WIN_PAY, summed", "... of his flat pay", "frames of matches in whole games",
               "in late rounds", "whole games and late rounds begun")
+#   PAY_SPLIT=1   (record only; the pay is the same to the bit with it on or off) each frame's pay split by term:
+#                 info["pay_terms"] [players, PAY_TERMS] (they sum to the frame's pay, to float rounding) and the counters
+#                 stats["pay_terms"] [3, PAY_TERMS]: his counted seats' sums in every round, in whole games (a game under way
+#                 at the frame's start), and the size (|x| summed, every round). A segment of step() between two marks goes
+#                 to the mark's term; a few terms are booked where they are paid (damage dealt and taken, the item flats, the
+#                 big three's order, the way, speed, frags, deaths, watching) and the segment around them keeps the rest
+#                 ("..._other" terms are float rounding, or a pay of that segment this list does not name). tools/pay_ledger.py.
+#   WIN_SHADOW=1  (record only) in whole games, late rounds and pro starts what WIN_PAY would pay this frame (the same
+#                 table, scale and rule as _game_step, its own chance as last "paid", ws_p), never paid:
+#                 info["win_shadow"], info["flat_frag"] (this frame's flat frag pay in such games, +1 a frag, -1 a death,
+#                 what WIN_PAY takes out) and stats["win_shadow"] (WS_COLS, his counted seats). With WIN_PAY on it equals
+#                 info["win_pay"].
+PAY_SPLIT = float(os.environ.get("PAY_SPLIT") or 0.0) > 0
+WIN_SHADOW = float(os.environ.get("WIN_SHADOW") or 0.0) > 0
+PAY_TERMS = ("jerk", "weapon_switch", "hop", "blind_fire", "move_round", "course", "fire_toggle", "shot_price", "blind_rocket",
+             "dmg_dealt", "dmg_taken", "high", "rail", "style", "item_MH", "item_RA", "item_YA", "item_flat_other", "big_order",
+             "item_points", "item_loss", "items_other", "item_seek", "way", "way_claw", "speed", "speed_run", "intent_switch",
+             "runs", "stack_diff", "stack_keep", "drops", "know", "frag", "death", "deaths_other", "win_pay", "watch", "preaim",
+             "lg_quiet")
+PT_IX = {k_: i_ for i_, k_ in enumerate(PAY_TERMS)}
+WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay in games, summed", "its size", "his frames in games",
+           "his games' frags (+1) and deaths (-1) counted")
 #   OVERTIME=1    Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
 #                 the game's limit (GAME_LEN) with the score level goes on for another OT_LEN seconds, period after period,
 #                 until a period ends with the score not level, or after OT_CAP periods (OVERTIME_CAP, 10): then it is a
@@ -5776,6 +5798,8 @@ class DuelEnv:
                 d_ = WATCH_PAY * (sc_[:m_] - sc_[m_:])
                 reward[a_[f_]] += d_.astype(reward.dtype)
                 reward[b_[f_]] -= d_.astype(reward.dtype)
+                self._pt("watch", a_[f_], d_)
+                self._pt("watch", b_[f_], -d_)
                 pay_ = np.concatenate([d_, -d_])
                 X_[1] += float(pay_.sum())
                 X_[2] += float(pay_[c2_].sum())
@@ -8434,6 +8458,49 @@ class DuelEnv:
         self.stats["cf_rounds"] += 1
 
     # ---------------------------------------------------------------- whole games and late rounds (GAME_P, LATE_P, WIN_PAY)
+    # ---------------------------------------------------------------- the pay split by term (PAY_SPLIT; record only)
+    def _pt_begin(self):
+        """(PAY_SPLIT) the frame's books: per player and term, the pay booked so far; the reward at the last mark"""
+        if not PAY_SPLIT:
+            return
+        n = self.n
+        self.pt = np.zeros((n, len(PAY_TERMS)), np.float64)
+        self.pt_sub = np.zeros(n, np.float64)               # booked by name since the last mark
+        self.pt_last = np.zeros(n, np.float64)
+        g_ = self._others_arr().shape[1] + 1
+        self.pt_gm = (self.game[np.arange(n) // g_] > 0) if GAME_ON else np.zeros(n, bool)
+
+    def _ps(self, name, reward):
+        """(PAY_SPLIT) a mark: what the reward gained since the last one, less what was booked by name, goes to `name`"""
+        if not PAY_SPLIT:
+            return
+        r_ = np.asarray(reward[:self.n], np.float64)
+        self.pt[:, PT_IX[name]] += r_ - self.pt_last - self.pt_sub
+        self.pt_last = r_.copy()
+        self.pt_sub[:] = 0.0
+
+    def _pt(self, name, idx, val):
+        """(PAY_SPLIT) a pay booked where it is paid: players idx (an index or an array), value(s) val"""
+        if not PAY_SPLIT:
+            return
+        idx = np.atleast_1d(np.asarray(idx, np.int64))
+        val = np.broadcast_to(np.asarray(val, np.float64), idx.shape)
+        np.add.at(self.pt[:, PT_IX[name]], idx, val)
+        np.add.at(self.pt_sub, idx, val)
+
+    def _pt_end(self, info):
+        """(PAY_SPLIT) the frame's split into info and the counters (his counted seats)"""
+        if not PAY_SPLIT:
+            return
+        info["pay_terms"] = self.pt.astype(np.float32)
+        P_ = self.stats.get("pay_terms")
+        if P_ is None:
+            P_ = self.stats["pay_terms"] = np.zeros((3, len(PAY_TERMS)))
+        c_ = self._counted(np.arange(self.n)) & (self.script[:self.n] == 0)
+        P_[0] += self.pt[c_].sum(0)
+        P_[1] += self.pt[c_ & self.pt_gm].sum(0)
+        P_[2] += np.abs(self.pt[c_]).sum(0)
+
     def _game_init(self):
         """the books of whole games and late rounds (see GAME_P): per match what it is (0 nothing, 1 a whole game, 2 a late
         round), the game's clock in frames and the first seat's chance of winning as last paid; per player what WIN_PAY
@@ -8446,12 +8513,16 @@ class DuelEnv:
         self.win_pay = np.zeros(self.n, np.float32)         # this frame's pay by the game, per player (info["win_pay"])
         self._late_m = []                                   # late rounds begun in this step: drawn after the round's reset
         self.win_tab, self.win_scale = None, 0.0
+        self.ws_tab, self.ws_scale = None, 0.0               # (WIN_SHADOW) the same table, recorded only
+        self.ws_p = np.full(self.M, 0.5, np.float64)
+        self.win_shadow = np.zeros(self.n, np.float32)
+        self.ws_flat = np.zeros(self.n, np.float32)
         if GAME_ON:
             self.stats["games"] = np.zeros(len(GAMES_COLS))
         self.g_ot = np.zeros(self.M, np.int64) if OVERTIME else None     # (OVERTIME) overtime periods begun in match m's game
         if GAME_ON and OVERTIME:
             self.stats["overtime"] = np.zeros(len(OT_COLS))
-        if GAME_ON and WIN_PAY:
+        if GAME_ON and (WIN_PAY or WIN_SHADOW):
             f_ = os.environ.get("WIN_CHANCE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "win_chance.json")
             with open(f_, encoding="utf-8") as fh_:
                 wc_ = json.load(fh_)
@@ -8463,13 +8534,18 @@ class DuelEnv:
             assert np.abs(p_ + p_[:, ::-1] - 1.0).max() < 1e-9, "win_chance.json: p(-d) must be 1 - p(d)"
             assert np.array_equal(p_[0], np.where(d_ > 0, 1.0, np.where(d_ < 0, 0.0, 0.5))), "win_chance.json: 1 / 0.5 / 0 at the limit"
             assert (np.diff(p_, axis=1) >= 0).all() and p_[-1, D_ + 1] > 0.5, "win_chance.json: the chance must rise with the lead"
-            self.win_tab = (p_, float(left_[1]), D_)
-            self.win_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)    # a frag at 0:0 with ten minutes left = a frag of today
+            if WIN_PAY:
+                self.win_tab = (p_, float(left_[1]), D_)
+                self.win_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)    # a frag at 0:0 with ten minutes left = a frag of today
+            if WIN_SHADOW:
+                self.ws_tab = (p_, float(left_[1]), D_)
+                self.ws_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)
+                self.stats["win_shadow"] = np.zeros(len(WS_COLS))
 
-    def _win_p(self, d, left):
+    def _win_p(self, d, left, tab=None):
         """the chance of winning the game for a player d frags ahead with `left` seconds to play (win_chance.json: a
         straight line between its time steps; a lead beyond the table counts as its last column)"""
-        p, step, D = self.win_tab
+        p, step, D = self.win_tab if tab is None else tab
         x = np.clip(np.asarray(left, np.float64) / step, 0.0, p.shape[0] - 1.0)
         i0 = np.minimum(x.astype(np.int64), p.shape[0] - 2)
         f = x - i0
@@ -8510,6 +8586,7 @@ class DuelEnv:
         self.kind[m], self.mode[m] = NORMAL, -1
         self.game[m] = 2 if late else 1
         self.g_tick[m], self.round_t[m], self.g_p[m] = 0, 0.0, 0.5
+        self.ws_p[m] = 0.5
         if OVERTIME:
             self.g_ot[m] = 0
         self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
@@ -8526,6 +8603,8 @@ class DuelEnv:
             self.g_tick[m], self.round_t[m] = t_, np.float32(t_ * DT)
             if self.win_tab is not None:
                 self.g_p[m] = float(self._win_p(np.zeros(1), np.array([GAME_LEN - t_ * DT]))[0])
+            if self.ws_tab is not None:
+                self.ws_p[m] = float(self._win_p(np.zeros(1), np.array([GAME_LEN - t_ * DT]), tab=self.ws_tab)[0])
             self.stats["stagger"] += (1.0, t_ * DT)
         if not late:
             self.stag_first[m] = False
@@ -8559,6 +8638,8 @@ class DuelEnv:
         if EN_STACK:                                         # (B-257) drawn stacks: nothing is known of them
             self._es_set(np.array(q), slice(None), spawn=False)
         self.g_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT)) if self.win_tab is not None else 0.5
+        if self.ws_tab is not None:
+            self.ws_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT, tab=self.ws_tab))
         for it in range(self.nI):
             kind, val, resp, cap, lab = self.item_def[it]
             p_ = LATE_DOWN[0] if lab in ("MH", "RA", "YA", "GA") else LATE_DOWN[1] if kind == "wp" else LATE_DOWN[2]
@@ -8581,6 +8662,8 @@ class DuelEnv:
         """a frame of the whole games and late rounds: their clock, to the frame, and with WIN_PAY the change in each
         player's chance of winning the game since the frame before (this frame's frags and deaths are in the score)"""
         self.win_pay[:] = 0.0
+        if WIN_SHADOW:
+            self.win_shadow[:] = 0.0
         gm = np.nonzero(self.game > 0)[0]
         if not len(gm):
             return
@@ -8594,6 +8677,21 @@ class DuelEnv:
         G = self.stats["games"]
         G[13] += int((self.game[gm] == 1).sum())
         G[14] += int((self.game[gm] == 2).sum())
+        if self.ws_tab is not None:                          # (WIN_SHADOW) what WIN_PAY would pay this frame: recorded, never paid
+            gw_ = self._others_arr().shape[1] + 1
+            aw_, bw_ = gm * gw_, gm * gw_ + 1
+            lw_ = GAME_LEN - self.g_tick[gm] * DT
+            if OVERTIME:
+                lw_ = np.where(self.g_tick[gm] > GAME_FRAMES, GAME_LEN - self.round_t[gm].astype(np.float64), lw_)
+            pw_ = self._win_p(self.frags_r[aw_] - self.frags_r[bw_], lw_, tab=self.ws_tab)
+            yw_ = self.ws_scale * (pw_ - self.ws_p[gm])
+            self.ws_p[gm] = pw_
+            self.win_shadow[aw_], self.win_shadow[bw_] = yw_, -yw_
+            WS_ = self.stats["win_shadow"]
+            for q_ in (aw_, bw_):
+                c_ = q_[self._counted(q_) & (self.script[q_] == 0)]
+                WS_ += (float(self.win_shadow[c_].sum()), float(np.abs(self.win_shadow[c_]).sum()), float(self.ws_flat[c_].sum()),
+                        float(np.abs(self.ws_flat[c_]).sum()), float(len(c_)), float((self.ws_flat[c_] != 0).sum()))
         if self.win_tab is None:
             return
         g_ = self._others_arr().shape[1] + 1
@@ -8954,6 +9052,8 @@ class DuelEnv:
         self.stats["games"][15] -= 1                         # (_game_start counted a whole game begun)
         d = int(self.frags_r[q[0]] - self.frags_r[q[1]])
         self.g_p[m] = float(self._win_p(d, GAME_LEN - tick * DT)) if self.win_tab is not None else 0.5
+        if self.ws_tab is not None:
+            self.ws_p[m] = float(self._win_p(d, GAME_LEN - tick * DT, tab=self.ws_tab))
         im_, L_, W_ = P["imap"], P["item_left"][k], P["item_who"][k]
         for it in range(self.nI):
             c_ = int(im_[it])
@@ -10728,6 +10828,8 @@ class DuelEnv:
         self.state = s = self.w.state()
         self.yaw = s[:, 7].copy()
         reward = -JERK_COST * jerk.astype(np.float32)
+        self._pt_begin()
+        self._ps("jerk", reward)
         self.r_long = r_long = np.zeros(n, np.float32)      # the game's part of this frame's pay (see r_long in __init__)
         self.snd_t += DT
         self.shot_t += DT
@@ -10745,6 +10847,7 @@ class DuelEnv:
             fall = np.where(out_, 0.0, fall)
         fallers = np.nonzero(fall > 0)[0]
         reward -= SWITCH_COST * sw
+        self._ps("weapon_switch", reward)
         if HOP_PAY:                                          # speed gained from hop to hop (see HOP_PAY)
             hv_ = np.hypot(s[:, 3], s[:, 4])
             hc_ = np.clip(hv_, SPEED_LO, SPEED_HI)
@@ -10785,6 +10888,7 @@ class DuelEnv:
             reward -= JUMP_COST * off_
             c_ = self._counted(np.arange(self.n))
             jc_ += (float((ok_ & c_).sum()), float((off_ & c_).sum()), JUMP_COST * float((off_ & c_).sum()))
+        self._ps("hop", reward)
         blind = fire & (self.seen_t > 1.0) & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         if BLIND_RULE:                                       # (rockets by where they land, below; plasma and grenades free)
             bill = blind & np.isin(self.weapon, (MG, SG, LG, RG, HMG))
@@ -10807,6 +10911,7 @@ class DuelEnv:
             self.stats["blind_bill"] += int(bill.sum())
         else:
             reward -= BLIND_FIRE_COST * blind
+        self._ps("blind_fire", reward)
         fight = human & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         if LEGS:
             lg_, up_ = self.legs_on, human & (self.hp > 0)
@@ -10846,6 +10951,7 @@ class DuelEnv:
                 r_long[i] += MOVE_ARRIVE * (0.5 + min(1.5, float(v) / 320.0))
                 self.stats["move_arrive"] += 1
                 self._new_goal(int(i))
+        self._ps("move_round", reward)
         self.stats["jerk"] += float(jerk.sum())
         st = dict(dmg_taken=np.zeros(n, np.float32), attacker=np.full(n, -1), kill_w={}, kicked=False,
                   by={}, killer=np.full(n, -1))               # damage per (attacker, victim) this frame; who took him below zero
@@ -10892,6 +10998,7 @@ class DuelEnv:
             self.yaw = s[:, 7].copy()
             if FIRE_QL:                                      # (a course moved him: the frame's end then)
                 hs_s1, hs_yaw1 = s, self.yaw.copy()
+        self._ps("course", reward)
         # fire: a shot leaves one frame after the command
         self.cool = np.maximum(0.0, self.cool - DT)
         self.fire_cd = np.maximum(0.0, self.fire_cd - DT)
@@ -10917,6 +11024,7 @@ class DuelEnv:
             reward -= FIRE_TOGGLE_COST * ((fire != self.fire_prev) & ~out_)
         else:
             reward -= FIRE_TOGGLE_COST * (fire != self.fire_prev)
+        self._ps("fire_toggle", reward)
         self.fire_prev = fire.copy()
         use = shoot & (self.weapon != G)                    # ammo is finite in every round kind
         if getattr(self, "inf_ammo", False):               # test-suite aim rooms: ammo never runs out
@@ -10940,11 +11048,13 @@ class DuelEnv:
                 self.stats["shot_cost"] += float(cost_.sum())
                 self.stats["shot_n"] += len(sc_)
                 self.stats["shot_fac"] += float(fac_.sum())
+        self._ps("shot_price", reward)
         if BLIND_RULE:
             br_ = np.nonzero(use & (self.weapon == RL) & (self.script == 0) & (self.seen_t > 1.0) & (pkind != MOVE)
                              & ((pkind != COURSE) | self.gun))[0]
             if len(br_):
                 self._blind_rockets(br_, s, reward)
+        self._ps("blind_rocket", reward)
         if RL_QL:                                            # (RL_QL) a rocket leaves on the frame of the command
             now_rl = shoot & (self.weapon == RL)
             if now_rl.any():
@@ -11165,9 +11275,14 @@ class DuelEnv:
             self.stats["gun"][0] += float(dealt[self.gun].sum())
             dealt = np.where(self.gun, dealt * gsp, dealt)
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
+        if PAY_SPLIT:
+            self._pt("dmg_dealt", ar, self.dmg_reward * dealt)
+            self._pt("dmg_taken", ar, -self.dmg_reward * self.dmg_taken_w * np.asarray(taken, np.float64))
         if high_ is not None:                                # (HIGH_PAY) a hit from above is worth more to both, one from below less
             reward += self.dmg_reward * (high_[0] - self.dmg_taken_w * high_[1])
+        self._ps("high", reward)
         self._rail(s, st, do_fire, do_w, reward)            # (RAIL_FAR_PAY) the long rail's pay (switch on) and its counters (always)
+        self._ps("rail", reward)
         if STYLE_P > 0:                                      # playing styles: his weapon, at its distance (see STYLES)
             live = (pkind == NORMAL) & (self.script == 0) & (self.hp > 0) & (self.run_k < 0)
             sw = STYLE_W[self.style]
@@ -11185,6 +11300,7 @@ class DuelEnv:
             np.add.at(st_[:, 5], self.style[live], dealt[live])
             np.add.at(st_[:, 6], self.style[mine], dealt[mine])
             np.add.at(st_[:, 7], self.style[live], self.has[live][:, [RL, RG, LG]].sum(1))
+        self._ps("style", reward)
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
         if self.flinch_on and hitby.any():                  # a hit throws the aim off at once, and for a moment after
@@ -11302,6 +11418,14 @@ class DuelEnv:
                         for o_ in self._mates(i):                           # (zero-sum) the enemy loses as much
                             reward[o_] -= ITEM_FLAT[lab]
                             r_long[o_] -= ITEM_FLAT[lab]
+                    if PAY_SPLIT:
+                        fl_ = float(ITEM_FLAT[lab]) if (ITEM_FLAT and lab in ITEM_FLAT and not own_) else 0.0
+                        if fl_:
+                            nm_ = ("item_" + lab) if lab in ("MH", "RA", "YA") else "item_flat_other"
+                            self._pt(nm_, i, fl_)
+                            for o_ in self._mates(i):
+                                self._pt(nm_, o_, -fl_)
+                        self._pt("big_order" if kind == "wp" and (BIG_PICK_SEQ or BIG_PICK > 0) else "item_points", i, float(pay_) - fl_)
                     reward[i] += pay_
                     r_long[i] += pay_
                     want_ = lab if lab in ("MH", "RA") else WEAPONS[int(val)].upper() if kind == "wp" else ""
@@ -11317,6 +11441,7 @@ class DuelEnv:
                         for o_ in self._mates(i):
                             if self.hp[o_] > 0 and self.run_k[o_] < 0:      # (not in an item run: there everybody is alone)
                                 reward[o_] -= self.item_loss * self.item_reward * gain / 100.0
+                                self._pt("item_loss", o_, -self.item_loss * self.item_reward * gain / 100.0)
                                 r_long[o_] -= self.item_loss * self.item_reward * gain / 100.0
                     if self.contest_t[m] > 0 and it == self.contest_it[m]:    # the item the round began as a race for
                         self.stats["contest_taken"] += int(self.script[i] == 0)
@@ -11324,6 +11449,7 @@ class DuelEnv:
                     if not own_:
                         self.item_up[m, it] = False
                         self.item_t[m, it] = resp
+        self._ps("items_other", reward)
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
         self.armor = np.where(self.armor > 100, np.maximum(100.0, self.armor - DT), self.armor)
         if self.item_seek > 0 and self.route is not None:
@@ -11343,6 +11469,7 @@ class DuelEnv:
             reward += self.item_seek * np.where(np.abs(gain) < 0.4, gain, 0.0) * (self.script == 0) * (self.hp > 0)
             r_long += self.item_seek * np.where(np.abs(gain) < 0.4, gain, 0.0) * (self.script == 0) * (self.hp > 0)
             self.seek_phi = phi.astype(np.float32)
+        self._ps("item_seek", reward)
         if WAY_MEASURE:                                      # his path since the route item he took last: a point every WT_EVERY frames
             self.wt_tick += 1
             on_ = (self.wt_from >= 0) & (self.hp > 0)
@@ -11423,6 +11550,7 @@ class DuelEnv:
             # a trip given up pays nothing (v9); one whose item another player took is not given up
             claw = self.intent_changed & (prev_int > 0) & ~prev_done & ~in_run & ~gone_before[:len(prev_int)]
             reward -= self.intent_paid * claw
+            self._pt("way_claw", ar, -(self.intent_paid * claw))
             if WAYS:                                         # (counted: what trips given up gave back; below: what his ways paid)
                 self.stats["way_pay"][1] += float((self.intent_paid * claw)[self._counted(ar)].sum())
             fast_ = np.where(self.intent_paid > 0, self.intent_fast, 0.0)      # the part of it that was pay for speed (a new life
@@ -11431,6 +11559,7 @@ class DuelEnv:
             self.intent_paid = np.where(claw | self.intent_done, 0.0, self.intent_paid).astype(np.float32)
             pay_now = self.intent_seek * worth * gain / self.intent_phi0 * pay
             reward += pay_now - INTENT_SWITCH * (self.intent_changed & (prev_int > 0) & ~in_run)
+            self._pt("way", ar, pay_now)
             r_long += pay_now - INTENT_SWITCH * (self.intent_changed & (prev_int > 0) & ~in_run)
             self.intent_paid = (self.intent_paid + pay_now).astype(np.float32)
             if WAYS:
@@ -11453,16 +11582,19 @@ class DuelEnv:
                     run_ok = in_run & (self.script == 0) & (self.hp > 0) & ~self.rjrun     # (RJ_RUN_P: nor for speed)
                     pace_now = pace_now + SPEED_PAY * sp_f * trip
                     reward += SPEED_PAY_RUN * sp_f * run_ok
+                    self._pt("speed_run", ar, SPEED_PAY_RUN * sp_f * run_ok)
                     self.stats["speed_pay"] += float((SPEED_PAY * sp_f * trip).sum())
                     self.stats["speed_pay_run"] += float((SPEED_PAY_RUN * sp_f * run_ok).sum())
                     self.stats["speed_frames"] += int(((sp_f > 0) & (trip | run_ok)).sum())
                 reward += pace_now
+                self._pt("speed", ar, pace_now)
                 self.intent_paid = (self.intent_paid + pace_now).astype(np.float32)     # a trip given up gives it back
                 self.intent_fast = (self.intent_fast + pace_now).astype(np.float32)     # ... as pay for speed, not the game's
                 self.stats["pace_pay"] += float(pace_now.sum())
                 self.stats["pace_frames"] += int((fast & (sp_h > 320.0)).sum())
                 self.stats["trip_frames"] += int(trip.sum())
                 self.stats["trip_speed"] += float(sp_h[trip].sum())
+            self._ps("intent_switch", reward)
             run = in_run & (self.script == 0)
             if run.any():                                   # item runs: the way gained against the clock, a bonus on taking it
                 alive = run & (self.hp > 0)
@@ -11545,6 +11677,7 @@ class DuelEnv:
                         self._run_pick(int(i))
             self.intent_phi = phi.astype(np.float32)
 
+        self._ps("runs", reward)
         if STACK_DIFF:                                       # (v0.3.1) his stack against the enemy's, zero-sum (see STACK_DIFF)
             on_ = (pkind == NORMAL) & (self.script == 0) & (self.run_k < 0)
             st_ = np.where(self.hp > 0, np.maximum(self.hp, 0.0) + self.armor, 0.0)
@@ -11552,6 +11685,7 @@ class DuelEnv:
             pay_ = np.where(on_, STACK_DIFF * diff_ * (DT / 60.0), 0.0)
             reward += pay_
             r_long += pay_
+        self._ps("stack_diff", reward)
         if STACK_PAY or STACK_WPN or STACK_BARE or STACK_LOW:   # pay for the stack he keeps (see STACK_PAY)
             on = (pkind == NORMAL) & (self.hp > 0) & (self.script == 0) & (self.run_k < 0)
             big = self.has[:, [RL, LG, RG]].sum(1)
@@ -11572,9 +11706,11 @@ class DuelEnv:
             self.stats["stack_low"] += int((on & (low > 0)).sum())
             self.stats["stack_cost"] += float((STACK_BARE * np.minimum(STACK_BARE_MAX, self.bare_t / STACK_BARE_RAMP) + STACK_LOW * low)[on].sum()) * DT / 60.0
 
+        self._ps("stack_keep", reward)
         if (self.drop_w >= 0).any():                         # weapons that dead players left (see DROPS)
             self._drops_step(reward)
 
+        self._ps("drops", reward)
         if KNOW_PAY:                                         # pay for knowing where the enemy is (see KNOW_PAY)
             on = (pkind == NORMAL) & (self.hp > 0) & (self.script == 0) & (self.run_k < 0)
             kn = self._knowledge()
@@ -11583,6 +11719,9 @@ class DuelEnv:
             self.stats["know"] += float(kn[on].sum())
             self.stats["know_frames"] += int(on.sum())
 
+        self._ps("know", reward)
+        if WIN_SHADOW:
+            self.ws_flat[:] = 0.0
         # deaths, frags, respawns
         if RESPAWN_QL:                                       # (RESPAWN_QL) the waits run down; at a wait's end he is back at a spawn
             self.rsp_born[:] = False                         # point chosen now, by where the enemy is now (see _spawn)
@@ -11603,12 +11742,17 @@ class DuelEnv:
             gm_ = GAME_ON and bool(self.game[self._match_of(v)])    # a whole game or a late round (GAME_P): the game's score,
             if gm_:                                                 # and with WIN_PAY the frag is paid by the game (_game_step)
                 self.g_flat[v] -= 1.0
+                if WIN_SHADOW:
+                    self.ws_flat[v] -= 1.0
+                    if k >= 0 and k != v:
+                        self.ws_flat[k] += 1.0
                 if k >= 0 and k != v:
                     self.g_flat[k] += 1.0
                 else:
                     self.frags_r[v] -= 1                    # (his own hand or the world: a point off him)
             if not (gm_ and WIN_PAY):
                 reward[v] -= 1.0
+                self._pt("death", v, -1.0)
             if k >= 0 and k != v and self.cf_side[k] and self.cf_side[v] and self.cf_side[k] != self.cf_side[v]:
                 self.stats["cf_stack_kills" if self.cf_side[k] == 1 else "cf_plain_kills"] += 1
             if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
@@ -11622,6 +11766,7 @@ class DuelEnv:
                     self.stats["style"][self.style[k], 8] += 1
                 if not (gm_ and WIN_PAY):
                     reward[k] += 1.0
+                    self._pt("frag", k, 1.0)
                 if DROPS:
                     self._drop_weapon(int(v), int(k))
                 self.frags_r[k] += 1
@@ -11668,10 +11813,13 @@ class DuelEnv:
                 gm_ = GAME_ON and bool(self.game[self._match_of(v)])
                 if gm_:                                      # (a whole game: a point off him, and the death is an event)
                     self.g_flat[v] -= 1.0
+                    if WIN_SHADOW:
+                        self.ws_flat[v] -= 1.0
                     self.frags_r[v] -= 1
                     events.append(dict(victim=int(v), killer=-1, weapon=-1))
                 if not (gm_ and WIN_PAY):
                     reward[v] -= 1.0
+                    self._pt("death", v, -1.0)
                 if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
                     reward[v] -= float(self.intent_paid[v])
                     r_long[v] -= float(self.intent_paid[v] - min(self.intent_fast[v], self.intent_paid[v]))
@@ -11688,10 +11836,12 @@ class DuelEnv:
                     self._rj_place(int(v))
                 if self.goal[v] >= 0:
                     self._new_goal(int(v))
+        self._ps("deaths_other", reward)
         # short rounds (curriculum): restart both players near each other every ~round_len seconds
         self.round_t += DT
         if GAME_ON:                                          # whole games and late rounds: their clock, and the frame's pay by the game
             self._game_step(reward)
+        self._ps("win_pay", reward)
         cf_ = np.nonzero(self.cf_t > 0)[0]
         if len(cf_):
             self.cf_t[cf_] -= DT
@@ -11885,17 +12035,23 @@ class DuelEnv:
         self._teach_update()
         info = dict(events=events)
         self._preaim(s, reward)                              # (PREAIM_PAY) fresh sightings: the counters, always; the pay with the switch on
+        self._ps("preaim", reward)
         if TRACK_TRUTH:                                      # (TRACK_TRUTH) the seconds each has not seen the enemy, for info["aux"]
             self._trk_step()
         if LG_QUIET_COST > 0:                                # (LG_QUIET_COST) the lightning gun carried while the enemy is away
             self._lg_quiet(reward)
         else:
             self.lgq_t = None                                # (off, by a live setting: his clock begins again when it is on)
+        self._ps("lg_quiet", reward)
+        self._pt_end(info)
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or
             info["legs_lab"], info["legs_held"] = self.legs_lab.copy(), self.legs_wh.copy()      # would have in a withheld stretch
         if GAME_ON:
             info["win_pay"] = self.win_pay.copy()            # (WIN_PAY) the frame's pay by the game, per player
+        if WIN_SHADOW:
+            info["win_shadow"] = self.win_shadow.copy()      # (WIN_SHADOW) what WIN_PAY would have paid this frame (never paid)
+            info["flat_frag"] = self.ws_flat.copy()          # ... and the flat frag pay of whole games this frame
         self._hand_step(done, died)                          # the weapon in his hand with nobody in view: the counters, always;
         if HAND_TEACH:                                       # (HAND_TEACH) the pros' shares as the target of his next reading of
             info["hand_lab"] = self.hand_lab.copy()          # the weapon key, for the trainer's --hand-teach
