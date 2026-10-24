@@ -233,6 +233,7 @@ class ffabot(duelbot):
             with open(bsp, "wb") as f:
                 f.write(data)
         self.P, self.attn = _net.load(os.path.join(D, "policy.npz"))     # (v0.2: with the attention part, if it has one)
+        self.mapname = mapname                               # (v0.4.1: the zones' map number of the brain's token, netpass.pose)
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
         self.dims = [int(x) for x in self.P["action_dims"]]
         if "legs" in self.P:                                 # his legs' network (duel_env's LEGS), exported beside the policy file
@@ -304,7 +305,7 @@ class ffabot(duelbot):
         env.mv[k], env.cool[k] = 0.0, 0.0
         if hasattr(env, "hb"):
             env.hb[k] = 0.0                                  # (HAND_BAND) the view's velocity too
-        self.h[k] = 0.0
+        _net.clear(self.P, self.h, k)                        # (a head's tick clock and the brain's kept, as in training: netpass.clear)
         self.want_w.pop((id(env), k), None)
         self.prev.pop(k, None), self.ammo_prev.pop(k, None), self.tot.pop(k, None)
         if hasattr(env, "_v02_round"):                       # (v0.2) the seat's own clocks and beliefs, and what the others
@@ -376,7 +377,13 @@ class ffabot(duelbot):
     def act_batch(self, obs, seats, xl=None):
         """one pass of the network for all the Bobbys alive (plugins/netpass.py: the same sums as the simulator's checks,
         the attention part of v0.2 included; sampled, as in training)"""
-        out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng, xl=xl)
+        pz = {}
+        if _net.needs_pose(self.P):                          # (v0.4.1) the brain's token: each seat's place and view yaw as the game gives them
+            p_, z_ = _net.pose(self.P, self.env, self.mapname)
+            pz = dict(pose=p_[seats], zmap=z_[seats])
+        out, self.h[seats] = _net.step(self.P, self.attn, obs, self.h[seats], self.rng, xl=xl, **pz)
+        if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
+            _net.brain_feed(self.P, self.env, self.h[seats], seats)
         return out
 
     # ------------------------------------------------------------------ the simulator's senses for every seat
@@ -565,7 +572,7 @@ class ffabot(duelbot):
         else:
             if now - self.sess_t0 > self.round_secs or new_:
                 self.sess_t0 = now
-                self.h[:] = 0
+                _net.clear(self.P, self.h)
                 self.kills0 = {p.id: p.stats.kills for k, p, st in seated}
             if new_:
                 self.new_game_in(env)

@@ -96,7 +96,10 @@ class SeatClock:
         if self.own:                                         # (as the simulator: a round's clock is a sum of float32 steps, a game's
             self.tick += 1                                   # is its frame count times the step)
             self.ct += self.E.DT
-            self.env.clock_t = np.where(self.gs, np.float32(self.tick * self.E.DT), self.ct)
+            tk_ = self.tick
+            if getattr(self.E, "OVERTIME", False) and tk_ > self.E.GAME_FRAMES:    # (OVERTIME) a period: the last OT_LEN s again
+                tk_ = int(self.env._ot_fold(tk_))
+            self.env.clock_t = np.where(self.gs, np.float32(tk_ * self.E.DT), self.ct)
         elif not self.left_full and hasattr(self.env, "v02_left"):      # (a frozen module of v0.2: the same rule through its v02_left)
             self.ct += self.E.DT
             self.env.v02_left = np.clip(1.0 - self.ct.astype(np.float64) / max(self.rounds[0], 1e-3), 0.0, 1.0)
@@ -167,6 +170,14 @@ def play(job):
         env.arena_len = 1e9
     env.round_t[:] = 1e9
     n = env.n
+    BR_ = bool(getattr(E, "BRAIN_READ", False))              # (v0.4.2a) the readers on the brain's answer: each side's lives drawn at
+    if BR_:                                                   # its own fade (a network without one, a scripted seat: the rule)
+        sw0_ = int(bool(swap) and opp_pol is not None)
+        g_ = np.zeros(n, np.float32)
+        g_[np.arange(sw0_, n, 2)] = pol.rfg if getattr(pol, "rf_read", False) else 0.0
+        if opp_pol is not None:
+            g_[np.arange(1 - sw0_, n, 2)] = opp_pol.rfg if getattr(opp_pol, "rf_read", False) else 0.0
+        env.set_brain_g(g_)
     obs, _, _, _ = env.step(np.zeros((n, len(E.ACTION_DIMS)), np.int64))
     env.round_len = env.arena_len = 1e9                          # one game, no restarts
     env.round_t[:] = 0.0
@@ -217,7 +228,15 @@ def play(job):
     NS_, SZ_ = len(SN_), np.zeros(n, np.int64)
     sty = dict(alive=np.zeros((2, NS_)), vis=np.zeros((2, NS_)), hand=np.zeros((2, NS_, 3)), frags=np.zeros((2, NS_)), deaths=np.zeros((2, NS_)),
                lives=np.zeros((2, NS_)))
-    for t in range(frames):
+    # (OVERTIME, 2026-10-22) a game level at the limit goes on in periods of OT_LEN, up to OT_CAP, as in training and the game;
+    # a game decided keeps the score it had when it ended; the counters are the regulation minutes'
+    OT_ = bool(getattr(E, "OVERTIME", False))
+    end_ = frames
+    final = None
+    ot_n, reg_ = 0, None
+    t = -1
+    while t + 1 < end_:
+        t += 1
         a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
@@ -225,11 +244,25 @@ def play(job):
         xlu_ = None                                                             # (--legs-feat, --legs-guide) the branch's inputs of this frame
         if getattr(E, "LEGS_IN", False) and (getattr(pol, "needs_xl", False) or getattr(opp_pol, "needs_xl", False)):
             xlu_ = env.legs_prep()                                              # (nothing between here and the step changes a target)
-        al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev])
+        pz_ = zz_ = None                                                        # (v0.4.1) his pose for a network whose brain token is open
+        if getattr(pol, "needs_pose", False) or getattr(opp_pol, "needs_pose", False):
+            import btoken as btoken_
+            pz_, zz_ = btoken_.pose_from_env(env, mp)
+        al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
+                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}))
         a[ev, :min(al.shape[1], a.shape[1])] = al[:, :a.shape[1]]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
-            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od])
+            ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
+                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}))
             a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
+        if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
+            ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
+            for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
+                an_ = p_.brain_answer(hs_) if hasattr(p_, "brain_answer") else None
+                if an_ is not None:
+                    for k_ in ans_:
+                        ans_[k_][m_] = an_[k_]
+            env.brain_in(ans_)
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
         if getattr(E, "LEGS_IN", False) and (pol.legsP is not None or (opp_pol is not None and opp_pol.legsP is not None)):
@@ -319,11 +352,31 @@ def play(job):
         was = alive.copy()
         hp0, ar0, has0 = env.hp.copy(), env.armor.copy(), env.has[:, big].copy()
         sc_.after(t, info["events"], (h, h2 if opp_pol is not None else None), (pol, opp_pol))    # a round seat's clock, score and memory start over; a game seat's never
+        if t + 1 == end_:
+            sp_ = score.reshape(-1, 2)
+            if final is None:                                   # the regulation limit
+                final = sp_.copy()
+                import copy as _cp
+                reg_ = (kills.copy(), _cp.deepcopy(c), _cp.deepcopy(sty), [list(x) for x in first],
+                        {k: np.array(env.stats[k], np.float64).copy() for k in SK})
+                live_ = final[:, 0] == final[:, 1]
+            else:                                               # a period's end: the games still in it take its score
+                final[live_] = sp_[live_]
+                live_ = live_ & (sp_[:, 0] == sp_[:, 1])
+            if OT_ and live_.any() and ot_n < int(getattr(E, "OT_CAP", 10)):
+                ot_n += 1
+                end_ += int(round(float(getattr(E, "OT_LEN", 120.0)) / E.DT))
+    if reg_ is not None:
+        kills, c, sty, first, st_reg = reg_
+        score = final.reshape(-1)
+    else:
+        st_reg = {k: np.array(env.stats[k], np.float64) for k in SK}
     flip = slice(None, None, -1) if swap else slice(None)
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
+                overtime_periods=ot_n,
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),
                 sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_,
-                st={k: (np.array(env.stats[k], np.float64) - st0[k]).tolist() for k in SK})
+                st={k: (st_reg[k] - st0[k]).tolist() for k in SK})
 
 
 def main():
@@ -353,11 +406,24 @@ def main():
     ap.add_argument("--opp-acquire-ms", type=float, default=None)
     ap.add_argument("--swap", action="store_true", help="two networks: every second process seats him on the odd seats (the same network on both "
                     "sides got 47 percent of the frags on the even seats: B-220); give --procs an even number")
+    ap.add_argument("--btoken-gate", type=float, default=None, help="(v0.4.1) play his brain token at this gate (default: his checkpoint's; 0: shut)")
+    ap.add_argument("--opp-btoken-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--rule-fade-g", type=float, default=None, help="(v0.4.2a) play his rule fade at this gate (default: his checkpoint's; 0: none)")
+    ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
     path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = T.Policy(path, seed=1)
+    if a.btoken_gate is not None:
+        pol.set_gate(a.btoken_gate)
+    if a.rule_fade_g is not None:
+        pol.set_rule_fade(a.rule_fade_g)
+    if getattr(pol, "rf", None) is not None:
+        print("rule fade: g {:g} ({}); the simulator's readers {}".format(pol.rfg, "none" if pol.rfg <= 0 else "{} columns faded".format(len(pol.rf_cols)),
+              "on the brain's answer for a life drawn at g (BRAIN_READ=1)" if pol.rf_read else "on the rule"), flush=True)
+    if getattr(pol, "btok", None) is not None:
+        print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
     old = names(a.inputs)
     assert len(old) == len(pol.mean), "the network has {} inputs, {} lists {}".format(len(pol.mean), a.inputs, len(old))
@@ -365,11 +431,17 @@ def main():
     opp_pol, opp_idx, kind = None, None, a.opp
     if a.opp.startswith("policy:"):
         opp_pol = T.Policy(a.opp[7:], seed=2)
+        if a.opp_btoken_gate is not None:
+            opp_pol.set_gate(a.opp_btoken_gate)
+        if a.opp_rule_fade_g is not None:
+            opp_pol.set_rule_fade(a.opp_rule_fade_g)
         oo = names(a.opp_inputs)
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
+    if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp_pol) if p_ is not None) and "BRAIN_READ" not in envvars:
+        envvars["BRAIN_READ"] = "1"                              # (v0.4.2a) a network trained with the readers on the brain plays so
     delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,
               None if opp_pol is None else (opp_pol.react_ms if a.opp_react_ms is None else a.opp_react_ms),
               None if opp_pol is None else (opp_pol.acquire_ms if a.opp_acquire_ms is None else a.opp_acquire_ms))

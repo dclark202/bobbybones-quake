@@ -62,6 +62,19 @@ class Policy:
             self.attP = attn_.params_np(sd)
             if not np.abs(self.attP["door.weight"]).sum() > 0:
                 self.attP = None
+        self.btok = None                                     # (v0.4.1, sim/btoken.py) the brain's token: played only while its gate is open
+        self.bgate = 0.0                                     # (gate 0: the network as it was, the brain not stepped)
+        bt_ = ck.get("btoken")
+        if bt_ is not None and self.attP is not None and "btok_emb.weight" in self.attP and ck.get("belief") is not None:
+            import btoken as btoken_
+            self.bgate = float(bt_.get("gate", 0.0))
+            self.btok = bt_
+            self.brainP = btoken_.numpy_brain(sd, ck["belief"], ck.get("track"), ck.get("track_z"))
+        self.rf = ck.get("rule_fade")                        # (v0.4.2a, sim/rule_fade.py) the rule-made columns faded out of the hands
+        self.rf_cols = np.asarray(self.rf["cols"], np.int64) if self.rf is not None else np.zeros(0, np.int64)
+        self.rfg = float(self.rf.get("g", 0.0)) if self.rf is not None else 0.0
+        self.rf_read = bool(self.rf.get("readers")) if self.rf is not None else False    # (BRAIN_READ in training: the simulator's
+        #                                                      readers on the brain's answer: the checks give it, brain_answer())
         self.legsP = None                                    # (LEGS_IN, B-253) his legs' branch, if the network has it inside
         if "legs.0.weight" in sd:
             self.legsP = tuple(sd[k_] for k_ in ("legs.0.weight", "legs.0.bias", "legs.2.weight", "legs.2.bias", "legs.4.weight", "legs.4.bias"))
@@ -99,6 +112,11 @@ class Policy:
             o_ = np.concatenate([[0], np.cumsum(self.dims)])
             self.head_si = slice(int(o_[10]), int(o_[11]))  # the intention's logits and his way's (none before stage B)
             self.head_sw = slice(int(o_[12]), int(o_[13])) if len(self.dims) > 12 else slice(0, 0)
+        self.brain_at = None                                 # (v0.4.1) the brain's and the token's state, at the end of a seat's array
+        if self.btok is not None:
+            import btoken as btoken_
+            self.brain_at = self.W
+            self.W = self.brain_at + btoken_.packed_width(self.brainP["H"])
 
     @property
     def needs_xl(self):
@@ -114,15 +132,71 @@ class Policy:
         import head as head_
         return head_
 
+    @property
+    def brain_on(self):
+        """(v0.4.1) the brain is stepped: its token is open, or (v0.4.2a) the simulator's readers take its answer (the rule
+        fade above 0 in a network trained with BRAIN_READ)"""
+        return self.btok is not None and (self.bgate > 0 or (self.rf_read and self.rfg > 0))
+
+    @property
+    def needs_pose(self):
+        """(v0.4.1) act() needs his pose (pose=, zmap=: btoken.pose_from_env of the frame, these rows): the brain is stepped"""
+        return self.brain_on
+
+    def set_rule_fade(self, g):
+        """(v0.4.2a, checks) play the rule fade at this gate (0: the network without the fade)"""
+        assert g <= 0 or self.rf is not None, "this network has no rule fade"
+        self.rfg = float(g)
+
+    def brain_answer(self, h):
+        """(v0.4.2a, BRAIN_READ) the brain's answer for these seats from their arrays (after act()), as the simulator's
+        readers take it (duel_env.brain_in; btoken.answer_of); None while the brain is not stepped"""
+        if not self.brain_on:
+            return None
+        import btoken as btoken_
+        _, tk_ = btoken_.unpack(self.brainP, self.btok, h[:, self.brain_at:])
+        return btoken_.answer_of(tk_)
+
+    def token_pre(self, obs, pose, zmap, hb):
+        """(v0.4.1) before a frame: the brain's last answer turned to his pose now, as the trainer makes it ([B, F] float32, the
+        numbers rounded to half precision), and the unpacked state; (None, None) while the gate is shut (the network without
+        it). obs: the raw inputs; hb: the seats' packed brain state (the end of their arrays)"""
+        if not self.brain_on:
+            return None, None
+        import btoken as btoken_
+        assert pose is not None and zmap is not None, "this network's brain is stepped: give act() pose= and zmap= (btoken.pose_from_env)"
+        br_, tk_ = btoken_.unpack(self.brainP, self.btok, hb)
+        tk_.see(obs)
+        return tk_.features(np.asarray(pose, np.float32), np.asarray(zmap)).astype(np.float32), (br_, tk_)
+
+    def token_post(self, xa, pose, zmap, st):
+        """(v0.4.1) after the frame: the brain reads the frame's normalised inputs xa; at its tick the readouts' answer is kept in
+        map coordinates (his pose of this frame) -> the packed state"""
+        import btoken as btoken_
+        br_, tk_ = st
+        tk = br_.frame(xa)
+        if tk.any():
+            o1_, o2_ = br_.readouts(tk)
+            tk_.answer(tk, o1_, o2_, np.asarray(pose, np.float32)[tk], np.asarray(zmap)[tk])
+        return btoken_.pack(br_, tk_).astype(np.float32)
+
+    def set_gate(self, g):
+        """(v0.4.1, checks) play the brain's token at this gate (0: shut, the network without it)"""
+        assert g <= 0 or self.btok is not None, "this network has no brain token"
+        self.bgate = float(g)
+
     def clear(self, h, rows=None):
         """a seat's memory cleared (the trainer's `done`), in place; the head's tick clock kept (sim/head.py np_clear). For a
         network without a head the same as h[rows] = 0."""
         r = slice(None) if rows is None else rows
+        if self.brain_at is not None:                        # (v0.4.1) the brain and its answer, by the same flag (its own clear)
+            import btoken as btoken_
+            btoken_.packed_clear(h[:, self.brain_at:], rows, self.brainP["H"])
         if self.head is None:
-            h[r] = 0.0
+            h[r, :self.brain_at] = 0.0
             return h
         h[r, :self.head_at] = 0.0
-        self.hm.np_clear(self.head, h[:, self.head_at:], rows)
+        self.hm.np_clear(self.head, h[:, self.head_at:self.brain_at], rows)
         return h
 
     def head_due(self, h):
@@ -151,7 +225,7 @@ class Policy:
             lg = LU_.np_residual(*self.uniR, lg, zo)
         return lg
 
-    def act(self, obs, h, events=None, xl=None):
+    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
         --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame"""
         dadd = gadd = h2_ = lgl_ = ok_ = None
@@ -162,7 +236,9 @@ class Policy:
             h2_, lgl_ = LU_.np_branch(self.legsP, xl)
             dadd = LU_.np_door(self.uniD[0], self.uniD[1], h2_, ok_) if self.uniD is not None else None
             gadd = LU_.np_guide_add(self.uni, self.uniG, lgl_, ok_, sum(self.dims)) if self.uniG is not None else None
-        hh = None
+        hh = hb = None
+        if self.brain_at is not None:                        # (v0.4.1) the brain's packed state, at the end of the array
+            hb, h = h[:, self.brain_at:], h[:, :self.brain_at]
         if self.head is not None:
             hh, h = h[:, self.head_at:], h[:, :self.head_at]
         hf = h                                               # (--slow-mem) the whole state; h its fast part
@@ -171,14 +247,20 @@ class Policy:
         if obs.shape[1] > len(self.mean):                    # an older network in a simulator with more inputs: they are appended at the end
             obs = obs[:, :len(self.mean)]
         x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
-        xa = x
+        xa = x                                               # (the brain reads these: unfaded)
+        bt, bst = self.token_pre(obs, pose, zmap, hb)
+        if self.rfg > 0 and len(self.rf_cols):               # (v0.4.2a) the hands' inputs: the rule-made columns times (1 - g)
+            import rule_fade as rfade_
+            x = rfade_.apply_np(x, self.rf_cols, self.rfg)
+        xh = x                                               # (the hands' attention reads these)
         if self.cell is not None:
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
             x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
         x = np.tanh(x @ self.w0.T + self.b0)
         x = np.tanh(x @ self.w1.T + self.b1)
         if self.attP is not None:
-            x = x + self.attn_fwd(self.attn, self.attP, xa, hm=h)       # (hm: "mem", his memory of the frame before)
+            bta = bt if self.bgate > 0 else None             # (v0.4.2a: the brain stepped for the readers alone: its token stays out)
+            x = x + self.attn_fwd(self.attn, self.attP, xh, hm=h, bt=bta, bg=self.bgate if bta is not None else 0.0)   # (hm: "mem", his memory of the frame before)
         xf = x
         if hh is not None:                                   # (v0.4) the plan of the head's last tick: e + plan_in(plan)
             o_ = self.hm._np_off(self.head)["plan"]
@@ -208,6 +290,8 @@ class Policy:
             import legs_unify as LU_
             logits = logits + LU_.np_gate_add(self.uni, *self.uniT, zo, h2_, lgl_, ok_, sum(self.dims))
         self.last_zo = zo
+        if bt is not None:
+            hb = self.token_post(xa, pose, zmap, bst)
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()
@@ -227,6 +311,8 @@ class Policy:
             one(int(c_), logits[:, o_[c_]:o_[c_ + 1]] + self.orderT[int(c_)][out[:, int(p_)]])
         if self.no_switch and out.shape[1] > 11:             # (NO_SWITCH) drawn as before, then off: his own network drives
             out[:, 11] = 0
+        if hb is not None:                                   # (v0.4.1) the brain's state back at the end of the array
+            h = np.concatenate([h, hb.astype(np.float32)], 1)
         return out, h
 
 
