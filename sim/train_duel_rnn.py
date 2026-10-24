@@ -192,8 +192,10 @@ def jump_far_rec(agg, agg_map):
 
 
 BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
+BRAIN_PFX = BRAIN_PFX + ("control.",)                               # (v0.4.3, --control) the readout "in control": a brain layer
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
-                "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W")   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
+                "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W")
+LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --control) a factor on the lesson "in control"   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1225,6 +1227,15 @@ def main():
     ap.add_argument("--ahead-warm", type=float, default=30.0, help="... minutes over which its lesson rises from nothing (from --ahead-start)")
     ap.add_argument("--ahead-start", type=float, default=-1.0, help="... the minute its lesson counts from (-1: this process's start)")
     ap.add_argument("--ahead-lr-scale", type=float, default=-1.0, help="... its layers learn at this many times --lr (-1: as --track-lr-scale)")
+    ap.add_argument("--control", type=float, default=0.0, help="v0.4.3 (B-280): the brain's readout 'in control' (sim/control.py), his share "
+                    "of the next two mega / red armor spawns, a lesson only; its weight (a factor on --control-lr). 0 = off (a network that has it keeps "
+                    "it). With --belief and --track; the simulator's CONTROL_TRUTH=1 gives the truth")
+    ap.add_argument("--control-lr", type=float, default=1e-3, help="... its own Adam's rate at weight 1")
+    ap.add_argument("--control-warm", type=float, default=60.0, help="... minutes over which its lesson rises from nothing (from --control-start)")
+    ap.add_argument("--control-start", type=float, default=-1.0, help="... the minute its warm-up counts from (-1: this process's start)")
+    ap.add_argument("--control-every", type=int, default=5, help="... the brain's state kept every this many of its ticks (5: 1 s; the ring "
+                    "holds the horizon: about 0.5 GB on the host with 10,080 players)")
+    ap.add_argument("--control-hid", type=int, default=64, help="... its hidden layer")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -1528,6 +1539,7 @@ def main():
     TRZ_CK = None                                            # (--track-z, v0.4.0) the readout's second part: comes with the network
     BTOK_CK = None                                           # (--btoken, v0.4.1) the brain's token: comes with the network
     AH_CK = None                                             # (--ahead, v0.4.1) the readout of what comes next: comes with the network
+    CTL_CK = None                                            # (--control, v0.4.3) the readout "in control": comes with the network
     RF_CK = None                                             # (--rule-fade, v0.4.2a) the faded columns and the gate: come with the network
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
@@ -1543,6 +1555,7 @@ def main():
         TRZ_CK = ck0_.get("track_z") if any(k_.startswith("trackz.") for k_ in ck0_["model"]) else None
         BTOK_CK = ck0_.get("btoken") if any(k_.startswith("attn.btok_") for k_ in ck0_["model"]) else None
         AH_CK = ck0_.get("ahead") if any(k_.startswith("ahead.") for k_ in ck0_["model"]) else None
+        CTL_CK = ck0_.get("control") if any(k_.startswith("control.") for k_ in ck0_["model"]) else None
         RF_CK = ck0_.get("rule_fade")
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
@@ -1696,6 +1709,7 @@ def main():
     TRZ_LR = float(a.track_z_lr_scale) if a.track_z_lr_scale >= 0 else float(a.track_lr_scale)
     import btoken as btoken_                                 # (v0.4.1) the brain's token (sim/btoken.py) and the readout ahead (sim/ahead.py)
     import ahead as ahead_
+    import control as control_                               # (v0.4.3) the readout "in control" (sim/control.py)
     BTOK_L = BTOK_CK
     if BTOK_L is None and a.btoken:
         assert BEL and TRK, "--btoken: with --belief and its readout (--track)"
@@ -1750,6 +1764,24 @@ def main():
         print("ahead (v0.4.1): the brain's readout of the enemy in {} s, what he goes for ({}), when he appears; {}; lesson {} rising over {} min, "
               "its layers at {} times --lr".format(AH_L["horiz"], AH_L["n_target"], "from the network" if AH_CK is not None else "new (its last layer at zero)",
                                                     AH_PARTS if AH_ON else "off", a.ahead_warm, AH_LR), flush=True)
+    CTL_L = CTL_CK                                           # (--control, v0.4.3) the readout "in control": its layout, from the network or new
+    if CTL_L is None and a.control > 0:
+        assert BEL and TRK_ON, "--control: with --belief and --track (it reads the belief's state)"
+        assert all(c_ in tuple(getattr(E_, "AUX_COLS", ())) for c_ in control_.COLS), "--control: the simulator gives no ctl_ columns (CONTROL_TRUTH=1)"
+        CTL_L = control_.layout(inp=int(BEL_L["hid"]), hid=a.control_hid, every=a.control_every,
+                                horizon_frames=int(E_.CONTROL_D), tick=int(BEL_L["every"]))
+    CTL = CTL_L is not None
+    CTL_ON = CTL and a.control > 0
+    if CTL_ON:
+        assert int(CTL_L["horizon"]) == int(E_.CONTROL_D) and int(CTL_L["tick"]) == int(BEL_L["every"]), \
+            "--control: the readout was made for a horizon of {} frames and ticks of {}; the simulator's CONTROL_D is {}".format(
+                CTL_L["horizon"], CTL_L["tick"], E_.CONTROL_D)
+    if CTL:
+        TRK_SAVE["control"] = CTL_L
+        print("control (v0.4.3): the brain's readout 'in control' ({} -> {} -> {}), {}; lesson {} (rate {} x weight, rising over {} min), "
+              "states every {} ticks over {} frames".format(CTL_L["inp"], CTL_L["hid"], CTL_L["d"], "from the network" if CTL_CK is not None else
+                                                            "new (its last layer at zero)", a.control if CTL_ON else "off",
+                                                            a.control_lr, a.control_warm, CTL_L["every"], CTL_L["horizon"]), flush=True)
     TRZ_TC, TRZ_MAPI = None, None
     TRZ_PRIOR = np.zeros((len(zonemap_.MAPS), trz_.MAX_Z))    # (the counters' map prior: how often the enemy stood in each zone, so far)
     TRK_IX, TRK_TC, TRK_K = None, None, [0.0, 0.0]           # (the truth's columns; the pay's k and the lesson's weight of this rollout)
@@ -1883,6 +1915,8 @@ def main():
                 self.trackz = trz_.make_module(int(TRZ_L["inp"]), TRZ_L)    # its last layer at zero
             if AH:                                               # (--ahead, v0.4.1) the readout of what comes next: its own stream, last layer at zero
                 self.ahead = ahead_.make_module(int(AH_L["inp"]), AH_L)
+            if CTL:                                              # (--control, v0.4.3) the readout "in control": its own stream, last layer at zero
+                self.control = control_.make_module(CTL_L)
             if ORDER:                                            # (--ordered-heads) a table a link: a row for each choice before, at zero
                 self.order = nn.Module()
                 for p_, c_ in ORDER:
@@ -2283,6 +2317,12 @@ def main():
     trk_group()                                              # (--track) the readout's group, if the optimizer's state did not bring it
     trz_group()                                              # (--track-z) the second part's, after it
     v41_group()                                              # (v0.4.1) the token's and the ahead's, after them
+    CTL_OPT = torch.optim.Adam(pol.control.parameters(), lr=a.control_lr) if CTL_ON else None   # (--control) its own, cold at a start
+    CTL_RING = [None]                                        # ... the brain's states as played, by global row (made at the first rollout)
+    CTL_G = [0]                                              # ... the global row of the next rollout's first frame
+    CTL_G0 = {}                                              # ... each rollout's first row, by its update
+    CTL_T0 = float(a.control_start) if a.control_start >= 0 else float(elapsed0)
+    CTL_LIVE = [1.0]                                         # (live.json's CONTROL_W: a factor on the lesson)
     TRZ_T0 = float(a.track_z_start) if a.track_z_start >= 0 else float(elapsed0)
     TRZ_LIVE = [1.0]                                         # (live.json's TRACK_Z_W: a factor on the part's lesson, 1 at the start)
 
@@ -2791,6 +2831,7 @@ def main():
                     AH_LIVE[0] = float(lt_.get("AHEAD_W", AH_LIVE[0]))               # (... a factor on the ahead lesson)
                     RJ_LIVE[0] = float(lt_.get("RJ_TEACH_W", RJ_LIVE[0]))            # (--rj-teach: the lesson's weight; its warm-up from the first minute above 0)
                     RJC_LIVE[0] = float(lt_.get("RJ_COPY_W", RJC_LIVE[0]))           # (--rj-copy: the lesson's weight; its warm-up from the first minute above 0)
+                    CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
                     a.rule_fade_cap = float(lt_.get("FADE_CAP", a.rule_fade_cap))    # (v0.4.2a: the rule fade's cap: 0 shuts it at once)
                     a.rule_fade_open = float(lt_.get("FADE_OPEN", a.rule_fade_open)) # (... the minutes of its opening: 0 holds it)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
@@ -2801,6 +2842,7 @@ def main():
                                   **({"BELIEF_LR": BEL_LR_NOW[0]} if BEL else {}), **({"AHEAD_W": AH_LIVE[0]} if AH_ON else {}),
                                   **({"RJ_TEACH_W": RJ_LIVE[0]} if RJ_LAB else {}),
                                   **({"RJ_COPY_W": RJC_LIVE[0]} if RJC_LAB else {}),
+                                  **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
@@ -3190,6 +3232,10 @@ def main():
             b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
         BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
+        if CTL_ON:                                                       # (--control) this rollout's first global row; the ring
+            CTL_G0[upd] = CTL_G[0]
+            if CTL_RING[0] is None:
+                CTL_RING[0] = control_.Ring(CTL_L, N)
         bs0 = None
         if BS_ is not None:
             assert float(BS_.cnt.abs().max()) == 0.0, "the belief's rollout must start on a tick's boundary"
@@ -3255,6 +3301,8 @@ def main():
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
+                if bt_ and CTL_ON:                                       # (--control) the state of this tick, kept every --control-every ticks
+                    CTL_RING[0].push(CTL_G0[upd] + t, BS_.s)
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
                 #                                                          (--belief) every seat at once: the inputs as the update re-reads them
@@ -3441,6 +3489,8 @@ def main():
         if AUX_W > 0:
             if AUX_BEL:
                 b_bel[T] = torch.from_numpy(np.ascontiguousarray(obs[:, BEL_IX], dtype=np.float32))
+        if CTL_ON:
+            CTL_G[0] = CTL_G0[upd] + T                                   # (--control) the next rollout's rows follow on
         t_done = time.time() if OVL else None
         C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl, rjc=rjc)
         return dict(b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
@@ -4451,6 +4501,15 @@ def main():
         if RINGH is not None:                                            # (--head) the rollout's ticks join its ring
             RINGH.push(HD_PEND)
             HD_PEND = []
+        CTL_REC = None
+        if CTL_ON and b_aux is not None and update in CTL_G0:           # (--control) the labels of this rollout: of frames CONTROL_D rows back
+            g0_ = CTL_G0.pop(update)
+            for k_ in [k_ for k_ in CTL_G0 if k_ < update]:
+                CTL_G0.pop(k_)
+            cw_ = CTL_LIVE[0] * float(a.control) * (min(1.0, max(0.0, mins - CTL_T0) / a.control_warm) if a.control_warm > 0 else 1.0)
+            cb_ = control_.batch(CTL_RING[0], g0_, b_aux, TRK_IX, int(CTL_L["horizon"]))
+            if cb_ is not None:
+                CTL_REC = control_.record(control_.learn(pol.control, CTL_OPT, *cb_, lr=a.control_lr * cw_, dev=dev), cw_)
         t_end = time.time()
         total += T * N
         sim_min = T * DT_MIN * n_groups                                  # minutes of play, summed over the groups
@@ -4754,6 +4813,8 @@ def main():
                                 frames=[int(ah_acc[NPA_ + i_]) for i_ in range(NPA_)],
                                 err_units={"{:g}s".format(h_): round(float(ah_acc[2 * NPA_ + i_] / max(1.0, float(ah_acc[-1]))), 1)
                                            for i_, h_ in enumerate(ahead_.HORIZ)})
+        if CTL_REC is not None:                                          # (--control) scored on each label before it is learnt from
+            rec["control"] = CTL_REC
         if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
             def q_(i_, d_=4):
                 return round(float(ax_s[i_] / max(1.0, float(ax_n[int(AUX_MI[i_])]))), d_)

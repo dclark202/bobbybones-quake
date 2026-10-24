@@ -2536,6 +2536,26 @@ RACE_CAP = 30.0
 if TRACK_RACE:
     assert TRACK_TRUTH, "TRACK_RACE needs TRACK_TRUTH=1"
     AUX_COLS = AUX_COLS + ("race_me_mh", "race_en_mh", "race_me_ra", "race_en_ra")
+# v0.4.3 (B-280; docs/v0.4.3/RUN_v0.4.3.md, "In control"). CONTROL_TRUTH=1 (a training switch, off by default; off: info["aux"]
+# as above and nothing else changes) adds the truth of the brain's readout "in control": his share of the next two spawns of
+# the mega and the red armor (the two kinds together, in the order they come up; an item lying there at the frame is the
+# first). Known only in hindsight, so it is given CONTROL_H seconds late: the row of frame F carries the label of frame
+# F - CONTROL_D (the trainer keeps the brain's state that long). Labels only, never inputs, never paid, never read by the
+# simulator itself:
+#   ctl_lab   of frame F - CONTROL_D, his share of the next two spawns: each 1 taken by him, 0 by the enemy, 0.5 come up and
+#             still lying there CONTROL_H seconds on; their mean. -1, no label: that frame was not a duel's game (a whole game
+#             or a pro start: as trk_on without "alive"), its round ended before both were taken, or the second had not
+#             come up by then (a map without the two), or F < CONTROL_D
+#   ctl_one   the same for the next spawn alone (1, 0, 0.5, -1)
+#   ctl_mh, ctl_ra   the same for the next spawn of the mega alone, of the red armor alone (-1 also: the map has none)
+#   ctl_age   the frames since the last fresh simulator, capped at CONTROL_D + 1: the trainer's check of the alignment
+#   ctl_ok    1: THIS frame will have a label CONTROL_D frames on if its spawns resolve (a duel's game; not delayed)
+CONTROL_TRUTH = float(os.environ.get("CONTROL_TRUTH") or 0.0) > 0
+CONTROL_H = float(os.environ.get("CONTROL_H") or 90.0)
+CONTROL_D = int(round(CONTROL_H / DT))
+CONTROL_M = 16                                             # instances kept per match and item
+if CONTROL_TRUTH:
+    AUX_COLS = AUX_COLS + ("ctl_lab", "ctl_one", "ctl_age", "ctl_ok", "ctl_mh", "ctl_ra")
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -10763,7 +10783,94 @@ class DuelEnv:
         if "win_game" in C and self._hd_live():             # (HEAD_EVENTS) the win label (labels only)
             out[:, C["win_game"]] = self.hd_gid_ran
             out[:, C["win_band"]] = self.hd_band
+        if CONTROL_TRUTH:                                    # (CONTROL_TRUTH) no label here: step()'s _ctl_step gives it
+            out[:, C["ctl_lab"]] = -1.0
+            out[:, C["ctl_one"]] = -1.0
+            out[:, C["ctl_mh"]] = -1.0
+            out[:, C["ctl_ra"]] = -1.0
         return out
+
+    def _ctl_step(self, done, out):
+        """(CONTROL_TRUTH) once a frame at the end of step(): the books of the mega's and the red armor's spawns (who took
+        each), and the label "in control" of the frame CONTROL_D ago into out (info["aux"]; see CONTROL_TRUTH). State kept
+        for this only: no random number, nothing else reads it"""
+        n, D, M = self.n, CONTROL_D, CONTROL_M
+        oth = self._others_arr()
+        per = oth.shape[1] + 1
+        G = n // per
+        grp = np.arange(n) // per
+        if getattr(self, "ctl_sp", None) is None or self.ctl_sp.shape[0] != G:
+            self.ctl_f = 0                                   # frames since the books began
+            self.ctl_rnd = np.zeros(G, np.int64)             # the round each match is in (a count of its ends)
+            self.ctl_sp = np.zeros((G, 2, M), np.int64)      # per match and item: an instance's spawn frame,
+            self.ctl_tk = np.full((G, 2, M), np.iinfo(np.int64).max, np.int64)   # the frame it was taken (max: not yet),
+            self.ctl_by = np.full((G, 2, M), -1, np.int64)   # by whom, its round (-1: an empty slot)
+            self.ctl_rn = np.full((G, 2, M), -1, np.int64)
+            self.ctl_open = np.full((G, 2), -1, np.int64)    # the slot of the instance lying there now (-1: none)
+            self.ctl_next = np.zeros((G, 2), np.int64)       # the next slot to write
+            self.ctl_q_ok = np.zeros((D, n), bool)           # the last D frames: a duel's game, the round
+            self.ctl_q_rn = np.zeros((D, G), np.int64)
+        F = self.ctl_f
+        for i_, k_ in getattr(self, "aux_take", ()):         # 1. this frame's takes close the instance lying there
+            g_ = int(grp[i_])
+            s_ = self.ctl_open[g_, k_]
+            if s_ >= 0:
+                self.ctl_tk[g_, k_, s_], self.ctl_by[g_, k_, s_] = F, int(i_)
+                self.ctl_open[g_, k_] = -1
+        dg_ = np.zeros(G, bool)                              # 2. a round's end: what lies there stays untaken in that round
+        np.logical_or.at(dg_, grp, np.asarray(done, bool))
+        self.ctl_rnd += dg_
+        self.ctl_open[dg_] = -1
+        for k_, id_ in enumerate(self.big_ids):              # 3. an item lying there with no open instance has come up
+            if id_ < 0:
+                continue
+            new_ = np.nonzero(self.item_up[:G, id_] & (self.ctl_open[:, k_] < 0))[0]
+            for g_ in new_:
+                s_ = int(self.ctl_next[g_, k_])
+                self.ctl_sp[g_, k_, s_], self.ctl_tk[g_, k_, s_] = F, np.iinfo(np.int64).max
+                self.ctl_by[g_, k_, s_], self.ctl_rn[g_, k_, s_] = -1, self.ctl_rnd[g_]
+                self.ctl_open[g_, k_] = s_
+                self.ctl_next[g_, k_] = (s_ + 1) % M
+        ok_ = np.zeros(n, bool)                              # this frame as a query: a duel's game (trk_on without "alive")
+        if oth.shape[1] == 1 and self.lab is None and self.fixed_kind is None:
+            foe = oth[:, 0]
+            ok_ = (self.kind[grp] == NORMAL) & (self.mode[grp] < 0) & (self.run_k[:n] < 0) & (self.run_k[foe] < 0)
+        C = {k_: i_ for i_, k_ in enumerate(AUX_COLS)}
+        out[:, C["ctl_age"]] = min(F, D + 1)
+        out[:, C["ctl_ok"]] = ok_
+        if F >= D:                                           # 4. the label of the frame D ago, from the books
+            q = F - D
+            qok = self.ctl_q_ok[q % D]
+            qrn = self.ctl_q_rn[q % D]
+            sp = self.ctl_sp.reshape(G, 2 * M)
+            tk = self.ctl_tk.reshape(G, 2 * M)
+            by = self.ctl_by.reshape(G, 2 * M)
+            rn = self.ctl_rn.reshape(G, 2 * M)
+            cand = (rn == qrn[:, None]) & (tk > q) & (sp <= F)
+            key_ = np.where(cand, sp, np.iinfo(np.int64).max)
+            od_ = np.argsort(key_, axis=1, kind="stable")[:, :2]
+            ga_ = np.arange(G)[:, None]
+            c2_ = cand[ga_, od_]                             # [G, 2]: the first two instances after the query frame
+            taken_ = tk[ga_, od_] <= F
+            live_ = self.ctl_rnd == qrn                      # the round of the query frame goes on (an untaken one: 0.5)
+            res_ = c2_ & (taken_ | live_[:, None])           # resolved: taken, or lying there all the horizon
+            byq_ = by[ga_, od_][grp]                         # [n, 2]
+            v_ = np.where(taken_[grp], (byq_ == np.arange(n)[:, None]).astype(np.float32), 0.5)
+            one_ = qok & res_[grp, 0]
+            two_ = qok & res_[grp, 0] & res_[grp, 1]
+            out[:, C["ctl_one"]] = np.where(one_, v_[:, 0], -1.0)
+            out[:, C["ctl_lab"]] = np.where(two_, v_.mean(1), -1.0)
+            for k_, c_ in ((0, "ctl_mh"), (1, "ctl_ra")):       # each item alone: its first instance after the query frame
+                ck_ = cand[:, k_ * M:(k_ + 1) * M]
+                j_ = np.argmin(np.where(ck_, sp[:, k_ * M:(k_ + 1) * M], np.iinfo(np.int64).max), axis=1) + k_ * M
+                h_ = ck_.any(1)
+                tj_ = tk[np.arange(G), j_] <= F
+                r_ = h_ & (tj_ | live_)
+                vj_ = np.where(tj_[grp], (by[np.arange(G), j_][grp] == np.arange(n)).astype(np.float32), 0.5)
+                out[:, C[c_]] = np.where(qok & r_[grp], vj_, -1.0)
+        self.ctl_q_ok[F % D] = ok_                           # 5. this frame into the ring of queries
+        self.ctl_q_rn[F % D] = self.ctl_rnd
+        self.ctl_f = F + 1
 
     def step(self, actions):
         a = np.array(actions, copy=True)
@@ -12187,6 +12294,8 @@ class DuelEnv:
                 lab_ = np.where(l2_[:, :1] >= 0, l2_, lab_).astype(np.int8)
             info["rj_copy"] = lab_
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
+        if CONTROL_TRUTH:                                    # (CONTROL_TRUTH) "in control" of the frame CONTROL_D ago (labels only)
+            self._ctl_step(done, info["aux"])
         if HEAD_EVENTS:                                      # (HEAD_EVENTS) the frame's events for the head
             dl_ = np.zeros(n, np.float32)
             for (i_, v_), d_ in st["by"].items():
