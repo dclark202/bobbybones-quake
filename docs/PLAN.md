@@ -5,6 +5,8 @@ physics, human limits, knowledge only from sight and sound. "v1.0 starts when he
 game's ten duel maps (Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged, Campgrounds, Hektik,
 Toxicity, Cure), all in training; House of Decay and Dismemberment are held out for checks.
 
+**One goal: win games** (the owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 are retired). Each generation has its own goals; **v0.4.x**: fade out every hard-wired rule, the brain manages the game state and the strategy, pay by win chance only. Open items beside them: rocket jumps, failed movement jumps, grenades less so. The path: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md).
+
 **Judged by** duels against the last best network (the control), how near his play comes to the pros' measures, the
 owner's play tests and what people do to him on the public server; the game's Nightmare bot is a floor.
 
@@ -30,9 +32,7 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 
 ## Now
 
-The owner's priority list (2026-10-10): (1) strafe jumping and keeping speed; (2) rockets; (3) plasma and grenades, the
-shotgun less; (4) game awareness. The five goals (2026-10-13): speed and movement, weapon use, positioning,
-counterplay, beating people.
+The generation's goals and rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) (the owner, 2026-10-24). The run now: **v0.4.2** ([v0.4.0/RUN_v0.4.2.md](v0.4.0/RUN_v0.4.2.md)).
 
 The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
 
@@ -54,7 +54,7 @@ The backlog items in work or next ([BACKLOG.md](BACKLOG.md)):
   flick speed and hand noise; never miss on purpose; no wallhacks.
 - **Method**: limit what he can do until the right play appears; do not add rewards for single behaviors without asking;
   the reward is the owner's call. Fading lessons from the pros are fine; what stays must hold without them.
-- **Pay is judged by its equilibrium and the five goals** (the owner, 2026-10-15, twice): whenever pay weights are discussed, the equilibrium they lead to in self-play (the zero-sum parts beside the parts both copies gain from) and how it aligns with the five goals (speed and movement, weapon use, positioning, counterplay, beating humans); any change must say how it gets closer to at least one of them.
+- **Pay is judged by its equilibrium** (the owner, 2026-10-15; 2026-10-24): whenever pay weights are discussed, the equilibrium they lead to in self-play (the zero-sum parts beside the parts both copies gain from), the behaviour it makes emerge on the way to the generation's goals, and whether it ends up winning more games, the one goal.
 - **Aim level 3 from v0.3.1 on** (the owner, 2026-10-15: "Set it to 3 going forward"): level 1.5 (v0.2 and v0.3, B-228's step one)
   cost the rail most; training, the checks and the servers use 3.
 - **One movement network before v0.4's head** (the owner, 2026-10-16 and 2026-10-18): his legs and his own network become one driver; "Giving up on removing the switch is not an option." A clumsier v0.3.1 with one movement network is an acceptable result; fewer items are acceptable, judge by frags and wins.
