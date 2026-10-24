@@ -443,7 +443,7 @@ class duelbot(minqlx.Plugin):
 
     def on_player_loaded(self, player):
         if not is_bot(player):
-            player.tell("^3I'm ^5BobbyBones^3, the learning Quake bot.^7 Here's some commands")
+            player.tell("^3I'm ^5B^7o^5bbyB^7o^5nes^3, the learning Quake bot.^7 Here's some commands")
             player.tell(self.WELCOME)
             if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
                 player.tell(self.AIM_WELCOME)
@@ -583,7 +583,7 @@ class duelbot(minqlx.Plugin):
             return
         for p in self.players():
             if p.id != player.id and not is_bot(p) and p.team in ("free", "red", "blue"):
-                player.tell("^3BobbyBones is playing {}.^7 Spectate: you play when they leave.".format(p.clean_name))
+                player.tell("^5B^7o^5bbyB^7o^5nes^3 is playing {}.^7 Spectate: you play when they leave.".format(p.clean_name))
                 return minqlx.RET_STOP_ALL
 
     def cmd_note(self, player, msg, channel):
@@ -656,7 +656,7 @@ class duelbot(minqlx.Plugin):
                     lad.note_duel(A["key"], A.get("owner", 0), played, o, b, why != "time", "timed")
             except Exception as e:                           # noqa: BLE001
                 self.log("duel line: {}".format(type(e).__name__))
-        self.msg("^3Arena over ({})^7: BobbyBones ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
+        self.msg("^3Arena over ({})^7: ^5B^7o^5bbyB^7o^5nes^7 ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
 
     def arena_spot(self, other):
         """a place in the arena at least 500 units from the other player"""
@@ -683,7 +683,7 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
         if on:
             player.put("spectator")
-            self.msg("Spar: BobbyBones against a Nightmare bot. Join the game or type !spar off to stop.")
+            self.msg("Spar: ^5B^7o^5bbyB^7o^5nes^7 against a Nightmare bot. Join the game or type !spar off to stop.")
         else:
             for p in self.players():
                 if is_bot(p) and not is_bobby(p):
@@ -692,16 +692,16 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab and "aim" not in self.lab:
-            player.tell("The training arena: play BobbyBones freely, or ^3!duel^7 for a timed five minutes.")
+            player.tell("The training arena: play ^5B^7o^5bbyB^7o^5nes^7 freely, or ^3!duel^7 for a timed five minutes.")
             return
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!arena box | env | yard = fight BobbyBones in that room for 5 minutes, full weapons (yard: the new two-level arena)")
+            player.tell("!arena box | env | yard = fight ^5B^7o^5bbyB^7o^5nes^7 in that room for 5 minutes, full weapons (yard: the new two-level arena)")
             player.tell("!room moves = every movement course in a row, with a table of times at the end")
             player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
-            player.tell("^3!movement^7 = every movement course, timed | ^3!duel^7 = five minutes against BobbyBones in the environment room")
+            player.tell("^3!movement^7 = every movement course, timed | ^3!duel^7 = five minutes against ^5B^7o^5bbyB^7o^5nes^7 in the environment room")
             player.tell("^3!reflex^7 = the aim reflex test: four short aim rooms, three minutes (lightning, rail, rockets)")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
@@ -869,7 +869,7 @@ class duelbot(minqlx.Plugin):
         try:
             if any(is_bobby(p) for p in self.players()):
                 return
-            minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
+            minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5B^7o^5bbyB^7o^5nes\"")
             ids = [p.id for p in self.players() if is_bobby(p)]
             for i in ids:
                 minqlx.set_bot_input(i, 0, 0, 0, 0, 0, 0.0, 0.0)
@@ -1686,7 +1686,7 @@ class duelbot(minqlx.Plugin):
                 if os.path.getmtime(os.path.join(D, "policy.npz")) != self.policy_mtime:
                     self.end_session()
                     self.setup()
-                    self.msg("^3New BobbyBones loaded^7: {} at {} minutes of training.".format(
+                    self.msg("^3New ^5B^7o^5bbyB^7o^5nes^3 loaded^7: {} at {} minutes of training.".format(
                         self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
