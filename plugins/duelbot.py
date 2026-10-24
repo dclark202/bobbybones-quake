@@ -1689,7 +1689,7 @@ class duelbot(minqlx.Plugin):
         if bobby is None:
             if now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
+                minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5Bobby^2Bones\"")   # (owner, 2026-10-23: BOT purple, Bobby light blue, Bones green; is_bobby still finds "BobbyBones" in the clean name)
             return
         give_autohop(bobby, now, self.log, want=autohop_want(getattr(self, "P", None)))
         if human is not None and filler is not None:
