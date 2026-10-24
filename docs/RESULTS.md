@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-24](results/2026-10-24.md)
 
+- 14:00 — v0.4.2: the first try dipped at fade 0 (42.5% twice, cause unknown); restarted with the fade from update 1, 48.1% and 53.1% at fade 0.1 and 0.18
 - 13:20 — The owner plays v0.4.1's end: Bobby wins a duel 10-8; item control the gap on Sinister and Campgrounds
 
 ## [2026-10-23](results/2026-10-23.md)
