@@ -1,5 +1,7 @@
 # v0.4.2 on one page: the old belief faded out of the hands
 
+**2026-10-24 11:57: the step bar loosened, the fade to 0.2** (owner: "within noise ... should be fine but 'looks like something bad happened' should be a flag. I think we can raise the gate here"): a check lets the fade step at games 50%+, or games 47.5%+ with a frag share of 48%+; the rollback rules unchanged. Update 10 at fade 0.1: 77-83 (48.1%), frag share 48.2%: a pass under the new bar; the cap raised 0.1 -> 0.2 by hand, the guard stepping again (+0.1 every ~25 min while checks pass).
+
 **2026-10-24 10:53: the guard's tie-break** (owner, after an outside review of the first try): a check under 45% games (or two under 50%) with a frag share of 48.5% or more holds the fade instead of rolling it back; stepping up still needs games 50%+. (It would have held the first try's update 10: 42.5%, frag share 49.1%.)
 
 **2026-10-24 10:34: RESTARTED** from v0.4.1's end, mega 0.35 from update 1, the fade opening from the first update (no shut hour; owner, 10:05). The first try (07:14 to 10:04, kept as `duel_gru_v0_4_2_try1`) read 68-92 (42.5%) against v0.4.1's end at updates 10 and 30 with the fade at 0 (0 to 0.05 for updates 19 to 22); the check path was proven fair first: v0.4.1's end against itself through it read 84-76 (52.5%, frag share 48.7%). A code review of the checks found no seat asymmetry. The cause of the first try's dip is not known (the mega pay from update 6 is the one training change).
