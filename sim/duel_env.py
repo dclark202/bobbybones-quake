@@ -1093,6 +1093,15 @@ RJ_TEACH_PITCH = float(os.environ.get("RJ_TEACH_PITCH") or 60.0)
 #                 average in the tests, so RJ_TEACH's condition (60 or more) was met on no frame. Off: the pull, as before.
 #                 RJ_TEACH_PITCH, RJ_TEACH_R and RJ_LOOK_FREE are live (the trainer's live_settings.env, "frame")
 RJ_LOOK_FREE = float(os.environ.get("RJ_LOOK_FREE") or 0.0)
+#   LEVEL_PULL=x  (B-275, v0.4.3; a PLAY_VAR and a live name) the view's pull toward level: with no enemy in view his pitch is
+#                 times x every frame (env.level reads it; 1.0 = no pull). Unset: 0.95, the pull of 2026-10-03 exactly. The
+#                 phase-out 0.95 -> 0.98 -> 0.99 -> 0.995 -> 1.0 by the run's live.json; the checkpoint's env_vars carry it
+#                 (the trainer's environment), sim/export_duel.py writes it and the plugins set it before loading the simulator.
+_lp_ = os.environ.get("LEVEL_PULL")
+LEVEL_PULL = float(_lp_) if (_lp_ or "").strip() else 0.95
+if not 0.0 <= LEVEL_PULL <= 1.0:
+    raise ValueError("LEVEL_PULL must be within 0 .. 1")
+PLAY_VARS = PLAY_VARS + ("LEVEL_PULL",)
 #   RJ_COPY=1     (the owner, 2026-10-23, "option 1": "one route that works that he has to use when he wants to get there") the
 #                 whole route as a lesson: step() gives info["rj_copy"], per player and output (int8, -1 = no label) the scripted
 #                 runner's choice for his NEXT frame in a rocket jump run (RJ_RUN_P), from the try's start to its landing: his
@@ -1797,7 +1806,8 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY",    # (v0.3.7)
              "BIG_PICK_SEQ", "RG_FAR_PRICE", "RG_FAR_DIST",                                                         # (v0.3.8)
              "JUMP_COST",                                                                                           # (v0.3.9)
-             "LG_QUIET_COST", "WATCH_PAY")                                                                          # (v0.3.10)
+             "LG_QUIET_COST", "WATCH_PAY",                                                                          # (v0.3.10)
+             "LEVEL_PULL")                                                                                          # (v0.4.3, B-275)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1819,6 +1829,10 @@ def live_values(get):
     v["WATCH_PAY"] = float(get("WATCH_PAY") or 0.0)
     if v["LG_QUIET_COST"] < 0 or v["WATCH_PAY"] < 0:
         raise ValueError("LG_QUIET_COST and WATCH_PAY must be 0 or more")
+    lp_ = get("LEVEL_PULL")                                  # (B-275) the view's pull toward level; unset: 0.95
+    v["LEVEL_PULL"] = float(lp_) if (lp_ or "").strip() else 0.95
+    if not 0.0 <= v["LEVEL_PULL"] <= 1.0:
+        raise ValueError("LEVEL_PULL must be within 0 .. 1")
     v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
     v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
     v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
@@ -2433,6 +2447,15 @@ PLAY_VARS = PLAY_VARS + ("DUEL_QL", "DQ_JUMP_MS", "DQ_WADE", "DQ_PICK_Z")
 #                  "near where he thinks the enemy is" / "on a way from there" read the brain's place for a life on the brain
 BRAIN_READ = float(os.environ.get("BRAIN_READ") or 0.0) > 0
 BLIND_BRAIN = float(os.environ.get("BLIND_BRAIN") or 0.0) > 0
+#   BLIND_AHEAD=1  (v0.4.3, a training switch beside BLIND_BRAIN; the owner, 2026-10-23: "no cost to spam/prefire where he expects
+#                  the enemy is/will be", "it probably should be 'will be'") for a life on the brain, the waiver also where the
+#                  brain says the enemy WILL BE: its readout ahead (sim/ahead.py "fut": his place in 1, 2 and 4 s, kept in map
+#                  coordinates at the brain's tick; the trainer sends it with the answer, brain_in's "fut") within PREFIRE_R of
+#                  the crosshair's line (a billed hitscan shot, seen_t up to BLIND_AHEAD_T seconds, 6) or within BLIND_NEAR of a
+#                  blind rocket's landing (blind_rl_how's sixth column, "ahead"). A cost waived, never a pay; no answer ahead
+#                  (none sent, a reset, the brain's answer not believed: brain_ok): nothing waived. Off: as before, bit for bit.
+BLIND_AHEAD = float(os.environ.get("BLIND_AHEAD") or 0.0) > 0
+BLIND_AHEAD_T = float(os.environ.get("BLIND_AHEAD_T") or 6.0)
 BRAIN_KNOWN = float(os.environ.get("BRAIN_KNOWN") or V02_KNOWN)
 BRAIN_BAND_MID = np.array([37.5, 100.0, 162.5, 250.0], np.float32)    # the stack bands' middles (under 75, 75-124, 125-200, over 200)
 BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
@@ -2997,6 +3020,15 @@ class RouteField:
 
 
 class DuelEnv:
+    @property
+    def level(self):
+        """(B-275) the view's pull toward level a frame with no enemy in view: LEVEL_PULL (live), unless a tool set env.level"""
+        return LEVEL_PULL if getattr(self, "_level", None) is None else self._level
+
+    @level.setter
+    def level(self, v):
+        self._level = None if v is None else float(v)
+
     def __init__(self, bsp, n_matches=256, seed=0, substeps=(8, 8, 9), dmg_reward=0.004, nav=None, close_p=0.0,
                  loadout="full", drill_weapons=(RL, RG, LG), teacher=None):
         """close_p: chance a respawn lands 300-700 units from the opponent with line of sight (curriculum).
@@ -3056,7 +3088,7 @@ class DuelEnv:
         self.spawns = np.array([e["origin"] for e in sp_], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in sp_], np.float32)
         self.close_p = close_p
-        self.level = 0.95                               # pitch eases back toward level (1.0 = off). 0.99 let it drift to floor/sky
+        self._level = None                              # pitch eases back toward level (1.0 = off): the property level, LEVEL_PULL
         self.drill_p = 0.0                              # share of rounds where both players have ONE weapon
         self.drill_weapons = tuple(drill_weapons)
         self.mode = np.full(n_matches, -1, np.int64)    # per match: -1 = normal, else the only weapon allowed
@@ -3902,7 +3934,7 @@ class DuelEnv:
                           hand_g=np.zeros(NW),                            # ... in games alone (not in one-weapon rounds)
                           hand_w=np.zeros(NW), blind_w=np.zeros(NW),      # frames with each weapon in hand; frames firing it with no enemy seen for a second
                           speed_pay=0.0, speed_pay_run=0.0, speed_frames=0, move_teach_frames=0,
-                          blind_rl=0, blind_rl_how=np.zeros(5), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way, at one of the pros' places
+                          blind_rl=0, blind_rl_how=np.zeros(6 if BLIND_AHEAD else 5), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way, at one of the pros' places
                           vs_persona=np.zeros((3, len(PERSONAS))), fall_dmg=0.0, duck_frames=0, walk_frames=0)      # rows: frags against, deaths to, frames
         for wn in WEAPONS:
             self.stats[wn + "_shots"] = 0               # shots, ticks or pellets fired
@@ -4674,6 +4706,8 @@ class DuelEnv:
         self.brain_ok[:] = np.asarray(ans["ok"], bool)
         self.brain_band[:] = np.asarray(ans["band"], np.float32)
         self.brain_ztop[:] = np.asarray(ans.get("ztop", np.full(self.n, -1)), np.int16)
+        if "fut" in ans:                                     # (BLIND_AHEAD) the brain's places ahead (1, 2, 4 s; map) [n, 3, 3]
+            self.brain_fut = np.asarray(ans["fut"], np.float32).reshape(self.n, -1, 3).copy()
 
     def _brain_count(self, key, rows):
         """(BRAIN_READ) a reader read these seats: his seats counted, those on the brain"""
@@ -4728,6 +4762,18 @@ class DuelEnv:
         if not on.any():
             return None
         return on, self.brain_bel[r], self.brain_ok[r]
+
+    def _blind_fut(self, rows):
+        """(BLIND_AHEAD) for the seats rows: (on the brain with an answer ahead [m], the brain's places ahead [m, 3, 3]); None:
+        none (switch off, no answer ahead ever sent, no seat on the brain with one). Not counted again (_blind_src counts)"""
+        if not (BRAIN_READ and BLIND_BRAIN and BLIND_AHEAD) or getattr(self, "brain_fut", None) is None:
+            return None
+        self._brain_init()
+        r = np.asarray(rows, np.int64)
+        on = self.brain_life[r] & self.brain_ok[r]
+        if not on.any():
+            return None
+        return on, self.brain_fut[r]
 
     def _brain_err_count(self):
         """(BRAIN_READ) every eighth frame: the place error of the rule's belief and of the brain's answer, his seats in a
@@ -8454,6 +8500,10 @@ class DuelEnv:
                     if tb[nl] <= by and (tb[nl] + R.from_node(nl)[me] <= tb[me] + BLIND_SLACK
                                          or bool((tb[nl] + R.T[:len(self.route_goal), nl] <= R.T[:len(self.route_goal), nb] + BLIND_SLACK).any())):
                         how = 3
+            if not how and BLIND_AHEAD:                      # (BLIND_AHEAD) near where the brain says he will be in 1, 2 or 4 s
+                fu_ = self._blind_fut([i])
+                if fu_ is not None and bool(fu_[0][0]) and float(np.linalg.norm(fu_[1][0] - L[None, :], axis=1).min()) < BLIND_NEAR:
+                    how = 5
             self.stats["blind_rl"] += 1
             self.stats["blind_rl_how"][how] += 1
             if not how:
@@ -11014,6 +11064,17 @@ class DuelEnv:
                     near_ &= ~(bb_[0] & ~bb_[2])
                 bill[pf_[near_]] = False
                 self.stats["prefire_frames"] += int(near_.sum())
+            if BLIND_AHEAD:                                  # (BLIND_AHEAD) the crosshair on where the brain says he will be in 1-4 s
+                pa_ = np.nonzero(bill & (self.seen_t <= BLIND_AHEAD_T))[0]
+                fu_ = self._blind_fut(pa_) if len(pa_) else None
+                if fu_ is not None:
+                    yr_, pr_ = np.radians(self.yaw[pa_]), np.radians(self.pitch[pa_])
+                    fd_ = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
+                    to_ = fu_[1] + np.array([0, 0, 4.0], np.float32) - self._eye(s)[pa_][:, None, :]     # [m, 3 horizons, 3]
+                    al_ = (to_ * fd_[:, None, :]).sum(2)
+                    nf_ = fu_[0] & ((al_ > 0) & (np.linalg.norm(to_ - al_[..., None] * fd_[:, None, :], axis=2) <= PREFIRE_R)).any(1)
+                    bill[pa_[nf_]] = False
+                    self.stats["prefire_ahead"] = self.stats.get("prefire_ahead", 0) + int(nf_.sum())
             reward -= BLIND_FIRE_COST * bill
             self.stats["blind_bill"] += int(bill.sum())
         else:

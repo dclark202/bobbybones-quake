@@ -174,6 +174,7 @@ class Token:
         self.zmap = np.full(n, -1, np.int64)
         self.spd = np.zeros((n, 2), np.float32)
         self.eta = np.zeros((n, 2), np.float64)        # the direction's natural parameters, turned to the map
+        self.fut = None                                # (v0.4.3, BLIND_AHEAD) the readout ahead's places in 1, 2, 4 s (map) [n, 3, 3]
 
     def state(self):
         return {k: getattr(self, k).copy() for k in ("valid", "age", "unseen", "P", "ls", "V", "lsv", "band", "hand", "own", "zone",
@@ -229,6 +230,18 @@ class Token:
         self.zmap[r] = zm
         self.valid[r] = True
         self.age[r] = 0.0
+
+    def answer_fut(self, o_ah, pose):
+        """(v0.4.3, BLIND_AHEAD) at a tick of every seat (with answer(None, ...)): the readout ahead's outputs [n, D] (sim/ahead.py:
+        5 numbers a horizon, the first three his place forward, left, up in thousands of units in the facing of the tick) and his
+        pose [n, 4] at the tick frame -> the places in 1, 2, 4 s kept in map coordinates (answer_of's "fut")"""
+        o = np.asarray(o_ah, np.float64)
+        nh = 3
+        f = o[:, :5 * nh].reshape(len(o), nh, 5)
+        pz = np.asarray(pose, np.float64)
+        y = np.repeat(pz[:, 3:4], nh, 1)
+        x_, y_ = _turn(y, f[..., 0] * 1000.0, f[..., 1] * 1000.0)
+        self.fut = np.stack([pz[:, None, 0] + x_, pz[:, None, 1] + y_, pz[:, None, 2] + f[..., 2] * 1000.0], -1).astype(np.float32)
 
     def answer_rows(self, a=0, b=None):
         """(v0.4.2a, BRAIN_READ) the answer of seats a..b for the simulator's readers (duel_env.brain_in): see answer_of"""
@@ -301,7 +314,10 @@ def answer_of(tk, rows=slice(None)):
     float32 (under 75, 75-124, 125-200, over 200), the likeliest zone's number [m] int16 (-1: no zones)"""
     z = tk.zone[rows]
     zt = np.where(z.sum(1) > 0, z.argmax(1), -1).astype(np.int16)
-    return dict(bel=tk.P[rows].astype(np.float32), ok=tk.valid[rows].copy(), band=tk.band[rows].astype(np.float32), ztop=zt)
+    d = dict(bel=tk.P[rows].astype(np.float32), ok=tk.valid[rows].copy(), band=tk.band[rows].astype(np.float32), ztop=zt)
+    if getattr(tk, "fut", None) is not None:          # (v0.4.3, BLIND_AHEAD) the places ahead [m, 3, 3], only once answer_fut made them
+        d["fut"] = tk.fut[rows].copy()
+    return d
 
 
 def numpy_brain(sd, bel_L, trk_L, trz_L):

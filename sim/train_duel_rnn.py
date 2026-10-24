@@ -194,7 +194,8 @@ def jump_far_rec(agg, agg_map):
 BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
 BRAIN_PFX = BRAIN_PFX + ("control.",)                               # (v0.4.3, --control) the readout "in control": a brain layer
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
-                "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W")
+                "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W",
+                "INTENT_TEACH_W")   # (v0.4.3: a factor on the item rule's weight, its floor included: 0 silences it)   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --control) a factor on the lesson "in control"   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 
 
@@ -1795,6 +1796,12 @@ def main():
                   "from the network" if CTL_CK is not None else "new (their last layers at zero)", a.control if CTL_ON else "off",
                   a.control_lr, a.control_warm, "this process's start" if a.control_start < 0 else a.control_start,
                   CTL_L["every"], CTL_L["horizon"], CTL_L["width"]), flush=True)
+    BA_SEND = bool(getattr(E_, "BLIND_AHEAD", False))     # (v0.4.3, BLIND_AHEAD) the readout ahead's places go with the brain's answer
+    if BA_SEND:
+        assert RF_READ and AH and bool(getattr(E_, "BLIND_BRAIN", False)), \
+            "BLIND_AHEAD=1: with BRAIN_READ=1, BLIND_BRAIN=1 and the readout ahead (--ahead): its places are what the waiver reads"
+        print("blind ahead (v0.4.3): the out-of-view shot cost also waived where the brain says the enemy will be in {} s "
+              "(a life on the brain; seen up to {} s ago)".format(AH_L["horiz"], getattr(E_, "BLIND_AHEAD_T", "?")), flush=True)
     TRZ_TC, TRZ_MAPI = None, None
     TRZ_PRIOR = np.zeros((len(zonemap_.MAPS), trz_.MAX_Z))    # (the counters' map prior: how often the enemy stood in each zone, so far)
     TRK_IX, TRK_TC, TRK_K = None, None, [0.0, 0.0]           # (the truth's columns; the pay's k and the lesson's weight of this rollout)
@@ -2377,6 +2384,7 @@ def main():
             f_ = float(np.clip((a.rj_teach_done - ov_ / tr_) / a.rj_teach_band, 0.0, 1.0))
         return w_ * f_, f_
     RJC_LIVE = [float(a.rj_copy)]                            # (--rj-copy; live.json's RJ_COPY_W: the lesson's weight)
+    IT_LIVE = [1.0]                                          # (v0.4.3; live.json's INTENT_TEACH_W: a factor on the item rule's weight, floor included)
     RJC_T0 = [float(a.rj_copy_start) if a.rj_copy_start >= 0 else None]     # ... the minute its warm-up counts from
     if RJC_LAB and RJC_T0[0] is None and a.resume and os.path.exists(os.path.join(out, "metrics.jsonl")):   # ... carried over a restart
         try:
@@ -2686,6 +2694,7 @@ def main():
                        **({"BELIEF_LR": float(BEL_LR)} if BEL else {}), **({"AHEAD_W": 1.0} if AH_ON else {}),
                        **({"RJ_TEACH_W": float(a.rj_teach)} if RJ_LAB else {}),
                        **({"RJ_COPY_W": float(a.rj_copy)} if RJC_LAB else {}),
+                       **({"INTENT_TEACH_W": 1.0} if a.intent_teach > 0 else {}),
                        **({"FADE_CAP": float(a.rule_fade_cap), "FADE_OPEN": float(a.rule_fade_open)} if RF_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
@@ -2847,6 +2856,7 @@ def main():
                     RJ_LIVE[0] = float(lt_.get("RJ_TEACH_W", RJ_LIVE[0]))            # (--rj-teach: the lesson's weight; its warm-up from the first minute above 0)
                     RJC_LIVE[0] = float(lt_.get("RJ_COPY_W", RJC_LIVE[0]))           # (--rj-copy: the lesson's weight; its warm-up from the first minute above 0)
                     CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
+                    IT_LIVE[0] = float(lt_.get("INTENT_TEACH_W", IT_LIVE[0]))        # (v0.4.3: the item rule's factor, at the next learning step)
                     a.rule_fade_cap = float(lt_.get("FADE_CAP", a.rule_fade_cap))    # (v0.4.2a: the rule fade's cap: 0 shuts it at once)
                     a.rule_fade_open = float(lt_.get("FADE_OPEN", a.rule_fade_open)) # (... the minutes of its opening: 0 holds it)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
@@ -2858,6 +2868,7 @@ def main():
                                   **({"RJ_TEACH_W": RJ_LIVE[0]} if RJ_LAB else {}),
                                   **({"RJ_COPY_W": RJC_LIVE[0]} if RJC_LAB else {}),
                                   **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
+                                  **({"INTENT_TEACH_W": IT_LIVE[0]} if a.intent_teach > 0 else {}),
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
@@ -3322,6 +3333,8 @@ def main():
                     CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if int(CTL_L["mem"]) == 0 else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
+                    if BA_SEND:                                          # (v0.4.3, BLIND_AHEAD) ... and the readout ahead's places, kept so too
+                        TOK_.answer_fut(net.ahead(BS_.s).float().cpu().numpy(), pose_)
                 #                                                          (--belief) every seat at once: the inputs as the update re-reads them
                 if LONG:
                     b_val2[t] = net.v2(net.zl)
@@ -3692,6 +3705,8 @@ def main():
         ik = a.intent_teach * max(0.0, 1.0 - (mins - fade0) / a.intent_teach_minutes)
         if a.intent_teach_floor > 0:                         # (v0.3.1, the owner 2026-10-15: fade 2.0 -> 0.1, then hold)
             ik = max(a.intent_teach_floor, ik)
+        if IT_LIVE[0] != 1.0:                                # (v0.4.3, live.json's INTENT_TEACH_W) the floor faded with it (1: as before)
+            ik = ik * IT_LIVE[0]
         ik_l = torch.zeros(())
         wk = a.weapon_teach * max(0.0, 1.0 - (mins - fade0) / a.weapon_teach_minutes)
         wk_l = torch.zeros(())
@@ -4563,8 +4578,8 @@ def main():
                                                         / max(1.0, float(np.atleast_1d(agg.get("hand_w", np.zeros(len(WEAPONS))))[i_]))), 3) for i_, w_ in enumerate(WEAPONS)},
                             blind_rockets=dict(per_player_min=round(float(agg.get("blind_rl", 0) / max(1e-9, NP * T * DT_MIN)), 3),          # (BLIND_RULE)
                                                how={k_: round(float(np.atleast_1d(agg.get("blind_rl_how", np.zeros(5)))[i_] / max(1, agg.get("blind_rl", 0))), 3)
-                                                    for i_, k_ in enumerate(("wasted", "jump", "near", "way", "place")) if i_ < len(np.atleast_1d(agg.get("blind_rl_how", np.zeros(5))))}),
-                            prefire_frames=int(agg.get("prefire_frames", 0)), blind_charged_frames=int(agg.get("blind_bill", 0)),
+                                                    for i_, k_ in enumerate(("wasted", "jump", "near", "way", "place", "ahead")) if i_ < len(np.atleast_1d(agg.get("blind_rl_how", np.zeros(5))))}),
+                            prefire_frames=int(agg.get("prefire_frames", 0)), **({"prefire_ahead": int(agg["prefire_ahead"])} if "prefire_ahead" in agg else {}), blind_charged_frames=int(agg.get("blind_bill", 0)),
                             speed_pay_per_player_min=round(float(agg.get("speed_pay", 0.0) / max(1e-9, NP * T * DT_MIN)), 4),             # (SPEED_PAY: on his way in games)
                             speed_pay_run_per_player_min=round(float(agg.get("speed_pay_run", 0.0) / max(1e-9, NP * T * DT_MIN)), 4),     # ... in item runs
                             teacher_frames=round(float(agg.get("move_teach_frames", 0) / max(1, NP * T)), 4),                             # (RUN_TEACHER) the share of all frames it labels
