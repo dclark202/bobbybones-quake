@@ -1,8 +1,10 @@
-# v0.4.2 on one page: the old belief faded out, the strategy head (DRAFT)
+# v0.4.2 on one page: the old belief faded out (v0.4.2a), the strategy head (v0.4.2b) (DRAFT)
 
 *2026-10-22: **proposed**, after v0.4.1 works (names, the owner, 2026-10-22 night: v0.4.0 the brain's pretraining, v0.4.1 the brain
 connected, v0.4.2 "the blending out of the old belief network while inserting the brain network", with what was called v0.4.1
 before: the strategy head). Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). Design: [BELIEF_LOOP.md](BELIEF_LOOP.md).*
+
+*2026-10-23 evening: step A has its own card, [RUN_v0.4.2a.md](RUN_v0.4.2a.md) (built and tested on the CPU; start Sat on the owner's go). Step B (this card's head) is v0.4.2b: build Sat-Sun, start Sun afternoon if A passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
@@ -17,6 +19,7 @@ before: the strategy head). Before it: [RUN_v0.4.1.md](RUN_v0.4.1.md). Design: [
 
 | Part | Detail | State |
 |---|---|---|
+| **The brain's new outputs, read by the head** (owner, 2026-10-23: "The hands handle what to do *now*, the predictions drive strategy") | where the enemy will be in 1/2/4 s, what he is going for, when he appears, the item race: inputs of the head, not the hands' token; each joins after its readiness bar | ❓ |
 | **The small slow head** | reads the brain (its memory and its answers), his own stack, item timers, score and clock, the hands' memory (no gradient); a GRU of 256 ticking every 0.2 s with the brain; acts by a plan (64) into the hands' memory and a bias on the intention head's choice, both starting at zero (an exact start, proven by a test) | ❓ |
 | Size | ~0.6 M weights (v0.4's earlier candidate head: ~7 M); grows only on a measured need | – |
 | On a server | well under 1 ms a tick; the head added to the plugins' forward pass | ❓ |
@@ -86,6 +89,16 @@ human check of "he changes his intention by the enemy's state" that no single nu
 
 Each pathology seen in play tests or the people review becomes a **measured row** in the decision report first; the head grows
 (or gets a new intention) only to move that row, and the row says whether it worked.
+
+## Toward pay by win chance (v0.4.3 on; the owner, 2026-10-23)
+
+| Step | What | When |
+|---|---|---|
+| Measure (now, CPU; branch `winpay`) | his own win table beside the pros'; the pay ledger (each pay's share); each shaping pay's alignment with winning 30–120 s later; value readiness (does his value predict the result; does it rise at a mega by the mega's worth); a shadow win-chance counter | 2026-10-23 → |
+| Recalibrate | a shaping pay far from its measured worth set to it (a bridge before its fade, not an end) | before its fade |
+| Frag pay → win chance (`WIN_PAY`, built) | a cross-fade of the flat ±1 into the change of his win chance, check-tied; the head's long value rewired to include it | v0.4.3 |
+| Scaffolds faded | one or two a version: items, the item rule's floor, speed/hop, watching/pre-aim, stack difference, damage last | v0.4.3 on |
+| Stays | the fairness limits (aim, senses, his own item timers); movement practice's own pays (no score there) | – |
 
 ## Then (v0.4.3 and on, each on a measured need)
 
