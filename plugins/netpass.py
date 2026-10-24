@@ -116,6 +116,11 @@ def width(P):
     return w
 
 
+def brain_on(P):
+    """(v0.4.1) the brain is stepped: its token is in the network and its gate open (the mind view, B-283, asks)"""
+    return P.get("_brain") is not None and P["_brain"][4] > 0
+
+
 def needs_pose(P):
     """(v0.4.1) step() needs his pose (pose=, zmap=; see pose()): the brain's token is in the network and its gate open"""
     return P.get("_brain") is not None and P["_brain"][4] > 0
