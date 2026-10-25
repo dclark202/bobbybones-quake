@@ -246,6 +246,10 @@ class duelbot(minqlx.Plugin):
         self.add_command("aim", self.cmd_aim, 0, usage="[1|2|3|4|5|max]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
+        if os.environ.get("DUEL_MIND", "") == "1":           # (owner, 2026-10-24: "make it so the mind records the game") on from the start
+            self.mind_w = _mind.Writer(os.path.join(D, "mind.jsonl"), log=self.log)
+            self.mind_map, self.mind_fr = None, 0
+            self.log("mind view: on from the start (DUEL_MIND=1; mind.jsonl in the data folder)")
         self.aim_want = None                                 # (!aim) the level asked for, put in at the next warmup
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
