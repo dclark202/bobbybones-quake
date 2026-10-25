@@ -102,7 +102,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     legs_in = bool(getattr(E_, "LEGS_IN", False))            # (LEGS_IN, B-253) his legs' inputs go to the branch of his network
     remote.send((env.observe(), env.teach.copy(), env.aux() if hasattr(env, "aux") else None,        # (--aux) the truth of the first frame
                  env.hand_lab.astype(np.float16) if getattr(E_, "HAND_TEACH", False) else None,         # (--hand-teach) the first frame's label (none yet)
-                 env.legs_prep() if legs_in else None))     # (LEGS_IN) the movement network's inputs of the frame about to be played
+                 env.legs_prep() if legs_in else None,      # (LEGS_IN) the movement network's inputs of the frame about to be played
+                 sorted(set(E_.INTENTS.index(l_) for l_ in (getattr(env, "route_goal", None) or ())     # (--item-floor) the map's big items
+                            if l_ in E_.INTENTS and 1 <= E_.INTENTS.index(l_) <= 7))))                    # as intentions (MH .. YA2)
     last = {k: np.copy(v) for k, v in env.stats.items()}
     tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)      # (time.rollout_parts) this worker's seconds, since the last "times"
     t_idle = time.perf_counter()
@@ -213,6 +215,7 @@ LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --
 LIVE_TRAINER = LIVE_TRAINER + ("BRAIN_HUMAN_W",)                   # (brainppl, --brain-human) the people's lesson's weight beside self-play's
 
 LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --win-value) a factor on the shadow win value's rate
+LIVE_TRAINER = LIVE_TRAINER + ("ITEM_FLOOR", "ITEM_FLOOR_W")          # (2026-10-25, --item-floor) the floor on his item intentions by map, its weight
 LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
 
 
@@ -1106,6 +1109,13 @@ def main():
     ap.add_argument("--ent-heads", default="", help="weight of the exploration bonus per action head (forward, strafe, "
                     "vertical, turn, pitch, fire, weapon, walk, zoom); empty = 1 for all")
     ap.add_argument("--ent-coef", type=float, default=0.01, help="exploration bonus (entropy coefficient)")
+    ap.add_argument("--item-floor", type=float, default=0.02,
+                    help="(2026-10-25, owner: keep trying every item) the floor on his item intentions: on every map, the mean "
+                         "probability of each big item the map has (MH, RA, YA, YA2, RL, RG, LG) over the frames his intention is "
+                         "read (his own seats) should not fall below it (live ITEM_FLOOR)")
+    ap.add_argument("--item-floor-w", type=float, default=0.0,
+                    help="the floor's weight: loss += w * sum over (map, item) of relu(log floor - log mean p), per learning piece "
+                         "(live ITEM_FLOOR_W; 0: no term, the trainer as before; the means are logged whatever the weight)")
     ap.add_argument("--arena-len", type=float, default=30.0, help="test map: seconds per arena round")
     ap.add_argument("--obs-dump", default="", help="write a sample of raw inputs (0.5%% of the rows of the updates --obs-dump-from..to) to this "
                     "file, for sim/renorm_policy.py --sample")
@@ -1601,6 +1611,12 @@ def main():
                                for p_, o_ in parts]).astype(np.float32)
     legs_x = legs_cat([(f[4], f[0]) for f in first]) if LEGS_IN else None
     N = len(obs)
+    IF_MAPS = sorted(set(w_map))                                         # (--item-floor) the maps, each player's, each map's big items
+    IF_PM = np.concatenate([np.full(len(f[0]), IF_MAPS.index(w_map[w]), np.int64) for w, f in enumerate(first)])
+    IF_OK = np.zeros((len(IF_MAPS), len(getattr(E_, "INTENTS", ()))), bool)
+    for w, f in enumerate(first):
+        for k_ in (f[5] if len(f) > 5 else ()):
+            IF_OK[IF_MAPS.index(w_map[w]), int(k_)] = True
     H = a.hidden
 
     CELL_DIM = 16                                            # v8 only: a learned table of 16 numbers per 64-unit cell
@@ -2562,6 +2578,12 @@ def main():
         return w_ * f_, f_
     RJC_LIVE = [float(a.rj_copy)]                            # (--rj-copy; live.json's RJ_COPY_W: the lesson's weight)
     IT_LIVE = [1.0]                                          # (v0.4.3; live.json's INTENT_TEACH_W: a factor on the item rule's weight, floor included)
+    IF_LIVE = [float(a.item_floor_w), float(a.item_floor)]   # (--item-floor; live.json's ITEM_FLOOR_W, ITEM_FLOOR)
+    IF_PMT = torch.from_numpy(IF_PM).to(dev)
+    IF_OKT = torch.from_numpy(IF_OK).to(dev)
+    IF_ONE = torch.nn.functional.one_hot(IF_PMT, len(IF_MAPS)).float()      # [N, maps]
+    print("item floor: {} maps, their big items {}; floor {} weight {} (live ITEM_FLOOR, ITEM_FLOOR_W)".format(
+        len(IF_MAPS), {m_: [E_.INTENTS[k_] for k_ in np.nonzero(IF_OK[j_])[0]] for j_, m_ in enumerate(IF_MAPS)}, a.item_floor, a.item_floor_w), flush=True)
     RJC_T0 = [float(a.rj_copy_start) if a.rj_copy_start >= 0 else None]     # ... the minute its warm-up counts from
     if RJC_LAB and RJC_T0[0] is None and a.resume and os.path.exists(os.path.join(out, "metrics.jsonl")):   # ... carried over a restart
         try:
@@ -2914,6 +2936,7 @@ def main():
                        **({"RJ_COPY_W": float(a.rj_copy)} if RJC_LAB else {}),
                        **({"INTENT_TEACH_W": 1.0} if a.intent_teach > 0 else {}),
                        **({"BRAIN_HUMAN_W": float(a.brain_human_w)} if BH is not None else {}),
+                       ITEM_FLOOR=float(a.item_floor), ITEM_FLOOR_W=float(a.item_floor_w),
                        **({"FADE_CAP": float(a.rule_fade_cap), "FADE_OPEN": float(a.rule_fade_open)} if RF_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
@@ -3078,6 +3101,8 @@ def main():
                     WV_LIVE[0] = float(lt_.get("WIN_VALUE_W", WV_LIVE[0]))           # (--win-value: a factor on its rate; 0 stops it)
                     IT_LIVE[0] = float(lt_.get("INTENT_TEACH_W", IT_LIVE[0]))        # (v0.4.3: the item rule's factor, at the next learning step)
                     BH_LIVE[0] = float(lt_.get("BRAIN_HUMAN_W", BH_LIVE[0]))         # (--brain-human: the people's lesson's weight; 0 stops it)
+                    IF_LIVE[0] = float(lt_.get("ITEM_FLOOR_W", IF_LIVE[0]))          # (--item-floor: its weight, 0 stops it; the floor)
+                    IF_LIVE[1] = float(lt_.get("ITEM_FLOOR", IF_LIVE[1]))
                     a.rule_fade_cap = float(lt_.get("FADE_CAP", a.rule_fade_cap))    # (v0.4.2a: the rule fade's cap: 0 shuts it at once)
                     a.rule_fade_open = float(lt_.get("FADE_OPEN", a.rule_fade_open)) # (... the minutes of its opening: 0 holds it)
                     a.head2_cap = float(lt_.get("H2_GATE_CAP", a.head2_cap))         # (v0.4.3: the strategy head's gate: its cap, 0 shuts it at once)
@@ -3096,6 +3121,7 @@ def main():
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
                                   **({"INTENT_TEACH_W": IT_LIVE[0]} if a.intent_teach > 0 else {}),
                                   **({"BRAIN_HUMAN_W": BH_LIVE[0]} if BH is not None else {}),
+                                  ITEM_FLOOR=IF_LIVE[1], ITEM_FLOOR_W=IF_LIVE[0],
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}),
                                   **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1]} if H2 else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
@@ -4344,6 +4370,9 @@ def main():
             h2_acc = torch.zeros(12, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
             #                                                              bias's (centred, on read frames), the hands' intention logits' (same), read
             #                                                              frames, grad norm (sum, count), |gin| / |e| (sum, pieces), the ratio's clip share
+        IF_ACC = torch.zeros(len(IF_MAPS), IF_OK.shape[1], device=dev)   # (--item-floor) epoch 0: sum of p over read frames, by map and item
+        IF_CNT = torch.zeros(len(IF_MAPS), device=dev)                     # ... the read frames by map
+        IF_LS = torch.zeros(4, dtype=torch.float64, device=dev)            # ... the term (sum), |grad| on the intention logits: the floor's, the bonus's, the pg's
         for epoch in range(3):
             HO_[2] = epoch == 0
             perm = torch.randperm(N, device=dev)
@@ -4456,6 +4485,32 @@ def main():
                                              (ds[W_HEAD].probs * wyf_[..., None]).sum((0, 1)),
                                              torch.stack([((A[..., W_HEAD] == j_).float() * wyf_).sum() for j_ in range(3)])]).double()
                 loss = pg + 0.5 * vl - ent_coef * en
+                if I_HEAD >= 0 and (IF_LIVE[0] > 0 or epoch == 0):      # (--item-floor) his item intentions' mean p by map, read frames
+                    pi_ = ds[I_HEAD].probs                               # [T, n, intentions]
+                    mr_ = lv * wgt                                       # (his own seats, the frames his intention was read)
+                    oh_ = IF_ONE[chunk]                                  # [n, maps]
+                    sp_ = torch.einsum("tn,tnk,nm->mk", mr_, pi_, oh_)
+                    cn_ = torch.einsum("tn,nm->m", mr_, oh_)
+                    if epoch == 0:
+                        IF_ACC += sp_.detach()
+                        IF_CNT += cn_.detach()
+                    if IF_LIVE[0] > 0:
+                        mp_ = sp_ / cn_.clamp(min=1.0)[:, None]
+                        ok_ = IF_OKT & (cn_ > 0)[:, None]
+                        fl_ = (torch.relu(float(np.log(max(IF_LIVE[1], 1e-6))) - torch.log(mp_ + 1e-6)) * ok_.float()).sum()   # (the log form:
+                        #                                                  its pull does not die with p as relu(floor - p)'s does, dp/dz = p (1 - p))
+                        loss = loss + IF_LIVE[0] * fl_
+                        if epoch == 0:
+                            IF_LS[0] += fl_.detach().double()
+                            if k_mb == 0:                                # (the sizing: the two gradients on this piece's intention logits)
+                                lgi_ = ds[I_HEAD].logits
+                                g1_ = torch.autograd.grad(IF_LIVE[0] * fl_, lgi_, retain_graph=True)[0]
+                                ei_ = (ent_heads[I_HEAD] * ds[I_HEAD].entropy() * (1.0 if hme[I_HEAD] is None else hme[I_HEAD]) * wgt).sum() / wsum
+                                g2_ = torch.autograd.grad(ent_coef * ei_, lgi_, retain_graph=True)[0]
+                                g3_ = torch.autograd.grad(pg, lgi_, retain_graph=True)[0]
+                                IF_LS[1] += g1_.norm().double()
+                                IF_LS[2] += g2_.norm().double()
+                                IF_LS[3] += g3_.norm().double()
                 if H2:                                                   # (--head2) its own lessons: the bias by its advantage (the hands' logits
                     ho2_ = HO2_[0]                                       # as numbers), its value on every learner frame
                     m2_ = lv * wgt
@@ -5564,6 +5619,21 @@ def main():
             rec["run_item"] = dict(begun=int(ri_[0]), weighted=int(getattr(E_, "RUN_TARGET_W", 0)),
                                    targets={E_.INTENTS[j_]: int(ri_[1 + j_]) for j_ in range(len(E_.INTENTS)) if ri_[1 + j_] > 0},
                                    by_map={k_: int(np.atleast_1d(v_["run_item"])[0]) for k_, v_ in agg_map.items() if "run_item" in v_})
+        if True:                                                         # (--item-floor) per map: the big items' mean p, those under the floor
+            ia_, ic_ = IF_ACC.cpu().numpy(), IF_CNT.cpu().numpy()
+            by_ = {}
+            un_ = {}
+            for j_, m_ in enumerate(IF_MAPS):
+                if ic_[j_] <= 0:
+                    continue
+                mp_ = {E_.INTENTS[k_]: round(float(ia_[j_, k_] / ic_[j_]), 4) for k_ in np.nonzero(IF_OK[j_])[0]}
+                by_[m_] = mp_
+                lo_ = {k_: v_ for k_, v_ in mp_.items() if v_ < IF_LIVE[1]}
+                if lo_:
+                    un_[m_] = lo_
+            ls_ = IF_LS.cpu().numpy()
+            rec["item_floor"] = dict(w=IF_LIVE[0], floor=IF_LIVE[1], under=un_, by_map=by_, term=round(float(ls_[0]), 5),
+                                     grad_floor=round(float(ls_[1]), 6), grad_bonus=round(float(ls_[2]), 6), grad_pg=round(float(ls_[3]), 6))
         if "overtime" in agg:                                            # (OVERTIME) games level at the limit played on, 120 s a period
             ot_ = np.atleast_1d(agg["overtime"]).astype(np.float64)      # (the simulator's OT_COLS)
             rec["overtime"] = dict(games=int(ot_[0]), periods=int(ot_[1]), ended_with_a_lead=int(ot_[2]), level_at_the_cap=int(ot_[3]),
