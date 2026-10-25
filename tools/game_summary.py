@@ -18,7 +18,7 @@ death was the victim's own (a suicide or the map: the game takes a point off him
 and right after each frag by the pros' score-and-clock table, sim/win_chance.json read as duel_env.py's WIN_PAY reads it:
 a straight line between its time steps; in overtime each period is read as the last two minutes again), stats (the
 game's own end-of-game table per player: kills, deaths, damage dealt and taken, per weapon [shots, hits, kills, seconds
-held]) and, only when a mind log exists for the game (--mind; the public servers do not record one now), mind (what
+held]) and, only when a mind log exists for the game (the data folder's mind files: every server records one from 2026-10-25), mind (what
 Bobby believed: tools/board_page.py draws it).
 
 Nothing personal: no key, no name, no Steam id, no address (the person is "p"; the history's names come from the board).
@@ -32,6 +32,7 @@ import bisect
 import calendar
 import csv
 import io
+import glob
 import json
 import math
 import os
@@ -285,19 +286,23 @@ def mind_section(path, mp, t0, t1, ev, fr_txt):
     his error by seconds out of sight, his guesses ahead, his reads of the person's next item, the error over the game
     and his believed place twice a second. None without lines for this game."""
     M = []
-    try:
-        with open(path, encoding="utf-8") as f:
-            for raw in f:
-                if '"k": "f"' not in raw and '"k":"f"' not in raw:
-                    continue
-                try:
-                    m = json.loads(raw)
-                except ValueError:
-                    continue
-                if m.get("map") == mp and t0 <= num(m.get("t")) <= t1:
-                    M.append(m)
-    except OSError:
-        return None
+    for p_ in ([path] if isinstance(path, str) else list(path)):
+        try:
+            if os.path.getmtime(p_) < t0:                    # (a rotated file that ended before the game began)
+                continue
+            with open(p_, encoding="utf-8") as f:
+                for raw in f:
+                    if '"k": "f"' not in raw and '"k":"f"' not in raw:
+                        continue
+                    try:
+                        m = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if m.get("map") == mp and t0 <= num(m.get("t")) <= t1:
+                        M.append(m)
+        except OSError:
+            continue
+    M.sort(key=lambda m: num(m.get("t")))
     if len(M) < 50:
         return None
     tr = []
@@ -394,7 +399,7 @@ def main():
     ap.add_argument("--frags", default=None, help="frags.jsonl (default <data>/frags.jsonl)")
     ap.add_argument("--out", default=None, help="where the summaries go (default <data>/games)")
     ap.add_argument("--win", default=None, help="the win-chance table (default sim/win_chance.json beside this tool)")
-    ap.add_argument("--mind", default=None, help="a mind log (plugins/duelbot.py !mind); none on the public servers")
+    ap.add_argument("--mind", action="append", default=None, help="mind logs (plugins/mindlog.py); default: the data folder's mind.jsonl and its rotated mind.<date-time>.jsonl")
     ap.add_argument("--days", type=float, default=7.0, help="games of the last DAYS days only (the servers keep sessions 7 days)")
     ap.add_argument("--all", action="store_true", help="every game, whatever its age (a backfill)")
     ap.add_argument("--redo", action="store_true", help="write the summaries again")
@@ -408,6 +413,7 @@ def main():
                 win_p = c
                 break
     win = WinTable(win_p) if win_p and os.path.exists(win_p) else None
+    minds = a.mind if a.mind is not None else sorted(glob.glob(os.path.join(a.data, "mind*.jsonl")))
     lines, _ = R.read_tail(a.duels or os.path.join(a.data, "duels.jsonl"), 0)
     now = time.time()
     games = [d for d in lines if d.get("kind") == "game" and "t" in d and (a.all or now - num(d["t"]) < a.days * 86400.0)]
@@ -439,7 +445,7 @@ def main():
         g = None
         if s is not None:
             try:
-                g = summarise(d, a.srv, s, frags, win, a.mind)
+                g = summarise(d, a.srv, s, frags, win, minds)
             except Exception as e:                           # noqa: BLE001 - one broken session must not stop the rest
                 print("{}: {} {}".format(gid, type(e).__name__, e))
         if g is None:
