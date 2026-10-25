@@ -105,21 +105,24 @@ def history_pages(rows, have):
         part = rows[(i - 1) * PER_PAGE:i * PER_PAGE]
         body = [nav("history", "../"), "<section><h1>Game history</h1>",
                 '<p class="sub">Every full game against BobbyBones on the US and EU servers, newest first, the last 180 days. '
-                "A row opens its game report.</p>"]
-        body.append('<div class="tbl"><table id="hist"><thead><tr><th>Date</th><th>Players</th><th>Score</th><th>Map</th>'
-                    '<th class="n">Length</th><th class="n">Aim</th><th>Bobby</th><th>Server</th><th>Rating after (change)</th>'
-                    "</tr></thead><tbody>")
+                "Click a game to open its report.</p>"]
+        body.append('<div class="tbl"><table id="hist"><thead><tr><th>Date</th><th>Players (rating after the game, change)</th>'
+                    '<th>Score</th><th>Map</th><th class="n">Length</th><th class="n">Aim</th><th>Bobby</th><th>Server</th>'
+                    '<th><span class="vh">Open</span></th></tr></thead><tbody>')
         if not part:
             body.append('<tr><td colspan="9">No games yet.</td></tr>')
         for r in part:
             tag, cls = result(r)
             href = "../games/{}.html".format(e(r["id"], quote=True))
-            body.append(('<tr><td><a class="row" href="{h}">{w}</a></td><td><a class="row" href="{h}"><span class="pl p">{pn}</span> vs '
-                         '<span class="b">BobbyBones</span></a></td><td><b>{p}–{b}</b> <span class="tag {c}">{tag}</span></td>'
-                         '<td>{m}</td><td class="n">{ln}</td><td class="n">{aim}</td><td>{v}</td><td>{s}</td><td class="rt">{rt}</td></tr>').format(
-                h=href, w=when(r["t0"]), pn=e(pname(r)), p=r["score"][0], b=r["score"][1], c=cls, tag=e(tag), m=e(map_name(r["map"])),
-                ln=mmss(r["len"]), aim=e(r.get("aim") or "–"), v=e(r.get("ver") or ""), s=e(SERVERS.get(r.get("srv"), str(r.get("srv") or "").upper())),
-                rt=ratings(r, "<br>")))
+            body.append(('<tr data-href="{h}"><td><a class="row" href="{h}" tabindex="-1">{w}</a></td><td><a class="row" href="{h}">'
+                         '<span class="pl p">{pn}</span> <span class="r">{pr} ({pd})</span> vs <span class="b">BobbyBones</span> '
+                         '<span class="r">{br} ({bd})</span></a></td><td><b>{p}–{b}</b> <span class="tag {c}">{tag}</span></td>'
+                         '<td>{m}</td><td class="n">{ln}</td><td class="n">{aim}</td><td>{v}</td><td>{s}</td>'
+                         '<td class="go" aria-hidden="true">›</td></tr>').format(
+                h=href, w=when(r["t0"]), pn=e(pname(r)), pr=num(r["r"][0]), pd=signed(r["dr"][0]), br=num(r["r"][1]),
+                bd=signed(r["dr"][1]), p=r["score"][0], b=r["score"][1], c=cls, tag=e(tag), m=e(map_name(r["map"])),
+                ln=mmss(r["len"]), aim=e(r.get("aim") or "–"), v=e(r.get("ver") or ""),
+                s=e(SERVERS.get(r.get("srv"), str(r.get("srv") or "").upper()))))
         body.append("</tbody></table></div>")
         pg = ['<div class="pager">']
         pg.append('<a href="{}">‹ Newer</a>'.format(name(i - 1)) if i > 1 else '<span class="off">‹ Newer</span>')

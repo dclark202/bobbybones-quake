@@ -34,52 +34,10 @@ README = ("# BobbyBones leaderboard\n\nThe public board of people against BobbyB
           "https://dclark202.github.io/bobbybones-leaderboard/ (the leaderboard and the game history), refreshed a few minutes after "
           "a game. The bot itself: " + REPO + "\n")
 
-CSS = """
-:root{--bg:#f7f7f5;--card:#ffffff;--text:#1d1d1b;--muted:#6b6b66;--line:#e3e3de;--accent:#b4441f;--accent-soft:#f6e6df;--you:#eef3fb}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141413;--card:#1d1d1b;--text:#ecebe6;--muted:#9c9b94;--line:#33332f;--accent:#e2774f;--accent-soft:#3a2219;--you:#1c2533}}
-:root[data-theme="dark"]{--bg:#141413;--card:#1d1d1b;--text:#ecebe6;--muted:#9c9b94;--line:#33332f;--accent:#e2774f;--accent-soft:#3a2219;--you:#1c2533}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:880px;margin:0 auto;padding:32px 16px 48px}
-h1{font-size:28px;margin:0 0 20px;letter-spacing:-.01em}
-.sub{color:var(--muted);margin:0 0 24px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 20px}
-.bobby{border-left:4px solid var(--accent)}
-.bobby h2{font-size:17px;margin:0 0 8px}
-.stats{display:flex;flex-wrap:wrap;gap:8px 28px}
-.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
-.stat span{color:var(--muted);font-size:13px}
-.servers{margin:12px 0 0;color:var(--muted);font-size:13px}
-.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
-table{border-collapse:collapse;width:100%;min-width:560px}
-th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
-th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
-td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
-tr:last-child td{border-bottom:0}
-tr.me td{background:var(--accent-soft);font-weight:600}
-td small{color:var(--muted);font-weight:400}
-.notes{color:var(--muted);font-size:13px;margin-top:20px}
-.notes p{margin:6px 0}
-a{color:var(--accent)}
-.card h2{font-size:17px;margin:0 0 8px}
-.tools{margin:0 0 10px}
-.tools input{width:100%;max-width:320px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);font:inherit}
-.pager{display:flex;align-items:center;gap:12px;margin:10px 0 24px;color:var(--muted);font-size:13px}
-.pager button{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);font:inherit;cursor:pointer}
-.pager button:disabled{opacity:.4;cursor:default}
-.trend{width:100%;height:auto;display:block}
-.trend .grid{stroke:var(--line);stroke-width:1}
-.trend .ax{fill:var(--muted);font-size:12px}
-.trend .nowt{fill:var(--accent);font-weight:600}
-.trend .val{fill:var(--text);font-size:12px;font-variant-numeric:tabular-nums}
-.trend .ln{fill:none;stroke:var(--accent);stroke-width:2}
-.trend .pt{fill:var(--card);stroke:var(--accent);stroke-width:2}
-.trend .pt.now{fill:var(--accent)}
-nav.tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 18px}
-nav.tabs a{font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);color:var(--text);text-decoration:none}
-nav.tabs a[aria-current="page"]{background:var(--text);color:var(--card);border-color:var(--text)}
-nav.tabs .site{font-weight:700;font-size:17px;margin-right:10px}
-"""
+def site_css():
+    """the game history's stylesheet (tools/board_site/site.css), inline so the front page stands alone"""
+    with open(os.path.join(BG.SITE, "site.css"), encoding="utf-8") as f:
+        return f.read()
 
 
 def vname(net):
@@ -109,15 +67,15 @@ def render(b, stamp):
         n, of = rows.rank(bobby, bobby)
         rec_all, rec_now = (b.get("duels") or {}).get("all", [0, 0, 0]), (b.get("duels") or {}).get(ver, [0, 0, 0])
         tot = bp["won"] + bp["lost"]
-        out.append('<section class="card bobby"><h2>BobbyBones {}</h2><div class="stats">'.format(e(ver)))
+        out.append('<section class="bobby"><h2>BobbyBones {}</h2><div class="stats">'.format(e(ver)))
         out.append('<div class="stat"><b>{:.0f}</b><span>rating (&plusmn;{:.0f}), rank {} of {}</span></div>'.format(bp["r"], 2 * bp["rd"], n, of))
         out.append('<div class="stat"><b>{}&ndash;{}</b><span>frags with people, made&ndash;taken ({:.0%})</span></div>'.format(
             bp["won"], bp["lost"], bp["won"] / max(1, tot)))
         out.append('<div class="stat"><b>{}</b><span>his full ten-minute games, won&ndash;lost ({})</span></div>'.format(wld(rec_now), e(ver)))
         out.append('<div class="stat"><b>{}</b><span>all versions</span></div></div>'.format(wld(rec_all)))
         out.append("</section>")
-    out.append('<div class="tools"><input id="q" type="search" placeholder="Search players" aria-label="Search players by name"></div>')
-    out.append('<div class="wrap"><table id="board"><thead><tr><th class="n">#</th><th>Player</th><th class="n">Rating</th>'
+    out.append('<section><div class="tools"><input id="q" type="search" placeholder="Search players" aria-label="Search players by name"></div>')
+    out.append('<div class="tbl"><table id="board"><thead><tr><th class="n">#</th><th>Player</th><th class="n">Rating</th>'
                '<th class="n">Games</th><th class="n">W&ndash;L vs Bobby</th><th class="n">Frags vs Bobby</th><th>Played on</th></tr></thead><tbody>')
     ranked = [(n, k, p) for n, (k, p) in enumerate(board, 1)]
     unranked = sorted(((None, k, p) for k, p in players.items() if not k.startswith(R.BOT) and p["won"] + p["lost"] < R.MIN_FRAGS),
@@ -126,7 +84,7 @@ def render(b, stamp):
         num = n if n else '<small title="ranked from {} frags with BobbyBones">&ndash;</small>'.format(R.MIN_FRAGS)
         if k == bobby:
             rec = (b.get("duels") or {}).get("all") or [0, 0, 0]
-            out.append('<tr class="me" data-name="bobbybones"><td class="n">{}</td><td>BobbyBones <small>{}</small></td>'
+            out.append('<tr class="me" data-name="bobbybones"><td class="n">{}</td><td class="nm">BobbyBones <small>{}</small></td>'
                        '<td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td><td class="n">{} <small>(his own)</small></td>'
                        '<td class="n"><small>the bot</small></td><td>both</td></tr>'.format(
                            num, e(ver), p["r"], 2 * p["rd"], sum(rec), wld(rec)))
@@ -137,18 +95,18 @@ def render(b, stamp):
         tot_d = [sum(v[i] for v in du.values()) for i in range(3)]
         by = " &middot; ".join("{} {}".format(s.upper(), wld(v)) for s, v in sorted(du.items()) if sum(v))
         on = " + ".join(s.upper() for s in sorted(fr) if sum(fr[s])) or "-"
-        out.append('<tr data-name="{}"><td class="n">{}</td><td>{}</td><td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td>'
+        out.append('<tr data-name="{}"><td class="n">{}</td><td class="nm">{}</td><td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td>'
                    '<td class="n">{}{}</td><td class="n">{}&ndash;{}</td><td>{}</td></tr>'.format(
                        e(nm.lower(), quote=True), num, e(nm), p["r"], 2 * p["rd"], sum(tot_d) or "-",
                        wld(tot_d) if sum(tot_d) else "-", " <small>({})</small>".format(by) if len(du) > 1 and by else "",
                        p["won"], p["lost"], on))
     out.append('</tbody></table></div>')
     out.append('<div class="pager"><button id="prev" type="button">&larr; Prev</button><span id="pn"></span>'
-               '<button id="next" type="button">Next &rarr;</button></div>')
+               '<button id="next" type="button">Next &rarr;</button></div></section>')
     trend = sorted(((k, p) for k, p in players.items() if k.startswith(R.BOT)), key=lambda kp: float(kp[1].get("since") or 0))
     if len(trend) > 1:
-        out.append('<section class="card"><h2>BobbyBones by version</h2>' + trend_svg(trend, bobby)
-                   + '<p class="servers">Each version&rsquo;s rating against people, oldest to newest; the filled point is the version playing now.</p></section>')
+        out.append('<section><h2>BobbyBones by version</h2>' + trend_svg(trend, bobby)
+                   + '<p class="note">Each version&rsquo;s rating against people, oldest to newest; the filled point is the version playing now.</p></section>')
     out.append('<div class="notes">')
     if unranked:
         out.append("<p>A player is ranked from {} frags with BobbyBones; {} {} not ranked yet (# &ndash;).</p>".format(
@@ -164,8 +122,8 @@ def render(b, stamp):
     return ("<!doctype html>\n"
             '<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n'
             '<title>BobbyBones Leaderboard</title><meta name="description" content="The shared leaderboard of the BobbyBones Quake Live duel servers">\n'
-            "<style>" + CSS + "</style></head>\n<body><main>\n" + BG.nav("board", "") + "\n<h1>BobbyBones leaderboard</h1>\n" + body
-            + "\n<script>" + JS + "</script>\n</main></body></html>\n")
+            + BG.FONTS + "<style>" + site_css() + "</style></head>\n<body><div class=\"wrap\">\n" + BG.nav("board", "")
+            + "\n<h1>BobbyBones leaderboard</h1>\n" + body + "\n<script>" + JS + "</script>\n</div></body></html>\n")
 
 
 def trend_svg(trend, bobby):

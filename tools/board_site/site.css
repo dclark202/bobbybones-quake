@@ -1,21 +1,18 @@
-/* The leaderboard site's game history and game reports (tools/board_page.py writes the pages; owner-approved mockup of
-   2026-10-25). Colours are tokens: light by default, dark by the system or data-theme. */
+/* The leaderboard site's game history and game reports (tools/board_page.py writes the pages; owner-approved mockups of
+   2026-10-25). Colours are tokens: dark, players green, Bobby purple. */
 :root {
-  --bg: #f3f4f6; --panel: #ffffff; --ink: #14181f; --muted: #5d6573; --line: #d9dde3;
-  --player: #c2410c; --bobby: #0e7490; --bobby-soft: rgba(14,116,144,.14); --player-soft: rgba(194,65,12,.14);
-  --floor: rgba(20,24,31,.16);
+  --bg: #0f1217; --panel: #161b22; --ink: #e6e9ee; --muted: #9aa3b2; --line: #2a313c;
+  --player: #4ade80; --bobby: #c084fc; --bobby-soft: rgba(192,132,252,.14); --player-soft: rgba(74,222,128,.14);
+  --floor: rgba(230,233,238,.14); color-scheme: dark;
   --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0f1217; --panel: #161b22; --ink: #e6e9ee; --muted: #9aa3b2; --line: #2a313c;
-  --player: #fb923c; --bobby: #22d3ee; --bobby-soft: rgba(34,211,238,.16); --player-soft: rgba(251,146,60,.16);
-  --floor: rgba(230,233,238,.14); color-scheme: dark } }
-:root[data-theme="dark"] {
-  --bg: #0f1217; --panel: #161b22; --ink: #e6e9ee; --muted: #9aa3b2; --line: #2a313c;
-  --player: #fb923c; --bobby: #22d3ee; --bobby-soft: rgba(34,211,238,.16); --player-soft: rgba(251,146,60,.16);
-  --floor: rgba(230,233,238,.14); color-scheme: dark }
+/* dark for everyone (owner, 2026-10-25); a light set only on request (data-theme="light") */
+:root[data-theme="light"] {
+  --bg: #f3f4f6; --panel: #ffffff; --ink: #14181f; --muted: #5d6573; --line: #d9dde3;
+  --player: #15803d; --bobby: #7e22ce; --bobby-soft: rgba(126,34,206,.10); --player-soft: rgba(21,128,61,.12);
+  --floor: rgba(20,24,31,.16); color-scheme: light }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
@@ -83,9 +80,14 @@ td.p { color: var(--player); font-weight: 600; } td.b { color: var(--bobby); fon
 #hist td { text-align: left; vertical-align: top; }
 #hist td.n { text-align: right; }
 #hist .p { color: var(--player); font-weight: 600; } #hist .b { color: var(--bobby); font-weight: 600; }
-#hist tbody tr:hover { background: var(--bg); }
+#hist tbody tr[data-href] { cursor: pointer; }
+#hist tbody tr[data-href]:hover, #hist tbody tr[data-href]:focus-within { background: var(--bobby-soft); }
+#hist tbody tr[data-href]:hover td:first-child, #hist tbody tr[data-href]:focus-within td:first-child { box-shadow: inset 3px 0 0 var(--bobby); }
 #hist a.row { color: inherit; text-decoration: none; }
-#hist a.row:hover .pl { text-decoration: underline; }
+#hist tbody tr[data-href]:hover .pl { text-decoration: underline; }
+#hist .r { color: var(--muted); font-weight: 400; font-size: 12px; white-space: nowrap; }
+#hist td.go { color: var(--muted); text-align: right; width: 1%; }
+#hist tbody tr[data-href]:hover td.go { color: var(--bobby); }
 .tag { font-family: var(--mono); font-size: 11px; margin-left: 6px; color: var(--player); white-space: nowrap; }
 .tag.bw { color: var(--bobby); } .tag.dr { color: var(--muted); }
 .rt { font-size: 12px; }
@@ -97,11 +99,39 @@ td.p { color: var(--player); font-weight: 600; } td.b { color: var(--bobby); fon
 @media (max-width: 700px) {
   #hist thead { display: none; }
   #hist, #hist tbody { display: block; }
-  #hist tr { display: block; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  #hist tr { display: block; padding: 8px 0 8px 6px; border-bottom: 1px solid var(--line); position: relative; }
   #hist td { display: inline-block; border: 0; padding: 1px 12px 1px 0; white-space: normal; text-align: left; }
-  #hist td:nth-child(1), #hist td:nth-child(2), #hist td:nth-child(9) { display: block; }
+  #hist td:nth-child(1), #hist td:nth-child(2) { display: block; }
   #hist td:nth-child(5)::before { content: "length "; color: var(--muted); }
   #hist td:nth-child(6)::before { content: "aim "; color: var(--muted); }
-  #hist td.rt br { display: none; }
-  #hist td.rt .b::before { content: "\00a0\00b7\00a0"; color: var(--muted); }
+  #hist td.go { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); padding: 0; }
+  #hist tbody tr[data-href]:hover td:first-child { box-shadow: none; }
+  #hist tbody tr[data-href]:hover { box-shadow: inset 3px 0 0 var(--bobby); }
 }
+/* the leaderboard (tools/board_page.py) */
+.tools input { width: 100%; max-width: 320px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--ink); font: inherit; }
+.tools input:focus-visible { outline: 2px solid var(--bobby); outline-offset: 1px; }
+.pager button { font-family: var(--mono); font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: transparent; color: var(--ink); cursor: pointer; }
+.pager button:disabled { opacity: .4; cursor: default; }
+.stats { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+section.bobby { border-left: 3px solid var(--bobby); }
+section.bobby h2 { color: var(--bobby); }
+#board { min-width: 560px; }
+#board td, #board th { text-align: left; }
+#board td.n, #board th.n { text-align: right; }
+#board td.nm { color: var(--player); font-weight: 600; }
+#board tr.me td { background: var(--bobby-soft); font-weight: 600; }
+#board tr.me td.nm { color: var(--bobby); }
+#board tr:last-child td { border-bottom: 0; }
+td small { color: var(--muted); font-weight: 400; }
+.trend { width: 100%; height: auto; display: block; }
+.trend .grid { stroke: var(--line); stroke-width: 1; }
+.trend .ax { fill: var(--muted); font-size: 12px; }
+.trend .nowt { fill: var(--bobby); font-weight: 600; }
+.trend .val { fill: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.trend .ln { fill: none; stroke: var(--bobby); stroke-width: 2; }
+.trend .pt { fill: var(--panel); stroke: var(--bobby); stroke-width: 2; }
+.trend .pt.now { fill: var(--bobby); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
