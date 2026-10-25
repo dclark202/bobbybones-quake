@@ -1627,6 +1627,32 @@ RAIL_START_COLS = ("rail starts begun", "asked for with no mid moment saved: a w
 #                 Counters: stats["pro_start"] (PRO_START_COLS).
 PRO_START_P = float(os.environ.get("PRO_START_P") or 0.0)
 PRO_START_LEN = float(os.environ.get("PRO_START_LEN") or 0.0)
+#   PEOPLE_START_SHARE=<share>   (2026-10-25, owner: "a variety of in game starts with different stack, positions and weapons in
+#                 hand ... sample them from actual moments in the games played ... so he knows that 'rail on campgrounds is
+#                 good'"): the share of the pro starts (PRO_START_P) that begin at a moment of a PERSON's duel against Bobby
+#                 instead of a pros' demo: data/people_moments/<map>.npz of tools/people_moments.py (PEOPLE_MOMENTS_DIR), the
+#                 same format and the same code (_pro_start; both players' truth: est 0). A map without the file keeps the
+#                 pros' only; a map with people's moments and no pros' has people's only (at any share above 0). The share is
+#                 of the starts' time: the starts' mean length is the two sources' mean by the share. Read at every draw (live:
+#                 the trainer's live_settings.env); the file is read at the start whenever PRO_START_P is on. 0 (the default):
+#                 not one random draw more, the simulator as before.
+#   MOMENT_WEIGHTED=1    a pro start's moment is drawn by the file's "weight" column (tools/people_moments.py: moments a few
+#                 seconds before a weapon he lacks or a big item is taken, and moments with the map's key weapon owned, count
+#                 more); a file without the column (the pros') is drawn evenly. 0: evenly, as before. Live as well.
+PEOPLE_START_SHARE = float(os.environ.get("PEOPLE_START_SHARE") or 0.0)
+MOMENT_WEIGHTED = int(float(os.environ.get("MOMENT_WEIGHTED") or 0))
+PEOPLE_MOMENTS_DIR = os.environ.get("PEOPLE_MOMENTS_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "people_moments")
+PEOPLE_START_COLS = ("pro starts from people's moments", "... counted seats begun", "... of them playing the person's seat",
+                     "moments drawn by weight (either source)")
+#   RUN_TARGET_W=1   (2026-10-25, owner's go: targeted practice for the items he never picks up): the item runs (ITEM_RUN_P:
+#                 alone on the map from the game's spawn, his intention the target, paid by RUN_SCALE for the way gained and
+#                 RUN_ARRIVE on taking it) draw their target by the map's weights in sim/run_targets.json ({map: {intention
+#                 label: weight}}, tools/run_targets.py: from his own pickups a minute in whole games, the items he takes
+#                 least weigh most) among the items lying there that his ways reach (_run_pick's rule, the walking map with
+#                 its jump pads and teleporters), the next one drawn the same way when he has it. A map without a row in the
+#                 table: evenly, as before. Read at every draw (live). 0 (the default): evenly, not one random draw changed.
+RUN_TARGET_W = int(float(os.environ.get("RUN_TARGET_W") or 0))
+RUN_TARGETS = os.environ.get("RUN_TARGETS") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_targets.json")
 PRO_KIND = 3 if PRO_START_LEN <= 0 else 4                 # (the game kind of its frames: a mid-game start's, or a spawn start's)
 PRO_FRAMES = int(round(PRO_START_LEN / DT))
 PRO_EARLY = 10.0                                           # (the counters: a start's first seconds)
@@ -3452,6 +3478,15 @@ class DuelEnv:
         self.jrun_past = np.zeros(self.n, bool)             # ... he has landed at the jump's landing (over it or not): the item is the goal
         self.jump_lab_off = np.zeros(0, bool)               # ... per jump: no teacher's labels before its landing (sim/jump_labels.json)
         self.jump_run_p = float(os.environ.get("JUMP_RUN_P") or 0.0)  # share of the playing time in jump runs
+        self.run_tw = None                                  # ... the map's weights by intention (None: no row for this map)
+        try:
+            with open(RUN_TARGETS, encoding="utf-8") as fh_:
+                rt_ = json.load(fh_).get(os.path.splitext(os.path.basename(bsp))[0].lower())
+            if isinstance(rt_, dict) and rt_:
+                self.run_tw = {INTENTS.index(k_): float(v_) for k_, v_ in rt_.items() if k_ in INTENTS and float(v_) > 0}
+                self.run_tw = self.run_tw or None
+        except (OSError, ValueError):
+            pass
         self.jrun = np.zeros(self.n, bool)                  # in a jump run
         self.jrun_k = np.zeros(self.n, np.int64)            # ... the jump his try is for
         self.jrun_t = np.zeros(self.n, np.float32)          # ... the seconds the try has left
@@ -4028,6 +4063,7 @@ class DuelEnv:
         self._game_init()
         self._v02_init(bsp)
         self._es_init()
+        self.stats["run_item"] = np.zeros(1 + len(INTENTS))  # (RUN_TARGET_W) item runs begun, targets drawn by the table by intention
         if MOMENTS:                                          # (MID_START_P, SPAWN_START_P) the saved moments of whole games
             self._moment_init(seed)
         if RAIL_START_P > 0:                                 # (RAIL_START_P) the pros' long rail places of this map
@@ -9051,6 +9087,7 @@ class DuelEnv:
         self.rail_m = np.zeros(self.M, bool)                 # (RAIL_START_P) match m is in a rail start
         self.rail_pairs = None                               # ... the map's pairs of places (None: no rail starts here)
         self.pro_mo = None                                   # (PRO_START_P) the map's pro moments (None: no pro starts here)
+        self.ppl_mo = None                                   # (PEOPLE_START_SHARE) the map's moments of people's duels (None: none)
 
     def _rail_start_init(self, bsp):
         """(RAIL_START_P) the map's pairs of places (sim/rail_pairs/<map>.json; none on a map without a railgun), the books"""
@@ -9066,19 +9103,37 @@ class DuelEnv:
             self.rail_pairs = np.array([p_[:10] for p_ in pr_["pairs"]], np.float32)
 
     def _pro_start_init(self, bsp):
-        """(PRO_START_P) the map's moments of the pros' duels (sim/pro_moments/<map>.npz; none: no pro starts here), each
-        of the file's items matched to this simulator's (same class, within PRO_ITEM_R units), the books"""
+        """(PRO_START_P) the map's moments of the pros' duels (sim/pro_moments/<map>.npz; none: no pro starts here) and of
+        people's (PEOPLE_START_SHARE: PEOPLE_MOMENTS_DIR/<map>.npz), each file's items matched to this simulator's (same
+        class, within 48 units), the books"""
         self.stats["pro_start"] = np.zeros(len(PRO_START_COLS))
+        self.stats["people_start"] = np.zeros(len(PEOPLE_START_COLS))
         self.pro_mm = np.zeros(self.M, bool)                 # match m is in a pro start
         self.pro_t0 = np.zeros(self.M, np.int64)             # ... the game's frame it began at
         self.pro_s0 = np.zeros(self.n, np.float32)           # ... each seat's score at its start
         self._pro_put = []
-        f_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_moments", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
-        if not os.path.exists(f_) or getattr(self, "lab", None) is not None:
+        if getattr(self, "lab", None) is not None:
             return
+        mapn_ = os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz"
+        self.pro_mo = self._moments_load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_moments", mapn_), "pro starts")
+        if self.pro_mo is not None:
+            self.pro_mean = self._moments_mean(self.pro_mo)
+        self.ppl_mo = self._moments_load(os.path.join(PEOPLE_MOMENTS_DIR, mapn_), "people's starts")
+        if self.ppl_mo is not None:
+            self.ppl_mean = self._moments_mean(self.ppl_mo)
+
+    @staticmethod
+    def _moments_mean(P):
+        return float(np.mean(GAME_LEN - P["clock"])) if PRO_START_LEN <= 0 else float(np.mean(np.minimum(PRO_START_LEN, GAME_LEN - P["clock"])))
+
+    def _moments_load(self, f_, what):
+        """a moments file (tools/pro_moments.py, tools/people_moments.py) as a dict with its items matched to this
+        simulator's (imap), or None (no file, no moments, a big item not matched)"""
+        if not os.path.exists(f_):
+            return None
         z_ = np.load(f_)
         if not len(z_["clock"]):
-            return
+            return None
         P = {k_: np.asarray(z_[k_]) for k_ in z_.files}
         cls_ = [e_["classname"] for e_ in self.w.entities if e_.get("classname") in ITEM_DEFS and "origin" in e_]
         fcls, fpos = [str(c_) for c_ in P["item_cls"]], P["item_pos"].astype(np.float32)
@@ -9092,19 +9147,48 @@ class DuelEnv:
                     imap[j_] = cand[int(np.argmin(d_))]
                     used.add(int(imap[j_]))
         if (imap < 0).any() and any(self.item_def[j_][4] in ("MH", "RA", "YA") for j_ in np.nonzero(imap < 0)[0]):
-            print("pro starts: the items of {} do not match this simulator's (a big item missing): none here".format(f_), flush=True)
-            return
+            print("{}: the items of {} do not match this simulator's (a big item missing): none here".format(what, f_), flush=True)
+            return None
         P["imap"] = imap
         P["item_left"] = P["item_left"].astype(np.float32)
-        self.pro_mo = P                                      # (a dict: no array of it is taken into a saved moment)
-        self.pro_mean = float(np.mean(GAME_LEN - P["clock"])) if PRO_START_LEN <= 0 else \
-            float(np.mean(np.minimum(PRO_START_LEN, GAME_LEN - P["clock"])))
+        if "weight" in P:                                    # (MOMENT_WEIGHTED) the draw's running sum
+            w_ = np.maximum(P["weight"].astype(np.float64), 0.0)
+            P["wcum"] = np.cumsum(w_) if w_.sum() > 0 else None
+        return P                                             # (a dict: no array of it is taken into a saved moment)
 
-    def _pro_start(self, m, k):
+    def _pro_ok(self):
+        """(PRO_START_P) this map has pro starts now: the pros' moments, or people's with PEOPLE_START_SHARE on"""
+        return self.pro_mo is not None or (PEOPLE_START_SHARE > 0 and self.ppl_mo is not None)
+
+    def _pro_mean_now(self):
+        """(PRO_START_P) the starts' mean length (for the shares): the pros' as before, or the two sources' by the share"""
+        s_ = PEOPLE_START_SHARE if self.ppl_mo is not None else 0.0
+        if s_ <= 0:
+            return self.pro_mean
+        if self.pro_mo is None:
+            return self.ppl_mean
+        return (1.0 - s_) * self.pro_mean + s_ * self.ppl_mean
+
+    def _pro_pick(self):
+        """(PRO_START_P) the source (0 the pros, 1 people: PEOPLE_START_SHARE) and the moment of a new pro start; with both
+        switches off one draw, as before"""
+        rng, src = self.rng_mom, 0
+        if PEOPLE_START_SHARE > 0 and self.ppl_mo is not None:
+            src = 1 if (self.pro_mo is None or rng.random() < PEOPLE_START_SHARE) else 0
+        P = self.ppl_mo if src else self.pro_mo
+        if MOMENT_WEIGHTED and P.get("wcum") is not None:
+            c_ = P["wcum"]
+            k = min(len(c_) - 1, int(np.searchsorted(c_, rng.random() * c_[-1], side="right")))
+            self.stats["people_start"][3] += 1
+        else:
+            k = int(rng.integers(len(P["clock"])))
+        return src, k
+
+    def _pro_start(self, m, k, src=0):
         """(PRO_START_P) match m, just begun as a whole game (its round's reset done), is put at pro moment k: which seat
         plays which pro drawn evenly; places, speeds, views, stacks, weapons, the score, the clock and the items as the
         moment has them; each seat knows the items its pro took (when they are back) and nothing of the enemy"""
-        P, rng, PS_ = self.pro_mo, self.rng_mom, self.stats["pro_start"]
+        P, rng, PS_ = (self.ppl_mo if src else self.pro_mo), self.rng_mom, self.stats["pro_start"]
         q = [int(x) for x in self._seats(m)]
         flip = int(rng.random() < 0.5)
         ok_w = np.zeros(NW, bool)
@@ -9141,6 +9225,9 @@ class DuelEnv:
             if bool(self._counted(i)):
                 PS_[14] += 1
                 PS_[15] += float(P["est"][k, s_] > 0)
+                if src:                                      # (PEOPLE_START_SHARE) seat 1 of a people's moment is the person
+                    self.stats["people_start"][1] += 1
+                    self.stats["people_start"][2] += float(s_ == 1)
         qa = np.array(q)
         self.g_tick[m], self.round_t[m] = tick, np.float32(tick * DT)
         self.game[m] = PRO_KIND
@@ -9187,6 +9274,8 @@ class DuelEnv:
         self.pro_mm[m] = True
         self.pro_t0[m] = tick
         PS_[0] += 1
+        if src:
+            self.stats["people_start"][0] += 1
         PS_[13] += abs(float(d))
         PS_[16] += tick * DT
 
@@ -9204,7 +9293,7 @@ class DuelEnv:
         kp0 = float(self.kind_p[0])
         rm, rs = kp0 * MID_START_P / MID_MEAN, kp0 * SPAWN_START_P / SPAWN_START_LEN
         rr = kp0 * RAIL_START_P / RAIL_MEAN if self.rail_pairs is not None else 0.0     # (RAIL_START_P: rail range starts)
-        rp = kp0 * PRO_START_P / self.pro_mean if PRO_START_P > 0 and self.pro_mo is not None else 0.0     # (PRO_START_P: pro starts)
+        rp = kp0 * PRO_START_P / self._pro_mean_now() if PRO_START_P > 0 and self._pro_ok() else 0.0     # (PRO_START_P: pro starts)
         if rg + rl + rm + rs + rr + rp <= 0:
             return False
         u = self.rng.random() * (r0 + rg + rl + rx + rm + rs + rr + rp)
@@ -9215,7 +9304,7 @@ class DuelEnv:
             return True
         if u >= rg + rl + rm + rs + rr:                      # (PRO_START_P) a pro start: a whole game's start, then the moment
             self._game_start(m, late=False)                  # (after the round's reset: _pro_start)
-            self._pro_put.append((int(m), int(self.rng_mom.integers(len(self.pro_mo["clock"])))))
+            self._pro_put.append((int(m),) + self._pro_pick()[::-1])     # (m, moment, source: PEOPLE_START_SHARE)
             return True
         kd = 3 if u < rg + rl + rm else 4 if u < rg + rl + rm + rs else 5
         bank = self.mom_bank[0 if kd == 4 else 1]            # (the bank: spawn moments, mid-game moments; a rail start: a mid moment)
@@ -9467,8 +9556,8 @@ class DuelEnv:
                 rs_ = float(self.kind_p[0]) * SPAWN_START_P / SPAWN_START_LEN if MOMENTS else 0.0
                 if MOMENTS and self.rail_pairs is not None:  # (RAIL_START_P: rail range starts)
                     rs_ += float(self.kind_p[0]) * RAIL_START_P / RAIL_MEAN
-                if PRO_START_P > 0 and self.pro_mo is not None:     # (PRO_START_P: pro starts)
-                    rs_ += float(self.kind_p[0]) * PRO_START_P / self.pro_mean
+                if PRO_START_P > 0 and self._pro_ok():       # (PRO_START_P: pro starts)
+                    rs_ += float(self.kind_p[0]) * PRO_START_P / self._pro_mean_now()
                 other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
         p = self.item_run_p + pj + pr
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
@@ -9501,6 +9590,8 @@ class DuelEnv:
             else:
                 self._spawn(int(i), avoid=None)
         self.state = self.w.state()
+        if RUN_TARGET_W and not (jump or rj):               # (RUN_TARGET_W) the item runs, counted
+            self.stats["run_item"][0] += 1
         for i in (() if (jump or rj) else q):
             self._run_pick(int(i))
         return q
@@ -10213,6 +10304,12 @@ class DuelEnv:
         ks = [k for k, gi in gk.items() if gi >= 0 and k != self.run_k[i] and Tr[gi, node] < 1e8]
         ok = [k for k in ks if self.item_up[m, self.route_item[gk[k]]] and Tr[gk[k], node] > 1.0]
         ok = ok or ks
+        if ok and RUN_TARGET_W and self.run_tw is not None:  # (RUN_TARGET_W) by the map's weights (evenly if none of them is here)
+            w_ = np.array([self.run_tw.get(int(k), 0.0) for k in ok], np.float64)
+            self.run_k[i] = int(ok[int(self.rng.choice(len(ok), p=w_ / w_.sum()))]) if w_.sum() > 0 else int(self.rng.choice(ok))
+            self.stats["run_item"][1 + int(self.run_k[i])] += 1
+            self.intent_new[i], self.intent_done[i] = True, True
+            return
         self.run_k[i] = int(self.rng.choice(ok)) if ok else 0
         self.intent_new[i], self.intent_done[i] = True, True     # the new target is read at once
 
@@ -12173,8 +12270,8 @@ class DuelEnv:
                 self._late_start(m_)
             self._late_m = []
         if PRO_START_P > 0 and self._pro_put:                # ... and for the pro starts: the moment of a pros' duel
-            for m_, k_ in self._pro_put:
-                self._pro_start(m_, k_)
+            for m_, k_, s_ in self._pro_put:
+                self._pro_start(m_, k_, s_)
             self._pro_put = []
         if len(dead) or len(out) or len(ends) or self._replaced:
             self.state = s = self.w.state()
