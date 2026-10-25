@@ -251,6 +251,7 @@ class duelbot(minqlx.Plugin):
             self.mind_map, self.mind_fr = None, 0
             self.log("mind view: on from the start (DUEL_MIND=1; mind.jsonl in the data folder)")
         self.aim_want = None                                 # (!aim) the level asked for, put in at the next warmup
+        self.aim_reset()                                     # (the start: the default aim, whatever policy.npz was left at)
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
@@ -1564,18 +1565,41 @@ class duelbot(minqlx.Plugin):
 
     AIM_DEFAULT = "4"
 
+    @staticmethod
+    def file_level(path):
+        """the aim level of a policy file on disk ("1" to "5", "max"; "?" when it cannot be read): only its env_vars are read"""
+        try:
+            with np.load(path, allow_pickle=False) as z:
+                v = float(json.loads(str(z["env_vars"])).get("AIM_LEVEL", 3))
+        except Exception:                                    # noqa: BLE001
+            return "?"
+        return "max" if v > 9 else "{:g}".format(v)
+
     def aim_reset(self):
-        """a new map: back to the default aim (owner, 2026-10-22); policy.npz is loaded by setup() once the map is up"""
-        self.aim_want = None
-        src, dst = os.path.join(D, self.AIM_FILES[self.AIM_DEFAULT]), os.path.join(D, "policy.npz")
-        if self.aim_level() in (self.AIM_DEFAULT, "?") or not os.path.exists(src):
+        """a new map (and the plugin's start): back to the default aim (owner, 2026-10-22), unless a level was asked for
+        "from the next game" during the last one (its countdown, its end, the vote, the load): that level is this map's,
+        and the map after it is back at the default. policy.npz is loaded by setup() once the map is up.
+        (2026-10-25: a level asked for after a game's gg, as the gg line itself suggests ("Try !aim 5 next game"), was
+        promised "from the next game" and then wiped here by the next map's load: every game on the servers was at 4.
+        And with no network loaded yet, a restart kept whatever level policy.npz was left at for the whole first map.)"""
+        want, self.aim_want = self.aim_want, None
+        lv = self.AIM_DEFAULT
+        if want in self.AIM_FILES and want != self.AIM_DEFAULT and os.path.exists(os.path.join(D, self.AIM_FILES[want])):
+            lv = want
+        self.aim_said = lv if lv != self.AIM_DEFAULT else None   # said once the map is up (aim_frame)
+        src, dst = os.path.join(D, self.AIM_FILES[lv]), os.path.join(D, "policy.npz")
+        cur = self.aim_level()
+        if cur == "?":                                       # no network loaded yet: the file's own level
+            cur = self.file_level(dst)
+        if cur in (lv, "?") or not os.path.exists(src):
             return
         try:
             tmp = dst + ".aim.tmp"
             shutil.copyfile(src, tmp)
             os.replace(tmp, dst)
-            self.log("new map: aim level back to {}".format(self.AIM_DEFAULT))
+            self.log("new map: aim level {}".format(lv) + (" (asked for in the last game)" if lv != self.AIM_DEFAULT else " (the default)"))
         except Exception as e:                           # noqa: BLE001
+            self.aim_said = None
             self.log("aim reset: {!r}".format(e))
 
     def aim_busy(self):
@@ -1713,6 +1737,11 @@ class duelbot(minqlx.Plugin):
 
     def aim_frame(self, now):
         """a level asked for during a game goes in at the next warmup"""
+        said = getattr(self, "aim_said", None)
+        if said:                                             # (aim_reset) the level asked for in the last game, on this map
+            self.aim_said = None
+            if said == self.aim_level():
+                self.msg("^3Aim level now^7 ^2{}^7 (back to ^2{}^7 on the next map).".format(said, self.AIM_DEFAULT))
         if not self.aim_want or now < getattr(self, "aim_check", 0.0):
             return
         self.aim_check = now + 2.0
