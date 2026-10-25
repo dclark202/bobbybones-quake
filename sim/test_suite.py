@@ -70,6 +70,11 @@ class Policy:
             self.bgate = float(bt_.get("gate", 0.0))
             self.btok = bt_
             self.brainP = btoken_.numpy_brain(sd, ck["belief"], ck.get("track"), ck.get("track_z"))
+        self.rf = ck.get("rule_fade")                        # (v0.4.2a, sim/rule_fade.py) the rule-made columns faded out of the hands
+        self.rf_cols = np.asarray(self.rf["cols"], np.int64) if self.rf is not None else np.zeros(0, np.int64)
+        self.rfg = float(self.rf.get("g", 0.0)) if self.rf is not None else 0.0
+        self.rf_read = bool(self.rf.get("readers")) if self.rf is not None else False    # (BRAIN_READ in training: the simulator's
+        #                                                      readers on the brain's answer: the checks give it, brain_answer())
         self.legsP = None                                    # (LEGS_IN, B-253) his legs' branch, if the network has it inside
         if "legs.0.weight" in sd:
             self.legsP = tuple(sd[k_] for k_ in ("legs.0.weight", "legs.0.bias", "legs.2.weight", "legs.2.bias", "legs.4.weight", "legs.4.bias"))
@@ -128,18 +133,38 @@ class Policy:
         return head_
 
     @property
+    def brain_on(self):
+        """(v0.4.1) the brain is stepped: its token is open, or (v0.4.2a) the simulator's readers take its answer (the rule
+        fade above 0 in a network trained with BRAIN_READ)"""
+        return self.btok is not None and (self.bgate > 0 or (self.rf_read and self.rfg > 0))
+
+    @property
     def needs_pose(self):
-        """(v0.4.1) act() needs his pose (pose=, zmap=: btoken.pose_from_env of the frame, these rows): the brain's token is open"""
-        return self.btok is not None and self.bgate > 0
+        """(v0.4.1) act() needs his pose (pose=, zmap=: btoken.pose_from_env of the frame, these rows): the brain is stepped"""
+        return self.brain_on
+
+    def set_rule_fade(self, g):
+        """(v0.4.2a, checks) play the rule fade at this gate (0: the network without the fade)"""
+        assert g <= 0 or self.rf is not None, "this network has no rule fade"
+        self.rfg = float(g)
+
+    def brain_answer(self, h):
+        """(v0.4.2a, BRAIN_READ) the brain's answer for these seats from their arrays (after act()), as the simulator's
+        readers take it (duel_env.brain_in; btoken.answer_of); None while the brain is not stepped"""
+        if not self.brain_on:
+            return None
+        import btoken as btoken_
+        _, tk_ = btoken_.unpack(self.brainP, self.btok, h[:, self.brain_at:])
+        return btoken_.answer_of(tk_)
 
     def token_pre(self, obs, pose, zmap, hb):
         """(v0.4.1) before a frame: the brain's last answer turned to his pose now, as the trainer makes it ([B, F] float32, the
         numbers rounded to half precision), and the unpacked state; (None, None) while the gate is shut (the network without
         it). obs: the raw inputs; hb: the seats' packed brain state (the end of their arrays)"""
-        if self.btok is None or not self.bgate > 0:
+        if not self.brain_on:
             return None, None
         import btoken as btoken_
-        assert pose is not None and zmap is not None, "this network's brain token is open: give act() pose= and zmap= (btoken.pose_from_env)"
+        assert pose is not None and zmap is not None, "this network's brain is stepped: give act() pose= and zmap= (btoken.pose_from_env)"
         br_, tk_ = btoken_.unpack(self.brainP, self.btok, hb)
         tk_.see(obs)
         return tk_.features(np.asarray(pose, np.float32), np.asarray(zmap)).astype(np.float32), (br_, tk_)
@@ -222,15 +247,20 @@ class Policy:
         if obs.shape[1] > len(self.mean):                    # an older network in a simulator with more inputs: they are appended at the end
             obs = obs[:, :len(self.mean)]
         x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
-        xa = x
+        xa = x                                               # (the brain reads these: unfaded)
         bt, bst = self.token_pre(obs, pose, zmap, hb)
+        if self.rfg > 0 and len(self.rf_cols):               # (v0.4.2a) the hands' inputs: the rule-made columns times (1 - g)
+            import rule_fade as rfade_
+            x = rfade_.apply_np(x, self.rf_cols, self.rfg)
+        xh = x                                               # (the hands' attention reads these)
         if self.cell is not None:
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
             x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
         x = np.tanh(x @ self.w0.T + self.b0)
         x = np.tanh(x @ self.w1.T + self.b1)
         if self.attP is not None:
-            x = x + self.attn_fwd(self.attn, self.attP, xa, hm=h, bt=bt, bg=self.bgate if bt is not None else 0.0)   # (hm: "mem", his memory of the frame before)
+            bta = bt if self.bgate > 0 else None             # (v0.4.2a: the brain stepped for the readers alone: its token stays out)
+            x = x + self.attn_fwd(self.attn, self.attP, xh, hm=h, bt=bta, bg=self.bgate if bta is not None else 0.0)   # (hm: "mem", his memory of the frame before)
         xf = x
         if hh is not None:                                   # (v0.4) the plan of the head's last tick: e + plan_in(plan)
             o_ = self.hm._np_off(self.head)["plan"]

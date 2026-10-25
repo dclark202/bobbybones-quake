@@ -230,6 +230,10 @@ class Token:
         self.valid[r] = True
         self.age[r] = 0.0
 
+    def answer_rows(self, a=0, b=None):
+        """(v0.4.2a, BRAIN_READ) the answer of seats a..b for the simulator's readers (duel_env.brain_in): see answer_of"""
+        return answer_of(self, slice(a, b))
+
     def reset(self, d):
         """after a frame: d [n] (1 where his memory and the brain's are cleared): no answer until the next tick"""
         m = np.asarray(d) > 0.5
@@ -289,6 +293,15 @@ class Token:
         F[:, ix["valid"]] = v
         self.age = np.where(v, self.age + 1.0, 0.0).astype(np.float32)
         return np.clip(F, -60000.0, 60000.0).astype(np.float16)
+
+
+def answer_of(tk, rows=slice(None)):
+    """(v0.4.2a) the brain's answer as the simulator's readers take it (duel_env.brain_in), for these rows of a Token: the
+    believed place in map coordinates [m, 3] float32, that there is an answer [m] bool, the stack band's odds [m, 4]
+    float32 (under 75, 75-124, 125-200, over 200), the likeliest zone's number [m] int16 (-1: no zones)"""
+    z = tk.zone[rows]
+    zt = np.where(z.sum(1) > 0, z.argmax(1), -1).astype(np.int16)
+    return dict(bel=tk.P[rows].astype(np.float32), ok=tk.valid[rows].copy(), band=tk.band[rows].astype(np.float32), ztop=zt)
 
 
 def numpy_brain(sd, bel_L, trk_L, trz_L):
