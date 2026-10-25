@@ -156,6 +156,24 @@ def duel_result(d):
         return None
 
 
+def game_t0(d):
+    """a duels.jsonl line's game start (unix time): its "t0" (from 2026-10-25), else its end less the minutes played"""
+    try:
+        if d.get("t0"):
+            return float(d["t0"])
+        return float(d["t"]) - 60.0 * float(d.get("minutes") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def game_id(d, srv):
+    """a finished game's id on the site (owner, 2026-10-25: "each game gets a unique id ... so it can be tracked"):
+    <server>-<UTC start yyyymmdd-hhmmss>-<map>, e.g. us-20261025-143207-campgrounds. Worked out from the line alone, the
+    same on every machine; one server plays one game at a time, so two games never share it."""
+    return "{}-{}-{}".format(srv or "x", time.strftime("%Y%m%d-%H%M%S", time.gmtime(int(game_t0(d)))),
+                             re.sub(r"[^a-z0-9]", "", str(d.get("map") or "map").lower()) or "map")
+
+
 def read_tail(path, offset=0):
     """the complete lines of a jsonl file from a byte offset on: (parsed lines, the offset after the last complete line).
     A last line still being written (no newline yet) is left for the next read; a line that does not parse is skipped.

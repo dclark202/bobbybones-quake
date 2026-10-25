@@ -367,6 +367,13 @@ class banter(minqlx.Plugin):
                         delay += 1.2 + self.rng.random()
                 except Exception:                            # noqa: BLE001
                     pass
+            if voice(p) == 0 and lad is not None and hasattr(lad, "report_lines"):   # (owner, 2026-10-25) the game history,
+                try:                                         # after any recorded game (a quit too), with the shared board on
+                    for line_ in lad.report_lines():
+                        self.say(p.id, line_, delay)
+                        delay += 1.2 + self.rng.random()
+                except Exception:                            # noqa: BLE001
+                    pass
         self.new_game()
 
     def on_map(self, mapname, factory):

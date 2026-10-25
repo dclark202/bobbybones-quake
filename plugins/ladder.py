@@ -43,6 +43,14 @@ lines after the board's "upto" mark for it. The plugin never writes board.json; 
 a map change. Without a name, or without a board that names this server, it is the local board it always was
 (ratings.json). ratings.json is still written: this server's view (the board and its own frags since).
 
+The game history (owner, 2026-10-25): the site of the shared board lists every finished game with a report of its own
+(tools/game_summary.py, tools/board_merge.py --history-out, tools/board_page.py). A duels.jsonl line carries "t0", the
+game's start (its id is ratings.game_id). After a recorded game Bobby names the history's page in chat (plugins/banter.py:
+report_lines), and the welcome names it with the opt-out. "!anonymous" (and "!anonymous off"; "!private" is a quiet alias):
+the person shows as "Anonymous" on the site, past games too, from its next update. The choice is kept by key in
+private.json in the data folder ({"keys": {key: {"on": 0|1, "t": time}}}, never in the repo); the board's sync takes every
+server's file and the newest word of a person counts on both servers.
+
 Load with QLX_PLUGINS="botctl, banlist, ladder, botmode, <duelbot|ffabot>". LADDER_TEST=1 (tests without a person) counts
 the second Bobby of a free-for-all as a person.
 """
@@ -65,7 +73,8 @@ except Exception:                                           # noqa: BLE001 - loa
 D = os.environ.get("LADDER_DIR", "/tmp/practice")
 TEST = bool(os.environ.get("LADDER_TEST"))
 TOP = 8
-PAGE = "dclark202.github.io/bobbybones-leaderboard"          # the public page of the shared board (published twice a day)
+PAGE = "dclark202.github.io/bobbybones-leaderboard"          # the public page of the shared board
+HISTORY = PAGE + "/history"                                  # its game history (owner, 2026-10-25)
 BOARD_EVERY = 30.0                                           # seconds between looks for a new board.json
 
 
@@ -199,6 +208,9 @@ class ladder(minqlx.Plugin):
         self.add_command("top", self.cmd_top, 0)
         self.add_command("elo", self.cmd_elo, 0, usage="[name]")
         self.add_command("ladder", self.cmd_ladder, 5)
+        self.add_command("anonymous", self.cmd_anonymous, 0, usage="[off]")
+        self.add_command("private", self.cmd_anonymous, 0, usage="[off]")     # (a quiet alias: the owner's first word for it)
+        self.report_t = 0.0                                  # (plugins/banter.py) when the last game was written to duels.jsonl
         # QLStats: nothing of it exists unless the server was started with QLSTATS=1 (no hook, no command, no thread)
         self.ql, self.ql_off = {}, set()                     # key -> the latest answer; the keys of those who switched it off
         self.ql_queue, self.ql_busy, self.ql_tell = [], 0.0, {}   # (key, Steam id) waiting; when the one in flight left; key -> client to tell
@@ -500,13 +512,16 @@ class ladder(minqlx.Plugin):
             secs = float(data.get("GAME_LENGTH") or (time.time() - d["t0"]))
             limit = float(minqlx.get_cvar("timelimit") or 0) * 60.0
             forfeit = d.get("left") or "forfeit" in msg or ("limit hit" not in msg and limit > 0 and secs < limit - 5)
-            self.note_duel(d["key"], d["owner"], secs / 60.0, d["score"][0], d["score"][1], forfeit, "game", net=d["net"])
+            self.note_duel(d["key"], d["owner"], secs / 60.0, d["score"][0], d["score"][1], forfeit, "game", net=d["net"],
+                           t0=d.get("t0"))                  # (wall time at the start: a server that falls behind plays
+                                                            # GAME_LENGTH game seconds in more wall seconds)
+            self.report_t = time.time()
             if not forfeit:
                 self.full_duel_t = time.time()               # (plugins/banter.py: Bobby says his rating and record after his gg)
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
-    def note_duel(self, key, owner, minutes, person, bobby, forfeit, kind, net=None):
+    def note_duel(self, key, owner, minutes, person, bobby, forfeit, kind, net=None, t0=None):
         """one finished duel between a person and Bobby: a real game of the 1v1 mode ("game", from on_game_end) or a
         timed one in warmup ("timed": !duel, from duelbot.arena_end). Keys only, no name."""
         try:
@@ -520,6 +535,8 @@ class ladder(minqlx.Plugin):
             line = dict(t=round(time.time(), 2), map=(minqlx.get_cvar("mapname") or "").lower(), net=net, key=key,
                         owner=int(bool(owner)), minutes=round(float(minutes), 2), score=[int(person), int(bobby)],
                         forfeit=int(bool(forfeit)), kind=kind, aim=str(aim))
+            if t0 is not None:
+                line["t0"] = round(float(t0), 2)             # (the game's start: its id on the site, ratings.game_id)
             if SRV:
                 line["srv"] = SRV
             with open(os.path.join(D, "duels.jsonl"), "a") as f:
@@ -527,17 +544,59 @@ class ladder(minqlx.Plugin):
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
+    # ------------------------------------------------------------------ the game history: the end line and !anonymous
+    def report_lines(self):
+        """(plugins/banter.py, after a recorded game) Bobby's line naming the game history; none without the shared board
+        (the site is the board's: a server outside it has no history)"""
+        if not SRV or time.time() - self.report_t > 15.0:
+            return []
+        return [self.REPORT_LINE]
+
+    def private_load(self):
+        try:
+            with open(os.path.join(D, "private.json"), encoding="utf-8") as f:
+                k = json.load(f).get("keys")
+            return k if isinstance(k, dict) else {}
+        except Exception:                                    # noqa: BLE001 - none yet, or broken: start again (the sync keeps the other server's)
+            return {}
+
+    def cmd_anonymous(self, player, msg, channel):
+        """!anonymous: show as Anonymous on the leaderboard's site (the game history, the game reports and the board),
+        past games too; !anonymous off: the name again. By key, in private.json (see the top)."""
+        if is_bot(player):
+            return minqlx.RET_STOP_ALL
+        on = not (len(msg) > 1 and msg[1].lower() in ("off", "0", "no"))
+        try:
+            keys = self.private_load()
+            keys[self.key(player)] = dict(on=int(on), t=round(time.time(), 1))
+            path = os.path.join(D, "private.json")
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(dict(keys=keys), f)
+            os.replace(path + ".tmp", path)
+        except Exception as e:                               # noqa: BLE001
+            minqlx.console_print("[ladder] anonymous: {}\n".format(type(e).__name__))
+            player.tell("^1That did not work^7, try again in a minute.")
+            return minqlx.RET_STOP_ALL
+        if on:
+            player.tell("^3You will show as Anonymous^7 on the leaderboard site (games, reports, board), past games too.")
+            player.tell("From its next update in 10-15 minutes. ^2!anonymous off^7 to show your name again.")
+        else:
+            player.tell("^3Your name shows again^7 on the leaderboard site from its next update (10-15 minutes).")
+        return minqlx.RET_STOP_ALL
+
     # ------------------------------------------------------------------ QLStats (docs/design/QLSTATS.md); all of it behind QL_ON
     QL_WELCOME = ("I look up your public ^5QLStats^7 rating (your Steam id goes to qlstats.net) to see how strong my "
                   "opponents are. ^2!qlstats off^7 stops it.")
 
     SHARED_WELCOME = ("^3Both BobbyBones servers (US and EU) share one leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the "
                       "whole board). Every frag between you and me counts ^6(including warmup)^7")
-    PAGE_LINE = "^3The leaderboard on the web^7 (updated twice a day): ^5" + PAGE
+    PAGE_LINE = "^3The leaderboard on the web^7 (updated a few minutes after a game): ^5" + PAGE
+    HISTORY_LINE = "^3Games tracked at^7 ^5" + HISTORY + "^7, ^2!anonymous^7 to opt out"
+    REPORT_LINE = "See the game report at ^5" + HISTORY + "^7 (games ready in 10-15 minutes)"
 
     def welcome_lines(self, player):
         """what a person is told about the leaderboard on joining (duelbot.on_player_loaded)"""
-        out = [self.SHARED_WELCOME, self.PAGE_LINE] if self.board is not None else [self.WELCOME]
+        out = [self.SHARED_WELCOME, self.PAGE_LINE, self.HISTORY_LINE] if self.board is not None else [self.WELCOME]
         try:
             rec_ = self.record_line()
             if rec_:

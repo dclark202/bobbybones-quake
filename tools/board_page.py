@@ -1,13 +1,19 @@
 """board_page.py: the public leaderboard page from the shared board (owner, 2026-10-23).
 
-    python3 tools/board_page.py board.json <out folder>      writes <out folder>/index.html, README.md and .nojekyll; prints the
-                                                              page's content hash (without its times) on the last line
+    python3 tools/board_page.py board.json <out folder> [--history history.json --games <summaries> [--games <more>]
+                                                         --maps data/maps --items plugins/duel_items.json]
+        writes <out folder>/index.html, README.md and .nojekyll and, with --history, the game history and the game reports
+        (tools/board_games.py: history/, games/, maps/, assets/); prints the site's content hash (without its times) on
+        the last line
 
 board.json is tools/board_merge.py's. The page shows what the servers' !top shows, for everyone: the in-game name a
 person was last seen with, the rating (Glicko-1 per frag, plugins/ratings.py), the frags with BobbyBones, the full duel
 games against him (won-lost, and on which server), and BobbyBones' own line. Nothing else leaves: no Steam id, no
-anonymous key, no QLStats number. The page is published twice a day by the server that merges the board.
+anonymous key, no QLStats number. A person who said !anonymous (board.json "private") is "Anonymous" here too: his rating
+after his last game is on the game history, so a name beside it on the board would give him away. The site is published
+by the server that merges the board, a few minutes after a change (private/tools/board/publish.sh).
 """
+import argparse
 import hashlib
 import html
 import json
@@ -21,10 +27,12 @@ for p_ in (HERE, os.path.join(os.path.dirname(HERE), "plugins")):
         sys.path.insert(0, p_)
         break
 import ratings as R  # noqa: E402
+import board_games as BG  # noqa: E402
 
 REPO = "https://github.com/dclark202/bobbybones-quake"
 README = ("# BobbyBones leaderboard\n\nThe public board of people against BobbyBones on its Quake Live duel servers, published at "
-          "https://dclark202.github.io/bobbybones-leaderboard/ and refreshed once or twice a day. The bot itself: " + REPO + "\n")
+          "https://dclark202.github.io/bobbybones-leaderboard/ (the leaderboard and the game history), refreshed a few minutes after "
+          "a game. The bot itself: " + REPO + "\n")
 
 CSS = """
 :root{--bg:#f7f7f5;--card:#ffffff;--text:#1d1d1b;--muted:#6b6b66;--line:#e3e3de;--accent:#b4441f;--accent-soft:#f6e6df;--you:#eef3fb}
@@ -67,6 +75,10 @@ a{color:var(--accent)}
 .trend .ln{fill:none;stroke:var(--accent);stroke-width:2}
 .trend .pt{fill:var(--card);stroke:var(--accent);stroke-width:2}
 .trend .pt.now{fill:var(--accent)}
+nav.tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 18px}
+nav.tabs a{font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);color:var(--text);text-decoration:none}
+nav.tabs a[aria-current="page"]{background:var(--text);color:var(--card);border-color:var(--text)}
+nav.tabs .site{font-weight:700;font-size:17px;margin-right:10px}
 """
 
 
@@ -88,6 +100,7 @@ def render(b, stamp):
     rows.players = players
     board = rows.board(bobby)
     people = b.get("people") or {}
+    private = set(b.get("private") or [])
     e = html.escape
     out = []
     bp = players.get(bobby) if bobby else None
@@ -119,13 +132,14 @@ def render(b, stamp):
                            num, e(ver), p["r"], 2 * p["rd"], sum(rec), wld(rec)))
             continue
         pp = people.get(k) or {}
+        nm = "Anonymous" if (k in private or not p.get("name") or p["name"] == k) else p["name"]
         fr, du = pp.get("frags") or {}, pp.get("duels") or {}
         tot_d = [sum(v[i] for v in du.values()) for i in range(3)]
         by = " &middot; ".join("{} {}".format(s.upper(), wld(v)) for s, v in sorted(du.items()) if sum(v))
         on = " + ".join(s.upper() for s in sorted(fr) if sum(fr[s])) or "-"
         out.append('<tr data-name="{}"><td class="n">{}</td><td>{}</td><td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td>'
                    '<td class="n">{}{}</td><td class="n">{}&ndash;{}</td><td>{}</td></tr>'.format(
-                       e(p["name"].lower(), quote=True), num, e(p["name"]), p["r"], 2 * p["rd"], sum(tot_d) or "-",
+                       e(nm.lower(), quote=True), num, e(nm), p["r"], 2 * p["rd"], sum(tot_d) or "-",
                        wld(tot_d) if sum(tot_d) else "-", " <small>({})</small>".format(by) if len(du) > 1 and by else "",
                        p["won"], p["lost"], on))
     out.append('</tbody></table></div>')
@@ -143,13 +157,14 @@ def render(b, stamp):
                "Glicko-1, one update per frag (a frag counts as a quarter of a game); everyone starts at 1500. A difference of "
                "100 points means the higher one makes about 64% of the frags between the two. &plusmn; is twice the rating's "
                "uncertainty. Games are full ten-minute duels against BobbyBones, won&ndash;lost from the player's side.</p>")
-    out.append("<p>Names are the in-game name a player was last seen with. Updated twice a day. {}</p>".format(e(stamp)))
+    out.append("<p>Names are the in-game name a player was last seen with; <b>!anonymous</b> in the game shows a player as "
+               "Anonymous here and in the game history. Updated a few minutes after a game. {}</p>".format(e(stamp)))
     out.append('<p>About the bot: <a href="{0}">{0}</a></p></div>'.format(REPO))
     body = "\n".join(out)
     return ("<!doctype html>\n"
             '<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n'
             '<title>BobbyBones Leaderboard</title><meta name="description" content="The shared leaderboard of the BobbyBones Quake Live duel servers">\n'
-            "<style>" + CSS + "</style></head>\n<body><main>\n<h1>BobbyBones leaderboard</h1>\n" + body
+            "<style>" + CSS + "</style></head>\n<body><main>\n" + BG.nav("board", "") + "\n<h1>BobbyBones leaderboard</h1>\n" + body
             + "\n<script>" + JS + "</script>\n</main></body></html>\n")
 
 
@@ -195,7 +210,15 @@ nx.addEventListener('click',function(){page++;draw();});draw();})();
 
 
 def main():
-    src, out_dir = sys.argv[1], sys.argv[2]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("board")
+    ap.add_argument("out")
+    ap.add_argument("--history", default=None, help="tools/board_merge.py --history-out")
+    ap.add_argument("--games", action="append", default=[], help="folders of game summaries (tools/game_summary.py)")
+    ap.add_argument("--maps", default=None, help="the walking graphs (data/maps/nav_<map>_sim.json)")
+    ap.add_argument("--items", default=None, help="plugins/duel_items.json (the maps' big items)")
+    a = ap.parse_args()
+    src, out_dir = a.board, a.out
     b = R.load_board(src)
     if b is None:
         sys.exit("no board in {}".format(src))
@@ -209,7 +232,16 @@ def main():
     open(os.path.join(out_dir, ".nojekyll"), "w").close()
     with open(os.path.join(out_dir, "README.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(README)
-    print(hashlib.sha256(render(b, "").encode("utf-8")).hexdigest())
+    h = hashlib.sha256(render(b, "").encode("utf-8"))
+    if a.history:
+        with open(a.history, encoding="utf-8") as f:
+            rows = json.load(f)["games"]
+        BG.clear(out_dir)
+        files = BG.write_site(out_dir, rows, a.games, a.maps, a.items)
+        for rel in sorted(files):
+            h.update(rel.encode("utf-8"))
+            h.update(files[rel].encode("utf-8"))
+    print(h.hexdigest())
 
 
 if __name__ == "__main__":
