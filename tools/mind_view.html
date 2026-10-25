@@ -54,6 +54,7 @@ h1 { font-size: 15px; margin: 0 0 2px; font-weight: 600; letter-spacing: .02em; 
     <div class="sec">In control (next mega / red armor spawns)</div>
     <div class="bar na" id="ctlbar"><i></i><b></b></div>
     <div class="lbl"><span class="b" id="ctlb">Bobby n/a</span><span class="o" id="ctlo">you n/a</span></div>
+    <div class="row"><span>next one · mega · red</span><span id="ctl4">-</span></div>
 
     <div class="sec">Where he thinks you are</div>
     <div class="row"><span>error</span><span id="err">-</span></div>
@@ -204,6 +205,8 @@ function panel() {
   $("clock").textContent = mmss(rec.left);
   bar("winbar", rec.win, "winb", "wino", "Bobby", "you");
   bar("ctlbar", rec.ctl, "ctlb", "ctlo", "Bobby", "you");
+  $("ctl4").textContent = rec.ctl4 ? pct(rec.ctl4.one) + " · " + pct(rec.ctl4.mh) + " · " + pct(rec.ctl4.ra) +
+    (rec.ctl_src ? "  (" + (rec.ctl_src === "both" ? "brain + hands" : "brain") + ")" : "") : "-";
   const b = rec.bel;
   if (b && b.ok) {
     $("err").textContent = Math.round(Math.hypot(b.p[0] - rec.en[0], b.p[1] - rec.en[1])) + " units across, " + Math.round(Math.abs(b.p[2] - rec.en[2])) + " up/down";

@@ -1672,7 +1672,8 @@ class duelbot(minqlx.Plugin):
             me = [float(v) for v in env.state[0, :3]] + [float(env.yaw[0])]
             en = [float(v) for v in env.state[1, :3]] + [float(env.yaw[1])]
             rec = _mind.build(now, self.mapname, me, en, seen, tok, br_.s[0] if br_ is not None else None, P, self.mind_pl,
-                              (float(env.frags_r[0]), float(env.frags_r[1])), left, zones=self.mind_zones, frame=self.mind_fr)
+                              (float(env.frags_r[0]), float(env.frags_r[1])), left, zones=self.mind_zones, frame=self.mind_fr,
+                              mem=self.h[0, :P["whh"].shape[1]])             # (the hands' fast GRU memory: the readout "both")
             rec["hp"] = [int(env.hp[0]), int(env.hp[1])]
             self.mind_w.write(rec)
         except Exception as e:                               # noqa: BLE001 - never in the way of play

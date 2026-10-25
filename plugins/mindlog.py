@@ -15,7 +15,9 @@ A line ("k": "f"):
          (null without the readout)
   score  [Bobby, opponent] as Bobby is shown it;  left  seconds of the game left as he is shown it
   win    Bobby's chance of winning from the pros' table (sim/win_chance.json, as WIN_PAY reads it) by lead and time left
-  ctl    "in control" (v0.4.3's readout: his share of the next two mega / red armor spawns), null without it
+  ctl    "in control" (v0.4.3's readout: his share of the next two mega / red armor spawns), null without it; with the
+         readouts of v0.4.2b (sim/control.py layout 2) also ctl_src (the readout used: "both", the brain's state and the
+         hands' memory, or "belief", the brain's state alone) and ctl4 {two, one, mh, ra}
 A meta line ("k": "meta") at the start and at every map: the map's items and holding places, the version.
 Writing never raises: a failure turns the log off for that session and is logged once."""
 import json
@@ -79,6 +81,19 @@ def readouts(P):
                 R[name] = (json.loads(str(P[name])), tuple(np.asarray(P[k], np.float32) for k in ks))
             except (ValueError, TypeError):
                 pass
+    if "control" not in R and "control" in P:                # (v0.4.2b, sim/control.py layout version 2) readouts side by side:
+        try:                                                 # weights {name: (w0, b0, w1, b1)} of "control.<name>.{0,2}.*"
+            L = json.loads(str(P["control"]))
+            if int(L.get("version", 1)) == 2:
+                W = {}
+                for r_ in L.get("readouts", []):
+                    ks = ["control.{}.{}.{}".format(r_["name"], i, w) for i in (0, 2) for w in ("weight", "bias")]
+                    if all(k in P for k in ks):
+                        W[r_["name"]] = tuple(np.asarray(P[k], np.float32) for k in ks)
+                if W:
+                    R["control"] = (L, W)
+        except (ValueError, TypeError, KeyError):
+            pass
     P["_mind"] = R
     return R
 
@@ -110,12 +125,44 @@ def ahead_of(L, W, s, pose):
     return out, tg, ap, race
 
 
-def control_of(L, W, s):
-    """v0.4.3's "in control" on the brain's state: the first output ("two": his share of the next two big spawns), 0..1"""
-    o = _mlp(W, np.asarray(s, np.float32)[None])[0]
+def control_src(L, W, mem=None):
+    """the readout used (layout version 2): "both" when the hands' memory is given and the file has it, else "belief"
+    (None for a layout of version 1: one readout on the brain's state)"""
+    if not isinstance(W, dict):
+        return None
+    if mem is not None and "both" in W:
+        return "both"
+    return "belief" if "belief" in W else None
+
+
+def control_all(L, W, s, mem=None):
+    """the readout "in control" -> (its four outputs as odds 0..1 in L["outs"] order, the readout's name).
+    Version 2 (sim/control.py, v0.4.2b): each readout is Linear(inp -> hid) + ReLU + Linear(hid -> 4), sigmoid, on the
+    ring's row as the trainer keeps it: the brain's state s [256] at its tick, then (for "both") the hands' GRU memory
+    [512] after that frame's step, both rounded to half precision (the ring is float16); a readout reads the row's first
+    inp numbers. Version 1: one readout on s."""
+    if isinstance(W, dict):
+        nm = control_src(L, W, mem)
+        if nm is None:
+            raise KeyError("control: no readout to use")
+        x = np.asarray(s, np.float32).reshape(-1)
+        if nm == "both":
+            x = np.concatenate([x, np.asarray(mem, np.float32).reshape(-1)])
+        inp = int(W[nm][0].shape[1])
+        x = x[:inp].astype(np.float16).astype(np.float32)
+        o = _mlp(W[nm], x[None])[0].astype(np.float64)
+    else:
+        nm = None
+        o = _mlp(W, np.asarray(s, np.float32)[None])[0].astype(np.float64)
+    return 1.0 / (1.0 + np.exp(-o)), nm
+
+
+def control_of(L, W, s, mem=None):
+    """"in control": the output "two" (his share of the next two big spawns), 0..1"""
+    p, _ = control_all(L, W, s, mem)
     outs = list(L.get("outs") or ["two"])
     i = outs.index("two") if "two" in outs else 0
-    return float(1.0 / (1.0 + math.exp(-float(o[i]))))
+    return float(p[i])
 
 
 # ---------------------------------------------------------------- the win table (sim/win_chance.json)
@@ -152,12 +199,13 @@ def target_names(n):
     return list(INTENTS[:n]) + ["?{}".format(i) for i in range(len(INTENTS), n)]
 
 
-def build(t, mapname, me, en, seen, tok, s, P, places, score, left, zones=None, frame=0):
+def build(t, mapname, me, en, seen, tok, s, P, places, score, left, zones=None, frame=0, mem=None):
     """one line of the log as a dict.
     me, en   [x, y, z, yaw] (Bobby, the opponent: the truth);  seen  the opponent noticed in view this frame
     tok      the brain's answer: dict(ok, P [3], ls [2] (log spreads, thousands of units), unseen, zone [24] odds) or None
     s        the brain's state [256] (the readouts read it) or None
     P        the policy dict (its readouts: readouts(P))
+    mem      the hands' GRU memory [512] after this frame's step (the readout "both" reads it beside s) or None
     places   {target name: [x, y, z]} (the map's items and holding places) for the targets' places
     score    (Bobby, opponent);  left  seconds left;  zones  a sim/zonemap.Zones of the map (or None) for the zones' names"""
     rec = dict(k="f", t=round(float(t), 3), fr=int(frame), map=mapname, me=_r(me[:3]) + [round(float(me[3]), 1)],
@@ -186,7 +234,13 @@ def build(t, mapname, me, en, seen, tok, s, P, places, score, left, zones=None, 
         rec["appear"] = _r(ap, 3)
         rec["race"] = race
     if s is not None and "control" in R:
-        rec["ctl"] = round(control_of(R["control"][0], R["control"][1], s), 3)
+        Lc, Wc = R["control"]
+        pc, nm = control_all(Lc, Wc, s, mem)
+        outs = list(Lc.get("outs") or ["two"])
+        rec["ctl"] = round(float(pc[outs.index("two") if "two" in outs else 0]), 3)
+        if nm is not None:                                   # (v0.4.2b) which readout, and its four outputs
+            rec["ctl_src"] = nm
+            rec["ctl4"] = {o_: round(float(pc[i]), 3) for i, o_ in enumerate(outs[:len(pc)])}
     rec["score"] = [int(score[0]), int(score[1])]
     rec["left"] = round(float(left), 1)
     tab = win_table()
