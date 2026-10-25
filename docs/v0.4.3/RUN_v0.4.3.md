@@ -6,6 +6,23 @@ before: the strategy head). Before it: [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) 
 
 *2026-10-23 evening: the old belief's fade is v0.4.2, [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) (built and tested on the CPU; start Sat on the owner's go). This card, the head, is v0.4.3: build Sat-Sun, start Sun afternoon if v0.4.2 passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
 
+**2026-10-25 13:30: RE-PLANNED (owner): weapon variety first, then the head, then pay by win chance.** He never takes
+Campgrounds' rail (every version since v0.4.1) and leans on the rail on Hektik since v0.4.2 (RESULTS 2026-10-25 13:30, B-286);
+the owner: "course correct now before adding more complications and further solidifying the behavior". The item rule's fade
+is done (INTENT_TEACH_W 0 since 12:25, update 60). The head stays shut; update 70 is kept with its optimizer as the fallback before
+it (`data/fallbacks/v043_u70_prehead`). The schedule below replaces the plan of 10-24 evening.
+
+| When (approx.) | What | How |
+|---|---|---|
+| from u72-73 | the three big weapons pay alike | BIG_PICK_SEQ 0.10,0.10,0.10 (was 0.10,0.06,0.05), live; fades out in v0.4.4's cross-fade |
+| 13:20 -> 16:00 | the pros' mid-game starts 22% -> 50% of the games' time | GAME_P / PRO_START_P live: 0.70/0.30, 14:15 0.60/0.40, 15:10 0.55/0.45, 16:00 0.50/0.50 (scratchpad v043w/ramp_starts.py; holds under 45%) |
+| when ready (restart at a save if not live) | targeted practice runs to the items he never takes (Campgrounds' rail by its pad, Hektik's lightning, by measured pickups per map) | item runs 10% of the playing time beside the jump runs' 10%: the mix 40% whole games / 40% mid-game starts / 20% practice (branch `starts`) |
+| every save | pickups and weapon held per map, in the simulator against v0.4.2's end | scratchpad v043w/weapon_watch.py (weapon_watch.jsonl) |
+| tonight (owner's review) | the head opens overnight if Campgrounds' rail is clearly above 0 and the checks are 50% or better against v0.4.2's end; then practice back to 10%, whole games 50%, starts 40% | RAMP=head as planned; trains through Monday |
+| tonight, if the rail has not moved | plan B (agreed): a temporary low-weight teacher for the neglected weapons only, faded | |
+| Mon | the "will be" exemption, the level pull phased out | as before |
+| Tue | v0.4.4: pay by win chance (with mid-game starts from people's games, moments before pickups) | the owner's go |
+
 **2026-10-25 07:35: STARTED** (`duel_gru_v0_4_3`, code `v043b` 98c54b8, worktree `ql-bot-v043`; from v0.4.2b's end, update 140). Changed from the plan of 10-24 evening: v0.4.2 became v0.4.2b overnight (the brain taught on people's games: [../v0.4.2/BRAIN_HUMANS_v0.4.2b.md](../v0.4.2/BRAIN_HUMANS_v0.4.2b.md)), and its people's lesson stays on (share 0.35); the owner's order is the **item rule's fade first**, then the head (attached shut at the start, H2_GATE_CAP 0, its control slot on the brain + memory readout); v0.4.2c (pusher opponents) dropped by the owner. Guard as v0.4.2's (scratchpad v043w/live_ramp.py: RAMP=rule now, RAMP=head next). Checks against v0.4.2's end: u10 86-74 (53.8%), u30 76-84 (47.5%, frag share 49.8%). Running beside: the shadow win value, the "in control" readouts.
 
 **2026-10-24 ~19:45: THE PLAN (owner: "Good, let's plan on that")**
