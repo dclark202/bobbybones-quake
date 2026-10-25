@@ -138,3 +138,21 @@ how this opponent plays". The hands' equilibrium is unchanged (the same pay); on
 Related: [RUN_v0.4.2.md](RUN_v0.4.2.md), [DIP_v0.4.2_try1.md](DIP_v0.4.2_try1.md),
 [../v0.4.3/RUN_v0.4.3.md](../v0.4.3/RUN_v0.4.3.md), [../v0.4.3/ARCHITECTURE_v0.4.3.md](../v0.4.3/ARCHITECTURE_v0.4.3.md),
 [../v0.4.0/PATH_v0.4.md](../v0.4.0/PATH_v0.4.md).
+
+## 7. The review (2026-10-24 ~21:15) and what was adopted (the owner: "adopt anything you think is useful")
+
+**Adopted for v0.4.2b:**
+
+| # | What | Why |
+|---|---|---|
+| 1 | A domain-leak check before the fit: each of the 868 inputs tested alone for telling demo (and server-session) frames from simulator frames; a giveaway column is matched or neutralised for the brain | otherwise the brain learns "this is a demo" and keeps Bobby priors in live play while the held-out demo numbers look good |
+| 2 | No hidden-time position labels from demos (masking on "present later" keeps only the times he walked into the recorder's view: "hidden enemies come toward me"); demos grade the target, the race where observable, appearance timing, and positions while present; hidden-time positions come from the sessions (full truth) | the visibility selection bias |
+| 3 | Check that the brain's memory is not reset at Bobby's deaths | reading this opponent's style within a game needs it |
+| 4 | The start set by the measured play effect: KL < 0.015 and intention changes < 8% → warm start from the offline fit (anchored to save 160), human share 0.20 → 0.35 over ~90 min; else save 160's brain, 0 → 0.35 over ~3 h | – |
+| 5 | Human share ~30-35% of the brain's lesson (~20% demos, 10-15% sessions), constant once reached | self-play would pull it back |
+| 6 | The overnight scoreboard on held-out human data: weapon-target recall, the 1-2 s gain over "stays put", appearance calibration, race false leads, a counterfactual replay of the hands on the owner's sessions (old vs new brain); the hands' attention on the brain's token logged every update | measures that predict a better play test |
+| 7 | Label checks on both seats, two asymmetric maps | frame / seat bugs |
+
+**To verify first (doubted):** whether demos hold the enemy's pickups while he is out of view; whether any simulator reader uses the brain's P(appear) (the readers read its believed place); whether the 0.23 vs 0.12 appearance figure uses the label's own definition. The 1-2 s predictions are not read by the hands in v0.4.2 (only by v0.4.3's head), so they did not break pre-fire; the hands lost the old pre-fire columns to the fade.
+
+**Not now:** keeping the simple motion columns unfaded (a rule back in); weapon pickup pays (the fix is pay by win chance; for the pay review). **Next, as its own change (v0.4.2c):** opponents who push and take weapons in a share of training games (the opponent seat's intention steered to the rocket launcher / rail / the enemy), so the hands practise against a weapon controller.
