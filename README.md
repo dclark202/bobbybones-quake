@@ -10,7 +10,7 @@ Quake Live servers:
 - `Duel BobbyBones the self taught Quake bot | US Chicago` (`193.239.237.127:27970`)
 - `Duel BobbyBones the self taught Quake bot | EU Frankfurt` (`45.140.42.214:27970`)
 
-We keep a local leaderboard across the two servers, see it [here](https://dclark202.github.io/bobbybones-leaderboard/) 
+We keep a local leaderboard and game log (with detailed game stats) across the two servers, see it [here](https://dclark202.github.io/bobbybones-leaderboard/) 
 
 ## Run him locally
 
