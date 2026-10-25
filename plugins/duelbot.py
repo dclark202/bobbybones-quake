@@ -358,14 +358,36 @@ class duelbot(minqlx.Plugin):
             self.inputs_flush()
 
     def inputs_flush(self):
+        """(2026-10-25: the compressed write held the game's frame 120-200 ms every two minutes on the public servers) the
+        rows are stacked, compressed and written by a background thread (zlib lets the game's thread run meanwhile); one
+        write at a time, in order, numbered per session"""
         buf, self.inlog = getattr(self, "inlog", []), []
         if not buf or not self.sess:
             return
         try:
-            n = len([f for f in os.listdir(self.sess) if f.startswith("inputs_")])
-            np.savez_compressed(os.path.join(self.sess, "inputs_{:04d}.npz".format(n)), t=np.array([b[0] for b in buf]),
-                                frame=np.array([b[1] for b in buf], np.int64), obs=np.stack([b[2] for b in buf]),
-                                h=np.stack([b[3] for b in buf]), acts=np.stack([b[4] for b in buf]))
+            cnt = self.__dict__.setdefault("inlog_n", {})
+            n = cnt.get(self.sess)
+            if n is None:
+                n = len([f for f in os.listdir(self.sess) if f.startswith("inputs_")])
+            cnt[self.sess] = n + 1
+            path = os.path.join(self.sess, "inputs_{:04d}.npz".format(n))
+            prev = getattr(self, "inlog_thread", None)
+            errs = self.__dict__.setdefault("inlog_errs", [])
+            while errs:                                      # (a write's failure is told here, on the game's thread)
+                self.log("inputs log: {}".format(errs.pop(0)))
+
+            def write():
+                if prev is not None:
+                    prev.join()
+                try:                                         # (stacked here too: the game's thread only hands the list over)
+                    np.savez_compressed(path, t=np.array([b[0] for b in buf]), frame=np.array([b[1] for b in buf], np.int64),
+                                        obs=np.stack([b[2] for b in buf]), h=np.stack([b[3] for b in buf]),
+                                        acts=np.stack([b[4] for b in buf]))
+                except Exception as e:                       # noqa: BLE001 - a full disk must not stop the game
+                    errs.append(type(e).__name__)
+            import threading
+            self.inlog_thread = threading.Thread(target=write, name="inputs-log", daemon=True)
+            self.inlog_thread.start()
         except Exception as e:                               # noqa: BLE001 - a full disk must not stop the game
             self.log("inputs log: {}".format(type(e).__name__))
 
