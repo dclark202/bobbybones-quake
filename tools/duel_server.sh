@@ -77,10 +77,13 @@ LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # 
 # EARLY_BOBBY (default 1 on a play-test server, 0 with PUBLIC=1): Bobby is added at a map's load, so that a person's game
 # loads his model with the map (plugins/duelbot.py, DUEL_EARLY_BOBBY: after a map change he was drawn with the person's own model)
 EARLY="${EARLY_BOBBY:-$([ "$PUBLIC" = "1" ] && echo 0 || echo 1)}"
+# MIND (default 1 on a play-test server, 0 with PUBLIC=1; owner, 2026-10-24: "let's do this for all the local playtests, no
+# mind command needed, log the games"): the mind log (plugins/mindlog.py) records every game into the data folder's mind.jsonl
+MIND_ON="${MIND:-$([ "$PUBLIC" = "1" ] && echo 0 || echo 1)}"
 PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; MODE="1v1"     # botmode: !map (the ten duel maps; !mode says 1v1 only); banlist: the owner's !kick and !ban; ladder: the leaderboard
 [ -n "$FFA" ] && echo "FFA=$FFA ignored: the server is 1v1 only (owner, 2026-10-23)"
 [ -n "$PLUGINS_EXTRA" ] && PLUGINS="$PLUGINS, $PLUGINS_EXTRA"
-docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e DUEL_EARLY_BOBBY="$EARLY" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e DUEL_EARLY_BOBBY="$EARLY" -e DUEL_MIND="$MIND_ON" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $DOCKER_EXTRA "$IMAGE" +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"
