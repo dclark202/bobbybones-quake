@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-24](results/2026-10-24.md)
+
+- 21:30 — The brain taught on people's games (brainppl): small, real gains on the owner's play tests, self-play held
+
 ## [2026-10-16](results/2026-10-16.md)
 
 - 08:45 — Rocket jump runs built (B-252), all off by default; a scripted player clears 104 of the 174 pros' links in the corrected simulator (75% of the pros' rocket jumps); off = v0.3.1's simulator by fixed runs

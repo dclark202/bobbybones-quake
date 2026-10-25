@@ -459,8 +459,8 @@ class Feeder:
         # his intention for the next frames (the plugin: after observe, from the network's choice)
         if hasattr(env, "intend") and self.intent_mode == "rule":
             env.intend(np.asarray(env.intent_rule(), np.int64), np.arange(env.n) == 0)
-        elif hasattr(env, "intend"):
-            env.intend(np.zeros(env.n, np.int64), np.arange(env.n) == 0)
+        elif hasattr(env, "intend"):                         # (sim/brain_data.py: his logged choice, held between the logged frames)
+            env.intend(np.asarray(getattr(self, "intent_next", np.zeros(env.n)), np.int64), np.arange(env.n) == 0)
         # the hit feedback for the next frame, his damage this life, the enemy's pain
         opos, pos = env.state[1, :3], env.state[0, :3]
         ang = math.atan2(opos[1] - pos[1], opos[0] - pos[0]) - math.radians(float(env.yaw[0]))
