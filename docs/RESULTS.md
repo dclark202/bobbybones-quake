@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-25](results/2026-10-25.md)
 
+- 18:00 — v0.4.3 on the weapon-variety code (practice runs to the weapons he skips, a per-map item floor); u70 66.2% against v0.4.2's end; a power cut; behaviour checks against the pros; the public servers' !aim fix and frame stalls; the v0.4.4 / v0.4.5 numbering
 - 13:30 — Weapon variety before the strategy head: he never takes Campgrounds' rail (every version), Hektik leans on the rail since v0.4.2; v0.4.3 re-planned (equal weapon pay, mid-game starts up, targeted practice runs); a false alarm about jump pads
 - 11:00 — v0.4.2 ended (v0.4.2b u140); v0.4.3 started 07:35 (item rule fade first); v0.4.1 on the public servers, listed as 1/8
 - 06:30 — v0.4.2b's night: the brain taught on people's games reads the owner far better (target 24% -> 34%, rocket launcher 6% -> 47%), games level or up

@@ -6,6 +6,14 @@ before: the strategy head). Before it: [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) 
 
 *2026-10-23 evening: the old belief's fade is v0.4.2, [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) (built and tested on the CPU; start Sat on the owner's go). This card, the head, is v0.4.3: build Sat-Sun, start Sun afternoon if v0.4.2 passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
 
+**2026-10-25 18:00: weapon-variety code in; v0.4.3 ends tonight (owner's go ~20:50 on the u90 and u110 checks), then
+v0.4.4 (the strategy head, its own number: [../v0.4.4/RUN_v0.4.4.md](../v0.4.4/RUN_v0.4.4.md)).** u70 against v0.4.2's end:
+106-54 (66.2%) = the fallback (`data/fallbacks/v043_u70_prehead`). Power cut 13:58-15:50 (u71-77 lost; restarted from u70).
+17:04 restart at a save onto branch `starts` (worktree ql-bot-starts): targeted practice runs (ITEM_RUN_P, RUN_TARGET_W) and the
+per-map item floor (ITEM_FLOOR_W); mix of ALL training 44 / 40 / 16 now, 40 / 40 / 20 on the u90 check (scratchpad
+v043w/set_mix.py). No rail bar for the head (owner); the rocket in fights and the rail judged at v0.4.5's end (RESULTS
+2026-10-25 18:00).
+
 **2026-10-25 13:30: RE-PLANNED (owner): weapon variety first, then the head, then pay by win chance.** He never takes
 Campgrounds' rail (every version since v0.4.1) and leans on the rail on Hektik since v0.4.2 (RESULTS 2026-10-25 13:30, B-286);
 the owner: "course correct now before adding more complications and further solidifying the behavior". The item rule's fade
