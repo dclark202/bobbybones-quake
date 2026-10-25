@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-25](results/2026-10-25.md)
 
+- 11:00 — v0.4.2 ended (v0.4.2b u140); v0.4.3 started 07:35 (item rule fade first); v0.4.1 on the public servers, listed as 1/8
 - 06:30 — v0.4.2b's night: the brain taught on people's games reads the owner far better (target 24% -> 34%, rocket launcher 6% -> 47%), games level or up
 
 ## [2026-10-24](results/2026-10-24.md)

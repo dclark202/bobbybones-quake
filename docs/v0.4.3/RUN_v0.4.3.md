@@ -6,6 +6,8 @@ before: the strategy head). Before it: [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) 
 
 *2026-10-23 evening: the old belief's fade is v0.4.2, [RUN_v0.4.2.md](../v0.4.2/RUN_v0.4.2.md) (built and tested on the CPU; start Sat on the owner's go). This card, the head, is v0.4.3: build Sat-Sun, start Sun afternoon if v0.4.2 passes. The goal of v0.4.x (owner, 2026-10-23): **pay by win chance** as the only game pay ("there is no tuning, you just pay for the win it figures out the rest"); the brain and the head are what make it possible; the shaping pays are scaffolds, recalibrated if badly off and then faded (below).*
 
+**2026-10-25 07:35: STARTED** (`duel_gru_v0_4_3`, code `v043b` 98c54b8, worktree `ql-bot-v043`; from v0.4.2b's end, update 140). Changed from the plan of 10-24 evening: v0.4.2 became v0.4.2b overnight (the brain taught on people's games: [../v0.4.2/BRAIN_HUMANS_v0.4.2b.md](../v0.4.2/BRAIN_HUMANS_v0.4.2b.md)), and its people's lesson stays on (share 0.35); the owner's order is the **item rule's fade first**, then the head (attached shut at the start, H2_GATE_CAP 0, its control slot on the brain + memory readout); v0.4.2c (pusher opponents) dropped by the owner. Guard as v0.4.2's (scratchpad v043w/live_ramp.py: RAMP=rule now, RAMP=head next). Checks against v0.4.2's end: u10 86-74 (53.8%), u30 76-84 (47.5%, frag share 49.8%). Running beside: the shadow win value, the "in control" readouts.
+
 **2026-10-24 ~19:45: THE PLAN (owner: "Good, let's plan on that")**
 
 1. **Tonight:** v0.4.2 restarted once at a save with the **"in control" shadow** in (no effect on play; the Aerowalk route copy
