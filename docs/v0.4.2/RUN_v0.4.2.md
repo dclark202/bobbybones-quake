@@ -1,5 +1,7 @@
 # v0.4.2 on one page: the old belief faded out of the hands
 
+**2026-10-24 ~19:45: the night** (owner): the fade reached 1.0 at 18:40 (checks against v0.4.1's end 50.6%, 57.5%, 55.0% while it rose; against v0.3.10's end 69.4% and 68.1%). One restart at a save after the third check at full fade (~21:40) with the **"in control" shadow** (two readouts on detached states, own optimizers: no effect on play, bit-identical on and off; code `v042b`, `scratch/run_duel_gru_v0_4_2_r3b.cmd`); the Aerowalk route copy **left out** (the owner: "I'm just nervous about including this type of thing overnight when I can't watch it"). Runs overnight; officially to Sunday noon, ended earlier on the owner's go after the 06:30 report, then v0.4.3 ([RUN_v0.4.3.md](../v0.4.3/RUN_v0.4.3.md)).
+
 **2026-10-24 12:00: the fade's steps halved** (owner): +0.05 every ~25 min (was +0.1), so a check (~70 min) judges about 0.15 of fade, not 0.3; fully faded about 19:00 if every check passes. The trainer moves g in steps (g = the cap; its own time ramp is ahead of it).
 
 **2026-10-24 11:57: the step bar loosened, the fade to 0.2** (owner: "within noise ... should be fine but 'looks like something bad happened' should be a flag. I think we can raise the gate here"): a check lets the fade step at games 50%+, or games 47.5%+ with a frag share of 48%+; the rollback rules unchanged. Update 10 at fade 0.1: 77-83 (48.1%), frag share 48.2%: a pass under the new bar; the cap raised 0.1 -> 0.2 by hand, the guard stepping again (+0.1 every ~25 min while checks pass).
