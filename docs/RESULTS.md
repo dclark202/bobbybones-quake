@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-25](results/2026-10-25.md)
+
+- 06:30 — v0.4.2b's night: the brain taught on people's games reads the owner far better (target 24% -> 34%, rocket launcher 6% -> 47%), games level or up
+
 ## [2026-10-24](results/2026-10-24.md)
 
 - 14:00 — v0.4.2: the first try dipped at fade 0 (42.5% twice, cause unknown); restarted with the fade from update 1, 48.1% and 53.1% at fade 0.1 and 0.18
