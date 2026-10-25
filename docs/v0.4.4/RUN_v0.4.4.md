@@ -58,4 +58,4 @@ evening review passes; trains through Monday. The head's design: [../v0.4.3/ARCH
 |---|---|---|
 | 1 | The 10% practice: jump runs / targeted item runs | 5 / 5 while Campgrounds' rail is under the pros'; then the jump runs back to 10 |
 | 2 | Plan B if the rail has not moved by tonight | a temporary low-weight teacher for the neglected weapons (rail, rocket) only, faded once he takes them |
-| 3 | The rocket in fights (3-24% in hand against the pros' 33-43%) | leave it to the head and v0.4.5's win pay; judge at v0.4.5's end |
+| 3 | The rocket in fights (3-24% in hand against the pros' 33-43%) | **decided (owner, 2026-10-25): judged at v0.4.5's end**; "probably same with the rail pickups honestly. I'll have to see how much they move" |
