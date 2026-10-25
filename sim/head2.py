@@ -9,8 +9,13 @@ What it reads (one vector u at each tick, all numbers: no gradient reaches anyth
   trz    the readout's second part (sim/track_z.py: 28: the zones, speed, direction)
   ahead  the readout of what comes next (sim/ahead.py: where he will be in 1/2/4 s, what he goes for, when he appears, the
          item race)
-  ctrl   the slot for the "in control" readout (B-280, branch v043-control): a network module `control` on the brain's
-         state (Linear, or Linear-ReLU-Linear as the readouts); its first `ctrl` outputs, zeros if the network has none
+  ctrl   the slot for the "in control" readouts (B-280; sim/control.py, layout version 2: a ModuleDict `control` of readouts
+         "belief" on the brain's state and "both" on the brain's state and the hands' memory). The layout's "ctrl_src" picks
+         one ("belief" or "both"; the trainer's --head2-ctrl-src) or none ("none", the default: zeros, as before). What it
+         reads: the readout's four chances minus 0.5 (sigmoid(logits) - 0.5: 0 for a readout whose last layer is at zero),
+         its input rounded to half precision as the readouts learn it; worked out under no_grad: a number to the head, no
+         gradient from the head reaches the readouts, the brain or the hands through it (the head's learning step re-reads
+         the stored u in any case)
   obs    his own normalised inputs that say his stack, his item timers, score and clock (the columns of docs/INPUTS.csv named
          by OBS_SEL, kept in the layout as indices: health, armor, weapons owned and ammunition, the mega and red armor's
          place and sight, the clock and score, the round's time left, the seconds since he took each item, his intention)
@@ -50,6 +55,7 @@ import numpy as np
 
 VERSION = 1
 PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "obs", "hands")
+CTRL_SRCS = ("none", "belief", "both")                     # (the ctrl slot's source: sim/control.py's readouts by name)
 CLIP = 10.0
 # (group, input) of docs/INPUTS.csv; an input of None: every row of the group
 OBS_SEL = (("self", "health"), ("self", "armor"), ("weapons", "owns "), ("weapons", "ammo: "),
@@ -74,15 +80,21 @@ def obs_cols(inputs_csv=None):
 
 
 def layout(brain=256, trk=27, trz=28, ahead=0, ctrl=4, obs=None, hands=512, enc=256, size=256, inp=256, plan=64,
-           n_target=17, every=8, gamma=0.9998, chrono=300, on=None):
+           n_target=17, every=8, gamma=0.9998, chrono=300, on=None, ctrl_src="none"):
     """the part's shape; kept in a checkpoint as "head2" (the gate is the state dict's head2.gate). obs: the input columns
     (obs_cols()); on: {part: 0 or 1} (default all on; a part off reads zeros)"""
     obs = [int(c) for c in (obs if obs is not None else obs_cols())]
     on_ = {p: 1 for p in PARTS}
     on_.update({str(k): int(v) for k, v in (on or {}).items()})
     w = dict(brain=int(brain), trk=int(trk), trz=int(trz), ahead=int(ahead), ctrl=int(ctrl), obs=len(obs), hands=int(hands))
+    assert ctrl_src in CTRL_SRCS, "ctrl_src: one of {}".format(CTRL_SRCS)
     return dict(version=VERSION, widths=w, on=on_, obs_cols=obs, enc=int(enc), size=int(size), inp=int(inp), plan=int(plan),
-                n_target=int(n_target), every=int(every), gamma=float(gamma), chrono=int(chrono))
+                n_target=int(n_target), every=int(every), gamma=float(gamma), chrono=int(chrono), ctrl_src=str(ctrl_src))
+
+
+def ctrl_src(L):
+    """the ctrl slot's source ("none" for a layout made before it was wired)"""
+    return str(L.get("ctrl_src", "none") or "none")
 
 
 def u_width(L):
@@ -182,13 +194,22 @@ def value(mod, s, h):
     return mod.v(torch.cat([s, h], -1)).squeeze(-1)
 
 
-def control_t(net, s_brain):
-    """(the ctrl slot) the network's "in control" readout on the brain's state, if it has one (a module named control)"""
-    c = getattr(net, "control", None)
-    if c is None or not callable(c):
+def control_t(net, s_brain, hands=None, src="none"):
+    """(the ctrl slot) the "in control" readout src ("belief": on the brain's state; "both": on the brain's state and the
+    hands' memory) of the network's ModuleDict `control` -> [B, 4] its chances minus 0.5, a number (no_grad, detached);
+    None (zeros in the slot) for "none" or a network without that readout"""
+    import torch
+    if src in (None, "none"):
         return None
-    o = c(s_brain)
-    return o[0] if isinstance(o, (tuple, list)) else o
+    c = getattr(net, "control", None)
+    if c is None or not hasattr(c, "keys") or src not in c.keys():
+        return None
+    with torch.no_grad():
+        x = s_brain.detach().float()
+        if src == "both":
+            m = int(c[src][0].in_features) - x.shape[1]
+            x = torch.cat([x, hands.detach()[:, :m].float()], 1)
+        return (torch.sigmoid(c[src](x.half().float()).float()) - 0.5).detach()
 
 
 class State:
@@ -336,6 +357,26 @@ def mlp_of(sd, name):
     if name + ".weight" in sd:
         return (g(name + ".weight"), g(name + ".bias"))
     return None
+
+
+def np_ctrl_params(sd, L):
+    """(the ctrl slot, numpy) the arrays of the readout the layout names (Linear-ReLU-Linear), None for "none" or absent"""
+    src = ctrl_src(L)
+    if src == "none":
+        return None
+    return mlp_of(sd, "control." + src)
+
+
+def np_ctrl(P, s_brain, hands=None):
+    """control_t() in numpy: P from np_ctrl_params (None: None); hands: the hands' memory after the frame (for "both")"""
+    if P is None:
+        return None
+    x = np.asarray(s_brain, np.float32)
+    m = int(P[0].shape[1]) - x.shape[1]
+    if m > 0:
+        x = np.concatenate([x, np.asarray(hands, np.float32)[:, :m]], 1)
+    x = x.astype(np.float16).astype(np.float32)
+    return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
 
 
 def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None):

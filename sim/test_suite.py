@@ -121,7 +121,7 @@ class Policy:
             assert self.btok is not None, "the strategy head reads the brain: a network with the brain's token (v0.4.1 on)"
             self.h2W = head2_.params_np(sd)
             self.h2_ah = head2_.mlp_of(sd, "ahead")         # (its inputs: the brain's readouts; the "in control" one if the network has it)
-            self.h2_ct = head2_.mlp_of(sd, "control")
+            self.h2_ct = head2_.np_ctrl_params(sd, self.h2)     # (the ctrl slot: the layout's "ctrl_src" readout, None: zeros)
             self.h2_live = head2_.np_open(self.h2W)          # (gate 0 or its links at zero: the network without it, not stepped)
             self.W = self.h2_at + head2_.np_state_width(self.h2)
         self.h2_tick = None
@@ -329,7 +329,7 @@ class Policy:
                 tk_, sb_, o1_, o2_ = self.h2_tick
                 u_ = head2_.np_feats(self.h2, brain=sb_, trk=o1_, trz=o2_,
                                      ahead=head2_.np_mlp(self.h2_ah, sb_) if self.h2_ah is not None else None,
-                                     ctrl=head2_.np_mlp(self.h2_ct, sb_) if self.h2_ct is not None else None,
+                                     ctrl=head2_.np_ctrl(self.h2_ct, sb_, hfast[tk_]),
                                      obs=xa[tk_], hands=hfast[tk_])
                 h2s = h2s.copy()
                 h2s[tk_] = head2_.np_tick(self.h2W, self.h2, u_, h2s[tk_])

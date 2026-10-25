@@ -84,7 +84,7 @@ def load(path):
             W2["gate"] = np.array(np.float32(float(os.environ["NET_HEAD2_GATE"])))
         base2 = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
         P["_head2"] = (lay2, W2, head2_, head2_.np_state_width(lay2), base2, head2_.np_open(W2),
-                       head2_.mlp_of(P, "ahead"), head2_.mlp_of(P, "control"))
+                       head2_.mlp_of(P, "ahead"), head2_.np_ctrl_params(P, lay2))
     P["_brain"] = None                                       # (v0.4.1) the brain and its token: (brain weights, token layout, btoken, where
     if "btoken" in P and "belief" in P:                      # its state starts in a seat's array, the gate); played only while the gate is open
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -388,7 +388,7 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
                 lay2, W2, hm2, _, _, _, ah2, ct2 = P["_head2"]
                 sb_ = br_.s[tkd_]
                 u_ = hm2.np_feats(lay2, brain=sb_, trk=o1_, trz=o2_, ahead=hm2.np_mlp(ah2, sb_) if ah2 is not None else None,
-                                  ctrl=hm2.np_mlp(ct2, sb_) if ct2 is not None else None, obs=xa[tkd_], hands=hfast[tkd_])
+                                  ctrl=hm2.np_ctrl(ct2, sb_, hfast[tkd_]), obs=xa[tkd_], hands=hfast[tkd_])
                 h2s = h2s.copy()
                 h2s[tkd_] = hm2.np_tick(W2, lay2, u_, h2s[tkd_])
         hb = P["_brain"][2].pack(br_, tk_)

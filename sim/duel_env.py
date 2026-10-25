@@ -1807,7 +1807,8 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "BIG_PICK_SEQ", "RG_FAR_PRICE", "RG_FAR_DIST",                                                         # (v0.3.8)
              "JUMP_COST",                                                                                           # (v0.3.9)
              "LG_QUIET_COST", "WATCH_PAY",                                                                          # (v0.3.10)
-             "LEVEL_PULL")                                                                                          # (v0.4.3, B-275)
+             "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
+             "BLIND_AHEAD_P")                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1833,6 +1834,10 @@ def live_values(get):
     v["LEVEL_PULL"] = float(lp_) if (lp_ or "").strip() else 0.95
     if not 0.0 <= v["LEVEL_PULL"] <= 1.0:
         raise ValueError("LEVEL_PULL must be within 0 .. 1")
+    bap_ = get("BLIND_AHEAD_P")                              # (v0.4.3) BLIND_AHEAD's chance a life; unset: 1
+    v["BLIND_AHEAD_P"] = float(bap_) if (bap_ or "").strip() else 1.0
+    if not 0.0 <= v["BLIND_AHEAD_P"] <= 1.0:
+        raise ValueError("BLIND_AHEAD_P must be within 0 .. 1")
     v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
     v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
     v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
@@ -2456,6 +2461,15 @@ BLIND_BRAIN = float(os.environ.get("BLIND_BRAIN") or 0.0) > 0
 #                  (none sent, a reset, the brain's answer not believed: brain_ok): nothing waived. Off: as before, bit for bit.
 BLIND_AHEAD = float(os.environ.get("BLIND_AHEAD") or 0.0) > 0
 BLIND_AHEAD_T = float(os.environ.get("BLIND_AHEAD_T") or 6.0)
+#   BLIND_AHEAD_P=p  (v0.4.3; a LIVE_VARS name: live.json opens it slowly) with BLIND_AHEAD=1, the chance that a life (drawn at its
+#                  start with BRAIN_READ's draw, brain_draw) has the waiver on "will be": a life on the brain AND drawn with chance
+#                  p. Its own random stream (ahead_rng: the game's and the brain's streams are never touched), one number a seat
+#                  at every life's start whatever p is: p = 0 is exactly BLIND_AHEAD off in play and pay. Unset: 1 (every life on
+#                  the brain, the switch as first built). Counted: stats["ahead_lives"] (his lives begun, with the waiver).
+_bap_ = os.environ.get("BLIND_AHEAD_P")
+BLIND_AHEAD_P = float(_bap_) if (_bap_ or "").strip() else 1.0
+if not 0.0 <= BLIND_AHEAD_P <= 1.0:
+    raise ValueError("BLIND_AHEAD_P must be within 0 .. 1")
 BRAIN_KNOWN = float(os.environ.get("BRAIN_KNOWN") or V02_KNOWN)
 BRAIN_BAND_MID = np.array([37.5, 100.0, 162.5, 250.0], np.float32)    # the stack bands' middles (under 75, 75-124, 125-200, over 200)
 BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
@@ -4676,6 +4690,8 @@ class DuelEnv:
             self.brain_ztop = np.full(n, -1, np.int16)
             self.brain_rng = np.random.default_rng([int(getattr(self, "brain_seed", 0)), 0xB4A1])
             self.brain_tick = 0
+            self.ahead_life = np.zeros(n, bool)          # (BLIND_AHEAD_P) the life's draw for the waiver on "will be"
+            self.ahead_rng = np.random.default_rng([int(getattr(self, "brain_seed", 0)), 0xA4EAD])
 
     def set_brain_g(self, g):
         """(BRAIN_READ) each seat's chance that a life begun from now on reads the brain's answer: a number or [n]"""
@@ -4690,11 +4706,17 @@ class DuelEnv:
         u = self.brain_rng.random(len(ii))
         v = (u < self.brain_g[ii]) if on is None else np.broadcast_to(np.asarray(on, bool), (len(ii),))
         self.brain_life[ii] = v
+        if BLIND_AHEAD:                                      # (BLIND_AHEAD_P) the waiver on "will be" for this life: its own stream
+            va_ = v & (self.ahead_rng.random(len(ii)) < BLIND_AHEAD_P)
+            self.ahead_life[ii] = va_
         st = getattr(self, "stats", None)
         if st is not None and getattr(self, "script", None) is not None and hasattr(self, "count_even"):
             c = (self.script[ii] == 0) & self._counted(ii)
             st.setdefault("brain_lives", np.zeros(2))
             st["brain_lives"] += (float(c.sum()), float((c & v).sum()))
+            if BLIND_AHEAD:
+                st.setdefault("ahead_lives", np.zeros(2))
+                st["ahead_lives"] += (float(c.sum()), float((c & va_).sum()))
 
     def brain_in(self, ans):
         """(BRAIN_READ) the brain's answer of this frame for every seat (btoken.answer_of: bel [n, 3] map coordinates, ok [n],
@@ -4770,7 +4792,7 @@ class DuelEnv:
             return None
         self._brain_init()
         r = np.asarray(rows, np.int64)
-        on = self.brain_life[r] & self.brain_ok[r]
+        on = self.brain_life[r] & self.brain_ok[r] & self.ahead_life[r]     # (BLIND_AHEAD_P: the life drawn for it)
         if not on.any():
             return None
         return on, self.brain_fut[r]

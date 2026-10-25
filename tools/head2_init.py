@@ -1,6 +1,7 @@
 """v0.4.3: give a network the strategy head (sim/head2.py) with its outputs at zero, and prove it answers as before.
 
   python tools/head2_init.py add <in policy.pt> <out policy.pt> [--gate G] [--opt <in opt.pt> <out opt.pt>] [--off hands,ctrl]
+      [--ctrl-src none|belief|both]
       the head added (plan_in and target at zero, so the network answers exactly as without it whatever the gate); the gate
       written into head2.gate (default 1: the trainer's --head2-open 0 holds it there; 0: shut). --opt copies the optimizer's
       state (the trainer adds the head's own group after the others when it loads one saved without it).
@@ -34,7 +35,7 @@ def add(a):
     L = head2_.layout(brain=int(ck["belief"]["hid"]), trk=int(sd["track.2.weight"].shape[0]), trz=tz, ahead=ah, ctrl=a.ctrl,
                       hands=int(ck["hidden"]), enc=256, size=a.size, inp=a.inp_w, plan=a.plan,
                       n_target=int(ck["action_dims"][INTENT_HEAD]), every=int(ck["belief"]["every"]), gamma=a.gamma,
-                      on={p: 0 for p in a.off.split(",") if p})
+                      on={p: 0 for p in a.off.split(",") if p}, ctrl_src=a.ctrl_src)
     assert max(L["obs_cols"]) < int(ck["obs_dim"]), "docs/INPUTS.csv does not fit the network's {} inputs".format(ck["obs_dim"])
     m = head2_.make_module(L)
     with torch.no_grad():
@@ -102,6 +103,8 @@ def main():
     p.add_argument("--opt", nargs=2, default=None)
     p.add_argument("--off", default="")
     p.add_argument("--ctrl", type=int, default=4)
+    p.add_argument("--ctrl-src", default="none", help="what the ctrl slot reads: none (zeros), belief or both (the 'in control' readout "
+                                                     "of that name; the trainer's --head2-ctrl-src can change it later)")
     p.add_argument("--size", type=int, default=256)
     p.add_argument("--inp-w", type=int, default=256)
     p.add_argument("--plan", type=int, default=64)
