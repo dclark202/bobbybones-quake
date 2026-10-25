@@ -11,3 +11,6 @@ Local changes (BobbyBones):
   new functions. `Makefile`: build `botctl.c`.
 - 2026-10-08: `botctl.c` / `hooks.c`: bots under full control (`set_bot_input` with `set_bot_substeps`) are commanded once per game frame from `Botctl_BeforeFrame` (called in `My_G_RunFrame` after the frame dispatcher); the game AI's own command for such a bot is dropped. Before, the input rode on that command and was lost in a server's catch-up frames.
 - 2026-10-09: `botctl.c` / `botctl.h` / `python_embed.c`: `spawn_map_item(classname, x, y, z)`: an item put on the map that comes back after it is taken, like a map's own (`LaunchItem` with the dropped flag and its 30 s timer cleared). `plugins/powerups.py` uses it to give a free-for-all game the item layout of a duel.
+- 2026-10-25: `botctl.c`: `SteamGameServer()` is interposed (minqlx is LD_PRELOADed); with `DUEL_LIST_BOT_AS_PLAYER=1` the
+  engine's per-frame `SetBotPlayerCount(n)` reaches Steam as 0 (the object's vtable pointer is set to a copy of its table
+  with slot 13 replaced), so the server query reports Bobby as a player and the browsers show 1/8. Off by default.
