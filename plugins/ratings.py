@@ -15,10 +15,18 @@ better or worse, not the people's.
 
 Every person meets only Bobby here, so a person's number says how he does against Bobby, and Bobby's says how he does
 against the people who come.
+
+One board for several servers (owner, 2026-10-23: the US and EU servers share one board). Each server only appends to its
+own frags.jsonl and duels.jsonl (a line carries "srv": the server's name). tools/board_merge.py, run every few minutes on
+one server, reads every server's files, takes each frag once (a frag is its time, killer and victim: the history the
+servers started from is in every copy) and works the table out again from all frags in time order: board.json, which
+it gives to every server with "upto", how far into each server's own files it read. A server's plugin plays on that
+board plus its own lines after "upto" (read_tail, replay); it never writes board.json. The functions for both are here.
 """
 import json
 import math
 import os
+import re
 import time
 
 Q = math.log(10.0) / 400.0
@@ -117,3 +125,87 @@ class Table:
     def earlier(self, bobby):
         """Bobby's networks before the current one, newest first"""
         return sorted(((k, p) for k, p in self.players.items() if k.startswith(BOT) and k != bobby), key=lambda kp: -kp[1]["t"])
+
+
+# ---------------------------------------------------------------------- the shared board (several servers, one table)
+BOARD_SCHEMA = 1
+
+
+def version_of(net):
+    """the docs' version name of a run (as sim/export_duel.py: duel_gru_v0_3_1b -> v0.3.1, duel_gru_v15c -> v0.1)"""
+    m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", str(net))
+    return "v" + m.group(1).replace("_", ".") if m else "v0.1" if net == "duel_gru_v15c" else str(net)
+
+
+FORFEIT_WIN_MIN = 5.0                                  # minutes (owner, 2026-10-24)
+
+
+def duel_result(d):
+    """a duels.jsonl line as Bobby's result: 0 won, 1 lost, 2 drawn; None for a line that does not count (a timed duel or
+    a forfeit: the record is of full games, owner 2026-10-16). A forfeit after more than FORFEIT_WIN_MIN minutes with Bobby
+    ahead is his win (owner, 2026-10-24: "if someone quits a duel and they are behind they are forfeiting ... treat it as a win")"""
+    try:
+        if d.get("kind") != "game":
+            return None
+        p_, b_ = d["score"]
+        if d.get("forfeit"):
+            if not (b_ > p_ and float(d.get("minutes") or 0.0) > FORFEIT_WIN_MIN):
+                return None
+        return 0 if b_ > p_ else 1 if b_ < p_ else 2
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def read_tail(path, offset=0):
+    """the complete lines of a jsonl file from a byte offset on: (parsed lines, the offset after the last complete line).
+    A last line still being written (no newline yet) is left for the next read; a line that does not parse is skipped.
+    An offset past the file's end (the file was replaced) reads nothing."""
+    out = []
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if offset > size:
+                return out, offset
+            f.seek(offset)
+            data = f.read()
+    except OSError:
+        return out, offset
+    end = data.rfind(b"\n") + 1
+    for raw in data[:end].splitlines():
+        try:
+            d = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if isinstance(d, dict):
+            out.append(d)
+    return out, offset + end
+
+
+def replay(table, frags, names=None):
+    """apply frag lines (in their order) to a table: the same arithmetic as the live plugin. names: key -> name (the rows'
+    names otherwise stay as they are; a new row is named by its key until a name is known)"""
+    names = names or {}
+    for f in frags:
+        try:
+            k, v, t = f["killer"], f["victim"], float(f["t"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        nk = names.get(k) or table.players.get(k, {}).get("name") or k
+        nv = names.get(v) or table.players.get(v, {}).get("name") or v
+        a, b = table.frag(k, nk, v, nv, t)
+        if f.get("owner"):
+            (b if a.get("bot") else a)["owner"] = True
+    return table
+
+
+def load_board(path):
+    """a board.json written by tools/board_merge.py, or None (missing, broken or of another schema)"""
+    try:
+        with open(path, encoding="utf-8") as f:
+            b = json.load(f)
+        if isinstance(b, dict) and b.get("schema") == BOARD_SCHEMA and isinstance(b.get("players"), dict):
+            return b
+    except Exception:                                        # noqa: BLE001 - a broken file is no board: the last one stays
+        pass
+    return None
