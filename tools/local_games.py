@@ -40,6 +40,73 @@ def stamp(folders):
     return tuple(s)
 
 
+def session_lines(d, duels):
+    """(owner, 2026-10-25: his local games were missing) a play test is often played in warmup or left by a map change,
+    which writes no duels.jsonl line: every person's session of a minute or more that no game line covers becomes one
+    (t0 and t from its frames, the score from the frags in it, forfeit unless ten minutes)"""
+    import json
+    frags = []
+    try:
+        with open(os.path.join(d, "frags.jsonl"), encoding="utf-8") as f:
+            for raw in f:
+                try:
+                    frags.append(json.loads(raw))
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+    out = []
+    for s in sorted(glob.glob(os.path.join(d, "sessions", "*_human"))):
+        p = os.path.join(s, "frames.csv")
+        try:
+            with open(p, encoding="utf-8") as f:
+                f.readline()
+                first = f.readline().split(",", 1)[0]
+                last = first
+                for raw in f:
+                    last = raw.split(",", 1)[0] or last
+            t0, t1 = float(first), float(last)
+        except (OSError, ValueError):
+            continue
+        if t1 - t0 < 60.0:
+            continue
+        mp = os.path.basename(s).split("_")[1].lower()
+        if any(g.get("map") == mp and t0 - 30 <= float(g.get("t", 0)) <= t1 + 30 for g in duels):
+            continue
+        inn = [f for f in frags if f.get("map") == mp and t0 - 1 <= float(f.get("t", 0)) <= t1 + 1]
+        bob = sum(1 for f in inn if str(f.get("killer", "")).startswith("bobby"))
+        keys = [f.get("victim") for f in inn if str(f.get("killer", "")).startswith("bobby")] + \
+               [f.get("killer") for f in inn if str(f.get("victim", "")).startswith("bobby")]
+        key = max(set(keys), key=keys.count) if keys else "local"
+        net = next((str(f.get("net")) for f in inn if f.get("net")), "")
+        mins = (t1 - t0) / 60.0
+        out.append(dict(t=round(t1, 2), t0=round(t0, 2), map=mp, net=net, key=key, owner=1, minutes=round(mins, 2),
+                        score=[len(inn) - bob, bob], forfeit=int(mins < 9.9), kind="game", aim="", local_session=1))
+    return out
+
+
+def work_folder(d, work, n):
+    """a copy of a play-test folder's board files with its sessions turned into game lines (session_lines)"""
+    import json
+    import shutil
+    w = os.path.join(work, "srv_" + n)
+    os.makedirs(w, exist_ok=True)
+    for f in ("frags.jsonl", "ratings.json"):
+        if os.path.exists(os.path.join(d, f)):
+            shutil.copyfile(os.path.join(d, f), os.path.join(w, f))
+    duels = []
+    try:
+        with open(os.path.join(d, "duels.jsonl"), encoding="utf-8") as f:
+            duels = [json.loads(x) for x in f if x.strip()]
+    except (OSError, ValueError):
+        pass
+    lines = sorted(duels + session_lines(d, duels), key=lambda g: float(g.get("t", 0)))
+    with open(os.path.join(w, "duels.jsonl"), "w", encoding="utf-8", newline="\n") as f:
+        for g in lines:
+            f.write(json.dumps(g) + "\n")
+    return w
+
+
 def build(folders, out):
     py = sys.executable
     work = os.path.join(out, "_work")
@@ -50,8 +117,11 @@ def build(folders, out):
         n = srv_name(d)
         if n in names.values():
             n = (n[:6] + str(len(names)))[:8]
-        names[d] = n
-        r = subprocess.run([py, os.path.join(HERE, "game_summary.py"), "--data", d, "--srv", n, "--all", "--out", games],
+        w = work_folder(d, work, n)
+        names[w] = n
+        r = subprocess.run([py, os.path.join(HERE, "game_summary.py"), "--data", w, "--srv", n, "--all", "--redo", "--out", games,
+                            "--sessions", os.path.join(d, "sessions")]
+                           + sum((["--mind", m] for m in sorted(glob.glob(os.path.join(d, "mind*.jsonl")))), []),
                            capture_output=True, text=True)
         print("{}: {}".format(n, (r.stdout.strip().splitlines() or [r.stderr.strip()[-300:]])[-1]))
     board, hist = os.path.join(work, "board.json"), os.path.join(work, "history.json")
@@ -81,7 +151,7 @@ def main():
     ap.add_argument("--watch", type=float, default=0.0)
     a = ap.parse_args()
     folders = [os.path.abspath(d) for d in a.data] or sorted(
-        d for d in glob.glob(os.path.join(ROOT, "data", "duellive*")) if os.path.exists(os.path.join(d, "duels.jsonl")))
+        d for d in glob.glob(os.path.join(ROOT, "data", "duellive*")) if os.path.exists(os.path.join(d, "duels.jsonl")) or glob.glob(os.path.join(d, "sessions", "*_human")))
     if not folders:
         sys.exit("no play-test data folders with a duels.jsonl")
     build(folders, a.out)
