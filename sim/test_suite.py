@@ -321,6 +321,7 @@ class Policy:
             import legs_unify as LU_
             logits = logits + LU_.np_gate_add(self.uni, *self.uniT, zo, h2_, lgl_, ok_, sum(self.dims))
         self.last_zo = zo
+        self.last_logits = logits                            # (sim/brain_fit.py: the play effect of a brain, the distributions per output)
         if bt is not None:
             hb = self.token_post(xa, pose, zmap, bst)
         if h2s is not None:                                  # (v0.4.3) the strategy head ticks with the brain, after the frame

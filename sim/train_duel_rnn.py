@@ -210,6 +210,7 @@ LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK
                 "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W",
                 "INTENT_TEACH_W")   # (v0.4.3: a factor on the item rule's weight, its floor included: 0 silences it)   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --control) a factor on the lesson "in control"   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
+LIVE_TRAINER = LIVE_TRAINER + ("BRAIN_HUMAN_W",)                   # (brainppl, --brain-human) the people's lesson's weight beside self-play's
 
 LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --win-value) a factor on the shadow win value's rate
 LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
@@ -1269,6 +1270,20 @@ def main():
     ap.add_argument("--ahead-warm", type=float, default=30.0, help="... minutes over which its lesson rises from nothing (from --ahead-start)")
     ap.add_argument("--ahead-start", type=float, default=-1.0, help="... the minute its lesson counts from (-1: this process's start)")
     ap.add_argument("--ahead-lr-scale", type=float, default=-1.0, help="... its layers learn at this many times --lr (-1: as --track-lr-scale)")
+    # (brainppl, 2026-10-24; sim/brain_human.py) the brain's lesson on people's games beside self-play's: a dataset of people's
+    # sessions and pro demos (sim/brain_fit.py --save-pack); each learning step of the brain's lesson adds w x the same lesson
+    # on the next piece of those lanes (w: --brain-human-w, live BRAIN_HUMAN_W, times its opening). Off (''): as before
+    ap.add_argument("--brain-human", default="", help="brainppl: the people's dataset folders (obs.npy, done.npy, labels.pt), comma-separated "
+                    "(e.g. the pro demos' and the server sessions'). '' = off")
+    ap.add_argument("--brain-human-mix", default="", help="... their shares inside the people's part, e.g. 0.6,0.4 (default: even)")
+    ap.add_argument("--brain-human-w", type=float, default=0.0, help="... the people's SHARE s of the brain's lesson: (1 - s) x self-play's + s x "
+                    "people's (live: BRAIN_HUMAN_W; 0: self-play's alone, as before)")
+    ap.add_argument("--brain-drop", default="", help="brainppl: a JSON {cols: [...]}: the brain's input weights of these columns held at zero "
+                    "(the domain-leak check's columns, as sim/brain_fit.py --drop-cols). '' = off")
+    ap.add_argument("--brain-human-open", type=float, default=0.0, help="... minutes over which the weight rises from 0 (from --brain-human-start)")
+    ap.add_argument("--brain-human-start", type=float, default=-1.0, help="... the minute its opening counts from (-1: this process's start; give the same on every resume)")
+    ap.add_argument("--brain-human-lanes", type=int, default=1, help="... lanes of the dataset in each piece (the groups of lanes in turn: with 16 lanes and 1, each lane moves on 1/16 of the pieces)")
+    ap.add_argument("--brain-human-piece", type=int, default=384, help="... frames of a piece (whole ticks)")
     ap.add_argument("--control", type=float, default=0.0, help="v0.4.3 (B-280): the brain's readout 'in control' (sim/control.py), his share "
                     "of the next two mega / red armor spawns, a lesson only; its weight (a factor on --control-lr). 0 = off (a network that has it keeps "
                     "it). With --belief and --track; the simulator's CONTROL_TRUTH=1 gives the truth")
@@ -2571,6 +2586,24 @@ def main():
         if not AH_ON:
             return 0.0
         return AH_LIVE[0] * (min(1.0, max(0.0, mins - AH_T0) / a.ahead_warm) if a.ahead_warm > 0 else 1.0)
+    BH = None                                                # (brainppl, --brain-human) the people's lesson
+    BH_LIVE = [float(a.brain_human_w)]
+    if a.brain_human:
+        assert BEL and TRK_ON, "--brain-human: with --belief and --track (the brain's lesson)"
+        import brain_human as bh_
+        dirs_ = [d_ for d_ in a.brain_human.split(",") if d_]
+        mx_ = [float(x_) for x_ in a.brain_human_mix.split(",")] if a.brain_human_mix else [1.0] * len(dirs_)
+        assert len(mx_) == len(dirs_), "--brain-human-mix: one share a folder"
+        BH = bh_.HumanMix([bh_.HumanLesson(d_, obs_mean, obs_var, int(BEL_L["hid"]), dev, piece=a.brain_human_piece, lanes=a.brain_human_lanes)
+                           for d_ in dirs_], mx_)
+        print(BH.describe() + "; share {} of the brain's lesson (live BRAIN_HUMAN_W), opening over {} min".format(a.brain_human_w, a.brain_human_open), flush=True)
+    BDROP = None                                             # (--brain-drop) the columns the brain does not read
+    if a.brain_drop:
+        assert BEL, "--brain-drop: with --belief"
+        BDROP = torch.tensor(json.load(open(a.brain_drop))["cols"], dtype=torch.long, device=dev)
+        with torch.no_grad():
+            pol.belief.inp.weight[:, BDROP] = 0.0
+        print("brain-drop: the brain reads none of {} columns ({})".format(len(BDROP), a.brain_drop), flush=True)
     TRK_T0 = float(a.track_start) if a.track_start >= 0 else float(elapsed0)    # (--track) the minute its lesson and pay count from
     assert a.info_pay <= 0 or a.track > 0 or TRK_CK is not None, "--info-pay: with --track (a readout that learns) or one that has learnt"
 
@@ -2589,6 +2622,14 @@ def main():
         if x_ <= 0:
             return 0.0
         return float(a.info_pay) * (min(1.0, x_ / a.info_warm) if a.info_warm > 0 else 1.0)
+
+    BH_T0 = float(a.brain_human_start) if a.brain_human_start >= 0 else float(elapsed0)
+
+    def bh_lesson_w(mins):
+        """(--brain-human) the people's lesson's weight at this minute: the live factor, rising from 0 over --brain-human-open"""
+        if BH is None:
+            return 0.0
+        return BH_LIVE[0] * (min(1.0, max(0.0, mins - BH_T0) / a.brain_human_open) if a.brain_human_open > 0 else 1.0)
 
     def trk_lesson_w(mins):
         """(--track) the lesson's weight at this minute: rising from nothing over --track-warm from the lesson's start"""
@@ -2865,6 +2906,7 @@ def main():
                        **({"RJ_TEACH_W": float(a.rj_teach)} if RJ_LAB else {}),
                        **({"RJ_COPY_W": float(a.rj_copy)} if RJC_LAB else {}),
                        **({"INTENT_TEACH_W": 1.0} if a.intent_teach > 0 else {}),
+                       **({"BRAIN_HUMAN_W": float(a.brain_human_w)} if BH is not None else {}),
                        **({"FADE_CAP": float(a.rule_fade_cap), "FADE_OPEN": float(a.rule_fade_open)} if RF_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
@@ -3028,6 +3070,7 @@ def main():
                     CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
                     WV_LIVE[0] = float(lt_.get("WIN_VALUE_W", WV_LIVE[0]))           # (--win-value: a factor on its rate; 0 stops it)
                     IT_LIVE[0] = float(lt_.get("INTENT_TEACH_W", IT_LIVE[0]))        # (v0.4.3: the item rule's factor, at the next learning step)
+                    BH_LIVE[0] = float(lt_.get("BRAIN_HUMAN_W", BH_LIVE[0]))         # (--brain-human: the people's lesson's weight; 0 stops it)
                     a.rule_fade_cap = float(lt_.get("FADE_CAP", a.rule_fade_cap))    # (v0.4.2a: the rule fade's cap: 0 shuts it at once)
                     a.rule_fade_open = float(lt_.get("FADE_OPEN", a.rule_fade_open)) # (... the minutes of its opening: 0 holds it)
                     a.head2_cap = float(lt_.get("H2_GATE_CAP", a.head2_cap))         # (v0.4.3: the strategy head's gate: its cap, 0 shuts it at once)
@@ -3045,6 +3088,7 @@ def main():
                                   **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
                                   **({"INTENT_TEACH_W": IT_LIVE[0]} if a.intent_teach > 0 else {}),
+                                  **({"BRAIN_HUMAN_W": BH_LIVE[0]} if BH is not None else {}),
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}),
                                   **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1]} if H2 else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
@@ -4085,6 +4129,7 @@ def main():
                         old_h[:, chunk, j] = dd.log_prob(b_act[:, chunk, j])
         trk_w = trk_lesson_w(mins) if TRK_ON else 0.0                    # (--track) the readout's lesson of this update: its truth and mask
         trz_w = trz_lesson_w(mins) if (TRZ_ON and trk_w > 0) else 0.0     # (--track-z) the second part's, with it (TRACK_W 0 stops both)
+        bh_w = bh_lesson_w(mins) if (BH is not None and trk_w > 0) else 0.0   # (--brain-human) the people's lesson's weight, with it
         if trz_w > 0:
             TRZ_Y = b_aux[:T][..., TRZ_TC][torch.arange(BK - 1, T, BK)].contiguous()
             tz_acc = torch.zeros(len(trz_.PARTS) + 1, dtype=torch.float64, device=ADEV)
@@ -4109,6 +4154,7 @@ def main():
                 TRK_TFD = TRK_TF.to(dev)
                 TRK_Y, TRK_M = TRK_Y[TRK_TF].contiguous(), TRK_M[TRK_TF].contiguous()
                 BEL_ISO = None
+                BH_ISO = None                                            # (--brain-human) the same proof for the people's lesson
             tk_acc = torch.zeros(len(track_.PARTS) + 1, dtype=torch.float64, device=ADEV)    # first pass: the parts' loss sums, weights
         aux_w = 0.0
         if AUX_W > 0:                                                    # (--aux) the lesson's labels, by hindsight inside this rollout
@@ -4606,6 +4652,19 @@ def main():
                                                                                  if n_.startswith("trackz.") and g_ is not None))), 6)
                         gr_ = None
                     loss = loss + trk_w * tl_
+                    if BH is not None and bh_w > 0:                  # (brainppl, --brain-human) the same lesson on the next piece of people's games
+                        hl_ = BH.next_loss(pol, TRK_PARTS, TRZ_PARTS if trz_w > 0 else None, AH_L, AH_PARTS,
+                                           trz_w / trk_w if trz_w > 0 else 0.0, ah_w / trk_w if ah_w > 0 else 0.0)
+                        loss = loss + trk_w * bh_w * (hl_ - tl_)         # (the brain's lesson: (1 - s) x self-play's + s x people's)
+                        if BH_ISO is None:                               # (v043b: the proof, every update: the people's lesson reaches no weight of the policy)
+                            nm_ = [n_ for n_, p_ in pol.named_parameters() if p_.requires_grad]
+                            gr_ = torch.autograd.grad(hl_, [p_ for _, p_ in pol.named_parameters() if p_.requires_grad],
+                                                      allow_unused=True, retain_graph=True)
+                            pr_ = [n_ for n_, g_ in zip(nm_, gr_) if not n_.startswith(BRAIN_PFX) and g_ is not None
+                                   and float(g_.abs().sum()) != 0.0]
+                            BH_ISO = dict(policy_params=sum(not n_.startswith(BRAIN_PFX) for n_ in nm_), policy_reached=len(pr_))
+                            assert not pr_, "the people's lesson reached the policy's weights: {}".format(pr_[:5])
+                            gr_ = None
                     if epoch == 0:
                         with torch.no_grad():
                             n_ = tm_.sum()
@@ -4784,6 +4843,8 @@ def main():
                     nn.utils.clip_grad_norm_(pol.track.parameters(), 0.5)    # step is as without it
                 if BEL:                                                  # (--belief) the belief's on its own, as the readout's
                     nn.utils.clip_grad_norm_(pol.belief.parameters(), 0.5)
+                    if BDROP is not None and pol.belief.inp.weight.grad is not None:    # (--brain-drop) no step on those columns
+                        pol.belief.inp.weight.grad[:, BDROP] = 0.0
                 if TRZ:                                                  # (--track-z) the second part's on its own
                     nn.utils.clip_grad_norm_(pol.trackz.parameters(), 0.5)
                 if AH:                                                   # (--ahead) on its own, as the readout's
@@ -4809,6 +4870,9 @@ def main():
                     for p_, g_ in zip(pol.head2.parameters(), H2GR_):
                         p_.grad = g_
                 opt.step()
+                if BDROP is not None:                                    # (--brain-drop) held at zero (Adam's moments move them otherwise)
+                    with torch.no_grad():
+                        pol.belief.inp.weight[:, BDROP] = 0.0
         if NOSYNC:                                                       # (--learn-nosync) the counters summed on the card, read once
             CHK_[:] = [None, None]
             XL_[:] = [None, None]
@@ -5144,6 +5208,8 @@ def main():
         if TRK_ON:                                                       # (--track, --info-pay) the readout's lesson and its counters (the rollout's)
             rec["track"] = dict(w=round(trk_w, 4), trunk=a.track_trunk if not BEL else 0.0, parts=TRK_PARTS, every=TRK_EVERY, rollout=R["trk"],
                                 **({"src": "belief", "iso": BEL_ISO if trk_w > 0 else None} if BEL else {}))
+            if BH is not None:                                           # (--brain-human) the people's lesson: its weight and its parts' means
+                rec["brain_human"] = dict(w=round(bh_w, 4), live=BH_LIVE[0], iso=BH_ISO if bh_w > 0 else None, **(BH.take_counters() or {}))
             if trk_w > 0 and float(tk_acc[-1]) > 0:
                 rec["track"]["loss"] = {p_: round(float(tk_acc[i_] / tk_acc[-1]), 4) for i_, p_ in enumerate(track_.PARTS)}
                 rec["track"]["frames"] = int(tk_acc[-1])
