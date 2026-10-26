@@ -36,6 +36,12 @@ for p_ in (HERE, os.path.join(os.path.dirname(HERE), "plugins")):      # (a copy
 import ratings as R  # noqa: E402
 
 
+def rated(f):
+    """a frag that moves the ratings: one in a live game (owner, 2026-10-26: "rating from games only makes more sense, the
+    warmup is not serious"); warmup frags still count in the frag totals"""
+    return (f.get("state") or "in_progress") == "in_progress"
+
+
 def write_atomic(path, text):
     tmp = "{}.tmp{}".format(path, os.getpid())
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
@@ -87,7 +93,7 @@ def merge(servers, history, prev=None):
             if isinstance(p, dict) and p.get("name") and (k not in best or float(p.get("t") or 0) >= best[k][0]):
                 best[k] = (float(p.get("t") or 0), p["name"])
     names = {k: v[1] for k, v in best.items()}
-    table = R.replay(R.Table(), frags, names)
+    table = R.replay(R.Table(), [f for f in frags if rated(f)], names)
     rec = {"all": [0, 0, 0]}
     people = collections.defaultdict(lambda: dict(frags={}, duels={}))
     for f in frags:
@@ -132,7 +138,8 @@ HISTORY_DAYS = 180                                           # (owner, 2026-10-2
 
 def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
     """the game history: every real game (kind "game") of the last `days` days, newest first, with both ratings after it
-    and their change over the game (the frags inside it, worked out in time order from all frags as the board is).
+    and their change over the game (the game's own frags only; the ratings worked out in time order from the frags of live
+    games on both servers, as the board is).
     A row: id (ratings.game_id), srv, t0, len (seconds), map, score [person, Bobby], forfeit, ot, aim, ver, name (the
     person's name on the board; None for a person who said !anonymous, or with no name known), r [person, Bobby] after,
     dr [person, Bobby] change. No key leaves: the page needs none."""
@@ -144,6 +151,8 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
         marks.append((float(d["t"]) + 1.0, 1, i))           # (a frag in the game's last frame is written just after it)
     marks.sort()
     table, fi, snap = R.Table(), 0, {}
+    live, own = set(), {i: [0.0, 0.0] for i in range(len(games))}   # (a game's change: its own frags only, not the other server's)
+    gk = [(d.get("srv"), d.get("key"), R.BOT + str(d.get("net") or "")) for d in games]
     ft = [float(f.get("t") or 0) for f in frags]
 
     def r_of(key):
@@ -157,8 +166,20 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
 
     for t, kind, i in marks:
         while fi < len(frags) and ft[fi] <= t:
-            R.replay(table, [frags[fi]], names)
+            f = frags[fi]
             fi += 1
+            if not rated(f):
+                continue
+            mine = [j for j in live if gk[j][0] == f.get("srv") and gk[j][1] in (f.get("killer"), f.get("victim"))]
+            before = [(r_of(gk[j][1]), r_of(gk[j][2])) for j in mine]
+            R.replay(table, [f], names)
+            for j, (pa, pb) in zip(mine, before):
+                own[j][0] += r_of(gk[j][1]) - pa
+                own[j][1] += r_of(gk[j][2]) - pb
+        if kind == 0:
+            live.add(i)
+        else:
+            live.discard(i)
         d = games[i]
         keys = (d.get("key"), R.BOT + str(d.get("net") or ""))
         snap.setdefault(i, [None, None])[kind] = [r_of(keys[0]), r_of(keys[1])]
@@ -173,7 +194,7 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
         rows.append(dict(id=R.game_id(d, d.get("srv")), srv=d.get("srv"), t0=int(t0), len=int(round(60.0 * mins)),
                          map=d.get("map"), score=[int(x) for x in d.get("score", [0, 0])], forfeit=int(bool(d.get("forfeit"))),
                          ot=int(mins > 10.03), aim=str(d.get("aim") or ""), ver=R.version_of(d.get("net", "")),
-                         name=nm, r=[int(round(b[0])), int(round(b[1]))], dr=[int(round(b[0] - a[0])), int(round(b[1] - a[1]))]))
+                         name=nm, r=[int(round(b[0])), int(round(b[1]))], dr=[int(round(own[i][0])), int(round(own[i][1]))]))
     rows.sort(key=lambda x: -x["t0"])
     return rows
 
