@@ -8,6 +8,10 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-26](results/2026-10-26.md)
+
+- 10:15 — v0.4.4: the generated mid-game starts tried overnight and switched off; the strategy head opening (69% against v0.4.3's end); the rocket's collapse is not the simulator's physics but its too-easy instant-hit aim (calibrated fix: PERCEPT_SPEED 0.05); Campgrounds' rail is his choice; the EU server moved to Amsterdam
+
 ## [2026-10-25](results/2026-10-25.md)
 
 - 18:00 — v0.4.3 on the weapon-variety code (practice runs to the weapons he skips, a per-map item floor); u70 66.2% against v0.4.2's end; a power cut; behaviour checks against the pros; the public servers' !aim fix and frame stalls; the v0.4.4 / v0.4.5 numbering
