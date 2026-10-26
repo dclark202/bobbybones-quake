@@ -155,12 +155,12 @@ merge-tree` clean; the worktree is `ql-bot-v044`). The run's `.cmd` as v0.4.4's 
 
 | # | Question | Recommendation |
 |---|---|---|
-| 1 | The win table: the pros' or his own | changed by the calibration check (below): **his own at K 0.22** if it holds on fresh games (the same game totals as the pros' at K 1, the credit inside a game by odds that are right for his games); else the pros' at K 1 |
-| 2 | The target w for v0.4.5 | 0.5 by the end of the day (7.8% of his pay's size at K 1 with the pros' table); 1.0 in the later steps with the rest of the cross-fade |
-| 3 | How fast w opens | +0.05 every 25 min on passing checks (about 4 h to 0.5) |
-| 4 | Who he trains against under win pay (the path: "keep outside styles in the mix") | keep the long-term control in the league, the mid-game starts at 40%, and the people's moments as the second thing |
-| 5 | The big-weapon pay | keep in v0.4.5 (above) |
-| 6 | The people's mid-game starts | as v0.4.5's second thing, opened after w is at its target |
+| 1 | The win table: the pros' or his own | **decided (owner, 2026-10-25): his own at K 0.22** if it holds on fresh v0.4.4 games (the calibration watch); else the pros' at K 1 |
+| 2 | The target w for v0.4.5 | **decided (owner, 2026-10-25): 1.0 within v0.4.5**: 0.5, two passing checks there, then on to 1.0 at the same pace (w cross-fades only the three retired pays, 4.5% of his pay; the rest fades in the later rounds) |
+| 3 | How fast w opens | **decided (owner)**: +0.05 every 25 min on passing checks; held at 0.2 until the critic is ready |
+| 4 | Who he trains against under win pay | **decided (owner)**: the long-term control in the league; the mid-game starts as v0.4.4 runs them (50%, half generated) |
+| 5 | The big-weapon pay | **decided (owner)**: kept; faded out when the pay becomes win chance only |
+| 6 | The people's mid-game starts | **decided (owner, 2026-10-25): dropped** while the generated starts work ("I don't think we need the people mid game starts if the generated ones work"); kept built and off |
 
 ## Reminders for this round's planning
 - The pros' jump-pad landings (`PAD_PRO`, branch `pads`, B-287): built and off; a later round's one new thing.
