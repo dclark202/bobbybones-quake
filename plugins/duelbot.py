@@ -55,7 +55,8 @@ sys.path.insert(0, "/sim")
 # cg_players.c, CG_SetDeferredClientInfo; the owner: "it makes him *my* player model", spec and rejoin fixed it). A player
 # in the gamestate is loaded in full while the map loads, cg_forceEnemyModel included.
 EARLY_BOBBY = os.environ.get("DUEL_EARLY_BOBBY", "") == "1"
-TIMING = bool(os.environ.get("DUEL_TIMING"))                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
+TIMING = bool(os.environ.get("DUEL_TIMING"))
+PROFILE = int(os.environ.get("DUEL_PROFILE") or 0)          # DUEL_PROFILE=N: a cProfile of the plugin every N frames (profile_*.txt)                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
 # BOBBY_AUTOHOP=1 (B-258, off by default): the game re-jumps a held jump on landing (pmove_AutoHop 1) only for a player
 # whose userinfo carries cg_autoHop 1, which a person's game sends (the owner's config has it) and a bot's has not: on
 # the servers Bobby's held jump has never hopped again, while the simulator he learnt in always did (plugins/physlab.py,
@@ -962,6 +963,7 @@ class duelbot(minqlx.Plugin):
         nav = "/maps/nav_{}_sim.json".format(mapname)
         os.environ["ROUTE_CACHE"] = D                          # the route grid is cached here (/maps is read-only)
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1, nav=nav if os.path.exists(nav) else None)
+        self.legs_reuse(self.env)
         self.clock_setup(self.env)                           # (a whole-games network: the game's clock, see clock_frame)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.env.react_frames = round(self.react_ms / 25)    # same reaction delay as in training (newer simulators)
@@ -1772,6 +1774,11 @@ class duelbot(minqlx.Plugin):
     # ------------------------------------------------------------------ frame
     def on_frame(self):
         t0_ = time.perf_counter() if TIMING else 0.0
+        if PROFILE and getattr(self, "ready", False):        # DUEL_PROFILE=N: cProfile of N frames at a time into profile_<k>.txt
+            if not hasattr(self, "_prof"):
+                import cProfile
+                self._prof, self._prof_n, self._prof_k = cProfile.Profile(), 0, 0
+            self._prof.enable()
         try:
             self.frame()
         except Exception as e:
@@ -1783,11 +1790,48 @@ class duelbot(minqlx.Plugin):
                     self.log("  " + " | ".join(l_.strip().replace("\n", " ") for l_ in traceback.format_exc().splitlines()[-7:-1]))
                 except Exception:                            # noqa: BLE001
                     pass
+        if PROFILE and hasattr(self, "_prof") and getattr(self, "ready", False):
+            self._prof.disable()
+            self._prof_n += 1
+            if self._prof_n >= PROFILE:
+                import io, pstats
+                for key in ("tottime", "cumulative"):
+                    s_ = io.StringIO()
+                    pstats.Stats(self._prof, stream=s_).sort_stats(key).print_stats(45)
+                    with open(os.path.join(D, "profile_{}_{}.txt".format(self._prof_k, key)), "w") as f:
+                        f.write(s_.getvalue())
+                import cProfile
+                self._prof, self._prof_n, self._prof_k = cProfile.Profile(), 0, self._prof_k + 1
         if TIMING:
             self.time_note(time.perf_counter() - t0_)
 
+    def legs_reuse(self, env):
+        """(2026-10-26, the frame budget) the legs' inputs are worked out twice a frame: for the network (act) and for his
+        legs' step after intend() (drive). The second is the first unless intend() changed his target, its state or his way
+        (1% of frames): then it is worked out again. Checked bit for bit on 6,000 frames (scratchpad srvprof/bench_legs.py)."""
+        orig_ = env.legs_prep
+        if getattr(orig_, "_reuse", False):
+            return
+
+        def key_():
+            return (self.__dict__.get("frame_no", 0),) + tuple(np.asarray(getattr(env, a_, np.zeros(1))).tobytes()
+                                                              for a_ in ("intent", "intent_done", "way", "run_k"))
+
+        def legs_prep_():
+            k_ = key_()
+            c_ = env.__dict__.get("_legs_c")
+            if c_ is not None and c_[0] == k_:
+                env.legs_x, env.legs_xok = c_[1].copy(), c_[2].copy()
+                return env.legs_x
+            out_ = orig_()
+            env._legs_c = (k_, env.legs_x.copy(), env.legs_xok.copy())
+            return out_
+        legs_prep_._reuse = True
+        env.legs_prep = legs_prep_
+
     def frame(self):
         now = time.time()
+        self.frame_no = self.__dict__.get("frame_no", 0) + 1
         if not self.ready:
             if EARLY_BOBBY:                                  # added at the map's load: no stale input from the last map
                 for p in self.players():

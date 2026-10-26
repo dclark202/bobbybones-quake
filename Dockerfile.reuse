@@ -1,0 +1,38 @@
+# (2026-10-26) The Dockerfile with the game's files taken from an earlier image instead of SteamCMD (the download timed out on
+# a server once): docker build -f Dockerfile.reuse --build-arg QL_FROM=<image> -t <tag> .
+# minqlx, the plugins and the simulator are built and copied over them as in the Dockerfile.
+ARG QL_FROM=qlbot:v041e
+FROM ${QL_FROM} AS ql_from
+
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
+
+RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl lib32gcc-s1 lib32stdc++6 \
+        build-essential python3 python3-dev python3-pip redis-server git \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir --break-system-packages redis==8.1.0 hiredis requests==2.34.2 pyzmq==27.2.0 numpy==2.5.4 scipy==1.18.1
+
+COPY --from=ql_from /ql /ql
+
+# minqlx (built from the local, possibly patched, source tree)
+COPY minqlx /src/minqlx
+RUN cd /src/minqlx && make clean && make && cp bin/* /ql/ && mkdir -p /ql/minqlx-plugins
+
+# movement simulator (same collision/observation code the policies were trained with)
+COPY sim /sim
+RUN cd /sim && gcc -O2 -shared -fPIC -w -DNDEBUG -fvisibility=hidden -Wl,-Bsymbolic -o libqsim.so sim_api.c q3/bg_pmove.c q3/bg_slidemove.c q3/bg_misc.c         q3/q_math.c q3/q_shared.c q3/cm_load.c q3/cm_patch.c q3/cm_polylib.c q3/cm_test.c q3/cm_trace.c -lm
+
+COPY server /ql/baseq3-extra
+COPY plugins /ql/minqlx-plugins
+COPY maps /ql/maps-data
+COPY docs/MAPS.md /ql/maps-data/MAPS.md
+COPY entrypoint.sh /entrypoint.sh
+COPY tools /tools
+RUN sed -i 's/\r$//' /entrypoint.sh /ql/baseq3-extra/* && chmod +x /entrypoint.sh /ql/run_server_x64_minqlx.sh
+
+# One thread for the numeric library: its helper threads spin between the network's matrix products, one per core
+# (2026-10-08: an idle local server held 7 to 8 of 20 threads for a day). tools/duel_server.sh sets the same at start.
+ENV OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+EXPOSE 27960/udp 28960/tcp
+ENTRYPOINT ["/entrypoint.sh"]
