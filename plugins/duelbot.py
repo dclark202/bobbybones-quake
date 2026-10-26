@@ -2082,6 +2082,8 @@ class duelbot(minqlx.Plugin):
         want = E.INTENTS[int(env.intent[k])]
         if lab is not None and (lab == want or (lab == "YA" and want == "YA2")):
             env.intent_done[k] = True
+            if getattr(E, "WEAPON_FREE", False) and d[0] == "wp":    # (v0.5.0, as the simulator: a weapon taken ends the choice)
+                env.intent_new[k] = True
 
     def put(self, p, pos, yaw=None, human=False):
         p.position(x=float(pos[0]), y=float(pos[1]), z=float(pos[2]) + 2.0)

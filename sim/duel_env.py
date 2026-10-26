@@ -322,6 +322,16 @@ N_EN = 1                                                   # one more input (the
 HOLD_INTENT, HOLD_SLOTS = 9, 8                             # the first place among the intentions; how many
 TARGETS = float(os.environ.get("TARGETS") or 0.0) > 0
 TARGETS_FREE = int(float(os.environ.get("TARGETS_FREE") or 0.0))
+#   WEAPON_FREE=1  (v0.5.0, a PLAY_VAR; owner 2026-10-26: "Make the loophole fix") a weapon he holds is no target. Weapons come
+#                  back every 5 s and a chosen weapon, once taken, stayed his "done" target with his way and legs still pointing
+#                  at its spawn; choosing it again began no new trip. So a weapon was a free "hold this spawn" order: v0.4.4 sat
+#                  on the lightning gun's (head open) or the rail's (head shut), re-taking it every 5 s for full ammunition and
+#                  keeping it from the enemy (RESULTS 2026-10-26). With the switch: (1) taking the weapon he chose ends the choice
+#                  (a new reading at once, as after a spawn); (2) a reading of a weapon he owns with at least one pickup's worth of
+#                  ammunition (ITEM_DEFS: rockets 10, rail 10, lightning 100) is read as "nothing" (the hands his own, no way to a
+#                  spawn), as the enemy is without HUNT. Going for a weapon he lacks, or to refill one that is low, stays.
+#                  Off: as before, bit for bit.
+WEAPON_FREE = float(os.environ.get("WEAPON_FREE") or 0.0) > 0
 HOLD_R, HOLD_Z = 96.0, 64.0
 assert INTENTS[HOLD_INTENT] == "H1" and len(INTENTS) == HOLD_INTENT + HOLD_SLOTS
 # WAYS (stage B part 3, docs/design/V02_STAGE_B.md; owner, 2026-10-11: "Yes"; his "main failure point is that their routes are
@@ -1102,6 +1112,7 @@ LEVEL_PULL = float(_lp_) if (_lp_ or "").strip() else 0.95
 if not 0.0 <= LEVEL_PULL <= 1.0:
     raise ValueError("LEVEL_PULL must be within 0 .. 1")
 PLAY_VARS = PLAY_VARS + ("LEVEL_PULL",)
+PLAY_VARS = PLAY_VARS + ("WEAPON_FREE",)                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
 #   RJ_COPY=1     (the owner, 2026-10-23, "option 1": "one route that works that he has to use when he wants to get there") the
 #                 whole route as a lesson: step() gives info["rj_copy"], per player and output (int8, -1 = no label) the scripted
 #                 runner's choice for his NEXT frame in a rocket jump run (RJ_RUN_P), from the try's start to its landing: his
@@ -2670,6 +2681,7 @@ ITEM_DEFS = {
     "ammo_cells": ("am", PG, 40, 50, None), "ammo_hmg": ("am", HMG, 40, 50, None),
     "ammo_pack": ("pack", 0, 40, 0, None),
 }
+WEAPON_PICK_AMMO = {d[1]: float(d[3]) for d in ITEM_DEFS.values() if d[0] == "wp"}     # (WEAPON_FREE) one pickup's ammunition
 PACK_AMMO = np.array([5, 5, 50, 50, 5, 5, 50, 50, 0], np.float32)
 # AMMO_PACKS=0: no universal ammo packs. The maps carry them next to the normal ammo boxes (7 on Blood Run, 6 on Aerowalk,
 # 4 on Lost World), but a duel server does not spawn them: plugins/itemlab.py listed every item of the real game on three
@@ -5676,6 +5688,8 @@ class DuelEnv:
             want_ = WEAPONS[w].upper()
             if want_ in INTENTS and self.intent[i] == INTENTS.index(want_) and not self.intent_done[i]:
                 self.intent_done[i] = True                               # he has what he was going for
+                if WEAPON_FREE:
+                    self.intent_new[i] = True                            # (WEAPON_FREE) the choice ends: a new reading at once
                 self.stats["intent_trips"][1] += 1
                 self.stats["intent_reach"] += float(self.intent_t[i])
 
@@ -6466,6 +6480,10 @@ class DuelEnv:
         if not EN_ON:                                        # (the enemy as a target: only with the switch, FIGHT_TARGET or HUNT)
             choice = np.where(choice == EN_INTENT, 0, choice)
         choice = np.where(choice >= HOLD_INTENT + self.hold_n, 0, choice)     # (a holding place: only with TARGETS, and one the map has)
+        if WEAPON_FREE:                                      # (v0.5.0) a weapon he holds with a pickup's worth of ammunition: "nothing"
+            for w_, lab_ in ((RL, "RL"), (RG, "RG"), (LG, "LG")):
+                full_ = self.has[:n, w_] & (self.ammo[:n, w_] >= WEAPON_PICK_AMMO[w_])
+                choice = np.where((choice == INTENTS.index(lab_)) & full_, 0, choice)
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD) | self.intent_gone     # a choice holds (INTENT_HOLD)
         if TARGETS_FREE == 1:                                # (a holding place can be left at any reading, as "nothing")
             may = may | (self.intent >= HOLD_INTENT)
@@ -11921,6 +11939,8 @@ class DuelEnv:
                         want_ = self.route_goal[self.route_item.index(it)]    # YA or YA2
                     if want_ in INTENTS and self.intent[i] == INTENTS.index(want_) and not self.intent_done[i]:
                         self.intent_done[i] = True                       # the trip he chose is complete
+                        if WEAPON_FREE and kind == "wp":
+                            self.intent_new[i] = True                    # (WEAPON_FREE) a weapon taken ends the choice: read anew at once
                         self.stats["intent_trips"][1] += 1
                         self.stats["intent_reach"] += float(self.intent_t[i])
                         if WAYS and self.script[i] == 0 and bool(self._counted(i)):
