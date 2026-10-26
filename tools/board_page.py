@@ -111,7 +111,7 @@ def render(b, stamp):
     if unranked:
         out.append("<p>A player is ranked from {} frags with BobbyBones; {} {} not ranked yet (# &ndash;).</p>".format(
             R.MIN_FRAGS, len(unranked), "is" if len(unranked) == 1 else "are"))
-    out.append("<p>Every frag between a person and BobbyBones counts, warmup included, on either server. The rating is "
+    out.append("<p>Every frag between a person and BobbyBones in a live game counts, on either server (warmup frags do not count). The rating is "
                "Glicko-1, one update per frag (a frag counts as a quarter of a game); everyone starts at 1500. A difference of "
                "100 points means the higher one makes about 64% of the frags between the two. &plusmn; is twice the rating's "
                "uncertainty. Games are full ten-minute duels against BobbyBones, won&ndash;lost from the player's side.</p>")

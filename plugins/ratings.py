@@ -1,8 +1,8 @@
 """The leaderboard's arithmetic and its file. Not a plugin: plugins/ladder.py keeps it on a server, tools/elo.py reads it
 on the PC.
 
-What counts (owner, 2026-10-09: "keep it local to this server, and base it on all interactions with the bots from humans
-(meaning warmup is included)"): every frag between a person and BobbyBones, either way, in warmup and in games. Frags
+What counts: every frag between a person and BobbyBones, either way, in a live game (owner, 2026-10-26: "ladder should be
+actual games only"; until then warmup frags counted too: rated() below; the frag lines still record warmup frags). Frags
 between two people, between two Bobbys, by the game's own bots, and deaths by one's own hand or the map are not counted.
 
 Each counted frag is a game won by the one who made it. Ratings are Glicko-1 (Glickman 1999), updated at every frag: a
@@ -200,11 +200,18 @@ def read_tail(path, offset=0):
     return out, offset + end
 
 
+def rated(f):
+    """a frag line that moves the ratings: one in a live game (owner, 2026-10-26: "ladder should be actual games only")"""
+    return (f.get("state") or "in_progress") == "in_progress"
+
+
 def replay(table, frags, names=None):
     """apply frag lines (in their order) to a table: the same arithmetic as the live plugin. names: key -> name (the rows'
     names otherwise stay as they are; a new row is named by its key until a name is known)"""
     names = names or {}
     for f in frags:
+        if not rated(f):
+            continue
         try:
             k, v, t = f["killer"], f["victim"], float(f["t"])
         except (KeyError, TypeError, ValueError):

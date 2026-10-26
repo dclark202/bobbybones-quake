@@ -36,10 +36,7 @@ for p_ in (HERE, os.path.join(os.path.dirname(HERE), "plugins")):      # (a copy
 import ratings as R  # noqa: E402
 
 
-def rated(f):
-    """a frag that moves the ratings: one in a live game (owner, 2026-10-26: "rating from games only makes more sense, the
-    warmup is not serious"); warmup frags still count in the frag totals"""
-    return (f.get("state") or "in_progress") == "in_progress"
+rated = R.rated                                              # (a live game's frags only: plugins/ratings.py)
 
 
 def write_atomic(path, text):

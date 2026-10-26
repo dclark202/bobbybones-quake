@@ -1,7 +1,8 @@
 """The leaderboard of a BobbyBones server (owner, 2026-10-09: "keep it local to this server, and base it on all
-interactions with the bots from humans (meaning warmup is included)").
+interactions with the bots from humans (meaning warmup is included)"; live games only since 2026-10-26).
 
-Every frag between a person and BobbyBones counts, in warmup and in games, in free-for-all and in 1v1; nothing else does
+Every frag between a person and BobbyBones in a live game counts (owner, 2026-10-26: "ladder should be actual games only";
+warmup frags are still written to frags.jsonl with their state, and move nothing), in free-for-all and in 1v1; nothing else does
 (plugins/ratings.py has the rules and the arithmetic: Glicko-1, one update per frag). Who made a frag is read from the
 game's own counters each frame: the player whose deaths went up and the player whose kills went up in the same frame.
 That works in warmup too, where the game sends no kill events. A frame in which that does not pair up (two frags by
@@ -182,8 +183,8 @@ def is_bot(p):
 
 class ladder(minqlx.Plugin):
     WELCOME = ("^3This server has a local leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the whole board). "
-               "Every frag between you and me counts ^6(including warmup)^7")
-    HELP = ("^3Leaderboard:^7 every frag between a person and me counts, in warmup and in games. ^2!bobby^7 my rating and rank, "
+               "Every frag between you and me in a game counts")
+    HELP = ("^3Leaderboard:^7 every frag between a person and me in a game counts. ^2!bobby^7 my rating and rank, "
             "^2!top^7 the board, ^2!elo^7 yours (ranked from {} frags with me; the board shows the name you play under).".format(_ra.MIN_FRAGS))
 
     def __init__(self):
@@ -371,10 +372,16 @@ class ladder(minqlx.Plugin):
             if a is None or b is None or (a[0] == bobby) == (b[0] == bobby):
                 continue                                     # a frag between two people, or between two Bobbys
             now = time.time()
-            self.seen["counted"] += 1
-            ra, rb = self.table.frag(a[0], a[1], b[0], b[1], now)
+            state = self.game.state if self.game is not None else None
+            if _ra.rated(dict(state=state)):
+                self.seen["counted"] += 1
+                ra, rb = self.table.frag(a[0], a[1], b[0], b[1], now)
+            else:                                            # warmup: written down, rates nothing (owner, 2026-10-26)
+                self.seen["warmup"] = self.seen.get("warmup", 0) + 1
+                ra = self.table.players.get(a[0]) or dict(r=_ra.R0)
+                rb = self.table.players.get(b[0]) or dict(r=_ra.R0)
             line = dict(t=round(now, 2), map=(minqlx.get_cvar("mapname") or "").lower(),
-                        state=self.game.state if self.game is not None else None,
+                        state=state,
                         mode=getattr(pl, "FACTORY", "duel"), net=str(pl.P["run"]), killer=a[0], victim=b[0],
                         r=[round(ra["r"], 1), round(rb["r"], 1)])
             if SRV:
@@ -589,7 +596,7 @@ class ladder(minqlx.Plugin):
                   "opponents are. ^2!qlstats off^7 stops it.")
 
     SHARED_WELCOME = ("^3Both BobbyBones servers (US and EU) share one leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the "
-                      "whole board). Every frag between you and me counts ^6(including warmup)^7")
+                      "whole board). Every frag between you and me in a game counts")
     PAGE_LINE = "^3The leaderboard on the web^7 (updated a few minutes after a game): ^5" + PAGE
     HISTORY_LINE = "^3Games tracked at^7 ^5" + HISTORY + "^7, ^2!anonymous^7 to opt out"
     REPORT_LINE = "See the game report at ^5" + HISTORY + "^7 (games ready in 10-15 minutes)"
