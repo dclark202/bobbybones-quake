@@ -15,9 +15,9 @@ smooth bias: one watch line is a few games a map; owner: "suitably gentle"), and
 Run after every weapon-watch line:  python tools/gen_bias.py --watch <weapon_watch.jsonl> --out <run>/gen_bias.json"""
 import argparse, json, os, time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NEAR_W, OWN_W, HAND_W, STEP = 0.30, 0.35, 3.0, 0.25          # (owner, 2026-10-25: "they don't need to be wimpy": firm targets, reached smoothly)
+NEAR_W, OWN_W, HAND_W, STEP = 0.60, 0.35, 3.0, 0.25          # (owner, 2026-10-25: "they don't need to be wimpy": firm targets, reached smoothly)
 MAX_MOVE = dict(near=0.05, own=0.05, hand=0.5)               # (owner, 2026-10-25: "suitably gentle": the most one line moves a value)
-NEAR_CAP = 0.35
+NEAR_CAP = 0.50                                              # (owner, 2026-10-25 ~22:45: the generated starts, now 10% of training, "targeted specifically for things we want him to do")
 PRIOR_OWN_BASE = 0.35                                        # (owner, 2026-10-25 ~22:30: "He should probably draw LG less frequently in the
 PRIOR_OWN = {"RL": 0.30, "RG": 0.15}                         # mid game starts, rockets more often"): a fixed prior on every map under the
 PRIOR_HAND = {"RL": 2.0, "LG": 0.4}                          # gaps' part: each weapon owned 35% (the rocket +30, the rail +15), the rocket
