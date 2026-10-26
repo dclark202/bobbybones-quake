@@ -56,7 +56,7 @@
       h += '<line x1="' + X(f.t) + '" x2="' + X(f.t) + '" y1="' + (y1 + 24) + '" y2="' + (y1 + 36) + '" stroke="' + c + '" stroke-width="3"><title>' +
            mmss(f.t) + " " + esc(who) + '</title></line>';
     });
-    h += '<text x="' + x0 + '" y="' + (y1 + 48) + '">frags: orange = ' + esc(PN) + ' scores, blue = Bobby scores, grey = a death by one’s own hand</text>';
+    h += '<text x="' + x0 + '" y="' + (y1 + 48) + '">frags: green = ' + esc(PN) + ' scores, purple = Bobby scores, grey = a death by one’s own hand</text>';
     s.setAttribute("viewBox", "0 0 960 " + (y1 + 56)); s.innerHTML = h;
   }
 
@@ -96,7 +96,7 @@
       if (mode !== "p") layer(posB, css("--bobby"));
     }
     var note = $("heatnote");
-    if (note) note.textContent = mode === "bel" ? "Orange: where " + PN + " really was. Blue: where Bobby believed he was while out of sight." : "";
+    if (note) note.textContent = mode === "bel" ? "Green: where " + PN + " really was. Purple: where Bobby believed he was while out of sight." : "";
     x.font = "bold 22px IBM Plex Mono, monospace"; x.textAlign = "center"; x.textBaseline = "middle";
     frags.forEach(function (f) {
       if (mode === "bel" || (mode === "p" && f.bobbyDied) || (mode === "b" && !f.bobbyDied)) return;
