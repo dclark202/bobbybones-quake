@@ -10,12 +10,13 @@ GEN_START_SHARE) for the next starts:
                  GEN_NEAR of its spawn (a weapon: half the time not owned, so he takes it; half owned, so he uses it there)
   own[w]       = OWN_W x the in-hand gap: added to the chance he owns it at the start
   hand[w]      = 1 + HAND_W x the in-hand gap: its weight as the weapon in hand at the start
-Each value moves STEP of the way from the last file's toward the new target (a slow, smooth bias: one watch line is a few
-games a map), and is capped (the simulator caps the near chances at 0.6 a start in all). A line in gen_bias.log per write.
+Each value moves STEP (a quarter) of the way from the last file's toward the new target and at most MAX_MOVE a line (a slow,
+smooth bias: one watch line is a few games a map; owner: "suitably gentle"), and is capped (the simulator caps the near chances at 0.6 a start in all). A line in gen_bias.log per write.
 Run after every weapon-watch line:  python tools/gen_bias.py --watch <weapon_watch.jsonl> --out <run>/gen_bias.json"""
 import argparse, json, os, time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NEAR_W, OWN_W, HAND_W, STEP = 0.20, 0.25, 2.0, 0.5
+NEAR_W, OWN_W, HAND_W, STEP = 0.20, 0.25, 2.0, 0.25
+MAX_MOVE = dict(near=0.05, own=0.05, hand=0.5)               # (owner, 2026-10-25: "suitably gentle": the most one line moves a value)
 NEAR_CAP = 0.25
 HOLD = {"aerowalk": ("RA",)}                                # (owner, 2026-10-25: "hold out aerowalk red armor for now ... he still cant figure out how to get there")
 
@@ -64,6 +65,8 @@ def main():
             for k, v in t_.items():
                 prev = float(o_.get(k, 1.0 if part == "hand" else 0.0))
                 x = prev + st * (v - prev)
+                if not (a.fresh or not old):
+                    x = prev + max(-MAX_MOVE[part], min(MAX_MOVE[part], x - prev))
                 x = min(NEAR_CAP, x) if part == "near" else x
                 if k in HOLD.get(mp, ()):
                     x = 1.0 if part == "hand" else 0.0
