@@ -1864,7 +1864,8 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "JUMP_COST",                                                                                           # (v0.3.9)
              "LG_QUIET_COST", "WATCH_PAY",                                                                          # (v0.3.10)
              "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
-             "BLIND_AHEAD_P")                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
+             "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
+             "PERCEPT_SPEED")                                                                                       # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1886,6 +1887,10 @@ def live_values(get):
     v["WATCH_PAY"] = float(get("WATCH_PAY") or 0.0)
     if v["LG_QUIET_COST"] < 0 or v["WATCH_PAY"] < 0:
         raise ValueError("LG_QUIET_COST and WATCH_PAY must be 0 or more")
+    ps_ = get("PERCEPT_SPEED")                               # (v0.4.4) the fast-target limit, live; unset: the aim level's (0 at every level)
+    v["PERCEPT_SPEED"] = float(ps_) if (ps_ or "").strip() else float(AIM_SET["percept_speed"])
+    if not 0.0 <= v["PERCEPT_SPEED"] <= 0.2:
+        raise ValueError("PERCEPT_SPEED must be within 0 .. 0.2")
     lp_ = get("LEVEL_PULL")                                  # (B-275) the view's pull toward level; unset: 0.95
     v["LEVEL_PULL"] = float(lp_) if (lp_ or "").strip() else 0.95
     if not 0.0 <= v["LEVEL_PULL"] <= 1.0:
