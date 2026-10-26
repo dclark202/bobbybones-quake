@@ -47,7 +47,7 @@ a map change. Without a name, or without a board that names this server, it is t
 The game history (owner, 2026-10-25): the site of the shared board lists every finished game with a report of its own
 (tools/game_summary.py, tools/board_merge.py --history-out, tools/board_page.py). A duels.jsonl line carries "t0", the
 game's start (its id is ratings.game_id). After a recorded game Bobby names the history's page in chat (plugins/banter.py:
-report_lines), and the welcome names it with the opt-out. "!anonymous" (and "!anonymous off"; "!private" is a quiet alias):
+report_lines), and the welcome names it with the opt-out. "!anonymous" (and "!anonymous off"):
 the person shows as "Anonymous" on the site, past games too, from its next update. The choice is kept by key in
 private.json in the data folder ({"keys": {key: {"on": 0|1, "t": time}}}, never in the repo); the board's sync takes every
 server's file and the newest word of a person counts on both servers.
@@ -210,7 +210,6 @@ class ladder(minqlx.Plugin):
         self.add_command("elo", self.cmd_elo, 0, usage="[name]")
         self.add_command("ladder", self.cmd_ladder, 5)
         self.add_command("anonymous", self.cmd_anonymous, 0, usage="[off]")
-        self.add_command("private", self.cmd_anonymous, 0, usage="[off]")     # (a quiet alias: the owner's first word for it)
         self.report_t = 0.0                                  # (plugins/banter.py) when the last game was written to duels.jsonl
         # QLStats: nothing of it exists unless the server was started with QLSTATS=1 (no hook, no command, no thread)
         self.ql, self.ql_off = {}, set()                     # key -> the latest answer; the keys of those who switched it off

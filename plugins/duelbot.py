@@ -13,7 +13,7 @@ human is measured with the same metrics, giving a human baseline card (docs/guid
 Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
 there. The server is held in warmup on the three maps.
 
-Chat commands: !note <text>, !drill <weapon|off>, !map <name>, !room <...> (see cmd_room), !rooms.
+Chat commands: !help, !maps, !aim, !note <text>, !mind (the owner); !map is plugins/botmode.py's. (Test rooms: no chat command since 2026-10-26.)
 Load with QLX_PLUGINS="botctl, duelbot". Needs /tmp/practice/policy.npz (sim/export_duel.py); rooms need
 /maps/nav_<map>_sim.json. Writes /tmp/practice/sessions/<session>/ and /tmp/practice/suite/.
 """
@@ -229,20 +229,11 @@ class duelbot(minqlx.Plugin):
         self.add_hook("stats", self.on_stats)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("maps", self.cmd_maps, 0)
-        self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(MAPS)))
+        # (!map is plugins/botmode.py's alone: owner, 2026-10-26, both plugins had it and a bad name printed the usage twice)
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
-        self.add_command("drill", self.cmd_drill, 5, usage="<weapon|off>")
-        self.add_command("room", self.cmd_room, 5,
-                         usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
-        self.add_command("rooms", self.cmd_rooms, 5)
-        self.add_command("reflex", self.cmd_reflex, 0)
-        self.add_command("movement", self.cmd_movement, 0)
-        self.add_command("duel", self.cmd_duel, 0, usage="[minutes|off]")
-        self.add_command("match", self.cmd_duel, 0, usage="[minutes|off]")
-        self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
-        self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
-        self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
+        # (owner, 2026-10-26: duels on the ten maps only: !duel, !match, !reflex, !movement, !room, !rooms, !drill, !arena,
+        # !spar, !nosg removed; their code below is no longer reachable from chat)
         self.add_command("aim", self.cmd_aim, 0, usage="[1|2|3|4|5|max]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
@@ -453,8 +444,8 @@ class duelbot(minqlx.Plugin):
         _pu.load_map(self.want_map, "duel")
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
-            "^3Play me:^7 join the game, I'm already in it. ^2F3^7 starts a real 10-minute game (the scoreboard and a vote for the next map at its end); ^2!duel [minutes]^7 a timed duel in warmup.",
-            "^3Maps:^7 one against one on the ten duel maps: ^2!maps^7 lists them, ^2!map <name>^7 changes it. ^2!match [minutes]^7 scores a timed game.",
+            "^3Play me:^7 join the game, I'm already in it. ^2F3^7 starts a real 10-minute game (the scoreboard and a vote for the next map at its end).",
+            "^3Maps:^7 one against one on the ten duel maps: ^2!maps^7 lists them, ^2!map <name>^7 changes it.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def cmd_help(self, player, msg, channel):
@@ -560,7 +551,7 @@ class duelbot(minqlx.Plugin):
                 player.tell("^3You are watching.^7 F3 starts a game for the one who plays; join when the seat is free.")
             return
         if self.room is not None or self.queue or self.arena:
-            player.tell("^3A test room or a timed duel is running:^7 ^2!room off^7 or ^2!duel off^7 first, then F3.")
+            player.tell("^3A test is running:^7 F3 when it is over.")
             return
         if getattr(self, "go_f3", 0.0):                      # the start is already on its way
             return
@@ -1849,7 +1840,7 @@ class duelbot(minqlx.Plugin):
                 minqlx.console_command("allready")
             elif now - self.go_f3 > 5.0:                     # the game would not start (its reason is on the console)
                 self.go_f3, self.real_game = 0.0, False
-                self.msg("^3The game did not start.^7 Press F3 again, or ^2!duel^7 for a timed duel.")
+                self.msg("^3The game did not start.^7 Press F3 again.")
         if getattr(self, "vote_map_ok", False) and not self.after_game(now):
             self.vote_map_ok = False                         # no map came out of the vote: back to the usual rules
         # (not in the game's own end sequence: the scoreboard and the vote for the next map: see on_game_end)
@@ -2847,8 +2838,7 @@ class duelbot(minqlx.Plugin):
             minqlx.set_bot_substeps(self.cast()[0].id, 3)    # our control of the body resumes
         self.room = None
         if not self.queue and r.get("reflex"):
-            self.msg("^2Reflex test done, thank you.^7 Your numbers are saved without your name. ^3!reflex^7 runs it again "
-                     "(two or three runs give a steadier result).")
+            self.msg("^2Reflex test done, thank you.^7 Your numbers are saved without your name.")
         elif not self.queue:
             self.msg("Rooms done: back to the normal duel. Card saved.")
             self.give_loadout(human)

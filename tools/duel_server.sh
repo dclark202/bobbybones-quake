@@ -84,10 +84,10 @@ LISTBOT="${LIST_BOT_AS_PLAYER:-$([ "$PUBLIC" = "1" ] && echo 1 || echo 0)}"
 # 2026-10-25: "we need the mind log that's the whole point"; MIND=0 turns it off): the mind log (plugins/mindlog.py)
 # records every game into the data folder's mind.jsonl; the game reports (tools/game_summary.py) read it
 MIND_ON="${MIND:-1}"
-PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; MODE="1v1"     # botmode: !map (the ten duel maps; !mode says 1v1 only); banlist: the owner's !kick and !ban; ladder: the leaderboard
+PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; MODE="1v1"     # botmode: !map (the ten duel maps); banlist: the owner's !kick and !ban; ladder: the leaderboard
 [ -n "$FFA" ] && echo "FFA=$FFA ignored: the server is 1v1 only (owner, 2026-10-23)"
 [ -n "$PLUGINS_EXTRA" ] && PLUGINS="$PLUGINS, $PLUGINS_EXTRA"
-docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e DUEL_EARLY_BOBBY="$EARLY" -e DUEL_LIST_BOT_AS_PLAYER="$LISTBOT" -e DUEL_MIND="$MIND_ON" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e DUEL_EARLY_BOBBY="$EARLY" -e DUEL_LIST_BOT_AS_PLAYER="$LISTBOT" -e DUEL_MIND="$MIND_ON" -e DUEL_PUBLIC="$([ "$PUBLIC" = "1" ] && echo 1)" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $DOCKER_EXTRA "$IMAGE" +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted")$([ "$LISTBOT" = "1" ] && echo ", Bobby listed as a player"))"

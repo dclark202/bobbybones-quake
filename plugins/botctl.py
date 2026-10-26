@@ -1,5 +1,6 @@
 """Probe plugin: read game state and drive a bot's inputs from Python."""
 import math
+import os
 import time
 
 import minqlx
@@ -9,15 +10,16 @@ BUTTON_ATTACK = 1
 
 class botctl(minqlx.Plugin):
     def __init__(self):
-        self.add_command("probe", self.cmd_probe, permission=5)
-        self.add_command("drive", self.cmd_drive, usage="<client_id> <test|aim|strafe>", permission=5)
-        self.add_command("release", self.cmd_release, usage="<client_id>", permission=5)
-        self.add_command("range", self.cmd_range, usage="<shooter_id> <target_id>", permission=5)
-        self.add_command("items", self.cmd_items, permission=5)
-        self.add_command("follow", self.cmd_follow, usage="<spectator_id> <target_id>", permission=5)
+        if os.environ.get("DUEL_PUBLIC", "") != "1":         # measurement tools: a private server only (owner, 2026-10-26)
+            self.add_command("probe", self.cmd_probe, permission=5)
+            self.add_command("drive", self.cmd_drive, usage="<client_id> <test|aim|strafe>", permission=5)
+            self.add_command("release", self.cmd_release, usage="<client_id>", permission=5)
+            self.add_command("range", self.cmd_range, usage="<shooter_id> <target_id>", permission=5)
+            self.add_command("items", self.cmd_items, permission=5)
+            self.add_command("follow", self.cmd_follow, usage="<spectator_id> <target_id>", permission=5)
+            self.add_command("autospec", self.cmd_autospec, usage="<on|off>", permission=5)
+            self.add_command("record", self.cmd_record, usage="<on|off>", permission=5)
         self.add_hook("player_loaded", self.on_player_loaded)
-        self.add_command("autospec", self.cmd_autospec, usage="<on|off>", permission=5)
-        self.add_command("record", self.cmd_record, usage="<on|off>", permission=5)
         self.add_hook("frame", self.on_frame)
         self.recording = False
         self.hits = []
