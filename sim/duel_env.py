@@ -1661,6 +1661,9 @@ GEN_START_SHARE = float(os.environ.get("GEN_START_SHARE") or 0.0)
 GEN_BIAS = os.environ.get("GEN_BIAS") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_bias.json")
 GEN_PLACES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_places")
 GEN_T_LO, GEN_T_HI, GEN_APART, GEN_NEAR, GEN_RELOAD = 20.0, 580.0, 300.0, 320.0, 30.0
+GEN_NEAR_S = float(os.environ.get("GEN_NEAR_S") or 3.0)    # (owner, 2026-10-25: "close needs to mean close in the sense of being able to
+#                 walk to it quickly"): "near" an item = a place his ways reach it from in GEN_NEAR_S seconds or less (the route
+#                 field's time: walking, pads, teleporters, the open jumps); an item with no way of its own: within GEN_NEAR units
 GEN_START_COLS = ("generated starts begun", "of them placed near an item by the bias", "weapons owned (both seats, the map's, summed)",
                   "a big weapon in hand (both seats, summed)", "the bias file read")
 PEOPLE_START_SHARE = float(os.environ.get("PEOPLE_START_SHARE") or 0.0)
@@ -9159,12 +9162,19 @@ class DuelEnv:
         if len(pos_) < 8:
             return
         self.gen_pl, self.gen_heat = pos_, heat_
-        self.gen_near = {}                                   # (label -> the places within GEN_NEAR of that item, its index)
+        self.gen_near = {}                                   # (label -> the places his ways reach that item from quickly, its index)
+        R_ = getattr(self, "route", None)
+        node_ = None
+        if R_ is not None:                                   # (each place's nearest point of the walking map)
+            node_ = np.array([int(np.linalg.norm(R_.nodes - p_, axis=1).argmin()) for p_ in pos_])
         for it in range(self.nI):
             lab_ = self.item_def[it][4]
             if lab_ and lab_ not in self.gen_near:
-                d_ = np.linalg.norm(pos_ - self.item_pos[it], axis=1)
-                ix_ = np.nonzero(d_ <= GEN_NEAR)[0]
+                if node_ is not None and it in self.route_item:
+                    g_ = self.route_item.index(it)
+                    ix_ = np.nonzero(R_.T[g_, node_] <= GEN_NEAR_S)[0]
+                else:
+                    ix_ = np.nonzero(np.linalg.norm(pos_ - self.item_pos[it], axis=1) <= GEN_NEAR)[0]
                 if len(ix_):
                     self.gen_near[lab_] = (ix_, it)
         self.gen_mean = float(GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)) if PRO_START_LEN <= 0 else float(min(PRO_START_LEN, GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)))

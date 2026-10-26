@@ -25,11 +25,15 @@ CONTENTS_LAVA, CONTENTS_SLIME, CONTENTS_WATER = 8, 16, 32
 BAD = CONTENTS_LAVA | CONTENTS_SLIME | CONTENTS_WATER
 
 
-def reachable(g, starts):
+def reachable(g, starts, links=()):
+    """the points of the walking map reachable from the spawns: its own links and `links` (the jump pads and teleporters, which
+    the raw walking map does not carry: 2026-10-25, every point only a pad reaches was left out, Campgrounds' rail among them)"""
     n = len(g["nodes"])
     adj = [[] for _ in range(n)]
     for e in g["edges"]:
         adj[int(e[0])].append(int(e[1]))
+    for a_, b_ in links:
+        adj[int(a_)].append(int(b_))
     nodes = np.array(g["nodes"], np.float32)
     seen = np.zeros(n, bool)
     stack = []
@@ -54,7 +58,19 @@ def one(mp, out_dir):
     n = len(nodes)
     w = qsim.World(bsp, n=n)
     spawns = [e["origin"] for e in w.spawns()]
-    reach = reachable(g, spawns)
+    links, mv0, an0 = [], np.zeros((n, 3), np.int8), np.zeros((n, 2), np.float32)
+    for kind, c, d in w.trigger_spots():                     # (a pad: where the simulator throws him; a teleporter: its destination)
+        if kind == 0:
+            w.reset(0, tuple(np.asarray(c, np.float32) + np.array([0, 0, 30.0], np.float32)), (0, 0, 0), 0.0)
+            for _ in range(160):
+                w.step(mv0, an0, 25)
+            land = np.asarray(w.state()[0, :3], np.float32)
+        else:
+            land = np.asarray(d, np.float32)
+        b_ = int(np.linalg.norm(nodes - land, axis=1).argmin())
+        src = np.nonzero((np.hypot(nodes[:, 0] - c[0], nodes[:, 1] - c[1]) < 130.0) & (np.abs(nodes[:, 2] - c[2]) < 96.0))[0]
+        links += [(int(a_), b_) for a_ in src]
+    reach = reachable(g, spawns, links)
     lo, hi = qsim.World.PLAYER_MINS, qsim.World.PLAYER_MAXS
     ok = reach.copy()
     why = dict(unreachable=int((~reach).sum()), solid=0, hazard=0, moved=0, fell=0, air=0, outside=0)
