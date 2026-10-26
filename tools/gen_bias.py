@@ -18,6 +18,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NEAR_W, OWN_W, HAND_W, STEP = 0.30, 0.35, 3.0, 0.25          # (owner, 2026-10-25: "they don't need to be wimpy": firm targets, reached smoothly)
 MAX_MOVE = dict(near=0.05, own=0.05, hand=0.5)               # (owner, 2026-10-25: "suitably gentle": the most one line moves a value)
 NEAR_CAP = 0.35
+PRIOR_OWN_BASE = 0.35                                        # (owner, 2026-10-25 ~22:30: "He should probably draw LG less frequently in the
+PRIOR_OWN = {"RL": 0.30, "RG": 0.15}                         # mid game starts, rockets more often"): a fixed prior on every map under the
+PRIOR_HAND = {"RL": 2.0, "LG": 0.4}                          # gaps' part: each weapon owned 35% (the rocket +30, the rail +15), the rocket
+#                                                              twice as likely in hand, the lightning gun 0.4 times; the gaps' part on top
 HOLD = {"aerowalk": ("RA",)}                                # (owner, 2026-10-25: "hold out aerowalk red armor for now ... he still cant figure out how to get there")
 
 
@@ -42,13 +46,14 @@ def main():
     old = {}
     if os.path.exists(a.out) and not a.fresh:
         old = json.load(open(a.out, encoding="utf-8"))
-    out = dict(heat=old.get("heat", 1.0), uniform=old.get("uniform", 0.1), own=old.get("own", 0.5), maps={},
+    gap_old = old.get("gap") or old.get("maps") or {}         # (the gaps' part alone; a file before the prior: its values were that part)
+    out = dict(heat=old.get("heat", 1.0), uniform=old.get("uniform", 0.1), own=PRIOR_OWN_BASE, maps={}, gap={},
                made=time.strftime("%Y-%m-%d %H:%M"), from_update=int(rec["update"]), step=a.step)
     st = 1.0 if (a.fresh or not old) else a.step
     notes = []
     for mp, his in rec["maps"].items():
         pro = {k: v["pooled"] for k, v in (base.get(mp) or {}).get("measures", {}).items()}
-        om = (old.get("maps") or {}).get(mp) or {}
+        om = gap_old.get(mp) or {}
         tg = dict(near={}, own={}, hand={})
         for w in ("rl", "rg"):
             g_pick = gap((his.get("pick_per_min") or {}).get(w), pro.get("pick_" + w), 0.1)
@@ -71,7 +76,13 @@ def main():
                 if k in HOLD.get(mp, ()):
                     x = 1.0 if part == "hand" else 0.0
                 m_[part][k] = round(x, 4)
-        out["maps"][mp] = m_
+        out["gap"][mp] = m_
+        eff = dict(near=dict(m_["near"]), own={}, hand={})
+        for k in set(m_["own"]) | set(PRIOR_OWN):
+            eff["own"][k] = round(min(0.6, PRIOR_OWN.get(k, 0.0) + m_["own"].get(k, 0.0)), 4)
+        for k in set(m_["hand"]) | set(PRIOR_HAND):
+            eff["hand"][k] = round(PRIOR_HAND.get(k, 1.0) * m_["hand"].get(k, 1.0), 4)
+        out["maps"][mp] = eff
         top = sorted(((v, "near " + k) for k, v in m_["near"].items()), reverse=True)[:2] + \
             sorted(((v, "own " + k) for k, v in m_["own"].items()), reverse=True)[:1]
         notes.append("{} {}".format(mp, ",".join("{} {:.2f}".format(n, v) for v, n in top if v >= 0.01) or "-"))
