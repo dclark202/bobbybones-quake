@@ -279,7 +279,7 @@ def live_read(path, E_, start, trainer_start):
 # Without the file none of this runs (no message, no draw).
 LS_SPEC = {                                                  # name -> (kind, parse)
     "GAME_P": ("start", "share"), "PRO_START_P": ("start", "share"), "JUMP_RUN_P": ("start", "env_share"),
-    "PEOPLE_START_SHARE": ("start", "share"), "MOMENT_WEIGHTED": ("start", "int"), "RUN_TARGET_W": ("start", "int"),   # (2026-10-25: people's starts, weighted moments, targeted item runs)
+    "PEOPLE_START_SHARE": ("start", "share"), "GEN_START_SHARE": ("start", "share"), "MOMENT_WEIGHTED": ("start", "int"), "RUN_TARGET_W": ("start", "int"),   # (2026-10-25: people's starts, weighted moments, targeted item runs)
     "ITEM_RUN_P": ("start", "env_share"),                     # (2026-10-25: the item runs' share, live: the simulator's attribute)
     "RJ_RUN_P": ("start", "env_share"),                      # (2026-10-23: rocket jump runs; their ways are built at the start: RJ_RUN_P > 0 or RJ_ONLY)
     "JUMP_W_FLOOR": ("start", "floor"), "JUMP_W_CAP": ("start", "pos"), "JUMP_W_DROP": ("start", "pos"),
@@ -2923,7 +2923,7 @@ def main():
                 "stack_bare", "stack_big", "stack_over", "first_wp", "fire_frames", "play_frames",
                 "jump_tries", "jump_over", "jump_short", "jump_far", "jump_frames", "move_frames", "move_arrive", "move_speed", "move_fast",
                 "rj_tries", "rj_over", "rj_frames", "rj_shots",
-                "hurt_dmg", "legs", "games", "open", "moments", "overtime", "rail_start", "pro_start", "people_start", "run_item")
+                "hurt_dmg", "legs", "games", "open", "moments", "overtime", "rail_start", "pro_start", "people_start", "gen_start", "run_item")
     LIVE_PATH = os.path.join(out, "live.json")                         # (B-265) pay weights changed while the run trains
     LIVE_ON = hasattr(E_, "live_set")
     LIVE_START = {k_: os.environ.get(k_) for k_ in getattr(E_, "LIVE_VARS", ())}      # the run's start: its environment
@@ -5610,6 +5610,11 @@ def main():
             rec["pro_start"] = dict(ps_rec(ps_), p=float(getattr(E_, "PRO_START_P", 0.0)), secs=float(getattr(E_, "PRO_START_LEN", 0.0)),
                                     by_map={k_: ps_rec(np.atleast_1d(v_["pro_start"]).astype(np.float64))
                                             for k_, v_ in agg_map.items() if "pro_start" in v_})
+        if "gen_start" in agg:                                           # (GEN_START_SHARE) the generated starts
+            gs_ = np.atleast_1d(agg["gen_start"]).astype(np.float64)
+            rec["gen_start"] = dict(begun=int(gs_[0]), near=int(gs_[1]), owned_per_seat=round(float(gs_[2] / max(1.0, 2 * gs_[0])), 3),
+                                    big_in_hand=round(float(gs_[3] / max(1.0, 2 * gs_[0])), 3), bias_reads=int(gs_[4]),
+                                    share=float(getattr(E_, "GEN_START_SHARE", 0.0)))
         if "people_start" in agg:                                        # (PEOPLE_START_SHARE, MOMENT_WEIGHTED) the pro starts from people's games
             pp_ = np.atleast_1d(agg["people_start"]).astype(np.float64)   # (the simulator's PEOPLE_START_COLS)
             rec["people_start"] = dict(begun=int(pp_[0]), counted_seats=int(pp_[1]), as_the_person=int(pp_[2]), weighted_draws=int(pp_[3]),

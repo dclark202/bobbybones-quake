@@ -1639,6 +1639,30 @@ PRO_START_LEN = float(os.environ.get("PRO_START_LEN") or 0.0)
 #   MOMENT_WEIGHTED=1    a pro start's moment is drawn by the file's "weight" column (tools/people_moments.py: moments a few
 #                 seconds before a weapon he lacks or a big item is taken, and moments with the map's key weapon owned, count
 #                 more); a file without the column (the pros') is drawn evenly. 0: evenly, as before. Live as well.
+#   GEN_START_SHARE=<share>   (2026-10-25, owner: "a generative way of putting people in random positions, stacks, ammo, weapons
+#                 in possession, on the map some point in time in the game, with all the in game timers in a random state ... make
+#                 sure they get placed in reasonable spots, and then we can bias the sampling toward the things we want to
+#                 encourage"; "new for each round basically unlimited"; places "biased towards [the pros'] heatmaps, but tunable"):
+#                 the share of the pro starts (PRO_START_P) that begin at a GENERATED moment, drawn fresh for every start
+#                 (_gen_moment): the places from sim/gen_places/<map>.npz (tools/gen_places.py: every point of the walking map
+#                 reachable from a spawn and tried in this simulator: free box, no lava / slime / water, stood one second he
+#                 stays on the ground), drawn by the pros' heatmap there (with a uniform share); the clock uniform in
+#                 GEN_T_LO..GEN_T_HI, a score drawn for it, each seat's health, armor, weapons owned, ammunition, weapon in hand,
+#                 life and speed drawn, the enemy at least GEN_APART away, every item up or back in a random part of its
+#                 time (a big item that is back: one of the two took it and knows when). Then it is a pro start in every way
+#                 (_pro_start: both seats' truth, nothing known of the enemy). The bias: GEN_BIAS (default sim/gen_bias.json,
+#                 re-read when it changes, every GEN_RELOAD seconds at most): {"heat": exponent on the pros' heat (0: uniform
+#                 over the safe places), "uniform": share drawn uniformly, "own": the chance a weapon of the map is owned,
+#                 "maps": {map: {"own": {label: + chance}, "hand": {label: weight in hand}, "near": {label: chance the first
+#                 seat starts within GEN_NEAR of that item's spawn}}}}; near an item, it is there and not owned half the
+#                 time (the pickup), owned the other half (its use). Read at every draw (live). 0 (the default): not one
+#                 random draw more, the simulator as before. Counters: stats["gen_start"] (GEN_START_COLS).
+GEN_START_SHARE = float(os.environ.get("GEN_START_SHARE") or 0.0)
+GEN_BIAS = os.environ.get("GEN_BIAS") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_bias.json")
+GEN_PLACES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_places")
+GEN_T_LO, GEN_T_HI, GEN_APART, GEN_NEAR, GEN_RELOAD = 20.0, 580.0, 300.0, 320.0, 30.0
+GEN_START_COLS = ("generated starts begun", "of them placed near an item by the bias", "weapons owned (both seats, the map's, summed)",
+                  "a big weapon in hand (both seats, summed)", "the bias file read")
 PEOPLE_START_SHARE = float(os.environ.get("PEOPLE_START_SHARE") or 0.0)
 MOMENT_WEIGHTED = int(float(os.environ.get("MOMENT_WEIGHTED") or 0))
 PEOPLE_MOMENTS_DIR = os.environ.get("PEOPLE_MOMENTS_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "people_moments")
@@ -9205,6 +9229,144 @@ class DuelEnv:
         self.ppl_mo = self._moments_load(os.path.join(PEOPLE_MOMENTS_DIR, mapn_), "people's starts")
         if self.ppl_mo is not None:
             self.ppl_mean = self._moments_mean(self.ppl_mo)
+        self._gen_init(os.path.join(GEN_PLACES_DIR, mapn_))
+
+    def _gen_init(self, f_):
+        """(GEN_START_SHARE) the map's safe places and the pros' heat on them (none: no generated starts here), the books"""
+        self.stats["gen_start"] = np.zeros(len(GEN_START_COLS))
+        self.gen_pl, self.gen_bias, self.gen_bt, self.gen_bm = None, {}, -1e9, None
+        self.gen_map = os.path.splitext(os.path.basename(f_))[0]
+        if not os.path.exists(f_):
+            return
+        with np.load(f_) as z_:
+            pos_, heat_ = z_["pos"].astype(np.float32), z_["heat"].astype(np.float64)
+        if len(pos_) < 8:
+            return
+        self.gen_pl, self.gen_heat = pos_, heat_
+        self.gen_near = {}                                   # (label -> the places within GEN_NEAR of that item, its index)
+        for it in range(self.nI):
+            lab_ = self.item_def[it][4]
+            if lab_ and lab_ not in self.gen_near:
+                d_ = np.linalg.norm(pos_ - self.item_pos[it], axis=1)
+                ix_ = np.nonzero(d_ <= GEN_NEAR)[0]
+                if len(ix_):
+                    self.gen_near[lab_] = (ix_, it)
+        self.gen_mean = float(GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)) if PRO_START_LEN <= 0 else float(min(PRO_START_LEN, GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)))
+
+    def _gen_bias_now(self):
+        """(GEN_START_SHARE) the bias file, re-read when it changed (at most every GEN_RELOAD seconds); its place weights"""
+        import time as _t
+        now_ = _t.time()
+        if now_ - self.gen_bt >= GEN_RELOAD:
+            self.gen_bt = now_
+            try:
+                mt_ = os.path.getmtime(GEN_BIAS)
+            except OSError:
+                mt_ = None
+            if mt_ != getattr(self, "gen_mt", None) or self.gen_bm is None:
+                self.gen_mt = mt_
+                b_ = {}
+                if mt_ is not None:
+                    try:
+                        with open(GEN_BIAS, encoding="utf-8") as fh_:
+                            b_ = json.load(fh_)
+                    except (OSError, ValueError):
+                        b_ = self.gen_bias                   # (a file being written: the last one stays)
+                self.gen_bias = b_ if isinstance(b_, dict) else {}
+                h_ = np.power(self.gen_heat, float(self.gen_bias.get("heat", 1.0)))
+                h_ = h_ / h_.sum() if h_.sum() > 0 else np.full(len(h_), 1.0 / len(h_))
+                u_ = float(np.clip(self.gen_bias.get("uniform", 0.1), 0.0, 1.0))
+                self.gen_bm = np.cumsum((1.0 - u_) * h_ + u_ / len(h_))
+                self.stats["gen_start"][4] += 1
+        return self.gen_bias
+
+    def _gen_place(self, rng, among=None):
+        c_ = self.gen_bm
+        if among is not None:
+            w_ = np.diff(np.concatenate([[0.0], c_]))[among]
+            return int(among[min(len(among) - 1, int(np.searchsorted(np.cumsum(w_), rng.random() * w_.sum(), side="right")))])
+        return min(len(c_) - 1, int(np.searchsorted(c_, rng.random() * c_[-1], side="right")))
+
+    def _gen_moment(self):
+        """(GEN_START_SHARE) a new generated moment in the moments' format (one row; the items in this simulator's order)"""
+        rng, B = self.rng_mom, self._gen_bias_now()
+        mb_ = (B.get("maps") or {}).get(self.gen_map) or {}
+        own_b, hand_b, near_b = mb_.get("own") or {}, mb_.get("hand") or {}, mb_.get("near") or {}
+        base_own = float(np.clip(B.get("own", 0.5), 0.0, 1.0))
+        clock = float(rng.uniform(GEN_T_LO, GEN_T_HI))
+        tot = int(rng.poisson(clock / 60.0 * rng.uniform(1.0, 3.0)))
+        a_ = int(rng.binomial(tot, rng.beta(2.5, 2.5)))
+        P = dict(clock=np.array([clock], np.float32), score=np.array([[a_, tot - a_]], np.int16),
+                 pos=np.zeros((1, 2, 3), np.float32), vel=np.zeros((1, 2, 3), np.float32), yaw=np.zeros((1, 2), np.float32),
+                 pitch=np.zeros((1, 2), np.float32), hp=np.zeros((1, 2), np.float32), armor=np.zeros((1, 2), np.float32),
+                 has=np.zeros((1, 2, NW), bool), ammo=np.zeros((1, 2, NW), np.int16), weapon=np.zeros((1, 2), np.int8),
+                 life=np.zeros((1, 2), np.float32), est=np.zeros((1, 2), np.int8),
+                 item_left=np.zeros((1, self.nI), np.float32), item_who=np.full((1, self.nI), -1, np.int8),
+                 imap=np.arange(self.nI, dtype=np.int64))
+        near_it, near_lab = -1, None                         # (the bias: the first seat near an item's spawn)
+        labs_ = [l_ for l_ in near_b if l_ in self.gen_near]
+        if labs_:
+            ps_ = np.array([max(0.0, float(near_b[l_])) for l_ in labs_])
+            if ps_.sum() > 0.6:
+                ps_ = ps_ * (0.6 / ps_.sum())
+            u_ = rng.random()
+            c_ = np.cumsum(ps_)
+            if u_ < c_[-1]:
+                near_lab = labs_[int(np.searchsorted(c_, u_, side="right"))]
+        if near_lab is not None:
+            ix_, near_it = self.gen_near[near_lab]
+            j0 = self._gen_place(rng, ix_)
+        else:
+            j0 = self._gen_place(rng)
+        p0 = self.gen_pl[j0]
+        j1 = self._gen_place(rng)
+        for _ in range(12):
+            if float(np.linalg.norm(self.gen_pl[j1] - p0)) >= GEN_APART:
+                break
+            j1 = self._gen_place(rng)
+        big_ = [w_ for w_ in self.map_weapons if w_ not in (MG, G)]
+        GS_ = self.stats["gen_start"]
+        for s_, j_ in enumerate((j0, j1)):
+            P["pos"][0, s_] = self.gen_pl[j_]
+            yaw_ = float(rng.uniform(-180.0, 180.0))
+            P["yaw"][0, s_], P["pitch"][0, s_] = yaw_, float(rng.uniform(-15.0, 15.0))
+            if rng.random() < 0.5:
+                sp_, a2_ = float(rng.uniform(0.0, 320.0)), math.radians(float(rng.uniform(-180.0, 180.0)))
+                P["vel"][0, s_, :2] = (sp_ * math.cos(a2_), sp_ * math.sin(a2_))
+            u_ = rng.random()
+            P["hp"][0, s_] = rng.uniform(25, 75) if u_ < 0.25 else rng.uniform(75, 125) if u_ < 0.70 else rng.uniform(125, 200)
+            u_ = rng.random()
+            P["armor"][0, s_] = 0.0 if u_ < 0.30 else rng.uniform(1, 50) if u_ < 0.60 else rng.uniform(50, 100) if u_ < 0.85 else rng.uniform(100, 200)
+            has_ = P["has"][0, s_]
+            has_[MG] = has_[G] = True
+            for w_ in big_:
+                pw_ = min(0.95, base_own + max(0.0, float(own_b.get(WEAPONS[w_].upper(), 0.0))))
+                has_[w_] = rng.random() < pw_
+            if s_ == 0 and near_lab is not None and self.item_def[near_it][0] == "wp":
+                has_[int(self.item_def[near_it][1])] = rng.random() < 0.5     # (half: the pickup, half: its use)
+            for w_ in np.nonzero(has_)[0]:
+                if w_ != G:
+                    P["ammo"][0, s_, w_] = int(round(float(rng.uniform(0.25, 1.0)) * float(AMMO_MAX[w_])))
+            cand_ = [w_ for w_ in big_ if has_[w_]]
+            wt_ = [max(0.0, float(hand_b.get(WEAPONS[w_].upper(), 1.0))) for w_ in cand_]
+            cand_.append(MG)
+            wt_.append(0.4)
+            wt_ = np.array(wt_, np.float64)
+            P["weapon"][0, s_] = cand_[min(len(cand_) - 1, int(np.searchsorted(np.cumsum(wt_), rng.random() * wt_.sum(), side="right")))]
+            P["life"][0, s_] = float(rng.uniform(0.0, min(clock, 100.0)))
+            GS_[2] += float(has_[big_].sum()) if big_ else 0.0
+            GS_[3] += float(int(P["weapon"][0, s_]) != MG)
+        for it in range(self.nI):
+            resp_ = float(self.item_def[it][2])
+            if it == near_it:
+                continue                                     # (the item the bias put him near: it is there)
+            if rng.random() >= 0.55:
+                P["item_left"][0, it] = float(rng.uniform(0.0, resp_))
+                if self.item_def[it][4] in ("MH", "RA", "YA"):
+                    P["item_who"][0, it] = int(rng.random() < 0.5)
+        GS_[0] += 1
+        GS_[1] += float(near_lab is not None)
+        return P
 
     @staticmethod
     def _moments_mean(P):
@@ -9242,21 +9404,28 @@ class DuelEnv:
 
     def _pro_ok(self):
         """(PRO_START_P) this map has pro starts now: the pros' moments, or people's with PEOPLE_START_SHARE on"""
-        return self.pro_mo is not None or (PEOPLE_START_SHARE > 0 and self.ppl_mo is not None)
+        return self.pro_mo is not None or (PEOPLE_START_SHARE > 0 and self.ppl_mo is not None) or (GEN_START_SHARE > 0 and getattr(self, "gen_pl", None) is not None)
 
     def _pro_mean_now(self):
         """(PRO_START_P) the starts' mean length (for the shares): the pros' as before, or the two sources' by the share"""
+        g_ = GEN_START_SHARE if getattr(self, "gen_pl", None) is not None else 0.0
+        if self.pro_mo is None and self.ppl_mo is None:
+            return self.gen_mean
         s_ = PEOPLE_START_SHARE if self.ppl_mo is not None else 0.0
         if s_ <= 0:
-            return self.pro_mean
-        if self.pro_mo is None:
-            return self.ppl_mean
-        return (1.0 - s_) * self.pro_mean + s_ * self.ppl_mean
+            m_ = self.pro_mean
+        elif self.pro_mo is None:
+            m_ = self.ppl_mean
+        else:
+            m_ = (1.0 - s_) * self.pro_mean + s_ * self.ppl_mean
+        return m_ if g_ <= 0 else (1.0 - g_) * m_ + g_ * self.gen_mean
 
     def _pro_pick(self):
         """(PRO_START_P) the source (0 the pros, 1 people: PEOPLE_START_SHARE) and the moment of a new pro start; with both
         switches off one draw, as before"""
         rng, src = self.rng_mom, 0
+        if GEN_START_SHARE > 0 and getattr(self, "gen_pl", None) is not None and (self.pro_mo is None and self.ppl_mo is None or rng.random() < GEN_START_SHARE):
+            return 2, 0                                      # (GEN_START_SHARE) a generated moment, made at the start itself
         if PEOPLE_START_SHARE > 0 and self.ppl_mo is not None:
             src = 1 if (self.pro_mo is None or rng.random() < PEOPLE_START_SHARE) else 0
         P = self.ppl_mo if src else self.pro_mo
@@ -9272,7 +9441,7 @@ class DuelEnv:
         """(PRO_START_P) match m, just begun as a whole game (its round's reset done), is put at pro moment k: which seat
         plays which pro drawn evenly; places, speeds, views, stacks, weapons, the score, the clock and the items as the
         moment has them; each seat knows the items its pro took (when they are back) and nothing of the enemy"""
-        P, rng, PS_ = (self.ppl_mo if src else self.pro_mo), self.rng_mom, self.stats["pro_start"]
+        P, rng, PS_ = (self._gen_moment() if src == 2 else self.ppl_mo if src else self.pro_mo), self.rng_mom, self.stats["pro_start"]
         q = [int(x) for x in self._seats(m)]
         flip = int(rng.random() < 0.5)
         ok_w = np.zeros(NW, bool)
@@ -9309,7 +9478,7 @@ class DuelEnv:
             if bool(self._counted(i)):
                 PS_[14] += 1
                 PS_[15] += float(P["est"][k, s_] > 0)
-                if src:                                      # (PEOPLE_START_SHARE) seat 1 of a people's moment is the person
+                if src == 1:                                 # (PEOPLE_START_SHARE) seat 1 of a people's moment is the person
                     self.stats["people_start"][1] += 1
                     self.stats["people_start"][2] += float(s_ == 1)
         qa = np.array(q)
@@ -9358,7 +9527,7 @@ class DuelEnv:
         self.pro_mm[m] = True
         self.pro_t0[m] = tick
         PS_[0] += 1
-        if src:
+        if src == 1:
             self.stats["people_start"][0] += 1
         PS_[13] += abs(float(d))
         PS_[16] += tick * DT

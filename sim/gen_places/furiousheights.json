@@ -1,0 +1,16 @@
+{
+ "map": "furiousheights",
+ "nodes": 1703,
+ "kept": 1464,
+ "dropped": {
+  "unreachable": 106,
+  "solid": 51,
+  "hazard": 79,
+  "moved": 3,
+  "fell": 0,
+  "air": 0,
+  "outside": 0
+ },
+ "pro_places": 10000,
+ "heat_top10_share": 0.28859026422122114
+}
