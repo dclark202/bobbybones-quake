@@ -2062,6 +2062,12 @@ class duelbot(minqlx.Plugin):
         it_ = np.array(env.route_item)[np.minimum(g_, len(env.route_item) - 1)]     # (a holding place's row is no item's: "soon" below)
         soon = env.item_up[0, it_] | (env.item_t[0, it_] < phi + 5.0) | (env.intent >= getattr(E, "EN_INTENT", 1 << 30))
         gone = valid & ~soon & (env.intent > 0)
+        if getattr(E, "GONE_BELIEF", False) and getattr(E, "ITEM_BELIEF", False):     # (v0.5.0, as the simulator: "gone" by
+            gb_ = np.minimum(g_, env.bel_t.shape[1] - 1)                              # what he knows of the item, not the truth)
+            rs_ = np.array([float(env.item_def[i_][2]) for i_ in it_], np.float32)
+            bt_ = env.bel_t[np.arange(env.n), gb_]
+            soon_b = (bt_ >= rs_) | (np.maximum(0.0, rs_ - bt_) < phi + 5.0) | (env.intent >= getattr(E, "EN_INTENT", 1 << 30))
+            gone = valid & ~soon_b & (env.intent > 0) & (env.intent < getattr(E, "HOLD_INTENT", 1 << 30))
         if getattr(env, "hold_n", 0):                        # (TARGETS, as step() does: a place is reached where he stands at it,
             hd_ = env.intent >= E.HOLD_INTENT                # given up where no way leads to it; 2026-10-14, the first real games)
             env.note_holds()

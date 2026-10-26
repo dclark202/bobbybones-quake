@@ -244,7 +244,9 @@ PERCEPT_SIGMA, PERCEPT_TAU = _aim("PERCEPT_SIGMA", "percept_sigma"), _aim("PERCE
 # off for half a second, not for a frame) that grows with how fast the target crosses his view. So for v11 (set by the launch
 # file): a larger error that drifts slowly (PERCEPT_TAU 0.5: the memory cannot average it away as it does the 0.15 s one) and
 # PERCEPT_SPEED degrees more for every degree a second the enemy's direction moves, at most PERCEPT_SPEED_MAX.
-PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), 3.0
+PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), float(os.environ.get("PERCEPT_SPEED_MAX") or 3.0)
+# (v0.5.0: PERCEPT_SPEED_MAX settable, a PLAY_VAR; 3 degrees as before. The calibration of 2026-10-26: at 3 the lightning gun's
+#  hit rate stops falling near 40% whatever PERCEPT_SPEED, the pros' is 33%.)
 # Values since 2026-10-07 20:15 (the first "click", owner: "nudge hitscan aim down 1-2 clicks"): 1.2 degrees, 0.5 s, 0.012.
 # v10 under them in the reflex room, not yet adapted: error on a strafing target 3.0 -> 3.8 degrees (the owner 2.45), time on
 # it 58% -> 54% (40%), lightning damage a second 83 -> 75 (58), first rail shot on a jumping target 74% -> 65% (88%).
@@ -332,6 +334,22 @@ TARGETS_FREE = int(float(os.environ.get("TARGETS_FREE") or 0.0))
 #                  spawn), as the enemy is without HUNT. Going for a weapon he lacks, or to refill one that is low, stays.
 #                  Off: as before, bit for bit.
 WEAPON_FREE = float(os.environ.get("WEAPON_FREE") or 0.0) > 0
+# v0.5.0's other loophole fixes (owner, 2026-10-26, the audit of v0.4.4's simulator; RESULTS 2026-10-26), each off by default:
+#   SPEED_LOS=1        the speed pay (SPEED_PAY) only while the enemy is out of his LINE OF SIGHT: before, out of his view cone
+#                      was enough, so facing away from the enemy kept it coming (a pay for not looking)
+#   GONE_BELIEF=1      a choice held for INTENT_HOLD is let go early when its item is gone and not back in time ("gone"):
+#                      judged by what he knows of the item (ITEM_BELIEF's bel_t), not the truth (a free probe of the item
+#                      clocks out of his sight: a new reading taken early meant "it was taken")
+#   TELEFRAG=1         a teleport that comes out on the other player kills him (the game's G_KillBox; the frag is the
+#                      teleporter's, his damage the victim's whole stack): standing on an exit was safe in the simulator
+#   JRUN_SPEED_BACK=1  a jump run's try that ends without the jump gives back its speed pay (SPEED_PAY_RUN) with the rest
+#   SMALL_ZERO=1       the knowledge pay (KNOW_PAY) and the big weapons' pay by order (BIG_PICK_SEQ) zero-sum: what one
+#                      player gets the other loses (both paid each other's pay before: a pay for peace)
+SPEED_LOS = float(os.environ.get("SPEED_LOS") or 0.0) > 0
+GONE_BELIEF = float(os.environ.get("GONE_BELIEF") or 0.0) > 0
+TELEFRAG = float(os.environ.get("TELEFRAG") or 0.0) > 0
+JRUN_SPEED_BACK = float(os.environ.get("JRUN_SPEED_BACK") or 0.0) > 0
+SMALL_ZERO = float(os.environ.get("SMALL_ZERO") or 0.0) > 0
 HOLD_R, HOLD_Z = 96.0, 64.0
 assert INTENTS[HOLD_INTENT] == "H1" and len(INTENTS) == HOLD_INTENT + HOLD_SLOTS
 # WAYS (stage B part 3, docs/design/V02_STAGE_B.md; owner, 2026-10-11: "Yes"; his "main failure point is that their routes are
@@ -1112,7 +1130,7 @@ LEVEL_PULL = float(_lp_) if (_lp_ or "").strip() else 0.95
 if not 0.0 <= LEVEL_PULL <= 1.0:
     raise ValueError("LEVEL_PULL must be within 0 .. 1")
 PLAY_VARS = PLAY_VARS + ("LEVEL_PULL",)
-PLAY_VARS = PLAY_VARS + ("WEAPON_FREE",)                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
+PLAY_VARS = PLAY_VARS + ("WEAPON_FREE", "GONE_BELIEF", "TELEFRAG", "PERCEPT_SPEED_MAX")                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
 #   RJ_COPY=1     (the owner, 2026-10-23, "option 1": "one route that works that he has to use when he wants to get there") the
 #                 whole route as a lesson: step() gives info["rj_copy"], per player and output (int8, -1 = no label) the scripted
 #                 runner's choice for his NEXT frame in a rocket jump run (RJ_RUN_P), from the try's start to its landing: his
@@ -5712,6 +5730,10 @@ class DuelEnv:
                     p_ = self._big_seq(i, b_, had)
                     reward[i] += p_
                     self.r_long[i] += p_
+                    if SMALL_ZERO and p_:                    # (SMALL_ZERO) the other loses as much
+                        for o_ in self._mates(i):
+                            reward[o_] -= p_
+                            self.r_long[o_] -= p_
             elif BIG_PICK > 0:                               # (v0.3.1) the big three once a life, nothing else
                 b_ = (RL, LG, RG).index(int(w)) if int(w) in (RL, LG, RG) else -1
                 if b_ >= 0 and not self.big_got[i, b_] and not (BIG_ONCE and self.big_got[i].any()):
@@ -9988,6 +10010,8 @@ class DuelEnv:
         if self.route_goal[g] in ("MH", "RA"):
             self.it_t[i, 0 if self.route_goal[g] == "MH" else 1] = 99.0
         self.jrun_it[i], self.jrun_paid[i], self._replaced = self.route_item[g], 0.0, True
+        if getattr(self, "jrun_spd", None) is not None and len(self.jrun_spd) == self.n:
+            self.jrun_spd[i] = 0.0                           # (JRUN_SPEED_BACK) a new try's speed pay counts from nothing
         self.run_k[i] = INTENTS.index(self.route_goal[g])
         self.intent_new[i], self.intent_done[i] = True, True     # the target is read at once
         self.jrun_k[i], self.jrun_t[i] = k, 2.0 * float(J.T[g, node]) + JUMP_TRY_SLACK
@@ -11545,6 +11569,18 @@ class DuelEnv:
         self.stats["jerk"] += float(jerk.sum())
         st = dict(dmg_taken=np.zeros(n, np.float32), attacker=np.full(n, -1), kill_w={}, kicked=False,
                   by={}, killer=np.full(n, -1))               # damage per (attacker, victim) this frame; who took him below zero
+        if TELEFRAG:                                         # (TELEFRAG) a teleport onto the other player kills him (G_KillBox)
+            tp_ = np.nonzero((np.linalg.norm(s[:, :3] - prev[:, :3], axis=1) > 200) & (self.hp > 0) & (pkind == NORMAL)
+                             & (self.run_k < 0))[0]          # (games only: in an item or jump run each player is alone)
+            for i in tp_:
+                for v in self._mates(int(i)):
+                    if self.hp[v] > 0 and self.run_k[v] < 0 and not (RESPAWN_QL and self.rsp_wait[v] > 0):
+                        d_ = np.abs(s[v, :3] - s[i, :3])
+                        if d_[0] < MAXS[0] - MINS[0] and d_[1] < MAXS[1] - MINS[1] and d_[2] < MAXS[2] - MINS[2]:
+                            # his whole stack as damage, through the armor as any hit (armor takes 2/3 at most, so the
+                            # health always goes below zero)
+                            self._hit(int(i), int(v), G, float(self.hp[v] + self.armor[v]) + 1.0, np.zeros(3, np.float32), st)
+                            self.stats["telefrag"] = self.stats.get("telefrag", 0) + 1
         for v in fallers:
             took_f = self._damage(int(v), float(fall[v]))
             if SELF_DEBT:
@@ -12008,6 +12044,12 @@ class DuelEnv:
                     if BIG_PICK_SEQ and kind == "wp":                       # (v0.3.8) the big three a life by order
                         b_ = (RL, LG, RG).index(int(val)) if int(val) in (RL, LG, RG) else -1
                         pay_ = self._big_seq(i, b_, had_wp) if b_ >= 0 else 0.0
+                        if SMALL_ZERO and pay_:              # (SMALL_ZERO) the other loses as much
+                            for o_ in self._mates(i):
+                                reward[o_] -= pay_
+                                r_long[o_] -= pay_
+                                if PAY_SPLIT:
+                                    self._pt("big_order", o_, -pay_)
                     elif BIG_PICK > 0 and kind == "wp":                     # (v0.3.1) the big three once a life, nothing else
                         b_ = (RL, LG, RG).index(int(val)) if int(val) in (RL, LG, RG) else -1
                         pay_ = BIG_PICK if b_ >= 0 and not self.big_got[i, b_] else 0.0
@@ -12105,6 +12147,12 @@ class DuelEnv:
             soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0) | (self.intent >= EN_INTENT)
             gone_before = self.intent_gone.copy()
             self.intent_gone = valid & ~soon & (self.intent > 0)
+            if GONE_BELIEF and ITEM_BELIEF:                  # (GONE_BELIEF) "gone" by what he knows of the item, not the truth
+                gb_ = np.minimum(g_, self.bel_t.shape[1] - 1)
+                rs_ = np.array([float(self.item_def[i_][2]) for i_ in it_], np.float32)
+                bt_ = self.bel_t[np.arange(n), gb_]
+                soon_b = (bt_ >= rs_) | (np.maximum(0.0, rs_ - bt_) < phi + 5.0) | (self.intent >= EN_INTENT)
+                self.intent_gone = valid & ~soon_b & (self.intent > 0) & (self.intent < HOLD_INTENT)
             if EN_ON:                                        # the enemy as the target: reached when he is in view, given up when
                 en_, vis_ = self.note_hunt(valid)            # nothing is known of him any more (FIGHT_TARGET, HUNT)
                 self.stats["en_frames"] += np.array([(en_ & (self.script == 0) & (self.hp > 0)).sum(), (en_ & self.legs_on).sum(),
@@ -12178,6 +12226,16 @@ class DuelEnv:
                 self.pace_g = (0.95 * self.pace_g + np.where(pay, gain, 0.0)).astype(np.float32)
                 sp_h = np.hypot(s[:, 3], s[:, 4])
                 trip = pay & ~in_run & ~self.visible & (self.seen_t > 1.5)
+                if SPEED_LOS:                                # (SPEED_LOS) out of his line of sight, whichever way he faces
+                    c_ = np.nonzero(trip & (sp_h > SPEED_LO))[0]
+                    if len(c_):
+                        eye_ = self._eye(s)[c_]
+                        for o_ in self._others_arr()[c_].T:     # (every other player of his group)
+                            los_ = self._los(eye_, s[o_, :3] + np.array([0, 0, 8.0], np.float32))
+                            los_ &= np.linalg.norm(s[o_, :3] - s[c_, :3], axis=1) < 4000
+                            if RESPAWN_QL:
+                                los_ &= self.rsp_wait[o_] <= 0
+                            trip[c_[los_]] = False
                 fast = trip & (self.pace_g > 0.3)
                 pace_now = PACE_PAY * DT * np.clip(sp_h / 320.0 - 1.0, 0.0, 1.0) * fast
                 if SPEED_PAY or SPEED_PAY_RUN:               # per stretch of new ground, by the speed he covers it at (see SPEED_PAY)
@@ -12186,6 +12244,7 @@ class DuelEnv:
                     run_ok = in_run & (self.script == 0) & (self.hp > 0) & ~self.rjrun     # (RJ_RUN_P: nor for speed)
                     pace_now = pace_now + SPEED_PAY * sp_f * trip
                     reward += SPEED_PAY_RUN * sp_f * run_ok
+                    self._spr_now = (SPEED_PAY_RUN * sp_f * run_ok).astype(np.float32)   # (JRUN_SPEED_BACK) given back with a failed try
                     self._pt("speed_run", ar, SPEED_PAY_RUN * sp_f * run_ok)
                     self.stats["speed_pay"] += float((SPEED_PAY * sp_f * trip).sum())
                     self.stats["speed_pay_run"] += float((SPEED_PAY_RUN * sp_f * run_ok).sum())
@@ -12222,6 +12281,10 @@ class DuelEnv:
                     kk_ = self.jrun_k[jr]
                     A_, B_, p_ = self.jump_a[kk_], self.jump_b[kk_], s[jr, :3]
                     self.jrun_paid[jr] += (pay_now[jr] + RUN_SCALE * np.where(pay[jr], gain[jr], 0.0)).astype(np.float32)
+                    if JRUN_SPEED_BACK and getattr(self, "_spr_now", None) is not None and len(self._spr_now) == n:
+                        if getattr(self, "jrun_spd", None) is None or len(self.jrun_spd) != n:
+                            self.jrun_spd = np.zeros(n, np.float32)
+                        self.jrun_spd[jr] += self._spr_now[jr]   # (its own counter: the speed pay is in reward only, not r_long)
                     self.jrun_edge[jr] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
@@ -12265,6 +12328,8 @@ class DuelEnv:
                     for i in jr[(short_ | (self.jrun_t[jr] <= 0)) & ~arr[jr]]:
                         reward[i] -= float(self.jrun_paid[i])    # a try that ends without the item gives back what its way paid
                         r_long[i] -= float(self.jrun_paid[i])
+                        if JRUN_SPEED_BACK and getattr(self, "jrun_spd", None) is not None:
+                            reward[i] -= float(self.jrun_spd[i])  # ... and its speed pay (JRUN_SPEED_BACK; reward only)
                         self._jump_place(int(i))
                 for i in np.nonzero(arr | gone | (run & (self.run_k == 0)))[0]:
                     if self.jrun_new[i]:
@@ -12318,8 +12383,11 @@ class DuelEnv:
         if KNOW_PAY:                                         # pay for knowing where the enemy is (see KNOW_PAY)
             on = (pkind == NORMAL) & (self.hp > 0) & (self.script == 0) & (self.run_k < 0)
             kn = self._knowledge()
-            reward += np.where(on, KNOW_PAY * kn * (DT / 60.0), 0.0)
-            r_long += np.where(on, KNOW_PAY * kn * (DT / 60.0), 0.0)
+            kp_ = np.where(on, KNOW_PAY * kn * (DT / 60.0), 0.0)
+            if SMALL_ZERO:                                   # (SMALL_ZERO) what he gets the other loses
+                kp_ = kp_ - kp_[self._others_arr()].mean(1)
+            reward += kp_
+            r_long += kp_
             self.stats["know"] += float(kn[on].sum())
             self.stats["know_frames"] += int(on.sum())
 
