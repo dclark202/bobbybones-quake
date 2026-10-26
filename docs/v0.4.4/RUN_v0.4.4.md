@@ -39,19 +39,28 @@ win chance is [v0.4.5](../v0.4.5/RUN_v0.4.5.md). Code: branch `starts` (dae9909,
 | Targeted item runs, item floor | off | off |
 | Equal big-weapon pay (0.10 x3) | on | on |
 
-## Schedule (owner, 2026-10-25 ~20:00: the generated starts alone overnight, the head in the morning)
+## Schedule (owner, 2026-10-26 morning; a held step moves the rest)
 
-| When (approx.; a held step moves the rest) | What | Gate |
+| When (approx.) | What | Gate |
 |---|---|---|
-| Sun 19:40 -> Mon 07:00 | the generated starts only, the head shut (the start mix fills in over ~60 updates) | checks u10 (~21:30), u30, u50, u70 (v0.3.10's end), u90 |
-| Mon 06:30 | report: games, frag share, the weapon gaps per map against u80 and the pros, the bias's moves | every check 50%+ against v0.4.3's end; the gaps closing |
-| Mon 07:00 -> ~11:10 | **the head opens**: live `H2_GATE_CAP` +0.1 every 25 min | hold under 50%, back under 45% or two checks under 50% |
-| Mon ~11:10 -> 14:00 | two checks at full head | |
-| Mon 14:00 -> ~20:00 | the "will be" exemption (`BLIND_AHEAD_P` 0 -> 1, to ~17:00) and the level pull (`LEVEL_PULL` 0.95 -> 1.0, 1.5 h a step), together | a failed check in the overlap: both hold, the level pull steps back first |
-| Mon afternoon | v0.4.5's code merged with `starts`; its calibration on v0.4.4's newest save | the critic "ready" bar |
+| Sun 19:40 -> Mon 07:00 | the generated starts (done: checks 56-73% vs v0.4.3's end, 146-14 / 150-10 vs v0.3.10's end; the rocket collapsed to 0.04 in hand, Campgrounds' rail still 0): **off** at 07:00 (owner); mix back to 50% whole games / 40% pros' starts / 10% jump runs | |
+| Mon 06:59 -> ~13:15 | **the strategy head opens**: live `H2_GATE_CAP` 0.1, held until a check of a later save passes (u171 ~09:30), then +0.1 every 25 min | hold under 50%, back under 45% or two checks under 50% |
+| Mon 12:00 | report (owner) | |
+| Mon ~13:15 -> 16:00 | two checks at full head | |
+| Mon ~16:00 | restart at a save (optimizer kept) to load the day's code: `PERCEPT_SPEED` live, the pros' b2r run-ups for jump practice (within the 10%) | |
+| Mon 16:00 -> ~22:00 | **together** (owner: "let's run them together"): the **aim fix** (`PERCEPT_SPEED` 0 -> 0.05, +0.0125 a step) and the **"will be" exemption** (`BLIND_AHEAD_P` 0 -> 1, +0.25 a step), a step each per passing check | a failed check: both hold; the exemption steps back first |
 | Mon 19:30 | play test | |
-| Tue 07:00 -> ~18:30 | v0.4.5 from v0.4.4's last save (owner's go): w 0 -> 0.2 by ~08:40, -> 0.5 by ~11:15 (critic ready), two checks, -> 1.0 by ~18:30 | as v0.4.5's card |
-| Tue 19:30 | play test; v0.4.5 done | |
+| Mon night | the level pull phased out alone (`LEVEL_PULL` 0.95 -> 1.0, 1.5 h a step) | as above |
+| Tue 06:30 / 07:00 | report; v0.4.5 (win pay, w held at 0.2 until the critic is ready) on the owner's go | |
+
+### The aim fix (calibrated 2026-10-26)
+`PERCEPT_SPEED` (a play setting): the sight error grows by 0.05 deg for every deg/s the enemy crosses his view, at most 3 deg (a
+320 u/s strafe: +1.1 deg at 800 u, +2.3 at 400, +3 at 200). Reaction (100 ms), the new-sighting delay (160 ms), hand noise:
+unchanged. Calibrated on his pre-head save against itself (4 maps x 8 games a value): hit rates at 0 / 0.05: rocket 0.475 / 0.462,
+LG 0.491 / 0.401, rail 0.573 / 0.427; LG/RL 1.03 -> 0.87 (the real servers' ~0.85: Bobby's LG 0.38-0.39, RL 0.445-0.45, RG
+0.40-0.45). The weapons' physics were checked against the game and match (rocket, splash, LG). The checks play both seats with
+the same limit. Campgrounds' rail: the simulator is fine (the pad route 32/32 when sent; b2r makeable with the pros' keys 84/89):
+it is his choice (the rail his target 0.36% of the time).
 
 ## Measures
 
