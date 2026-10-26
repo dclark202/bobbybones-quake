@@ -15,9 +15,9 @@ smooth bias: one watch line is a few games a map; owner: "suitably gentle"), and
 Run after every weapon-watch line:  python tools/gen_bias.py --watch <weapon_watch.jsonl> --out <run>/gen_bias.json"""
 import argparse, json, os, time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NEAR_W, OWN_W, HAND_W, STEP = 0.20, 0.25, 2.0, 0.25
+NEAR_W, OWN_W, HAND_W, STEP = 0.30, 0.35, 3.0, 0.25          # (owner, 2026-10-25: "they don't need to be wimpy": firm targets, reached smoothly)
 MAX_MOVE = dict(near=0.05, own=0.05, hand=0.5)               # (owner, 2026-10-25: "suitably gentle": the most one line moves a value)
-NEAR_CAP = 0.25
+NEAR_CAP = 0.35
 HOLD = {"aerowalk": ("RA",)}                                # (owner, 2026-10-25: "hold out aerowalk red armor for now ... he still cant figure out how to get there")
 
 
