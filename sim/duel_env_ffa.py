@@ -1661,6 +1661,9 @@ GEN_START_SHARE = float(os.environ.get("GEN_START_SHARE") or 0.0)
 GEN_BIAS = os.environ.get("GEN_BIAS") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_bias.json")
 GEN_PLACES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_places")
 GEN_T_LO, GEN_T_HI, GEN_APART, GEN_NEAR, GEN_RELOAD = 20.0, 580.0, 300.0, 320.0, 30.0
+GEN_FAR = float(os.environ.get("GEN_FAR") or 800.0)        # (owner, 2026-10-25 ~22:45: "make the enemy spawn farther away and out of sight"):
+#                 the enemy of a generated start at least GEN_FAR units away with no line of sight between the two (eye to eye);
+#                 of 40 draws the first that is both, else the farthest unseen one, else the farthest
 GEN_NEAR_S = float(os.environ.get("GEN_NEAR_S") or 3.0)    # (owner, 2026-10-25: "close needs to mean close in the sense of being able to
 #                 walk to it quickly"): "near" an item = a place his ways reach it from in GEN_NEAR_S seconds or less (the route
 #                 field's time: walking, pads, teleporters, the open jumps); an item with no way of its own: within GEN_NEAR units
@@ -9329,11 +9332,17 @@ class DuelEnv:
         else:
             j0 = self._gen_place(rng)
         p0 = self.gen_pl[j0]
-        j1 = self._gen_place(rng)
-        for _ in range(12):
-            if float(np.linalg.norm(self.gen_pl[j1] - p0)) >= GEN_APART:
-                break
-            j1 = self._gen_place(rng)
+        cand_ = np.array([self._gen_place(rng) for _ in range(40)])
+        d_ = np.linalg.norm(self.gen_pl[cand_] - p0, axis=1)
+        eye_ = np.array([0.0, 0.0, 26.0], np.float32)
+        seen_ = self.w.lines(np.repeat((p0 + eye_)[None, :], len(cand_), 0), self.gen_pl[cand_] + eye_) >= 0.999
+        ok_ = np.nonzero((d_ >= GEN_FAR) & ~seen_)[0]
+        if len(ok_):
+            j1 = int(cand_[ok_[0]])
+        elif (~seen_).any():
+            j1 = int(cand_[np.nonzero(~seen_)[0][int(np.argmax(d_[~seen_]))]])
+        else:
+            j1 = int(cand_[int(np.argmax(d_))])
         big_ = [w_ for w_ in self.map_weapons if w_ not in (MG, G)]
         GS_ = self.stats["gen_start"]
         for s_, j_ in enumerate((j0, j1)):
