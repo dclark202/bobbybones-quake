@@ -247,6 +247,11 @@ PERCEPT_SIGMA, PERCEPT_TAU = _aim("PERCEPT_SIGMA", "percept_sigma"), _aim("PERCE
 PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), float(os.environ.get("PERCEPT_SPEED_MAX") or 3.0)
 # (v0.5.0: PERCEPT_SPEED_MAX settable, a PLAY_VAR; 3 degrees as before. The calibration of 2026-10-26: at 3 the lightning gun's
 #  hit rate stops falling near 40% whatever PERCEPT_SPEED, the pros' is 33%.)
+# PERCEPT_SPEED_MAX_RG / PERCEPT_SPEED_MAX_LG (v0.5.0, after the review of 2026-10-26; PLAY_VARS and live): the cap with the
+# railgun / the lightning gun in hand (0: PERCEPT_SPEED_MAX). One cap moved both together (cap 5: lightning 37.4%, rail 38.2%,
+# the pros 32.7 / 43.5): a rail shot is a flick, the lightning gun a track. Both 0 = the simulator before, bit for bit.
+PERCEPT_SPEED_MAX_RG = float(os.environ.get("PERCEPT_SPEED_MAX_RG") or 0.0)
+PERCEPT_SPEED_MAX_LG = float(os.environ.get("PERCEPT_SPEED_MAX_LG") or 0.0)
 # Values since 2026-10-07 20:15 (the first "click", owner: "nudge hitscan aim down 1-2 clicks"): 1.2 degrees, 0.5 s, 0.012.
 # v10 under them in the reflex room, not yet adapted: error on a strafing target 3.0 -> 3.8 degrees (the owner 2.45), time on
 # it 58% -> 54% (40%), lightning damage a second 83 -> 75 (58), first rail shot on a jumping target 74% -> 65% (88%).
@@ -1130,7 +1135,7 @@ LEVEL_PULL = float(_lp_) if (_lp_ or "").strip() else 0.95
 if not 0.0 <= LEVEL_PULL <= 1.0:
     raise ValueError("LEVEL_PULL must be within 0 .. 1")
 PLAY_VARS = PLAY_VARS + ("LEVEL_PULL",)
-PLAY_VARS = PLAY_VARS + ("WEAPON_FREE", "GONE_BELIEF", "TELEFRAG", "PERCEPT_SPEED_MAX")                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
+PLAY_VARS = PLAY_VARS + ("WEAPON_FREE", "GONE_BELIEF", "TELEFRAG", "PERCEPT_SPEED_MAX", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG")                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
 #   RJ_COPY=1     (the owner, 2026-10-23, "option 1": "one route that works that he has to use when he wants to get there") the
 #                 whole route as a lesson: step() gives info["rj_copy"], per player and output (int8, -1 = no label) the scripted
 #                 runner's choice for his NEXT frame in a rocket jump run (RJ_RUN_P), from the try's start to its landing: his
@@ -1894,7 +1899,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "LG_QUIET_COST", "WATCH_PAY",                                                                          # (v0.3.10)
              "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
-             "PERCEPT_SPEED")                                                                                       # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
+             "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG")                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1920,6 +1925,10 @@ def live_values(get):
     v["PERCEPT_SPEED"] = float(ps_) if (ps_ or "").strip() else float(AIM_SET["percept_speed"])
     if not 0.0 <= v["PERCEPT_SPEED"] <= 0.2:
         raise ValueError("PERCEPT_SPEED must be within 0 .. 0.2")
+    for k_ in ("PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG"):     # (v0.5.0) the cap by weapon, live; unset: 0 (PERCEPT_SPEED_MAX)
+        v[k_] = float(get(k_) or 0.0)
+        if not 0.0 <= v[k_] <= 20.0:
+            raise ValueError(k_ + " must be within 0 .. 20")
     lp_ = get("LEVEL_PULL")                                  # (B-275) the view's pull toward level; unset: 0.95
     v["LEVEL_PULL"] = float(lp_) if (lp_ or "").strip() else 0.95
     if not 0.0 <= v["LEVEL_PULL"] <= 1.0:
@@ -6832,7 +6841,12 @@ class DuelEnv:
                                 np.degrees(np.arctan2(tb_[:, 2], np.hypot(tb_[:, 0], tb_[:, 1]) + 1e-6))], 1).astype(np.float32)
                 dy_ = (br_[:, 0] - self.bearing[:, 0] + 180.0) % 360.0 - 180.0
                 w_ = np.hypot(dy_, br_[:, 1] - self.bearing[:, 1]) / DT * (visible & self.bearing_ok)
-                sig_ = sig_ + np.minimum(PERCEPT_SPEED * w_, PERCEPT_SPEED_MAX)[:, None]
+                cap_ = PERCEPT_SPEED_MAX
+                if PERCEPT_SPEED_MAX_RG > 0 or PERCEPT_SPEED_MAX_LG > 0:     # (the cap by the weapon in hand)
+                    wh_ = np.asarray(self.weapon)[:len(w_)]
+                    cap_ = np.where(wh_ == RG, PERCEPT_SPEED_MAX_RG or PERCEPT_SPEED_MAX,
+                                    np.where(wh_ == LG, PERCEPT_SPEED_MAX_LG or PERCEPT_SPEED_MAX, PERCEPT_SPEED_MAX)).astype(np.float32)
+                sig_ = sig_ + np.minimum(PERCEPT_SPEED * w_, cap_)[:, None]
                 self.bearing, self.bearing_ok = br_, visible.copy()
             self.percept = (rho * self.percept + math.sqrt(1.0 - rho * rho) * sig_ *
                             self.rng.normal(0, 1, (n, 2))).astype(np.float32)
