@@ -17,6 +17,7 @@ import argparse, json, os, time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NEAR_W, OWN_W, HAND_W, STEP = 0.20, 0.25, 2.0, 0.5
 NEAR_CAP = 0.25
+HOLD = {"aerowalk": ("RA",)}                                # (owner, 2026-10-25: "hold out aerowalk red armor for now ... he still cant figure out how to get there")
 
 
 def gap(his, pro, floor):
@@ -64,6 +65,8 @@ def main():
                 prev = float(o_.get(k, 1.0 if part == "hand" else 0.0))
                 x = prev + st * (v - prev)
                 x = min(NEAR_CAP, x) if part == "near" else x
+                if k in HOLD.get(mp, ()):
+                    x = 1.0 if part == "hand" else 0.0
                 m_[part][k] = round(x, 4)
         out["maps"][mp] = m_
         top = sorted(((v, "near " + k) for k, v in m_["near"].items()), reverse=True)[:2] + \
