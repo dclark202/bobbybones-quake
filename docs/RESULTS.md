@@ -10,6 +10,7 @@ page lists every entry. A new entry goes at the top of today's file and gets a l
 
 ## [2026-10-26](results/2026-10-26.md)
 
+- 16:30 — v0.4.3 and v0.4.4 scrapped: the spawn camping (target choice unguided after the item rule faded, a weapon target as a free "hold here", too-easy instant-hit aim, then the head); v0.5.0 started from v0.4.2b's end with the loopholes closed, one `!aim` calibrated to the pros, and a behaviour panel
 - 10:15 — v0.4.4: the generated mid-game starts tried overnight and switched off; the strategy head opening (69% against v0.4.3's end); the rocket's collapse is not the simulator's physics but its too-easy instant-hit aim (calibrated fix: PERCEPT_SPEED 0.05); Campgrounds' rail is his choice; the EU server moved to Amsterdam
 
 ## [2026-10-25](results/2026-10-25.md)
