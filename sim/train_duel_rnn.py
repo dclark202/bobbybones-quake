@@ -5549,6 +5549,14 @@ def main():
                                      win_size_per_player_min=round(float(WS_[1] / wm_), 4), flat_per_player_min=round(float(WS_[2] / wm_), 4),
                                      flat_size_per_player_min=round(float(WS_[3] / wm_), 4),
                                      size_ratio_win_to_flat=round(float(WS_[1] / max(1e-9, WS_[3])), 4))
+        if "win_blend" in agg:                                           # (v0.5.1, WIN_W / FADE_V) the blend's sizes a player-minute in games
+            WB_ = np.atleast_1d(agg["win_blend"]).astype(np.float64)     # (the simulator's WB_COLS): for sizing WIN_GAIN, the win part at
+            bm_ = max(1e-9, float(WB_[0]) * DT_MIN)                      # G = 1 against the combat pay it replaces
+            rec["win_blend"] = dict(minutes=round(float(WB_[0]) * DT_MIN, 1), win_g1_per_player_min=round(float(WB_[1] / bm_), 4),
+                                    win_g1_size=round(float(WB_[2] / bm_), 4), combat_per_player_min=round(float(WB_[3] / bm_), 4),
+                                    combat_size=round(float(WB_[4] / bm_), 4), other_size=round(float(WB_[5] / bm_), 4),
+                                    paid_size=round(float(WB_[6] / bm_), 4), blend_frames=int(WB_[7]),
+                                    combat_to_win_g1=round(float(WB_[4] / max(1e-9, WB_[2])), 3))
         if "open" in agg:                                                # (OPENINGS) the pros' spawn openings as the item rule's label, his seats
             def open_(o_):                                               # (the simulator's OPEN_COLS)
                 o_ = np.atleast_1d(o_).astype(np.float64)
