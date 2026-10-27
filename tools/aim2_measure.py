@@ -232,13 +232,14 @@ def _init(mp, tmp):
     os.makedirs(_W["tmp"], exist_ok=True)
 
 
-def _one(demo):
+def _one(job):
     import pro_yardsticks as Y
+    demo, src = job
     try:
         rec, info = Y.parse(demo, _W["tmp"])
         if rec is None:
             return None
-        return rows_of(rec, _W["world"])
+        return rows_of(rec, _W["world"], src=src)                # src: the demo's number (the per-demo spread of the pros)
     except Exception as e:                                      # noqa: BLE001
         print("skip", os.path.basename(demo), repr(e)[:120], file=sys.stderr)
         return None
@@ -264,7 +265,8 @@ def pros(a):
         tmp = tempfile.mkdtemp(prefix="aim2p_")
         t0 = time.time()
         with mp_.Pool(a.procs, initializer=_init, initargs=(mp, tmp)) as pool:
-            res = pool.map(_one, files, chunksize=2)
+            res = pool.map(_one, [(f, 1000 + len(out_s) * 0 + k + 100000 * (1 + a.maps.split(",").index(mp))) for k, f in enumerate(files)],
+                           chunksize=2)
         ok = [r for r in res if r is not None]
         for r in ok:
             out_s.append(r[0])
@@ -496,9 +498,78 @@ def report(paths):
             print("| {} | {} |".format(k, " | ".join(cells)))
 
 
+def spread(path, min_shots=None):
+    """the pros' spread: per demo (src) hit rates by weapon, distance-matched to the whole set's rate by band (100 = the
+    pros' average), with the 10th, 50th, 90th percentiles; and the same for the rail's first shot after a sighting"""
+    Z = np.load(path)
+    S = Z["shots"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    print("| weapon | demos | p10 | p25 | median | p75 | p90 | (distance-matched, % of the pros' mean) |")
+    print("|---|---|---|---|---|---|---|---|")
+    for label, nm in STYLES:
+        wq = NAMES.index(nm)
+        m0 = (S[:, 0] == wq) & np.isfinite(S[:, C["dist"]])
+        if m0.sum() < 100:
+            continue
+        mn = min_shots or (300 if nm in ("lg", "mg") else 40 if nm in ("rg", "rl", "pg") else 15)
+        vals = []
+        for d in np.unique(S[m0, C["src"]]):
+            md = m0 & (S[:, C["src"]] == d)
+            if S[md, 1].sum() < mn:
+                continue
+            vals.append(_matched(S, C, md, m0)[0])
+        v = np.array([x for x in vals if np.isfinite(x)])
+        if len(v):
+            print("| {} | {} | {} |".format(nm, len(v), " | ".join("{:.0f}".format(np.percentile(v, q)) for q in (10, 25, 50, 75, 90))))
+
+
+def versus(pro_path, paths):
+    """each file's hits against what the pros' hit rate by distance band would give its shots (100 = pro level), by weapon;
+    the rail's and shotgun's first shot after a sighting by the angle off (the same, by angle band)"""
+    P = np.load(pro_path)["shots"]
+    PF = np.load(pro_path)["flicks"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    print("| weapon (distance-matched, % of the pros) | " + " | ".join(os.path.basename(p) for p in paths) + " |")
+    print("|---|" + "---|" * len(paths))
+    rows = {}
+    for label, nm in STYLES:
+        wq = NAMES.index(nm)
+        cells = []
+        for p in paths:
+            S = np.load(p)["shots"]
+            got, exp_, nA = 0.0, 0.0, 0
+            for lo, hi in ((0, 250), (250, 500), (500, 750), (750, 1100), (1100, 1e9)):
+                bs = (S[:, 0] == wq) & (S[:, C["dist"]] >= lo) & (S[:, C["dist"]] < hi)
+                bp = (P[:, 0] == wq) & (P[:, C["dist"]] >= lo) & (P[:, C["dist"]] < hi)
+                if P[bp, 1].sum() < 20 or S[bs, 1].sum() == 0:
+                    continue
+                rp = (P[bp, 2] * P[bp, 1]).sum() / P[bp, 1].sum()
+                exp_ += S[bs, 1].sum() * rp
+                got += (S[bs, 2] * S[bs, 1]).sum()
+                nA += int(S[bs, 1].sum())
+            cells.append("{:.0f} ({})".format(100 * got / exp_, nA) if exp_ > 0 else "-")
+        print("| {} | {} |".format(nm, " | ".join(cells)))
+    for nm in ("rg", "sg"):
+        wq = NAMES.index(nm)
+        cells = []
+        for p in paths:
+            F = np.load(p)["flicks"]
+            got, exp_, nA = 0.0, 0.0, 0
+            for lo, hi in ((0, 5), (5, 15), (15, 30), (30, 60), (60, 181)):
+                bs = (F[:, 0] == wq) & (F[:, 1] >= lo) & (F[:, 1] < hi)
+                bp = (PF[:, 0] == wq) & (PF[:, 1] >= lo) & (PF[:, 1] < hi)
+                if bp.sum() < 20 or not bs.any():
+                    continue
+                exp_ += bs.sum() * PF[bp, 3].mean()
+                got += F[bs, 3].sum()
+                nA += int(bs.sum())
+            cells.append("{:.0f} ({})".format(100 * got / exp_, nA) if exp_ > 0 else "-")
+        print("| {} first shot after a sighting, angle-matched | {} |".format(nm, " | ".join(cells)))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=("pros", "sim", "report"))
+    ap.add_argument("mode", choices=("pros", "sim", "report", "spread", "vs"))
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--set", default="demos")
     ap.add_argument("--maps", default="bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged")
@@ -519,6 +590,10 @@ def main():
     elif a.mode == "sim":
         a.set = a.set_
         sim(a)
+    elif a.mode == "vs":
+        versus(a.paths[0], a.paths[1:])
+    elif a.mode == "spread":
+        spread(a.paths[0])
     else:
         report(a.paths)
 
