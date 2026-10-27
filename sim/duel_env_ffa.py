@@ -265,10 +265,10 @@ FLINCH_PER_DMG, FLINCH_MAX, FLINCH_TAU = _aim("FLINCH_PER_DMG", "flinch_per_dmg"
 SURPRISE_MS = _aim("SURPRISE_MS", "surprise_ms")
 
 
-def surprise_frames(ecc, seen_t):
+def surprise_frames(ecc, seen_t, ms=None):
     """frames more before an enemy who comes into view is noticed: by how far off the crosshair he is (degrees) and by
     whether he was seen or heard in the last two seconds (see the aim ability above)"""
-    return np.rint(SURPRISE_MS * np.clip((ecc - 10.0) / 30.0, 0.0, 1.0) * np.where(seen_t < 2.0, 0.5, 1.0) / 25.0).astype(np.int64)
+    return np.rint((SURPRISE_MS if ms is None else ms) * np.clip((ecc - 10.0) / 30.0, 0.0, 1.0) * np.where(seen_t < 2.0, 0.5, 1.0) / 25.0).astype(np.int64)
 # (2026-10-05, B-93) The tracking delay is an average, not a floor: with an enemy in view he is sharper for a short
 # spell (FOCUS_GAIN frames quicker) while his focus lasts, then slower than the average (FOCUS_LOSS frames) until
 # it has come back. Focus runs down at one second a second with an enemy in view and comes back at FOCUS_REFILL.
@@ -6957,7 +6957,9 @@ class DuelEnv:
         if self.focus_on:                                    # the delay per player: sharp while focus lasts, then dull
             self.focus = np.where(self.acquired, self.focus - DT, self.focus + FOCUS_REFILL * DT)
             self.focus = np.clip(self.focus, -0.5, FOCUS_SECS).astype(np.float32)
-            dly = rf_ + np.where(self.focus > 0, -(int(AIM2_FOCUS_GAIN) if AIM2_FOCUS else FOCUS_GAIN), FOCUS_LOSS)
+            fg_ = self._sa("AIM2_FOCUS_GAIN")
+            fg_ = (np.asarray(fg_).astype(np.int64) if np.ndim(fg_) else int(fg_)) if AIM2_FOCUS else FOCUS_GAIN
+            dly = rf_ + np.where(self.focus > 0, -fg_, FOCUS_LOSS)
             dly = np.where(self.script == 0, np.maximum(dly, 1), rf_)
             L_ = len(self.opp_hist)
             pick = np.maximum(0, L_ - 1 - dly)
@@ -6982,19 +6984,23 @@ class DuelEnv:
         known_w = None                                       # (AIM2_SPLIT) the world picture's place, apart from the aim's
         if AIM2:                                             # (AIM2) his view and the target's bearing kept a frame, for the slip
             self._aim2_note(eye, n)
-        if self.percept_sigma > 0:                           # the enemy is seen a little off from where he is
+        psg_ = self._sa("PERCEPT_SIGMA")                     # (SEAT_AIM: one a seat in a check; else the simulator's own)
+        if np.any(np.asarray(psg_) > 0):                     # the enemy is seen a little off from where he is
             rho = math.exp(-DT / PERCEPT_TAU)
-            self.flinch = (self.flinch * math.exp(-DT / FLINCH_TAU)).astype(np.float32)
-            sig_ = (self.percept_sigma + self.flinch)[:, None]
+            ft_ = self._sa("FLINCH_TAU")
+            self.flinch = (self.flinch * (math.exp(-DT / ft_) if not np.ndim(ft_) else np.exp(-DT / ft_))).astype(np.float32)
+            sig_ = (psg_ + self.flinch)[:, None]
             if ZOOM_PERCEPT:                                 # (ZOOM_PERCEPT) zoomed: the target is judged on a larger picture
-                sig_ = (self.percept_sigma * np.where(np.asarray(self.zoom, bool)[:n], ZOOM, 1.0) + self.flinch)[:, None]
+                sig_ = (psg_ * np.where(np.asarray(self.zoom, bool)[:n], ZOOM, 1.0) + self.flinch)[:, None]
+            a2w_ = self._sa("AIM2_W")
             if AIM2 or AIM2_FOCUS:                           # (AIM2) the base error by focus; zoom on every term
                 zf_ = np.where(np.asarray(self.zoom, bool)[:n], ZOOM, 1.0) if ZOOM_PERCEPT else np.ones(n)
-                b_ = self.percept_sigma * (np.where(self.focus[:n] > 0, AIM2_FOCUS_SIG, 1.0) if (AIM2_FOCUS and self.focus_on) else 1.0)
-                a2_ = (self._aim2_err(n, pick if self.focus_on else None, rf_) * AIM2_W) if AIM2 else 0.0
-                zall_ = (1.0 - AIM2_W * (1.0 - zf_)) if AIM2 else 1.0     # (W = 0: the flinch unscaled as before)
+                b_ = psg_ * (np.where(self.focus[:n] > 0, self._sa("AIM2_FOCUS_SIG"), 1.0) if (AIM2_FOCUS and self.focus_on) else 1.0)
+                a2_ = (self._aim2_err(n, pick if self.focus_on else None, rf_) * a2w_) if AIM2 else 0.0
+                zall_ = (1.0 - a2w_ * (1.0 - zf_)) if AIM2 else 1.0     # (W = 0: the flinch unscaled as before)
                 sig_ = (b_ * zf_ + (self.flinch + a2_) * zall_)[:, None]
-            if PERCEPT_SPEED > 0:                            # a target that crosses the view fast is judged worse
+            psp_ = self._sa("PERCEPT_SPEED")
+            if np.any(np.asarray(psp_) > 0):                 # a target that crosses the view fast is judged worse
                 tb_ = known - eye
                 br_ = np.stack([np.degrees(np.arctan2(tb_[:, 1], tb_[:, 0])),
                                 np.degrees(np.arctan2(tb_[:, 2], np.hypot(tb_[:, 0], tb_[:, 1]) + 1e-6))], 1).astype(np.float32)
@@ -7005,7 +7011,7 @@ class DuelEnv:
                     wh_ = np.asarray(self.weapon)[:len(w_)]
                     cap_ = np.where(wh_ == RG, PERCEPT_SPEED_MAX_RG or PERCEPT_SPEED_MAX,
                                     np.where(wh_ == LG, PERCEPT_SPEED_MAX_LG or PERCEPT_SPEED_MAX, PERCEPT_SPEED_MAX)).astype(np.float32)
-                sig_ = sig_ + (np.minimum(PERCEPT_SPEED * w_, cap_) * ((1.0 - AIM2_W) if AIM2 else 1.0))[:, None]
+                sig_ = sig_ + (np.minimum(psp_ * w_, cap_) * ((1.0 - a2w_) if AIM2 else 1.0))[:, None]
                 self.bearing, self.bearing_ok = br_, visible.copy()
             self.percept = (rho * self.percept + math.sqrt(1.0 - rho * rho) * sig_ *
                             self.rng.normal(0, 1, (n, 2))).astype(np.float32)
@@ -7015,7 +7021,8 @@ class DuelEnv:
             off = np.tan(np.radians(self.percept)) * d_[:, None] * (visible & (self.script == 0))[:, None]
             dk_ = np.stack([-t_[:, 1] / hd_ * off[:, 0], t_[:, 0] / hd_ * off[:, 0], off[:, 1]], 1).astype(np.float32)
             if AIM2_SPLIT:                                   # (AIM2_SPLIT) the world picture keeps (1 - AIM2_SPLIT_W) of it
-                known_w = (known + (1.0 - AIM2_SPLIT_W) * dk_).astype(np.float32)
+                sw_ = self._sa("AIM2_SPLIT_W")
+                known_w = (known + ((1.0 - sw_) if not np.ndim(sw_) else (1.0 - sw_)[:, None]) * dk_).astype(np.float32)
             known = known + dk_
         if AIM2_SPLIT and known_w is None:
             known_w = known.copy()
@@ -7262,6 +7269,21 @@ class DuelEnv:
             v = np.where(np.linalg.norm(v, axis=1, keepdims=True) < VEL_MIN, 0.0, v)
         return v.astype(np.float32)
 
+    SEAT_AIM = ("PERCEPT_SIGMA", "PERCEPT_SPEED", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU", "MOTOR_NOISE", "MOTOR_BASE",
+                "SURPRISE_MS", "AIM2_W", "AIM2_C_SLIP", "AIM2_S0", "AIM2_CAP_SLIP", "AIM2_C_ECC", "AIM2_E0", "AIM2_CAP_ECC",
+                "AIM2_SPLIT_W", "AIM2_FOCUS_GAIN", "AIM2_FOCUS_SIG", "AIM2_FLINCH")
+
+    def _sa(self, name):
+        """(SEAT_AIM, branch aim2) a check that seats two aim models: env.seat_aim = {name: one value a seat} for the names of
+        SEAT_AIM; a name it does not hold, or seat_aim None (the default): the module's value (PERCEPT_SIGMA: the
+        simulator's own percept_sigma), so nothing changes. To seat the old model beside AIM2 the module runs with AIM2,
+        AIM2_SPLIT and AIM2_FOCUS on and the old seats get AIM2_W 0, AIM2_SPLIT_W 0, AIM2_FOCUS_GAIN 2, AIM2_FOCUS_SIG 1,
+        AIM2_FLINCH 0 (the blend's start: the old model exactly, section 7 of docs/v0.5.2/AIM_MODEL.md)"""
+        sa = getattr(self, "seat_aim", None)
+        if sa is not None and name in sa:
+            return np.asarray(sa[name], np.float64)[:self.n]
+        return self.percept_sigma if name == "PERCEPT_SIGMA" else globals()[name]
+
     def _aim2_note(self, eye, n):
         """(AIM2) keeps a frame of his view (yaw, elevation) and of the true bearing to the enemy's acquired place (self.known,
         as opp_hist keeps it), with the acquired flag: the slip and the eccentricity are read from it at his read delay.
@@ -7309,8 +7331,9 @@ class DuelEnv:
         y1, e1, by, bp = (np.radians(h1[:, j]) for j in range(4))
         cosang = np.cos(e1) * np.cos(bp) * np.cos(by - y1) + np.sin(e1) * np.sin(bp)
         ecc = np.where((i1 >= 0) & (h1[:, 4] > 0), np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0))), 0.0)
-        err = (np.minimum(AIM2_C_SLIP * np.maximum(0.0, slip - AIM2_S0), AIM2_CAP_SLIP)
-               + np.minimum(AIM2_C_ECC * np.maximum(0.0, ecc - AIM2_E0), AIM2_CAP_ECC))
+        g_ = self._sa
+        err = (np.minimum(g_("AIM2_C_SLIP") * np.maximum(0.0, slip - g_("AIM2_S0")), g_("AIM2_CAP_SLIP"))
+               + np.minimum(g_("AIM2_C_ECC") * np.maximum(0.0, ecc - g_("AIM2_E0")), g_("AIM2_CAP_ECC")))
         err = err * (self.script[:n] == 0)
         self.a2_last = (slip.astype(np.float32), ecc.astype(np.float32), err.astype(np.float32))
         return err.astype(np.float32)
@@ -11753,11 +11776,15 @@ class DuelEnv:
             self.mv[:, 0] = np.clip(self.mv[:, 0], -TURN_CAP * zs, TURN_CAP * zs)
             if HAND_BAND:                                    # (HAND_BAND) the view follows the hand within its bandwidth
                 v_ = np.where((self.script > 0)[:, None], self.mv, self._hand_band(self.script == 0))
-                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(v_) + MOTOR_BASE * zs[:, None])
+                mn_, mb_ = self._sa("MOTOR_NOISE"), self._sa("MOTOR_BASE")
+                mn_, mb_ = (mn_[:, None] if np.ndim(mn_) else mn_), (mb_[:, None] if np.ndim(mb_) else mb_)
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (mn_ * np.abs(v_) + mb_ * zs[:, None])
                 jit[self.script > 0] = 0.0
                 turn, dpit = v_[:, 0] + jit[:, 0], v_[:, 1] + jit[:, 1]
             else:
-                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (MOTOR_NOISE * np.abs(self.mv) + MOTOR_BASE * zs[:, None])
+                mn_, mb_ = self._sa("MOTOR_NOISE"), self._sa("MOTOR_BASE")
+                mn_, mb_ = (mn_[:, None] if np.ndim(mn_) else mn_), (mb_[:, None] if np.ndim(mb_) else mb_)
+                jit = self.rng.normal(0, 1, self.mv.shape).astype(np.float32) * (mn_ * np.abs(self.mv) + mb_ * zs[:, None])
                 jit[self.script > 0] = 0.0
                 turn, dpit = self.mv[:, 0] + jit[:, 0], self.mv[:, 1] + jit[:, 1]
             turn, dpit = self.pad_turn(turn, dpit, (a[:, 9] == 1) if a.shape[1] > 9 else np.zeros(n, bool), zs, self.script == 0)
@@ -12309,9 +12336,13 @@ class DuelEnv:
         self.dmg_life += dealt
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
         if self.flinch_on and hitby.any():                  # a hit throws the aim off at once, and for a moment after
-            add = np.minimum(FLINCH_MAX, FLINCH_PER_DMG * dmg_taken) * hitby * (self.script == 0)
-            self.flinch = np.minimum(FLINCH_MAX, self.flinch + add).astype(np.float32)
-            if not AIM2_FLINCH:                              # (AIM2_FLINCH: the sustained error only)
+            fm_ = self._sa("FLINCH_MAX")
+            add = np.minimum(fm_, self._sa("FLINCH_PER_DMG") * dmg_taken) * hitby * (self.script == 0)
+            self.flinch = np.minimum(fm_, self.flinch + add).astype(np.float32)
+            af_ = self._sa("AIM2_FLINCH")
+            if np.ndim(af_):                                 # (SEAT_AIM) the kick for the seats without AIM2_FLINCH
+                self.percept = (self.percept + (add * (af_ <= 0))[:, None] * self.rng.normal(0, 1, (n, 2))).astype(np.float32)
+            elif not af_:                                    # (AIM2_FLINCH: the sustained error only)
                 self.percept = (self.percept + add[:, None] * self.rng.normal(0, 1, (n, 2))).astype(np.float32)
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
         self.fb = np.stack([np.minimum(dealt / 100.0, 2.0), np.minimum(dmg_taken / 100.0, 2.0),
