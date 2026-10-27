@@ -19,16 +19,18 @@ import numpy as np
 COMMON = dict(AIM2="1", AIM2_SPLIT="1", AIM2_FOCUS="1", AIM2_FLINCH="1", AIM2_W="1", AIM2_SPLIT_W="1", AIM2_FOCUS_GAIN="0",
               PERCEPT_SPEED="0", PERCEPT_TAU="0.15", AIM_LEVEL="3")
 # name: react_ms, acquire_ms, then the env_vars
-TABLE = {   # (PROVISIONAL, 2026-10-27: default = the first fit to the tournament pros, sw_g1 of docs/v0.5.2/AIM_MODEL.md section 4)
-    "worse": (150, 300, dict(SURPRISE_MS="300", PERCEPT_SIGMA="0.9", AIM2_C_SLIP="0.05", AIM2_S0="5", AIM2_CAP_SLIP="3.5",
+TABLE = {   # FINAL 2026-10-27 18:20: fitted on the pooled pro sample (968 demos, the pros' per-demo distributions), docs/v0.5.2/AIM_MODEL.md
+    "worse": (150, 300, dict(SURPRISE_MS="300", PERCEPT_SIGMA="1.0", AIM2_C_SLIP="0.07", AIM2_S0="0", AIM2_CAP_SLIP="4",
                              AIM2_C_ECC="0.035", AIM2_E0="2", AIM2_CAP_ECC="2", AIM2_FOCUS_SIG="0.85",
-                             FLINCH_PER_DMG="0.15", FLINCH_MAX="4", FLINCH_TAU="0.4", MOTOR_NOISE="0.15", MOTOR_BASE="0.075")),
+                             FLINCH_PER_DMG="0.15", FLINCH_MAX="4", FLINCH_TAU="0.4", MOTOR_NOISE="0.15", MOTOR_BASE="0.075",
+                             VEL_DELAY_MS="300", VEL_WEBER="0.45", RANGE_WEBER="0.25")),
     "default": (100, 200, dict(SURPRISE_MS="200", PERCEPT_SIGMA="0.6", AIM2_C_SLIP="0.035", AIM2_S0="10", AIM2_CAP_SLIP="2.5",
                                AIM2_C_ECC="0.02", AIM2_E0="2", AIM2_CAP_ECC="1", AIM2_FOCUS_SIG="0.75",
                                FLINCH_PER_DMG="0.05", FLINCH_MAX="1.5", FLINCH_TAU="0.3", MOTOR_NOISE="0.10", MOTOR_BASE="0.05")),
-    "better": (75, 150, dict(SURPRISE_MS="150", PERCEPT_SIGMA="0.4", AIM2_C_SLIP="0.02", AIM2_S0="15", AIM2_CAP_SLIP="1.5",
-                             AIM2_C_ECC="0.01", AIM2_E0="3", AIM2_CAP_ECC="0.6", AIM2_FOCUS_SIG="0.7",
-                             FLINCH_PER_DMG="0.02", FLINCH_MAX="0.75", FLINCH_TAU="0.25", MOTOR_NOISE="0.075", MOTOR_BASE="0.0375")),
+    "better": (100, 150, dict(SURPRISE_MS="150", PERCEPT_SIGMA="0.35", AIM2_C_SLIP="0.02", AIM2_S0="15", AIM2_CAP_SLIP="1.5",
+                              AIM2_C_ECC="0.005", AIM2_E0="3", AIM2_CAP_ECC="0.3", AIM2_FOCUS_SIG="0.7", AIM2_FOCUS_GAIN="1",
+                              FLINCH_PER_DMG="0.02", FLINCH_MAX="0.75", FLINCH_TAU="0.25", MOTOR_NOISE="0.075", MOTOR_BASE="0.0375",
+                              VEL_DELAY_MS="150", VEL_WEBER="0.1")),
     # max: AIM_LEVEL 40 takes the sight error, surprise and flinch to ~0; written out as well. The hand AS TRAINED.
     "max": (25, 25, dict(AIM_LEVEL="40", SURPRISE_MS="0", PERCEPT_SIGMA="0", AIM2_C_SLIP="0", AIM2_CAP_SLIP="0", AIM2_C_ECC="0",
                          AIM2_CAP_ECC="0", AIM2_FOCUS_SIG="1", FLINCH_PER_DMG="0", MOTOR_NOISE="0.10", MOTOR_BASE="0.05",
