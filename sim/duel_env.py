@@ -11582,6 +11582,8 @@ class DuelEnv:
             fall = np.where(out_, 0.0, fall)
         fallers = np.nonzero(fall > 0)[0]
         reward -= SWITCH_COST * sw
+        self.stats["w_switch"] = self.stats.get("w_switch", 0.0) + float(np.sum(np.asarray(sw) * (self.script == 0)))   # (v0.5.1: his weapon
+        #                                                    switches, counted whatever the switch cost is: FADE_V takes it to 0)
         self._ps("weapon_switch", reward)
         if HOP_PAY:                                          # speed gained from hop to hop (see HOP_PAY)
             hv_ = np.hypot(s[:, 3], s[:, 4])
