@@ -232,13 +232,14 @@ def _init(mp, tmp):
     os.makedirs(_W["tmp"], exist_ok=True)
 
 
-def _one(demo):
+def _one(job):
     import pro_yardsticks as Y
+    demo, src = job
     try:
         rec, info = Y.parse(demo, _W["tmp"])
         if rec is None:
             return None
-        return rows_of(rec, _W["world"])
+        return rows_of(rec, _W["world"], src=src)                # src: the demo's number (the per-demo spread of the pros)
     except Exception as e:                                      # noqa: BLE001
         print("skip", os.path.basename(demo), repr(e)[:120], file=sys.stderr)
         return None
@@ -264,7 +265,8 @@ def pros(a):
         tmp = tempfile.mkdtemp(prefix="aim2p_")
         t0 = time.time()
         with mp_.Pool(a.procs, initializer=_init, initargs=(mp, tmp)) as pool:
-            res = pool.map(_one, files, chunksize=2)
+            res = pool.map(_one, [(f, 1000 + len(out_s) * 0 + k + 100000 * (1 + a.maps.split(",").index(mp))) for k, f in enumerate(files)],
+                           chunksize=2)
         ok = [r for r in res if r is not None]
         for r in ok:
             out_s.append(r[0])
@@ -286,64 +288,64 @@ def cmd_env(path):
     return env
 
 
+_REC = {}
+
+
+def _recorder(E):
+    """wraps E.DuelEnv.step once: every step's state kept in _REC["B"] (lists of per-frame arrays)"""
+    if getattr(E.DuelEnv, "_aim2_rec", False):
+        return
+    step0 = E.DuelEnv.step
+
+    def step(self, a):
+        out = step0(self, a)
+        B = _REC.setdefault("B", {k: [] for k in ("pos", "vel", "air", "yaw", "pitch", "hp", "ar", "w", "ammo", "duck", "dmg",
+                                                   "died", "a2")})
+        s = self.state
+        B["pos"].append(s[:, :3].copy())
+        B["vel"].append(s[:, 3:6].copy())
+        B["air"].append(s[:, 6] < 0.5)
+        B["yaw"].append(np.asarray(self.yaw, np.float32).copy())
+        B["pitch"].append(np.asarray(self.pitch, np.float32).copy())
+        B["hp"].append(np.asarray(self.hp, np.float32).copy())
+        B["ar"].append(np.asarray(self.armor, np.float32).copy())
+        B["w"].append(np.asarray(self.weapon).copy())
+        B["ammo"].append(np.asarray(self.ammo, np.float32).copy())
+        B["duck"].append(np.asarray(self.duck).copy())
+        B["dmg"].append(np.asarray(self.dmg_life, np.float32).copy())
+        d_ = np.zeros(self.n, bool)
+        for e in out[3]["events"]:
+            d_[int(e["victim"])] = True
+        B["died"].append(d_)
+        a2_ = getattr(self, "a2_last", None)
+        B["a2"].append(np.stack(a2_, 1) if a2_ is not None else np.zeros((self.n, 3), np.float32))
+        return out
+    E.DuelEnv.step = step
+    E.DuelEnv._aim2_rec = True
+
+
 def play(job):
-    """self-play games of a policy on a map -> shot and flick rows of every seat (bobby_yardsticks.play's record)"""
-    envmod, envvars, mp, games, minutes, seed, pol = job
+    """duel_eval.play's games (the network on every seat, the checks' setup) with every frame recorded -> shot and flick
+    rows of every seat, and the AIM2 terms (slip, ecc, error) of the frames they were read on"""
     import pro_yardsticks as Y
-    Y.low_priority()
-    os.environ.update(envvars)
+    import duel_eval as DE
     import importlib
+    Y.low_priority()
+    envmod, envvars = job[0], job[1]
+    os.environ.update(envvars)
     E = importlib.import_module(envmod)
-    import test_suite as TS_
-    nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
-    kw = dict(group=2) if envmod.endswith("ffa") else {}
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
-                    nav=nav_ if os.path.exists(nav_) else None, **kw)
-    TS_.set_delays(E, env, [(np.arange(env.n), float(envvars.get("REACT_MS") or pol.react_ms),
-                             float(envvars.get("ACQUIRE_MS") or pol.acquire_ms))])
-    env.arena_stack = False
-    env.loadout_p = (0.0, 1.0, 0.0, 0.0)
-    env.stack_p = env.near_item_p = env.close_p = env.item_run_p = env.jump_run_p = 0.0
-    env.kind_p, env.bot_p, env.runner_p = (1.0, 0.0, 0.0, 0.0), 0.0, 0.0
-    env.round_t[:] = 1e9
-    n = env.n
-    obs, _, _, _ = env.step(np.zeros((n, len(E.ACTION_DIMS)), np.int64))
-    env.round_len = env.arena_len = 1e9
-    env.round_t[:] = 0.0
-    env.script[:] = 0
-    pol.rng = np.random.default_rng(seed)
-    h = pol.zeros(n)
-    ni = len(pol.mean)
-    frames = int(minutes * 60 / E.DT)
-    nw = len(E.WEAPONS)
-    B = dict(pos=np.zeros((frames, n, 3), np.float32), vel=np.zeros((frames, n, 3), np.float32), air=np.zeros((frames, n), bool),
-             yaw=np.zeros((frames, n), np.float32), pitch=np.zeros((frames, n), np.float32), hp=np.zeros((frames, n), np.float32),
-             ar=np.zeros((frames, n), np.float32), w=np.zeros((frames, n), np.int8), ammo=np.zeros((frames, n, nw), np.float32),
-             duck=np.zeros((frames, n), bool), dmg=np.zeros((frames, n), np.float32), score=np.zeros((frames, n), np.int32),
-             died=np.zeros((frames, n), bool), frag=np.zeros((frames, n), bool))
-    A2 = np.zeros((frames, n, 3), np.float32)
-    score = np.zeros(n, np.int64)
-    for t in range(frames):
-        al, h = pol.act(obs[:, :ni], h)
-        a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
-        a[:, :al.shape[1]] = al
-        obs, _, _, info = env.step(a)
-        for e in info["events"]:
-            v, k = int(e["victim"]), int(e["killer"])
-            B["died"][t, v] = True
-            if k >= 0 and k != v:
-                score[k] += 1
-                B["frag"][t, k] = True
-            else:
-                score[v] -= 1
-        s = env.state
-        B["pos"][t], B["vel"][t], B["air"][t] = s[:, :3], s[:, 3:6], s[:, 6] < 0.5
-        B["yaw"][t], B["pitch"][t], B["hp"][t], B["ar"][t], B["w"][t] = env.yaw, env.pitch, env.hp, env.armor, env.weapon
-        B["ammo"][t], B["duck"][t], B["dmg"][t], B["score"][t] = env.ammo, env.duck, env.dmg_life, score
-        if getattr(env, "a2_last", None) is not None:
-            A2[t] = np.stack(env.a2_last, 1)
-    from qsim import World  # noqa: F401  (env.w is the World)
+    _recorder(E)
+    _REC.clear()
+    DE.play(job)
+    B = {k: np.stack(v) for k, v in _REC["B"].items()}
+    mp = job[2]
+    from qsim import World
+    w = World(os.path.join(ROOT, "data", "maps", mp + ".bsp"))
+    w.add_solids()
+    frames, n = B["hp"].shape
     tm = (np.arange(frames) + 1) * E.DT
+    nw = len(E.WEAPONS)
+    score = np.zeros((frames, n), np.int64)
     S, F = [], []
     for p in range(n):
         o = p ^ 1
@@ -364,13 +366,14 @@ def play(job):
         enemy[B["died"][:, o]] = np.nan
         rec = Y.make_record(t=tm, pos=B["pos"][:, p], vel=B["vel"][:, p], yaw=B["yaw"][:, p], pitch=B["pitch"][:, p],
                             weapon=B["w"][:, p], shots=shots, health=np.where(dead, 0.0, B["hp"][:, p]), armor=B["ar"][:, p],
-                            score=B["score"][:, p], enemy=enemy, enemy_score=B["score"][:, o], clock=tm, alive=alive,
+                            score=score[:, p], enemy=enemy, enemy_score=score[:, o], clock=tm, alive=alive,
                             eye_h=np.where(B["duck"][:, p], 12.0, 26.0), enemy_air=B["air"][:, o].astype(np.int64),
-                            hits=np.cumsum(upd | B["frag"][:, p]))
-        r, f = rows_of(rec, env.w, src=1)
+                            hits=np.cumsum(upd))
+        r, f = rows_of(rec, w, src=1)
         S.append(r)
         F.append(f)
-    a2 = A2[A2[:, :, 0] > 0]
+    a2 = B["a2"].reshape(-1, 3)
+    a2 = a2[a2[:, 0] > 0]
     return mp, np.concatenate(S), np.concatenate(F), a2
 
 
@@ -385,7 +388,12 @@ def sim(a):
     os.environ.update(envvars)
     import test_suite as TS
     pol = TS.Policy(a.policy, seed=1)
-    jobs = [(a.env, envvars, mp, a.games, a.minutes, a.seed + 17 * q, pol) for q, mp in enumerate(a.maps.split(","))]
+    idx = np.arange(len(pol.mean))
+    delays = (pol.react_ms, pol.acquire_ms, pol.react_ms, pol.acquire_ms)
+    if "BRAIN_READ" not in envvars and getattr(pol, "rf_read", False) and pol.rfg > 0:
+        envvars["BRAIN_READ"] = "1"
+    jobs = [(a.env, envvars, mp, a.games, a.minutes, a.seed + 17 * q, pol, idx, "policy", pol, idx, (600.0, 600.0, False), False,
+             delays) for q, mp in enumerate(a.maps.split(","))]
     t0 = time.time()
     S, F, A2 = [], [], []
     with mp_.Pool(min(a.procs, len(jobs)), maxtasksperchild=1) as pool:
@@ -408,6 +416,22 @@ STYLES = (("lightning (tracking)", "lg"), ("machine gun (tracking + spread)", "m
 def _rate(S, m):
     w = S[m, 1]
     return (float((S[m, 2] * w).sum() / w.sum()) * 100.0 if w.sum() > 0 else float("nan")), int(w.sum())
+
+
+def _matched(S, C, mA, mB):
+    """mA's hits against what mB's hit rate by distance band would give mA's shots (100 = no difference)"""
+    d = S[:, C["dist"]]
+    exp_, got_, nA = 0.0, 0.0, 0
+    for lo, hi in ((0, 250), (250, 500), (500, 750), (750, 1100), (1100, 1e9)):
+        b = (d >= lo) & (d < hi)
+        wa, wb = S[mA & b, 1], S[mB & b, 1]
+        if wa.sum() == 0 or wb.sum() < 20:
+            continue
+        rb = (S[mB & b, 2] * wb).sum() / wb.sum()
+        exp_ += wa.sum() * rb
+        got_ += (S[mA & b, 2] * wa).sum()
+        nA += int(wa.sum())
+    return (100.0 * got_ / exp_ if exp_ > 0 else float("nan")), nA
 
 
 def tables(path):
@@ -433,6 +457,16 @@ def tables(path):
         o["took 0 (none in 0.5 s)"] = _rate(S, m0 & (S[:, C["took"]] == 0))
         o["took 1-29"] = _rate(S, m0 & (S[:, C["took"]] > 0) & (S[:, C["took"]] < 30))
         o["took 30+"] = _rate(S, m0 & (S[:, C["took"]] >= 30))
+        calm = m0 & (S[:, C["took"]] == 0)
+        o["after damage (any in 0.5 s), distance-matched, % of calm"] = _matched(S, C, m0 & (S[:, C["took"]] > 0), calm)
+        o["after 30+ damage, distance-matched, % of calm"] = _matched(S, C, m0 & (S[:, C["took"]] >= 30), calm)
+        steady = m0 & (S[:, C["rev"]] >= 0.6)
+        o["0.1-0.2 s after a reversal, distance-matched, % of steady"] = _matched(
+            S, C, m0 & (S[:, C["rev"]] >= 0.1) & (S[:, C["rev"]] < 0.2), steady)
+        o["0.2-0.35 s after a reversal, distance-matched, % of steady"] = _matched(
+            S, C, m0 & (S[:, C["rev"]] >= 0.2) & (S[:, C["rev"]] < 0.35), steady)
+        slow = m0 & (S[:, C["slip"]] < 25)
+        o["slip 50+ deg/s, distance-matched, % of slip under 25"] = _matched(S, C, m0 & (S[:, C["slip"]] >= 50), slow)
         if nm in ("rl", "pg"):
             mm = m0 & np.isfinite(S[:, C["m_along"]]) & (S[:, C["espeed"]] > 200)
             o["miss along med (moving)"] = (float(np.median(S[mm, C["m_along"]])) if mm.any() else float("nan"), int(mm.sum()))
@@ -464,9 +498,78 @@ def report(paths):
             print("| {} | {} |".format(k, " | ".join(cells)))
 
 
+def spread(path, min_shots=None):
+    """the pros' spread: per demo (src) hit rates by weapon, distance-matched to the whole set's rate by band (100 = the
+    pros' average), with the 10th, 50th, 90th percentiles; and the same for the rail's first shot after a sighting"""
+    Z = np.load(path)
+    S = Z["shots"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    print("| weapon | demos | p10 | p25 | median | p75 | p90 | (distance-matched, % of the pros' mean) |")
+    print("|---|---|---|---|---|---|---|---|")
+    for label, nm in STYLES:
+        wq = NAMES.index(nm)
+        m0 = (S[:, 0] == wq) & np.isfinite(S[:, C["dist"]])
+        if m0.sum() < 100:
+            continue
+        mn = min_shots or (300 if nm in ("lg", "mg") else 40 if nm in ("rg", "rl", "pg") else 15)
+        vals = []
+        for d in np.unique(S[m0, C["src"]]):
+            md = m0 & (S[:, C["src"]] == d)
+            if S[md, 1].sum() < mn:
+                continue
+            vals.append(_matched(S, C, md, m0)[0])
+        v = np.array([x for x in vals if np.isfinite(x)])
+        if len(v):
+            print("| {} | {} | {} |".format(nm, len(v), " | ".join("{:.0f}".format(np.percentile(v, q)) for q in (10, 25, 50, 75, 90))))
+
+
+def versus(pro_path, paths):
+    """each file's hits against what the pros' hit rate by distance band would give its shots (100 = pro level), by weapon;
+    the rail's and shotgun's first shot after a sighting by the angle off (the same, by angle band)"""
+    P = np.load(pro_path)["shots"]
+    PF = np.load(pro_path)["flicks"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    print("| weapon (distance-matched, % of the pros) | " + " | ".join(os.path.basename(p) for p in paths) + " |")
+    print("|---|" + "---|" * len(paths))
+    rows = {}
+    for label, nm in STYLES:
+        wq = NAMES.index(nm)
+        cells = []
+        for p in paths:
+            S = np.load(p)["shots"]
+            got, exp_, nA = 0.0, 0.0, 0
+            for lo, hi in ((0, 250), (250, 500), (500, 750), (750, 1100), (1100, 1e9)):
+                bs = (S[:, 0] == wq) & (S[:, C["dist"]] >= lo) & (S[:, C["dist"]] < hi)
+                bp = (P[:, 0] == wq) & (P[:, C["dist"]] >= lo) & (P[:, C["dist"]] < hi)
+                if P[bp, 1].sum() < 20 or S[bs, 1].sum() == 0:
+                    continue
+                rp = (P[bp, 2] * P[bp, 1]).sum() / P[bp, 1].sum()
+                exp_ += S[bs, 1].sum() * rp
+                got += (S[bs, 2] * S[bs, 1]).sum()
+                nA += int(S[bs, 1].sum())
+            cells.append("{:.0f} ({})".format(100 * got / exp_, nA) if exp_ > 0 else "-")
+        print("| {} | {} |".format(nm, " | ".join(cells)))
+    for nm in ("rg", "sg"):
+        wq = NAMES.index(nm)
+        cells = []
+        for p in paths:
+            F = np.load(p)["flicks"]
+            got, exp_, nA = 0.0, 0.0, 0
+            for lo, hi in ((0, 5), (5, 15), (15, 30), (30, 60), (60, 181)):
+                bs = (F[:, 0] == wq) & (F[:, 1] >= lo) & (F[:, 1] < hi)
+                bp = (PF[:, 0] == wq) & (PF[:, 1] >= lo) & (PF[:, 1] < hi)
+                if bp.sum() < 20 or not bs.any():
+                    continue
+                exp_ += bs.sum() * PF[bp, 3].mean()
+                got += F[bs, 3].sum()
+                nA += int(bs.sum())
+            cells.append("{:.0f} ({})".format(100 * got / exp_, nA) if exp_ > 0 else "-")
+        print("| {} first shot after a sighting, angle-matched | {} |".format(nm, " | ".join(cells)))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=("pros", "sim", "report"))
+    ap.add_argument("mode", choices=("pros", "sim", "report", "spread", "vs"))
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--set", default="demos")
     ap.add_argument("--maps", default="bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged")
@@ -487,6 +590,10 @@ def main():
     elif a.mode == "sim":
         a.set = a.set_
         sim(a)
+    elif a.mode == "vs":
+        versus(a.paths[0], a.paths[1:])
+    elif a.mode == "spread":
+        spread(a.paths[0])
     else:
         report(a.paths)
 
