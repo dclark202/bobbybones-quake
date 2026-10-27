@@ -244,7 +244,10 @@ PERCEPT_SIGMA, PERCEPT_TAU = _aim("PERCEPT_SIGMA", "percept_sigma"), _aim("PERCE
 # off for half a second, not for a frame) that grows with how fast the target crosses his view. So for v11 (set by the launch
 # file): a larger error that drifts slowly (PERCEPT_TAU 0.5: the memory cannot average it away as it does the 0.15 s one) and
 # PERCEPT_SPEED degrees more for every degree a second the enemy's direction moves, at most PERCEPT_SPEED_MAX.
-PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), 3.0
+PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), float(os.environ.get("PERCEPT_SPEED_MAX") or 3.0)
+# (2026-10-26, the play build of the new !aim: the cap settable and by weapon, as branch v050aim; 0 = PERCEPT_SPEED_MAX)
+PERCEPT_SPEED_MAX_RG = float(os.environ.get("PERCEPT_SPEED_MAX_RG") or 0.0)
+PERCEPT_SPEED_MAX_LG = float(os.environ.get("PERCEPT_SPEED_MAX_LG") or 0.0)
 # Values since 2026-10-07 20:15 (the first "click", owner: "nudge hitscan aim down 1-2 clicks"): 1.2 degrees, 0.5 s, 0.012.
 # v10 under them in the reflex room, not yet adapted: error on a strafing target 3.0 -> 3.8 degrees (the owner 2.45), time on
 # it 58% -> 54% (40%), lightning damage a second 83 -> 75 (58), first rail shot on a jumping target 74% -> 65% (88%).
@@ -6633,7 +6636,12 @@ class DuelEnv:
                                 np.degrees(np.arctan2(tb_[:, 2], np.hypot(tb_[:, 0], tb_[:, 1]) + 1e-6))], 1).astype(np.float32)
                 dy_ = (br_[:, 0] - self.bearing[:, 0] + 180.0) % 360.0 - 180.0
                 w_ = np.hypot(dy_, br_[:, 1] - self.bearing[:, 1]) / DT * (visible & self.bearing_ok)
-                sig_ = sig_ + np.minimum(PERCEPT_SPEED * w_, PERCEPT_SPEED_MAX)[:, None]
+                cap_ = PERCEPT_SPEED_MAX
+                if PERCEPT_SPEED_MAX_RG > 0 or PERCEPT_SPEED_MAX_LG > 0:     # (the cap by the weapon in hand)
+                    wh_ = np.asarray(self.weapon)[:len(w_)]
+                    cap_ = np.where(wh_ == RG, PERCEPT_SPEED_MAX_RG or PERCEPT_SPEED_MAX,
+                                    np.where(wh_ == LG, PERCEPT_SPEED_MAX_LG or PERCEPT_SPEED_MAX, PERCEPT_SPEED_MAX)).astype(np.float32)
+                sig_ = sig_ + np.minimum(PERCEPT_SPEED * w_, cap_)[:, None]
                 self.bearing, self.bearing_ok = br_, visible.copy()
             self.percept = (rho * self.percept + math.sqrt(1.0 - rho * rho) * sig_ *
                             self.rng.normal(0, 1, (n, 2))).astype(np.float32)

@@ -243,7 +243,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
         self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
         self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
-        self.add_command("aim", self.cmd_aim, 0, usage="[1|2|3|4|5|max]")
+        self.add_command("aim", self.cmd_aim, 0, usage="[worse|default|better|max]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
         if os.environ.get("DUEL_MIND", "") == "1":           # (owner, 2026-10-24: "make it so the mind records the game") on from the start
@@ -1553,18 +1553,21 @@ class duelbot(minqlx.Plugin):
     # policy_l4.npz, policy_l5.npz, policy_max.npz: the same network, AIM_LEVEL and the aim delays in env_vars changed),
     # and the chosen one is copied over policy.npz and loaded at once when no game runs (warmup), else at the next
     # warmup (a game in progress, its countdown, its end and the next map's load keep the aim they started with).
-    AIM_FILES = {"1": "policy_l1.npz", "2": "policy_l2.npz", "3": "policy_l3.npz", "4": "policy_l4.npz", "5": "policy_l5.npz",
-                 "max": "policy_max.npz"}
+    AIM_FILES = {"worse": "policy_worse.npz", "default": "policy_default.npz", "better": "policy_better.npz", "max": "policy_max.npz"}
+    # (2026-10-26, owner: one aim setting, four values; a file names itself by AIM_NAME in its env_vars)
 
     def aim_level(self):
         """the aim level of the network loaded: "1" to "5", "max" (AIM_LEVEL in its env_vars; 40 is max)"""
         try:
-            v = float(json.loads(str(self.P["env_vars"])).get("AIM_LEVEL", 3))
+            ev_ = json.loads(str(self.P["env_vars"]))
         except Exception:                                    # noqa: BLE001 - no network loaded yet
             return "?"
+        if ev_.get("AIM_NAME"):
+            return str(ev_["AIM_NAME"])
+        v = float(ev_.get("AIM_LEVEL", 3))
         return "max" if v > 9 else "{:g}".format(v)
 
-    AIM_DEFAULT = "4"
+    AIM_DEFAULT = "default"
 
     def aim_reset(self):
         """a new map: back to the default aim (owner, 2026-10-22); policy.npz is loaded by setup() once the map is up"""
@@ -1688,12 +1691,12 @@ class duelbot(minqlx.Plugin):
         cur = self.aim_level()
         if len(msg) < 2:
             want = self.aim_want if self.aim_want and self.aim_want != cur else None
-            player.tell("^3Aim level^7 ^2{}^7{} (^2!aim 1-5|max^7 to change)".format(
+            player.tell("^3Aim^7 ^2{}^7{} (^2!aim worse|default|better|max^7 to change)".format(
                 cur, ", ^2{}^7 from the next game".format(want) if want else ""))
             return
         lv = msg[1].lower().strip()
         if lv not in self.AIM_FILES:
-            player.tell("^3Aim levels:^7 ^2!aim 1^7 or ^22^7 relaxed, ^2!aim 3^7 easier, ^2!aim 4^7 normal, ^2!aim 5^7 sharp, "
+            player.tell("^3Aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains, ^2!aim better^7 sharper, "
                         "^2!aim max^7 no human limits")
             return
         if not os.path.exists(os.path.join(D, self.AIM_FILES[lv])):
