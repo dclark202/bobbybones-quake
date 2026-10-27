@@ -891,16 +891,23 @@ class duelbot(minqlx.Plugin):
 
     def add_early(self):
         """(DUEL_EARLY_BOBBY) Bobby in the map's gamestate: added now, in the map hook, once a map; he stands still (zero
-        input) until setup() is done"""
+        input) until setup() is done. A Bobby who came over from the last map (the end-of-game vote, an rcon "map": the game
+        keeps its bots across those; only !map kicks them first) is kicked and added again here, so a person's client learns
+        of him with the map's gamestate and loads his model, not its own (2026-10-27: the bug was still seen after a vote)"""
         try:
+            old = [p.id for p in self.players() if is_bobby(p)]
+            for i in old:                                    # (a bot's seat is freed at once: no zombie state for bots)
+                minqlx.console_command("clientkick {}".format(i))
             if any(is_bobby(p) for p in self.players()):
+                self.log("early add: a Bobby is still there after the kick (seats {}); not added again".format(old))
                 return
             minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5B^7o^5bbyB^7o^5nes\"")
             ids = [p.id for p in self.players() if is_bobby(p)]
             for i in ids:
                 minqlx.set_bot_input(i, 0, 0, 0, 0, 0, 0.0, 0.0)
-            self.log("map {}: BobbyBones added at the map's load (DUEL_EARLY_BOBBY), seat {}".format(
-                (minqlx.get_cvar("mapname") or "").lower(), ids or "not yet seen"))
+            self.log("map {}: BobbyBones added at the map's load (DUEL_EARLY_BOBBY), seat {}{}".format(
+                (minqlx.get_cvar("mapname") or "").lower(), ids or "not yet seen",
+                " (the one carried over from the last map, seat {}, kicked first)".format(old) if old else ""))
         except Exception as e:                               # noqa: BLE001
             self.log("early add: {!r}".format(e))
 
