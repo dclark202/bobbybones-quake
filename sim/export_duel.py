@@ -35,6 +35,7 @@ ap.add_argument("--legs", default="", help="the movement network's run (duel_env
 ap.add_argument("--version", default="", help="the version name the server's welcome shows (default: from the run's name, duel_gru_v0_3_1b -> v0.3.1)")
 ap.add_argument("--updated", default="", help="the date the welcome shows as last updated (default: today, the day of the export and upload)")
 ap.add_argument("--btoken-gate", type=float, default=-1.0, help="(v0.4.1) the brain token's gate in the file (-1: the checkpoint's own; 0: shut, the network as without it)")
+ap.add_argument("--head2-gate", type=float, default=-1.0, help="(v0.4.3) the strategy head's gate in the file (-1: the checkpoint's own; 0: none)")
 ap.add_argument("--rule-fade-g", type=float, default=-1.0, help="(v0.4.2a) the rule fade's gate in the file (-1: the checkpoint's own; 0: none)")
 ap.add_argument("--no-readouts", action="store_true", help="(B-283) leave the brain's readouts ahead and 'in control' out (by default they go in when the "
                 "checkpoint has them: nothing plays from them, the plugin's mind view (!mind on) shows them)")
@@ -144,6 +145,16 @@ if brain and not a.no_readouts:                              # (sim/ahead.py) an
         if nm_ and all("control.{}.{}.{}".format(n_, i_, w_) in sd for n_ in nm_ for i_ in (0, 2) for w_ in ("weight", "bias")):
             mind["control"] = np.array(json.dumps(cl_))
             mind.update({k: v for k, v in sd.items() if k.startswith(tuple("control.{}.".format(n_) for n_ in nm_))})
+head2 = {}                                                   # (v0.4.3, sim/head2.py) the strategy head: its layout as text, its weights
+if ck.get("head2") is not None:                              # (its value is the trainer's alone), the readout ahead and an "in control"
+    assert brain, "the strategy head reads the brain: the checkpoint has no brain token"     # readout it reads; plugins/netpass.py steps it
+    head2 = {"head2": np.array(json.dumps(ck["head2"]))}    # as test_suite.Policy does
+    head2.update({k: v for k, v in sd.items() if k.startswith(("head2.", "ahead.", "control.")) and not k.startswith("head2.v.")})
+    if a.head2_gate >= 0:
+        head2["head2.gate"] = np.array(np.float32(a.head2_gate))
+    assert "head2.plan_in.weight" in head2 and "head2.gate" in head2, "the checkpoint names a strategy head and has no weights for it"
+else:
+    assert a.head2_gate < 0, "--head2-gate: this network has no strategy head"
 rfade = {}                                                   # (v0.4.2a, sim/rule_fade.py) the faded columns and the gate g; plugins/netpass.py
 if ck.get("rule_fade") is not None:                          # fades them as test_suite.Policy does (and with "readers", the simulator's
     rf_ = dict(ck["rule_fade"])                              # readers take the brain's answer: BRAIN_READ in env_vars)
@@ -160,12 +171,13 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
          env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
-         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **mind, **rfade, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **mind, **head2, **rfade, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",
       "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "",
       "| brain: {} numbers in its token, gate {:.4f}".format(json.loads(str(brain["btoken"]))["dim"], json.loads(str(brain["btoken"]))["gate"]) if brain else "",
       "| readouts for the mind view: {}".format(", ".join(k for k in ("ahead", "control") if k in mind) or "none") if brain else "",
+      "| strategy head: gate {:.4f}, plan_in {}".format(float(head2["head2.gate"]), "open" if np.abs(head2["head2.plan_in.weight"]).sum() > 0 else "at zero") if head2 else "",
       "| rule fade: {} columns, g {:.4f}, readers {}".format(len(json.loads(str(rfade["rule_fade"]))["cols"]), json.loads(str(rfade["rule_fade"]))["g"],
                                                             bool(json.loads(str(rfade["rule_fade"])).get("readers"))) if rfade else "")

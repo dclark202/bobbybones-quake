@@ -1,0 +1,16 @@
+{
+ "map": "toxicity",
+ "nodes": 849,
+ "kept": 664,
+ "dropped": {
+  "unreachable": 97,
+  "solid": 5,
+  "hazard": 81,
+  "moved": 0,
+  "fell": 2,
+  "air": 0,
+  "outside": 0
+ },
+ "pro_places": 10000,
+ "heat_top10_share": 0.22635004503668268
+}

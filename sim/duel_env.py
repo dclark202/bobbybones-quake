@@ -245,7 +245,11 @@ PERCEPT_SIGMA, PERCEPT_TAU = _aim("PERCEPT_SIGMA", "percept_sigma"), _aim("PERCE
 # file): a larger error that drifts slowly (PERCEPT_TAU 0.5: the memory cannot average it away as it does the 0.15 s one) and
 # PERCEPT_SPEED degrees more for every degree a second the enemy's direction moves, at most PERCEPT_SPEED_MAX.
 PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), float(os.environ.get("PERCEPT_SPEED_MAX") or 3.0)
-# (2026-10-26, the play build of the new !aim: the cap settable and by weapon, as branch v050aim; 0 = PERCEPT_SPEED_MAX)
+# (v0.5.0: PERCEPT_SPEED_MAX settable, a PLAY_VAR; 3 degrees as before. The calibration of 2026-10-26: at 3 the lightning gun's
+#  hit rate stops falling near 40% whatever PERCEPT_SPEED, the pros' is 33%.)
+# PERCEPT_SPEED_MAX_RG / PERCEPT_SPEED_MAX_LG (v0.5.0, after the review of 2026-10-26; PLAY_VARS and live): the cap with the
+# railgun / the lightning gun in hand (0: PERCEPT_SPEED_MAX). One cap moved both together (cap 5: lightning 37.4%, rail 38.2%,
+# the pros 32.7 / 43.5): a rail shot is a flick, the lightning gun a track. Both 0 = the simulator before, bit for bit.
 PERCEPT_SPEED_MAX_RG = float(os.environ.get("PERCEPT_SPEED_MAX_RG") or 0.0)
 PERCEPT_SPEED_MAX_LG = float(os.environ.get("PERCEPT_SPEED_MAX_LG") or 0.0)
 # Values since 2026-10-07 20:15 (the first "click", owner: "nudge hitscan aim down 1-2 clicks"): 1.2 degrees, 0.5 s, 0.012.
@@ -325,6 +329,32 @@ N_EN = 1                                                   # one more input (the
 HOLD_INTENT, HOLD_SLOTS = 9, 8                             # the first place among the intentions; how many
 TARGETS = float(os.environ.get("TARGETS") or 0.0) > 0
 TARGETS_FREE = int(float(os.environ.get("TARGETS_FREE") or 0.0))
+#   WEAPON_FREE=1  (v0.5.0, a PLAY_VAR; owner 2026-10-26: "Make the loophole fix") a weapon he holds is no target. Weapons come
+#                  back every 5 s and a chosen weapon, once taken, stayed his "done" target with his way and legs still pointing
+#                  at its spawn; choosing it again began no new trip. So a weapon was a free "hold this spawn" order: v0.4.4 sat
+#                  on the lightning gun's (head open) or the rail's (head shut), re-taking it every 5 s for full ammunition and
+#                  keeping it from the enemy (RESULTS 2026-10-26). With the switch: (1) taking the weapon he chose ends the choice
+#                  (a new reading at once, as after a spawn); (2) a reading of a weapon he owns with at least one pickup's worth of
+#                  ammunition (ITEM_DEFS: rockets 10, rail 10, lightning 100) is read as "nothing" (the hands his own, no way to a
+#                  spawn), as the enemy is without HUNT. Going for a weapon he lacks, or to refill one that is low, stays.
+#                  Off: as before, bit for bit.
+WEAPON_FREE = float(os.environ.get("WEAPON_FREE") or 0.0) > 0
+# v0.5.0's other loophole fixes (owner, 2026-10-26, the audit of v0.4.4's simulator; RESULTS 2026-10-26), each off by default:
+#   SPEED_LOS=1        the speed pay (SPEED_PAY) only while the enemy is out of his LINE OF SIGHT: before, out of his view cone
+#                      was enough, so facing away from the enemy kept it coming (a pay for not looking)
+#   GONE_BELIEF=1      a choice held for INTENT_HOLD is let go early when its item is gone and not back in time ("gone"):
+#                      judged by what he knows of the item (ITEM_BELIEF's bel_t), not the truth (a free probe of the item
+#                      clocks out of his sight: a new reading taken early meant "it was taken")
+#   TELEFRAG=1         a teleport that comes out on the other player kills him (the game's G_KillBox; the frag is the
+#                      teleporter's, his damage the victim's whole stack): standing on an exit was safe in the simulator
+#   JRUN_SPEED_BACK=1  a jump run's try that ends without the jump gives back its speed pay (SPEED_PAY_RUN) with the rest
+#   SMALL_ZERO=1       the knowledge pay (KNOW_PAY) and the big weapons' pay by order (BIG_PICK_SEQ) zero-sum: what one
+#                      player gets the other loses (both paid each other's pay before: a pay for peace)
+SPEED_LOS = float(os.environ.get("SPEED_LOS") or 0.0) > 0
+GONE_BELIEF = float(os.environ.get("GONE_BELIEF") or 0.0) > 0
+TELEFRAG = float(os.environ.get("TELEFRAG") or 0.0) > 0
+JRUN_SPEED_BACK = float(os.environ.get("JRUN_SPEED_BACK") or 0.0) > 0
+SMALL_ZERO = float(os.environ.get("SMALL_ZERO") or 0.0) > 0
 HOLD_R, HOLD_Z = 96.0, 64.0
 assert INTENTS[HOLD_INTENT] == "H1" and len(INTENTS) == HOLD_INTENT + HOLD_SLOTS
 # WAYS (stage B part 3, docs/design/V02_STAGE_B.md; owner, 2026-10-11: "Yes"; his "main failure point is that their routes are
@@ -1096,6 +1126,16 @@ RJ_TEACH_PITCH = float(os.environ.get("RJ_TEACH_PITCH") or 60.0)
 #                 average in the tests, so RJ_TEACH's condition (60 or more) was met on no frame. Off: the pull, as before.
 #                 RJ_TEACH_PITCH, RJ_TEACH_R and RJ_LOOK_FREE are live (the trainer's live_settings.env, "frame")
 RJ_LOOK_FREE = float(os.environ.get("RJ_LOOK_FREE") or 0.0)
+#   LEVEL_PULL=x  (B-275, v0.4.3; a PLAY_VAR and a live name) the view's pull toward level: with no enemy in view his pitch is
+#                 times x every frame (env.level reads it; 1.0 = no pull). Unset: 0.95, the pull of 2026-10-03 exactly. The
+#                 phase-out 0.95 -> 0.98 -> 0.99 -> 0.995 -> 1.0 by the run's live.json; the checkpoint's env_vars carry it
+#                 (the trainer's environment), sim/export_duel.py writes it and the plugins set it before loading the simulator.
+_lp_ = os.environ.get("LEVEL_PULL")
+LEVEL_PULL = float(_lp_) if (_lp_ or "").strip() else 0.95
+if not 0.0 <= LEVEL_PULL <= 1.0:
+    raise ValueError("LEVEL_PULL must be within 0 .. 1")
+PLAY_VARS = PLAY_VARS + ("LEVEL_PULL",)
+PLAY_VARS = PLAY_VARS + ("WEAPON_FREE", "GONE_BELIEF", "TELEFRAG", "PERCEPT_SPEED_MAX", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG")                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
 #   RJ_COPY=1     (the owner, 2026-10-23, "option 1": "one route that works that he has to use when he wants to get there") the
 #                 whole route as a lesson: step() gives info["rj_copy"], per player and output (int8, -1 = no label) the scripted
 #                 runner's choice for his NEXT frame in a rocket jump run (RJ_RUN_P), from the try's start to its landing: his
@@ -1463,10 +1503,98 @@ PAY_TERMS = ("jerk", "weapon_switch", "hop", "blind_fire", "move_round", "course
              "dmg_dealt", "dmg_taken", "high", "rail", "style", "item_MH", "item_RA", "item_YA", "item_flat_other", "big_order",
              "item_points", "item_loss", "items_other", "item_seek", "way", "way_claw", "speed", "speed_run", "intent_switch",
              "runs", "stack_diff", "stack_keep", "drops", "know", "frag", "death", "deaths_other", "win_pay", "watch", "preaim",
-             "lg_quiet")
+             "lg_quiet", "win_part")
 PT_IX = {k_: i_ for i_, k_ in enumerate(PAY_TERMS)}
 WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay in games, summed", "its size", "his frames in games",
            "his games' frags (+1) and deaths (-1) counted")
+#   WIN_W=w, WIN_GAIN=G, FADE_V=v   (v0.5.1; live names, all three; 0 / 1 / 0 by default, and with WIN_W and FADE_V both 0
+#                 the simulator is what it was, to the bit: not one draw more, nothing paid otherwise) the cross-fade from the
+#                 pays made by hand to the pay by the chance of winning (the generation's goal, owner 2026-10-23: "pay by win
+#                 chance only"). It applies to the frames of every match with a game under way (self.game > 0 when the
+#                 frame's clock is run, _game_step): whole games (1), late rounds (2), mid-game starts and the pros' and
+#                 people's starts (3; PRO_KIND, to the game's limit with PRO_START_LEN=0, overtime as there), spawn starts and
+#                 short starts (4) and rail starts. The practice rounds with no game keep their own pays as they were: jump
+#                 runs, rocket jump runs, item runs (kind MOVE), the one-weapon and aim rounds (DRILL, AIM), the ordinary
+#                 short NORMAL rounds, the test map's labs and courses (none of them is in v0.5.0's mix but the jump runs).
+#                 In such a frame, per player, the pay is cut in three:
+#                   combat   the flat pay for a frag (+1) and a death (-1) and the damage pay (dealt x dmg_reward less taken x
+#                            dmg_taken_w x dmg_reward): the terms "frag", "death", "dmg_dealt", "dmg_taken";
+#                   win      WIN_SCALE x (p - p before), p his chance of winning by lead and time left (WIN_PAY's rule, its
+#                            own chance as last counted: wb_p, kept up every frame of every game whatever the switches, so
+#                            a WIN_W opened in the middle of a game pays from that frame's chance on);
+#                   other    everything else the frame pays (reward - combat): the item flats (the taker's gain and the
+#                            mates' loss alike), the big three's order, the weapon and target switches, the shot price,
+#                            the view jerk, the fire toggle, blind fire and blind rockets, KNOW_PAY, WATCH_PAY, PREAIM_PAY,
+#                            RAIL_FAR_PAY, HIGH_PAY, STACK_DIFF and the stack keep, drops, the way and its claw, speed,
+#                            LG_QUIET_COST: whatever is in it, no list to keep up;
+#                 and paid  (1 - v) x other + (1 - w) x combat + w x G x win.  r_long (the items' and stack's part, not
+#                 combat, not win) is (1 - v) x r_long: the win part is not in r_long, as WIN_PAY's was not. At w = 1 and
+#                 v = 1 a game's frame pays the win part alone, exactly (0 x other is 0). With WIN_W > 0 or FADE_V > 0 the
+#                 flat frag pay is counted as combat even with WIN_PAY=1 and WIN_PAY's own pay is not added (the blend
+#                 takes its place); WIN_PAY=1 with both at 0 is what it was (the flat frag pay out, the win pay in, damage
+#                 untouched). The trainer's own --info-pay (added to the reward outside the simulator; 0 in v0.5.0) is not
+#                 faded.
+#                 The equilibrium: the win part is zero-sum (the second seat is paid exactly the first seat's amount with
+#                 the other sign) and each frame pays a difference of one function of the score and the clock, so a game's
+#                 win part sums to w x G x WIN_SCALE x (its result 1 / 0.5 / 0 less the chance at its start, or at the
+#                 frame w was last changed) whatever happened on the way: nothing in it can be pumped, and the only way to
+#                 more of it is to win more games. In self-play the fixed point of the win part alone is the policy that
+#                 wins most against the league. The (1 - w) combat part and the (1 - v) other part keep today's behaviour
+#                 while they fade; the overtime's last frame reads 0 s left (_ot_left, fixed 2026-10-24, 4e52053: the fold
+#                 showed 120 s there), so a game decided in overtime pays its outcome. Counters: stats["win_blend"] (WB_COLS,
+#                 his counted seats in such frames, kept whether the blend is on or not, for sizing G); info["win_blend"]
+#                 (blend on: per player [win, combat, the win part paid]); the pay term "win_part" (PAY_SPLIT; the other
+#                 terms scaled with the pay they stand for). sim/win_chance.json is read whenever GAME_ON.
+#   WIN_LONG=1    (live, 0 / 1, default 0; with the blend on) the win part paid (w x G x win) goes into r_long as well: the
+#                 long value (--long-gamma, about two minutes ahead) learns the chance of winning when FADE_V takes the items
+#                 out of r_long. r_long = (1 - v) x r_long + w x G x win in the games' frames.
+#   WIN_STACK=1   (live, 0 / 1, default 0; the coefficients live too, their defaults the fit of 2026-10-26 (held out: the
+#                 win chance's log loss 0.3959 -> 0.3848): WIN_TAU 32.5 s, WIN_PA 2.7546, WIN_PS 300, WIN_PRL 0.4277,
+#                 WIN_PLG 0.4485, WIN_PRG 0.2922) the blend's chance with the stack in it:
+#                 W~ = clip(W(lead, left) + PHI, 0, 1), PHI = (p_next - 0.5) x (W(lead + 1, left) - W(lead - 1, left)) x
+#                 (1 - exp(-left / WIN_TAU)), p_next = sigmoid(WIN_PA x f(d) + WIN_PRL x dRL + WIN_PLG x dLG + WIN_PRG x dRG)
+#                 the chance that the first seat scores the next frag: d his true stack (health + armor) less the other's,
+#                 f(d) = tanh(d / WIN_PS) with WIN_PS > 0 else d / 100, dRL / dLG / dRG the big weapons owned (1 he only, -1
+#                 the other only, 0 both or neither). A dead player (health 0 or less, or waiting to respawn) counts as his
+#                 respawn will have him: SPAWN_HP, no armor, no big weapon (the fit saw both alive only; so PHI does not
+#                 jump at the respawn, it steps once, at the frag, with the score). No intercept: the second seat's W~ is
+#                 1 - the first's exactly (p_next and the lead swap, W(lead + 1) - W(lead - 1) is the same for both), so
+#                 the win part stays zero-sum; PHI is 0 at the game's end (left 0), so a game's win part still sums to
+#                 w x G x WIN_SCALE x (result - W~ at its start) (the start's W~ is taken with the start's stacks: a whole
+#                 game's spawn, a late round's drawn stacks, a pro start's). A pickup, a hit, a weapon taken move the pay on
+#                 that frame. Switched on or off in the middle of a game: one frame's step from W to W~ (or back). Only the
+#                 blend reads it (WIN_PAY and WIN_SHADOW keep the table alone). The trainer's live.json takes numbers of 0
+#                 or more only: a negative coefficient goes by live_settings.env or the run's environment.
+WIN_LIVE = ("WIN_W", "WIN_GAIN", "FADE_V", "WIN_LONG", "WIN_STACK", "WIN_TAU", "WIN_PA", "WIN_PS", "WIN_PRL", "WIN_PLG", "WIN_PRG")
+
+
+def _win_live(get):
+    """(v0.5.1) WIN_W, WIN_GAIN, FADE_V, WIN_LONG and the stack term's names from get(name) -> a string or None (unset: the
+    default); ValueError on a value out of range (the trainer refuses the live file then)"""
+    d_ = dict(WIN_W=0.0, WIN_GAIN=1.0, FADE_V=0.0, WIN_LONG=0.0, WIN_STACK=0.0,      # (the stack term's defaults: the fit of 2026-10-26)
+              WIN_TAU=32.5, WIN_PA=2.7546, WIN_PS=300.0, WIN_PRL=0.4277, WIN_PLG=0.4485, WIN_PRG=0.2922)
+    v = {}
+    for k_, x0_ in d_.items():
+        x_ = get(k_)
+        v[k_] = float(x_) if (x_ or "").strip() else x0_
+        if not np.isfinite(v[k_]):
+            raise ValueError("{}: not a finite number".format(k_))
+    if not 0.0 <= v["WIN_W"] <= 1.0 or not 0.0 <= v["FADE_V"] <= 1.0:
+        raise ValueError("WIN_W and FADE_V must be within 0 .. 1")
+    if not 0.0 < v["WIN_GAIN"] <= 100.0:
+        raise ValueError("WIN_GAIN must be above 0 (at most 100)")
+    if v["WIN_LONG"] not in (0.0, 1.0) or v["WIN_STACK"] not in (0.0, 1.0):
+        raise ValueError("WIN_LONG and WIN_STACK are 0 or 1")
+    if not v["WIN_TAU"] > 0 or v["WIN_PS"] < 0:
+        raise ValueError("WIN_TAU must be above 0 and WIN_PS 0 or more")
+    v["WIN_LONG"], v["WIN_STACK"] = v["WIN_LONG"] > 0, v["WIN_STACK"] > 0
+    return v
+
+
+globals().update(_win_live(os.environ.get))
+WB_COLS = ("his frames in games", "the win part at G = 1 (WIN_SCALE x the change in his chance), summed", "its size",
+           "the combat pay (frags, deaths, damage) before the blend, summed", "its size", "the other pay before the blend: size",
+           "the pay after the blend: size", "frames with the blend on")
 #   OVERTIME=1    Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
 #                 the game's limit (GAME_LEN) with the score level goes on for another OT_LEN seconds, period after period,
 #                 until a period ends with the score not level, or after OT_CAP periods (OVERTIME_CAP, 10): then it is a
@@ -1621,6 +1749,62 @@ RAIL_START_COLS = ("rail starts begun", "asked for with no mid moment saved: a w
 #                 Counters: stats["pro_start"] (PRO_START_COLS).
 PRO_START_P = float(os.environ.get("PRO_START_P") or 0.0)
 PRO_START_LEN = float(os.environ.get("PRO_START_LEN") or 0.0)
+#   PEOPLE_START_SHARE=<share>   (2026-10-25, owner: "a variety of in game starts with different stack, positions and weapons in
+#                 hand ... sample them from actual moments in the games played ... so he knows that 'rail on campgrounds is
+#                 good'"): the share of the pro starts (PRO_START_P) that begin at a moment of a PERSON's duel against Bobby
+#                 instead of a pros' demo: data/people_moments/<map>.npz of tools/people_moments.py (PEOPLE_MOMENTS_DIR), the
+#                 same format and the same code (_pro_start; both players' truth: est 0). A map without the file keeps the
+#                 pros' only; a map with people's moments and no pros' has people's only (at any share above 0). The share is
+#                 of the starts' time: the starts' mean length is the two sources' mean by the share. Read at every draw (live:
+#                 the trainer's live_settings.env); the file is read at the start whenever PRO_START_P is on. 0 (the default):
+#                 not one random draw more, the simulator as before.
+#   MOMENT_WEIGHTED=1    a pro start's moment is drawn by the file's "weight" column (tools/people_moments.py: moments a few
+#                 seconds before a weapon he lacks or a big item is taken, and moments with the map's key weapon owned, count
+#                 more); a file without the column (the pros') is drawn evenly. 0: evenly, as before. Live as well.
+#   GEN_START_SHARE=<share>   (2026-10-25, owner: "a generative way of putting people in random positions, stacks, ammo, weapons
+#                 in possession, on the map some point in time in the game, with all the in game timers in a random state ... make
+#                 sure they get placed in reasonable spots, and then we can bias the sampling toward the things we want to
+#                 encourage"; "new for each round basically unlimited"; places "biased towards [the pros'] heatmaps, but tunable"):
+#                 the share of the pro starts (PRO_START_P) that begin at a GENERATED moment, drawn fresh for every start
+#                 (_gen_moment): the places from sim/gen_places/<map>.npz (tools/gen_places.py: every point of the walking map
+#                 reachable from a spawn and tried in this simulator: free box, no lava / slime / water, stood one second he
+#                 stays on the ground), drawn by the pros' heatmap there (with a uniform share); the clock uniform in
+#                 GEN_T_LO..GEN_T_HI, a score drawn for it, each seat's health, armor, weapons owned, ammunition, weapon in hand,
+#                 life and speed drawn, the enemy at least GEN_APART away, every item up or back in a random part of its
+#                 time (a big item that is back: one of the two took it and knows when). Then it is a pro start in every way
+#                 (_pro_start: both seats' truth, nothing known of the enemy). The bias: GEN_BIAS (default sim/gen_bias.json,
+#                 re-read when it changes, every GEN_RELOAD seconds at most): {"heat": exponent on the pros' heat (0: uniform
+#                 over the safe places), "uniform": share drawn uniformly, "own": the chance a weapon of the map is owned,
+#                 "maps": {map: {"own": {label: + chance}, "hand": {label: weight in hand}, "near": {label: chance the first
+#                 seat starts within GEN_NEAR of that item's spawn}}}}; near an item, it is there and not owned half the
+#                 time (the pickup), owned the other half (its use). Read at every draw (live). 0 (the default): not one
+#                 random draw more, the simulator as before. Counters: stats["gen_start"] (GEN_START_COLS).
+GEN_START_SHARE = float(os.environ.get("GEN_START_SHARE") or 0.0)
+GEN_BIAS = os.environ.get("GEN_BIAS") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_bias.json")
+GEN_PLACES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_places")
+GEN_T_LO, GEN_T_HI, GEN_APART, GEN_NEAR, GEN_RELOAD = 20.0, 580.0, 300.0, 320.0, 30.0
+GEN_FAR = float(os.environ.get("GEN_FAR") or 800.0)        # (owner, 2026-10-25 ~22:45: "make the enemy spawn farther away and out of sight"):
+#                 the enemy of a generated start at least GEN_FAR units away with no line of sight between the two (eye to eye);
+#                 of 40 draws the first that is both, else the farthest unseen one, else the farthest
+GEN_NEAR_S = float(os.environ.get("GEN_NEAR_S") or 3.0)    # (owner, 2026-10-25: "close needs to mean close in the sense of being able to
+#                 walk to it quickly"): "near" an item = a place his ways reach it from in GEN_NEAR_S seconds or less (the route
+#                 field's time: walking, pads, teleporters, the open jumps); an item with no way of its own: within GEN_NEAR units
+GEN_START_COLS = ("generated starts begun", "of them placed near an item by the bias", "weapons owned (both seats, the map's, summed)",
+                  "a big weapon in hand (both seats, summed)", "the bias file read")
+PEOPLE_START_SHARE = float(os.environ.get("PEOPLE_START_SHARE") or 0.0)
+MOMENT_WEIGHTED = int(float(os.environ.get("MOMENT_WEIGHTED") or 0))
+PEOPLE_MOMENTS_DIR = os.environ.get("PEOPLE_MOMENTS_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "people_moments")
+PEOPLE_START_COLS = ("pro starts from people's moments", "... counted seats begun", "... of them playing the person's seat",
+                     "moments drawn by weight (either source)")
+#   RUN_TARGET_W=1   (2026-10-25, owner's go: targeted practice for the items he never picks up): the item runs (ITEM_RUN_P:
+#                 alone on the map from the game's spawn, his intention the target, paid by RUN_SCALE for the way gained and
+#                 RUN_ARRIVE on taking it) draw their target by the map's weights in sim/run_targets.json ({map: {intention
+#                 label: weight}}, tools/run_targets.py: from his own pickups a minute in whole games, the items he takes
+#                 least weigh most) among the items lying there that his ways reach (_run_pick's rule, the walking map with
+#                 its jump pads and teleporters), the next one drawn the same way when he has it. A map without a row in the
+#                 table: evenly, as before. Read at every draw (live). 0 (the default): evenly, not one random draw changed.
+RUN_TARGET_W = int(float(os.environ.get("RUN_TARGET_W") or 0))
+RUN_TARGETS = os.environ.get("RUN_TARGETS") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_targets.json")
 PRO_KIND = 3 if PRO_START_LEN <= 0 else 4                 # (the game kind of its frames: a mid-game start's, or a spawn start's)
 PRO_FRAMES = int(round(PRO_START_LEN / DT))
 PRO_EARLY = 10.0                                           # (the counters: a start's first seconds)
@@ -1800,7 +1984,11 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "HOP_CHAIN", "HOP_CHAIN_MS", "HOP_CHAIN_TOL", "HOP_CHAIN_STEP", "HOP_CHAIN_CAP", "JUMP_EVERY",    # (v0.3.7)
              "BIG_PICK_SEQ", "RG_FAR_PRICE", "RG_FAR_DIST",                                                         # (v0.3.8)
              "JUMP_COST",                                                                                           # (v0.3.9)
-             "LG_QUIET_COST", "WATCH_PAY")                                                                          # (v0.3.10)
+             "LG_QUIET_COST", "WATCH_PAY",                                                                          # (v0.3.10)
+             "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
+             "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
+             "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
+             ) + WIN_LIVE                                                                                           # (v0.5.1, the cross-fade to the win pay)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1822,6 +2010,23 @@ def live_values(get):
     v["WATCH_PAY"] = float(get("WATCH_PAY") or 0.0)
     if v["LG_QUIET_COST"] < 0 or v["WATCH_PAY"] < 0:
         raise ValueError("LG_QUIET_COST and WATCH_PAY must be 0 or more")
+    ps_ = get("PERCEPT_SPEED")                               # (v0.4.4) the fast-target limit, live; unset: the aim level's (0 at every level)
+    v["PERCEPT_SPEED"] = float(ps_) if (ps_ or "").strip() else float(AIM_SET["percept_speed"])
+    if not 0.0 <= v["PERCEPT_SPEED"] <= 0.2:
+        raise ValueError("PERCEPT_SPEED must be within 0 .. 0.2")
+    for k_ in ("PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG"):     # (v0.5.0) the cap by weapon, live; unset: 0 (PERCEPT_SPEED_MAX)
+        v[k_] = float(get(k_) or 0.0)
+        if not 0.0 <= v[k_] <= 20.0:
+            raise ValueError(k_ + " must be within 0 .. 20")
+    lp_ = get("LEVEL_PULL")                                  # (B-275) the view's pull toward level; unset: 0.95
+    v["LEVEL_PULL"] = float(lp_) if (lp_ or "").strip() else 0.95
+    if not 0.0 <= v["LEVEL_PULL"] <= 1.0:
+        raise ValueError("LEVEL_PULL must be within 0 .. 1")
+    bap_ = get("BLIND_AHEAD_P")                              # (v0.4.3) BLIND_AHEAD's chance a life; unset: 1
+    v["BLIND_AHEAD_P"] = float(bap_) if (bap_ or "").strip() else 1.0
+    if not 0.0 <= v["BLIND_AHEAD_P"] <= 1.0:
+        raise ValueError("BLIND_AHEAD_P must be within 0 .. 1")
+    v.update(_win_live(get))                                 # (v0.5.1) the cross-fade to the win pay, its long part, the stack term
     v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
     v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
     v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
@@ -2436,6 +2641,24 @@ PLAY_VARS = PLAY_VARS + ("DUEL_QL", "DQ_JUMP_MS", "DQ_WADE", "DQ_PICK_Z")
 #                  "near where he thinks the enemy is" / "on a way from there" read the brain's place for a life on the brain
 BRAIN_READ = float(os.environ.get("BRAIN_READ") or 0.0) > 0
 BLIND_BRAIN = float(os.environ.get("BLIND_BRAIN") or 0.0) > 0
+#   BLIND_AHEAD=1  (v0.4.3, a training switch beside BLIND_BRAIN; the owner, 2026-10-23: "no cost to spam/prefire where he expects
+#                  the enemy is/will be", "it probably should be 'will be'") for a life on the brain, the waiver also where the
+#                  brain says the enemy WILL BE: its readout ahead (sim/ahead.py "fut": his place in 1, 2 and 4 s, kept in map
+#                  coordinates at the brain's tick; the trainer sends it with the answer, brain_in's "fut") within PREFIRE_R of
+#                  the crosshair's line (a billed hitscan shot, seen_t up to BLIND_AHEAD_T seconds, 6) or within BLIND_NEAR of a
+#                  blind rocket's landing (blind_rl_how's sixth column, "ahead"). A cost waived, never a pay; no answer ahead
+#                  (none sent, a reset, the brain's answer not believed: brain_ok): nothing waived. Off: as before, bit for bit.
+BLIND_AHEAD = float(os.environ.get("BLIND_AHEAD") or 0.0) > 0
+BLIND_AHEAD_T = float(os.environ.get("BLIND_AHEAD_T") or 6.0)
+#   BLIND_AHEAD_P=p  (v0.4.3; a LIVE_VARS name: live.json opens it slowly) with BLIND_AHEAD=1, the chance that a life (drawn at its
+#                  start with BRAIN_READ's draw, brain_draw) has the waiver on "will be": a life on the brain AND drawn with chance
+#                  p. Its own random stream (ahead_rng: the game's and the brain's streams are never touched), one number a seat
+#                  at every life's start whatever p is: p = 0 is exactly BLIND_AHEAD off in play and pay. Unset: 1 (every life on
+#                  the brain, the switch as first built). Counted: stats["ahead_lives"] (his lives begun, with the waiver).
+_bap_ = os.environ.get("BLIND_AHEAD_P")
+BLIND_AHEAD_P = float(_bap_) if (_bap_ or "").strip() else 1.0
+if not 0.0 <= BLIND_AHEAD_P <= 1.0:
+    raise ValueError("BLIND_AHEAD_P must be within 0 .. 1")
 BRAIN_KNOWN = float(os.environ.get("BRAIN_KNOWN") or V02_KNOWN)
 BRAIN_BAND_MID = np.array([37.5, 100.0, 162.5, 250.0], np.float32)    # the stack bands' middles (under 75, 75-124, 125-200, over 200)
 BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
@@ -2538,6 +2761,26 @@ RACE_CAP = 30.0
 if TRACK_RACE:
     assert TRACK_TRUTH, "TRACK_RACE needs TRACK_TRUTH=1"
     AUX_COLS = AUX_COLS + ("race_me_mh", "race_en_mh", "race_me_ra", "race_en_ra")
+# v0.4.3 (B-280; docs/v0.4.3/RUN_v0.4.3.md, "In control"). CONTROL_TRUTH=1 (a training switch, off by default; off: info["aux"]
+# as above and nothing else changes) adds the truth of the brain's readout "in control": his share of the next two spawns of
+# the mega and the red armor (the two kinds together, in the order they come up; an item lying there at the frame is the
+# first). Known only in hindsight, so it is given CONTROL_H seconds late: the row of frame F carries the label of frame
+# F - CONTROL_D (the trainer keeps the brain's state that long). Labels only, never inputs, never paid, never read by the
+# simulator itself:
+#   ctl_lab   of frame F - CONTROL_D, his share of the next two spawns: each 1 taken by him, 0 by the enemy, 0.5 come up and
+#             still lying there CONTROL_H seconds on; their mean. -1, no label: that frame was not a duel's game (a whole game
+#             or a pro start: as trk_on without "alive"), its round ended before both were taken, or the second had not
+#             come up by then (a map without the two), or F < CONTROL_D
+#   ctl_one   the same for the next spawn alone (1, 0, 0.5, -1)
+#   ctl_mh, ctl_ra   the same for the next spawn of the mega alone, of the red armor alone (-1 also: the map has none)
+#   ctl_age   the frames since the last fresh simulator, capped at CONTROL_D + 1: the trainer's check of the alignment
+#   ctl_ok    1: THIS frame will have a label CONTROL_D frames on if its spawns resolve (a duel's game; not delayed)
+CONTROL_TRUTH = float(os.environ.get("CONTROL_TRUTH") or 0.0) > 0
+CONTROL_H = float(os.environ.get("CONTROL_H") or 90.0)
+CONTROL_D = int(round(CONTROL_H / DT))
+CONTROL_M = 16                                             # instances kept per match and item
+if CONTROL_TRUTH:
+    AUX_COLS = AUX_COLS + ("ctl_lab", "ctl_one", "ctl_age", "ctl_ok", "ctl_mh", "ctl_ra")
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -2555,6 +2798,7 @@ ITEM_DEFS = {
     "ammo_cells": ("am", PG, 40, 50, None), "ammo_hmg": ("am", HMG, 40, 50, None),
     "ammo_pack": ("pack", 0, 40, 0, None),
 }
+WEAPON_PICK_AMMO = {d[1]: float(d[3]) for d in ITEM_DEFS.values() if d[0] == "wp"}     # (WEAPON_FREE) one pickup's ammunition
 PACK_AMMO = np.array([5, 5, 50, 50, 5, 5, 50, 50, 0], np.float32)
 # AMMO_PACKS=0: no universal ammo packs. The maps carry them next to the normal ammo boxes (7 on Blood Run, 6 on Aerowalk,
 # 4 on Lost World), but a duel server does not spawn them: plugins/itemlab.py listed every item of the real game on three
@@ -2980,6 +3224,15 @@ class RouteField:
 
 
 class DuelEnv:
+    @property
+    def level(self):
+        """(B-275) the view's pull toward level a frame with no enemy in view: LEVEL_PULL (live), unless a tool set env.level"""
+        return LEVEL_PULL if getattr(self, "_level", None) is None else self._level
+
+    @level.setter
+    def level(self, v):
+        self._level = None if v is None else float(v)
+
     def __init__(self, bsp, n_matches=256, seed=0, substeps=(8, 8, 9), dmg_reward=0.004, nav=None, close_p=0.0,
                  loadout="full", drill_weapons=(RL, RG, LG), teacher=None):
         """close_p: chance a respawn lands 300-700 units from the opponent with line of sight (curriculum).
@@ -3039,7 +3292,7 @@ class DuelEnv:
         self.spawns = np.array([e["origin"] for e in sp_], np.float32)
         self.spawn_yaw = np.array([float(e.get("angle", 0)) for e in sp_], np.float32)
         self.close_p = close_p
-        self.level = 0.95                               # pitch eases back toward level (1.0 = off). 0.99 let it drift to floor/sky
+        self._level = None                              # pitch eases back toward level (1.0 = off): the property level, LEVEL_PULL
         self.drill_p = 0.0                              # share of rounds where both players have ONE weapon
         self.drill_weapons = tuple(drill_weapons)
         self.mode = np.full(n_matches, -1, np.int64)    # per match: -1 = normal, else the only weapon allowed
@@ -3389,6 +3642,15 @@ class DuelEnv:
         self.jrun_past = np.zeros(self.n, bool)             # ... he has landed at the jump's landing (over it or not): the item is the goal
         self.jump_lab_off = np.zeros(0, bool)               # ... per jump: no teacher's labels before its landing (sim/jump_labels.json)
         self.jump_run_p = float(os.environ.get("JUMP_RUN_P") or 0.0)  # share of the playing time in jump runs
+        self.run_tw = None                                  # ... the map's weights by intention (None: no row for this map)
+        try:
+            with open(RUN_TARGETS, encoding="utf-8") as fh_:
+                rt_ = json.load(fh_).get(os.path.splitext(os.path.basename(bsp))[0].lower())
+            if isinstance(rt_, dict) and rt_:
+                self.run_tw = {INTENTS.index(k_): float(v_) for k_, v_ in rt_.items() if k_ in INTENTS and float(v_) > 0}
+                self.run_tw = self.run_tw or None
+        except (OSError, ValueError):
+            pass
         self.jrun = np.zeros(self.n, bool)                  # in a jump run
         self.jrun_k = np.zeros(self.n, np.int64)            # ... the jump his try is for
         self.jrun_t = np.zeros(self.n, np.float32)          # ... the seconds the try has left
@@ -3885,7 +4147,7 @@ class DuelEnv:
                           hand_g=np.zeros(NW),                            # ... in games alone (not in one-weapon rounds)
                           hand_w=np.zeros(NW), blind_w=np.zeros(NW),      # frames with each weapon in hand; frames firing it with no enemy seen for a second
                           speed_pay=0.0, speed_pay_run=0.0, speed_frames=0, move_teach_frames=0,
-                          blind_rl=0, blind_rl_how=np.zeros(5), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way, at one of the pros' places
+                          blind_rl=0, blind_rl_how=np.zeros(6 if BLIND_AHEAD else 5), prefire_frames=0, blind_bill=0,   # blind rockets: wasted, a jump, near, on a way, at one of the pros' places
                           vs_persona=np.zeros((3, len(PERSONAS))), fall_dmg=0.0, duck_frames=0, walk_frames=0)      # rows: frags against, deaths to, frames
         for wn in WEAPONS:
             self.stats[wn + "_shots"] = 0               # shots, ticks or pellets fired
@@ -3965,6 +4227,7 @@ class DuelEnv:
         self._game_init()
         self._v02_init(bsp)
         self._es_init()
+        self.stats["run_item"] = np.zeros(1 + len(INTENTS))  # (RUN_TARGET_W) item runs begun, targets drawn by the table by intention
         if MOMENTS:                                          # (MID_START_P, SPAWN_START_P) the saved moments of whole games
             self._moment_init(seed)
         if RAIL_START_P > 0:                                 # (RAIL_START_P) the pros' long rail places of this map
@@ -4627,6 +4890,8 @@ class DuelEnv:
             self.brain_ztop = np.full(n, -1, np.int16)
             self.brain_rng = np.random.default_rng([int(getattr(self, "brain_seed", 0)), 0xB4A1])
             self.brain_tick = 0
+            self.ahead_life = np.zeros(n, bool)          # (BLIND_AHEAD_P) the life's draw for the waiver on "will be"
+            self.ahead_rng = np.random.default_rng([int(getattr(self, "brain_seed", 0)), 0xA4EAD])
 
     def set_brain_g(self, g):
         """(BRAIN_READ) each seat's chance that a life begun from now on reads the brain's answer: a number or [n]"""
@@ -4641,11 +4906,17 @@ class DuelEnv:
         u = self.brain_rng.random(len(ii))
         v = (u < self.brain_g[ii]) if on is None else np.broadcast_to(np.asarray(on, bool), (len(ii),))
         self.brain_life[ii] = v
+        if BLIND_AHEAD:                                      # (BLIND_AHEAD_P) the waiver on "will be" for this life: its own stream
+            va_ = v & (self.ahead_rng.random(len(ii)) < BLIND_AHEAD_P)
+            self.ahead_life[ii] = va_
         st = getattr(self, "stats", None)
         if st is not None and getattr(self, "script", None) is not None and hasattr(self, "count_even"):
             c = (self.script[ii] == 0) & self._counted(ii)
             st.setdefault("brain_lives", np.zeros(2))
             st["brain_lives"] += (float(c.sum()), float((c & v).sum()))
+            if BLIND_AHEAD:
+                st.setdefault("ahead_lives", np.zeros(2))
+                st["ahead_lives"] += (float(c.sum()), float((c & va_).sum()))
 
     def brain_in(self, ans):
         """(BRAIN_READ) the brain's answer of this frame for every seat (btoken.answer_of: bel [n, 3] map coordinates, ok [n],
@@ -4657,6 +4928,8 @@ class DuelEnv:
         self.brain_ok[:] = np.asarray(ans["ok"], bool)
         self.brain_band[:] = np.asarray(ans["band"], np.float32)
         self.brain_ztop[:] = np.asarray(ans.get("ztop", np.full(self.n, -1)), np.int16)
+        if "fut" in ans:                                     # (BLIND_AHEAD) the brain's places ahead (1, 2, 4 s; map) [n, 3, 3]
+            self.brain_fut = np.asarray(ans["fut"], np.float32).reshape(self.n, -1, 3).copy()
 
     def _brain_count(self, key, rows):
         """(BRAIN_READ) a reader read these seats: his seats counted, those on the brain"""
@@ -4711,6 +4984,18 @@ class DuelEnv:
         if not on.any():
             return None
         return on, self.brain_bel[r], self.brain_ok[r]
+
+    def _blind_fut(self, rows):
+        """(BLIND_AHEAD) for the seats rows: (on the brain with an answer ahead [m], the brain's places ahead [m, 3, 3]); None:
+        none (switch off, no answer ahead ever sent, no seat on the brain with one). Not counted again (_blind_src counts)"""
+        if not (BRAIN_READ and BLIND_BRAIN and BLIND_AHEAD) or getattr(self, "brain_fut", None) is None:
+            return None
+        self._brain_init()
+        r = np.asarray(rows, np.int64)
+        on = self.brain_life[r] & self.brain_ok[r] & self.ahead_life[r]     # (BLIND_AHEAD_P: the life drawn for it)
+        if not on.any():
+            return None
+        return on, self.brain_fut[r]
 
     def _brain_err_count(self):
         """(BRAIN_READ) every eighth frame: the place error of the rule's belief and of the brain's answer, his seats in a
@@ -5507,6 +5792,10 @@ class DuelEnv:
                     p_ = self._big_seq(i, b_, had)
                     reward[i] += p_
                     self.r_long[i] += p_
+                    if SMALL_ZERO and p_:                    # (SMALL_ZERO) the other loses as much
+                        for o_ in self._mates(i):
+                            reward[o_] -= p_
+                            self.r_long[o_] -= p_
             elif BIG_PICK > 0:                               # (v0.3.1) the big three once a life, nothing else
                 b_ = (RL, LG, RG).index(int(w)) if int(w) in (RL, LG, RG) else -1
                 if b_ >= 0 and not self.big_got[i, b_] and not (BIG_ONCE and self.big_got[i].any()):
@@ -5520,6 +5809,8 @@ class DuelEnv:
             want_ = WEAPONS[w].upper()
             if want_ in INTENTS and self.intent[i] == INTENTS.index(want_) and not self.intent_done[i]:
                 self.intent_done[i] = True                               # he has what he was going for
+                if WEAPON_FREE:
+                    self.intent_new[i] = True                            # (WEAPON_FREE) the choice ends: a new reading at once
                 self.stats["intent_trips"][1] += 1
                 self.stats["intent_reach"] += float(self.intent_t[i])
 
@@ -6310,6 +6601,10 @@ class DuelEnv:
         if not EN_ON:                                        # (the enemy as a target: only with the switch, FIGHT_TARGET or HUNT)
             choice = np.where(choice == EN_INTENT, 0, choice)
         choice = np.where(choice >= HOLD_INTENT + self.hold_n, 0, choice)     # (a holding place: only with TARGETS, and one the map has)
+        if WEAPON_FREE:                                      # (v0.5.0) a weapon he holds with a pickup's worth of ammunition: "nothing"
+            for w_, lab_ in ((RL, "RL"), (RG, "RG"), (LG, "LG")):
+                full_ = self.has[:n, w_] & (self.ammo[:n, w_] >= WEAPON_PICK_AMMO[w_])
+                choice = np.where((choice == INTENTS.index(lab_)) & full_, 0, choice)
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD) | self.intent_gone     # a choice holds (INTENT_HOLD)
         if TARGETS_FREE == 1:                                # (a holding place can be left at any reading, as "nothing")
             may = may | (self.intent >= HOLD_INTENT)
@@ -8442,6 +8737,10 @@ class DuelEnv:
                     if tb[nl] <= by and (tb[nl] + R.from_node(nl)[me] <= tb[me] + BLIND_SLACK
                                          or bool((tb[nl] + R.T[:len(self.route_goal), nl] <= R.T[:len(self.route_goal), nb] + BLIND_SLACK).any())):
                         how = 3
+            if not how and BLIND_AHEAD:                      # (BLIND_AHEAD) near where the brain says he will be in 1, 2 or 4 s
+                fu_ = self._blind_fut([i])
+                if fu_ is not None and bool(fu_[0][0]) and float(np.linalg.norm(fu_[1][0] - L[None, :], axis=1).min()) < BLIND_NEAR:
+                    how = 5
             self.stats["blind_rl"] += 1
             self.stats["blind_rl_how"][how] += 1
             if not how:
@@ -8549,6 +8848,90 @@ class DuelEnv:
                 self.ws_tab = (p_, float(left_[1]), D_)
                 self.ws_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)
                 self.stats["win_shadow"] = np.zeros(len(WS_COLS))
+        # (WIN_W / FADE_V, v0.5.1) the blend's own chance, kept up in every game whatever the switches (they are live)
+        self.wb_tab, self.wb_scale = None, 0.0
+        self.wb_p = np.full(self.M, 0.5, np.float64)
+        self.wb_raw = np.zeros(self.n, np.float64)           # this frame's win part at G = 1, per player
+        self.wb_cb = np.zeros(self.n, np.float64)            # this frame's combat pay (frags, deaths, damage), per player
+        self.wb_gm = np.zeros(self.n, bool)                  # this frame: a game under way in his match
+        self.wb_left = np.zeros(self.M)                      # the seconds left the blend's chance read this frame, per match
+        if GAME_ON:
+            f_ = os.environ.get("WIN_CHANCE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "win_chance.json")
+            if os.path.exists(f_):
+                with open(f_, encoding="utf-8") as fh_:
+                    wc_ = json.load(fh_)
+                p_ = np.array(wc_["p"], np.float64)
+                left_, d_ = np.array(wc_["left_s"], np.float64), np.array(wc_["diffs"], np.int64)
+                D_ = int(d_[-1])
+                assert p_.shape == (len(left_), len(d_)) and np.array_equal(d_, np.arange(-D_, D_ + 1)), "win_chance.json: the table's shape"
+                assert left_[0] == 0.0 and np.allclose(np.diff(left_), left_[1]) and abs(left_[-1] - GAME_LEN) < 1e-6, "win_chance.json: the time steps"
+                assert np.abs(p_ + p_[:, ::-1] - 1.0).max() < 1e-9, "win_chance.json: p(-d) must be 1 - p(d)"
+                assert np.array_equal(p_[0], np.where(d_ > 0, 1.0, np.where(d_ < 0, 0.0, 0.5))), "win_chance.json: 1 / 0.5 / 0 at the limit"
+                self.wb_tab = (p_, float(left_[1]), D_)
+                self.wb_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)
+                self.stats["win_blend"] = np.zeros(len(WB_COLS))
+
+    def _wb_on(self):
+        """(WIN_W / FADE_V) is the blend on in this frame's games?"""
+        if not (GAME_ON and (WIN_W > 0 or FADE_V > 0)):
+            return False
+        if self.wb_tab is None:
+            raise RuntimeError("WIN_W / FADE_V: no win_chance.json (or no whole games: GAME_P / LATE_P)")
+        return True
+
+    def _wb_chance(self, m, left):
+        """(WIN_W) the blend's chance for the first seat of matches m with `left` seconds to play: W(lead, left) of
+        win_chance.json, and with WIN_STACK the stack term on it (see WIN_STACK): clip(W + PHI, 0, 1), PHI = (p_next - 0.5)
+        x (W(lead + 1) - W(lead - 1)) x (1 - exp(-left / WIN_TAU)), p_next = sigmoid(WIN_PA x f(stack difference) +
+        WIN_PRL x dRL + WIN_PLG x dLG + WIN_PRG x dRG), the true stacks (health + armor) and the big weapons owned (-1 / 0 / 1)"""
+        m = np.atleast_1d(np.asarray(m, np.int64))
+        g_ = self._others_arr().shape[1] + 1
+        a_, b_ = m * g_, m * g_ + 1
+        d_ = (self.frags_r[a_] - self.frags_r[b_]).astype(np.float64)
+        left = np.broadcast_to(np.asarray(left, np.float64), m.shape)
+        W_ = self._win_p(d_, left, tab=self.wb_tab)
+        if not WIN_STACK:
+            return W_
+        dead_ = (self.hp <= 0) | (self.rsp_wait > 0)          # (a dead player as his respawn will have him: the spawn's
+        st_ = lambda i_: np.where(dead_[i_], SPAWN_HP, np.asarray(self.hp[i_], np.float64) + np.asarray(self.armor[i_], np.float64))
+        ds_ = st_(a_) - st_(b_)                               # health, no armor, no big weapon; the fit has both alive only)
+        f_ = np.tanh(ds_ / WIN_PS) if WIN_PS > 0 else ds_ / 100.0
+        hv_ = lambda w_: np.where(dead_[a_], 0.0, self.has[a_, w_].astype(np.float64)) - np.where(dead_[b_], 0.0, self.has[b_, w_].astype(np.float64))
+        z_ = WIN_PA * f_ + WIN_PRL * hv_(RL) + WIN_PLG * hv_(LG) + WIN_PRG * hv_(RG)
+        pn_ = 1.0 / (1.0 + np.exp(-z_))
+        dW_ = self._win_p(d_ + 1.0, left, tab=self.wb_tab) - self._win_p(d_ - 1.0, left, tab=self.wb_tab)
+        return np.clip(W_ + (pn_ - 0.5) * dW_ * (1.0 - np.exp(-np.maximum(left, 0.0) / WIN_TAU)), 0.0, 1.0)
+
+    def _wb_blend(self, reward, info):
+        """(WIN_W / FADE_V) the frame's pay in the games cut into combat, win and other and paid by the blend (see WIN_W)"""
+        gm = self.wb_gm
+        on = self._wb_on()
+        WB = self.stats.get("win_blend")
+        if not gm.any() or WB is None:
+            return
+        r64 = np.asarray(reward, np.float64)
+        oth = r64 - self.wb_cb
+        new = r64
+        if on:
+            w_, v_, g_ = float(WIN_W), float(FADE_V), float(WIN_GAIN)
+            paid_ = w_ * g_ * self.wb_raw
+            new = np.where(gm, (1.0 - v_) * oth + (1.0 - w_) * self.wb_cb + paid_, r64)
+            reward[gm] = new[gm]
+            if v_ > 0 or WIN_LONG:                           # (WIN_LONG) the win part into r_long too
+                rl_ = np.asarray(self.r_long[gm], np.float64) * (1.0 - v_) + (paid_[gm] if WIN_LONG else 0.0)
+                self.r_long[gm] = rl_.astype(self.r_long.dtype)
+            info["win_blend"] = np.stack([self.wb_raw, self.wb_cb, np.where(gm, paid_, 0.0)], 1).astype(np.float32)
+            if PAY_SPLIT:                                    # the terms scaled with the pay they stand for
+                cb_ix = [PT_IX[k_] for k_ in ("frag", "death", "dmg_dealt", "dmg_taken")]
+                sc_ = np.full(len(PAY_TERMS), 1.0 - v_)
+                sc_[cb_ix] = 1.0 - w_
+                sc_[PT_IX["win_part"]] = 0.0
+                self.pt[gm] *= sc_
+                self.pt[gm, PT_IX["win_part"]] = paid_[gm]
+        c_ = gm & self._counted(np.arange(self.n)) & (self.script[:self.n] == 0)
+        WB += (float(c_.sum()), float(self.wb_raw[c_].sum()), float(np.abs(self.wb_raw[c_]).sum()), float(self.wb_cb[c_].sum()),
+               float(np.abs(self.wb_cb[c_]).sum()), float(np.abs(oth[c_]).sum()), float(np.abs(np.asarray(new)[c_]).sum()),
+               float(c_.sum()) if on else 0.0)
 
     def _win_p(self, d, left, tab=None):
         """the chance of winning the game for a player d frags ahead with `left` seconds to play (win_chance.json: a
@@ -8595,6 +8978,7 @@ class DuelEnv:
         self.game[m] = 2 if late else 1
         self.g_tick[m], self.round_t[m], self.g_p[m] = 0, 0.0, 0.5
         self.ws_p[m] = 0.5
+        self.wb_p[m] = 0.5
         if OVERTIME:
             self.g_ot[m] = 0
         self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
@@ -8604,6 +8988,8 @@ class DuelEnv:
             self.load_sets[int(i)] = ()                     # the game's spawn: machine gun and gauntlet
         self._spawn(int(q[0]), avoid=None)
         self._spawn(int(q[1]), avoid=self.w.state()[int(q[0]), :3])
+        if WIN_STACK and self.wb_tab is not None:            # (WIN_STACK) the blend's chance at the start with the spawned stacks
+            self.wb_p[m] = float(self._wb_chance(m, GAME_LEN)[0])
         self.item_up[m], self.item_t[m] = True, 0.0
         self.contest_t[m] = -1.0
         if STAGGER_START and not late and self.stag_first[m]:      # (STAGGER_START) the match's first whole game: a drawn point of its clock
@@ -8613,6 +8999,8 @@ class DuelEnv:
                 self.g_p[m] = float(self._win_p(np.zeros(1), np.array([GAME_LEN - t_ * DT]))[0])
             if self.ws_tab is not None:
                 self.ws_p[m] = float(self._win_p(np.zeros(1), np.array([GAME_LEN - t_ * DT]), tab=self.ws_tab)[0])
+            if self.wb_tab is not None:
+                self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - t_ * DT)[0])
             self.stats["stagger"] += (1.0, t_ * DT)
         if not late:
             self.stag_first[m] = False
@@ -8648,6 +9036,8 @@ class DuelEnv:
         self.g_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT)) if self.win_tab is not None else 0.5
         if self.ws_tab is not None:
             self.ws_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT, tab=self.ws_tab))
+        if self.wb_tab is not None:
+            self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - LATE_AT)[0])
         for it in range(self.nI):
             kind, val, resp, cap, lab = self.item_def[it]
             p_ = LATE_DOWN[0] if lab in ("MH", "RA", "YA", "GA") else LATE_DOWN[1] if kind == "wp" else LATE_DOWN[2]
@@ -8672,6 +9062,8 @@ class DuelEnv:
         self.win_pay[:] = 0.0
         if WIN_SHADOW:
             self.win_shadow[:] = 0.0
+        self.wb_raw[:] = 0.0
+        self.wb_gm[:] = False
         gm = np.nonzero(self.game > 0)[0]
         if not len(gm):
             return
@@ -8685,12 +9077,25 @@ class DuelEnv:
         G = self.stats["games"]
         G[13] += int((self.game[gm] == 1).sum())
         G[14] += int((self.game[gm] == 2).sum())
+        if self.wb_tab is not None:                          # (WIN_W / FADE_V) the win part at G = 1, kept up whatever the switches
+            gb_ = self._others_arr().shape[1] + 1
+            ab_, bb_ = gm * gb_, gm * gb_ + 1
+            self.wb_gm[ab_], self.wb_gm[bb_] = True, True
+            lb_ = GAME_LEN - self.g_tick[gm] * DT
+            if OVERTIME:                                     # (the period's last frame: 0 s left, _ot_left)
+                lb_ = np.where(self.g_tick[gm] > GAME_FRAMES, self._ot_left(self.g_tick[gm], self.round_t[gm]), lb_)
+            self.wb_left[:] = 0.0
+            self.wb_left[gm] = lb_
+            pb_ = self._wb_chance(gm, lb_)
+            yb_ = self.wb_scale * (pb_ - self.wb_p[gm])
+            self.wb_p[gm] = pb_
+            self.wb_raw[ab_], self.wb_raw[bb_] = yb_, -yb_
         if self.ws_tab is not None:                          # (WIN_SHADOW) what WIN_PAY would pay this frame: recorded, never paid
             gw_ = self._others_arr().shape[1] + 1
             aw_, bw_ = gm * gw_, gm * gw_ + 1
             lw_ = GAME_LEN - self.g_tick[gm] * DT
             if OVERTIME:
-                lw_ = np.where(self.g_tick[gm] > GAME_FRAMES, GAME_LEN - self.round_t[gm].astype(np.float64), lw_)
+                lw_ = np.where(self.g_tick[gm] > GAME_FRAMES, self._ot_left(self.g_tick[gm], self.round_t[gm]), lw_)
             pw_ = self._win_p(self.frags_r[aw_] - self.frags_r[bw_], lw_, tab=self.ws_tab)
             yw_ = self.ws_scale * (pw_ - self.ws_p[gm])
             self.ws_p[gm] = pw_
@@ -8706,15 +9111,25 @@ class DuelEnv:
         a_, b_ = gm * g_, gm * g_ + 1
         left_ = GAME_LEN - self.g_tick[gm] * DT
         if OVERTIME:                                         # (OVERTIME) in a period: the seconds left in it
-            left_ = np.where(self.g_tick[gm] > GAME_FRAMES, GAME_LEN - self.round_t[gm].astype(np.float64), left_)
+            left_ = np.where(self.g_tick[gm] > GAME_FRAMES, self._ot_left(self.g_tick[gm], self.round_t[gm]), left_)
         p = self._win_p(self.frags_r[a_] - self.frags_r[b_], left_)
         pay = self.win_scale * (p - self.g_p[gm])
         self.g_p[gm] = p
+        if self._wb_on():                                    # (WIN_W / FADE_V) the blend pays the win part in its place
+            return
         reward[a_] += pay
         reward[b_] -= pay
         self.win_pay[a_], self.win_pay[b_] = pay, -pay
         self.g_win[a_] += pay
         self.g_win[b_] -= pay
+
+    def _ot_left(self, tick, round_t):
+        """(OVERTIME, WIN_PAY / WIN_SHADOW) the seconds left in the period for frames past the limit: the folded clock's, except
+        on a period's last frame (tick GAME_FRAMES + k * OT_FRAMES), where the fold shows the next period's start (120 s) but
+        the period is over: 0 there, so a game decided in overtime pays its outcome (1 / 0, a draw 0.5) on its last frame
+        (until 2026-10-24 it read 120 s there: the last frame paid the wrong amount, even the wrong sign)"""
+        last_ = (np.asarray(tick, np.int64) - GAME_FRAMES) % OT_FRAMES == 0
+        return np.where(last_, 0.0, GAME_LEN - np.asarray(round_t).astype(np.float64))
 
     def _ot_fold(self, tick):
         """(OVERTIME) a game's frame past the limit as the plugin shows it: the last OT_LEN seconds again, period after
@@ -8959,6 +9374,7 @@ class DuelEnv:
         self.rail_m = np.zeros(self.M, bool)                 # (RAIL_START_P) match m is in a rail start
         self.rail_pairs = None                               # ... the map's pairs of places (None: no rail starts here)
         self.pro_mo = None                                   # (PRO_START_P) the map's pro moments (None: no pro starts here)
+        self.ppl_mo = None                                   # (PEOPLE_START_SHARE) the map's moments of people's duels (None: none)
 
     def _rail_start_init(self, bsp):
         """(RAIL_START_P) the map's pairs of places (sim/rail_pairs/<map>.json; none on a map without a railgun), the books"""
@@ -8974,19 +9390,188 @@ class DuelEnv:
             self.rail_pairs = np.array([p_[:10] for p_ in pr_["pairs"]], np.float32)
 
     def _pro_start_init(self, bsp):
-        """(PRO_START_P) the map's moments of the pros' duels (sim/pro_moments/<map>.npz; none: no pro starts here), each
-        of the file's items matched to this simulator's (same class, within PRO_ITEM_R units), the books"""
+        """(PRO_START_P) the map's moments of the pros' duels (sim/pro_moments/<map>.npz; none: no pro starts here) and of
+        people's (PEOPLE_START_SHARE: PEOPLE_MOMENTS_DIR/<map>.npz), each file's items matched to this simulator's (same
+        class, within 48 units), the books"""
         self.stats["pro_start"] = np.zeros(len(PRO_START_COLS))
+        self.stats["people_start"] = np.zeros(len(PEOPLE_START_COLS))
         self.pro_mm = np.zeros(self.M, bool)                 # match m is in a pro start
         self.pro_t0 = np.zeros(self.M, np.int64)             # ... the game's frame it began at
         self.pro_s0 = np.zeros(self.n, np.float32)           # ... each seat's score at its start
         self._pro_put = []
-        f_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_moments", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
-        if not os.path.exists(f_) or getattr(self, "lab", None) is not None:
+        if getattr(self, "lab", None) is not None:
             return
+        mapn_ = os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz"
+        self.pro_mo = self._moments_load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro_moments", mapn_), "pro starts")
+        if self.pro_mo is not None:
+            self.pro_mean = self._moments_mean(self.pro_mo)
+        self.ppl_mo = self._moments_load(os.path.join(PEOPLE_MOMENTS_DIR, mapn_), "people's starts")
+        if self.ppl_mo is not None:
+            self.ppl_mean = self._moments_mean(self.ppl_mo)
+        self._gen_init(os.path.join(GEN_PLACES_DIR, mapn_))
+
+    def _gen_init(self, f_):
+        """(GEN_START_SHARE) the map's safe places and the pros' heat on them (none: no generated starts here), the books"""
+        self.stats["gen_start"] = np.zeros(len(GEN_START_COLS))
+        self.gen_pl, self.gen_bias, self.gen_bt, self.gen_bm = None, {}, -1e9, None
+        self.gen_map = os.path.splitext(os.path.basename(f_))[0]
+        if not os.path.exists(f_):
+            return
+        with np.load(f_) as z_:
+            pos_, heat_ = z_["pos"].astype(np.float32), z_["heat"].astype(np.float64)
+        if len(pos_) < 8:
+            return
+        self.gen_pl, self.gen_heat = pos_, heat_
+        self.gen_near = {}                                   # (label -> the places his ways reach that item from quickly, its index)
+        R_ = getattr(self, "route", None)
+        node_ = None
+        if R_ is not None:                                   # (each place's nearest point of the walking map)
+            node_ = np.array([int(np.linalg.norm(R_.nodes - p_, axis=1).argmin()) for p_ in pos_])
+        for it in range(self.nI):
+            lab_ = self.item_def[it][4]
+            if lab_ and lab_ not in self.gen_near:
+                if node_ is not None and it in self.route_item:
+                    g_ = self.route_item.index(it)
+                    ix_ = np.nonzero(R_.T[g_, node_] <= GEN_NEAR_S)[0]
+                else:
+                    ix_ = np.nonzero(np.linalg.norm(pos_ - self.item_pos[it], axis=1) <= GEN_NEAR)[0]
+                if len(ix_):
+                    self.gen_near[lab_] = (ix_, it)
+        self.gen_mean = float(GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)) if PRO_START_LEN <= 0 else float(min(PRO_START_LEN, GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)))
+
+    def _gen_bias_now(self):
+        """(GEN_START_SHARE) the bias file, re-read when it changed (at most every GEN_RELOAD seconds); its place weights"""
+        import time as _t
+        now_ = _t.time()
+        if now_ - self.gen_bt >= GEN_RELOAD:
+            self.gen_bt = now_
+            try:
+                mt_ = os.path.getmtime(GEN_BIAS)
+            except OSError:
+                mt_ = None
+            if mt_ != getattr(self, "gen_mt", None) or self.gen_bm is None:
+                self.gen_mt = mt_
+                b_ = {}
+                if mt_ is not None:
+                    try:
+                        with open(GEN_BIAS, encoding="utf-8") as fh_:
+                            b_ = json.load(fh_)
+                    except (OSError, ValueError):
+                        b_ = self.gen_bias                   # (a file being written: the last one stays)
+                self.gen_bias = b_ if isinstance(b_, dict) else {}
+                h_ = np.power(self.gen_heat, float(self.gen_bias.get("heat", 1.0)))
+                h_ = h_ / h_.sum() if h_.sum() > 0 else np.full(len(h_), 1.0 / len(h_))
+                u_ = float(np.clip(self.gen_bias.get("uniform", 0.1), 0.0, 1.0))
+                self.gen_bm = np.cumsum((1.0 - u_) * h_ + u_ / len(h_))
+                self.stats["gen_start"][4] += 1
+        return self.gen_bias
+
+    def _gen_place(self, rng, among=None):
+        c_ = self.gen_bm
+        if among is not None:
+            w_ = np.diff(np.concatenate([[0.0], c_]))[among]
+            return int(among[min(len(among) - 1, int(np.searchsorted(np.cumsum(w_), rng.random() * w_.sum(), side="right")))])
+        return min(len(c_) - 1, int(np.searchsorted(c_, rng.random() * c_[-1], side="right")))
+
+    def _gen_moment(self):
+        """(GEN_START_SHARE) a new generated moment in the moments' format (one row; the items in this simulator's order)"""
+        rng, B = self.rng_mom, self._gen_bias_now()
+        mb_ = (B.get("maps") or {}).get(self.gen_map) or {}
+        own_b, hand_b, near_b = mb_.get("own") or {}, mb_.get("hand") or {}, mb_.get("near") or {}
+        base_own = float(np.clip(B.get("own", 0.5), 0.0, 1.0))
+        clock = float(rng.uniform(GEN_T_LO, GEN_T_HI))
+        tot = int(rng.poisson(clock / 60.0 * rng.uniform(1.0, 3.0)))
+        a_ = int(rng.binomial(tot, rng.beta(2.5, 2.5)))
+        P = dict(clock=np.array([clock], np.float32), score=np.array([[a_, tot - a_]], np.int16),
+                 pos=np.zeros((1, 2, 3), np.float32), vel=np.zeros((1, 2, 3), np.float32), yaw=np.zeros((1, 2), np.float32),
+                 pitch=np.zeros((1, 2), np.float32), hp=np.zeros((1, 2), np.float32), armor=np.zeros((1, 2), np.float32),
+                 has=np.zeros((1, 2, NW), bool), ammo=np.zeros((1, 2, NW), np.int16), weapon=np.zeros((1, 2), np.int8),
+                 life=np.zeros((1, 2), np.float32), est=np.zeros((1, 2), np.int8),
+                 item_left=np.zeros((1, self.nI), np.float32), item_who=np.full((1, self.nI), -1, np.int8),
+                 imap=np.arange(self.nI, dtype=np.int64))
+        near_it, near_lab = -1, None                         # (the bias: the first seat near an item's spawn)
+        labs_ = [l_ for l_ in near_b if l_ in self.gen_near]
+        if labs_:
+            ps_ = np.array([max(0.0, float(near_b[l_])) for l_ in labs_])
+            if ps_.sum() > 0.6:
+                ps_ = ps_ * (0.6 / ps_.sum())
+            u_ = rng.random()
+            c_ = np.cumsum(ps_)
+            if u_ < c_[-1]:
+                near_lab = labs_[int(np.searchsorted(c_, u_, side="right"))]
+        if near_lab is not None:
+            ix_, near_it = self.gen_near[near_lab]
+            j0 = self._gen_place(rng, ix_)
+        else:
+            j0 = self._gen_place(rng)
+        p0 = self.gen_pl[j0]
+        cand_ = np.array([self._gen_place(rng) for _ in range(40)])
+        d_ = np.linalg.norm(self.gen_pl[cand_] - p0, axis=1)
+        eye_ = np.array([0.0, 0.0, 26.0], np.float32)
+        seen_ = self.w.lines(np.repeat((p0 + eye_)[None, :], len(cand_), 0), self.gen_pl[cand_] + eye_) >= 0.999
+        ok_ = np.nonzero((d_ >= GEN_FAR) & ~seen_)[0]
+        if len(ok_):
+            j1 = int(cand_[ok_[0]])
+        elif (~seen_).any():
+            j1 = int(cand_[np.nonzero(~seen_)[0][int(np.argmax(d_[~seen_]))]])
+        else:
+            j1 = int(cand_[int(np.argmax(d_))])
+        big_ = [w_ for w_ in self.map_weapons if w_ not in (MG, G)]
+        GS_ = self.stats["gen_start"]
+        for s_, j_ in enumerate((j0, j1)):
+            P["pos"][0, s_] = self.gen_pl[j_]
+            yaw_ = float(rng.uniform(-180.0, 180.0))
+            P["yaw"][0, s_], P["pitch"][0, s_] = yaw_, float(rng.uniform(-15.0, 15.0))
+            if rng.random() < 0.5:
+                sp_, a2_ = float(rng.uniform(0.0, 320.0)), math.radians(float(rng.uniform(-180.0, 180.0)))
+                P["vel"][0, s_, :2] = (sp_ * math.cos(a2_), sp_ * math.sin(a2_))
+            u_ = rng.random()
+            P["hp"][0, s_] = rng.uniform(25, 75) if u_ < 0.25 else rng.uniform(75, 125) if u_ < 0.70 else rng.uniform(125, 200)
+            u_ = rng.random()
+            P["armor"][0, s_] = 0.0 if u_ < 0.30 else rng.uniform(1, 50) if u_ < 0.60 else rng.uniform(50, 100) if u_ < 0.85 else rng.uniform(100, 200)
+            has_ = P["has"][0, s_]
+            has_[MG] = has_[G] = True
+            for w_ in big_:
+                pw_ = min(0.95, base_own + max(0.0, float(own_b.get(WEAPONS[w_].upper(), 0.0))))
+                has_[w_] = rng.random() < pw_
+            if s_ == 0 and near_lab is not None and self.item_def[near_it][0] == "wp":
+                has_[int(self.item_def[near_it][1])] = rng.random() < 0.5     # (half: the pickup, half: its use)
+            for w_ in np.nonzero(has_)[0]:
+                if w_ != G:
+                    P["ammo"][0, s_, w_] = int(round(float(rng.uniform(0.25, 1.0)) * float(AMMO_MAX[w_])))
+            cand_ = [w_ for w_ in big_ if has_[w_]]
+            wt_ = [max(0.0, float(hand_b.get(WEAPONS[w_].upper(), 1.0))) for w_ in cand_]
+            cand_.append(MG)
+            wt_.append(0.4)
+            wt_ = np.array(wt_, np.float64)
+            P["weapon"][0, s_] = cand_[min(len(cand_) - 1, int(np.searchsorted(np.cumsum(wt_), rng.random() * wt_.sum(), side="right")))]
+            P["life"][0, s_] = float(rng.uniform(0.0, min(clock, 100.0)))
+            GS_[2] += float(has_[big_].sum()) if big_ else 0.0
+            GS_[3] += float(int(P["weapon"][0, s_]) != MG)
+        for it in range(self.nI):
+            resp_ = float(self.item_def[it][2])
+            if it == near_it:
+                continue                                     # (the item the bias put him near: it is there)
+            if rng.random() >= 0.55:
+                P["item_left"][0, it] = float(rng.uniform(0.0, resp_))
+                if self.item_def[it][4] in ("MH", "RA", "YA"):
+                    P["item_who"][0, it] = int(rng.random() < 0.5)
+        GS_[0] += 1
+        GS_[1] += float(near_lab is not None)
+        return P
+
+    @staticmethod
+    def _moments_mean(P):
+        return float(np.mean(GAME_LEN - P["clock"])) if PRO_START_LEN <= 0 else float(np.mean(np.minimum(PRO_START_LEN, GAME_LEN - P["clock"])))
+
+    def _moments_load(self, f_, what):
+        """a moments file (tools/pro_moments.py, tools/people_moments.py) as a dict with its items matched to this
+        simulator's (imap), or None (no file, no moments, a big item not matched)"""
+        if not os.path.exists(f_):
+            return None
         z_ = np.load(f_)
         if not len(z_["clock"]):
-            return
+            return None
         P = {k_: np.asarray(z_[k_]) for k_ in z_.files}
         cls_ = [e_["classname"] for e_ in self.w.entities if e_.get("classname") in ITEM_DEFS and "origin" in e_]
         fcls, fpos = [str(c_) for c_ in P["item_cls"]], P["item_pos"].astype(np.float32)
@@ -9000,19 +9585,55 @@ class DuelEnv:
                     imap[j_] = cand[int(np.argmin(d_))]
                     used.add(int(imap[j_]))
         if (imap < 0).any() and any(self.item_def[j_][4] in ("MH", "RA", "YA") for j_ in np.nonzero(imap < 0)[0]):
-            print("pro starts: the items of {} do not match this simulator's (a big item missing): none here".format(f_), flush=True)
-            return
+            print("{}: the items of {} do not match this simulator's (a big item missing): none here".format(what, f_), flush=True)
+            return None
         P["imap"] = imap
         P["item_left"] = P["item_left"].astype(np.float32)
-        self.pro_mo = P                                      # (a dict: no array of it is taken into a saved moment)
-        self.pro_mean = float(np.mean(GAME_LEN - P["clock"])) if PRO_START_LEN <= 0 else \
-            float(np.mean(np.minimum(PRO_START_LEN, GAME_LEN - P["clock"])))
+        if "weight" in P:                                    # (MOMENT_WEIGHTED) the draw's running sum
+            w_ = np.maximum(P["weight"].astype(np.float64), 0.0)
+            P["wcum"] = np.cumsum(w_) if w_.sum() > 0 else None
+        return P                                             # (a dict: no array of it is taken into a saved moment)
 
-    def _pro_start(self, m, k):
+    def _pro_ok(self):
+        """(PRO_START_P) this map has pro starts now: the pros' moments, or people's with PEOPLE_START_SHARE on"""
+        return self.pro_mo is not None or (PEOPLE_START_SHARE > 0 and self.ppl_mo is not None) or (GEN_START_SHARE > 0 and getattr(self, "gen_pl", None) is not None)
+
+    def _pro_mean_now(self):
+        """(PRO_START_P) the starts' mean length (for the shares): the pros' as before, or the two sources' by the share"""
+        g_ = GEN_START_SHARE if getattr(self, "gen_pl", None) is not None else 0.0
+        if self.pro_mo is None and self.ppl_mo is None:
+            return self.gen_mean
+        s_ = PEOPLE_START_SHARE if self.ppl_mo is not None else 0.0
+        if s_ <= 0:
+            m_ = self.pro_mean
+        elif self.pro_mo is None:
+            m_ = self.ppl_mean
+        else:
+            m_ = (1.0 - s_) * self.pro_mean + s_ * self.ppl_mean
+        return m_ if g_ <= 0 else (1.0 - g_) * m_ + g_ * self.gen_mean
+
+    def _pro_pick(self):
+        """(PRO_START_P) the source (0 the pros, 1 people: PEOPLE_START_SHARE) and the moment of a new pro start; with both
+        switches off one draw, as before"""
+        rng, src = self.rng_mom, 0
+        if GEN_START_SHARE > 0 and getattr(self, "gen_pl", None) is not None and (self.pro_mo is None and self.ppl_mo is None or rng.random() < GEN_START_SHARE):
+            return 2, 0                                      # (GEN_START_SHARE) a generated moment, made at the start itself
+        if PEOPLE_START_SHARE > 0 and self.ppl_mo is not None:
+            src = 1 if (self.pro_mo is None or rng.random() < PEOPLE_START_SHARE) else 0
+        P = self.ppl_mo if src else self.pro_mo
+        if MOMENT_WEIGHTED and P.get("wcum") is not None:
+            c_ = P["wcum"]
+            k = min(len(c_) - 1, int(np.searchsorted(c_, rng.random() * c_[-1], side="right")))
+            self.stats["people_start"][3] += 1
+        else:
+            k = int(rng.integers(len(P["clock"])))
+        return src, k
+
+    def _pro_start(self, m, k, src=0):
         """(PRO_START_P) match m, just begun as a whole game (its round's reset done), is put at pro moment k: which seat
         plays which pro drawn evenly; places, speeds, views, stacks, weapons, the score, the clock and the items as the
         moment has them; each seat knows the items its pro took (when they are back) and nothing of the enemy"""
-        P, rng, PS_ = self.pro_mo, self.rng_mom, self.stats["pro_start"]
+        P, rng, PS_ = (self._gen_moment() if src == 2 else self.ppl_mo if src else self.pro_mo), self.rng_mom, self.stats["pro_start"]
         q = [int(x) for x in self._seats(m)]
         flip = int(rng.random() < 0.5)
         ok_w = np.zeros(NW, bool)
@@ -9049,6 +9670,9 @@ class DuelEnv:
             if bool(self._counted(i)):
                 PS_[14] += 1
                 PS_[15] += float(P["est"][k, s_] > 0)
+                if src == 1:                                 # (PEOPLE_START_SHARE) seat 1 of a people's moment is the person
+                    self.stats["people_start"][1] += 1
+                    self.stats["people_start"][2] += float(s_ == 1)
         qa = np.array(q)
         self.g_tick[m], self.round_t[m] = tick, np.float32(tick * DT)
         self.game[m] = PRO_KIND
@@ -9062,6 +9686,8 @@ class DuelEnv:
         self.g_p[m] = float(self._win_p(d, GAME_LEN - tick * DT)) if self.win_tab is not None else 0.5
         if self.ws_tab is not None:
             self.ws_p[m] = float(self._win_p(d, GAME_LEN - tick * DT, tab=self.ws_tab))
+        if self.wb_tab is not None:
+            self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - tick * DT)[0])
         im_, L_, W_ = P["imap"], P["item_left"][k], P["item_who"][k]
         for it in range(self.nI):
             c_ = int(im_[it])
@@ -9095,6 +9721,8 @@ class DuelEnv:
         self.pro_mm[m] = True
         self.pro_t0[m] = tick
         PS_[0] += 1
+        if src == 1:
+            self.stats["people_start"][0] += 1
         PS_[13] += abs(float(d))
         PS_[16] += tick * DT
 
@@ -9112,7 +9740,7 @@ class DuelEnv:
         kp0 = float(self.kind_p[0])
         rm, rs = kp0 * MID_START_P / MID_MEAN, kp0 * SPAWN_START_P / SPAWN_START_LEN
         rr = kp0 * RAIL_START_P / RAIL_MEAN if self.rail_pairs is not None else 0.0     # (RAIL_START_P: rail range starts)
-        rp = kp0 * PRO_START_P / self.pro_mean if PRO_START_P > 0 and self.pro_mo is not None else 0.0     # (PRO_START_P: pro starts)
+        rp = kp0 * PRO_START_P / self._pro_mean_now() if PRO_START_P > 0 and self._pro_ok() else 0.0     # (PRO_START_P: pro starts)
         if rg + rl + rm + rs + rr + rp <= 0:
             return False
         u = self.rng.random() * (r0 + rg + rl + rx + rm + rs + rr + rp)
@@ -9123,7 +9751,7 @@ class DuelEnv:
             return True
         if u >= rg + rl + rm + rs + rr:                      # (PRO_START_P) a pro start: a whole game's start, then the moment
             self._game_start(m, late=False)                  # (after the round's reset: _pro_start)
-            self._pro_put.append((int(m), int(self.rng_mom.integers(len(self.pro_mo["clock"])))))
+            self._pro_put.append((int(m),) + self._pro_pick()[::-1])     # (m, moment, source: PEOPLE_START_SHARE)
             return True
         kd = 3 if u < rg + rl + rm else 4 if u < rg + rl + rm + rs else 5
         bank = self.mom_bank[0 if kd == 4 else 1]            # (the bank: spawn moments, mid-game moments; a rail start: a mid moment)
@@ -9375,8 +10003,8 @@ class DuelEnv:
                 rs_ = float(self.kind_p[0]) * SPAWN_START_P / SPAWN_START_LEN if MOMENTS else 0.0
                 if MOMENTS and self.rail_pairs is not None:  # (RAIL_START_P: rail range starts)
                     rs_ += float(self.kind_p[0]) * RAIL_START_P / RAIL_MEAN
-                if PRO_START_P > 0 and self.pro_mo is not None:     # (PRO_START_P: pro starts)
-                    rs_ += float(self.kind_p[0]) * PRO_START_P / self.pro_mean
+                if PRO_START_P > 0 and self._pro_ok():       # (PRO_START_P: pro starts)
+                    rs_ += float(self.kind_p[0]) * PRO_START_P / self._pro_mean_now()
                 other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
         p = self.item_run_p + pj + pr
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
@@ -9409,6 +10037,8 @@ class DuelEnv:
             else:
                 self._spawn(int(i), avoid=None)
         self.state = self.w.state()
+        if RUN_TARGET_W and not (jump or rj):               # (RUN_TARGET_W) the item runs, counted
+            self.stats["run_item"][0] += 1
         for i in (() if (jump or rj) else q):
             self._run_pick(int(i))
         return q
@@ -9510,6 +10140,8 @@ class DuelEnv:
         if self.route_goal[g] in ("MH", "RA"):
             self.it_t[i, 0 if self.route_goal[g] == "MH" else 1] = 99.0
         self.jrun_it[i], self.jrun_paid[i], self._replaced = self.route_item[g], 0.0, True
+        if getattr(self, "jrun_spd", None) is not None and len(self.jrun_spd) == self.n:
+            self.jrun_spd[i] = 0.0                           # (JRUN_SPEED_BACK) a new try's speed pay counts from nothing
         self.run_k[i] = INTENTS.index(self.route_goal[g])
         self.intent_new[i], self.intent_done[i] = True, True     # the target is read at once
         self.jrun_k[i], self.jrun_t[i] = k, 2.0 * float(J.T[g, node]) + JUMP_TRY_SLACK
@@ -10121,6 +10753,12 @@ class DuelEnv:
         ks = [k for k, gi in gk.items() if gi >= 0 and k != self.run_k[i] and Tr[gi, node] < 1e8]
         ok = [k for k in ks if self.item_up[m, self.route_item[gk[k]]] and Tr[gk[k], node] > 1.0]
         ok = ok or ks
+        if ok and RUN_TARGET_W and self.run_tw is not None:  # (RUN_TARGET_W) by the map's weights (evenly if none of them is here)
+            w_ = np.array([self.run_tw.get(int(k), 0.0) for k in ok], np.float64)
+            self.run_k[i] = int(ok[int(self.rng.choice(len(ok), p=w_ / w_.sum()))]) if w_.sum() > 0 else int(self.rng.choice(ok))
+            self.stats["run_item"][1 + int(self.run_k[i])] += 1
+            self.intent_new[i], self.intent_done[i] = True, True
+            return
         self.run_k[i] = int(self.rng.choice(ok)) if ok else 0
         self.intent_new[i], self.intent_done[i] = True, True     # the new target is read at once
 
@@ -10687,7 +11325,94 @@ class DuelEnv:
         if "win_game" in C and self._hd_live():             # (HEAD_EVENTS) the win label (labels only)
             out[:, C["win_game"]] = self.hd_gid_ran
             out[:, C["win_band"]] = self.hd_band
+        if CONTROL_TRUTH:                                    # (CONTROL_TRUTH) no label here: step()'s _ctl_step gives it
+            out[:, C["ctl_lab"]] = -1.0
+            out[:, C["ctl_one"]] = -1.0
+            out[:, C["ctl_mh"]] = -1.0
+            out[:, C["ctl_ra"]] = -1.0
         return out
+
+    def _ctl_step(self, done, out):
+        """(CONTROL_TRUTH) once a frame at the end of step(): the books of the mega's and the red armor's spawns (who took
+        each), and the label "in control" of the frame CONTROL_D ago into out (info["aux"]; see CONTROL_TRUTH). State kept
+        for this only: no random number, nothing else reads it"""
+        n, D, M = self.n, CONTROL_D, CONTROL_M
+        oth = self._others_arr()
+        per = oth.shape[1] + 1
+        G = n // per
+        grp = np.arange(n) // per
+        if getattr(self, "ctl_sp", None) is None or self.ctl_sp.shape[0] != G:
+            self.ctl_f = 0                                   # frames since the books began
+            self.ctl_rnd = np.zeros(G, np.int64)             # the round each match is in (a count of its ends)
+            self.ctl_sp = np.zeros((G, 2, M), np.int64)      # per match and item: an instance's spawn frame,
+            self.ctl_tk = np.full((G, 2, M), np.iinfo(np.int64).max, np.int64)   # the frame it was taken (max: not yet),
+            self.ctl_by = np.full((G, 2, M), -1, np.int64)   # by whom, its round (-1: an empty slot)
+            self.ctl_rn = np.full((G, 2, M), -1, np.int64)
+            self.ctl_open = np.full((G, 2), -1, np.int64)    # the slot of the instance lying there now (-1: none)
+            self.ctl_next = np.zeros((G, 2), np.int64)       # the next slot to write
+            self.ctl_q_ok = np.zeros((D, n), bool)           # the last D frames: a duel's game, the round
+            self.ctl_q_rn = np.zeros((D, G), np.int64)
+        F = self.ctl_f
+        for i_, k_ in getattr(self, "aux_take", ()):         # 1. this frame's takes close the instance lying there
+            g_ = int(grp[i_])
+            s_ = self.ctl_open[g_, k_]
+            if s_ >= 0:
+                self.ctl_tk[g_, k_, s_], self.ctl_by[g_, k_, s_] = F, int(i_)
+                self.ctl_open[g_, k_] = -1
+        dg_ = np.zeros(G, bool)                              # 2. a round's end: what lies there stays untaken in that round
+        np.logical_or.at(dg_, grp, np.asarray(done, bool))
+        self.ctl_rnd += dg_
+        self.ctl_open[dg_] = -1
+        for k_, id_ in enumerate(self.big_ids):              # 3. an item lying there with no open instance has come up
+            if id_ < 0:
+                continue
+            new_ = np.nonzero(self.item_up[:G, id_] & (self.ctl_open[:, k_] < 0))[0]
+            for g_ in new_:
+                s_ = int(self.ctl_next[g_, k_])
+                self.ctl_sp[g_, k_, s_], self.ctl_tk[g_, k_, s_] = F, np.iinfo(np.int64).max
+                self.ctl_by[g_, k_, s_], self.ctl_rn[g_, k_, s_] = -1, self.ctl_rnd[g_]
+                self.ctl_open[g_, k_] = s_
+                self.ctl_next[g_, k_] = (s_ + 1) % M
+        ok_ = np.zeros(n, bool)                              # this frame as a query: a duel's game (trk_on without "alive")
+        if oth.shape[1] == 1 and self.lab is None and self.fixed_kind is None:
+            foe = oth[:, 0]
+            ok_ = (self.kind[grp] == NORMAL) & (self.mode[grp] < 0) & (self.run_k[:n] < 0) & (self.run_k[foe] < 0)
+        C = {k_: i_ for i_, k_ in enumerate(AUX_COLS)}
+        out[:, C["ctl_age"]] = min(F, D + 1)
+        out[:, C["ctl_ok"]] = ok_
+        if F >= D:                                           # 4. the label of the frame D ago, from the books
+            q = F - D
+            qok = self.ctl_q_ok[q % D]
+            qrn = self.ctl_q_rn[q % D]
+            sp = self.ctl_sp.reshape(G, 2 * M)
+            tk = self.ctl_tk.reshape(G, 2 * M)
+            by = self.ctl_by.reshape(G, 2 * M)
+            rn = self.ctl_rn.reshape(G, 2 * M)
+            cand = (rn == qrn[:, None]) & (tk > q) & (sp <= F)
+            key_ = np.where(cand, sp, np.iinfo(np.int64).max)
+            od_ = np.argsort(key_, axis=1, kind="stable")[:, :2]
+            ga_ = np.arange(G)[:, None]
+            c2_ = cand[ga_, od_]                             # [G, 2]: the first two instances after the query frame
+            taken_ = tk[ga_, od_] <= F
+            live_ = self.ctl_rnd == qrn                      # the round of the query frame goes on (an untaken one: 0.5)
+            res_ = c2_ & (taken_ | live_[:, None])           # resolved: taken, or lying there all the horizon
+            byq_ = by[ga_, od_][grp]                         # [n, 2]
+            v_ = np.where(taken_[grp], (byq_ == np.arange(n)[:, None]).astype(np.float32), 0.5)
+            one_ = qok & res_[grp, 0]
+            two_ = qok & res_[grp, 0] & res_[grp, 1]
+            out[:, C["ctl_one"]] = np.where(one_, v_[:, 0], -1.0)
+            out[:, C["ctl_lab"]] = np.where(two_, v_.mean(1), -1.0)
+            for k_, c_ in ((0, "ctl_mh"), (1, "ctl_ra")):       # each item alone: its first instance after the query frame
+                ck_ = cand[:, k_ * M:(k_ + 1) * M]
+                j_ = np.argmin(np.where(ck_, sp[:, k_ * M:(k_ + 1) * M], np.iinfo(np.int64).max), axis=1) + k_ * M
+                h_ = ck_.any(1)
+                tj_ = tk[np.arange(G), j_] <= F
+                r_ = h_ & (tj_ | live_)
+                vj_ = np.where(tj_[grp], (by[np.arange(G), j_][grp] == np.arange(n)).astype(np.float32), 0.5)
+                out[:, C[c_]] = np.where(qok & r_[grp], vj_, -1.0)
+        self.ctl_q_ok[F % D] = ok_                           # 5. this frame into the ring of queries
+        self.ctl_q_rn[F % D] = self.ctl_rnd
+        self.ctl_f = F + 1
 
     def step(self, actions):
         a = np.array(actions, copy=True)
@@ -10838,6 +11563,8 @@ class DuelEnv:
         reward = -JERK_COST * jerk.astype(np.float32)
         self._pt_begin()
         self._ps("jerk", reward)
+        wb_on_ = self._wb_on()                               # (WIN_W / FADE_V) the blend this frame (live: read once a frame)
+        self.wb_cb[:] = 0.0
         self.r_long = r_long = np.zeros(n, np.float32)      # the game's part of this frame's pay (see r_long in __init__)
         self.snd_t += DT
         self.shot_t += DT
@@ -10855,6 +11582,8 @@ class DuelEnv:
             fall = np.where(out_, 0.0, fall)
         fallers = np.nonzero(fall > 0)[0]
         reward -= SWITCH_COST * sw
+        self.stats["w_switch"] = self.stats.get("w_switch", 0.0) + float(np.sum(np.asarray(sw) * (self.script == 0)))   # (v0.5.1: his weapon
+        #                                                    switches, counted whatever the switch cost is: FADE_V takes it to 0)
         self._ps("weapon_switch", reward)
         if HOP_PAY:                                          # speed gained from hop to hop (see HOP_PAY)
             hv_ = np.hypot(s[:, 3], s[:, 4])
@@ -10915,6 +11644,17 @@ class DuelEnv:
                     near_ &= ~(bb_[0] & ~bb_[2])
                 bill[pf_[near_]] = False
                 self.stats["prefire_frames"] += int(near_.sum())
+            if BLIND_AHEAD:                                  # (BLIND_AHEAD) the crosshair on where the brain says he will be in 1-4 s
+                pa_ = np.nonzero(bill & (self.seen_t <= BLIND_AHEAD_T))[0]
+                fu_ = self._blind_fut(pa_) if len(pa_) else None
+                if fu_ is not None:
+                    yr_, pr_ = np.radians(self.yaw[pa_]), np.radians(self.pitch[pa_])
+                    fd_ = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
+                    to_ = fu_[1] + np.array([0, 0, 4.0], np.float32) - self._eye(s)[pa_][:, None, :]     # [m, 3 horizons, 3]
+                    al_ = (to_ * fd_[:, None, :]).sum(2)
+                    nf_ = fu_[0] & ((al_ > 0) & (np.linalg.norm(to_ - al_[..., None] * fd_[:, None, :], axis=2) <= PREFIRE_R)).any(1)
+                    bill[pa_[nf_]] = False
+                    self.stats["prefire_ahead"] = self.stats.get("prefire_ahead", 0) + int(nf_.sum())
             reward -= BLIND_FIRE_COST * bill
             self.stats["blind_bill"] += int(bill.sum())
         else:
@@ -10963,6 +11703,18 @@ class DuelEnv:
         self.stats["jerk"] += float(jerk.sum())
         st = dict(dmg_taken=np.zeros(n, np.float32), attacker=np.full(n, -1), kill_w={}, kicked=False,
                   by={}, killer=np.full(n, -1))               # damage per (attacker, victim) this frame; who took him below zero
+        if TELEFRAG:                                         # (TELEFRAG) a teleport onto the other player kills him (G_KillBox)
+            tp_ = np.nonzero((np.linalg.norm(s[:, :3] - prev[:, :3], axis=1) > 200) & (self.hp > 0) & (pkind == NORMAL)
+                             & (self.run_k < 0))[0]          # (games only: in an item or jump run each player is alone)
+            for i in tp_:
+                for v in self._mates(int(i)):
+                    if self.hp[v] > 0 and self.run_k[v] < 0 and not (RESPAWN_QL and self.rsp_wait[v] > 0):
+                        d_ = np.abs(s[v, :3] - s[i, :3])
+                        if d_[0] < MAXS[0] - MINS[0] and d_[1] < MAXS[1] - MINS[1] and d_[2] < MAXS[2] - MINS[2]:
+                            # his whole stack as damage, through the armor as any hit (armor takes 2/3 at most, so the
+                            # health always goes below zero)
+                            self._hit(int(i), int(v), G, float(self.hp[v] + self.armor[v]) + 1.0, np.zeros(3, np.float32), st)
+                            self.stats["telefrag"] = self.stats.get("telefrag", 0) + 1
         for v in fallers:
             took_f = self._damage(int(v), float(fall[v]))
             if SELF_DEBT:
@@ -11283,6 +12035,7 @@ class DuelEnv:
             self.stats["gun"][0] += float(dealt[self.gun].sum())
             dealt = np.where(self.gun, dealt * gsp, dealt)
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
+        self.wb_cb += self.dmg_reward * (np.asarray(dealt, np.float64) - self.dmg_taken_w * np.asarray(taken, np.float64))   # (WIN_W: combat)
         if PAY_SPLIT:
             self._pt("dmg_dealt", ar, self.dmg_reward * dealt)
             self._pt("dmg_taken", ar, -self.dmg_reward * self.dmg_taken_w * np.asarray(taken, np.float64))
@@ -11414,6 +12167,12 @@ class DuelEnv:
                     if BIG_PICK_SEQ and kind == "wp":                       # (v0.3.8) the big three a life by order
                         b_ = (RL, LG, RG).index(int(val)) if int(val) in (RL, LG, RG) else -1
                         pay_ = self._big_seq(i, b_, had_wp) if b_ >= 0 else 0.0
+                        if SMALL_ZERO and pay_:              # (SMALL_ZERO) the other loses as much
+                            for o_ in self._mates(i):
+                                reward[o_] -= pay_
+                                r_long[o_] -= pay_
+                                if PAY_SPLIT:
+                                    self._pt("big_order", o_, -pay_)
                     elif BIG_PICK > 0 and kind == "wp":                     # (v0.3.1) the big three once a life, nothing else
                         b_ = (RL, LG, RG).index(int(val)) if int(val) in (RL, LG, RG) else -1
                         pay_ = BIG_PICK if b_ >= 0 and not self.big_got[i, b_] else 0.0
@@ -11441,6 +12200,8 @@ class DuelEnv:
                         want_ = self.route_goal[self.route_item.index(it)]    # YA or YA2
                     if want_ in INTENTS and self.intent[i] == INTENTS.index(want_) and not self.intent_done[i]:
                         self.intent_done[i] = True                       # the trip he chose is complete
+                        if WEAPON_FREE and kind == "wp":
+                            self.intent_new[i] = True                    # (WEAPON_FREE) a weapon taken ends the choice: read anew at once
                         self.stats["intent_trips"][1] += 1
                         self.stats["intent_reach"] += float(self.intent_t[i])
                         if WAYS and self.script[i] == 0 and bool(self._counted(i)):
@@ -11509,6 +12270,12 @@ class DuelEnv:
             soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0) | (self.intent >= EN_INTENT)
             gone_before = self.intent_gone.copy()
             self.intent_gone = valid & ~soon & (self.intent > 0)
+            if GONE_BELIEF and ITEM_BELIEF:                  # (GONE_BELIEF) "gone" by what he knows of the item, not the truth
+                gb_ = np.minimum(g_, self.bel_t.shape[1] - 1)
+                rs_ = np.array([float(self.item_def[i_][2]) for i_ in it_], np.float32)
+                bt_ = self.bel_t[np.arange(n), gb_]
+                soon_b = (bt_ >= rs_) | (np.maximum(0.0, rs_ - bt_) < phi + 5.0) | (self.intent >= EN_INTENT)
+                self.intent_gone = valid & ~soon_b & (self.intent > 0) & (self.intent < HOLD_INTENT)
             if EN_ON:                                        # the enemy as the target: reached when he is in view, given up when
                 en_, vis_ = self.note_hunt(valid)            # nothing is known of him any more (FIGHT_TARGET, HUNT)
                 self.stats["en_frames"] += np.array([(en_ & (self.script == 0) & (self.hp > 0)).sum(), (en_ & self.legs_on).sum(),
@@ -11582,6 +12349,16 @@ class DuelEnv:
                 self.pace_g = (0.95 * self.pace_g + np.where(pay, gain, 0.0)).astype(np.float32)
                 sp_h = np.hypot(s[:, 3], s[:, 4])
                 trip = pay & ~in_run & ~self.visible & (self.seen_t > 1.5)
+                if SPEED_LOS:                                # (SPEED_LOS) out of his line of sight, whichever way he faces
+                    c_ = np.nonzero(trip & (sp_h > SPEED_LO))[0]
+                    if len(c_):
+                        eye_ = self._eye(s)[c_]
+                        for o_ in self._others_arr()[c_].T:     # (every other player of his group)
+                            los_ = self._los(eye_, s[o_, :3] + np.array([0, 0, 8.0], np.float32))
+                            los_ &= np.linalg.norm(s[o_, :3] - s[c_, :3], axis=1) < 4000
+                            if RESPAWN_QL:
+                                los_ &= self.rsp_wait[o_] <= 0
+                            trip[c_[los_]] = False
                 fast = trip & (self.pace_g > 0.3)
                 pace_now = PACE_PAY * DT * np.clip(sp_h / 320.0 - 1.0, 0.0, 1.0) * fast
                 if SPEED_PAY or SPEED_PAY_RUN:               # per stretch of new ground, by the speed he covers it at (see SPEED_PAY)
@@ -11590,6 +12367,7 @@ class DuelEnv:
                     run_ok = in_run & (self.script == 0) & (self.hp > 0) & ~self.rjrun     # (RJ_RUN_P: nor for speed)
                     pace_now = pace_now + SPEED_PAY * sp_f * trip
                     reward += SPEED_PAY_RUN * sp_f * run_ok
+                    self._spr_now = (SPEED_PAY_RUN * sp_f * run_ok).astype(np.float32)   # (JRUN_SPEED_BACK) given back with a failed try
                     self._pt("speed_run", ar, SPEED_PAY_RUN * sp_f * run_ok)
                     self.stats["speed_pay"] += float((SPEED_PAY * sp_f * trip).sum())
                     self.stats["speed_pay_run"] += float((SPEED_PAY_RUN * sp_f * run_ok).sum())
@@ -11626,6 +12404,10 @@ class DuelEnv:
                     kk_ = self.jrun_k[jr]
                     A_, B_, p_ = self.jump_a[kk_], self.jump_b[kk_], s[jr, :3]
                     self.jrun_paid[jr] += (pay_now[jr] + RUN_SCALE * np.where(pay[jr], gain[jr], 0.0)).astype(np.float32)
+                    if JRUN_SPEED_BACK and getattr(self, "_spr_now", None) is not None and len(self._spr_now) == n:
+                        if getattr(self, "jrun_spd", None) is None or len(self.jrun_spd) != n:
+                            self.jrun_spd = np.zeros(n, np.float32)
+                        self.jrun_spd[jr] += self._spr_now[jr]   # (its own counter: the speed pay is in reward only, not r_long)
                     self.jrun_edge[jr] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
                     ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
@@ -11669,6 +12451,8 @@ class DuelEnv:
                     for i in jr[(short_ | (self.jrun_t[jr] <= 0)) & ~arr[jr]]:
                         reward[i] -= float(self.jrun_paid[i])    # a try that ends without the item gives back what its way paid
                         r_long[i] -= float(self.jrun_paid[i])
+                        if JRUN_SPEED_BACK and getattr(self, "jrun_spd", None) is not None:
+                            reward[i] -= float(self.jrun_spd[i])  # ... and its speed pay (JRUN_SPEED_BACK; reward only)
                         self._jump_place(int(i))
                 for i in np.nonzero(arr | gone | (run & (self.run_k == 0)))[0]:
                     if self.jrun_new[i]:
@@ -11722,8 +12506,11 @@ class DuelEnv:
         if KNOW_PAY:                                         # pay for knowing where the enemy is (see KNOW_PAY)
             on = (pkind == NORMAL) & (self.hp > 0) & (self.script == 0) & (self.run_k < 0)
             kn = self._knowledge()
-            reward += np.where(on, KNOW_PAY * kn * (DT / 60.0), 0.0)
-            r_long += np.where(on, KNOW_PAY * kn * (DT / 60.0), 0.0)
+            kp_ = np.where(on, KNOW_PAY * kn * (DT / 60.0), 0.0)
+            if SMALL_ZERO:                                   # (SMALL_ZERO) what he gets the other loses
+                kp_ = kp_ - kp_[self._others_arr()].mean(1)
+            reward += kp_
+            r_long += kp_
             self.stats["know"] += float(kn[on].sum())
             self.stats["know_frames"] += int(on.sum())
 
@@ -11758,8 +12545,9 @@ class DuelEnv:
                     self.g_flat[k] += 1.0
                 else:
                     self.frags_r[v] -= 1                    # (his own hand or the world: a point off him)
-            if not (gm_ and WIN_PAY):
+            if not (gm_ and WIN_PAY and not wb_on_):         # (WIN_W / FADE_V: the blend pays it, in part)
                 reward[v] -= 1.0
+                self.wb_cb[v] -= 1.0
                 self._pt("death", v, -1.0)
             if k >= 0 and k != v and self.cf_side[k] and self.cf_side[v] and self.cf_side[k] != self.cf_side[v]:
                 self.stats["cf_stack_kills" if self.cf_side[k] == 1 else "cf_plain_kills"] += 1
@@ -11772,8 +12560,9 @@ class DuelEnv:
             if k >= 0 and k != v:
                 if STYLE_P > 0 and self.script[k] == 0:
                     self.stats["style"][self.style[k], 8] += 1
-                if not (gm_ and WIN_PAY):
+                if not (gm_ and WIN_PAY and not wb_on_):
                     reward[k] += 1.0
+                    self.wb_cb[k] += 1.0
                     self._pt("frag", k, 1.0)
                 if DROPS:
                     self._drop_weapon(int(v), int(k))
@@ -11825,8 +12614,9 @@ class DuelEnv:
                         self.ws_flat[v] -= 1.0
                     self.frags_r[v] -= 1
                     events.append(dict(victim=int(v), killer=-1, weapon=-1))
-                if not (gm_ and WIN_PAY):
+                if not (gm_ and WIN_PAY and not wb_on_):
                     reward[v] -= 1.0
+                    self.wb_cb[v] -= 1.0
                     self._pt("death", v, -1.0)
                 if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
                     reward[v] -= float(self.intent_paid[v])
@@ -11983,8 +12773,8 @@ class DuelEnv:
                 self._late_start(m_)
             self._late_m = []
         if PRO_START_P > 0 and self._pro_put:                # ... and for the pro starts: the moment of a pros' duel
-            for m_, k_ in self._pro_put:
-                self._pro_start(m_, k_)
+            for m_, k_, s_ in self._pro_put:
+                self._pro_start(m_, k_, s_)
             self._pro_put = []
         if len(dead) or len(out) or len(ends) or self._replaced:
             self.state = s = self.w.state()
@@ -12051,6 +12841,8 @@ class DuelEnv:
         else:
             self.lgq_t = None                                # (off, by a live setting: his clock begins again when it is on)
         self._ps("lg_quiet", reward)
+        if GAME_ON:                                          # (WIN_W / FADE_V) the blend in the games; its counters always
+            self._wb_blend(reward, info)
         self._pt_end(info)
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or
@@ -12072,6 +12864,8 @@ class DuelEnv:
                 lab_ = np.where(l2_[:, :1] >= 0, l2_, lab_).astype(np.int8)
             info["rj_copy"] = lab_
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
+        if CONTROL_TRUTH:                                    # (CONTROL_TRUTH) "in control" of the frame CONTROL_D ago (labels only)
+            self._ctl_step(done, info["aux"])
         if HEAD_EVENTS:                                      # (HEAD_EVENTS) the frame's events for the head
             dl_ = np.zeros(n, np.float32)
             for (i_, v_), d_ in st["by"].items():

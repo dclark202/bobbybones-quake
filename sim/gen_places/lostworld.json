@@ -1,0 +1,16 @@
+{
+ "map": "lostworld",
+ "nodes": 1272,
+ "kept": 1161,
+ "dropped": {
+  "unreachable": 34,
+  "solid": 15,
+  "hazard": 59,
+  "moved": 3,
+  "fell": 0,
+  "air": 0,
+  "outside": 0
+ },
+ "pro_places": 10000,
+ "heat_top10_share": 0.25982019486677943
+}

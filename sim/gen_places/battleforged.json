@@ -1,0 +1,16 @@
+{
+ "map": "battleforged",
+ "nodes": 1667,
+ "kept": 1230,
+ "dropped": {
+  "unreachable": 407,
+  "solid": 21,
+  "hazard": 0,
+  "moved": 9,
+  "fell": 0,
+  "air": 0,
+  "outside": 0
+ },
+ "pro_places": 10000,
+ "heat_top10_share": 0.25329770223936404
+}

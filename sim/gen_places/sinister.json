@@ -1,0 +1,16 @@
+{
+ "map": "sinister",
+ "nodes": 1827,
+ "kept": 1414,
+ "dropped": {
+  "unreachable": 293,
+  "solid": 10,
+  "hazard": 104,
+  "moved": 6,
+  "fell": 0,
+  "air": 0,
+  "outside": 0
+ },
+ "pro_places": 10000,
+ "heat_top10_share": 0.28920919780112664
+}
