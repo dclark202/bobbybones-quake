@@ -61,7 +61,7 @@ if [ "${PREP:-1}" != "0" ]; then
         || echo "map tables: not prepared (the server makes them at a map's first load)"
 fi
 if [ -n "$SPAR" ]; then
-    docker run -d --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" -e DUEL_TIMING="${TIMING:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
+    docker run -d --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_AIM2DUMP="$AIM2DUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" -e DUEL_TIMING="${TIMING:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" "$IMAGE" +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs the game bot, skill ${SKILL:-5}, on $MAP)"; exit 0
 fi
