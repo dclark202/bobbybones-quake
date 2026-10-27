@@ -2224,8 +2224,12 @@ class duelbot(minqlx.Plugin):
                 self.es_dealt0 = dn_
                 if hit_ > 0 and os_.health > 0:
                     env.note_dealt(0, 1, hit_)
-            if took > 0 and hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
-                env.note_hit(0, took)                        # being shot at throws his aim off for a moment
+            if hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
+                on_ = int(opp.stats.damage_dealt)            # being shot at throws his aim off for a moment: only the enemy's own
+                by_ = max(0, on_ - self.__dict__.get("fl_dealt0", on_))   # hits, by the game's count of the damage the opponent dealt, as
+                self.fl_dealt0 = on_                         # the simulator (until 2026-10-27 any drop of 3 in his health and armor:
+                if by_ > 0:                                  # his own splash, falls and lava flinched him on a server, never in training)
+                    env.note_hit(0, by_)
             if hasattr(env, "pain_t"):                       # the opponent's pain sound, by his health after the hit
                 env.pain_t += E.DT                           # (EN_STACK: after any hurt the game plays it for, his own splash and falls too, as step())
                 near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < \
