@@ -1503,10 +1503,98 @@ PAY_TERMS = ("jerk", "weapon_switch", "hop", "blind_fire", "move_round", "course
              "dmg_dealt", "dmg_taken", "high", "rail", "style", "item_MH", "item_RA", "item_YA", "item_flat_other", "big_order",
              "item_points", "item_loss", "items_other", "item_seek", "way", "way_claw", "speed", "speed_run", "intent_switch",
              "runs", "stack_diff", "stack_keep", "drops", "know", "frag", "death", "deaths_other", "win_pay", "watch", "preaim",
-             "lg_quiet")
+             "lg_quiet", "win_part")
 PT_IX = {k_: i_ for i_, k_ in enumerate(PAY_TERMS)}
 WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay in games, summed", "its size", "his frames in games",
            "his games' frags (+1) and deaths (-1) counted")
+#   WIN_W=w, WIN_GAIN=G, FADE_V=v   (v0.5.1; live names, all three; 0 / 1 / 0 by default, and with WIN_W and FADE_V both 0
+#                 the simulator is what it was, to the bit: not one draw more, nothing paid otherwise) the cross-fade from the
+#                 pays made by hand to the pay by the chance of winning (the generation's goal, owner 2026-10-23: "pay by win
+#                 chance only"). It applies to the frames of every match with a game under way (self.game > 0 when the
+#                 frame's clock is run, _game_step): whole games (1), late rounds (2), mid-game starts and the pros' and
+#                 people's starts (3; PRO_KIND, to the game's limit with PRO_START_LEN=0, overtime as there), spawn starts and
+#                 short starts (4) and rail starts. The practice rounds with no game keep their own pays as they were: jump
+#                 runs, rocket jump runs, item runs (kind MOVE), the one-weapon and aim rounds (DRILL, AIM), the ordinary
+#                 short NORMAL rounds, the test map's labs and courses (none of them is in v0.5.0's mix but the jump runs).
+#                 In such a frame, per player, the pay is cut in three:
+#                   combat   the flat pay for a frag (+1) and a death (-1) and the damage pay (dealt x dmg_reward less taken x
+#                            dmg_taken_w x dmg_reward): the terms "frag", "death", "dmg_dealt", "dmg_taken";
+#                   win      WIN_SCALE x (p - p before), p his chance of winning by lead and time left (WIN_PAY's rule, its
+#                            own chance as last counted: wb_p, kept up every frame of every game whatever the switches, so
+#                            a WIN_W opened in the middle of a game pays from that frame's chance on);
+#                   other    everything else the frame pays (reward - combat): the item flats (the taker's gain and the
+#                            mates' loss alike), the big three's order, the weapon and target switches, the shot price,
+#                            the view jerk, the fire toggle, blind fire and blind rockets, KNOW_PAY, WATCH_PAY, PREAIM_PAY,
+#                            RAIL_FAR_PAY, HIGH_PAY, STACK_DIFF and the stack keep, drops, the way and its claw, speed,
+#                            LG_QUIET_COST: whatever is in it, no list to keep up;
+#                 and paid  (1 - v) x other + (1 - w) x combat + w x G x win.  r_long (the items' and stack's part, not
+#                 combat, not win) is (1 - v) x r_long: the win part is not in r_long, as WIN_PAY's was not. At w = 1 and
+#                 v = 1 a game's frame pays the win part alone, exactly (0 x other is 0). With WIN_W > 0 or FADE_V > 0 the
+#                 flat frag pay is counted as combat even with WIN_PAY=1 and WIN_PAY's own pay is not added (the blend
+#                 takes its place); WIN_PAY=1 with both at 0 is what it was (the flat frag pay out, the win pay in, damage
+#                 untouched). The trainer's own --info-pay (added to the reward outside the simulator; 0 in v0.5.0) is not
+#                 faded.
+#                 The equilibrium: the win part is zero-sum (the second seat is paid exactly the first seat's amount with
+#                 the other sign) and each frame pays a difference of one function of the score and the clock, so a game's
+#                 win part sums to w x G x WIN_SCALE x (its result 1 / 0.5 / 0 less the chance at its start, or at the
+#                 frame w was last changed) whatever happened on the way: nothing in it can be pumped, and the only way to
+#                 more of it is to win more games. In self-play the fixed point of the win part alone is the policy that
+#                 wins most against the league. The (1 - w) combat part and the (1 - v) other part keep today's behaviour
+#                 while they fade; the overtime's last frame reads 0 s left (_ot_left, fixed 2026-10-24, 4e52053: the fold
+#                 showed 120 s there), so a game decided in overtime pays its outcome. Counters: stats["win_blend"] (WB_COLS,
+#                 his counted seats in such frames, kept whether the blend is on or not, for sizing G); info["win_blend"]
+#                 (blend on: per player [win, combat, the win part paid]); the pay term "win_part" (PAY_SPLIT; the other
+#                 terms scaled with the pay they stand for). sim/win_chance.json is read whenever GAME_ON.
+#   WIN_LONG=1    (live, 0 / 1, default 0; with the blend on) the win part paid (w x G x win) goes into r_long as well: the
+#                 long value (--long-gamma, about two minutes ahead) learns the chance of winning when FADE_V takes the items
+#                 out of r_long. r_long = (1 - v) x r_long + w x G x win in the games' frames.
+#   WIN_STACK=1   (live, 0 / 1, default 0; the coefficients live too, their defaults the fit of 2026-10-26 (held out: the
+#                 win chance's log loss 0.3959 -> 0.3848): WIN_TAU 32.5 s, WIN_PA 2.7546, WIN_PS 300, WIN_PRL 0.4277,
+#                 WIN_PLG 0.4485, WIN_PRG 0.2922) the blend's chance with the stack in it:
+#                 W~ = clip(W(lead, left) + PHI, 0, 1), PHI = (p_next - 0.5) x (W(lead + 1, left) - W(lead - 1, left)) x
+#                 (1 - exp(-left / WIN_TAU)), p_next = sigmoid(WIN_PA x f(d) + WIN_PRL x dRL + WIN_PLG x dLG + WIN_PRG x dRG)
+#                 the chance that the first seat scores the next frag: d his true stack (health + armor) less the other's,
+#                 f(d) = tanh(d / WIN_PS) with WIN_PS > 0 else d / 100, dRL / dLG / dRG the big weapons owned (1 he only, -1
+#                 the other only, 0 both or neither). A dead player (health 0 or less, or waiting to respawn) counts as his
+#                 respawn will have him: SPAWN_HP, no armor, no big weapon (the fit saw both alive only; so PHI does not
+#                 jump at the respawn, it steps once, at the frag, with the score). No intercept: the second seat's W~ is
+#                 1 - the first's exactly (p_next and the lead swap, W(lead + 1) - W(lead - 1) is the same for both), so
+#                 the win part stays zero-sum; PHI is 0 at the game's end (left 0), so a game's win part still sums to
+#                 w x G x WIN_SCALE x (result - W~ at its start) (the start's W~ is taken with the start's stacks: a whole
+#                 game's spawn, a late round's drawn stacks, a pro start's). A pickup, a hit, a weapon taken move the pay on
+#                 that frame. Switched on or off in the middle of a game: one frame's step from W to W~ (or back). Only the
+#                 blend reads it (WIN_PAY and WIN_SHADOW keep the table alone). The trainer's live.json takes numbers of 0
+#                 or more only: a negative coefficient goes by live_settings.env or the run's environment.
+WIN_LIVE = ("WIN_W", "WIN_GAIN", "FADE_V", "WIN_LONG", "WIN_STACK", "WIN_TAU", "WIN_PA", "WIN_PS", "WIN_PRL", "WIN_PLG", "WIN_PRG")
+
+
+def _win_live(get):
+    """(v0.5.1) WIN_W, WIN_GAIN, FADE_V, WIN_LONG and the stack term's names from get(name) -> a string or None (unset: the
+    default); ValueError on a value out of range (the trainer refuses the live file then)"""
+    d_ = dict(WIN_W=0.0, WIN_GAIN=1.0, FADE_V=0.0, WIN_LONG=0.0, WIN_STACK=0.0,      # (the stack term's defaults: the fit of 2026-10-26)
+              WIN_TAU=32.5, WIN_PA=2.7546, WIN_PS=300.0, WIN_PRL=0.4277, WIN_PLG=0.4485, WIN_PRG=0.2922)
+    v = {}
+    for k_, x0_ in d_.items():
+        x_ = get(k_)
+        v[k_] = float(x_) if (x_ or "").strip() else x0_
+        if not np.isfinite(v[k_]):
+            raise ValueError("{}: not a finite number".format(k_))
+    if not 0.0 <= v["WIN_W"] <= 1.0 or not 0.0 <= v["FADE_V"] <= 1.0:
+        raise ValueError("WIN_W and FADE_V must be within 0 .. 1")
+    if not 0.0 < v["WIN_GAIN"] <= 100.0:
+        raise ValueError("WIN_GAIN must be above 0 (at most 100)")
+    if v["WIN_LONG"] not in (0.0, 1.0) or v["WIN_STACK"] not in (0.0, 1.0):
+        raise ValueError("WIN_LONG and WIN_STACK are 0 or 1")
+    if not v["WIN_TAU"] > 0 or v["WIN_PS"] < 0:
+        raise ValueError("WIN_TAU must be above 0 and WIN_PS 0 or more")
+    v["WIN_LONG"], v["WIN_STACK"] = v["WIN_LONG"] > 0, v["WIN_STACK"] > 0
+    return v
+
+
+globals().update(_win_live(os.environ.get))
+WB_COLS = ("his frames in games", "the win part at G = 1 (WIN_SCALE x the change in his chance), summed", "its size",
+           "the combat pay (frags, deaths, damage) before the blend, summed", "its size", "the other pay before the blend: size",
+           "the pay after the blend: size", "frames with the blend on")
 #   OVERTIME=1    Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
 #                 the game's limit (GAME_LEN) with the score level goes on for another OT_LEN seconds, period after period,
 #                 until a period ends with the score not level, or after OT_CAP periods (OVERTIME_CAP, 10): then it is a
@@ -1899,7 +1987,8 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "LG_QUIET_COST", "WATCH_PAY",                                                                          # (v0.3.10)
              "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
-             "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG")                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
+             "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
+             ) + WIN_LIVE                                                                                           # (v0.5.1, the cross-fade to the win pay)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -1937,6 +2026,7 @@ def live_values(get):
     v["BLIND_AHEAD_P"] = float(bap_) if (bap_ or "").strip() else 1.0
     if not 0.0 <= v["BLIND_AHEAD_P"] <= 1.0:
         raise ValueError("BLIND_AHEAD_P must be within 0 .. 1")
+    v.update(_win_live(get))                                 # (v0.5.1) the cross-fade to the win pay, its long part, the stack term
     v["HOP_QUIET"] = float(get("HOP_QUIET") or 0.0) > 0
     v["HOP_QUIET_HEARD"] = float(get("HOP_QUIET_HEARD") or 4.0)
     v["HOP_QUIET_NEAR"] = float(get("HOP_QUIET_NEAR") or 700.0)
@@ -8758,6 +8848,90 @@ class DuelEnv:
                 self.ws_tab = (p_, float(left_[1]), D_)
                 self.ws_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)
                 self.stats["win_shadow"] = np.zeros(len(WS_COLS))
+        # (WIN_W / FADE_V, v0.5.1) the blend's own chance, kept up in every game whatever the switches (they are live)
+        self.wb_tab, self.wb_scale = None, 0.0
+        self.wb_p = np.full(self.M, 0.5, np.float64)
+        self.wb_raw = np.zeros(self.n, np.float64)           # this frame's win part at G = 1, per player
+        self.wb_cb = np.zeros(self.n, np.float64)            # this frame's combat pay (frags, deaths, damage), per player
+        self.wb_gm = np.zeros(self.n, bool)                  # this frame: a game under way in his match
+        self.wb_left = np.zeros(self.M)                      # the seconds left the blend's chance read this frame, per match
+        if GAME_ON:
+            f_ = os.environ.get("WIN_CHANCE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "win_chance.json")
+            if os.path.exists(f_):
+                with open(f_, encoding="utf-8") as fh_:
+                    wc_ = json.load(fh_)
+                p_ = np.array(wc_["p"], np.float64)
+                left_, d_ = np.array(wc_["left_s"], np.float64), np.array(wc_["diffs"], np.int64)
+                D_ = int(d_[-1])
+                assert p_.shape == (len(left_), len(d_)) and np.array_equal(d_, np.arange(-D_, D_ + 1)), "win_chance.json: the table's shape"
+                assert left_[0] == 0.0 and np.allclose(np.diff(left_), left_[1]) and abs(left_[-1] - GAME_LEN) < 1e-6, "win_chance.json: the time steps"
+                assert np.abs(p_ + p_[:, ::-1] - 1.0).max() < 1e-9, "win_chance.json: p(-d) must be 1 - p(d)"
+                assert np.array_equal(p_[0], np.where(d_ > 0, 1.0, np.where(d_ < 0, 0.0, 0.5))), "win_chance.json: 1 / 0.5 / 0 at the limit"
+                self.wb_tab = (p_, float(left_[1]), D_)
+                self.wb_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)
+                self.stats["win_blend"] = np.zeros(len(WB_COLS))
+
+    def _wb_on(self):
+        """(WIN_W / FADE_V) is the blend on in this frame's games?"""
+        if not (GAME_ON and (WIN_W > 0 or FADE_V > 0)):
+            return False
+        if self.wb_tab is None:
+            raise RuntimeError("WIN_W / FADE_V: no win_chance.json (or no whole games: GAME_P / LATE_P)")
+        return True
+
+    def _wb_chance(self, m, left):
+        """(WIN_W) the blend's chance for the first seat of matches m with `left` seconds to play: W(lead, left) of
+        win_chance.json, and with WIN_STACK the stack term on it (see WIN_STACK): clip(W + PHI, 0, 1), PHI = (p_next - 0.5)
+        x (W(lead + 1) - W(lead - 1)) x (1 - exp(-left / WIN_TAU)), p_next = sigmoid(WIN_PA x f(stack difference) +
+        WIN_PRL x dRL + WIN_PLG x dLG + WIN_PRG x dRG), the true stacks (health + armor) and the big weapons owned (-1 / 0 / 1)"""
+        m = np.atleast_1d(np.asarray(m, np.int64))
+        g_ = self._others_arr().shape[1] + 1
+        a_, b_ = m * g_, m * g_ + 1
+        d_ = (self.frags_r[a_] - self.frags_r[b_]).astype(np.float64)
+        left = np.broadcast_to(np.asarray(left, np.float64), m.shape)
+        W_ = self._win_p(d_, left, tab=self.wb_tab)
+        if not WIN_STACK:
+            return W_
+        dead_ = (self.hp <= 0) | (self.rsp_wait > 0)          # (a dead player as his respawn will have him: the spawn's
+        st_ = lambda i_: np.where(dead_[i_], SPAWN_HP, np.asarray(self.hp[i_], np.float64) + np.asarray(self.armor[i_], np.float64))
+        ds_ = st_(a_) - st_(b_)                               # health, no armor, no big weapon; the fit has both alive only)
+        f_ = np.tanh(ds_ / WIN_PS) if WIN_PS > 0 else ds_ / 100.0
+        hv_ = lambda w_: np.where(dead_[a_], 0.0, self.has[a_, w_].astype(np.float64)) - np.where(dead_[b_], 0.0, self.has[b_, w_].astype(np.float64))
+        z_ = WIN_PA * f_ + WIN_PRL * hv_(RL) + WIN_PLG * hv_(LG) + WIN_PRG * hv_(RG)
+        pn_ = 1.0 / (1.0 + np.exp(-z_))
+        dW_ = self._win_p(d_ + 1.0, left, tab=self.wb_tab) - self._win_p(d_ - 1.0, left, tab=self.wb_tab)
+        return np.clip(W_ + (pn_ - 0.5) * dW_ * (1.0 - np.exp(-np.maximum(left, 0.0) / WIN_TAU)), 0.0, 1.0)
+
+    def _wb_blend(self, reward, info):
+        """(WIN_W / FADE_V) the frame's pay in the games cut into combat, win and other and paid by the blend (see WIN_W)"""
+        gm = self.wb_gm
+        on = self._wb_on()
+        WB = self.stats.get("win_blend")
+        if not gm.any() or WB is None:
+            return
+        r64 = np.asarray(reward, np.float64)
+        oth = r64 - self.wb_cb
+        new = r64
+        if on:
+            w_, v_, g_ = float(WIN_W), float(FADE_V), float(WIN_GAIN)
+            paid_ = w_ * g_ * self.wb_raw
+            new = np.where(gm, (1.0 - v_) * oth + (1.0 - w_) * self.wb_cb + paid_, r64)
+            reward[gm] = new[gm]
+            if v_ > 0 or WIN_LONG:                           # (WIN_LONG) the win part into r_long too
+                rl_ = np.asarray(self.r_long[gm], np.float64) * (1.0 - v_) + (paid_[gm] if WIN_LONG else 0.0)
+                self.r_long[gm] = rl_.astype(self.r_long.dtype)
+            info["win_blend"] = np.stack([self.wb_raw, self.wb_cb, np.where(gm, paid_, 0.0)], 1).astype(np.float32)
+            if PAY_SPLIT:                                    # the terms scaled with the pay they stand for
+                cb_ix = [PT_IX[k_] for k_ in ("frag", "death", "dmg_dealt", "dmg_taken")]
+                sc_ = np.full(len(PAY_TERMS), 1.0 - v_)
+                sc_[cb_ix] = 1.0 - w_
+                sc_[PT_IX["win_part"]] = 0.0
+                self.pt[gm] *= sc_
+                self.pt[gm, PT_IX["win_part"]] = paid_[gm]
+        c_ = gm & self._counted(np.arange(self.n)) & (self.script[:self.n] == 0)
+        WB += (float(c_.sum()), float(self.wb_raw[c_].sum()), float(np.abs(self.wb_raw[c_]).sum()), float(self.wb_cb[c_].sum()),
+               float(np.abs(self.wb_cb[c_]).sum()), float(np.abs(oth[c_]).sum()), float(np.abs(np.asarray(new)[c_]).sum()),
+               float(c_.sum()) if on else 0.0)
 
     def _win_p(self, d, left, tab=None):
         """the chance of winning the game for a player d frags ahead with `left` seconds to play (win_chance.json: a
@@ -8804,6 +8978,7 @@ class DuelEnv:
         self.game[m] = 2 if late else 1
         self.g_tick[m], self.round_t[m], self.g_p[m] = 0, 0.0, 0.5
         self.ws_p[m] = 0.5
+        self.wb_p[m] = 0.5
         if OVERTIME:
             self.g_ot[m] = 0
         self.script[q], self.goal[q], self.frags_r[q], self.snd_t[q] = 0, -1, 0, 99.0
@@ -8813,6 +8988,8 @@ class DuelEnv:
             self.load_sets[int(i)] = ()                     # the game's spawn: machine gun and gauntlet
         self._spawn(int(q[0]), avoid=None)
         self._spawn(int(q[1]), avoid=self.w.state()[int(q[0]), :3])
+        if WIN_STACK and self.wb_tab is not None:            # (WIN_STACK) the blend's chance at the start with the spawned stacks
+            self.wb_p[m] = float(self._wb_chance(m, GAME_LEN)[0])
         self.item_up[m], self.item_t[m] = True, 0.0
         self.contest_t[m] = -1.0
         if STAGGER_START and not late and self.stag_first[m]:      # (STAGGER_START) the match's first whole game: a drawn point of its clock
@@ -8822,6 +8999,8 @@ class DuelEnv:
                 self.g_p[m] = float(self._win_p(np.zeros(1), np.array([GAME_LEN - t_ * DT]))[0])
             if self.ws_tab is not None:
                 self.ws_p[m] = float(self._win_p(np.zeros(1), np.array([GAME_LEN - t_ * DT]), tab=self.ws_tab)[0])
+            if self.wb_tab is not None:
+                self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - t_ * DT)[0])
             self.stats["stagger"] += (1.0, t_ * DT)
         if not late:
             self.stag_first[m] = False
@@ -8857,6 +9036,8 @@ class DuelEnv:
         self.g_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT)) if self.win_tab is not None else 0.5
         if self.ws_tab is not None:
             self.ws_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT, tab=self.ws_tab))
+        if self.wb_tab is not None:
+            self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - LATE_AT)[0])
         for it in range(self.nI):
             kind, val, resp, cap, lab = self.item_def[it]
             p_ = LATE_DOWN[0] if lab in ("MH", "RA", "YA", "GA") else LATE_DOWN[1] if kind == "wp" else LATE_DOWN[2]
@@ -8881,6 +9062,8 @@ class DuelEnv:
         self.win_pay[:] = 0.0
         if WIN_SHADOW:
             self.win_shadow[:] = 0.0
+        self.wb_raw[:] = 0.0
+        self.wb_gm[:] = False
         gm = np.nonzero(self.game > 0)[0]
         if not len(gm):
             return
@@ -8894,6 +9077,19 @@ class DuelEnv:
         G = self.stats["games"]
         G[13] += int((self.game[gm] == 1).sum())
         G[14] += int((self.game[gm] == 2).sum())
+        if self.wb_tab is not None:                          # (WIN_W / FADE_V) the win part at G = 1, kept up whatever the switches
+            gb_ = self._others_arr().shape[1] + 1
+            ab_, bb_ = gm * gb_, gm * gb_ + 1
+            self.wb_gm[ab_], self.wb_gm[bb_] = True, True
+            lb_ = GAME_LEN - self.g_tick[gm] * DT
+            if OVERTIME:                                     # (the period's last frame: 0 s left, _ot_left)
+                lb_ = np.where(self.g_tick[gm] > GAME_FRAMES, self._ot_left(self.g_tick[gm], self.round_t[gm]), lb_)
+            self.wb_left[:] = 0.0
+            self.wb_left[gm] = lb_
+            pb_ = self._wb_chance(gm, lb_)
+            yb_ = self.wb_scale * (pb_ - self.wb_p[gm])
+            self.wb_p[gm] = pb_
+            self.wb_raw[ab_], self.wb_raw[bb_] = yb_, -yb_
         if self.ws_tab is not None:                          # (WIN_SHADOW) what WIN_PAY would pay this frame: recorded, never paid
             gw_ = self._others_arr().shape[1] + 1
             aw_, bw_ = gm * gw_, gm * gw_ + 1
@@ -8919,6 +9115,8 @@ class DuelEnv:
         p = self._win_p(self.frags_r[a_] - self.frags_r[b_], left_)
         pay = self.win_scale * (p - self.g_p[gm])
         self.g_p[gm] = p
+        if self._wb_on():                                    # (WIN_W / FADE_V) the blend pays the win part in its place
+            return
         reward[a_] += pay
         reward[b_] -= pay
         self.win_pay[a_], self.win_pay[b_] = pay, -pay
@@ -9488,6 +9686,8 @@ class DuelEnv:
         self.g_p[m] = float(self._win_p(d, GAME_LEN - tick * DT)) if self.win_tab is not None else 0.5
         if self.ws_tab is not None:
             self.ws_p[m] = float(self._win_p(d, GAME_LEN - tick * DT, tab=self.ws_tab))
+        if self.wb_tab is not None:
+            self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - tick * DT)[0])
         im_, L_, W_ = P["imap"], P["item_left"][k], P["item_who"][k]
         for it in range(self.nI):
             c_ = int(im_[it])
@@ -11363,6 +11563,8 @@ class DuelEnv:
         reward = -JERK_COST * jerk.astype(np.float32)
         self._pt_begin()
         self._ps("jerk", reward)
+        wb_on_ = self._wb_on()                               # (WIN_W / FADE_V) the blend this frame (live: read once a frame)
+        self.wb_cb[:] = 0.0
         self.r_long = r_long = np.zeros(n, np.float32)      # the game's part of this frame's pay (see r_long in __init__)
         self.snd_t += DT
         self.shot_t += DT
@@ -11831,6 +12033,7 @@ class DuelEnv:
             self.stats["gun"][0] += float(dealt[self.gun].sum())
             dealt = np.where(self.gun, dealt * gsp, dealt)
         reward += self.dmg_reward * (dealt - self.dmg_taken_w * taken)   # damage taken against damage dealt
+        self.wb_cb += self.dmg_reward * (np.asarray(dealt, np.float64) - self.dmg_taken_w * np.asarray(taken, np.float64))   # (WIN_W: combat)
         if PAY_SPLIT:
             self._pt("dmg_dealt", ar, self.dmg_reward * dealt)
             self._pt("dmg_taken", ar, -self.dmg_reward * self.dmg_taken_w * np.asarray(taken, np.float64))
@@ -12340,8 +12543,9 @@ class DuelEnv:
                     self.g_flat[k] += 1.0
                 else:
                     self.frags_r[v] -= 1                    # (his own hand or the world: a point off him)
-            if not (gm_ and WIN_PAY):
+            if not (gm_ and WIN_PAY and not wb_on_):         # (WIN_W / FADE_V: the blend pays it, in part)
                 reward[v] -= 1.0
+                self.wb_cb[v] -= 1.0
                 self._pt("death", v, -1.0)
             if k >= 0 and k != v and self.cf_side[k] and self.cf_side[v] and self.cf_side[k] != self.cf_side[v]:
                 self.stats["cf_stack_kills" if self.cf_side[k] == 1 else "cf_plain_kills"] += 1
@@ -12354,8 +12558,9 @@ class DuelEnv:
             if k >= 0 and k != v:
                 if STYLE_P > 0 and self.script[k] == 0:
                     self.stats["style"][self.style[k], 8] += 1
-                if not (gm_ and WIN_PAY):
+                if not (gm_ and WIN_PAY and not wb_on_):
                     reward[k] += 1.0
+                    self.wb_cb[k] += 1.0
                     self._pt("frag", k, 1.0)
                 if DROPS:
                     self._drop_weapon(int(v), int(k))
@@ -12407,8 +12612,9 @@ class DuelEnv:
                         self.ws_flat[v] -= 1.0
                     self.frags_r[v] -= 1
                     events.append(dict(victim=int(v), killer=-1, weapon=-1))
-                if not (gm_ and WIN_PAY):
+                if not (gm_ and WIN_PAY and not wb_on_):
                     reward[v] -= 1.0
+                    self.wb_cb[v] -= 1.0
                     self._pt("death", v, -1.0)
                 if CLAW_ON_DEATH and self.intent[v] > 0 and not self.intent_done[v]:
                     reward[v] -= float(self.intent_paid[v])
@@ -12633,6 +12839,8 @@ class DuelEnv:
         else:
             self.lgq_t = None                                # (off, by a live setting: his clock begins again when it is on)
         self._ps("lg_quiet", reward)
+        if GAME_ON:                                          # (WIN_W / FADE_V) the blend in the games; its counters always
+            self._wb_blend(reward, info)
         self._pt_end(info)
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or
