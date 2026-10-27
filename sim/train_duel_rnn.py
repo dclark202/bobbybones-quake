@@ -214,6 +214,7 @@ LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK
 LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --control) a factor on the lesson "in control"   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 LIVE_TRAINER = LIVE_TRAINER + ("BRAIN_HUMAN_W",)                   # (brainppl, --brain-human) the people's lesson's weight beside self-play's
 
+LIVE_TRAINER = LIVE_TRAINER + ("VALUE_WARM",)                      # (v0.6.1, --value-warm) the critic's warm-up: the next N updates learn the value outputs only
 LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --win-value) a factor on the shadow win value's rate
 LIVE_TRAINER = LIVE_TRAINER + ("ITEM_FLOOR", "ITEM_FLOOR_W")          # (2026-10-25, --item-floor) the floor on his item intentions by map, its weight
 LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
@@ -1326,6 +1327,14 @@ def main():
     ap.add_argument("--win-value-gamma", type=float, default=1.0, help="... its discount a frame (1: the game's sum, cut at its end)")
     ap.add_argument("--win-value-lam", type=float, default=0.95, help="... TD(lambda) over its kept states")
     ap.add_argument("--win-value-cal-every", type=int, default=5, help="... every this many kept states go into the calibration at a game's end")
+    ap.add_argument("--value-warm", type=int, default=0,
+                    help="(v0.6.1) the critic's warm-up: the first N updates of this process learn the value outputs only (pol.v, "
+                         "pol.v2: their own gradient of the value loss, clipped on its own at 0.5); every other weight takes no step "
+                         "and its Adam moments and step count stand still (its gradient is None, so Adam skips it): the policy, the "
+                         "trunk, the brain and every lesson are bit-identical through it, and the value learns a new pay before the "
+                         "policy moves. Live: VALUE_WARM=N in live.json starts a warm-up of N updates from the rollout read after "
+                         "the change (an update learnt on a rollout of the old pay is not counted); set it back to 0 after, or a "
+                         "restart that reads the file starts it again. 0 = off")
     ap.add_argument("--gamma", type=float, default=0.998,
                     help="how far ahead rewards count: 0.995 = about 5 s, 0.998 = about 12 s, 0.999 = about 25 s")
     ap.add_argument("--demo-dir", default="", help="pro-demo training data (sim/demo_dataset.py), folders separated by commas")
@@ -1449,6 +1458,8 @@ def main():
     ap.add_argument("--dump-acts", default="", help="(checks) after each update: <this>_<update>.pt with the rollout's actions, log p, "
                                                     "values and rewards (a fixed-seed identity check of two runs)")
     a = ap.parse_args()
+    if "WIN_SHAPE_G" not in os.environ:                       # (v0.6.1, WIN_SHAPE_K) the shaping's discount is the trainer's, unless named
+        os.environ["WIN_SHAPE_G"] = repr(float(a.gamma))
     if a.solo_self_drive:                                    # (v0.3.4 C) read by the simulators (spawned with this environment)
         os.environ["SOLO_SELF"] = "1"
 
@@ -2535,6 +2546,7 @@ def main():
     WV_GEN = torch.Generator().manual_seed(4048)             # (--win-value) its minibatch order: a stream of its own
     WV_T0 = float(a.win_value_start) if a.win_value_start >= 0 else float(elapsed0)
     WV_LIVE = [1.0]                                          # (live.json's WIN_VALUE_W)
+    VW_ = [1, int(a.value_warm)]                             # (v0.6.1, --value-warm; live VALUE_WARM) the critic's warm-up: from update, updates
     WV_PREV = [None]                                         # (the last rollout's kept states: learnt one rollout late)
     WV_ST = [None]                                           # (the per-seat stream, made at the first rollout)
     h2_group()                                               # (v0.4.3) the strategy head's, the last
@@ -2936,7 +2948,7 @@ def main():
                        **({"RJ_COPY_W": float(a.rj_copy)} if RJC_LAB else {}),
                        **({"INTENT_TEACH_W": 1.0} if a.intent_teach > 0 else {}),
                        **({"BRAIN_HUMAN_W": float(a.brain_human_w)} if BH is not None else {}),
-                       ITEM_FLOOR=float(a.item_floor), ITEM_FLOOR_W=float(a.item_floor_w),
+                       ITEM_FLOOR=float(a.item_floor), ITEM_FLOOR_W=float(a.item_floor_w), VALUE_WARM=float(a.value_warm),
                        **({"FADE_CAP": float(a.rule_fade_cap), "FADE_OPEN": float(a.rule_fade_open)} if RF_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
     if LIVE_ON and os.path.exists(LIVE_PATH):
@@ -3099,6 +3111,8 @@ def main():
                     RJC_LIVE[0] = float(lt_.get("RJ_COPY_W", RJC_LIVE[0]))           # (--rj-copy: the lesson's weight; its warm-up from the first minute above 0)
                     CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
                     WV_LIVE[0] = float(lt_.get("WIN_VALUE_W", WV_LIVE[0]))           # (--win-value: a factor on its rate; 0 stops it)
+                    if "VALUE_WARM" in cht_:                                         # (v0.6.1) a new critic warm-up: from this rollout's update
+                        VW_[:] = [update, int(round(float(cht_["VALUE_WARM"])))]
                     IT_LIVE[0] = float(lt_.get("INTENT_TEACH_W", IT_LIVE[0]))        # (v0.4.3: the item rule's factor, at the next learning step)
                     BH_LIVE[0] = float(lt_.get("BRAIN_HUMAN_W", BH_LIVE[0]))         # (--brain-human: the people's lesson's weight; 0 stops it)
                     IF_LIVE[0] = float(lt_.get("ITEM_FLOOR_W", IF_LIVE[0]))          # (--item-floor: its weight, 0 stops it; the floor)
@@ -3121,7 +3135,7 @@ def main():
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
                                   **({"INTENT_TEACH_W": IT_LIVE[0]} if a.intent_teach > 0 else {}),
                                   **({"BRAIN_HUMAN_W": BH_LIVE[0]} if BH is not None else {}),
-                                  ITEM_FLOOR=IF_LIVE[1], ITEM_FLOOR_W=IF_LIVE[0],
+                                  ITEM_FLOOR=IF_LIVE[1], ITEM_FLOOR_W=IF_LIVE[0], VALUE_WARM=float(VW_[1]),
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}),
                                   **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1]} if H2 else {}))
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
@@ -3875,6 +3889,7 @@ def main():
     PEND, R, t_prev = None, None, None                                   # (--overlap) the rollout in flight; the last rollout's buffers
     PREV_SD = [None]                                                     # (--step-kl-pieces) pol before the last update's learning
     upd0_ = update
+    VW_IDS = VW_PS = None                                                # (v0.6.1, --value-warm) the value outputs' tensors
     while time.time() - t_start < a.minutes * 60 and not (a.max_updates > 0 and update - upd0_ >= a.max_updates):
         update += 1
         ovl_wait = 0.0
@@ -3961,6 +3976,13 @@ def main():
         if OVL and time.time() - t_start < a.minutes * 60 and not (a.max_updates > 0 and update - upd0_ >= a.max_updates):   # (--overlap) the next rollout plays while this update learns
             PEND = launch(update + 1)
         t_learn = time.time()
+        VW_ON = VW_[1] > 0 and VW_[0] <= update < VW_[0] + VW_[1]       # (v0.6.1, --value-warm) this update learns the value outputs only
+        VL_ACC = [None, 0, None, 0]                                      # (--value-warm) the value loss summed over this update's pieces: first pass, last pass
+        if VW_ON and VW_IDS is None:
+            VW_IDS = {id(p_) for n_, p_ in pol.named_parameters() if n_.startswith(("v.", "v2."))}
+            VW_PS = [p_ for n_, p_ in pol.named_parameters() if n_.startswith(("v.", "v2."))]
+            print("value warm-up: {} tensors learn ({}), every other weight stands still".format(
+                len(VW_PS), [n_ for n_, p_ in pol.named_parameters() if n_.startswith(("v.", "v2."))]), flush=True)
         T_ROLL = t_learn - t_roll if not OVL else R["t_done"] - t_roll   # the rollout's seconds (--overlap: its thread's own)
         if OVL and dev.type == "cuda":
             torch.cuda.reset_peak_memory_stats()
@@ -4881,7 +4903,19 @@ def main():
                                     float((dd_[2].logits.argmax(-1) == da[..., 2]).float().mean()),
                                     float(((dd_[3].logits.argmax(-1) - da[..., 3]).abs() <= 1).float().mean())]
                 opt.zero_grad()
+                if VW_[1] > 0 and epoch in (0, 2):                       # (--value-warm) the value loss, recorded while a warm-up is set
+                    j_ = 0 if epoch == 0 else 2                          # (the first pass's and the last's, on the same frames)
+                    VL_ACC[j_] = vl.detach() if VL_ACC[j_] is None else VL_ACC[j_] + vl.detach()
+                    VL_ACC[j_ + 1] += 1
+                if VW_ON:                                                # (v0.6.1, --value-warm) the value loss alone, the value outputs only:
+                    loss = 0.5 * vl                                      # every other tensor's gradient is None (no step, no Adam moment)
                 loss.backward()
+                if VW_ON:
+                    for g_ in opt.param_groups:
+                        for p_ in g_["params"]:
+                            if id(p_) not in VW_IDS:
+                                p_.grad = None
+                    nn.utils.clip_grad_norm_(VW_PS, 0.5)
                 H2GR_ = None
                 if H2:                                                   # (--head2) its gradient clipped on its own and kept out of the rest's clip
                     h2_acc[7] += nn.utils.clip_grad_norm_(pol.head2.parameters(), 0.5).detach().double()
@@ -4928,7 +4962,7 @@ def main():
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith(BRAIN_PFX)], 0.5)
                 else:
                     nn.utils.clip_grad_norm_(pol.parameters(), 0.5)
-                if H2GR_ is not None:                                    # (--head2) its gradient back for the step
+                if H2GR_ is not None and not VW_ON:                      # (--head2) its gradient back for the step
                     for p_, g_ in zip(pol.head2.parameters(), H2GR_):
                         p_.grad = g_
                 opt.step()
@@ -5549,6 +5583,15 @@ def main():
                                      win_size_per_player_min=round(float(WS_[1] / wm_), 4), flat_per_player_min=round(float(WS_[2] / wm_), 4),
                                      flat_size_per_player_min=round(float(WS_[3] / wm_), 4),
                                      size_ratio_win_to_flat=round(float(WS_[1] / max(1e-9, WS_[3])), 4))
+        if VW_[1] > 0:                                                   # (v0.6.1, --value-warm) the critic's warm-up: on in this update, its span
+            rec["value_warm"] = dict(on=bool(VW_ON), start=int(VW_[0]), n=int(VW_[1]), left=max(0, int(VW_[0] + VW_[1] - update - 1)),
+                                     v_loss=round(float(VL_ACC[0]) / max(1, VL_ACC[1]), 6) if VL_ACC[0] is not None else None,
+                                     v_loss_last=round(float(VL_ACC[2]) / max(1, VL_ACC[3]), 6) if VL_ACC[2] is not None else None)
+        if "win_shape" in agg:                                           # (v0.6.1, WIN_SHAPE_K) the shaping's sizes a player-minute in games
+            WH_ = np.atleast_1d(agg["win_shape"]).astype(np.float64)     # (the simulator's WSH_COLS)
+            hm_ = max(1e-9, float(WH_[0]) * DT_MIN)
+            rec["win_shape"] = dict(minutes=round(float(WH_[0]) * DT_MIN, 1), per_player_min=round(float(WH_[1] / hm_), 4),
+                                    size=round(float(WH_[2] / hm_), 4), cut_sum=round(float(WH_[3]), 4), cuts=int(WH_[4]))
         if "win_blend" in agg:                                           # (v0.5.1, WIN_W / FADE_V) the blend's sizes a player-minute in games
             WB_ = np.atleast_1d(agg["win_blend"]).astype(np.float64)     # (the simulator's WB_COLS): for sizing WIN_GAIN, the win part at
             bm_ = max(1e-9, float(WB_[0]) * DT_MIN)                      # G = 1 against the combat pay it replaces

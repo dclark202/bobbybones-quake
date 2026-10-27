@@ -1617,14 +1617,40 @@ WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay
 #                 that frame. Switched on or off in the middle of a game: one frame's step from W to W~ (or back). Only the
 #                 blend reads it (WIN_PAY and WIN_SHADOW keep the table alone). The trainer's live.json takes numbers of 0
 #                 or more only: a negative coefficient goes by live_settings.env or the run's environment.
-WIN_LIVE = ("WIN_W", "WIN_GAIN", "FADE_V", "WIN_LONG", "WIN_STACK", "WIN_TAU", "WIN_PA", "WIN_PS", "WIN_PRL", "WIN_PLG", "WIN_PRG")
+#   WIN_SHAPE_K=k (v0.6.1; live, 0 or more, default 0: off, the simulator is v0.5.1's to the bit) a dense pay beside the win
+#                 part that leaves its equilibrium alone (potential-based shaping, Ng, Harada and Russell 1999): in every frame
+#                 of a game under way (the blend's frames, wb_gm) the first seat of a match is paid
+#                     k x (WIN_SHAPE_G x PSI(now) - PSI(the frame before))      and the second seat exactly the opposite,
+#                 PSI = (p_next - 0.5) x (1 - exp(-left / WIN_SHAPE_TAU)), p_next WIN_STACK's chance of the next frag (the same
+#                 coefficients WIN_PA .. WIN_PRG, the same dead-player rule: a dead player counts as his respawn will have him),
+#                 left the seconds to play as the blend reads them (overtime: the period's, 0 on its last frame). PSI is a
+#                 function of the state only (stacks, big weapons, the clock), zero-sum (the second seat's PSI is minus the
+#                 first's) and 0 at a game's end (left 0); a round that ends before (a spawn start, a moment's end) is cut
+#                 there with PSI(end) := 0 (the frame's pay is corrected: k x (0 - PSI before)), as a terminal state must be.
+#                 So over a game the shaping sums to  k x (WIN_SHAPE_G^T x 0 - PSI(start)) discounted at WIN_SHAPE_G, i.e. it adds
+#                 a constant, -k PSI(start), to the value of the start and nothing to any choice: with WIN_SHAPE_G = the
+#                 trainer's --gamma (0.999 a frame in v0.5.x; the trainer sets WIN_SHAPE_G to its --gamma when the run's
+#                 environment does not name it) the discounted objective PPO maximises, and with it its fixed point in self-play,
+#                 is exactly the win part's. Undiscounted, a game's shaping sums to -k PSI(start) - k (1 - WIN_SHAPE_G) x the sum
+#                 of PSI over its frames (a stack lead held costs 0.1% of its PSI a frame): small and, being zero-sum, cancels
+#                 between equal players. What it changes: a hit, a pickup, a big weapon taken pay on their frame instead of only
+#                 through the frag they make likelier, and the pay is taken back when the advantage goes (a frag resets the
+#                 dead player to the spawn's stack; the respawn moves nothing). Not faded by FADE_V or scaled by WIN_W (added
+#                 after the blend), not in r_long. Opened in the middle of a game it pays from that frame on (its PSI before
+#                 is read there, nothing paid that frame); set to 0 it forgets PSI. Counters (with k > 0): stats["win_shape"]
+#                 (WSH_COLS); info["win_shape"]; PAY_SPLIT: in the term "win_part".
+#   WIN_SHAPE_TAU (live, seconds, default 32.5: WIN_STACK's) how fast PSI goes to 0 at the end;  WIN_SHAPE_G (live, default
+#                 0.999) its discount a frame: must be the trainer's --gamma.
+WIN_LIVE = ("WIN_W", "WIN_GAIN", "FADE_V", "WIN_LONG", "WIN_STACK", "WIN_TAU", "WIN_PA", "WIN_PS", "WIN_PRL", "WIN_PLG", "WIN_PRG",
+            "WIN_SHAPE_K", "WIN_SHAPE_TAU", "WIN_SHAPE_G")
 
 
 def _win_live(get):
     """(v0.5.1) WIN_W, WIN_GAIN, FADE_V, WIN_LONG and the stack term's names from get(name) -> a string or None (unset: the
     default); ValueError on a value out of range (the trainer refuses the live file then)"""
     d_ = dict(WIN_W=0.0, WIN_GAIN=1.0, FADE_V=0.0, WIN_LONG=0.0, WIN_STACK=0.0,      # (the stack term's defaults: the fit of 2026-10-26)
-              WIN_TAU=32.5, WIN_PA=2.7546, WIN_PS=300.0, WIN_PRL=0.4277, WIN_PLG=0.4485, WIN_PRG=0.2922)
+              WIN_TAU=32.5, WIN_PA=2.7546, WIN_PS=300.0, WIN_PRL=0.4277, WIN_PLG=0.4485, WIN_PRG=0.2922,
+              WIN_SHAPE_K=0.0, WIN_SHAPE_TAU=32.5, WIN_SHAPE_G=0.999)          # (v0.6.1, the shaping beside the win part: off)
     v = {}
     for k_, x0_ in d_.items():
         x_ = get(k_)
@@ -1639,6 +1665,8 @@ def _win_live(get):
         raise ValueError("WIN_LONG and WIN_STACK are 0 or 1")
     if not v["WIN_TAU"] > 0 or v["WIN_PS"] < 0:
         raise ValueError("WIN_TAU must be above 0 and WIN_PS 0 or more")
+    if v["WIN_SHAPE_K"] < 0 or not v["WIN_SHAPE_TAU"] > 0 or not 0.0 < v["WIN_SHAPE_G"] <= 1.0:
+        raise ValueError("WIN_SHAPE_K must be 0 or more, WIN_SHAPE_TAU above 0, WIN_SHAPE_G within (0, 1]")
     v["WIN_LONG"], v["WIN_STACK"] = v["WIN_LONG"] > 0, v["WIN_STACK"] > 0
     return v
 
@@ -1647,6 +1675,8 @@ globals().update(_win_live(os.environ.get))
 WB_COLS = ("his frames in games", "the win part at G = 1 (WIN_SCALE x the change in his chance), summed", "its size",
            "the combat pay (frags, deaths, damage) before the blend, summed", "its size", "the other pay before the blend: size",
            "the pay after the blend: size", "frames with the blend on")
+WSH_COLS = ("his frames in games with the shaping on", "the shaping paid (k x (g PSI - PSI before)), summed", "its size",
+            "the corrections at a round cut before the game's end, summed", "his rounds cut so")
 #   OVERTIME=1    Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
 #                 the game's limit (GAME_LEN) with the score level goes on for another OT_LEN seconds, period after period,
 #                 until a period ends with the score not level, or after OT_CAP periods (OVERTIME_CAP, 10): then it is a
@@ -9001,6 +9031,9 @@ class DuelEnv:
         self.wb_cb = np.zeros(self.n, np.float64)            # this frame's combat pay (frags, deaths, damage), per player
         self.wb_gm = np.zeros(self.n, bool)                  # this frame: a game under way in his match
         self.wb_left = np.zeros(self.M)                      # the seconds left the blend's chance read this frame, per match
+        self.wsh_prev = np.full(self.M, np.nan)              # (WIN_SHAPE_K, v0.6.1) the first seat's PSI the frame before (nan: not kept)
+        self.wsh_now = np.full(self.M, np.nan)               # ... and this frame's (for a round cut before the game's end)
+        self.wsh_pay = np.zeros(self.n, np.float64)          # ... this frame's shaping, per player
         if GAME_ON:
             f_ = os.environ.get("WIN_CHANCE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "win_chance.json")
             if os.path.exists(f_):
@@ -9038,15 +9071,65 @@ class DuelEnv:
         W_ = self._win_p(d_, left, tab=self.wb_tab)
         if not WIN_STACK:
             return W_
+        pn_ = self._wb_pnext(a_, b_)
+        dW_ = self._win_p(d_ + 1.0, left, tab=self.wb_tab) - self._win_p(d_ - 1.0, left, tab=self.wb_tab)
+        return np.clip(W_ + (pn_ - 0.5) * dW_ * (1.0 - np.exp(-np.maximum(left, 0.0) / WIN_TAU)), 0.0, 1.0)
+
+    def _wb_pnext(self, a_, b_):
+        """(WIN_STACK, WIN_SHAPE_K) the chance that seats a_ score the next frag against seats b_: sigmoid(WIN_PA x f(stack
+        difference) + WIN_PRL x dRL + WIN_PLG x dLG + WIN_PRG x dRG), the true stacks (health + armor) and the big weapons
+        owned (-1 / 0 / 1); a dead player as his respawn will have him"""
         dead_ = (self.hp <= 0) | (self.rsp_wait > 0)          # (a dead player as his respawn will have him: the spawn's
         st_ = lambda i_: np.where(dead_[i_], SPAWN_HP, np.asarray(self.hp[i_], np.float64) + np.asarray(self.armor[i_], np.float64))
         ds_ = st_(a_) - st_(b_)                               # health, no armor, no big weapon; the fit has both alive only)
         f_ = np.tanh(ds_ / WIN_PS) if WIN_PS > 0 else ds_ / 100.0
         hv_ = lambda w_: np.where(dead_[a_], 0.0, self.has[a_, w_].astype(np.float64)) - np.where(dead_[b_], 0.0, self.has[b_, w_].astype(np.float64))
         z_ = WIN_PA * f_ + WIN_PRL * hv_(RL) + WIN_PLG * hv_(LG) + WIN_PRG * hv_(RG)
-        pn_ = 1.0 / (1.0 + np.exp(-z_))
-        dW_ = self._win_p(d_ + 1.0, left, tab=self.wb_tab) - self._win_p(d_ - 1.0, left, tab=self.wb_tab)
-        return np.clip(W_ + (pn_ - 0.5) * dW_ * (1.0 - np.exp(-np.maximum(left, 0.0) / WIN_TAU)), 0.0, 1.0)
+        return 1.0 / (1.0 + np.exp(-z_))
+
+    def _wsh_psi(self, m, left):
+        """(WIN_SHAPE_K) the shaping's potential for the first seat of matches m with `left` seconds to play:
+        (p_next - 0.5) x (1 - exp(-left / WIN_SHAPE_TAU)); the second seat's is minus it"""
+        m = np.atleast_1d(np.asarray(m, np.int64))
+        g_ = self._others_arr().shape[1] + 1
+        left = np.broadcast_to(np.asarray(left, np.float64), m.shape)
+        return (self._wb_pnext(m * g_, m * g_ + 1) - 0.5) * (1.0 - np.exp(-np.maximum(left, 0.0) / WIN_SHAPE_TAU))
+
+    def _wsh_start(self, m, left):
+        """(WIN_SHAPE_K) a game begins in match m with `left` seconds to play: its PSI there (with the start's stacks), or
+        nothing kept with the shaping off"""
+        self.wsh_prev[m] = float(self._wsh_psi(m, left)[0]) if WIN_SHAPE_K > 0 and self.wb_tab is not None else np.nan
+
+    def _wsh_cut(self, m):
+        """(WIN_SHAPE_K) match m's round ends here with its game not played to its end: the end is terminal, so its PSI is 0
+        there and this frame's shaping is k x (0 - PSI before), not k x (g PSI now - PSI before): take g k PSI now back"""
+        if not (WIN_SHAPE_K > 0) or not np.isfinite(self.wsh_now[m]):
+            return
+        g_ = self._others_arr().shape[1] + 1
+        c_ = WIN_SHAPE_K * WIN_SHAPE_G * float(self.wsh_now[m])
+        a_, b_ = m * g_, m * g_ + 1
+        self.wsh_pay[a_] -= c_                               # (paid after the blend with the frame's shaping)
+        self.wsh_pay[b_] += c_
+        S_ = self.stats.get("win_shape")
+        if S_ is not None and c_ != 0.0:
+            for q_, x_ in ((a_, -c_), (b_, c_)):
+                if self._counted(np.array([q_]))[0] and self.script[q_] == 0:
+                    S_ += (0.0, x_, abs(x_), x_, 1.0)
+        self.wsh_now[m] = np.nan
+
+    def _wsh_pay(self, reward, info):
+        """(WIN_SHAPE_K) this frame's shaping into the pay (after the blend: neither FADE_V nor WIN_W touch it), its counters"""
+        gm = self.wb_gm
+        y_ = np.where(gm, self.wsh_pay, 0.0)
+        reward += y_.astype(reward.dtype)
+        info["win_shape"] = y_.astype(np.float32)
+        if PAY_SPLIT:
+            self.pt[gm, PT_IX["win_part"]] += y_[gm]
+        S_ = self.stats.get("win_shape")
+        if S_ is None:
+            S_ = self.stats["win_shape"] = np.zeros(len(WSH_COLS))
+        c_ = gm & self._counted(np.arange(self.n)) & (self.script[:self.n] == 0)
+        S_ += (float(c_.sum()), float(y_[c_].sum()), float(np.abs(y_[c_]).sum()), 0.0, 0.0)
 
     def _wb_blend(self, reward, info):
         """(WIN_W / FADE_V) the frame's pay in the games cut into combat, win and other and paid by the blend (see WIN_W)"""
@@ -9148,6 +9231,7 @@ class DuelEnv:
             if self.wb_tab is not None:
                 self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - t_ * DT)[0])
             self.stats["stagger"] += (1.0, t_ * DT)
+        self._wsh_start(m, GAME_LEN - int(self.g_tick[m]) * DT)     # (WIN_SHAPE_K) PSI at the start, with the spawned stacks
         if not late:
             self.stag_first[m] = False
         self.stats["games"][15] += 1
@@ -9184,6 +9268,7 @@ class DuelEnv:
             self.ws_p[m] = float(self._win_p(d, GAME_LEN - LATE_AT, tab=self.ws_tab))
         if self.wb_tab is not None:
             self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - LATE_AT)[0])
+        self._wsh_start(m, GAME_LEN - LATE_AT)               # (WIN_SHAPE_K) PSI with the drawn stacks
         for it in range(self.nI):
             kind, val, resp, cap, lab = self.item_def[it]
             p_ = LATE_DOWN[0] if lab in ("MH", "RA", "YA", "GA") else LATE_DOWN[1] if kind == "wp" else LATE_DOWN[2]
@@ -9210,6 +9295,7 @@ class DuelEnv:
             self.win_shadow[:] = 0.0
         self.wb_raw[:] = 0.0
         self.wb_gm[:] = False
+        self.wsh_pay[:] = 0.0
         gm = np.nonzero(self.game > 0)[0]
         if not len(gm):
             return
@@ -9236,6 +9322,15 @@ class DuelEnv:
             yb_ = self.wb_scale * (pb_ - self.wb_p[gm])
             self.wb_p[gm] = pb_
             self.wb_raw[ab_], self.wb_raw[bb_] = yb_, -yb_
+            self.wsh_now[:] = np.nan
+            if WIN_SHAPE_K > 0:                              # (WIN_SHAPE_K, v0.6.1) the shaping: k (g PSI - PSI before), zero-sum
+                ps_ = self._wsh_psi(gm, lb_)
+                pv_ = self.wsh_prev[gm]
+                y_ = np.where(np.isfinite(pv_), WIN_SHAPE_K * (WIN_SHAPE_G * ps_ - np.nan_to_num(pv_)), 0.0)   # (opened here: from now on)
+                self.wsh_prev[gm], self.wsh_now[gm] = ps_, ps_
+                self.wsh_pay[ab_], self.wsh_pay[bb_] = y_, -y_
+            else:
+                self.wsh_prev[:] = np.nan                    # (off: forgotten; opened again it reads PSI afresh)
         if self.ws_tab is not None:                          # (WIN_SHADOW) what WIN_PAY would pay this frame: recorded, never paid
             gw_ = self._others_arr().shape[1] + 1
             aw_, bw_ = gm * gw_, gm * gw_ + 1
@@ -9834,6 +9929,7 @@ class DuelEnv:
             self.ws_p[m] = float(self._win_p(d, GAME_LEN - tick * DT, tab=self.ws_tab))
         if self.wb_tab is not None:
             self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - tick * DT)[0])
+        self._wsh_start(m, GAME_LEN - tick * DT)             # (WIN_SHAPE_K) PSI with the start's stacks
         im_, L_, W_ = P["imap"], P["item_left"][k], P["item_who"][k]
         for it in range(self.nI):
             c_ = int(im_[it])
@@ -12819,6 +12915,7 @@ class DuelEnv:
         contest_m = []
         for m in ends:
             if GAME_ON and self.game[m]:                     # a whole game or a late round is over: its result into the counters
+                self._wsh_cut(int(m))                        # (WIN_SHAPE_K) cut before its end: PSI there is 0 (0 at the end anyway)
                 self._game_end(int(m))
             self.round_fac[m] = self.rng.uniform(0.67, 1.33)
             self.drop_w[m] = -1
@@ -12992,6 +13089,8 @@ class DuelEnv:
         self._ps("lg_quiet", reward)
         if GAME_ON:                                          # (WIN_W / FADE_V) the blend in the games; its counters always
             self._wb_blend(reward, info)
+            if WIN_SHAPE_K > 0:                              # (WIN_SHAPE_K, v0.6.1) the shaping, after the blend: not faded
+                self._wsh_pay(reward, info)
         self._pt_end(info)
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or
