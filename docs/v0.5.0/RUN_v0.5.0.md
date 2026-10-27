@@ -5,7 +5,7 @@ local server v0.4.4 looped one item and the weapon beside it (Hektik: 7 megas, 3
 went for the player; v0.4.2b's end does not. The simulator does it too (the same save in self-play: lightning gun as target 82%,
 47% of the time within 300 u of its spawn). The checks had not seen it: they played each save against the previous one and
 counted intentions over every kind of round. v0.5.0 is one phase: v0.4.2b's end, every loophole found closed, `!aim default`,
-the owner's mix; at least 6 hours, maybe overnight. Then [v0.5.1](../v0.5.1/RUN_v0.5.1.md): pay by win chance only; then [v0.5.2](../v0.5.2/RUN_v0.5.2.md): the head, then the item rule's fade.*
+the owner's mix; at least 6 hours, maybe overnight. Then [v0.5.1](../v0.5.1/RUN_v0.5.1.md): pay by win chance only; then [v0.5.2](../v0.5.2/RUN_v0.5.2.md): the new aim model; then [v0.5.3](../v0.5.3/RUN_v0.5.3.md): the head, then the item rule's fade.*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 

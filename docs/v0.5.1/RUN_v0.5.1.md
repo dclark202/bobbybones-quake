@@ -2,7 +2,7 @@
 
 *2026-10-26 night (owner: "a lot of his current behavior is pathological. he does what gives him reward, and ends up not
 fighting when he should be and doing weird things"). From v0.5.0's end, before the strategy head (now
-[v0.5.2](../v0.5.2/RUN_v0.5.2.md)): the head optimises whatever he is paid, so it opens on the pay that only rewards winning.
+[v0.5.3](../v0.5.3/RUN_v0.5.3.md), after the new aim model of [v0.5.2](../v0.5.2/RUN_v0.5.2.md)): the head optimises whatever he is paid, so it opens on the pay that only rewards winning.
 Two overlapping fades: the fight's pay becomes the change in his chance of winning, then everything else in a game fades out.
 At the end a game pays him only for his chance of winning. The full proposal and its review:
 [PROPOSAL_v0.5.1_winpay.md](PROPOSAL_v0.5.1_winpay.md).*
@@ -14,11 +14,11 @@ At the end a game pays him only for his chance of winning. The full proposal and
 | | |
 |---|---|
 | Network | v0.5.0's end (`duel_gru_v0_5_0/keep/policy_end_v050.pt` + optimizer) |
-| Code | branch `v051` (v0.5.0's code + the pay blends below; everything off = v0.5.0 bit for bit) ⏳ |
+| Code | branch `v051` (1cb3009, 1b02dd6, 120c086: v0.5.0's code + the pay blends below; everything off = v0.5.0 bit for bit in fixed runs of both modules; a game's win part sums to its result; at full fade a game frame pays only the win part; the CPU smoke test of the command passed) ✅ |
 | Aim | `!aim default`: level 3 delays (100 / 200 ms), sight 0.6°, hand 0.10, fast-target 0.075 capped at 1.5° (rail 1.0°) |
 | Mix | **67% whole games / 33% the pros' mid-game starts; no movement practice at all** (owner: "He isn't getting any better at any of the jumps specifically. So let's just remove them"): `JUMP_RUN_P` 0, the jump focus off. Every frame he plays is a game paid by win chance |
 | Speed pay | already 0 (faded out at v0.5.0's end, 04:00-06:05) |
-| Before the go | the dry run: the exact command on a scratch copy for 10 updates, then a check against the control and the behaviour panel; `WIN_GAIN` set there 🧪 |
+| Before the go | the first 10 updates are the dry run (as v0.5.0's: the pay is v0.5.0's at step 0), then a check against the control and the behaviour panel; the start is one script (`start_v051.ps1`: v0.5.0 stopped after its next save and kept as its end, the folder made, the trainer, watcher, guard and ramp started) ✅ |
 | Run | `duel_gru_v0_5_1`, Tue 07:00 to Wed noon (owner) |
 
 ## What is paid now in a game (v0.5.0, per player-minute)
@@ -36,10 +36,10 @@ At the end a game pays him only for his chance of winning. The full proposal and
 
 | Part | What it is | State |
 |---|---|---|
-| Win chance | each frame: the change in his chance of winning, from `sim/win_chance.json` (the pros' 257 games: score lead and time left) | built (`WIN_PAY`), never run ⏳ |
-| Stack in the win chance | a zero-sum term: the chance the next frag is his (from both stacks and big weapons), times what a frag is worth at this score and clock, times the chance a frag still comes before the end; 0 at the end. Fitted from ~1,100 pro games recorded by both players | fitting ⏳ |
-| `WIN_GAIN` | scales the win part to keep his learning signal the size it is now (the spread of his advantages matched in the dry run) | 🧪 |
-| The long value | the win part also feeds his ~2-minute value (it learned items and stack before; they fade) | ⏳ |
+| Win chance | each frame: the change in his chance of winning, from `sim/win_chance.json` (the pros' 257 games: score lead and time left); the overtime and buzzer frames read 0 s left | ✅ |
+| Stack in the win chance | a zero-sum term: the chance the next frag is his (from both stacks and big weapons), times what a frag is worth at this score and clock, times the chance a frag still comes before the end; 0 at the end. Fitted from 1,040 pro games recorded by both players: held out, the win chance's log loss 0.3959 -> 0.3848, better in every time band; a dead player counts as his respawn stack | ✅ |
+| `WIN_GAIN` | scales the win part to keep his pay the size it is now: set by the ramp before step 1 from the run's own counters (the combat pay's size over the win part's, the first 10 updates), within 1 to 4 | 🧪 |
+| The long value | the win part also feeds his ~2-minute value (it learned items and stack before; they fade): `WIN_LONG` | ✅ |
 
 **Equilibrium:** each frame pays the change of one function of the game, so a game's pay sums to its result whatever happened on
 the way: zero-sum, nothing can be pumped, the self-play optimum is to win. The stack term changes when he is paid, never how much a
@@ -75,7 +75,7 @@ game is worth.
 | | |
 |---|---|
 | Movement practice | removed for v0.5.1 (owner); revisited once the strategy layer and the rest are done. The panel tracks his tries and successes at Aerowalk's red-armor jump and Campgrounds' b2r in games meanwhile |
-| The item rule | a lesson for which item to go for (not a pay): stays on; faded with the head in v0.5.2 |
+| The item rule | a lesson for which item to go for (not a pay): stays on; faded with the head in v0.5.3 |
 | A learned win chance | later: a correction learned from his own games on top of the pros' fit, only if it predicts held-out games better ⏸ |
 
 ## Risks

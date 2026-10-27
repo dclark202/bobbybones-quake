@@ -1,9 +1,12 @@
-# v0.5.2 on one page: the strategy head opened, then the item rule faded, behaviour-gated
+# v0.5.2 on one page: the new human aim model, calibrated to the pros by weapon style
 
-*2026-10-26 (owner; renumbered that night: v0.5.1 is now the win-chance pay, [RUN_v0.5.1.md](../v0.5.1/RUN_v0.5.1.md), and this run comes after it, from v0.5.1's end, on win-chance pay alone): first planned from v0.5.0's end ([RUN_v0.5.0.md](../v0.5.0/RUN_v0.5.0.md)) after its ≥ 6 h on `!aim default` with the
-loopholes closed. Two steps, one after the other: the head opens while the item rule still guides his target (v0.4.3 faded the
-rule before any head existed, so for a whole version nothing guided the choice, and the spawn camping began), then the rule fades
-with the head taking over. Each step is stepped by the checks AND the behaviour panel; a red holds or steps back by itself.*
+*2026-10-27 (owner): v0.5.1 finishes the fade to pay by win chance; then this run replaces the aim limits of 2026-10-26 (one
+error by the target's speed across the world, capped by the weapon in hand: rail 0.001°, everything else 1.5°) with a model
+of the eyes and hands that does not know the weapon. The owner: "I'm not convinced our approach yesterday to aim smoothing was
+the right one"; "LG is tracking, rail is flicking, rockets are predictions. Plasma is a hybrid of predicting and tracking, SG is
+a close range flick, mg/hmg is tracking with spread"; "when in doubt, calibrate based on the pros. Their measures should be the
+benchmark for `default`". The limits as they are: [AIM_LIMITS.md](../v0.5.1/AIM_LIMITS.md); the model and its calibration:
+`AIM_MODEL.md` in this folder (being written). Then [v0.5.3](../v0.5.3/RUN_v0.5.3.md): the strategy head.*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
@@ -11,42 +14,52 @@ with the head taking over. Each step is stepped by the checks AND the behaviour 
 
 | | |
 |---|---|
-| Network | v0.5.0's end (`keep/policy_end_v050.pt` + optimizer) |
-| Code | v0.5.0's (`v050`), every v0.5.0 fix on; `!aim default`; the mix 60 / 30 / 10 |
-| Control | v0.4.2b's end (fixed, as in v0.5.0) and v0.5.0's end; every 4th check v0.4.1's end (owner: "Use v0.4.1 as the ref. v0.3.10 can be out") |
-| Before the head opens | the speed pay phased out at v0.5.0's end (owner): live SPEED_PAY 0.25 -> 0 in steps of 0.05 every 25 min from 04:00 Tue (scratchpad v050/ramp_speed50.py; the jump runs' own speed pay kept); equilibrium: speed is worth only what it wins |
+| Network | v0.5.1's end (`keep/policy_end_v051.pt` + optimizer), on pay by win chance only ⏳ (v0.5.1's fade ends ~03:00-04:00 Wed) |
+| Code | branch `aim2` (from v051): the new model as switches, all off = v0.5.1's simulator bit for bit (`tools/aim2_ident.py`) ✅ |
+| Pay | win chance only, unchanged (v0.5.1's end state) |
+| Mix | as v0.5.1: 67% whole games / 33% the pros' mid-game starts, no movement practice |
+| When | Wed ~noon (after ~8 h of win-chance pay alone) through Thu morning ❓ |
 
-## Schedule (owner, 2026-10-26)
+## The new model (one new thing, opened in two phases)
 
-| When | What |
-|---|---|
-| Mon 21:00 | look at v0.5.0 (likely: let it run overnight) |
-| Tue 04:00-06:05 | the speed pay phased out (v0.5.0's end) |
-| Tue 06:30 | the report on v0.5.0 |
-| Tue 07:00-08:00 | v0.5.1 starts: the head attached shut, trains shut ~20 updates and a check, then opens (phase 2) |
-| Tue afternoon | play test after phase 2; then phase 3 (the item rule fades) |
-| Wed noon | v0.5.1 ends (or earlier, the owner's call) |
+| Part | Now (v0.5.1) | v0.5.2 | Mostly governs |
+|---|---|---|---|
+| Fast-target error | by the target's speed across the world, cap by weapon (rail 0.001°, else 1.5°) | **retinal slip**: the target's motion against his own view's, as of his delay; **eccentricity**: the angle off his crosshair. No weapon in it | slip: tracking (LG, MG, plasma); eccentricity: flicks (rail, SG) |
+| Where the error goes | his whole picture of the enemy (map memory, the brain, the rocket floor point) | the crosshair-to-target angles and the lead's last offset only; his map memory gets the delay and the judged range and speed | predictions (RL, plasma) and the brain |
+| Focus | cuts his tracking delay 100 → 50 ms for 2 s of sight | keeps the delay; sharpens his sight instead | reversals in tracking |
+| Flinch | 0.25°/damage, up to 6°, 0.5 s; impulse and sustained together | recalibrated to the pros' dip in the half second after a hit; sustained only | every weapon |
+| Zoom | shrinks the base sight error only | shrinks every part of it | zoomed MG, LG, rail |
+| Hand smoothing | view inertia 0.75 ahead of the 4 Hz hand filter | 🧪 measured: is it filtered twice? A change there is his hands (retraining): its own later step if so | flicks |
 
-## Phase 2: the strategy head
-
-| | |
-|---|---|
-| What | the head's gate cap 0 → 1 (live `H2_GATE_CAP`), the item rule still on |
-| Steps | +0.1 every 25 min while the checks pass (games 50%+) AND the behaviour panel is green; hold at 45-50% or one red; back to the last passing value under 45%, two checks under 50%, or a red twice |
-| Watched closely | his targets per map (the head pushed the lightning gun to 82% in v0.4.4), time at each weapon spawn, roaming, hunting the watcher |
-| Ends | the cap at 1.0 with two passing checks at full |
-
-## Phase 3: the item rule faded (after phase 2's play test)
+## Calibration (the pros are `default`)
 
 | | |
 |---|---|
-| What | the item rule's weight 1.0 → 0 (live `INTENT_TEACH_W`), the head open |
-| Steps | −0.1 every 25 min on the same gates; a red target or camping limit steps the rule back up |
-| Ends | the rule at 0 with two passing checks; then the owner's play test |
+| Data | the tournament demos 2010-2016 (6,624 duels, ~1,029 h, `T:\quake-demos\trance\by_map`) and the pro sets ⏳ |
+| By style | LG and MG: accuracy by the target's speed and around strafe reversals; rail and SG: flick time and accuracy by flick angle; RL: hit and splash by distance and target speed, the lead's miss along and across the motion; plasma: both; every weapon: the dip after taking damage ⏳ |
+| Levels | `default` = the pros' average per style; `worse` 25-50% below a pro; `better` ~25% above or the top of the pros' spread; `max` = every perception and reaction limit the server can turn off, the hands as trained (owner) ⏳ |
+| Owner's check | play test of v0.4.2b's end under the new levels (the play build `play-aim2`, the mind view with his win chance) ❓ |
+
+## Opening
+
+| Phase | What | How |
+|---|---|---|
+| A | the world picture apart from the aim error; the code defaults = `!aim default` | at once at the start (it changes what his memory and the brain see, not how well he aims); 10-20 updates |
+| B | old error model → new: the weapon caps out; slip, eccentricity, focus as sharpness, the new flinch, zoom in | a blend of the two in ~5 steps of 40-50 min, each panel-gated like v0.5.1's fade |
+| Before the start | the 10-update dry run on a scratch copy + a check + the panel (standing rule); the server's inputs against the simulator's with the new model on | ⏳ |
+
+## Checks and panel
+
+| | |
+|---|---|
+| Control | v0.4.2b's end, fixed; each seat on its own aim settings from its checkpoint (new at this boundary: numbers not comparable with earlier checks) |
+| Reference | v0.5.1's end |
+| Panel | v0.5.1's, plus aim by style beside the pros: hit rates by weapon, rail flick times, LG around reversals, the rocket lead's miss |
+| Stop | only a collapse (owner: a check under 15% or two in a row under 25%); a dip while he relearns his aim is expected |
 
 ## After
 
 | | |
 |---|---|
-| Then | pay by win chance (v0.4.5's plan, renumbered), on the owner's go |
-| Owner | a local game after phase 2 and after phase 3 |
+| v0.5.3 | the strategy head, then the item rule's fade ([RUN_v0.5.3.md](../v0.5.3/RUN_v0.5.3.md)) |
+| Public servers | if v0.5.2 beats the control: one deploy with the v0.5.x network, the new `!aim` levels, the flinch fix (the opponent's hits only) and Bobby added at a map's load ❓ |
