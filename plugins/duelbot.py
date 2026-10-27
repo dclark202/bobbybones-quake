@@ -1495,6 +1495,8 @@ class duelbot(minqlx.Plugin):
             else E.MOUSE_SMOOTH
         if getattr(E, "ZOOM_PERCEPT", False):               # (ZOOM_PERCEPT) small in hand terms: 1 degree unzoomed, as in training
             sm = np.where(np.abs(cmd) <= zs + 1e-6, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH)
+        if getattr(E, "AIM2_SMOOTH_K", 1.0) != 1.0:          # (AIM2_SMOOTH_K) less (or no) view inertia, as in training
+            sm = sm * E.AIM2_SMOOTH_K
         env.mv[i] = sm * env.mv[i] + (1.0 - sm) * cmd
         turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
         if rules2 and env.human_aim:                         # flick cap and hand noise, as in training
@@ -1992,6 +1994,8 @@ class duelbot(minqlx.Plugin):
                         env.cool[:] = 0
                         env.seen_t[:] = 9.0
                         env.opp_hist = []
+                        if hasattr(env, "aim2_clear"):
+                            env.aim2_clear()                 # (AIM2) no slip from the life before: his view and the enemy's bearing anew
                         if hasattr(env, "drift_clear"):
                             env.drift_clear()                # (DRIFT_IN) no rate from the life before
                         if hasattr(env, "proj_clear"):
@@ -2164,6 +2168,16 @@ class duelbot(minqlx.Plugin):
         t_ = time.perf_counter()
         ob = env.observe()[:1]                               # (once a frame: the new inputs' clocks are kept in it)
         self.t_obs = time.perf_counter() - t_
+        if os.environ.get("DUEL_AIM2DUMP") and getattr(E, "AIM2", False):     # (AIM2) debugging: what the new terms read, frame
+            self.aim2_dump = getattr(self, "aim2_dump", [])                    # by frame, with what they are made of (tools/aim2_srvcheck.py)
+            a2_ = getattr(env, "a2_last", None)
+            self.aim2_dump.append(np.concatenate([[now, env.yaw[0], env.pitch[0]], env._eye(env.state)[0], env.known[0],
+                                                  env.state[1, :3], [float(env.acquired[0]), float(env.focus[0]),
+                                                  float(env.flinch[0]), float(env.react_frames)],
+                                                  env.percept[0], [float(x_[0]) for x_ in a2_] if a2_ is not None else [-1.0] * 3,
+                                                  [float(env.zoom[0]), float(env.weapon[0])]]).astype(np.float64))
+            if len(self.aim2_dump) % 400 == 0:
+                np.save("/tmp/practice/aim2_dump.npy", np.array(self.aim2_dump[-24000:]))
         if os.environ.get("DUEL_OBSDUMP"):                   # debugging: keep the inputs to compare with the simulator's
             self.obs_dump = getattr(self, "obs_dump", [])
             self.obs_dump.append(ob[0].copy())
