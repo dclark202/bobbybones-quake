@@ -5,7 +5,7 @@ local server v0.4.4 looped one item and the weapon beside it (Hektik: 7 megas, 3
 went for the player; v0.4.2b's end does not. The simulator does it too (the same save in self-play: lightning gun as target 82%,
 47% of the time within 300 u of its spawn). The checks had not seen it: they played each save against the previous one and
 counted intentions over every kind of round. v0.5.0 is one phase: v0.4.2b's end, every loophole found closed, `!aim default`,
-the owner's mix; at least 6 hours, maybe overnight. Then [v0.5.1](../v0.5.1/RUN_v0.5.1.md): the head, then the item rule's fade.*
+the owner's mix; at least 6 hours, maybe overnight. Then [v0.5.1](../v0.5.1/RUN_v0.5.1.md): pay by win chance only; then [v0.5.2](../v0.5.2/RUN_v0.5.2.md): the head, then the item rule's fade.*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
 
@@ -44,12 +44,20 @@ the owner's mix; at least 6 hours, maybe overnight. Then [v0.5.1](../v0.5.1/RUN_
 
 ## One aim setting (`!aim`) ✅ (owner, 2026-10-26)
 
-| `!aim` | Tracking / notice delay | Sight error | Hand noise | Fast-target limit / cap | Use |
-|---|---|---|---|---|---|
-| `worse` | 125 / 250 ms | 0.75° | 0.125 | 0.094 / 6.25° | an easier opponent (a good average player) |
-| **`default`** | **100 / 200 ms** (level 3) | **0.6°** | **0.10** | **0.075 / 5°** | **always trained on; the servers' default** |
-| `better` | 80 / 160 ms | 0.48° | 0.08 | 0.06 / 4° | a harder opponent (beyond an average pro) |
-| `max` | 25 / 25 ms | 0 | 0 | 0 | every human limit off |
+| `!aim` | Tracking / notice delay | Sight error | Hand noise | Fast-target | Rail cap | LG cap | Use |
+|---|---|---|---|---|---|---|---|
+| `worse` | 150 / 300 ms | 1° | 0.15 | 0.125 | 5° | 15° | an easier opponent |
+| **`default`** | **100 / 200 ms** (level 3) | **0.6°** | **0.10** | **0.075** | **3°** | **10°** | **always trained on; the servers' default** |
+| `better` | 75 / 150 ms | 0.3° | 0.075 | 0.05 | 2° | 5° | a harder opponent |
+| `max` | 25 / 25 ms | 0 | 0 | 0 | 0 | 0 | every human limit off |
+
+*Table of 2026-10-26 evening (owner: "I want the worse and better to really stand out"). The cap by weapon (rail / lightning,
+`PERCEPT_SPEED_MAX_RG` / `_LG`, live; other weapons 5° at default) came after the review: one cap of 5° moved both together
+(lightning 37.4%, rail 38.2%). Calibration, v0.4.2b's end against itself, 8 maps x 8 games: rail 3° / LG 5°: 37.3 / 43.8;
+3 / 8: 34.3 / 41.9; 3 / 12: 34.0 / 45.0; 2.5 / 10: 34.5 / 44.6 (the pros 32.7 / 43.5). In the run from update 30 (a restart
+at the save, optimizer kept, code `v050aim` 33804d3), ramped 4/6.5 -> 3/8 -> 3/10 (18:34 to 19:24). Not in the table and
+scaled with it in the play files: MOTOR_BASE with the hand noise, SURPRISE_MS with the delays, the other weapons' cap with
+the rail's; the flinch stays the default's. Local play build: worktree `ql-bot-v042aim` (v0.4.2b's end, port 27975).*
 
 | Calibration (v0.4.2b's end against itself, 8 maps x 8 games) | lightning | rail | rockets |
 |---|---|---|---|
@@ -73,7 +81,7 @@ first deploy (owner's call); `better` and `worse` are measured before it.
 | | |
 |---|---|
 | Control | **v0.4.2b's end, fixed**, both seats at `!aim default`; every 4th check v0.3.10's end |
-| Games | the usual bar: 50%+ passes, 45-50% holds, under 45% or two under 50% stops the run to look |
+| Games | (owner, 2026-10-26 evening: "not concerned with the win rate ... it's more about how it feels to play against him") overnight he trains on; stopped only on a collapse: a check under 15% or two in a row under 25% (scratchpad v050/guard_v050.py) |
 | Targets | his held target per map, whole games only, the frames it is read: red at ~2× v0.4.2b's share for any one target |
 | Camping | time within 300 u of each item and weapon spawn per map; weapon pickups a minute and re-picks of an owned weapon: red at ~2× v0.4.2b's |
 | Roaming | map cells a minute (256-unit), median speed: red at −15% |
