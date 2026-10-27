@@ -37,7 +37,7 @@ ap.add_argument("--updated", default="", help="the date the welcome shows as las
 ap.add_argument("--btoken-gate", type=float, default=-1.0, help="(v0.4.1) the brain token's gate in the file (-1: the checkpoint's own; 0: shut, the network as without it)")
 ap.add_argument("--head2-gate", type=float, default=-1.0, help="(v0.4.3) the strategy head's gate in the file (-1: the checkpoint's own; 0: none)")
 ap.add_argument("--rule-fade-g", type=float, default=-1.0, help="(v0.4.2a) the rule fade's gate in the file (-1: the checkpoint's own; 0: none)")
-ap.add_argument("--no-readouts", action="store_true", help="(B-283) leave the brain's readouts ahead and 'in control' out (by default they go in when the "
+ap.add_argument("--no-readouts", action="store_true", help="(B-283) leave the brain's readouts ahead and 'in control' and the shadow win value out (by default they go in when the "
                 "checkpoint has them: nothing plays from them, the plugin's mind view (!mind on) shows them)")
 ap.add_argument("--round-secs", type=float, default=0.0, help="the length of a training round on the server's map (0: from the checkpoint, else the plugin's default)")
 a = ap.parse_args()
@@ -145,6 +145,11 @@ if brain and not a.no_readouts:                              # (sim/ahead.py) an
         if nm_ and all("control.{}.{}.{}".format(n_, i_, w_) in sd for n_ in nm_ for i_ in (0, 2) for w_ in ("weight", "bias")):
             mind["control"] = np.array(json.dumps(cl_))
             mind.update({k: v for k, v in sd.items() if k.startswith(tuple("control.{}.".format(n_) for n_ in nm_))})
+    wv_ = ck.get("win_value")                                # (2026-10-27) the shadow win value (sim/win_value.py; a top-level entry, never in
+    if isinstance(wv_, dict) and wv_.get("model") is not None:   # "model"): its layout as text, "win_value.{0,2}.{weight,bias}"; for the mind
+        mind["win_value"] = np.array(json.dumps(wv_["layout"]))  # view only (Linear-ReLU-Linear on the brain's 256 then the hands' 512)
+        mind.update({"win_value." + k: np.asarray(v.detach().cpu().numpy() if hasattr(v, "detach") else v, np.float32) for k, v in wv_["model"].items()})
+        assert all("win_value.{}.{}".format(i_, w_) in mind for i_ in (0, 2) for w_ in ("weight", "bias")), "win_value: not a Linear-ReLU-Linear"
 head2 = {}                                                   # (v0.4.3, sim/head2.py) the strategy head: its layout as text, its weights
 if ck.get("head2") is not None:                              # (its value is the trainer's alone), the readout ahead and an "in control"
     assert brain, "the strategy head reads the brain: the checkpoint has no brain token"     # readout it reads; plugins/netpass.py steps it
@@ -177,7 +182,7 @@ print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minut
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",
       "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "",
       "| brain: {} numbers in its token, gate {:.4f}".format(json.loads(str(brain["btoken"]))["dim"], json.loads(str(brain["btoken"]))["gate"]) if brain else "",
-      "| readouts for the mind view: {}".format(", ".join(k for k in ("ahead", "control") if k in mind) or "none") if brain else "",
+      "| readouts for the mind view: {}".format(", ".join(k for k in ("ahead", "control", "win_value") if k in mind) or "none") if brain else "",
       "| strategy head: gate {:.4f}, plan_in {}".format(float(head2["head2.gate"]), "open" if np.abs(head2["head2.plan_in.weight"]).sum() > 0 else "at zero") if head2 else "",
       "| rule fade: {} columns, g {:.4f}, readers {}".format(len(json.loads(str(rfade["rule_fade"]))["cols"]), json.loads(str(rfade["rule_fade"]))["g"],
                                                             bool(json.loads(str(rfade["rule_fade"])).get("readers"))) if rfade else "")

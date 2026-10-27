@@ -10,7 +10,7 @@ will be in 1, 2 and 4 s and what he is going for, the win table's chance and "in
 
 Standard library only (any Python). It only reads: the data folder's mind.jsonl, the map files. Endpoints: /  the page,
 /map/<name>  the floor (JSON), /events  the lines as server-sent events (the latest map line and the last lines first,
-then each new line as it is written; a rotated or truncated file is followed), /last?n=  the last lines (JSON)."""
+then each new line as it is written; a rotated or truncated file is followed), /last?n=[&bytes=]  the last lines (JSON; from at most `bytes` of the file's end, 400 kB by default)."""
 import argparse
 import base64
 import json
@@ -154,7 +154,8 @@ def handler(path_jsonl, root):
             if p == "/last":
                 q = dict(x.split("=", 1) for x in self.path.split("?", 1)[1].split("&")) if "?" in self.path else {}
                 n = int(q.get("n", "50"))
-                return self._send(200, "[" + ",".join(tail_lines(path_jsonl)[-n:]) + "]", "application/json")
+                mb = min(16000000, max(1000, int(q.get("bytes", "400000"))))     # (the win chart's start: a whole game's lines)
+                return self._send(200, "[" + ",".join(tail_lines(path_jsonl, mb)[-n:]) + "]", "application/json")
             if p == "/events":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")

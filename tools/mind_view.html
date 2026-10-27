@@ -33,6 +33,8 @@ h1 { font-size: 15px; margin: 0 0 2px; font-weight: 600; letter-spacing: .02em; 
 .tg .m i { display: block; height: 100%; background: var(--target); }
 .key { display: grid; grid-template-columns: 18px 1fr; gap: 4px 6px; font-size: 12px; color: var(--dim); align-items: center; }
 .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.wch { position: static; display: block; width: 100%; height: 110px; margin-top: 6px; background: #12151b; border: 1px solid var(--line); border-radius: 4px; }
+.key2 { display: flex; gap: 12px; font-size: 11px; margin-top: 3px; }
 #stale { color: var(--bad); font-size: 12px; min-height: 16px; }
 @media (max-width: 700px) { #wrap { flex-direction: column; } #side { width: auto; border-left: 0; border-top: 1px solid var(--line); } #mapbox { min-height: 60vh; } }
 </style>
@@ -50,6 +52,14 @@ h1 { font-size: 15px; margin: 0 0 2px; font-weight: 600; letter-spacing: .02em; 
     <div class="sec">Win chance (table: lead and time left)</div>
     <div class="bar" id="winbar"><i></i><b></b></div>
     <div class="lbl"><span class="b" id="winb">Bobby 50%</span><span class="o" id="wino">you 50%</span></div>
+
+    <div class="sec">His own sense of winning (shadow win value)</div>
+    <div class="bar na" id="hisbar"><i></i><b></b></div>
+    <div class="lbl"><span class="b" id="hisb">Bobby n/a</span><span class="o" id="hiso">you n/a</span></div>
+    <div class="row"><span>referee (table + stacks)</span><span id="ref">-</span></div>
+    <div class="row"><span>he knows beyond the table</span><span id="beyond">-</span></div>
+    <canvas id="wch" class="wch"></canvas>
+    <div class="key2"><span style="color:var(--bobby)">&#9644; his sense</span><span style="color:#e6e9ee">&#9644; referee</span><span style="color:var(--dim)">&#9476; table</span></div>
 
     <div class="sec">In control (next mega / red armor spawns)</div>
     <div class="bar na" id="ctlbar"><i></i><b></b></div>
@@ -87,6 +97,7 @@ const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 const $ = (id) => document.getElementById(id);
 let floor = null, floorName = null, meta = {}, rec = null, lastAt = 0, trail = [];
 let view = null;   // {sx, ox, oy}
+let hist = [], histMap = null, histOt = 0;   // the win chart: one point a second of the game [elapsed s, his, referee, table]
 
 const ZC = ["#3b5b8c","#5b3b8c","#3b8c6e","#8c6a3b","#3b7d8c","#8c3b5f","#6e8c3b","#3b4a8c","#8c4f3b","#4f8c3b",
             "#7a3b8c","#3b8c8c","#8c833b","#3b8c4a","#8c3b3b","#4a3b8c","#5f8c3b","#3b6a8c","#8c3b7d","#6a8c6a",
@@ -205,6 +216,12 @@ function panel() {
   $("clock").textContent = mmss(rec.left);
   bar("winbar", rec.win, "winb", "wino", "Bobby", "you");
   bar("ctlbar", rec.ctl, "ctlb", "ctlo", "Bobby", "you");
+  bar("hisbar", rec.win_his, "hisb", "hiso", "Bobby", "you");
+  $("ref").textContent = rec.win_ref === null || rec.win_ref === undefined ? "-" : "Bobby " + pct(rec.win_ref);
+  $("beyond").textContent = rec.win_his === null || rec.win_his === undefined || rec.win === null ? "-" :
+    (rec.win_his - rec.win >= 0 ? "+" : "") + Math.round(100 * (rec.win_his - rec.win)) + " points" +
+    (rec.win_ref === null || rec.win_ref === undefined ? "" : " (referee's stacks: " + (rec.win_ref - rec.win >= 0 ? "+" : "") + Math.round(100 * (rec.win_ref - rec.win)) + ")");
+  winChart();
   $("ctl4").textContent = rec.ctl4 ? pct(rec.ctl4.one) + " · " + pct(rec.ctl4.mh) + " · " + pct(rec.ctl4.ra) +
     (rec.ctl_src ? "  (" + (rec.ctl_src === "both" ? "brain + hands" : "brain") + ")" : "") : "-";
   const b = rec.bel;
@@ -228,6 +245,41 @@ function panel() {
   } else $("race").textContent = "-";
 }
 
+function winPoint(d) {
+  // one point a second at the game's own time: [game s, his, referee, table, left, frags]; 600 - left in regulation, then
+  // 600 + 120 a period (an overtime period's start: the clock back up to 2:00). A new game (another map, the clock up by more
+  // than an overtime period, or the score back to 0 : 0) starts the chart over
+  let last = hist.length ? hist[hist.length - 1] : null;
+  if (d.map !== histMap || (last && (d.left > last[4] + 150 || (d.score[0] + d.score[1] === 0 && last[5] > 0)))) { hist = []; histMap = d.map; histOt = 0; last = null; }
+  if (last && d.left > last[4] + 1) histOt += 1;
+  const gt = histOt === 0 ? 600 - d.left : 600 + 120 * (histOt - 1) + (120 - d.left);
+  if (last && gt - last[0] < 1 && d.left <= last[4]) return;
+  hist.push([gt, d.win_his, d.win_ref, d.win, d.left, d.score[0] + d.score[1]]);
+  if (hist.length > 3000) hist.shift();
+}
+function winChart() {
+  const c = $("wch"), g = c.getContext("2d"), r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr));
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = r.width, H = r.height, p = 4;
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = "#ffffff22"; g.lineWidth = 1; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+  if (hist.length < 2) { g.fillStyle = "#8a93a3"; g.font = "11px system-ui"; g.fillText("his chance over the game", 6, 14); return; }
+  const t1 = Math.max(600, hist[hist.length - 1][0]);
+  const xs = (t) => p + (W - 2 * p) * t / t1, ys = (v) => H - p - (H - 2 * p) * v;
+  const line = (k, col, dash, w) => {
+    g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash); g.beginPath(); let on = false;
+    for (const q of hist) { if (q[k] === null || q[k] === undefined) { on = false; continue; } on ? g.lineTo(xs(q[0]), ys(q[k])) : g.moveTo(xs(q[0]), ys(q[k])); on = true; }
+    g.stroke(); g.setLineDash([]);
+  };
+  const C = getComputedStyle(document.body);
+  line(3, C.getPropertyValue("--dim").trim(), [3, 3], 1);
+  line(2, "#e6e9ee", [], 1.2);
+  line(1, C.getPropertyValue("--bobby").trim(), [], 2);
+  g.fillStyle = "#8a93a3"; g.font = "10px system-ui"; g.fillText("100%", 4, 11); g.fillText("0%", 4, H - 4);
+  g.textAlign = "right"; g.fillText(t1 > 600 ? "overtime" : "10:00 -> 0:00", W - 4, H - 4); g.textAlign = "left";
+}
+
 async function setMap(name) {
   if (name === floorName) return;
   floorName = name; floor = null; trail = [];
@@ -240,6 +292,7 @@ function onLine(d) {
   if (d.k !== "f") return;
   if (rec && rec.map === d.map && Math.hypot(d.en[0] - rec.en[0], d.en[1] - rec.en[1]) > 400) trail = [];   // (a respawn or a teleporter)
   rec = d; lastAt = Date.now();
+  winPoint(d);
   trail.push(d.en); if (trail.length > 15) trail.shift();
   setMap(d.map); draw(); panel();
 }
@@ -255,7 +308,13 @@ setInterval(() => {
   else if (rec) $("stale").textContent = "";
 }, 1000);
 window.addEventListener("resize", draw);
-connect();
+(async () => {                                   // the win chart from the game's start (the last ~13 minutes of lines), then live
+  try {
+    const ls = await (await fetch("/last?n=4000&bytes=6000000")).json();
+    for (const d of ls) if (d && d.k === "f") winPoint(d);
+  } catch (e) { /* an older viewer's server: the chart starts now */ }
+  connect();
+})();
 </script>
 </body>
 </html>

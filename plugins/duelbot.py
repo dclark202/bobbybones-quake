@@ -1672,9 +1672,9 @@ class duelbot(minqlx.Plugin):
         P_ = getattr(self, "P", None)
         R = _mind.readouts(P_) if P_ is not None else {}
         brain = P_ is not None and _net.brain_on(P_)
-        line = "Mind view {}. Brain {}, ahead readout {}, in control {}.".format(
+        line = "Mind view {}. Brain {}, ahead readout {}, in control {}, his win sense {}.".format(
             "on: open the viewer on your second screen" if on else "off", "on" if brain else "off",
-            "yes" if "ahead" in R else "no", "yes" if "control" in R else "n/a")
+            "yes" if "ahead" in R else "no", "yes" if "control" in R else "n/a", "yes" if "win_value" in R else "n/a")
         try:
             player.tell(line)                                # (to him alone)
         except Exception:                                    # noqa: BLE001 - the console (rcon) has no one to tell
@@ -1689,6 +1689,15 @@ class duelbot(minqlx.Plugin):
         for i_, hp_ in enumerate(np.asarray(getattr(env, "hold_pos", np.zeros((0, 3))))[:8]):
             pl["H{}".format(i_ + 1)] = [float(v) for v in hp_]
         return pl
+
+    def mind_stack(self, env):
+        """(2026-10-27, the mind view's referee win_ref) both players' true health, armor, death and big weapons (rl, lg, rg)
+        as the plugin keeps them from the game each frame, and the simulator's stack coefficients (WIN_STACK's fit)"""
+        E = self.E
+        big_ = [int(getattr(E, n_)) for n_ in ("RL", "LG", "RG")]
+        return dict(hp=[float(env.hp[0]), float(env.hp[1])], ar=[float(env.armor[0]), float(env.armor[1])],
+                    dead=[bool(env.hp[0] <= 0), bool(env.hp[1] <= 0)], big=[[bool(env.has[i_, k_]) for k_ in big_] for i_ in (0, 1)],
+                    coef={k_: float(getattr(E, k_)) for k_ in _mind.STACK_COEF if hasattr(E, k_)})
 
     def mind_frame(self, env, now):
         """(!mind on) once a frame after the network's step: a line at the brain's tick (every eighth frame without a brain)"""
@@ -1726,7 +1735,8 @@ class duelbot(minqlx.Plugin):
             en = [float(v) for v in env.state[1, :3]] + [float(env.yaw[1])]
             rec = _mind.build(now, self.mapname, me, en, seen, tok, br_.s[0] if br_ is not None else None, P, self.mind_pl,
                               (float(env.frags_r[0]), float(env.frags_r[1])), left, zones=self.mind_zones, frame=self.mind_fr,
-                              mem=self.h[0, :P["whh"].shape[1]])             # (the hands' fast GRU memory: the readout "both")
+                              mem=self.h[0, :P["whh"].shape[1]],             # (the hands' fast GRU memory: the readout "both", the win value)
+                              stack=self.mind_stack(env))
             rec["hp"] = [int(env.hp[0]), int(env.hp[1])]
             self.mind_w.write(rec)
         except Exception as e:                               # noqa: BLE001 - never in the way of play

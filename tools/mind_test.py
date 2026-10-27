@@ -75,7 +75,9 @@ def env_for(mapname):
         if len(e) < 4 or e[3] == "walk":
             nbr[int(e[0])].append(int(e[1]))
     env = types.SimpleNamespace(n=2, state=np.zeros((2, 7), np.float32), yaw=np.zeros(2, np.float32), frags_r=np.zeros(2, np.float32),
-                                clock_t=np.zeros(2, np.float32), round_t=np.zeros(2, np.float32), hp=np.array([125, 125]))
+                                clock_t=np.zeros(2, np.float32), round_t=np.zeros(2, np.float32), hp=np.array([125, 125]),
+                                armor=np.array([50, 0]), has=np.zeros((2, 9), bool))     # (the referee's stacks: win_ref)
+    env.has[0, 0] = True                                     # (Bobby holds a rocket launcher: weapon 0, RL)
     goal, item, pos = [], [], []
     at = os.path.join(ROOT, "maps", "atlas", mapname + ".json")
     if os.path.exists(at):
@@ -127,6 +129,7 @@ def main():
     print("network:", str(bot.P.get("run", "")), "readouts:", sorted(R))
     bot.mind_w = None
     bot.game_seat, bot.round_secs = True, 600.0
+    bot.E = types.SimpleNamespace(RL=0, RG=1, LG=2)          # (the simulator's weapon numbers; WIN_* from mindlog's defaults)
     tel = Teller()
     bot.cmd_mind(tel, ["!mind", "on"], None)
     print("  [to the owner]", tel.said[-1])
@@ -161,6 +164,11 @@ def main():
             assert all(math.isfinite(v) for v in vals), "a number that is not finite"
             assert abs(sum(t[1] for t in l["tgt"])) <= 1.0001 and abs(sum(l["appear"]) - 1) < 1e-2
             assert len(l["ahead"]) == 3 and [h["h"] for h in l["ahead"]] == [1.0, 2.0, 4.0]
+            for k in ("win_his", "wv", "win_ref"):           # (2026-10-27) his win sense and the referee: null only without the head
+                assert k in l, k
+            assert ("win_value" in R) == (l["win_his"] is not None), "win_his: there exactly when the file has the win value"
+            for k in ("win_his", "win_ref"):
+                assert l[k] is None or 0.0 <= l[k] <= 1.0, k
         # the readout ahead's place, turned back into his facing, is the raw output (sim/ahead.py's labels: fwd = c dx + s dy)
         B_, bl_, bt_, at_, _ = bot.P["_brain"]
         br_, _tk = bt_.unpack(B_, bl_, bot.h[:1, at_:])

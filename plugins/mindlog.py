@@ -18,6 +18,14 @@ A line ("k": "f"):
   ctl    "in control" (v0.4.3's readout: his share of the next two mega / red armor spawns), null without it; with the
          readouts of v0.4.2b (sim/control.py layout 2) also ctl_src (the readout used: "both", the brain's state and the
          hands' memory, or "belief", the brain's state alone) and ctl4 {two, one, mh, ra}
+  win_his  (2026-10-27) Bobby's own sense of his chance of winning: the shadow win value (sim/win_value.py, the export's
+         "win_value": Linear-ReLU-Linear on the brain's state and the hands' memory of the frame, rounded to half precision
+         as the trainer keeps them) learns WIN_SCALE x (the result 1 / 0.5 / 0 less the table's chance now), so his chance is
+         clip(win + wv / WIN_SCALE, 0, 1), WIN_SCALE = 1 / (W(one ahead, ten minutes left) - 0.5) of the same table (8.22);
+         wv the raw value (frags of today's pay); both null without the head
+  win_ref  the referee's chance (v0.5.1's WIN_STACK): the table with the stack term, clip(W + (p_next - 0.5) x (W(lead + 1)
+         - W(lead - 1)) x (1 - exp(-left / tau)), 0, 1), p_next from both players' true health + armor and big weapons
+         (a dead player counts as his respawn: 125, no armor, no weapon); null without the stacks
 A meta line ("k": "meta") at the start and at every map: the map's items and holding places, the version.
 Writing never raises: a failure turns the log off for that session and is logged once."""
 import json
@@ -74,6 +82,12 @@ def readouts(P):
     if "_mind" in P:
         return P["_mind"]
     R = {}
+    wk = ["win_value.{}.{}".format(i, w) for i in (0, 2) for w in ("weight", "bias")]
+    if "win_value" in P and all(k in P for k in wk):       # (2026-10-27) the shadow win value
+        try:
+            R["win_value"] = (json.loads(str(P["win_value"])), tuple(np.asarray(P[k], np.float32) for k in wk))
+        except (ValueError, TypeError):
+            pass
     for name in ("ahead", "control"):
         ks = ["{}.{}.{}".format(name, i, w) for i in (0, 2) for w in ("weight", "bias")]
         if name in P and all(k in P for k in ks):
@@ -165,8 +179,37 @@ def control_of(L, W, s, mem=None):
     return float(p[i])
 
 
+def win_value_of(L, W, s, mem):
+    """(2026-10-27) the shadow win value's raw output on the brain's state s [256] and the hands' memory [512] after the
+    frame's step: the row [s | mem] rounded to half precision (as the trainer keeps it), Linear-ReLU-Linear"""
+    x = np.concatenate([np.asarray(s, np.float32).reshape(-1)[:int(L["bel"])], np.asarray(mem, np.float32).reshape(-1)[:int(L["mem"])]])
+    return float(_mlp(W, x.astype(np.float16).astype(np.float32)[None])[0, 0])
+
+
 # ---------------------------------------------------------------- the win table (sim/win_chance.json)
 _WIN = {}
+STACK_COEF = dict(WIN_TAU=32.5, WIN_PA=2.7546, WIN_PS=300.0, WIN_PRL=0.4277, WIN_PLG=0.4485, WIN_PRG=0.2922)   # (v0.5.1's fit of 2026-10-26)
+SPAWN_HP = 125.0
+
+
+def win_scale(tab):
+    """WIN_PAY's scale: 1 / (the chance one frag ahead with ten minutes left - 0.5)"""
+    p, _, D = tab
+    return 1.0 / (float(p[-1, D + 1]) - 0.5)
+
+
+def stack_p(d, left, tab, hp, ar, dead, big, coef=None):
+    """duel_env._wb_chance with WIN_STACK: the table's chance with the stack term. hp, ar, dead: [Bobby, opponent];
+    big: [[rl, lg, rg] Bobby, [...] opponent] owned (0 / 1); coef: the simulator's WIN_* (default STACK_COEF)"""
+    c = dict(STACK_COEF, **(coef or {}))
+    st = [SPAWN_HP if dead[i] else float(hp[i]) + float(ar[i]) for i in (0, 1)]
+    ds = st[0] - st[1]
+    f = math.tanh(ds / c["WIN_PS"]) if c["WIN_PS"] > 0 else ds / 100.0
+    hv = [(0.0 if dead[0] else float(big[0][k])) - (0.0 if dead[1] else float(big[1][k])) for k in range(3)]
+    z = c["WIN_PA"] * f + c["WIN_PRL"] * hv[0] + c["WIN_PLG"] * hv[1] + c["WIN_PRG"] * hv[2]
+    pn = 1.0 / (1.0 + math.exp(-z))
+    dW = win_p(d + 1, left, tab) - win_p(d - 1, left, tab)
+    return min(1.0, max(0.0, win_p(d, left, tab) + (pn - 0.5) * dW * (1.0 - math.exp(-max(float(left), 0.0) / c["WIN_TAU"]))))
 
 
 def win_table(path=None):
@@ -199,7 +242,7 @@ def target_names(n):
     return list(INTENTS[:n]) + ["?{}".format(i) for i in range(len(INTENTS), n)]
 
 
-def build(t, mapname, me, en, seen, tok, s, P, places, score, left, zones=None, frame=0, mem=None):
+def build(t, mapname, me, en, seen, tok, s, P, places, score, left, zones=None, frame=0, mem=None, stack=None):
     """one line of the log as a dict.
     me, en   [x, y, z, yaw] (Bobby, the opponent: the truth);  seen  the opponent noticed in view this frame
     tok      the brain's answer: dict(ok, P [3], ls [2] (log spreads, thousands of units), unseen, zone [24] odds) or None
@@ -207,7 +250,8 @@ def build(t, mapname, me, en, seen, tok, s, P, places, score, left, zones=None, 
     P        the policy dict (its readouts: readouts(P))
     mem      the hands' GRU memory [512] after this frame's step (the readout "both" reads it beside s) or None
     places   {target name: [x, y, z]} (the map's items and holding places) for the targets' places
-    score    (Bobby, opponent);  left  seconds left;  zones  a sim/zonemap.Zones of the map (or None) for the zones' names"""
+    score    (Bobby, opponent);  left  seconds left;  zones  a sim/zonemap.Zones of the map (or None) for the zones' names
+    stack    (the referee's win_ref) dict(hp, ar, dead, big [[rl, lg, rg] x 2], coef) for [Bobby, opponent], or None"""
     rec = dict(k="f", t=round(float(t), 3), fr=int(frame), map=mapname, me=_r(me[:3]) + [round(float(me[3]), 1)],
                en=_r(en[:3]) + [round(float(en[3]), 1)], seen=bool(seen))
     if tok is not None:
@@ -245,6 +289,14 @@ def build(t, mapname, me, en, seen, tok, s, P, places, score, left, zones=None, 
     rec["left"] = round(float(left), 1)
     tab = win_table()
     rec["win"] = round(win_p(score[0] - score[1], left, tab), 4) if tab is not None else None
+    rec["win_his"] = rec["wv"] = rec["win_ref"] = None
+    if tab is not None and s is not None and mem is not None and "win_value" in R:     # (2026-10-27) his own sense of his chance
+        Lw, Ww = R["win_value"]
+        v = win_value_of(Lw, Ww, s, mem)
+        rec["wv"] = round(v, 4)
+        rec["win_his"] = round(min(1.0, max(0.0, win_p(score[0] - score[1], left, tab) + v / win_scale(tab))), 4)
+    if tab is not None and stack is not None:                # the referee: the table with the stack term
+        rec["win_ref"] = round(stack_p(score[0] - score[1], left, tab, stack["hp"], stack["ar"], stack["dead"], stack["big"], stack.get("coef")), 4)
     return rec
 
 
