@@ -1438,7 +1438,7 @@ def main():
     ap.add_argument("--kind-p", default="0.40,0.15,0.10,0.35",
                     help="share of rounds: normal duel, aim (scripted strafing target), one-weapon drill, movement")
     ap.add_argument("--bot-p", type=float, default=0.5, help="share of normal rounds against the scripted fighter")
-    ap.add_argument("--react-ms", type=float, default=50, help="tracking delay on an enemy already in view")
+    ap.add_argument("--react-ms", type=float, default=100, help="tracking delay on an enemy already in view (100: !aim default; 50 until branch aim2)")
     ap.add_argument("--acquire-ms", type=float, default=200, help="delay before an enemy who just came into view is noticed")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--env", default="duel_env", help="simulator module (duel_env_ffa: groups of more than two players)")

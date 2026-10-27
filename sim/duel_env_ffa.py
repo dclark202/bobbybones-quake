@@ -197,7 +197,9 @@ AIM_STEP = 1.25
 
 def aim_settings(level=3.0, preset=""):
     f = AIM_STEP ** (3.0 - float(level))
-    a = dict(level=float(level), percept_sigma=0.6 * f, percept_tau=0.15, percept_speed=0.0, react_ms=100.0 * f,
+    # (branch aim2, 2026-10-27: the code's defaults are !aim default's, so a tool run without the run's environment plays as
+    #  the servers do: percept_speed 0.075 x f (0 at every level before), PERCEPT_SPEED_MAX 1.5 (3.0), the rail's 0.001 (0))
+    a = dict(level=float(level), percept_sigma=0.6 * f, percept_tau=0.15, percept_speed=0.075 * f, react_ms=100.0 * f,
              acquire_ms=200.0 * f, surprise_ms=200.0 * f, flinch_per_dmg=0.25 * f, flinch_max=6.0 * min(f, 1.6),
              flinch_tau=0.5, motor_noise=0.10 * f, motor_base=0.05 * f)
     if preset in ("v12", "v11"):
@@ -216,7 +218,7 @@ def _aim(var, key):
     return float(os.environ[var]) if os.environ.get(var) else float(AIM_SET[key])
 
 
-REACT_FRAMES = 2                                       # 50 ms: tracking an enemy already in view lags by this much.
+REACT_FRAMES = 4                                       # 100 ms (!aim default; 2 = 50 ms until branch aim2, 2026-10-27): tracking an enemy already in view lags by this much.
 ACQUIRE_FRAMES = 8                                     # 200 ms: an enemy who has just come into view is not reacted to before this
 # SEAT_DELAYS (2026-10-12, B-226): the two delays above are one number for every seat of a simulator (env.react_frames,
 # env.acquire_frames: the trainer's --react-ms and --acquire-ms), or, in a check that seats two networks trained with
@@ -244,13 +246,13 @@ PERCEPT_SIGMA, PERCEPT_TAU = _aim("PERCEPT_SIGMA", "percept_sigma"), _aim("PERCE
 # off for half a second, not for a frame) that grows with how fast the target crosses his view. So for v11 (set by the launch
 # file): a larger error that drifts slowly (PERCEPT_TAU 0.5: the memory cannot average it away as it does the 0.15 s one) and
 # PERCEPT_SPEED degrees more for every degree a second the enemy's direction moves, at most PERCEPT_SPEED_MAX.
-PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), float(os.environ.get("PERCEPT_SPEED_MAX") or 3.0)
+PERCEPT_SPEED, PERCEPT_SPEED_MAX = _aim("PERCEPT_SPEED", "percept_speed"), float(os.environ.get("PERCEPT_SPEED_MAX") or 1.5)
 # (v0.5.0: PERCEPT_SPEED_MAX settable, a PLAY_VAR; 3 degrees as before. The calibration of 2026-10-26: at 3 the lightning gun's
 #  hit rate stops falling near 40% whatever PERCEPT_SPEED, the pros' is 33%.)
 # PERCEPT_SPEED_MAX_RG / PERCEPT_SPEED_MAX_LG (v0.5.0, after the review of 2026-10-26; PLAY_VARS and live): the cap with the
 # railgun / the lightning gun in hand (0: PERCEPT_SPEED_MAX). One cap moved both together (cap 5: lightning 37.4%, rail 38.2%,
 # the pros 32.7 / 43.5): a rail shot is a flick, the lightning gun a track. Both 0 = the simulator before, bit for bit.
-PERCEPT_SPEED_MAX_RG = float(os.environ.get("PERCEPT_SPEED_MAX_RG") or 0.0)
+PERCEPT_SPEED_MAX_RG = float(os.environ.get("PERCEPT_SPEED_MAX_RG") or 0.001)     # (aim2 branch: !aim default's 0.001 when unset)
 PERCEPT_SPEED_MAX_LG = float(os.environ.get("PERCEPT_SPEED_MAX_LG") or 0.0)
 # Values since 2026-10-07 20:15 (the first "click", owner: "nudge hitscan aim down 1-2 clicks"): 1.2 degrees, 0.5 s, 0.012.
 # v10 under them in the reflex room, not yet adapted: error on a strafing target 3.0 -> 3.8 degrees (the owner 2.45), time on
@@ -2065,7 +2067,7 @@ def live_values(get):
     if not 0.0 <= v["PERCEPT_SPEED"] <= 0.2:
         raise ValueError("PERCEPT_SPEED must be within 0 .. 0.2")
     for k_ in ("PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG"):     # (v0.5.0) the cap by weapon, live; unset: 0 (PERCEPT_SPEED_MAX)
-        v[k_] = float(get(k_) or 0.0)
+        v[k_] = float(get(k_) or (0.001 if k_ == "PERCEPT_SPEED_MAX_RG" else 0.0))     # (aim2 branch: the rail's default 0.001)
         if not 0.0 <= v[k_] <= 20.0:
             raise ValueError(k_ + " must be within 0 .. 20")
     lp_ = get("LEVEL_PULL")                                  # (B-275) the view's pull toward level; unset: 0.95
