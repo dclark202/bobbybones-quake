@@ -235,7 +235,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         # (owner, 2026-10-26: duels on the ten maps only: !duel, !match, !reflex, !movement, !room, !rooms, !drill, !arena,
         # !spar, !nosg removed; their code below is no longer reachable from chat)
-        self.add_command("aim", self.cmd_aim, 0, usage="[1|2|3|4|5|max]")
+        self.add_command("aim", self.cmd_aim, 0, usage="[worse|default|better|max]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
         if os.environ.get("DUEL_MIND", "") == "1":           # (owner, 2026-10-24: "make it so the mind records the game") on from the start
@@ -1007,6 +1007,8 @@ class duelbot(minqlx.Plugin):
             p_, z_ = _net.pose(self.P, self.env, self.mapname)    # (fill_player put them in the simulator this frame)
             pz = dict(pose=p_[:1], zmap=z_[:1])
         acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **pz)
+        if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
+            _net.brain_feed(self.P, self.env, self.h, [0])
         return [int(v) for v in acts[0]]
 
     # ------------------------------------------------------------------ v0.4: the head's events (sim/duel_env.py HEAD_EVENTS)
@@ -1567,27 +1569,34 @@ class duelbot(minqlx.Plugin):
     # policy_l4.npz, policy_l5.npz, policy_max.npz: the same network, AIM_LEVEL and the aim delays in env_vars changed),
     # and the chosen one is copied over policy.npz and loaded at once when no game runs (warmup), else at the next
     # warmup (a game in progress, its countdown, its end and the next map's load keep the aim they started with).
-    AIM_FILES = {"1": "policy_l1.npz", "2": "policy_l2.npz", "3": "policy_l3.npz", "4": "policy_l4.npz", "5": "policy_l5.npz",
-                 "max": "policy_max.npz"}
+    AIM_FILES = {"worse": "policy_worse.npz", "default": "policy_default.npz", "better": "policy_better.npz", "max": "policy_max.npz"}
+    # (2026-10-26, owner: one aim setting, four values; a file names itself by AIM_NAME in its env_vars)
 
     def aim_level(self):
         """the aim level of the network loaded: "1" to "5", "max" (AIM_LEVEL in its env_vars; 40 is max)"""
         try:
-            v = float(json.loads(str(self.P["env_vars"])).get("AIM_LEVEL", 3))
+            ev_ = json.loads(str(self.P["env_vars"]))
         except Exception:                                    # noqa: BLE001 - no network loaded yet
             return "?"
+        if ev_.get("AIM_NAME"):
+            return str(ev_["AIM_NAME"])
+        v = float(ev_.get("AIM_LEVEL", 3))
         return "max" if v > 9 else "{:g}".format(v)
 
-    AIM_DEFAULT = "4"
+    AIM_DEFAULT = "default"
 
     @staticmethod
     def file_level(path):
-        """the aim level of a policy file on disk ("1" to "5", "max"; "?" when it cannot be read): only its env_vars are read"""
+        """the aim setting of a policy file on disk (AIM_NAME: "worse", "default", "better", "max"; else "1" to "5", "max";
+        "?" when it cannot be read): only its env_vars are read"""
         try:
             with np.load(path, allow_pickle=False) as z:
-                v = float(json.loads(str(z["env_vars"])).get("AIM_LEVEL", 3))
+                ev_ = json.loads(str(z["env_vars"]))
         except Exception:                                    # noqa: BLE001
             return "?"
+        if ev_.get("AIM_NAME"):
+            return str(ev_["AIM_NAME"])
+        v = float(ev_.get("AIM_LEVEL", 3))
         return "max" if v > 9 else "{:g}".format(v)
 
     def aim_reset(self):
@@ -1709,7 +1718,8 @@ class duelbot(minqlx.Plugin):
             me = [float(v) for v in env.state[0, :3]] + [float(env.yaw[0])]
             en = [float(v) for v in env.state[1, :3]] + [float(env.yaw[1])]
             rec = _mind.build(now, self.mapname, me, en, seen, tok, br_.s[0] if br_ is not None else None, P, self.mind_pl,
-                              (float(env.frags_r[0]), float(env.frags_r[1])), left, zones=self.mind_zones, frame=self.mind_fr)
+                              (float(env.frags_r[0]), float(env.frags_r[1])), left, zones=self.mind_zones, frame=self.mind_fr,
+                              mem=self.h[0, :P["whh"].shape[1]])             # (the hands' fast GRU memory: the readout "both")
             rec["hp"] = [int(env.hp[0]), int(env.hp[1])]
             self.mind_w.write(rec)
         except Exception as e:                               # noqa: BLE001 - never in the way of play
@@ -1724,12 +1734,12 @@ class duelbot(minqlx.Plugin):
         cur = self.aim_level()
         if len(msg) < 2:
             want = self.aim_want if self.aim_want and self.aim_want != cur else None
-            player.tell("^3Aim level^7 ^2{}^7{} (^2!aim 1-5|max^7 to change)".format(
+            player.tell("^3Aim^7 ^2{}^7{} (^2!aim worse|default|better|max^7 to change)".format(
                 cur, ", ^2{}^7 from the next game".format(want) if want else ""))
             return
         lv = msg[1].lower().strip()
         if lv not in self.AIM_FILES:
-            player.tell("^3Aim levels:^7 ^2!aim 1^7 or ^22^7 relaxed, ^2!aim 3^7 easier, ^2!aim 4^7 normal, ^2!aim 5^7 sharp, "
+            player.tell("^3Aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains, ^2!aim better^7 sharper, "
                         "^2!aim max^7 no human limits")
             return
         if not os.path.exists(os.path.join(D, self.AIM_FILES[lv])):
@@ -2345,6 +2355,8 @@ class duelbot(minqlx.Plugin):
         once), his hands and mouse pad, and his playing style for this life (one of the map's, at random)"""
         if hasattr(env, "intent_new"):
             env.intent[k], env.intent_t[k], env.intent_new[k], env.intent_done[k] = 0, 0.0, True, False
+        if hasattr(_net, "brain_life"):                      # (v0.4.2a) this life on the brain's answer with chance g (the simulator's _fresh)
+            _net.brain_life(self.P, env, k)
         if hasattr(env, "key_tok"):
             env.key_last[k], env.key_hold[k], env.key_tok[k] = (1, 1, 0), 99, E.KEY_BURST
             env.key_req[k] = (1, 1, 0, 0)

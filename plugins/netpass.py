@@ -21,6 +21,13 @@ the brain reads the frame's normalised inputs, ticks every eighth of its frames,
 coordinates and turned to his facing every frame, and the token joins the attention part at the gate (forward_np's bt, bg).
 At gate 0 the brain is not stepped and the network answers exactly as without it. NET_BTOKEN_GATE=<g> in the environment
 overrides the file's gate when a plugin loads it.
+
+(v0.4.2a) A network with the rule fade (sim/rule_fade.py; the export's "rule_fade": the columns and the gate g) reads the
+rule-made input columns times (1 - g) after the scaling, in the encoder and the attention part only (the brain reads them
+unfaded), as test_suite's Policy. With its readers on (BRAIN_READ in training) the brain is stepped while g is above zero
+even with the token shut, and the simulator's readers (the legs' look point, the hunt's target) take the brain's answer for
+a life drawn on it: brain_life() at each life's start, brain_feed() after each step(). NET_RULE_FADE_G=<g> overrides the
+file's g when a plugin loads it.
 """
 import json
 import os
@@ -79,6 +86,12 @@ def load(path):
                                  json.loads(str(P["track_z"])) if "track_z" in P else None)
         base_ = (P["_slow"][3] if "_slow" in P else P["whh"].shape[1]) + (P["_head"][3] if "_head" in P else 0)
         P["_brain"] = (B_, bl_, btoken_, base_, float(bl_.get("gate", 0.0)))
+    P["_rfade"] = None                                       # (v0.4.2a) the rule fade: (the columns, g, the readers on the brain)
+    if "rule_fade" in P:
+        rf_ = json.loads(str(P["rule_fade"]))
+        if os.environ.get("NET_RULE_FADE_G", "") != "":
+            rf_["g"] = float(os.environ["NET_RULE_FADE_G"])
+        P["_rfade"] = (np.asarray(rf_["cols"], np.int64), float(rf_.get("g", 0.0)), bool(rf_.get("readers")))
     P["_uni"] = None                                         # (--legs-feat, --legs-guide) (layout, door or None, guide weights or None):
     if "legs_unify" in P:                                    # None while both parts are at zero (they add nothing then)
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -117,13 +130,49 @@ def width(P):
 
 
 def brain_on(P):
-    """(v0.4.1) the brain is stepped: its token is in the network and its gate open (the mind view, B-283, asks)"""
-    return P.get("_brain") is not None and P["_brain"][4] > 0
+    """(v0.4.1) the brain is stepped: its token's gate is open, or (v0.4.2a) the rule fade is above 0 with its readers on"""
+    rf = P.get("_rfade")
+    return P.get("_brain") is not None and (P["_brain"][4] > 0 or (rf is not None and rf[2] and rf[1] > 0))
 
 
 def needs_pose(P):
-    """(v0.4.1) step() needs his pose (pose=, zmap=; see pose()): the brain's token is in the network and its gate open"""
-    return P.get("_brain") is not None and P["_brain"][4] > 0
+    """(v0.4.1) step() needs his pose (pose=, zmap=; see pose()): the brain is stepped"""
+    return brain_on(P)
+
+
+def brain_answer(P, h):
+    """(v0.4.2a) the brain's answer of these seats from their arrays (after step()), as the simulator's readers take it
+    (btoken.answer_of); None while the brain is not stepped"""
+    if not brain_on(P):
+        return None
+    B_, bl_, bt_, at_, _ = P["_brain"]
+    return bt_.answer_of(bt_.unpack(B_, bl_, np.asarray(h)[:, at_:])[1])
+
+
+def _readers(P, env):
+    rf = P.get("_rfade")
+    return rf is not None and rf[2] and hasattr(env, "brain_in") and bool(getattr(sys.modules.get(type(env).__module__), "BRAIN_READ", False))
+
+
+def brain_life(P, env, k):
+    """(v0.4.2a) a life of seat k begins (the plugins' fresh_life): drawn on the brain's answer with chance g, as the
+    simulator's _fresh does in training. Nothing for a network without the readers"""
+    if _readers(P, env):
+        env._brain_init()
+        env.brain_g[k] = P["_rfade"][1]
+        env.brain_draw(k)
+
+
+def brain_feed(P, env, h, seats):
+    """(v0.4.2a) after step() for these seats: their brain's answer into the simulator (env.brain_in's arrays, these rows)"""
+    if not _readers(P, env):
+        return
+    an = brain_answer(P, h)
+    if an is None:
+        return
+    env._brain_init()
+    r = np.asarray(seats)
+    env.brain_bel[r], env.brain_ok[r], env.brain_band[r], env.brain_ztop[r] = an["bel"], an["ok"], an["band"], an["ztop"]
 
 
 def pose(P, env, mapname=None):
@@ -175,6 +224,8 @@ def describe(P, A):
     if "_head" in P:                                         # (v0.4)
         hd = ", head of {} ticking every {} frames, plan_in {}".format(P["_head"][0]["size"], P["_head"][0]["every"],
                                                                      "open" if np.abs(P["_head"][1]["plan_in.weight"]).sum() > 0 else "at zero")
+    if P.get("_rfade") is not None:                          # (v0.4.2a)
+        hd += ", rule fade of {} columns at g {:.4f} (readers {})".format(len(P["_rfade"][0]), P["_rfade"][1], "on the brain" if P["_rfade"][2] else "on the rule")
     if P.get("_brain") is not None:                          # (v0.4.1)
         B_, bl_, _, _, g_ = P["_brain"]
         hd += ", brain of {} ticking every {} frames (readouts {}), its token of {} numbers at gate {:.4f}{}".format(
@@ -248,7 +299,7 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
     if obs.shape[1] > len(mean):                             # an older network in a simulator with more inputs: they are appended at the end
         obs = obs[:, :len(mean)]
     x = np.clip((obs - mean) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
-    xa = x
+    xa = x                                                   # (the brain reads these: unfaded)
     if needs_pose(P):                                        # (v0.4.1) the brain's last answer turned to his pose now (test_suite's token_pre)
         B_, bl_, bt_m, _, _ = P["_brain"]
         assert pose is not None and zmap is not None, "this network's brain token is open: give step() pose= and zmap= (netpass.pose)"
@@ -256,16 +307,22 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
         tk_.see(obs)
         bt = tk_.features(np.asarray(pose, np.float32), np.asarray(zmap)).astype(np.float32)
         bst = (br_, tk_)
+    rf = P.get("_rfade")
+    if rf is not None and rf[1] > 0 and len(rf[0]):          # (v0.4.2a) the hands' inputs: the rule-made columns times (1 - g)
+        y_ = np.array(x, copy=True)                          # (sim/rule_fade.py apply_np: the same sums)
+        y_[:, rf[0]] = y_[:, rf[0]] * np.float32(1.0 - float(rf[1]))
+        x = y_
+    xh = x                                                   # (the hands' attention reads these)
     if "cell" in P:                                          # the learned map (v8): the last two inputs are cell numbers
         ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
         x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
     x = np.tanh(x @ P["w0"].T + P["b0"])
     x = np.tanh(x @ P["w1"].T + P["b1"])
     if A is not None:                                        # (v0.2) what the door lets through of the tokens
-        if bt is None:
-            x = x + A[2](A[0], A[1], xa, hm=h)                # (hm: "mem", his memory of the frame before)
+        if bt is None or not P["_brain"][4] > 0:             # (v0.4.2a: the brain stepped for the readers alone: its token stays out)
+            x = x + A[2](A[0], A[1], xh, hm=h)                # (hm: "mem", his memory of the frame before)
         else:                                                # (v0.4.1) with the brain's token at its gate
-            x = x + A[2](A[0], A[1], xa, hm=h, bt=bt, bg=P["_brain"][4])
+            x = x + A[2](A[0], A[1], xh, hm=h, bt=bt, bg=P["_brain"][4])
     xf = x
     if hh is not None:                                       # (v0.4) the head's plan of its last tick reaches the fast GRU: e + plan_in(plan)
         hlay, hW, hm = P["_head"][:3]

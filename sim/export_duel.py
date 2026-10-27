@@ -138,6 +138,12 @@ if brain and not a.no_readouts:                              # (sim/ahead.py) an
         if ck.get(k_) is not None and "{}.0.weight".format(k_) in sd:
             mind[k_] = np.array(json.dumps(ck[k_]))
             mind.update({k: v for k, v in sd.items() if k.startswith(k_ + ".")})
+    cl_ = ck.get("control")                                  # (v0.4.2b, layout version 2: sim/control.py) readouts side by side,
+    if isinstance(cl_, dict) and int(cl_.get("version", 1)) == 2:   # "control.<name>.{0,2}.*" (belief: the brain's 256; both: the
+        nm_ = [r_["name"] for r_ in cl_.get("readouts", [])]        # brain's 256 then the hands' 512); for the mind view only
+        if nm_ and all("control.{}.{}.{}".format(n_, i_, w_) in sd for n_ in nm_ for i_ in (0, 2) for w_ in ("weight", "bias")):
+            mind["control"] = np.array(json.dumps(cl_))
+            mind.update({k: v for k, v in sd.items() if k.startswith(tuple("control.{}.".format(n_) for n_ in nm_))})
 rfade = {}                                                   # (v0.4.2a, sim/rule_fade.py) the faded columns and the gate g; plugins/netpass.py
 if ck.get("rule_fade") is not None:                          # fades them as test_suite.Policy does (and with "readers", the simulator's
     rf_ = dict(ck["rule_fade"])                              # readers take the brain's answer: BRAIN_READ in env_vars)
