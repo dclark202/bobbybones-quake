@@ -318,7 +318,8 @@ set JRUN_SPEED_BACK=1
 set SMALL_ZERO=1
 rem !aim default's fast-target cap (PERCEPT_SPEED itself is live: live.json)
 rem the aim2 model at !aim default (the calibration of 2026-10-27; the old speed term and its caps off)
-call C:\Users\dacla\ql-bot-aim2\scratch\aim2_env.cmd
+rem (the aim block it called, ql-bot-aim2\scratch\aim2_env.cmd, is aim2_env.cmd beside this file, copied unchanged)
+call %~dp0aim2_env.cmd
 if "%WV_START%"=="" set WV_START=-1
 if "%CTL_START%"=="" set CTL_START=-1
 rem v0.4.2b (owner, 2026-10-24 night): the brain taught on people's games beside self-play (branch brainppl 4b1d881): the start
