@@ -1808,7 +1808,7 @@ class duelbot(minqlx.Plugin):
                 return
             if self.aim_set(self.AIM_DEFAULT):
                 self.log("aim back to {}: the player in the duel {}".format(self.AIM_DEFAULT, why))
-                self.msg("^3Aim back to^7 ^2{}^7.".format(self.AIM_DEFAULT))
+                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
         except Exception as e:                               # noqa: BLE001
             self.log("aim reset ({}): {!r}".format(why, e))
 
@@ -1947,7 +1947,7 @@ class duelbot(minqlx.Plugin):
         if getattr(self, "aim_said", False):                 # (aim_reset) the last map ended at another setting
             self.aim_said = False
             if self.aim_level() == self.AIM_DEFAULT:
-                self.msg("^3Aim back to^7 ^2{}^7.".format(self.AIM_DEFAULT))
+                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
         if now < getattr(self, "aim_check", 0.0):
             return
         self.aim_check = now + 0.5
