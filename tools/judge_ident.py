@@ -64,8 +64,8 @@ def side(code, data, mp, frames, out, envv, check_judge):
                     J["scale_err"] = max(J["scale_err"], float(np.abs(raw[a_][same_] - env.wb_scale * (env.wb_p[gm][same_] - p_before[gm][same_])).max()))
                 # direct: sim/win_judge on the raw state
                 dead_ = (env.hp <= 0) | (env.rsp_wait > 0)
-                ea_ = wj.effective(env.hp[a_], env.armor[a_], dead_[a_])
-                eb_ = wj.effective(env.hp[b_], env.armor[b_], dead_[b_])
+                ea_ = wj.parts(env.hp[a_], env.armor[a_], dead_[a_])
+                eb_ = wj.parts(env.hp[b_], env.armor[b_], dead_[b_])
                 wa_ = np.where(dead_[a_][:, None], 0.0, env.has[a_][:, [E.RL, E.LG, E.RG]].astype(np.float64))
                 wb_ = np.where(dead_[b_][:, None], 0.0, env.has[b_][:, [E.RL, E.LG, E.RG]].astype(np.float64))
                 pdir_ = wj.chance(env.wb_judge, (env.frags_r[a_] - env.frags_r[b_]).astype(np.float64), env.wb_left[gm], ea_, wa_, eb_, wb_)

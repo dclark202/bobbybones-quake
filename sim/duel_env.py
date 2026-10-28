@@ -1680,7 +1680,8 @@ WSH_COLS = ("his frames in games with the shaping on", "the shaping paid (k x (g
 #   WIN_JUDGE=<file.npz> (v0.6.1, owner 2026-10-28: "Build judge. Freeze now, train later"; unset = off, the simulator as before
 #                 to the bit) the win part's chance (the blend's, WIN_W) is the judge's (sim/win_judge.py, fitted by
 #                 tools/run/fit_b.py on his own self-play games, frozen): his lead, the time left (the period's in overtime), each
-#                 player's effective stack (health + min(armor, 2 x health); dead: 125) and big weapons owned (dead: none), with
+#                 player's stack in a lasting and a decaying part (health and armor above 100 decay; dead: a respawn) and the big
+#                 weapons owned (dead: none), with
 #                 the owner's four axioms in its shape (a frag and damage dealt raise his chance, a death and damage taken lower
 #                 it). It takes the place of win_chance.json's table and WIN_STACK's term in _wb_chance (the table is still read:
 #                 the blend needs it loaded). WIN_SCALE becomes 1 / (the judge's chance at a lead of 1 with ten minutes left and
@@ -9085,8 +9086,8 @@ class DuelEnv:
                 if WIN_JUDGE:                                # (WIN_JUDGE) the judge in the table's place, its own scale
                     import win_judge as wj_
                     self.wb_judge = wj_.load(WIN_JUDGE)[0]
-                    z1_, w0_ = np.ones(1), np.zeros((1, 3))
-                    p1_ = float(wj_.chance(self.wb_judge, z1_, z1_ * GAME_LEN, z1_ * wj_.SPAWN, w0_, z1_ * wj_.SPAWN, w0_)[0])
+                    z1_, w0_, s0_ = np.ones(1), np.zeros((1, 3)), wj_.parts(np.full(1, wj_.SPAWN), np.zeros(1), np.zeros(1, bool))
+                    p1_ = float(wj_.chance(self.wb_judge, z1_, z1_ * GAME_LEN, s0_, w0_, s0_, w0_)[0])
                     assert p1_ > 0.5, "WIN_JUDGE: a lead of 1 must be worth more than a level score"
                     self.wb_scale = 1.0 / (p1_ - 0.5)
 
@@ -9111,7 +9112,7 @@ class DuelEnv:
         if self.wb_judge is not None:                        # (WIN_JUDGE) the judge's chance in the table's place
             import win_judge as wj_
             dead_ = (self.hp <= 0) | (self.rsp_wait > 0)
-            st_ = lambda i_: (wj_.effective(self.hp[i_], self.armor[i_], dead_[i_]),                         # noqa: E731
+            st_ = lambda i_: (wj_.parts(self.hp[i_], self.armor[i_], dead_[i_]),                             # noqa: E731
                               np.where(dead_[i_][:, None], 0.0, self.has[i_][:, [RL, LG, RG]].astype(np.float64)))
             (ea_, wa_), (eb_, wb_) = st_(a_), st_(b_)
             return wj_.chance(self.wb_judge, d_, np.maximum(left, 0.0), ea_, wa_, eb_, wb_)
