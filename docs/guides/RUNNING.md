@@ -36,6 +36,14 @@ Only on the owner's word: wait for the next save (policy.pt and opt.pt newer), t
 the brain packs, the movement network, `owner.env`) to `T:\BobbyBones_backup`, never deleting there. The Windows scheduled
 task "BobbyBones backup" runs it nightly. Restore = copy back from `T:\BobbyBones_backup\data`.
 
+## After a fresh clone or a move of the repo
+
+- `sim/qsim.dll` is built, not tracked: build it with `simuild.bat` (MSVC), or copy the one from the last run's folder. An old
+  build refuses to load ("always cuts velocity to whole units"): the check is in `sim/qsim.py`.
+- `data/` moves with the repo (it is a real folder, never a link). `data/demo_root.txt` names the demos' folder (`T:\quake-demos`).
+- The scheduled tasks name the repo's path: "BobbyBones backup" (`tools/run/backup.py`) and "BobbyBones session pull"
+  (`tools/pull_sessions.sh`): update them after a move.
+
 ## Rebuilding data (what was learned on 2026-10-28)
 
 | | from |
