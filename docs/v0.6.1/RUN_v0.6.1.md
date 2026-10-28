@@ -41,8 +41,7 @@ shaping, the critic's warm-up, the pay ledger, one change at a time). Full desig
 | Steps | one every 10 updates and at least 25 min (warm-up updates not counted), **whatever the checks say**: the fade keeps going unless performance collapses |
 | Checks | every 10 updates, 160 games against **v0.6.0's end** (two models trained natively on the new aim) |
 | Flag | games won-lost **< 40%**: a message to the owner, the fade goes on |
-| Serious | **< 30%**: the fade holds and the owner gets a message; **no automatic stop** (owner: "let him train overnight"): the stop is the owner's call |
-| Collapse | the guard as in v0.6.0 (stops at a save) |
+| Serious | **< 30%**: posted in the chat; the owner decides. **The run is never stopped automatically** (owner, 10-27: "just don't ever stop the run") |
 | Logged every check | weapon use (time in hand, frags by weapon), items (mega, red, yellow a minute), accuracy by weapon (LG, rail, rockets, plasma), with the behaviour panel |
 
 ## Schedule
