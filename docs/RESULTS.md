@@ -8,6 +8,24 @@ the git-ignored `data/` folder (paths given so results can be re-checked).
 The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
 page lists every entry. A new entry goes at the top of today's file and gets a line here.
 
+## [2026-10-26](results/2026-10-26.md)
+
+- 21:10 — v0.5.0 evening: !aim settled by the owner's play (one fast-target cap of 1.5°, rail 1.0°); the self-play calibration misled; servers on Python 3.12 (Amsterdam); v0.5.1 becomes pay by win chance only (the head is v0.5.2)
+- 16:30 — v0.4.3 and v0.4.4 scrapped: the spawn camping (target choice unguided after the item rule faded, a weapon target as a free "hold here", too-easy instant-hit aim, then the head); v0.5.0 started from v0.4.2b's end with the loopholes closed, one `!aim` calibrated to the pros, and a behaviour panel
+- 10:15 — v0.4.4: the generated mid-game starts tried overnight and switched off; the strategy head opening (69% against v0.4.3's end); the rocket's collapse is not the simulator's physics but its too-easy instant-hit aim (calibrated fix: PERCEPT_SPEED 0.05); Campgrounds' rail is his choice; the EU server moved to Amsterdam
+
+## [2026-10-25](results/2026-10-25.md)
+
+- 18:00 — v0.4.3 on the weapon-variety code (practice runs to the weapons he skips, a per-map item floor); u70 66.2% against v0.4.2's end; a power cut; behaviour checks against the pros; the public servers' !aim fix and frame stalls; the v0.4.4 / v0.4.5 numbering
+- 13:30 — Weapon variety before the strategy head: he never takes Campgrounds' rail (every version), Hektik leans on the rail since v0.4.2; v0.4.3 re-planned (equal weapon pay, mid-game starts up, targeted practice runs); a false alarm about jump pads
+- 11:00 — v0.4.2 ended (v0.4.2b u140); v0.4.3 started 07:35 (item rule fade first); v0.4.1 on the public servers, listed as 1/8
+- 06:30 — v0.4.2b's night: the brain taught on people's games reads the owner far better (target 24% -> 34%, rocket launcher 6% -> 47%), games level or up
+
+## [2026-10-24](results/2026-10-24.md)
+
+- 14:00 — v0.4.2: the first try dipped at fade 0 (42.5% twice, cause unknown); restarted with the fade from update 1, 48.1% and 53.1% at fade 0.1 and 0.18
+- 13:20 — The owner plays v0.4.1's end: Bobby wins a duel 10-8; item control the gap on Sinister and Campgrounds
+
 ## [2026-10-23](results/2026-10-23.md)
 
 - 21:30 — the owner's play test of v0.4.1 (save 110): "I can tell that he actually is keeping track of me, and it leads him to pushing more"
