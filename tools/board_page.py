@@ -122,7 +122,7 @@ def render(b, stamp):
     return ("<!doctype html>\n"
             '<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n'
             '<title>BobbyBones Leaderboard</title><meta name="description" content="The shared leaderboard of the BobbyBones Quake Live duel servers">\n'
-            + BG.FONTS + "<style>" + site_css() + "</style></head>\n<body><div class=\"wrap\">\n" + BG.nav("board", "")
+            + BG.ICON + BG.FONTS + "<style>" + site_css() + "</style></head>\n<body><div class=\"wrap\">\n" + BG.nav("board", "")
             + "\n<h1>BobbyBones leaderboard</h1>\n" + body + "\n<script>" + JS + "</script>\n</div></body></html>\n")
 
 
