@@ -5,7 +5,9 @@ physics, human limits, knowledge only from sight and sound. "v1.0 starts when he
 game's ten duel maps (Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged, Campgrounds, Hektik,
 Toxicity, Cure), all in training; House of Decay and Dismemberment are held out for checks.
 
-**One goal: win games** (the owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 are retired). Each generation has its own goals; **v0.4.x**: fade out every hard-wired rule, the brain manages the game state and the strategy, pay by win chance only. Open items beside them: rocket jumps, failed movement jumps, grenades less so. The path: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md).
+**One goal: win games** (the owner, 2026-10-24: "There is only one goal: win games"). Each generation has its own goals; **v0.6.x**:
+pay by win chance only (fitted directly on game results, "B"), then the strategy head and the item rule's fade (v0.6.2). Open items
+beside them: rocket jumps and failed movement jumps (built, off).
 
 **Judged by** duels against the last best network (the control), how near his play comes to the pros' measures, the
 owner's play tests and what people do to him on the public server; the game's Nightmare bot is a floor.
@@ -19,25 +21,16 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 2. **Self-play reinforcement learning**, seeded where needed by fading lessons from the pros' demos.
 3. **Measure against people**: play tests, the public server's logs, the pros' demos.
 
-## Status (2026-10-24)
+## Status (2026-10-28)
 
-| What | Where it stands |
+| | |
 |---|---|
-| On the public servers | **v0.4.1's end** (US and EU, duel only, start map Sinister since 2026-10-25 17:30; branch `pub-v041d`: the game history and shared board, the mind log, the !aim fix, the input log off the game's thread). The next network push is the owner's call (before it: the hindsight review of games against people) |
-| Behind us | v0.3.2 to v0.3.11: one movement network (the legs switch retired), rockets and pre-fire, the doorway watching; **v0.4.0/0.4.0b** the brain; **v0.4.1** the brain's token in the hands: 64 to 71% against v0.4.0b's end, 159-1 against v0.3.6 (ended 2026-10-24 07:12, update 320, `keep/policy_end_v041.pt`) |
-| The run now | **v0.4.3** (`duel_gru_v0_4_3`, since 2026-10-25 07:35): the item rule faded out; weapon variety (B-286: equal big-weapon pay, mid-game starts 40% of all training, targeted practice runs, a per-map item floor; code branch `starts` since 17:04); u70 66.2% against v0.4.2's end. **Next: v0.4.4 = the strategy head opened** (tonight on the owner's go), **v0.4.5 = pay by win chance** (built, off). Beside, no effect on play: the brain's lesson on people's games, the "in control" readouts, the shadow win value |
-| Next | **v0.4.3**, the strategy head (card for the owner's review: [v0.4.3/RUN_v0.4.3.md](v0.4.3/RUN_v0.4.3.md)), then the win-chance rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) |
-| Checks of a run | every 20 updates 160 ten-minute games on ten maps at aim level 4 against the previous best; every fourth against the long-term control (v0.3.10's end from v0.4.2); the same network against itself reads about 49%, ±4 points a check, a single map about ±10 |
+| Best network | v0.4.2b's end (`data/sim_runs/duel_gru_v0_4_2/keep/policy_end_v042.pt`; backup `T:\BobbyBones_backup`) |
+| Public servers | v0.4.2b's end with `!aim` worse / default / better / max (aim2, measured on the pros), branch `pub-aim2` = `main`'s server code |
+| Now | v0.6.0 retrained from v0.4.2b's end after the data loss of 2026-10-28 ([runs/v0.6.0/CARD.md](runs/v0.6.0/CARD.md)), with the self-play logging for B |
+| Next | B: his chance of winning fitted on game results ([runs/v0.6.1/CARD.md](runs/v0.6.1/CARD.md) to be revised); v0.6.1 = pay by win chance only on B; v0.6.2 = the strategy head ([runs/v0.6.2/CARD.md](runs/v0.6.2/CARD.md)) |
 
-## Now
-
-The generation's goals and rounds: [v0.4.0/PATH_v0.4.md](v0.4.0/PATH_v0.4.md) (the owner, 2026-10-24). The run now: **v0.4.3** ([v0.4.3/RUN_v0.4.3.md](v0.4.3/RUN_v0.4.3.md)).
-
-- v0.4.2: the fade (the rule columns out of the hands); B-275 (the level pull, out in v0.4.3).
-- v0.4.3: the head; B-280 ("in control" as a brain readout), B-279 (grenades and plasma as area denial), B-278 (items' worth in fights).
-- Win-chance pay (v0.4.4 on): the overtime fix, his own win table, the cross-fade.
-- Open items: rocket jumps (B-252; the full-route copy built, off), failed movement jumps (the Aerowalk red-armor two-hop route copy, built), B-277 (too much jumping at times), B-276 (stuck behind the teleporter on Cure).
-- The full open list: [BACKLOG.md](BACKLOG.md).
+What has been tried and what it taught: [HISTORY.md](HISTORY.md). Open work: [BACKLOG.md](BACKLOG.md).
 
 ## Standing decisions of the owner
 

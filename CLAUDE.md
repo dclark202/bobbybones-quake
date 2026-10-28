@@ -2,8 +2,48 @@
 
 A Quake Live duel bot that learns to play from scratch: a recurrent network trained by self-play in a fast
 simulator of the game, checked on a real Quake Live server, play-tested by people. Repo:
-`dclark202/bobbybones-quake` (public, GPL-3.0 because of the bundled minqlx and ioquake3 code). Local path: the
-`ql-bot` folder in the owner's home directory.
+`dclark202/bobbybones-quake` (public, GPL-3.0 because of the bundled minqlx and ioquake3 code). Local path:
+`Documents\gh\BobbyBones` in the owner's home directory (moved there 2026-10-28; older notes say `ql-bot`).
+
+## HARD RULES (read before doing anything)
+
+1. **Never delete anything outside git's tracked files.** No `rm -rf`, `Remove-Item -Recurse`, `rmdir /s`, or
+   `git worktree remove --force` on any folder. On 2026-10-28 a cleanup did that near links into `data/` and wiped the whole
+   data folder (every run's checkpoints): see [docs/HISTORY.md](docs/HISTORY.md). A link (junction) is removed only with
+   `cmd /c rmdir "<link>"` (no `/s`) after checking with `(Get-Item <path>).LinkType`, and the target is checked after.
+   Any delete of data needs the owner's word for that exact delete and a backup first (`python tools/run/backup.py`).
+2. **Do only what the owner asks.** A question is not a go. Ask before starting runs, servers, agents, or anything that
+   changes something outside this session; before renaming or restarting fresh. Public servers only on his word.
+3. **Settings check before every run, check and calibration, and before using its numbers:**
+   `python tools/run/check_settings.py <train.cmd> --ref <reference.cmd>` (and `--ck <checkpoint>` for a run's own saves).
+   Any difference not deliberately allowed = the data is not used. Never build a run tool from an older copy.
+4. **Correctness over speed.** Never skip or approximate a calibration to meet a start time; say what is missing and when.
+5. **Red-team before a go.** Every run card lists each hand-built or assumed part of the pay and design, its measured
+   alternative, and the ledger's pathology check (negative frags, sign flips, lopsided games). Volunteer weaknesses unasked.
+6. **Never stop a run** unless the owner says so (2026-10-27); a check under 30% won-lost is posted in the chat.
+7. **No personal data** in the repo (Steam IDs, IPs, usernames, passwords); public-server details stay in `private/`.
+8. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most 1-2
+   times a day; one working tree (the repo) plus at most one worktree per active run, made without links into `data/`.
+
+## Where things are
+
+| | |
+|---|---|
+| `docs/PLAN.md` | the goal, where things stand, what's next |
+| `docs/HISTORY.md` | every version and experiment: what, result, lesson. Read it before proposing anything |
+| `docs/BACKLOG.md` | open work and ideas, numbered `B-nn` |
+| `docs/runs/<version>/` | one folder per model run: `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
+| `docs/design/` | current designs (aim2, ...) · `docs/guides/` how-tos · `docs/archive/` old versions and the old daily log (frozen) |
+| `tools/run/` | the run tools: `check_settings`, `make_train_cmd`, `watch` (checks), `panel` (behaviour), `selfplay_loop` / `selfplay_log` (B data), `backup` |
+| `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` |
+| `private/` (git-ignored) | the public servers' notes and scripts |
+
+## Starting a run
+
+1. The owner's go on the run's `CARD.md` (both parts filled in).
+2. `powershell -ExecutionPolicy Bypass -File docs\runs\<version>\start.ps1`: it runs the settings check and refuses on any
+   difference, checks the files are there and no trainer runs, then starts the trainer, the watcher and the self-play logger.
+3. One line an hour while it runs; the 06:30 report after a night.
 
 ## The owner's goals (read first)
 - **One goal: win games** (owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 and the priority
@@ -67,26 +107,13 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - The owner prefers concise answers and doable batches. Do not start a training run without his go-ahead when he
   has asked to test first.
 
-## Docs (keep in sync, one commit; the routine is `docs/README.md`)
-- `docs/PLAN.md`: the goal, the approach, today's status table, the "Now" list (the owner's priority list and backlog
-  numbers only), owner decisions. History does not go into it: the plan as it stood is in `docs/archive/`.
-- `docs/BACKLOG.md`: the open work by number (`B-nn`), grouped by the owner's priority list; a closed item moves with
-  its row to `docs/archive/BACKLOG_closed.md`. A new item takes the highest number in both files plus one.
-- `docs/RESULTS.md` is the index of the results log; the log is one file a day in `docs/results/<date>.md`, newest
-  first, what did not work included. Add an entry with `python tools/add_result.py entry.md` (first line
-  `## <date> <time> — <the finding>`; links written as from `docs/results/`). "RESULTS 2026-10-08 18:45" anywhere
-  means the entry of that time in `docs/results/2026-10-08.md`.
-- `docs/v<model>/` (`v0.4.3/`, `v0.4.2/`, `v0.4.1/`, `v0.4.0/`, `v0.4/`, `v0.3.11/`, `v0.3.10/`, `v0.3.9/`, `v0.3.8/`, `v0.3.7/`, `v0.3.5/`, `v0.3.4/`, `v0.3.3/`, `v0.3.2/`, `v0.3.1/`, `v0.3/`, `v0.2.2/`, `v0.2.1/`, `v0.2/`; from v0.4.0 on one folder per main run (owner, 2026-10-24: "Every main run v0.4.x gets its own folder. Any restarts etc. we do can be in the same folder"): its restarts and trials go in its folder, `v0.4/` keeps the design papers from before v0.4.0, the generation's path is `v0.4.0/PATH_v0.4.md`; since the clean-up of 2026-10-15 everything before v0.2 (`docs/legacy/`, `docs/v0.1/`, the V16 design files, the old plans, the log before 2026-10-11, `INPUTS_v7` to `INPUTS_v15b.csv`, old evals and yardsticks) is kept locally in the git-ignored `data/docs_old/docs/`, same paths; a `docs/...` path below that is gone from the repo is there: owner, 2026-10-13, "group the docs in docs/ into sub folders by their model"): a model's run documents and its design proposals together. Older text and code comments that say `docs/runs/...` or `docs/design/<a model's file>` mean the model's folder. A run's own documents: `RUN_v<n>.md` (one page in plain words, the one the owner reads and gives his go on: owner, 2026-10-13, "your manifests are getting rather long and complicated and difficult for me to follow"; keep it to one page and current), `MANIFEST_v<n>.md` (the run in full, for the owner's go before a start; changes
-  during the run go into its section 0), `MIDRUN_v<n>.md`, `REPORT_v<n>.md` (the full report, ending with what to try next).
-- `docs/guides/` (PLAYTEST, COMMANDS, LOGS: the schemas of recorded data, ATLAS), `docs/design/`
-  (what belongs to no one model: QLSTATS, the jumps' and places' pictures), `docs/archive/`.
-- `docs/INPUTS*.csv`, `docs/*.json`, `docs/MAPS.md`: data that tools and the Dockerfile read by path; they stay there
-  until every path moves with them (B-203).
-- `README.md`: the public page (goal, fairness rules, how it works, what he can do, in progress, planned; no dated
-  status table: owner, 2026-10-08). The owner wants it kept current
-  with the docs (2026-10-08).
-After any run, test or decision: an entry in the log, the backlog, the plan if its status or "Now" changed, then
-`python tools/docs_check.py` (links, the log's index, backlog numbers) before the commit.
+## Docs (keep in sync, one commit)
+- After a run, test or decision: the run's folder (`docs/runs/<version>/`: card, report), a line in `docs/HISTORY.md`, the
+  backlog, `docs/PLAN.md` if its status changed, then `python tools/docs_check.py` (links, backlog numbers) before the commit.
+- The old daily log (`docs/archive/results/`, "RESULTS 2026-10-08 18:45" = that entry) and the per-version folders
+  (`docs/archive/versions/v<n>/`; older text that says `docs/v<n>/...` means there) are frozen.
+- `docs/INPUTS*.csv`, `docs/*.json`, `docs/MAPS.md`: data that tools read by path; they stay at `docs/` (B-203).
+- `README.md` is the public page; keep it current with the docs.
 
 ## Architecture
 - **Simulator** (`sim/`): `sim_api.c` + vendored ioquake3 movement and collision (`sim/q3`) -> `qsim.dll`
