@@ -557,6 +557,103 @@ def spread(path, min_shots=None):
     return out
 
 
+def _ratio_by(S, C, sel, ref, groups):
+    """per group (demo): hits of sel against what the pooled rate by distance band of ref would give sel's shots"""
+    edges = np.array([250.0, 500.0, 750.0, 1100.0])
+    b = np.searchsorted(edges, np.nan_to_num(S[:, C["dist"]], nan=1e9), side="right")
+    w, h = S[:, 1], S[:, 2] * S[:, 1]
+    rb = np.bincount(b[ref], h[ref], 5) / np.maximum(np.bincount(b[ref], w[ref], 5), 1e-9)
+    G = int(groups.max()) + 1
+    got = np.bincount(groups[sel], h[sel], G)
+    exp_ = np.bincount(groups[sel], (w * rb[b])[sel], G)
+    n_ = np.bincount(groups[sel], w[sel], G)
+    return got, exp_, n_
+
+
+def measures(path, per_demo=True):
+    """the style measures, per demo (src) for the pros or one value for a simulator file:
+    dm (hits against the pooled pros by distance), rev (0.1-0.2 s after a reversal against steady), dmg (after damage against
+    calm), flick hit % and median time of the first shot after a sighting (rail, shotgun, LG, RL)"""
+    Z = np.load(path)
+    S, F = Z["shots"], Z["flicks"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    _, grp = np.unique(S[:, C["src"]], return_inverse=True) if per_demo else (None, np.zeros(len(S), np.int64))
+    out = {}
+    for label, nm in STYLES:
+        wq = NAMES.index(nm)
+        m0 = (S[:, 0] == wq) & np.isfinite(S[:, C["dist"]])
+        if m0.sum() < 50:
+            continue
+        mn = (200 if nm in ("lg", "mg") else 30 if nm in ("rg", "rl", "pg") else 10) if per_demo else 1
+        got, exp_, n_ = _ratio_by(S, C, m0, m0, grp)
+        ok = n_ >= mn
+        o = out[nm] = {"dm": 100 * got[ok] / np.maximum(exp_[ok], 1e-9)}
+        rv = m0 & (S[:, C["rev"]] >= 0.1) & (S[:, C["rev"]] < 0.2)
+        st = m0 & (S[:, C["rev"]] >= 0.6)
+        g1, e1, n1 = _ratio_by(S, C, rv, st, grp)
+        g2, e2, n2 = _ratio_by(S, C, st, st, grp)
+        ok2 = (n1 >= mn / 4) & (n2 >= mn / 2) & (e1 > 0) & (e2 > 0) & (g2 > 0)
+        o["rev"] = 100 * (g1[ok2] / e1[ok2]) / (g2[ok2] / e2[ok2])
+        dmg = m0 & (S[:, C["took"]] > 0)
+        calm = m0 & (S[:, C["took"]] == 0)
+        g1, e1, n1 = _ratio_by(S, C, dmg, calm, grp)
+        g2, e2, n2 = _ratio_by(S, C, calm, calm, grp)
+        ok3 = (n1 >= mn / 4) & (n2 >= mn / 2) & (e1 > 0) & (e2 > 0) & (g2 > 0)
+        o["dmg"] = 100 * (g1[ok3] / e1[ok3]) / (g2[ok3] / e2[ok3])
+        if nm in ("rg", "sg", "lg", "rl"):
+            fm = F[:, 0] == wq
+            if fm.sum() >= 20:
+                if per_demo:
+                    u, gi = np.unique(F[fm, -1], return_inverse=True)
+                    cnt = np.bincount(gi)
+                    okf = cnt >= 5
+                    o["flick_hit"] = 100 * (np.bincount(gi, F[fm, 3]) / np.maximum(cnt, 1))[okf]
+                    o["flick_time"] = np.array([np.median(F[fm, 2][gi == k]) for k in np.nonzero(okf)[0]])
+                else:
+                    o["flick_hit"] = np.array([100 * F[fm, 3].mean()])
+                    o["flick_time"] = np.array([np.median(F[fm, 2])])
+    return out
+
+
+def distribution(pro_path, sims):
+    """the pros' percentiles of each measure (by demo) and where each simulator file lands among them (its percentile)"""
+    P = measures(pro_path, True)
+    Ss = [(os.path.basename(p), measures(p, False)) for p in sims]
+    PS = np.load(pro_path)["shots"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    edges = np.array([250.0, 500.0, 750.0, 1100.0])
+    for (_, s), p in zip(Ss, sims):                          # a simulator's dm: against the pros' rate by band, not its own
+        X = np.load(p)["shots"]
+        for nm in s:
+            wq = NAMES.index(nm)
+            mp_ = (PS[:, 0] == wq) & np.isfinite(PS[:, C["dist"]])
+            bp = np.searchsorted(edges, PS[mp_, C["dist"]], side="right")
+            rb = np.bincount(bp, PS[mp_, 2] * PS[mp_, 1], 5) / np.maximum(np.bincount(bp, PS[mp_, 1], 5), 1e-9)
+            mx = (X[:, 0] == wq) & np.isfinite(X[:, C["dist"]])
+            bx = np.searchsorted(edges, X[mx, C["dist"]], side="right")
+            s[nm]["dm"] = np.array([100 * (X[mx, 2] * X[mx, 1]).sum() / max((X[mx, 1] * rb[bx]).sum(), 1e-9)])
+    print("| style | measure | pro demos | p10 | p25 | p50 | p75 | p90 | " + " | ".join(n for n, _ in Ss) + " |")
+    print("|---|---|---|---|---|---|---|---|" + "---|" * len(Ss))
+    for label, nm in STYLES:
+        if nm not in P:
+            continue
+        for k, v in P[nm].items():
+            v = v[np.isfinite(v)]
+            if len(v) < 10:
+                continue
+            q = np.percentile(v, (10, 25, 50, 75, 90))
+            cells = []
+            for _, s in Ss:
+                x = s.get(nm, {}).get(k)
+                if x is None or not len(x) or not np.isfinite(x[0]):
+                    cells.append("-")
+                else:
+                    cells.append("{:.0f} (p{:.0f})".format(x[0], 100 * (v < x[0]).mean()) if k != "flick_time" else
+                                 "{:.2f} (p{:.0f})".format(x[0], 100 * (v < x[0]).mean()))
+            fmt = "{:.2f}" if k == "flick_time" else "{:.0f}"
+            print("| {} | {} | {} | {} | {} |".format(nm, k, len(v), " | ".join(fmt.format(x) for x in q), " | ".join(cells)))
+
+
 def versus(pro_path, paths):
     """each file's hits against what the pros' hit rate by distance band would give its shots (100 = pro level), by weapon;
     the rail's and shotgun's first shot after a sighting by the angle off (the same, by angle band)"""
@@ -603,7 +700,7 @@ def versus(pro_path, paths):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=("pros", "sim", "report", "spread", "vs"))
+    ap.add_argument("mode", choices=("pros", "sim", "report", "spread", "vs", "dist"))
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--set", default="demos")
     ap.add_argument("--maps", default="bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged")
@@ -631,6 +728,8 @@ def main():
     elif a.mode == "sim":
         a.set = a.set_
         sim(a)
+    elif a.mode == "dist":
+        distribution(a.paths[0], a.paths[1:])
     elif a.mode == "vs":
         versus(a.paths[0], a.paths[1:])
     elif a.mode == "spread":
