@@ -13,7 +13,7 @@ human is measured with the same metrics, giving a human baseline card (docs/guid
 Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
 there. The server is held in warmup on the three maps.
 
-Chat commands: !note <text>, !drill <weapon|off>, !map <name>, !room <...> (see cmd_room), !rooms.
+Chat commands: !help, !maps, !aim, !note <text>, !mind (the owner); !map is plugins/botmode.py's. (Test rooms: no chat command since 2026-10-26.)
 Load with QLX_PLUGINS="botctl, duelbot". Needs /tmp/practice/policy.npz (sim/export_duel.py); rooms need
 /maps/nav_<map>_sim.json. Writes /tmp/practice/sessions/<session>/ and /tmp/practice/suite/.
 """
@@ -40,9 +40,23 @@ try:                                                        # the network's forw
 except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     _net = importlib.import_module("netpass")
+try:                                                        # (B-283) the mind view's log (plugins/mindlog.py; !mind on|off)
+    _mind = importlib.import_module(__package__ + ".mindlog")
+except Exception:                                           # noqa: BLE001 - loaded outside the plugin package
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    _mind = importlib.import_module("mindlog")
 
 sys.path.insert(0, "/sim")
-TIMING = bool(os.environ.get("DUEL_TIMING"))                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
+# DUEL_EARLY_BOBBY=1 (owner, 2026-10-24; tools/duel_server.sh sets it on every server, PUBLIC=1 too since 2026-10-27): Bobby is added
+# inside the map hook, before any client is sent the new map's gamestate. The game drops bots on a map change and the frame
+# loop added him back ten seconds or more later (after setup()), when the person's game had loaded the map: with
+# cg_deferPlayers 1 (the default) a client that learns of a player after its load defers his model and, in a game without
+# teams, draws him with the model of the first player it has loaded, its own, until it loads the deferred models (ioquake3's
+# cg_players.c, CG_SetDeferredClientInfo; the owner: "it makes him *my* player model", spec and rejoin fixed it). A player
+# in the gamestate is loaded in full while the map loads, cg_forceEnemyModel included.
+EARLY_BOBBY = os.environ.get("DUEL_EARLY_BOBBY", "") == "1"
+TIMING = bool(os.environ.get("DUEL_TIMING"))
+PROFILE = int(os.environ.get("DUEL_PROFILE") or 0)          # DUEL_PROFILE=N: a cProfile of the plugin every N frames (profile_*.txt)                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
 # BOBBY_AUTOHOP=1 (B-258, off by default): the game re-jumps a held jump on landing (pmove_AutoHop 1) only for a player
 # whose userinfo carries cg_autoHop 1, which a person's game sends (the owner's config has it) and a bot's has not: on
 # the servers Bobby's held jump has never hopped again, while the simulator he learnt in always did (plugins/physlab.py,
@@ -216,22 +230,20 @@ class duelbot(minqlx.Plugin):
         self.add_hook("stats", self.on_stats)
         self.add_command("help", self.cmd_help, 0)
         self.add_command("maps", self.cmd_maps, 0)
-        self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(MAPS)))
+        # (!map is plugins/botmode.py's alone: owner, 2026-10-26, both plugins had it and a bad name printed the usage twice)
         self.lab = None
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
-        self.add_command("drill", self.cmd_drill, 5, usage="<weapon|off>")
-        self.add_command("room", self.cmd_room, 5,
-                         usage="aim <weapon> <still|slow|fast|jump> [close|mid|far] | choice <close|mid|far> | move | solo | ladder [style] | suite | off")
-        self.add_command("rooms", self.cmd_rooms, 5)
-        self.add_command("reflex", self.cmd_reflex, 0)
-        self.add_command("movement", self.cmd_movement, 0)
-        self.add_command("duel", self.cmd_duel, 0, usage="[minutes|off]")
-        self.add_command("match", self.cmd_duel, 0, usage="[minutes|off]")
-        self.add_command("spar", self.cmd_spar, 5, usage="<on|off>")
-        self.add_command("nosg", self.cmd_nosg, 5, usage="<on|off>")
-        self.add_command("arena", self.cmd_arena, 5, usage="<box|env|yard|off> [minutes]")
-        self.add_command("aim", self.cmd_aim, 0, usage="[1|2|3|4|5|max]")
-        self.aim_want = None                                 # (!aim) the level asked for, put in at the next warmup
+        # (owner, 2026-10-26: duels on the ten maps only: !duel, !match, !reflex, !movement, !room, !rooms, !drill, !arena,
+        # !spar, !nosg removed; their code below is no longer reachable from chat)
+        self.add_command("aim", self.cmd_aim, 0, usage="[worse|default|better|max]")
+        self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
+        self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
+        if os.environ.get("DUEL_MIND", "") == "1":           # (owner, 2026-10-24: "make it so the mind records the game") on from the start
+            self.mind_w = _mind.Writer(os.path.join(D, "mind.jsonl"), log=self.log)
+            self.mind_map, self.mind_fr = None, 0
+            self.log("mind view: on from the start (DUEL_MIND=1; mind.jsonl in the data folder)")
+        self.aim_prof, self.aim_names, self.aim_bad, self.aim_who = {}, [], {}, set()   # (!aim, aim_build, aim_frame)
+        self.aim_reset()                                     # (the start: the default aim, whatever policy.npz was left at)
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
@@ -338,14 +350,36 @@ class duelbot(minqlx.Plugin):
             self.inputs_flush()
 
     def inputs_flush(self):
+        """(2026-10-25: the compressed write held the game's frame 120-200 ms every two minutes on the public servers) the
+        rows are stacked, compressed and written by a background thread (zlib lets the game's thread run meanwhile); one
+        write at a time, in order, numbered per session"""
         buf, self.inlog = getattr(self, "inlog", []), []
         if not buf or not self.sess:
             return
         try:
-            n = len([f for f in os.listdir(self.sess) if f.startswith("inputs_")])
-            np.savez_compressed(os.path.join(self.sess, "inputs_{:04d}.npz".format(n)), t=np.array([b[0] for b in buf]),
-                                frame=np.array([b[1] for b in buf], np.int64), obs=np.stack([b[2] for b in buf]),
-                                h=np.stack([b[3] for b in buf]), acts=np.stack([b[4] for b in buf]))
+            cnt = self.__dict__.setdefault("inlog_n", {})
+            n = cnt.get(self.sess)
+            if n is None:
+                n = len([f for f in os.listdir(self.sess) if f.startswith("inputs_")])
+            cnt[self.sess] = n + 1
+            path = os.path.join(self.sess, "inputs_{:04d}.npz".format(n))
+            prev = getattr(self, "inlog_thread", None)
+            errs = self.__dict__.setdefault("inlog_errs", [])
+            while errs:                                      # (a write's failure is told here, on the game's thread)
+                self.log("inputs log: {}".format(errs.pop(0)))
+
+            def write():
+                if prev is not None:
+                    prev.join()
+                try:                                         # (stacked here too: the game's thread only hands the list over)
+                    np.savez_compressed(path, t=np.array([b[0] for b in buf]), frame=np.array([b[1] for b in buf], np.int64),
+                                        obs=np.stack([b[2] for b in buf]), h=np.stack([b[3] for b in buf]),
+                                        acts=np.stack([b[4] for b in buf]))
+                except Exception as e:                       # noqa: BLE001 - a full disk must not stop the game
+                    errs.append(type(e).__name__)
+            import threading
+            self.inlog_thread = threading.Thread(target=write, name="inputs-log", daemon=True)
+            self.inlog_thread.start()
         except Exception as e:                               # noqa: BLE001 - a full disk must not stop the game
             self.log("inputs log: {}".format(type(e).__name__))
 
@@ -411,8 +445,8 @@ class duelbot(minqlx.Plugin):
         _pu.load_map(self.want_map, "duel")
 
     HELP = ["^3What I can do:^7 I learned to play from scratch in a simulator: movement, aim, picking up items, choosing weapons. I play with human limits.",
-            "^3Play me:^7 join the game, I'm already in it. ^2F3^7 starts a real 10-minute game (the scoreboard and a vote for the next map at its end); ^2!duel [minutes]^7 a timed duel in warmup.",
-            "^3Maps:^7 one against one on the ten duel maps: ^2!maps^7 lists them, ^2!map <name>^7 changes it. ^2!match [minutes]^7 scores a timed game.",
+            "^3Play me:^7 join the game, I'm already in it. ^2F3^7 starts a real 10-minute game (the scoreboard and a vote for the next map at its end).",
+            "^3Maps:^7 one against one on the ten duel maps: ^2!maps^7 lists them, ^2!map <name>^7 changes it.",
             "^3Give feedback:^7 ^2!note <text>^7 tells me what you noticed. Every match I play is recorded, without names."]
 
     def cmd_help(self, player, msg, channel):
@@ -430,12 +464,12 @@ class duelbot(minqlx.Plugin):
     # the second line a person reads on joining (owner, 2026-10-23: 1v1 only, no !mode or !bots)
     WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2F3^7 starts a 10-minute game"
 
-    AIM_WELCOME = ("^3My aim:^7 ^2!aim 1^7 or ^22^7 relaxed, ^2!aim 3^7 easier, ^2!aim 4^7 normal ^6(default)^7, "
-                   "^2!aim 5^7 sharp, ^2!aim max^7 no human limits")
+    AIM_WELCOME = ("^3My aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains ^6(default)^7, ^2!aim better^7 sharper, "
+                   "^2!aim max^7 no human limits. The player in the duel can change it at any time.")
 
     def on_player_loaded(self, player):
         if not is_bot(player):
-            player.tell("^3I'm ^5BobbyBones^3, the learning Quake bot.^7 Here's some commands")
+            player.tell("^3I'm ^5B^7o^5bbyB^7o^5nes^3, the learning Quake bot.^7 Here's some commands")
             player.tell(self.WELCOME)
             if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
                 player.tell(self.AIM_WELCOME)
@@ -518,7 +552,7 @@ class duelbot(minqlx.Plugin):
                 player.tell("^3You are watching.^7 F3 starts a game for the one who plays; join when the seat is free.")
             return
         if self.room is not None or self.queue or self.arena:
-            player.tell("^3A test room or a timed duel is running:^7 ^2!room off^7 or ^2!duel off^7 first, then F3.")
+            player.tell("^3A test is running:^7 F3 when it is over.")
             return
         if getattr(self, "go_f3", 0.0):                      # the start is already on its way
             return
@@ -575,7 +609,7 @@ class duelbot(minqlx.Plugin):
             return
         for p in self.players():
             if p.id != player.id and not is_bot(p) and p.team in ("free", "red", "blue"):
-                player.tell("^3BobbyBones is playing {}.^7 Spectate: you play when they leave.".format(p.clean_name))
+                player.tell("^5B^7o^5bbyB^7o^5nes^3 is playing {}.^7 Spectate: you play when they leave.".format(p.clean_name))
                 return minqlx.RET_STOP_ALL
 
     def cmd_note(self, player, msg, channel):
@@ -648,7 +682,7 @@ class duelbot(minqlx.Plugin):
                     lad.note_duel(A["key"], A.get("owner", 0), played, o, b, why != "time", "timed")
             except Exception as e:                           # noqa: BLE001
                 self.log("duel line: {}".format(type(e).__name__))
-        self.msg("^3Arena over ({})^7: BobbyBones ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
+        self.msg("^3Arena over ({})^7: ^5B^7o^5bbyB^7o^5nes^7 ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
 
     def arena_spot(self, other):
         """a place in the arena at least 500 units from the other player"""
@@ -675,7 +709,7 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
         if on:
             player.put("spectator")
-            self.msg("Spar: BobbyBones against a Nightmare bot. Join the game or type !spar off to stop.")
+            self.msg("Spar: ^5B^7o^5bbyB^7o^5nes^7 against a Nightmare bot. Join the game or type !spar off to stop.")
         else:
             for p in self.players():
                 if is_bot(p) and not is_bobby(p):
@@ -684,16 +718,16 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab and "aim" not in self.lab:
-            player.tell("The training arena: play BobbyBones freely, or ^3!duel^7 for a timed five minutes.")
+            player.tell("The training arena: play ^5B^7o^5bbyB^7o^5nes^7 freely, or ^3!duel^7 for a timed five minutes.")
             return
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!arena box | env | yard = fight BobbyBones in that room for 5 minutes, full weapons (yard: the new two-level arena)")
+            player.tell("!arena box | env | yard = fight ^5B^7o^5bbyB^7o^5nes^7 in that room for 5 minutes, full weapons (yard: the new two-level arena)")
             player.tell("!room moves = every movement course in a row, with a table of times at the end")
             player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
-            player.tell("^3!movement^7 = every movement course, timed | ^3!duel^7 = five minutes against BobbyBones in the environment room")
+            player.tell("^3!movement^7 = every movement course, timed | ^3!duel^7 = five minutes against ^5B^7o^5bbyB^7o^5nes^7 in the environment room")
             player.tell("^3!reflex^7 = the aim reflex test: four short aim rooms, three minutes (lightning, rail, rockets)")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
@@ -852,6 +886,42 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
         self.game_over_t, self.go_f3 = 0.0, 0.0              # a new map: a game's end sequence is over with it
         self.aim_reset()
+        if EARLY_BOBBY:
+            self.add_early()
+
+    def add_early(self):
+        """(DUEL_EARLY_BOBBY) Bobby in the map's gamestate: added now, in the map hook, once a map; he stands still (zero
+        input) until setup() is done. A Bobby who came over from the last map (the end-of-game vote, an rcon "map": the game
+        keeps its bots across those; only !map kicks them first) is kicked and added again here, so a person's client learns
+        of him with the map's gamestate and loads his model, not its own (2026-10-27: the bug was still seen after a vote)"""
+        try:
+            old = [p.id for p in self.players() if is_bobby(p)]
+            for i in old:                                    # (a bot's seat is freed at once: no zombie state for bots)
+                minqlx.console_command("clientkick {}".format(i))
+            if any(is_bobby(p) for p in self.players()):
+                self.log("early add: a Bobby is still there after the kick (seats {}); not added again".format(old))
+                return
+            minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5B^7o^5bbyB^7o^5nes\"")
+            ids = [p.id for p in self.players() if is_bobby(p)]
+            for i in ids:
+                minqlx.set_bot_input(i, 0, 0, 0, 0, 0, 0.0, 0.0)
+                self.put_free(i)
+            self.log("map {}: BobbyBones added at the map's load (DUEL_EARLY_BOBBY), seat {}{}".format(
+                (minqlx.get_cvar("mapname") or "").lower(), ids or "not yet seen",
+                " (the one carried over from the last map, seat {}, kicked first)".format(old) if old else ""))
+        except Exception as e:                               # noqa: BLE001
+            self.log("early add: {!r}".format(e))
+
+    @staticmethod
+    def put_free(cid):
+        """(2026-10-28, the wrong player model again) a bot added in a duel enters as a QUEUED SPECTATOR (his configstring
+        t 3, pq 1) and the game moves him into the game a few frames later (t 0): measured on a private server, 60 to 280 ms
+        after the add. Added in the map hook, the gamestate a person's client gets therefore had him as a spectator, and
+        his move to the game (a configstring change) could reach the client after its load: the likely cause of the wrong
+        model still seen with the early add (not yet proven with a client: a spectator is no enemy for cg_forceEnemyModel,
+        so his model would be worked out anew and, with cg_deferPlayers 1, deferred to the client's own). "put <id> free"
+        moves him at once, inside the hook: the gamestate already has him in the game (t 0, pq 0), and nothing changes later."""
+        minqlx.console_command("put {} free".format(cid))
 
     # ------------------------------------------------------------------ setup
     FACTORY = "duel"                                         # (ffabot: "ffa")
@@ -912,6 +982,7 @@ class duelbot(minqlx.Plugin):
         nav = "/maps/nav_{}_sim.json".format(mapname)
         os.environ["ROUTE_CACHE"] = D                          # the route grid is cached here (/maps is read-only)
         self.env = E.DuelEnv(bsp, n_matches=1, seed=1, nav=nav if os.path.exists(nav) else None)
+        self.legs_reuse(self.env)
         self.clock_setup(self.env)                           # (a whole-games network: the game's clock, see clock_frame)
         self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
         self.env.react_frames = round(self.react_ms / 25)    # same reaction delay as in training (newer simulators)
@@ -943,6 +1014,11 @@ class duelbot(minqlx.Plugin):
         self.log("ready on {}: policy {} ({} min of training), {} inputs, reaction {} ms, rooms nav {}, {}{}".format(
             mapname, self.P["run"], int(self.P["minutes"]), E.OBS_DIM, int(self.react_ms),
             "yes" if self.renv.field is not None else "no", _net.describe(self.P, self.attn), self.v02_note(self.env, E)))
+        try:
+            self.aim_build()                                 # (!aim) the settings' values, for a switch at once
+        except Exception as e:                               # noqa: BLE001 - never in the way of play
+            self.aim_prof, self.aim_names = {}, []
+            self.log("aim: {!r}; no live aim changes".format(e))
 
     def act(self, obs):
         """one frame of the network for the one Bobby of a 1v1 server (plugins/netpass.py: the same sums as the
@@ -1436,6 +1512,8 @@ class duelbot(minqlx.Plugin):
             else E.MOUSE_SMOOTH
         if getattr(E, "ZOOM_PERCEPT", False):               # (ZOOM_PERCEPT) small in hand terms: 1 degree unzoomed, as in training
             sm = np.where(np.abs(cmd) <= zs + 1e-6, E.MOUSE_SMOOTH_FINE, E.MOUSE_SMOOTH)
+        if getattr(E, "AIM2_SMOOTH_K", 1.0) != 1.0:          # (AIM2_SMOOTH_K) less (or no) view inertia, as in training
+            sm = sm * E.AIM2_SMOOTH_K
         env.mv[i] = sm * env.mv[i] + (1.0 - sm) * cmd
         turn, dpit = float(env.mv[i, 0]), float(env.mv[i, 1])
         if rules2 and env.human_aim:                         # flick cap and hand noise, as in training
@@ -1513,109 +1591,389 @@ class duelbot(minqlx.Plugin):
         minqlx.set_bot_input(p.id, fwd, side, jump, 1 if press else 0, QLNUM[names[w]], pitch, yaw)
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 
-    # ------------------------------------------------------------------ !aim (owner, 2026-10-21)
-    # !aim 1|2|3|4|5|max sets his aim for the next game (1 and 2: owner, 2026-10-22): one export per level (policy_l1.npz to l5,
-    # policy_l4.npz, policy_l5.npz, policy_max.npz: the same network, AIM_LEVEL and the aim delays in env_vars changed),
-    # and the chosen one is copied over policy.npz and loaded at once when no game runs (warmup), else at the next
-    # warmup (a game in progress, its countdown, its end and the next map's load keep the aim they started with).
-    AIM_FILES = {"1": "policy_l1.npz", "2": "policy_l2.npz", "3": "policy_l3.npz", "4": "policy_l4.npz", "5": "policy_l5.npz",
-                 "max": "policy_max.npz"}
+    # ------------------------------------------------------------------ !aim (owner, 2026-10-21; at once: 2026-10-27)
+    # !aim worse|default|better|max: one export per setting (policy_<name>.npz: the same network, only the aim limits in
+    # env_vars and the aim delays react_ms / acquire_ms differ). Since 2026-10-27 (owner) a change takes effect AT ONCE,
+    # mid-game too, without loading the network again: aim_live() sets the simulator module's aim globals, the env's copies
+    # of them and the delays to the chosen file's, as worked out by aim_build() (the module run once a setting, under that
+    # file's env_vars, as env_module() would load it), and keeps his memory, the game clock and the session log. Only the
+    # person playing the duel (or the server's owner) may change it. Back to the default on a new map and when the person in
+    # the duel leaves (disconnects or goes to spectate), so the next person starts at the default (owner, 2026-10-27).
+    AIM_FILES = {"worse": "policy_worse.npz", "default": "policy_default.npz", "better": "policy_better.npz", "max": "policy_max.npz"}
+    # (2026-10-26, owner: one aim setting, four values; a file names itself by AIM_NAME in its env_vars)
+    AIM_KEEP = ("env_vars", "react_ms", "acquire_ms")        # the arrays that may differ between the files of the settings
 
     def aim_level(self):
-        """the aim level of the network loaded: "1" to "5", "max" (AIM_LEVEL in its env_vars; 40 is max)"""
+        """the aim setting of the network loaded: AIM_NAME in its env_vars ("worse", "default", "better", "max"); else
+        AIM_LEVEL ("1" to "5", "max")"""
         try:
-            v = float(json.loads(str(self.P["env_vars"])).get("AIM_LEVEL", 3))
+            ev_ = json.loads(str(self.P["env_vars"]))
         except Exception:                                    # noqa: BLE001 - no network loaded yet
             return "?"
+        if ev_.get("AIM_NAME"):
+            return str(ev_["AIM_NAME"])
+        v = float(ev_.get("AIM_LEVEL", 3))
         return "max" if v > 9 else "{:g}".format(v)
 
-    AIM_DEFAULT = "4"
+    AIM_DEFAULT = "default"
 
-    def aim_reset(self):
-        """a new map: back to the default aim (owner, 2026-10-22); policy.npz is loaded by setup() once the map is up"""
-        self.aim_want = None
-        src, dst = os.path.join(D, self.AIM_FILES[self.AIM_DEFAULT]), os.path.join(D, "policy.npz")
-        if self.aim_level() in (self.AIM_DEFAULT, "?") or not os.path.exists(src):
-            return
+    @staticmethod
+    def file_level(path):
+        """the aim setting of a policy file on disk (AIM_NAME: "worse", "default", "better", "max"; else "1" to "5", "max";
+        "?" when it cannot be read): only its env_vars are read"""
         try:
-            tmp = dst + ".aim.tmp"
-            shutil.copyfile(src, tmp)
-            os.replace(tmp, dst)
-            self.log("new map: aim level back to {}".format(self.AIM_DEFAULT))
-        except Exception as e:                           # noqa: BLE001
-            self.log("aim reset: {!r}".format(e))
-
-    def aim_busy(self):
-        """a game (or its countdown or end), a test room, a timed duel or a map load: the aim stays as it is for now"""
-        try:
-            st = self.game.state if self.game is not None else None
+            with np.load(path, allow_pickle=False) as z:
+                ev_ = json.loads(str(z["env_vars"]))
         except Exception:                                    # noqa: BLE001
-            st = None
-        return (not self.ready or st != "warmup" or self.real_game or bool(getattr(self, "go_f3", 0.0)) or self.after_game()
-                or self.room is not None or bool(self.queue) or bool(self.arena))
+            return "?"
+        if ev_.get("AIM_NAME"):
+            return str(ev_["AIM_NAME"])
+        v = float(ev_.get("AIM_LEVEL", 3))
+        return "max" if v > 9 else "{:g}".format(v)
 
-    def aim_apply(self, level):
-        """copy the level's export over policy.npz and load it (setup(), as the hot reload does)"""
+    @staticmethod
+    def aim_may(team, bot, owner):
+        """may this player change !aim: the server's owner, or the person playing the duel (in the game: not a spectator,
+        not a bot) (owner, 2026-10-27)"""
+        return bool(owner) or (not bot and team in ("free", "red", "blue"))
+
+    def aim_owner(self, p):
+        """the server's owner (QLX_OWNER, as plugins/banlist.py and ladder.py know him), or the server's console (rcon)"""
+        rc_ = getattr(minqlx, "RconDummyPlayer", None)
+        if rc_ is not None and isinstance(p, rc_):
+            return True
+        try:
+            if is_bot(p) or not (minqlx.get_cvar("qlx_owner") or "").strip().isdigit():
+                return False
+            return str(p.steam_id) == str(minqlx.owner())
+        except Exception:                                    # noqa: BLE001
+            return False
+
+    def aim_file(self, level):
+        """copy the setting's export over policy.npz (what setup() loads at a map's load and after a restart); the hot reload
+        is told it is not a new network"""
         src, dst = os.path.join(D, self.AIM_FILES[level]), os.path.join(D, "policy.npz")
         tmp = dst + ".aim.tmp"
         shutil.copyfile(src, tmp)
         os.replace(tmp, dst)
-        self.aim_want = None
-        self.end_session()
-        self.setup()
-        self.log("aim level {} loaded ({})".format(level, self.AIM_FILES[level]))
+        if getattr(self, "ready", False):
+            self.policy_mtime = os.path.getmtime(dst)
+
+    def aim_build(self):
+        """(setup) for every setting's file on disk: the simulator module's globals as that file's env_vars make them (the
+        module's source run once a setting, the environment set as env_module() sets it, then put back) and its delays;
+        aim_names: the globals the settings set differently. A file whose network is not the one loaded, or whose
+        env_vars the module refuses, cannot be switched to live (aim_bad)."""
+        t0_ = time.perf_counter()
+        self.aim_prof, self.aim_names, self.aim_bad = {}, [], {}
+        E = self.E
+        try:
+            with open(E.__file__, encoding="utf-8") as f:
+                code = compile(f.read(), E.__file__, "exec")
+        except Exception as e:                               # noqa: BLE001
+            self.log("aim: the simulator's source cannot be read ({!r}): no live aim changes".format(e))
+            return
+        types_ = (bool, int, float, str, tuple, frozenset, dict, np.ndarray, np.generic)
+        old_set = set(getattr(duelbot, "_env_set", ()))
+        for lv, fn in self.AIM_FILES.items():
+            path = os.path.join(D, fn)
+            if not os.path.exists(path):
+                continue
+            saved = None
+            try:
+                with np.load(path, allow_pickle=False) as z:
+                    keep = {k_: z[k_] for k_ in self.AIM_KEEP if k_ in z.files}
+                    other = [k_ for k_ in z.files if k_ not in self.AIM_KEEP]
+                    if sorted(other) != sorted(k_ for k_ in self.P if not k_.startswith("_") and k_ not in self.AIM_KEEP):
+                        raise ValueError("its arrays are not the loaded network's")
+                    for k_ in other:
+                        if not np.array_equal(z[k_], self.P[k_]):
+                            raise ValueError("its {} is not the loaded network's".format(k_))
+                ev_ = json.loads(str(keep["env_vars"]))
+                if str(ev_.get("AIM_NAME", lv)) != lv:
+                    raise ValueError("it names itself {}".format(ev_.get("AIM_NAME")))
+                names_ = (old_set - set(ev_)) | set(ev_)
+                saved = {k_: os.environ.get(k_) for k_ in names_}
+                for k_ in old_set - set(ev_):
+                    os.environ.pop(k_, None)
+                os.environ.update({k_: str(v_) for k_, v_ in ev_.items()})
+                g_ = {"__name__": "_aim_probe_" + lv, "__file__": E.__file__}
+                exec(code, g_)
+                vals = {k_: v_ for k_, v_ in g_.items() if not k_.startswith("__") and isinstance(v_, types_)}
+                self.aim_prof[lv] = dict(vals=vals, ev=ev_, keep=keep)
+            except Exception as e:                           # noqa: BLE001
+                self.aim_bad[lv] = "{}: {}".format(type(e).__name__, e)
+                self.log("aim {}: cannot be switched to live ({})".format(lv, self.aim_bad[lv]))
+            finally:
+                if saved is not None:
+                    for k_, v_ in saved.items():
+                        if v_ is None:
+                            os.environ.pop(k_, None)
+                        else:
+                            os.environ[k_] = v_
+
+        def same(a, b):
+            try:
+                if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+                    return isinstance(a, np.ndarray) and isinstance(b, np.ndarray) and a.shape == b.shape and np.array_equal(a, b)
+                return type(a) is type(b) and bool(a == b)
+            except Exception:                                # noqa: BLE001
+                return False
+        profs = list(self.aim_prof.values())
+        if profs:
+            allk = set().union(*[set(p_["vals"]) for p_ in profs])
+            self.aim_names = sorted(k_ for k_ in allk if hasattr(E, k_) and not all(
+                k_ in p_["vals"] and same(p_["vals"][k_], profs[0]["vals"][k_]) for p_ in profs))
+            for k_ in [k_ for k_ in allk if not hasattr(E, k_)]:
+                if not all(k_ in p_["vals"] and same(p_["vals"][k_], profs[0]["vals"][k_]) for p_ in profs):
+                    self.log("aim: {} differs between the settings but is not in the running module".format(k_))
+        cur = self.aim_level()
+        if cur in self.aim_prof:                             # the running module is the loaded setting's, global by global
+            off_ = [k_ for k_ in self.aim_names if not same(getattr(E, k_), self.aim_prof[cur]["vals"][k_])]
+            if off_:
+                self.log("aim: the running module differs from setting {} in {}".format(cur, ", ".join(off_)))
+        self.log("aim: settings {} can be switched live ({} globals differ: {}); built in {:.0f} ms".format(
+            "/".join(self.aim_prof) or "none", len(self.aim_names), ", ".join(self.aim_names),
+            1000.0 * (time.perf_counter() - t0_)))
+
+    def aim_live(self, level):
+        """switch to the setting at once, with no new network, simulator or memory: the module's aim globals, the
+        environment and the plugin's record of the switches (as env_module() leaves them), the env's own copies (his sight
+        error, the read delay of the enemy's velocity, the tracking and noticing delays), the network's env_vars and delays
+        in memory (aim_level reads them). Returns the milliseconds it took."""
+        t0_ = time.perf_counter()
+        pr = self.aim_prof[level]
+        E, env = self.E, self.env
+        for k_ in self.aim_names:
+            v_ = pr["vals"][k_]
+            setattr(E, k_, v_.copy() if isinstance(v_, (np.ndarray, dict)) else v_)
+        ev_ = pr["ev"]
+        for k_ in set(getattr(duelbot, "_env_set", ())) - set(ev_):
+            os.environ.pop(k_, None)
+        duelbot._env_set = set(ev_)
+        os.environ.update({k_: str(v_) for k_, v_ in ev_.items()})
+        E._plugin_env = ev_
+        for k_, v_ in pr["keep"].items():
+            self.P[k_] = v_
+        self.react_ms = float(self.P["react_ms"]) if "react_ms" in self.P else E.REACT_FRAMES * 25.0
+        env.react_frames = round(self.react_ms / 25)
+        if self.rules2:
+            env.acquire_frames = round(float(self.P["acquire_ms"]) / 25) if "acquire_ms" in self.P else E.ACQUIRE_FRAMES
+        if hasattr(env, "percept_sigma"):                    # (__init__: self.percept_sigma = PERCEPT_SIGMA)
+            env.percept_sigma = E.PERCEPT_SIGMA
+        if hasattr(env, "vel_frames"):                       # (__init__: by VEL_FIX and VEL_DELAY_MS)
+            env.vel_frames = max(0, int(round(E.VEL_DELAY_MS / 1000.0 / E.DT))) if getattr(E, "VEL_FIX", False) else E.VEL_REACT_FRAMES
+        ms = 1000.0 * (time.perf_counter() - t0_)
+        # (policy.npz is left as it is: copying the 12 MB file took 120 to 175 ms in a frame on the test server. The next map
+        # and a restart start at the default anyway, and aim_reset() puts the default's file back whatever is there.)
+        self.record(event="aim", level=level, react_ms=self.react_ms, acquire_ms=float(self.P.get("acquire_ms", 0.0)),
+                    ms=round(ms, 3))
+        self.log("aim {} live in {:.2f} ms (reaction {:.0f} ms, noticing {:.0f} ms)".format(
+            level, ms, self.react_ms, float(self.P.get("acquire_ms", 0.0))))
+        return ms
+
+    def aim_set(self, level):
+        """the setting now: live when a network is loaded, else policy.npz only (setup() loads it once the map is up).
+        True when it is in."""
+        if self.aim_level() == level:
+            return True
+        if not getattr(self, "ready", False) or getattr(self, "env", None) is None:
+            self.aim_file(level)
+            return True
+        if level not in getattr(self, "aim_prof", {}):
+            self.log("aim {}: not switchable ({})".format(level, getattr(self, "aim_bad", {}).get(level, "no profile")))
+            return False
+        self.aim_live(level)
+        return True
+
+    def aim_reset(self):
+        """a new map (and the plugin's start): back to the default (owner, 2026-10-22, 2026-10-27). policy.npz is set to the
+        default's file here and loaded by setup() once the map is up; the chat line comes then (aim_frame)."""
+        cur = self.aim_level()                               # (a live switch leaves policy.npz as it was: both are read)
+        on_disk = self.file_level(os.path.join(D, "policy.npz"))
+        if cur == "?":                                       # no network loaded yet: the file's own level
+            cur = on_disk
+        if (cur == self.AIM_DEFAULT and on_disk == self.AIM_DEFAULT) or not os.path.exists(os.path.join(D, self.AIM_FILES[self.AIM_DEFAULT])):
+            return
+        try:
+            self.aim_file(self.AIM_DEFAULT)
+            self.aim_said = cur not in ("?", self.AIM_DEFAULT)
+            self.log("new map: aim back to {} (was {})".format(self.AIM_DEFAULT, cur))
+        except Exception as e:                           # noqa: BLE001
+            self.log("aim reset: {!r}".format(e))
+
+    def aim_left(self, player, why):
+        """the person in the duel left (disconnected, or went to spectate): back to the default for the next person"""
+        try:
+            if self.aim_level() in (self.AIM_DEFAULT, "?"):
+                return
+            if self.aim_set(self.AIM_DEFAULT):
+                self.log("aim back to {}: the player in the duel {}".format(self.AIM_DEFAULT, why))
+                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
+        except Exception as e:                               # noqa: BLE001
+            self.log("aim reset ({}): {!r}".format(why, e))
+
+
+    # ------------------------------------------------------------------ B-283: the mind view (plugins/mindlog.py, tools/mind_view.py)
+    # The owner's live view of what Bobby thinks, on a second monitor (2026-10-24: nothing in the game's centre print or
+    # chat). Off by default; "!mind on" (owner commands' level) writes one line at every tick of the brain (0.2 s) into
+    # /tmp/practice/mind.jsonl: both players' true places, the brain's believed place of the opponent and its readout ahead,
+    # the score, the clock, the win table's chance, "in control" when the network has it. The reply goes to him alone.
+    def cmd_mind(self, player, msg, channel):
+        """!mind on|off: the mind view's log (tools/mind_view.py draws it on a second screen)"""
+        on = len(msg) < 2 or msg[1].lower() not in ("off", "0", "stop")
+        if on and self.mind_w is None:
+            self.mind_w = _mind.Writer(os.path.join(D, "mind.jsonl"), log=self.log)
+            self.mind_map, self.mind_fr = None, 0
+            self.log("mind view: on (mind.jsonl in the data folder)")
+        elif not on and self.mind_w is not None:
+            self.mind_w.close()
+            self.mind_w = None
+            self.log("mind view: off")
+        P_ = getattr(self, "P", None)
+        R = _mind.readouts(P_) if P_ is not None else {}
+        brain = P_ is not None and _net.brain_on(P_)
+        line = "Mind view {}. Brain {}, ahead readout {}, in control {}, his win sense {}.".format(
+            "on: open the viewer on your second screen" if on else "off", "on" if brain else "off",
+            "yes" if "ahead" in R else "no", "yes" if "control" in R else "n/a", "yes" if "win_value" in R else "n/a")
+        try:
+            player.tell(line)                                # (to him alone)
+        except Exception:                                    # noqa: BLE001 - the console (rcon) has no one to tell
+            channel.reply(line)
+
+    def mind_places(self, env):
+        """{target name: [x, y, z]}: the map's big items (the route goals' first item of each name) and holding places"""
+        pl = {}
+        for lab_, k_ in zip(getattr(env, "route_goal", []) or [], getattr(env, "route_item", []) or []):
+            if lab_ not in pl:
+                pl[lab_] = [float(v) for v in env.item_pos[k_]]
+        for i_, hp_ in enumerate(np.asarray(getattr(env, "hold_pos", np.zeros((0, 3))))[:8]):
+            pl["H{}".format(i_ + 1)] = [float(v) for v in hp_]
+        return pl
+
+    def mind_stack(self, env):
+        """(2026-10-27, the mind view's referee win_ref) both players' true health, armor, death and big weapons (rl, lg, rg)
+        as the plugin keeps them from the game each frame, and the simulator's stack coefficients (WIN_STACK's fit)"""
+        E = self.E
+        big_ = [int(getattr(E, n_)) for n_ in ("RL", "LG", "RG")]
+        return dict(hp=[float(env.hp[0]), float(env.hp[1])], ar=[float(env.armor[0]), float(env.armor[1])],
+                    dead=[bool(env.hp[0] <= 0), bool(env.hp[1] <= 0)], big=[[bool(env.has[i_, k_]) for k_ in big_] for i_ in (0, 1)],
+                    coef={k_: float(getattr(E, k_)) for k_ in _mind.STACK_COEF if hasattr(E, k_)})
+
+    def mind_frame(self, env, now):
+        """(!mind on) once a frame after the network's step: a line at the brain's tick (every eighth frame without a brain)"""
+        try:
+            self.mind_fr += 1
+            P = self.P
+            br_ = tk_ = None
+            if _net.brain_on(P):
+                B_, bl_, bt_, at_, _ = P["_brain"]
+                br_, tk_ = bt_.unpack(B_, bl_, self.h[:1, at_:])
+                if int(br_.gv[0]) % int(B_["K"]) != 0:
+                    return                                   # not a tick of the brain
+            elif self.mind_fr % 8:
+                return
+            if self.mind_map != self.mapname:
+                self.mind_map = self.mapname
+                self.mind_pl = self.mind_places(env)
+                try:
+                    import zonemap as zm_
+                    self.mind_zones = zm_.load(self.mapname)
+                except Exception:                            # noqa: BLE001
+                    self.mind_zones = None
+                self.mind_w.write(_mind.meta(self.mapname, {k: v for k, v in self.mind_pl.items() if not k.startswith("H")},
+                                             [self.mind_pl["H{}".format(i_ + 1)] for i_ in range(8) if "H{}".format(i_ + 1) in self.mind_pl],
+                                             version=str(P.get("version", "")), note=str(P.get("run", ""))))
+            tok = None
+            if tk_ is not None:
+                tok = dict(ok=bool(tk_.valid[0]), P=tk_.P[0], ls=tk_.ls[0], unseen=float(tk_.unseen[0]), zone=tk_.zone[0])
+            seen = bool(tk_.unseen[0] < 0.1) if tk_ is not None else False
+            if getattr(self, "game_seat", False) and hasattr(env, "clock_t"):
+                left = max(0.0, GAME_SECS - float(env.clock_t[0]))
+            else:
+                left = max(0.0, float(self.round_secs) - float(env.round_t[0]))
+            me = [float(v) for v in env.state[0, :3]] + [float(env.yaw[0])]
+            en = [float(v) for v in env.state[1, :3]] + [float(env.yaw[1])]
+            rec = _mind.build(now, self.mapname, me, en, seen, tok, br_.s[0] if br_ is not None else None, P, self.mind_pl,
+                              (float(env.frags_r[0]), float(env.frags_r[1])), left, zones=self.mind_zones, frame=self.mind_fr,
+                              mem=self.h[0, :P["whh"].shape[1]],             # (the hands' fast GRU memory: the readout "both", the win value)
+                              stack=self.mind_stack(env))
+            rec["hp"] = [int(env.hp[0]), int(env.hp[1])]
+            self.mind_w.write(rec)
+        except Exception as e:                               # noqa: BLE001 - never in the way of play
+            if self.mind_w is not None:
+                self.log("mind view: {!r}; off".format(e))
+                self.mind_w.close()
+            self.mind_w = None
 
     def cmd_aim(self, player, msg, channel):
-        """!aim: the aim level now (and the one asked for the next game). !aim 1|2|3|4|5|max: that level from the next game
-        (at once when no game runs)"""
+        """!aim: the aim setting now. !aim worse|default|better|max: that setting at once (the person playing the duel,
+        or the server's owner)"""
         cur = self.aim_level()
         if len(msg) < 2:
-            want = self.aim_want if self.aim_want and self.aim_want != cur else None
-            player.tell("^3Aim level^7 ^2{}^7{} (^2!aim 1-5|max^7 to change)".format(
-                cur, ", ^2{}^7 from the next game".format(want) if want else ""))
+            player.tell("^3Aim^7 ^2{}^7 (^2!aim worse|default|better|max^7 to change)".format(cur))
             return
         lv = msg[1].lower().strip()
         if lv not in self.AIM_FILES:
-            player.tell("^3Aim levels:^7 ^2!aim 1^7 or ^22^7 relaxed, ^2!aim 3^7 easier, ^2!aim 4^7 normal, ^2!aim 5^7 sharp, "
+            player.tell("^3Aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains, ^2!aim better^7 sharper, "
                         "^2!aim max^7 no human limits")
+            return
+        try:
+            team_, bot_ = getattr(player, "team", "spectator"), is_bot(player)
+        except Exception:                                    # noqa: BLE001
+            team_, bot_ = "spectator", False
+        if not self.aim_may(team_, bot_, self.aim_owner(player)):
+            player.tell("^3Only the player in the duel can change the aim.^7")
             return
         if not os.path.exists(os.path.join(D, self.AIM_FILES[lv])):
             player.tell("^3Aim {} is not on this server.^7".format(lv))
             return
         if lv == cur:
-            self.aim_want = None
-            self.msg("^3Aim level^7 ^2{}^7 stays.".format(lv))
-            return
-        if self.aim_busy():
-            self.aim_want = lv
-            self.msg("^3Aim level^7 ^2{}^7 from the next game (this one stays at ^2{}^7).".format(lv, cur))
+            self.msg("^3Aim^7 ^2{}^7 stays.".format(lv))
             return
         try:
-            self.aim_apply(lv)
-            self.msg("^3Aim level now^7 ^2{}^7.".format(self.aim_level()))
+            if self.aim_set(lv):
+                self.msg("^3Aim now^7 ^2{}^7.".format(lv))
+            else:
+                player.tell("^3Aim could not be changed.^7")
         except Exception as e:                               # noqa: BLE001
             self.log("aim {}: {!r}".format(lv, e))
             player.tell("^3Aim could not be changed.^7")
 
     def aim_frame(self, now):
-        """a level asked for during a game goes in at the next warmup"""
-        if not self.aim_want or now < getattr(self, "aim_check", 0.0):
+        """the line of a new map's reset, once the map is up; and the reset when the person in the duel has left (checked
+        twice a second: a disconnect, a kick, a move to spectate all read the same here). Out of the game for 3 s: a game's
+        start and an abort restart the game, and for a frame or so nobody reads as in it (seen on the test server: a reset
+        at an abort)"""
+        if getattr(self, "aim_said", False):                 # (aim_reset) the last map ended at another setting
+            self.aim_said = False
+            if self.aim_level() == self.AIM_DEFAULT:
+                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
+        if now < getattr(self, "aim_check", 0.0):
             return
-        self.aim_check = now + 2.0
-        if self.aim_want == self.aim_level():
-            self.aim_want = None
-        elif not self.aim_busy():
-            lv = self.aim_want
-            try:
-                self.aim_apply(lv)
-                self.msg("^3Aim level now^7 ^2{}^7.".format(self.aim_level()))
-            except Exception as e:                           # noqa: BLE001
-                self.aim_want = None
-                self.log("aim {}: {!r}".format(lv, e))
+        self.aim_check = now + 0.5
+        try:
+            here = {str(p.steam_id) for p in self.players() if not is_bot(p) and p.team in ("free", "red", "blue")}
+        except Exception:                                    # noqa: BLE001
+            return
+        seen = self.__dict__.setdefault("aim_seen", {})     # steam id -> the last time he was in the game
+        for sid in here:
+            seen[sid] = now
+        gone = [sid for sid, t_ in seen.items() if sid not in here and now - t_ > 3.0]
+        for sid in gone:
+            del seen[sid]
+        self.aim_who = here
+        if gone:
+            self.aim_left(None, "left")
 
     # ------------------------------------------------------------------ frame
     def on_frame(self):
         t0_ = time.perf_counter() if TIMING else 0.0
+        if PROFILE and getattr(self, "ready", False):        # DUEL_PROFILE=N: cProfile of N frames at a time into profile_<k>.txt
+            if not hasattr(self, "_prof"):
+                import cProfile
+                self._prof, self._prof_n, self._prof_k = cProfile.Profile(), 0, 0
+            self._prof.enable()
         try:
             self.frame()
         except Exception as e:
@@ -1627,12 +1985,53 @@ class duelbot(minqlx.Plugin):
                     self.log("  " + " | ".join(l_.strip().replace("\n", " ") for l_ in traceback.format_exc().splitlines()[-7:-1]))
                 except Exception:                            # noqa: BLE001
                     pass
+        if PROFILE and hasattr(self, "_prof") and getattr(self, "ready", False):
+            self._prof.disable()
+            self._prof_n += 1
+            if self._prof_n >= PROFILE:
+                import io, pstats
+                for key in ("tottime", "cumulative"):
+                    s_ = io.StringIO()
+                    pstats.Stats(self._prof, stream=s_).sort_stats(key).print_stats(45)
+                    with open(os.path.join(D, "profile_{}_{}.txt".format(self._prof_k, key)), "w") as f:
+                        f.write(s_.getvalue())
+                import cProfile
+                self._prof, self._prof_n, self._prof_k = cProfile.Profile(), 0, self._prof_k + 1
         if TIMING:
             self.time_note(time.perf_counter() - t0_)
 
+    def legs_reuse(self, env):
+        """(2026-10-26, the frame budget) the legs' inputs are worked out twice a frame: for the network (act) and for his
+        legs' step after intend() (drive). The second is the first unless intend() changed his target, its state or his way
+        (1% of frames): then it is worked out again. Checked bit for bit on 6,000 frames (scratchpad srvprof/bench_legs.py)."""
+        orig_ = env.legs_prep
+        if getattr(orig_, "_reuse", False):
+            return
+
+        def key_():
+            return (self.__dict__.get("frame_no", 0),) + tuple(np.asarray(getattr(env, a_, np.zeros(1))).tobytes()
+                                                              for a_ in ("intent", "intent_done", "way", "run_k"))
+
+        def legs_prep_():
+            k_ = key_()
+            c_ = env.__dict__.get("_legs_c")
+            if c_ is not None and c_[0] == k_:
+                env.legs_x, env.legs_xok = c_[1].copy(), c_[2].copy()
+                return env.legs_x
+            out_ = orig_()
+            env._legs_c = (k_, env.legs_x.copy(), env.legs_xok.copy())
+            return out_
+        legs_prep_._reuse = True
+        env.legs_prep = legs_prep_
+
     def frame(self):
         now = time.time()
+        self.frame_no = self.__dict__.get("frame_no", 0) + 1
         if not self.ready:
+            if EARLY_BOBBY:                                  # added at the map's load: no stale input from the last map
+                for p in self.players():
+                    if is_bobby(p):
+                        minqlx.set_bot_input(p.id, 0, 0, 0, 0, 0, 0.0, 0.0)
             if now > self.next_check:
                 self.next_check = now + 2
                 mapname = (minqlx.get_cvar("mapname") or "").lower()
@@ -1660,7 +2059,7 @@ class duelbot(minqlx.Plugin):
                 if os.path.getmtime(os.path.join(D, "policy.npz")) != self.policy_mtime:
                     self.end_session()
                     self.setup()
-                    self.msg("^3New BobbyBones loaded^7: {} at {} minutes of training.".format(
+                    self.msg("^3New ^5B^7o^5bbyB^7o^5nes^3 loaded^7: {} at {} minutes of training.".format(
                         self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
@@ -1680,7 +2079,7 @@ class duelbot(minqlx.Plugin):
                 minqlx.console_command("allready")
             elif now - self.go_f3 > 5.0:                     # the game would not start (its reason is on the console)
                 self.go_f3, self.real_game = 0.0, False
-                self.msg("^3The game did not start.^7 Press F3 again, or ^2!duel^7 for a timed duel.")
+                self.msg("^3The game did not start.^7 Press F3 again.")
         if getattr(self, "vote_map_ok", False) and not self.after_game(now):
             self.vote_map_ok = False                         # no map came out of the vote: back to the usual rules
         # (not in the game's own end sequence: the scoreboard and the vote for the next map: see on_game_end)
@@ -1690,10 +2089,25 @@ class duelbot(minqlx.Plugin):
             self.log("game state {} - back to warmup".format(self.game.state))
             minqlx.console_command("abort")
         if bobby is None:
+            spec_ = [p_ for p_ in self.players() if is_bobby(p_)]
+            if spec_:                                        # (2026-10-28) he is there, as a spectator: a game's start (the
+                t_ = self.__dict__.setdefault("bobby_spec_t", now)   # game's restart) reads him so for a frame, and the frame
+                if now - t_ > 3.0:                           # loop sent an "addbot" each time. Never added again; put back
+                    self.bobby_spec_t = now                  # in the game only if he stays a spectator
+                    self.put_free(spec_[0].id)
+                    self.log("BobbyBones was a spectator for 3 s: put back in the game")
+                return
+            self.__dict__.pop("bobby_spec_t", None)
             if now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot bones 5 free 0 \"BobbyBones (BOT)\"")
+                minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5B^7o^5bbyB^7o^5nes\"")   # (owner, 2026-10-24: BOT purple, BobbyBones light blue with the two o's white; is_bobby still finds "BobbyBones" in the clean name)
+                for p_ in self.players():                # (put_free: in the game at once, not a queued spectator first)
+                    if is_bobby(p_):
+                        self.put_free(p_.id)
+                self.log("BobbyBones added by the frame loop (not at a map's load: a person's game already loaded may draw "
+                         "him with its own model)")
             return
+        self.__dict__.pop("bobby_spec_t", None)
         give_autohop(bobby, now, self.log, want=autohop_want(getattr(self, "P", None)))
         if human is not None and filler is not None:
             if now > self.next_check:
@@ -1761,6 +2175,8 @@ class duelbot(minqlx.Plugin):
                         env.cool[:] = 0
                         env.seen_t[:] = 9.0
                         env.opp_hist = []
+                        if hasattr(env, "aim2_clear"):
+                            env.aim2_clear()                 # (AIM2) no slip from the life before: his view and the enemy's bearing anew
                         if hasattr(env, "drift_clear"):
                             env.drift_clear()                # (DRIFT_IN) no rate from the life before
                         if hasattr(env, "proj_clear"):
@@ -1933,6 +2349,16 @@ class duelbot(minqlx.Plugin):
         t_ = time.perf_counter()
         ob = env.observe()[:1]                               # (once a frame: the new inputs' clocks are kept in it)
         self.t_obs = time.perf_counter() - t_
+        if os.environ.get("DUEL_AIM2DUMP") and getattr(E, "AIM2", False):     # (AIM2) debugging: what the new terms read, frame
+            self.aim2_dump = getattr(self, "aim2_dump", [])                    # by frame, with what they are made of (tools/aim2_srvcheck.py)
+            a2_ = getattr(env, "a2_last", None)
+            self.aim2_dump.append(np.concatenate([[now, env.yaw[0], env.pitch[0]], env._eye(env.state)[0], env.known[0],
+                                                  env.state[1, :3], [float(env.acquired[0]), float(env.focus[0]),
+                                                  float(env.flinch[0]), float(env.react_frames)],
+                                                  env.percept[0], [float(x_[0]) for x_ in a2_] if a2_ is not None else [-1.0] * 3,
+                                                  [float(env.zoom[0]), float(env.weapon[0])]]).astype(np.float64))
+            if len(self.aim2_dump) % 400 == 0:
+                np.save("/tmp/practice/aim2_dump.npy", np.array(self.aim2_dump[-24000:]))
         if os.environ.get("DUEL_OBSDUMP"):                   # debugging: keep the inputs to compare with the simulator's
             self.obs_dump = getattr(self, "obs_dump", [])
             self.obs_dump.append(ob[0].copy())
@@ -1942,6 +2368,8 @@ class duelbot(minqlx.Plugin):
         h_in_ = self.h[0].copy() if self.sess else None      # (the memory the network answers from, for the input log)
         a = self.act(ob)
         self.t_net, self.t_live = time.perf_counter() - t_, 1
+        if self.mind_w is not None:                          # (B-283) the mind view: a line at each tick of the brain
+            self.mind_frame(env, now)
         if os.environ.get("DUEL_OBSDUMP") and self.P.get("_brain") is not None:      # (v0.4.1) debugging: his pose, the enemy's true
             B_, bl_, bt_, at_, _ = self.P["_brain"]                                   # place and the brain's answer (map coordinates)
             tk_ = bt_.unpack(B_, bl_, self.h[:1, at_:])[1]                            # after the frame, to set the answer beside the truth
@@ -1991,8 +2419,12 @@ class duelbot(minqlx.Plugin):
                 self.es_dealt0 = dn_
                 if hit_ > 0 and os_.health > 0:
                     env.note_dealt(0, 1, hit_)
-            if took > 0 and hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
-                env.note_hit(0, took)                        # being shot at throws his aim off for a moment
+            if hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
+                on_ = int(opp.stats.damage_dealt)            # being shot at throws his aim off for a moment: only the enemy's own
+                by_ = max(0, on_ - self.__dict__.get("fl_dealt0", on_))   # hits, by the game's count of the damage the opponent dealt, as
+                self.fl_dealt0 = on_                         # the simulator (until 2026-10-27 any drop of 3 in his health and armor:
+                if by_ > 0:                                  # his own splash, falls and lava flinched him on a server, never in training)
+                    env.note_hit(0, by_)
             if hasattr(env, "pain_t"):                       # the opponent's pain sound, by his health after the hit
                 env.pain_t += E.DT                           # (EN_STACK: after any hurt the game plays it for, his own splash and falls too, as step())
                 near_ = float(np.linalg.norm(np.asarray(opos) - np.asarray(pos))) < \
@@ -2686,8 +3118,7 @@ class duelbot(minqlx.Plugin):
             minqlx.set_bot_substeps(self.cast()[0].id, 3)    # our control of the body resumes
         self.room = None
         if not self.queue and r.get("reflex"):
-            self.msg("^2Reflex test done, thank you.^7 Your numbers are saved without your name. ^3!reflex^7 runs it again "
-                     "(two or three runs give a steadier result).")
+            self.msg("^2Reflex test done, thank you.^7 Your numbers are saved without your name.")
         elif not self.queue:
             self.msg("Rooms done: back to the normal duel. Card saved.")
             self.give_loadout(human)

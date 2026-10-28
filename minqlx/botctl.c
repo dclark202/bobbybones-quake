@@ -429,3 +429,55 @@ PyObject* PyMinqlx_AiWantsFire(PyObject* self, PyObject* args) {
         return NULL;
     return PyBool_FromLong(ai_wants_fire[id]);
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// 2026-10-25 (owner: "if the server looks to have a population of 1/8 that would be better it would make people
+// join more"): DUEL_LIST_BOT_AS_PLAYER=1 makes the Steam server query report no bots, so Bobby counts as a player in
+// the server browsers (they show players minus bots: 0/8 with only Bobby on before, 1/8 now). His name and the server
+// name still say he is a bot. Default off: without the variable nothing below changes anything.
+// How: the engine imports SteamGameServer() from libsteam_api.so and once a frame calls SetBotPlayerCount(n) on the
+// object it returns (ISteamGameServer012: vtable slot 13; slot 27 BUpdateUserData puts every client, the bots too, in
+// the players' list). minqlx is LD_PRELOADed, so this SteamGameServer() is the one the engine gets: it hands back the
+// real object, whose vtable pointer is set once to a copy of its own table with slot 13 replaced by a call of the real
+// SetBotPlayerCount with 0. No byte of the engine or of Steam's libraries is written.
+#include <dlfcn.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#define LISTBOT_SLOT 13          // ISteamGameServer012::SetBotPlayerCount
+#define LISTBOT_COPY 128         // entries copied (more than the interface has: a few hundred bytes read, never written)
+typedef void (*listbot_fn)(void* self, int n);
+static void* (*listbot_real_gs)(void) = NULL;
+static int listbot_on = -1;      // -1: the variable not read yet
+static void* listbot_vt[LISTBOT_COPY + 2];   // [0] offset to top, [1] type info, then the table
+static listbot_fn listbot_real_set = NULL;
+static int listbot_engine_n = -1;
+
+static void Listbot_SetBotPlayerCount(void* self, int n) {
+    static int changes = 0;
+    if (n != listbot_engine_n && changes++ < 20)   // (a few lines a map; never one a frame)
+        fprintf(stderr, "botctl: engine bot count %d, reported to Steam as 0 (DUEL_LIST_BOT_AS_PLAYER)\n", n);
+    listbot_engine_n = n;
+    listbot_real_set(self, 0);
+}
+
+__attribute__((visibility("default"))) void* SteamGameServer(void) {
+    if (!listbot_real_gs) {
+        listbot_real_gs = (void* (*)(void))dlsym(RTLD_NEXT, "SteamGameServer");
+        if (!listbot_real_gs) return NULL;
+    }
+    void* gs = listbot_real_gs();
+    if (listbot_on < 0) {
+        const char* e = getenv("DUEL_LIST_BOT_AS_PLAYER");
+        listbot_on = (e && strcmp(e, "1") == 0);
+        if (listbot_on) fprintf(stderr, "botctl: DUEL_LIST_BOT_AS_PLAYER=1: bots are listed as players\n");
+    }
+    if (listbot_on && gs && *(void***)gs != listbot_vt + 2) {   // (checked on every call: a new object is set too)
+        void** vt = *(void***)gs;
+        memcpy(listbot_vt, vt - 2, sizeof(listbot_vt));
+        listbot_real_set = (listbot_fn)vt[LISTBOT_SLOT];
+        listbot_vt[2 + LISTBOT_SLOT] = (void*)Listbot_SetBotPlayerCount;
+        *(void***)gs = listbot_vt + 2;
+    }
+    return gs;
+}

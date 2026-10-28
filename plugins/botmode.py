@@ -2,7 +2,7 @@
 remove ffa entirely from the server, and remove the two custom maps that we had built. It should just have duel mode on
 the 10 duel maps we've been training on.").
 
-!map <name> brings one of the ten duel maps up in the duel factory; !mode answers that the server plays 1v1 only. Until
+!map <name> brings one of the ten duel maps up in the duel factory (the only !map: owner, 2026-10-26; !mode removed). Until
 2026-10-23 this plugin switched a running server between 1v1 (plugins/duelbot.py) and free-for-all (plugins/ffabot.py);
 ffabot stays in the repo but no server loads it. Load before duelbot: QLX_PLUGINS="botctl, botmode, duelbot".
 """
@@ -28,7 +28,6 @@ def is_bot(p):
 
 class botmode(minqlx.Plugin):
     def __init__(self):
-        self.add_command("mode", self.cmd_mode, 0, priority=minqlx.PRI_HIGH)
         self.add_command("map", self.cmd_map, 0, usage="<{}>".format("|".join(MAPS)), priority=minqlx.PRI_HIGH)
         self.last_switch = 0.0
 

@@ -1,7 +1,8 @@
 """The leaderboard of a BobbyBones server (owner, 2026-10-09: "keep it local to this server, and base it on all
-interactions with the bots from humans (meaning warmup is included)").
+interactions with the bots from humans (meaning warmup is included)"; live games only since 2026-10-26).
 
-Every frag between a person and BobbyBones counts, in warmup and in games, in free-for-all and in 1v1; nothing else does
+Every frag between a person and BobbyBones in a live game counts (owner, 2026-10-26: "ladder should be actual games only";
+warmup frags are still written to frags.jsonl with their state, and move nothing), in free-for-all and in 1v1; nothing else does
 (plugins/ratings.py has the rules and the arithmetic: Glicko-1, one update per frag). Who made a frag is read from the
 game's own counters each frame: the player whose deaths went up and the player whose kills went up in the same frame.
 That works in warmup too, where the game sends no kill events. A frame in which that does not pair up (two frags by
@@ -36,9 +37,25 @@ qlstats.jsonl (every answer, appended). The Steam id is in the request and nowhe
 (an error is kept by its class name only: its text and the address hold the id). "!qlstats off" drops a person's stored
 answers and stops the lookups for him (qlstats_off.json, by key).
 
+One board for both public servers (owner, 2026-10-23; plugins/ratings.py has the scheme): a server that knows its name
+(LADDER_SRV, or one word in srv.txt in the data folder, e.g. "us") tags its frag and duel lines with it ("srv") and plays
+on board.json, the shared board that tools/board_merge.py writes into its data folder every few minutes, plus its own
+lines after the board's "upto" mark for it. The plugin never writes board.json; it looks for a new one every 30 s and at
+a map change. Without a name, or without a board that names this server, it is the local board it always was
+(ratings.json). ratings.json is still written: this server's view (the board and its own frags since).
+
+The game history (owner, 2026-10-25): the site of the shared board lists every finished game with a report of its own
+(tools/game_summary.py, tools/board_merge.py --history-out, tools/board_page.py). A duels.jsonl line carries "t0", the
+game's start (its id is ratings.game_id). After a recorded game Bobby names the history's page in chat (plugins/banter.py:
+report_lines), and the welcome names it with the opt-out. "!anonymous" (and "!anonymous off"):
+the person shows as "Anonymous" on the site, past games too, from its next update. The choice is kept by key in
+private.json in the data folder ({"keys": {key: {"on": 0|1, "t": time}}}, never in the repo); the board's sync takes every
+server's file and the newest word of a person counts on both servers.
+
 Load with QLX_PLUGINS="botctl, banlist, ladder, botmode, <duelbot|ffabot>". LADDER_TEST=1 (tests without a person) counts
 the second Bobby of a free-for-all as a person.
 """
+import copy
 import hashlib
 import importlib
 import json
@@ -57,6 +74,27 @@ except Exception:                                           # noqa: BLE001 - loa
 D = os.environ.get("LADDER_DIR", "/tmp/practice")
 TEST = bool(os.environ.get("LADDER_TEST"))
 TOP = 8
+PAGE = "dclark202.github.io/bobbybones-leaderboard"          # the public page of the shared board
+HISTORY = PAGE + "/history"                                  # its game history (owner, 2026-10-25)
+BOARD_EVERY = 30.0                                           # seconds between looks for a new board.json
+
+
+def server_name():
+    """this server's name on the shared board: LADDER_SRV, else the first word of srv.txt in the data folder; None if
+    neither (a local board)"""
+    import re
+    v = (os.environ.get("LADDER_SRV") or "").strip()
+    if not v:
+        try:
+            with open(os.path.join(D, "srv.txt")) as f:
+                v = (f.read().split() or [""])[0]
+        except OSError:
+            v = ""
+    v = v.lower()
+    return v if re.match(r"^[a-z0-9]{1,8}$", v) else None
+
+
+SRV = server_name()
 
 # ---------------------------------------------------------------------- QLStats (off unless QLSTATS=1)
 QL_ON = os.environ.get("QLSTATS") == "1"
@@ -145,13 +183,17 @@ def is_bot(p):
 
 class ladder(minqlx.Plugin):
     WELCOME = ("^3This server has a local leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the whole board). "
-               "Every frag between you and me counts ^6(including warmup)^7")
-    HELP = ("^3Leaderboard:^7 every frag between a person and me counts, in warmup and in games. ^2!bobby^7 my rating and rank, "
+               "Every frag between you and me in a game counts")
+    HELP = ("^3Leaderboard:^7 every frag between a person and me in a game counts. ^2!bobby^7 my rating and rank, "
             "^2!top^7 the board, ^2!elo^7 yours (ranked from {} frags with me; the board shows the name you play under).".format(_ra.MIN_FRAGS))
 
     def __init__(self):
         super().__init__()
         self.table = _ra.Table(os.path.join(D, "ratings.json"))
+        self.board, self.board_mt, self.board_up, self.next_board = None, None, {}, 0.0   # the shared board (see the top)
+        self.board_n = dict(loads=0, tail=0)
+        self.board_check()
+        minqlx.console_print("[ladder] board: {}\n".format(self.board_state()))
         self.prev = {}                                       # client id -> (steam id, kills, deaths) last frame
         self.next_save = 0.0
         self.seen = dict(deaths=0, own=0, paired=0, counted=0, unsure=0)   # since the plugin was loaded (see cmd_ladder)
@@ -167,6 +209,8 @@ class ladder(minqlx.Plugin):
         self.add_command("top", self.cmd_top, 0)
         self.add_command("elo", self.cmd_elo, 0, usage="[name]")
         self.add_command("ladder", self.cmd_ladder, 5)
+        self.add_command("anonymous", self.cmd_anonymous, 0, usage="[off]")
+        self.report_t = 0.0                                  # (plugins/banter.py) when the last game was written to duels.jsonl
         # QLStats: nothing of it exists unless the server was started with QLSTATS=1 (no hook, no command, no thread)
         self.ql, self.ql_off = {}, set()                     # key -> the latest answer; the keys of those who switched it off
         self.ql_queue, self.ql_busy, self.ql_tell = [], 0.0, {}   # (key, Steam id) waiting; when the one in flight left; key -> client to tell
@@ -230,11 +274,57 @@ class ladder(minqlx.Plugin):
                 return None                                  # one of the game's own bots (a spar)
             if TEST and len(names) > 1 and names[1] in p.clean_name:
                 return "test000002", "test player"
-            return bobby, "BobbyBones ({})".format(_ra.label(bobby[len(_ra.BOT):]))
+            return bobby, "^5B^7o^5bbyB^7o^5nes^7 ({})".format(_ra.label(bobby[len(_ra.BOT):]))
         return self.key(p), p.clean_name[:24]
+
+    # ------------------------------------------------------------------ the shared board (several servers; see the top)
+    def board_check(self):
+        """take a new board.json if there is one: the board, then this server's own frags after its mark, in their order.
+        Only a stat of the file when nothing changed; a missing or broken board leaves the table as it is."""
+        if not SRV:
+            return
+        path = os.path.join(D, "board.json")
+        try:
+            mt = os.stat(path).st_mtime_ns
+        except OSError:
+            return
+        if mt == self.board_mt:
+            return
+        self.board_mt = mt
+        b = _ra.load_board(path)
+        up = ((b or {}).get("upto") or {}).get(SRV)
+        if b is None or not isinstance(up, dict):
+            minqlx.console_print("[ladder] board.json {}: the table stays as it is\n".format("broken" if b is None else "does not name this server"))
+            return
+        names = {k: p.get("name") for k, p in self.table.players.items()}     # (names of people new since the board)
+        t = _ra.Table()
+        t.path = self.table.path
+        t.players = copy.deepcopy(b["players"])
+        tail, _ = _ra.read_tail(os.path.join(D, "frags.jsonl"), int(up.get("frags") or 0))
+        _ra.replay(t, tail, names)
+        t.dirty = True
+        self.table, self.board, self.board_up = t, b, up
+        self.board_n["loads"] += 1
+        self.board_n["tail"] = len(tail)
+        self._rec = None
+
+    def board_state(self):
+        if not SRV:
+            return "local (no server name)"
+        if self.board is None:
+            return "server {}, no shared board yet: local".format(SRV)
+        return "server {}, shared board of {} UTC ({} rows, {} frags), {} of this server's frags on top; {} loads".format(
+            SRV, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(float(self.board.get("saved") or 0))),
+            len(self.board["players"]), self.board.get("n_frags", "?"), self.board_n["tail"], self.board_n["loads"])
 
     # ------------------------------------------------------------------ frags
     def on_frame(self):
+        if time.time() > self.next_board:
+            self.next_board = time.time() + BOARD_EVERY
+            try:
+                self.board_check()
+            except Exception as e:                           # noqa: BLE001 - the board is never worth a frame
+                minqlx.console_print("[ladder] board: {}\n".format(type(e).__name__))
         pl = self.bot_plugin()
         if pl is None or getattr(pl, "room", None) is not None:      # no network playing, or a test room (Bobby's body is a scripted target there)
             self.prev = {}
@@ -281,12 +371,20 @@ class ladder(minqlx.Plugin):
             if a is None or b is None or (a[0] == bobby) == (b[0] == bobby):
                 continue                                     # a frag between two people, or between two Bobbys
             now = time.time()
-            self.seen["counted"] += 1
-            ra, rb = self.table.frag(a[0], a[1], b[0], b[1], now)
+            state = self.game.state if self.game is not None else None
+            if _ra.rated(dict(state=state)):
+                self.seen["counted"] += 1
+                ra, rb = self.table.frag(a[0], a[1], b[0], b[1], now)
+            else:                                            # warmup: written down, rates nothing (owner, 2026-10-26)
+                self.seen["warmup"] = self.seen.get("warmup", 0) + 1
+                ra = self.table.players.get(a[0]) or dict(r=_ra.R0)
+                rb = self.table.players.get(b[0]) or dict(r=_ra.R0)
             line = dict(t=round(now, 2), map=(minqlx.get_cvar("mapname") or "").lower(),
-                        state=self.game.state if self.game is not None else None,
+                        state=state,
                         mode=getattr(pl, "FACTORY", "duel"), net=str(pl.P["run"]), killer=a[0], victim=b[0],
                         r=[round(ra["r"], 1), round(rb["r"], 1)])
+            if SRV:
+                line["srv"] = SRV
             person, row = (killer, ra) if b[0] == bobby else (victim, rb)
             if self.is_owner(person):                        # the owner's frags and his row are marked (see the top)
                 line["owner"] = 1
@@ -313,6 +411,10 @@ class ladder(minqlx.Plugin):
         self.prev = {}
         self.duel = None
         self.table.save()
+        try:
+            self.board_check()
+        except Exception as e:                               # noqa: BLE001
+            minqlx.console_print("[ladder] board: {}\n".format(type(e).__name__))
 
     def on_unload(self, plugin):
         self.table.save()
@@ -321,42 +423,39 @@ class ladder(minqlx.Plugin):
     @staticmethod
     def version_of(net):
         """the docs' version name of a run (as sim/export_duel.py: duel_gru_v0_3_1b -> v0.3.1, duel_gru_v15c -> v0.1)"""
-        import re
-        m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", str(net))
-        return "v" + m.group(1).replace("_", ".") if m else "v0.1" if net == "duel_gru_v15c" else str(net)
+        return _ra.version_of(net)
 
     FORFEIT_WIN_MIN = 5.0                                  # (owner, 2026-10-24) minutes after which a quit while behind is his win
 
     def duel_record(self):
         """(owner, 2026-10-16) Bobby's record in full duel games against people: real games (kind "game"), the owner's games
         included (owner, 2026-10-16). A forfeit (the person left before the end) counts as Bobby's win when it came after more than
-        FORFEIT_WIN_MIN minutes with Bobby ahead (owner, 2026-10-24: "if someone quits a duel and they are behind they are
-        forfeiting ... treat it as a win"); any other forfeit (the person ahead or level, or a short game) is left out ("If they are
-        ahead and they quit, it's not part of his w/l rate"). Returns {version: [won, lost, drawn]} with "all" for every version."""
+        FORFEIT_WIN_MIN minutes with Bobby ahead (owner, 2026-10-24); any other forfeit is left out (ratings.duel_result).
+        Returns {version: [won, lost, drawn]} with "all" for every version together.
+        With the shared board: the board's record of every server, and this server's own duels after its mark."""
         path = os.path.join(D, "duels.jsonl")
         try:
             mt = os.path.getmtime(path)
         except OSError:
+            mt = None
+        if mt is None and self.board is None:
             return {"all": [0, 0, 0]}
-        if getattr(self, "_rec", None) and self._rec[0] == mt:
+        if getattr(self, "_rec", None) and self._rec[0] == (mt, self.board_mt):
             return self._rec[1]
-        out = {"all": [0, 0, 0]}
-        with open(path) as f:
-            for line in f:
-                try:
-                    d = json.loads(line)
-                except ValueError:
-                    continue
-                if d.get("kind") != "game":
-                    continue
-                p_, b_ = d["score"]
-                if d.get("forfeit"):                         # (owner, 2026-10-24) a quit while behind, late enough: his win
-                    if not (b_ > p_ and float(d.get("minutes") or 0.0) > self.FORFEIT_WIN_MIN):
-                        continue
-                k_ = 0 if b_ > p_ else 1 if b_ < p_ else 2
-                for v_ in ("all", self.version_of(d.get("net", ""))):
-                    out.setdefault(v_, [0, 0, 0])[k_] += 1
-        self._rec = (mt, out)
+        if self.board is not None:
+            out = {k: list(v) for k, v in (self.board.get("duels") or {}).items()}
+            out.setdefault("all", [0, 0, 0])
+            lines, _ = _ra.read_tail(path, int(self.board_up.get("duels") or 0))
+        else:
+            out = {"all": [0, 0, 0]}
+            lines, _ = _ra.read_tail(path, 0)
+        for d in lines:
+            k_ = _ra.duel_result(d)
+            if k_ is None:
+                continue
+            for v_ in ("all", self.version_of(d.get("net", ""))):
+                out.setdefault(v_, [0, 0, 0])[k_] += 1
+        self._rec = ((mt, self.board_mt), out)
         return out
 
     @staticmethod
@@ -419,13 +518,16 @@ class ladder(minqlx.Plugin):
             secs = float(data.get("GAME_LENGTH") or (time.time() - d["t0"]))
             limit = float(minqlx.get_cvar("timelimit") or 0) * 60.0
             forfeit = d.get("left") or "forfeit" in msg or ("limit hit" not in msg and limit > 0 and secs < limit - 5)
-            self.note_duel(d["key"], d["owner"], secs / 60.0, d["score"][0], d["score"][1], forfeit, "game", net=d["net"])
+            self.note_duel(d["key"], d["owner"], secs / 60.0, d["score"][0], d["score"][1], forfeit, "game", net=d["net"],
+                           t0=d.get("t0"))                  # (wall time at the start: a server that falls behind plays
+                                                            # GAME_LENGTH game seconds in more wall seconds)
+            self.report_t = time.time()
             if not forfeit:
                 self.full_duel_t = time.time()               # (plugins/banter.py: Bobby says his rating and record after his gg)
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
-    def note_duel(self, key, owner, minutes, person, bobby, forfeit, kind, net=None):
+    def note_duel(self, key, owner, minutes, person, bobby, forfeit, kind, net=None, t0=None):
         """one finished duel between a person and Bobby: a real game of the 1v1 mode ("game", from on_game_end) or a
         timed one in warmup ("timed": !duel, from duelbot.arena_end). Keys only, no name."""
         try:
@@ -436,20 +538,71 @@ class ladder(minqlx.Plugin):
                 aim = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else ""
             except Exception:                                # noqa: BLE001
                 aim = ""
+            line = dict(t=round(time.time(), 2), map=(minqlx.get_cvar("mapname") or "").lower(), net=net, key=key,
+                        owner=int(bool(owner)), minutes=round(float(minutes), 2), score=[int(person), int(bobby)],
+                        forfeit=int(bool(forfeit)), kind=kind, aim=str(aim))
+            if t0 is not None:
+                line["t0"] = round(float(t0), 2)             # (the game's start: its id on the site, ratings.game_id)
+            if SRV:
+                line["srv"] = SRV
             with open(os.path.join(D, "duels.jsonl"), "a") as f:
-                f.write(json.dumps(dict(t=round(time.time(), 2), map=(minqlx.get_cvar("mapname") or "").lower(), net=net, key=key,
-                                        owner=int(bool(owner)), minutes=round(float(minutes), 2), score=[int(person), int(bobby)],
-                                        forfeit=int(bool(forfeit)), kind=kind, aim=str(aim))) + "\n")
+                f.write(json.dumps(line) + "\n")
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
+
+    # ------------------------------------------------------------------ the game history: the end line and !anonymous
+    def report_lines(self):
+        """(plugins/banter.py, after a recorded game) Bobby's line naming the game history; none without the shared board
+        (the site is the board's: a server outside it has no history)"""
+        if not SRV or time.time() - self.report_t > 15.0:
+            return []
+        return [self.REPORT_LINE]
+
+    def private_load(self):
+        try:
+            with open(os.path.join(D, "private.json"), encoding="utf-8") as f:
+                k = json.load(f).get("keys")
+            return k if isinstance(k, dict) else {}
+        except Exception:                                    # noqa: BLE001 - none yet, or broken: start again (the sync keeps the other server's)
+            return {}
+
+    def cmd_anonymous(self, player, msg, channel):
+        """!anonymous: show as Anonymous on the leaderboard's site (the game history, the game reports and the board),
+        past games too; !anonymous off: the name again. By key, in private.json (see the top)."""
+        if is_bot(player):
+            return minqlx.RET_STOP_ALL
+        on = not (len(msg) > 1 and msg[1].lower() in ("off", "0", "no"))
+        try:
+            keys = self.private_load()
+            keys[self.key(player)] = dict(on=int(on), t=round(time.time(), 1))
+            path = os.path.join(D, "private.json")
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(dict(keys=keys), f)
+            os.replace(path + ".tmp", path)
+        except Exception as e:                               # noqa: BLE001
+            minqlx.console_print("[ladder] anonymous: {}\n".format(type(e).__name__))
+            player.tell("^1That did not work^7, try again in a minute.")
+            return minqlx.RET_STOP_ALL
+        if on:
+            player.tell("^3You will show as Anonymous^7 on the leaderboard site (games, reports, board), past games too.")
+            player.tell("From its next update in 10-15 minutes. ^2!anonymous off^7 to show your name again.")
+        else:
+            player.tell("^3Your name shows again^7 on the leaderboard site from its next update (10-15 minutes).")
+        return minqlx.RET_STOP_ALL
 
     # ------------------------------------------------------------------ QLStats (docs/design/QLSTATS.md); all of it behind QL_ON
     QL_WELCOME = ("I look up your public ^5QLStats^7 rating (your Steam id goes to qlstats.net) to see how strong my "
                   "opponents are. ^2!qlstats off^7 stops it.")
 
+    SHARED_WELCOME = ("^3Both BobbyBones servers (US and EU) share one leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the "
+                      "whole board). Every frag between you and me in a game counts")
+    PAGE_LINE = "^3The leaderboard on the web^7 (updated a few minutes after a game): ^5" + PAGE
+    HISTORY_LINE = "^3Games tracked at^7 ^5" + HISTORY + "^7, ^2!anonymous^7 to opt out"
+    REPORT_LINE = "See the game report at ^5" + HISTORY + "^7 (games ready in 10-15 minutes)"
+
     def welcome_lines(self, player):
         """what a person is told about the leaderboard on joining (duelbot.on_player_loaded)"""
-        out = [self.WELCOME]
+        out = [self.SHARED_WELCOME, self.PAGE_LINE, self.HISTORY_LINE] if self.board is not None else [self.WELCOME]
         try:
             rec_ = self.record_line()
             if rec_:
@@ -633,7 +786,7 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         p = self.table.players.get(bobby) if bobby else None
         if p is None:
-            player.tell("^3BobbyBones has no rating yet:^7 it starts with the first frag between him and a person.")
+            player.tell("^5B^7o^5bbyB^7o^5nes^3 has no rating yet:^7 it starts with the first frag between him and a person.")
             return minqlx.RET_STOP_ALL
         n, of = self.table.rank(bobby, bobby)
         tot = p["won"] + p["lost"]
@@ -648,13 +801,16 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         rows = self.table.board(bobby)
         if not rows:
-            player.tell("^3The board is empty:^7 a person is ranked from {} frags with BobbyBones.".format(_ra.MIN_FRAGS))
+            player.tell("^3The board is empty:^7 a person is ranked from {} frags with ^5B^7o^5bbyB^7o^5nes^7.".format(_ra.MIN_FRAGS))
             return minqlx.RET_STOP_ALL
         me = None if is_bot(player) else self.key(player)
-        player.tell("^3Leaderboard^7 ({} ranked; every frag between a person and BobbyBones counts):".format(len(rows)))
+        player.tell("^3Leaderboard^7 ({} ranked; every frag between a person and ^5B^7o^5bbyB^7o^5nes^7 counts{}):".format(
+            len(rows), ", both servers" if self.board is not None else ""))
         for n, (k, p) in enumerate(rows, 1):
             if n <= TOP or k in (bobby, me):
                 player.tell(("^2" if k == bobby else "^5" if k == me else "") + self.line(n, p) + "^7")
+        if self.board is not None:
+            player.tell(self.PAGE_LINE)
         return minqlx.RET_STOP_ALL
 
     def cmd_elo(self, player, msg, channel):
@@ -672,15 +828,15 @@ class ladder(minqlx.Plugin):
             p = self.table.players.get(k)
             ql = QL_ON and not is_bot(player) and not isinstance(player, minqlx.AbstractDummyPlayer)
             if p is None:
-                player.tell("^3You have no rating {}yet:^7 it starts with your first frag with BobbyBones, either way.".format("here " if ql else ""))
+                player.tell("^3You have no rating {}yet:^7 it starts with your first frag with ^5B^7o^5bbyB^7o^5nes^7, either way.".format("here " if ql else ""))
                 if ql:
                     self.ql_say(player, k)
                 return minqlx.RET_STOP_ALL
         n, of = self.table.rank(k, bobby)
         tot = p["won"] + p["lost"]
-        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after {} more frags with BobbyBones".format(max(0, _ra.MIN_FRAGS - tot))
+        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after {} more frags with ^5B^7o^5bbyB^7o^5nes^7".format(max(0, _ra.MIN_FRAGS - tot))
         # (with the QLStats line under it the two numbers are named apart: this one starts at 1500 and knows only frags with Bobby)
-        player.tell("^3{}^7{}: rating ^2{:.0f}^7 (+-{:.0f}), {}. Frags with BobbyBones: {} made, {} taken (a share of {:.0%}).".format(
+        player.tell("^3{}^7{}: rating ^2{:.0f}^7 (+-{:.0f}), {}. Frags with ^5B^7o^5bbyB^7o^5nes^7: {} made, {} taken (a share of {:.0%}).".format(
             p["name"], " here, against me" if ql else "", p["r"], 2 * p["rd"], where, p["won"], p["lost"], p["won"] / max(1, tot)))
         if ql:
             self.ql_say(player, k)
@@ -691,4 +847,5 @@ class ladder(minqlx.Plugin):
         player.tell("ladder since its load: {} deaths seen, {} by his own hand or the map, {} paired with a killer ({} of them counted: "
                     "a person and Bobby), {} left out (more than one frag in a frame); {} rows in the table.".format(
                         s["deaths"], s["own"], s["paired"], s["counted"], s["unsure"], len(self.table.players)))
+        player.tell("board: " + self.board_state())
         return minqlx.RET_STOP_ALL

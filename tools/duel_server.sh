@@ -19,9 +19,9 @@
 # Before the server starts, the map tables the simulator caches (tools/prep_ways.py: since v0.2 also the ways between any
 # two points, up to ten seconds a map at its first load) are made for the start map and the maps of !map; PREP=0 skips it,
 # PREP_MAPS="a b" names other maps. For checks: TIMING=1 (the plugin's time a frame, to timing.txt in the data folder),
-# OBSDUMP=1 (his inputs, to obs_dump.npy there; with a v0.4.1 brain also brain_dump.npy: his pose, the enemy's true place and
-# the brain's answer). BTOKEN_GATE=<g>: play the brain's token at this gate in place of the file's (0: shut; plugins/netpass.py
-# NET_BTOKEN_GATE).
+# OBSDUMP=1 / FFA_OBSDUMP=1 (his inputs, to obs_dump.npy there; with a v0.4.1 brain in the 1v1 plugin also brain_dump.npy: his
+# pose, the enemy's true place and the brain's answer). BTOKEN_GATE=<g>: play the brain's token at this gate in place of the
+# file's (0: shut; plugins/netpass.py NET_BTOKEN_GATE).
 # QLSTATS=1 switches the leaderboard's QLStats lookup on (plugins/ladder.py; off by default: a person's Steam id then goes
 # to qlstats.net once a day, he is told so on joining and "!qlstats off" stops it); QLSTATS_URL=<address> another service
 # address (tests: a fake of one's own).
@@ -61,7 +61,7 @@ if [ "${PREP:-1}" != "0" ]; then
         || echo "map tables: not prepared (the server makes them at a map's first load)"
 fi
 if [ -n "$SPAR" ]; then
-    docker run -d --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" -e DUEL_TIMING="${TIMING:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
+    docker run -d --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="botctl, duelbot" -e LAB_MAP="$MAP" -e DUEL_OPP=bot -e DUEL_ROOMTEST="$ROOMTEST" -e DUEL_OBSDUMP="$OBSDUMP" -e DUEL_AIMDUMP="$AIMDUMP" -e DUEL_AIM2DUMP="$AIM2DUMP" -e DUEL_BOT_SKILL="${SKILL:-5}" -e DUEL_ARENA="$ARENA" -e DUEL_ARENA_MIN="$ARENA_MIN" -e DUEL_TIMING="${TIMING:-}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
         -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" -v "$ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro" -v "$ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro" "$IMAGE" +set sv_master 0 +set sv_serverType 0 >/dev/null
     echo "sparring server up (Bobby vs the game bot, skill ${SKILL:-5}, on $MAP)"; exit 0
 fi
@@ -74,10 +74,21 @@ PORT="${PORT:-27970}"
 MAP_MOUNTS=""
 [ "$TESTMAPS" = "1" ] && [ "$PUBLIC" != "1" ] && MAP_MOUNTS="-v $ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro -v $ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro"
 LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # PUBLIC=1: show in the server list (the rented server); local servers stay unlisted (Windows sets PUBLIC to a folder: an exact 1 is required)
-PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; MODE="1v1"     # botmode: !map (the ten duel maps; !mode says 1v1 only); banlist: the owner's !kick and !ban; ladder: the leaderboard
+# EARLY_BOBBY (default 1 on every server, PUBLIC=1 too since 2026-10-27; EARLY_BOBBY=0 turns it off): Bobby is added at a map's
+# load, so that a person's game loads his model with the map (plugins/duelbot.py, DUEL_EARLY_BOBBY: after a map change he was
+# drawn with the person's own model)
+EARLY="${EARLY_BOBBY:-1}"
+# LIST_BOT_AS_PLAYER (default 1 with PUBLIC=1, else 0): the Steam server query reports no bots, so the browsers count Bobby
+# as a player (1/8, not 0/8; owner, 2026-10-25). His name and the server name still say he is a bot (minqlx/botctl.c).
+LISTBOT="${LIST_BOT_AS_PLAYER:-$([ "$PUBLIC" = "1" ] && echo 1 || echo 0)}"
+# MIND (default 1 on every server, the public ones too; owner, 2026-10-24: "let's do this for all the local playtests";
+# 2026-10-25: "we need the mind log that's the whole point"; MIND=0 turns it off): the mind log (plugins/mindlog.py)
+# records every game into the data folder's mind.jsonl; the game reports (tools/game_summary.py) read it
+MIND_ON="${MIND:-1}"
+PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; MODE="1v1"     # botmode: !map (the ten duel maps); banlist: the owner's !kick and !ban; ladder: the leaderboard
 [ -n "$FFA" ] && echo "FFA=$FFA ignored: the server is 1v1 only (owner, 2026-10-23)"
 [ -n "$PLUGINS_EXTRA" ] && PLUGINS="$PLUGINS, $PLUGINS_EXTRA"
-docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e DUEL_EARLY_BOBBY="$EARLY" -e DUEL_LIST_BOT_AS_PLAYER="$LISTBOT" -e DUEL_MIND="$MIND_ON" -e DUEL_PUBLIC="$([ "$PUBLIC" = "1" ] && echo 1)" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $DOCKER_EXTRA "$IMAGE" +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
-echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted"))"
+echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted")$([ "$LISTBOT" = "1" ] && echo ", Bobby listed as a player"))"

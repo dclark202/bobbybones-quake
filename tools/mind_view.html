@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bobby's Mind</title>
+<style>
+:root {
+  --bg: #0e1014; --panel: #161a21; --line: #2a303b; --text: #d7dbe2; --dim: #8a93a3;
+  --owner: #3fd0ff; --bobby: #ff9a3c; --belief: #e45cff; --ahead: #ffd84a; --target: #7dff8a; --bad: #ff5a5a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 14px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+#wrap { display: flex; height: 100%; }
+#mapbox { flex: 1; position: relative; min-width: 0; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#side { width: 330px; background: var(--panel); border-left: 1px solid var(--line); padding: 14px 16px; overflow-y: auto; }
+h1 { font-size: 15px; margin: 0 0 2px; font-weight: 600; letter-spacing: .02em; }
+.sub { color: var(--dim); font-size: 12px; margin-bottom: 12px; }
+.sec { margin: 14px 0 6px; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.big { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+.bar { position: relative; height: 22px; border-radius: 4px; overflow: hidden; background: #24364a; margin: 4px 0 2px; }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bobby); }
+.bar > b { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #0008; }
+.bar.na { background: #22262e; }
+.bar.na > i { display: none; }
+.lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); }
+.lbl .b { color: var(--bobby); } .lbl .o { color: var(--owner); }
+.tg { display: grid; grid-template-columns: 46px 1fr 44px; gap: 6px; align-items: center; font-size: 13px; margin: 3px 0; }
+.tg .m { height: 8px; background: #2a2f39; border-radius: 3px; overflow: hidden; }
+.tg .m i { display: block; height: 100%; background: var(--target); }
+.key { display: grid; grid-template-columns: 18px 1fr; gap: 4px 6px; font-size: 12px; color: var(--dim); align-items: center; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.wch { position: static; display: block; width: 100%; height: 110px; margin-top: 6px; background: #12151b; border: 1px solid var(--line); border-radius: 4px; }
+.key2 { display: flex; gap: 12px; font-size: 11px; margin-top: 3px; }
+#stale { color: var(--bad); font-size: 12px; min-height: 16px; }
+@media (max-width: 700px) { #wrap { flex-direction: column; } #side { width: auto; border-left: 0; border-top: 1px solid var(--line); } #mapbox { min-height: 60vh; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="mapbox"><canvas id="cv"></canvas></div>
+  <div id="side">
+    <h1>Bobby's mind</h1>
+    <div class="sub" id="sub">waiting for the server (type !mind on in the game)</div>
+    <div id="stale"></div>
+    <div class="row"><span class="big" id="score">0 : 0</span><span class="big" id="clock">10:00</span></div>
+    <div class="lbl"><span class="b">Bobby</span><span class="o">you</span></div>
+
+    <div class="sec">Win chance (table: lead and time left)</div>
+    <div class="bar" id="winbar"><i></i><b></b></div>
+    <div class="lbl"><span class="b" id="winb">Bobby 50%</span><span class="o" id="wino">you 50%</span></div>
+
+    <div class="sec">His own sense of winning (shadow win value)</div>
+    <div class="bar na" id="hisbar"><i></i><b></b></div>
+    <div class="lbl"><span class="b" id="hisb">Bobby n/a</span><span class="o" id="hiso">you n/a</span></div>
+    <div class="row"><span>referee (table + stacks)</span><span id="ref">-</span></div>
+    <div class="row"><span>he knows beyond the table</span><span id="beyond">-</span></div>
+    <canvas id="wch" class="wch"></canvas>
+    <div class="key2"><span style="color:var(--bobby)">&#9644; his sense</span><span style="color:#e6e9ee">&#9644; referee</span><span style="color:var(--dim)">&#9476; table</span></div>
+
+    <div class="sec">In control (next mega / red armor spawns)</div>
+    <div class="bar na" id="ctlbar"><i></i><b></b></div>
+    <div class="lbl"><span class="b" id="ctlb">Bobby n/a</span><span class="o" id="ctlo">you n/a</span></div>
+    <div class="row"><span>next one · mega · red</span><span id="ctl4">-</span></div>
+
+    <div class="sec">Where he thinks you are</div>
+    <div class="row"><span>error</span><span id="err">-</span></div>
+    <div class="row"><span>his spread</span><span id="spr">-</span></div>
+    <div class="row"><span>last noticed you</span><span id="uns">-</span></div>
+    <div class="row"><span>likeliest zone</span><span id="zone">-</span></div>
+
+    <div class="sec">What he thinks you go for</div>
+    <div id="tgts"><div class="sub">no readout ahead in this network</div></div>
+
+    <div class="sec">When he expects to see you</div>
+    <div id="appear" class="sub">-</div>
+
+    <div class="sec">Item race (his guess)</div>
+    <div id="race" class="sub">-</div>
+
+    <div class="sec">Key</div>
+    <div class="key">
+      <span class="dot" style="background:var(--owner)"></span><span>you, where you really are (arrow: your view)</span>
+      <span class="dot" style="background:var(--bobby)"></span><span>Bobby (arrow: his view)</span>
+      <span class="dot" style="background:var(--belief)"></span><span>where he believes you are; ring = his spread</span>
+      <span class="dot" style="background:var(--ahead)"></span><span>where he expects you in 1, 2, 4 s</span>
+      <span class="dot" style="background:var(--target)"></span><span>what he thinks you go for</span>
+    </div>
+  </div>
+</div>
+<script>
+"use strict";
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const $ = (id) => document.getElementById(id);
+let floor = null, floorName = null, meta = {}, rec = null, lastAt = 0, trail = [];
+let view = null;   // {sx, ox, oy}
+let hist = [], histMap = null, histOt = 0;   // the win chart: one point a second of the game [elapsed s, his, referee, table]
+
+const ZC = ["#3b5b8c","#5b3b8c","#3b8c6e","#8c6a3b","#3b7d8c","#8c3b5f","#6e8c3b","#3b4a8c","#8c4f3b","#4f8c3b",
+            "#7a3b8c","#3b8c8c","#8c833b","#3b8c4a","#8c3b3b","#4a3b8c","#5f8c3b","#3b6a8c","#8c3b7d","#6a8c6a",
+            "#8c5f6a","#3b8c5f","#6a6a8c","#8c7d5f"];
+
+function fit() {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(r.width * dpr)); cv.height = Math.max(1, Math.round(r.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (!floor || !floor.bounds) { view = null; return; }
+  const [x0, y0, , x1, y1] = floor.bounds, pad = 60;
+  const sx = Math.min((r.width - 2 * pad) / Math.max(1, x1 - x0), (r.height - 2 * pad) / Math.max(1, y1 - y0));
+  view = { sx, ox: (r.width - sx * (x1 - x0)) / 2 - sx * x0, oy: (r.height + sx * (y1 - y0)) / 2 + sx * y0, w: r.width, h: r.height };
+}
+const X = (x) => view.ox + view.sx * x, Y = (y) => view.oy - view.sx * y;   // map: x east, y north (up on screen)
+
+function drawFloor() {
+  const r = cv.getBoundingClientRect();
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--bg"); ctx.fillRect(0, 0, r.width, r.height);
+  if (!view) { ctx.fillStyle = "#8a93a3"; ctx.font = "14px system-ui"; ctx.fillText(floor ? "no floor for " + floorName : "waiting for a map", 20, 30); return; }
+  const [, , z0, , , z1] = floor.bounds, s = Math.max(1.5, floor.spacing * view.sx);
+  const ns = floor.nodes.slice().sort((a, b) => a[2] - b[2]);
+  for (const n of ns) {
+    const t = (n[2] - z0) / Math.max(1, z1 - z0);
+    ctx.fillStyle = n[3] >= 0 ? ZC[n[3] % ZC.length] : "#3a3f48";
+    ctx.globalAlpha = 0.22 + 0.38 * t;                         // (higher floors brighter)
+    ctx.fillRect(X(n[0]) - s / 2, Y(n[1]) - s / 2, Math.max(1, s - 1), Math.max(1, s - 1));
+  }
+  ctx.globalAlpha = 1;
+  if (floor.zones) {
+    ctx.font = "11px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#c6ccd6aa";
+    floor.zones.centres.forEach((c, i) => { const nm = floor.zones.names[i]; if (nm) ctx.fillText(nm, X(c[0]), Y(c[1]) + 4); });
+  }
+  const m = meta[floorName];
+  if (m) {
+    ctx.font = "bold 11px system-ui"; ctx.textAlign = "left";
+    for (const [nm, p] of Object.entries(m.items || {})) {
+      const x = X(p[0]), y = Y(p[1]);
+      ctx.fillStyle = nm === "MH" ? "#5aa0ff" : nm === "RA" ? "#ff5a5a" : nm.startsWith("YA") ? "#ffd84a" : "#c8c8c8";
+      ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#e6e9ee"; ctx.fillText(nm, x + 8, y + 4);
+    }
+    (m.holds || []).forEach((p, i) => {
+      ctx.strokeStyle = "#ffffff55"; ctx.lineWidth = 1; ctx.strokeRect(X(p[0]) - 4, Y(p[1]) - 4, 8, 8);
+      ctx.fillStyle = "#ffffff77"; ctx.font = "10px system-ui"; ctx.fillText("H" + (i + 1), X(p[0]) + 6, Y(p[1]) - 4);
+    });
+  }
+}
+
+function arrow(p, yaw, col, size) {
+  const x = X(p[0]), y = Y(p[1]), a = -yaw * Math.PI / 180;   // yaw: degrees counter-clockwise from east
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.fillStyle = col; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(size * 1.3, 0); ctx.lineTo(-size * 0.8, size * 0.8); ctx.lineTo(-size * 0.4, 0); ctx.lineTo(-size * 0.8, -size * 0.8); ctx.closePath();
+  ctx.fill(); ctx.stroke(); ctx.restore();
+}
+function ring(p, r, col, dash, width) {
+  ctx.strokeStyle = col; ctx.lineWidth = width || 1.5; ctx.setLineDash(dash || []);
+  ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), Math.max(3, r * view.sx), 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
+}
+function disc(p, r, col) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), r, 0, 2 * Math.PI); ctx.fill(); }
+function label(p, txt, col, dx, dy) { ctx.font = "bold 12px system-ui"; ctx.textAlign = "left"; ctx.fillStyle = col; ctx.fillText(txt, X(p[0]) + (dx || 9), Y(p[1]) + (dy || -8)); }
+
+function draw() {
+  fit(); drawFloor();
+  if (!view || !rec || rec.map !== floorName) return;
+  const C = getComputedStyle(document.body), col = (v) => C.getPropertyValue(v).trim();
+  // your trail (the last 3 s)
+  ctx.strokeStyle = col("--owner") + "66"; ctx.lineWidth = 2; ctx.beginPath();
+  trail.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.stroke();
+  const b = rec.bel;
+  if (b && b.ok) {
+    // the guess ahead: belief -> 1 s -> 2 s -> 4 s
+    if (rec.ahead) {
+      ctx.strokeStyle = col("--ahead"); ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(X(b.p[0]), Y(b.p[1]));
+      rec.ahead.forEach((a) => ctx.lineTo(X(a.p[0]), Y(a.p[1]))); ctx.stroke(); ctx.setLineDash([]);
+      rec.ahead.forEach((a) => { ring(a.p, a.sxy, col("--ahead") + "55", [2, 4], 1); disc(a.p, 4.5, col("--ahead")); label(a.p, a.h + "s", col("--ahead"), 7, 4); });
+    }
+    // the error: your true place to his belief
+    ctx.strokeStyle = "#ffffff40"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(rec.en[0]), Y(rec.en[1])); ctx.lineTo(X(b.p[0]), Y(b.p[1])); ctx.stroke();
+    ring(b.p, b.sxy, col("--belief"), [5, 4], 2);
+    disc(b.p, 6, col("--belief"));
+    label(b.p, "he thinks you are here", col("--belief"));
+  }
+  // the target he thinks you go for
+  if (rec.tgt && rec.tgt.length) {
+    const t = rec.tgt.find((x) => x[2]);
+    if (t) {
+      const p = t[2], x = X(p[0]), y = Y(p[1]);
+      ctx.strokeStyle = col("--target"); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, 14, 0, 2 * Math.PI); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 20, y); ctx.lineTo(x - 9, y); ctx.moveTo(x + 9, y); ctx.lineTo(x + 20, y);
+      ctx.moveTo(x, y - 20); ctx.lineTo(x, y - 9); ctx.moveTo(x, y + 9); ctx.lineTo(x, y + 20); ctx.stroke();
+      label(p, "your target? " + t[0] + " " + Math.round(100 * t[1]) + "%", col("--target"), 18, 18);
+    }
+  }
+  arrow(rec.me, rec.me[3], col("--bobby"), 9);
+  arrow(rec.en, rec.en[3], col("--owner"), 9);
+  label(rec.en, rec.seen ? "you (he sees you)" : "you", col("--owner"), 12, 18);
+  label(rec.me, "Bobby", col("--bobby"), 12, 18);
+}
+
+const pct = (v) => Math.round(100 * v) + "%";
+const mmss = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+function bar(id, v, nb, no, nbTxt, noTxt) {
+  const el = $(id);
+  if (v === null || v === undefined) { el.classList.add("na"); $(nb).textContent = nbTxt + " n/a"; $(no).textContent = noTxt + " n/a"; return; }
+  el.classList.remove("na"); el.querySelector("i").style.width = (100 * v) + "%";
+  $(nb).textContent = nbTxt + " " + pct(v); $(no).textContent = noTxt + " " + pct(1 - v);
+}
+
+function panel() {
+  if (!rec) return;
+  const m = meta[rec.map] || {};
+  $("sub").textContent = rec.map + (m.version ? "  ·  " + m.version : "") + (rec.hp ? "  ·  health " + rec.hp[0] + " / " + rec.hp[1] : "");
+  $("score").textContent = rec.score[0] + " : " + rec.score[1];
+  $("clock").textContent = mmss(rec.left);
+  bar("winbar", rec.win, "winb", "wino", "Bobby", "you");
+  bar("ctlbar", rec.ctl, "ctlb", "ctlo", "Bobby", "you");
+  bar("hisbar", rec.win_his, "hisb", "hiso", "Bobby", "you");
+  $("ref").textContent = rec.win_ref === null || rec.win_ref === undefined ? "-" : "Bobby " + pct(rec.win_ref);
+  $("beyond").textContent = rec.win_his === null || rec.win_his === undefined || rec.win === null ? "-" :
+    (rec.win_his - rec.win >= 0 ? "+" : "") + Math.round(100 * (rec.win_his - rec.win)) + " points" +
+    (rec.win_ref === null || rec.win_ref === undefined ? "" : " (referee's stacks: " + (rec.win_ref - rec.win >= 0 ? "+" : "") + Math.round(100 * (rec.win_ref - rec.win)) + ")");
+  winChart();
+  $("ctl4").textContent = rec.ctl4 ? pct(rec.ctl4.one) + " · " + pct(rec.ctl4.mh) + " · " + pct(rec.ctl4.ra) +
+    (rec.ctl_src ? "  (" + (rec.ctl_src === "both" ? "brain + hands" : "brain") + ")" : "") : "-";
+  const b = rec.bel;
+  if (b && b.ok) {
+    $("err").textContent = Math.round(Math.hypot(b.p[0] - rec.en[0], b.p[1] - rec.en[1])) + " units across, " + Math.round(Math.abs(b.p[2] - rec.en[2])) + " up/down";
+    $("spr").textContent = Math.round(b.sxy) + " units";
+    $("uns").textContent = b.unseen >= 59 ? "a minute or more ago" : b.unseen < 0.1 ? "now" : b.unseen.toFixed(1) + " s ago";
+    $("zone").textContent = b.zones && b.zones.length ? (b.zones[0][0] || "-") + " " + pct(b.zones[0][1]) : "-";
+  } else {
+    $("err").textContent = b ? "no answer yet" : "the brain is off in this network"; $("spr").textContent = "-"; $("uns").textContent = "-"; $("zone").textContent = "-";
+  }
+  if (rec.tgt) {
+    $("tgts").innerHTML = rec.tgt.map((t) => `<div class="tg"><span>${t[0] === "none" ? "nothing" : t[0] === "EN" ? "Bobby" : t[0]}</span><span class="m"><i style="width:${100 * t[1]}%"></i></span><span>${pct(t[1])}</span></div>`).join("");
+  }
+  if (rec.appear) {
+    $("appear").textContent = rec.seen ? "he sees you now" : ["<1 s", "1-3 s", "3-6 s", ">6 s"].map((n, i) => n + " " + pct(rec.appear[i])).join("   ");
+  } else $("appear").textContent = "-";
+  if (rec.race) {
+    const f = (r, n) => `${n}: ${r.lead > 0 ? "he is " + r.lead.toFixed(1) + " s nearer" : "you are " + (-r.lead).toFixed(1) + " s nearer"} (±${r.sd.toFixed(0)} s), you there at spawn ${pct(r.there)}`;
+    $("race").innerHTML = f(rec.race.mh, "Mega") + "<br>" + f(rec.race.ra, "Red armor");
+  } else $("race").textContent = "-";
+}
+
+function winPoint(d) {
+  // one point a second at the game's own time: [game s, his, referee, table, left, frags]; 600 - left in regulation, then
+  // 600 + 120 a period (an overtime period's start: the clock back up to 2:00). A new game (another map, the clock up by more
+  // than an overtime period, or the score back to 0 : 0) starts the chart over
+  let last = hist.length ? hist[hist.length - 1] : null;
+  if (d.map !== histMap || (last && (d.left > last[4] + 150 || (d.score[0] + d.score[1] === 0 && last[5] > 0)))) { hist = []; histMap = d.map; histOt = 0; last = null; }
+  if (last && d.left > last[4] + 1) histOt += 1;
+  const gt = histOt === 0 ? 600 - d.left : 600 + 120 * (histOt - 1) + (120 - d.left);
+  if (last && gt - last[0] < 1 && d.left <= last[4]) return;
+  hist.push([gt, d.win_his, d.win_ref, d.win, d.left, d.score[0] + d.score[1]]);
+  if (hist.length > 3000) hist.shift();
+}
+function winChart() {
+  const c = $("wch"), g = c.getContext("2d"), r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr));
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = r.width, H = r.height, p = 4;
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = "#ffffff22"; g.lineWidth = 1; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+  if (hist.length < 2) { g.fillStyle = "#8a93a3"; g.font = "11px system-ui"; g.fillText("his chance over the game", 6, 14); return; }
+  const t1 = Math.max(600, hist[hist.length - 1][0]);
+  const xs = (t) => p + (W - 2 * p) * t / t1, ys = (v) => H - p - (H - 2 * p) * v;
+  const line = (k, col, dash, w) => {
+    g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash); g.beginPath(); let on = false;
+    for (const q of hist) { if (q[k] === null || q[k] === undefined) { on = false; continue; } on ? g.lineTo(xs(q[0]), ys(q[k])) : g.moveTo(xs(q[0]), ys(q[k])); on = true; }
+    g.stroke(); g.setLineDash([]);
+  };
+  const C = getComputedStyle(document.body);
+  line(3, C.getPropertyValue("--dim").trim(), [3, 3], 1);
+  line(2, "#e6e9ee", [], 1.2);
+  line(1, C.getPropertyValue("--bobby").trim(), [], 2);
+  g.fillStyle = "#8a93a3"; g.font = "10px system-ui"; g.fillText("100%", 4, 11); g.fillText("0%", 4, H - 4);
+  g.textAlign = "right"; g.fillText(t1 > 600 ? "overtime" : "10:00 -> 0:00", W - 4, H - 4); g.textAlign = "left";
+}
+
+async function setMap(name) {
+  if (name === floorName) return;
+  floorName = name; floor = null; trail = [];
+  try { floor = await (await fetch("/map/" + name)).json(); } catch (e) { floor = { nodes: [], spacing: 48 }; }
+  draw();
+}
+
+function onLine(d) {
+  if (d.k === "meta") { meta[d.map] = d; setMap(d.map); return; }
+  if (d.k !== "f") return;
+  if (rec && rec.map === d.map && Math.hypot(d.en[0] - rec.en[0], d.en[1] - rec.en[1]) > 400) trail = [];   // (a respawn or a teleporter)
+  rec = d; lastAt = Date.now();
+  winPoint(d);
+  trail.push(d.en); if (trail.length > 15) trail.shift();
+  setMap(d.map); draw(); panel();
+}
+
+function connect() {
+  const es = new EventSource("/events");
+  es.onmessage = (ev) => { try { onLine(JSON.parse(ev.data)); } catch (e) { /* a broken line */ } };
+  es.onerror = () => { $("stale").textContent = "lost the viewer's server; retrying"; };
+  es.onopen = () => { $("stale").textContent = ""; };
+}
+setInterval(() => {
+  if (rec && Date.now() - lastAt > 3000) $("stale").textContent = "no new lines for " + Math.round((Date.now() - lastAt) / 1000) + " s (mind off, or no game running)";
+  else if (rec) $("stale").textContent = "";
+}, 1000);
+window.addEventListener("resize", draw);
+(async () => {                                   // the win chart from the game's start (the last ~13 minutes of lines), then live
+  try {
+    const ls = await (await fetch("/last?n=4000&bytes=6000000")).json();
+    for (const d of ls) if (d && d.k === "f") winPoint(d);
+  } catch (e) { /* an older viewer's server: the chart starts now */ }
+  connect();
+})();
+</script>
+</body>
+</html>

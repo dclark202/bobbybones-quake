@@ -1,11 +1,11 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
 
 RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl lib32gcc-s1 lib32stdc++6 \
         build-essential python3 python3-dev python3-pip redis-server git \
     && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --no-cache-dir redis hiredis requests pyzmq numpy scipy
+RUN pip3 install --no-cache-dir --break-system-packages redis==8.1.0 hiredis requests==2.34.2 pyzmq==27.2.0 numpy==2.5.4 scipy==1.18.1
 
 # SteamCMD + Quake Live dedicated server (app 349090, anonymous login)
 RUN mkdir -p /opt/steamcmd && curl -sSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \

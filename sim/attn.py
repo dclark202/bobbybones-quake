@@ -227,7 +227,7 @@ def _block(P, b, xq, xall, heads, gate=None, qadd=None):
     na = _norm(xall)
     k = (na @ P[b + ".k.weight"].T).reshape(B, T, heads, hd).transpose(0, 2, 3, 1)
     v = (na @ P[b + ".v.weight"].T).reshape(B, T, heads, hd).transpose(0, 2, 1, 3)
-    a = (q @ k) / np.sqrt(hd)
+    a = (q @ k) / math.sqrt(hd)                        # (a Python float: under NumPy 2 np.sqrt(hd) is a float64 scalar that made the whole part float64, 2026-10-26)
     if gate is not None:
         a = a + gate
     a = np.exp(a - a.max(-1, keepdims=True))

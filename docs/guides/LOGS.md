@@ -114,7 +114,19 @@ Its files in a server's data folder (`data/duellive/`):
   `net`, `key`, `owner`, `minutes` (played), `score` ([the person's, Bobby's]), `forfeit` (1: the person left or
   stopped it, or it ended before its time with no limit hit), `kind`: `game` (a real game, started with F3: the game's
   own score, machine gun at spawn) or `timed` (`!duel` on a duel map: the plugin's clock in warmup, every weapon at
-  spawn, the score counted from deaths). A game thrown back to warmup leaves no line.
+  spawn, the score counted from deaths). A game thrown back to warmup leaves no line. Since 2026-10-25 a real game's
+  line also has `t0` (the wall time at its start) and, on a server with a name (`srv.txt`), `srv`. A game's id on the
+  site is `plugins/ratings.py` `game_id`: `<server>-<UTC start yyyymmdd-hhmmss>-<map>` (an older line without `t0`: its
+  `t` less its `minutes`).
+- `private.json` (since 2026-10-25): `keys`: key -> `on` (1 after `!anonymous`, 0 after `!anonymous off`), `t`. The site
+  shows such a person as "Anonymous" (the board's sync takes both servers' files; the newest word counts).
+- `games/<id>.json` (since 2026-10-25, `tools/game_summary.py`, run by the board's jobs): one small summary per real game
+  for the site's game report (schema 1, documented at the top of the tool): positions twice a second in units of 8, the
+  frags with the killing weapon, the big items, the win chance by the pros' score-and-clock table, the game's own
+  weapons table. No key, no name. `games/_none.json`: the ids found without a session.
+- `board.json` (the shared board, `tools/board_merge.py`) also carries `private` (the keys of the anonymous) and `dups`
+  (how many frag and duel lines were in more than one server's copy and were taken once); the merging server keeps
+  `history.json` beside it (the site's game history: no keys).
 - `salt.txt`: the salt of the keys. Whoever has it and a Steam id can make that person's key: it is as private as the
   bans, is copied to the archive by the daily pull and never goes into the repo.
 - Only on a server started with `QLSTATS=1` (`docs/design/QLSTATS.md`): `qlstats.json`: `players`: key -> `t`, `status`
