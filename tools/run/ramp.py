@@ -7,7 +7,8 @@ with the critic's warm-up first, the shaping beside the win part, and the checks
   k = 0 .. 12.
 WIN_GAIN: RAMP_GAIN (set from v0.6.0's settled counters before the start, tools winsize_v061.py) or, unset, sized here from the
 run's own win_blend counters after RAMP_SKIP (20) updates (the start-up transient: v0.5.1 read 5.1 -> 3.1 in its first 10),
-the mean of the next 10; kept within 0.25 .. 4.
+the mean of the next 10; kept within 0.001 .. 100 (the simulator's own bound), two significant figures (with WIN_JUDGE the
+win part's scale is the judge's: about 0.03, 2026-10-28).
 Step 1 is taken with the critic's warm-up: WIN_W 0.1, WIN_SHAPE_K 0.1 x RAMP_K and VALUE_WARM = RAMP_WARM (10) at once, so the
 value outputs learn the new pay for 10 updates while the policy stands still; the ramp writes VALUE_WARM back to 0 when the
 metrics say the warm-up is over (value_warm.left 0) so a restart does not start it again. RAMP_WARM_EVERY=1: a warm-up at every
@@ -84,7 +85,8 @@ def gain():
     L = L[:10]
     c = sum(x["combat_size"] for x in L) / len(L)
     w = sum(x["win_g1_size"] for x in L) / len(L)
-    return round(min(4.0, max(0.25, c / max(1e-9, w))) * 20) / 20, c, w
+    g_ = min(100.0, max(0.001, c / max(1e-9, w)))             # (the judge's scale is not the table's: the v0.6.1 dry run of 2026-10-28
+    return float("{:.2g}".format(g_)), c, w                  # read 0.034; the old clip at 0.25 .. 4 would have paid 7x too much)
 
 
 def warm_left():
