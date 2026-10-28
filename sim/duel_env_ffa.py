@@ -1677,6 +1677,16 @@ WB_COLS = ("his frames in games", "the win part at G = 1 (WIN_SCALE x the change
            "the pay after the blend: size", "frames with the blend on")
 WSH_COLS = ("his frames in games with the shaping on", "the shaping paid (k x (g PSI - PSI before)), summed", "its size",
             "the corrections at a round cut before the game's end, summed", "his rounds cut so")
+#   WIN_JUDGE=<file.npz> (v0.6.1, owner 2026-10-28: "Build judge. Freeze now, train later"; unset = off, the simulator as before
+#                 to the bit) the win part's chance (the blend's, WIN_W) is the judge's (sim/win_judge.py, fitted by
+#                 tools/run/fit_b.py on his own self-play games, frozen): his lead, the time left (the period's in overtime), each
+#                 player's stack in a lasting and a decaying part (health and armor above 100 decay; dead: a respawn) and the big
+#                 weapons owned (dead: none), with
+#                 the owner's four axioms in its shape (a frag and damage dealt raise his chance, a death and damage taken lower
+#                 it). It takes the place of win_chance.json's table and WIN_STACK's term in _wb_chance (the table is still read:
+#                 the blend needs it loaded). WIN_SCALE becomes 1 / (the judge's chance at a lead of 1 with ten minutes left and
+#                 both at a respawn - 0.5): a frag at the start is still worth 1 before WIN_GAIN. Not a PLAY_VAR (pay only).
+WIN_JUDGE = os.environ.get("WIN_JUDGE") or ""
 #   OVERTIME=1    Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
 #                 the game's limit (GAME_LEN) with the score level goes on for another OT_LEN seconds, period after period,
 #                 until a period ends with the score not level, or after OT_CAP periods (OVERTIME_CAP, 10): then it is a
@@ -9141,6 +9151,7 @@ class DuelEnv:
         self.wsh_prev = np.full(self.M, np.nan)              # (WIN_SHAPE_K, v0.6.1) the first seat's PSI the frame before (nan: not kept)
         self.wsh_now = np.full(self.M, np.nan)               # ... and this frame's (for a round cut before the game's end)
         self.wsh_pay = np.zeros(self.n, np.float64)          # ... this frame's shaping, per player
+        self.wb_judge = None                                 # (WIN_JUDGE) the judge's numbers, or None
         if GAME_ON:
             f_ = os.environ.get("WIN_CHANCE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "win_chance.json")
             if os.path.exists(f_):
@@ -9156,6 +9167,13 @@ class DuelEnv:
                 self.wb_tab = (p_, float(left_[1]), D_)
                 self.wb_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)
                 self.stats["win_blend"] = np.zeros(len(WB_COLS))
+                if WIN_JUDGE:                                # (WIN_JUDGE) the judge in the table's place, its own scale
+                    import win_judge as wj_
+                    self.wb_judge = wj_.load(WIN_JUDGE)[0]
+                    z1_, w0_, s0_ = np.ones(1), np.zeros((1, 3)), wj_.parts(np.full(1, wj_.SPAWN), np.zeros(1), np.zeros(1, bool))
+                    p1_ = float(wj_.chance(self.wb_judge, z1_, z1_ * GAME_LEN, s0_, w0_, s0_, w0_)[0])
+                    assert p1_ > 0.5, "WIN_JUDGE: a lead of 1 must be worth more than a level score"
+                    self.wb_scale = 1.0 / (p1_ - 0.5)
 
     def _wb_on(self):
         """(WIN_W / FADE_V) is the blend on in this frame's games?"""
@@ -9175,6 +9193,13 @@ class DuelEnv:
         a_, b_ = m * g_, m * g_ + 1
         d_ = (self.frags_r[a_] - self.frags_r[b_]).astype(np.float64)
         left = np.broadcast_to(np.asarray(left, np.float64), m.shape)
+        if self.wb_judge is not None:                        # (WIN_JUDGE) the judge's chance in the table's place
+            import win_judge as wj_
+            dead_ = (self.hp <= 0) | (self.rsp_wait > 0)
+            st_ = lambda i_: (wj_.parts(self.hp[i_], self.armor[i_], dead_[i_]),                             # noqa: E731
+                              np.where(dead_[i_][:, None], 0.0, self.has[i_][:, [RL, LG, RG]].astype(np.float64)))
+            (ea_, wa_), (eb_, wb_) = st_(a_), st_(b_)
+            return wj_.chance(self.wb_judge, d_, np.maximum(left, 0.0), ea_, wa_, eb_, wb_)
         W_ = self._win_p(d_, left, tab=self.wb_tab)
         if not WIN_STACK:
             return W_
@@ -9324,7 +9349,7 @@ class DuelEnv:
             self.load_sets[int(i)] = ()                     # the game's spawn: machine gun and gauntlet
         self._spawn(int(q[0]), avoid=None)
         self._spawn(int(q[1]), avoid=self.w.state()[int(q[0]), :3])
-        if WIN_STACK and self.wb_tab is not None:            # (WIN_STACK) the blend's chance at the start with the spawned stacks
+        if (WIN_STACK or self.wb_judge is not None) and self.wb_tab is not None:    # (WIN_STACK, WIN_JUDGE) the blend's chance at the start with the spawned stacks
             self.wb_p[m] = float(self._wb_chance(m, GAME_LEN)[0])
         self.item_up[m], self.item_t[m] = True, 0.0
         self.contest_t[m] = -1.0
