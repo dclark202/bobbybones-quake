@@ -11,16 +11,16 @@ way for 6 hours (owner: "restart the v0.6.0 training exactly as it was last nigh
 | | |
 |---|---|
 | Network | v0.4.2b's end with its optimizer (`data/sim_runs/duel_gru_v0_4_2/keep/policy_end_v042.pt`, `opt_end_v042.pt`; recovered, byte-identical to a second copy) ✅ |
-| League | v0.4.2's snapshots (98 of 103 recovered; 5 damaged left out) + the anchors (v0.3.8, v0.3.9, v0.3.10, v0.4.1, v0.4.2b) ✅ |
+| League | **v0.4.2b's end only** (anchor) + the run's own new snapshots (owner, 2026-10-28: "Just get rid of the league then. I only need v0.4.2b"). The recovered league held 9 corrupt networks (anchors v0.3.8, v0.3.9 and 7 of v0.4.2's snapshots: weights up to 1e38 or NaN); drawn as an opponent, one made the trainer crash (CUDA assert in sampling) at 12:25 and 12:32. All 99 moved to `snapshots_aside_20261028/` (not deleted) ✅ |
 | Code | `main` (the training code of branch v061 = aim2 + the v0.5.0 loophole fixes; the win-pay parts off) ✅ |
 | Aim | `!aim default` = the pros' mean, twelve knobs measured on 781 pro demos (`aim2_env.cmd`; 125 / 225 ms) ✅ |
 | Pay | v0.5.0's: flat frag, damage, item pay (mega 0.35, red 0.30, yellow 0.15), speed pay 0.25; win chance recorded only ✅ |
 | Mix | 65% whole games / 35% the pros' mid-game starts; no movement practice ✅ |
 | The brain's people lesson | **changed for the retrain**: from the pro demos only (the same 115 demos as before; the people's sessions pack is gone; owner: "Build on the pros") ✅ |
 | Maps | the game's own geometry; nav and cell tables from the public server (87-99% identical to training's lost copy, mean way difference ≤ 0.08 s) ✅ |
-| Length | 6 hours (`--minutes 360`) |
+| Length | started 2026-10-28 12:00, to ~21:00 (`--minutes 535`; owner: "running until 9pm") |
 | Checks | every 20 updates, 160 games against v0.4.2b's end (both at the new default); the behaviour panel. No guard: never stopped automatically; under 30% posted to the owner |
-| Logged for v0.6.1 | self-play games of every 40th save, once a second (score, stacks, weapons owned, deaths, his win value): the data for fitting his chance of winning on game results ("B") |
+| Logged for v0.6.1 | self-play games of saves 40 to 120, every 20th, 6 games a map (300 games; fitted after the run), once a second (score, stacks, weapons owned, deaths, his win value): the data for fitting his chance of winning on game results ("B") |
 
 ## The checklist
 

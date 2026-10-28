@@ -4,7 +4,7 @@ of the run (keep/policy_<update>.pt) plays GAMES self-play games a map on the te
 the performance cores. Nothing here touches the run: it only reads its saves. Rows go to data/sim_runs/<run>/selfplay/u<update>/.
 Before the first games, the settings check: the games' settings (selfplay_log's meta.json) against the run's command.
 
-    python tools/run/selfplay_loop.py <run> [--every 40] [--games 5] [--par 2] [--procs 2]"""
+    python tools/run/selfplay_loop.py <run> [--every 40] [--from 0] [--games 5] [--par 2] [--procs 2]"""
 import argparse
 import os
 import re
@@ -21,6 +21,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run")
     ap.add_argument("--every", type=int, default=40)
+    ap.add_argument("--from", dest="from_", type=int, default=0, help="the first save to play (earlier saves are left out)")
     ap.add_argument("--games", type=int, default=5)
     ap.add_argument("--par", type=int, default=2)
     ap.add_argument("--procs", type=int, default=2)
@@ -33,7 +34,7 @@ def main():
     done = set(os.listdir(out))
     while True:
         saves = sorted((int(m.group(1)), f) for f in os.listdir(keep) if (m := re.match(r"policy_(\d+)\.pt$", f)))
-        todo = [(u, f) for u, f in saves if u % a.every == 0 and "u{}".format(u) not in done]
+        todo = [(u, f) for u, f in saves if u % a.every == 0 and u >= a.from_ and "u{}".format(u) not in done]
         if not todo:
             time.sleep(120)
             continue

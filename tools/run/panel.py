@@ -47,7 +47,8 @@ def live_caps():
 
 
 def settings(ps):
-    S_ = json.load(open(os.path.join(SP, "v044w", "check_sets.json")))
+    S_ = json.load(open(os.path.join(HERE, "check_sets.json")))   # (the checks' play switches; from the scratchpad's v044w/, 2026-10-28)
+    S_["LEGS_NET"] = os.path.join(ROOT_, "data", "sim_runs", "move_v17_look", "policy.npz")   # (the file carried the old checkout's path)
     S_.update(PLAY)
     S_["PERCEPT_SPEED"] = str(ps)
     S_.update(live_caps())                                   # (the cap by weapon, as the run has it now; both seats alike)
