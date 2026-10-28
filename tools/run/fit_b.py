@@ -13,7 +13,8 @@ Forms set beside each other, on the same rows and held-out games (folds by game)
   A       the simulator's formula today: the pro table + the 2026-10-26 next-frag stack term (not fitted)
   A-fit   the same, its numbers fitted on these results
   B2      the hand-shaped formula of 2026-10-28 (stack above / below a respawn, a fixed fade, weapons >= 0)
-  judge   sim/win_judge.py, the one that is used
+  judge, one part   the judge with the stack in one part (no decaying part: the first judge, a comparator)
+  judge   sim/win_judge.py, the one that is used (the stack in a lasting and a decaying part)
   flex    a small free network with no structure (a reference for what the structure costs)
 Reported: held-out log loss and Brier (all, by time left) with the difference to the judge (95%, games resampled); the
 judge's value table (a hit, a frag, a death, a mega, a red armor, the weapons, at several leads and times) with 95% intervals
@@ -43,6 +44,21 @@ DT, GF, OTF, OT_LEN, GAME_LEN, SPAWN = 0.025, 24000, 4800, 120.0, 600.0, 125.0  
 TBINS = ((600, 450), (450, 300), (300, 180), (180, 60), (60, 0))
 F1026 = dict(PA=2.7546, PRL=0.4277, PLG=0.4485, PRG=0.2922)
 CELLS = ((0, 590), (0, 300), (0, 60), (3, 300), (3, 60), (-3, 60), (5, 300))
+
+
+def eff(hp, ar, dead):
+    """effective stack (B2's input): health + min(armor, 2 x health); a dead player: the respawn's 125"""
+    hp = np.maximum(np.asarray(hp, np.float64), 0.0)
+    return np.where(dead, SPAWN, hp + np.minimum(np.asarray(ar, np.float64), 2.0 * hp))
+
+
+def one_part(S):
+    """the judge with the stack in one part (the first judge of 2026-10-28, a comparator): L = the effective stack - 25,
+    D fixed at the anchor's 25, so the decaying part adds nothing"""
+    S1 = S.copy()
+    S1[..., 0] = S[..., 0] + S[..., 1] - WJ.D0
+    S1[..., 1] = WJ.D0
+    return S1
 
 
 def rows(folders):
@@ -88,7 +104,8 @@ def data(folders):
     wm, wo = own("my"), own("op")
     X = dict(d=R["my_score"] - R["op_score"], left=np.maximum(R["left"], 0.0),
              ds=np.where(dead("my"), SPAWN, R["my_hp"] + R["my_ar"]) - np.where(dead("op"), SPAWN, R["op_hp"] + R["op_ar"]),
-             e_my=WJ.effective(R["my_hp"], R["my_ar"], dead("my")), e_op=WJ.effective(R["op_hp"], R["op_ar"], dead("op")),
+             e_my=eff(R["my_hp"], R["my_ar"], dead("my")), e_op=eff(R["op_hp"], R["op_ar"], dead("op")),
+             sm=WJ.parts(R["my_hp"], R["my_ar"], dead("my")), so=WJ.parts(R["op_hp"], R["op_ar"], dead("op")),
              wm=wm, wo=wo, rl=wm[:, 0] - wo[:, 0], lg=wm[:, 1] - wo[:, 1], rg=wm[:, 2] - wo[:, 2],
              dm=R["my_dead"], do=R["op_dead"], y=res, g=R["g"], save=R["save"], ot=(~reg).astype(float))
     X = {k: np.asarray(v[use], np.float64) for k, v in X.items()}
@@ -109,14 +126,17 @@ def T(x):
 
 
 class Judge(torch.nn.Module):
-    """sim/win_judge.py with torch: the same function, its numbers as parameters"""
-    def __init__(self, P0=None):
+    """sim/win_judge.py with torch: the same function, its numbers as parameters (one_part: the comparator without the
+    decaying part)"""
+    def __init__(self, P0=None, one=False):
         super().__init__()
         P0 = WJ.init() if P0 is None else P0
         self.P = torch.nn.ParameterDict({k: torch.nn.Parameter(T(v)) for k, v in P0.items()})
+        self.one = one
 
     def forward(self, X):
-        return WJ.chance(self.P, X["d"], X["left"], X["e_my"], X["wm"], X["e_op"], X["wo"], xp=torch)
+        sm, so = (T(one_part(X["sm"].numpy())), T(one_part(X["so"].numpy()))) if self.one else (X["sm"], X["so"])
+        return WJ.chance(self.P, X["d"], X["left"], sm, X["wm"], so, X["wo"], xp=torch)
 
     def numpy(self):
         return {k: v.detach().numpy().astype(np.float64) for k, v in self.P.items()}
@@ -207,10 +227,10 @@ def fit(model, X, steps=400, lr=0.05):
     return model
 
 
-def fit_judge(X, P0=None, adam=600, lbfgs=200, l2=1e-4):
+def fit_judge(X, P0=None, adam=600, lbfgs=200, l2=1e-4, one=False):
     """Adam to get near, then L-BFGS; a small pull of the networks' weights to nothing (the shape is sure, the data is 300 games)"""
     torch.manual_seed(0)
-    m = Judge(P0)
+    m = Judge(P0, one=one)
     Xt = {k: T(v) for k, v in X.items()}
     reg = lambda: l2 * sum((p_ ** 2).sum() for n_, p_ in m.P.items() if "_w" in n_)   # noqa: E731
     opt = torch.optim.Adam(m.parameters(), lr=0.02)
@@ -264,11 +284,13 @@ def state(d, left, me=(100.0, 50.0), him=(100.0, 50.0), w_me=(1, 1, 0), w_him=(1
     """one stand-in state, seat 0's view (health, armor), weapons owned (RL, LG, RG); a dead player as his respawn"""
     sm = SPAWN if dead_me else me[0] + me[1]
     sh = SPAWN if dead_him else him[0] + him[1]
-    em = float(WJ.effective(me[0], me[1], bool(dead_me)))
-    eh = float(WJ.effective(him[0], him[1], bool(dead_him)))
+    em = float(eff(me[0], me[1], bool(dead_me)))
+    eh = float(eff(him[0], him[1], bool(dead_him)))
+    pm = WJ.parts(me[0], me[1], bool(dead_me)).tolist()
+    ph = WJ.parts(him[0], him[1], bool(dead_him)).tolist()
     wm = (0, 0, 0) if dead_me else w_me
     wh = (0, 0, 0) if dead_him else w_him
-    return dict(d=[d], left=[left], ds=[sm - sh], e_my=[em], e_op=[eh], wm=[list(wm)], wo=[list(wh)],
+    return dict(d=[d], left=[left], ds=[sm - sh], e_my=[em], e_op=[eh], sm=[pm], so=[ph], wm=[list(wm)], wo=[list(wh)],
                 rl=[wm[0] - wh[0]], lg=[wm[1] - wh[1]], rg=[wm[2] - wh[2]], dm=[dead_me], do=[dead_him], y=[0.5])
 
 
@@ -332,7 +354,7 @@ def axioms(m):
             bad.append(k + (round(100 * (b - a), 4),))
     # death and damage taken are the same states from the other seat: P(seat 1) = 1 - P(seat 0), checked on the grid
     s_ = cat([a for a, _ in S][:2000])
-    sw = dict(s_, d=-s_["d"], e_my=s_["e_op"], e_op=s_["e_my"], wm=s_["wo"], wo=s_["wm"])
+    sw = dict(s_, d=-s_["d"], e_my=s_["e_op"], e_op=s_["e_my"], sm=s_["so"], so=s_["sm"], wm=s_["wo"], wo=s_["wm"])
     sym = float(np.abs(predict(m, s_) + predict(m, sw) - 1.0).max())
     return bad, len(S), sym
 
@@ -362,7 +384,7 @@ def main():
     fold_of = dict(zip(games, rng.permutation(n_g) % a.folds))
     fo = np.array([fold_of[int(g)] for g in X["g"]])
     tab = table()
-    names = ["table", "A", "A-fit", "B2", "judge", "flex"]
+    names = ["table", "A", "A-fit", "B2", "judge, one part", "judge", "flex"]
     P = {n: np.zeros(len(X["y"])) for n in names}
     for k in range(a.folds):
         tr, te = fo != k, fo == k
@@ -374,6 +396,7 @@ def main():
             P["A"][te] = a0(Xq).numpy()
         P["A-fit"][te] = predict(fit(Afit(tab, F1026), Xtr), Xte)
         P["B2"][te] = predict(fit(B2(), Xtr), Xte)
+        P["judge, one part"][te] = predict(fit_judge(Xtr, one=True), Xte)
         P["judge"][te] = predict(fit_judge(Xtr), Xte)
         P["flex"][te] = predict(fit_flex(Xtr), Xte)
     y = X["y"]
