@@ -154,6 +154,17 @@ def play(job):
     sw_ = int(bool(swap) and opp_pol is not None)             # opponent: his tracking delay, the simulator's own acquire delay
     set_ = T_.set_delays(E, env, [(np.arange(sw_, env.n, 2), delays[0], delays[1])]
                          + ([(np.arange(1 - sw_, env.n, 2), delays[2], delays[3])] if opp_pol is not None else []))
+    sa_he, sa_op = envvars.get("SEAT_AIM_HE", ""), envvars.get("SEAT_AIM_OPP", "")
+    if sa_he or sa_op:                                        # (--aim-he / --aim-opp, branch aim2) each side's own aim settings
+        sa_ = {}
+        for txt_, seats_ in ((sa_he, np.arange(sw_, env.n, 2)), (sa_op, np.arange(1 - sw_, env.n, 2))):
+            for kv_ in [x for x in txt_.split(",") if "=" in x]:
+                k_, v_ = kv_.split("=", 1)
+                assert k_ in env.SEAT_AIM, "not a per-seat aim setting: " + k_
+                if k_ not in sa_:
+                    sa_[k_] = np.full(env.n, float(np.asarray(env._sa(k_)).ravel()[0]), np.float64)
+                sa_[k_][seats_] = float(v_)
+        env.seat_aim = sa_
     env.arena_stack = False
     env.arena_sets = [(E.MG,)]
     env.loadout_p = (0.0, 1.0, 0.0, 0.0)
@@ -410,6 +421,11 @@ def main():
     ap.add_argument("--opp-btoken-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--rule-fade-g", type=float, default=None, help="(v0.4.2a) play his rule fade at this gate (default: his checkpoint's; 0: none)")
     ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
+    ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
+                    "PERCEPT_SIGMA=0.48,AIM2_W=0); the rest of his aim is the process's. Needs AIM2, AIM2_SPLIT, AIM2_FOCUS on (--set) to seat AIM2 beside the old model")
+    ap.add_argument("--aim-opp", default="", help="... the opponent's seats")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
@@ -419,6 +435,10 @@ def main():
         pol.set_gate(a.btoken_gate)
     if a.rule_fade_g is not None:
         pol.set_rule_fade(a.rule_fade_g)
+    if a.head2_gate is not None:
+        pol.set_head2_gate(a.head2_gate)
+    if getattr(pol, "h2", None) is not None:
+        print("strategy head: gate {:g} ({})".format(float(pol.h2W["gate"]), "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
     if getattr(pol, "rf", None) is not None:
         print("rule fade: g {:g} ({}); the simulator's readers {}".format(pol.rfg, "none" if pol.rfg <= 0 else "{} columns faded".format(len(pol.rf_cols)),
               "on the brain's answer for a life drawn at g (BRAIN_READ=1)" if pol.rf_read else "on the rule"), flush=True)
@@ -435,11 +455,17 @@ def main():
             opp_pol.set_gate(a.opp_btoken_gate)
         if a.opp_rule_fade_g is not None:
             opp_pol.set_rule_fade(a.opp_rule_fade_g)
+        if a.opp_head2_gate is not None:
+            opp_pol.set_head2_gate(a.opp_head2_gate)
         oo = names(a.opp_inputs)
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
+    if a.aim_he:
+        envvars["SEAT_AIM_HE"] = a.aim_he
+    if a.aim_opp:
+        envvars["SEAT_AIM_OPP"] = a.aim_opp
     if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp_pol) if p_ is not None) and "BRAIN_READ" not in envvars:
         envvars["BRAIN_READ"] = "1"                              # (v0.4.2a) a network trained with the readers on the brain plays so
     delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,

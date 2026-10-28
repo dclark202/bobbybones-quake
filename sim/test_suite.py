@@ -49,7 +49,7 @@ class Policy:
         self.mean, self.var = ck["obs_mean"], ck["obs_var"]
         self.dims = [int(x) for x in ck["action_dims"]]
         self.minutes = float(ck.get("minutes", 0.0))
-        self.react_ms = float(ck.get("react_ms", 150.0))
+        self.react_ms = float(ck.get("react_ms", 100.0))      # (a checkpoint without it: !aim default; 150 until branch aim2)
         self.acquire_ms = float(ck.get("acquire_ms", 200.0))  # (B-226) the trainer's --acquire-ms; 200: the simulator's own
         self.round_secs = float(ck.get("round_secs") or 120.0)    # his clock, score and memory start over every this many seconds; 600: whole games, never (tools/duel_eval.py SeatClock)
         self.H = self.whh.shape[1]
@@ -112,6 +112,19 @@ class Policy:
             o_ = np.concatenate([[0], np.cumsum(self.dims)])
             self.head_si = slice(int(o_[10]), int(o_[11]))  # the intention's logits and his way's (none before stage B)
             self.head_sw = slice(int(o_[12]), int(o_[13])) if len(self.dims) > 12 else slice(0, 0)
+        self.h2 = ck.get("head2")                            # (v0.4.3, sim/head2.py) the strategy head: its state after the head's, before the brain's
+        self.h2_at = self.W
+        self.h2_live = False
+        if self.h2 is not None:
+            import head2 as head2_
+            assert self.head is None, "a network with both heads: not built"
+            assert self.btok is not None, "the strategy head reads the brain: a network with the brain's token (v0.4.1 on)"
+            self.h2W = head2_.params_np(sd)
+            self.h2_ah = head2_.mlp_of(sd, "ahead")         # (its inputs: the brain's readouts; the "in control" one if the network has it)
+            self.h2_ct = head2_.np_ctrl_params(sd, self.h2)     # (the ctrl slot: the layout's "ctrl_src" readout, None: zeros)
+            self.h2_live = head2_.np_open(self.h2W)          # (gate 0 or its links at zero: the network without it, not stepped)
+            self.W = self.h2_at + head2_.np_state_width(self.h2)
+        self.h2_tick = None
         self.brain_at = None                                 # (v0.4.1) the brain's and the token's state, at the end of a seat's array
         if self.btok is not None:
             import btoken as btoken_
@@ -136,7 +149,7 @@ class Policy:
     def brain_on(self):
         """(v0.4.1) the brain is stepped: its token is open, or (v0.4.2a) the simulator's readers take its answer (the rule
         fade above 0 in a network trained with BRAIN_READ)"""
-        return self.btok is not None and (self.bgate > 0 or (self.rf_read and self.rfg > 0))
+        return self.btok is not None and (self.bgate > 0 or (self.rf_read and self.rfg > 0) or self.h2_live)
 
     @property
     def needs_pose(self):
@@ -175,10 +188,19 @@ class Policy:
         import btoken as btoken_
         br_, tk_ = st
         tk = br_.frame(xa)
+        self.h2_tick = None
         if tk.any():
             o1_, o2_ = br_.readouts(tk)
             tk_.answer(tk, o1_, o2_, np.asarray(pose, np.float32)[tk], np.asarray(zmap)[tk])
+            self.h2_tick = (tk, br_.s[tk], o1_, o2_)        # (v0.4.3) what the strategy head reads at the tick
         return btoken_.pack(br_, tk_).astype(np.float32)
+
+    def set_head2_gate(self, g):
+        """(v0.4.3, checks) play the strategy head at this gate (0: the network without it)"""
+        assert self.h2 is not None, "this network has no strategy head"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, gate=np.float32(g))
+        self.h2_live = head2_.np_open(self.h2W)
 
     def set_gate(self, g):
         """(v0.4.1, checks) play the brain's token at this gate (0: shut, the network without it)"""
@@ -192,7 +214,7 @@ class Policy:
         if self.brain_at is not None:                        # (v0.4.1) the brain and its answer, by the same flag (its own clear)
             import btoken as btoken_
             btoken_.packed_clear(h[:, self.brain_at:], rows, self.brainP["H"])
-        if self.head is None:
+        if self.head is None:                                # (the strategy head's state is cleared with it: zeros)
             h[r, :self.brain_at] = 0.0
             return h
         h[r, :self.head_at] = 0.0
@@ -236,9 +258,11 @@ class Policy:
             h2_, lgl_ = LU_.np_branch(self.legsP, xl)
             dadd = LU_.np_door(self.uniD[0], self.uniD[1], h2_, ok_) if self.uniD is not None else None
             gadd = LU_.np_guide_add(self.uni, self.uniG, lgl_, ok_, sum(self.dims)) if self.uniG is not None else None
-        hh = hb = None
+        hh = hb = h2s = None
         if self.brain_at is not None:                        # (v0.4.1) the brain's packed state, at the end of the array
             hb, h = h[:, self.brain_at:], h[:, :self.brain_at]
+        if self.h2 is not None:                              # (v0.4.3) the strategy head's state, before the brain's
+            h2s, h = h[:, self.h2_at:], h[:, :self.h2_at]
         if self.head is not None:
             hh, h = h[:, self.head_at:], h[:, :self.head_at]
         hf = h                                               # (--slow-mem) the whole state; h its fast part
@@ -267,6 +291,11 @@ class Policy:
             xf = x + self.hm.np_plan_in(self.headP, hh[:, o_[0]:o_[1]])
         if dadd is not None:                                 # (--legs-feat) only his fast GRU reads the legs' features
             xf = xf + dadd
+        b2 = None
+        if h2s is not None and self.h2_live:                 # (v0.4.3) the plan of its last tick into his fast GRU, its bias on his intention
+            import head2 as head2_
+            g2_, b2 = head2_.np_adds(self.h2W, self.h2, h2s)
+            xf = xf + g2_
         gi = xf @ self.wih.T + self.bih
         gh = h @ self.whh.T + self.bhh
         H = self.H
@@ -279,6 +308,8 @@ class Policy:
         if self.slow is not None:                            # (--slow-mem) the outputs read h + door(s); the slow GRU ticks on its frames
             zo, h = self.slow_step(self.slowP, self.slow, x, h, hf)
         logits = zo @ self.wp.T + self.bp
+        if b2 is not None:
+            logits[:, int(np.sum(self.dims[:10])):int(np.sum(self.dims[:11]))] += b2
         if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
             _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
             logits[:, self.head_si] += t_add
@@ -290,8 +321,20 @@ class Policy:
             import legs_unify as LU_
             logits = logits + LU_.np_gate_add(self.uni, *self.uniT, zo, h2_, lgl_, ok_, sum(self.dims))
         self.last_zo = zo
+        self.last_logits = logits                            # (sim/brain_fit.py: the play effect of a brain, the distributions per output)
         if bt is not None:
             hb = self.token_post(xa, pose, zmap, bst)
+        if h2s is not None:                                  # (v0.4.3) the strategy head ticks with the brain, after the frame
+            if self.h2_live and self.h2_tick is not None:
+                import head2 as head2_
+                tk_, sb_, o1_, o2_ = self.h2_tick
+                u_ = head2_.np_feats(self.h2, brain=sb_, trk=o1_, trz=o2_,
+                                     ahead=head2_.np_mlp(self.h2_ah, sb_) if self.h2_ah is not None else None,
+                                     ctrl=head2_.np_ctrl(self.h2_ct, sb_, hfast[tk_]),
+                                     obs=xa[tk_], hands=hfast[tk_])
+                h2s = h2s.copy()
+                h2s[tk_] = head2_.np_tick(self.h2W, self.h2, u_, h2s[tk_])
+            h = np.concatenate([h, h2s.astype(np.float32)], 1)
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()

@@ -1,0 +1,16 @@
+{
+ "map": "bloodrun",
+ "nodes": 1185,
+ "kept": 1099,
+ "dropped": {
+  "unreachable": 73,
+  "solid": 10,
+  "hazard": 0,
+  "moved": 3,
+  "fell": 0,
+  "air": 0,
+  "outside": 0
+ },
+ "pro_places": 10000,
+ "heat_top10_share": 0.2780091724001264
+}

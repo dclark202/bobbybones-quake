@@ -1450,6 +1450,7 @@ class duelbot(minqlx.Plugin):
             turn, dpit = float(t_[i]), float(p_[i])
         yaw = (yaw + turn + 180.0) % 360.0 - 180.0
         lev = 1.0 if (nine and env.seen_t[i] <= 0.5) else env.level     # newer simulators: no pull while an enemy is in view
+        #                                                  (B-275: env.level is the policy.npz's LEVEL_PULL from v0.4.3 on, set before the module loads; 0.95 unset)
         pitch = float(np.clip(pitch * lev + dpit, -89, 89))
         names = E.WEAPONS
         ncol = env.has.shape[1]
@@ -2170,6 +2171,12 @@ class duelbot(minqlx.Plugin):
         it_ = np.array(env.route_item)[np.minimum(g_, len(env.route_item) - 1)]     # (a holding place's row is no item's: "soon" below)
         soon = env.item_up[0, it_] | (env.item_t[0, it_] < phi + 5.0) | (env.intent >= getattr(E, "EN_INTENT", 1 << 30))
         gone = valid & ~soon & (env.intent > 0)
+        if getattr(E, "GONE_BELIEF", False) and getattr(E, "ITEM_BELIEF", False):     # (v0.5.0, as the simulator: "gone" by
+            gb_ = np.minimum(g_, env.bel_t.shape[1] - 1)                              # what he knows of the item, not the truth)
+            rs_ = np.array([float(env.item_def[i_][2]) for i_ in it_], np.float32)
+            bt_ = env.bel_t[np.arange(env.n), gb_]
+            soon_b = (bt_ >= rs_) | (np.maximum(0.0, rs_ - bt_) < phi + 5.0) | (env.intent >= getattr(E, "EN_INTENT", 1 << 30))
+            gone = valid & ~soon_b & (env.intent > 0) & (env.intent < getattr(E, "HOLD_INTENT", 1 << 30))
         if getattr(env, "hold_n", 0):                        # (TARGETS, as step() does: a place is reached where he stands at it,
             hd_ = env.intent >= E.HOLD_INTENT                # given up where no way leads to it; 2026-10-14, the first real games)
             env.note_holds()
@@ -2190,6 +2197,8 @@ class duelbot(minqlx.Plugin):
         want = E.INTENTS[int(env.intent[k])]
         if lab is not None and (lab == want or (lab == "YA" and want == "YA2")):
             env.intent_done[k] = True
+            if getattr(E, "WEAPON_FREE", False) and d[0] == "wp":    # (v0.5.0, as the simulator: a weapon taken ends the choice)
+                env.intent_new[k] = True
 
     def put(self, p, pos, yaw=None, human=False):
         p.position(x=float(pos[0]), y=float(pos[1]), z=float(pos[2]) + 2.0)

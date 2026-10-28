@@ -1,0 +1,16 @@
+{
+ "map": "campgrounds",
+ "nodes": 1643,
+ "kept": 1588,
+ "dropped": {
+  "unreachable": 28,
+  "solid": 23,
+  "hazard": 0,
+  "moved": 3,
+  "fell": 1,
+  "air": 0,
+  "outside": 0
+ },
+ "pro_places": 10000,
+ "heat_top10_share": 0.28398003412513756
+}

@@ -236,7 +236,7 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
-                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
+                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
                               self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp)], 1)
         return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
@@ -245,7 +245,7 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
                               self._v14(vel, yaw, pit, eye, known, opp_vel, visible, opp),
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
-                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp), self._pref(pos, eye, yaw, pit, visible),
+                              self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
                               self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp)], 1)
         return obs.astype(np.float32)
 
