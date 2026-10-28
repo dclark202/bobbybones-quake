@@ -74,9 +74,10 @@ PORT="${PORT:-27970}"
 MAP_MOUNTS=""
 [ "$TESTMAPS" = "1" ] && [ "$PUBLIC" != "1" ] && MAP_MOUNTS="-v $ROOT/maps/testlab/testlab.pk3:/ql/baseq3/testlab.pk3:ro -v $ROOT/maps/arena1/arena1.pk3:/ql/baseq3/arena1.pk3:ro"
 LISTED="+set sv_master 0"; [ "$PUBLIC" = "1" ] && LISTED="+set sv_master 1"   # PUBLIC=1: show in the server list (the rented server); local servers stay unlisted (Windows sets PUBLIC to a folder: an exact 1 is required)
-# EARLY_BOBBY (default 1 on a play-test server, 0 with PUBLIC=1): Bobby is added at a map's load, so that a person's game
-# loads his model with the map (plugins/duelbot.py, DUEL_EARLY_BOBBY: after a map change he was drawn with the person's own model)
-EARLY="${EARLY_BOBBY:-$([ "$PUBLIC" = "1" ] && echo 0 || echo 1)}"
+# EARLY_BOBBY (default 1 on every server, PUBLIC=1 too since 2026-10-27; EARLY_BOBBY=0 turns it off): Bobby is added at a map's
+# load, so that a person's game loads his model with the map (plugins/duelbot.py, DUEL_EARLY_BOBBY: after a map change he was
+# drawn with the person's own model)
+EARLY="${EARLY_BOBBY:-1}"
 # LIST_BOT_AS_PLAYER (default 1 with PUBLIC=1, else 0): the Steam server query reports no bots, so the browsers count Bobby
 # as a player (1/8, not 0/8; owner, 2026-10-25). His name and the server name still say he is a bot (minqlx/botctl.c).
 LISTBOT="${LIST_BOT_AS_PLAYER:-$([ "$PUBLIC" = "1" ] && echo 1 || echo 0)}"
