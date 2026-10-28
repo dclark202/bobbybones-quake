@@ -181,28 +181,30 @@ class Picker:
 
 
 def aim_level():
-    """BobbyBones's aim level on a 1v1 server ("1" to "5", "max"), None elsewhere (plugins/duelbot.py, !aim)"""
+    """BobbyBones's aim setting on a 1v1 server ("worse", "default", "better", "max"), None elsewhere (plugins/duelbot.py, !aim)"""
     pl = minqlx.Plugin._loaded_plugins.get("duelbot")
     try:
         lv = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else None
     except Exception:                                        # noqa: BLE001
         lv = None
-    return lv if lv in ("1", "2", "3", "4", "5", "max") else None
+    return lv if lv in AIM_ORDER else None
+
+
+AIM_ORDER = ("worse", "default", "better", "max")         # (owner, 2026-10-27: the labels replace 1-5|max)
 
 
 def aim_gg_line(level, person, bobby):
     """after a full duel: what BobbyBones says about his aim, by the result (owner's wording, 2026-10-21); None on a draw"""
     if level is None or person == bobby:
         return None
+    i = AIM_ORDER.index(level)
     if person > bobby:
-        if level in ("1", "2", "3", "4"):
-            return "Too easy at aim {}? Try ^2!aim {}^7 next game".format(level, int(level) + 1)
-        if level == "5":
-            return "You beat aim 5. Think you can take ^2!aim max^7?"
+        if level != "max":
+            return "Too easy at aim {}? Try ^2!aim {}^7 next game".format(level, AIM_ORDER[i + 1])
         return "You beat me at max aim. Respect."
-    if level == "1":
+    if level == "worse":
         return "That's my easiest aim. Rematch?"
-    return "Want a closer game? Try ^2!aim {}^7".format("5" if level == "max" else int(level) - 1)
+    return "Want a closer game? Try ^2!aim {}^7".format(AIM_ORDER[i - 1])
 
 
 def clean(s):
@@ -327,7 +329,7 @@ class banter(minqlx.Plugin):
                 delay += 0.8 + self.rng.random()
                 lv = aim_level() if voice(p) == 0 else None  # (!aim, owner, 2026-10-21) BobbyBones says his aim level
                 if lv:
-                    self.say(p.id, "Aim level ^2{}^7 (^2!aim 1-5|max^7 to change)".format(lv), delay)
+                    self.say(p.id, "Aim ^2{}^7 (^2!aim worse|default|better|max^7 to change)".format(lv), delay)
                     delay += 0.8 + self.rng.random()
 
     # ------------------------------------------------------------------ a game's start and end
