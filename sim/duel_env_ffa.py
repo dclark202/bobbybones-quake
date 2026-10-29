@@ -1687,7 +1687,17 @@ WSH_COLS = ("his frames in games with the shaping on", "the shaping paid (k x (g
 #                 the blend needs it loaded). WIN_SCALE becomes 1 / (the judge's chance at a lead of 1 with ten minutes left and
 #                 both at a respawn - 0.5): a frag at the start is still worth 1 before WIN_GAIN. Not a PLAY_VAR (pay only).
 WIN_JUDGE = os.environ.get("WIN_JUDGE") or ""
-#   OVERTIME=1    Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
+#   WIN_END=1     (v0.6.2, owner 2026-10-29; found by an audit that day) the blend's win part pays a game's RESULT: with the
+#                 judge (WIN_JUDGE) the chance on a game's last frame is not 1 / 0.5 / 0 (its spread at 0 s is sqrt(0.02), and
+#                 the stacks still count there), so a game paid scale x (chance on the last frame - chance at the start), not
+#                 its result (a won game on 10 hp against 200/200 was paid as a loss). (1) When a game really ends (at its
+#                 limit, overtime decided or at OT_CAP), _game_end adds scale x (result - the chance just paid) to seat a, the
+#                 minus to seat b, on that frame: a game pays scale x (result - its start chance) exactly, zero-sum, whatever
+#                 the judge reads at 0 s. (2) A limit frame (regulation's last, or an overtime period's last) with the score
+#                 level that goes on into another period reads the next period's start (OT_LEN), not 0: no swing there and
+#                 back on the next frame. Off: the simulator as before to the bit. Pay only (not a PLAY_VAR).
+WIN_END = (os.environ.get("WIN_END") or "0").strip() not in ("", "0")
+#   OVERTIME=1   Quake Live's duel overtime (g_overtime 120): a whole game, a late round or a mid-game start that reaches
 #                 the game's limit (GAME_LEN) with the score level goes on for another OT_LEN seconds, period after period,
 #                 until a period ends with the score not level, or after OT_CAP periods (OVERTIME_CAP, 10): then it is a
 #                 draw. A spawn start (SPAWN_START_P) ends after its seconds as before. Groups of three or more have no
@@ -9167,7 +9177,9 @@ class DuelEnv:
                 self.wb_tab = (p_, float(left_[1]), D_)
                 self.wb_scale = 1.0 / (float(p_[-1, D_ + 1]) - 0.5)
                 self.stats["win_blend"] = np.zeros(len(WB_COLS))
-                if WIN_JUDGE:                                # (WIN_JUDGE) the judge in the table's place, its own scale
+                if WIN_END:                                  # (WIN_END) games paid their result: count, |the term| summed, terms over 0.1 of a game
+                    self.stats["win_end"] = np.zeros(3)
+                if WIN_JUDGE:                               # (WIN_JUDGE) the judge in the table's place, its own scale
                     import win_judge as wj_
                     self.wb_judge = wj_.load(WIN_JUDGE)[0]
                     z1_, w0_, s0_ = np.ones(1), np.zeros((1, 3)), wj_.parts(np.full(1, wj_.SPAWN), np.zeros(1), np.zeros(1, bool))
@@ -9448,6 +9460,8 @@ class DuelEnv:
             lb_ = GAME_LEN - self.g_tick[gm] * DT
             if OVERTIME:                                     # (the period's last frame: 0 s left, _ot_left)
                 lb_ = np.where(self.g_tick[gm] > GAME_FRAMES, self._ot_left(self.g_tick[gm], self.round_t[gm]), lb_)
+                if WIN_END:                                  # (WIN_END) a level limit frame that goes on: the next period's start
+                    lb_ = np.where(self._ot_goes_on(gm, ab_, bb_), OT_LEN, lb_)
             self.wb_left[:] = 0.0
             self.wb_left[gm] = lb_
             pb_ = self._wb_chance(gm, lb_)
@@ -9543,8 +9557,35 @@ class DuelEnv:
             OS[6 if d > 0 else 7 if d == 0 else 8] += 1
         self.g_ot[m] = 0
 
+    def _ot_goes_on(self, gm, a_, b_):
+        """(WIN_END) of the games gm (their seats a_, b_): on a limit frame (regulation's last or an overtime period's last)
+        with the score level, the game goes on into another period (as _ot_ends decides it on this frame)"""
+        t_ = self.g_tick[gm].astype(np.int64)
+        lim_ = (t_ == GAME_FRAMES) | ((t_ > GAME_FRAMES) & ((t_ - GAME_FRAMES) % OT_FRAMES == 0))
+        on_ = lim_ & (self.frags_r[a_] == self.frags_r[b_]) & np.isin(self.game[gm], OT_KINDS) & (self.g_ot[gm] < OT_CAP)
+        if MOMENTS:
+            on_ &= self.g_end[gm] == GAME_FRAMES
+        return on_
+
+    def _wb_result(self, m):
+        """(WIN_END) a game that really ended (at its limit) pays its result: scale x (result - the chance paid up to now) to
+        seat a, the minus to seat b, on this frame (the blend pays wb_raw after the ends)"""
+        if self.g_tick[m] < GAME_FRAMES or (MOMENTS and int(self.g_end[m]) != GAME_FRAMES):
+            return
+        q = self._seats(m)
+        a_, b_ = int(q[0]), int(q[1])
+        d = float(self.frags_r[a_] - self.frags_r[b_])
+        res = 1.0 if d > 0 else (0.0 if d < 0 else 0.5)
+        y = self.wb_scale * (res - float(self.wb_p[m]))
+        self.wb_raw[a_] += y
+        self.wb_raw[b_] -= y
+        self.wb_p[m] = res
+        self.stats["win_end"] += (1.0, abs(y), float(abs(y) > 0.1 * self.wb_scale))
+
     def _game_end(self, m):
         """the whole game or late round of match m is over, at the limit (level is a draw: no overtime): into the counters"""
+        if WIN_END and self.wb_tab is not None:              # (WIN_END) the result, before anything is cleared
+            self._wb_result(m)
         self._hd_result(m)                                   # (HEAD_EVENTS) the win label: the band of the final margin
         if OVERTIME:
             self._ot_over(m)

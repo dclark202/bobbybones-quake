@@ -5637,7 +5637,11 @@ def main():
                                     combat_size=round(float(WB_[4] / bm_), 4), other_size=round(float(WB_[5] / bm_), 4),
                                     paid_size=round(float(WB_[6] / bm_), 4), blend_frames=int(WB_[7]),
                                     combat_to_win_g1=round(float(WB_[4] / max(1e-9, WB_[2])), 3))
-        if "open" in agg:                                                # (OPENINGS) the pros' spawn openings as the item rule's label, his seats
+        if "win_end" in agg:                                             # (WIN_END, v0.6.2) the games paid their result on their last frame
+            WE_ = np.atleast_1d(agg["win_end"]).astype(np.float64)
+            rec["win_end"] = dict(games=int(WE_[0]), term_mean_abs=round(float(WE_[1] / max(1.0, WE_[0])), 4),
+                                  over_tenth=round(float(WE_[2] / max(1.0, WE_[0])), 4))
+        if "open" in agg:                                               # (OPENINGS) the pros' spawn openings as the item rule's label, his seats
             def open_(o_):                                               # (the simulator's OPEN_COLS)
                 o_ = np.atleast_1d(o_).astype(np.float64)
                 at_ = max(1.0, o_[1] + o_[2])
