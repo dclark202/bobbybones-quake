@@ -20,7 +20,7 @@
  "AUTO_SWITCH": "1",
  "LEGS_OFF": "2",
  "FIGHT_TARGET": "0",
- "LEGS_NET": "C:\\Users\\dacla\\ql-bot\\data\\sim_runs\\move_v17_look\\policy.npz",
+ "LEGS_NET": "data\\sim_runs\\move_v17_look\\policy.npz",
  "TARGETS": "1",
  "TARGETS_FREE": "2",
  "AIM_LEVEL": "4",

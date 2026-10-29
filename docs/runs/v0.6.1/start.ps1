@@ -11,7 +11,7 @@
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT = (Resolve-Path (Join-Path $HERE "..\..\..")).Path
-$PY = if ($env:BB_PY) { $env:BB_PY } else { "C:\Users\dacla\anaconda3\python.exe" }
+$PY = if ($env:BB_PY) { $env:BB_PY } else { (Join-Path $env:USERPROFILE "anaconda3\python.exe") }
 $R0 = Join-Path $ROOT "data\sim_runs\duel_gru_v0_6_0"
 $RUN = "duel_gru_v0_6_1"
 $R1 = Join-Path $ROOT "data\sim_runs\$RUN"
