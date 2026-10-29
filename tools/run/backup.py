@@ -1,7 +1,8 @@
 """The nightly backup (owner, 2026-10-28, after the data loss): copies what cannot be remade to T:\\BobbyBones_backup (or BB_BACKUP),
 never deleting anything there. Copied when new or changed (size or time): every run's keep/ (version ends, kept saves,
-optimizers), live.json, live_settings.env and snapshots/; data/maps; data/sim_runs/brainppl/ packs and shards; the movement
-network (data/sim_runs/move_v17_look); data/owner.env and data/demo_root.txt. Logs to <backup>/backup.log.
+optimizers), live.json, live_settings.env, snapshots/ and selfplay/ (the self-play games the judges are fitted on); the trainers'
+logs (data/sim_runs/*.log); data/maps; data/sim_runs/brainppl/ packs and shards; the movement
+network (data/sim_runs/move_v17_look); the win-chance judges (data/sim_runs/judge); data/owner.env and data/demo_root.txt. Logs to <backup>/backup.log.
     python tools/run/backup.py            (the scheduled task "BobbyBones backup" runs it nightly)"""
 import os
 import shutil
@@ -17,10 +18,12 @@ def want(rel):
     p = rel.replace("\\", "/").split("/")
     if rel in ("owner.env", "demo_root.txt") or p[0] == "maps":
         return True
+    if p[0] == "sim_runs" and len(p) == 2:
+        return p[1].endswith(".log")                         # the trainers' logs
     if p[0] == "sim_runs" and len(p) >= 3:
-        if p[1] in ("brainppl", "move_v17_look"):
+        if p[1] in ("brainppl", "move_v17_look", "judge"):
             return True
-        return p[2] in ("keep", "snapshots", "live.json", "live_settings.env", "metrics.jsonl")
+        return p[2] in ("keep", "snapshots", "selfplay", "live.json", "live_settings.env", "metrics.jsonl")
     return False
 
 
