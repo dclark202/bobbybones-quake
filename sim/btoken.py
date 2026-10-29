@@ -325,6 +325,11 @@ def numpy_brain(sd, bel_L, trk_L, trz_L):
     g = lambda k: np.asarray(sd[k], np.float32)
     B = dict(inp_w=g("belief.inp.weight"), inp_b=g("belief.inp.bias"), wih=g("belief.gru.weight_ih"), whh=g("belief.gru.weight_hh"),
              bih=g("belief.gru.bias_ih"), bhh=g("belief.gru.bias_hh"), H=int(bel_L["hid"]), K=int(bel_L["every"]))
+    fd_ = bel_L.get("fade") or {}                            # (v0.6.1b, --brain-fade; sim/belief.py) the faded columns' weights
+    if float(fd_.get("g", 0.0)) > 0 and fd_.get("cols"):     # times (1 - g), as the trainer's brain reads them
+        w_ = np.array(B["inp_w"], copy=True)
+        w_[:, np.asarray(fd_["cols"], np.int64)] *= np.float32(1.0 - float(fd_["g"]))
+        B["inp_w"] = w_
     if trk_L is not None and "track.0.weight" in sd:
         B["trk"] = tuple(g("track.{}.{}".format(i, w)) for i in (0, 2) for w in ("weight", "bias"))
     if trz_L is not None and "trackz.0.weight" in sd:

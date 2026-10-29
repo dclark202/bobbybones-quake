@@ -39,6 +39,7 @@ def describe(L):
 def make_module(L, seed=4040):
     """the part: inp (Linear obs_dim -> hid), gru (GRUCell 2 hid -> hid), PyTorch's own start; made from a random stream of
     its own (the global stream after it is the one without)"""
+    import numpy as np
     import torch
     import torch.nn as nn
 
@@ -47,13 +48,31 @@ def make_module(L, seed=4040):
             super().__init__()
             self.inp = nn.Linear(int(L["obs_dim"]), int(L["hid"]))
             self.gru = nn.GRUCell(2 * int(L["hid"]), int(L["hid"]))
+            fd_ = L.get("fade") or {}                       # (v0.6.1b, --brain-fade) the old belief's columns faded out of the brain:
+            self.fade_cols = [int(c_) for c_ in fd_.get("cols", ())]    # plain attributes, not weights (the state dict is as before)
+            self.fade_g = float(fd_.get("g", 0.0))
+            self.fade_m = None
 
         def enc(self, x):
-            return torch.tanh(self.inp(x))
+            g_ = float(self.fade_g)
+            if not (g_ > 0 and self.fade_cols):
+                return torch.tanh(self.inp(x))
+            w_ = self.inp.weight                             # (v0.6.1b) the faded columns' weights times (1 - g): the same sums as
+            if self.fade_m is None or self.fade_m[0] != g_ or self.fade_m[1].device != w_.device:    # those inputs times (1 - g)
+                m_ = torch.ones(w_.shape[1], dtype=torch.float32)
+                m_[torch.as_tensor(self.fade_cols, dtype=torch.long)] = float(np.float32(1.0 - g_))
+                self.fade_m = (g_, m_.to(w_.device))
+            return torch.tanh(torch.nn.functional.linear(x, w_ * self.fade_m[1].to(w_.dtype), self.inp.bias))
 
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(int(seed))
         return Belief()
+
+
+def fade_layout(cols, g=0.0):
+    """(v0.6.1b, --brain-fade) the "fade" entry of the checkpoint's "belief": the columns (the hands' rule fade's, sim/rule_fade.py)
+    and the gate g; the brain reads those inputs times (1 - g) (at 0: exactly the brain without it)"""
+    return dict(cols=[int(c_) for c_ in cols], g=float(g))
 
 
 class State:
