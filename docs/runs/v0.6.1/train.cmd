@@ -335,7 +335,7 @@ rem brain's lesson rising 0 -> 0.35 over 90 min (live BRAIN_HUMAN_W), sessions 0
 rem on a later resume set BH_START to the first start's minute (in the log) so the opening does not begin again
 if "%BH_START%"=="" set BH_START=-1
 rem (v0.6.1) the judge, frozen: his chance of winning from his lead, the clock and both players' stacks and weapons
-set WIN_JUDGE=%ROOT%\data\sim_runs\judge\judge_v060.npz
+set WIN_JUDGE=%ROOT%\data\sim_runs\judge\judge_v060_wpn.npz
 if "%RF_START%"=="" set RF_START=18411.038983547685
 rem (RF_START: v0.4.1's end save, keep/policy_end_v041.pt, update 320)
 if "%RF_START%"=="" (echo set RF_START to the save's minutes ^(the first start^) & exit /b 1)

@@ -15,7 +15,7 @@ $PY = if ($env:BB_PY) { $env:BB_PY } else { "C:\Users\dacla\anaconda3\python.exe
 $R0 = Join-Path $ROOT "data\sim_runs\duel_gru_v0_6_0"
 $RUN = "duel_gru_v0_6_1"
 $R1 = Join-Path $ROOT "data\sim_runs\$RUN"
-$JUDGE = Join-Path $ROOT "data\sim_runs\judge\judge_v060.npz"
+$JUDGE = Join-Path $ROOT "data\sim_runs\judge\judge_v060_wpn.npz"
 $LOG = Join-Path $HERE "start.log"
 function Log($m) { $l = (Get-Date -Format "MM-dd HH:mm:ss ") + $m; Add-Content -Path $LOG -Value $l; $l }
 
