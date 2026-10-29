@@ -7,8 +7,8 @@ on a real Quake Live server through a server plugin. All learning is from playin
 ## Play him online
 
 Quake Live servers:
-- `Duel BobbyBones the self taught Quake bot | US Chicago` (`193.239.237.127:27970`)
-- `Duel BobbyBones the self taught Quake bot | EU Amsterdam` (`194.127.178.184:27970`)
+- `Duel BobbyBones the self taught Quake bot | US Chicago` (`66.42.118.191:27970`)
+- `Duel BobbyBones the self taught Quake bot | EU Amsterdam` (`209.250.249.21:27970`)
 
 We keep a local leaderboard and game log (with detailed game stats) across the two servers, see it [here](https://dclark202.github.io/bobbybones-leaderboard/) 
 
