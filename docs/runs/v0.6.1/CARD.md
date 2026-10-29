@@ -3,7 +3,29 @@
 *2026-10-28 (owner): "Build judge. Freeze now, train later." The judge is his chance of winning learned from how his own games
 ended, with the owner's four axioms in its shape: "frag good, death bad, deal damage good, take damage bad". It replaces the
 hand-built formula (A) and the hand-shaped fit (B2); the earlier design with the stack term and the shaping
-([WINPAY_v0.6.1.md](WINPAY_v0.6.1.md)) is superseded. The way there: [B_FIT.md](B_FIT.md) and the review of 2026-10-28.*
+([WINPAY_v0.6.1.md](WINPAY_v0.6.1.md)) is superseded. The way there: [B_FIT.md](B_FIT.md) and the review of 2026-10-29.*
+
+> **What follows this run (owner, 2026-10-29), for the session running it:**
+> - **v0.6.1 finishes as planned (~18:00).** Nothing about it changes.
+> - **Then [v0.6.1b](../v0.6.1b/CARD.md) runs overnight from v0.6.1's end:** the old hand-built belief faded out of the brain
+>   (live `BRAIN_FADE`), with the game-end pay fix. **[v0.6.2](../v0.6.2/CARD.md) starts tomorrow morning from v0.6.1b's end,
+>   not tonight.**
+> - **The game-end pay fix** ([WINPAY_END.md](WINPAY_END.md)) is this session's to land, in `sim/duel_env.py` (then
+>   `duel_env_ffa.py` regenerated). Once it is in and checked, set `$FIX_MARK` in
+>   [v0.6.1b/start.ps1](../v0.6.1b/start.ps1) to a string the fix's code carries. The start refuses until then. If the fix
+>   is a switch, it also goes in v0.6.1b's `train.cmd` and the settings check's allowed list.
+> - **Already built for v0.6.1b** (another session, uncommitted on `main`): the brain's dial in `sim/belief.py`,
+>   `sim/btoken.py` and `sim/train_duel_rnn.py`. It is inert unless a network carries `belief.fade` or the trainer gets
+>   `--brain-fade 1`, so this run and its checks are unaffected. Also built: `tools/run/brain_fade_check.py` (passed on v0.6.0's
+>   end), and v0.6.1b's `train.cmd` (settings check against this run's: PASS), `start.ps1` and `smoke.py`.
+> - **The order after this run ends:**
+>   1. the fix;
+>   2. `smoke.py` (~25 min, CPU);
+>   3. v0.6.1b's `start.ps1`, on the owner's go.
+>
+>   `start.ps1` keeps this run's end as `keep/policy_end_v061.pt` itself.
+> - **The level fade:** `fade_level.ps1` had not run as of 2026-10-29 afternoon (no log line, no `LEVEL_PULL` in live.json). The
+>   owner says it is handled in this run. v0.6.1b takes over whatever `LEVEL_PULL` this run's live.json ends with.
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision
 
@@ -35,7 +57,7 @@ hand-built formula (A) and the hand-shaped fit (B2); the earlier design with the
 | Acceptance of the fit | held-out log loss no worse than B2's interval and better than A; no axiom failure; the value table sensible (hits rise with damage, mega > red armor at low health); drift between saves within the intervals 🧪 |
 | Hand-built / assumed parts | the shape "lead + stack edge in frags" (needed to prove the frag axiom); the armor rule (armor counts up to twice the health) and the split at 100 into lasting and decaying; a dead player counts as his respawn at once; the floor below a respawn (at most 0.5 frag for a low lasting part, 0.1 for the decaying part, 0.05 a weapon: together 0.75, which keeps a kill worth at least 0.25 frag); the ramp's schedule; **the rocket launcher's and the rail's worth set by hand to the lightning gun's** (his games priced them near 0: it pays taking them, not using them well; removed at v0.6.2's refit unless the owner says otherwise) |
 | Weaknesses | weapons he rarely takes cannot show their worth (the rail: only exploration breaks the loop; refit per version); ammunition, weapon in hand, position and item timers are not in the judge (they pay only through what they lead to); self-play data only; with a 0.999 discount the judge is his goal over ~25 s |
-| Pay pathologies (ledger) | a frag or damage dealt of the wrong sign: impossible by construction, checked on the grid ✅; late with a big lead the pay goes quiet (decided games) |
+| Pay pathologies (ledger) | a frag or damage dealt of the wrong sign: impossible by construction, checked on the grid ✅; late with a big lead the pay goes quiet (decided games). **Found 2026-10-29 (an audit), left in this run (owner): a game pays the judge's chance on its last frame, not its result** (at 0 s the judge's spread is 0.14 frags and the stacks still count): on this run's 250 self-play games 4.8% were off by more than 0.1, 0.14 of pay a game on average against 3.19 for a whole game, the worst 6.2 (a won game paid as a loss); it pulls a little toward stacking in a game's last seconds. Fixed for v0.6.2 (`WIN_END`) |
 | Test on last night's 60 games | the judge (two parts) 0.4361 held-out log loss, one part 0.4365, B2 0.4360, the free network 0.4394, A 0.4796; axioms hold; the decaying part priced low (a mega at 100+50 +2.3 points at 5:00 level against a red armor's +8.9; wide intervals on 60 games) ✅ |
 
 ## Start (after v0.6.0 ends, on the owner's go)
