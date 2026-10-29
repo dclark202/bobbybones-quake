@@ -18,7 +18,8 @@ way for 6 hours (owner: "restart the v0.6.0 training exactly as it was last nigh
 | Mix | 65% whole games / 35% the pros' mid-game starts; no movement practice ✅ |
 | The brain's people lesson | **changed for the retrain**: from the pro demos only (the same 115 demos as before; the people's sessions pack is gone; owner: "Build on the pros") ✅ |
 | Maps | the game's own geometry; nav and cell tables from the public server (87-99% identical to training's lost copy, mean way difference ≤ 0.08 s) ✅ |
-| Length | started 2026-10-28 12:00, to ~21:00 (`--minutes 535`; owner: "running until 9pm") |
+| Length | started 2026-10-28 12:58 (after two crashes: the corrupt league), **ended at update 80** at 18:09 (owner: "end at update 80"); its end `keep/policy_end_v060.pt` + `opt_end_v060.pt` |
+| Result | against v0.4.2b's end: 52.5 / 59.4 / 55.0 / 56.2% at updates 20 / 40 / 60 / 80; the owner's play test: "a good bot ... the aim is much more enjoyable". On both public servers from 2026-10-28 ~20:05 with the four `!aim` files (`*_v042b.npz` kept beside them); open-weights release [v0.6.0](https://github.com/dclark202/bobbybones-quake/releases/tag/v0.6.0) |
 | Checks | every 20 updates, 160 games against v0.4.2b's end (both at the new default); the behaviour panel. No guard: never stopped automatically; under 30% posted to the owner |
 | Logged for v0.6.1 | self-play games of saves 40 to 120, every 20th, 6 games a map (300 games; fitted after the run), once a second (score, stacks, weapons owned, deaths, his win value): the data for fitting his chance of winning on game results ("B") |
 

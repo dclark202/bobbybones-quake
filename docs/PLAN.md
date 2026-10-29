@@ -27,8 +27,8 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 |---|---|
 | Best network | v0.4.2b's end (`data/sim_runs/duel_gru_v0_4_2/keep/policy_end_v042.pt`; backup `T:\BobbyBones_backup`) |
 | Public servers | v0.4.2b's end with `!aim` worse / default / better / max (aim2, measured on the pros), branch `pub-aim2` = `main`'s server code |
-| Now | v0.6.0 retrained from v0.4.2b's end after the data loss of 2026-10-28 ([runs/v0.6.0/CARD.md](runs/v0.6.0/CARD.md)), with the self-play logging for B |
-| Next | B: his chance of winning fitted on game results ([runs/v0.6.1/CARD.md](runs/v0.6.1/CARD.md) to be revised); v0.6.1 = pay by win chance only on B; v0.6.2 = the strategy head ([runs/v0.6.2/CARD.md](runs/v0.6.2/CARD.md)) |
+| Now | v0.6.0 (update 80) on both public servers and released as open weights; v0.6.1 ready to start: pay by win chance from the frozen judge, 24 h ([runs/v0.6.1/CARD.md](runs/v0.6.1/CARD.md)) |
+| Next | v0.6.1's run; v0.6.2 = the judge learning on his new games (more inputs; the weapons' hand-set worth removed at its refit) and the strategy head ([runs/v0.6.2/CARD.md](runs/v0.6.2/CARD.md)) |
 
 What has been tried and what it taught: [HISTORY.md](HISTORY.md). Open work: [BACKLOG.md](BACKLOG.md).
 
