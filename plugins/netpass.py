@@ -317,7 +317,10 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
     mean = P["obs_mean"]
     if obs.shape[1] > len(mean):                             # an older network in a simulator with more inputs: they are appended at the end
         obs = obs[:, :len(mean)]
-    x = np.clip((obs - mean) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
+    sd_ = P.get("_sd")                                       # (the frame budget, 2026-10-29: the scale made once per network)
+    if sd_ is None or sd_[0] is not P["obs_var"]:
+        sd_ = P["_sd"] = (P["obs_var"], np.sqrt(P["obs_var"] + 1e-8))
+    x = np.clip((obs - mean) / sd_[1], -10, 10).astype(np.float32)
     xa = x                                                   # (the brain reads these: unfaded)
     if needs_pose(P):                                        # (v0.4.1) the brain's last answer turned to his pose now (test_suite's token_pre)
         B_, bl_, bt_m, _, _ = P["_brain"]
@@ -411,8 +414,13 @@ def draw(P, logits, rng):
     """one sampled choice per output (one random number per player and output from rng, drawn in the outputs' order). (v0.4,
     --ordered-heads: "ordered" in the file) the ordered outputs are drawn after the one before them, its table's row of the
     choice drawn there added to their logits (order.t<output>)"""
-    dims = [int(d) for d in P["action_dims"]]
-    o = np.concatenate([[0], np.cumsum(dims)]).astype(int)
+    dr_ = P.get("_draw")                                     # (the frame budget, 2026-10-29: the tables made once per network)
+    if dr_ is None or dr_[0] is not P["action_dims"]:
+        dims_ = [int(d) for d in P["action_dims"]]
+        order_ = json.loads(str(P["ordered"])) if "ordered" in P else []
+        dr_ = P["_draw"] = (P["action_dims"], dims_, np.concatenate([[0], np.cumsum(dims_)]).astype(int), order_,
+                            {int(c_) for _, c_ in order_})
+    _, dims, o, order, later = dr_
     u = [rng.random((len(logits), 1)) for _ in dims]
     out = np.zeros((len(logits), len(dims)), np.int64)
 
@@ -421,8 +429,6 @@ def draw(P, logits, rng):
         p /= p.sum(1, keepdims=True)
         out[:, j] = (p.cumsum(1) > u[j]).argmax(1)
 
-    order = json.loads(str(P["ordered"])) if "ordered" in P else []
-    later = {int(c_) for _, c_ in order}
     for j in range(len(dims)):
         if j not in later:
             one(j, logits[:, o[j]:o[j + 1]])

@@ -211,9 +211,32 @@ def params_np(sd, prefix="attn."):
     return {k[len(prefix):]: (v.cpu().numpy() if hasattr(v, "cpu") else np.asarray(v)) for k, v in sd.items() if k.startswith(prefix)}
 
 
+def _mean_last(x):
+    """x.mean(-1, keepdims=True) for a float32 or float64 array, the way numpy's _methods._mean makes it (add.reduce, then
+    true_divide by the count as an intp, in place, unsafe casting): the same numbers without its Python layers (the frame
+    budget, 2026-10-29)"""
+    r = np.add.reduce(x, -1, None, None, True)
+    return np.true_divide(r, np.intp(x.shape[-1]), out=r, casting="unsafe", subok=False)
+
+
 def _norm(x):
-    m = x.mean(-1, keepdims=True)
-    return (x - m) / np.sqrt(((x - m) ** 2).mean(-1, keepdims=True) + 1e-5)
+    if type(x) is not np.ndarray or x.dtype.kind != "f" or x.dtype.itemsize < 4:
+        m = x.mean(-1, keepdims=True)
+        return (x - m) / np.sqrt(((x - m) ** 2).mean(-1, keepdims=True) + 1e-5)
+    m = _mean_last(x)
+    return (x - m) / np.sqrt(_mean_last((x - m) ** 2) + 1e-5)
+
+
+_TOK = {}                                                    # (the frame budget) per layout: each token kind's columns and weight name
+
+
+def _tok_cols(lay):
+    c_ = _TOK.get(id(lay))
+    if c_ is None or c_[0] is not lay:
+        c_ = (lay, [(np.asarray(k["idx"], np.int64) % (lay["obs_dim"] + 1), "emb.{}.weight".format(i))
+                    for i, k in enumerate(lay["kinds"])])
+        _TOK[id(lay)] = c_
+    return c_[1]
 
 
 def _block(P, b, xq, xall, heads, gate=None, qadd=None):
@@ -241,10 +264,7 @@ def forward_np(lay, P, x, hm=None, bt=None, bg=0.0):
     the frame before (a layout with "mem"; read at half precision as the torch side does)"""
     x = np.asarray(x, np.float32)
     xp = np.concatenate([x, np.zeros((len(x), 1), np.float32)], 1)
-    toks = []
-    for i, k in enumerate(lay["kinds"]):
-        idx = np.asarray(k["idx"], np.int64) % (lay["obs_dim"] + 1)
-        toks.append(xp[:, idx] @ P["emb.{}.weight".format(i)].T)
+    toks = [xp[:, idx] @ P[w_].T for idx, w_ in _tok_cols(lay)]
     t = np.concatenate(toks + [np.zeros((len(x), 1, lay["D"]), np.float32)], 1) + P["mark"]
     gate = np.asarray(P["gate"], np.float32) if lay.get("gated") else None
     if bt is not None and float(bg) > 0.0 and lay.get("btok") and "btok_emb.weight" in P:      # ("btok") the brain's token

@@ -37,8 +37,8 @@ rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + 
 rep("        return (np.arange(self.n) ^ 1)[:, None]", "        return self.others")
 rep("        return [i ^ 1]", "        return [int(x) for x in self.others[i]]")
 rep("        return j % 2", "        return j % self.G")
-rep("        return np.where(self.acquired, 1.0, 0.5 * np.clip(1.0 - self.seen_t / KNOW_FADE, 0.0, 1.0))",
-    "        return np.where(self.acq2, 1.0, 0.5 * np.clip(1.0 - self.seen2 / KNOW_FADE, 0.0, 1.0)).mean(1)")
+rep("        return np.where(self.acquired, 1.0, 0.5 * _clip(1.0 - self.seen_t / KNOW_FADE, 0.0, 1.0))",
+    "        return np.where(self.acq2, 1.0, 0.5 * _clip(1.0 - self.seen2 / KNOW_FADE, 0.0, 1.0)).mean(1)")
 
 # ---- constructor
 rep('''                 loadout="full", drill_weapons=(RL, RG, LG), teacher=None):''',
@@ -293,9 +293,9 @@ rep('''        ar = np.arange(n)
         t = np.repeat(self.round_t, self.G)
         best = self.frags_r[self.others].max(1)''')
 rep('''                          np.minimum(self.frags_r[opp] / 10.0, 2.0),
-                          np.clip((self.frags_r - self.frags_r[opp]) / 5.0, -2, 2)], 1)''',
+                          _clip((self.frags_r - self.frags_r[opp]) / 5.0, -2, 2)], 1)''',
     '''                          np.minimum(best / 10.0, 2.0),
-                          np.clip((self.frags_r - best) / 5.0, -2, 2)], 1)''')
+                          _clip((self.frags_r - best) / 5.0, -2, 2)], 1)''')
 rep('''                                np.minimum(self.dmg_life / 200.0, 2.0)[:, None]], 1)''',
     '''                                np.minimum((self.dmg_life if self.G == 2 else self.dmg_on[ar, self.slot[opp]])
                                            / 200.0, 2.0)[:, None]], 1)''')
@@ -484,7 +484,7 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
                 heard &= dist < self._lgd_hear_reach(ar, opp)
             self.vis2[:, k_] = vis
             if SURPRISE_MS > 0:                              # off the crosshair and unexpected: noticed later
-                ecc_ = np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0)))
+                ecc_ = np.degrees(np.arccos(_clip(cosang, -1.0, 1.0)))
                 self.acq_extra2[:, k_] = np.where(vis & (self.vis_run2[:, k_] == 0), surprise_frames(ecc_, self.seen2[:, k_]),
                                                   np.where(vis, self.acq_extra2[:, k_], 0))
             self.vis_run2[:, k_] = np.where(vis, self.vis_run2[:, k_] + 1, 0)
@@ -516,7 +516,7 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
         dist = np.linalg.norm(to, axis=1) + 1e-6
         vh = np.nonzero(vis & (self.script == 0))[0]        # aim quality while the enemy is in view
         if len(vh):
-            cosang = np.clip((to[vh] * fdir[vh]).sum(1) / dist[vh], -1, 1)
+            cosang = _clip((to[vh] * fdir[vh]).sum(1) / dist[vh], -1, 1)
             self.stats["aim_err"] += float(np.degrees(np.arccos(cosang)).sum())
             self.stats["aim_frames"] += len(vh)
             self.stats["on_target"] += int(self._seg_box(eye[vh], eye[vh] + fdir[vh].astype(np.float32) * 4000.0,
