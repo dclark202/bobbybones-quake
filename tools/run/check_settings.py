@@ -14,6 +14,9 @@ import re
 import sys
 
 
+ARG_ENV = {"NO_SWITCH": "--no-switch"}                     # (train_duel_rnn.py: --no-switch 1 -> env_vars NO_SWITCH=1 in every save)
+
+
 def norm(v):
     v = v.strip().strip('"')
     v = re.sub(r"(?i)^%ROOT%\\", "", v)
@@ -88,12 +91,16 @@ def main():
     if a.ck:
         import torch
         ck = torch.load(a.ck, map_location="cpu", weights_only=False)
+        cenv = dict(env)
+        for k, arg in ARG_ENV.items():                      # (settings the trainer writes into env_vars from its own argument)
+            if k not in cenv and arg in args:
+                cenv[k] = args[arg]
         for k, v in sorted((ck.get("env_vars") or {}).items()):
-            if k in env and same(env[k], str(v)):
+            if k in cenv and same(cenv[k], str(v)):
                 continue
             tag = "allowed" if k in allow else "DIFF"
             bad += tag == "DIFF"
-            print("{:7s} checkpoint {}: checkpoint {!r} | command {!r}".format(tag, k, str(v), env.get(k, "<unset>")))
+            print("{:7s} checkpoint {}: checkpoint {!r} | command {!r}".format(tag, k, str(v), cenv.get(k, "<unset>")))
         for k, arg in (("react_ms", "--react-ms"), ("acquire_ms", "--acquire-ms")):
             if ck.get(k) is not None and not same(str(ck[k]), args.get(arg, "nan")):
                 bad += 1
