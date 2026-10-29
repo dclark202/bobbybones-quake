@@ -47,7 +47,7 @@ with torch.no_grad():
     check("g 1: the other columns still count", not torch.equal(m1.enc(x), m1.enc(x3)))
 # the numpy brain (checks, servers): the same weights as the trainer's at g
 sdn = {k: v.numpy() for k, v in ck["model"].items() if k.startswith("belief.")}
-B0 = btoken_.numpy_brain(sdn, L, None, None)
+B0 = btoken_.numpy_brain(sdn, {k_: v_ for k_, v_ in L.items() if k_ != "fade"}, None, None)   # (a faded save: its entry left out)
 check("numpy brain, no entry: weights as saved", np.array_equal(B0["inp_w"], sdn["belief.inp.weight"]))
 B05 = btoken_.numpy_brain(sdn, dict(L, fade=belief_.fade_layout(cols, 0.5)), None, None)
 m1.fade_g = 0.5
