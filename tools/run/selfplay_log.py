@@ -44,7 +44,7 @@ def main():
     if a.opp == "self":
         a.opp = a.policy
     ps = live_ps(a.run) if a.ps is None else a.ps
-    sets = P.settings(ps)
+    sets = P.settings(ps, a.policy)
     out = os.path.join(SR, a.run, "selfplay", a.tag)
     os.makedirs(out, exist_ok=True)
     json.dump(dict(policy=a.policy, opp=a.opp, sets=sets, games=a.games, maps=a.maps, minutes=a.minutes, started=time.strftime("%Y-%m-%d %H:%M")),

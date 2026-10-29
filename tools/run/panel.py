@@ -46,12 +46,24 @@ def live_caps():
     return {k: str(d[k]) for k in ("PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG") if d.get(k)}
 
 
-def settings(ps):
+def save_level(pol):
+    """(B-275) the view's pull toward level a save was trained at (its env_vars' LEVEL_PULL; the trainer writes the live value in
+    force), or None for a save that does not carry it"""
+    import torch
+    ck = torch.load(pol, map_location="cpu", weights_only=False)
+    v = (ck.get("env_vars") or {}).get("LEVEL_PULL")
+    return str(v) if v not in (None, "") else None
+
+
+def settings(ps, pol=None):
     S_ = json.load(open(os.path.join(HERE, "check_sets.json")))   # (the checks' play switches; from the scratchpad's v044w/, 2026-10-28)
     S_["LEGS_NET"] = os.path.join(ROOT_, "data", "sim_runs", "move_v17_look", "policy.npz")   # (the file carried the old checkout's path)
     S_.update(PLAY)
     S_["PERCEPT_SPEED"] = str(ps)
     S_.update(live_caps())                                   # (the cap by weapon, as the run has it now; both seats alike)
+    lv_ = save_level(pol) if pol else None                   # (v0.6.1's fade of the pull, 2026-10-29: the save's own; both seats alike)
+    if lv_ is not None:
+        S_["LEVEL_PULL"] = lv_
     return ["{}={}".format(k, v) for k, v in S_.items() if k != "OVERTIME"] + ["OVERTIME=1"]
 
 
@@ -70,7 +82,7 @@ def jobs(pol, out, ps):
                    "--react-ms", "125", "--acquire-ms", "225"]
             cmd += (["--opp", "policy:" + pol, "--opp-inputs", os.path.join(CODE, "docs", "INPUTS.csv"), "--opp-round", "600",
                      "--opp-react-ms", "125", "--opp-acquire-ms", "225"] if opp is None else ["--opp", opp])
-            cmd += [x for s_ in settings(ps) for x in ("--set", s_)]
+            cmd += [x for s_ in settings(ps, pol) for x in ("--set", s_)]
             J.append((cmd, env, js))
     return J
 

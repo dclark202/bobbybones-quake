@@ -54,7 +54,7 @@ def live_ps():
 
 
 def games(pol, upd, ctrl, label, ps):
-    sets = P.settings(ps)
+    sets = P.settings(ps, pol)
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1", CUDA_VISIBLE_DEVICES="-1")
     res = {}
     tag = "prev" if ctrl == CTRL_PREV else "ref"

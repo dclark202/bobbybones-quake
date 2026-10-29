@@ -248,7 +248,58 @@ def item_at(t, downs, unknown, tu, td, R_):
     return 0.0, -1, False
 
 
-def one_demo(MI, demo, tmp, every, life_s, rng, counts):
+def judge_rows(judge, E, rec, clock, cn, other, clients, dth, eh, ea, ehas, T, own_pw, en, counts, t_game0):
+    """(the judge's pro rows, tools/run/pro_judge_rows.py) one row a second of the game's clock, the two players as two fixed
+    seats (seat 0 = the lower client number, whoever the demo follows), as tools/run/fit_b.py reads them: the score, health,
+    armor, dead, the big weapons owned (the followed player's exact, the other's worked out as above); kept only if the demo
+    holds the game to its end (the clock at 599 s or more) with no powerup, no level end counted as anything but a draw. Sets
+    judge["rows"], judge["final"] (seat 0, seat 1), judge["sig"] (the frag times: two recordings of one game share it)"""
+    ok = np.isfinite(clock)
+    if not ok.any() or float(np.nanmax(clock)) < 599.0:
+        counts["judge: the game not held to its end"] += 1
+        return
+    if own_pw[ok].any() or (en["pw"][ok] != 0).any():
+        counts["judge: a powerup"] += 1
+        return
+    c0, c1 = clients
+    alive_rec = (np.asarray(rec["alive"], bool)) & (np.asarray(rec["health"]) > 0)
+    rows, last_s = [], -1
+    for f in np.nonzero(ok & (clock <= 600.5))[0]:
+        s_ = int(np.floor(clock[f]))
+        if s_ <= last_s or s_ >= 600:                       # (0..599 s: tools/run/fit_b.py reads frame 24,000 as overtime)
+            continue
+        last_s = s_
+        me, op = int(cn[f]), int(other[f])
+        sc = {me: int(rec["score"][f]), op: int(rec["enemy_score"][f])}
+        dead = {}
+        for cl in clients:
+            ds_ = np.array(dth[cl])
+            j_ = np.searchsorted(ds_, T[f], side="right") - 1
+            dead[cl] = bool(j_ >= 0 and T[f] - ds_[j_] < 2.0)          # (from his death to his respawn, about 2 s)
+        dead[me] = dead[me] or not bool(alive_rec[f])
+        hp = {me: float(rec["health"][f]), op: float(eh[f])}
+        ar = {me: float(rec["armor"][f]), op: float(ea[f])}
+        hs = {me: rec["owned"][f].astype(bool), op: ehas[f]}
+        r_ = [0, 0, s_ / 0.025]
+        r_ += [sc[c0], sc[c1], hp[c0], ar[c0], hp[c1], ar[c1], float(dead[c0]), float(dead[c1])]
+        r_ += [float(hs[c0][E.RL]), float(hs[c0][E.LG]), float(hs[c0][E.RG]), float(hs[c1][E.RL]), float(hs[c1][E.LG]), float(hs[c1][E.RG])]
+        r_ += [0.0, float(sc[c0] - sc[c1])]
+        rows.append(r_)
+    if len(rows) < 500:
+        counts["judge: under 500 seconds of rows"] += 1
+        return
+    fe_ = int(np.nonzero(ok & (clock <= 600.5))[0][-1])     # (the result: the score at the game's last frame)
+    me_, op_ = int(cn[fe_]), int(other[fe_])
+    sc_ = {me_: int(rec["score"][fe_]), op_: int(rec["enemy_score"][fe_])}
+    rows[-1][3], rows[-1][4], rows[-1][18] = sc_[c0], sc_[c1], float(sc_[c0] - sc_[c1])   # (fit_b reads the result from the last row:
+    judge["rows"] = rows                                  #  a frag in the game's last second moves there, under a second early)
+    judge["final"] = (sc_[c0], sc_[c1])
+    fr = sorted(round(float(t_) - t_game0, 0) for cl in clients for t_ in dth[cl])   # (the deaths on the game's clock)
+    judge["sig"] = (int(sc_[c0] + sc_[c1]), tuple(fr[:12]))
+    counts["judge: games"] += 1
+
+
+def one_demo(MI, demo, tmp, every, life_s, rng, counts, judge=None):
     E = MI.E
     out = parse(demo, tmp)
     if out is None:
@@ -496,6 +547,9 @@ def one_demo(MI, demo, tmp, every, life_s, rng, counts):
         F[op] = [H, A, has, am]
         eh[f], ea[f] = H, A
         ehas[f], eammo[f] = has, am.copy()
+    if judge is not None:                                    # (tools/run/pro_judge_rows.py) the judge's rows instead of moments
+        judge_rows(judge, E, rec, clock, cn, other, clients, dth, eh, ea, ehas, T, own_pw, en, counts, t_game0)
+        return []
     # ---- the moments
     out = []
 
