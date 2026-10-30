@@ -63,7 +63,7 @@ def when(t):
 
 
 def num(n):
-    return "{:,}".format(int(n))
+    return "{:,}".format(int(round(n)))
 
 
 def signed(n):
@@ -145,8 +145,8 @@ def history_pages(rows, have):
         pg.append("</div>")
         body.append("".join(pg) + "</section>")
         body.append('<div class="notes"><p>Times are shown in your own time zone (UTC without scripts). The rating is the '
-                    "leaderboard&rsquo;s (Glicko-1, one update per frag), after the game, with its change over the game&rsquo;s "
-                    "frags. A quit is a game the player left or stopped before its end.</p>"
+                    "leaderboard&rsquo;s (Glicko-1, one update per game), after the game, with its change. A quit is a game the player left "
+                    "or stopped before its end: a loss if they were behind after more than 5 minutes, otherwise it does not count.</p>"
                     "<p>Players are named as on the leaderboard. Type <b>!anonymous</b> in the game to show as Anonymous here "
                     "(past games too; <b>!anonymous off</b> to undo it). Games appear here 10 to 15 minutes after they end.</p></div>")
         out[name(i)] = page("BobbyBones Game History" + ("" if i == 1 else " ({})".format(i)), "\n".join(body), "../", ("site.js",),
@@ -475,8 +475,9 @@ def player_page(name, rating, rd, rank, frags, servers, rows, lights, heats, map
             best = max(best, streak)
         elif o != "q":
             streak = 0
-    facts = ["Rating {} ±{:.0f}".format(num(rating), 2 * rd)]
-    if rows:
+    rated_rows = [r for r in rows if outcome(r) != "q"]
+    facts = ["Rating {} ±{:.0f}".format(num(rating), 2 * rd) if rated_rows else "No rating yet"]
+    if rated_rows:
         facts.append("Peak {}".format(num(max(r["r"][0] for r in rows))))
     facts.append(servers or "–")
     if rows:
@@ -498,8 +499,8 @@ def player_page(name, rating, rd, rank, frags, servers, rows, lights, heats, map
     b.append('<section class="pstats"><div class="stats pl-tiles">{}</div></section>'.format(
         "".join('<div class="stat"><b>{}</b><span>{}</span></div>'.format(a, d) for a, d in tiles)))
     if not rows:
-        b.append('<section><h2>No full games yet</h2><p class="note">Frags against BobbyBones count from the first one; the rest of this page '
-                 "fills in from the first full ten-minute duel.</p></section>")
+        b.append('<section><h2>No full games yet</h2><p class="note">The rating and the rest of this page start from the first full ten-minute duel '
+                 "against BobbyBones.</p></section>")
     if len(rows) >= 2:
         b.append('<section><h2>Rating over time</h2><p class="sub">After each game. The dashed lines mark a new version of BobbyBones.</p>{}</section>'.format(rating_chart(old)))
     if rows:
@@ -563,7 +564,7 @@ def player_page(name, rating, rd, rank, frags, servers, rows, lights, heats, map
             b.append('<details class="allg"><summary>All {} games</summary>{}</details>'.format(len(rows), games_table(rows[6:])))
         b.append("</section>")
     b.append('<div class="notes"><p>Rating, rank and frags are the leaderboard&rsquo;s. Won&ndash;lost counts full ten-minute duels; a quit is a game the player left or '
-             "stopped before its end (a quit while well behind counts as a loss). Games and their details go back 180 days.</p>"
+             "stopped before its end (a loss if they were behind after more than 5 minutes; otherwise it does not count). Games and their details go back 180 days.</p>"
              "<p>Type <b>!anonymous</b> in the game to take this page down and show as Anonymous everywhere (<b>!anonymous off</b> to undo it).</p></div>")
     return page("{} – BobbyBones Player".format(name), "\n".join(b), "../", ("site.js",), "{} against BobbyBones on its Quake Live duel servers".format(name))
 
@@ -738,7 +739,7 @@ def bobby_page(board, rows, lights, pages, rank, now_ver):
     duels = board.get("duels") or {}
     rec = lambda v: "{}–{}".format(*(list(v or [0, 0, 0]) + [0, 0])[:2])
     versions = {R.version_of(k[len(R.BOT):]): p for k, p in board["players"].items() if k.startswith(R.BOT)}
-    best = max(versions.items(), key=lambda kv: kv[1]["r"]) if versions else (now_ver, bp)
+    best = max(((v, p) for v, p in versions.items() if p.get("games")), key=lambda kv: kv[1]["r"], default=(now_ver, bp))
     out = [nav("board", "../"), '<header class="pl-head"><div class="eyebrow">The bot · {}</div><h1 class="pname bo">BobbyBones {}</h1><div class="facts"><span>Rating {} ±{:.0f}</span>'
            "<span>Best version {} at {}</span><span>US + EU servers</span></div></header>".format(e(rank), e(now_ver), num(bp["r"]), 2 * bp["rd"], e(best[0]), num(best[1]["r"]))]
     cf, ca = sum(r["score"][1] for r in cur), sum(r["score"][0] for r in cur)
@@ -843,7 +844,7 @@ def bobby_page(board, rows, lights, pages, rank, now_ver):
         for v, rs in vs:
             t = tally(rs)
             b.append('<tr><td class="b">{}{}</td><td class="n">{}</td><td class="n">{}</td><td class="n">{}–{}</td><td class="n">{}</td><td class="n">{}–{}</td><td class="n">{:.0%}</td></tr>'.format(
-                e(v), " <small>now</small>" if v == now_ver else "", num(versions[v]["r"]) if v in versions else "–", t["g"], t["l"], t["w"], t["q"], num(t["a"]), num(t["f"]), max(0, t["a"]) / max(1, max(0, t["a"]) + max(0, t["f"]))))
+                e(v), " <small>now</small>" if v == now_ver else "", num(versions[v]["r"]) if versions.get(v, {}).get("games") else "–", t["g"], t["l"], t["w"], t["q"], num(t["a"]), num(t["f"]), max(0, t["a"]) / max(1, max(0, t["a"]) + max(0, t["f"]))))
         b.append("</tbody></table></div></section>")
         out.append("".join(b))
     out.append('<div class="notes"><p>Won&ndash;lost counts full ten-minute duels from Bobby&rsquo;s side. Numbers in brackets are the people he played, in the same games. Strengths and weaknesses are worked out afresh from the games of the version playing now, over all aim levels. Games go back 180 days.</p></div>')

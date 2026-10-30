@@ -7,7 +7,7 @@
         the last line
 
 board.json is tools/board_merge.py's. The page shows what the servers' !top shows, for everyone: the in-game name a
-person was last seen with, the rating (Glicko-1 per frag, plugins/ratings.py), the frags with BobbyBones, the full duel
+person was last seen with, the rating (Glicko-1 per counted game, plugins/ratings.py), the frags with BobbyBones, the full duel
 games against him (won-lost, and on which server), and BobbyBones' own line. Nothing else leaves: no Steam id, no
 anonymous key, no QLStats number. A person who said !anonymous (board.json "private") is "Anonymous" here too: his rating
 after his last game is on the game history, so a name beside it on the board would give him away. The site is published
@@ -80,10 +80,10 @@ def render(b, stamp, linked=False):
     out.append('<div class="tbl"><table id="board"><thead><tr><th class="n">#</th><th>Player</th><th class="n">Rating</th>'
                '<th class="n">Games</th><th class="n">W&ndash;L vs Bobby</th><th class="n">Frags vs Bobby</th><th>Played on</th></tr></thead><tbody>')
     ranked = [(n, k, p) for n, (k, p) in enumerate(board, 1)]
-    unranked = sorted(((None, k, p) for k, p in players.items() if not k.startswith(R.BOT) and p["won"] + p["lost"] < R.MIN_FRAGS),
-                      key=lambda x: -x[2]["r"])
+    unranked = sorted(((None, k, p) for k, p in players.items() if not k.startswith(R.BOT) and p.get("games", 0) < R.MIN_GAMES),
+                      key=lambda x: -(x[2]["won"] + x[2]["lost"]))
     for n, k, p in ranked + unranked:
-        num = n if n else '<small title="ranked from {} frags with BobbyBones">&ndash;</small>'.format(R.MIN_FRAGS)
+        num = n if n else '<small title="ranked from the first full game">&ndash;</small>'
         if k == bobby:
             rec = (b.get("duels") or {}).get("all") or [0, 0, 0]
             out.append('<tr class="me" data-name="bobbybones"><td class="n">{}</td><td class="nm">{} <small>{}</small></td>'
@@ -98,26 +98,27 @@ def render(b, stamp, linked=False):
         by = " &middot; ".join("{} {}".format(s.upper(), wld(v)) for s, v in sorted(du.items()) if sum(v))
         on = " + ".join(s.upper() for s in sorted(fr) if sum(fr[s])) or "-"
         cell = '<a class="plink" href="players/{}.html">{}</a>'.format(R.page_id(k), e(nm)) if linked and nm != "Anonymous" else e(nm)
-        out.append('<tr data-name="{}"><td class="n">{}</td><td class="nm">{}</td><td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td>'
+        out.append('<tr data-name="{}"><td class="n">{}</td><td class="nm">{}</td><td class="n">{}</td><td class="n">{}</td>'
                    '<td class="n">{}{}</td><td class="n">{}&ndash;{}</td><td>{}</td></tr>'.format(
-                       e(nm.lower(), quote=True), num, cell, p["r"], 2 * p["rd"], sum(tot_d) or "-",
+                       e(nm.lower(), quote=True), num, cell,
+                       "{:.0f} <small>&plusmn;{:.0f}</small>".format(p["r"], 2 * p["rd"]) if p.get("games", 0) >= R.MIN_GAMES else "-", sum(tot_d) or "-",
                        wld(tot_d) if sum(tot_d) else "-", " <small>({})</small>".format(by) if len(du) > 1 and by else "",
                        p["won"], p["lost"], on))
     out.append('</tbody></table></div>')
     out.append('<div class="pager"><button id="prev" type="button">&larr; Prev</button><span id="pn"></span>'
                '<button id="next" type="button">Next &rarr;</button></div></section>')
-    trend = sorted(((k, p) for k, p in players.items() if k.startswith(R.BOT)), key=lambda kp: float(kp[1].get("since") or 0))
+    trend = sorted(((k, p) for k, p in players.items() if k.startswith(R.BOT) and p.get("games")), key=lambda kp: float(kp[1].get("since") or 0))
     if len(trend) > 1:
         out.append('<section><h2>BobbyBones by version</h2>' + trend_svg(trend, bobby)
                    + '<p class="note">Each version&rsquo;s rating against people, oldest to newest; the filled point is the version playing now.</p></section>')
     out.append('<div class="notes">')
     if unranked:
-        out.append("<p>A player is ranked from {} frags with BobbyBones; {} {} not ranked yet (# &ndash;).</p>".format(
-            R.MIN_FRAGS, len(unranked), "is" if len(unranked) == 1 else "are"))
-    out.append("<p>Every frag between a person and BobbyBones in a live game counts, on either server (warmup frags do not count). The rating is "
-               "Glicko-1, one update per frag (a frag counts as a quarter of a game); everyone starts at 1500. A difference of "
-               "100 points means the higher one makes about 64% of the frags between the two. &plusmn; is twice the rating's "
-               "uncertainty. Games are full ten-minute duels against BobbyBones, won&ndash;lost from the player's side.</p>")
+        out.append("<p>A player is ranked from their first full game; {} {} not ranked yet (# &ndash;).</p>".format(
+            len(unranked), "is" if len(unranked) == 1 else "are"))
+    out.append("<p>The rating counts games won and lost against BobbyBones, on either server: Glicko-1, one update per game; everyone starts "
+               "at 1500. A quit counts as a loss if the player quitting is behind after more than 5 minutes; any other quit does not count. "
+               "A difference of 100 points means the higher one wins about 64% of the games between the two. &plusmn; is twice the "
+               "rating's uncertainty, which is large after only a few games. Frags are shown beside the rating and do not move it.</p>")
     out.append("<p>Names are the in-game name a player was last seen with; <b>!anonymous</b> in the game shows a player as "
                "Anonymous here and in the game history. Updated a few minutes after a game. {}</p>".format(e(stamp)))
     out.append('<p>About the bot: <a href="{0}">{0}</a></p></div>'.format(REPO))
@@ -133,9 +134,6 @@ def trend_svg(trend, bobby):
     """Bobby's rating by version, oldest to newest (inline SVG, no library); the version playing now is the last point"""
     e = html.escape
     W, H, L, Rt, T, Bt = 960, 260, 56, 10, 24, 34
-    names = [vname(k[len(R.BOT):]) for k, _ in trend]
-    if "v0.1" in names:                                      # (owner, 2026-10-30: the chart starts at v0.1)
-        trend = trend[names.index("v0.1"):]
     vals = [p["r"] for _, p in trend]
     lo, hi = min(vals) - 15, max(vals)
     step = 50 if hi - lo > 150 else 25

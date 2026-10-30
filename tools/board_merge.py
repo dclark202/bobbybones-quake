@@ -90,7 +90,7 @@ def merge(servers, history, prev=None):
             if isinstance(p, dict) and p.get("name") and (k not in best or float(p.get("t") or 0) >= best[k][0]):
                 best[k] = (float(p.get("t") or 0), p["name"])
     names = {k: v[1] for k, v in best.items()}
-    table = R.replay(R.Table(), [f for f in frags if rated(f)], names)
+    table = R.replay_all(R.Table(), [f for f in frags if rated(f)], duels, names)
     rec = {"all": [0, 0, 0]}
     people = collections.defaultdict(lambda: dict(frags={}, duels={}))
     for f in frags:
@@ -135,22 +135,14 @@ HISTORY_DAYS = 180                                           # (owner, 2026-10-2
 
 def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
     """the game history: every real game (kind "game") of the last `days` days, newest first, with both ratings after it
-    and their change over the game (the game's own frags only; the ratings worked out in time order from the frags of live
-    games on both servers, as the board is).
+    and their change over the game (a game that does not count, ratings.duel_result, changes nothing).
     A row: id (ratings.game_id), srv, t0, len (seconds), map, score [person, Bobby], forfeit, ot, aim, ver, name (the
     person's name on the board; None for a person who said !anonymous, or with no name known), who (the person's page,
     ratings.page_id; None with no name), r [person, Bobby] after, dr [person, Bobby] change. No key leaves: the page needs none."""
     now = time.time() if now is None else now
     games = [d for d in duels if d.get("kind") == "game" and now - float(d.get("t") or 0) < days * 86400.0]
-    marks = []
-    for i, d in enumerate(games):
-        marks.append((R.game_t0(d) - 0.01, 0, i))
-        marks.append((float(d["t"]) + 1.0, 1, i))           # (a frag in the game's last frame is written just after it)
-    marks.sort()
-    table, fi, snap = R.Table(), 0, {}
-    live, own = set(), {i: [0.0, 0.0] for i in range(len(games))}   # (a game's change: its own frags only, not the other server's)
-    gk = [(d.get("srv"), d.get("key"), R.BOT + str(d.get("net") or "")) for d in games]
-    ft = [float(f.get("t") or 0) for f in frags]
+    index = {id(d): i for i, d in enumerate(games)}
+    table, snap = R.Table(), {}
 
     def r_of(key):
         p = table.players.get(key)
@@ -161,25 +153,15 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
             return last["r"] if last is not None else R.R0
         return R.R0
 
-    for t, kind, i in marks:
-        while fi < len(frags) and ft[fi] <= t:
-            f = frags[fi]
-            fi += 1
-            if not rated(f):
-                continue
-            mine = [j for j in live if gk[j][0] == f.get("srv") and gk[j][1] in (f.get("killer"), f.get("victim"))]
-            before = [(r_of(gk[j][1]), r_of(gk[j][2])) for j in mine]
-            R.replay(table, [f], names)
-            for j, (pa, pb) in zip(mine, before):
-                own[j][0] += r_of(gk[j][1]) - pa
-                own[j][1] += r_of(gk[j][2]) - pb
-        if kind == 0:
-            live.add(i)
-        else:
-            live.discard(i)
-        d = games[i]
-        keys = (d.get("key"), R.BOT + str(d.get("net") or ""))
-        snap.setdefault(i, [None, None])[kind] = [r_of(keys[0]), r_of(keys[1])]
+    for kind, line in R.events([f for f in frags if rated(f)], duels):
+        if kind == "f":
+            R.replay(table, [line], names)
+            continue
+        keys = (line.get("key"), R.BOT + str(line.get("net") or ""))
+        before = [r_of(keys[0]), r_of(keys[1])]
+        R.apply_game(table, line, names)
+        if id(line) in index:
+            snap[index[id(line)]] = (before, [r_of(keys[0]), r_of(keys[1])])
     rows = []
     for i, d in enumerate(games):
         a, b = snap[i]
@@ -192,7 +174,7 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
                          map=d.get("map"), score=[int(x) for x in d.get("score", [0, 0])], forfeit=int(bool(d.get("forfeit"))),
                          ot=int(mins > 10.03), aim=str(d.get("aim") or ""), ver=R.version_of(d.get("net", "")),
                          name=nm, who=R.page_id(d.get("key")) if nm else None,
-                         r=[int(round(b[0])), int(round(b[1]))], dr=[int(round(own[i][0])), int(round(own[i][1]))]))
+                         r=[int(round(b[0])), int(round(b[1]))], dr=[int(round(b[0] - a[0])), int(round(b[1] - a[1]))]))
     rows.sort(key=lambda x: -x["t0"])
     return rows
 

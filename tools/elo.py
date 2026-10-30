@@ -7,8 +7,7 @@ server's data folder; tools/pull_sessions.sh copies both to the session archive 
 
 Prints the board as the server has it, and from the frag log, per network of Bobby and per person: the frags made and
 taken against him, the person's share with its 95% range, and what the share is in rating points (the person's edge
-over Bobby: 400 * log10(share / (1 - share))). Then Bobby's share by map and by warmup or game, and the table worked
-out again from the frag log, to set beside the file (they must agree).
+over Bobby: 400 * log10(share / (1 - share))). Then Bobby's share by map and by warmup or game.
 
 Names are in ratings.json only (the last name a player was seen with); the frag log has anonymous keys. Neither file
 belongs in the repo.
@@ -55,9 +54,9 @@ bobby = R.BOT + nets[-1] if nets else None
 print("\nThe board (Bobby's current network: {}):".format(R.label(nets[-1]) if nets else "-"))
 for n, (k, p) in enumerate(table.board(bobby), 1):
     print("  {:2d}. {:24s} {:5.0f} (+-{:3.0f})  frags made {:4d}, taken {:4d}".format(n, p["name"], p["r"], 2 * p["rd"], p["won"], p["lost"]))
-low = [(k, p) for k, p in table.players.items() if not k.startswith(R.BOT) and p["won"] + p["lost"] < R.MIN_FRAGS]
+low = [(k, p) for k, p in table.players.items() if not k.startswith(R.BOT) and p.get("games", 0) < R.MIN_GAMES]
 if low:
-    print("  not ranked yet (under {} frags): {}".format(R.MIN_FRAGS, ", ".join("{} ({})".format(p["name"], p["won"] + p["lost"]) for k, p in low)))
+    print("  not ranked yet (no full game): {}".format(", ".join("{} ({})".format(p["name"], p["won"] + p["lost"]) for k, p in low)))
 
 for net in nets:
     if only and net != only:
@@ -86,10 +85,3 @@ for net in nets:
             c[f.get(key)][0 if f["killer"] == B else 1] += 1
         print("  his share {}: {}".format(title, ", ".join("{} {:.0%} of {}".format(k, v[0] / (v[0] + v[1]), v[0] + v[1]) for k, v in sorted(c.items(), key=lambda q: -sum(q[1])))))
 
-again = R.Table()
-for f in frags:
-    again.frag(f["killer"], name(f["killer"]), f["victim"], name(f["victim"]), f["t"])
-worst = max((abs(again.players[k]["r"] - p["r"]) for k, p in table.players.items() if k in again.players), default=0.0)
-missing = [k for k in table.players if k not in again.players] + [k for k in again.players if k not in table.players]
-print("\nworked out again from the frag log: largest difference to the file {:.1f} points{}".format(
-    worst, "; rows only on one side: {}".format(len(missing)) if missing else ""))

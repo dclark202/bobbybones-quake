@@ -1,17 +1,14 @@
 """The leaderboard's arithmetic and its file. Not a plugin: plugins/ladder.py keeps it on a server, tools/elo.py reads it
 on the PC.
 
-What counts: every frag between a person and BobbyBones, either way, in a live game (owner, 2026-10-26: "ladder should be
-actual games only"; until then warmup frags counted too: rated() below; the frag lines still record warmup frags). Frags
-between two people, between two Bobbys, by the game's own bots, and deaths by one's own hand or the map are not counted.
+What counts (owner, 2026-10-30: "it should just be win loss"): a full game between a person and BobbyBones, and a quit by
+a person who is behind after more than FORFEIT_WIN_MIN minutes, which is that person's loss (duel_result). Any other quit
+does not count, and frags do not move a rating: they are kept beside it (won, lost: frags made and taken in live games).
 
-Each counted frag is a game won by the one who made it. Ratings are Glicko-1 (Glickman 1999), updated at every frag: a
-number, and how unsure it is (RD). A difference of d points means the higher one makes 1 / (1 + 10^(-d/400)) of the
-frags between the two: 100 points is 64%, 200 is 76%, 400 is 91%. Frags come in streaks (a stack, a spawn, a held
-position), so one frag counts as a quarter of a game (W): a new player's first frag moves him about 70 points, not 175,
-and it takes about 200 frags, not 50, until the table is as sure of him as it gets. The unsure one moves more: a new
-network of Bobby starts at the last one's number with RD 150, so that it is Bobby's number that moves when he has got
-better or worse, not the people's.
+Ratings are Glicko-1 (Glickman 1999), updated at every counted game: a number, and how unsure it is (RD). A difference of
+d points means the higher one wins 1 / (1 + 10^(-d/400)) of the games between the two: 100 points is 64%, 200 is 76%, 400
+is 91%. A person is ranked from the first counted game. The unsure one moves more: a new network of Bobby starts at the
+last one's number with RD 150, so that it is Bobby's number that moves when he has got better or worse, not the people's.
 
 Every person meets only Bobby here, so a person's number says how he does against Bobby, and Bobby's says how he does
 against the people who come.
@@ -33,10 +30,9 @@ import time
 Q = math.log(10.0) / 400.0
 R0, RD0 = 1500.0, 350.0          # where everybody starts, and how unsure
 RD_MIN = 50.0                    # never surer than this (people get better, and so does he)
-W = 0.25                         # a frag is this much of a game: frags come in streaks
 RD_NEW_NET = 150.0               # a new network of Bobby: the last one's number, this unsure
 C_DAY = 35.0                     # away for a while: RD grows to sqrt(RD^2 + C_DAY^2 * days)
-MIN_FRAGS = 20                   # frags with Bobby (made and taken) before a person has a rank
+MIN_GAMES = 1                    # counted games with Bobby before a person has a rank
 BOT = "bobby:"                   # Bobby's keys: bobby:<the network's run>
 
 
@@ -45,15 +41,15 @@ def g(rd):
 
 
 def expect(r, r_j, rd_j):
-    """the share of the frags the one rated r is expected to make against the one rated r_j"""
+    """the share of the games the one rated r is expected to win against the one rated r_j"""
     return 1.0 / (1.0 + 10.0 ** (-g(rd_j) * (r - r_j) / 400.0))
 
 
 def update(r, rd, r_j, rd_j, s):
-    """one game against (r_j, rd_j) with result s (1 won, 0 lost): the new number and RD"""
+    """one game against (r_j, rd_j) with result s (1 won, 0.5 drawn, 0 lost): the new number and RD"""
     e, gj = expect(r, r_j, rd_j), g(rd_j)
-    v = 1.0 / (1.0 / (rd * rd) + W * Q * Q * gj * gj * e * (1.0 - e))
-    return r + W * Q * v * gj * (s - e), max(RD_MIN, math.sqrt(v))
+    v = 1.0 / (1.0 / (rd * rd) + Q * Q * gj * gj * e * (1.0 - e))
+    return r + Q * v * gj * (s - e), max(RD_MIN, math.sqrt(v))
 
 
 def label(run):
@@ -64,7 +60,7 @@ def label(run):
 class Table:
     def __init__(self, path=None):
         self.path = path
-        self.players = {}        # key -> dict(name, r, rd, won, lost, t, since, bot)
+        self.players = {}        # key -> dict(name, r, rd, won, lost (frags), games, gw, gl, gd, t, since, bot)
         self.dirty = False
         if path and os.path.exists(path):
             try:
@@ -82,7 +78,7 @@ class Table:
         self.dirty = False
 
     def entry(self, key, name, now=None):
-        """a player's row, made at his first frag; a new network of Bobby takes over the last one's number"""
+        """a player's row, made at the first frag or game; a new network of Bobby takes over the last one's number"""
         now = time.time() if now is None else now
         e = self.players.get(key)
         if e is None:
@@ -91,7 +87,7 @@ class Table:
                 last = max((p for k, p in self.players.items() if k.startswith(BOT)), key=lambda p: p["t"], default=None)
                 if last is not None:
                     r, rd = last["r"], max(last["rd"], RD_NEW_NET)
-            e = self.players[key] = dict(name=name, r=r, rd=rd, won=0, lost=0, t=now, since=now, bot=key.startswith(BOT))
+            e = self.players[key] = dict(name=name, r=r, rd=rd, won=0, lost=0, games=0, gw=0, gl=0, gd=0, t=now, since=now, bot=key.startswith(BOT))
         else:
             e["name"] = name
             days = max(0.0, (now - e["t"]) / 86400.0)
@@ -99,20 +95,31 @@ class Table:
         return e
 
     def frag(self, killer, killer_name, victim, victim_name, now=None):
-        """one counted frag; returns the two rows after it"""
+        """one frag in a live game: counted beside the rating, which it does not move; returns the two rows"""
         now = time.time() if now is None else now
         a, b = self.entry(killer, killer_name, now), self.entry(victim, victim_name, now)
-        (ra, rda), (rb, rdb) = update(a["r"], a["rd"], b["r"], b["rd"], 1.0), update(b["r"], b["rd"], a["r"], a["rd"], 0.0)
-        a.update(r=ra, rd=rda, won=a["won"] + 1, t=now)
-        b.update(r=rb, rd=rdb, lost=b["lost"] + 1, t=now)
+        a.update(won=a["won"] + 1, t=now)
+        b.update(lost=b["lost"] + 1, t=now)
+        self.dirty = True
+        return a, b
+
+    def game(self, person, person_name, bot, bot_name, s, now=None):
+        """one counted game; s: the person's result (1 won, 0.5 drawn, 0 lost); returns the two rows"""
+        now = time.time() if now is None else now
+        a, b = self.entry(person, person_name, now), self.entry(bot, bot_name, now)
+        (ra, rda), (rb, rdb) = update(a["r"], a["rd"], b["r"], b["rd"], s), update(b["r"], b["rd"], a["r"], a["rd"], 1.0 - s)
+        for e, r, rd, res in ((a, ra, rda, s), (b, rb, rdb, 1.0 - s)):
+            e.update(r=r, rd=rd, t=now, games=e.get("games", 0) + 1)
+            f = "gw" if res == 1.0 else "gl" if res == 0.0 else "gd"
+            e[f] = e.get(f, 0) + 1
         self.dirty = True
         return a, b
 
     def board(self, bobby=None):
-        """the ranked rows, best first: people with MIN_FRAGS frags or more, and Bobby's current network (key `bobby`;
+        """the ranked rows, best first: people with MIN_GAMES counted games or more, and Bobby's current network (key `bobby`;
         his earlier networks keep their rows in the file and are not ranked)"""
         rows = [(k, p) for k, p in self.players.items()
-                if (k == bobby) or (not k.startswith(BOT) and p["won"] + p["lost"] >= MIN_FRAGS)]
+                if (k == bobby) or (not k.startswith(BOT) and p.get("games", 0) >= MIN_GAMES)]
         return sorted(rows, key=lambda kp: -kp[1]["r"])
 
     def rank(self, key, bobby=None):
@@ -208,7 +215,7 @@ def read_tail(path, offset=0):
 
 
 def rated(f):
-    """a frag line that moves the ratings: one in a live game (owner, 2026-10-26: "ladder should be actual games only")"""
+    """a frag line that counts: one in a live game (owner, 2026-10-26: "ladder should be actual games only")"""
     return (f.get("state") or "in_progress") == "in_progress"
 
 
@@ -228,6 +235,38 @@ def replay(table, frags, names=None):
         a, b = table.frag(k, nk, v, nv, t)
         if f.get("owner"):
             (b if a.get("bot") else a)["owner"] = True
+    return table
+
+
+def apply_game(table, d, names=None):
+    """a duels.jsonl line onto a table, if it counts (duel_result); returns (person's row, Bobby's row) or None"""
+    res = duel_result(d)
+    if res is None:
+        return None
+    names = names or {}
+    try:
+        k, b, t = d["key"], BOT + str(d["net"]), float(d["t"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    nk = names.get(k) or table.players.get(k, {}).get("name") or k
+    nb = names.get(b) or table.players.get(b, {}).get("name") or b
+    return table.game(k, nk, b, nb, {0: 0.0, 1: 1.0, 2: 0.5}[res], t)
+
+
+def events(frags, duels):
+    """frag lines and game lines in time order: ("f", line) and ("d", line)"""
+    ev = [(float(f.get("t") or 0), 0, "f", f) for f in frags] + [(float(d.get("t") or 0), 1, "d", d) for d in duels]
+    ev.sort(key=lambda x: x[:2])
+    return [(x[2], x[3]) for x in ev]
+
+
+def replay_all(table, frags, duels, names=None):
+    """frags and games, in time order, onto a table: what tools/board_merge.py works the board out with"""
+    for kind, line in events(frags, duels):
+        if kind == "f":
+            replay(table, [line], names)
+        else:
+            apply_game(table, line, names)
     return table
 
 

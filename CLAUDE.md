@@ -244,7 +244,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   `tools/duel_items.py`); since 2026-10-23 (owner) the servers are 1v1 only: no free-for-all (`ffabot.py` is not loaded,
   `!mode` says so), no `testlab` or `arena1` on `!map`, no Workshop item. `banlist.py`: the
   owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo). `ladder.py`: the
-  leaderboard, local to a server (every frag between a person and Bobby, warmup included; Glicko-1 per frag in
+  leaderboard, local to a server (games won and lost between a person and Bobby (owner, 2026-10-30), frags kept beside them; Glicko-1 per game in
   `ratings.py`; who made a frag is read from the kills and deaths counters each frame; `tools/elo.py` reads its files).
   A chat line must not have a percent sign before a letter: the game takes it for a printf format. `banter.py`: what
   the bots say (a line at a game's end, a few during a game); the four bots' names are `duelbot.BOT_NAMES`, and a Bobby
