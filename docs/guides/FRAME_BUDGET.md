@@ -37,8 +37,8 @@ versions). A speedup that changes a number, however small, is a simulator change
 | 29bbc4b | the network: the layer norm's means as numpy's `_mean` makes them without its wrappers (`attn._mean_last`), the tokens' column lists, the input scale and the draw's tables made once per network | -2% on the server (-8% on the PC) |
 | 8bf5184 | the hearing check (`HEAR_QL`: `hear` -> `_hear_ok` -> `pvs.Vis.clusters`): the BSP descent point by point in plain Python floats (the same float64 sums in the same order; `leaves_np` is the reference) and a memo of recent points | it was 9% of a frame on 1 vCPU; 80 -> 9 us a player's box |
 
-Live: `qlbot:perf` (29bbc4b) on both public servers from 2026-10-29/30, `qlbot:perf2` (8bf5184: `qlbot:perf` with the new
-`sim/pvs.py` copied in, a thin layer built on each server) from 2026-10-30 01:37 UTC. The code is on `pub-perf`, not yet on `main`.
+Live: `qlbot:perf` (29bbc4b) on both public servers from 2026-10-29/30, then `qlbot:pub-8bf5184` (8bf5184, a full build on each
+server, no cache) from 2026-10-30 ~02:00 UTC. The code is on `pub-perf`, not yet on `main`.
 
 The frame on the same Vultr host and hour (private sparring, old against new): median 15.5 -> 13.6 ms, late frames
 2.8% -> 1.4%. In people's games on the new build: 12.6-13.5 ms, 0.5-1.4% late. On 1 vCPU / 1 GB: 12.5-15.7 ms, about 1% late.
@@ -68,6 +68,22 @@ build and the same bit-for-bit check).
 
 Since 2026-10-30 both public servers run on Vultr High Frequency 1 vCPU / 1 GB boxes (details in `private/`). What that needs:
 background jobs at Linux's idle scheduling class (`chrt -i 0`: a `nice 19` job still cost late frames on one core), the
-services a game server does not need switched off, no image build on the box (it may not fit in 1 GB: the image is built
-elsewhere and copied in), and the session pull every 6 hours (32 GB disks). Memory: about 560 MB of 955 used in play; the
-largest container peak seen was 433 MB.
+services a game server does not need switched off, and the session pull every 6 hours (32 GB disks). Memory: about 560 MB of 955 used in play; the
+largest container peak seen was 433 MB. A new build (owner, 2026-10-30): take the server offline, do a full build on it, put
+it back online (`private/tools/push_bobby.sh` with `CODE=1` does it in that order, with nobody on the server).
+
+## Chicago's "connection interrupted" (2026-10-30)
+
+- **Cause found: swapping.** After the image was loaded onto the 1 GB box, the kernel (swappiness 60) had moved 96 MB of the
+  running game into swap; its page faults made frames twice as slow and stalled the server 2.4 and 2.7 s (the engine's
+  "Hitch warning"): the owner reconnected three times. Fix: `vm.swappiness=1` (in `/etc/sysctl.d/90-bobby-swap.conf` on both
+  boxes and in `private/tools/setup_1c.sh`) and the swap cleared (`swapoff -a && swapon -a`) before a server starts.
+- **After the fix**, in 40 minutes of private sparring on Chicago with a 20-a-second query probe from the PC: no stall of
+  0.4 s or more, 0 of 27,900 queries lost. Late frames vary 0.7-12% from minute to minute; in the bad minutes the inputs and
+  the network are slow together (the host's speed, as on Amsterdam's slow spell), not the logging.
+- **Logging**: the mind log (`DUEL_MIND=1`) costs about a point of late frames (2.7% against 1.5% without, the same hour).
+  Commit 7f119a4 (`pub-perf`, not deployed) writes it from a background thread at the idle scheduling class (the same file,
+  line for line) and puts the inputs log's writer at the idle class: it takes the disk waits off the game's thread; its gain
+  in late frames was inside the host's noise in two runs.
+- **Open:** a person's game on Chicago had 6.9-11.7% late frames after the fix; whether that and the owner's drops were the
+  host (try a new Chicago instance: another host node) or the network path needs a test with a person on and the probe running.
