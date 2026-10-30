@@ -94,6 +94,8 @@ def main():
     ap.add_argument("--share", default="0.25,0.5")
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--boot", type=int, default=10)
+    ap.add_argument("--reinit", action="store_true", help="start the weapons' part from sim/win_judge.init() (a judge whose weapon sits at "
+                    "its floor cannot leave it from there: the gradient through the floor's softplus is nearly nothing)")
     ap.add_argument("--pro-every", type=int, default=1, help="keep the pros' rows every this many seconds (1: all; they hardly change "
                     "from one second to the next, and the fit's time goes with the rows)")
     ap.add_argument("--out", default="")
@@ -101,12 +103,15 @@ def main():
     a = ap.parse_args()
     t0 = time.time()
     P0, meta0 = WJ.load(a.judge)
+    if a.reinit:
+        I0 = WJ.init()
+        P0 = dict(P0, **{k: I0[k] for k in WEAPON_KEYS})
     J0 = FB.Judge(P0)
     base = os.path.join(FB.SR, a.run, "selfplay")
     tags = a.tags.split(",") if a.tags else sorted((t for t in os.listdir(base) if t[:1] == "u" and t[1:].isdigit()
                                                     and len(glob.glob(os.path.join(base, t, "rows_*.json"))) >= 10), key=lambda t: int(t[1:]))
     Xs, cs = FB.data([os.path.join(base, t) for t in tags])
-    pmaps = sorted(os.listdir(a.pro)) if a.maps == "all" else a.maps.split(",")
+    pmaps = sorted(m for m in os.listdir(a.pro) if os.path.isdir(os.path.join(a.pro, m))) if a.maps == "all" else a.maps.split(",")
     Xp, cp = FB.data([os.path.join(a.pro, m) for m in pmaps if glob.glob(os.path.join(a.pro, m, "rows_*.json"))])
     Xp["g"] = Xp["g"] + 1e6                                  # (the pros' games apart from his)
     if a.pro_every > 1:                                      # (every n-th second of each pro game: 600 - left on whole seconds)

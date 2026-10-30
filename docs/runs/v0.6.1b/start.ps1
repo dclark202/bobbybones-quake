@@ -16,7 +16,7 @@ $PY = if ($env:BB_PY) { $env:BB_PY } else { (Join-Path $env:USERPROFILE "anacond
 $R0 = Join-Path $ROOT "data\sim_runs\duel_gru_v0_6_1"
 $RUN = "duel_gru_v0_6_1b"
 $R1 = Join-Path $ROOT "data\sim_runs\$RUN"
-$JUDGE = Join-Path $ROOT "data\sim_runs\judge\judge_v060_wpn.npz"
+$JUDGE = Join-Path $ROOT "data\sim_runs\judge\judge_v061_wpn.npz"
 $LOG = Join-Path $HERE "start.log"
 # the game-end pay fix (docs/runs/v0.6.1/WINPAY_END.md): a string its code carries in sim\duel_env.py, set by whoever lands it.
 # Empty: not started. If the fix is a switch, it must also be set in train.cmd and allowed below.
@@ -34,7 +34,7 @@ if ($FIX_MARK -eq "") { Log "the game-end pay fix is not named (FIX_MARK in star
 foreach ($f in "duel_env.py", "duel_env_ffa.py") {
     if (-not (Select-String -Path (Join-Path $ROOT "sim\$f") -Pattern $FIX_MARK -SimpleMatch -Quiet)) { Log "sim\$f has no '$FIX_MARK' (the game-end fix; duel_env_ffa.py regenerated?): not started"; exit 1 }
 }
-& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\v0.6.1\train.cmd") "--allow=--run,--minutes,--brain-fade,WIN_END" | ForEach-Object { Log $_ }
+& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\v0.6.1\train.cmd") "--allow=--run,--minutes,--brain-fade,WIN_END,WIN_JUDGE" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED: not started"; exit 1 }
 if (Test-Path (Join-Path $R1 "policy.pt")) { Log "$R1 already has a policy.pt: not started (nothing overwritten)"; exit 1 }
 

@@ -338,7 +338,9 @@ rem brain's lesson rising 0 -> 0.35 over 90 min (live BRAIN_HUMAN_W), sessions 0
 rem on a later resume set BH_START to the first start's minute (in the log) so the opening does not begin again
 if "%BH_START%"=="" set BH_START=-1
 rem (v0.6.1) the judge, frozen: his chance of winning from his lead, the clock and both players' stacks and weapons
-set WIN_JUDGE=%ROOT%\data\sim_runs\judge\judge_v060_wpn.npz
+rem (v0.6.1b, owner 2026-10-29: "That seems fair. Let's do that.") the judge refitted on v0.6.1's own 350 self-play games
+rem  (tools/run/fit_b.py), the rail set to the lightning gun's worth by hand (tools/run/judge_weapons.py --set rg)
+set WIN_JUDGE=%ROOT%\data\sim_runs\judge\judge_v061_wpn.npz
 rem (v0.6.1b, owner 2026-10-29) the game-end pay fix: the win part pays a game's result on its last frame; a level limit
 rem  frame that goes on reads the next period's start (sim/duel_env.py WIN_END; branch v062pay, merged into main)
 set WIN_END=1
