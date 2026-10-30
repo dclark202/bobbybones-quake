@@ -47,7 +47,36 @@ class Vis:
         self._cache = {}
 
     def leaves(self, points):
-        """(N, 3) points -> (N,) leaf numbers (CM_PointLeafnum)"""
+        """(N, 3) points -> (N,) leaf numbers (CM_PointLeafnum). (The frame budget, 2026-10-30) point by point in plain
+        Python floats: the same float64 sums in the same order as leaves_np (x0*n0 + x1*n1 + x2*n2 - d, its test d < 0),
+        without numpy's cost per small call; the last points' answers kept (a frame asks for the same eyes and boxes
+        several times)"""
+        p = np.asarray(points, np.float64).reshape(-1, 3)
+        if getattr(self, "_tree", None) is None:
+            self._tree = ([tuple(r) for r in self.pn.tolist()], self.pd.tolist(), self.nplane.tolist(),
+                          [tuple(r) for r in self.nchild.tolist()])
+            self._memo = {}
+        pn, pd, npl, nch = self._tree
+        memo = self._memo
+        out = np.empty(len(p), np.int64)
+        for k, (x, y, z) in enumerate(p.tolist()):
+            key = (x, y, z)
+            leaf = memo.get(key)
+            if leaf is None:
+                node = 0
+                while node >= 0:
+                    pk = npl[node]
+                    a, b, c = pn[pk]
+                    node = nch[node][1] if a * x + b * y + c * z - pd[pk] < 0 else nch[node][0]
+                leaf = -1 - node
+                if len(memo) > 4096:
+                    memo.clear()
+                memo[key] = leaf
+            out[k] = leaf
+        return out
+
+    def leaves_np(self, points):
+        """leaves() as numpy steps (the reference it is checked against)"""
         p = np.asarray(points, np.float64).reshape(-1, 3)
         node = np.zeros(len(p), np.int64)
         live = node >= 0
