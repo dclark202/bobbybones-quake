@@ -31,6 +31,8 @@ import os
 
 import numpy as np
 
+from fastnp import stack as _stack  # (the frame budget, 2026-10-30)
+
 VERSION = 1
 UNSEEN_CAP = 60.0
 DT = 0.025
@@ -118,7 +120,7 @@ def zone_table():
 def pose_from_aux(aux, cols):
     """his own place and yaw (degrees) [n, 4] and the zones' map number [n] from info["aux"] rows (the trainer)"""
     C = {k: i for i, k in enumerate(cols)}
-    p = np.stack([aux[:, C["x"]], aux[:, C["y"]], aux[:, C["z"]], aux[:, C["yaw"]]], 1).astype(np.float32)
+    p = _stack([aux[:, C["x"]], aux[:, C["y"]], aux[:, C["z"]], aux[:, C["yaw"]]], 1).astype(np.float32)
     zm = aux[:, C["zone_map"]].round().astype(np.int64) if "zone_map" in C else np.full(len(aux), -1, np.int64)
     return p, zm
 
@@ -202,11 +204,11 @@ class Token:
             o = np.asarray(o_trk, np.float64)
             a0, a1 = TRK_SL["pos"]
             x_, y_ = _turn(y, o[:, a0] * 1000.0, o[:, a0 + 1] * 1000.0)
-            self.P[r] = np.stack([pz[:, 0] + x_, pz[:, 1] + y_, pz[:, 2] + o[:, a0 + 2] * 1000.0], 1)
+            self.P[r] = _stack([pz[:, 0] + x_, pz[:, 1] + y_, pz[:, 2] + o[:, a0 + 2] * 1000.0], 1)
             self.ls[r, 0] = _squash(o[:, TRK_SL["ls_xy"]], *TRK_LS["ls_xy"])
             self.ls[r, 1] = _squash(o[:, TRK_SL["ls_z"]], *TRK_LS["ls_z"])
             v0, _ = TRK_SL["vel"]
-            self.V[r] = np.stack(_turn(y, o[:, v0] * 1000.0, o[:, v0 + 1] * 1000.0), 1)
+            self.V[r] = _stack(_turn(y, o[:, v0] * 1000.0, o[:, v0 + 1] * 1000.0), 1)
             self.lsv[r] = _squash(o[:, TRK_SL["ls_v"]], *TRK_LS["ls_v"])
             b0, b1 = TRK_SL["band"]
             self.band[r] = _softmax(o[:, b0:b1])
@@ -226,7 +228,7 @@ class Token:
             self.spd[r, 0] = o[:, Z_SL["spd"]]
             self.spd[r, 1] = _squash(o[:, Z_SL["ls_s"]], *Z_LS)
             d0, _ = Z_SL["dir"]
-            self.eta[r] = np.stack(_turn(y, o[:, d0], o[:, d0 + 1]), 1)
+            self.eta[r] = _stack(_turn(y, o[:, d0], o[:, d0 + 1]), 1)
         self.zmap[r] = zm
         self.valid[r] = True
         self.age[r] = 0.0
@@ -241,7 +243,7 @@ class Token:
         pz = np.asarray(pose, np.float64)
         y = np.repeat(pz[:, 3:4], nh, 1)
         x_, y_ = _turn(y, f[..., 0] * 1000.0, f[..., 1] * 1000.0)
-        self.fut = np.stack([pz[:, None, 0] + x_, pz[:, None, 1] + y_, pz[:, None, 2] + f[..., 2] * 1000.0], -1).astype(np.float32)
+        self.fut = _stack([pz[:, None, 0] + x_, pz[:, None, 1] + y_, pz[:, None, 2] + f[..., 2] * 1000.0], -1).astype(np.float32)
 
     def answer_rows(self, a=0, b=None):
         """(v0.4.2a, BRAIN_READ) the answer of seats a..b for the simulator's readers (duel_env.brain_in): see answer_of"""

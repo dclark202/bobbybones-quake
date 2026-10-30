@@ -56,6 +56,7 @@ sys.path.insert(0, "/sim")
 # in the gamestate is loaded in full while the map loads, cg_forceEnemyModel included.
 EARLY_BOBBY = os.environ.get("DUEL_EARLY_BOBBY", "") == "1"
 TIMING = bool(os.environ.get("DUEL_TIMING"))
+GC_FREEZE = os.environ.get("DUEL_GC_FREEZE", "") == "1"   # (the frame budget, 2026-10-30) see gc_settle
 PROFILE = int(os.environ.get("DUEL_PROFILE") or 0)          # DUEL_PROFILE=N: a cProfile of the plugin every N frames (profile_*.txt)                # DUEL_TIMING=1: the plugin's time a frame goes to timing.txt (see time_note)
 # BOBBY_AUTOHOP=1 (B-258, off by default): the game re-jumps a held jump on landing (pmove_AutoHop 1) only for a player
 # whose userinfo carries cg_autoHop 1, which a person's game sends (the owner's config has it) and a bot's has not: on
@@ -1011,6 +1012,7 @@ class duelbot(minqlx.Plugin):
         self.game_new, self.ground_was, self.shot_made = False, None, {}
         self.obs_dump, self.aim_dump = [], []                # (the debugging dumps start over with a network: another one has other inputs)
         self.ready = True
+        self.gc_settle()
         self.log("rules on {}: weapons back in {} s, the vote's map pool {}, factory {}".format(
             mapname, minqlx.get_cvar("g_weaponRespawn"), minqlx.get_cvar("sv_mapPoolFile"), minqlx.get_cvar("g_factory")))
         self.log("ready on {}: policy {} ({} min of training), {} inputs, reaction {} ms, rooms nav {}, {}{}".format(
@@ -1210,6 +1212,41 @@ class duelbot(minqlx.Plugin):
         if getattr(E, "DRIFT_IN", False) and hasattr(env, "drift_clear"):
             env.drift_clear()                                # (DRIFT_IN) a frame with no picture: no rate across it
 
+    def gc_settle(self):
+        """(the frame budget, 2026-10-30) DUEL_GC_FREEZE=1: once the map's simulator and network are built, what is alive is
+        moved out of Python's garbage collector's sight (gc.freeze): a full collection then looks at the objects made since,
+        not at the simulator's and the network's tens of thousands (17-24 ms a full collection on the PC, three times that
+        on a server's core, inside a game frame). The last map's objects are let back first (gc.unfreeze) and collected,
+        so a map change frees what it left. It changes no number Bobby computes. DUEL_TIMING=1: each collection's time is
+        counted for timing.txt (gc_note)."""
+        import gc
+        if TIMING and not getattr(self, "_gc_cb", None):
+            self._gc_cb = [time.perf_counter(), [0, 0, 0], 0.0, 0.0]          # (start, collections by generation, max ms, total ms)
+
+            def cb_(phase, info, c_=self._gc_cb):
+                if phase == "start":
+                    c_[0] = time.perf_counter()
+                else:
+                    ms_ = (time.perf_counter() - c_[0]) * 1000.0
+                    c_[1][info["generation"]] += 1
+                    c_[2], c_[3] = max(c_[2], ms_), c_[3] + ms_
+            gc.callbacks.append(cb_)
+        if GC_FREEZE:
+            t_ = time.perf_counter()
+            gc.unfreeze()
+            gc.collect()
+            gc.freeze()
+            self.log("gc: {} objects frozen after the load ({:.0f} ms)".format(gc.get_freeze_count(), (time.perf_counter() - t_) * 1000.0))
+
+    def gc_note(self):
+        """the collections since the last timing line: counts by generation, the longest and the total, in ms"""
+        c_ = getattr(self, "_gc_cb", None)
+        if not c_:
+            return ""
+        s_ = " | gc {}/{}/{} max {:.1f} total {:.0f} ms{}".format(c_[1][0], c_[1][1], c_[1][2], c_[2], c_[3], " frozen" if GC_FREEZE else "")
+        c_[1], c_[2], c_[3] = [0, 0, 0], 0.0, 0.0
+        return s_
+
     def time_note(self, total):
         """DUEL_TIMING=1: the plugin's time for a frame on which the network ran: the whole frame hook, of it building
         the inputs (observe) and the network. A line per number of Bobbys alive goes to timing.txt every 2,400 such
@@ -1228,7 +1265,7 @@ class duelbot(minqlx.Plugin):
                     f.write("{} {} bobbys {} frames | frame median {:.2f} p90 {:.2f} p99 {:.2f} max {:.2f}, over 15 ms {:.1%}, over 25 ms {:.1%} | inputs median {:.2f} p99 {:.2f} | network median {:.2f} p99 {:.2f}\n".format(
                         time.strftime("%H:%M:%S"), int(nb), len(r), np.median(r[:, 1]), np.percentile(r[:, 1], 90), np.percentile(r[:, 1], 99), r[:, 1].max(),
                         float((r[:, 1] > 15.0).mean()), float((r[:, 1] > 25.0).mean()),
-                        np.median(r[:, 2]), np.percentile(r[:, 2], 99), np.median(r[:, 3]), np.percentile(r[:, 3], 99)))
+                        np.median(r[:, 2]), np.percentile(r[:, 2], 99), np.median(r[:, 3]), np.percentile(r[:, 3], 99)).rstrip("\n") + self.gc_note() + "\n")
 
     # ------------------------------------------------------------------ players and world
     def cast(self):

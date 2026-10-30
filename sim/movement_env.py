@@ -35,6 +35,7 @@ except Exception:                                           # scipy missing or b
             return np.sqrt(np.maximum(d2[np.arange(len(x)), k], 0.0)), k
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fastnp import norm as _norm, stack as _stack  # noqa: E402  (the frame budget, 2026-10-30)
 from qsim import World  # noqa: E402
 import jump_links as JL  # noqa: E402
 
@@ -103,8 +104,8 @@ def shut_teleports(world, nav_path):
     drop = set()
     for a, b, t, kind in g["edges"]:
         if kind == "tele" and len(tin):
-            j = int(np.linalg.norm(tout - nd[b], axis=1).argmin())
-            if np.linalg.norm(tout[j] - nd[b]) < 150.0 and world.trace(nd[a], tin[j])["fraction"] < 0.97:
+            j = int(_norm(tout - nd[b], axis=1).argmin())
+            if _norm(tout[j] - nd[b]) < 150.0 and world.trace(nd[a], tin[j])["fraction"] < 0.97:
                 drop.add((int(a), int(b)))
     return drop
 
@@ -130,7 +131,7 @@ def arrive_points(world, nav_path, mapname, hazard):
     down = np.array([[0, 0, -1.0]], np.float32)
     ok = np.array([world.cluster(p) >= 0 for p in nodes]) & (world.rays(nodes, down, 64.0)[:, 0] < 1)
     ang = np.linspace(0, 2 * np.pi, N_FLOOR, endpoint=False)
-    st = np.concatenate([nodes[:, None, :2] + (np.stack([np.cos(ang), np.sin(ang)], 1) * 96.0)[None, :, :],
+    st = np.concatenate([nodes[:, None, :2] + (_stack([np.cos(ang), np.sin(ang)], 1) * 96.0)[None, :, :],
                          np.repeat(nodes[:, None, 2:3], N_FLOOR, 1)], 2).reshape(-1, 3).astype(np.float32)
     fr = world.rays(st, down, 256.0).reshape(-1)
     drop = fr * 256.0 > 124.0
@@ -172,15 +173,15 @@ class NavField:
         enter = {}                                            # v14: a teleporter link -> its entrance
         edges = [e for e in g["edges"] if self.valid[e[0]] and self.valid[e[1]] and not (drop and (e[0], e[1]) in drop)]
         for a, b, t, kind in edges:
-            d = float(np.linalg.norm(self.nodes[a] - self.nodes[b]))
+            d = float(_norm(self.nodes[a] - self.nodes[b]))
             cost = 0.1 if kind == "tele" else (d / RUN if kind == "walk" else max(t, d / 900.0))
             if kind == "tele" and tele is not None and len(tele[0]):
                 # v14: a teleporter link costs the walk to its entrance, and one that starts far from the entrance is left
                 # out (the walking map has links from 360 to 410 units away at 0.1 s: the way then "teleported" from
                 # there, and the network, shown the far exit as its next point, ran at a wall; Battleforged, 2026-10-09)
-                j = int(np.linalg.norm(tele[1] - self.nodes[b], axis=1).argmin())
-                if np.linalg.norm(tele[1][j] - self.nodes[b]) < 150.0:
-                    d_in = float(np.linalg.norm(tele[0][j] - self.nodes[a]))
+                j = int(_norm(tele[1] - self.nodes[b], axis=1).argmin())
+                if _norm(tele[1][j] - self.nodes[b]) < 150.0:
+                    d_in = float(_norm(tele[0][j] - self.nodes[a]))
                     if d_in > TELE_FAR:
                         continue
                     cost = 0.1 + d_in / RUN
@@ -189,7 +190,7 @@ class NavField:
             have.add((a, b))
         for a, b, t, kind in edges:                           # flat walking works both ways
             if kind == "walk" and (b, a) not in have and abs(self.nodes[a][2] - self.nodes[b][2]) < 18:
-                radj[a].append((b, float(np.linalg.norm(self.nodes[a] - self.nodes[b])) / RUN, "walk"))
+                radj[a].append((b, float(_norm(self.nodes[a] - self.nodes[b])) / RUN, "walk"))
         self.kd_idx = np.nonzero(self.valid)[0]
         self._kd = cKDTree(self.nodes[self.kd_idx] * np.array([1, 1, 2.0], np.float32))   # vertical counts double
         self.jumps = list(jumps or [])                        # v15: the pros' jumps as links (sim/jump_links.py)
@@ -230,7 +231,7 @@ class NavField:
         self.jd = self.ji = None                              # per goal and point: the way to the first jump ahead, and which
         if self.jumps:
             la = [JL.look_ahead(self.next[gi], self.jlink[gi], self.nodes) for gi in range(G)]
-            self.jd, self.ji = np.stack([x[0] for x in la]), np.stack([x[1] for x in la])
+            self.jd, self.ji = _stack([x[0] for x in la]), _stack([x[1] for x in la])
         if starts is not None and len(starts):                # v14: a try starts only where the spawn points lead
             fwd = [[] for _ in range(n)]
             for b_ in range(n):
@@ -354,9 +355,9 @@ class MoveEnv:
         nodes = self.field.nodes
         self.zmin = float(nodes[:, 2].min()) - 300
         ang = np.linspace(0, 2 * np.pi, N_WALL, endpoint=False)
-        self.wall_dirs = np.stack([np.cos(ang), np.sin(ang), np.zeros_like(ang)], 1).astype(np.float32)
+        self.wall_dirs = _stack([np.cos(ang), np.sin(ang), np.zeros_like(ang)], 1).astype(np.float32)
         fang = np.linspace(0, 2 * np.pi, N_FLOOR, endpoint=False)
-        self.floor_off = np.stack([np.cos(fang), np.sin(fang)], 1).astype(np.float32) * 96.0
+        self.floor_off = _stack([np.cos(fang), np.sin(fang)], 1).astype(np.float32) * 96.0
         self.goal = np.zeros(n, np.int32)
         self.yaw = np.zeros(n, np.float32)
         self.t = np.zeros(n, np.float32)
@@ -433,7 +434,7 @@ class MoveEnv:
         c, si = np.cos(yaw), np.sin(yaw)
 
         def rot(v):                                          # world xy -> view frame (forward, left)
-            return np.stack([c * v[:, 0] + si * v[:, 1], -si * v[:, 0] + c * v[:, 1], v[:, 2]], 1)
+            return _stack([c * v[:, 0] + si * v[:, 1], -si * v[:, 0] + c * v[:, 1], v[:, 2]], 1)
         f = self.field
         pre_ = getattr(self, "pre", None)                     # (duel_env's legs: the nearest nodes and the wall and floor rays its
         self.pre = None                                       # caller worked out already for exactly these players; used once)
@@ -456,7 +457,7 @@ class MoveEnv:
         goal = rot(self.goal_pos[self.goal] - pos) / 2000.0
         # wall rays turn with the view so the first one always points forward
         wd = self.wall_dirs
-        dirs = np.stack([c[:, None] * wd[None, :, 0] - si[:, None] * wd[None, :, 1],
+        dirs = _stack([c[:, None] * wd[None, :, 0] - si[:, None] * wd[None, :, 1],
                          si[:, None] * wd[None, :, 0] + c[:, None] * wd[None, :, 1],
                          np.zeros((self.n, N_WALL), np.float32)], 2)
         if pre_ is not None and pre_[1] is not None:
@@ -465,11 +466,11 @@ class MoveEnv:
         else:
             walls = self.w.rays_each(pos, dirs, 512.0)
             floors = self._floor_rays(pos, c, si)
-        obs = np.concatenate([rot(vel) / 400.0, ground[:, None], np.concatenate(wps, 1), np.stack(kinds, 1) / 2.0,
+        obs = np.concatenate([rot(vel) / 400.0, ground[:, None], np.concatenate(wps, 1), _stack(kinds, 1) / 2.0,
                               goal, (self.phi / 10.0)[:, None], walls, floors], 1)
         if getattr(self, "jump_obs", False):                   # v15: the jump ahead on his way (sim/jump_links.py)
             if getattr(f, "ji", None) is not None:
-                jo = JL.inputs(f.jumps, f.jd[self.goal, idx], f.ji[self.goal, idx], np.linalg.norm(f.nodes[idx] - pos, axis=1))
+                jo = JL.inputs(f.jumps, f.jd[self.goal, idx], f.ji[self.goal, idx], _norm(f.nodes[idx] - pos, axis=1))
             else:
                 jo = np.zeros((len(pos), JL.N_JUMP), np.float32)
             obs = np.concatenate([obs, jo], 1)
@@ -479,7 +480,7 @@ class MoveEnv:
                                  (self.key_wait / KEY_EVERY)[:, None].astype(np.float32)], 1)
             obs = np.concatenate([obs, ho], 1)
         if getattr(self, "mouse", False):                      # v15: what his mouse is doing
-            mo = np.stack([self.mv / TURN_CAP, self.turn_dir, self.rev_wait / getattr(self, "mouse_rev", MOUSE_REV)], 1).astype(np.float32)
+            mo = _stack([self.mv / TURN_CAP, self.turn_dir, self.rev_wait / getattr(self, "mouse_rev", MOUSE_REV)], 1).astype(np.float32)
             obs = np.concatenate([obs, mo], 1)
         if getattr(self, "c2", 0):                             # stage C part 2: where to look, and that he is to stand at the goal
             co = np.zeros((len(pos), N_C2), np.float32)        # (zeros where nothing is given, or nobody has set it: a teacher's asker)
@@ -497,7 +498,7 @@ class MoveEnv:
 
     def _floor_rays(self, pos, c, si, fr=None):
         """fr: the rays' fractions [players, N_FLOOR] when the caller traced these very rays already"""
-        off = np.stack([c[:, None] * self.floor_off[None, :, 0] - si[:, None] * self.floor_off[None, :, 1],
+        off = _stack([c[:, None] * self.floor_off[None, :, 0] - si[:, None] * self.floor_off[None, :, 1],
                         si[:, None] * self.floor_off[None, :, 0] + c[:, None] * self.floor_off[None, :, 1]], 2)
         starts = np.concatenate([pos[:, None, :2] + off, np.repeat(pos[:, None, 2:3], N_FLOOR, 1)], 2)
         down = np.array([[0, 0, -1.0]], np.float32)
@@ -548,7 +549,7 @@ class MoveEnv:
         off = (np.degrees(np.arctan2(d[:, 1], d[:, 0])) - way + 180.0) % 360.0 - 180.0
         ok = np.nonzero((np.hypot(d[:, 0], d[:, 1]) >= LOOK_NEAR) & (np.abs(off) <= LOOK_OFF))[0]
         if len(ok):
-            pt = nd[ok[np.linalg.norm(nd[ok] - pt[None, :], axis=1).argmin()]]
+            pt = nd[ok[_norm(nd[ok] - pt[None, :], axis=1).argmin()]]
         self.look_pt[i], self.look_on[i] = pt, True
 
     def _c2_pay(self, s, pos, phi, reward, arrived):
@@ -576,7 +577,7 @@ class MoveEnv:
         pay2 = (self.arr_owed - owed) + np.where(standing, STAND_PAY * gate, -DT) + new * 1.0
         reward = np.where(second, pay2, reward).astype(np.float32)
         self.arr_owed = owed
-        self.arr_n += np.stack([second, second & inside, standing], 1)
+        self.arr_n += _stack([second, second & inside, standing], 1)
         self.arr_fell |= second & (pos[:, 2] < gp[:, 2] - STAND_Z)
         # the counters, over the frames he travels (not an arrive try's part at the place): with a look direction given the
         # frames, of them his view within LOOK_IN degrees, the sum of his speed, frames at 400 or more; the same three
@@ -630,7 +631,7 @@ class MoveEnv:
         f_want = np.where((f_now != 1) & (f_want != 1) & (f_now != f_want), 1, f_want)     # a reversal first lets go
         f_new = np.where(act(MIDDLE, f_now != f_want), f_want, f_now)
         strafe = np.where(l_new & ~d_new, 0, np.where(d_new & ~l_new, 2, 1))               # both down cancel out
-        self.key_last = np.stack([f_new, strafe, j_new.astype(np.int64)], 1)
+        self.key_last = _stack([f_new, strafe, j_new.astype(np.int64)], 1)
         self.key_wait = ((-(self.key_tick + 1 + np.arange(n))) % KEY_EVERY).astype(np.float32)
         return self.key_last
 
@@ -662,13 +663,13 @@ class MoveEnv:
         turn = TURN_BINS[a[:, 3]]
         if self.mouse:
             turn = self.mouse_turn(turn)
-        moves = np.stack([fwd, side, jump], 1).astype(np.int8)
+        moves = _stack([fwd, side, jump], 1).astype(np.int8)
         y0 = self.yaw
         done_ms = 0
         for ms in self.substeps:                               # the turn is spread over the physics steps
             done_ms += ms
             yaw = y0 + turn * (done_ms / 25.0)
-            self.w.step(moves, np.stack([np.zeros(self.n, np.float32), yaw.astype(np.float32)], 1), ms)
+            self.w.step(moves, _stack([np.zeros(self.n, np.float32), yaw.astype(np.float32)], 1), ms)
         self.yaw = (y0 + turn + 180.0) % 360.0 - 180.0
         prev = self.state
         self.state = s = self.w.state()
@@ -701,7 +702,7 @@ class MoveEnv:
                 A_, B_, p_ = self.jump_a[self.try_k[on]], self.jump_b[self.try_k[on]], pos[on]
                 self.at_edge[on] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
                 landed = (s[on, 6] > 0.5) | ((prev[on, 5] < 0.0) & (s[on, 5] > 0.0))    # on the floor, or touched it and jumped again inside the frame
-                ov = self.at_edge[on] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed | arrived[on])
+                ov = self.at_edge[on] & (_norm(p_ - B_, axis=1) < 110.0) & (landed | arrived[on])
                 over[on[ov]] = True
                 self.crossed[on[ov]] = True
                 fell = fell.copy()

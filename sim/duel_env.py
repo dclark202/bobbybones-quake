@@ -48,6 +48,18 @@ def _clip(a, lo, hi):
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fastnp import norm as _norm, stack as _stack  # noqa: E402  (the frame budget, 2026-10-30)
+
+
+def _hist_pick(hist, j, pick, rows=None):
+    """_stack([h[j] for h in hist])[pick, rows] (rows: 0 .. n-1 when None) without stacking the whole history: each
+    player's one entry read where it is, in the dtype the stack would have had (the frame budget, 2026-10-30). j None:
+    the history's entries themselves"""
+    col = hist if j is None else [h_[j] for h_ in hist]
+    dt_ = np.result_type(*col)
+    pk_ = np.asarray(pick).tolist()
+    rw_ = range(len(pk_)) if rows is None else np.asarray(rows).tolist()
+    return np.array([col[p_][r_] for p_, r_ in zip(pk_, rw_)], dt_)
 from qsim import World  # noqa: E402
 import jump_links as JL  # noqa: E402
 import rocket_jumps as RJM  # noqa: E402
@@ -2918,9 +2930,9 @@ class RouteField:
             keep = []
             for e in g["edges"]:
                 if e[3] == "tele":
-                    j = int(np.linalg.norm(tout0 - self.nodes[e[1]], axis=1).argmin())
-                    if np.linalg.norm(tout0[j] - self.nodes[e[1]]) < 150.0:
-                        d_in = float(np.linalg.norm(tin0[j] - self.nodes[e[0]]))
+                    j = int(_norm(tout0 - self.nodes[e[1]], axis=1).argmin())
+                    if _norm(tout0[j] - self.nodes[e[1]]) < 150.0:
+                        d_in = float(_norm(tin0[j] - self.nodes[e[0]]))
                         if d_in > tele_far:
                             continue
                         tele_walk[(e[0], e[1])] = d_in / 320.0
@@ -2935,12 +2947,12 @@ class RouteField:
                     fwd[b].append(a)
             for c_, d_ in pads:                               # (the pads' links, as they are added below)
                 dx = np.hypot(self.nodes[:, 0] - c_[0], self.nodes[:, 1] - c_[1])
-                land = int(np.linalg.norm(self.nodes - np.asarray(d_, np.float32) + np.array([0, 0, 100.0], np.float32), axis=1).argmin())
+                land = int(_norm(self.nodes - np.asarray(d_, np.float32) + np.array([0, 0, 100.0], np.float32), axis=1).argmin())
                 for a_ in np.nonzero((dx < 130) & (np.abs(self.nodes[:, 2] - c_[2]) < 48))[0]:
                     fwd[int(a_)].append(land)
             seen = np.zeros(n, bool)
             far_ = np.where(self.dead[:, None], 1e9, self.nodes)
-            stack = [int(np.linalg.norm(far_ - np.asarray(p_, np.float32), axis=1).argmin()) for p_ in starts]
+            stack = [int(_norm(far_ - np.asarray(p_, np.float32), axis=1).argmin()) for p_ in starts]
             for s0 in stack:
                 seen[s0] = True
             while stack:
@@ -2959,22 +2971,22 @@ class RouteField:
         if avoid is not None and np.any(avoid):
             g["edges"] = [e for e in g["edges"] if not (avoid[e[0]] or avoid[e[1]])]
         for a, b, t, kind in g["edges"]:
-            d = float(np.linalg.norm(self.nodes[a] - self.nodes[b]))
+            d = float(_norm(self.nodes[a] - self.nodes[b]))
             radj[b].append((a, 0.1 + tele_walk.get((a, b), 0.0) if kind == "tele" else (d / 320.0 if kind == "walk" else max(t, d / 900.0))))
             have.add((a, b))
             if kind != "walk":
                 special.add((a, b))
             if kind == "tele" and len(tin):                   # a teleporter: the entrance of the one that comes out at the link's end
-                j = int(np.linalg.norm(tout - self.nodes[b], axis=1).argmin())
-                if np.linalg.norm(tout[j] - self.nodes[b]) < 150.0:
+                j = int(_norm(tout - self.nodes[b], axis=1).argmin())
+                if _norm(tout[j] - self.nodes[b]) < 150.0:
                     enter[(a, b)] = tin[j]
         for a, b, t, kind in g["edges"]:                      # flat walking works both ways
             if kind == "walk" and (b, a) not in have and abs(self.nodes[a][2] - self.nodes[b][2]) < 18:
-                radj[a].append((b, float(np.linalg.norm(self.nodes[a] - self.nodes[b])) / 320.0))
+                radj[a].append((b, float(_norm(self.nodes[a] - self.nodes[b])) / 320.0))
         for c_, d_ in pads:                                   # jump pads: from the plate to where it throws him
             dx = np.hypot(self.nodes[:, 0] - c_[0], self.nodes[:, 1] - c_[1])      # (the builder's walkers get thrown off
             on = np.nonzero((dx < 130) & (np.abs(self.nodes[:, 2] - c_[2]) < 48))[0]  # the plate: link from the floor round it)
-            land = int(np.linalg.norm(self.nodes - np.asarray(d_, np.float32) + np.array([0, 0, 100.0], np.float32), axis=1).argmin())
+            land = int(_norm(self.nodes - np.asarray(d_, np.float32) + np.array([0, 0, 100.0], np.float32), axis=1).argmin())
             for a_ in on:
                 radj[land].append((int(a_), 1.2 + float(dx[a_]) / 320.0))
                 enter.setdefault((int(a_), land), np.asarray(c_, np.float32))      # a jump pad: its plate
@@ -3105,7 +3117,7 @@ class RouteField:
                     X.via[gi, a_] = e_
                 X.move[gi, a_] = k_ in self._special
         la = [JL.look_ahead(X.next[gi], X.jlink[gi], self.nodes) for gi in range(G)]
-        X.jd, X.ji = np.stack([x[0] for x in la]), np.stack([x[1] for x in la])
+        X.jd, X.ji = _stack([x[0] for x in la]), _stack([x[1] for x in la])
         X.pro_step = np.zeros((G, n), bool)
         return X
 
@@ -3177,14 +3189,14 @@ class RouteField:
         tf = np.full(int(np.prod(dims)), -1, np.int64)
         bf = np.full(int(np.prod(dims)), np.inf, np.float32)
         R = int(256 // self.CELL)
-        off = np.stack(np.meshgrid(*[np.arange(-R, R + 1)] * 3, indexing="ij"), -1).reshape(-1, 3)
+        off = _stack(np.meshgrid(*[np.arange(-R, R + 1)] * 3, indexing="ij"), -1).reshape(-1, 3)
         base = ((nodes - self.lo) / self.CELL).astype(np.int64)
         for s0 in range(0, n, 1024):
             nd = np.arange(s0, min(n, s0 + 1024))
             cells = base[nd][:, None, :] + off[None, :, :]
             ok = ((cells >= 0) & (cells < dims)).all(2)
             ci = _clip(cells, 0, dims - 1)
-            centers = np.stack([cx[0][ci[..., 0]], cx[1][ci[..., 1]], cx[2][ci[..., 2]]], -1)
+            centers = _stack([cx[0][ci[..., 0]], cx[1][ci[..., 1]], cx[2][ci[..., 2]]], -1)
             d2 = np.where(ok, (((centers - nodes[nd][:, None, :]) * w) ** 2).sum(2), np.inf).astype(np.float32).ravel()
             flat = ((ci[..., 0] * dims[1] + ci[..., 1]) * dims[2] + ci[..., 2]).ravel()
             np.minimum.at(bf, flat, d2)
@@ -3192,8 +3204,8 @@ class RouteField:
             tf[flat[hit]] = np.repeat(nd, off.shape[0])[hit]
         rest = np.nonzero(tf < 0)[0]
         if len(rest):
-            pts = np.stack(np.unravel_index(rest, tuple(dims)), 1)
-            P = np.stack([cx[0][pts[:, 0]], cx[1][pts[:, 1]], cx[2][pts[:, 2]]], 1) * w
+            pts = _stack(np.unravel_index(rest, tuple(dims)), 1)
+            P = _stack([cx[0][pts[:, 0]], cx[1][pts[:, 1]], cx[2][pts[:, 2]]], 1) * w
             nw = nodes * w
             for c0 in range(0, len(rest), 512):
                 d2 = ((P[c0:c0 + 512, None, :] - nw[None, :, :]) ** 2).sum(2)
@@ -3454,9 +3466,9 @@ class DuelEnv:
         if nav and os.path.exists(nav):
             self.spots = np.array(json.load(open(nav))["nodes"], np.float32)
         ang = np.linspace(0, 2 * np.pi, N_WALL, endpoint=False)
-        self.wall_dirs = np.stack([np.cos(ang), np.sin(ang)], 1).astype(np.float32)
+        self.wall_dirs = _stack([np.cos(ang), np.sin(ang)], 1).astype(np.float32)
         fang = np.linspace(0, 2 * np.pi, N_FLOOR, endpoint=False)
-        self.floor_off = np.stack([np.cos(fang), np.sin(fang)], 1).astype(np.float32) * 96.0
+        self.floor_off = _stack([np.cos(fang), np.sin(fang)], 1).astype(np.float32) * 96.0
         # items
         ents = [e for e in self.w.entities if e.get("classname") in ITEM_DEFS and "origin" in e]
         self.item_pos = np.array([e["origin"] for e in ents], np.float32).reshape(-1, 3)
@@ -3498,7 +3510,7 @@ class DuelEnv:
         self.up_dirs = np.array([[0, 0, 1.0]] + [[math.cos(t) * 0.7071, math.sin(t) * 0.7071, 0.7071]
                                                  for t in np.radians([0, 90, 180, 270])], np.float32)
         la = np.linspace(0, 2 * np.pi, N_LONG, endpoint=False)
-        self.long_dirs = np.stack([np.cos(la), np.sin(la)], 1).astype(np.float32)
+        self.long_dirs = _stack([np.cos(la), np.sin(la)], 1).astype(np.float32)
         self.lo, self.hi = [np.asarray(v, np.float32) for v in self.w.bounds()]
         self.cell_n = np.maximum(1, np.ceil((self.hi[:2] - self.lo[:2]) / CELL_SIZE)).astype(np.int64)   # map cells (N_INTENT)
         self.cell_zmid = float(self.lo[2] + self.hi[2]) / 2.0
@@ -3639,8 +3651,8 @@ class DuelEnv:
                         drop_ = set()
                         for a_, b_, t_, kind_ in g_["edges"]:
                             if kind_ == "tele" and len(tin_):
-                                j_ = int(np.linalg.norm(tout_ - nd_[b_], axis=1).argmin())
-                                if np.linalg.norm(tout_[j_] - nd_[b_]) < 150.0 and self.w.trace(nd_[a_], tin_[j_])["fraction"] < 0.97:
+                                j_ = int(_norm(tout_ - nd_[b_], axis=1).argmin())
+                                if _norm(tout_[j_] - nd_[b_]) < 150.0 and self.w.trace(nd_[a_], tin_[j_])["fraction"] < 0.97:
                                     drop_.add((int(a_), int(b_)))
                         more_["drop"] = drop_
                     if LAVA:                                 # jumps and drops whose line passes over lava or slime: left out. A scripted
@@ -3947,7 +3959,7 @@ class DuelEnv:
                 new_ = {k_: j_ for j_, k_ in enumerate(keep_)}
                 lk2_ = [(a_, b_, t_, new_[k_]) for a_, b_, t_, k_ in lk_ if k_ in new_]   # (RJ_ONLY: its links only)
                 for j_, r_ in enumerate(self.rjs):
-                    g_ = min(items_, key=lambda q_: float(np.linalg.norm(np.asarray(R_.goals[q_]) - r_["b"])))   # (the item nearest the landing: its row)
+                    g_ = min(items_, key=lambda q_: float(_norm(np.asarray(R_.goals[q_]) - r_["b"])))   # (the item nearest the landing: its row)
                     X_ = RJ_.field(R_, g_, [l_ for l_ in lk2_ if l_[3] == j_], self.rjs, goal=r_["b"])
                     d_ = np.hypot(R_.nodes[:, 0] - r_["a"][0], R_.nodes[:, 1] - r_["a"][1])
                     st_ = np.nonzero((X_.ji[g_] == j_) & (X_.jd[g_] >= RJ_BACK[0]) & (X_.jd[g_] <= RJ_BACK[1]) & ~R_.dead)[0]   # (RJ_BACK units of way before it)
@@ -4003,7 +4015,7 @@ class DuelEnv:
                                      start=np.array(R0_["start"], np.float32), syaw=float(R0_["start_yaw"])))
                 A_ = np.array(rd_["A"], np.float32)
                 B_ = np.array(rd_["B"], np.float32)
-                U_ = (B_ - A_)[:2] / np.linalg.norm((B_ - A_)[:2])
+                U_ = (B_ - A_)[:2] / _norm((B_ - A_)[:2])
                 self.rc = dict(k=int(ks_[0]), routes=rts_, A=A_, B=B_, RA=np.array(rd_["RA"], np.float32), U=U_,
                                hop_tgt=A_[:2] + U_ * ROUTE_COPY_HOPX)
         self.rc_rng = np.random.default_rng(9173)           # (ROUTE_COPY) its own stream: which route a try takes
@@ -4080,11 +4092,11 @@ class DuelEnv:
         if self.lab is not None:
             for key, c_ in self.lab.get("courses", {}).items():
                 path = np.array(c_["path"], np.float32)
-                seg_len = np.linalg.norm(path[1:] - path[:-1], axis=1)
+                seg_len = _norm(path[1:] - path[:-1], axis=1)
                 cum = np.concatenate([[0.0], np.cumsum(seg_len)]).astype(np.float32)
                 cps = np.array([q[:3] for q in c_["checkpoints"]], np.float32)
                 cyaw = np.array([q[3] if len(q) > 3 else c_["yaw"] for q in c_["checkpoints"]], np.float32)
-                d = np.linalg.norm(path[None, :, :] - cps[:, None, :2], axis=2)
+                d = _norm(path[None, :, :] - cps[:, None, :2], axis=2)
                 self.courses.append(dict(key=key, path=path, seg_len=np.maximum(seg_len, 1e-3), cum=cum, cps=cps, cyaw=cyaw,
                                          cprog=cum[d.argmin(1)], start=np.array(c_["start"], np.float32), yaw=float(c_["yaw"]),
                                          fall_z=float(c_["fall_z"]), end_r=float(c_.get("end_r", 120)),
@@ -4123,10 +4135,10 @@ class DuelEnv:
                 self.t_mid = int(np.argmin(np.abs(M.TURN_BINS)))   # its choice "no turn"
                 self.t_field, self.t_field_j, self.t_nav = T.field, None, (nav, tg)   # (its field with the pros' jumps: _move_teach)
                 ta = np.linspace(0, 2 * np.pi, M.N_WALL, endpoint=False)
-                T.wall_dirs = np.stack([np.cos(ta), np.sin(ta), np.zeros_like(ta)], 1).astype(np.float32)
+                T.wall_dirs = _stack([np.cos(ta), np.sin(ta), np.zeros_like(ta)], 1).astype(np.float32)
                 tf = np.linspace(0, 2 * np.pi, M.N_FLOOR, endpoint=False)
-                T.floor_off = np.stack([np.cos(tf), np.sin(tf)], 1).astype(np.float32) * 96.0
-                d = np.linalg.norm(self.teacher.goal_pos[None, :, :] - self.field.goals[:, None, :], axis=2)
+                T.floor_off = _stack([np.cos(tf), np.sin(tf)], 1).astype(np.float32) * 96.0
+                d = _norm(self.teacher.goal_pos[None, :, :] - self.field.goals[:, None, :], axis=2)
                 self.t_goal = d.argmin(1).astype(np.int32)        # our goal index -> the teacher's goal index
                 self.t_turn = np.abs(TURN[None, :] - M.TURN_BINS[:, None]).argmin(1)   # teacher turn bin -> ours
         n = self.n
@@ -4537,7 +4549,7 @@ class DuelEnv:
             a_, b_ = C["path"][:-1], C["path"][1:]
             ab = b_ - a_
             t_ = _clip(((pos[:, None, :2] - a_[None]) * ab[None]).sum(2) / (C["seg_len"] ** 2)[None], 0, 1)
-            d = np.linalg.norm(pos[:, None, :2] - (a_[None] + ab[None] * t_[:, :, None]), axis=2)
+            d = _norm(pos[:, None, :2] - (a_[None] + ab[None] * t_[:, :, None]), axis=2)
             ks = np.arange(len(a_))[None, :]
             d = np.where(np.abs(ks - self.seg[idx][:, None]) <= 1, d, 1e9)      # only near the current segment
             k = d.argmin(1)
@@ -4639,7 +4651,7 @@ class DuelEnv:
                 E_ = L["env"]
                 spots = [np.array([q[0], q[1], q[2] if len(q) > 2 else E_["z"]], np.float32) for q in E_["spots"]]
                 i = int(rng.integers(len(spots)))
-                d = [float(np.linalg.norm(q - spots[i])) for q in spots]
+                d = [float(_norm(q - spots[i])) for q in spots]
                 cand = [k for k, v in enumerate(d) if 400 <= v <= 1300] or [int(np.argmax(d))]
                 j = int(rng.choice(cand))
                 home, subj = spots[i], spots[j]
@@ -4694,7 +4706,7 @@ class DuelEnv:
         if first:
             p = cand[int(rng.integers(len(cand)))]
         else:
-            d = np.array([float(np.linalg.norm(q - opp)) for q in cand])
+            d = np.array([float(_norm(q - opp)) for q in cand])
             ok = np.nonzero(d > 500)[0]
             p = cand[int(rng.choice(ok))] if len(ok) else cand[int(d.argmax())]
         face = math.degrees(math.atan2(opp[1] - p[1], opp[0] - p[0])) if not first else float(rng.uniform(-180, 180))
@@ -4803,7 +4815,7 @@ class DuelEnv:
             hop = self._pro_hop(pos) & (np.hypot(s[ri, 3], s[ri, 4]) > 200.0) & (np.abs(d[:, 2]) < 40.0) & ~care & (R.T[g, node] > 1.0)
             vert = np.where(jump | hop, 1, np.where(care, 0, -1))    # before a jump, a drop, a pad or a teleporter: feet down; else his own
         turn = _clip(rel_deg * 0.5, -20.0, 20.0)
-        lab = np.stack([fwd + 1, side + 1, vert, np.abs(TURN[None, :] - turn[:, None]).argmin(1)], 1)
+        lab = _stack([fwd + 1, side + 1, vert, np.abs(TURN[None, :] - turn[:, None]).argmin(1)], 1)
         self.teach[ri[ok | to_drop], :4] = lab[ok | to_drop]
         if STACK_TEACH:
             self.teach[ri[n_run:], 3] = -1                   # (in a game the view is his own)
@@ -4868,7 +4880,7 @@ class DuelEnv:
             w_ = mi
             out[3] = np.where((sg_ != 0) & (self.turn_dir[w_] != 0) & (sg_ != self.turn_dir[w_]) & (self.rev_wait[w_] > 0), self.t_mid, out[3])
         out[3] = self.t_turn[out[3]]
-        self.teach[mi, :4] = np.stack(out, 1)
+        self.teach[mi, :4] = _stack(out, 1)
 
     def _teacher_hand(self, T, ii):
         """a movement network trained under the finger limits (train_move.py --hand) is shown the hand of the players
@@ -4878,7 +4890,7 @@ class DuelEnv:
         if not getattr(T, "hand", False):
             return
         kl = self.key_last[ii]
-        T.key_last = np.stack([kl[:, 0], kl[:, 1], (kl[:, 2] == 1).astype(np.int64)], 1)
+        T.key_last = _stack([kl[:, 0], kl[:, 1], (kl[:, 2] == 1).astype(np.int64)], 1)
         T.key_tok = self.key_tok[ii]
         T.key_wait = ((-(self.key_tick + 1 + np.asarray(ii))) % KEY_EVERY).astype(np.float32)
 
@@ -5093,8 +5105,8 @@ class DuelEnv:
         if not m.any():
             return
         tr = self.state[en, :3]
-        er = np.linalg.norm(np.asarray(bel, np.float64) - tr, axis=1)
-        eb = np.linalg.norm(self.brain_bel.astype(np.float64) - tr, axis=1)
+        er = _norm(np.asarray(bel, np.float64) - tr, axis=1)
+        eb = _norm(self.brain_bel.astype(np.float64) - tr, axis=1)
         b = np.digitize(np.asarray(self.seen_t, np.float64), (2.0, 5.0, 10.0))
         st = self.stats.setdefault("brain_err", np.zeros(3 * len(BRAIN_ERR_BINS)))
         for k in range(len(BRAIN_ERR_BINS)):
@@ -5184,16 +5196,16 @@ class DuelEnv:
         if md_ == "use":                                     # (LEGS_IN) the branch's own draw, before the hand rule and the turn bins
             if getattr(self, "legs_raw", None) is None or len(self.legs_raw) != self.n:
                 self.legs_raw = np.full((self.n, 4), -1, np.int64)
-            self.legs_raw[ri[ok]] = np.stack(out, 1)[ok]
+            self.legs_raw[ri[ok]] = _stack(out, 1)[ok]
         if getattr(T, "mouse", False):                       # (a change of direction his hand cannot make yet: the view rests)
             sg_ = np.sign(self.t_bins[out[3]])
             w_ = ri
             out[3] = np.where((sg_ != 0) & (self.turn_dir[w_] != 0) & (sg_ != self.turn_dir[w_]) & (self.rev_wait[w_] > 0), self.t_mid, out[3])
         out[3] = self.t_turn[out[3]]
         if into is not None:                                 # (LEGS: its choices move him)
-            into[ri[ok]] = np.stack(out, 1)[ok]
+            into[ri[ok]] = _stack(out, 1)[ok]
             return
-        self.teach[ri[ok], :4] = np.stack(out, 1)[ok]
+        self.teach[ri[ok], :4] = _stack(out, 1)[ok]
         self.stats["move_teach_frames"] += int(ok.sum())
 
     def _legs_pre(self, ri, T, idx):
@@ -5356,7 +5368,7 @@ class DuelEnv:
         if game_:
             p_close = 0.0
         if avoid is not None and self.spots is not None and self.rng.random() < p_close:
-            d = np.linalg.norm(self.spots - avoid, axis=1)
+            d = _norm(self.spots - avoid, axis=1)
             cand = np.nonzero((d > self.close_band[0]) & (d < self.close_band[1]))[0]
             for k in self.rng.permutation(cand)[:24]:
                 p = self.spots[k]
@@ -5368,7 +5380,7 @@ class DuelEnv:
                     return
         k = int(self.rng.integers(len(self.spawns)))
         if avoid is not None:                            # prefer a spawn away from the opponent
-            d = np.linalg.norm(self.spawns - avoid, axis=1)
+            d = _norm(self.spawns - avoid, axis=1)
             far = np.nonzero(d > np.median(d))[0]
             if len(far):
                 k = int(self.rng.choice(far))
@@ -5506,12 +5518,12 @@ class DuelEnv:
                         continue
                     yr_, pr_ = np.radians(float(self.yaw[i_])), np.radians(float(self.pitch[i_]))
                     dv_ = np.array([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)])
-                    cos_ = float(np.dot(dv_, d_) / max(1e-6, np.linalg.norm(d_)))
+                    cos_ = float(np.dot(dv_, d_) / max(1e-6, _norm(d_)))
                     self.stats["aw_emg"][0] += 1.0
                     self.stats["aw_emg"][1] += float(cos_ >= np.cos(np.radians(30.0)))
                     self.stats["aw_emg"][3] += float(at_bel)
         ht_ = np.asarray(getattr(self, "v02_ht", np.full((n, 1), 99.0)))[:n]
-        near = ~inview & ((ht_ < 2.0).any(1) | (fresh & (np.linalg.norm(bpos - s[:n, :3], axis=1) < 700.0)))
+        near = ~inview & ((ht_ < 2.0).any(1) | (fresh & (_norm(bpos - s[:n, :3], axis=1) < 700.0)))
         sit = [inview, near, ~inview & ~near]
         ga = game & alive
         can_ = np.asarray(getattr(self, "aw_can", np.zeros(n, bool)), bool)[:n]
@@ -5585,7 +5597,7 @@ class DuelEnv:
         those of noisy whose sound was a footstep alone"""
         s, n = self.state, self.n
         oth = self._others_arr()
-        d = np.linalg.norm(s[oth, :3] - s[:, None, :3], axis=2)
+        d = _norm(s[oth, :3] - s[:, None, :3], axis=2)
         hum = ((self.weapon == RG) | (self.weapon == LG))[oth] & (d < HUM_RANGE)       # the weapon's hum, always there
         ok = ((noisy[oth] & (d < EAR_RANGE)) | hum) & (self.hp[oth] > 0) & (self.hp > 0)[:, None]
         if LG_DEAF:                                          # (LG_DEAF) his own lightning gun muffles footsteps and the enemy's LG hum
@@ -5628,13 +5640,13 @@ class DuelEnv:
             ang = np.arctan2(to[:, 1], to[:, 0]) + np.radians(self.rng.normal(0, EAR_NOISE, len(got)))
             up = _clip((to[:, 2] + self.rng.normal(0, 40.0, len(got))) / 200.0, -1.5, 1.5)
             close = -((s[src, 3:6] - s[got, 3:6]) * to).sum(1) / (dist + 1e-6)          # positive: the gap is closing
-        self.ear[got] = np.stack([ang, up, 1.0 - dist / EAR_RANGE, _clip(close / 400.0, -1.5, 1.5)], 1)
+        self.ear[got] = _stack([ang, up, 1.0 - dist / EAR_RANGE, _clip(close / 400.0, -1.5, 1.5)], 1)
         self.ear_t[got] = 0.0
         self.ear_hum[got] = np.where(hum[got, k[got]], self.weapon[src], -1)
         dz_ = up * 200.0                                     # (N_V02: when and about where he last heard that player, from
         dh_ = np.sqrt(np.maximum(dist * dist - dz_ * dz_, 0.0))     # what the sound tells him: direction, height, loudness)
         self.v02_ht[got, self._slot(src)] = 0.0
-        self.v02_hp[got, self._slot(src)] = s[got, :3] + np.stack([np.cos(ang) * dh_, np.sin(ang) * dh_, dz_], 1)
+        self.v02_hp[got, self._slot(src)] = s[got, :3] + _stack([np.cos(ang) * dh_, np.sin(ang) * dh_, dz_], 1)
 
     def _hf_steps(self, ground, ground_was, vel, duck, alive):
         """(HEAR_FIX) this frame's footsteps and jumps, for every player: a footstep every HF_STEP_FRAMES frames while on
@@ -5666,7 +5678,7 @@ class DuelEnv:
             mf_ = np.asarray(muff, bool)
             a_ = np.arctan2(tv_[:, 1], tv_[:, 0]) + np.radians((HF_DIR + np.where(mf_, LGD_DIR * (dh_ / LGD_STEP) ** 2, 0.0)) * z_[:, 0])
             r_ = dh_ * np.maximum(0.2, 1.0 + (HF_LOUD + np.where(mf_, LGD_LOUD, 0.0)) * z_[:, 1])
-        return np.stack([s[hh, 0] + np.cos(a_) * r_, s[hh, 1] + np.sin(a_) * r_, s[src, 2] + HF_UP * z_[:, 2]], 1).astype(np.float32)
+        return _stack([s[hh, 0] + np.cos(a_) * r_, s[hh, 1] + np.sin(a_) * r_, s[src, 2] + HF_UP * z_[:, 2]], 1).astype(np.float32)
 
     def _lgd_lvl(self, lis):
         """(LG_DEAF) listeners lis: 0 the LG not in his hand (or dead), 1 in hand, 2 firing it"""
@@ -5741,7 +5753,7 @@ class DuelEnv:
             for r_, dist in enumerate(HAZ_DIST):
                 sx = pos[:, 0:1] + (c[:, None] * np.cos(ang)[None] - si[:, None] * np.sin(ang)[None]) * dist
                 sy = pos[:, 1:2] + (si[:, None] * np.cos(ang)[None] + c[:, None] * np.sin(ang)[None]) * dist
-                starts = np.stack([sx, sy, np.repeat(pos[:, 2:3], 8, 1)], 2).reshape(-1, 3).astype(np.float32)
+                starts = _stack([sx, sy, np.repeat(pos[:, 2:3], 8, 1)], 2).reshape(-1, 3).astype(np.float32)
                 fr = self.w.rays(starts, np.array([[0, 0, -1.0]], np.float32), 1200.0).reshape(n, 8)
                 ez = pos[:, 2:3] - fr * 1200.0               # the floor under that spot
                 for hz in self.hurt_zones:
@@ -5755,22 +5767,22 @@ class DuelEnv:
             ca_, sa_ = c[:, None] * _HAZ_COS[None], si[:, None] * _HAZ_SIN[None]     # (both radii: one call each, below)
             cb_, sb_ = si[:, None] * _HAZ_COS[None], c[:, None] * _HAZ_SIN[None]
             R_ = len(HAZ_DIST)
-            sx = np.stack([pos[:, 0:1] + (ca_ - sa_) * dist for dist in HAZ_DIST])     # (radii, players, 8)
-            sy = np.stack([pos[:, 1:2] + (cb_ + sb_) * dist for dist in HAZ_DIST])
-            starts = np.stack([sx, sy, np.broadcast_to(np.repeat(pos[:, 2:3], 8, 1), sx.shape)], 3).reshape(-1, 3).astype(np.float32)
+            sx = _stack([pos[:, 0:1] + (ca_ - sa_) * dist for dist in HAZ_DIST])     # (radii, players, 8)
+            sy = _stack([pos[:, 1:2] + (cb_ + sb_) * dist for dist in HAZ_DIST])
+            starts = _stack([sx, sy, np.broadcast_to(np.repeat(pos[:, 2:3], 8, 1), sx.shape)], 3).reshape(-1, 3).astype(np.float32)
             fr = self.w.rays(starts, np.array([[0, 0, -1.0]], np.float32), 1200.0).reshape(R_, n, 8)
             ez = pos[None, :, 2:3] - fr * 1200.0             # the floor under that spot (a liquid's bottom: the ray goes through it)
-            cc = self.w.contents_n(np.stack([sx, sy, ez + 4.0], 3).reshape(-1, 3)).reshape(R_, n, 8)
+            cc = self.w.contents_n(_stack([sx, sy, ez + 4.0], 3).reshape(-1, 3)).reshape(R_, n, 8)
             for r_ in range(R_):
                 haz[:, 16 * r_:16 * r_ + 8] = (((cc[r_] & (C_LAVA | C_SLIME)) != 0) & (fr[r_] < 0.999)) & see
         self.last_vel = np.where(visible[:, None], opp_vel, self.last_vel).astype(np.float32)
         lv = rot(self.last_vel) / 400.0 * (seen_t < 5.0)[:, None]
         pd = np.zeros((n, 3), np.float32)
         if len(self.pads):
-            k = np.linalg.norm(self.pads[None] - pos[:, None], axis=2).argmin(1)
+            k = _norm(self.pads[None] - pos[:, None], axis=2).argmin(1)
             pd = _clip(rot(self.pad_dest[k] - pos) / 1000.0, -3, 3)
         own = np.zeros((n, 18), np.float32)
-        dist = np.where(self.ra, np.linalg.norm(self.rp - pos[:, None, :], axis=2), 1e9)
+        dist = np.where(self.ra, _norm(self.rp - pos[:, None, :], axis=2), 1e9)
         order = np.argsort(dist, axis=1)[:, :2]
         for j in range(2):
             idx = order[:, j]
@@ -5788,14 +5800,14 @@ class DuelEnv:
         zf = np.where(self.zoom, ZOOM, 1.0)[:, None]
         gy = (yaw[:, None, None] + DENSE_YAW[None, None, :] * zf[:, :, None]).repeat(len(DENSE_PITCH), 1).reshape(self.n, -1)
         gp = (pit[:, None, None] + DENSE_PITCH[None, :, None] * zf[:, :, None]).repeat(len(DENSE_YAW), 2).reshape(self.n, -1)
-        vd = np.stack([np.cos(gp) * np.cos(gy), np.cos(gp) * np.sin(gy), -np.sin(gp)], 2).astype(np.float32)
+        vd = _stack([np.cos(gp) * np.cos(gy), np.cos(gp) * np.sin(gy), -np.sin(gp)], 2).astype(np.float32)
         return self.w.rays_each(eye, vd, 2000.0).astype(np.float32)
 
     def _pad_ear(self, yaw):
         """the inputs of N_PAD and N_EAR"""
         rel = self.ear[:, 0] - yaw
         on = (self.ear_t < 3.0).astype(np.float32)
-        return np.stack([self.pad / (PAD_DEG / 2.0), (self.pad_lift > 0).astype(np.float32),
+        return _stack([self.pad / (PAD_DEG / 2.0), (self.pad_lift > 0).astype(np.float32),
                          (self.ear_t < 0.06).astype(np.float32), np.exp(-2.0 * self.ear_t),
                          np.sin(rel) * on, np.cos(rel) * on, self.ear[:, 1] * on, self.ear[:, 2] * on, self.ear[:, 3] * on,
                          ((self.ear_hum == RG) & (self.ear_t < 0.5)).astype(np.float32),
@@ -5805,7 +5817,7 @@ class DuelEnv:
         """(SENSE_MINOR) player j knows of v's death: he is v or the killer, has v in view, or is within earshot"""
         if j == v or j == killer:
             return True
-        return self._sees(j, v) or (np.linalg.norm(self.state[j, :3] - self.state[v, :3]) < HEAR_EVT and self._hear1(j, v))
+        return self._sees(j, v) or (_norm(self.state[j, :3] - self.state[v, :3]) < HEAR_EVT and self._hear1(j, v))
 
     def _sees(self, j, v):
         """player j has player v in view (noticed)"""
@@ -5906,7 +5918,7 @@ class DuelEnv:
         w = self.drop_w[grp]
         p = self.drop_pos[grp]
         tov = p - eye[:, None, :]
-        dd = np.linalg.norm(tov, axis=2) + 1e-6
+        dd = _norm(tov, axis=2) + 1e-6
         u = (tov / dd[:, :, None]).astype(np.float32)
         cand = (w >= 0) & ((u * fdir[:, None, :]).sum(2) > self.fov()[2][:n, None]) & (dd < 1500.0)
         sees = np.zeros(w.shape, bool)
@@ -5995,7 +6007,7 @@ class DuelEnv:
         R = self.stats["rail"]
         opp = self._others_arr()[:, 0]
         cnt = (self.script[:n] == 0) & (self.run_k[:n] < 0) & self._counted(ar)
-        d_en = np.linalg.norm(s[opp, :3] - s[:n, :3], axis=1)
+        d_en = _norm(s[opp, :3] - s[:n, :3], axis=1)
         band = np.where(d_en < RAIL_FAR_LO, 0, np.where(d_en <= RAIL_FAR_HI, 1, 2))
         alive = self.hp[:n] > 0
         R[0] += int((cnt & alive).sum())
@@ -6018,7 +6030,7 @@ class DuelEnv:
                 RS[16] += float(t_[e_].sum())
                 self.rail_shot[ar[f0_]] = True
         for i_, v_ in st.get("rail", ()):
-            d_ = float(np.linalg.norm(s[i_, :3] - s[v_, :3]))
+            d_ = float(_norm(s[i_, :3] - s[v_, :3]))
             if cnt[i_]:
                 R[4 + (0 if d_ < RAIL_FAR_LO else 1 if d_ <= RAIL_FAR_HI else 2)] += 1
                 if rs_ is not None and rs_[i_]:
@@ -6067,7 +6079,7 @@ class DuelEnv:
             self.pa_since = np.zeros(n)                      # seconds since he was placed
             self.pa_pos = pos.copy()
             self.pa_life = np.asarray(self.life_t[:n], np.float64).copy()
-        moved = np.linalg.norm(pos - self.pa_pos, axis=1) >= 100.0
+        moved = _norm(pos - self.pa_pos, axis=1) >= 100.0
         born = np.asarray(self.life_t[:n], np.float64) < self.pa_life
         self.pa_since = np.where(moved | born, 0.0, self.pa_since + DT)
         self.pa_pos = pos.copy()
@@ -6088,7 +6100,7 @@ class DuelEnv:
                 eye = self._eye(s)
                 up_ = np.array([0, 0, 8.0], np.float32)
                 ia_, ib_ = a_[r_], b_[r_]
-                near_ = np.linalg.norm(s[ib_, :3] - eye[ia_], axis=1) < 4000
+                near_ = _norm(s[ib_, :3] - eye[ia_], axis=1) < 4000
                 r_, ia_, ib_ = r_[near_], ia_[near_], ib_[near_]
                 if len(r_):
                     l1_ = self._los(eye[ia_], s[ib_, :3] + up_)
@@ -6114,9 +6126,9 @@ class DuelEnv:
         jj_ = np.concatenate([b_[f_], a_[f_]])
         eye = self._eye(s)
         yr, pr = np.radians(self.yaw[ii_]), np.radians(self.pitch[ii_])
-        fd_ = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
+        fd_ = _stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
         to_ = s[jj_, :3] + np.array([0, 0, 8.0], np.float32) - eye[ii_]
-        cos_ = (to_ * fd_).sum(1) / (np.linalg.norm(to_, axis=1) * np.linalg.norm(fd_, axis=1) + 1e-9)
+        cos_ = (to_ * fd_).sum(1) / (_norm(to_, axis=1) * _norm(fd_, axis=1) + 1e-9)
         err = np.degrees(np.arccos(_clip(cos_, -1.0, 1.0)))
         q = _clip(1.0 - err / 60.0, 0.0, 1.0)
         if PREAIM_PAY > 0:
@@ -6160,9 +6172,9 @@ class DuelEnv:
             kw_ = ix_[:WATCH_WIN]
             el_ = R_["alive"][kw_][:, ii_] & R_["hid"][kw_][:, ii_] & after_[:WATCH_WIN]
             yr_, pr_ = np.radians(R_["yaw"][kw_][:, ii_]), np.radians(R_["pit"][kw_][:, ii_])
-            fd_ = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 2)
+            fd_ = _stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 2)
             to_ = (s[jj_, :3] + np.array([0, 0, 8.0], np.float32))[None, :, :] - R_["eye"][kw_][:, ii_]
-            cos_ = (to_ * fd_).sum(2) / (np.linalg.norm(to_, axis=2) * np.linalg.norm(fd_, axis=2) + 1e-9)
+            cos_ = (to_ * fd_).sum(2) / (_norm(to_, axis=2) * _norm(fd_, axis=2) + 1e-9)
             ang_ = np.degrees(np.arccos(_clip(cos_, -1.0, 1.0)))
             w_ = _clip(1.0 - ang_ / WATCH_DEG, 0.0, 1.0)
             wt_ = (0.5 + 0.5 * (WATCH_WIN - k_[:WATCH_WIN]) / max(1, WATCH_WIN - 1))[:, None] * el_
@@ -6349,7 +6361,7 @@ class DuelEnv:
         n = self.n
         eye = self._eye(self.state)
         yr_, pr_ = np.radians(self.yaw), np.radians(self.pitch)
-        fdir = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
+        fdir = _stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
         gsz = self._others_arr().shape[1] + 1
         grp = np.arange(n) // gsz
         items = np.array(self.route_item)
@@ -6359,15 +6371,15 @@ class DuelEnv:
         if self.bel_prev is not None and self.bel_prev.shape == up.shape:
             for m, g in zip(*np.nonzero(self.bel_prev & ~up)):     # taken since the last look: who is in earshot knows
                 q = np.arange(m * gsz, (m + 1) * gsz)
-                near = np.linalg.norm(pos[q] - self.item_pos[items[g]], axis=1) < self._evt_reach(q)
+                near = _norm(pos[q] - self.item_pos[items[g]], axis=1) < self._evt_reach(q)
                 if HEAR_QL:                                  # (HEAR_QL) heard where the game sends it (at the item's place)
                     near &= self._hear_ok(q, pos=self.item_pos[items[g]])
                 self.bel_t[q[near], g] = 0.0
                 if SENSE_MINOR:                                  # (SENSE_MINOR) heard, not seen: his clock starts a little off
                     ip_ = self.item_pos[items[g]]
-                    took_ = np.linalg.norm(pos[q] - ip_, axis=1) < 120.0         # (the one who took it)
+                    took_ = _norm(pos[q] - ip_, axis=1) < 120.0         # (the one who took it)
                     kn_ = np.asarray(self.known, np.float32)[q]
-                    saw_ = np.asarray(self.acquired, bool)[q] & (np.linalg.norm(kn_ - ip_, axis=1) < 150.0)
+                    saw_ = np.asarray(self.acquired, bool)[q] & (_norm(kn_ - ip_, axis=1) < 150.0)
                     hq_ = q[near & ~took_ & ~saw_]
                     if len(hq_):
                         self.bel_t[hq_, g] = self.rng.normal(0, SM_ITEM_SD, len(hq_)).astype(np.float32)
@@ -6377,7 +6389,7 @@ class DuelEnv:
             return
         for g, it in enumerate(items):
             tov = self.item_pos[it][None, :] - eye
-            dd = np.linalg.norm(tov, axis=1) + 1e-6
+            dd = _norm(tov, axis=1) + 1e-6
             u = (tov / dd[:, None]).astype(np.float32)
             ci = np.nonzero(((u * fdir).sum(1) > self.fov()[2][:n]) & (dd < BELIEF_SEE) & (self.hp > 0))[0]
             if not len(ci):
@@ -6411,14 +6423,14 @@ class DuelEnv:
         self.shot_scarce = _clip(SHOT_REF_FIRE / np.maximum(self.shot_fire, 1e-6), 0.5, 2.0).astype(np.float32)
         if self.route is not None:
             far = np.full(len(self.route.nodes), 1e9, np.float32)
-            self.shot_way = np.stack([self.route.nearest(self.item_pos[s_]) if s_ else far for s_ in src])
+            self.shot_way = _stack([self.route.nearest(self.item_pos[s_]) if s_ else far for s_ in src])
 
     def note_pickup(self, i, k):
         """player i took the mega health (k = 0) or the red armor (k = 1): he knows, and so do those in earshot"""
         s = self.state
         self.it_t[i, k] = 0.0
         for j in self._mates(i):
-            if np.linalg.norm(s[j, :3] - s[i, :3]) < self._evt_reach(j) and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
+            if _norm(s[j, :3] - s[i, :3]) < self._evt_reach(j) and self._hear1(j, i):     # (HEAR_QL: where the game sends it)
                 self.it_t[j, k] = 0.0
                 if SENSE_MINOR and not self._sees(j, i):
                     self.it_t[j, k] = float(self.rng.normal(0, SM_ITEM_SD))   # (SENSE_MINOR) heard, not seen: a little off
@@ -6428,7 +6440,7 @@ class DuelEnv:
         """player v died: his killer knows, and those in earshot"""
         s = self.state
         for j in self._mates(v):
-            if j == killer or np.linalg.norm(s[j, :3] - s[v, :3]) < HEAR_EVT or HEAR_QL:     # (HEAR_QL: the obituary goes to all)
+            if j == killer or _norm(s[j, :3] - s[v, :3]) < HEAR_EVT or HEAR_QL:     # (HEAR_QL: the obituary goes to all)
                 self.e_life[j, self._slot(v)] = 0.0
                 self.e_got[j, self._slot(v)] = 0.0
                 self._v02_void(j, v)
@@ -6448,11 +6460,11 @@ class DuelEnv:
         n = self.n
         ar = np.arange(n)
         known = (self.it_t < 90.0).astype(np.float32)
-        items = np.stack([known[:, 0], np.minimum(self.it_t[:, 0] / 35.0, 2.0) * known[:, 0],
+        items = _stack([known[:, 0], np.minimum(self.it_t[:, 0] / 35.0, 2.0) * known[:, 0],
                           known[:, 1], np.minimum(self.it_t[:, 1] / 25.0, 2.0) * known[:, 1]], 1)
         el = self.e_life[ar, self._slot(opp)]
         ek = (el < 90.0).astype(np.float32)
-        life = np.stack([np.minimum(self.life_t / 30.0, 2.0), ek, np.minimum(el / 30.0, 2.0) * ek], 1)
+        life = _stack([np.minimum(self.life_t / 30.0, 2.0), ek, np.minimum(el / 30.0, 2.0) * ek], 1)
         focus = _clip(self.focus / FOCUS_SECS, -0.25, 1.0)[:, None]
         return np.concatenate([items, self.e_got[ar, self._slot(opp)][:, MEM_COLS], life, focus], 1).astype(np.float32)
 
@@ -6463,7 +6475,7 @@ class DuelEnv:
         if R is None:
             return out
         node = R.locate(pos)
-        off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
+        off = _norm(R.nodes[node] - pos, axis=1) / 320.0
         alt = self._alt()
         for gi, lab in enumerate(self.route_goal):
             t = R.T[gi, node]
@@ -6498,7 +6510,7 @@ class DuelEnv:
                 gi[m_] = self._trip_goal(k[m_], node[m_], X_, who=np.nonzero(m_)[0])
             valid = gi >= 0
             g = np.maximum(gi, 0)
-            off = np.linalg.norm(R.nodes[node] - pos, axis=1) / 320.0
+            off = _norm(R.nodes[node] - pos, axis=1) / 320.0
             t = R.T[g, node]
             nx = R.walk[g, node]
             via_ = R.via[g, node]
@@ -6545,7 +6557,7 @@ class DuelEnv:
         out = np.zeros((n, N_V9), np.float32)
         out[:, :4] = np.exp(-self.resp_t)
         if len(self.spawns):
-            d = np.linalg.norm(self.spawns[None, :, :] - pos[:, None, :], axis=2)
+            d = _norm(self.spawns[None, :, :] - pos[:, None, :], axis=2)
             order = np.argsort(d, axis=1)[:, :4]
             for j in range(min(4, len(self.spawns))):
                 out[:, 4 + 3 * j:7 + 3 * j] = _clip(rot(self.spawns[order[:, j]] - pos) / 1000.0, -3, 3)
@@ -6556,7 +6568,7 @@ class DuelEnv:
         kind, val, resp, cap, lab = self.item_def[k]
         cat = 0 if lab == "MH" else 1 if lab == "RA" else 2 if kind == "wp" else 3
         idx = np.arange(self.n) if who is None else np.asarray(who)
-        near = np.linalg.norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
+        near = _norm(self.state[idx, :3] - self.item_pos[k][None, :], axis=1) < HEAR_EVT
         if HEAR_QL:                                          # (HEAR_QL) heard where the game sends it (at the item's place)
             near &= self._hear_ok(idx, pos=self.item_pos[k])
         self.resp_t[idx[near], cat] = 0.0
@@ -6730,7 +6742,7 @@ class DuelEnv:
         lis = src ^ 1
         k_ = np.repeat(self.kind, 2)[lis]
         alone = ((k_ == MOVE) | (k_ == SOLO) | ((k_ == COURSE) & ~self.gun[lis]))
-        d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
+        d = _norm(s[src, :3] - s[lis, :3], axis=1)
         d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         seen = self.acquired[lis] & ~alone
         ok = (seen | (d < self._evt_reach(lis))) & ~alone & (self.hp[lis] > 0)
@@ -6743,14 +6755,14 @@ class DuelEnv:
             sh, li = src[hit], lis[hit]
             eye = self._eye(s)
             yr, pr = np.radians(self.yaw[sh]), np.radians(self.pitch[sh])
-            dv = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
+            dv = _stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
             reach = np.where(self.weapon[sh] == LG, 768.0, 4000.0)
             along = _clip(((eye[li] - eye[sh]) * dv).sum(1), 0.0, reach)
             near = eye[sh] + dv * along[:, None]
             to = near - eye[li]
-            dn = np.linalg.norm(to, axis=1) + 1e-6
+            dn = _norm(to, axis=1) + 1e-6
             yl, pl = np.radians(self.yaw[li]), np.radians(self.pitch[li])
-            fl = np.stack([np.cos(pl) * np.cos(yl), np.cos(pl) * np.sin(yl), -np.sin(pl)], 1)
+            fl = _stack([np.cos(pl) * np.cos(yl), np.cos(pl) * np.sin(yl), -np.sin(pl)], 1)
             vis = (self.acquired[li] | ((to * fl).sum(1) / dn > self.fov()[2][li])) & (dn < 2000.0)
             for k in np.nonzero(vis)[0]:
                 if self.acquired[li[k]] or self.w.trace(eye[li[k]], near[k].astype(np.float32), mask=self.sight)["fraction"] >= 0.999:
@@ -6771,9 +6783,9 @@ class DuelEnv:
         on = (self.trail_t < 1.0).astype(np.float32)
         trail = np.concatenate([_clip(rot(self.trail_p - eye) / 500.0, -4, 4) * on[:, None], fade[:, None]], 1)
         v_ = visible.astype(np.float32)
-        body = np.stack([self.duck[opp].astype(np.float32) * v_, (self.state[opp, 6] < 0.5).astype(np.float32) * v_], 1)
+        body = _stack([self.duck[opp].astype(np.float32) * v_, (self.state[opp, 6] < 0.5).astype(np.float32) * v_], 1)
         if SENSE_MINOR:                                      # (SENSE_MINOR) as seen a reaction time ago
-            body = np.stack([self._sm_e["duck"].astype(np.float32) * v_, self._sm_e["air"].astype(np.float32) * v_], 1)
+            body = _stack([self._sm_e["duck"].astype(np.float32) * v_, self._sm_e["air"].astype(np.float32) * v_], 1)
         hand = np.concatenate([(self.key_last - np.array([1, 1, 0]))[:, :2].astype(np.float32),
                                (self.key_last[:, 2:3] == 1).astype(np.float32) - (self.key_last[:, 2:3] == 2).astype(np.float32),
                                (self.key_tok / KEY_BURST)[:, None],
@@ -6792,13 +6804,13 @@ class DuelEnv:
         s = self.state
         lis = src ^ 1
         k_ = np.repeat(self.kind, 2)[src]
-        ok = (np.linalg.norm(s[src, :3] - s[lis, :3], axis=1) < HEAR_EVT) & (k_ != MOVE) & (k_ != SOLO)
+        ok = (_norm(s[src, :3] - s[lis, :3], axis=1) < HEAR_EVT) & (k_ != MOVE) & (k_ != SOLO)
         if HEAR_QL:                                          # (HEAR_QL) where the game sends it
             ok &= self._hear_ok(lis, src)
         if RESPAWN_QL:                                       # (RESPAWN_QL) a body waiting to respawn makes no sound
             ok &= self.rsp_wait[src] <= 0
         if LG_DEAF:                                          # (LG_DEAF) firing the lightning gun: LGD_FIRE_EVT at most
-            ok &= np.linalg.norm(s[src, :3] - s[lis, :3], axis=1) < self._evt_reach(lis)
+            ok &= _norm(s[src, :3] - s[lis, :3], axis=1) < self._evt_reach(lis)
         src, lis = src[ok], lis[ok]
         if not len(src):
             return
@@ -6820,12 +6832,12 @@ class DuelEnv:
             return out
         ar = np.arange(n)
         ip = self.item_pos[ids]
-        d = np.linalg.norm(ip[None, :, :] - pos[:, None, :], axis=2)
+        d = _norm(ip[None, :, :] - pos[:, None, :], axis=2)
         near = d.argmin(1) if rank == 0 else np.argsort(d, axis=1)[:, rank]
         it = np.array(ids)[near]
         p = self.item_pos[it]
         tov = p - eye
-        dd = np.linalg.norm(tov, axis=1) + 1e-6
+        dd = _norm(tov, axis=1) + 1e-6
         u = (tov / dd[:, None]).astype(np.float32)
         infov = ((u * fdir).sum(1) > self.fov()[2][:len(u)]) & (dd < 1500)
         sees = np.zeros(n, bool)
@@ -6849,12 +6861,12 @@ class DuelEnv:
         if not live:
             return out
         ar = np.arange(n)
-        dall = np.linalg.norm(self.item_pos[None, :, :] - pos[:, None, :], axis=2)
-        its = np.stack([ids_[dall[:, ids_].argmin(1) if r_ == 0 else np.argsort(dall[:, ids_], axis=1)[:, r_]]
+        dall = _norm(self.item_pos[None, :, :] - pos[:, None, :], axis=2)
+        its = _stack([ids_[dall[:, ids_].argmin(1) if r_ == 0 else np.argsort(dall[:, ids_], axis=1)[:, r_]]
                         for _, ids_, r_ in live])            # (blocks, n) the item of each block, per player
         p = self.item_pos[its]
         tov = p - eye
-        dd = np.linalg.norm(tov, axis=2) + 1e-6
+        dd = _norm(tov, axis=2) + 1e-6
         u = (tov / dd[..., None]).astype(np.float32)
         infov = ((u * fdir).sum(2) > self.fov()[2][:n]) & (dd < 1500)
         sees = np.zeros(infov.shape, bool)
@@ -6876,14 +6888,14 @@ class DuelEnv:
         out = np.zeros(len(a), bool)
         if self.sight is None or not len(a):                 # (the one call below needs a mask)
             for k in range(len(a)):
-                out[k] = np.linalg.norm(b[k] - a[k]) < 1 or self.w.trace(a[k], b[k], mask=self.sight)["fraction"] >= 0.999
+                out[k] = _norm(b[k] - a[k]) < 1 or self.w.trace(a[k], b[k], mask=self.sight)["fraction"] >= 0.999
             return out
         a32, b32 = np.asarray(a, np.float32).reshape(-1, 3), np.asarray(b, np.float32).reshape(-1, 3)
         fr = self.w.lines(a32, b32, mask=self.sight)         # (the same point traces, one call: qsim_lines_m)
-        dv = np.linalg.norm(np.asarray(b) - np.asarray(a), axis=1)
+        dv = _norm(np.asarray(b) - np.asarray(a), axis=1)
         close = dv < 1
         for k in np.nonzero(np.abs(dv - 1.0) < 1e-3)[0]:     # (at the edge: the pair's own norm, as before)
-            close[k] = np.linalg.norm(b[k] - a[k]) < 1
+            close[k] = _norm(b[k] - a[k]) < 1
         return close | (fr >= 0.999)
 
     @staticmethod
@@ -6929,7 +6941,7 @@ class DuelEnv:
             o_[:, 0], o_[:, 1], o_[:, 2] = a_, b_, z_
             return o_
         wd = self.wall_dirs
-        dirs = np.stack([c[:, None] * wd[None, :, 0] - si[:, None] * wd[None, :, 1],
+        dirs = _stack([c[:, None] * wd[None, :, 0] - si[:, None] * wd[None, :, 1],
                          si[:, None] * wd[None, :, 0] + c[:, None] * wd[None, :, 1],
                          np.zeros((n, N_WALL), np.float32)], 2)
         walls = self.w.rays_each(pos, dirs, 512.0)
@@ -6939,7 +6951,7 @@ class DuelEnv:
             fh, fv, _ = self.fov()
             see = (np.abs(wa)[None, :] <= fh[:, None]) & (np.abs(pit)[:, None] <= fv[:, None])
             walls = np.where(see, walls, UNSEEN).astype(np.float32)
-        off = np.stack([c[:, None] * self.floor_off[None, :, 0] - si[:, None] * self.floor_off[None, :, 1],
+        off = _stack([c[:, None] * self.floor_off[None, :, 0] - si[:, None] * self.floor_off[None, :, 1],
                         si[:, None] * self.floor_off[None, :, 0] + c[:, None] * self.floor_off[None, :, 1]], 2)
         starts = np.concatenate([pos[:, None, :2] + off, np.repeat(pos[:, None, 2:3], N_FLOOR, 1)], 2)
         floors = self.w.rays(starts.reshape(-1, 3).astype(np.float32), np.array([[0, 0, -1.0]], np.float32),
@@ -6951,7 +6963,7 @@ class DuelEnv:
             see = (np.abs(fa)[None, :] <= fh[:, None]) & (np.abs(pit[:, None] - down) <= fv[:, None])
             floors = np.where(see, floors, UNSEEN).astype(np.float32)
         eye = self._eye(s)
-        fdir = np.stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
+        fdir = _stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
         opp = np.arange(n) ^ 1
         # Reaction time: what the player knows about the opponent (where, how fast, visible or not) is
         # REACT_FRAMES old. The player's own view is current, so the crosshair-to-enemy readings respond to
@@ -6968,7 +6980,7 @@ class DuelEnv:
         rf_ = self.react_frames if self.react_seat is None else self.react_seat     # (SEAT_DELAYS) one number, or one a seat
         if self.react_seat is not None:                      # ... each seat by its own delay (react_frames is the largest)
             pk_ = np.maximum(0, len(self.opp_hist) - 1 - rf_)
-            known, visible, seen_t = (np.stack([h_[j_] for h_ in self.opp_hist])[pk_, np.arange(n)] for j_ in (0, 1, 3))
+            known, visible, seen_t = (_hist_pick(self.opp_hist, j_, pk_) for j_ in (0, 1, 3))
             if DRIFT_IN:
                 self._drift_pick = np.asarray(pk_, np.int64) - len(self.opp_hist)
         if self.focus_on:                                    # the delay per player: sharp while focus lasts, then dull
@@ -6981,9 +6993,9 @@ class DuelEnv:
             if DRIFT_IN:
                 self._drift_pick = np.asarray(pick - L_, np.int64)
             ar_ = np.arange(n)
-            known = np.stack([h_[0] for h_ in self.opp_hist])[pick, ar_]
-            visible = np.stack([h_[1] for h_ in self.opp_hist])[pick, ar_]
-            seen_t = np.stack([h_[3] for h_ in self.opp_hist])[pick, ar_]
+            known = _hist_pick(self.opp_hist, 0, pick, ar_)
+            visible = _hist_pick(self.opp_hist, 1, pick, ar_)
+            seen_t = _hist_pick(self.opp_hist, 3, pick, ar_)
         opp_vel = self.opp_hist[max(0, len(self.opp_hist) - 1 - self.vel_frames)][2]
         if SENSE_MINOR:                                      # (SENSE_MINOR) his facing, crouch, air and weapon as seen with his place
             self._sm_note(opp, rf_, pick if self.focus_on else None)
@@ -7013,7 +7025,7 @@ class DuelEnv:
                 sig_ = (b_ * zf_ + (self.flinch + a2_) * zall_)[:, None]
             if PERCEPT_SPEED > 0:                            # a target that crosses the view fast is judged worse
                 tb_ = known - eye
-                br_ = np.stack([np.degrees(np.arctan2(tb_[:, 1], tb_[:, 0])),
+                br_ = _stack([np.degrees(np.arctan2(tb_[:, 1], tb_[:, 0])),
                                 np.degrees(np.arctan2(tb_[:, 2], np.hypot(tb_[:, 0], tb_[:, 1]) + 1e-6))], 1).astype(np.float32)
                 dy_ = (br_[:, 0] - self.bearing[:, 0] + 180.0) % 360.0 - 180.0
                 w_ = np.hypot(dy_, br_[:, 1] - self.bearing[:, 1]) / DT * (visible & self.bearing_ok)
@@ -7028,9 +7040,9 @@ class DuelEnv:
                             self.rng.normal(0, 1, (n, 2))).astype(np.float32)
             t_ = known - eye
             hd_ = np.hypot(t_[:, 0], t_[:, 1]) + 1e-6
-            d_ = np.linalg.norm(t_, axis=1)
+            d_ = _norm(t_, axis=1)
             off = np.tan(np.radians(self.percept)) * d_[:, None] * (visible & (self.script == 0))[:, None]
-            dk_ = np.stack([-t_[:, 1] / hd_ * off[:, 0], t_[:, 0] / hd_ * off[:, 0], off[:, 1]], 1).astype(np.float32)
+            dk_ = _stack([-t_[:, 1] / hd_ * off[:, 0], t_[:, 0] / hd_ * off[:, 0], off[:, 1]], 1).astype(np.float32)
             if AIM2_SPLIT:                                   # (AIM2_SPLIT) the world picture keeps (1 - AIM2_SPLIT_W) of it
                 known_w = (known + (1.0 - AIM2_SPLIT_W) * dk_).astype(np.float32)
             known = known + dk_
@@ -7054,17 +7066,17 @@ class DuelEnv:
         if AIM2_SPLIT:                                       # (AIM2_SPLIT) the angles between the world's place and the aim's
             tw_ = known + np.array([0, 0, 4.0], np.float32) - eye
             hw_ = np.hypot(tw_[:, 0], tw_[:, 1]) + 1e-6
-            self._a2_dang = np.stack([np.degrees((np.arctan2(to[:, 1], to[:, 0]) - np.arctan2(tw_[:, 1], tw_[:, 0]) + np.pi)
+            self._a2_dang = _stack([np.degrees((np.arctan2(to[:, 1], to[:, 0]) - np.arctan2(tw_[:, 1], tw_[:, 0]) + np.pi)
                                                  % (2 * np.pi) - np.pi),
                                       np.degrees(-np.arctan2(to[:, 2], hd) + np.arctan2(tw_[:, 2], hw_))], 1).astype(np.float32)
         # reticle distance to the enemy, in degrees: coarse (+-15) and fine (+-2) readings, both axes
         ey = np.degrees((ang_yaw + np.pi) % (2 * np.pi) - np.pi)
         ep_ = np.degrees(ang_pit)
-        dist3 = np.linalg.norm(to, axis=1) + 1e-6
+        dist3 = _norm(to, axis=1) + 1e-6
         on_target = self._seg_box(eye, eye + fdir.astype(np.float32) * 4000.0, known_a,
                                   np.where(self.duck[opp], TOP_DUCK, TOP)) & visible
         if AIM2_SPLIT:                                       # (AIM2_SPLIT) how big he looks: by the world's distance
-            dist3 = np.linalg.norm(known + np.array([0, 0, 4.0], np.float32) - eye, axis=1) + 1e-6
+            dist3 = _norm(known + np.array([0, 0, 4.0], np.float32) - eye, axis=1) + 1e-6
         size = np.degrees(np.arctan2(20.0, dist3)) / 10.0      # how big the target looks
         opp_feat = np.concatenate([[exact], [np.exp(-seen_t)], rel.T, ovel.T, [np.sin(ang_yaw)], [np.cos(ang_yaw)],
                                    [np.cos(ang_pit)], [np.sin(ang_pit)],
@@ -7074,7 +7086,7 @@ class DuelEnv:
         # incoming projectiles (the opponent's), nearest N_PROJ: position, velocity, kind (rocket / grenade / plasma)
         rk = np.zeros((n, 9 * N_PROJ), np.float32)
         orp, orv, ora, orw = self.rp[opp], self.rv[opp], self.ra[opp], self.rw[opp]
-        dist = np.where(ora, np.linalg.norm(orp - pos[:, None, :], axis=2), 1e9)
+        dist = np.where(ora, _norm(orp - pos[:, None, :], axis=2), 1e9)
         order = np.argsort(dist, axis=1)[:, :N_PROJ]
         ar = np.arange(n)
         for j in (range(N_PROJ) if not PROJ_SEE else ()):    # (the frame budget, 2026-10-29: PROJ_SEE's block replaces it below)
@@ -7082,7 +7094,7 @@ class DuelEnv:
             ok = dist[ar, idx] < 1500
             if self.fov_sight:
                 to_p = orp[ar, idx] - eye
-                dn = np.linalg.norm(to_p, axis=1) + 1e-6
+                dn = _norm(to_p, axis=1) + 1e-6
                 ok &= ((to_p * fdir).sum(1) / dn > self.fov()[2]) | (dn < 400.0)
             rk[:, 9 * j:9 * j + 3] = rot(orp[ar, idx] - pos) / 1000.0 * ok[:, None]
             rk[:, 9 * j + 3:9 * j + 6] = rot(orv[ar, idx]) / 1000.0 * ok[:, None]
@@ -7097,7 +7109,7 @@ class DuelEnv:
         # while looking at it from within 1500 units (no timers given: remembering them is the player's job)
         up = np.repeat(self.item_up, 2, axis=0)                               # per player (its match)
         items = self._item_blocks([(ids, 0) for ids in self.slot_items], pos, eye, fdir, up, rot)
-        own = np.stack([self.hp / 200.0, self.armor / 200.0, np.minimum(self.cool, 1.5) / 1.5, self.pitch / 90.0,
+        own = _stack([self.hp / 200.0, self.armor / 200.0, np.minimum(self.cool, 1.5) / 1.5, self.pitch / 90.0,
                         (self.hp <= 0).astype(np.float32)], 1)
         # movement-round goal: where it is and the next waypoint on the way (zeros in every other round)
         goal = np.zeros((n, N_GOAL), np.float32)
@@ -7111,7 +7123,7 @@ class DuelEnv:
             cg, sg = c[gi], si[gi]
 
             def rotg(v):
-                return np.stack([cg * v[:, 0] + sg * v[:, 1], -sg * v[:, 0] + cg * v[:, 1], v[:, 2]], 1)
+                return _stack([cg * v[:, 0] + sg * v[:, 1], -sg * v[:, 0] + cg * v[:, 1], v[:, 2]], 1)
             goal[gi, 0] = 1.0
             goal[gi, 1:4] = rotg(f.goals[g] - pos[gi]) / 2000.0
             goal[gi, 4:7] = _clip(rotg(wp - pos[gi]) / 500.0, -1, 1)
@@ -7122,10 +7134,10 @@ class DuelEnv:
 
             def ahead(dist_):
                 pr = np.minimum(self.prog[ci_] + dist_, C["cum"][-1])
-                return np.stack([np.interp(pr, C["cum"], C["path"][:, 0]), np.interp(pr, C["cum"], C["path"][:, 1])], 1)
+                return _stack([np.interp(pr, C["cum"], C["path"][:, 0]), np.interp(pr, C["cum"], C["path"][:, 1])], 1)
 
             def rotc(v):
-                return np.stack([cg * v[:, 0] + sg * v[:, 1], -sg * v[:, 0] + cg * v[:, 1]], 1)
+                return _stack([cg * v[:, 0] + sg * v[:, 1], -sg * v[:, 0] + cg * v[:, 1]], 1)
             goal[ci_, 0] = 1.0
             if self.fov_sight:                               # the track has to be seen; only its far end is known
                 goal[ci_, 1:3] = _clip(rotc(C["path"][-1][None] - pos[ci_, :2]) / 2000.0, -3, 3)
@@ -7160,7 +7172,7 @@ class DuelEnv:
             self.drift_pk, self.drift_foe = np.zeros(n, np.int64), np.full(n, -1, np.int64)
             self.drift_wn, self.drift_an = np.zeros((n, 2), np.float32), np.zeros((n, 2), np.float32)
             self.drift_q = []
-        ang = np.stack([ey, ep], 1).astype(np.float32)
+        ang = _stack([ey, ep], 1).astype(np.float32)
         pk = getattr(self, "_drift_pick", None)
         pk = np.zeros(n, np.int64) if pk is None else np.asarray(pk, np.int64).reshape(n)
         self._drift_pick = None
@@ -7171,7 +7183,7 @@ class DuelEnv:
         foe = np.asarray(opp, np.int64).reshape(n)           # as it is) and read as a new sighting (DRIFT_JUMP), the rate zeroed
         now = np.asarray(visible, bool)[:n] & (self.hp[:n] > 0)
         ok = (now & self.drift_ok & (pk == self.drift_pk) & (foe == self.drift_foe)
-              & (np.linalg.norm(pos - self.drift_pos, axis=1) < DRIFT_JUMP) & (np.linalg.norm(known - self.drift_kn, axis=1) < DRIFT_JUMP))
+              & (_norm(pos - self.drift_pos, axis=1) < DRIFT_JUMP) & (_norm(known - self.drift_kn, axis=1) < DRIFT_JUMP))
         d_ = ang - self.drift_ang
         d_[:, 0] = (d_[:, 0] + 180.0) % 360.0 - 180.0
         rate = d_ / DT                                       # degrees a second, as the perceived picture moved
@@ -7201,7 +7213,7 @@ class DuelEnv:
             self.drift_q.pop(0)
         if len(self.drift_q) <= dq:
             return out
-        held = np.stack([q_[1] for q_ in self.drift_q]).all(0)
+        held = _stack([q_[1] for q_ in self.drift_q]).all(0)
         return np.where(held[:, None], self.drift_q[0][0], 0.0).astype(np.float32)
 
     def _sm_note(self, opp, rf_, pick):
@@ -7221,11 +7233,11 @@ class DuelEnv:
             self.sm_hist.insert(0, self.sm_hist[0])
         ar = np.arange(n)
         pk = np.asarray(pick, np.int64) if pick is not None else np.broadcast_to(np.maximum(0, L_ - 1 - np.asarray(rf_, np.int64)), (n,))
-        H = [np.stack([h_[k_] for h_ in self.sm_hist]) for k_ in range(5)]
         rho = math.exp(-DT / max(SM_FACE_TAU, 1e-3))
         self.sm_face = (rho * self.sm_face + math.sqrt(1.0 - rho * rho) * SM_FACE_DEG * self.rng.normal(0, 1, n)).astype(np.float32)
         o_ = np.asarray(opp, np.int64)
-        self._sm_e = dict(yaw=H[0][pk, o_] + self.sm_face, duck=H[1][pk, o_], air=H[2][pk, o_], weapon=H[3][pk, o_], pos=H[4][pk, o_])
+        H = [_hist_pick(self.sm_hist, k_, pk, o_) for k_ in range(5)]     # (each entry read where it is: _hist_pick)
+        self._sm_e = dict(yaw=H[0] + self.sm_face, duck=H[1], air=H[2], weapon=H[3], pos=H[4])
 
     def _vel_percept(self, v):
         """(VEL_FIX) the enemy's velocity as he reads it: times a drifting scale error (VEL_WEBER, VEL_TAU), a speed below
@@ -7249,7 +7261,7 @@ class DuelEnv:
         tb_ = self.known[:n] + np.array([0, 0, 4.0], np.float32) - eye
         by_ = np.degrees(np.arctan2(tb_[:, 1], tb_[:, 0]))
         bp_ = np.degrees(np.arctan2(tb_[:, 2], np.hypot(tb_[:, 0], tb_[:, 1]) + 1e-6))
-        self.a2_hist.append(np.stack([np.asarray(self.yaw[:n], np.float64), -np.asarray(self.pitch[:n], np.float64), by_, bp_,
+        self.a2_hist.append(_stack([np.asarray(self.yaw[:n], np.float64), -np.asarray(self.pitch[:n], np.float64), by_, bp_,
                                       np.asarray(self.acquired[:n], np.float64)], 1))
         keep = max(self.react_frames + FOCUS_LOSS, self.vel_frames) + 3
         while len(self.a2_hist) > keep:
@@ -7275,10 +7287,8 @@ class DuelEnv:
         i1 = (L - 1) - back
         i0 = i1 - 1
         ok = i0 >= 0
-        A = np.stack(H)                                      # (L, n, 5)
-        ar = np.arange(n)
-        h1 = A[np.maximum(i1, 0), ar]
-        h0 = A[np.maximum(i0, 0), ar]
+        h1 = _hist_pick(H, None, np.maximum(i1, 0))         # (_stack(H): L, n, 5, read at these rows)
+        h0 = _hist_pick(H, None, np.maximum(i0, 0))
         w = lambda x: (x + 180.0) % 360.0 - 180.0
         sy = w(h1[:, 2] - h0[:, 2]) - w(h1[:, 0] - h0[:, 0])     # the target's turn across his view, a frame
         sp = (h1[:, 3] - h0[:, 3]) - (h1[:, 1] - h0[:, 1])
@@ -7325,7 +7335,7 @@ class DuelEnv:
         P, V = self.rp[oth].reshape(n, -1, 3), self.rv[oth].reshape(n, -1, 3)
         A, W, G = self.ra[oth].reshape(n, -1), self.rw[oth].reshape(n, -1), self.rage[oth].reshape(n, -1)
         to = P - eye[:, None, :]
-        dist = np.linalg.norm(to, axis=2) + 1e-6
+        dist = _norm(to, axis=2) + 1e-6
         see = A & (dist < PROJ_FAR) & ((to * fdir[:, None, :]).sum(2) / dist > self.fov()[2][:, None])
         ii, kk = np.nonzero(see)
         if len(ii):
@@ -7334,7 +7344,7 @@ class DuelEnv:
         if PROJ_FIX:                                         # (PROJ_FIX) noticed late, read late, the fuse only if followed
             P, V, G, see = self._proj_fix(P, V, A, G, see)
             to = P - eye[:, None, :]
-            dist = np.linalg.norm(to, axis=2) + 1e-6
+            dist = _norm(to, axis=2) + 1e-6
         d = np.where(see, dist, 1e9)
         base, more = np.zeros((n, S6, 9), np.float32), np.zeros((n, S6, 3), np.float32)
         if not (d < 1e8).any():                              # (the frame budget, 2026-10-29) none in sight: every row below is
@@ -7356,7 +7366,7 @@ class DuelEnv:
             base[:, j, 6], base[:, j, 7], base[:, j, 8] = ok & (w_ == RL), ok & (w_ == GL), ok & (w_ == PG)
             rel, rv_ = p_ - pos, v_ - vel                    # (as if both kept their speed: a grenade's bounce is not foreseen)
             t_ = _clip(-(rel * rv_).sum(1) / np.maximum((rv_ * rv_).sum(1), 1.0), 0.0, 2.0)
-            near = np.linalg.norm(rel + rv_ * t_[:, None], axis=1)
+            near = _norm(rel + rv_ * t_[:, None], axis=1)
             more[:, j, 0] = np.where(w_ == GL, _clip((P_FUSE[GL] - G[ar, idx]) / P_FUSE[GL], 0.0, 1.0), 0.0) * ok
             more[:, j, 1] = t_ / 2.0 * ok
             more[:, j, 2] = _clip(near / rad[w_], 0.0, 3.0) / 3.0 * ok
@@ -7408,7 +7418,7 @@ class DuelEnv:
                 jd_, ji_ = jd_.copy(), ji_.copy()
                 jd_[w_], ji_[w_] = J.wjd[self.way[ii][w_] - 1, g[w_], node[w_]], J.wji[self.way[ii][w_] - 1, g[w_], node[w_]]
             out[ii, :JL.N_JUMP] = JL.inputs(J.jumps if getattr(J, "rj", False) else self.jumps, jd_, np.where(gi >= 0, ji_, -1),   # (RJ_RUN_P, RJ_OPEN: its own list)
-                                           np.linalg.norm(J.nodes[node] - pos[ii], axis=1))
+                                           _norm(J.nodes[node] - pos[ii], axis=1))
         on = (self.weapon == GL) & (self.hp > 0) & (visible | (seen_t < GL_KNOWN))
         if on.any():
             to = known - np.array([0, 0, 20.0], np.float32) - eye       # (the floor at his feet, about)
@@ -7420,7 +7430,7 @@ class DuelEnv:
             ey = np.degrees((np.arctan2(to[:, 1], to[:, 0]) - yaw + np.pi) % (2 * np.pi) - np.pi)
             ep = np.degrees(-(th - 0.2 * np.cos(th)) - pit)
             tf = D / np.maximum(v_ * np.cos(th), 1.0)
-            out[:, JL.N_JUMP:JL.N_JUMP + 6] = np.stack([_clip(ey / 30.0, -1, 1), _clip(ey / 2.0, -1, 1), _clip(ep / 15.0, -1, 1),
+            out[:, JL.N_JUMP:JL.N_JUMP + 6] = _stack([_clip(ey / 30.0, -1, 1), _clip(ey / 2.0, -1, 1), _clip(ep / 15.0, -1, 1),
                                            _clip(ep / 2.0, -1, 1), _clip(tf / 1.5, 0, 2), np.ones(len(pos))], 1) * reach[:, None]
         if getattr(self, "_pm", None) is not None:           # the projectiles he sees beyond the nearest two, and what each is about to do
             out[:, JL.N_JUMP + 6:N_V15 - N_LEGS - N_EN] = self._pm
@@ -7649,9 +7659,9 @@ class DuelEnv:
         out[ii, 0] = 1.0
         out[ii, 1] = np.minimum(bd / 2000.0, 2.0)
         out[ii, 2] = _clip((bp[:, 2] - e_[:, 2]) / 300.0, -1.0, 1.0)
-        out[ii, 3] = _clip((bd - np.linalg.norm(kn - e_, axis=1)) / 500.0, -1.0, 1.0) * vis
+        out[ii, 3] = _clip((bd - _norm(kn - e_, axis=1)) / 500.0, -1.0, 1.0) * vis
         kn_a = kn if (known_a is None or not AIM2_SPLIT) else known_a[ii].astype(np.float32)   # (AIM2_SPLIT) the aim's place
-        out[ii, 4] = _clip(1.0 - np.linalg.norm(bp - kn_a, axis=1) / P_RADIUS[RL], 0.0, 1.0) * vis * (fr < 1.0)
+        out[ii, 4] = _clip(1.0 - _norm(bp - kn_a, axis=1) / P_RADIUS[RL], 0.0, 1.0) * vis * (fr < 1.0)
         jj = np.nonzero(vis)[0]
         if not len(jj):
             return out
@@ -7661,22 +7671,22 @@ class DuelEnv:
         air = self._sm_e["air"][k] if SENSE_MINOR else self.state[opp[k], 6] < 0.5
         feet = kn2 - np.array([0, 0, 24.0], np.float32)
         c_ = float(P_SPEED[RL])
-        t = np.linalg.norm(feet - e2, axis=1) / c_
+        t = _norm(feet - e2, axis=1) / c_
         for _ in range(3):                                   # the flight time and his place by then, each from the other
             t = np.minimum(t, 3.0)
             dz = np.where(air, ov[:, 2] * t - 400.0 * t * t, 0.0)
-            m = feet + np.stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)
+            m = feet + _stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)
             aimz = np.minimum(m[:, 2], feet[:, 2])           # (aimed at the floor: no higher than his feet now)
-            t = np.linalg.norm(np.stack([m[:, 0], m[:, 1], aimz], 1) - e2, axis=1) / c_
+            t = _norm(_stack([m[:, 0], m[:, 1], aimz], 1) - e2, axis=1) / c_
         t = np.minimum(t, 3.0)
         dz = np.where(air, ov[:, 2] * t - 400.0 * t * t, 0.0)
-        m = (feet + np.stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)).astype(np.float32)
+        m = (feet + _stack([ov[:, 0] * t, ov[:, 1] * t, dz], 1)).astype(np.float32)
         top = np.maximum(m[:, 2], feet[:, 2]) + 40.0
-        st = np.stack([m[:, 0], m[:, 1], top], 1).astype(np.float32)
+        st = _stack([m[:, 0], m[:, 1], top], 1).astype(np.float32)
         frd = self.w.rays(st, np.array([[0, 0, -1.0]], np.float32), 1024.0, mask=self.sight)[:, 0]
         found = frd < 1.0
         fz = np.where(found, top - frd * 1024.0, m[:, 2])
-        fp = np.stack([m[:, 0], m[:, 1], fz + PF_LIFT], 1).astype(np.float32)
+        fp = _stack([m[:, 0], m[:, 1], fz + PF_LIFT], 1).astype(np.float32)
         ey, ep = self._aim_at(e2, fp, yaw[k], pit[k])
         if AIM2_SPLIT:                                       # (AIM2_SPLIT) the sight error on the final angles only
             ey, ep = ey + self._a2_dang[k, 0], ep + self._a2_dang[k, 1]
@@ -7692,7 +7702,7 @@ class DuelEnv:
         o = 14
         mid = (fp + np.array([0, 0, 24.0 - PF_LIFT], np.float32)).astype(np.float32)
         an = np.linspace(0.0, 2 * np.pi, RAIM_WALL_N, endpoint=False)
-        dw = np.stack([np.cos(an), np.sin(an), np.zeros(RAIM_WALL_N)], 1).astype(np.float32)
+        dw = _stack([np.cos(an), np.sin(an), np.zeros(RAIM_WALL_N)], 1).astype(np.float32)
         fw = self.w.rays_each(mid, np.repeat(dw[None], len(k), 0), RAIM_WALL, mask=self.sight)
         j_ = fw.argmin(1)
         fmin = fw[np.arange(len(k)), j_]
@@ -7760,7 +7770,7 @@ class DuelEnv:
             wb = W[pn[None, :], nb[:, None]].astype(np.float32)      # the way from the believed place to each place (16ths of a second)
             wm = W[na[:, None], pn[None, :]].astype(np.float32)      # ... from each place to him
             wbm = W[na, nb].astype(np.float32)[:, None]              # ... from the believed place to him
-            ok = (wb < 255) & (wm < 255) & (np.linalg.norm(pps[None, :, :] - p_[:, None, :], axis=2) >= PF_SELF)
+            ok = (wb < 255) & (wm < 255) & (_norm(pps[None, :, :] - p_[:, None, :], axis=2) >= PF_SELF)
             det = np.maximum(np.where(wbm < 255, wb + wm - wbm, wb + wm), 0.0) / 16.0
             score = np.where(ok, det + 0.01 * wb / 16.0, np.inf)
             order = np.argsort(score, axis=1, kind="stable")[:, :S]
@@ -7769,7 +7779,7 @@ class DuelEnv:
             pp = (pps[order] + np.array([0, 0, PF_LIFT], np.float32)).astype(np.float32)        # (k, S, 3)
             ey, ep = self._aim_at(e_[:, None, :], pp, yaw[ii][:, None], pit[ii][:, None])
             to = pp - e_[:, None, :]
-            d = np.linalg.norm(to, axis=2)
+            d = _norm(to, axis=2)
             bt = np.asarray(self.v02_bt_now, np.float32)[ii]
             since = bt - np.minimum(bt, 1.0)                 # (the believed place is where he was a second after the last news)
             blk = np.zeros((len(ii), PF_SLOTS, PF_F), np.float32)
@@ -7876,7 +7886,7 @@ class DuelEnv:
         on = live & self.emg_ok[:, 0]
         pw = on & self.emg_ok[:, 2]
         ey, ep = self._aim_at(eye, self.emg_pt, yaw, pit)
-        d = np.linalg.norm(self.emg_pt - eye, axis=1)
+        d = _norm(self.emg_pt - eye, axis=1)
         out[:, 0] = on
         out[:, 1] = np.sin(np.radians(ey)) * pw
         out[:, 2] = np.cos(np.radians(ey)) * pw
@@ -7913,7 +7923,7 @@ class DuelEnv:
         oth_ = self._others_arr()
         kn_ = self._v02_others()[2]
         near_ = ((self.v02_bt[np.arange(self.n)[:, None], self._slot(oth_)] < V02_BY_KNOWN)
-                 & (np.linalg.norm(kn_ - self.state[:, None, :3], axis=2) < EAR_RANGE)).any(1)
+                 & (_norm(kn_ - self.state[:, None, :3], axis=2) < EAR_RANGE)).any(1)
         self.v02_by = np.where((np.asarray(shot, bool) | np.asarray(hop, bool) | np.asarray(steps, bool)) & near_ & up_, 0.0, self.v02_by).astype(np.float32)
 
     def note_take(self, i, it):
@@ -7928,7 +7938,7 @@ class DuelEnv:
                 a2_ = getattr(self, "acq2", None)
                 for j in self._mates(i):
                     sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-                    if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
+                    if sees or (_norm(self.state[j, :3] - self.state[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
                         self.hd_ev[j, HEAD_COL["en_took_" + c_]] += 1.0
         lab = self.item_def[it][4]
         if EN_STACK and self.item_def[it][0] in ("hp", "ar") and int(self.kind[self._match_of(i)]) not in (MOVE, SOLO):
@@ -7936,7 +7946,7 @@ class DuelEnv:
             a2_ = getattr(self, "acq2", None)
             for j in self._mates(i):
                 sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-                if sees or (np.linalg.norm(self.state[j, :3] - self.state[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
+                if sees or (_norm(self.state[j, :3] - self.state[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
                     self._es_take(j, self._slot(i), kd_, float(val_), float(cap_))
         k = 0 if lab == "MH" else 1 if lab == "RA" else 2 if lab in ("YA", "GA") else -1
         if k < 0 or int(self.kind[self._match_of(i)]) in (MOVE, SOLO):     # (alone on the map: nobody else is about)
@@ -7945,7 +7955,7 @@ class DuelEnv:
         a2_ = getattr(self, "acq2", None)
         for j in self._mates(i):
             sees = bool(self.acquired[j]) if a2_ is None else bool(a2_[j, (self._slot(i) - self._slot(j)) % (a2_.shape[1] + 1) - 1])
-            if sees or (np.linalg.norm(s[j, :3] - s[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
+            if sees or (_norm(s[j, :3] - s[i, :3]) < self._evt_reach(j) and self._hear1(j, i)):
                 self.v02_pk[j, self._slot(i), k] += 1.0
 
     # ---------------------------------------------------------------- the head's events and the win label (HEAD_EVENTS)
@@ -8058,7 +8068,7 @@ class DuelEnv:
         s = self.state
         gr_ = s[:, 6] > 0.5
         pos_ = s[:, :3]
-        moved_ = np.linalg.norm(pos_ - self.hd_pos, axis=1) > 200.0
+        moved_ = _norm(pos_ - self.hd_pos, axis=1) > 200.0
         e[:, C["takeoff"]] += self.hd_gr & ~gr_ & (s[:, 5] > 100) & ~moved_
         e[:, C["fall_land"]] += ~self.hd_gr & gr_ & (self.hd_z0 - pos_[:, 2] >= HEAD_FALL_DROP) & ~moved_
         e[:, C["weapon_change"]] += (self.weapon != self.hd_w) & ~moved_ & (self.hp > 0)
@@ -8091,7 +8101,7 @@ class DuelEnv:
 
     def _v02_clear(self, a, b):
         """is the line a -> b clear, for many pairs, as the eye sees (the sight mask); b may lie V02_SEE_TOL deep in a wall"""
-        dd = np.linalg.norm(b - a, axis=1)
+        dd = _norm(b - a, axis=1)
         if self.new_lib:
             fr = self.w.lines(a, b) if self.sight is None else self.w.lines(a, b, mask=self.sight)
         else:
@@ -8120,7 +8130,7 @@ class DuelEnv:
         fresh, acq2, kn2, so = self.v02_q[0]
         if self.react_seat is not None:                      # (SEAT_DELAYS) each seat as late as its own delay
             pk_ = np.maximum(0, len(self.v02_q) - 1 - (self.react_seat + FOCUS_LOSS))
-            fresh, acq2, kn2, so = (np.stack([q_[j_] for q_ in self.v02_q])[pk_, ar] for j_ in range(4))
+            fresh, acq2, kn2, so = (_hist_pick(self.v02_q, j_, pk_) for j_ in range(4))
         if fresh.any():
             self.v02_bt[ar2, sl] = np.where(fresh, 0.0, self.v02_bt[ar2, sl])
             hi_, hk_ = np.nonzero(fresh & ~acq2)             # ... heard only (running within HEAR): the rough place
@@ -8185,7 +8195,7 @@ class DuelEnv:
             if self.v02_ways is not None:
                 na = R.locate(pos)
                 v_ = self.v02_ways[nb, na]
-                t_ = v_ / 16.0 + np.linalg.norm(R.nodes[na] - pos, axis=1) / 320.0
+                t_ = v_ / 16.0 + _norm(R.nodes[na] - pos, axis=1) / 320.0
                 way[:, 0] = np.where(bel_ok & (v_ < 255), np.minimum(t_, V02_WAY_MAX) / V02_WAY_MAX, 1.0)
             for j_, g_ in enumerate(self.v02_big):
                 if g_ >= 0:
@@ -8204,7 +8214,7 @@ class DuelEnv:
         o = V02_GAME + V02_POS + V02_BEL
         out[:, o:o + V02_ITEMS] = 1.0
         if self.nI:
-            d_it = np.linalg.norm(self.item_pos[None, :, :] - pos[:, None, :], axis=2)
+            d_it = _norm(self.item_pos[None, :, :] - pos[:, None, :], axis=2)
             for j_, (ids_, rank_) in enumerate(self.v02_slots):
                 if len(ids_) > rank_:
                     dj_ = d_it[:, ids_]
@@ -8215,7 +8225,7 @@ class DuelEnv:
         P = len(self.v02_pp)
         if P:
             S = min(V02_SLOTS, P)
-            d_pl = np.linalg.norm(self.v02_pp[None, :, :] - pos[:, None, :], axis=2)
+            d_pl = _norm(self.v02_pp[None, :, :] - pos[:, None, :], axis=2)
             order = np.argsort(d_pl, axis=1)[:, :S]
             self.v02_tick += 1
             sel = np.nonzero((self.v02_tick + ar) % V02_SEE_EVERY == 0)[0]      # the look: every V02_SEE_EVERY frames a player
@@ -8233,9 +8243,9 @@ class DuelEnv:
             blk[:, :S, :3] = _clip(blk[:, :S, :3], -2.0, 2.0)
             blk[:, :S, 3] = np.minimum(d_pl[ar2, order] / 2000.0, 1.5)
             blk[:, :S, 4] = see
-            blk[:, :S, 5] = np.where(bel_ok[:, None], np.minimum(np.linalg.norm(pp_ - bel[:, None, :], axis=2) / 1500.0, 1.0), 1.0)
+            blk[:, :S, 5] = np.where(bel_ok[:, None], np.minimum(_norm(pp_ - bel[:, None, :], axis=2) / 1500.0, 1.0), 1.0)
             blk[:, :S, 6:10] = self.v02_pf[order]
-            nearest_ = np.linalg.norm(self.v02_pp[None, :, :] - bel[:, None, :], axis=2).argmin(1)
+            nearest_ = _norm(self.v02_pp[None, :, :] - bel[:, None, :], axis=2).argmin(1)
             blk[:, :S, 10] = (order == nearest_[:, None]) & bel_ok[:, None]
             blk[:, :S, 11] = 1.0
             out[:, o:] = blk.reshape(n, -1)
@@ -8282,7 +8292,7 @@ class DuelEnv:
         if R is not None and self.v02_ways is not None and len(self.hold_node) == H:
             na = R.locate(pos)
             v_ = self.v02_ways[self.hold_node[None, :], na[:, None]]     # (the way from his point to the place's, sixteenths of a second)
-            t_ = v_ / 16.0 + (np.linalg.norm(R.nodes[na] - pos, axis=1) / 320.0)[:, None]
+            t_ = v_ / 16.0 + (_norm(R.nodes[na] - pos, axis=1) / 320.0)[:, None]
             blk[:, :H, 3] = np.where(v_ < 255, np.minimum(t_, V02_WAY_MAX) / V02_WAY_MAX, 1.0)
         blk[:, :H, 4:6] = self.hold_feat[None, :, :]
         if self.hold_n:
@@ -8327,23 +8337,23 @@ class DuelEnv:
         sp = np.hypot(vel[:, 0], vel[:, 1])
         moving = sp > 50.0
         dv = np.arctan2(vel[:, 1], vel[:, 0]) - yaw
-        own = np.stack([_clip(sp / 400.0, 0, 3), np.sin(dv) * moving, np.cos(dv) * moving,
+        own = _stack([_clip(sp / 400.0, 0, 3), np.sin(dv) * moving, np.cos(dv) * moving,
                         _clip((sp - self.sp_hist[:, 3]) / 100.0, -1, 1)], 1)
         cs = LEAD_SPEED[self.weapon]
         on = visible & (cs > 0) & (self.hp > 0)
         c_ = np.maximum(cs, 1.0)
         r0 = known + np.array([0, 0, 4.0], np.float32) - eye
         air = self._sm_e["air"] if SENSE_MINOR else self.state[opp, 6] < 0.5
-        t = np.linalg.norm(r0, axis=1) / c_
+        t = _norm(r0, axis=1) / c_
         for _ in range(3):                                   # the flight time and the enemy's place by then, each from the other
             t = np.minimum(t, 3.0)
             dz = np.where(air, opp_vel[:, 2] * t - 400.0 * t * t, 0.0)
-            m = r0 + np.stack([opp_vel[:, 0] * t, opp_vel[:, 1] * t, dz], 1)
-            t = np.linalg.norm(m, axis=1) / c_
+            m = r0 + _stack([opp_vel[:, 0] * t, opp_vel[:, 1] * t, dz], 1)
+            t = _norm(m, axis=1) / c_
         t = np.minimum(t, 3.0)
         meet = eye + m
         top = np.maximum(meet[:, 2], known[:, 2]) + 16.0     # the floor under the meeting point: he does not fall through it
-        st = np.stack([meet[:, 0], meet[:, 1], top], 1).astype(np.float32)
+        st = _stack([meet[:, 0], meet[:, 1], top], 1).astype(np.float32)
         fr = self.w.rays(st, np.array([[0, 0, -1.0]], np.float32), 1024.0, mask=self.sight)[:, 0]
         floor = top - fr * 1024.0
         meet[:, 2] = np.where(fr < 1.0, np.maximum(meet[:, 2], floor + 28.0), meet[:, 2])
@@ -8354,7 +8364,7 @@ class DuelEnv:
         ef = np.degrees(-np.arctan2(floor + 2.0 - eye[:, 2], hd) - pit)
         if AIM2_SPLIT:                                       # (AIM2_SPLIT) the sight error on the final angles only
             ey, ep, ef = ey + self._a2_dang[:, 0], ep + self._a2_dang[:, 1], ef + self._a2_dang[:, 1]
-        lead = np.stack([_clip(ey / 30.0, -1, 1), _clip(ey / 2.0, -1, 1), _clip(ep / 15.0, -1, 1), _clip(ep / 2.0, -1, 1),
+        lead = _stack([_clip(ey / 30.0, -1, 1), _clip(ey / 2.0, -1, 1), _clip(ep / 15.0, -1, 1), _clip(ep / 2.0, -1, 1),
                          _clip(t / 1.5, 0, 2), np.where(fr < 1.0, _clip((ef - ep) / 15.0, 0, 1), 1.0)], 1) * on[:, None]
         return np.concatenate([own, lead], 1).astype(np.float32)
 
@@ -8365,7 +8375,7 @@ class DuelEnv:
         opp = ar ^ 1
         # clock (item timers are 25 s and 35 s) and score of the round
         t = np.repeat(self.round_t, 2)
-        clock = np.stack([np.minimum(t / 120.0, 2.0), np.sin(2 * np.pi * t / 25.0), np.cos(2 * np.pi * t / 25.0),
+        clock = _stack([np.minimum(t / 120.0, 2.0), np.sin(2 * np.pi * t / 25.0), np.cos(2 * np.pi * t / 25.0),
                           np.sin(2 * np.pi * t / 35.0), np.cos(2 * np.pi * t / 35.0), np.minimum(self.frags_r / 10.0, 2.0),
                           np.minimum(self.frags_r[opp] / 10.0, 2.0),
                           _clip((self.frags_r - self.frags_r[opp]) / 5.0, -2, 2)], 1)
@@ -8389,7 +8399,7 @@ class DuelEnv:
         xitems = self._item_blocks(self.xslots, pos, eye, fdir, up, rot)
         # sounds: how long ago and roughly where, per category; which pickup it was
         fresh = self.snd_t < 5.0
-        rel = np.stack([rot(self.snd_pos[:, j] - pos) / 1000.0 for j in range(4)], 1) * fresh[:, :, None]
+        rel = _stack([rot(self.snd_pos[:, j] - pos) / 1000.0 for j in range(4)], 1) * fresh[:, :, None]
         snd = np.concatenate([np.exp(-self.snd_t), rel.reshape(n, 12),
                               _EYE4[self.snd_kind] * fresh[:, :1]], 1)
         # where on the map, and which map
@@ -8397,10 +8407,10 @@ class DuelEnv:
         # sight: a coarse picture along the view, what is above, and long horizontal distances
         zf = np.where(self.zoom, ZOOM, 1.0)[:, None]                 # zoomed: the picture covers a smaller angle
         gy, gp = yaw[:, None] + self.view_grid[None, :, 0] * zf, pit[:, None] + self.view_grid[None, :, 1] * zf
-        vd = np.stack([np.cos(gp) * np.cos(gy), np.cos(gp) * np.sin(gy), -np.sin(gp)], 2).astype(np.float32)
+        vd = _stack([np.cos(gp) * np.cos(gy), np.cos(gp) * np.sin(gy), -np.sin(gp)], 2).astype(np.float32)
         view = self.w.rays_each(eye, vd, 2000.0, mask=self.sight)   # what he sees where he looks (a clip brush is not drawn)
         ud = self.up_dirs
-        udw = np.stack([c[:, None] * ud[None, :, 0] - si[:, None] * ud[None, :, 1],
+        udw = _stack([c[:, None] * ud[None, :, 0] - si[:, None] * ud[None, :, 1],
                         si[:, None] * ud[None, :, 0] + c[:, None] * ud[None, :, 1],
                         np.repeat(ud[None, :, 2], n, 0)], 2).astype(np.float32)
         above = self.w.rays_each(eye, udw, 512.0)
@@ -8414,7 +8424,7 @@ class DuelEnv:
             see = (np.abs(az)[None, :] <= fh[:, None]) & (np.abs(el[None, :] + pit[:, None]) <= fv[:, None])
             above = np.where(see, above, UNSEEN).astype(np.float32)
         ld = self.long_dirs
-        ldw = np.stack([c[:, None] * ld[None, :, 0] - si[:, None] * ld[None, :, 1],
+        ldw = _stack([c[:, None] * ld[None, :, 0] - si[:, None] * ld[None, :, 1],
                         si[:, None] * ld[None, :, 0] + c[:, None] * ld[None, :, 1],
                         np.zeros((n, N_LONG), np.float32)], 2).astype(np.float32)
         far = self.w.rays_each(pos, ldw, 2000.0)
@@ -8432,17 +8442,17 @@ class DuelEnv:
         if SENSE_MINOR:                                      # (SENSE_MINOR) from where he was seen, as his facing
             back = np.arctan2(pos[:, 1] - self._sm_e["pos"][:, 1], pos[:, 0] - self._sm_e["pos"][:, 0]) - oy
         enemy = np.concatenate([_EYE_NW[self._sm_e["weapon"] if SENSE_MINOR else self.weapon[opp]][:, OBS_W] * v_,
-                                np.stack([np.sin(back), np.cos(back)], 1) * v_,
+                                _stack([np.sin(back), np.cos(back)], 1) * v_,
                                 np.minimum(self.dmg_life / 200.0, 2.0)[:, None]], 1)
         # nearest teleporter (entrance and exit) and jump pad
         tp = np.zeros((n, 11), np.float32)
         if len(self.tele_in):
-            k = np.linalg.norm(self.tele_in[None] - pos[:, None], axis=2).argmin(1)
+            k = _norm(self.tele_in[None] - pos[:, None], axis=2).argmin(1)
             tp[:, 0:3] = rot(self.tele_in[k] - pos) / 1000.0
             tp[:, 3:6] = rot(self.tele_out[k] - pos) / 1000.0
             tp[:, 6] = 1.0
         if len(self.pads):
-            k = np.linalg.norm(self.pads[None] - pos[:, None], axis=2).argmin(1)
+            k = _norm(self.pads[None] - pos[:, None], axis=2).argmin(1)
             tp[:, 7:10] = rot(self.pads[k] - pos) / 1000.0
             tp[:, 10] = 1.0
         return np.concatenate([clock, xitems, snd, where, view, above, far, enemy, self.fb, tp,
@@ -8500,14 +8510,14 @@ class DuelEnv:
         for q in range(len(owner)):
             i, k, wq = owner[q], slot[q], int(wp[q])
             dq = p1r[q] - p0[q]
-            dn = float(np.linalg.norm(dq))
+            dn = float(_norm(dq))
             dirq = (dq / dn).astype(np.float32) if dn > 1e-9 else np.array([0.0, 0.0, -1.0], np.float32)
             d_on, ep = None, hitpt[q]
             for v_ in self._mates(int(i)):                         # the first body on the way (the trace's end there,
                 if bool(self._seg_box(p0[q:q + 1], hitpt[q:q + 1], s[v_:v_ + 1, :3],          # its box entered 1/8 short)
                                       np.where(self.duck[v_:v_ + 1], TOP_DUCK, TOP))[0]):
                     e_ = self._box_entry(p0[q], hitpt[q], s[v_, :3], TOP_DUCK if self.duck[v_] else TOP)
-                    if d_on is None or np.linalg.norm(e_ - p0[q]) < np.linalg.norm(ep - p0[q]):
+                    if d_on is None or _norm(e_ - p0[q]) < _norm(ep - p0[q]):
                         d_on, ep = int(v_), e_
             if d_on is not None or (wall[q] and wq != GL):         # G_MissileImpact: the blast at the end, cut toward trBase
                 self.ra[i, k] = False
@@ -8524,7 +8534,7 @@ class DuelEnv:
                 # all 37, mean 0.2; Quake 3's G_BounceMissile takes the part flown, which the record does not follow)
                 vh[2] -= float(grav[q]) * (math.floor(1000.0 * DT * (1.0 - float(fr[q])) + 1e-6) / 1000.0)
                 vq = ((vh - 2.0 * float(vh @ nrm) * nrm) * GL_BOUNCE).astype(np.float32)
-                if nrm[2] > 0.2 and float(np.linalg.norm(vq)) < 40.0:
+                if nrm[2] > 0.2 and float(_norm(vq)) < 40.0:
                     self.rv[i, k] = 0.0                            # it lies one unit off the surface, cut to whole units
                     self.rrest[i, k] = True                        # (weaponlab5: at rest at -761.0, 513.0 over a floor at 512)
                     self.rp[i, k] = np.trunc(hitpt[q] + nrm)
@@ -8574,10 +8584,10 @@ class DuelEnv:
             for v_ in self._mates(int(i)):
                 if bool(self._seg_box(mz[None], hp_[None], s[v_:v_ + 1, :3], np.where(self.duck[v_:v_ + 1], TOP_DUCK, TOP))[0]):
                     e_ = self._box_entry(mz, hp_, s[v_, :3], TOP_DUCK if self.duck[v_] else TOP)
-                    if d_on is None or np.linalg.norm(e_ - mz) < np.linalg.norm(ep - mz):
+                    if d_on is None or _norm(e_ - mz) < _norm(ep - mz):
                         d_on, ep = int(v_), e_
             dq = pa - mz
-            dirq = (dq / max(1e-6, float(np.linalg.norm(dq)))).astype(np.float32)
+            dirq = (dq / max(1e-6, float(_norm(dq)))).astype(np.float32)
             if d_on is not None or (fr < 1 and wpn != GL):           # it meets him, or the plasma a wall: the blast now
                 self._explode(i, wpn, self._snap_towards(ep, mz) if MISSILE_POINT else ep, d_on,
                               dirq if d_on is not None else None, s, st, back=None if MISSILE_POINT else dirq)
@@ -8611,7 +8621,7 @@ class DuelEnv:
             c = s[v, :3]
             e2 = ep.copy()                                # measured: splash acts SPLASH_NEAR units closer than
             h = c[:2] - ep[:2]                            # the plain box distance (horizontally toward the player)
-            hl = float(np.linalg.norm(h))
+            hl = float(_norm(h))
             if hl > 1e-3:
                 e2[:2] += h / hl * min(SPLASH_NEAR, hl)
             hi_ = c + MAXS
@@ -8619,7 +8629,7 @@ class DuelEnv:
                 hi_ = hi_.copy()
                 hi_[2] = c[2] + TOP_DUCK
             near = _clip(e2, c + MINS, hi_)
-            d = float(np.linalg.norm(e2 - near))
+            d = float(_norm(e2 - near))
             R = P_RADIUS[wpn]
             if d < R and (self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999
                           or (GL_QL and any(self.w.trace(ep, c + np.array([ox_, oy_, 0.0], np.float32), mask=self.sight)["fraction"] >= 0.999
@@ -8627,7 +8637,7 @@ class DuelEnv:
                 f_ = 1.0 - d / R
                 kdir = c - e2
                 kdir[2] += 24.0                           # as in Quake 3: splash pushes upward
-                kn = float(np.linalg.norm(kdir))
+                kn = float(_norm(kdir))
                 kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
                 victims.append((v, P_SPLASH[wpn] * f_, P_SPLASH[wpn] * f_, kdir, False))
         for v, dmg, kpts, kdir, is_direct in victims:
@@ -8680,14 +8690,14 @@ class DuelEnv:
                 hi_ = hi_.copy()
                 hi_[2] = c[2] + TOP_DUCK + box_
             near = _clip(ep, c + MINS - box_, hi_)
-            d = float(np.linalg.norm(ep - near))
+            d = float(_norm(ep - near))
             if d < R and (self.w.trace(ep, c, mask=self.sight)["fraction"] >= 0.999
                           or (GL_QL and any(self.w.trace(ep, c + np.array([ox_, oy_, 0.0], np.float32), mask=self.sight)["fraction"] >= 0.999
                                             for ox_, oy_ in ((15.0, 15.0), (15.0, -15.0), (-15.0, 15.0), (-15.0, -15.0))))):
                 f_ = 1.0 - d / R
                 kdir = (c - ep).astype(np.float32)
                 kdir[2] += 24.0
-                kn = float(np.linalg.norm(kdir))
+                kn = float(_norm(kdir))
                 kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
                 kp = int(RL_KNOCK_BASE * f_ * (RL_KNOCK_SELF if v == i else RL_KNOCK_OTHER))
                 victims.append((v, float(int(P_SPLASH[wpn] * f_)), float(kp), kdir, False))
@@ -8755,7 +8765,7 @@ class DuelEnv:
         vis = self.visible[idx] & fighter
         tgt = np.where(vis[:, None], s[opp, :3], self.known[idx]) + np.array([0, 0, 4.0], np.float32)
         to = tgt - eye
-        dist = np.linalg.norm(to, axis=1) + 1e-6
+        dist = _norm(to, axis=1) + 1e-6
         ey = (np.degrees(np.arctan2(to[:, 1], to[:, 0])) - self.yaw[idx] + 180.0) % 360.0 - 180.0
         ep = -np.degrees(np.arctan2(to[:, 2], np.hypot(to[:, 0], to[:, 1]) + 1e-6)) - self.pitch[idx]
         # wander: turn toward the most open direction in the front half
@@ -8833,7 +8843,7 @@ class DuelEnv:
         ii = np.nonzero(who)[0]
         if not len(ii):
             return
-        d = np.linalg.norm(self.known[ii] - self.state[ii, :3], axis=1)
+        d = _norm(self.known[ii] - self.state[ii, :3], axis=1)
         ok = self.has[ii] & (self.ammo[ii] > 0)
         want = np.full(len(ii), MG, np.int64)
         want = np.where(ok[:, LG] & (d < W_RULE_LG), LG, want)
@@ -8877,7 +8887,7 @@ class DuelEnv:
         ever = (self.hand_ever & ~new) | inview
         # a hold, as tools/pro_yardsticks.py's: within HAND_HOLD_R of where the stretch began, nobody in view, a big weapon in hand
         okh = (self.hp > 0) & ~inview & ((w == RL) | (w == RG) | (w == LG))
-        anew = ~okh | new | died | (np.linalg.norm(s[:, :3] - self.hand_p0, axis=1) > HAND_HOLD_R)
+        anew = ~okh | new | died | (_norm(s[:, :3] - self.hand_p0, axis=1) > HAND_HOLD_R)
         self.hand_p0 = np.where(anew[:, None], s[:, :3], self.hand_p0).astype(np.float32)
         self.hand_a0 = np.where(anew, okh, self.hand_a0)
         hf = np.where(anew, 0, self.hand_hf + 1)
@@ -8929,7 +8939,7 @@ class DuelEnv:
         """rockets fired with no enemy in view (see BLIND_RULE): free as a rocket jump, near where he thinks the enemy is,
         or on a way the enemy is likely to take from there; any other costs BLIND_RL_DMG points of damage"""
         yr, pr = np.radians(self.yaw[ii]), np.radians(self.pitch[ii])
-        fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
+        fdir = _stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
         eye = self._eye(s)[ii]
         R = self.route
         for k, i in enumerate(ii):
@@ -8941,23 +8951,23 @@ class DuelEnv:
                 if bb_ is not None:
                     B, bk_ = bb_[1][0], bool(bb_[2][0])
             how = 0
-            if np.linalg.norm(L - s[i, :3]) < BLIND_JUMP:
+            if _norm(L - s[i, :3]) < BLIND_JUMP:
                 how = 1
-            elif bk_ and np.linalg.norm(L - B) < BLIND_NEAR:
+            elif bk_ and _norm(L - B) < BLIND_NEAR:
                 how = 2
-            elif len(self.spam_places) and float(np.linalg.norm(self.spam_places - L, axis=1).min()) < BLIND_PLACES:
+            elif len(self.spam_places) and float(_norm(self.spam_places - L, axis=1).min()) < BLIND_PLACES:
                 how = 4                                      # (a place the pros fire at with nobody in view)
             elif bk_ and R is not None:
-                nb, nl, me = (int(x) for x in R.locate(np.stack([B, L, s[i, :3]]).astype(np.float32)))
-                if np.linalg.norm(R.nodes[nl] - L) < BLIND_WAY_R:
+                nb, nl, me = (int(x) for x in R.locate(_stack([B, L, s[i, :3]]).astype(np.float32)))
+                if _norm(R.nodes[nl] - L) < BLIND_WAY_R:
                     tb = R.from_node(nb)
-                    by = float(self.seen_t[i]) + float(np.linalg.norm(L - eye[k])) / P_SPEED[RL] + BLIND_SLACK
+                    by = float(self.seen_t[i]) + float(_norm(L - eye[k])) / P_SPEED[RL] + BLIND_SLACK
                     if tb[nl] <= by and (tb[nl] + R.from_node(nl)[me] <= tb[me] + BLIND_SLACK
                                          or bool((tb[nl] + R.T[:len(self.route_goal), nl] <= R.T[:len(self.route_goal), nb] + BLIND_SLACK).any())):
                         how = 3
             if not how and BLIND_AHEAD:                      # (BLIND_AHEAD) near where the brain says he will be in 1, 2 or 4 s
                 fu_ = self._blind_fut([i])
-                if fu_ is not None and bool(fu_[0][0]) and float(np.linalg.norm(fu_[1][0] - L[None, :], axis=1).min()) < BLIND_NEAR:
+                if fu_ is not None and bool(fu_[0][0]) and float(_norm(fu_[1][0] - L[None, :], axis=1).min()) < BLIND_NEAR:
                     how = 5
             self.stats["blind_rl"] += 1
             self.stats["blind_rl_how"][how] += 1
@@ -9138,7 +9148,7 @@ class DuelEnv:
             if v_ > 0 or WIN_LONG:                           # (WIN_LONG) the win part into r_long too
                 rl_ = np.asarray(self.r_long[gm], np.float64) * (1.0 - v_) + (paid_[gm] if WIN_LONG else 0.0)
                 self.r_long[gm] = rl_.astype(self.r_long.dtype)
-            info["win_blend"] = np.stack([self.wb_raw, self.wb_cb, np.where(gm, paid_, 0.0)], 1).astype(np.float32)
+            info["win_blend"] = _stack([self.wb_raw, self.wb_cb, np.where(gm, paid_, 0.0)], 1).astype(np.float32)
             if PAY_SPLIT:                                    # the terms scaled with the pay they stand for
                 cb_ix = [PT_IX[k_] for k_ in ("frag", "death", "dmg_dealt", "dmg_taken")]
                 sc_ = np.full(len(PAY_TERMS), 1.0 - v_)
@@ -9441,7 +9451,7 @@ class DuelEnv:
             d_ = json.load(fh_)
         lab_of = {}                                          # the file's item -> his intention, by its place (0: none he can name)
         for nm_, p_ in (d_.get("items") or {}).items():
-            dd_ = [float(np.linalg.norm(self.item_pos[it_] - np.array(p_, np.float32))) for it_ in self.route_item]
+            dd_ = [float(_norm(self.item_pos[it_] - np.array(p_, np.float32))) for it_ in self.route_item]
             if dd_ and min(dd_) < OPEN_ITEM_R and self.route_goal[int(np.argmin(dd_))] in INTENTS[1:EN_INTENT]:
                 lab_of[nm_] = INTENTS.index(self.route_goal[int(np.argmin(dd_))])
         best = {}
@@ -9449,7 +9459,7 @@ class DuelEnv:
             b_ = sp_.get("bsp")
             if not b_ or float(b_.get("distance", 1e9)) > OPEN_SPAWN_R:
                 continue
-            dk_ = np.linalg.norm(self.spawns - np.array(b_["pos"], np.float32)[None, :], axis=1)
+            dk_ = _norm(self.spawns - np.array(b_["pos"], np.float32)[None, :], axis=1)
             k_ = int(dk_.argmin())
             if dk_[k_] < OPEN_AT and (k_ not in best or float(b_["distance"]) < float(best[k_]["bsp"]["distance"])):
                 best[k_] = sp_
@@ -9503,7 +9513,7 @@ class DuelEnv:
         self.op_lt = self.life_t.copy()
         if new.any():
             ii = np.nonzero(new)[0]
-            dd = np.linalg.norm(self.spawns[None, :, :] - self.state[ii, None, :3], axis=2)
+            dd = _norm(self.spawns[None, :, :] - self.state[ii, None, :3], axis=2)
             k_ = dd.argmin(1)
             at = (dd[np.arange(len(ii)), k_] < OPEN_AT) & on[ii]
             self.op_sp[ii] = np.where(at, k_, -1)
@@ -9533,7 +9543,7 @@ class DuelEnv:
             tk[:, c_] |= took
             bet = v_ & (tg < t[:, c_])
             if bel is not None and bok is not None and len(bel) == n:
-                near[:, c_] = np.where(bet, np.asarray(bok, bool) & (np.linalg.norm(bel - self.item_pos[it][None, :], axis=1) < OPEN_AVOID), near[:, c_])
+                near[:, c_] = np.where(bet, np.asarray(bok, bool) & (_norm(bel - self.item_pos[it][None, :], axis=1) < OPEN_AVOID), near[:, c_])
             t[:, c_] = np.where(bet, tg, t[:, c_])
             valid[:, c_] |= v_
         fb = on & ~self.op_big & tk.any(1)                   # the first big pickup of a life: its seconds
@@ -9644,7 +9654,7 @@ class DuelEnv:
         R_ = getattr(self, "route", None)
         node_ = None
         if R_ is not None:                                   # (each place's nearest point of the walking map)
-            node_ = np.array([int(np.linalg.norm(R_.nodes - p_, axis=1).argmin()) for p_ in pos_])
+            node_ = np.array([int(_norm(R_.nodes - p_, axis=1).argmin()) for p_ in pos_])
         for it in range(self.nI):
             lab_ = self.item_def[it][4]
             if lab_ and lab_ not in self.gen_near:
@@ -9652,7 +9662,7 @@ class DuelEnv:
                     g_ = self.route_item.index(it)
                     ix_ = np.nonzero(R_.T[g_, node_] <= GEN_NEAR_S)[0]
                 else:
-                    ix_ = np.nonzero(np.linalg.norm(pos_ - self.item_pos[it], axis=1) <= GEN_NEAR)[0]
+                    ix_ = np.nonzero(_norm(pos_ - self.item_pos[it], axis=1) <= GEN_NEAR)[0]
                 if len(ix_):
                     self.gen_near[lab_] = (ix_, it)
         self.gen_mean = float(GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)) if PRO_START_LEN <= 0 else float(min(PRO_START_LEN, GAME_LEN - 0.5 * (GEN_T_LO + GEN_T_HI)))
@@ -9724,7 +9734,7 @@ class DuelEnv:
             j0 = self._gen_place(rng)
         p0 = self.gen_pl[j0]
         cand_ = np.array([self._gen_place(rng) for _ in range(40)])
-        d_ = np.linalg.norm(self.gen_pl[cand_] - p0, axis=1)
+        d_ = _norm(self.gen_pl[cand_] - p0, axis=1)
         eye_ = np.array([0.0, 0.0, 26.0], np.float32)
         seen_ = self.w.lines(np.repeat((p0 + eye_)[None, :], len(cand_), 0), self.gen_pl[cand_] + eye_) >= 0.999
         ok_ = np.nonzero((d_ >= GEN_FAR) & ~seen_)[0]
@@ -9798,7 +9808,7 @@ class DuelEnv:
         for j_ in range(self.nI):
             cand = [c_ for c_ in range(len(fcls)) if fcls[c_] == cls_[j_] and c_ not in used]
             if cand:
-                d_ = [float(np.linalg.norm(fpos[c_] - self.item_pos[j_])) for c_ in cand]
+                d_ = [float(_norm(fpos[c_] - self.item_pos[j_])) for c_ in cand]
                 if min(d_) <= 48.0:
                     imap[j_] = cand[int(np.argmin(d_))]
                     used.add(int(imap[j_]))
@@ -10111,8 +10121,8 @@ class DuelEnv:
                 ends = ends[::-1]
             pa, pb = ends[0][0].astype(np.float32), ends[1][0].astype(np.float32)
             room = all(not self.w.trace(p_, p_, MINS, MAXS)["startsolid"] for p_ in (pa, pb))
-            lines = bool(self._los(np.stack([pa, pb]) + np.array([0, 0, VIEW_H], np.float32),
-                                   np.stack([pb, pa]) + np.array([0, 0, 8.0], np.float32)).all())
+            lines = bool(self._los(_stack([pa, pb]) + np.array([0, 0, VIEW_H], np.float32),
+                                   _stack([pb, pa]) + np.array([0, 0, 8.0], np.float32)).all())
             if room and lines:
                 break
             RS[17] += 1
@@ -10145,7 +10155,7 @@ class DuelEnv:
         self.rail_shot[qa] = False
         RS[0] += 1
         RS[14] += float(self._counted(qa).sum())
-        RS[18] += float(np.linalg.norm(ends[0][0] - ends[1][0]))
+        RS[18] += float(_norm(ends[0][0] - ends[1][0]))
 
     def _moment_keep(self, kd, mo):
         bank, cap = self.mom_bank[kd], (SPAWN_BANK, MID_BANK)[kd]
@@ -10603,7 +10613,7 @@ class DuelEnv:
         kk_ = self.rjrun_k[rr]
         A_, B_, p_ = self.rj_a[kk_], self.rj_b[kk_], s[rr, :3]
         at_a = (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < RJ_EDGE) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
-        near_b = np.linalg.norm(p_ - B_, axis=1) < RJ_LAND
+        near_b = _norm(p_ - B_, axis=1) < RJ_LAND
         landed_ = (s[rr, 6] > 0.5) | ((prev[rr, 5] < 0.0) & (s[rr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
         from_, air_ = self.rjrun_from[rr] | at_a, self.rjrun_air[rr]
         ov_ = near_b & landed_ & from_ & (air_ >= 8)
@@ -10775,7 +10785,7 @@ class DuelEnv:
         bounce_ = (self.rc_vz[who] < 0.0) & (v[:, 2] > 100.0)               # (down and up again inside one frame: AUTO_HOP)
         down_ = self.rc_down[who] | ((ph == 2) & gr)
         ph = np.where((ph == 2) & ((down_ & ~gr & (v[:, 2] > 100.0)) | bounce_), 3, ph)   # (up again from the hop's landing: the gap jump)
-        over_ = gr & (np.linalg.norm(p - B, axis=1) < 110.0) & (p[:, 2] > B[2] - 40.0)
+        over_ = gr & (_norm(p - B, axis=1) < 110.0) & (p[:, 2] > B[2] - 40.0)
         ph = np.where((ph == 3) & over_, 4, ph)
         ph = np.where(self.jrun_over[who] | self.jrun_past[who], np.maximum(ph, 4), ph)
         basin_ = np.array([np.hypot(*(rts[int(r_)]["start"][:2] - p[j_, :2])) < 250.0 for j_, r_ in enumerate(self.rc_r[who])])             & (np.abs(p[:, 2] - A[2]) < 40.0)                # (near the staging spot, on its level; elsewhere: along his try's way)
@@ -10808,7 +10818,7 @@ class DuelEnv:
                 tyaw[j] = math.degrees(math.atan2(q_[1] - p[j, 1], q_[0] - p[j, 0]))
                 fwd[j] = 2
             elif ph[j] <= 1 and gr[j]:
-                d_ = np.linalg.norm(R["p"][:, :2] - p[j, :2], axis=1) + 0.1 * np.linalg.norm(R["v"][:, :2] - v[j, :2], axis=1)
+                d_ = _norm(R["p"][:, :2] - p[j, :2], axis=1) + 0.1 * _norm(R["v"][:, :2] - v[j, :2], axis=1)
                 if ph[j] == 1:                               # the maneuver: the nearest of the next few reference frames
                     lo_ = int(idx[j])
                     hi_ = min(len(d_), lo_ + 8)
@@ -11078,7 +11088,7 @@ class DuelEnv:
                 continue
             eye = (s[i, :3] + np.array([0, 0, VIEW_H], np.float32)).astype(np.float32)
             to = (P - eye).astype(np.float64)
-            D, dist = float(np.hypot(to[0], to[1])), float(np.linalg.norm(to))
+            D, dist = float(np.hypot(to[0], to[1])), float(_norm(to))
             if dist > 1800.0 or dist < 200.0:
                 continue
             if self.has[i, PG] and self.ammo[i, PG] > 0 and self.w.trace(eye, P.astype(np.float32), mask=self.sight)["fraction"] >= 0.97:
@@ -11120,7 +11130,7 @@ class DuelEnv:
         eye = np.array([0, 0, VIEW_H], np.float32)
         up30 = np.array([0, 0, 30.0], np.float32)
         for gi, gp in enumerate(R.goals):
-            d = np.linalg.norm(R.nodes[live] - gp, axis=1)
+            d = _norm(R.nodes[live] - gp, axis=1)
             cand = live[(d > 450.0) & (d < 1400.0) & (R.T_walk[gi, live] < 1e8)]
             near = live[d < 320.0]
             if not len(cand) or not len(near):
@@ -11134,7 +11144,7 @@ class DuelEnv:
                 score[a_] = (see[:-1].mean() + 0.003 * float(_clip(R.nodes[c_][2] - gp[2], -100.0, 300.0))) * see[-1]
             posts = []
             for b_ in np.argsort(-score)[:6]:
-                if score[b_] > 0.4 and all(np.linalg.norm(R.nodes[cand[b_]] - pts[q_]) > 250.0 for q_ in posts) and len(posts) < 2:
+                if score[b_] > 0.4 and all(_norm(R.nodes[cand[b_]] - pts[q_]) > 250.0 for q_ in posts) and len(posts) < 2:
                     posts.append(len(pts))
                     pts.append(R.nodes[cand[b_]].copy())
             if posts:
@@ -11160,7 +11170,7 @@ class DuelEnv:
         self.hunt_t[ri[h & engaged]] = 0.0
         start = h & (self.hunt_t[ri] > 0) & (self.x_goal[ri] < 0) & (self.hp[opp] > 0)
         if start.any():
-            sp = np.linalg.norm(self.xpts[None, :self.x_spawns] - s[opp[start], None, :3], axis=2).argmin(1)
+            sp = _norm(self.xpts[None, :self.x_spawns] - s[opp[start], None, :3], axis=2).argmin(1)
             self.x_goal[ri[start]] = sp
         self.x_goal[ri[h & (self.hunt_t[ri] <= 0)]] = -1
         hunt = h & (self.x_goal[ri] >= 0) & ~big
@@ -11194,7 +11204,7 @@ class DuelEnv:
         within HOP_QUIET_NEAR units) or his intention is one of the map's holding places"""
         q_ = (self.v02_ht < HOP_QUIET_HEARD).any(1) if getattr(self, "v02_ht", None) is not None else np.zeros(self.n, bool)
         if getattr(self, "v02_bel", None) is not None:
-            q_ = q_ | (np.asarray(self.v02_bel_ok, bool) & (np.linalg.norm(self.v02_bel - s[:, :3], axis=1) < HOP_QUIET_NEAR))
+            q_ = q_ | (np.asarray(self.v02_bel_ok, bool) & (_norm(self.v02_bel - s[:, :3], axis=1) < HOP_QUIET_NEAR))
         if self.hold_n:
             q_ = q_ | ((self.intent >= HOLD_INTENT) & (self.intent < HOLD_INTENT + HOLD_SLOTS))
         return q_
@@ -11206,7 +11216,7 @@ class DuelEnv:
         if st is None:                                       # (also when turned on by live.json in a running simulator)
             st = self.stats["rg_far"] = np.zeros(4)
         oth_ = self._others_arr()[sc_]
-        d_ = np.linalg.norm(s[oth_, :3] - s[sc_, None, :3], axis=2)
+        d_ = _norm(s[oth_, :3] - s[sc_, None, :3], axis=2)
         d_ = np.where(self.hp[oth_] > 0, d_, np.inf).min(1)
         far_ = (w_ == RG) & np.isfinite(d_) & (d_ > RG_FAR_DIST)
         st[0] += int(((w_ == RG) & np.isfinite(d_)).sum())  # rail shots with an enemy alive, far ones, their price, the
@@ -11357,7 +11367,7 @@ class DuelEnv:
             a[:, 8] = self.zoom
         strafe = np.where(l_new & ~d_new, 0, np.where(d_new & ~l_new, 2, 1))       # both down cancel out
         vert = np.where(j_new, 1, np.where(c_new, 2, 0))
-        new = np.stack([f_new, strafe, vert], 1)
+        new = _stack([f_new, strafe, vert], 1)
         new = np.where(who[:, None], new, a[:, :3])
         self.key_last[:] = new
         a[:, :3] = new
@@ -11465,7 +11475,7 @@ class DuelEnv:
             if vh_ is not None and vh_.shape[1] == n:
                 cnt_ = np.maximum(self.trk_vc[foe], 1.0)
                 mv_ = vh_[:, foe].sum(0) / cnt_[:, None]
-                out[:, C["en_spd8"]] = np.linalg.norm(vh_[:, foe], axis=2).sum(0) / cnt_
+                out[:, C["en_spd8"]] = _norm(vh_[:, foe], axis=2).sum(0) / cnt_
                 out[:, C["en_mvf8"]] = c * mv_[:, 0] + si * mv_[:, 1]
                 out[:, C["en_mvl8"]] = -si * mv_[:, 0] + c * mv_[:, 1]
             zs_ = getattr(self, "trk_zseen", None)
@@ -11716,7 +11726,7 @@ class DuelEnv:
             self.stats["rsp_wait_frames"] += int(out_.sum())
         prev = self.state.copy()
         # mouse: the chosen turn speed is followed with a little inertia; jerky commands cost a little
-        cmd = np.stack([TURN[a[:, 3]], PITCH[a[:, 4]]], 1)
+        cmd = _stack([TURN[a[:, 3]], PITCH[a[:, 4]]], 1)
         if LEGS_TURN_ADD and a.shape[1] > TA_HEAD:          # (LEGS_TURN_ADD) on his legs: their turn plus his correction (_legs_step)
             cmd[:, 0] = turn_sum(cmd[:, 0], self.ta_add)
         cmd = cmd * np.where(self.zoom, ZOOM, 1.0).astype(np.float32)[:, None]      # zoomed: the same hand movement turns less
@@ -11762,7 +11772,7 @@ class DuelEnv:
         self.weapon = want
         # as in the game: a weapon change only starts once the reload from the last shot is over
         self.cool = np.where(sw, np.maximum(self.cool, self.fire_cd + SWITCH), self.cool)
-        moves = np.stack([fwd, side, jump], 1).astype(np.int8)
+        moves = _stack([fwd, side, jump], 1).astype(np.int8)
         y0 = self.yaw.copy()
         # the view eases back toward level, but not while an enemy is in sight (no pull against vertical aim)
         lev = np.where(self.seen_t > 0.5, self.level, 1.0)
@@ -11774,7 +11784,7 @@ class DuelEnv:
         for ms in self.substeps:
             done_ms += ms
             f = done_ms / 25.0
-            self.w.step(moves, np.stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32), ms)
+            self.w.step(moves, _stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32), ms)
             if FIRE_QL and hs_s1 is None:
                 hs_s1, hs_yaw1 = self.w.state(), y0 + turn * f
         self.pitch = p1
@@ -11791,7 +11801,7 @@ class DuelEnv:
         self.pain_t += DT
         self.trail_t += DT
         self._hear(2, np.nonzero((prev[:, 6] > 0.5) & (s[:, 6] < 0.5) & (s[:, 5] > 100))[0])      # jumps
-        self._hear(3, np.nonzero(np.linalg.norm(s[:, :3] - prev[:, :3], axis=1) > 200)[0])       # teleports
+        self._hear(3, np.nonzero(_norm(s[:, :3] - prev[:, :3], axis=1) > 200)[0])       # teleports
         self.sp_hist = np.roll(self.sp_hist, 1, 1)
         self.sp_hist[:, 0] = np.hypot(prev[:, 3], prev[:, 4])
         # fall damage (Quake 3 rule: from the speed of the landing)
@@ -11852,14 +11862,14 @@ class DuelEnv:
             pf_ = np.nonzero(bill & (self.seen_t <= PREFIRE_T))[0]
             if len(pf_):                                     # pre-fire: the crosshair on where the enemy must be by now
                 yr_, pr_ = np.radians(self.yaw[pf_]), np.radians(self.pitch[pf_])
-                fd_ = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
+                fd_ = _stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
                 to_ = (self.known[pf_] + self.last_vel[pf_] * np.minimum(self.seen_t[pf_], 1.0)[:, None]
                        + np.array([0, 0, 4.0], np.float32) - self._eye(s)[pf_])
                 bb_ = self._blind_src(pf_) if BLIND_BRAIN else None      # (BLIND_BRAIN) a life on the brain: its place
                 if bb_ is not None:
                     to_ = np.where(bb_[0][:, None], bb_[1] + np.array([0, 0, 4.0], np.float32) - self._eye(s)[pf_], to_)
                 al_ = (to_ * fd_).sum(1)
-                near_ = (al_ > 0) & (np.linalg.norm(to_ - al_[:, None] * fd_, axis=1) <= PREFIRE_R)
+                near_ = (al_ > 0) & (_norm(to_ - al_[:, None] * fd_, axis=1) <= PREFIRE_R)
                 if bb_ is not None:                          # (... with no answer there: no exemption)
                     near_ &= ~(bb_[0] & ~bb_[2])
                 bill[pf_[near_]] = False
@@ -11869,10 +11879,10 @@ class DuelEnv:
                 fu_ = self._blind_fut(pa_) if len(pa_) else None
                 if fu_ is not None:
                     yr_, pr_ = np.radians(self.yaw[pa_]), np.radians(self.pitch[pa_])
-                    fd_ = np.stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
+                    fd_ = _stack([np.cos(pr_) * np.cos(yr_), np.cos(pr_) * np.sin(yr_), -np.sin(pr_)], 1)
                     to_ = fu_[1] + np.array([0, 0, 4.0], np.float32) - self._eye(s)[pa_][:, None, :]     # [m, 3 horizons, 3]
                     al_ = (to_ * fd_[:, None, :]).sum(2)
-                    nf_ = fu_[0] & ((al_ > 0) & (np.linalg.norm(to_ - al_[..., None] * fd_[:, None, :], axis=2) <= PREFIRE_R)).any(1)
+                    nf_ = fu_[0] & ((al_ > 0) & (_norm(to_ - al_[..., None] * fd_[:, None, :], axis=2) <= PREFIRE_R)).any(1)
                     bill[pa_[nf_]] = False
                     self.stats["prefire_ahead"] = self.stats.get("prefire_ahead", 0) + int(nf_.sum())
             reward -= BLIND_FIRE_COST * bill
@@ -11924,7 +11934,7 @@ class DuelEnv:
         st = dict(dmg_taken=np.zeros(n, np.float32), attacker=np.full(n, -1), kill_w={}, kicked=False,
                   by={}, killer=np.full(n, -1))               # damage per (attacker, victim) this frame; who took him below zero
         if TELEFRAG:                                         # (TELEFRAG) a teleport onto the other player kills him (G_KillBox)
-            tp_ = np.nonzero((np.linalg.norm(s[:, :3] - prev[:, :3], axis=1) > 200) & (self.hp > 0) & (pkind == NORMAL)
+            tp_ = np.nonzero((_norm(s[:, :3] - prev[:, :3], axis=1) > 200) & (self.hp > 0) & (pkind == NORMAL)
                              & (self.run_k < 0))[0]          # (games only: in an item or jump run each player is alone)
             for i in tp_:
                 for v in self._mates(int(i)):
@@ -12070,11 +12080,11 @@ class DuelEnv:
         self.note_shots(np.nonzero(shoot & (self.weapon != G))[0])
         if do_fire.any():
             yr, pr = np.radians(self.yaw), np.radians(self.pitch)
-            fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
+            fdir = _stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
             eye = self._eye(s)
             if FIRE_QL and hs_now.any():                     # (FIRE_QL) the eye and the yaw of the frame's first substep, the final pitch
                 yr = np.where(hs_now, np.radians(hs_yaw1), yr)
-                fdir[hs_now] = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)[hs_now]
+                fdir[hs_now] = _stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)[hs_now]
                 eye[hs_now] = self._eye(hs_s1)[hs_now]
             for i in np.nonzero(do_fire)[0]:
                 wpn = int(do_w[i])
@@ -12107,7 +12117,7 @@ class DuelEnv:
                             if got_ or tr_["fraction"] * span_ <= ahead_:     # it meets something within its first stretch
                                 self.stats[name + "_shots"] += hm
                                 self.stats[name + "_shots_vis"] += hm * int(self.visible[i])
-                                dv_ = min(got_, key=lambda q_: float(np.linalg.norm(s[q_, :3] - mz_))) if got_ else None
+                                dv_ = min(got_, key=lambda q_: float(_norm(s[q_, :3] - mz_))) if got_ else None
                                 if MISSILE_POINT and got_:      # (MISSILE_POINT) the trace's end at the body it met
                                     near_ = self._box_entry(mz_, near_.astype(np.float32), s[dv_, :3],
                                                             TOP_DUCK if self.duck[dv_] else TOP)
@@ -12125,7 +12135,7 @@ class DuelEnv:
                         if wpn == GL:                       # Quake lofts grenades a little (forward z + 0.2)
                             d_ = fdir[i].copy()
                             d_[2] += 0.2
-                            self.rv[i, k] = d_ / np.linalg.norm(d_) * P_SPEED[wpn]
+                            self.rv[i, k] = d_ / _norm(d_) * P_SPEED[wpn]
                         if FIRE_QL and wpn != RL:           # (FIRE_QL) plasma and grenades as the game launches them
                             self._fire_launch(i, k, wpn, eye[i], fdir[i], s, st)
                             self.stats[name + "_shots"] += hm
@@ -12140,7 +12150,7 @@ class DuelEnv:
                     self.stats[name + "_shots"] += hm * SG_PELLETS
                     self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
                     to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
-                    d = float(np.linalg.norm(to)) + 1e-6
+                    d = float(_norm(to)) + 1e-6
                     if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                         continue
                     hd = math.hypot(to[0], to[1]) + 1e-6
@@ -12158,7 +12168,7 @@ class DuelEnv:
                 fd = fdir[i]
                 if MG_SPREAD > 0 and wpn in (MG, HMG):        # the bullet leaves somewhere inside the cone
                     u_ = np.cross(fd, np.array([0.0, 0.0, 1.0], np.float32))
-                    u_ = u_ / (np.linalg.norm(u_) + 1e-6)
+                    u_ = u_ / (_norm(u_) + 1e-6)
                     v_ = np.cross(fd, u_)
                     if FIRE_QL:                             # (FIRE_QL) Quake 3's Bullet_Fire: a random angle, each axis a uniform share
                         th_ = self.rng.random() * 2 * math.pi
@@ -12167,7 +12177,7 @@ class DuelEnv:
                     else:
                         ra_, th_ = math.tan(math.radians(MG_SPREAD)) * self.rng.random(), self.rng.random() * 2 * math.pi
                         fd = fd + (u_ * math.cos(th_) + v_ * math.sin(th_)) * ra_
-                    fd = (fd / np.linalg.norm(fd)).astype(np.float32)
+                    fd = (fd / _norm(fd)).astype(np.float32)
                 fr = self.w.rays_each(eye[i:i + 1], fd[None, None, :], rng_, mask=self.sight)[0, 0]
                 end = eye[i] + fd * rng_ * fr
                 self.stats[name + "_shots"] += hm
@@ -12191,7 +12201,7 @@ class DuelEnv:
             self.rage[owner, slot] += DT
             p0 = self.rp[owner, slot]
             vel = self.rv[owner, slot]
-            step_len = np.linalg.norm(vel, axis=1) * DT + 1e-6
+            step_len = _norm(vel, axis=1) * DT + 1e-6
             p1r = p0 + vel * DT
             dirs = (p1r - p0) / step_len[:, None]
             fr = self.w.rays_md(p0, dirs, step_len, mask=self.sight)     # per-projectile step length (speeds differ)
@@ -12215,7 +12225,7 @@ class DuelEnv:
                     nrm = tr["normal"]
                     vq = self.rv[i, k]
                     vq = (vq - 2.0 * float(vq @ nrm) * nrm) * GL_BOUNCE
-                    if nrm[2] > 0.2 and np.linalg.norm(vq) < 40:
+                    if nrm[2] > 0.2 and _norm(vq) < 40:
                         vq[:] = 0.0                         # resting on the floor until the fuse runs out
                     self.rv[i, k] = vq
                     self.rp[i, k] = hitpt[q] + nrm * 0.5
@@ -12232,7 +12242,7 @@ class DuelEnv:
         hurt = np.nonzero((dmg_taken > 0) & (self.hp > 0))[0]              # pain sounds: the opponent hears them within earshot
         if len(hurt):
             lis_ = hurt ^ 1
-            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
+            near_ = _norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
             if HEAR_QL:                                      # (HEAR_QL) where the game sends it
                 near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
@@ -12268,7 +12278,7 @@ class DuelEnv:
             live = (pkind == NORMAL) & (self.script == 0) & (self.hp > 0) & (self.run_k < 0)
             sw = STYLE_W[self.style]
             mine = live & (sw >= 0) & (self.weapon == sw)
-            d_ = np.linalg.norm(self.known - s[:, :3], axis=1)
+            d_ = _norm(self.known - s[:, :3], axis=1)
             seen = live & self.visible
             inb = mine & seen & (d_ > STYLE_LO[self.style]) & (d_ < STYLE_HI[self.style])
             reward += STYLE_DMG * self.dmg_reward * np.where(mine, dealt, 0.0) + STYLE_BAND * inb * (DT / 60.0)
@@ -12290,7 +12300,7 @@ class DuelEnv:
             if not AIM2_FLINCH:                              # (AIM2_FLINCH: the sustained error only)
                 self.percept = (self.percept + add[:, None] * self.rng.normal(0, 1, (n, 2))).astype(np.float32)
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
-        self.fb = np.stack([np.minimum(dealt / 100.0, 2.0), np.minimum(dmg_taken / 100.0, 2.0),
+        self.fb = _stack([np.minimum(dealt / 100.0, 2.0), np.minimum(dmg_taken / 100.0, 2.0),
                             np.sin(ang) * hitby, np.cos(ang) * hitby], 1).astype(np.float32)
 
         # items: pickups, respawns, decay above 100
@@ -12308,7 +12318,7 @@ class DuelEnv:
                 self.stats["big_up"][k_] += int(self.item_up[:, id_].sum())
         self.stats["big_frames"] += self.item_up.shape[0]
         if self.nI:
-            dxy = np.linalg.norm(s[:, None, :2] - self.item_pos[None, :, :2], axis=2)
+            dxy = _norm(s[:, None, :2] - self.item_pos[None, :, :2], axis=2)
             dz = np.abs(s[:, None, 2] - self.item_pos[None, :, 2])
             touch = (dxy < 36) & (dz < PICK_Z) & np.repeat(self.item_up, 2, axis=0) & (self.hp > 0)[:, None]
             for i, it in zip(*np.nonzero(touch)):
@@ -12448,7 +12458,7 @@ class DuelEnv:
             # Only steady movement counts: a jump in the figure (item taken, death, teleporter) pays nothing.
             R_ = self.route
             node = R_.locate(s[:, :3])
-            off_ = np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0
+            off_ = _norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0
             up_ = self.item_up[np.arange(n) // (self._others_arr().shape[1] + 1)]
             phi = np.full(n, 15.0, np.float32)
             for gi, lab_ in enumerate(self.route_goal):
@@ -12485,7 +12495,7 @@ class DuelEnv:
             tb_ = t_                                         # (the shortest set's seconds)
             if WAYS:                                         # his way: the seconds to go by the set he chose
                 t_ = self._on_way(g_, node, tb_)[0]
-            phi = np.where(valid, t_ + np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
+            phi = np.where(valid, t_ + _norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0, 0.0)
             grp = np.arange(n) // (self._others_arr().shape[1] + 1)
             it_ = np.array(self.route_item)[np.minimum(g_, len(self.route_item) - 1)]     # (a holding place's row is no item's: "soon" below)
             soon = self.item_up[grp, it_] | (self.item_t[grp, it_] < phi + 5.0) | (self.intent >= EN_INTENT)
@@ -12515,8 +12525,8 @@ class DuelEnv:
                                                        (up_ & np.asarray(self.visible, bool)[:len(up_)]).sum(), new_.sum(),
                                                        np.hypot(s[:, 3], s[:, 4])[up_ & ~at_].sum()], np.float64)
             if WAYS and self.way_field is not None:          # (see WAYS, "the pay")
-                off_ = np.linalg.norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0
-                p3_ = np.stack([np.where(valid, self._on_way(g_, node, tb_, w=np.full(n, k_, np.int64))[0] + off_, 0.0) for k_ in range(N_WAYS)], 1)
+                off_ = _norm(R_.nodes[node] - s[:, :3], axis=1) / 320.0
+                p3_ = _stack([np.where(valid, self._on_way(g_, node, tb_, w=np.full(n, k_, np.int64))[0] + off_, 0.0) for k_ in range(N_WAYS)], 1)
                 self.way_phi0 = np.where(self.intent_changed[:, None], np.maximum(p3_, 1.0), self.way_phi0).astype(np.float32)
                 sw_ = (self.way != self.way_was) & ~self.intent_changed & valid & ~in_run     # the way alone changed: the trip goes on, on the new set's scale
                 if sw_.any():
@@ -12576,7 +12586,7 @@ class DuelEnv:
                         eye_ = self._eye(s)[c_]
                         for o_ in self._others_arr()[c_].T:     # (every other player of his group)
                             los_ = self._los(eye_, s[o_, :3] + np.array([0, 0, 8.0], np.float32))
-                            los_ &= np.linalg.norm(s[o_, :3] - s[c_, :3], axis=1) < 4000
+                            los_ &= _norm(s[o_, :3] - s[c_, :3], axis=1) < 4000
                             if RESPAWN_QL:
                                 los_ &= self.rsp_wait[o_] <= 0
                             trip[c_[los_]] = False
@@ -12631,7 +12641,7 @@ class DuelEnv:
                         self.jrun_spd[jr] += self._spr_now[jr]   # (its own counter: the speed pay is in reward only, not r_long)
                     self.jrun_edge[jr] |= (np.hypot(p_[:, 0] - A_[:, 0], p_[:, 1] - A_[:, 1]) < 120.0) & (np.abs(p_[:, 2] - A_[:, 2]) < 64.0)
                     landed_ = (s[jr, 6] > 0.5) | ((prev[jr, 5] < 0.0) & (s[jr, 5] > 0.0))   # on the floor, or touched it and jumped again inside the frame
-                    ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (np.linalg.norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
+                    ov_ = ~self.jrun_over[jr] & self.jrun_edge[jr] & (_norm(p_ - B_, axis=1) < 110.0) & (landed_ | arr[jr])
                     if JUMP_OVER_ANY:                        # (JUMP_OVER_ANY) over it from his own take-off
                         L_ = self.jrun_lift[jr]
                         gap_ = np.hypot(A_[:, 0] - B_[:, 0], A_[:, 1] - B_[:, 1])
@@ -12644,7 +12654,7 @@ class DuelEnv:
                             far_ = np.hypot(L_[:, 0] - B_[:, 0], L_[:, 1] - B_[:, 1]) >= 0.6 * gap_
                             high_ = L_[:, 2] >= np.minimum(A_[:, 2], B_[:, 2]) - 48.0
                             ring_ = 110.0
-                        at_ = (np.linalg.norm(p_ - B_, axis=1) < ring_) & (p_[:, 2] >= B_[:, 2] - 40.0)
+                        at_ = (_norm(p_ - B_, axis=1) < ring_) & (p_[:, 2] >= B_[:, 2] - 40.0)
                         if JUMP_OVER_ANY >= 2:                   # (=2) this rule alone: "been at the take-off, then at the landing
                             ov_ = ~self.jrun_over[jr] & at_ & far_ & high_ & landed_    # some way" counted walks round (Hektik 15)
                             if JUMP_OVER_ANY >= 3:               # (=3) ... and down no shorter than the gap less 64 u from the take-off
@@ -12662,7 +12672,7 @@ class DuelEnv:
                     oc_ = ov_ & self._counted(jr)
                     self.stats["jump_far"][1] += int((oc_ & ~self.jrun_far[jr]).sum())
                     self.stats["jump_far"][3] += int((oc_ & self.jrun_far[jr]).sum())
-                    past_ = ov_ | ((np.linalg.norm(p_ - B_, axis=1) < 110.0) & landed_)     # landed at the jump's landing, over it or
+                    past_ = ov_ | ((_norm(p_ - B_, axis=1) < 110.0) & landed_)     # landed at the jump's landing, over it or
                     self.jrun_past[jr[past_]] = True                                        # round it: from here the plain ways with
                     self.jrun_f[jr[past_]] = 0                                              # the pros' jumps, to the item
                     np.add.at(self.stats["jump_over"], np.minimum(kk_[ov_ & self._counted(jr)], 63), 1)
@@ -13005,9 +13015,9 @@ class DuelEnv:
         eye = self._eye(s)
         opp = ar ^ 1
         to = s[opp, :3] - eye
-        dist = np.linalg.norm(to, axis=1) + 1e-6
+        dist = _norm(to, axis=1) + 1e-6
         yr, pr = np.radians(self.yaw), np.radians(self.pitch)
-        fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
+        fdir = _stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
         infov = (to * fdir).sum(1) / dist > self.fov()[2]
         cand = np.nonzero(infov & (dist < 4000))[0]
         vis = np.zeros(n, bool)

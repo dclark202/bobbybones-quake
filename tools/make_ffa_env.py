@@ -155,7 +155,7 @@ rep('''            E_ = L["env"]
         if first:
             p = cand[int(rng.integers(len(cand)))]
         else:
-            d = np.array([float(np.linalg.norm(q - opp)) for q in cand])
+            d = np.array([float(_norm(q - opp)) for q in cand])
             ok = np.nonzero(d > 500)[0]
             p = cand[int(rng.choice(ok))] if len(ok) else cand[int(d.argmax())]
         face = math.degrees(math.atan2(opp[1] - p[1], opp[0] - p[0])) if not first else float(rng.uniform(-180, 180))''',
@@ -164,10 +164,10 @@ rep('''            E_ = L["env"]
         if first:
             p = cand[int(rng.integers(len(cand)))]
         else:                                               # well away from everybody else
-            d = np.array([min(float(np.linalg.norm(q - o_)) for o_ in oth) for q in cand])
+            d = np.array([min(float(_norm(q - o_)) for o_ in oth) for q in cand])
             ok = np.nonzero(d > 500)[0]
             p = cand[int(rng.choice(ok))] if len(ok) else cand[int(d.argmax())]
-        opp = oth[int(np.linalg.norm(oth - p, axis=1).argmin())]
+        opp = oth[int(_norm(oth - p, axis=1).argmin())]
         face = math.degrees(math.atan2(opp[1] - p[1], opp[0] - p[0])) if not first else float(rng.uniform(-180, 180))''')
 rep('''        """a death on the lab map: back to the room's own spot, not to a map spawn point"""
         m = v // 2''', '''        """a death on the lab map: back to the room's own spot, not to a map spawn point"""
@@ -178,7 +178,7 @@ rep('''        s = self.state
         lis = src ^ 1
         k_ = np.repeat(self.kind, 2)[lis]
         alone = ((k_ == MOVE) | (k_ == SOLO) | ((k_ == COURSE) & ~self.gun[lis]))
-        d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
+        d = _norm(s[src, :3] - s[lis, :3], axis=1)
         d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         seen = self.acquired[lis] & ~alone
         ok = (seen | (d < self._evt_reach(lis))) & ~alone & (self.hp[lis] > 0)
@@ -187,7 +187,7 @@ rep('''        s = self.state
         src = np.repeat(src, self.G - 1)
         k_ = np.repeat(self.kind, self.G)[lis]
         alone = ((k_ == MOVE) | (k_ == SOLO) | ((k_ == COURSE) & ~self.gun[lis]))
-        d = np.linalg.norm(s[src, :3] - s[lis, :3], axis=1)
+        d = _norm(s[src, :3] - s[lis, :3], axis=1)
         d = np.where(self._hear_ok(lis, src), d, 1e9) if HEAR_QL else d     # (HEAR_QL: heard where the game sends it)
         acq_p = self.acquired[lis] if self.G == 2 else self.acq2[lis, (self.slot[src] - self.slot[lis]) % self.G - 1]
         seen = acq_p & ~alone
@@ -210,18 +210,18 @@ rep('''        n = self.n
 rep('''        s = self.state
         lis = src ^ 1
         k_ = np.repeat(self.kind, 2)[src]
-        ok = (np.linalg.norm''', '''        s = self.state
+        ok = (_norm''', '''        s = self.state
         lis = self.others[src].reshape(-1)
         src = np.repeat(src, self.G - 1)
         if kind is not None and np.ndim(kind):
             kind = np.repeat(np.asarray(kind), self.G - 1)
         k_ = np.repeat(self.kind, self.G)[src]
-        ok = (np.linalg.norm''')
+        ok = (_norm''')
 
 # ---- observation
-rep('''        fdir = np.stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
+rep('''        fdir = _stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
         opp = np.arange(n) ^ 1
-        # Reaction time''', '''        fdir = np.stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
+        # Reaction time''', '''        fdir = _stack([np.cos(pit) * c, np.cos(pit) * si, -np.sin(pit)], 1)
         opp = self.foe
         # Reaction time''')
 rep('''        orp, orv, ora, orw = self.rp[opp], self.rv[opp], self.ra[opp], self.rw[opp]''',
@@ -265,8 +265,8 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
         rest = acq.copy()
         rest[ar, self.fidx] = False                          # the attended enemy has his own inputs
         to = p_old[self.others] + np.array([0, 0, 4.0], np.float32) - eye[:, None, :]
-        dist = np.linalg.norm(to, axis=2) + 1e-6
-        fdir = np.stack([np.cos(pit) * np.cos(yaw), np.cos(pit) * np.sin(yaw), -np.sin(pit)], 1)
+        dist = _norm(to, axis=2) + 1e-6
+        fdir = _stack([np.cos(pit) * np.cos(yaw), np.cos(pit) * np.sin(yaw), -np.sin(pit)], 1)
         off = np.where(rest, 1.0 - (to * fdir[:, None, :]).sum(2) / dist, 9.0)
         order = np.argsort(off, axis=1)
         for j in range(min(2, G - 2)):
@@ -278,7 +278,7 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
             ap = -np.arctan2(t_[:, 2], np.hypot(t_[:, 0], t_[:, 1]) + 1e-6) - pit
             back = np.arctan2(pos[:, 1] - p_old[o, 1], pos[:, 0] - p_old[o, 0]) - np.radians(yaw_old[o])
             blk = np.concatenate([np.ones((n, 1), np.float32), rot(p_old[o] - pos) / 1000.0,
-                                  np.stack([np.sin(ay), np.cos(ay), np.sin(ap), np.cos(back)], 1),
+                                  _stack([np.sin(ay), np.cos(ay), np.sin(ap), np.cos(back)], 1),
                                   np.eye(NW, dtype=np.float32)[self.weapon[o]][:, [RL, RG, LG]]], 1)   # what he holds (v9)
             out[:, 11 * j:11 * j + 11] = blk * on[:, None]
         out[:, 16] = acq.sum(1) / 5.0
@@ -325,7 +325,7 @@ rep('''                name = WEAPONS[wpn]
 ''')
 rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
                     to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
-                    d = float(np.linalg.norm(to)) + 1e-6
+                    d = float(_norm(to)) + 1e-6
                     if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                         continue
                     hd = math.hypot(to[0], to[1]) + 1e-6
@@ -341,7 +341,7 @@ rep('''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * 
                     continue''', '''                    self.stats[name + "_shots_vis"] += hm * SG_PELLETS * int(self.visible[i])
                     for v in vs_:
                         to = tg_[v, :3] + np.array([0, 0, 4.0], np.float32) - eye[i]
-                        d = float(np.linalg.norm(to)) + 1e-6
+                        d = float(_norm(to)) + 1e-6
                         if self.w.trace(eye[i], tg_[v, :3] + np.array([0, 0, 4.0], np.float32), mask=self.sight)["fraction"] < 0.999:
                             continue
                         hd = math.hypot(to[0], to[1]) + 1e-6
@@ -361,7 +361,7 @@ rep('''                if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''', '''                got = [v for v in vs_ if bool(self._seg_box(eye[i:i + 1], end[None], tg_[v:v + 1, :3],
                                                             np.where(dk_[v:v + 1], TOP_DUCK, TOP))[0])]
                 if got:                                     # the nearest player on the line takes the shot
-                    v = min(got, key=lambda q: float(np.linalg.norm(tg_[q, :3] - eye[i])))
+                    v = min(got, key=lambda q: float(_norm(tg_[q, :3] - eye[i])))
                     self.stats[name + "_hits"] += hm
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)''')
 rep('''            opp = owner ^ 1
@@ -381,7 +381,7 @@ rep('''        opp_all = ar ^ 1
         hurt = np.nonzero((dmg_taken > 0) & (self.hp > 0))[0]              # pain sounds: the opponent hears them within earshot
         if len(hurt):
             lis_ = hurt ^ 1
-            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
+            near_ = _norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
             if HEAR_QL:                                      # (HEAR_QL) where the game sends it
                 near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
@@ -393,7 +393,7 @@ rep('''        opp_all = ar ^ 1
         if len(hurt):
             lis_ = self.others[hurt].reshape(-1)
             hurt = np.repeat(hurt, self.G - 1)
-            near_ = np.linalg.norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
+            near_ = _norm(s[hurt, :3] - s[lis_, :3], axis=1) < self._evt_reach(lis_)
             if HEAR_QL:                                      # (HEAR_QL) where the game sends it
                 near_ &= self._hear_ok(lis_, hurt)
             self.pain_t[lis_[near_]] = 0.0
@@ -456,13 +456,13 @@ b = s.index("        self._teach_update()\n        info = dict(events=events)")
 s = s[:a] + '''        # senses: sight (line of sight + field of view) and hearing (rough position), for every other member
         eye = self._eye(s)
         yr, pr = np.radians(self.yaw), np.radians(self.pitch)
-        fdir = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
+        fdir = _stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
         pkind = np.repeat(self.kind, self.G)
         off = np.zeros((n, self.G - 1), np.float32)
         for k_ in range(self.G - 1):
             opp = self.others[:, k_]
             to = s[opp, :3] - eye
-            dist = np.linalg.norm(to, axis=1) + 1e-6
+            dist = _norm(to, axis=1) + 1e-6
             cosang = (to * fdir).sum(1) / dist
             off[:, k_] = 1.0 - cosang
             infov = cosang > self.fov()[2]
@@ -513,7 +513,7 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
         self.known = self.known2[ar, self.fidx]
         self.seen_t = self.seen2[ar, self.fidx]
         to = s[opp, :3] - eye
-        dist = np.linalg.norm(to, axis=1) + 1e-6
+        dist = _norm(to, axis=1) + 1e-6
         vh = np.nonzero(vis & (self.script == 0))[0]        # aim quality while the enemy is in view
         if len(vh):
             cosang = _clip((to[vh] * fdir[vh]).sum(1) / dist[vh], -1, 1)
