@@ -51,7 +51,8 @@ def wld(r, draws=True):
     return "{}&ndash;{}".format(r[0], r[1]) + ("&ndash;{}".format(r[2]) if draws and r[2] else "")
 
 
-def render(b, stamp):
+def render(b, stamp, linked=False):
+    """linked: the site has the people's pages (tools/board_games.py), so a name links to them"""
     players = b["players"]
     bobby = b.get("bobby")
     rows = R.Table()
@@ -67,7 +68,8 @@ def render(b, stamp):
         n, of = rows.rank(bobby, bobby)
         rec_all, rec_now = (b.get("duels") or {}).get("all", [0, 0, 0]), (b.get("duels") or {}).get(ver, [0, 0, 0])
         tot = bp["won"] + bp["lost"]
-        out.append('<section class="bobby"><h2>BobbyBones {}</h2><div class="stats">'.format(e(ver)))
+        out.append('<section class="bobby"><h2>{} {}</h2><div class="stats">'.format(
+            '<a class="plink" href="players/bobby.html">BobbyBones</a>' if linked else "BobbyBones", e(ver)))
         out.append('<div class="stat"><b>{:.0f}</b><span>rating (&plusmn;{:.0f}), rank {} of {}</span></div>'.format(bp["r"], 2 * bp["rd"], n, of))
         out.append('<div class="stat"><b>{}&ndash;{}</b><span>frags with people, made&ndash;taken ({:.0%})</span></div>'.format(
             bp["won"], bp["lost"], bp["won"] / max(1, tot)))
@@ -84,10 +86,10 @@ def render(b, stamp):
         num = n if n else '<small title="ranked from {} frags with BobbyBones">&ndash;</small>'.format(R.MIN_FRAGS)
         if k == bobby:
             rec = (b.get("duels") or {}).get("all") or [0, 0, 0]
-            out.append('<tr class="me" data-name="bobbybones"><td class="n">{}</td><td class="nm">BobbyBones <small>{}</small></td>'
+            out.append('<tr class="me" data-name="bobbybones"><td class="n">{}</td><td class="nm">{} <small>{}</small></td>'
                        '<td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td><td class="n">{} <small>(his own)</small></td>'
                        '<td class="n"><small>the bot</small></td><td>both</td></tr>'.format(
-                           num, e(ver), p["r"], 2 * p["rd"], sum(rec), wld(rec)))
+                           num, '<a class="plink" href="players/bobby.html">BobbyBones</a>' if linked else "BobbyBones", e(ver), p["r"], 2 * p["rd"], sum(rec), wld(rec)))
             continue
         pp = people.get(k) or {}
         nm = "Anonymous" if (k in private or not p.get("name") or p["name"] == k) else p["name"]
@@ -95,9 +97,10 @@ def render(b, stamp):
         tot_d = [sum(v[i] for v in du.values()) for i in range(3)]
         by = " &middot; ".join("{} {}".format(s.upper(), wld(v)) for s, v in sorted(du.items()) if sum(v))
         on = " + ".join(s.upper() for s in sorted(fr) if sum(fr[s])) or "-"
+        cell = '<a class="plink" href="players/{}.html">{}</a>'.format(R.page_id(k), e(nm)) if linked and nm != "Anonymous" else e(nm)
         out.append('<tr data-name="{}"><td class="n">{}</td><td class="nm">{}</td><td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td>'
                    '<td class="n">{}{}</td><td class="n">{}&ndash;{}</td><td>{}</td></tr>'.format(
-                       e(nm.lower(), quote=True), num, e(nm), p["r"], 2 * p["rd"], sum(tot_d) or "-",
+                       e(nm.lower(), quote=True), num, cell, p["r"], 2 * p["rd"], sum(tot_d) or "-",
                        wld(tot_d) if sum(tot_d) else "-", " <small>({})</small>".format(by) if len(du) > 1 and by else "",
                        p["won"], p["lost"], on))
     out.append('</tbody></table></div>')
@@ -181,7 +184,8 @@ def main():
     if b is None:
         sys.exit("no board in {}".format(src))
     stamp = "Board as of {} UTC.".format(time.strftime("%Y-%m-%d %H:%M", time.gmtime(float(b.get("saved") or time.time()))))
-    page = render(b, stamp)
+    linked = bool(a.history)
+    page = render(b, stamp, linked)
     os.makedirs(out_dir, exist_ok=True)
     tmp = os.path.join(out_dir, "index.html.tmp")
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
@@ -190,12 +194,12 @@ def main():
     open(os.path.join(out_dir, ".nojekyll"), "w").close()
     with open(os.path.join(out_dir, "README.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(README)
-    h = hashlib.sha256(render(b, "").encode("utf-8"))
+    h = hashlib.sha256(render(b, "", linked).encode("utf-8"))
     if a.history:
         with open(a.history, encoding="utf-8") as f:
             rows = json.load(f)["games"]
         BG.clear(out_dir)
-        files = BG.write_site(out_dir, rows, a.games, a.maps, a.items)
+        files = BG.write_site(out_dir, rows, a.games, a.maps, a.items, board=b)
         for rel in sorted(files):
             h.update(rel.encode("utf-8"))
             h.update(files[rel].encode("utf-8"))

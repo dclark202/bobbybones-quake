@@ -133,4 +133,48 @@ td small { color: var(--muted); font-weight: 400; }
 .trend .ln { fill: none; stroke: var(--bobby); stroke-width: 2; }
 .trend .pt { fill: var(--panel); stroke: var(--bobby); stroke-width: 2; }
 .trend .pt.now { fill: var(--bobby); }
+/* a person's page (tools/board_games.py) */
+a.plink { color: inherit; text-decoration: none; }
+a.plink:hover, a.plink:focus-visible { text-decoration: underline; }
+.pl-head { display: grid; gap: 8px; min-width: 0; }
+.pname { font-size: 48px; line-height: 1.1; color: var(--player); overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--player); background: var(--player-soft); }
+.pl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 28px; }
+.pl-hl { display: grid; gap: 12px; }
+.pstats .stat, .pl-hl .stat { border-left-color: var(--player); }
+.two2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 22px; min-width: 0; align-items: start; }
+table.num td.n, table.num th.n { text-align: right; }
+table.num tr:last-child td { border-bottom: 0; }
+table.num .mu { color: var(--muted); }
+table.num td a { color: var(--bobby); }
+table.num td a.plink { color: inherit; }
+.track { position: relative; height: 9px; border-radius: 3px; background: var(--line); min-width: 90px; }
+.fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--player); }
+.tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
+.items { display: grid; gap: 12px; }
+.item { display: grid; grid-template-columns: 96px 1fr 168px; gap: 10px; align-items: center; font-family: var(--mono); font-size: 12px; }
+.maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+.map { display: grid; gap: 6px; margin: 0; }
+.map figcaption { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.heat { width: 100%; aspect-ratio: 1 / 1; display: block; border-radius: 6px; background: var(--bg); }
+.heat .fl { fill: var(--floor); }
+.heat .ht { fill: var(--player); }
+.heat text.it { fill: var(--ink); stroke: var(--bg); stroke-width: .7px; paint-order: stroke; font-family: var(--mono); font-size: 2.6px; font-weight: 700; }
+.trend .vline { stroke: var(--bobby); stroke-dasharray: 4 4; }
+.trend .vname { fill: var(--bobby); }
+.trend .ln.p { stroke: var(--player); }
+.trend .pt.p { stroke: var(--player); }
+.trend .pt.now.p { fill: var(--player); }
+.pname.bo { color: var(--bobby); }
+.reads .stat { border-left-color: var(--bobby); }
+.reads.bad .stat { border-left-color: var(--player); }
+.b-h { color: var(--bobby); } .p-h { color: var(--player); }
+.track.vs { background: var(--player); overflow: hidden; }
+.track.vs .fill { background: var(--bobby); border-radius: 0; }
+.trend .mb { fill: var(--bobby); } .trend .mp { fill: var(--player); }
+table.num td.b { color: var(--bobby); font-weight: 600; }
+.allg summary { cursor: pointer; font-family: var(--mono); font-size: 13px; color: var(--bobby); }
+.allg .tbl { margin-top: 10px; }
+@media (max-width: 560px) { .pname { font-size: 34px; } .item { grid-template-columns: 76px 1fr; } .item span:last-child { grid-column: 2; } }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

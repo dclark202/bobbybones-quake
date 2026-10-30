@@ -23,6 +23,7 @@ servers started from is in every copy) and works the table out again from all fr
 it gives to every server with "upto", how far into each server's own files it read. A server's plugin plays on that
 board plus its own lines after "upto" (read_tail, replay); it never writes board.json. The functions for both are here.
 """
+import hashlib
 import json
 import math
 import os
@@ -164,6 +165,12 @@ def game_t0(d):
         return float(d["t"]) - 60.0 * float(d.get("minutes") or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def page_id(key):
+    """a person's page on the site: a code worked out from the anonymous key, so a new name keeps the page and the key
+    itself does not leave"""
+    return hashlib.sha256(("bobbybones-page:" + str(key)).encode("utf-8")).hexdigest()[:12]
 
 
 def game_id(d, srv):

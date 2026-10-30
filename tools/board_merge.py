@@ -138,8 +138,8 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
     and their change over the game (the game's own frags only; the ratings worked out in time order from the frags of live
     games on both servers, as the board is).
     A row: id (ratings.game_id), srv, t0, len (seconds), map, score [person, Bobby], forfeit, ot, aim, ver, name (the
-    person's name on the board; None for a person who said !anonymous, or with no name known), r [person, Bobby] after,
-    dr [person, Bobby] change. No key leaves: the page needs none."""
+    person's name on the board; None for a person who said !anonymous, or with no name known), who (the person's page,
+    ratings.page_id; None with no name), r [person, Bobby] after, dr [person, Bobby] change. No key leaves: the page needs none."""
     now = time.time() if now is None else now
     games = [d for d in duels if d.get("kind") == "game" and now - float(d.get("t") or 0) < days * 86400.0]
     marks = []
@@ -191,7 +191,8 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
         rows.append(dict(id=R.game_id(d, d.get("srv")), srv=d.get("srv"), t0=int(t0), len=int(round(60.0 * mins)),
                          map=d.get("map"), score=[int(x) for x in d.get("score", [0, 0])], forfeit=int(bool(d.get("forfeit"))),
                          ot=int(mins > 10.03), aim=str(d.get("aim") or ""), ver=R.version_of(d.get("net", "")),
-                         name=nm, r=[int(round(b[0])), int(round(b[1]))], dr=[int(round(own[i][0])), int(round(own[i][1]))]))
+                         name=nm, who=R.page_id(d.get("key")) if nm else None,
+                         r=[int(round(b[0])), int(round(b[1]))], dr=[int(round(own[i][0])), int(round(own[i][1]))]))
     rows.sort(key=lambda x: -x["t0"])
     return rows
 

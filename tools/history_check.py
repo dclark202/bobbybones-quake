@@ -123,6 +123,8 @@ check(len(rows) == 1 and rows[0]["name"] is None and rows[0]["id"] == gid, "hist
 check(rows[0]["dr"][0] == rows[0]["r"][0] - 1500 and rows[0]["dr"][0] > 0, "history row: change over the game from 1500")
 rows = BM.game_history(frags, [d], {key: "tester"}, set(), now=time.time())
 check(rows[0]["name"] == "tester", "history row: named when not anonymous")
+check(rows[0]["who"] == R.page_id(key) and key not in R.page_id(key), "history row: the person's page, not the key")
+check(BM.game_history(frags, [d], {key: "tester"}, {key}, now=time.time())[0]["who"] is None, "history row: no page after !anonymous")
 check(not BM.game_history(frags, [d], {}, set(), now=time.time() + 181 * 86400), "a game older than 180 days leaves the history")
 
 shutil.rmtree(TMP, ignore_errors=True)
