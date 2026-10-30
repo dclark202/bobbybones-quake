@@ -127,9 +127,11 @@ section.bobby h2 { color: var(--bobby); }
 td small { color: var(--muted); font-weight: 400; }
 .trend { width: 100%; height: auto; display: block; }
 .trend .grid { stroke: var(--line); stroke-width: 1; }
-.trend .ax { fill: var(--muted); font-size: 12px; }
+.trend-wide { overflow-x: auto; min-width: 0; }
+.trend-wide .trend { min-width: 720px; }
+.trend .ax { fill: var(--muted); font-size: 11px; }
 .trend .nowt { fill: var(--bobby); font-weight: 600; }
-.trend .val { fill: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.trend .val { fill: var(--ink); font-size: 11px; font-variant-numeric: tabular-nums; }
 .trend .ln { fill: none; stroke: var(--bobby); stroke-width: 2; }
 .trend .pt { fill: var(--panel); stroke: var(--bobby); stroke-width: 2; }
 .trend .pt.now { fill: var(--bobby); }

@@ -132,28 +132,31 @@ def render(b, stamp, linked=False):
 def trend_svg(trend, bobby):
     """Bobby's rating by version, oldest to newest (inline SVG, no library); the version playing now is the last point"""
     e = html.escape
-    W, H, L, Rt, T, Bt = 560, 240, 46, 30, 26, 42
+    W, H, L, Rt, T, Bt = 960, 260, 56, 10, 24, 34
+    names = [vname(k[len(R.BOT):]) for k, _ in trend]
+    if "v0.1" in names:                                      # (owner, 2026-10-30: the chart starts at v0.1)
+        trend = trend[names.index("v0.1"):]
     vals = [p["r"] for _, p in trend]
-    lo, hi = min(vals) - 30, max(vals) + 30
+    lo, hi = min(vals) - 15, max(vals)
     step = 50 if hi - lo > 150 else 25
     lo, hi = step * int(lo // step), step * int(-(-hi // step))
-    x = lambda i: L + (W - L - Rt) * (i / max(1, len(trend) - 1))
+    x = lambda i: L + 14 + (W - L - Rt - 30) * (i / max(1, len(trend) - 1))
     y = lambda v: T + (H - T - Bt) * (1 - (v - lo) / max(1.0, hi - lo))
-    s = ['<svg class="trend" viewBox="0 0 {} {}" role="img" aria-label="BobbyBones rating by version">'.format(W, H)]
+    s = ['<div class="trend-wide"><svg class="trend" viewBox="0 0 {} {}" role="img" aria-label="BobbyBones rating by version">'.format(W, H)]
     v = lo
     while v <= hi:
         s.append('<line class="grid" x1="{}" x2="{}" y1="{:.1f}" y2="{:.1f}"/><text class="ax" x="{}" y="{:.1f}" text-anchor="end">{}</text>'.format(
-            L, W - Rt, y(v), y(v), L - 6, y(v) + 4, v))
+            L, W - Rt, y(v), y(v), L - 8, y(v) + 4, v))
         v += step
     s.append('<polyline class="ln" points="{}"/>'.format(" ".join("{:.1f},{:.1f}".format(x(i), y(p["r"])) for i, (_, p) in enumerate(trend))))
     for i, (k, p) in enumerate(trend):
         now = k == bobby
         s.append('<circle class="{}" cx="{:.1f}" cy="{:.1f}" r="{}"><title>{} {:.0f}</title></circle>'.format(
             "pt now" if now else "pt", x(i), y(p["r"]), 5 if now else 3.5, e(vname(k[len(R.BOT):])), p["r"]))
-        s.append('<text class="val" x="{:.1f}" y="{:.1f}" text-anchor="middle">{:.0f}</text>'.format(x(i), y(p["r"]) - 9, p["r"]))
+        s.append('<text class="val" x="{:.1f}" y="{:.1f}" text-anchor="middle">{:.0f}</text>'.format(x(i), y(p["r"]) - 10, p["r"]))
         s.append('<text class="ax{}" x="{:.1f}" y="{}" text-anchor="middle">{}</text>'.format(
-            " nowt" if now else "", x(i), H - Bt + 18, e(vname(k[len(R.BOT):]))))
-    s.append("</svg>")
+            " nowt" if now else "", x(i), H - Bt + 24, e(vname(k[len(R.BOT):]))))
+    s.append("</svg></div>")
     return "".join(s)
 
 
