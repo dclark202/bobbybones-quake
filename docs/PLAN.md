@@ -27,8 +27,8 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 |---|---|
 | Best network | v0.4.2b's end (`data/sim_runs/duel_gru_v0_4_2/keep/policy_end_v042.pt`; backup `T:\BobbyBones_backup`) |
 | Public servers | v0.4.2b's end with `!aim` worse / default / better / max (aim2, measured on the pros), branch `pub-aim2` = `main`'s server code |
-| Now | v0.6.0 (update 80) on both public servers and released as open weights; v0.6.1 ready to start: pay by win chance from the frozen judge, 24 h ([runs/v0.6.1/CARD.md](runs/v0.6.1/CARD.md)) |
-| Next | v0.6.1's run; v0.6.2 = the judge learning on his new games (more inputs; the weapons' hand-set worth removed at its refit) and the strategy head ([runs/v0.6.2/CARD.md](runs/v0.6.2/CARD.md)) |
+| Now | v0.6.0 (update 80) on both public servers and released as open weights; v0.6.1 ended 2026-10-29 at update 340 (win chance only, the pull toward level gone; [runs/v0.6.1/CARD.md](runs/v0.6.1/CARD.md)); v0.6.1b next, overnight from v0.6.1's end: the old hand-built belief faded out of the brain, the game-end pay fix, the judge refitted on v0.6.1's games ([runs/v0.6.1b/CARD.md](runs/v0.6.1b/CARD.md)) |
+| Next | v0.6.2 from v0.6.1b's end: the strategy head replaces the item rule ([runs/v0.6.2/CARD.md](runs/v0.6.2/CARD.md)) |
 
 What has been tried and what it taught: [HISTORY.md](HISTORY.md). Open work: [BACKLOG.md](BACKLOG.md).
 
