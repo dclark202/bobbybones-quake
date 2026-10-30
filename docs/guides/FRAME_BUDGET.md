@@ -37,6 +37,11 @@ versions). A speedup that changes a number, however small, is a simulator change
 | 29bbc4b | the network: the layer norm's means as numpy's `_mean` makes them without its wrappers (`attn._mean_last`), the tokens' column lists, the input scale and the draw's tables made once per network | -2% on the server (-8% on the PC) |
 | 8bf5184 | the hearing check (`HEAR_QL`: `hear` -> `_hear_ok` -> `pvs.Vis.clusters`): the BSP descent point by point in plain Python floats (the same float64 sums in the same order; `leaves_np` is the reference) and a memo of recent points | it was 9% of a frame on 1 vCPU; 80 -> 9 us a player's box |
 
+| 5575160 | `sim/fastnp.py`: `np.linalg.norm` and `np.stack` as numpy's own fast cases without its Python layers (~250 call sites); the sight histories (`opp_hist`, `sm_hist`, `a2_hist`, `v02_q`) read at each player's entry, not stacked whole (`_hist_pick`) | inputs about -5% on the PC; inside the host's noise on Chicago |
+| 5575160 | `DUEL_GC_FREEZE=1`: Python's garbage collector stops scanning the simulator and network after a map's load (`gc.freeze`; the last map's objects let back and collected first). `DUEL_TIMING` now logs the collections | a full collection on Chicago: 32 ms, about once a minute (a late frame each); frozen: under 3 ms |
+
+Not deployed yet: 7f119a4 and 5575160 (with `DUEL_GC_FREEZE=1` to be set in `tools/duel_server.sh` for `PUBLIC=1`).
+
 Live: `qlbot:perf` (29bbc4b) on both public servers from 2026-10-29/30, then `qlbot:pub-8bf5184` (8bf5184, a full build on each
 server, no cache) from 2026-10-30 ~02:00 UTC. The code is on `pub-perf`, not yet on `main`.
 
@@ -85,5 +90,11 @@ it back online (`private/tools/push_bobby.sh` with `CODE=1` does it in that orde
   Commit 7f119a4 (`pub-perf`, not deployed) writes it from a background thread at the idle scheduling class (the same file,
   line for line) and puts the inputs log's writer at the idle class: it takes the disk waits off the game's thread; its gain
   in late frames was inside the host's noise in two runs.
+- **Peak hours (owner, 2026-10-30: choppy mostly 6-10 pm):** the host slows down when its neighbours are busy. On
+  Amsterdam the same code built its inputs in 9.8 ms in the EU evening against 5.4 ms at night (19-26% late frames against
+  0.5-1%). On Chicago in the afternoon: one slow spell every few minutes, about 10 to 30 s long, in which the network's
+  fixed work runs about 3 times slower (p99 18-25 ms against 7) and 9-13% of that minute's frames are late. The box's
+  steal counter stays at 0: the guest cannot see it. `/root/hostspeed.sh` on both boxes (idle class, every 5 min) logs a
+  fixed piece of work to `/root/hostspeed.log` (only meaningful while nobody plays: the game takes the core first).
 - **Open:** a person's game on Chicago had 6.9-11.7% late frames after the fix; whether that and the owner's drops were the
   host (try a new Chicago instance: another host node) or the network path needs a test with a person on and the probe running.
