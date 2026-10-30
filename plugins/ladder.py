@@ -3,7 +3,7 @@ interactions with the bots from humans (meaning warmup is included)"; live games
 
 Every frag between a person and BobbyBones in a live game counts (owner, 2026-10-26: "ladder should be actual games only";
 warmup frags are still written to frags.jsonl with their state, and move nothing), in free-for-all and in 1v1; nothing else does
-(plugins/ratings.py has the rules and the arithmetic: Glicko-1, one update per frag). Who made a frag is read from the
+(plugins/ratings.py has the rules and the arithmetic: Glicko-1, one update per counted game). Who made a frag is read from the
 game's own counters each frame: the player whose deaths went up and the player whose kills went up in the same frame.
 That works in warmup too, where the game sends no kill events. A frame in which that does not pair up (two frags by
 different players at once) is left out.
@@ -185,7 +185,7 @@ class ladder(minqlx.Plugin):
     WELCOME = ("^3This server has a local leaderboard:^7 see my rank ^2!bobby^7 (^2!top^7 for the whole board). "
                "Every frag between you and me in a game counts")
     HELP = ("^3Leaderboard:^7 every frag between a person and me in a game counts. ^2!bobby^7 my rating and rank, "
-            "^2!top^7 the board, ^2!elo^7 yours (ranked from {} frags with me; the board shows the name you play under).".format(_ra.MIN_FRAGS))
+            "^2!top^7 the board, ^2!elo^7 yours (ranked from your first full game with me; the board shows the name you play under).")
 
     def __init__(self):
         super().__init__()
@@ -301,7 +301,8 @@ class ladder(minqlx.Plugin):
         t.path = self.table.path
         t.players = copy.deepcopy(b["players"])
         tail, _ = _ra.read_tail(os.path.join(D, "frags.jsonl"), int(up.get("frags") or 0))
-        _ra.replay(t, tail, names)
+        tail_d, _ = _ra.read_tail(os.path.join(D, "duels.jsonl"), int(up.get("duels") or 0))
+        _ra.replay_all(t, tail, tail_d, names)
         t.dirty = True
         self.table, self.board, self.board_up = t, b, up
         self.board_n["loads"] += 1
@@ -547,6 +548,7 @@ class ladder(minqlx.Plugin):
                 line["srv"] = SRV
             with open(os.path.join(D, "duels.jsonl"), "a") as f:
                 f.write(json.dumps(line) + "\n")
+            _ra.apply_game(self.table, line)
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
@@ -786,7 +788,7 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         p = self.table.players.get(bobby) if bobby else None
         if p is None:
-            player.tell("^5B^7o^5bbyB^7o^5nes^3 has no rating yet:^7 it starts with the first frag between him and a person.")
+            player.tell("^5B^7o^5bbyB^7o^5nes^3 has no rating yet:^7 it starts with his first full game.")
             return minqlx.RET_STOP_ALL
         n, of = self.table.rank(bobby, bobby)
         tot = p["won"] + p["lost"]
@@ -801,10 +803,10 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         rows = self.table.board(bobby)
         if not rows:
-            player.tell("^3The board is empty:^7 a person is ranked from {} frags with ^5B^7o^5bbyB^7o^5nes^7.".format(_ra.MIN_FRAGS))
+            player.tell("^3The board is empty:^7 a person is ranked from their first full game with ^5B^7o^5bbyB^7o^5nes^7.")
             return minqlx.RET_STOP_ALL
         me = None if is_bot(player) else self.key(player)
-        player.tell("^3Leaderboard^7 ({} ranked; every frag between a person and ^5B^7o^5bbyB^7o^5nes^7 counts{}):".format(
+        player.tell("^3Leaderboard^7 ({} ranked; games won and lost against ^5B^7o^5bbyB^7o^5nes^7 count{}):".format(
             len(rows), ", both servers" if self.board is not None else ""))
         for n, (k, p) in enumerate(rows, 1):
             if n <= TOP or k in (bobby, me):
@@ -828,14 +830,14 @@ class ladder(minqlx.Plugin):
             p = self.table.players.get(k)
             ql = QL_ON and not is_bot(player) and not isinstance(player, minqlx.AbstractDummyPlayer)
             if p is None:
-                player.tell("^3You have no rating {}yet:^7 it starts with your first frag with ^5B^7o^5bbyB^7o^5nes^7, either way.".format("here " if ql else ""))
+                player.tell("^3You have no rating {}yet:^7 it starts with your first full game with ^5B^7o^5bbyB^7o^5nes^7.".format("here " if ql else ""))
                 if ql:
                     self.ql_say(player, k)
                 return minqlx.RET_STOP_ALL
         n, of = self.table.rank(k, bobby)
         tot = p["won"] + p["lost"]
-        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after {} more frags with ^5B^7o^5bbyB^7o^5nes^7".format(max(0, _ra.MIN_FRAGS - tot))
-        # (with the QLStats line under it the two numbers are named apart: this one starts at 1500 and knows only frags with Bobby)
+        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after a full game with ^5B^7o^5bbyB^7o^5nes^7"
+        # (with the QLStats line under it the two numbers are named apart: this one starts at 1500 and knows only games with Bobby)
         player.tell("^3{}^7{}: rating ^2{:.0f}^7 (+-{:.0f}), {}. Frags with ^5B^7o^5bbyB^7o^5nes^7: {} made, {} taken (a share of {:.0%}).".format(
             p["name"], " here, against me" if ql else "", p["r"], 2 * p["rd"], where, p["won"], p["lost"], p["won"] / max(1, tot)))
         if ql:
