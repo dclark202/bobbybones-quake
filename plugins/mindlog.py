@@ -306,15 +306,55 @@ def meta(mapname, items, holds, version="", note=""):
                 items={k: _r(v) for k, v in items.items()}, holds=[_r(h) for h in holds])
 
 
+def idle_thread():
+    """(2026-10-30, the 1-vCPU servers) the calling thread to Linux's idle scheduling class: it runs only when the game's
+    thread leaves the core free (a log write that waits on the disk then waits there, not in the game's frame). No-op
+    elsewhere."""
+    try:
+        os.sched_setscheduler(0, os.SCHED_IDLE, os.sched_param(0))
+    except (AttributeError, OSError):
+        pass
+
+
 class Writer:
-    """appends lines to path; rotates a full file into mind.<date-time>.jsonl; never raises (a failure: off, logged once)"""
+    """appends lines to path; rotates a full file into mind.<date-time>.jsonl; never raises (a failure: off, logged once).
+    (2026-10-30) write() only queues the record: a background thread at the idle class (idle_thread) turns it into its
+    line, writes, flushes and rotates, in order; the same lines as before. MIND_SYNC=1 in the environment: written at once
+    on the caller's thread, as before."""
 
     def __init__(self, path, log=None, rotate=ROTATE_BYTES):
         self.path, self.log, self.rotate = path, log, int(rotate)
         self.fh, self.dead = None, False
         self.n = 0
+        self.q, self.th = None, None
+        if os.environ.get("MIND_SYNC") != "1":
+            import queue
+            import threading
+            self.q = queue.Queue(maxsize=2000)              # (about 7 minutes of ticks: a stuck disk drops lines, never the game)
+            self.th = threading.Thread(target=self._run, name="mind-log", daemon=True)
+            self.th.start()
+
+    def _run(self):
+        idle_thread()
+        while True:
+            rec = self.q.get()
+            if rec is None:
+                self._close_fh()
+                return
+            self._write(rec)
 
     def write(self, rec):
+        if self.dead:
+            return False
+        if self.q is None:
+            return self._write(rec)
+        try:
+            self.q.put_nowait(rec)
+            return True
+        except Exception:                                    # noqa: BLE001 - full: the line is dropped, the game goes on
+            return False
+
+    def _write(self, rec):
         if self.dead:
             return False
         try:
@@ -347,6 +387,15 @@ class Writer:
             return False
 
     def close(self):
+        if self.q is not None and self.th is not None and self.th.is_alive():
+            try:                                             # the queued lines are written, then the file closed, by the thread:
+                self.q.put_nowait(None)                      # nothing waited for here (close is called on the game's thread)
+            except Exception:                                # noqa: BLE001
+                pass
+            return
+        self._close_fh()
+
+    def _close_fh(self):
         try:
             if self.fh is not None:
                 self.fh.close()

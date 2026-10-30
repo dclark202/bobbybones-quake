@@ -369,6 +369,8 @@ class duelbot(minqlx.Plugin):
                 self.log("inputs log: {}".format(errs.pop(0)))
 
             def write():
+                if hasattr(_mind, "idle_thread"):           # (2026-10-30, the 1-vCPU servers) only when the game leaves the core free
+                    _mind.idle_thread()
                 if prev is not None:
                     prev.join()
                 try:                                         # (stacked here too: the game's thread only hands the list over)
