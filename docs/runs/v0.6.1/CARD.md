@@ -58,7 +58,7 @@ hand-built formula (A) and the hand-shaped fit (B2); the earlier design with the
 | Kept | the save before the level fade as `keep/policy_prelevel_v061.pt` (= `keep/policy_250.pt`, no pull in its settings; its optimizer was not kept, only the end's), backed up to T: (owner: "save the weights for the pre pull fade model so we can return if needed") |
 | The owner's decision | "The pull needs to go"; v0.6.1b starts from v0.6.1's end (no pull) as planned: "I'm going to continue with the planned next iterations because I think they all work together to create something better at the end" |
 | Behaviour over the run | a slower game (frags a match-minute 1.65 -> 1.42); the rail out of his hands (in hand 0.21 -> 0.13, shots 2.0 -> 1.0 a minute; accuracy flat); items held (megas 0.80, red armors 0.95 a player-minute) with no item pay; entropy 1.82 -> 1.91 |
-| Play tests | 12:00 (save 240): Hektik 31-4 to the owner at `!aim better`; 19:30 (the end): Aerowalk 14-2 to the owner at `!aim better` (forfeit at 6.9 min) |
+| Play tests | 12:00 (save 240): Hektik 31-4 to the owner at `!aim better`; 19:30 (the end): Aerowalk 14-2 to the owner at `!aim better` (forfeit at 6.9 min); the owner: the end played weaker than the noon save, as the comparison found |
 
 ## The checklist
 
