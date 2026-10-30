@@ -47,6 +47,19 @@ hand-built formula (A) and the hand-shaped fit (B2); the earlier design with the
 | Logged | self-play games of every 40th save (the judge's training data for v0.6.2) |
 | Length | 24 hours (`--minutes 1440`; owner, 2026-10-28: start around 21:00, "let it run for 24 hours"). The fade: `WIN_GAIN` sized at updates 21-30 (~2 h), step 1 with the warm-up (~40 min), a step every 10 updates; win chance only from about update 150 (~10 h) |
 
+## How it ended (2026-10-29)
+
+| | |
+|---|---|
+| End | stopped by hand right after the save of update 340 (17:52; owner: "run goes until 6pm"), `keep/policy_end_v061.pt` + `opt_end_v061.pt`; v0.6.1b's start |
+| Checks against v0.6.0's end | during the win pay's fade (updates 50-140) 622-498, 55.5%; win chance only (160-230) 400-400, 50.0%; during and after the level fade (250-320) 51.2 to 56.9% a check |
+| The level fade (owner, 2026-10-29) | `LEVEL_PULL` 0.95 -> 1.0, 0.01 right after each save from 12:14 (update 250) to 14:39 (`tools/run/ramp_live.py`); the checks played each save at its own pull |
+| The end against the save before the level fade (update 250, `keep/policy_prelevel_v061.pt`) | 160 games at each pull for both seats (`tools/run/compare_level.py`): at 1.0 68-92, **42.5%**; at 0.95 76-84, 47.5%; pooled 144-176, 45.0% (±5.5 points). The last 90 updates (the level fade and more win-only training together: not told apart) likely cost him a little, most without the pull |
+| Kept | the save before the level fade as `keep/policy_prelevel_v061.pt` (= `keep/policy_250.pt`, no pull in its settings; its optimizer was not kept, only the end's), backed up to T: (owner: "save the weights for the pre pull fade model so we can return if needed") |
+| The owner's decision | "The pull needs to go"; v0.6.1b starts from v0.6.1's end (no pull) as planned: "I'm going to continue with the planned next iterations because I think they all work together to create something better at the end" |
+| Behaviour over the run | a slower game (frags a match-minute 1.65 -> 1.42); the rail out of his hands (in hand 0.21 -> 0.13, shots 2.0 -> 1.0 a minute; accuracy flat); items held (megas 0.80, red armors 0.95 a player-minute) with no item pay; entropy 1.82 -> 1.91 |
+| Play tests | 12:00 (save 240): Hektik 31-4 to the owner at `!aim better`; 19:30 (the end): Aerowalk 14-2 to the owner at `!aim better` (forfeit at 6.9 min) |
+
 ## The checklist
 
 | | |
