@@ -40,7 +40,9 @@ versions). A speedup that changes a number, however small, is a simulator change
 | 5575160 | `sim/fastnp.py`: `np.linalg.norm` and `np.stack` as numpy's own fast cases without its Python layers (~250 call sites); the sight histories (`opp_hist`, `sm_hist`, `a2_hist`, `v02_q`) read at each player's entry, not stacked whole (`_hist_pick`) | inputs about -5% on the PC; inside the host's noise on Chicago |
 | 5575160 | `DUEL_GC_FREEZE=1`: Python's garbage collector stops scanning the simulator and network after a map's load (`gc.freeze`; the last map's objects let back and collected first). `DUEL_TIMING` now logs the collections | a full collection on Chicago: 32 ms, about once a minute (a late frame each); frozen: under 3 ms |
 
-Not deployed yet: 7f119a4 and 5575160 (with `DUEL_GC_FREEZE=1` to be set in `tools/duel_server.sh` for `PUBLIC=1`).
+Live since 2026-10-30 ~16:50 UTC: `qlbot:pub-0c49643` on both public servers (full builds on each box, no cache): 7f119a4
+(the mind log off the game's thread), 5575160 and 0c49643 (`tools/duel_server.sh` sets `DUEL_GC_FREEZE=1` by default;
+`GC_FREEZE=0` turns it off). The only setting that changed: `DUEL_GC_FREEZE=1`; `EARLY_BOBBY=0` as before.
 
 Live: `qlbot:perf` (29bbc4b) on both public servers from 2026-10-29/30, then `qlbot:pub-8bf5184` (8bf5184, a full build on each
 server, no cache) from 2026-10-30 ~02:00 UTC. The code is on `pub-perf`, not yet on `main`.
