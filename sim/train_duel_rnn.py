@@ -214,6 +214,7 @@ LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK
 LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --control) a factor on the lesson "in control"   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 LIVE_TRAINER = LIVE_TRAINER + ("BRAIN_HUMAN_W",)                   # (brainppl, --brain-human) the people's lesson's weight beside self-play's
 LIVE_TRAINER = LIVE_TRAINER + ("BRAIN_FADE",)                      # (v0.6.1b, --brain-fade) the old belief's columns out of the brain: its gate g
+LIVE_TRAINER = LIVE_TRAINER + ("ADV_PAY_REF",)                     # (v0.6.1c, --adv-pay-ref above 0 at the start) the advantages' target pay size
 
 LIVE_TRAINER = LIVE_TRAINER + ("VALUE_WARM",)                      # (v0.6.1, --value-warm) the critic's warm-up: the next N updates learn the value outputs only
 LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --win-value) a factor on the shadow win value's rate
@@ -1111,6 +1112,14 @@ def main():
     ap.add_argument("--ent-heads", default="", help="weight of the exploration bonus per action head (forward, strafe, "
                     "vertical, turn, pitch, fire, weapon, walk, zoom); empty = 1 for all")
     ap.add_argument("--ent-coef", type=float, default=0.01, help="exploration bonus (entropy coefficient)")
+    ap.add_argument("--adv-pay-ref", type=float, default=0.0, help="v0.6.1c: 0 = off (the advantages as they are). Above 0: the "
+                    "advantages (not the value targets) times ref / the pay's size a player-minute in games (win_blend.paid_size, a "
+                    "running mean over --adv-pay-tau updates), so the pay's pull on his choices against the fixed entropy bonus stays "
+                    "as at that size whatever the judge or WIN_GAIN (v0.6.0's flat pay: 8.5)")
+    ap.add_argument("--adv-pay-tau", type=float, default=5.0, help="(--adv-pay-ref) the running mean's length in updates")
+    ap.add_argument("--adv-pay-max", type=float, default=4.0, help="(--adv-pay-ref) the factor kept within 1/max .. max")
+    ap.add_argument("--adv-pay-warm", type=float, default=0.0, help="(--adv-pay-ref) minutes from this process's start over which "
+                    "the factor opens from 1 to its full value (0: at once)")
     ap.add_argument("--item-floor", type=float, default=0.02,
                     help="(2026-10-25, owner: keep trying every item) the floor on his item intentions: on every map, the mean "
                          "probability of each big item the map has (MH, RA, YA, YA2, RL, RG, LG) over the frames his intention is "
@@ -1869,6 +1878,7 @@ def main():
     assert not BF_ON or BEL, "--brain-fade: with --belief"
     BF = BEL and bool((BEL_L.get("fade") or {}).get("cols"))  # the network's brain has the entry (its own g applies, moved or not)
     BF_G = [float(BEL_L["fade"]["g"]) if BF else 0.0]
+    ADVP = [None, None, 1.0]                                 # (v0.6.1c, --adv-pay-ref) the pay size's running mean, this rollout's, the factor
     if BF:
         assert sorted(BEL_L["fade"]["cols"]) == sorted(RF_L["cols"]) if RF else True, "--brain-fade: the brain's columns are not the rule fade's"
         BEL_SAVE = {"belief": BEL_L}
@@ -3137,6 +3147,10 @@ def main():
                         BF_G[0] = min(1.0, max(0.0, float(lt_.get("BRAIN_FADE", BF_G[0]))))
                     elif "BRAIN_FADE" in lt_:
                         print("live: BRAIN_FADE ignored (--brain-fade 0: the network's own g {:.4f} stays)".format(BF_G[0]), flush=True)
+                    if a.adv_pay_ref > 0:                                            # (v0.6.1c) the advantages' target pay size, from the next update
+                        a.adv_pay_ref = max(1e-6, float(lt_.get("ADV_PAY_REF", a.adv_pay_ref)))
+                    elif "ADV_PAY_REF" in lt_:
+                        print("live: ADV_PAY_REF ignored (--adv-pay-ref 0: the advantages as they are)", flush=True)
                     IF_LIVE[0] = float(lt_.get("ITEM_FLOOR_W", IF_LIVE[0]))          # (--item-floor: its weight, 0 stops it; the floor)
                     IF_LIVE[1] = float(lt_.get("ITEM_FLOOR", IF_LIVE[1]))
                     a.rule_fade_cap = float(lt_.get("FADE_CAP", a.rule_fade_cap))    # (v0.4.2a: the rule fade's cap: 0 shuts it at once)
@@ -3959,6 +3973,15 @@ def main():
         b_lr, b_llp, b_lab, b_iteach, b_teach, b_aux, b_ht, b_bel = (R[k_] for k_ in ("b_lr", "b_llp", "b_lab", "b_iteach", "b_teach", "b_aux", "b_ht", "b_bel"))
         b_ev, b_wg, b_wb, b_hand, h0, raw, agg, agg_map, lk = (R[k_] for k_ in ("b_ev", "b_wg", "b_wb", "b_hand", "h0", "raw", "agg", "agg_map", "lk"))
         keep_raw, t_roll = R["keep_raw"], R["t_roll"]
+        if a.adv_pay_ref > 0:                                            # (v0.6.1c, --adv-pay-ref) the advantages' factor: ref / the pay's size
+            WBk_ = np.atleast_1d(agg.get("win_blend", np.zeros(8))).astype(np.float64)   # a player-minute in games (a running mean)
+            ps_ = float(WBk_[6]) / (float(WBk_[0]) * DT_MIN) if len(WBk_) > 6 and WBk_[0] > 0 else None
+            if ps_ is not None and ps_ > 0:
+                ADVP[0] = ps_ if ADVP[0] is None else ADVP[0] + (ps_ - ADVP[0]) / max(1.0, a.adv_pay_tau)
+            ADVP[1] = ps_
+            ADVP[2] = 1.0 if ADVP[0] is None else min(a.adv_pay_max, max(1.0 / a.adv_pay_max, a.adv_pay_ref / ADVP[0]))
+            if a.adv_pay_warm > 0:                                       # (--adv-pay-warm) opened slowly from 1
+                ADVP[2] = 1.0 + (ADVP[2] - 1.0) * min(1.0, (time.time() - t_start) / (a.adv_pay_warm * 60))
         with torch.no_grad():                                            # (v0.6.1, record only) his target against the item rule's: on the frames the
             ir_m_ = (b_iteach >= 0) & (b_live > 0) & (b_w > 0)           # intention was read on his own seats and the rule names an item, the share
             IR_AGREE = [float(((b_act[..., I_HEAD] == b_iteach) & ir_m_).sum()), float(ir_m_.sum())]   # where he chose that item
@@ -4051,6 +4074,8 @@ def main():
         ret2 = None
         if not DEC:
             adv, ret, ret2, long_c, long_gap = gae_()
+            if a.adv_pay_ref > 0:                                        # (--adv-pay-ref) the policy's advantages only; ret stays in pay units
+                adv = adv * ADVP[2]
         frac = min(1.0, mins / a.lr_minutes) if a.lr_minutes > 0 else min(1.0, (time.time() - t_start) / (a.minutes * 60))
         if BEL:                                                          # (v0.4.1, live.json's BELIEF_LR) the brain's group's share
             for g in opt.param_groups:
@@ -4403,6 +4428,8 @@ def main():
                 V_PX = V2_PX = None
                 IS_.append(time.time() - t_px)
             adv, ret, ret2, long_c, long_gap = gae_()
+            if a.adv_pay_ref > 0:                                        # (--adv-pay-ref) the policy's advantages only; ret stays in pay units
+                adv = adv * ADVP[2]
         if OVL and not DEC and a.overlap_kl_pieces > 0:                  # behind) against the one that learns, before any step of this update,
             OV_ = torch.zeros(6, dtype=torch.float64)                    # on pieces of every n_mb-th player (all simulators): the learner's
             with torch.no_grad():                                        # frames; sums of log p(played) - log p(now), of frames outside the
@@ -5357,6 +5384,9 @@ def main():
                 vi_ = BTOK_L["feats"].index("valid")
                 rec["btoken"]["valid"] = round(float(bb_[..., vi_].mean()), 4)
                 rec["btoken"]["abs_mean"] = round(float(bb_.abs().mean()), 4)
+        if a.adv_pay_ref > 0:                                            # (v0.6.1c) the advantages' factor this update and what it came from
+            rec["adv_pay"] = dict(k=round(float(ADVP[2]), 4), warm=a.adv_pay_warm, size_mean=None if ADVP[0] is None else round(float(ADVP[0]), 4),
+                                  size=None if ADVP[1] is None else round(float(ADVP[1]), 4), ref=a.adv_pay_ref)
         if BF:                                                           # (v0.6.1b) the brain's gate it was played and learnt at
             rec["brain_fade"] = dict(g=round(BFG_R, 5), cols=len(BEL_L["fade"]["cols"]), live=BF_ON)
         if RF:                                                           # (v0.4.2a) the rule fade: the gate it was played and learnt at; the

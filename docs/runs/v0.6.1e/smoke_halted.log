@@ -1,0 +1,5 @@
+08:00:19 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_W': 0.5, 'FADE_V': 0.5, 'WIN_SHAPE_K': 0.0, 'VALUE_WARM': 0, 'WIN_GAIN': 0.83, 'LEVEL_PULL': 0.95, 'ADV_PAY_REF': 10.0, 'BRAIN_FADE': 0.0}
+08:00:19 the smoke trainer and the fades started
+10-31 08:00:19 ramp_live on for scratch_v061e_smoke: BRAIN_FADE 0.0 -> 1.0 by 0.125 right after a save (policy.pt rewritten), every 1 save(s), at least 0 min apart
+10-31 08:01:54 kept the save of update 14 as keep/policy_prefade_v061e.pt (before the first step)
+10-31 08:01:54 RAMP BRAIN_FADE 0.125, LEVEL_PULL 0.95625 (right after the save of update 14; it takes effect at the next rollout)

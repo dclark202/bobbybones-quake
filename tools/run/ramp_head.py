@@ -7,6 +7,7 @@ on the clock (the owner: "keep going unless a collapse"), the checks and the beh
   open     the first save (keep/policy_<N>.pt, every 10 updates) a full RAMP_EVERY_N updates after the cap reached 1 is kept
            as keep/policy_head_open_v062.pt: the owner's play test of the head open; training goes on, and phase 2 starts
   phase 2  INTENT_TEACH_W 0.1 a step down to 0 (the item rule's label and its floor), the head open
+RAMP_HEAD_ONLY=1 (v0.6.2a, owner 2026-10-30: the head in only): done at the head-open save, no phase 2, the item rule stays where it is.
 A step every RAMP_EVERY_N (10) updates and at least RAMP_MIN_S (25 min) since the last. RAMP_START_CAP / RAMP_START_IT resume
 at a step (live.json must already be there). Logs <run>/watch/ramp.log and a RAMP line in watch.log.
     python tools/run/ramp_head.py [run]"""
@@ -26,6 +27,7 @@ EVERY_N = int(os.environ.get("RAMP_EVERY_N") or 10)
 EVERY_S = int(float(os.environ.get("RAMP_MIN_S") or 25 * 60))
 SHUT_N = int(os.environ.get("RAMP_SHUT_N") or 10)
 SLEEP = float(os.environ.get("RAMP_SLEEP") or 60)
+HEAD_ONLY = float(os.environ.get("RAMP_HEAD_ONLY") or 0) > 0
 STEP = 0.1
 
 
@@ -72,7 +74,7 @@ u0 = updates()
 n_last, t_last = u0 + (SHUT_N - EVERY_N if cap == 0 and it == 1.0 else 0), time.time() - (EVERY_S if cap == 0 and it == 1.0 else 0)
 open_at = None                                               # (the update at which the cap reached 1: the head-open save follows)
 kept = os.path.exists(os.path.join(KEEP, "policy_head_open_v062.pt"))
-while it > 0 or not kept:
+while (it > 0 and not HEAD_ONLY) or not kept:
     time.sleep(SLEEP)
     n = updates()
     if cap >= 1.0 and not kept and open_at is not None:
@@ -90,7 +92,7 @@ while it > 0 or not kept:
         log("RAMP head gate cap {} (u{}, {} updates, {} min since the last step); last check {}".format(cap, n, n - n_last, int((time.time() - t_last) // 60), last_check()))
         if cap >= 1.0:
             open_at = n
-    elif it > 0 and kept:
+    elif it > 0 and kept and not HEAD_ONLY:
         it = round(max(0.0, it - STEP), 2)
         put(INTENT_TEACH_W=it)
         log("RAMP item rule {} (u{}, {} updates, {} min since the last step); last check {}".format(it, n, n - n_last, int((time.time() - t_last) // 60), last_check()))

@@ -5,7 +5,9 @@ first save is kept under --keep-as (the network before the first step), then NAM
 right after each later save, at least --min-s apart, until TO. Logs <run>/watch/ramp.log and a RAMP line in watch.log. Nothing
 else is touched.
 
-    python tools/run/ramp_live.py <run> LEVEL_PULL 0.95 1.0 0.01 --keep-as policy_prelevel_v061.pt"""
+    python tools/run/ramp_live.py <run> LEVEL_PULL 0.95 1.0 0.01 --keep-as policy_prelevel_v061.pt
+--also NAME:FROM:TO:STEP (v0.6.1c, repeatable): more settings stepped in the same write as NAME at each step, each clamped at
+its own TO (give them the same number of steps as NAME)."""
 import argparse
 import json
 import os
@@ -28,6 +30,7 @@ def main():
     ap.add_argument("--dir", default="", help="the run's folder (default data/sim_runs/<run>)")
     ap.add_argument("--sleep", type=float, default=30)
     ap.add_argument("--settle", type=float, default=20, help="seconds policy.pt must stand still before it counts as saved")
+    ap.add_argument("--also", action="append", default=[], help="NAME:FROM:TO:STEP, stepped with NAME in the same write")
     a = ap.parse_args()
     D = a.dir or os.path.join(ROOT, "data", "sim_runs", a.run)
     LIVE, MET, POL, KEEP, WD = (os.path.join(D, x) for x in ("live.json", "metrics.jsonl", "policy.pt", "keep", "watch"))
@@ -54,14 +57,24 @@ def main():
         except FileNotFoundError:
             return 0.0
 
+    ALSO = []
+    for s_ in a.also:
+        n_, f_, t_, st_ = s_.split(":")
+        ALSO.append([n_, float(f_), float(t_), float(st_), float(f_)])
+
     def put(v):
         d = json.load(open(LIVE, encoding="utf-8"))
         d[a.name] = v
+        for x_ in ALSO:
+            d[x_[0]] = x_[4]
         open(LIVE + ".tmp", "w", encoding="utf-8").write(json.dumps(d))
         os.replace(LIVE + ".tmp", LIVE)
 
     cur = json.load(open(LIVE, encoding="utf-8")).get(a.name)
     assert cur is None or abs(float(cur) - a.frm) < 1e-9, "{} is {} in live.json, not {}".format(a.name, cur, a.frm)
+    for x_ in ALSO:
+        c_ = json.load(open(LIVE, encoding="utf-8")).get(x_[0])
+        assert c_ is None or abs(float(c_) - x_[1]) < 1e-9, "{} is {} in live.json, not {}".format(x_[0], c_, x_[1])
     sign = 1.0 if a.to >= a.frm else -1.0
     v = a.frm
     log("ramp_live on for {}: {} {} -> {} by {} right after a save (policy.pt rewritten), every {} save(s), at least {:g} min apart".format(
@@ -85,10 +98,15 @@ def main():
             log("kept the save of update {} as keep/{} (before the first step)".format(n, a.keep_as))
         v = round(v + sign * a.step, 6)
         v = a.to if sign * (v - a.to) > 0 else v
+        for x_ in ALSO:
+            sg_ = 1.0 if x_[2] >= x_[1] else -1.0
+            w_ = round(x_[4] + sg_ * x_[3], 6)
+            x_[4] = x_[2] if sg_ * (w_ - x_[2]) > 0 else w_
         put(v)
-        log("RAMP {} {} (right after the save of update {}; it takes effect at the next rollout)".format(a.name, v, n))
+        log("RAMP {} {}{} (right after the save of update {}; it takes effect at the next rollout)".format(
+            a.name, v, "".join(", {} {}".format(x_[0], x_[4]) for x_ in ALSO), n))
         t_last = time.time()
-    log("ramp_live done: {} at {}".format(a.name, v))
+    log("ramp_live done: {} at {}{}".format(a.name, v, "".join(", {} at {}".format(x_[0], x_[4]) for x_ in ALSO)))
 
 
 if __name__ == "__main__":

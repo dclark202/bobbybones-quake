@@ -1,0 +1,18 @@
+10-28 12:00:39 allowed arg --brain-human: run 'data\\sim_runs\\brainppl\\pack_demo' | reference 'data\\sim_runs\\brainppl\\pack_ppl,data\\sim_runs\\brainppl\\pack_demo'
+10-28 12:00:39 allowed arg --brain-human-mix: run '1.0' | reference '0.7,0.3'
+10-28 12:00:39 allowed arg --minutes: run '535' | reference '790'
+10-28 12:00:39 settings check: PASS
+10-28 12:00:39 trainer started: cmd 12084
+10-28 12:00:39 watcher 20108 | self-play logger 752 | no guard (owner: never stop the run)
+10-28 12:26:28 allowed arg --brain-human: run 'data\\sim_runs\\brainppl\\pack_demo' | reference 'data\\sim_runs\\brainppl\\pack_ppl,data\\sim_runs\\brainppl\\pack_demo'
+10-28 12:26:28 allowed arg --brain-human-mix: run '1.0' | reference '0.7,0.3'
+10-28 12:26:28 allowed arg --minutes: run '510' | reference '790'
+10-28 12:26:28 settings check: PASS
+10-28 12:26:28 trainer started: cmd 15464
+10-28 12:26:28 watcher 2968 | self-play logger 5700 | no guard (owner: never stop the run)
+10-28 12:58:43 allowed arg --brain-human: run 'data\\sim_runs\\brainppl\\pack_demo' | reference 'data\\sim_runs\\brainppl\\pack_ppl,data\\sim_runs\\brainppl\\pack_demo'
+10-28 12:58:43 allowed arg --brain-human-mix: run '1.0' | reference '0.7,0.3'
+10-28 12:58:43 allowed arg --minutes: run '510' | reference '790'
+10-28 12:58:43 settings check: PASS
+10-28 12:58:44 trainer started: cmd 15672
+10-28 12:58:44 watcher 26316 | self-play logger 744 | no guard (owner: never stop the run)
