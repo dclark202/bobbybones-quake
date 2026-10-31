@@ -274,7 +274,7 @@ class ladder(minqlx.Plugin):
                 return None                                  # one of the game's own bots (a spar)
             if TEST and len(names) > 1 and names[1] in p.clean_name:
                 return "test000002", "test player"
-            return bobby, "^5B^7o^5bbyB^7o^5nes^7 ({})".format(_ra.label(bobby[len(_ra.BOT):]))
+            return bobby, "^5BobbyBones^7 ({})".format(_ra.label(bobby[len(_ra.BOT):]))
         return self.key(p), p.clean_name[:24]
 
     # ------------------------------------------------------------------ the shared board (several servers; see the top)
@@ -788,7 +788,7 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         p = self.table.players.get(bobby) if bobby else None
         if p is None:
-            player.tell("^5B^7o^5bbyB^7o^5nes^3 has no rating yet:^7 it starts with his first full game.")
+            player.tell("^5BobbyBones^3 has no rating yet:^7 it starts with his first full game.")
             return minqlx.RET_STOP_ALL
         n, of = self.table.rank(bobby, bobby)
         tot = p["won"] + p["lost"]
@@ -803,10 +803,10 @@ class ladder(minqlx.Plugin):
         bobby = self.bobby_key()
         rows = self.table.board(bobby)
         if not rows:
-            player.tell("^3The board is empty:^7 a person is ranked from their first full game with ^5B^7o^5bbyB^7o^5nes^7.")
+            player.tell("^3The board is empty:^7 a person is ranked from their first full game with ^5BobbyBones^7.")
             return minqlx.RET_STOP_ALL
         me = None if is_bot(player) else self.key(player)
-        player.tell("^3Leaderboard^7 ({} ranked; games won and lost against ^5B^7o^5bbyB^7o^5nes^7 count{}):".format(
+        player.tell("^3Leaderboard^7 ({} ranked; games won and lost against ^5BobbyBones^7 count{}):".format(
             len(rows), ", both servers" if self.board is not None else ""))
         for n, (k, p) in enumerate(rows, 1):
             if n <= TOP or k in (bobby, me):
@@ -830,15 +830,15 @@ class ladder(minqlx.Plugin):
             p = self.table.players.get(k)
             ql = QL_ON and not is_bot(player) and not isinstance(player, minqlx.AbstractDummyPlayer)
             if p is None:
-                player.tell("^3You have no rating {}yet:^7 it starts with your first full game with ^5B^7o^5bbyB^7o^5nes^7.".format("here " if ql else ""))
+                player.tell("^3You have no rating {}yet:^7 it starts with your first full game with ^5BobbyBones^7.".format("here " if ql else ""))
                 if ql:
                     self.ql_say(player, k)
                 return minqlx.RET_STOP_ALL
         n, of = self.table.rank(k, bobby)
         tot = p["won"] + p["lost"]
-        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after a full game with ^5B^7o^5bbyB^7o^5nes^7"
+        where = "rank ^2{}^7 of {}".format(n, of) if n else "ranked after a full game with ^5BobbyBones^7"
         # (with the QLStats line under it the two numbers are named apart: this one starts at 1500 and knows only games with Bobby)
-        player.tell("^3{}^7{}: rating ^2{:.0f}^7 (+-{:.0f}), {}. Frags with ^5B^7o^5bbyB^7o^5nes^7: {} made, {} taken (a share of {:.0%}).".format(
+        player.tell("^3{}^7{}: rating ^2{:.0f}^7 (+-{:.0f}), {}. Frags with ^5BobbyBones^7: {} made, {} taken (a share of {:.0%}).".format(
             p["name"], " here, against me" if ql else "", p["r"], 2 * p["rd"], where, p["won"], p["lost"], p["won"] / max(1, tot)))
         if ql:
             self.ql_say(player, k)

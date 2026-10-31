@@ -17,6 +17,7 @@ Chat commands: !help, !maps, !aim, !note <text>, !mind (the owner); !map is plug
 Load with QLX_PLUGINS="botctl, duelbot". Needs /tmp/practice/policy.npz (sim/export_duel.py); rooms need
 /maps/nav_<map>_sim.json. Writes /tmp/practice/sessions/<session>/ and /tmp/practice/suite/.
 """
+import hashlib
 import importlib
 import json
 import math
@@ -472,7 +473,7 @@ class duelbot(minqlx.Plugin):
 
     def on_player_loaded(self, player):
         if not is_bot(player):
-            player.tell("^3I'm ^5B^7o^5bbyB^7o^5nes^3, the learning Quake bot.^7 Here's some commands")
+            player.tell("^3I'm ^5BobbyBones^3, the learning Quake bot.^7 Here's some commands")
             player.tell(self.WELCOME)
             if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
                 player.tell(self.AIM_WELCOME)
@@ -612,7 +613,7 @@ class duelbot(minqlx.Plugin):
             return
         for p in self.players():
             if p.id != player.id and not is_bot(p) and p.team in ("free", "red", "blue"):
-                player.tell("^5B^7o^5bbyB^7o^5nes^3 is playing {}.^7 Spectate: you play when they leave.".format(p.clean_name))
+                player.tell("^5BobbyBones^3 is playing {}.^7 Spectate: you play when they leave.".format(p.clean_name))
                 return minqlx.RET_STOP_ALL
 
     def cmd_note(self, player, msg, channel):
@@ -685,7 +686,7 @@ class duelbot(minqlx.Plugin):
                     lad.note_duel(A["key"], A.get("owner", 0), played, o, b, why != "time", "timed")
             except Exception as e:                           # noqa: BLE001
                 self.log("duel line: {}".format(type(e).__name__))
-        self.msg("^3Arena over ({})^7: ^5B^7o^5bbyB^7o^5nes^7 ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
+        self.msg("^3Arena over ({})^7: ^5BobbyBones^7 ^2{}^7 : ^2{}^7 opponent. Damage {} : {}.".format(why, b, o, A["dmg"][0], A["dmg"][1]))
 
     def arena_spot(self, other):
         """a place in the arena at least 500 units from the other player"""
@@ -712,7 +713,7 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
         if on:
             player.put("spectator")
-            self.msg("Spar: ^5B^7o^5bbyB^7o^5nes^7 against a Nightmare bot. Join the game or type !spar off to stop.")
+            self.msg("Spar: ^5BobbyBones^7 against a Nightmare bot. Join the game or type !spar off to stop.")
         else:
             for p in self.players():
                 if is_bot(p) and not is_bobby(p):
@@ -721,16 +722,16 @@ class duelbot(minqlx.Plugin):
 
     def cmd_rooms(self, player, msg, channel):
         if self.lab and "aim" not in self.lab:
-            player.tell("The training arena: play ^5B^7o^5bbyB^7o^5nes^7 freely, or ^3!duel^7 for a timed five minutes.")
+            player.tell("The training arena: play ^5BobbyBones^7 freely, or ^3!duel^7 for a timed five minutes.")
             return
         if self.lab:
             player.tell("!room aim <{}> <walk|jump|env>  (25 s, env 45 s)".format("|".join(LAB_WEAPONS)))
             player.tell("!room move <{}> (30 s or until the end)".format("|".join(self.lab.get("courses", {}))))
-            player.tell("!arena box | env | yard = fight ^5B^7o^5bbyB^7o^5nes^7 in that room for 5 minutes, full weapons (yard: the new two-level arena)")
+            player.tell("!arena box | env | yard = fight ^5BobbyBones^7 in that room for 5 minutes, full weapons (yard: the new two-level arena)")
             player.tell("!room moves = every movement course in a row, with a table of times at the end")
             player.tell("!room items (120 s): time the mega and the red armor | !room fight (60 s): the game's Nightmare bot")
             player.tell("!room suite = every room, about 20 minutes | !room off")
-            player.tell("^3!movement^7 = every movement course, timed | ^3!duel^7 = five minutes against ^5B^7o^5bbyB^7o^5nes^7 in the environment room")
+            player.tell("^3!movement^7 = every movement course, timed | ^3!duel^7 = five minutes against ^5BobbyBones^7 in the environment room")
             player.tell("^3!reflex^7 = the aim reflex test: four short aim rooms, three minutes (lightning, rail, rockets)")
             return
         player.tell("!room aim <lg|rg|rl|pg|sg|hmg|mg> <still|slow|fast|jump> [close|mid|far]  (60 s)")
@@ -904,7 +905,7 @@ class duelbot(minqlx.Plugin):
             if any(is_bobby(p) for p in self.players()):
                 self.log("early add: a Bobby is still there after the kick (seats {}); not added again".format(old))
                 return
-            minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5B^7o^5bbyB^7o^5nes\"")
+            minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5BobbyBones\"")
             ids = [p.id for p in self.players() if is_bobby(p)]
             for i in ids:
                 minqlx.set_bot_input(i, 0, 0, 0, 0, 0, 0.0, 0.0)
@@ -1637,6 +1638,8 @@ class duelbot(minqlx.Plugin):
     # file's env_vars, as env_module() would load it), and keeps his memory, the game clock and the session log. Only the
     # person playing the duel (or the server's owner) may change it. Back to the default on a new map and when the person in
     # the duel leaves (disconnects or goes to spectate), so the next person starts at the default (owner, 2026-10-27).
+    # Each person's own choice comes back when they are seated, on a new map too, and is said in the chat (owner, 2026-10-31):
+    # aim_choices.json in the data folder, {key: level}, the key a hash of the Steam ID; choosing the default removes the line.
     AIM_FILES = {"worse": "policy_worse.npz", "default": "policy_default.npz", "better": "policy_better.npz", "max": "policy_max.npz"}
     # (2026-10-26, owner: one aim setting, four values; a file names itself by AIM_NAME in its env_vars)
     AIM_KEEP = ("env_vars", "react_ms", "acquire_ms")        # the arrays that may differ between the files of the settings
@@ -1827,6 +1830,7 @@ class duelbot(minqlx.Plugin):
     def aim_reset(self):
         """a new map (and the plugin's start): back to the default (owner, 2026-10-22, 2026-10-27). policy.npz is set to the
         default's file here and loaded by setup() once the map is up; the chat line comes then (aim_frame)."""
+        self.aim_for = None                                  # (aim_frame: a person's own setting comes back on the new map)
         cur = self.aim_level()                               # (a live switch leaves policy.npz as it was: both are read)
         on_disk = self.file_level(os.path.join(D, "policy.npz"))
         if cur == "?":                                       # no network loaded yet: the file's own level
@@ -1839,6 +1843,46 @@ class duelbot(minqlx.Plugin):
             self.log("new map: aim back to {} (was {})".format(self.AIM_DEFAULT, cur))
         except Exception as e:                           # noqa: BLE001
             self.log("aim reset: {!r}".format(e))
+
+    def aim_key(self, sid):
+        return hashlib.sha1(("aim" + str(sid)).encode()).hexdigest()[:16]
+
+    def aim_choices(self):
+        """{key: level}, read once; an unreadable file counts as empty"""
+        c_ = self.__dict__.get("aim_chosen")
+        if c_ is None:
+            try:
+                with open(os.path.join(D, "aim_choices.json"), encoding="utf-8") as f:
+                    c_ = json.load(f)
+                c_ = c_ if isinstance(c_, dict) else {}
+            except (OSError, ValueError):
+                c_ = {}
+            self.aim_chosen = c_
+        return c_
+
+    def aim_saved(self, sid):
+        """this person's chosen setting, None if they have not chosen one (or it is no longer on the server)"""
+        lv = self.aim_choices().get(self.aim_key(sid))
+        return lv if isinstance(lv, str) and lv in self.AIM_FILES else None
+
+    def aim_remember(self, player, level):
+        """keep the choice of the person playing the duel (the owner's from the spectators is not theirs to keep)"""
+        try:
+            if is_bot(player) or player.team not in ("free", "red", "blue"):
+                return
+            c_, k_ = self.aim_choices(), self.aim_key(player.steam_id)
+            if level == self.AIM_DEFAULT:
+                if c_.pop(k_, None) is None:
+                    return
+            else:
+                c_[k_] = level
+            path = os.path.join(D, "aim_choices.json")
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(c_, f)
+            os.replace(path + ".tmp", path)
+            self.aim_for = str(player.steam_id)
+        except Exception as e:                               # noqa: BLE001 - the rcon console has no team or Steam ID
+            self.log("aim choice not kept: {!r}".format(e))
 
     def aim_left(self, player, why):
         """the person in the duel left (disconnected, or went to spectate): back to the default for the next person"""
@@ -1967,10 +2011,12 @@ class duelbot(minqlx.Plugin):
             player.tell("^3Aim {} is not on this server.^7".format(lv))
             return
         if lv == cur:
+            self.aim_remember(player, lv)
             self.msg("^3Aim^7 ^2{}^7 stays.".format(lv))
             return
         try:
             if self.aim_set(lv):
+                self.aim_remember(player, lv)
                 self.msg("^3Aim now^7 ^2{}^7.".format(lv))
             else:
                 player.tell("^3Aim could not be changed.^7")
@@ -1979,14 +2025,11 @@ class duelbot(minqlx.Plugin):
             player.tell("^3Aim could not be changed.^7")
 
     def aim_frame(self, now):
-        """the line of a new map's reset, once the map is up; and the reset when the person in the duel has left (checked
+        """the line of a new map's reset, once the map is up; a person's own setting when they are seated (aim_saved); and
+        the reset when the person in the duel has left (checked
         twice a second: a disconnect, a kick, a move to spectate all read the same here). Out of the game for 3 s: a game's
         start and an abort restart the game, and for a frame or so nobody reads as in it (seen on the test server: a reset
         at an abort)"""
-        if getattr(self, "aim_said", False):                 # (aim_reset) the last map ended at another setting
-            self.aim_said = False
-            if self.aim_level() == self.AIM_DEFAULT:
-                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
         if now < getattr(self, "aim_check", 0.0):
             return
         self.aim_check = now + 0.5
@@ -1994,6 +2037,22 @@ class duelbot(minqlx.Plugin):
             here = {str(p.steam_id) for p in self.players() if not is_bot(p) and p.team in ("free", "red", "blue")}
         except Exception:                                    # noqa: BLE001
             return
+        kept = {sid: self.aim_saved(sid) for sid in here}
+        kept = {sid: lv for sid, lv in kept.items() if lv is not None}
+        if getattr(self, "aim_said", False):                 # (aim_reset) the last map ended at another setting
+            self.aim_said = False
+            if self.aim_level() == self.AIM_DEFAULT and not kept:
+                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
+        sid_ = next(iter(here)) if len(here) == 1 else None
+        if sid_ is not None and sid_ != getattr(self, "aim_for", None) and getattr(self, "ready", False):
+            self.aim_for = sid_
+            lv = kept.get(sid_)
+            try:
+                if lv is not None and lv != self.aim_level() and self.aim_set(lv):
+                    self.log("aim {}: the choice of the person seated".format(lv))
+                    self.msg("^3Aim back to your last setting:^7 ^2{}^7 (^2!aim default^7 to change)".format(lv))
+            except Exception as e:                           # noqa: BLE001
+                self.log("aim choice {}: {!r}".format(lv, e))
         seen = self.__dict__.setdefault("aim_seen", {})     # steam id -> the last time he was in the game
         for sid in here:
             seen[sid] = now
@@ -2002,7 +2061,10 @@ class duelbot(minqlx.Plugin):
             del seen[sid]
         self.aim_who = here
         if gone:
-            self.aim_left(None, "left")
+            if getattr(self, "aim_for", None) in gone:
+                self.aim_for = None
+            if not kept:                                     # (somebody seated at their own setting: it stays)
+                self.aim_left(None, "left")
 
     # ------------------------------------------------------------------ frame
     def on_frame(self):
@@ -2097,7 +2159,7 @@ class duelbot(minqlx.Plugin):
                 if os.path.getmtime(os.path.join(D, "policy.npz")) != self.policy_mtime:
                     self.end_session()
                     self.setup()
-                    self.msg("^3New ^5B^7o^5bbyB^7o^5nes^3 loaded^7: {} at {} minutes of training.".format(
+                    self.msg("^3New ^5BobbyBones^3 loaded^7: {} at {} minutes of training.".format(
                         self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
@@ -2138,7 +2200,7 @@ class duelbot(minqlx.Plugin):
             self.__dict__.pop("bobby_spec_t", None)
             if now > self.next_check:
                 self.next_check = now + 5
-                minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5B^7o^5bbyB^7o^5nes\"")   # (owner, 2026-10-24: BOT purple, BobbyBones light blue with the two o's white; is_bobby still finds "BobbyBones" in the clean name)
+                minqlx.console_command("addbot bones 5 free 0 \"^6BOT ^5BobbyBones\"")   # (owner, 2026-10-31: BOT purple, BobbyBones solid light blue; is_bobby still finds "BobbyBones" in the clean name)
                 for p_ in self.players():                # (put_free: in the game at once, not a queued spectator first)
                     if is_bobby(p_):
                         self.put_free(p_.id)
