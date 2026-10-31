@@ -11,7 +11,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
    `git worktree remove --force` on any folder. On 2026-10-28 a cleanup did that near links into `data/` and wiped the whole
    data folder (every run's checkpoints): see [docs/HISTORY.md](docs/HISTORY.md). A link (junction) is removed only with
    `cmd /c rmdir "<link>"` (no `/s`) after checking with `(Get-Item <path>).LinkType`, and the target is checked after.
-   Any delete of data needs the owner's word for that exact delete and a backup first (`python tools/run/backup.py`).
+   Any delete of data needs the owner's word for that exact delete and a backup first (`python tools/run/backup.py`). `tools/hooks/no_delete.py` (a hook in `.claude/settings.json`) asks him before any delete command runs.
 2. **Do only what the owner asks.** A question is not a go. Ask before starting runs, servers, agents, or anything that
    changes something outside this session; before renaming or restarting fresh. Public servers only on his word.
 3. **Settings check before every run, check and calibration, and before using its numbers:**
@@ -40,18 +40,21 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 
 ## Starting a run
 
-1. The owner's go on the run's `CARD.md` (both parts filled in).
+1. The owner's go on the run's `CARD.md` (both parts filled in). **Run length (owner, 2026-10-30): 12 hours by default (`--minutes 720`), and ask him to specify the length before starting anything.**
 2. `powershell -ExecutionPolicy Bypass -File docs\runs\<version>\start.ps1`: it runs the settings check and refuses on any
    difference, checks the files are there and no trainer runs, then starts the trainer, the watcher and the self-play logger.
 3. One line an hour while it runs; the 06:30 report after a night.
 
 ## The owner's goals (read first)
 - **One goal: win games** (owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 and the priority
-  list of 2026-10-10 are retired). Goals are set per generation. **v0.4.x**: (1) fade out every hard-wired rule (the fairness
-  limits stay); (2) the brain manages the game state and the strategy; (3) pay by win chance only, every step on the way
-  scaffolded. Open items beside them: rocket jumps, failed movement jumps (Aerowalk's red armor), grenades less so. Every
-  change is stated by the equilibrium it leads to in self-play and the behaviour it brings out on the way; only winning
-  matters in the long run. The rounds: `docs/v0.4.0/PATH_v0.4.md`; where things stand: `docs/PLAN.md`.
+  list of 2026-10-10 are retired). Goals are set per generation. **b1 (2026-10-31; the current series, it replaces the vN.N.N names and
+  v0.4.x to v0.6.x's goal of pay by win chance only)**: win chance pay is purely additive (or subtractive) on top of the pay table, which stays:
+  combat skills and likely item incentives remain hard rules, and win pay gives him a reason to win and items a value that depends on the game. Then the
+  hard-coded rules come out and the strategy head comes in, one step at a time; the fairness limits stay. Open items beside them: rocket jumps, failed
+  movement jumps (Aerowalk's red armor), grenades less so. Every change is stated by the equilibrium it leads to in self-play and the behaviour it brings out
+  on the way; only winning matters in the long run. The steps: `docs/PLAN.md`; the reasons: `docs/design/B1_PLAN.md`.
+- **Names (owner, 2026-10-31)**: runs are bN.Nx (BobbyBones 1: b1.0a; the first number the series, the second the step, the letter the try), in `docs/runs/b1.0a/`
+  and `data/sim_runs/duel_gru_b1_0a`. The v0.x names below are history: use them only for what was run under them.
 - **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
   trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
   a dip lasts 20 to 30 updates at most). Two new things open one after the other.
@@ -91,7 +94,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   and any odd behaviour seen in a run or in duels.
 - **The control in every run (2026-10-10)**: the last best network stays in the league (`--anchor-p`) and every
   checked save plays it head to head, beside the stand-in; a network is promoted only if it beats the control.
-- **Names (owner, 2026-10-11)**: "The v15c bot that exists on the server is now: v0.1. We're building v0.2 currently, any
+- **Older names (owner, 2026-10-11; replaced by bN.Nx on 2026-10-31)**: "The v15c bot that exists on the server is now: v0.1. We're building v0.2 currently, any
   exploration phases will get a further index e.g., v0.2.1, etc."; "v1.0 starts when he can beat me." v0.2 = ten maps, the
   rocket changes, the enemy as a target and stage A of the attention model (`docs/v0.2/MANIFEST_v0.2.md`); the write-up of
   2026-10-11 that first carried the name v0.2.1 (`MANIFEST_v15e.md`) was never run; since 2026-10-12 v0.2.1 is the run after v0.2, from

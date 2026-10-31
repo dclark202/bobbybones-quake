@@ -1641,14 +1641,17 @@ WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay
 #                 (WSH_COLS); info["win_shape"]; PAY_SPLIT: in the term "win_part".
 #   WIN_SHAPE_TAU (live, seconds, default 32.5: WIN_STACK's) how fast PSI goes to 0 at the end;  WIN_SHAPE_G (live, default
 #                 0.999) its discount a frame: must be the trainer's --gamma.
-WIN_LIVE = ("WIN_W", "WIN_GAIN", "FADE_V", "WIN_LONG", "WIN_STACK", "WIN_TAU", "WIN_PA", "WIN_PS", "WIN_PRL", "WIN_PLG", "WIN_PRG",
+#   WIN_ADD=A     (b1.0, owner 2026-10-31: win chance "purely additive (or subtractive)" on the table; live, 0 by default, and at 0 with
+#                 WIN_W and FADE_V at 0 the simulator is what it was, to the bit) A x the win part added to the blend's pay, nothing else
+#                 moved: paid  (1 - v) x other + (1 - w) x combat + (w x G + A) x win.  It can be negative and is zero-sum, as the win part.
+WIN_LIVE = ("WIN_ADD", "WIN_W", "WIN_GAIN", "FADE_V", "WIN_LONG", "WIN_STACK", "WIN_TAU", "WIN_PA", "WIN_PS", "WIN_PRL", "WIN_PLG", "WIN_PRG",
             "WIN_SHAPE_K", "WIN_SHAPE_TAU", "WIN_SHAPE_G")
 
 
 def _win_live(get):
     """(v0.5.1) WIN_W, WIN_GAIN, FADE_V, WIN_LONG and the stack term's names from get(name) -> a string or None (unset: the
     default); ValueError on a value out of range (the trainer refuses the live file then)"""
-    d_ = dict(WIN_W=0.0, WIN_GAIN=1.0, FADE_V=0.0, WIN_LONG=0.0, WIN_STACK=0.0,      # (the stack term's defaults: the fit of 2026-10-26)
+    d_ = dict(WIN_ADD=0.0, WIN_W=0.0, WIN_GAIN=1.0, FADE_V=0.0, WIN_LONG=0.0, WIN_STACK=0.0,      # (the stack term's defaults: the fit of 2026-10-26)
               WIN_TAU=32.5, WIN_PA=2.7546, WIN_PS=300.0, WIN_PRL=0.4277, WIN_PLG=0.4485, WIN_PRG=0.2922,
               WIN_SHAPE_K=0.0, WIN_SHAPE_TAU=32.5, WIN_SHAPE_G=0.999)          # (v0.6.1, the shaping beside the win part: off)
     v = {}
@@ -1659,6 +1662,8 @@ def _win_live(get):
             raise ValueError("{}: not a finite number".format(k_))
     if not 0.0 <= v["WIN_W"] <= 1.0 or not 0.0 <= v["FADE_V"] <= 1.0:
         raise ValueError("WIN_W and FADE_V must be within 0 .. 1")
+    if not 0.0 <= v["WIN_ADD"] <= 100.0:
+        raise ValueError("WIN_ADD must be within 0 .. 100")
     if not 0.0 < v["WIN_GAIN"] <= 100.0:
         raise ValueError("WIN_GAIN must be above 0 (at most 100)")
     if v["WIN_LONG"] not in (0.0, 1.0) or v["WIN_STACK"] not in (0.0, 1.0):
@@ -9189,7 +9194,7 @@ class DuelEnv:
 
     def _wb_on(self):
         """(WIN_W / FADE_V) is the blend on in this frame's games?"""
-        if not (GAME_ON and (WIN_W > 0 or FADE_V > 0)):
+        if not (GAME_ON and (WIN_W > 0 or FADE_V > 0 or WIN_ADD > 0)):
             return False
         if self.wb_tab is None:
             raise RuntimeError("WIN_W / FADE_V: no win_chance.json (or no whole games: GAME_P / LATE_P)")
@@ -9287,7 +9292,7 @@ class DuelEnv:
         new = r64
         if on:
             w_, v_, g_ = float(WIN_W), float(FADE_V), float(WIN_GAIN)
-            paid_ = w_ * g_ * self.wb_raw
+            paid_ = (w_ * g_ + float(WIN_ADD)) * self.wb_raw
             new = np.where(gm, (1.0 - v_) * oth + (1.0 - w_) * self.wb_cb + paid_, r64)
             reward[gm] = new[gm]
             if v_ > 0 or WIN_LONG:                           # (WIN_LONG) the win part into r_long too

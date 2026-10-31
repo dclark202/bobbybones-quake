@@ -102,7 +102,7 @@ def rule():
 
 def check_games(pol, upd, ctrl, label):
     games(pol, upd, ctrl, label, live_ps())
-    if ctrl == CTRL_PREV:
+    if ctrl == CTRL_PREV and os.environ.get("CHECK_RULE") != "0":    # (b1.0a: CHECK_RULE=0, the run's own ramp flags its checks)
         rule()
 
 

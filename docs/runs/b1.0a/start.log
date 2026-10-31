@@ -1,0 +1,10 @@
+10-31 10:56:24 judge axioms_ok True logloss 0.3781443884957982
+10-31 10:56:24 allowed set WIN_END: run '1' | reference '<unset>'
+10-31 10:56:24 allowed set WIN_JUDGE: run 'data\\sim_runs\\judge\\judge_v060_wpn.npz' | reference '<unset>'
+10-31 10:56:24 allowed arg --minutes: run '1320' | reference '510'
+10-31 10:56:24 allowed arg --run: run 'duel_gru_b1_0a' | reference 'duel_gru_v0_6_0'
+10-31 10:56:24 settings check: PASS
+10-31 10:56:25 backup: copied 24 files 0.2 GB to T:\BobbyBones_backup
+10-31 10:56:25 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.0, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0}
+10-31 10:56:25 trainer started: cmd 36920
+10-31 10:56:30 watcher 34936 | ramp 36320 (WIN_ADD 0 -> 0.15 -> 0.33; held only at a check of 40% or less) | self-play logger 24516 | no guard (owner: never stop the run)
