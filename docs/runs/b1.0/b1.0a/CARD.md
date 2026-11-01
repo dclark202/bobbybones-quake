@@ -2,7 +2,7 @@
 
 *2026-10-31 (owner): win chance pay is "purely additive (or subtractive)" on the table we have, about a third of the total, changeable on the
 fly. It answers two concerns: "He is not incentivized to win (under v0.6.0 pay)" and "Items have no conditional value to them".
-The plan: [B1_PLAN.md](../../design/B1_PLAN.md).*
+The plan: [B1_PLAN.md](../../../design/B1_PLAN.md).*
 
 **Marks:** ✅ built and tested · ⏳ to build · 🧪 to measure · ❓ owner's decision
 
@@ -10,7 +10,7 @@ The plan: [B1_PLAN.md](../../design/B1_PLAN.md).*
 
 | | |
 |---|---|
-| Network | v0.6.0's end with its own optimizer (`duel_gru_v0_6_0/keep/policy_end_v060.pt`, `opt_end_v060.pt`) ✅ |
+| Started from | v0.6.0's end with its own optimizer (`duel_gru_v0_6_0/keep/policy_end_v060.pt`, `opt_end_v060.pt`) ✅ |
 | Run | `duel_gru_b1_0a` |
 | Pay | `paid = other + combat + A x win`. The table is untouched (`WIN_W` 0, `FADE_V` 0). A is the new live dial `WIN_ADD` ⏳ |
 | The win part | scale x the change in his chance of winning, each frame. Can be negative, zero-sum between the seats; a game's total is scale x (result - start chance), so it cannot be pumped |
@@ -79,6 +79,8 @@ The total for a frag (both 125/50 before it) and the win pay added to an item's 
 | Pay pathologies (ledger) | no negative frags by the judge's axioms (lowest total 1.0). Watched: lopsided games, sign flips, armor hoarding |
 | Rocket jumps, movement jumps | important, not in this run |
 
+*The run's own files stay in `docs/runs/b1.0a/` while it runs (`train.cmd` is in use); they move here at its end.*
+
 ## Before the start
 
 | Step | Passes when |
@@ -93,6 +95,14 @@ The total for a frag (both 125/50 before it) and the win pay added to an item's 
 | The owner's go ❓ | |
 
 Then: `powershell -ExecutionPolicy Bypass -File docs\runs\b1.0a\start.ps1`
+
+## Stopped 2026-10-31 21:00 at update 160 (owner)
+
+"Calling b1.0a a success." Against v0.6.0's end 61.9 / 53.8 / 55.6 / 58.8 / 49.4 / 56.2 / 55.6 / 55.0% at updates 10 to 150 (a save every 20; `WIN_ADD` 0.33 from update 80). End: frags 1.61 a match-minute, rail in hand 0.14, entropy 1.84. The owner: "he's better than any of the v0.6.1x bots"; his biggest weakness, tunnel vision on items. Its end: `keep/policy_end_b10a.pt` + `opt_end_b10a.pt`. Gates missed: rail (floor 0.18) and entropy (ceiling 1.82); both were set by hand, and the entropy comparison showed it is a poor gate.
+
+## The owner's play test (2026-10-31 ~20:00, the save of update 140, on a local server)
+
+"This bot is good ... he's better than any of the v0.6.1x bots." "His biggest weakness is that he's getting tunnel vision on getting items instead of fighting." The owner won 21-0 (Blood Run, `!aim default`) and 12-0 (Furious Heights, `!aim better`, forfeited). Read from the logs: mean stack alive 133 and 166 against 231 and 198; with the owner in sight within 800 units he aims more than 30 degrees off 25 to 30% of the time (the owner 15 to 18%), fires 32 to 42%, and moves away at 17 to 34 u/s. Logs: `data/duellive_b10a/`. Different maps from v0.6.1d's games, so not directly comparable.
 
 ## Changes on the fly
 

@@ -64,6 +64,11 @@ def settings(ps, pol=None):
     lv_ = save_level(pol) if pol else None                   # (v0.6.1's fade of the pull, 2026-10-29: the save's own; both seats alike)
     if lv_ is not None:
         S_["LEVEL_PULL"] = lv_
+    if pol:                                                  # (b1.1a, the target lock's fade: the save's own; both seats alike)
+        import torch
+        ih_ = (torch.load(pol, map_location="cpu", weights_only=False).get("env_vars") or {}).get("INTENT_HOLD")
+        if ih_ not in (None, ""):
+            S_["INTENT_HOLD"] = str(ih_)
     return ["{}={}".format(k, v) for k, v in S_.items() if k != "OVERTIME"] + ["OVERTIME=1"]
 
 

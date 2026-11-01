@@ -82,6 +82,12 @@ panel, KL and clip share, the checks against the start and v0.6.0's end.
 
 Owner: "Stop v0.6.1d now". Its end is its last save, 07:18 (`keep/policy_end_v061d.pt` + `opt_end_v061d.pt`); `extend_noon.py` was stopped too, so no resume and no c/d comparison ran. **The setting was not what was asked:** the old pay was meant to be half of each part, but `WIN_W` 0.8 kept only 20% of `combat` (`FADE_V` 0.5 kept half of `other`); only the totals were equal. v0.6.1e replaces it.
 
+## The owner's play test (2026-10-31, the end, on a local server)
+
+"He was better than the numbers gave him credit for." The biggest part: "he lost his aggression a bit". Behaviour changes were visible when down by a lot with about a minute left. Logs: `data/duellive_v061d/`.
+
+Two games at `!aim better`, the owner won 23-3 (Aerowalk) and 30-2 (Toxicity, forfeited). Read from the logs: he lost on stack, not aim. Mean stack alive 107 and 117 against the owner's 214 and 223; he began 131 of 167 sight-fights 25 or more behind, with 1 kill and 36 deaths in them, and 12 to 13% of fights ahead. Lightning accuracy 34% against 35%, rockets 42% against 46% (Toxicity). Red armor on Aerowalk 0 of 15, mega on Toxicity 1 of 11, the rocket launcher in hand 17 to 32% against 63 to 72%, the machine gun 14 to 24%. Median life 13 to 17 s. One person, two games.
+
 ## Changes on the fly
 
 | Time | Change | Why |

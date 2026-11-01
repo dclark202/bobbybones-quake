@@ -11,18 +11,11 @@ rem  aim2); no movement practice (JUMP_RUN_P 0, jump focus off: 67% whole games 
 rem  (--minutes 420). The aim2 values: scratch\aim2_env.cmd. Made by scratchpad v060/make_cmd_v060.py.
 rem ==== restarted 2026-10-28 after the data loss (owner): the same command; the brain's people lesson from the pro demos
 rem  only (pack_demo rebuilt from the same 115 demos); --minutes 510 (owner: "running until 9pm"). Made by make_cmd_v060r.py.
-rem ==== v0.6.1 (owner, 2026-10-28: "Build judge. Freeze now, train later"; docs/runs/v0.6.1/CARD.md): pay by win chance
-rem  only, the chance from the judge (sim/win_judge.py, fitted by tools/run/fit_b.py on v0.6.0's self-play games, frozen:
-rem  WIN_JUDGE), from v0.6.0's end. v0.6.0's command with: WIN_JUDGE set; run duel_gru_v0_6_1; WV_START and CTL_START
-rem  at v0.6.0's start minute (the readouts' warm-ups are over, not begun again); --minutes (owner's call). The blend
-rem  WIN_W / FADE_V / WIN_GAIN / VALUE_WARM is live (live.json), stepped by tools/run/ramp.py; no shaping (WIN_SHAPE_K 0).
-rem  Made by scratchpad make_cmd_v061j.py.
-rem ==== v0.6.1b (owner, 2026-10-29; docs/runs/v0.6.1b/CARD.md): the old hand-built belief faded out of the brain, overnight,
-rem  from v0.6.1's end. v0.6.1's command with: run duel_gru_v0_6_1b; --brain-fade 1 (the brain's gate, live BRAIN_FADE,
-rem  stepped by tools/run/ramp_live.py); --minutes 720 (12 h; owner, 2026-10-29 evening: "let it run for 12 hours"). Made by scratchpad make_cmd_v061b.py.
-rem ==== the entropy arm arm_v061b_ent005 (owner, 2026-10-30; docs/runs/v0.6.1b/DRIFT.md): v0.6.1b's command from its end with
-rem  --run arm_v061b_ent005, --minutes 130, --ent-coef 0.005. Made by docs/runs/v0.6.1b/arms/make_arms.py.
-rem the repo root: this file lives in docs\runs\v0.6.1b\arms\
+rem ==== b1.0a (owner, 2026-10-31; docs/runs/b1.0a/CARD.md): from v0.6.0's end, win chance pay added on top of the table (live WIN_ADD, ramp_win.py), the table
+rem  unchanged. v0.6.0's command with: run duel_gru_b1_1a; --minutes 1320; WV_START, CTL_START at v0.6.0's start minute; WIN_JUDGE; WIN_END. Made by make_files.py.
+rem ==== b1.1a (owner, 2026-10-31; docs/runs/b1.1/b1.1a/CARD.md): from b1.0a's end, the brain's old belief, the pull toward level and the target lock faded out (live BRAIN_FADE, LEVEL_PULL, INTENT_HOLD:
+rem  ramp_b11.py). b1.0a's command with: run duel_gru_b1_1a; --minutes 885; --brain-fade 1. Made by make_files.py.
+rem the repo root: this file lives in docs\runs\b1.1\b1.1a\
 set ROOT=%~dp0..\..\..\..
 cd /d %ROOT%
 set GPU_MEM_FRACTION=0.90
@@ -331,7 +324,7 @@ set JRUN_SPEED_BACK=1
 set SMALL_ZERO=1
 rem !aim default's fast-target cap (PERCEPT_SPEED itself is live: live.json)
 rem the aim2 model at !aim default (the calibration of 2026-10-27; the old speed term and its caps off)
-call %~dp0..\aim2_env.cmd
+call %~dp0aim2_env.cmd
 if "%WV_START%"=="" set WV_START=19593.9
 if "%CTL_START%"=="" set CTL_START=19593.9
 rem v0.4.2b (owner, 2026-10-24 night): the brain taught on people's games beside self-play (branch brainppl 4b1d881): the start
@@ -339,15 +332,11 @@ rem save = save 160 with the offline-tuned brain (data\sim_runs\brainppl\policy_
 rem brain's lesson rising 0 -> 0.35 over 90 min (live BRAIN_HUMAN_W), sessions 0.7 / demos 0.3 of it. BH_START: -1 = this process's start;
 rem on a later resume set BH_START to the first start's minute (in the log) so the opening does not begin again
 if "%BH_START%"=="" set BH_START=-1
-rem (v0.6.1) the judge, frozen: his chance of winning from his lead, the clock and both players' stacks and weapons
-rem (v0.6.1b, owner 2026-10-29: "That seems fair. Let's do that.") the judge refitted on v0.6.1's own 350 self-play games
-rem  (tools/run/fit_b.py), the rail set to the lightning gun's worth by hand (tools/run/judge_weapons.py --set rg)
-set WIN_JUDGE=%ROOT%\data\sim_runs\judge\judge_v061_wpn.npz
-rem (v0.6.1b, owner 2026-10-29) the game-end pay fix: the win part pays a game's result on its last frame; a level limit
-rem  frame that goes on reads the next period's start (sim/duel_env.py WIN_END; branch v062pay, merged into main)
+rem the judge, frozen, fitted on v0.6.0's own games, the rocket launcher and the rail at the lightning gun's worth by hand; a game's result paid on its last frame
+set WIN_JUDGE=%ROOT%\data\sim_runs\judge\judge_v060_wpn.npz
 set WIN_END=1
 if "%RF_START%"=="" set RF_START=18411.038983547685
 rem (RF_START: v0.4.1's end save, keep/policy_end_v041.pt, update 320)
 if "%RF_START%"=="" (echo set RF_START to the save's minutes ^(the first start^) & exit /b 1)
-start "" /b /wait /affinity C3FFF %USERPROFILE%\anaconda3\python.exe sim\train_duel_rnn.py --env duel_env_ffa --group 2 --map bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure --workers 30 --matches 168 --steps 384 --run arm_v061b_ent005 --brain-fade 1 --resume --minutes 130 --gamma 0.999 --react-ms 125 --acquire-ms 225 --kind-p 1,0,0,0 --drill-weapons rl,rl,rl,rl,pg,pg,gl,gl,sg --lab-p 0,0,1 --arena-len 180 --bot-p 0 --teacher move_v17_look --teach 0 --teach-minutes 100000 --teach-warm 0 --weapon-teach 0 --weapon-teach-minutes 1000000 --minibatches 360 --lr 1e-4 --lr-minutes 1440 --lr-end 1.0 --lam 0.98 --close-floor 0 --loadout-p 0,1,0,0 --close-minutes 1 --intent-teach 9.13 --intent-teach-minutes 1643 --dmg-taken-w 1.0 --ent-coef 0.005 --ent-heads 0,0,0.25,0.25,0.25,0,0.5,0,1,1,0.1,0.1,0,0 --dmg-reward 0.0055 --item-reward 0 --item-loss 0.5 --intent-seek 1.0 --intent-seek-minutes 0 --stack-p 0 --near-item-p 0 --kl-heads 10 --teach-trunk 0.05 --teach-trunk-move 1.0 --anchor-p 0.24 --fade-start 7214.898282571636 --long-gamma 0.9998 --long-ramp 0 --obs-half --fast-gru 1 --legs-learn 1.0 --legs-ent 0 --intent-teach-floor 0.1 --aux 0.2 --aux-trunk 0 --gate-open 480 --gate-from -12 --gate-start 14397.514 --aux-heads place,near --aux-warm 0 --aux-tail --aux-fresh 5 --aux-unseen --aux-measure --turn-add-open 120 --turn-add-start 9685.137113598985 --turn-add-to 4.68 --legs-feat 1 --legs-door-lr-scale 0.25 --legs-gate 1 --legs-residual 0 --no-switch 1 --solo-self-drive 1 --belief 256 --belief-every 8 --track 0.3 --track-warm 0 --track-lr-scale 5 --belief-lr-scale 2.5 --info-pay 0 --track-parts pos:1,vel:0,band:0.5,hand:0.25,own:0.25 --track-z zone:0.5,spd:0.25,dir:0.25 --track-z-warm 0 --btoken 1 --btoken-delay 60 --btoken-open 240 --btoken-start 17278.807862214246 --ahead default --ahead-warm 60 --ahead-start 17278.807862214246 --rj-teach 0 --rj-teach-warm 120 --rj-teach-trunk 0.05 --rule-fade 1 --rule-fade-delay 0 --rule-fade-open 250 --rule-fade-start %RF_START% --control 1 --control-lr 1e-3 --control-warm 60 --control-start %CTL_START% --control-every 5 --control-hid 64 --control-src belief,both --win-value 1 --win-value-lr 1e-3 --win-value-warm 60 --win-value-start %WV_START% --brain-human %ROOT%\data\sim_runs\brainppl\pack_demo --brain-human-mix 1.0 --brain-human-w 0.35 --brain-human-open 0 --brain-human-start -1 --brain-human-lanes 1 %LEARN% >> data\sim_runs\arm_v061b_ent005.log 2>&1
-echo exit %ERRORLEVEL% >> data\sim_runs\arm_v061b_ent005.log
+start "" /b /wait /affinity C3FFF %USERPROFILE%\anaconda3\python.exe sim\train_duel_rnn.py --env duel_env_ffa --group 2 --map bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure --workers 30 --matches 168 --steps 384 --run duel_gru_b1_1a --brain-fade 1 --resume --minutes 885 --gamma 0.999 --react-ms 125 --acquire-ms 225 --kind-p 1,0,0,0 --drill-weapons rl,rl,rl,rl,pg,pg,gl,gl,sg --lab-p 0,0,1 --arena-len 180 --bot-p 0 --teacher move_v17_look --teach 0 --teach-minutes 100000 --teach-warm 0 --weapon-teach 0 --weapon-teach-minutes 1000000 --minibatches 360 --lr 1e-4 --lr-minutes 1440 --lr-end 1.0 --lam 0.98 --close-floor 0 --loadout-p 0,1,0,0 --close-minutes 1 --intent-teach 9.13 --intent-teach-minutes 1643 --dmg-taken-w 1.0 --ent-coef 0.005 --ent-heads 0,0,0.25,0.25,0.25,0,0.5,0,1,1,0.1,0.1,0,0 --dmg-reward 0.0055 --item-reward 0 --item-loss 0.5 --intent-seek 1.0 --intent-seek-minutes 0 --stack-p 0 --near-item-p 0 --kl-heads 10 --teach-trunk 0.05 --teach-trunk-move 1.0 --anchor-p 0.24 --fade-start 7214.898282571636 --long-gamma 0.9998 --long-ramp 0 --obs-half --fast-gru 1 --legs-learn 1.0 --legs-ent 0 --intent-teach-floor 0.1 --aux 0.2 --aux-trunk 0 --gate-open 480 --gate-from -12 --gate-start 14397.514 --aux-heads place,near --aux-warm 0 --aux-tail --aux-fresh 5 --aux-unseen --aux-measure --turn-add-open 120 --turn-add-start 9685.137113598985 --turn-add-to 4.68 --legs-feat 1 --legs-door-lr-scale 0.25 --legs-gate 1 --legs-residual 0 --no-switch 1 --solo-self-drive 1 --belief 256 --belief-every 8 --track 0.3 --track-warm 0 --track-lr-scale 5 --belief-lr-scale 2.5 --info-pay 0 --track-parts pos:1,vel:0,band:0.5,hand:0.25,own:0.25 --track-z zone:0.5,spd:0.25,dir:0.25 --track-z-warm 0 --btoken 1 --btoken-delay 60 --btoken-open 240 --btoken-start 17278.807862214246 --ahead default --ahead-warm 60 --ahead-start 17278.807862214246 --rj-teach 0 --rj-teach-warm 120 --rj-teach-trunk 0.05 --rule-fade 1 --rule-fade-delay 0 --rule-fade-open 250 --rule-fade-start %RF_START% --control 1 --control-lr 1e-3 --control-warm 60 --control-start %CTL_START% --control-every 5 --control-hid 64 --control-src belief,both --win-value 1 --win-value-lr 1e-3 --win-value-warm 60 --win-value-start %WV_START% --brain-human %ROOT%\data\sim_runs\brainppl\pack_demo --brain-human-mix 1.0 --brain-human-w 0.35 --brain-human-open 0 --brain-human-start -1 --brain-human-lanes 1 %LEARN% >> data\sim_runs\duel_gru_b1_1a.log 2>&1
+echo exit %ERRORLEVEL% >> data\sim_runs\duel_gru_b1_1a.log

@@ -3,7 +3,7 @@
 *2026-10-30 (owner): "We'll do v0.6.2a without them for now" (the pro demos); any run on win-chance pay carries the rescaling to
 ~10 a player-minute, "that is a given"; "Likely it will start from v0.6.1c, I'm expecting b to be a dead end"; hold judgement until
 it has finished. **The line (owner, 2026-10-30): "v0.6.2 fades in v0.6.3 fades out. That's it"**: this run only fades the head in; the
-item rule stays on and its fade moves to [v0.6.3](../v0.6.3/CARD.md). Earlier draft, from v0.6.1b's end: [v0.6.2](../v0.6.2/CARD.md).*
+item rule stays on and its fade moves to [v0.6.3](../v0.6.3/CARD.md). Earlier draft, from v0.6.1b's end: [v0.6.2](../../archive/versions/v0.6.2/CARD.md).*
 
 **Marks:** ✅ built and tested · ⏳ waiting for v0.6.1c's end · 🧪 to measure · ❓ owner's decision
 

@@ -32,7 +32,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 | `docs/PLAN.md` | the goal, where things stand, what's next |
 | `docs/HISTORY.md` | every version and experiment: what, result, lesson. Read it before proposing anything |
 | `docs/BACKLOG.md` | open work and ideas, numbered `B-nn` |
-| `docs/runs/<version>/` | one folder per model run: `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
+| `docs/runs/bN.N/` | one folder per family of runs: a `README.md` (the goal, the attempts) and a folder per attempt, `bN.Nx/` (older runs: `docs/runs/<version>/`), each with: `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
 | `docs/design/` | current designs (aim2, ...) · `docs/guides/` how-tos · `docs/archive/` old versions and the old daily log (frozen) |
 | `tools/run/` | the run tools: `check_settings`, `make_train_cmd`, `watch` (checks), `panel` (behaviour), `selfplay_loop` / `selfplay_log` (B data), `backup` |
 | `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` |
@@ -53,7 +53,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   hard-coded rules come out and the strategy head comes in, one step at a time; the fairness limits stay. Open items beside them: rocket jumps, failed
   movement jumps (Aerowalk's red armor), grenades less so. Every change is stated by the equilibrium it leads to in self-play and the behaviour it brings out
   on the way; only winning matters in the long run. The steps: `docs/PLAN.md`; the reasons: `docs/design/B1_PLAN.md`.
-- **Names (owner, 2026-10-31)**: runs are bN.Nx (BobbyBones 1: b1.0a; the first number the series, the second the step, the letter the try), in `docs/runs/b1.0a/`
+- **Names (owner, 2026-10-31)**: bN is the series (BobbyBones 1: b1); bN.N is a family of runs, each with a specific goal of its own; each run in it is bN.Nx, where the attempts are x = a, b, c, ... (b1.0a, b1.0b). In `docs/runs/b1.0/` (the family: its `README.md` says the goal and lists the attempts) with a folder per attempt, `docs/runs/b1.0/b1.0a/`,
   and `data/sim_runs/duel_gru_b1_0a`. The v0.x names below are history: use them only for what was run under them.
 - **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
   trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
@@ -111,6 +111,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   has asked to test first.
 
 ## Docs (keep in sync, one commit)
+- **At a run's start (owner, 2026-10-31)**: its row in `docs/HISTORY.md`'s family tree (what it started from, its folder) and its line in the series' table; a stopped run, a side arm and a failed try too. Its card's first row is "Started from".
 - After a run, test or decision: the run's folder (`docs/runs/<version>/`: card, report), a line in `docs/HISTORY.md`, the
   backlog, `docs/PLAN.md` if its status changed, then `python tools/docs_check.py` (links, backlog numbers) before the commit.
 - The old daily log (`docs/archive/results/`, "RESULTS 2026-10-08 18:45" = that entry) and the per-version folders

@@ -1,7 +1,7 @@
 # v0.6.1b: the old hand-built belief out of the brain, overnight, from v0.6.1's end
 
 *2026-10-29 (owner): "I'm not opposed to doing v0.6.3 B first (before v0.6.2), as a short overnight run"; "Write the card".
-Group B of [v0.6.3](../v0.6.3/CARD.md), moved ahead of the strategy head so that the head ([v0.6.2](../v0.6.2/CARD.md))
+Group B of [v0.6.3](../v0.6.3/CARD.md), moved ahead of the strategy head so that the head ([v0.6.2](../../archive/versions/v0.6.2/CARD.md))
 learns once, on the brain it keeps. Started 2026-10-29 19:59 on the owner's go ("Start it now, let it run for 12 hours"); ends ~08:00 10-30.*
 
 **Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
@@ -100,7 +100,7 @@ must hold for a go; the owner decides in the band marked so.
 
 ## What changes for v0.6.2
 
-Done 2026-10-29 evening (owner: "Yes, prepare it"; see [v0.6.2's card](../v0.6.2/CARD.md)):
+Done 2026-10-29 evening (owner: "Yes, prepare it"; see [v0.6.2's card](../../archive/versions/v0.6.2/CARD.md)):
 - It starts from `keep/policy_end_v061b.pt` with its optimizer; `start.ps1` checks the end's brain dial at 1 and the head's identity on it.
 - Its checks are against v0.6.1b's end, every fourth against v0.6.0's; the league anchors are v0.6.1b's end and v0.6.0's end.
 - Its `train.cmd` is made from v0.6.1b's (settings check PASS: only `--run`, `--minutes` and the head's arguments differ;

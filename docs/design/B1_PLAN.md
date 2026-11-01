@@ -9,12 +9,12 @@ as hard rules. The owner sets the order of the later steps; the order below is a
 
 | Run | One new thing | Start | Passes when (beside the owner's play test) |
 |---|---|---|---|
-| **b1.0a** | win pay added, every other weight fixed ([card](../runs/b1.0a/CARD.md)) | v0.6.0's end | the gates below |
+| **b1.0a** | win pay added, every other weight fixed ([card](../runs/b1.0/b1.0a/CARD.md)) | v0.6.0's end | the gates below |
 | **b1.1a** | the pull toward level and the brain's old belief out, together (`LEVEL_PULL` 0.95 → 1, `BRAIN_FADE` 0 → 1; owner, 2026-10-31) | b1.0's end | at least level with b1.0's end; the brain's scores, rail in hand and aim hold; no fall in the gates |
 | **b1.2a** | the strategy head in, item rule on (`H2_GATE_CAP` 0 → 1) | b1.1's end | at least level; targets and roaming hold; the head adds something (blanked-head check) |
 | **Later** | the item rule's label out (`INTENT_TEACH_W` 1 → 0) | b1.2's end | at least level; no spawn camping (v0.4.4's failure); items hold |
 
-A failed step gets a letter (b1.1b), not a new number. If b1.1a fails, b1.1b and b1.1c isolate its two fades: no run has tested either alone.
+bN is the series, bN.N a family of runs with a specific goal, bN.Nx an attempt at it (a, b, c, ...). A failed attempt gets the next letter (b1.1b), not a new number. If b1.1a fails, b1.1b and b1.1c isolate its two fades: no run has tested either alone.
 
 **After that, not yet ordered:** the target lock (`INTENT_HOLD`, `TARGETS_FREE`, `WEAPON_FREE`), the pros' tables as inputs, the movement
 mechanics (rocket jumps, trick jumps: v0.6.4's card, still the plan).

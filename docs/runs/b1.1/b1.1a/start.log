@@ -1,0 +1,8 @@
+10-31 21:11:06 allowed arg --brain-fade: run '1' | reference '<unset>'
+10-31 21:11:06 allowed arg --minutes: run '885' | reference '1320'
+10-31 21:11:06 allowed arg --run: run 'duel_gru_b1_1a' | reference 'duel_gru_b1_0a'
+10-31 21:11:06 settings check: PASS
+10-31 21:11:08 backup: copied 161 files 0.73 GB to T:\BobbyBones_backup
+10-31 21:11:08 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 0.95, 'BRAIN_FADE': 0.0, 'INTENT_HOLD': 8.0}
+10-31 21:11:08 trainer started: cmd 37544
+10-31 21:11:13 watcher 34552 | ramp 40332 (the brain, the pull, the lock; held only at a check of 40% or less) | self-play logger 32800 | no guard (owner: never stop the run)

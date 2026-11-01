@@ -1,4 +1,4 @@
-"""v0.6.2's ramp (owner, 2026-10-29; docs/runs/v0.6.2/CARD.md): the strategy head replaces the item rule, one after the other,
+"""v0.6.2's ramp (owner, 2026-10-29; docs/archive/versions/v0.6.2/CARD.md): the strategy head replaces the item rule, one after the other,
 on the clock (the owner: "keep going unless a collapse"), the checks and the behaviour panel only logged.
   shut     the head's gate held at 0 (live H2_GATE_CAP 0) for RAMP_SHUT_N updates (10): its own value learns the win pay
            while it changes nothing

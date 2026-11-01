@@ -8,7 +8,7 @@ hand-built formula (A) and the hand-shaped fit (B2); the earlier design with the
 > **What follows this run (owner, 2026-10-29), for the session running it:**
 > - **v0.6.1 finishes as planned (~18:00).** Nothing about it changes.
 > - **Then [v0.6.1b](../v0.6.1b/CARD.md) runs overnight from v0.6.1's end:** the old hand-built belief faded out of the brain
->   (live `BRAIN_FADE`), with the game-end pay fix. **[v0.6.2](../v0.6.2/CARD.md) starts tomorrow morning from v0.6.1b's end,
+>   (live `BRAIN_FADE`), with the game-end pay fix. **[v0.6.2](../../archive/versions/v0.6.2/CARD.md) starts tomorrow morning from v0.6.1b's end,
 >   not tonight.**
 > - **The game-end pay fix** ([WINPAY_END.md](WINPAY_END.md)) is this session's to land, in `sim/duel_env.py` (then
 >   `duel_env_ffa.py` regenerated). Once it is in and checked, set `$FIX_MARK` in

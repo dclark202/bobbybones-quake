@@ -41,7 +41,7 @@ Owner: "At the next save, stop v0.6.1e and save the optimizer. Might resume if m
 
 ## Stopped 2026-10-31 ~10:17 at about update 30 (owner)
 
-The owner replaced the v0.6.1 line with b1 ([b1.0a](../b1.0a/CARD.md)). Its checks against the start: 44.4% at update 10, 52.5% at update 20. `FADE_V` had reached 0.39 and `WIN_GAIN` 0.71, and the fades had not begun, so it answers nothing it set out to test. Its end: `keep/policy_end_v061e.pt`.
+The owner replaced the v0.6.1 line with b1 ([b1.0a](../b1.0/b1.0a/CARD.md)). Its checks against the start: 44.4% at update 10, 52.5% at update 20. `FADE_V` had reached 0.39 and `WIN_GAIN` 0.71, and the fades had not begun, so it answers nothing it set out to test. Its end: `keep/policy_end_v061e.pt`.
 
 ## Changes on the fly
 

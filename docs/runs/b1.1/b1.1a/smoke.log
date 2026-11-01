@@ -1,0 +1,42 @@
+20:58:38 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 0.95, 'BRAIN_FADE': 0.0, 'INTENT_HOLD': 8.0}
+20:58:38 the smoke trainer and the ramp started
+10-31 20:58:58 ramp_live on for scratch_b11a_smoke3: BRAIN_FADE 0.0 -> 1.0 by 0.5 right after a save (policy.pt rewritten), every 1 save(s), at least 0 min apart
+10-31 21:00:13 kept the save of update 13 as keep/policy_prebrain_b11a.pt (before the first step)
+10-31 21:00:13 RAMP BRAIN_FADE 0.5 (right after the save of update 13; it takes effect at the next rollout)
+10-31 21:01:18 RAMP BRAIN_FADE 1.0 (right after the save of update 23; it takes effect at the next rollout)
+10-31 21:01:18 ramp_live done: BRAIN_FADE at 1.0
+10-31 21:01:18 ramp_live on for scratch_b11a_smoke3: LEVEL_PULL 0.95 -> 1.0 by 0.025 right after a save (policy.pt rewritten), every 1 save(s), at least 0 min apart
+10-31 21:02:18 kept the save of update 33 as keep/policy_nobrain_b11a.pt (before the first step)
+10-31 21:02:18 RAMP LEVEL_PULL 0.975 (right after the save of update 33; it takes effect at the next rollout)
+10-31 21:03:23 RAMP LEVEL_PULL 1.0 (right after the save of update 43; it takes effect at the next rollout)
+10-31 21:03:23 ramp_live done: LEVEL_PULL at 1.0
+10-31 21:03:23 ramp_live on for scratch_b11a_smoke3: INTENT_HOLD 8.0 -> 1.0 by 1.0 right after a save (policy.pt rewritten), every 1 save(s), at least 0 min apart
+10-31 21:04:28 kept the save of update 53 as keep/policy_nopull_b11a.pt (before the first step)
+10-31 21:04:28 RAMP INTENT_HOLD 4.0 (right after the save of update 53; it takes effect at the next rollout)
+10-31 21:05:33 RAMP INTENT_HOLD 2.0 (right after the save of update 63; it takes effect at the next rollout)
+10-31 21:06:33 RAMP INTENT_HOLD 1.0 (right after the save of update 73; it takes effect at the next rollout)
+10-31 21:06:33 ramp_live done: INTENT_HOLD at 1.0
+21:10:48 PASS the trainer exited 0
+21:10:48 PASS on the CPU
+21:10:48 PASS 20 or more updates (114)
+21:10:48 PASS LEVEL_PULL 1, BRAIN_FADE 1, INTENT_HOLD 1 at the end (1.0, 1.0, 1.0)
+21:10:48 PASS the pay untouched (WIN_ADD 0.33)
+21:10:48 PASS the brain, then the pull, then the lock
+21:10:48 PASS the lock's steps 4, 2, 1
+21:10:48 PASS the lock taken live
+21:10:50 PASS the last save carries the lock (1.0)
+21:10:50 PASS the brain's dial went 0 -> 1 ([0.0, 0.5, 1.0])
+21:10:50 PASS the saves before each fade kept
+21:10:50 PASS win pay still in force in the last updates
+PASS state dict keys unchanged
+PASS g 0: the same as without the entry, bit for bit
+PASS g 0.3: the same as the inputs times 0.7 (max diff 1.07e-06)
+PASS g 1: the faded columns change nothing
+PASS g 1: the other columns still count
+PASS numpy brain, no entry: weights as saved
+PASS numpy brain at g 0.5 = the trainer's (max diff 7.88e-06; numpy against torch without the fade 1.12e-05)
+PASS numpy brain did not change the saved weights
+ALL PASSED
+21:10:51 PASS brain_fade_check on the last save
+21:10:51 PASS test_suite.Policy loads the last save
+21:10:51 ALL PASSED

@@ -4,13 +4,41 @@ The short record of every model and experiment, so that nothing is tried twice b
 [archive/](archive/) (the per-version folders as they were, and the daily results log, [archive/RESULTS.md](archive/RESULTS.md)).
 Newest first. A run's own card and report are in [runs/](runs/) from v0.6.0 on.
 
+## Family tree: what each network started from
+
+Every run gets a row here at its start, and a line in its series' table below (a stopped run, a side arm and a failed try too). To trace a network back, follow "Started from".
+
+| Network | Started from | Run folder (`data/sim_runs/`) | Result, in a word |
+|---|---|---|---|
+| **b1.1a** | b1.0a's end, its own optimizer | `duel_gru_b1_1a` | planned |
+| **b1.0a** | v0.6.0's end, its own optimizer | `duel_gru_b1_0a` | success |
+| v0.6.1e | v0.6.1's update 90, v0.6.1's end's optimizer | `duel_gru_v0_6_1e` | stopped early |
+| v0.6.1d | v0.6.1's update 110, v0.6.1's end's optimizer | `duel_gru_v0_6_1d` | stopped; beat v0.6.0's end, fought less |
+| v0.6.1c | v0.6.1's update 250, v0.6.1's end's optimizer | `duel_gru_v0_6_1c` | failed |
+| v0.6.1b arm B | v0.6.1b's end | `arm_v061b_ent002` (`docs/runs/v0.6.1b/arms/`) | abandoned |
+| v0.6.1b | v0.6.1's end | `duel_gru_v0_6_1b` | failed |
+| v0.6.1 | v0.6.0's end | `duel_gru_v0_6_1` | level, weaker at the end |
+| **v0.6.0** (the retrain; the first run's saves were lost on 10-28) | v0.4.2b's end | `duel_gru_v0_6_0` | good: on the servers |
+| v0.5.1 | v0.5.0's end | `duel_gru_v0_5_1` | failed |
+| v0.5.0 | v0.4.2b's end | `duel_gru_v0_5_0` | failed |
+| v0.4.4 | v0.4.3's update 80 | `duel_gru_v0_4_4` | scrapped |
+| v0.4.3 | v0.4.2b's end (update 140) | `duel_gru_v0_4_3` | scrapped |
+| **v0.4.2b** | v0.4.2's save 160, with the brain tuned offline (`brainppl/policy_brainppl.pt`) | `duel_gru_v0_4_2` | best of its day |
+| v0.4.2 | v0.4.1's end; the first try is `duel_gru_v0_4_2_try1` | `duel_gru_v0_4_2` | good |
+| v0.4.1 | v0.4.0b's end | `duel_gru_v0_4_1` | good |
+| v0.4.0b | v0.4.0, a save with the brain's new outputs | `duel_gru_v0_4_0` | good |
+| v0.4.0 | v0.3.10's end + a fresh brain | `duel_gru_v0_4_0` | good |
+
+Older runs' starts are in their write-ups ([archive/](archive/)). The data loss of 2026-10-28 took the older run folders: v0.4.0 to v0.4.1 and v0.4.3 to v0.5.1 are gone (their folder names above are from the write-ups), and only `duel_gru_v0_4_2` survives of them.
+
 ## b1 (2026-10-31 →): win chance on top of the pay table
 
 New names, bN.Nx, and the series to stick with (owner). The plan: [PLAN.md](PLAN.md), [design/B1_PLAN.md](design/B1_PLAN.md).
 
 | Version | What | Result | Lesson |
 |---|---|---|---|
-| b1.0a (2026-10-31 10:56 →) | from v0.6.0's end, win chance pay added on top of the unchanged table (`WIN_ADD`, live: 0 → 0.15 → 0.33, about a third of the total), `judge_v060_wpn`, `WIN_END`, no rescale; checks against v0.6.0's end only ([runs/b1.0a/CARD.md](runs/b1.0a/CARD.md)) | running | |
+| b1.1a (2026-10-31 ~21:45 →) | from b1.0a's end, the brain's old belief, the pull toward level and the target lock out, in one run ([runs/b1.1/b1.1a/CARD.md](runs/b1.1/b1.1a/CARD.md)) | starting | |
+| b1.0a (2026-10-31 10:56 → 21:00) | from v0.6.0's end, win chance pay added on top of the unchanged table (`WIN_ADD`, live: 0 → 0.15 → 0.33, about a third of the total), `judge_v060_wpn`, `WIN_END`, no rescale; checks against v0.6.0's end only ([runs/b1.0/b1.0a/CARD.md](runs/b1.0/b1.0a/CARD.md)) | stopped at update 160 (owner: a success). Against v0.6.0's end 61.9 / 53.8 / 55.6 / 58.8 / 49.4 / 56.2 / 55.6 / 55.0% at updates 10 to 150 (a save every 20; `WIN_ADD` 0.33 from update 80). End: frags 1.61 a match-minute, rail in hand 0.14, entropy 1.84. The owner: "he's better than any of the v0.6.1x bots"; his biggest weakness, tunnel vision on items | adding win pay to the table kept what replacing the table lost; the rail's slide (0.22 to 0.14) remains unexplained |
 
 ## v0.6 (2026-10-27 → 10-31): the pro-measured aim
 
@@ -21,6 +49,7 @@ give a base to build on. Review: [runs/v0.6.1d/REVIEW_v0.6.1.md](runs/v0.6.1d/RE
 |---|---|---|---|
 | v0.6.1e (2026-10-31 08:22 → ~10:17, stopped by the owner at about update 30) | from v0.6.1's update 90, the table to half and win chance to half over 40 updates, then the pull and the brain's old belief together ([card](runs/v0.6.1e/CARD.md)) | 44.4% and 52.5% against its start at updates 10 and 20; replaced by b1 before its fades began | no conclusion: too short |
 | v0.6.1d (2026-10-30 17:41 → 10-31 ~07:55, stopped by the owner at about update 219) | from v0.6.1's update 110, the old pay and win pay about equal in size, the pull and the brain's old belief faded together ([card](runs/v0.6.1d/CARD.md)) | against v0.6.0's end 59.4 / 67.5 / 60.0 / 50.0%; level with its start. But frags 1.75 → 1.32 a match-minute, rail in hand 0.22 → 0.09, panel flags for hunting and camping. `WIN_W` 0.8 kept only 20% of combat, not the half intended | the fades can be survived on a blend; he can win checks against v0.6.0 while fighting less, so win rate against old selves and skill measures tell different things, and it is unsettled which matters against people. Check what a dial setting really pays before running it |
+| v0.6.1b arm B (2026-10-30, stopped at about update 17) | from v0.6.1b's end, the entropy bonus lower (`--ent-coef 0.002`) | abandoned for v0.6.1c; entropy flat at 1.987 | no conclusion: too short |
 | v0.6.1c (2026-10-30, stopped at update 130) | from v0.6.1's update 250, the rescale, the pull and the brain's old belief together ([card](runs/v0.6.1c/CARD.md)) | 43.1% against v0.6.0's end and against its start; entropy rose with the rescale on | keeping the pay's size up did not stop the drift: it was not only a matter of pay size |
 | v0.6.1b (2026-10-29 → 10-30, stopped at update 181) | from v0.6.1's end, the brain's old belief out, the refit judge, `WIN_END` ([card](runs/v0.6.1b/CARD.md)) | no-go: 43.8% against its start, 40.6% against v0.6.0's end; rail in hand 0.06, rocket 0.31; the league alone hid the slide | check against fixed networks; several changes at once cannot be told apart |
 | v0.6.1 (2026-10-28 20:05 → 10-29 17:52, update 340) | the pay faded to win chance only (done update ~153), then the view's pull toward level faded out (`LEVEL_PULL` 0.95 → 1.0 from update 250, owner); the game-end pay fault found by an audit and left in (fixed for v0.6.1b: `WIN_END`) | level with v0.6.0's end on win chance only (50.0% over 800 games; 55.5% during the fade); the end lost to its own save before the level fade, 144-176 (45.0%), and played weaker in the owner's test; a slower game (frags 1.65 → 1.42 a match-minute), the rail out of his hands (in hand 0.21 → 0.13), items held with no item pay. Kept: `keep/policy_end_v061.pt` + `opt_end_v061.pt` (v0.6.1b's start) and `keep/policy_prelevel_v061.pt` (update 250, to return to; no optimizer), both backed up ([runs/v0.6.1/CARD.md](runs/v0.6.1/CARD.md)) | win chance alone held his level but did not lift it in 190 updates; nothing in the pay asks for the rail's use, and the pros' games price owning it near nothing too; one change at a time (the level fade and more win-only training cannot be told apart) |

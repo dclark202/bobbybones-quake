@@ -2093,6 +2093,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "JUMP_COST",                                                                                           # (v0.3.9)
              "LG_QUIET_COST", "WATCH_PAY",                                                                          # (v0.3.10)
              "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
+             "INTENT_HOLD",                                                                                         # (b1.1a, owner 2026-10-31: the target lock faded, a PLAY_VAR too)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
              "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
@@ -2129,6 +2130,10 @@ def live_values(get):
     v["LEVEL_PULL"] = float(lp_) if (lp_ or "").strip() else 0.95
     if not 0.0 <= v["LEVEL_PULL"] <= 1.0:
         raise ValueError("LEVEL_PULL must be within 0 .. 1")
+    ih_ = get("INTENT_HOLD")                                 # (b1.1a) how long a target choice holds, seconds, live; unset: 3 (read each frame by intend())
+    v["INTENT_HOLD"] = float(ih_) if (ih_ or "").strip() else 3.0
+    if not 0.0 <= v["INTENT_HOLD"] <= 60.0:
+        raise ValueError("INTENT_HOLD must be within 0 .. 60")
     bap_ = get("BLIND_AHEAD_P")                              # (v0.4.3) BLIND_AHEAD's chance a life; unset: 1
     v["BLIND_AHEAD_P"] = float(bap_) if (bap_ or "").strip() else 1.0
     if not 0.0 <= v["BLIND_AHEAD_P"] <= 1.0:

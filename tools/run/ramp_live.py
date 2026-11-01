@@ -31,6 +31,8 @@ def main():
     ap.add_argument("--sleep", type=float, default=30)
     ap.add_argument("--settle", type=float, default=20, help="seconds policy.pt must stand still before it counts as saved")
     ap.add_argument("--also", action="append", default=[], help="NAME:FROM:TO:STEP, stepped with NAME in the same write")
+    ap.add_argument("--values", default="", help="(b1.1) the steps' values, comma-separated, in place of a fixed STEP (the last must be TO)")
+    ap.add_argument("--hold-at", type=float, default=0.0, help="(b1.1) no step while the last check in watch/checks_prev.jsonl is at or under this win rate (0: off)")
     a = ap.parse_args()
     D = a.dir or os.path.join(ROOT, "data", "sim_runs", a.run)
     LIVE, MET, POL, KEEP, WD = (os.path.join(D, x) for x in ("live.json", "metrics.jsonl", "policy.pt", "keep", "watch"))
@@ -81,6 +83,7 @@ def main():
         a.run, a.name, a.frm, a.to, a.step, a.every, a.min_s / 60))
     seen = mtime()                                           # (the start file, or the last save before now: not a new save)
     saves, t_last = 0, 0.0
+    SEQ = [float(x) for x in a.values.split(",")] if a.values else []
     while sign * (a.to - v) > 1e-9:
         time.sleep(a.sleep)
         m_ = mtime()
@@ -92,12 +95,25 @@ def main():
         if (saves - 1) % a.every or time.time() - t_last < a.min_s:
             log("save at update {}: no step (every {} saves, at least {:g} min apart)".format(n, a.every, a.min_s / 60))
             continue
+        if a.hold_at > 0:
+            try:
+                with open(os.path.join(WD, "checks_prev.jsonl")) as f:
+                    c_ = json.loads([x for x in f if x.strip()][-1])
+                wr_ = c_["won"] / max(1, c_["won"] + c_["lost"])
+            except (FileNotFoundError, IndexError):
+                wr_ = 1.0
+            if wr_ <= a.hold_at:
+                log("HOLD at the save of update {}: the last check {:.1%} is {:.0%} or less".format(n, wr_, a.hold_at))
+                continue
         if a.keep_as and t_last == 0.0:
             os.makedirs(KEEP, exist_ok=True)
             shutil.copy2(POL, os.path.join(KEEP, a.keep_as))
             log("kept the save of update {} as keep/{} (before the first step)".format(n, a.keep_as))
-        v = round(v + sign * a.step, 6)
-        v = a.to if sign * (v - a.to) > 0 else v
+        if SEQ:
+            v = SEQ.pop(0)
+        else:
+            v = round(v + sign * a.step, 6)
+            v = a.to if sign * (v - a.to) > 0 else v
         for x_ in ALSO:
             sg_ = 1.0 if x_[2] >= x_[1] else -1.0
             w_ = round(x_[4] + sg_ * x_[3], 6)

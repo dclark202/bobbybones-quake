@@ -7,7 +7,7 @@ import os
 import shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "..", "v0.6.2")
+SRC = os.path.join(HERE, "..", "..", "archive", "versions", "v0.6.2")
 BS = "\\"
 
 
