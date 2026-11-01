@@ -15,7 +15,7 @@ out and the strategy head comes in, one step at a time. Open items beside them: 
 |---|---|---|
 | b1.0a | win chance pay in, on top of the unchanged table (`WIN_ADD` to 0.33, about a third of the total), from v0.6.0's end | done 2026-10-31 21:00, a success ([card](runs/b1.0/b1.0a/CARD.md)) |
 | b1.1a | ready for strategy: the brain's old belief, the pull toward level and the target lock out, in one run | built ([card](runs/b1.1/b1.1a/CARD.md)); starting ~21:45 on 10-31. A save is kept between the fades |
-| b1.2a | the strategy head in, learning from combat plus win pay; item rule still on: he should fight more | card written, not built ([card](runs/b1.2/b1.2a/CARD.md)); planned ~08:30 on 11-01, 24 h |
+| b1.2a | the strategy head in, learning from combat plus win pay; item rule still on: he should fight more | built and smoke-tested ([card](runs/b1.2/b1.2a/CARD.md)); ~08:30 on 11-01 on the owner's go, 24 h |
 | later | the item rule's label out (the item pay stays); then the target lock, the pros' tables, movement mechanics, in an order not yet set | planned |
 
 **Names (owner, 2026-10-31):** bN is the series; bN.N a family of runs with a specific goal; bN.Nx a run in it, the attempts x = a, b, c, ... A failed attempt gets the next letter (b1.1b), not a new number. Yardstick: v0.6.0's end. The reasons, gates and open points: [design/B1_PLAN.md](design/B1_PLAN.md).

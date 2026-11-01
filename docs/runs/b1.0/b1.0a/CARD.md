@@ -79,8 +79,6 @@ The total for a frag (both 125/50 before it) and the win pay added to an item's 
 | Pay pathologies (ledger) | no negative frags by the judge's axioms (lowest total 1.0). Watched: lopsided games, sign flips, armor hoarding |
 | Rocket jumps, movement jumps | important, not in this run |
 
-*The run's own files stay in `docs/runs/b1.0a/` while it runs (`train.cmd` is in use); they move here at its end.*
-
 ## Before the start
 
 | Step | Passes when |

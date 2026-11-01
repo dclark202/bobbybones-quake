@@ -4,7 +4,7 @@ WIN_W and FADE_V still 0; no rescale; the sizes printed, the paid size above the
     %USERPROFILE%\\anaconda3\\python.exe docs\\runs\\b1.0a\\smoke.py > docs\\runs\\b1.0a\\smoke.log"""
 import json, os, shutil, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 PY = sys.executable
 SR = os.path.join(ROOT, "data", "sim_runs")
 K0 = os.path.join(SR, "duel_gru_v0_6_0", "keep")
@@ -38,7 +38,7 @@ def main():
     json.dump(lv, open(os.path.join(D, "live.json"), "w", encoding="utf-8"))
     say("live.json: {}".format(lv))
     t = open(os.path.join(HERE, "train.cmd"), encoding="ascii").read().replace("\r\n", "\n")
-    subs = [("set ROOT=%~dp0.." + BS + ".." + BS + "..", "set ROOT={}\nset CUDA_VISIBLE_DEVICES=-1\nset OMP_NUM_THREADS=1".format(ROOT)),
+    subs = [("set ROOT=%~dp0.." + BS + ".." + BS + ".." + BS + "..", "set ROOT={}\nset CUDA_VISIBLE_DEVICES=-1\nset OMP_NUM_THREADS=1".format(ROOT)),
             ("call %~dp0aim2_env.cmd", "call " + os.path.join(HERE, "aim2_env.cmd")),
             ("/affinity C3FFF", "/affinity 3C000"), ("--workers 30 ", "--workers 2 "), ("--matches 168 ", "--matches 8 "),
             ("--steps 384 ", "--steps 96 "), ("--minibatches 360 ", "--minibatches 4 "), ("--run duel_gru_b1_0a ", "--run " + RUN + " "),

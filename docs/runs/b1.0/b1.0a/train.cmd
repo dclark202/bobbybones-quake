@@ -13,8 +13,8 @@ rem ==== restarted 2026-10-28 after the data loss (owner): the same command; the
 rem  only (pack_demo rebuilt from the same 115 demos); --minutes 510 (owner: "running until 9pm"). Made by make_cmd_v060r.py.
 rem ==== b1.0a (owner, 2026-10-31; docs/runs/b1.0a/CARD.md): from v0.6.0's end, win chance pay added on top of the table (live WIN_ADD, ramp_win.py), the table
 rem  unchanged. v0.6.0's command with: run duel_gru_b1_0a; --minutes 1320; WV_START, CTL_START at v0.6.0's start minute; WIN_JUDGE; WIN_END. Made by make_files.py.
-rem the repo root: this file lives in docs\runs\b1.0a\
-set ROOT=%~dp0..\..\..
+rem the repo root: this file lives in docs\runs\b1.0\b1.0a\
+set ROOT=%~dp0..\..\..\..
 cd /d %ROOT%
 set GPU_MEM_FRACTION=0.90
 if "%LEARN%"=="" set LEARN=--overlap 1 --learn-nosync 1

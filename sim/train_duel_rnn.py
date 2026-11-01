@@ -165,7 +165,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (env.solo_now.copy() if getattr(env, "solo_now", None) is not None else np.zeros(env.n, bool)),    # (SOLO_SELF) in his runs
                          (info["rj_lab"] if "rj_lab" in info else None),                                     # (--rj-teach) "jump and fire now" for his NEXT frame
                          (info["rj_copy"] if "rj_copy" in info else None),                                   # (--rj-copy) the runner's choices for his NEXT frame
-                         (wv_pack(env, wv_pre, info, G) if wv_pre is not None else None)))                  # (--win-value) shadow pay, cut, in a game
+                         (wv_pack(env, wv_pre, info, G) if wv_pre is not None else None),
+                         (((1.0 - float(E_.WIN_W)) * info["win_blend"][:, 1] + info["win_blend"][:, 2]).astype(np.float32)   # (--head2-pay combat_win) combat plus the win part
+                          if "win_blend" in info else None)))                  # (--win-value) shadow pay, cut, in a game
             tw_["send"] += time.perf_counter() - t_lp        # (the reply's pickling and the pipe)
         elif cmd == "brain_g":                               # (v0.4.2a, --rule-fade with BRAIN_READ) each seat's chance that a life
             env.set_brain_g(data)                            # begun from now on reads the brain's answer
@@ -1013,6 +1015,7 @@ def main():
     ap.add_argument("--head2-lr-scale", type=float, default=1.0, help="(--head2) its learning rate as a share of --lr (its own group; plan_in is in it)")
     ap.add_argument("--head2-pg", type=float, default=1.0, help="(--head2) the weight of its own policy-gradient term (the bias on his intention, "
                                                                  "its own advantage; live: H2_PG, a factor on it)")
+    ap.add_argument("--head2-pay", default="all", choices=("all", "combat_win"), help="(--head2, b1.2a) what its value and advantage count: his whole pay, or combat (frags, deaths, damage) plus the win part, not the item pay")
     ap.add_argument("--head2-v", type=float, default=0.5, help="(--head2) the weight of its value's lesson")
     ap.add_argument("--head2-plan-grad", type=float, default=0.0, help="(--head2) the share of the hands' gradient that goes on into the head through the "
                                                                        "plan (0: plan_in learns from the hands' loss, the head only from its own lessons; live: H2_PLAN_GRAD)")
@@ -3546,6 +3549,7 @@ def main():
         b_logp = torch.zeros(T, N, device=dev)
         b_val = torch.zeros(T + 1, N, device=dev)
         b_rew = torch.zeros(T, N, device=dev)
+        b_hr = torch.zeros(T, N, device=dev) if a.head2_pay != "all" else None   # (--head2-pay) the head's own pay
         b_done = torch.zeros(T, N, device=dev)
         b_w = torch.zeros(T, N, device=dev)
         b_live = torch.zeros(T, N, device=dev)                           # the intention head was read on that frame
@@ -3759,6 +3763,8 @@ def main():
             if LEGS_IN:
                 legs_x = legs_cat([(r[15], r[0]) for r in res])
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
+            if b_hr is not None:                                         # (a frame with no blend: his pay as it is)
+                b_hr[t] = torch.from_numpy(np.concatenate([r[21] if r[21] is not None else r[1] for r in res])).to(dev)
             if tpay_ is not None:                                        # (--info-pay) zero-sum over each pair of seats
                 b_rew[t] += tpay_
             if LONG:
@@ -3880,7 +3886,7 @@ def main():
             CTL_G0.pop(upd, None)                                        # rollout writes over the ring (with --overlap too)
         t_done = time.time() if OVL else None
         C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl, rjc=rjc)
-        return dict(b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
+        return dict(b_hr=b_hr, b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
@@ -4449,7 +4455,9 @@ def main():
                     OV_ += torch.stack([w_.sum(), (d_ * w_).sum(), (((r_ - 1.0).abs() > clip).float() * w_).sum(), ((r_ - 1.0).abs() * w_).sum(),
                                         ((v_ - b_val[:T, chunk]).abs() * w_).sum(), (r_ * w_).sum()]).double().cpu()
         if H2:                                                           # (--head2) its own advantage: GAE of his whole pay at its gamma, from its value
-            ADV_H, RET_H = head2_.gae(b_rew, B_VH, b_done, float(H2L["gamma"]), lam)
+            B_HR = R.get("b_hr") if R.get("b_hr") is not None else b_rew
+            H2_PAYS = [float(B_HR.abs().mean()), float(b_rew.abs().mean())]   # (a frame's |pay|: the head's, his)
+            ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), lam)
             h2_acc = torch.zeros(12, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
             #                                                              bias's (centred, on read frames), the hands' intention logits' (same), read
             #                                                              frames, grad norm (sum, count), |gin| / |e| (sum, pieces), the ratio's clip share
@@ -5333,7 +5341,7 @@ def main():
                 clip_share=round(float(ha2_[11] / max(1.0, ha2_[6])), 4),
                 grad=round(float(ha2_[7] / max(1.0, ha2_[8])), 5),                                    # its gradient's norm before its clip (0.5)
                 plan_in_w=round(float(pin_), 6), target_w=round(float(pol.head2.target.weight.norm()), 6),
-                v=round(float(B_VH[:T].mean()), 4), ret=round(float(RET_H.mean()), 4), adv_sd=round(float(ADV_H.std()), 4),
+                pay=a.head2_pay, pay_abs=[round(x_, 6) for x_ in H2_PAYS], v=round(float(B_VH[:T].mean()), 4), ret=round(float(RET_H.mean()), 4), adv_sd=round(float(ADV_H.std()), 4),
                 lr=opt.param_groups[-1]["lr"], opp_open=bool(snaps and opp.h2_open))
         if HEADL:                                                        # (--head) the plan's size, plan_in, the head's part of his target, its
             ha_ = hd_acc.numpy()                                         # values' and win head's losses, the read, its step (first pass)

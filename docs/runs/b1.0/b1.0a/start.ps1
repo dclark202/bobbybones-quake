@@ -1,10 +1,10 @@
 # b1.0a's start (owner, 2026-10-31; docs/runs/b1.0a/CARD.md): v0.6.0's end, win chance pay added on top of the table (live WIN_ADD, ramp_win.py). Refuses unless:
 # no trainer runs; the code and the judge are there; the settings check passes against v0.6.0's command; ident.log and smoke.log end ALL PASSED; the run folder is
 # new. Then the trainer, the watcher (checks against v0.6.0's end only, every 10 updates), the ramp, the self-play logger. Nothing stops the run.
-# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.0a\start.ps1
+# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.0\b1.0a\start.ps1
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ROOT = (Resolve-Path (Join-Path $HERE "..\..\..")).Path
+$ROOT = (Resolve-Path (Join-Path $HERE "..\..\..\..")).Path
 $PY = if ($env:BB_PY) { $env:BB_PY } else { Join-Path $env:USERPROFILE "anaconda3\python.exe" }
 $SR = Join-Path $ROOT "data\sim_runs"
 $K0 = Join-Path $SR "duel_gru_v0_6_0\keep"

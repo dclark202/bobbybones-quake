@@ -1,4 +1,4 @@
-# b1.2a: the strategy head faded in, learning from combat plus win pay (not built)
+# b1.2a: the strategy head faded in, learning from combat plus win pay
 
 *2026-10-31 (owner): head on "combat plus win"; no help trying the enemy as a target; item rule stays on; "Set it for 24 hours, likely we'll start it around 8-9am tomorrow". The family: [README](../README.md). From v0.6.2a's draft ([card](../../v0.6.2a/CARD.md)), which was for win-only pay.*
 
@@ -11,7 +11,7 @@
 | Started from | b1.1a's end with its optimizer, or the save the morning's checks choose ❓; given the head with its gate shut (`tools/head2_init.py add --gate 0`) ⏳ |
 | Run | `duel_gru_b1_2a` |
 | The head | `sim/head2.py`, ~0.65 M weights: a slow GRU (256) ticking every 0.2 s, reading the brain's memory and readouts, its "in control" readout, his stack, timers, score, clock and the hands' memory. It adds a bias to his target choice and a plan into the hands' memory, both times its gate ✅ |
-| What it learns from | **combat plus win** (owner): frags, deaths, damage and the win part, not the item pay. Its value looks about 2 minutes ahead ⏳ today it learns from the whole pay |
+| What it learns from | **combat plus win** (owner): frags, deaths, damage and the win part, not the item pay. Its value looks about 2 minutes ahead ✅ |
 | What he's paid | unchanged: the table + `WIN_ADD` 0.33. The hands still earn the item pay |
 | Its start | from nothing: links at zero, gate 0. No pro-demo fit (owner, 10-30) |
 | Help trying the enemy as a target | none (owner). He picks it 1.2% of the time today |
@@ -56,7 +56,7 @@ The head plans for frags and winning; the hands keep their item pay and the rule
 | Never run on this pay | v0.6.2a's smoke ran on win-only pay. Everything is untested on additive pay |
 | A long settle at the head's full gate | 16 h with no scheduled test, by day only one play test; the checks run on |
 | Judged from a young start | b1.1a may have only ~1 h to settle after the lock |
-| Win pay's item prices | may teach the head that items are worth too much: a red armor x4, a frag x2.2, level at 5 min. 🧪 to measure before the start |
+| Win pay's item prices | a red armor x4, a frag x2.2, level at 5 min. His targets did not move with it in b1.0a, so it stays, but the head reads the win part directly, so it may still learn that items are worth a lot |
 | Hand-built / assumed | the head's size and inputs, its 2-minute value, its rate, its lesson's weight (1), the ramp's schedule, the pay it learns from |
 | Pay pathologies (ledger) | none new in his pay. Watched: lopsided games, sign flips, negative scores |
 | Rocket jumps, movement jumps | important, not in this run: the head can only choose what he can do |
@@ -65,14 +65,18 @@ The head plans for frags and winning; the hands keep their item pay and the rule
 
 | Step | Where it stands |
 |---|---|
-| The head's pay ⏳ | `head2_.gae` on combat + win (`--head2-pay`), the old pay at the default, identical to the bit; about 1 h. Doesn't touch a running trainer |
-| The start save ⏳ | the morning's choice + `head2_init.py add --gate 0`; `same` proves he answers as before, at gate 0 and 1 |
-| Command, start, smoke ⏳ | from b1.1a's command + v0.6.2a's head arguments, no rescale; settings check; smoke on the real start |
-| The ramp ✅ | `ramp_head.py` built and tested on v0.6.2a's names; b1's hold rule and names to set ⏳ |
-| Baselines 🧪 | tunnel vision, stack gap, target shares on the start: a tool from the scratch scripts of 10-31 |
-| Item prices 🧪 | an early and a late save of b1.0a, with the enemy in sight |
-| A server ⏳ | netpass and `export_duel` know the head; a save with it open on a private server before the first play test |
+| The head's pay ✅ | `--head2-pay combat_win`: its value and advantage on combat plus the win part. The default (`all`) takes the path it always did. Smoke: a frame's mean pay 0.0032 for the head, 0.0047 for him |
+| Command ✅ | `train.cmd`, from b1.1a's: only `--run`, `--minutes` 1440 and the head's arguments differ (settings check PASS) |
+| The ramp ✅ | `ramp_head.py` with `RAMP_HEAD_ONLY`, `RAMP_OPEN_NAME`, `RAMP_HOLD_AT` 0.40: on a fake run it stepped, flagged a check under 50%, and held at 37.5%. The head-open save's copy was not reached in that test |
+| Smoke run ✅ | `smoke.log` ALL PASSED: the head with its gate forced open, on b1.0a's end with the dials at brain 1, pull 1, lock 1 s; its links rose from zero, its bias 12% of his target choice |
+| Start script ✅ | `start.ps1`, parsed, not run. It proves the head changes none of his answers on the real start, and refuses otherwise. It takes the dials from the start save |
+| Item prices ✅ | no sign win pay moved his targets: b1.0a's shares at update 160 match v0.6.0's end within a point (the enemy 0.5% to 1.2%), trips 12.3 to 12.7 a minute. So `WIN_ADD` stays. It doesn't measure how he plays once there |
+| Reading a play test ✅ | `tools/run/play_read.py <data folder>`: stacks, items, fights by who is ahead, tunnel vision |
+| The start save ⏳ morning | **b1.1a must be stopped and its end kept first:** `python tools/run/stop_run.py duel_gru_b1_1a b11a` (the next save, then it stops; the owner's word). From another save: `start.ps1 -Save policy_nopull_b11a.pt -Opt opt_end_b11a.pt` (a borrowed optimizer, from up to a few hours later) |
+| A server ⏳ | the head open on a private server, before the first play test: not done |
 | The owner's go ❓ | morning of 11-01 |
+
+Then: `powershell -ExecutionPolicy Bypass -File docs\runs\b1.2\b1.2a\start.ps1`
 
 ## Changes on the fly
 

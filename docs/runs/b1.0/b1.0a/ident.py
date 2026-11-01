@@ -13,7 +13,7 @@ import tempfile
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 CMD = os.path.join(HERE, "train.cmd")
 RUN0 = os.path.join(ROOT, "data", "sim_runs", "duel_gru_v0_6_0")
 FRAMES = 3000

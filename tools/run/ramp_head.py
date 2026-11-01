@@ -28,6 +28,8 @@ EVERY_S = int(float(os.environ.get("RAMP_MIN_S") or 25 * 60))
 SHUT_N = int(os.environ.get("RAMP_SHUT_N") or 10)
 SLEEP = float(os.environ.get("RAMP_SLEEP") or 60)
 HEAD_ONLY = float(os.environ.get("RAMP_HEAD_ONLY") or 0) > 0
+OPEN_NAME = os.environ.get("RAMP_OPEN_NAME") or "policy_head_open_v062.pt"   # (b1.2a) the head-open save's name
+HOLD_AT = float(os.environ.get("RAMP_HOLD_AT") or 0)          # (b1.2a) no step while the last check is at or under this win rate; 0: on the clock
 STEP = 0.1
 
 
@@ -73,7 +75,8 @@ log("ramp_head on for {}: shut {} updates, then H2_GATE_CAP +{} and then INTENT_
 u0 = updates()
 n_last, t_last = u0 + (SHUT_N - EVERY_N if cap == 0 and it == 1.0 else 0), time.time() - (EVERY_S if cap == 0 and it == 1.0 else 0)
 open_at = None                                               # (the update at which the cap reached 1: the head-open save follows)
-kept = os.path.exists(os.path.join(KEEP, "policy_head_open_v062.pt"))
+kept = os.path.exists(os.path.join(KEEP, OPEN_NAME))
+FLAGGED = [len(jl(CHK))]
 while (it > 0 and not HEAD_ONLY) or not kept:
     time.sleep(SLEEP)
     n = updates()
@@ -81,9 +84,17 @@ while (it > 0 and not HEAD_ONLY) or not kept:
         tag = -(-(open_at + EVERY_N) // 10) * 10              # (the first save, every 10 updates, a full EVERY_N updates on)
         src = os.path.join(KEEP, "policy_{}.pt".format(tag))
         if os.path.exists(src) and n > tag:
-            shutil.copy2(src, os.path.join(KEEP, "policy_head_open_v062.pt"))
-            log("the head open: keep/policy_{}.pt kept as keep/policy_head_open_v062.pt (the owner's play test; training goes on)".format(tag))
+            shutil.copy2(src, os.path.join(KEEP, OPEN_NAME))
+            log("the head open: keep/policy_{}.pt kept as keep/{} (the owner's play test; training goes on)".format(tag, OPEN_NAME))
             kept = True
+    if HOLD_AT > 0:                                          # (b1.2a) a check under 50% is flagged; at or under HOLD_AT it holds the next step
+        c_ = jl(CHK)
+        for d_ in c_[FLAGGED[0]:]:
+            if d_["won"] / max(1, d_["won"] + d_["lost"]) < 0.5:
+                log("FLAG check update {} against the start: {}-{}".format(d_.get("update"), d_["won"], d_["lost"]))
+        FLAGGED[0] = len(c_)
+        if c_ and c_[-1]["won"] / max(1, c_[-1]["won"] + c_[-1]["lost"]) <= HOLD_AT:
+            continue
     if n < n_last + EVERY_N or time.time() - t_last < EVERY_S:
         continue
     if cap < 1.0:

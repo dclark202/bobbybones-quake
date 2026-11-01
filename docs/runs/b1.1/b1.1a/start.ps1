@@ -16,7 +16,7 @@ function Log($m) { $l = (Get-Date -Format "MM-dd HH:mm:ss ") + $m; Add-Content -
 
 if ((Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*train_duel_rnn*" } | Measure-Object).Count -gt 0) { Log "A TRAINER IS RUNNING: not started"; exit 1 }
 foreach ($p in $START, (Join-Path $K0 "opt_end_b10a.pt"), (Join-Path $SR "duel_gru_v0_6_0\keep\policy_end_v060.pt")) { if (-not (Test-Path $p)) { Log "MISSING ${p}: not started"; exit 1 } }
-& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\b1.0a\train.cmd") "--allow=--run,--minutes,--brain-fade" | ForEach-Object { Log $_ }
+& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\b1.0\b1.0a\train.cmd") "--allow=--run,--minutes,--brain-fade" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED: not started"; exit 1 }
 foreach ($n in "ident.log", "smoke.log") {
     $f = Join-Path $HERE $n

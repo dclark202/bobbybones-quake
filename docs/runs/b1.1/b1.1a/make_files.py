@@ -4,7 +4,7 @@ import os
 import shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "..", "..", "b1.0a")
+SRC = os.path.join(HERE, "..", "..", "b1.0", "b1.0a")
 t = open(os.path.join(SRC, "train.cmd"), encoding="ascii").read().replace("\r\n", "\n")
 
 
