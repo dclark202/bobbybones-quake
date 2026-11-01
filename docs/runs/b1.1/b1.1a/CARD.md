@@ -32,7 +32,9 @@
 
 So b1.2 can start from any of them: the morning's checks say which fade, if any, to go back before.
 
-**Stopped at 08:00 to 09:00 for b1.2, the lock has only ~1 to 1.5 h and ~3 checks to settle.** To noon: ~4.5 h.
+**Daylight saving ends at 02:00 on 11-01:** the times above after 02:00 are the old clock; on the new clock each is an hour earlier (the lock done ~06:25). `--minutes 885` counts real time, so the run ends itself at ~10:55 on the new clock, not noon.
+
+**Stopped at 08:30 (new clock) for b1.2, the lock has ~2 h and ~3 checks to settle.**
 
 ## Judged by
 
@@ -79,6 +81,14 @@ The pay doesn't change, so neither does its fixed point: win more games, collect
 | Smoke run | `smoke.py`, on the new plan; `start.ps1` refuses without ALL PASSED and the lock's check |
 | b1.0a's end | kept at its next save after the owner's word; `handover.py` not used |
 | The owner's go ✅ | 2026-10-31: "Just build it yourself and start it when it's ready. I agree on the plan that we have (what is in the card)" |
+
+## Stopped 2026-11-01 07:27 at update 180 (owner)
+
+`keep/policy_end_b11a.pt` + `opt_end_b11a.pt`: all three out, lock 1 s. **b1.1 is the save before the lock's fade (owner: "that will be called b1.1"):** `keep/policy_b1.1.pt` = `policy_nopull_b11a.pt` (update 140), with `opt_b1.1.pt` = the optimizer of update 170, as the save's own was not kept. Both copied to `T:` and compared.
+
+Against b1.0a's end: 56.2, 56.9, 53.1, 51.9, 50.0, 60.6% (u10 to u130); against v0.6.0's end: 57.5% (u70), 69.4% (u150, at a short lock in both seats: flattering). From lock 8 s (u120) to 1 s (u180): trips 12.6 to 20.0, targets reached 40% to 21%, the enemy's share 1.2% unmoved, frags 1.56 to 1.41, aim error 13.9 to 14.4. Report: [REPORT_0630.md](REPORT_0630.md).
+
+**The fair head-to-heads (11-01, each seat at its own lock, `tools/run/head2head.py`, 160 games, ±4 points):** the end at 1 s against b1.1 at 8 s: 66-94, 41.2%, frag share 44.7%. The end at 1 s against b1.0a's end at 8 s: 68-92, 42.5%, frag share 46.2%. So the 73.8% of update 170 against b1.0a's end (one 1 s lock for both seats) came from the lock's harm to b1.0a: the short lock cost him games by the run's end. The checks of the lock's fade (u150 on) are not used as strength.
 
 ## Changes on the fly
 

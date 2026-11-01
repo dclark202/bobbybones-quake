@@ -154,6 +154,12 @@ def play(job):
     sw_ = int(bool(swap) and opp_pol is not None)             # opponent: his tracking delay, the simulator's own acquire delay
     set_ = T_.set_delays(E, env, [(np.arange(sw_, env.n, 2), delays[0], delays[1])]
                          + ([(np.arange(1 - sw_, env.n, 2), delays[2], delays[3])] if opp_pol is not None else []))
+    if envvars.get("SEAT_HOLD_HE") or envvars.get("SEAT_HOLD_OPP"):   # (--hold / --opp-hold, b1.2) each side's own target lock
+        env.hold_seat = np.full(env.n, float(E.INTENT_HOLD), np.float32)
+        if envvars.get("SEAT_HOLD_HE"):
+            env.hold_seat[np.arange(sw_, env.n, 2)] = float(envvars["SEAT_HOLD_HE"])
+        if envvars.get("SEAT_HOLD_OPP"):
+            env.hold_seat[np.arange(1 - sw_, env.n, 2)] = float(envvars["SEAT_HOLD_OPP"])
     sa_he, sa_op = envvars.get("SEAT_AIM_HE", ""), envvars.get("SEAT_AIM_OPP", "")
     if sa_he or sa_op:                                        # (--aim-he / --aim-opp, branch aim2) each side's own aim settings
         sa_ = {}
@@ -423,6 +429,8 @@ def main():
     ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
     ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--hold", default="", help="(b1.2) his seats' own target lock, seconds (default: INTENT_HOLD, the same for both)")
+    ap.add_argument("--opp-hold", default="", help="... the opponent's seats")
     ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
                     "PERCEPT_SIGMA=0.48,AIM2_W=0); the rest of his aim is the process's. Needs AIM2, AIM2_SPLIT, AIM2_FOCUS on (--set) to seat AIM2 beside the old model")
     ap.add_argument("--aim-opp", default="", help="... the opponent's seats")
@@ -462,6 +470,10 @@ def main():
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
+    if a.hold:
+        envvars["SEAT_HOLD_HE"] = a.hold
+    if a.opp_hold:
+        envvars["SEAT_HOLD_OPP"] = a.opp_hold
     if a.aim_he:
         envvars["SEAT_AIM_HE"] = a.aim_he
     if a.aim_opp:

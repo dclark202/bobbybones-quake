@@ -10,7 +10,8 @@ Every run gets a row here at its start, and a line in its series' table below (a
 
 | Network | Started from | Run folder (`data/sim_runs/`) | Result, in a word |
 |---|---|---|---|
-| **b1.1a** | b1.0a's end, its own optimizer | `duel_gru_b1_1a` | planned |
+| **b1.1** | b1.1a's save of update 140 (`keep/policy_b1.1.pt`) | `duel_gru_b1_1a` | brain and pull out, lock 8 s |
+| b1.1a | b1.0a's end, its own optimizer | `duel_gru_b1_1a` | its lock fade left out of b1.1: its end at 1 s lost to b1.1 at 8 s 66-94 and to b1.0a's end at 8 s 68-92, each seat at its own lock; the 73.8% at update 170 was a shared lock's harm to b1.0a |
 | **b1.0a** | v0.6.0's end, its own optimizer | `duel_gru_b1_0a` | success |
 | v0.6.1e | v0.6.1's update 90, v0.6.1's end's optimizer | `duel_gru_v0_6_1e` | stopped early |
 | v0.6.1d | v0.6.1's update 110, v0.6.1's end's optimizer | `duel_gru_v0_6_1d` | stopped; beat v0.6.0's end, fought less |
@@ -37,7 +38,7 @@ New names, bN.Nx, and the series to stick with (owner). The plan: [PLAN.md](PLAN
 
 | Version | What | Result | Lesson |
 |---|---|---|---|
-| b1.1a (2026-10-31 ~21:45 →) | from b1.0a's end, the brain's old belief, the pull toward level and the target lock out, in one run ([runs/b1.1/b1.1a/CARD.md](runs/b1.1/b1.1a/CARD.md)) | starting | |
+| b1.1a (2026-10-31 21:11 → 11-01 07:27, update 180) | from b1.0a's end, the brain's old belief, the pull toward level and the target lock out, in one run ([runs/b1.1/b1.1a/CARD.md](runs/b1.1/b1.1a/CARD.md)) | brain and pull out at no cost seen: 60.6% against b1.0a's end at u130. Lock to 1 s: trips 12.6 to 20.0, targets reached 40% to 21%, the enemy's share unmoved, frags 1.56 to 1.41. **b1.1 = the save of update 140, before the lock's fade** (owner) | the lock alone doesn't make him fight: with no head to use it the freedom became flicker. A kept save must keep its optimizer (b1.1's own was lost) |
 | b1.0a (2026-10-31 10:56 → 21:00) | from v0.6.0's end, win chance pay added on top of the unchanged table (`WIN_ADD`, live: 0 → 0.15 → 0.33, about a third of the total), `judge_v060_wpn`, `WIN_END`, no rescale; checks against v0.6.0's end only ([runs/b1.0/b1.0a/CARD.md](runs/b1.0/b1.0a/CARD.md)) | stopped at update 160 (owner: a success). Against v0.6.0's end 61.9 / 53.8 / 55.6 / 58.8 / 49.4 / 56.2 / 55.6 / 55.0% at updates 10 to 150 (a save every 20; `WIN_ADD` 0.33 from update 80). End: frags 1.61 a match-minute, rail in hand 0.14, entropy 1.84. The owner: "he's better than any of the v0.6.1x bots"; his biggest weakness, tunnel vision on items | adding win pay to the table kept what replacing the table lost; the rail's slide (0.22 to 0.14) remains unexplained |
 
 ## v0.6 (2026-10-27 → 10-31): the pro-measured aim

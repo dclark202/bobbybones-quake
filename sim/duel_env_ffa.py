@@ -1944,7 +1944,7 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "jump_b", "jump_lab_off", "lo", "long_dirs", "pad_dest", "pads", "persona_p", "shot_fire", "shot_scarce", "shot_way", "spam_places",
                  "spawn_yaw", "spawns", "spots", "t_bins", "t_goal", "t_route", "t_turn", "tele_in", "tele_out", "up_dirs", "v02_pf", "v02_pp",
                  "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
-                 "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "g_end",
+                 "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "hold_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
                  "r_long", "op_lab", "pf_node", "emg_links",
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
@@ -3413,6 +3413,7 @@ class DuelEnv:
         self.react_frames = REACT_FRAMES
         self.acquire_frames = ACQUIRE_FRAMES
         self.react_seat = self.acquire_seat = None             # (SEAT_DELAYS) one a seat, in a check of two networks
+        self.hold_seat = None                                  # (b1.2, a check of two networks) INTENT_HOLD a seat, seconds; None: the one number
         self.vis_run = np.zeros(group * n_matches, np.int64)       # frames the opponent has been in view without a break
         self.acquired = np.zeros(group * n_matches, bool)          # in view long enough to have been noticed
         self.acq_extra = np.zeros(group * n_matches, np.int64)     # frames more this time, by surprise (surprise_frames)
@@ -6762,7 +6763,7 @@ class DuelEnv:
             for w_, lab_ in ((RL, "RL"), (RG, "RG"), (LG, "LG")):
                 full_ = self.has[:n, w_] & (self.ammo[:n, w_] >= WEAPON_PICK_AMMO[w_])
                 choice = np.where((choice == INTENTS.index(lab_)) & full_, 0, choice)
-        may = (self.intent == 0) | self.intent_done | (self.intent_t >= INTENT_HOLD) | self.intent_gone     # a choice holds (INTENT_HOLD)
+        may = (self.intent == 0) | self.intent_done | (self.intent_t >= (INTENT_HOLD if self.hold_seat is None else self.hold_seat[:n])) | self.intent_gone     # a choice holds (INTENT_HOLD)
         if TARGETS_FREE == 1:                                # (a holding place can be left at any reading, as "nothing")
             may = may | (self.intent >= HOLD_INTENT)
         elif TARGETS_FREE >= 2:                              # (... for an item only)

@@ -8,7 +8,7 @@
 
 | Attempt | Started from | What | State | Result |
 |---|---|---|---|---|
-| [b1.2a](b1.2a/CARD.md) | b1.1a's end, or the save the morning's checks choose | the head faded in, learning from combat plus win pay; item rule on | built and smoke-tested; needs b1.1a's end and the owner's go | |
+| [b1.2a](b1.2a/CARD.md) | b1.1 (b1.1a's save of update 140) | the head faded in, learning from combat plus win pay, then the target lock stepped out; item rule on | built and smoke-tested; waits for the owner's go | |
 
 ## Next, depending on b1.2a
 

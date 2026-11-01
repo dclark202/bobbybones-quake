@@ -1,8 +1,8 @@
-# b1.2a's start (owner, 2026-10-31; docs/runs/b1.2/b1.2a/CARD.md): the strategy head faded in, learning from combat plus win pay, the item rule on.
+# b1.2a's start (owner, 2026-10-31; docs/runs/b1.2/b1.2a/CARD.md): the strategy head faded in, learning from combat plus win pay, the item rule on; then the target lock stepped out.
 # Refuses unless: no trainer runs; the start save and its optimizer are there; the settings check passes against b1.1a's command; smoke.log ends ALL PASSED; the run folder is new; the start with the head (shut, and with its
 # whole path run) answers exactly as the save without it. The live dials (brain, pull, lock, win pay) come from the save and b1.1a's live.json. Then the trainer, the watcher, the ramp, the self-play logger. Nothing stops the run.
-# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.2\b1.2a\start.ps1 [-Save policy_nopull_b11a.pt] [-Opt opt_end_b11a.pt]     (default: b1.1a's end; files in duel_gru_b1_1a\keep)
-param([string]$Save = "policy_end_b11a.pt", [string]$Opt = "opt_end_b11a.pt")
+# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.2\b1.2a\start.ps1 [-Save policy_end_b11a.pt] [-Opt opt_end_b11a.pt]     (default: b1.1; files in duel_gru_b1_1a\keep)
+param([string]$Save = "policy_b1.1.pt", [string]$Opt = "opt_b1.1.pt")
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT = (Resolve-Path (Join-Path $HERE "..\..\..\..")).Path
@@ -52,8 +52,7 @@ $env:CHECK_EVERY = "10"; $env:PANEL_RUN = $RUN; $env:PANEL_CTRL = $END; $env:CHE
 $w = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\watch.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "watch_stdout.log") -RedirectStandardError (Join-Path $WD "watch_stderr.log")
 $w.ProcessorAffinity = [IntPtr]0xC03C3
 Start-Sleep 5
-$env:RAMP_HEAD_ONLY = "1"; $env:RAMP_OPEN_NAME = "policy_head_open_b12a.pt"; $env:RAMP_HOLD_AT = "0.40"
-$r = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\ramp_head.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "ramp_stdout.log") -RedirectStandardError (Join-Path $WD "ramp_stderr.log")
+$r = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "ramp_b12.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "ramp_stdout.log") -RedirectStandardError (Join-Path $WD "ramp_stderr.log")
 $s = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\selfplay_loop.py"), $RUN, "--every", "40", "--games", "5" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "selfplay_stdout.log") -RedirectStandardError (Join-Path $WD "selfplay_stderr.log")
 $s.ProcessorAffinity = [IntPtr]0xC03C3
-Log ("watcher " + $w.Id + " | ramp_head " + $r.Id + " (shut 10 updates, then the gate +0.1 a step, the head-open save; held only at a check of 40% or less) | self-play logger " + $s.Id + " | no guard (owner: never stop the run)")
+Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (the head: shut 10 updates, the gate +0.1 a step, the head-open save; then the lock 8 to 0 s; held only at a check of 40% or less) | self-play logger " + $s.Id + " | no guard (owner: never stop the run)")

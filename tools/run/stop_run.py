@@ -1,6 +1,6 @@
 """A run's end by hand (the owner's word only: CLAUDE.md's rule 6): at its next save, keeps policy.pt and opt.pt as keep/policy_end_<tag>.pt + opt_end_<tag>.pt, then stops its trainer, watcher, ramp, self-play logger and checks.
 Starts nothing, deletes nothing; refuses if the end is already kept. --now: this save, without waiting (only right after a save).
-    python tools/run/stop_run.py duel_gru_b1_1a b11a [--now]"""
+    python tools/run/stop_run.py duel_gru_b1_1a b11a [--now] [--keep-checks]"""
 import os
 import shutil
 import subprocess
@@ -15,6 +15,8 @@ ENDS = ((POL, os.path.join(D, "keep", "policy_end_{}.pt".format(TAG))), (OPT, os
 assert not any(os.path.exists(b) for _, b in ENDS), "the end is already kept"
 Q = ("Get-CimInstance Win32_Process | Where-Object {{ $_.Name -eq 'python.exe' -and $_.CommandLine -like '*{}*' -and $_.CommandLine -notlike '*stop_run*' }} "
      "| ForEach-Object {{ $_.ProcessId }}".format(RUN))
+if "--keep-checks" in sys.argv:                              # (the trainer, ramp and self-play logger only: a running check and its watcher go on)
+    Q = Q.replace("-notlike '*stop_run*'", "-notlike '*stop_run*' -and $_.CommandLine -notlike '*watch.py*' -and $_.CommandLine -notlike '*duel_eval*'")
 
 
 def procs():

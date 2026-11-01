@@ -53,6 +53,17 @@ def live_ps():
         return 0.0
 
 
+def hold_args(pol, ctrl):
+    """(b1.2) each side at the target lock it was trained at (its env_vars), not one lock for both"""
+    import torch
+    out = []
+    for name, p_ in (("--hold", pol), ("--opp-hold", ctrl)):
+        v_ = (torch.load(p_, map_location="cpu", weights_only=False).get("env_vars") or {}).get("INTENT_HOLD")
+        if v_ not in (None, ""):
+            out += [name, str(v_)]
+    return out
+
+
 def games(pol, upd, ctrl, label, ps):
     sets = P.settings(ps, pol)
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1", CUDA_VISIBLE_DEVICES="-1")
@@ -67,6 +78,7 @@ def games(pol, upd, ctrl, label, ps):
                    "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225",
                    "--round", "600", "--opp-round", "600"]
             cmd += [x for s_ in sets for x in ("--set", s_)]
+            cmd += hold_args(pol, ctrl)
             jobs.append((mp, js, subprocess.Popen(cmd, cwd=P.CODE, env=env, creationflags=0x4000 | 0x08000000, stdout=open(js + ".log", "w"),
                                                   stderr=subprocess.STDOUT)))
         for mp, js, p in jobs:

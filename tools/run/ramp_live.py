@@ -32,6 +32,7 @@ def main():
     ap.add_argument("--settle", type=float, default=20, help="seconds policy.pt must stand still before it counts as saved")
     ap.add_argument("--also", action="append", default=[], help="NAME:FROM:TO:STEP, stepped with NAME in the same write")
     ap.add_argument("--values", default="", help="(b1.1) the steps' values, comma-separated, in place of a fixed STEP (the last must be TO)")
+    ap.add_argument("--keep-each", default="", help="(b1.2) the save before each step kept with its optimizer; a name with {} for the value it was at")
     ap.add_argument("--hold-at", type=float, default=0.0, help="(b1.1) no step while the last check in watch/checks_prev.jsonl is at or under this win rate (0: off)")
     a = ap.parse_args()
     D = a.dir or os.path.join(ROOT, "data", "sim_runs", a.run)
@@ -108,7 +109,16 @@ def main():
         if a.keep_as and t_last == 0.0:
             os.makedirs(KEEP, exist_ok=True)
             shutil.copy2(POL, os.path.join(KEEP, a.keep_as))
-            log("kept the save of update {} as keep/{} (before the first step)".format(n, a.keep_as))
+            o_ = os.path.join(D, "opt.pt")                   # (the owner's standing rule: a kept save keeps its optimizer)
+            if os.path.exists(o_):
+                shutil.copy2(o_, os.path.join(KEEP, a.keep_as.replace("policy_", "opt_", 1)))
+            log("kept the save of update {} as keep/{} with its optimizer (before the first step)".format(n, a.keep_as))
+        if a.keep_each:
+            os.makedirs(KEEP, exist_ok=True)
+            ke_ = a.keep_each.format("{:g}".format(v))
+            shutil.copy2(POL, os.path.join(KEEP, ke_))
+            shutil.copy2(os.path.join(D, "opt.pt"), os.path.join(KEEP, ke_.replace("policy_", "opt_", 1)))
+            log("kept the save of update {} as keep/{} with its optimizer".format(n, ke_))
         if SEQ:
             v = SEQ.pop(0)
         else:

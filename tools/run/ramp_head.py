@@ -85,12 +85,14 @@ while (it > 0 and not HEAD_ONLY) or not kept:
         src = os.path.join(KEEP, "policy_{}.pt".format(tag))
         if os.path.exists(src) and n > tag:
             shutil.copy2(src, os.path.join(KEEP, OPEN_NAME))
+            if os.path.exists(os.path.join(D, "opt.pt")):     # (the owner's standing rule; the optimizer of the latest save: at most one save later)
+                shutil.copy2(os.path.join(D, "opt.pt"), os.path.join(KEEP, OPEN_NAME.replace("policy_", "opt_", 1)))
             log("the head open: keep/policy_{}.pt kept as keep/{} (the owner's play test; training goes on)".format(tag, OPEN_NAME))
             kept = True
     if HOLD_AT > 0:                                          # (b1.2a) a check under 50% is flagged; at or under HOLD_AT it holds the next step
         c_ = jl(CHK)
         for d_ in c_[FLAGGED[0]:]:
-            if d_["won"] / max(1, d_["won"] + d_["lost"]) < 0.5:
+            if d_["won"] / max(1, d_["won"] + d_["lost"]) < 0.5 and os.environ.get("RAMP_FLAG") != "0":
                 log("FLAG check update {} against the start: {}-{}".format(d_.get("update"), d_["won"], d_["lost"]))
         FLAGGED[0] = len(c_)
         if c_ and c_[-1]["won"] / max(1, c_[-1]["won"] + c_[-1]["lost"]) <= HOLD_AT:
