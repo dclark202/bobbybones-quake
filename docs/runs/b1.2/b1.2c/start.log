@@ -1,0 +1,17 @@
+11-01 19:36:06 allowed set SM_ITEMS: run '1' | reference '<unset>'
+11-01 19:36:06 allowed arg --gate-open: run '120' | reference '480'
+11-01 19:36:06 allowed arg --gate-start: run '21009.47' | reference '14397.514'
+11-01 19:36:06 allowed arg --minutes: run '1344' | reference '1185'
+11-01 19:36:06 allowed arg --opt-small-items: run '1' | reference '<unset>'
+11-01 19:36:06 allowed arg --run: run 'duel_gru_b1_2c' | reference 'duel_gru_b1_2b'
+11-01 19:36:06 settings check: PASS
+11-01 19:36:11 backup: copied 43 files 0.33 GB to T:\BobbyBones_backup
+11-01 19:36:15 widened: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2c\policy.pt (980 inputs, 112 new, attention tokens 62, new and shut: ['small'])
+11-01 19:36:21 frames 300, seats 16: memory's largest difference 2.99e-05; actions that differ: 0
+11-01 19:36:22 widened: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2c\snapshots\anchor_b11.pt (980 inputs, 112 new, attention tokens 62, new and shut: ['small'])
+11-01 19:36:24 widened: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2c\snapshots\anchor_v060_end.pt (980 inputs, 112 new, attention tokens 62, new and shut: ['small'])
+11-01 19:36:30 frames 300, seats 16: memory's largest difference 2.99e-05; actions that differ: 0
+11-01 19:36:35 frames 300, seats 16: memory's largest difference 4.05e-05; actions that differ: 0
+11-01 19:36:36 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 1.0, 'COST_JERK_W': 1.0, 'CONTACT_FREE': 0.0}
+11-01 19:36:36 trainer started: cmd 5428, from b1.1 widened
+11-01 19:36:41 watcher 4356 | ramp 22700 (the table and the new inputs from the start; fourteen steps; held only at a check of 40% or less) | self-play logger 5116 | no guard
