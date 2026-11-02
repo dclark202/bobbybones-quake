@@ -10,4 +10,5 @@
 |---|---|---|---|---|
 | [b1.2a](b1.2a/CARD.md) | b1.1 (b1.1a's save of update 140) | under the family's old goal: the head faded in, learning from combat plus win pay | **Crashed 11-01 15:18 at update 82, gate 0.7. UNUSABLE, saved only (`keep/policy_end_b12a_UNUSABLE.pt`, update 80)** | The head and the hands fought over his target choice: a design fault. See its card |
 | [b1.2b](b1.2b/CARD.md) | b1.1 | the health and armor table, then the firing costs, then contact freedom, then the jerk cost | stopped 2026-11-01 17:40 at update 20 (owner): he must know where the small items are, and what they are | 53.1% against b1.1 at update 10 |
-| [b1.2c](b1.2c/CARD.md) | b1.1, widened | b1.2b's plan, with every small health and armor item as an input | started 2026-11-01 evening, to 18:00 on 11-02 at most | |
+| [b1.2c](b1.2c/CARD.md) | b1.1, widened | b1.2b's plan, with every small health and armor item as an input | started 2026-11-01 evening, to 18:00 on 11-02 at most | level with b1.1 so far; reads the new inputs, barely acts on them (small items taken near his way 22% to 23%) |
+| [b1.2d](b1.2d/CARD.md) | b1.2c's end ❓ | the pay table by the point (the line at 100, decay charged), speed pay down, the long rail up; combat wins | card written; after b1.2c, before b1.3 (owner) | |

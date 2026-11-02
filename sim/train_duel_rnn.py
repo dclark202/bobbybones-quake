@@ -5246,6 +5246,12 @@ def main():
                    frag_share={w: round(float(agg[w + "_frags"] / max(1, sum(agg[x + "_frags"] for x in WEAPONS))), 2) for w in WEAPONS},
                    pick_by={k_: [round(float(np.atleast_1d(agg["pick_by"])[i_] / (G * sim_min)), 3), round(float(np.atleast_1d(agg["pick_by"])[8 + i_] / max(1.0, np.atleast_1d(agg["pick_by"])[i_])), 1)]
                             for i_, k_ in enumerate(("H5", "H25", "H50", "MH", "A5", "A25", "A50", "A100"))} if "pick_by" in agg else {},     # (ITEM_RATE) a player-minute's pickups, points a pickup
+                   item_pt={k_: round(float(np.atleast_1d(agg["item_pt"])[i_] / (G * sim_min)), 2) for i_, k_ in enumerate(("to_100", "over_100", "decayed"))}
+                   if "item_pt" in agg and float(np.sum(agg["item_pt"])) > 0 else {},       # (ITEM_PT_LO) points a player-minute
+                   sm_pass={k_: [round(float(np.atleast_1d(agg["sm_pass"])[i_] / (G * sim_min)), 2),
+                                 round(float(np.atleast_1d(agg["sm_pass"])[5 + i_] / max(1.0, np.atleast_1d(agg["sm_pass"])[i_])), 3)]
+                            for i_, k_ in enumerate(("bubbles", "H25", "H50", "shards", "green"))}
+                   if "sm_pass" in agg and float(np.sum(agg["sm_pass"])) > 0 else {},       # (SM_PASS) passes a player-minute, share taken
                    pickups_per_player_min={k[5:]: round(float(agg[k] / (G * sim_min)), 2)
                                            for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_wpnew", "pick_am") if k in agg},
                    acc_visible={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots_vis"])), 3) for w in ("rl", "rg", "lg")},

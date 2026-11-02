@@ -1,0 +1,8 @@
+the steps at updates [30, 40, 70, 80]
+PASS four steps
+PASS the end values
+PASS at updates 30, 40, 70, 80
+PASS a save and an optimizer before each step
+PASS the stages' saves
+PASS the table's end is the save of update 30, the speed's of 70, the rail's of 100
+ALL PASSED

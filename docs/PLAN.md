@@ -18,6 +18,7 @@ out and the strategy head comes in, one step at a time. Open items beside them: 
 | b1.2a | the strategy head in, learning from combat plus win pay | **unusable:** crashed 11-01 15:18 at update 82; the head and the hands fought over his target logits ([card](runs/b1.2/b1.2a/CARD.md)) |
 | b1.2b | every health and armor item priced, zero-sum, per point gained; then the firing costs out; then free target choice in contact; then the jerk cost out | stopped 11-01 17:40 at update 20 ([card](runs/b1.2/b1.2b/CARD.md)) |
 | b1.2c | b1.2b's plan, with every small health and armor item as an input: what it is, where, the way, its state by what he knows | running from 2026-11-01 evening, to 18:00 on 11-02 at most ([card](runs/b1.2/b1.2c/CARD.md), [design](design/SMALL_ITEMS.md)) |
+| b1.2d | the pay table by the point (0.004 up to 100, 0.002 above, decay charged), speed pay halved, long rail 0.25; the table the baseline, win pay the correction | card written ([card](runs/b1.2/b1.2d/CARD.md)); after b1.2c, before b1.3 (owner, 11-02) |
 | b1.3a | the strategy layer opens, with the head as the only learner of his target choice | card written, the fix to build ([card](runs/b1.3/b1.3a/CARD.md)); after b1.2b on the owner's go |
 | b1.4a | `DMG_TAKEN_W` to 0.8, on enemy damage only, after b1.3's read | to rewrite ([family](runs/b1.4/README.md)) |
 | later | the target lock outside contact, the pros' tables, rocket jumps and movement mechanics, in an order not yet set | planned |

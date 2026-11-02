@@ -987,6 +987,21 @@ ITEM_RATE_AR = float(os.environ.get("ITEM_RATE_AR") or 0.0)
 COST_FIRE_W = float(os.environ.get("COST_FIRE_W") or 1.0)
 COST_JERK_W = float(os.environ.get("COST_JERK_W") or 1.0)
 PICK_BY = {("hp", 5): 0, ("hp", 25): 1, ("hp", 50): 2, ("hp", 100): 3, ("ar", 5): 4, ("ar", 25): 5, ("ar", 50): 6, ("ar", 100): 7}
+# b1.2d (owner, 2026-11-02: "trend the speed pay down and spread it out over the small items", "combat still wins out";
+# docs/runs/b1.2/b1.2d/CARD.md), off by default (all 0: as before, to the bit):
+#   ITEM_PT_LO, ITEM_PT_HI, ITEM_DECAY  (live) the table by the point, health and armor alike: a point gained that lands at
+#                 or under 100 pays ITEM_PT_LO, one that lands above 100 ITEM_PT_HI, and each point lost to the tick-down above
+#                 100 costs ITEM_DECAY, up to the points that were paid above 100 (the spawn's 125 and what damage takes first
+#                 are not charged); all zero-sum (the enemy loses what he gains, and gains what decays). With ITEM_PT_LO
+#                 above 0 it takes the place of ITEM_RATE_HP / _AR and of ITEM_FLAT on health and armor. Counted:
+#                 stats["item_pt"] (points at or under 100, above 100, decayed: every seat).
+#   SM_PASS=1     (a counter only; with SM_ITEMS) a small place that is there, within 1 s of his way and gives him points
+#                 opens a pass; taken while within 2 s of his way, or left. Counted: stats["sm_pass"] (passes, then taken,
+#                 by kind: bubbles, 25 health, 50 health, shards, green; every seat).
+ITEM_PT_LO = float(os.environ.get("ITEM_PT_LO") or 0.0)
+ITEM_PT_HI = float(os.environ.get("ITEM_PT_HI") or 0.0)
+ITEM_DECAY = float(os.environ.get("ITEM_DECAY") or 0.0)
+SM_PASS = float(os.environ.get("SM_PASS") or 0.0) > 0
 # v15 (2026-10-10), both off by default:
 #   JUMPS=1       the pros' jumps that a walker cannot make (tools/pro_gaps.py -> sim/pro_gaps/<map>.json) are links of a
 #                 second set of ways (route_j), which are his in a jump run: a share of the playing time (JUMP_RUN_P, beside
@@ -1575,7 +1590,7 @@ PAY_TERMS = ("jerk", "weapon_switch", "hop", "blind_fire", "move_round", "course
              "dmg_dealt", "dmg_taken", "high", "rail", "style", "item_MH", "item_RA", "item_YA", "item_flat_other", "big_order",
              "item_points", "item_loss", "items_other", "item_seek", "way", "way_claw", "speed", "speed_run", "intent_switch",
              "runs", "stack_diff", "stack_keep", "drops", "know", "frag", "death", "deaths_other", "win_pay", "watch", "preaim",
-             "lg_quiet", "win_part")
+             "lg_quiet", "win_part", "item_decay")
 PT_IX = {k_: i_ for i_, k_ in enumerate(PAY_TERMS)}
 WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay in games, summed", "its size", "his frames in games",
            "his games' frags (+1) and deaths (-1) counted")
@@ -2116,6 +2131,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "INTENT_HOLD",                                                                                         # (b1.1a, owner 2026-10-31: the target lock faded, a PLAY_VAR too)
              "CONTACT_FREE",                                                                                        # (b1.4a, the chance a contact is free of the lock)
              "ITEM_RATE_HP", "ITEM_RATE_AR", "COST_FIRE_W", "COST_JERK_W",                                          # (b1.3a, a point of health or armor gained; the costs' factors)
+             "ITEM_PT_LO", "ITEM_PT_HI", "ITEM_DECAY",                                                              # (b1.2d, the table by the point)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
              "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
@@ -2156,7 +2172,7 @@ def live_values(get):
     v["INTENT_HOLD"] = float(ih_) if (ih_ or "").strip() else 3.0
     if not 0.0 <= v["INTENT_HOLD"] <= 60.0:
         raise ValueError("INTENT_HOLD must be within 0 .. 60")
-    for k_ in ("ITEM_RATE_HP", "ITEM_RATE_AR"):              # (b1.3a) a point of health or armor gained, live; unset: 0 (ITEM_FLAT as before)
+    for k_ in ("ITEM_RATE_HP", "ITEM_RATE_AR", "ITEM_PT_LO", "ITEM_PT_HI", "ITEM_DECAY"):    # (b1.3a, b1.2d) a point of health or armor, live; unset: 0 (ITEM_FLAT as before)
         v[k_] = float(get(k_) or 0.0)
         if not 0.0 <= v[k_] <= 0.05:
             raise ValueError(k_ + " must be within 0 .. 0.05")
@@ -3590,6 +3606,9 @@ class DuelEnv:
                             grp_.append(c_)
                             st_.append(c_)
             self.sm_places.append(grp_)
+        self.sm_place_of = {self.sm_ids[k_]: p_ for p_, g_ in enumerate(self.sm_places) for k_ in g_}    # (SM_PASS) an item's place
+        self.sm_open, self.sm_took = None, None
+        self.pt_bal = None                                   # (ITEM_DECAY) per player, health and armor: points paid above 100 not yet decayed
         # teleporter entrances with their exits, and jump pads (from the map's trigger brushes)
         spots = self.w.trigger_spots() if hasattr(self.w, "trigger_spots") else []
         self.tele_in = np.array([c for k, c, d in spots if k == 1], np.float32).reshape(-1, 3)
@@ -4321,6 +4340,8 @@ class DuelEnv:
                           rule_hunt=np.zeros(2),                        # (RULE_HUNT) the same
                           rule_blind=np.zeros(2),                       # (RULE_BLIND) the same, for a fresh belief of the enemy's place
                           pick_by=np.zeros(16),                         # (ITEM_RATE) by item (PICK_BY): pickups, then points gained
+                          item_pt=np.zeros(3),                          # (ITEM_PT_LO) points gained at or under 100, above 100, decayed
+                          sm_pass=np.zeros(10),                         # (SM_PASS) passes by kind (SM_KINDS), then taken by kind
                           contact=np.zeros(5),                          # (CONTACT_FREE) begun, free, readings in free contact, changes, changes to the enemy
 
                           style=np.zeros((4, 10)),        # per style: frames, his weapon in hand, enemy in view, in his band, sum of
@@ -6520,6 +6541,24 @@ class DuelEnv:
             have = self.hp if kind == "hp" else self.armor
             gives[p_] = np.minimum(np.maximum(float(cap) - have, 0.0), float(val) * up_.sum(0)) / 50.0
         kinds = np.array([SM_KINDS[self.item_def[ids[g_[0]]][:2]] for g_ in P])
+        if SM_PASS:                                          # (SM_PASS, a counter) by the truth, not by what he knows
+            if self.sm_open is None or self.sm_open.shape != (len(P), n):
+                self.sm_open, self.sm_took = np.zeros((len(P), n), bool), np.zeros((n, len(P)), bool)
+            gsz_ = self._others_arr().shape[1] + 1
+            upt_ = self.item_up[ar // gsz_]
+            gv_ = np.zeros((len(P), n), np.float32)
+            for p_, g_ in enumerate(P):
+                kind, val, resp, cap, _ = self.item_def[ids[g_[0]]]
+                have = self.hp[:n] if kind == "hp" else self.armor[:n]
+                gv_[p_] = np.minimum(np.maximum(float(cap) - have, 0.0), float(val) * upt_[:, [ids[k_] for k_ in g_]].sum(1))
+            alive_ = (self.hp[:n] > 0)[None, :]
+            new_ = ~self.sm_open & (T < 1.0) & (gv_ > 0) & alive_
+            hit_ = (self.sm_open | new_) & self.sm_took.T
+            st_ = self.stats["sm_pass"]
+            np.add.at(st_, kinds, new_.sum(1))
+            np.add.at(st_, 5 + kinds, hit_.sum(1))
+            self.sm_open = (self.sm_open | new_) & ~self.sm_took.T & (T < 2.0) & alive_
+            self.sm_took[:] = False
         for s_ in range(order.shape[0]):
             b = s_ * SM_F
             pk = order[s_]
@@ -12725,8 +12764,19 @@ class DuelEnv:
                             self.big_got[i, b_] = True
                     if BIG_ONCE and kind == "wp" and BIG_PICK > 0 and not BIG_PICK_SEQ and pay_ > 0 and self.big_got[i].sum() > 1:
                         pay_ = 0.0                                          # (BIG_ONCE) only the first of the three pays
-                    per_ = (ITEM_RATE_HP > 0 or ITEM_RATE_AR > 0) and kind in ("hp", "ar") and not own_     # (ITEM_RATE) by the points gained
-                    fl_r = float(pts_) * (ITEM_RATE_HP if kind == "hp" else ITEM_RATE_AR) if per_ else 0.0
+                    per_ = (ITEM_RATE_HP > 0 or ITEM_RATE_AR > 0 or ITEM_PT_LO > 0) and kind in ("hp", "ar") and not own_     # (ITEM_RATE, ITEM_PT_LO) by the points gained
+                    if per_ and ITEM_PT_LO > 0:                             # (ITEM_PT_LO) the points at or under 100, and above it
+                        old_ = float(self.hp[i] if kind == "hp" else self.armor[i]) - float(gain)
+                        lo_ = min(max(0.0, 100.0 - old_), float(gain), float(pts_))
+                        fl_r = lo_ * ITEM_PT_LO + (float(pts_) - lo_) * ITEM_PT_HI
+                        self.stats["item_pt"][0] += lo_
+                        self.stats["item_pt"][1] += float(pts_) - lo_
+                        if ITEM_DECAY > 0:                                  # (ITEM_DECAY) what was paid above 100, to charge back as it decays
+                            if self.pt_bal is None or len(self.pt_bal) != self.n:
+                                self.pt_bal = np.zeros((self.n, 2), np.float64)
+                            self.pt_bal[i, 0 if kind == "hp" else 1] += float(pts_) - lo_
+                    else:
+                        fl_r = float(pts_) * (ITEM_RATE_HP if kind == "hp" else ITEM_RATE_AR) if per_ else 0.0
                     if per_:
                         pay_ += fl_r
                         for o_ in self._mates(i):                           # (zero-sum) the enemy loses as much
@@ -12767,10 +12817,31 @@ class DuelEnv:
                     if self.contest_t[m] > 0 and it == self.contest_it[m]:    # the item the round began as a race for
                         self.stats["contest_taken"] += int(self.script[i] == 0)
                         self.contest_t[m] = -1.0
+                    if SM_PASS and self.sm_took is not None and int(it) in self.sm_place_of:
+                        self.sm_took[i, self.sm_place_of[int(it)]] = True      # (SM_PASS) he took one of this place's items
                     if not own_:
                         self.item_up[m, it] = False
                         self.item_t[m, it] = resp
         self._ps("items_other", reward)
+        if ITEM_DECAY > 0 and self.pt_bal is not None and len(self.pt_bal) == self.n:
+            # (ITEM_DECAY) the tick-down above 100 charges back what was paid above 100 (not the spawn's 125, not what damage took
+            # first); the enemy gains it
+            n_ = self.n
+            st_ = np.stack([self.hp[:n_], self.armor[:n_]], 1).astype(np.float64)
+            self.pt_bal = np.minimum(self.pt_bal, np.maximum(0.0, st_ - 100.0))
+            dk_ = np.minimum(np.clip(st_ - 100.0, 0.0, DT), self.pt_bal)
+            self.pt_bal -= dk_
+            dec_ = dk_.sum(1)
+            dec_ *= (self.run_k[:n_] < 0) & ~np.asarray(self.jrun[:n_], bool) & ~np.asarray(self.items_room[:n_], bool)
+            if dec_.any():
+                g_ = self._others_arr().shape[1] + 1
+                c_ = ITEM_DECAY * dec_
+                back_ = np.repeat(c_.reshape(-1, g_).sum(1), g_) - c_    # (each mate gains it all, as the pickups' zero-sum)
+                reward[:n_] += back_ - c_
+                r_long[:n_] += back_ - c_
+                self.stats["item_pt"][2] += float(dec_.sum())
+                if PAY_SPLIT:
+                    self._pt("item_decay", np.arange(n_), back_ - c_)
         self.hp = np.where(self.hp > 100, np.maximum(100.0, self.hp - DT), self.hp)
         self.armor = np.where(self.armor > 100, np.maximum(100.0, self.armor - DT), self.armor)
         if self.item_seek > 0 and self.route is not None:

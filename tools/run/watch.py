@@ -143,9 +143,16 @@ def collapse_line(L):
     wb = L[-1].get("win_blend") or {}
     ws = L[-1].get("win_shape") or {}
     vw = L[-1].get("value_warm") or {}
+    sz = (L[-1].get("pay_terms") or {}).get("size_share") or {}      # (b1.2d) combat against items and movement, by size (both sides' halves)
+    cb_ = sum(sz.get(k_, 0.0) for k_ in ("dmg_dealt", "dmg_taken", "frag", "death"))
+    im_ = sum(v_ for k_, v_ in sz.items() if k_.startswith("item") or k_ in ("speed", "speed_run"))
+    sp_ = L[-1].get("sm_pass") or {}
+    ps_ = sum(v_[0] for v_ in sp_.values())
+    tk_ = sum(v_[0] * v_[1] for v_ in sp_.values()) / ps_ if ps_ else None
+    extra_ = (" | combat {:.2f}x items and movement".format(cb_ / im_) if im_ else "") + (" | small taken near {:.0%}".format(tk_) if tk_ is not None else "")
     return ("in hand " + " ".join("{} {:.2f}".format(w, v) for w, v in ih.items()) + " | mega+red/min {:.2f}".format(pk)
             + " | kl {:.4f}".format(L[-1].get("kl", 0.0)) + " | win part G1 size {} combat size {} | shaping size {} | value warm-up {}".format(
-                wb.get("win_g1_size"), wb.get("combat_size"), ws.get("size"), vw or "off"))
+                wb.get("win_g1_size"), wb.get("combat_size"), ws.get("size"), vw or "off") + extra_)
 
 
 def main():
