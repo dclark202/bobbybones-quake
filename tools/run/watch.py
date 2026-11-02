@@ -27,6 +27,7 @@ PREV_LABEL = os.environ.get("CTRL_PREV_LABEL") or "v0.4.2b's end (the start, bot
 REF_LABEL = os.environ.get("CTRL_REF_LABEL") or "v0.4.2b's end (reference)"
 PAR_BUSY = int(os.environ.get("PANEL_PAR_BUSY") or 3)
 CHECK_EVERY = int(os.environ.get("CHECK_EVERY") or 20)   # (v0.6.1: the ramp steps every 10 updates and waits for a check after its step)
+CHECK_BATCH = int(os.environ.get("CHECK_BATCH") or 5)    # (b1.2d) maps played at once in a check (two processes each): 4 on 8 efficiency cores
 MAPS = ["bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure"]
 WD = os.path.join(SR, RUN, "watch")
 os.makedirs(WD, exist_ok=True)
@@ -71,9 +72,9 @@ def games(pol, upd, ctrl, label, ps):
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1", CUDA_VISIBLE_DEVICES="-1")
     res = {}
     tag = "prev" if ctrl == CTRL_PREV else "ref"
-    for w in range(0, len(MAPS), 5):
+    for w in range(0, len(MAPS), CHECK_BATCH):
         jobs = []
-        for mp in MAPS[w:w + 5]:
+        for mp in MAPS[w:w + CHECK_BATCH]:
             js = os.path.join(WD, "chk_{}_{}_{}.json".format(upd, tag, mp))
             cmd = [PY, "tools/duel_eval.py", "--run", RUN, "--policy", pol, "--opp", "policy:" + ctrl, "--opp-inputs",
                    os.path.join(P.CODE, "docs", "INPUTS.csv"), "--map", mp, "--games", "16", "--minutes", "10", "--procs", "2", "--swap",

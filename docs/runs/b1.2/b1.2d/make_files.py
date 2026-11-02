@@ -26,6 +26,8 @@ sub("set SM_ITEMS=1\n", "set SM_ITEMS=1\n"
 sub("rem the repo root: this file lives in docs\\runs\\b1.2\\b1.2c\\",
     "rem ==== b1.2d (owner, 2026-11-02; docs/runs/b1.2/b1.2d/CARD.md): from b1.2c's end, five pay changes faded in together over 40 updates (ramp_b12d.py): the pay table by the point (the line at 100, the decay charged back), the speed pay down, damage taken 0.8 on the enemy's damage, the stack lead out, the long rail up. b1.2c's command with: run duel_gru_b1_2d; --minutes; ITEM_PT_LO, ITEM_PT_HI, ITEM_DECAY, SM_PASS, DMG_ENEMY_ONLY. Made by make_files.py.\n"
     "rem the repo root: this file lives in docs\\runs\\b1.2\\b1.2d\\")
+sub("start \"\" /b /wait /affinity C3FFF ", "rem (b1.2d, owner 2026-11-02) the trainer on the 8 performance cores only (0xC03C3); the checks on 8 efficiency cores (start.ps1); 4 left for the owner\n"
+    "start \"\" /b /wait /affinity C03C3 ")
 assert "--minutes {} --gamma ".format(MIN) in t
 open(os.path.join(HERE, "train.cmd"), "w", encoding="ascii", newline="").write(t.replace("\n", "\r\n"))
 shutil.copy2(os.path.join(HERE, "..", "b1.2c", "aim2_env.cmd"), os.path.join(HERE, "aim2_env.cmd"))

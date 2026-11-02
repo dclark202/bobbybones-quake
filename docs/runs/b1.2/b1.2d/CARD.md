@@ -90,6 +90,21 @@ Saves kept with their optimizers: `policy_start_b12d.pt`, `policy_fade10/20/30_b
 
 Checks: against the start (b1.2c's end), every fourth against b1.1; the league keeps b1.1, v0.6.0's end and b1.2c's end as anchors.
 
+## The cores
+
+Owner, 2026-11-02: "Use the 8 P cores for training ONLY", "Leave 4 E cores free for my ordinary computer use", "Use 8 of the E cores for the checks", "up to half can be used for testing during the run if it's deemed necessary". The efficiency-core crash of October is fixed (owner).
+
+| Use | Logical cores | Mask | Where it is set |
+|---|---|---|---|
+| The trainer and its 30 simulators, nothing else | 0, 1, 6, 7, 8, 9, 18, 19 (performance) | `0xC03C3` | `train.cmd` (`start /affinity C03C3`) |
+| The watcher (every check and panel job inherits it), the ramp, the self-play logger | 2-5, 10-13 (efficiency) | `0x3C3C` | `start.ps1` |
+| Of those, for a test during the run when needed | 10-13 (the checks keep 2-5) | `0x3C00` | by hand |
+| The owner's own use | 14-17 (efficiency) | `0x3C000` | nothing of ours |
+
+The checks sized to 8 cores: 4 maps at a time, 2 processes each (`CHECK_BATCH=4`, was 5); the panel 2 jobs at once, 1 while a check plays (`PANEL_PAR=2`, `PANEL_PAR_BUSY=1`); the self-play logger 1 map at a time. b1.2c ran the trainer on 16 cores (`0xC3FFF`) and every check on the 8 performance cores beside it.
+
+**Before the run (owner: "before doing the full run, have it run a short test to make sure the CPU cores are being used effectively"; "they start once 1.2c is done"):** `cpu_test.py`, about 30 minutes, nothing else of ours running: b1.2d's own command on a scratch copy of b1.2c's end, and a check batch beside it as the watcher plays one. Passes when an update takes at most 10% more than b1.2c's 4.2 minutes, the trainer stays on the performance cores, the checks on their 8 cores, nothing of ours on the owner's four, and the batch finishes. If the update is slower: two of the test cores to the trainer (the 2026-10-19 measure: pinned to the performance cores, learning 133 s against 126 unpinned).
+
 ## Judged by
 
 | Measure | b1.2c's end | Wanted |
@@ -132,5 +147,6 @@ Checks: against the start (b1.2c's end), every fourth against b1.1; the league k
 | `ramp_b12d.py`: the five dials in one 40-update line; `ramp_test.log` (also with a hold) | ✅ ALL PASSED |
 | `start.ps1`: refuses on a trainer running, b1.2c's dials not at their ends, a failed settings check or log; controls b1.2c's end and b1.1 widened | ✅ parsed; a check job with b1.2d's settings against b1.1 widened played |
 | A dry run on the card | not done (owner: "just start it after c") |
+| The cores: `train.cmd` on `C03C3`, `start.ps1` on `0x3C3C` with the checks sized; `cpu_test.py` written | ✅ built; the test runs once b1.2c is done 🧪 |
 | Length | ❓ `make_files.py <minutes>` at the start; 720 written as the default |
 | The owner's go to stop b1.2c at its jerk stage's end (about 13:40, `policy_nojerk_b12c.pt`) and start | ❓ |

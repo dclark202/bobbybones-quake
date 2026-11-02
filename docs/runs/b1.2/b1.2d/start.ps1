@@ -51,10 +51,14 @@ $WD = Join-Path $R1 "watch"
 $env:CTRL_PREV = $CK; $env:CTRL_PREV_LABEL = "the start (b1.2c's end)"
 $env:CTRL_REF = $CR; $env:CTRL_REF_LABEL = "b1.1 (reference)"
 $env:CHECK_EVERY = "10"; $env:PANEL_RUN = $RUN; $env:PANEL_CTRL = $CK; $env:CHECK_RULE = "0"
+# the cores (owner, 2026-11-02): the trainer on the 8 performance cores (train.cmd); everything beside it on 8 efficiency cores (2-5, 10-13: 0x3C3C), sized to them; 14-17 left for the owner
+$CHK = [IntPtr]0x3C3C
+$env:CHECK_BATCH = "4"; $env:PANEL_PAR = "2"; $env:PANEL_PAR_BUSY = "1"
 $w = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\watch.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "watch_stdout.log") -RedirectStandardError (Join-Path $WD "watch_stderr.log")
-$w.ProcessorAffinity = [IntPtr]0xC03C3
+$w.ProcessorAffinity = $CHK
 Start-Sleep 5
 $r = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "ramp_b12d.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "ramp_stdout.log") -RedirectStandardError (Join-Path $WD "ramp_stderr.log")
-$s = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\selfplay_loop.py"), $RUN, "--every", "40", "--games", "5" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "selfplay_stdout.log") -RedirectStandardError (Join-Path $WD "selfplay_stderr.log")
-$s.ProcessorAffinity = [IntPtr]0xC03C3
+$r.ProcessorAffinity = $CHK
+$s = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\selfplay_loop.py"), $RUN, "--every", "40", "--games", "5", "--par", "1" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "selfplay_stdout.log") -RedirectStandardError (Join-Path $WD "selfplay_stderr.log")
+$s.ProcessorAffinity = $CHK
 Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (five dials faded together over updates 0 to 40; held only at a check of 40% or less) | self-play logger " + $s.Id)
