@@ -16,6 +16,8 @@ def main():
     for n_ in ("label", "run", "a", "hold_a", "b", "hold_b"):
         ap.add_argument(n_)
     ap.add_argument("--out", default="")
+    ap.add_argument("--contact-a", default="0", help="(b1.3a) save A's chance of a free contact")
+    ap.add_argument("--contact-b", default="0", help="(b1.3a) save B's")
     ap.add_argument("--games", type=int, default=16)
     ap.add_argument("--maps", default=",".join(MAPS))
     ap.add_argument("--batch", type=int, default=4)
@@ -35,7 +37,7 @@ def main():
             js = os.path.join(out, mp + ".json")
             cmd = [sys.executable, "tools/duel_eval.py", "--run", a.run, "--policy", a.a, "--opp", "policy:" + a.b, "--opp-inputs", os.path.join(ROOT, "docs", "INPUTS.csv"), "--map", mp, "--games", str(a.games),
                    "--minutes", "10", "--procs", "2", "--swap", "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225", "--round", "600", "--opp-round", "600",
-                   "--hold", a.hold_a, "--opp-hold", a.hold_b]
+                   "--hold", a.hold_a, "--opp-hold", a.hold_b, "--contact", a.contact_a, "--opp-contact", a.contact_b]
             cmd += [x for s_ in sets for x in ("--set", s_)]
             jobs.append((mp, js, subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=open(js + ".log", "w"), stderr=subprocess.STDOUT)))
         for mp, js, p in jobs:

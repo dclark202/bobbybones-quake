@@ -1015,6 +1015,10 @@ def main():
     ap.add_argument("--head2-lr-scale", type=float, default=1.0, help="(--head2) its learning rate as a share of --lr (its own group; plan_in is in it)")
     ap.add_argument("--head2-pg", type=float, default=1.0, help="(--head2) the weight of its own policy-gradient term (the bias on his intention, "
                                                                  "its own advantage; live: H2_PG, a factor on it)")
+    ap.add_argument("--opt-small-items", type=int, default=0, help="(b1.2c, SM_ITEMS) an optimizer's state saved before the network was widened (tools/items_init.py) is carried over: the new inputs' columns of the encoder and the small tokens' marks get "
+                                                                   "no first moment and the median second moment of their parameter (a zero one makes Adam's first steps on them huge); their new first layer starts fresh. Does nothing to a state that fits")
+    ap.add_argument("--head2-sole", type=int, default=0, help="(--head2, b1.3a) the head alone learns his target choice: the hands' target logits take no lesson (policy, entropy, teachers: nothing reaches his memory through them) "
+                                                              "and their rows of pi stay as they are; the head's lesson has the target's entropy bonus. b1.2a's blowup: two learners on different pay added to one logit")
     ap.add_argument("--head2-pay", default="all", choices=("all", "combat_win"), help="(--head2, b1.2a) what its value and advantage count: his whole pay, or combat (frags, deaths, damage) plus the win part, not the item pay")
     ap.add_argument("--head2-v", type=float, default=0.5, help="(--head2) the weight of its value's lesson")
     ap.add_argument("--head2-plan-grad", type=float, default=0.0, help="(--head2) the share of the hands' gradient that goes on into the head through the "
@@ -1766,7 +1770,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
     BEL_SEEN = [0]
 
@@ -1796,7 +1800,7 @@ def main():
     BEL = BEL_L is not None
     BK = int(BEL_L["every"]) if BEL else 0
     if BEL:
-        assert int(BEL_L["obs_dim"]) == OBS_DIM, "the belief reads {} inputs, the simulator has {}".format(BEL_L["obs_dim"], OBS_DIM)
+        assert int(BEL_L["obs_dim"]) in (OBS_DIM, OBS_DIM - getattr(E_, "N_ITEMS", 0)), "the belief reads {} inputs, the simulator has {}".format(BEL_L["obs_dim"], OBS_DIM)
         assert a.belief <= 0 or (int(a.belief) == int(BEL_L["hid"]) and int(a.belief_every) == BK), \
             "--belief {} --belief-every {}: the network's belief is {} every {}".format(a.belief, a.belief_every, BEL_L["hid"], BK)
         assert a.steps % BK == 0, "--steps {} is not a whole number of the belief's ticks ({})".format(a.steps, BK)
@@ -2510,6 +2514,33 @@ def main():
                     trz_group()                               # --track-z: and the second part's)
                 elif TRK and TRZ and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL):
                     trk_group()                               # (--track-z added to a save without it: its group after the load)
+                if a.opt_small_items:                         # (b1.2c) see --opt-small-items
+                    nm_ = {id(p_): n_ for n_, p_ in pol.named_parameters()}
+                    nx_ = max(i_ for g_ in os_["param_groups"] for i_ in g_["params"]) + 1
+                    for g_, s_ in zip(opt.param_groups, os_["param_groups"]):
+                        ks_ = [k_ for k_, p_ in enumerate(g_["params"]) if nm_.get(id(p_)) == "attn.emb.{}.weight".format(len(ATT["kinds"]) - 1)]
+                        if ks_ and len(g_["params"]) == len(s_["params"]) + 1:
+                            s_["params"] = s_["params"][:ks_[0]] + [nx_] + s_["params"][ks_[0]:]      # (no state: Adam starts it)
+                            nx_ += 1
+                            print("optimizer: the small tokens' first layer starts fresh", flush=True)
+                        for p_, i_ in zip(g_["params"], s_["params"]):
+                            m_ = os_["state"].get(i_)
+                            n_ = nm_.get(id(p_))
+                            if m_ is None or tuple(m_["exp_avg"].shape) == tuple(p_.shape) or n_ not in ("enc.0.weight", "attn.mark"):
+                                continue
+                            old_ = tuple(m_["exp_avg"].shape)
+                            for k2_ in ("exp_avg", "exp_avg_sq"):
+                                v_ = m_[k2_]
+                                new_ = torch.zeros(tuple(p_.shape), dtype=v_.dtype, device=v_.device)
+                                fill_ = float(v_.median()) if k2_ == "exp_avg_sq" else 0.0
+                                new_.fill_(fill_)
+                                if n_ == "enc.0.weight":
+                                    new_[:, :old_[1]] = v_
+                                else:                         # (the summary token's mark stays the last)
+                                    new_[:old_[0] - 1] = v_[:-1]
+                                    new_[-1] = v_[-1]
+                                m_[k2_] = new_
+                            print("optimizer: {} carried over, {} -> {}".format(n_, old_, tuple(p_.shape)), flush=True)
                 sc_ = [g_.get("lr_scale", 1.0) for g_ in opt.param_groups]      # (this run's scales: loading puts the saved ones back)
                 for g_, s_ in zip(opt.param_groups, os_["param_groups"]):   # (torch checks the groups' sizes only: a moment of
                     for p_, i_ in zip(g_["params"], s_["params"]):           # another shape, or of another parameter, is refused here)
@@ -2664,9 +2695,15 @@ def main():
         dirs_ = [d_ for d_ in a.brain_human.split(",") if d_]
         mx_ = [float(x_) for x_ in a.brain_human_mix.split(",")] if a.brain_human_mix else [1.0] * len(dirs_)
         assert len(mx_) == len(dirs_), "--brain-human-mix: one share a folder"
-        BH = bh_.HumanMix([bh_.HumanLesson(d_, obs_mean, obs_var, int(BEL_L["hid"]), dev, piece=a.brain_human_piece, lanes=a.brain_human_lanes)
+        BH = bh_.HumanMix([bh_.HumanLesson(d_, obs_mean[:int(BEL_L["obs_dim"])], obs_var[:int(BEL_L["obs_dim"])], int(BEL_L["hid"]), dev, piece=a.brain_human_piece, lanes=a.brain_human_lanes)
                            for d_ in dirs_], mx_)
         print(BH.describe() + "; share {} of the brain's lesson (live BRAIN_HUMAN_W), opening over {} min".format(a.brain_human_w, a.brain_human_open), flush=True)
+    H2_SKIP = [0]                                            # (--head2-sole) pieces of an update left out: their loss was not finite
+    H2_ROWS = None                                           # (--head2-sole) the hands' target rows of pi
+    if H2 and a.head2_sole:
+        with torch.no_grad():
+            H2_ROWS = (pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])].clone(), pol.pi.bias[HD_I0:HD_I0 + int(H2L["n_target"])].clone())
+        print("head2-sole: the head alone learns his target; the hands' {} target rows are held".format(int(H2L["n_target"])), flush=True)
     BDROP = None                                             # (--brain-drop) the columns the brain does not read
     if a.brain_drop:
         assert BEL, "--brain-drop: with --belief"
@@ -4143,9 +4180,16 @@ def main():
         HO_ = [None, [], False]                                          # (--head) the last seq_pass's head outputs; the read's numbers (first pass)
         HO2_ = [None]                                                    # (--head2) the last seq_pass's strategy head outputs
 
+        def sole_(lg_):
+            """(--head2-sole) his logits with the target's cut off from what the hands learn"""
+            if not (H2 and a.head2_sole):
+                return lg_
+            n_ = int(H2L["n_target"])
+            return torch.cat([lg_[..., :HD_I0], lg_[..., HD_I0:HD_I0 + n_].detach(), lg_[..., HD_I0 + n_:]], -1)
+
         def h2pi_(hs_):
             """his logits from his memory, the strategy head's bias added as a number (the hands' loss never moves the head)"""
-            lg_ = pol.pi(hs_)
+            lg_ = sole_(pol.pi(hs_))
             if H2:
                 HO2_[0]["hands_int"] = lg_[..., HD_I0:HD_I0 + int(H2L["n_target"])].detach()
                 lg_ = head2_.add_bias(lg_, HO2_[0]["bias"].detach(), HD_I0)
@@ -4349,7 +4393,7 @@ def main():
 
         def pi_t(z_):
             """what the teachers' losses read: his logits from z_, the head's part added as it is but taught by them never (--head)"""
-            lg_ = pol.pi(z_)
+            lg_ = sole_(pol.pi(z_))
             if H2:                                                       # (--head2) its bias as it is, taught by them never
                 lg_ = head2_.add_bias(lg_, HO2_[0]["bias"].detach(), HD_I0)
             lg_ = lg_ if not HEADL else head_logits(lg_, HO_[0]["tadd"].detach(), HO_[0]["wadd"].detach())
@@ -4607,7 +4651,7 @@ def main():
                     m2_ = lv * wgt
                     ms2_ = m2_.sum().clamp(min=1.0)
                     lpi_ = torch.log_softmax(ho2_["hands_int"] + ho2_["bias"], -1).gather(-1, A[..., I_HEAD:I_HEAD + 1]).squeeze(-1)
-                    r2_ = (lpi_ - B_LPI[:, chunk]).exp()
+                    r2_ = (lpi_ - B_LPI[:, chunk]).clamp(max=30.0).exp()     # (capped as pi_prox / pi_played: b1.2a's overflow)
                     ah_ = ADV_H[:, chunk]
                     mu2_ = (ah_ * m2_).sum() / ms2_
                     ah_ = (ah_ - mu2_) / (((ah_ - mu2_).pow(2) * m2_).sum() / ms2_).sqrt().clamp(min=1e-8)
@@ -4615,6 +4659,9 @@ def main():
                     vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
                     vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
                     loss = loss + H2_PG_[0] * H2_PG_[2] * pg2_ + a.head2_v * vl2_
+                    if a.head2_sole:                                     # (--head2-sole) the target's entropy bonus is the head's now
+                        lq2_ = torch.log_softmax(ho2_["hands_int"] + ho2_["bias"], -1)
+                        loss = loss - ent_coef * ent_heads[I_HEAD] * ((-(lq2_.exp() * lq2_).sum(-1)) * m2_).sum() / ms2_
                     if epoch == 0:
                         with torch.no_grad():
                             bc_ = ho2_["bias"] - ho2_["bias"].mean(-1, keepdim=True)
@@ -4978,6 +5025,9 @@ def main():
                     VL_ACC[j_ + 1] += 1
                 if VW_ON:                                                # (v0.6.1, --value-warm) the value loss alone, the value outputs only:
                     loss = 0.5 * vl                                      # every other tensor's gradient is None (no step, no Adam moment)
+                if H2 and a.head2_sole and not bool(torch.isfinite(loss)):     # (--head2-sole) one bad piece does not reach the weights
+                    H2_SKIP[0] += 1
+                    continue
                 loss.backward()
                 if VW_ON:
                     for g_ in opt.param_groups:
@@ -5035,6 +5085,10 @@ def main():
                     for p_, g_ in zip(pol.head2.parameters(), H2GR_):
                         p_.grad = g_
                 opt.step()
+                if H2_ROWS is not None:                                  # (--head2-sole) held as they were (Adam's moments move them otherwise)
+                    with torch.no_grad():
+                        pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])] = H2_ROWS[0]
+                        pol.pi.bias[HD_I0:HD_I0 + int(H2L["n_target"])] = H2_ROWS[1]
                 if BDROP is not None:                                    # (--brain-drop) held at zero (Adam's moments move them otherwise)
                     with torch.no_grad():
                         pol.belief.inp.weight[:, BDROP] = 0.0
@@ -5190,6 +5244,8 @@ def main():
                    suicides_per_match_min=round(agg["suicides"] / sim_min, 3),
                    hit_rate={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots"])), 3) for w in WEAPONS},
                    frag_share={w: round(float(agg[w + "_frags"] / max(1, sum(agg[x + "_frags"] for x in WEAPONS))), 2) for w in WEAPONS},
+                   pick_by={k_: [round(float(np.atleast_1d(agg["pick_by"])[i_] / (G * sim_min)), 3), round(float(np.atleast_1d(agg["pick_by"])[8 + i_] / max(1.0, np.atleast_1d(agg["pick_by"])[i_])), 1)]
+                            for i_, k_ in enumerate(("H5", "H25", "H50", "MH", "A5", "A25", "A50", "A100"))} if "pick_by" in agg else {},     # (ITEM_RATE) a player-minute's pickups, points a pickup
                    pickups_per_player_min={k[5:]: round(float(agg[k] / (G * sim_min)), 2)
                                            for k in ("pick_hp", "pick_ar", "pick_mega", "pick_ra", "pick_wp", "pick_wpnew", "pick_am") if k in agg},
                    acc_visible={w: round(float(agg[w + "_hits"] / max(1, agg[w + "_shots_vis"])), 3) for w in ("rl", "rg", "lg")},
@@ -5249,6 +5305,7 @@ def main():
                    intent_rule_agree=[round(IR_AGREE[0] / max(1.0, IR_AGREE[1]), 4), int(IR_AGREE[1])],   # (v0.6.1) agreement with the item rule, frames
                    rule_contest=round(float(np.atleast_1d(agg.get("rule_contest", np.zeros(2)))[0]) / max(1.0, float(np.atleast_1d(agg.get("rule_contest", np.zeros(2)))[-1])), 4),
                    rule_hunt=round(float(np.atleast_1d(agg.get("rule_hunt", np.zeros(2)))[0]) / max(1.0, float(np.atleast_1d(agg.get("rule_hunt", np.zeros(2)))[-1])), 4),      # (RULE_HUNT) the share of the rule's item frames silenced where hunting is reasonable
+                   contact=[round(float(x_), 1) for x_ in np.atleast_1d(agg.get("contact", np.zeros(5)))],     # (CONTACT_FREE) begun, free, readings, changes, to the enemy
                    rule_blind=round(float(np.atleast_1d(agg.get("rule_blind", np.zeros(2)))[0]) / max(1.0, float(np.atleast_1d(agg.get("rule_blind", np.zeros(2)))[-1])), 4),      # (RULE_BLIND) the share of the rule's frames silenced by a fresh belief   # (RULE_CONTEST) the share of the rule's item frames silenced
                    weapon_teach=[round(wk, 3), round(float(wk_l), 3)],
                    weapon_rule_agree=round(float(agg.get("wrule_agree", 0) / max(1, agg.get("wrule_frames", 0))), 3),
@@ -5338,6 +5395,8 @@ def main():
                 gin_share=round(float(ha2_[9] / max(1.0, ha2_[10])), 6),                              # |gate x plan_in(plan)| beside his fast GRU's input
                 bias=round(float(ha2_[4] / max(1.0, ha2_[6])), 5),                                    # the bias's centred length on read frames
                 bias_share=round(float(ha2_[4] / max(1e-9, ha2_[4] + ha2_[5])), 5),                   # ... beside the hands' own intention logits
+                hands=round(float(ha2_[5] / max(1.0, ha2_[6])), 5),                                   # the hands' own intention logits' centred length (b1.3a's tripwire, with bias)
+                sole=int(a.head2_sole), skipped=int(H2_SKIP[0]),
                 clip_share=round(float(ha2_[11] / max(1.0, ha2_[6])), 4),
                 grad=round(float(ha2_[7] / max(1.0, ha2_[8])), 5),                                    # its gradient's norm before its clip (0.5)
                 plan_in_w=round(float(pin_), 6), target_w=round(float(pol.head2.target.weight.norm()), 6),

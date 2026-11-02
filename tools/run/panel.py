@@ -66,9 +66,14 @@ def settings(ps, pol=None):
         S_["LEVEL_PULL"] = lv_
     if pol:                                                  # (b1.1a, the target lock's fade: the save's own; both seats alike)
         import torch
-        ih_ = (torch.load(pol, map_location="cpu", weights_only=False).get("env_vars") or {}).get("INTENT_HOLD")
+        ev_ = torch.load(pol, map_location="cpu", weights_only=False).get("env_vars") or {}
+        ih_ = ev_.get("INTENT_HOLD")
         if ih_ not in (None, ""):
             S_["INTENT_HOLD"] = str(ih_)
+        if ev_.get("CONTACT_FREE") not in (None, ""):        # (b1.3a) and its chance of a free contact
+            S_["CONTACT_FREE"] = str(ev_["CONTACT_FREE"])
+        if ev_.get("SM_ITEMS") not in (None, ""):            # (b1.2c) and the small items as inputs: without it the check's simulator gives him zeros there
+            S_["SM_ITEMS"] = str(ev_["SM_ITEMS"])
     return ["{}={}".format(k, v) for k, v in S_.items() if k != "OVERTIME"] + ["OVERTIME=1"]
 
 

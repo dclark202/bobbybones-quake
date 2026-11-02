@@ -1,0 +1,7 @@
+﻿the steps at updates [30, 40, 50, 60, 70, 90, 110, 130, 150, 170, 180, 190, 200, 210]
+PASS fourteen steps
+PASS the end values
+PASS at updates 30 to 70, 90 to 150, 170 to 210
+PASS a save and an optimizer before each step
+PASS the stages' saves
+ALL PASSED

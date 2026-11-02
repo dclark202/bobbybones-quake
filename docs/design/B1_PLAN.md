@@ -14,6 +14,8 @@ as hard rules. The owner sets the order of the later steps; the order below is a
 | **b1.2a** | the strategy head in, item rule on (`H2_GATE_CAP` 0 → 1) | b1.1's end | at least level; targets and roaming hold; the head adds something (blanked-head check) |
 | **Later** | the item rule's label out (`INTENT_TEACH_W` 1 → 0) | b1.2's end | at least level; no spawn camping (v0.4.4's failure); items hold |
 
+**2026-11-01 (owner):** b1.2's goal changed from the head to every item priced and the costs out ([family](../runs/b1.2/README.md)). Small items as inputs and b1.2c's decisions: [SMALL_ITEMS.md](SMALL_ITEMS.md).
+
 bN is the series, bN.N a family of runs with a specific goal, bN.Nx an attempt at it (a, b, c, ...). A failed attempt gets the next letter (b1.1b), not a new number. If b1.1a fails, b1.1b and b1.1c isolate its two fades: no run has tested either alone.
 
 **After that, not yet ordered:** the target lock (`INTENT_HOLD`, `TARGETS_FREE`, `WEAPON_FREE`), the pros' tables as inputs, the movement

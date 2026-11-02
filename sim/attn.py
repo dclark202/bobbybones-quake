@@ -36,6 +36,7 @@ LATE = [("stack", ("v031 enemy stack",)),                  # (v0.3.1, B-257: the
          ("emerge", ("v036 emergence",))]                    # EMERGE_IN)
 LATE_SPLIT = [("prefire", ("v036 prefire",))]               # (v0.3.6, PREFIRE: a token a pre-fire place; after the late kinds)
 LATE2 = [("drift", ("v038 drift",))]                         # (v0.3.8, DRIFT_IN: after every older kind, so that their rows stay)
+LATE3 = [("small", ("b12 small items",))]                    # (b1.2c, SM_ITEMS: a token a small item; after every older kind)
 # A layout may say "gated": the network then carries "gate" among its weights (not trained: a buffer), a number a token
 # (the summary token too) that is added to every look at that token before the softmax of both blocks. A network that
 # is given new tokens answers as before while their gate is very negative (GATE_SHUT: nothing looks at them;
@@ -95,6 +96,8 @@ def layout_from_csv(path):
         if idx:
             kinds.append(dict(name=name, idx=[idx]))
             used[idx] = True
+    for name, groups in LATE3:
+        split(name, groups)
     rest = [i for i in range(n) if not used[i]]
     if rest:
         kinds.append(dict(name="rest", idx=[rest]))

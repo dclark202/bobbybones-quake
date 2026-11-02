@@ -15,8 +15,12 @@ out and the strategy head comes in, one step at a time. Open items beside them: 
 |---|---|---|
 | b1.0a | win chance pay in, on top of the unchanged table (`WIN_ADD` to 0.33, about a third of the total), from v0.6.0's end | done 2026-10-31 21:00, a success ([card](runs/b1.0/b1.0a/CARD.md)) |
 | b1.1a | ready for strategy: the brain's old belief, the pull toward level and the target lock out | done 11-01 ([card](runs/b1.1/b1.1a/CARD.md)). **b1.1** = its save before the lock's fade: brain and pull out, lock 8 s |
-| b1.2a | the strategy head in, learning from combat plus win pay, then the target lock stepped out; item rule still on: he should fight more | built and smoke-tested ([card](runs/b1.2/b1.2a/CARD.md)); ~08:30 on 11-01 on the owner's go, 24 h |
-| later | the item rule's label out (the item pay stays); then the target lock, the pros' tables, movement mechanics, in an order not yet set | planned |
+| b1.2a | the strategy head in, learning from combat plus win pay | **unusable:** crashed 11-01 15:18 at update 82; the head and the hands fought over his target logits ([card](runs/b1.2/b1.2a/CARD.md)) |
+| b1.2b | every health and armor item priced, zero-sum, per point gained; then the firing costs out; then free target choice in contact; then the jerk cost out | stopped 11-01 17:40 at update 20 ([card](runs/b1.2/b1.2b/CARD.md)) |
+| b1.2c | b1.2b's plan, with every small health and armor item as an input: what it is, where, the way, its state by what he knows | running from 2026-11-01 evening, to 18:00 on 11-02 at most ([card](runs/b1.2/b1.2c/CARD.md), [design](design/SMALL_ITEMS.md)) |
+| b1.3a | the strategy layer opens, with the head as the only learner of his target choice | card written, the fix to build ([card](runs/b1.3/b1.3a/CARD.md)); after b1.2b on the owner's go |
+| b1.4a | `DMG_TAKEN_W` to 0.8, on enemy damage only, after b1.3's read | to rewrite ([family](runs/b1.4/README.md)) |
+| later | the target lock outside contact, the pros' tables, rocket jumps and movement mechanics, in an order not yet set | planned |
 
 **Names (owner, 2026-10-31):** bN is the series; bN.N a family of runs with a specific goal; bN.Nx a run in it, the attempts x = a, b, c, ... A failed attempt gets the next letter (b1.1b), not a new number. Yardstick: v0.6.0's end. The reasons, gates and open points: [design/B1_PLAN.md](design/B1_PLAN.md).
 
@@ -39,7 +43,7 @@ What lives where in `docs/` and the routine that keeps it: [README.md](README.md
 | Best network | v0.4.2b's end (`data/sim_runs/duel_gru_v0_4_2/keep/policy_end_v042.pt`; backup `T:\BobbyBones_backup`) |
 | Public servers | v0.4.2b's end with `!aim` worse / default / better / max (aim2, measured on the pros), branch `pub-aim2` = `main`'s server code |
 | Now (2026-10-31) | v0.6.0 (update 80) on both public servers and released as open weights; b1.1 done ([runs/b1.1/README.md](runs/b1.1/README.md)); the v0.6.1 line (b, c, d, e) ended ([runs/v0.6.1d/REVIEW_v0.6.1.md](runs/v0.6.1d/REVIEW_v0.6.1.md)) |
-| Next (owner's rough plan, 2026-10-31) | b1.2a from b1.1, on the owner's go, morning of 11-01 |
+| Now (2026-11-01) | b1.1 on both public servers (network files only, about 13:00; v0.6.0 before it); b1.2a running from b1.1, started 09:08, 24 h |
 
 What has been tried and what it taught: [HISTORY.md](HISTORY.md). Open work: [BACKLOG.md](BACKLOG.md).
 

@@ -39,6 +39,19 @@ def game(d, S):
         cl = ((A["o_x"] - A["b_x"]) * A["b_vx"] + (A["o_y"] - A["b_y"]) * A["b_vy"])[close] / np.maximum(dist[close], 1)
         print("tunnel vision, the person in sight under 800 u ({:.0%} of both alive): him off by 30+ {:.0%}, firing {:.0%}, closing {:.0f} u/s; person off by 30+ {:.0%}, firing {:.0%}".format(
             close.sum() / both.sum(), (A["b_aim_err"][close] > 30).mean(), (A["b_fire"][close] > 0).mean(), cl.mean(), (A["o_aim_err"][close] > 30).mean(), (A["o_fire"][close] > 0).mean()))
+    ed0 = np.diff(np.r_[0, los.astype(int), 0])              # (b1.3) chip damage: an exchange (a stretch in sight of 0.5 s or more) in which he or the person lost stack and neither died
+    ch = collections.Counter()
+    for a_, z_ in zip(np.where(ed0 == 1)[0], np.where(ed0 == -1)[0]):
+        if z_ - a_ >= 20:
+            z2 = min(z_ + 8, n - 1)
+            if A["b_health"][z2] > 0 and A["o_health"][z2] > 0:
+                db_, do_ = max(0.0, b[a_] - b[z2]), max(0.0, o[a_] - o[z2])
+                if db_ > 0 or do_ > 0:
+                    ch["n"] += 1
+                    ch["him"] += do_
+                    ch["person"] += db_
+    mins_ = max(1e-6, both.sum() * .025 / 60)
+    print("chip damage, exchanges with no death: {:.1f} a minute; stack taken a minute: by him {:.0f}, by the person {:.0f}".format(ch["n"] / mins_, ch["him"] / mins_, ch["person"] / mins_))
     E = [json.loads(x) for x in open(os.path.join(S, "events.jsonl"))]
     pk, seen = collections.Counter(), set()
     for e in E:

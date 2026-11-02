@@ -160,6 +160,12 @@ def play(job):
             env.hold_seat[np.arange(sw_, env.n, 2)] = float(envvars["SEAT_HOLD_HE"])
         if envvars.get("SEAT_HOLD_OPP"):
             env.hold_seat[np.arange(1 - sw_, env.n, 2)] = float(envvars["SEAT_HOLD_OPP"])
+    if envvars.get("SEAT_CONTACT_HE") or envvars.get("SEAT_CONTACT_OPP"):   # (--contact / --opp-contact, b1.3a) each side's own chance of a free contact
+        env.contact_seat = np.full(env.n, float(E.CONTACT_FREE), np.float32)
+        if envvars.get("SEAT_CONTACT_HE"):
+            env.contact_seat[np.arange(sw_, env.n, 2)] = float(envvars["SEAT_CONTACT_HE"])
+        if envvars.get("SEAT_CONTACT_OPP"):
+            env.contact_seat[np.arange(1 - sw_, env.n, 2)] = float(envvars["SEAT_CONTACT_OPP"])
     sa_he, sa_op = envvars.get("SEAT_AIM_HE", ""), envvars.get("SEAT_AIM_OPP", "")
     if sa_he or sa_op:                                        # (--aim-he / --aim-opp, branch aim2) each side's own aim settings
         sa_ = {}
@@ -429,6 +435,8 @@ def main():
     ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
     ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--contact", default="", help="(b1.3a) his seats' own chance of a free contact (default: CONTACT_FREE, the same for both)")
+    ap.add_argument("--opp-contact", default="", help="(b1.3a) the opponent's seats' own chance of a free contact")
     ap.add_argument("--hold", default="", help="(b1.2) his seats' own target lock, seconds (default: INTENT_HOLD, the same for both)")
     ap.add_argument("--opp-hold", default="", help="... the opponent's seats")
     ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
@@ -470,6 +478,10 @@ def main():
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
+    if a.contact:
+        envvars["SEAT_CONTACT_HE"] = a.contact
+    if a.opp_contact:
+        envvars["SEAT_CONTACT_OPP"] = a.opp_contact
     if a.hold:
         envvars["SEAT_HOLD_HE"] = a.hold
     if a.opp_hold:

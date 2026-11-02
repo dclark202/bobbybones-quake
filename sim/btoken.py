@@ -370,7 +370,7 @@ class NpBrain:
         """-> [n] bool: the seats that ticked on this frame"""
         if self.half:
             x = np.asarray(x, np.float32).astype(np.float16).astype(np.float32)
-        u = np.tanh(x @ self.B["inp_w"].T + self.B["inp_b"])
+        u = np.tanh(x[..., :self.B["inp_w"].shape[1]] @ self.B["inp_w"].T + self.B["inp_b"])     # (b1.2c: the inputs it was made with)
         self.sum = self.sum + u
         self.mx = np.maximum(self.mx, u)
         self.cnt = self.cnt + 1.0

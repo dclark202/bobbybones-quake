@@ -1194,6 +1194,8 @@ class duelbot(minqlx.Plugin):
             env.it_t[:], env.e_got[:], env.e_life[:] = 99.0, 0.0, 99.0
             if hasattr(env, "bel_t"):
                 env.bel_t[:] = 99.0
+                if getattr(env, "sm_bel", None) is not None:
+                    env.sm_bel[:] = 99.0
             env._v02_round(np.ones(env.n, bool))
 
     @staticmethod

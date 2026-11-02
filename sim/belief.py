@@ -55,6 +55,7 @@ def make_module(L, seed=4040):
 
         def enc(self, x):
             g_ = float(self.fade_g)
+            x = x[..., :self.inp.in_features]                # (b1.2c) the brain reads the inputs it was made with; later ones are the hands'
             if not (g_ > 0 and self.fade_cols):
                 return torch.tanh(self.inp(x))
             w_ = self.inp.weight                             # (v0.6.1b) the faded columns' weights times (1 - g): the same sums as

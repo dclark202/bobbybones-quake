@@ -1,5 +1,7 @@
 # b1.2a: the strategy head faded in, learning from combat plus win pay, then the target lock stepped out
 
+**UNUSABLE (owner, 11-01). Crashed 15:18 at update 82, gate 0.7. Saved only, as `keep/policy_end_b12a_UNUSABLE.pt` (update 80): do not start from it.** The head and the hands, learning on different pay, fought over the same target logits: at update 80 lightning was +265 from the head, -257 from the hands, +8 in play (correlation -0.99 in games). Bias length 5, 55, 162, 317 at updates 20, 40, 60, 80. The likely end: the head's uncapped ratio (`sim/train_duel_rnn.py:4610`) overflowed, not reproduced. Checks before it: 53.8, 55.6, 53.8, 56.2% against b1.1 (u10 to u70), 63.1% against v0.6.0's end (u60), but they read a network whose head was mostly cancelled. The fix: [b1.3a](../../b1.3/b1.3a/CARD.md).
+
 *2026-10-31 (owner): head on "combat plus win"; no help trying the enemy as a target; item rule stays on; "Set it for 24 hours, likely we'll start it around 8-9am tomorrow". The family: [README](../README.md). From v0.6.2a's draft ([card](../../v0.6.2a/CARD.md)), which was for win-only pay.*
 
 **Marks:** ✅ built and tested · ⏳ to build · 🧪 to measure · ❓ owner's decision
@@ -8,7 +10,7 @@
 
 | | |
 |---|---|
-| Started from | **b1.1** (`duel_gru_b1_1a/keep/policy_b1.1.pt`: b1.1a's save of update 140, brain and pull out, lock 8 s; owner, 11-01), with `opt_b1.1.pt`, the optimizer of update 170: its own was not kept; given the head with its gate shut (`tools/head2_init.py add --gate 0`) ⏳ |
+| Started from | **b1.1** (`duel_gru_b1_1a/keep/policy_b1.1.pt`: b1.1a's save of update 140, brain and pull out, lock 8 s; owner, 11-01), with `opt_b1.1.pt`, the optimizer of update 170: its own was not kept; given the head with its gate shut (`tools/head2_init.py add --gate 0`) ✅ started 11-01 09:08 |
 | Run | `duel_gru_b1_2a` |
 | The head | `sim/head2.py`, ~0.65 M weights: a slow GRU (256) ticking every 0.2 s, reading the brain's memory and readouts, its "in control" readout, his stack, timers, score, clock and the hands' memory. It adds a bias to his target choice and a plan into the hands' memory, both times its gate ✅ |
 | What it learns from | **combat plus win** (owner): frags, deaths, damage and the win part, not the item pay. Its value looks about 2 minutes ahead ✅ |
@@ -17,22 +19,27 @@
 | Help trying the enemy as a target | none (owner). He picks it 1.2% of the time today |
 | Item rule | stays at full weight (`INTENT_TEACH_W` 1) |
 | Target lock | **a second stage, after the head is open** (owner, 11-01: "the lock should go entirely, but step it in a way that we can trace when something goes wrong"): `INTENT_HOLD` 8 → 6 → 4 → 3 → 2 → 1 → 0 s, a step every second save (~76 min, room for one check at each value), the save before each step kept with its optimizer (`keep/policy_lock<value>_b12a.pt`). He reads a choice once a second. It runs only from a start at 8 s; from a start already at 1 s there is no stage |
-| Ramp | `ramp_b12.py`: shut for 10 updates, its value learning the pay; then `H2_GATE_CAP` +0.1 a step, ten steps, one right after each save (`tools/run/ramp_head.py`), ~6.3 h; the head-open save kept with its optimizer 10 updates after (`keep/policy_head_open_b12a.pt`); then the lock stage, ~7.6 h |
+| Ramp | `ramp_b12.py`: shut for 10 updates, its value learning the pay; then `H2_GATE_CAP` +0.1 a step, ten steps, one right after each save (`tools/run/ramp_head.py`), ~6.3 h; the head-open save kept with its optimizer 10 updates after (`keep/policy_head_open_b12a.pt`); then the lock stage, ~7 h (the first step at the next save) |
 | Hold rule | as b1.0a: goes on above 40%; a check under 50% flagged in the chat; 40% or less holds the next step |
 | Length | `--minutes 1440` (24 h, owner) |
 | League, checks | the start and v0.6.0's end as anchors; 160 games, about every 20 updates, against the start; every fourth against v0.6.0's end; the panel. Never stopped |
 | Kept | the head-open save, the saves every 10 updates, `keep/policy_end_b12a.pt` + `opt_end_b12a.pt` |
 
-## The schedule (from an 08:30 start on 11-01)
+## The schedule (started 09:08 on 11-01; at ~3.8 min an update, measured without the head; a hold adds to it)
 
-| Time | What |
-|---|---|
-| 08:30 to ~09:10 | gate shut |
-| ~09:10 to ~15:30 | gate 0 → 1 |
-| ~12:30 | possible play test at about half open |
-| ~16:10 | head-open save; play test |
-| ~16:10 to ~23:45 | the lock, 8 → 0 s, a value each ~76 min |
-| to ~08:30 on 11-02 | settles, ~9 h; play test |
+| Time | Update | What |
+|---|---|---|
+| 09:08 to ~09:46 | 0 to 10 | gate shut |
+| ~09:46 to ~15:28 | 10 to 100 | gate 0 → 1, +0.1 each save |
+| ~12:30 | ~55 | possible play test at about half open |
+| ~16:06 | 110 | head-open save; play test |
+| ~16:44 | 120 | lock 6 s |
+| ~18:00 | 140 | lock 4 s |
+| ~19:16 | 160 | lock 3 s |
+| ~20:32 | 180 | lock 2 s |
+| ~21:48 | 200 | lock 1 s |
+| ~23:04 | 220 | lock 0 s |
+| to ~09:08 on 11-02 | ~380 | settles, ~10 h; play test |
 
 Why this ramp: no measurement sets the speed. A check reads about every 75 minutes, so ten steps give ~5 readings, and its value needs a start. The opening in v0.4.4 was 25-minute steps, and its spawn camping came from the rule's earlier fade.
 
@@ -74,9 +81,9 @@ The head plans for frags and winning; the hands keep their item pay and the rule
 | Item prices ✅ | no sign win pay moved his targets: b1.0a's shares at update 160 match v0.6.0's end within a point (the enemy 0.5% to 1.2%), trips 12.3 to 12.7 a minute. So `WIN_ADD` stays. It doesn't measure how he plays once there |
 | Reading a play test ✅ | `tools/run/play_read.py <data folder>`: stacks, items, fights by who is ahead, tunnel vision |
 | The start save ✅ | b1.1a is stopped, and `start.ps1` starts from b1.1 by default. From b1.1a's end instead (lock at 1 s, no lock stage): `start.ps1 -Save policy_end_b11a.pt -Opt opt_end_b11a.pt`. Fair head-to-heads, 11-01: b1.1a's end at 1 s lost 66-94 to b1.1 at 8 s and 68-92 to b1.0a's end at 8 s, so the evidence is for b1.1 |
-| The lock stage's risk ❓ | the same fall, 8 s to 1 s, cost b1.1a about 18 points (41% against its own start) in about 40 updates, and it may need more time than the stage gives. The checks now play each seat at its own lock, so the stage will read honestly; the ramp holds only at 40% or under and flags under 50% |
+| The lock stage's risk ✅ taken (owner's go) | the same fall, 8 s to 1 s, cost b1.1a about 18 points (41% against its own start) in about 40 updates, and it may need more time than the stage gives. The checks now play each seat at its own lock, so the stage will read honestly; the ramp holds only at 40% or under and flags under 50% |
 | A server ⏳ | the head open on a private server, before the first play test: not done |
-| The owner's go ❓ | morning of 11-01 |
+| The owner's go ✅ | 11-01 ~09:07: "start it now" |
 
 Then: `powershell -ExecutionPolicy Bypass -File docs\runs\b1.2\b1.2a\start.ps1`
 
@@ -84,3 +91,4 @@ Then: `powershell -ExecutionPolicy Bypass -File docs\runs\b1.2\b1.2a\start.ps1`
 
 | Time | Change | Why |
 |---|---|---|
+| 11-01, planned | owner: stop at about 20 updates after the gate reaches 1 (update 120, ~18:10); the lock stage does not run; b1.3a starts from that save | the pay table and the costs, then "need to fight", take precedence: [b1.3](../../b1.3/README.md), [b1.4](../../b1.4/README.md) |

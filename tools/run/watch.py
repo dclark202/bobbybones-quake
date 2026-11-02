@@ -57,10 +57,12 @@ def hold_args(pol, ctrl):
     """(b1.2) each side at the target lock it was trained at (its env_vars), not one lock for both"""
     import torch
     out = []
-    for name, p_ in (("--hold", pol), ("--opp-hold", ctrl)):
-        v_ = (torch.load(p_, map_location="cpu", weights_only=False).get("env_vars") or {}).get("INTENT_HOLD")
+    for name, cname, p_ in (("--hold", "--contact", pol), ("--opp-hold", "--opp-contact", ctrl)):
+        ev_ = torch.load(p_, map_location="cpu", weights_only=False).get("env_vars") or {}
+        v_ = ev_.get("INTENT_HOLD")
         if v_ not in (None, ""):
             out += [name, str(v_)]
+        out += [cname, str(ev_.get("CONTACT_FREE") or 0)]      # (b1.3a) and its own chance of a free contact (older saves: none)
     return out
 
 

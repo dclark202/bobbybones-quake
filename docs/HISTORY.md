@@ -10,7 +10,11 @@ Every run gets a row here at its start, and a line in its series' table below (a
 
 | Network | Started from | Run folder (`data/sim_runs/`) | Result, in a word |
 |---|---|---|---|
-| **b1.1** | b1.1a's save of update 140 (`keep/policy_b1.1.pt`) | `duel_gru_b1_1a` | brain and pull out, lock 8 s |
+| b1.2c | b1.1 widened to 980 inputs, the optimizer of b1.1a's update 170 (no head) | `duel_gru_b1_2c` | started 2026-11-01 evening, to 18:00 on 11-02 at most |
+| b1.2b | b1.1, the optimizer of b1.1a's update 170 (no head) | `duel_gru_b1_2b` | 2026-11-01 16:12 to 17:40, update 20: stopped (owner) to give him the small items as inputs; 53.1% against b1.1 at update 10 |
+| not approved | b1.1 | `duel_gru_b1_3a_UNAPPROVED_DO_NOT_USE` | a rejected command that ran, 11-01 15:44 to 16:08; not used |
+| b1.2a | b1.1, the optimizer of b1.1a's update 170 (its own was not kept), the head added shut | `duel_gru_b1_2a` | **unusable:** crashed 2026-11-01 15:18 at update 82; the head and the hands fought over his target logits |
+| **b1.1** | b1.1a's save of update 140 (`keep/policy_b1.1.pt`) | `duel_gru_b1_1a` | brain and pull out, lock 8 s; on the public servers since 2026-11-01 |
 | b1.1a | b1.0a's end, its own optimizer | `duel_gru_b1_1a` | its lock fade left out of b1.1: its end at 1 s lost to b1.1 at 8 s 66-94 and to b1.0a's end at 8 s 68-92, each seat at its own lock; the 73.8% at update 170 was a shared lock's harm to b1.0a |
 | **b1.0a** | v0.6.0's end, its own optimizer | `duel_gru_b1_0a` | success |
 | v0.6.1e | v0.6.1's update 90, v0.6.1's end's optimizer | `duel_gru_v0_6_1e` | stopped early |
@@ -19,7 +23,7 @@ Every run gets a row here at its start, and a line in its series' table below (a
 | v0.6.1b arm B | v0.6.1b's end | `arm_v061b_ent002` (`docs/runs/v0.6.1b/arms/`) | abandoned |
 | v0.6.1b | v0.6.1's end | `duel_gru_v0_6_1b` | failed |
 | v0.6.1 | v0.6.0's end | `duel_gru_v0_6_1` | level, weaker at the end |
-| **v0.6.0** (the retrain; the first run's saves were lost on 10-28) | v0.4.2b's end | `duel_gru_v0_6_0` | good: on the servers |
+| **v0.6.0** (the retrain; the first run's saves were lost on 10-28) | v0.4.2b's end | `duel_gru_v0_6_0` | good: on the servers to 2026-11-01 |
 | v0.5.1 | v0.5.0's end | `duel_gru_v0_5_1` | failed |
 | v0.5.0 | v0.4.2b's end | `duel_gru_v0_5_0` | failed |
 | v0.4.4 | v0.4.3's update 80 | `duel_gru_v0_4_4` | scrapped |
@@ -38,6 +42,7 @@ New names, bN.Nx, and the series to stick with (owner). The plan: [PLAN.md](PLAN
 
 | Version | What | Result | Lesson |
 |---|---|---|---|
+| b1.2c (2026-11-01 evening →) | b1.2b's plan, with the 8 nearest small health and armor places as inputs; firing costs from update 60 ([card](runs/b1.2/b1.2c/CARD.md), [design/SMALL_ITEMS.md](design/SMALL_ITEMS.md)) | running. Before it, b1.1 takes 18 to 31% of the small items within 1 s of his way that would give him points | the prechecks found checks that would have failed all night: a change of inputs must go through the checks, panel and logger as the start script sets them |
 | b1.1a (2026-10-31 21:11 → 11-01 07:27, update 180) | from b1.0a's end, the brain's old belief, the pull toward level and the target lock out, in one run ([runs/b1.1/b1.1a/CARD.md](runs/b1.1/b1.1a/CARD.md)) | brain and pull out at no cost seen: 60.6% against b1.0a's end at u130. Lock to 1 s: trips 12.6 to 20.0, targets reached 40% to 21%, the enemy's share unmoved, frags 1.56 to 1.41. **b1.1 = the save of update 140, before the lock's fade** (owner) | the lock alone doesn't make him fight: with no head to use it the freedom became flicker. A kept save must keep its optimizer (b1.1's own was lost) |
 | b1.0a (2026-10-31 10:56 → 21:00) | from v0.6.0's end, win chance pay added on top of the unchanged table (`WIN_ADD`, live: 0 → 0.15 → 0.33, about a third of the total), `judge_v060_wpn`, `WIN_END`, no rescale; checks against v0.6.0's end only ([runs/b1.0/b1.0a/CARD.md](runs/b1.0/b1.0a/CARD.md)) | stopped at update 160 (owner: a success). Against v0.6.0's end 61.9 / 53.8 / 55.6 / 58.8 / 49.4 / 56.2 / 55.6 / 55.0% at updates 10 to 150 (a save every 20; `WIN_ADD` 0.33 from update 80). End: frags 1.61 a match-minute, rail in hand 0.14, entropy 1.84. The owner: "he's better than any of the v0.6.1x bots"; his biggest weakness, tunnel vision on items | adding win pay to the table kept what replacing the table lost; the rail's slide (0.22 to 0.14) remains unexplained |
 
