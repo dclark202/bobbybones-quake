@@ -1,8 +1,7 @@
-the steps at updates [30, 40, 70, 80]
-PASS four steps
+at update 10: (0.25, 0.21875, 0.95, 0.525, 0.1525) | 20: (0.5, 0.1875, 0.9, 0.35, 0.185) | 40: (1.0, 0.125, 0.8, 0.0, 0.25) | 60: (1.0, 0.125, 0.8, 0.0, 0.25)
 PASS the end values
-PASS at updates 30, 40, 70, 80
-PASS a save and an optimizer before each step
-PASS the stages' saves
-PASS the table's end is the save of update 30, the speed's of 70, the rail's of 100
+PASS the faded save kept with its optimizer
+PASS a straight line: a quarter at update 10, half at 20, done at 40
+PASS the fade's saves kept with their optimizers (10, 20, 30)
+PASS the faded save is the save of update 40
 ALL PASSED

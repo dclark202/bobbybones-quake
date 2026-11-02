@@ -1,4 +1,4 @@
-# b1.2d: the pay table set by the point, the speed pay down, the long rail up
+# b1.2d: the pay table set by the point, the speed pay down, damage taken 0.8, the stack lead out, the long rail up
 
 *2026-11-02 (owner): "I think generally we should trend the speed pay down and spread it out over the small items. But I want to be very careful that combat still wins out in his decisions"; "we have this table as a baseline, and win chance pay does the 'correction' to it"; "I think the rail pay can go up"; "Let's put it in a card for B1.2d to experiment with after this run ends. I think we should nail this down before going to 1.3". The family: [README](../README.md). Why: b1.2c's read (below).*
 
@@ -11,9 +11,9 @@
 | Started from | b1.2c's end ❓ (or its stage save that checks best) |
 | Run | `duel_gru_b1_2d` |
 | Goal | the pay table as the baseline, win chance pay as the correction to it; combat wins his decisions |
-| Stays | combat pay (damage dealt and taken, frags, deaths), `WIN_ADD` 0.33, fairness limits, `!aim default`, b1.2c's end values of the firing costs, contact and jerk |
-| Length | ❓ (owner) |
-| Kept | each stage's end with its optimizer, and the save before each step |
+| Stays | damage dealt, frags, deaths, `WIN_ADD` 0.33, the target-switch cost (0.02; owner, 11-02: "Stack lead only"), fairness limits, `!aim default`, b1.2c's end values of the firing costs, contact and jerk |
+| Length | ❓ (owner; roughly to 21:00 on 11-02, then b1.3) |
+| Kept | each save of the fade with its optimizer, and the first save with it done |
 
 ## Why
 
@@ -51,16 +51,22 @@ At high, the points are paid when taken and charged back as they decay, unless d
 |---|---|---|
 | Speed pay (`SPEED_PAY`) | 0.25 (0.68 a player-minute) | **0.125** (about 0.34) |
 | Long rail (`RAIL_FAR_PAY`, 500 to 800 units) | 0.12 a hit | **0.25** |
+| Damage taken (`DMG_TAKEN_W`, live), on the enemy's damage only (`DMG_ENEMY_ONLY=1`: his own splash, falls and hazards at full cost) | 1.0 | **0.8** (owner, 11-02; was b1.4a's plan) |
+| Stack lead (`STACK_DIFF`, live) | 0.7 | **0**: the win part's judge already counts the stack edge (lasting and decaying parts); it paid for holding stack above 100, against the table's decay rule |
 | Everything else | | unchanged |
 
 ## Combat wins
 
-| | Combat | Items and movement |
-|---|---|---|
-| b1.2c, update 160 (gross, a player-minute) | 2.09 (damage dealt 1.39, frags 0.70) | 1.19 (speed 0.68, items 0.51) |
-| b1.2d (estimated) | 2.09 | about 0.95 (speed 0.34, items about 0.6 net of decay) 🧪 |
+By size (`pay_terms`' size share: both sides of zero-sum terms counted; the watch line's "combat N× items and movement", which counts every item, weapon-order, stack and speed term):
 
-**The rules for this and every later change:** no single pickup above 40% of a kill (a kill pays about 1.0 with its damage; the most is red armor at 0 armor, 0.40), and combat at least twice items and movement together.
+| | Combat (damage dealt and taken, frags, deaths) | Items, weapons, stack, speed | Ratio |
+|---|---|---|---|
+| b1.2c, updates 173 to 182 | 4.44 a player-minute | 2.33 (health and armor 1.03, weapon order 0.24, stack lead 0.37, speed 0.69) | **1.9×** |
+| b1.2d (estimated) | 4.13 (damage taken 1.55 → 1.24) | 1.78 (health and armor about 1.2, weapon order 0.24, stack lead 0, speed 0.34) | **about 2.3×** 🧪 |
+
+(Corrected 11-02: the first estimate left out the weapon-order and stack-lead pays.)
+
+**The rules for this and every later change:** no single pickup above 40% of a kill (a kill pays about 1.0 with its damage; the most is red armor at 0 armor, 0.40), and combat at least twice items and movement together, by size.
 
 ## The equilibrium
 
@@ -68,15 +74,19 @@ Both get back to 100 first: it pays twice what topping up does, so the small ite
 
 ## The schedule
 
-Starts when b1.2c's jerk stage ends (owner, 11-02: "when it ends we do the B1.2d changes ... rather than wait until c ends at 6"; no dry run: "just start it after c and if it looks bad then we'll fix it"). One change a round; a step right after a save; a check of 40% or less against the start holds the next step (`ramp_b12d.py`).
+Starts when b1.2c's jerk stage ends, on the owner's approval after b1.2c's full results (owner, 11-02: "when it ends we do the B1.2d changes ... rather than wait until c ends at 6"; no dry run: "just start it after c and if it looks bad then we'll fix it"; "Do not schedule this"). **All five go at the start and fade together in a straight line over 40 updates from b1.2c's values** (owner, 11-02: "all go at the start, fade over 40 updates from where they are now. All five changes"); `ramp_b12d.py` writes them after each update. A check of 40% or less against the start holds the fade where it is.
 
-| Update | What | Save kept (with its optimizer) |
-|---|---|---|
-| 0 | **the table** in force | `policy_start_b12d.pt` |
-| 30 / 40 | **speed pay** 0.19 / 0.125 | `policy_table_b12d.pt` at 30 |
-| 70 / 80 | **long rail** 0.18 / 0.25 | `policy_speed_b12d.pt` at 70 |
-| 100 | | `policy_rail_b12d.pt` |
-| to the end | settles | |
+| Dial | Update 0 | 10 | 20 | 30 | 40 on |
+|---|---|---|---|---|---|
+| The table (`ITEM_PT_MIX`: the old rates → the table by the point, decay charge with it) | 0 | 0.25 | 0.5 | 0.75 | **1** |
+| `SPEED_PAY` | 0.25 | 0.219 | 0.188 | 0.156 | **0.125** |
+| `DMG_TAKEN_W` | 1.0 | 0.95 | 0.9 | 0.85 | **0.8** |
+| `STACK_DIFF` | 0.7 | 0.525 | 0.35 | 0.175 | **0** |
+| `RAIL_FAR_PAY` | 0.12 | 0.153 | 0.185 | 0.218 | **0.25** |
+
+Saves kept with their optimizers: `policy_start_b12d.pt`, `policy_fade10/20/30_b12d.pt`, `policy_faded_b12d.pt` (update 40). Then it settles to the end.
+
+**Against the owner's one-change rule:** five changes at once. Read by group in the checks and counters, not one at a time; the fade's saves are the way back.
 
 Checks: against the start (b1.2c's end), every fourth against b1.1; the league keeps b1.1, v0.6.0's end and b1.2c's end as anchors.
 
@@ -118,7 +128,8 @@ Checks: against the start (b1.2c's end), every fourth against b1.1; the league k
 | `pay_check.log`: all off = b1.2c's simulator to the bit (git HEAD); the split at one rate = the old rate to the bit; on: the game the same, the pay's change zero-sum in every frame, decay never above what was paid above 100 | ✅ ALL PASSED |
 | `tools/ffa_check.py` | ❌ cannot run: its test map `maps/sim.bsp` is missing (not this change); `pay_check` runs on the group module instead |
 | `make_files.py` → `train.cmd`; settings check against b1.2c's: only `--run`, `--minutes`, `ITEM_PT_*`, `SM_PASS` differ | ✅ |
-| `ramp_b12d.py`, `ramp_test.log` (also with a hold) | ✅ ALL PASSED |
+| `ITEM_PT_MIX` (live): the fade from the old rates; at 0 with enemy-only damage at weight 1 it pays as b1.2c to the bit (`pay_check.log`) | ✅ |
+| `ramp_b12d.py`: the five dials in one 40-update line; `ramp_test.log` (also with a hold) | ✅ ALL PASSED |
 | `start.ps1`: refuses on a trainer running, b1.2c's dials not at their ends, a failed settings check or log; controls b1.2c's end and b1.1 widened | ✅ parsed; a check job with b1.2d's settings against b1.1 widened played |
 | A dry run on the card | not done (owner: "just start it after c") |
 | Length | ❓ `make_files.py <minutes>` at the start; 720 written as the default |

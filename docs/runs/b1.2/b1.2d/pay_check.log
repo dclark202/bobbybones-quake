@@ -1,3 +1,4 @@
+PASS bloodrun the fade's start (ITEM_PT_MIX 0, enemy-only damage at weight 1) pays as HEAD (largest difference 0.0e+00)
 PASS bloodrun off: inputs, pay and ends as HEAD
 PASS bloodrun the split at one rate pays as HEAD's rate (largest difference 0.0e+00)
 PASS bloodrun on: the game the same
@@ -6,6 +7,7 @@ PASS bloodrun on: points a player-minute: to 100 21.3, over 100 14.8, decayed 6.
 bloodrun on: small places near his way (random play): 101 passes, 56 taken (55%)
 PASS bloodrun on: passes counted, taken no more than passes
 PASS bloodrun the live names read ([np.float64(0.004), np.float64(0.002), np.float64(0.002)])
+PASS cure the fade's start (ITEM_PT_MIX 0, enemy-only damage at weight 1) pays as HEAD (largest difference 0.0e+00)
 PASS cure off: inputs, pay and ends as HEAD
 PASS cure the split at one rate pays as HEAD's rate (largest difference 0.0e+00)
 PASS cure on: the game the same

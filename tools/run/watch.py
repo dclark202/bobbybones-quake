@@ -145,7 +145,7 @@ def collapse_line(L):
     vw = L[-1].get("value_warm") or {}
     sz = (L[-1].get("pay_terms") or {}).get("size_share") or {}      # (b1.2d) combat against items and movement, by size (both sides' halves)
     cb_ = sum(sz.get(k_, 0.0) for k_ in ("dmg_dealt", "dmg_taken", "frag", "death"))
-    im_ = sum(v_ for k_, v_ in sz.items() if k_.startswith("item") or k_ in ("speed", "speed_run"))
+    im_ = sum(v_ for k_, v_ in sz.items() if k_.startswith("item") or k_ in ("speed", "speed_run", "big_order", "stack_diff", "stack_keep"))
     sp_ = L[-1].get("sm_pass") or {}
     ps_ = sum(v_[0] for v_ in sp_.values())
     tk_ = sum(v_[0] * v_[1] for v_ in sp_.values()) / ps_ if ps_ else None

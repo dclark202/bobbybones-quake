@@ -1,4 +1,4 @@
-# b1.2d's start (owner, 2026-11-02; docs/runs/b1.2/b1.2d/CARD.md): from b1.2c's end, the pay table by the point at once; the speed pay down, then the long rail up, by the ramp.
+# b1.2d's start (owner, 2026-11-02; docs/runs/b1.2/b1.2d/CARD.md): from b1.2c's end, five pay changes faded in together over 40 updates by the ramp: the table by the point, speed pay, damage taken, stack lead, long rail.
 # Refuses unless: no trainer runs; the start save and its optimizer, and b1.2c's widened controls, are there; b1.2c's dials ended at their end values; the settings check passes against b1.2c's command;
 # pay_check.log and ramp_test.log end ALL PASSED; the run folder is new.
 # Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.2\b1.2d\start.ps1 [-From <a b1.2c save, default keep\policy_nojerk_b12c.pt>]
@@ -23,7 +23,7 @@ $CB11 = Join-Path $K0 "control_b11.pt"; $CV60 = Join-Path $K0 "control_v060_end.
 foreach ($p in $SRC, $SRCO, $CB11, $CV60) { if (-not (Test-Path $p)) { Log "MISSING ${p}: not started"; exit 1 } }
 & $PY -c "import json, sys; d = json.load(open(sys.argv[1])); bad = {k: d.get(k) for k, v in (('COST_FIRE_W', 0.0), ('COST_JERK_W', 0.0), ('CONTACT_FREE', 1.0)) if abs(float(d.get(k, -1)) - v) > 1e-9}; assert not bad, ('b1.2c did not end its dials', bad); print('b1.2c ended its dials')" (Join-Path $R0 "live.json") | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "b1.2c's dials are not at their ends (a start from an earlier stage needs its own dials): not started"; exit 1 }
-& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\b1.2\b1.2c\train.cmd") "--allow=--run,--minutes,ITEM_PT_LO,ITEM_PT_HI,ITEM_DECAY,SM_PASS" | ForEach-Object { Log $_ }
+& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\b1.2\b1.2c\train.cmd") "--allow=--run,--minutes,ITEM_PT_LO,ITEM_PT_HI,ITEM_DECAY,SM_PASS,DMG_ENEMY_ONLY" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED: not started"; exit 1 }
 foreach ($f in (Join-Path $HERE "pay_check.log"), (Join-Path $HERE "ramp_test.log")) { if (-not (Test-Path $f) -or -not ((Get-Content $f -Tail 1) -like "*ALL PASSED*")) { Log "$f has not passed: not started"; exit 1 } }
 if (Test-Path (Join-Path $R1 "policy.pt")) { Log "$R1 already has a policy.pt: not started (nothing overwritten)"; exit 1 }
@@ -40,7 +40,7 @@ Copy-Item $CB11 $CR
 Copy-Item $CB11 (Join-Path $R1 "snapshots\anchor_b11.pt")
 Copy-Item $CV60 (Join-Path $R1 "snapshots\anchor_v060_end.pt")
 Copy-Item $SRC (Join-Path $R1 "snapshots\anchor_b12c.pt")
-& $PY -c "import json, sys; d = json.load(open(sys.argv[1])); d.update(ITEM_PT_LO=0.004, ITEM_PT_HI=0.002, ITEM_DECAY=0.002, SPEED_PAY=0.25, RAIL_FAR_PAY=0.12); json.dump(d, open(sys.argv[2], 'w')); print('live.json:', d)" (Join-Path $R0 "live.json") (Join-Path $R1 "live.json") | ForEach-Object { Log $_ }
+& $PY -c "import json, sys; d = json.load(open(sys.argv[1])); d.update(ITEM_PT_LO=0.004, ITEM_PT_HI=0.002, ITEM_DECAY=0.002, ITEM_PT_MIX=0.0, SPEED_PAY=0.25, DMG_TAKEN_W=1.0, STACK_DIFF=0.7, RAIL_FAR_PAY=0.12); json.dump(d, open(sys.argv[2], 'w')); print('live.json:', d)" (Join-Path $R0 "live.json") (Join-Path $R1 "live.json") | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "live.json not made: not started"; exit 1 }
 Copy-Item (Join-Path $R0 "live_settings.env") (Join-Path $R1 "live_settings.env")
 Log ("from " + $SRC)
@@ -57,4 +57,4 @@ Start-Sleep 5
 $r = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "ramp_b12d.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "ramp_stdout.log") -RedirectStandardError (Join-Path $WD "ramp_stderr.log")
 $s = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\selfplay_loop.py"), $RUN, "--every", "40", "--games", "5" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "selfplay_stdout.log") -RedirectStandardError (Join-Path $WD "selfplay_stderr.log")
 $s.ProcessorAffinity = [IntPtr]0xC03C3
-Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (the table from the start; speed at 30 and 40, rail at 70 and 80; held only at a check of 40% or less) | self-play logger " + $s.Id)
+Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (five dials faded together over updates 0 to 40; held only at a check of 40% or less) | self-play logger " + $s.Id)

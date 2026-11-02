@@ -17,8 +17,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 CMD = os.path.join(ROOT, "docs", "runs", "b1.2", "b1.2c", "train.cmd")
 RUN0 = os.path.join(ROOT, "data", "sim_runs", "duel_gru_v0_6_0")
 FRAMES = 2400
-ON = dict(ITEM_PT_LO="0.004", ITEM_PT_HI="0.002", ITEM_DECAY="0.002", SM_PASS="1")
-MODES = {"off": {}, "rate": dict(ITEM_RATE_HP="0.0025", ITEM_RATE_AR="0.0025"),
+ON = dict(ITEM_PT_LO="0.004", ITEM_PT_HI="0.002", ITEM_DECAY="0.002", SM_PASS="1", DMG_ENEMY_ONLY="1")
+MODES = {"off": {}, "rate": dict(ITEM_RATE_HP="0.0025", ITEM_RATE_AR="0.0025"), "mix0": dict(ON, ITEM_PT_MIX="0"),
          "split": dict(ITEM_RATE_HP="0", ITEM_RATE_AR="0", ITEM_PT_LO="0.0025", ITEM_PT_HI="0.0025"), "on": ON}
 
 
@@ -78,11 +78,13 @@ def main():
 
     for mp in ("bloodrun", "cure"):
         res = {}
-        for name, mod, mode in (("head", head, "off"), ("off", now, "off"), ("head_rate", head, "rate"), ("split", now, "split"), ("on", now, "on")):
+        for name, mod, mode in (("head", head, "off"), ("off", now, "off"), ("head_rate", head, "rate"), ("split", now, "split"), ("mix0", now, "mix0"), ("on", now, "on")):
             o_ = os.path.join(tmp, "{}_{}.npz".format(mp, name))
             subprocess.check_call([sys.executable, os.path.abspath(__file__), "--side", mod, mp, o_, mode], env=env)
             res[name] = np.load(o_)
         H, O, HR, S, N = res["head"], res["off"], res["head_rate"], res["split"], res["on"]
+        d0_ = float(np.abs(res["mix0"]["rew"] - H["rew"]).max())
+        check("{} the fade's start (ITEM_PT_MIX 0, enemy-only damage at weight 1) pays as HEAD (largest difference {:.1e})".format(mp, d0_), d0_ < 1e-5 and np.array_equal(res["mix0"]["obs"], H["obs"]))
         check("{} off: inputs, pay and ends as HEAD".format(mp), np.array_equal(H["obs"], O["obs"]) and np.array_equal(H["rew"], O["rew"]) and np.array_equal(H["done"], O["done"]))
         d_ = float(np.abs(HR["rew"] - S["rew"]).max())
         check("{} the split at one rate pays as HEAD's rate (largest difference {:.1e})".format(mp, d_), d_ < 1e-6 and np.array_equal(HR["obs"], S["obs"]))

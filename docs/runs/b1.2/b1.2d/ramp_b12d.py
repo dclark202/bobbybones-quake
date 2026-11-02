@@ -1,7 +1,8 @@
-"""b1.2d's schedule (owner, 2026-11-02; CARD.md): the table is in force from the start; this moves two live dials, a step right after a save, at least --min-s apart: SPEED_PAY 0.19, 0.125 at
-updates 30 and 40; RAIL_FAR_PAY 0.18, 0.25 at updates 70 and 80. The save before each step is kept with its optimizer (keep/policy_step<n>_b12d.pt), the stages' ends under their names, the last
-two saves after its last step. A check of 40% or less against the start holds the next step until a later check is above it; a check under 50% is flagged in watch.log. Nothing here stops the run.
-    python docs/runs/b1.2/b1.2d/ramp_b12d.py <run> [--min-s S] [--poll S] [--settle S] [--dir D]"""
+"""b1.2d's fade (owner, 2026-11-02: "all go at the start, fade over 40 updates from where they are now. All five changes"; CARD.md): five live dials move together in a straight line from b1.2c's
+values to b1.2d's over updates 0 to 40, written after each new update (live.json, read between rollouts): the table by the point (ITEM_PT_MIX 0 -> 1), SPEED_PAY 0.25 -> 0.125, DMG_TAKEN_W 1 -> 0.8,
+STACK_DIFF 0.7 -> 0, RAIL_FAR_PAY 0.12 -> 0.25. Each save during the fade is kept with its optimizer (keep/policy_fade<update>_b12d.pt), and the first save with the fade done as keep/policy_faded_b12d.pt.
+A check of 40% or less against the start holds the fade where it is until a later check is above it; a check under 50% is flagged in watch.log. Nothing here stops the run.
+    python docs/runs/b1.2/b1.2d/ramp_b12d.py <run> [--over N] [--poll S] [--settle S] [--dir D]"""
 import argparse
 import json
 import os
@@ -10,18 +11,15 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-STEPS = [("SPEED_PAY", 0.19), ("SPEED_PAY", 0.125), ("RAIL_FAR_PAY", 0.18), ("RAIL_FAR_PAY", 0.25)]
-GAPS = (3, 1, 3, 1)                                          # saves before each step (a save every 10 updates)
-NAMED = {0: "policy_table_b12d.pt", 2: "policy_speed_b12d.pt"}     # (the save before step n, counted from 0: a stage's end)
-END = "policy_rail_b12d.pt"                                  # (two saves after the last step)
-START = {"SPEED_PAY": 0.25, "RAIL_FAR_PAY": 0.12, "ITEM_PT_LO": 0.004, "ITEM_PT_HI": 0.002, "ITEM_DECAY": 0.002}
+DIALS = {"ITEM_PT_MIX": (0.0, 1.0), "SPEED_PAY": (0.25, 0.125), "DMG_TAKEN_W": (1.0, 0.8), "STACK_DIFF": (0.7, 0.0), "RAIL_FAR_PAY": (0.12, 0.25)}
+FIXED = {"ITEM_PT_LO": 0.004, "ITEM_PT_HI": 0.002, "ITEM_DECAY": 0.002}
 HOLD_AT = 0.40
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run")
-    ap.add_argument("--min-s", type=float, default=25 * 60)
+    ap.add_argument("--over", type=int, default=40)
     ap.add_argument("--poll", type=float, default=30)
     ap.add_argument("--settle", type=float, default=20)
     ap.add_argument("--dir", default="")
@@ -67,53 +65,52 @@ def main():
         shutil.copy2(POL, os.path.join(KEEP, name))
         shutil.copy2(OPT, os.path.join(KEEP, name.replace("policy_", "opt_", 1)))
 
+    def write(f):
+        d = json.load(open(LIVE, encoding="utf-8"))
+        for k_, (s_, e_) in DIALS.items():
+            d[k_] = round(s_ + f * (e_ - s_), 6)
+        with open(LIVE + ".tmp", "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(d))
+        os.replace(LIVE + ".tmp", LIVE)
+        return {k_: d[k_] for k_ in DIALS}
+
     cur = json.load(open(LIVE, encoding="utf-8"))
-    for k_, v_ in START.items():
+    for k_, (s_, _) in DIALS.items():
+        assert abs(float(cur.get(k_, -1)) - s_) < 1e-9, "{} is {} in live.json, not {}".format(k_, cur.get(k_), s_)
+    for k_, v_ in FIXED.items():
         assert abs(float(cur.get(k_, -1)) - v_) < 1e-9, "{} is {} in live.json, not {}".format(k_, cur.get(k_), v_)
     threading.Thread(target=flags, daemon=True).start()
-    log("ramp_b12d on for {}: {} steps, saves between them {}, at least {:g} min apart; held at a check of {:.0%} or less".format(a.run, len(STEPS), GAPS, a.min_s / 60, HOLD_AT))
-    seen, due, t_last, i, due_end = mtime(), GAPS[0], 0.0, 0, 2
-    while i < len(STEPS):
-        time.sleep(a.poll)
-        m_ = mtime()
-        if m_ <= seen or time.time() - m_ < a.settle:
-            continue
-        seen = m_
-        due -= 1
-        L = jl(MET)
-        n = int(L[-1]["update"]) if L else 0
-        if due > 0 or time.time() - t_last < a.min_s:
-            log("save at update {}: no step".format(n))
-            continue
-        c_ = jl(os.path.join(WD, "checks_prev.jsonl"))
-        if c_ and c_[-1]["won"] / max(1, c_[-1]["won"] + c_[-1]["lost"]) <= HOLD_AT:
-            log("HOLD at the save of update {}: the last check {}-{} is {:.0%} or less".format(n, c_[-1]["won"], c_[-1]["lost"], HOLD_AT))
-            continue
-        name, val = STEPS[i]
-        ke_ = "policy_step{}_b12d.pt".format(i)
-        keep(ke_)
-        if i in NAMED:
-            keep(NAMED[i])
-        d = json.load(open(LIVE, encoding="utf-8"))
-        d[name] = val
-        with open(LIVE + ".tmp", "w", encoding="utf-8") as f:
-            f.write(json.dumps(d))
-        os.replace(LIVE + ".tmp", LIVE)
-        log("RAMP {} {} (step {} of {}, right after the save of update {}, kept as keep/{}; last check {})".format(name, val, i + 1, len(STEPS), n, ke_, "{}-{}".format(c_[-1]["won"], c_[-1]["lost"]) if c_ else "none yet"))
-        i, t_last = i + 1, time.time()
-        due = GAPS[i] if i < len(STEPS) else 0
-    log("ramp_b12d: every step taken; the checks are still flagged")
-    while due_end > 0:                                       # the last stage's end: two saves after its last step
-        time.sleep(a.poll)
-        m_ = mtime()
-        if m_ <= seen or time.time() - m_ < a.settle:
-            continue
-        seen = m_
-        due_end -= 1
-    keep(END)
-    log("ramp_b12d done: the last stage's end kept as keep/" + END)
+    log("ramp_b12d on for {}: {} dials from b1.2c's values to b1.2d's over {} updates: {}; held at a check of {:.0%} or less".format(a.run, len(DIALS), a.over, DIALS, HOLD_AT))
+    f, done_n, seen, held, faded_kept = 0.0, 0, mtime(), False, False
     while True:
         time.sleep(a.poll)
+        L = jl(MET)
+        n = int(L[-1]["update"]) if L else 0
+        c_ = jl(os.path.join(WD, "checks_prev.jsonl"))
+        low = bool(c_) and c_[-1]["won"] / max(1, c_[-1]["won"] + c_[-1]["lost"]) <= HOLD_AT
+        if low != held:
+            held = low
+            log(("HOLD at update {}: the last check {}-{} is {:.0%} or less; the fade stays at {:.3f}" if low else "the hold lifts at update {}: the last check {}-{} is above {:.0%}; the fade goes on from {:.3f}").format(
+                n, c_[-1]["won"], c_[-1]["lost"], HOLD_AT, f))
+        if n > done_n and f < 1.0:
+            if not held:
+                f = min(1.0, f + (n - done_n) / float(a.over))
+                v_ = write(f)
+                log("FADE {:.3f} after update {}: {}".format(f, n, v_))
+            done_n = n
+        elif n > done_n:
+            done_n = n
+        m_ = mtime()
+        if m_ > seen and time.time() - m_ >= a.settle:
+            seen = m_
+            if f < 1.0 or not faded_kept:
+                if f >= 1.0:
+                    keep("policy_faded_b12d.pt")
+                    faded_kept = True
+                    log("the fade done: kept keep/policy_faded_b12d.pt at the save of update {}".format(n))
+                else:
+                    keep("policy_fade{}_b12d.pt".format(n))
+                    log("save at update {} kept with its optimizer (fade {:.3f})".format(n, f))
 
 
 if __name__ == "__main__":

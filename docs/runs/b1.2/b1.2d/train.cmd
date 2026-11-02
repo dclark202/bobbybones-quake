@@ -18,7 +18,7 @@ rem  ramp_b11.py). b1.0a's command with: run duel_gru_b1_2d; --minutes 885; --br
 rem ==== b1.2b (owner, 2026-11-01; docs/runs/b1.2/b1.2b/CARD.md): from b1.1, no head: the health and armor table at once; the firing costs, contact freedom, the jerk cost, by live dials (ramp_b12b.py). b1.1a's command with: run duel_gru_b1_2d;
 rem  --minutes; ITEM_RATE_HP, ITEM_RATE_AR. Made by make_files.py.
 rem ==== b1.2c (owner, 2026-11-01; docs/runs/b1.2/b1.2c/CARD.md): b1.2b's plan, with every small health and armor item as an input, from the start. b1.2b's command with: run duel_gru_b1_2d; --minutes; SM_ITEMS=1; --gate-open 120 from the start. Made by make_files.py.
-rem ==== b1.2d (owner, 2026-11-02; docs/runs/b1.2/b1.2d/CARD.md): from b1.2c's end, the pay table by the point (the line at 100, the decay charged back), then the speed pay down, then the long rail up (ramp_b12d.py). b1.2c's command with: run duel_gru_b1_2d; --minutes; ITEM_PT_LO, ITEM_PT_HI, ITEM_DECAY, SM_PASS. Made by make_files.py.
+rem ==== b1.2d (owner, 2026-11-02; docs/runs/b1.2/b1.2d/CARD.md): from b1.2c's end, five pay changes faded in together over 40 updates (ramp_b12d.py): the pay table by the point (the line at 100, the decay charged back), the speed pay down, damage taken 0.8 on the enemy's damage, the stack lead out, the long rail up. b1.2c's command with: run duel_gru_b1_2d; --minutes; ITEM_PT_LO, ITEM_PT_HI, ITEM_DECAY, SM_PASS, DMG_ENEMY_ONLY. Made by make_files.py.
 rem the repo root: this file lives in docs\runs\b1.2\b1.2d\
 set ROOT=%~dp0..\..\..\..
 cd /d %ROOT%
@@ -333,6 +333,8 @@ set ITEM_PT_LO=0.004
 set ITEM_PT_HI=0.002
 set ITEM_DECAY=0.002
 set SM_PASS=1
+rem (b1.2d) the damage-taken weight (live, faded 1 -> 0.8) on the enemy's damage only: his own splash, falls and hazards at full cost
+set DMG_ENEMY_ONLY=1
 set TELEFRAG=1
 set JRUN_SPEED_BACK=1
 set SMALL_ZERO=1

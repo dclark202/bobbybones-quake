@@ -1001,6 +1001,9 @@ PICK_BY = {("hp", 5): 0, ("hp", 25): 1, ("hp", 50): 2, ("hp", 100): 3, ("ar", 5)
 ITEM_PT_LO = float(os.environ.get("ITEM_PT_LO") or 0.0)
 ITEM_PT_HI = float(os.environ.get("ITEM_PT_HI") or 0.0)
 ITEM_DECAY = float(os.environ.get("ITEM_DECAY") or 0.0)
+#   ITEM_PT_MIX   (live; 1 by default) the fade into the table by the point: a pickup pays MIX x the table's + (1 - MIX) x
+#                 ITEM_RATE_HP / _AR's, and the decay costs MIX x ITEM_DECAY (b1.2d, owner: "fade over 40 updates from where they are now")
+ITEM_PT_MIX = float(os.environ.get("ITEM_PT_MIX") or 1.0)
 SM_PASS = float(os.environ.get("SM_PASS") or 0.0) > 0
 # v15 (2026-10-10), both off by default:
 #   JUMPS=1       the pros' jumps that a walker cannot make (tools/pro_gaps.py -> sim/pro_gaps/<map>.json) are links of a
@@ -2131,7 +2134,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "INTENT_HOLD",                                                                                         # (b1.1a, owner 2026-10-31: the target lock faded, a PLAY_VAR too)
              "CONTACT_FREE",                                                                                        # (b1.4a, the chance a contact is free of the lock)
              "ITEM_RATE_HP", "ITEM_RATE_AR", "COST_FIRE_W", "COST_JERK_W",                                          # (b1.3a, a point of health or armor gained; the costs' factors)
-             "ITEM_PT_LO", "ITEM_PT_HI", "ITEM_DECAY",                                                              # (b1.2d, the table by the point)
+             "ITEM_PT_LO", "ITEM_PT_HI", "ITEM_DECAY", "ITEM_PT_MIX",                                               # (b1.2d, the table by the point)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
              "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
@@ -2176,6 +2179,10 @@ def live_values(get):
         v[k_] = float(get(k_) or 0.0)
         if not 0.0 <= v[k_] <= 0.05:
             raise ValueError(k_ + " must be within 0 .. 0.05")
+    mx_ = get("ITEM_PT_MIX")                                 # (b1.2d) the fade into the table by the point; unset: 1
+    v["ITEM_PT_MIX"] = float(mx_) if (mx_ or "").strip() else 1.0
+    if not 0.0 <= v["ITEM_PT_MIX"] <= 1.0:
+        raise ValueError("ITEM_PT_MIX must be within 0 .. 1")
     for k_ in ("COST_FIRE_W", "COST_JERK_W"):                # (b1.3a) the costs' factors, live; unset: 1
         cw_ = get(k_)
         v[k_] = float(cw_) if (cw_ or "").strip() else 1.0
@@ -12769,6 +12776,8 @@ class DuelEnv:
                         old_ = float(self.hp[i] if kind == "hp" else self.armor[i]) - float(gain)
                         lo_ = min(max(0.0, 100.0 - old_), float(gain), float(pts_))
                         fl_r = lo_ * ITEM_PT_LO + (float(pts_) - lo_) * ITEM_PT_HI
+                        if ITEM_PT_MIX < 1.0:                               # (ITEM_PT_MIX) the fade from ITEM_RATE's pay
+                            fl_r = ITEM_PT_MIX * fl_r + (1.0 - ITEM_PT_MIX) * float(pts_) * (ITEM_RATE_HP if kind == "hp" else ITEM_RATE_AR)
                         self.stats["item_pt"][0] += lo_
                         self.stats["item_pt"][1] += float(pts_) - lo_
                         if ITEM_DECAY > 0:                                  # (ITEM_DECAY) what was paid above 100, to charge back as it decays
@@ -12835,7 +12844,7 @@ class DuelEnv:
             dec_ *= (self.run_k[:n_] < 0) & ~np.asarray(self.jrun[:n_], bool) & ~np.asarray(self.items_room[:n_], bool)
             if dec_.any():
                 g_ = self._others_arr().shape[1] + 1
-                c_ = ITEM_DECAY * dec_
+                c_ = ITEM_DECAY * min(1.0, ITEM_PT_MIX) * dec_
                 back_ = np.repeat(c_.reshape(-1, g_).sum(1), g_) - c_    # (each mate gains it all, as the pickups' zero-sum)
                 reward[:n_] += back_ - c_
                 r_long[:n_] += back_ - c_
