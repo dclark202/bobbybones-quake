@@ -1,5 +1,5 @@
-"""b1.2d's fade (owner, 2026-11-02: "all go at the start, fade over 40 updates from where they are now. All five changes"; CARD.md): five live dials move together in a straight line from b1.2c's
-values to b1.2d's over updates 0 to 40, written after each new update (live.json, read between rollouts): the table by the point (ITEM_PT_MIX 0 -> 1), SPEED_PAY 0.25 -> 0.125, DMG_TAKEN_W 1 -> 0.8,
+"""b1.2d's fade (owner, 2026-11-02: "all go at the start, fade over 40 updates from where they are now. All five changes"; then "fade starts at u10 and takes 60 updates"; CARD.md): five live dials move together in a straight line from b1.2c's
+values to b1.2d's over updates 10 to 70 (--start, --over), written after each new update (live.json, read between rollouts): the table by the point (ITEM_PT_MIX 0 -> 1), SPEED_PAY 0.25 -> 0.125, DMG_TAKEN_W 1 -> 0.8,
 STACK_DIFF 0.7 -> 0, RAIL_FAR_PAY 0.12 -> 0.25. Each save during the fade is kept with its optimizer (keep/policy_fade<update>_b12d.pt), and the first save with the fade done as keep/policy_faded_b12d.pt.
 A check of 40% or less against the start holds the fade where it is until a later check is above it; a check under 50% is flagged in watch.log. Nothing here stops the run.
     python docs/runs/b1.2/b1.2d/ramp_b12d.py <run> [--over N] [--poll S] [--settle S] [--dir D]"""
@@ -19,7 +19,8 @@ HOLD_AT = 0.40
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run")
-    ap.add_argument("--over", type=int, default=40)
+    ap.add_argument("--start", type=int, default=10)
+    ap.add_argument("--over", type=int, default=60)
     ap.add_argument("--poll", type=float, default=30)
     ap.add_argument("--settle", type=float, default=20)
     ap.add_argument("--dir", default="")
@@ -80,7 +81,7 @@ def main():
     for k_, v_ in FIXED.items():
         assert abs(float(cur.get(k_, -1)) - v_) < 1e-9, "{} is {} in live.json, not {}".format(k_, cur.get(k_), v_)
     threading.Thread(target=flags, daemon=True).start()
-    log("ramp_b12d on for {}: {} dials from b1.2c's values to b1.2d's over {} updates: {}; held at a check of {:.0%} or less".format(a.run, len(DIALS), a.over, DIALS, HOLD_AT))
+    log("ramp_b12d on for {}: {} dials from b1.2c's values to b1.2d's over {} updates from update {}: {}; held at a check of {:.0%} or less".format(a.run, len(DIALS), a.over, a.start, DIALS, HOLD_AT))
     f, done_n, seen, held, faded_kept = 0.0, 0, mtime(), False, False
     while True:
         time.sleep(a.poll)
@@ -93,8 +94,9 @@ def main():
             log(("HOLD at update {}: the last check {}-{} is {:.0%} or less; the fade stays at {:.3f}" if low else "the hold lifts at update {}: the last check {}-{} is above {:.0%}; the fade goes on from {:.3f}").format(
                 n, c_[-1]["won"], c_[-1]["lost"], HOLD_AT, f))
         if n > done_n and f < 1.0:
-            if not held:
-                f = min(1.0, f + (n - done_n) / float(a.over))
+            inc_ = max(0, n - max(done_n, a.start))          # (--start) the fade begins after this update
+            if not held and inc_ > 0:
+                f = min(1.0, f + inc_ / float(a.over))
                 v_ = write(f)
                 log("FADE {:.3f} after update {}: {}".format(f, n, v_))
             done_n = n

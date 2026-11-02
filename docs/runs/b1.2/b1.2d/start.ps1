@@ -57,8 +57,15 @@ $env:CHECK_BATCH = "4"; $env:PANEL_PAR = "2"; $env:PANEL_PAR_BUSY = "1"
 $w = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\watch.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "watch_stdout.log") -RedirectStandardError (Join-Path $WD "watch_stderr.log")
 $w.ProcessorAffinity = $CHK
 Start-Sleep 5
-$r = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "ramp_b12d.py"), $RUN -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "ramp_stdout.log") -RedirectStandardError (Join-Path $WD "ramp_stderr.log")
+$r = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "ramp_b12d.py"), $RUN, "--start", "10", "--over", "60" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "ramp_stdout.log") -RedirectStandardError (Join-Path $WD "ramp_stderr.log")
 $r.ProcessorAffinity = $CHK
 $s = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\selfplay_loop.py"), $RUN, "--every", "40", "--games", "5", "--par", "1" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "selfplay_stdout.log") -RedirectStandardError (Join-Path $WD "selfplay_stderr.log")
 $s.ProcessorAffinity = $CHK
-Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (five dials faded together over updates 0 to 40; held only at a check of 40% or less) | self-play logger " + $s.Id)
+$fc = $null
+if (-not (Test-Path (Join-Path $R0 "watch\final_check_started"))) {           # b1.2c's final check of its update 250 save, once, beside b1.2d on the check cores (owner, 2026-11-02)
+    Set-Content -Path (Join-Path $R0 "watch\final_check_started") -Value (Get-Date -Format "MM-dd HH:mm:ss")
+    $fc = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "final_check_b12c.py") -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "final_check_b12c_stdout.log") -RedirectStandardError (Join-Path $WD "final_check_b12c_stderr.log")
+    $fc.ProcessorAffinity = $CHK
+    Log ("b1.2c's final check of update 250 started: " + $fc.Id + " (results in duel_gru_b1_2c\watch\watch.log)")
+}
+Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (five dials faded together over updates 10 to 70; held only at a check of 40% or less) | self-play logger " + $s.Id)

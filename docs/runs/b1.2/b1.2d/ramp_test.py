@@ -1,4 +1,4 @@
-"""ramp_b12d.py on a fake run folder: the five dials in a straight line over 40 updates, from b1.2c's values to b1.2d's; a save and optimizer kept at each save of the fade, and the first save with it done; with "hold": the fade frozen while a check stands at 40% or less, going on after a later check, a flag under 50%.
+"""ramp_b12d.py on a fake run folder: the five dials in a straight line over updates 10 to 70, from b1.2c's values to b1.2d's; a save and optimizer kept at each save of the fade, and the first save with it done; with "hold": the fade frozen while a check stands at 40% or less, going on after a later check, a flag under 50%.
     python docs/runs/b1.2/b1.2d/ramp_test.py <empty scratch folder> [hold] > docs/runs/b1.2/b1.2d/ramp_test.log"""
 import json
 import os
@@ -33,8 +33,8 @@ time.sleep(0.2)
 p = subprocess.Popen([sys.executable, os.path.join(HERE, "ramp_b12d.py"), "fake", "--dir", D, "--poll", "0.05", "--settle", "0"])
 time.sleep(1)
 seq = []
-holds = {10: (60, 100), 20: (70, 90)} if HOLD else {}
-for u in range(1, 61):
+holds = {30: (60, 100), 50: (70, 90)} if HOLD else {}
+for u in range(1, 91):
     if u in holds:
         check(*holds[u], u)
         time.sleep(0.4)
@@ -53,20 +53,20 @@ def need(name, c):
 
 
 end = (1.0, 0.125, 0.8, 0.0, 0.25)
-print("at update 10:", seq[9][1:], "| 20:", seq[19][1:], "| 40:", seq[39][1:], "| 60:", seq[59][1:])
+print("at update 10:", seq[9][1:], "| 40:", seq[39][1:], "| 70:", seq[69][1:], "| 90:", seq[89][1:])
 need("the end values", seq[-1][1:] == end)
 k = os.listdir(os.path.join(D, "keep"))
 need("the faded save kept with its optimizer", "policy_faded_b12d.pt" in k and "opt_faded_b12d.pt" in k)
 if HOLD:
-    frozen = [s for s in seq if 10 <= s[0] < 20]
+    frozen = [s for s in seq if 30 <= s[0] < 50]
     need("no movement while the check stood at 37.5%", len(set(s[1:] for s in frozen)) == 1)
     need("the fade goes on after the later check", seq[-1][1:] == end)
     w = open(os.path.join(D, "watch", "watch.log")).read()
-    need("a flag under 50%, a HOLD logged", "FLAG check update 20" in w and "HOLD at update" in w)
+    need("a flag under 50%, a HOLD logged", "FLAG check update 50" in w and "HOLD at update" in w)
 else:
-    need("a straight line: a quarter at update 10, half at 20, done at 40",
-         abs(seq[9][1] - 0.25) < 1e-6 and abs(seq[19][1] - 0.5) < 1e-6 and seq[39][1:] == end and abs(seq[19][2] - 0.1875) < 1e-6 and abs(seq[19][3] - 0.9) < 1e-6 and abs(seq[19][4] - 0.35) < 1e-6 and abs(seq[19][5] - 0.185) < 1e-6)
-    need("the fade's saves kept with their optimizers (10, 20, 30)", all("policy_fade{}_b12d.pt".format(u) in k and "opt_fade{}_b12d.pt".format(u) in k for u in (10, 20, 30)))
-    need("the faded save is the save of update 40", open(os.path.join(D, "keep", "policy_faded_b12d.pt")).read() == "40")
+    need("nothing moves to update 10; a straight line: half at 40, done at 70",
+         seq[9][1:] == (0.0, 0.25, 1.0, 0.7, 0.12) and abs(seq[39][1] - 0.5) < 1e-6 and seq[69][1:] == end and abs(seq[39][2] - 0.1875) < 1e-6 and abs(seq[39][3] - 0.9) < 1e-6 and abs(seq[39][4] - 0.35) < 1e-6 and abs(seq[39][5] - 0.185) < 1e-6)
+    need("the fade's saves kept with their optimizers (10 to 60)", all("policy_fade{}_b12d.pt".format(u) in k and "opt_fade{}_b12d.pt".format(u) in k for u in (10, 20, 30, 40, 50, 60)))
+    need("the faded save is the save of update 70", open(os.path.join(D, "keep", "policy_faded_b12d.pt")).read() == "70")
 print("ALL PASSED" if ok else "FAILED", flush=True)
 sys.exit(0 if ok else 1)

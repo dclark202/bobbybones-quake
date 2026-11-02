@@ -8,11 +8,12 @@
 
 | | |
 |---|---|
-| Started from | b1.2c's end ❓ (or its stage save that checks best) |
+| Started from | **b1.2c's save of update 250** (`duel_gru_b1_2c/keep/policy_nojerk_b12c.pt`, with its optimizer), the first save after its jerk fade ended (owner, 11-02); b1.2c's end values kept |
+| Started by | the owner, in another session (`start.ps1`), after the core test below |
 | Run | `duel_gru_b1_2d` |
 | Goal | the pay table as the baseline, win chance pay as the correction to it; combat wins his decisions |
 | Stays | damage dealt, frags, deaths, `WIN_ADD` 0.33, the target-switch cost (0.02; owner, 11-02: "Stack lead only"), fairness limits, `!aim default`, b1.2c's end values of the firing costs, contact and jerk |
-| Length | ❓ (owner; roughly to 21:00 on 11-02, then b1.3) |
+| Length | **12 hours** (`--minutes 720`; owner, 11-02: "I will likely cancel it early and start B1.3 tonight, but i'd rather it go long than have to restart it") |
 | Kept | each save of the fade with its optimizer, and the first save with it done |
 
 ## Why
@@ -74,9 +75,9 @@ Both get back to 100 first: it pays twice what topping up does, so the small ite
 
 ## The schedule
 
-Starts when b1.2c's jerk stage ends, on the owner's approval after b1.2c's full results (owner, 11-02: "when it ends we do the B1.2d changes ... rather than wait until c ends at 6"; no dry run: "just start it after c and if it looks bad then we'll fix it"; "Do not schedule this"). **All five go at the start and fade together in a straight line over 40 updates from b1.2c's values** (owner, 11-02: "all go at the start, fade over 40 updates from where they are now. All five changes"); `ramp_b12d.py` writes them after each update. A check of 40% or less against the start holds the fade where it is.
+**All five fade together in a straight line from b1.2c's values, over updates 10 to 70** (owner, 11-02: "all go at the start, fade over 40 updates from where they are now. All five changes"; then "fade starts at u10 and takes 60 updates"); `ramp_b12d.py --start 10 --over 60` writes them after each update. A check of 40% or less against the start holds the fade where it is. b1.2c's own end values (firing costs 0, contact freedom 100%, jerk 0) are kept as they are (owner: "the values we faded to are KEPT now").
 
-| Dial | Update 0 | 10 | 20 | 30 | 40 on |
+| Dial | Updates 0 to 10 | 25 | 40 | 55 | 70 on |
 |---|---|---|---|---|---|
 | The table (`ITEM_PT_MIX`: the old rates → the table by the point, decay charge with it) | 0 | 0.25 | 0.5 | 0.75 | **1** |
 | `SPEED_PAY` | 0.25 | 0.219 | 0.188 | 0.156 | **0.125** |
@@ -84,7 +85,9 @@ Starts when b1.2c's jerk stage ends, on the owner's approval after b1.2c's full 
 | `STACK_DIFF` | 0.7 | 0.525 | 0.35 | 0.175 | **0** |
 | `RAIL_FAR_PAY` | 0.12 | 0.153 | 0.185 | 0.218 | **0.25** |
 
-Saves kept with their optimizers: `policy_start_b12d.pt`, `policy_fade10/20/30_b12d.pt`, `policy_faded_b12d.pt` (update 40). Then it settles to the end.
+Saves kept with their optimizers: `policy_start_b12d.pt`, every save of the fade (`policy_fade10_b12d.pt` to `policy_fade60_b12d.pt`), `policy_faded_b12d.pt` (update 70). Then it settles to the end: 12 hours in all, about 170 updates at 4.2 minutes.
+
+b1.2c's final check (its update 250 against b1.1, 160 games) runs beside b1.2d's start on the check cores (`final_check_b12c.py`, started once by `start.ps1`), into b1.2c's own `watch.log`.
 
 **Against the owner's one-change rule:** five changes at once. Read by group in the checks and counters, not one at a time; the fade's saves are the way back.
 
@@ -148,5 +151,12 @@ The checks sized to 8 cores: 4 maps at a time, 2 processes each (`CHECK_BATCH=4`
 | `start.ps1`: refuses on a trainer running, b1.2c's dials not at their ends, a failed settings check or log; controls b1.2c's end and b1.1 widened | ✅ parsed; a check job with b1.2d's settings against b1.1 widened played |
 | A dry run on the card | not done (owner: "just start it after c") |
 | The cores: `train.cmd` on `C03C3`, `start.ps1` on `0x3C3C` with the checks sized; `cpu_test.py` written | ✅ built; the test runs once b1.2c is done 🧪 |
-| Length | ❓ `make_files.py <minutes>` at the start; 720 written as the default |
-| The owner's go to stop b1.2c at its jerk stage's end (about 13:40, `policy_nojerk_b12c.pt`) and start | ❓ |
+| Length | 12 hours, written (`make_files.py 720`) ✅ |
+| The fade from update 10 over 60 updates; `ramp_test.log` (also with a hold) | ✅ ALL PASSED |
+| b1.2c stopped at its update 250 save, kept with its optimizer as `policy_nojerk_b12c.pt` (owner, 11-02) | ⏳ about 12:51 |
+| The core test (`cpu_test.py`) | 🧪 after b1.2c stops; results below |
+| The start | the owner, in another session |
+
+## The core test's results
+
+*(filled in when it has run)*
