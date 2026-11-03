@@ -25,7 +25,7 @@
 |---|---|---|
 | The head's first choice = the hands' first choice, on read frames | 90% or more (proposal ❓), on every map; also in fights, at low stack, when bare | `metrics.jsonl` `head2.copy.agree` (by map and situation: 🧪 a read of the end save, to build) |
 | The copy's KL | falling, then flat | `head2.copy.kl` |
-| **The head plays alone** (his target from the head's choice, the hands' target outputs left out) against b1.2d's end, 200 games | about level (45% or more ❓) | ⏳ a mode of the checks' tools, built during the run |
+| **The head plays alone** (his target from the head's choice, the hands' target outputs left out) against b1.2d's end, 200 games | about level (45% or more ❓) | **74-126, 37.0%** (below; 11-03) |
 | Play | as b1.2d: checks about 50% against the start | the watcher |
 | The head's value | its loss falls | `head2.v_loss` |
 

@@ -181,3 +181,7 @@ The checks sized to 8 cores: 4 maps at a time, 2 processes each (`CHECK_BATCH=4`
 | The owner's four cores | 3% over the test, nothing of ours on them ✅ |
 
 **Not measured:** a full check (160 ten-minute games) on the 8 efficiency cores; the test's batch was 4 games of 4 minutes a map. Its time shows in the first real check, at update 10 (b1.2c's took about 45 minutes on the shared performance cores). The performance cores' 54% means the trainer does not fill them.
+
+## The result (2026-11-02)
+
+Ended at its save of update 80 (owner), `keep/policy_end_b12d.pt` with its optimizer. Against the start (b1.2c's update 250): 90-70 (56.2%) at u10, 92-68 (57.5%) at u30, 82-78 (51.2%) at u40, **93-67 (58.1%) at u80**; against b1.1 95-65 (59.4%) at u60. **A success** (owner, after his play test); on the public servers and released as open weights 11-02 evening.
