@@ -36,6 +36,11 @@ What it is
   moves from the hands' to the head's own. With k = mix x valid (0 from a reset to the head's next tick: the hands' then),
   the intention's logits are (1 - k) x the hands' + k x target(s), the gate's bias added after. mix 0 is the network
   without it whatever its weights; mix 1 is the head's choice alone (when it has a state).
+  The add (1.3b; a buffer, "head2.add", 0 by default and for a save without it): the head's own scores added to the hands'
+  where it has a state: (1 - k) x the hands' + (k + add) x target(s) + the gate's bias. With target at zero (a new head) a
+  network given add 1 answers exactly as it did; one set of logits, learnt by one lesson (the trainer's --head2-add).
+  "chrono_lo" (1.3b, a new head): the update gate's time scales drawn evenly in log from chrono_lo to chrono ticks (absent:
+  evenly from 1 to chrono, as before), so part of its memory can follow a fight.
 
 How it learns (the trainer; the routing of its gradient)
   (1) its value: v against the returns of his whole pay at gamma = layout "gamma" (0.9998, about two minutes), on every
@@ -84,7 +89,7 @@ def obs_cols(inputs_csv=None):
 
 
 def layout(brain=256, trk=27, trz=28, ahead=0, ctrl=4, obs=None, hands=512, enc=256, size=256, inp=256, plan=64,
-           n_target=17, every=8, gamma=0.9998, chrono=300, on=None, ctrl_src="none"):
+           n_target=17, every=8, gamma=0.9998, chrono=300, on=None, ctrl_src="none", chrono_lo=0.0):
     """the part's shape; kept in a checkpoint as "head2" (the gate is the state dict's head2.gate). obs: the input columns
     (obs_cols()); on: {part: 0 or 1} (default all on; a part off reads zeros)"""
     obs = [int(c) for c in (obs if obs is not None else obs_cols())]
@@ -93,7 +98,8 @@ def layout(brain=256, trk=27, trz=28, ahead=0, ctrl=4, obs=None, hands=512, enc=
     w = dict(brain=int(brain), trk=int(trk), trz=int(trz), ahead=int(ahead), ctrl=int(ctrl), obs=len(obs), hands=int(hands))
     assert ctrl_src in CTRL_SRCS, "ctrl_src: one of {}".format(CTRL_SRCS)
     return dict(version=VERSION, widths=w, on=on_, obs_cols=obs, enc=int(enc), size=int(size), inp=int(inp), plan=int(plan),
-                n_target=int(n_target), every=int(every), gamma=float(gamma), chrono=int(chrono), ctrl_src=str(ctrl_src))
+                n_target=int(n_target), every=int(every), gamma=float(gamma), chrono=int(chrono), ctrl_src=str(ctrl_src),
+                **({"chrono_lo": float(chrono_lo)} if chrono_lo > 0 else {}))
 
 
 def ctrl_src(L):
@@ -145,19 +151,26 @@ def make_module(L, seed=4044):
             self.v = nn.Linear(S + int(L["widths"]["hands"]), 1)
             self.register_buffer("gate", torch.zeros(()))
             self.register_buffer("mix", torch.zeros(()))     # (b1.4a) his target choice moved from the hands' to the head's
+            self.register_buffer("add", torch.zeros(()))     # (1.3b) the head's own scores added to the hands'
             for l_ in (self.plan_in, self.target, self.v):
                 nn.init.zeros_(l_.weight)
                 nn.init.zeros_(l_.bias)
             tmax = int(L.get("chrono", 0))
             if tmax > 1:                                     # the update gate starts near 1 for long time scales (in ticks)
                 with torch.no_grad():
-                    tau = 1.0 + torch.rand(S) * (tmax - 1.0)
+                    lo_ = float(L.get("chrono_lo", 0) or 0)
+                    if lo_ > 0:                              # (1.3b) evenly in log from lo_ to tmax ticks
+                        tau = torch.exp(math.log(lo_) + torch.rand(S) * (math.log(tmax) - math.log(lo_)))
+                    else:
+                        tau = 1.0 + torch.rand(S) * (tmax - 1.0)
                     self.gru.bias_ih[S:2 * S] = torch.log((tau - 1.0).clamp(min=1e-3))
                     self.gru.bias_hh[S:2 * S] = 0.0
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
             if prefix + "mix" not in state_dict:             # (a save from before b1.4a: no mix, 0)
                 state_dict[prefix + "mix"] = torch.zeros(())
+            if prefix + "add" not in state_dict:             # (a save from before 1.3b: no add, 0)
+                state_dict[prefix + "add"] = torch.zeros(())
             super()._load_from_state_dict(state_dict, prefix, *args, **kw)
 
     with torch.random.fork_rng(devices=[]):
@@ -245,9 +258,10 @@ class State:
             self.raw = mod.target(self.s) * self.valid[:, None]
 
     def adds(self, mod):
-        """(what the hands' fast GRU input gets, what the intention's logits get, the mix k [n, 1], the head's own choice) on
-        this frame"""
-        return mod.gate * mod.plan_in(self.plan) * self.valid[:, None], self.bias, mod.mix * self.valid[:, None], self.raw
+        """(what the hands' fast GRU input gets, what the intention's logits get, the mix k [n, 1], the head's own choice, the
+        add [n, 1]) on this frame"""
+        return (mod.gate * mod.plan_in(self.plan) * self.valid[:, None], self.bias, mod.mix * self.valid[:, None], self.raw,
+                mod.add * self.valid[:, None])
 
     def tick(self, mod, u):
         import torch
@@ -275,7 +289,8 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
       s0, v0         the state and its valid flag at the rollout's start (State.snap(), after the reset of the frame before)
     -> dict gin [T, B, enc] (into the fast GRU's input), bias [T, B, n_target], s_held [T, B, size] (the state each frame's
     outputs read; zeros after a reset), alive [T, B], s [J, B, size], plan [J + 1, B, plan] (the held plans: the rollout's
-    own first), raw [T, B, n_target] (b1.4a: its own target choice), k [T, B, 1] (the mix where it has a state)"""
+    own first), raw [T, B, n_target] (b1.4a: its own target choice), k [T, B, 1] (the mix where it has a state), a [T, B, 1]
+    (1.3b: the add where it has a state)"""
     import torch
     T, B = dn.shape
     K = int(L["every"])
@@ -303,7 +318,8 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
         Pf = Pf.detach() + plan_grad * (Pf - Pf.detach()) if plan_grad > 0 else Pf.detach()
     gin = mod.gate * mod.plan_in(Pf) * am
     Sh = St[idx] * am
-    return dict(gin=gin, bias=Bi[idx] * am, s_held=Sh, alive=alive, s=St[1:], plan=P, raw=mod.target(Sh) * am, k=mod.mix * am)
+    return dict(gin=gin, bias=Bi[idx] * am, s_held=Sh, alive=alive, s=St[1:], plan=P, raw=mod.target(Sh) * am, k=mod.mix * am,
+                a=mod.add * am)
 
 
 def gae(rew, val, done, gamma, lam):
@@ -329,14 +345,16 @@ def add_bias(lg, bias, i0):
 
 def mix_in(lg, g2, i0):
     """(b1.4a) his logits with the head's part on the intention's: (1 - k) x the hands' + k x its own choice + the bias.
-    g2: (gin, bias) as before b1.4a, or (gin, bias, k, raw); k 0 everywhere: add_bias's numbers (1 x a = a, a + 0 = a; no
-    check of k here: that would wait on the card every frame)"""
+    g2: (gin, bias) as before b1.4a, (gin, bias, k, raw), or (1.3b) (gin, bias, k, raw, add): (1 - k) x the hands' + (k + add)
+    x its own + the bias. k and add 0 everywhere: add_bias's numbers (1 x a = a, a + 0 = a; no check of k here: that would
+    wait on the card every frame)"""
     import torch
     if len(g2) < 4:
         return add_bias(lg, g2[1], i0)
     n = g2[1].shape[-1]
     k = g2[2]
-    return torch.cat([lg[..., :i0], (1.0 - k) * lg[..., i0:i0 + n] + k * g2[3] + g2[1], lg[..., i0 + n:]], -1)
+    kr = k if len(g2) < 5 or g2[4] is None else k + g2[4]
+    return torch.cat([lg[..., :i0], (1.0 - k) * lg[..., i0:i0 + n] + kr * g2[3] + g2[1], lg[..., i0 + n:]], -1)
 
 
 # ------------------------------------------------------------------------------------------------------------------ numpy
@@ -356,22 +374,24 @@ def np_state_width(L):
 def np_open(W):
     """the head acts (its gate above 0 and plan_in or target not all zero; or, b1.4a, its mix above 0 and target not all zero)"""
     tg_ = np.abs(W["target.weight"]).sum() + np.abs(W["target.bias"]).sum()
-    if float(np.asarray(W.get("mix", 0.0))) > 0 and tg_ > 0:
+    if (float(np.asarray(W.get("mix", 0.0))) > 0 or float(np.asarray(W.get("add", 0.0))) > 0) and tg_ > 0:
         return True
     return float(np.asarray(W.get("gate", 0.0))) > 0 and (np.abs(W["plan_in.weight"]).sum() + np.abs(W["plan_in.bias"]).sum() + tg_) > 0
 
 
 def np_mix_in(W, L, hs, lg):
     """(b1.4a) the intention's logits lg [B, n_target] (the hands', before the gate's bias is added) with the mix: (1 - k) x
-    the hands' + k x its own choice, k = mix where it has a state (hs [B, np_state_width]). Unchanged with mix 0"""
+    the hands' + k x its own choice, k = mix where it has a state (hs [B, np_state_width]); (1.3b) + add x its own where it
+    has a state. Unchanged with mix and add 0"""
     m = float(np.asarray(W.get("mix", 0.0)))
-    if m <= 0:
+    ad = float(np.asarray(W.get("add", 0.0)))
+    if m <= 0 and ad <= 0:
         return lg
     S = int(L["size"])
     s, ok = hs[:, :S], hs[:, S:S + 1]
     k = np.float32(m) * ok
     raw = s @ W["target.weight"].T + W["target.bias"]
-    return ((1.0 - k) * lg + k * raw).astype(np.float32)
+    return ((1.0 - k) * lg + (k + np.float32(ad) * ok) * raw).astype(np.float32)
 
 
 def np_adds(W, L, hs):

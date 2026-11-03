@@ -221,7 +221,7 @@ LIVE_TRAINER = LIVE_TRAINER + ("ADV_PAY_REF",)                     # (v0.6.1c, -
 LIVE_TRAINER = LIVE_TRAINER + ("VALUE_WARM",)                      # (v0.6.1, --value-warm) the critic's warm-up: the next N updates learn the value outputs only
 LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --win-value) a factor on the shadow win value's rate
 LIVE_TRAINER = LIVE_TRAINER + ("ITEM_FLOOR", "ITEM_FLOOR_W")          # (2026-10-25, --item-floor) the floor on his item intentions by map, its weight
-LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD", "H2_MIX", "H2_COPY", "INTENT_SEEK_W")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
+LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD", "H2_MIX", "H2_COPY", "INTENT_SEEK_W", "H2_L2")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1024,6 +1024,23 @@ def main():
                                                                    "frames his intention is read and the head has a state. Its gradient reaches the head only. 0: none")
     ap.add_argument("--head2-mix", type=float, default=-1.0, help="(--head2, b1.4a) his target choice moved this far from the hands' to the head's own at the start "
                                                                   "(-1: the network's own; live: H2_MIX, the value itself, played and learnt at the value of each rollout)")
+    ap.add_argument("--head2-add", type=int, default=0, help="(--head2, 1.3b) the head's own target scores added to the hands' (head2.add 1): one set of "
+                                                              "target logits, the hands' rows plus target(s), with target at zero for a new head (he answers exactly as "
+                                                              "before). One lesson learns them: the hands' policy term (his own advantage) on a share 1 - c of the "
+                                                              "target's gradient, the head's own term (its advantage) on c, c = --head2-pg x live H2_PG (0 to 1). "
+                                                              "Both reach the hands' rows, the fast memory, the head's target layer and its GRU. Not with --head2-sole")
+    ap.add_argument("--head2-norm-cap", type=float, default=0.0, help="(--head2-add, 1.3b) a soft cap on the size (centred length) of each part of his "
+                                                                        "target scores, the hands' rows and the head's own, on read frames: above it a pull back of "
+                                                                        "--head2-norm-w x (size - cap)^2; nothing below it. 0: none. The parts may oppose (the head's "
+                                                                        "part is a correction); their sizes may not run away (owner, 2026-11-03)")
+    ap.add_argument("--head2-norm-w", type=float, default=0.01, help="(--head2-norm-cap) the pull's weight")
+    ap.add_argument("--head2-l2", type=float, default=0.0, help="(--head2-add, 1.3b; owner 2026-11-03: \"I don't see why you would use different weights for "
+                                                               "the two\") decoupled weight decay (AdamW's L2) on both parts' own weights, one coefficient: the "
+                                                               "hands' 17 target rows of pi and the head's target layer shrink by lr x this a step; live H2_L2 "
+                                                               "(the value itself). An L2 in the loss went through Adam's scaling: dry runs of 11-03")
+    ap.add_argument("--head2-lam", type=float, default=-1.0, help="(--head2, 1.3b) the lambda of the head's own advantage (-1: --lam). 0.995: about 5 s of credit")
+    ap.add_argument("--head2-chrono-lo", type=float, default=0.0, help="(--head2, 1.3b, a new head) its update gate's time scales evenly in log from this to "
+                                                                       "--head2's chrono (300 ticks); 0: evenly from 1 to 300 (as before)")
     ap.add_argument("--head2-pay", default="all", choices=("all", "combat_win"), help="(--head2, b1.2a) what its value and advantage count: his whole pay, or combat (frags, deaths, damage) plus the win part, not the item pay")
     ap.add_argument("--head2-v", type=float, default=0.5, help="(--head2) the weight of its value's lesson")
     ap.add_argument("--head2-plan-grad", type=float, default=0.0, help="(--head2) the share of the hands' gradient that goes on into the head through the "
@@ -2003,7 +2020,8 @@ def main():
         assert BEL and TRK, "--head2: with the brain (--belief) and its readout (--track)"
         H2L = head2_.layout(brain=int(BEL_L["hid"]), trk=int(TRK_L["d"]), trz=int(TRZ_L["d"]) if TRZ else 0, ahead=int(AH_L["d"]) if AH else 0,
                             ctrl=a.head2_ctrl, hands=H, enc=256, size=a.head2_size, inp=a.head2_inp, plan=a.head2_plan,
-                            n_target=ACTION_DIMS[I_HEAD], every=BK, gamma=a.head2_gamma, on={p_: 0 for p_ in a.head2_off.split(",") if p_})
+                            n_target=ACTION_DIMS[I_HEAD], every=BK, gamma=a.head2_gamma, on={p_: 0 for p_ in a.head2_off.split(",") if p_},
+                            chrono_lo=a.head2_chrono_lo)
     H2 = H2L is not None
     if H2:
         import head2 as head2_
@@ -2030,6 +2048,7 @@ def main():
                                                    "the 'in control' readout {!r} (chances - 0.5, detached)".format(head2_.ctrl_src(H2L))), flush=True)
     H2_SAVE = {"head2": H2L} if H2 else {}                   # (a checkpoint without the part is as it was)
     H2_PG_ = [a.head2_pg, a.head2_plan_grad, 1.0]            # (--head2) its lesson's weight, the plan's gradient into it, live H2_PG's factor
+    H2_L2_ = [a.head2_l2]                                    # (--head2-l2, 1.3b) the L2 on the head's own part; live H2_L2
     # (--legs-feat, --legs-guide; one movement network, steps 3 and 4: sim/legs_unify.py) the network's own parts, or new
     # ones at zero; a flag adds its part to a network that has none, a resume keeps what the network has
     import legs_unify as LU_
@@ -2343,8 +2362,8 @@ def main():
             if getattr(net, "head2", None) is not None:      # its head counts only if its gate is open and a link of it is not zero
                 net.h2_open = bool((float(net.head2.gate) > 0 and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters()
                                                                       if n_.startswith(("plan_in.", "target."))))
-                                   or (float(net.head2.mix) > 0 and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters()
-                                                                        if n_.startswith("target."))))
+                                   or ((float(net.head2.mix) > 0 or float(net.head2.add) > 0)          # (1.3b: or its add)
+                                       and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters() if n_.startswith("target."))))
 
     if SLOW:                                                 # (--slow-mem) a network without the part (the control, older league files, the
         load_net0_ = load_net                                # start before conversion) gets one with its door shut: it answers as it did
@@ -2914,6 +2933,13 @@ def main():
             if a.head2_mix >= 0:
                 pol.head2.mix.fill_(float(a.head2_mix))
         H2_M[0] = float(pol.head2.mix)
+        if a.head2_add:                                      # (1.3b) the head's own scores added to the hands'
+            assert not a.head2_sole, "--head2-add with --head2-sole: the add is one learner of the hands' rows and the head together"
+            assert H2_M[0] == 0.0, "--head2-add with a mix above 0: not built"
+            with torch.no_grad():
+                pol.head2.add.fill_(1.0)
+            print("head2: add 1 (1.3b): his target logits = the hands' rows + the head's target(s) (|target| {:.4g}); the target's gradient "
+                  "split by c = --head2-pg x live H2_PG: the hands' term 1 - c, the head's own c".format(float(pol.head2.target.weight.abs().sum())), flush=True)
         print("head2: mix {:.4f} (his target choice: (1 - mix) x the hands' + mix x the head's own where it has a state; live H2_MIX)".format(H2_M[0]), flush=True)
         H2_T0 = float(a.head2_start) if a.head2_start >= 0 else float(elapsed0)
         print("head2: gate {:.4f} now{}; lr x {}, its lesson x {}, value x {}, the plan's gradient into it x {}; ticks: u at half precision on "
@@ -3214,6 +3240,7 @@ def main():
                     a.head2_cap = float(lt_.get("H2_GATE_CAP", a.head2_cap))         # (v0.4.3: the strategy head's gate: its cap, 0 shuts it at once)
                     a.head2_open = float(lt_.get("H2_GATE_OPEN", a.head2_open))      # (... the minutes of its opening: 0 holds it)
                     H2_PG_[2] = float(lt_.get("H2_PG", H2_PG_[2]))                   # (... a factor on its own lesson)
+                    H2_L2_[0] = float(lt_.get("H2_L2", H2_L2_[0]))                   # (1.3b: the L2 on its own part)
                     H2_PG_[1] = float(lt_.get("H2_PLAN_GRAD", H2_PG_[1]))            # (... the plan's gradient into it)
                     if "H2_MIX" in lt_:                                                # (b1.4a) the mix itself, from the next rollout
                         H2_M[0] = min(1.0, max(0.0, float(lt_["H2_MIX"])))
@@ -3234,7 +3261,7 @@ def main():
                                   **({"BRAIN_FADE": BF_G[0]} if BF_ON else {}),
                                   ITEM_FLOOR=IF_LIVE[1], ITEM_FLOOR_W=IF_LIVE[0], VALUE_WARM=float(VW_[1]),
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}),
-                                  **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1], "H2_MIX": H2_M[0], "H2_COPY": H2_CW[0]} if H2 else {}),
+                                  **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1], "H2_MIX": H2_M[0], "H2_COPY": H2_CW[0], "H2_L2": H2_L2_[0]} if H2 else {}),
                                   INTENT_SEEK_W=SEEK_W[0])
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
@@ -4058,18 +4085,25 @@ def main():
         if H2:                                                           # (--head2) its ticks' inputs, values and the intention as played; learnt
             B_U2, B_VH, B_LPI, H2_S0V0, H2G_R = R["b_u2"], R["b_vh"], R["b_lpi"], R["h2s0"], float(R["h2g"])    # at the gate it was played at
             H2M_R = float(R.get("h2m") or 0.0)                           # (b1.4a) ... and the mix
-            with torch.no_grad():
-                pol.head2.gate.fill_(H2G_R)
-                pol.head2.mix.fill_(H2M_R)
         B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
-        if BTOK:
-            pol.attn.bgate = BTG_R if B_BTOK is not None else 0.0        # (learnt at the gate it was played at)
         RFG_R = float(R.get("rfg") or 0.0)                               # (v0.4.2a) the rule fade's gate he played at: learnt at it
-        if RF:
-            pol.rfg = RFG_R
         BFG_R = float(R.get("bfg") or 0.0)                               # (v0.6.1b) the brain's gate he played at: learnt at it (the people's
-        if BF:                                                           # lesson too: it runs the same brain)
-            pol.belief.fade_g = BFG_R
+                                                                         # lesson too: it runs the same brain)
+
+        def played_at():
+            """the gates and the mix this rollout was played at, into pol: learnt at them. Called again after --overlap's launch, whose
+            pre_rollout writes the next rollout's into pol (review of 2026-11-03, B1: until then each update learnt at the next one's)"""
+            if H2:
+                with torch.no_grad():
+                    pol.head2.gate.fill_(H2G_R)
+                    pol.head2.mix.fill_(H2M_R)
+            if BTOK:
+                pol.attn.bgate = BTG_R if B_BTOK is not None else 0.0
+            if RF:
+                pol.rfg = RFG_R
+            if BF:
+                pol.belief.fade_g = BFG_R
+        played_at()
         if a.dump_acts:                                                  # (--dump-acts) the rollout as played, for a fixed-seed identity check
             torch.save(dict(act=b_act.cpu(), logp=b_logp.cpu(), val=b_val.cpu(), rew=b_rew.cpu(), done=b_done.cpu()),
                        "{}_{}.pt".format(a.dump_acts, update))
@@ -4099,6 +4133,7 @@ def main():
                 dump = []
         if OVL and time.time() - t_start < a.minutes * 60 and not (a.max_updates > 0 and update - upd0_ >= a.max_updates):   # (--overlap) the next rollout plays while this update learns
             PEND = launch(update + 1)
+            played_at()                                                  # (B1) launch copied the next rollout's gates and mix into ACT; pol learns at this one's
         t_learn = time.time()
         VW_ON = VW_[1] > 0 and VW_[0] <= update < VW_[0] + VW_[1]       # (v0.6.1, --value-warm) this update learns the value outputs only
         VL_ACC = [None, 0, None, 0]                                      # (--value-warm) the value loss summed over this update's pieces: first pass, last pass
@@ -4203,6 +4238,7 @@ def main():
 
         HO_ = [None, [], False]                                          # (--head) the last seq_pass's head outputs; the read's numbers (first pass)
         HO2_ = [None]                                                    # (--head2) the last seq_pass's strategy head outputs
+        H2ADD = bool(H2 and a.head2_add)                                 # (1.3b) the head's own scores added to the hands'
 
         def sole_(lg_):
             """(--head2-sole) his logits with the target's cut off from what the hands learn"""
@@ -4216,7 +4252,10 @@ def main():
             lg_ = sole_(pol.pi(hs_))
             if H2:
                 HO2_[0]["hands_int"] = lg_[..., HD_I0:HD_I0 + int(H2L["n_target"])].detach()
-                lg_ = head2_.mix_in(lg_, (None, HO2_[0]["bias"].detach(), HO2_[0]["k"], HO2_[0]["raw"].detach()), HD_I0)    # (b1.4a: and the mix)
+                if H2ADD:                                        # (1.3b) one set of target logits: the rows and the head's part keep their gradient
+                    HO2_[0]["hands_g"] = lg_[..., HD_I0:HD_I0 + int(H2L["n_target"])]
+                lg_ = head2_.mix_in(lg_, (None, HO2_[0]["bias"].detach(), HO2_[0]["k"], HO2_[0]["raw"] if H2ADD else HO2_[0]["raw"].detach(),
+                                          HO2_[0]["a"]), HD_I0)    # (b1.4a: and the mix; 1.3b: and the add)
             return lg_
         UG_ = [None, None, None]                                         # (--legs-feat, --legs-guide) the last seq_pass's guide addition, the
         #                                                                  branch's logits and its "has a way" (for pi_t and the counters)
@@ -4418,8 +4457,10 @@ def main():
         def pi_t(z_):
             """what the teachers' losses read: his logits from z_, the head's part added as it is but taught by them never (--head)"""
             lg_ = sole_(pol.pi(z_))
-            if H2:                                                       # (--head2) its bias as it is, taught by them never
-                lg_ = head2_.mix_in(lg_, (None, HO2_[0]["bias"].detach(), HO2_[0]["k"], HO2_[0]["raw"].detach()), HD_I0)    # (b1.4a: and the mix)
+            if H2 and not H2ADD:                                         # (--head2) its bias as it is, taught by them never (1.3b, the add: the
+                lg_ = head2_.mix_in(lg_, (None, HO2_[0]["bias"].detach(), HO2_[0]["k"], HO2_[0]["raw"].detach(), HO2_[0]["a"]), HD_I0)    # (b1.4a: and the mix)
+            #                                                              teachers judge the hands' part alone: the head's correction on top of it
+            #                                                              does not make the rule push harder, an arms race of two sizes)
             lg_ = lg_ if not HEADL else head_logits(lg_, HO_[0]["tadd"].detach(), HO_[0]["wadd"].detach())
             return lg_ if UG_[0] is None else lg_ + UG_[0].detach()     # (--legs-guide: its part as it is, taught by them never)
 
@@ -4456,9 +4497,11 @@ def main():
                 PREV_SD[0] = cur_
         OV_ = None                                                       # (--overlap) the staleness: the network that played (ACT, one update
         LP_PX = ISW = IS_ = None                                         # (decoupled) the learner's log p before the update, the capped weights
+        LPI_PX = ISW2 = None                                             # (--head2) ... of his target alone: the head's own term clips around it
         if DEC:                                                          # (--overlap-ppo decoupled) the proximal pass: pol before any step of
             with torch.no_grad():                                        # this update on the whole batch: its log p of what he did (as the
                 LP_PX = torch.zeros(T, N, device=dev)                    # learning passes count it), its values; per head for kl_heads
+                LPI_PX = torch.zeros(T, N, device=dev) if H2 else None
                 V_PX = torch.zeros(T, N, device=dev)
                 V2_PX = torch.zeros(T, N, 2, device=dev) if LONG else None
                 if a.kl_heads and (update % a.kl_heads == 0 or update <= 20):
@@ -4476,6 +4519,8 @@ def main():
                         l_ = dd.log_prob(b_act[:, chunk, j])
                         if old_h is not None:
                             old_h[:, chunk, j] = l_
+                        if LPI_PX is not None and j == I_HEAD:
+                            LPI_PX[:, chunk] = l_
                         lp_ = lp_ + l_ * (1.0 if hm_[j] is None else hm_[j])
                     if LEGS_LEARN:                                       # (the legs' part, as in the learning passes)
                         lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
@@ -4489,6 +4534,8 @@ def main():
                 d_ = b_logp - LP_PX                                      # log p(played) - log p(learner before the update)
                 r_ = (-d_).clamp(max=30.0).exp()                         # pi_prox / pi_played
                 ISW = r_.clamp(max=a.overlap_is_cap)
+                if LPI_PX is not None:                                   # (--head2) the same weight for his target alone
+                    ISW2 = (LPI_PX - B_LPI).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
                 OV_ = torch.stack([w_.sum(), (d_ * w_).sum(), (((r_ - 1.0).abs() > clip).float() * w_).sum(), ((r_ - 1.0).abs() * w_).sum(),
                                    ((V_PX - b_val[:T]).abs() * w_).sum(), (r_.clamp(max=1e3) * w_).sum()]).double().cpu()
                 IS_ = [float((ISW * w_).sum() / w_.sum().clamp(min=1.0)), float((r_ * (w_ > 0)).max()),
@@ -4525,8 +4572,8 @@ def main():
         if H2:                                                           # (--head2) its own advantage: GAE of his whole pay at its gamma, from its value
             B_HR = R.get("b_hr") if R.get("b_hr") is not None else b_rew
             H2_PAYS = [float(B_HR.abs().mean()), float(b_rew.abs().mean())]   # (a frame's |pay|: the head's, his)
-            ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), lam)
-            h2_acc = torch.zeros(18, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
+            ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else lam)    # (1.3b: --head2-lam)
+            h2_acc = torch.zeros(26, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
             #                                                              bias's (centred, on read frames), the hands' intention logits' (same), read
             #                                                              frames, grad norm (sum, count), |gin| / |e| (sum, pieces), the ratio's clip share
         IF_ACC = torch.zeros(len(IF_MAPS), IF_OK.shape[1], device=dev)   # (--item-floor) epoch 0: sum of p over read frames, by map and item
@@ -4574,6 +4621,10 @@ def main():
                 dc = b_dec[:, chunk]
                 hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk])
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
+                if H2ADD:                                                # (1.3b) the target's share of this term's gradient: 1 - c (its value as it is)
+                    c_ = min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2]))
+                    lt_ = ds[I_HEAD].log_prob(A[..., I_HEAD]) * (1.0 if hm[I_HEAD] is None else hm[I_HEAD])
+                    lp = lp - c_ * (lt_ - lt_.detach())
                 hme = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk], ent=True) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
                 ent = sum(w_ * dd.entropy() * (1.0 if hme[j] is None else hme[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
@@ -4674,16 +4725,41 @@ def main():
                     ho2_ = HO2_[0]                                       # as numbers), its value on every learner frame
                     m2_ = lv * wgt
                     ms2_ = m2_.sum().clamp(min=1.0)
-                    lmx_ = (1.0 - ho2_["k"]) * ho2_["hands_int"] + ho2_["k"] * ho2_["raw"] + ho2_["bias"]     # (b1.4a: the mix; k 0: as before)
+                    if H2ADD:                                            # (1.3b) the logits as played, every part with its gradient
+                        lmx_ = ho2_["hands_g"] + ho2_["a"] * ho2_["raw"] + ho2_["bias"]
+                    else:
+                        lmx_ = (1.0 - ho2_["k"]) * ho2_["hands_int"] + ho2_["k"] * ho2_["raw"] + ho2_["bias"]     # (b1.4a: the mix; k 0: as before)
                     lpi_ = torch.log_softmax(lmx_, -1).gather(-1, A[..., I_HEAD:I_HEAD + 1]).squeeze(-1)
-                    r2_ = (lpi_ - B_LPI[:, chunk]).clamp(max=30.0).exp()     # (capped as pi_prox / pi_played: b1.2a's overflow)
+                    r2_ = (lpi_ - (LPI_PX if DEC else B_LPI)[:, chunk]).clamp(max=30.0).exp()     # (decoupled: around the learner before the
+                    #                                                  update, as the hands' (review of 2026-11-03, B5); capped: b1.2a's overflow)
                     ah_ = ADV_H[:, chunk]
                     mu2_ = (ah_ * m2_).sum() / ms2_
                     ah_ = (ah_ - mu2_) / (((ah_ - mu2_).pow(2) * m2_).sum() / ms2_).sqrt().clamp(min=1e-8)
-                    pg2_ = -(torch.min(r2_ * ah_, r2_.clamp(1 - clip, 1 + clip) * ah_) * m2_).sum() / ms2_
+                    pg2t_ = torch.min(r2_ * ah_, r2_.clamp(1 - clip, 1 + clip) * ah_)
+                    pg2t_ = torch.where(ah_ < 0, torch.max(pg2t_, 3.0 * ah_), pg2t_)     # (the second clip: a bad choice's ratio counts at most 3)
+                    pg2_ = -((ISW2[:, chunk] if DEC else 1.0) * pg2t_ * m2_).sum() / ms2_
+                    if H2ADD:                                            # (1.3b) the two parts' sizes, their cosine, the soft cap
+                        hc2_ = ho2_["hands_g"] - ho2_["hands_g"].mean(-1, keepdim=True)
+                        rr2_ = ho2_["a"] * ho2_["raw"]
+                        rc2_ = rr2_ - rr2_.mean(-1, keepdim=True)
+                        hn2_, rn2_ = hc2_.norm(dim=-1), rc2_.norm(dim=-1)
+                        if a.head2_norm_cap > 0:
+                            ov2_ = torch.relu(hn2_ - a.head2_norm_cap).pow(2) + torch.relu(rn2_ - a.head2_norm_cap).pow(2)
+                            nc2_ = (ov2_ * m2_).sum() / ms2_
+                            loss = loss + a.head2_norm_w * nc2_
+                        if epoch == 0:
+                            with torch.no_grad():
+                                mv2_ = m2_ * (rn2_ > 1e-6).float()
+                                h2_acc[19] += ((hc2_ * rc2_).sum(-1) / (hn2_ * rn2_).clamp(min=1e-9) * mv2_).sum()
+                                h2_acc[20] += mv2_.sum()
+                                h2_acc[21] += ((hc2_ + rc2_).norm(dim=-1) * m2_).sum()
+                                if a.head2_norm_cap > 0:
+                                    h2_acc[22] += nc2_.detach() * ms2_
+                                    h2_acc[23] += ((hn2_ > a.head2_norm_cap).float() * m2_).sum()
+                                    h2_acc[24] += ((rn2_ > a.head2_norm_cap).float() * m2_).sum()
                     vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
                     vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
-                    loss = loss + H2_PG_[0] * H2_PG_[2] * pg2_ + a.head2_v * vl2_
+                    loss = loss + (min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])) if H2ADD else H2_PG_[0] * H2_PG_[2]) * pg2_ + a.head2_v * vl2_
                     if a.head2_copy > 0:                                 # (--head2-copy, b1.3a) the head's own choice taught to copy the hands'
                         mc_ = m2_ * ho2_["alive"]                         # (read frames with a head state: none from a reset to its next tick)
                         msc_ = mc_.sum().clamp(min=1.0)
@@ -4722,6 +4798,8 @@ def main():
                             h2_acc[3] += ho2_["plan"][1:].norm(dim=-1).mean() * wsum
                             h2_acc[4] += (bc_.norm(dim=-1) * m2_).sum()
                             h2_acc[5] += (hc_.norm(dim=-1) * m2_).sum()
+                            rc_ = ho2_["raw"] * ho2_["a"] if H2ADD else ho2_["raw"]
+                            h2_acc[18] += ((rc_ - rc_.mean(-1, keepdim=True)).norm(dim=-1) * m2_).sum()
                             h2_acc[6] += m2_.sum()
                             if "gin_share" in ho2_:
                                 h2_acc[9] += ho2_["gin_share"]
@@ -5135,6 +5213,11 @@ def main():
                     for p_, g_ in zip(pol.head2.parameters(), H2GR_):
                         p_.grad = g_
                 opt.step()
+                if H2ADD and H2_L2_[0] > 0:                              # (--head2-l2, 1.3b) decoupled weight decay (AdamW's L2) on both parts'
+                    with torch.no_grad():                                # own weights, one coefficient: the hands' 17 target rows and the head's
+                        n2_ = int(H2L["n_target"])                       # target layer shrink by lr x wd a step. (An L2 in the loss went through
+                        pol.pi.weight[HD_I0:HD_I0 + n2_] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]    # Adam's scaling: the rows' size
+                        pol.head2.target.weight *= 1.0 - opt.param_groups[-1]["lr"] * H2_L2_[0]          # 22 -> 14 in one update, dry run 4)
                 if H2_ROWS is not None:                                  # (--head2-sole) held as they were (Adam's moments move them otherwise)
                     with torch.no_grad():
                         pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])] = H2_ROWS[0]
@@ -5445,7 +5528,18 @@ def main():
             with torch.no_grad():
                 pin_ = pol.head2.plan_in.weight.norm()
             rec["head2"] = dict(
-                gate=round(H2G_R, 5), mix=round(H2M_R, 5), seek_w=round(SEEK_W[0], 5), cap=a.head2_cap, open_min=a.head2_open, pg_w=round(H2_PG_[0] * H2_PG_[2], 4), plan_grad=H2_PG_[1],
+                gate=round(H2G_R, 5), mix=round(H2M_R, 5), mix_learnt=round(float(pol.head2.mix), 5), gate_learnt=round(float(pol.head2.gate), 5),   # (B1: the same)
+                is_w=round(float(ISW2.mean()), 4) if ISW2 is not None else None, seek_w=round(SEEK_W[0], 5),
+                add=round(float(pol.head2.add), 3), credit=round(min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])), 4) if a.head2_add else None,
+                lam=a.head2_lam if a.head2_lam > 0 else a.lam,
+                raw=round(float(ha2_[18] / max(1.0, ha2_[6])), 5),                                     # (1.3b) the head's own scores' centred length on read frames
+                cos=round(float(ha2_[19] / max(1.0, ha2_[20])), 4) if a.head2_add else None,
+                l2=dict(wd=H2_L2_[0], rows_w=round(float(pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])].norm()), 4),
+                        head_w=round(float(pol.head2.target.weight.norm()), 4)) if a.head2_add else None,      # ... the decay, both parts' weight norms           # ... the cosine of the two parts (where the head has a part)
+                sum=round(float(ha2_[21] / max(1.0, ha2_[6])), 5) if a.head2_add else None,            # ... the sum's centred length
+                norm_cap=dict(cap=a.head2_norm_cap, w=a.head2_norm_w, pen=round(float(ha2_[22] / max(1.0, ha2_[6])), 6),
+                              over_hands=round(float(ha2_[23] / max(1.0, ha2_[6])), 4), over_head=round(float(ha2_[24] / max(1.0, ha2_[6])), 4))
+                if (a.head2_add and a.head2_norm_cap > 0) else None, cap=a.head2_cap, open_min=a.head2_open, pg_w=round(H2_PG_[0] * H2_PG_[2], 4), plan_grad=H2_PG_[1],
                 pg_loss=round(float(ha2_[1] / max(1.0, ha2_[6])), 5), v_loss=round(float(ha2_[2] / max(1.0, ha2_[0])), 5),
                 plan=round(float(ha2_[3] / max(1.0, ha2_[0])), 4),                                   # the plan's mean length (before the gate)
                 gin_share=round(float(ha2_[9] / max(1.0, ha2_[10])), 6),                              # |gate x plan_in(plan)| beside his fast GRU's input

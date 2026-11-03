@@ -22,9 +22,16 @@ sys.path.insert(0, os.path.join(ROOT, "sim"))
 
 
 def collect(a):
+    if a.npz:                                                # (1.3b) the switches the server played with, set before the module as the plugins do
+        import json
+        os.environ.update({k: str(v) for k, v in json.loads(str(np.load(a.npz).get("env_vars", "{}"))).items()})
+        os.environ.setdefault("LEGS_NET", os.path.join(os.path.dirname(os.path.abspath(a.npz)), "legs.npz"))
     E = importlib.import_module(a.env)
     import test_suite as T
     pol = T.Policy(a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt"), seed=1)
+    BT = None
+    if getattr(pol, "needs_pose", False):                    # (the brain's pose and zones, as the checks give them)
+        import btoken as BT
     nav = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(a.map))
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n_matches=a.games, seed=77, loadout="all",
                     nav=nav if os.path.exists(nav) else None)
@@ -50,14 +57,22 @@ def collect(a):
     keep, acts = [], []
     for t in range(int(a.minutes * 60 / E.DT)):
         act = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
-        al, h = pol.act(obs[me], h)
+        kw = {}
+        if getattr(pol, "needs_xl", False):                  # (the movement branch's inputs)
+            kw["xl"] = env.legs_prep()[me]
+        if BT is not None:
+            pz_, zz_ = BT.pose_from_env(env, a.map)
+            kw.update(pose=pz_[me], zmap=zz_[me])
+        al, h = pol.act(obs[me], h, **kw)
+        if getattr(E, "LEGS_IN", False) and getattr(pol, "legsP", None) is not None:
+            env.legs_lg = pol.legs_logits(env.legs_prep())
         act[me, :al.shape[1]] = al
         obs, r, done, info = env.step(act)
         alive = env.hp[me] > 0
         if t % 3 == 0:
             keep.append(obs[me][alive].copy())
             acts.append(al[alive].copy())
-        if (t + 1) % int(120 / E.DT) == 0:                       # his clock and memory start over, as on the server
+        if not getattr(E, "GAME_ON", False) and (t + 1) % int(120 / E.DT) == 0:    # his clock and memory start over, as on the server (not for a whole-games network)
             env.round_t[:] = 0.0
             env.frags_r[:] = 0
             h[:] = 0.0
@@ -76,6 +91,7 @@ def main():
     ap.add_argument("--minutes", type=float, default=3.0)
     ap.add_argument("--real", default="", help="a recording of the real game's inputs (obs_dump.npy)")
     ap.add_argument("--skip", type=int, default=0, help="frames to drop from the start of the recording (the warmup)")
+    ap.add_argument("--npz", default="", help="(1.3b) the server's policy.npz: its switches (env_vars) set before the simulator, as the plugins do")
     a = ap.parse_args()
     names = [(r["group"], r["input"]) for r in csv.DictReader(open(a.inputs, encoding="utf-8"))]
     E, sim, acts = collect(a)

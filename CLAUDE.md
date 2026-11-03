@@ -55,6 +55,9 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   on the way; only winning matters in the long run. The steps: `docs/PLAN.md`; the reasons: `docs/design/B1_PLAN.md`.
 - **Names (owner, 2026-10-31)**: bN is the series (BobbyBones 1: b1); bN.N is a family of runs, each with a specific goal of its own; each run in it is bN.Nx, where the attempts are x = a, b, c, ... (b1.0a, b1.0b). In `docs/runs/b1.0/` (the family: its `README.md` says the goal and lists the attempts) with a folder per attempt, `docs/runs/b1.0/b1.0a/`,
   and `data/sim_runs/duel_gru_b1_0a`. The v0.x names below are history: use them only for what was run under them.
+  **The b dropped (owner, 2026-11-03):** "I want to drop the B from our bot naming convention. So, this is just 1.3b, 1.4b,c": new runs are
+  N.Nx (1.3b, 1.4b), in the family's existing folder (`docs/runs/b1.3/1.3b/`) and `data/sim_runs/duel_gru_1_3b`; what was run as b1.0a to b1.4a
+  keeps its name and folders.
 - **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
   trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
   a dip lasts 20 to 30 updates at most). Two new things open one after the other.

@@ -2,7 +2,7 @@
 
 **The goal (owner, 2026-11-02 evening):** "B1.3 - fade head IN ... B1.4 - fade OLD rules out"; "we bring it in in b1.3 to learn how to copy the rules that exist, and then once we know it can, we remove those rules and let the head train". Combat, item and win pay stay ("I view the win pay as the correction factor on top of those"). Most of the rule removal goes here, the rest in b1.5 at most (owner: "Your proposed schedule here is too timid").
 
-**Starts from:** b1.3a's end, whose head has learnt to copy his target choice ([b1.3](../b1.3/README.md)), if its copy passes (agreement on read frames, and the head playing alone about level with b1.2d's end).
+**Starts from (2026-11-03):** [1.3b](../b1.3/1.3b/CARD.md)'s end, if it passes. (Before: b1.3a's end, whose head had learnt to copy his target choice; scrapped with b1.4a.) The plan of 11-02 below is history; the current steps are on [1.4b](1.4b/CARD.md).
 
 ## The plan (proposal of 11-02 evening; exact numbers set on the card)
 
@@ -23,4 +23,5 @@ Holds: a check at 40% or less holds the fade in progress, under 50% flagged.
 
 | Attempt | Started from | What | State | Result |
 |---|---|---|---|---|
+| [1.4b](1.4b/CARD.md) | 1.3b's end | (owner, 11-03) one run of about 24 hours, five steps one after the other: the item rule's lesson out, the speed pay the same for every target, the switch cost out, the weapon rule out, the target lock outside contact 8 s → 0 (1.4c merged into it) | planned | |
 | [b1.4a](b1.4a/CARD.md) | b1.3a's end | replanned 11-03 after the head-alone test (37%): the head blended in to half (mix 0 → 0.5 over updates 10 to 90), learning from pay the whole time; the copy lesson off; the rules' imprint frozen; the lock and the way pay stay; 12 h | **stopped 11-03 11:12 at update 21** (owner) | 43.5% at update 10 (mix 0); the head's scores 16 → 29, agreement 87% → 61%: b1.3 to be redesigned |

@@ -1,0 +1,39 @@
+15:37:02 copied the optimizer's state C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\opt_end_b12d.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_13b_dry5\opt.pt (the head's group is added by the trainer)
+written
+15:37:02 the dry run's trainer started (10 updates, full size)
+15:45:02 update 1 recorded; H2_PG in the file 0.0
+15:49:47 update 2 recorded; H2_PG in the file 0.0
+15:54:32 update 3 recorded; H2_PG in the file 0.0
+15:59:17 update 4 recorded; H2_PG in the file 0.5
+16:04:17 update 5 recorded; H2_PG in the file 0.5
+16:09:17 update 6 recorded; H2_PG in the file 0.5
+16:14:02 update 7 recorded; H2_PG in the file 1.0
+16:19:02 update 8 recorded; H2_PG in the file 1.0
+16:24:02 update 9 recorded; H2_PG in the file 1.0
+16:27:02 PASS the trainer exited 0
+16:27:02 PASS no stall
+16:27:02 PASS the add on
+16:27:02 PASS 10 updates (10)
+16:27:02 update 1: credit 0.0 raw 0.06021 hands 21.60351 sum 21.60344 cos 0.0 l2 {'wd': 0.01, 'rows_w': 16.5837, 'head_w': 0.2526} cap None kl 0.03311 head clip 0.093 pg 0.00218 v 0.15669
+16:27:02 update 2: credit 0.0 raw 0.48584 hands 22.62884 sum 22.59085 cos -0.0897 l2 {'wd': 0.01, 'rows_w': 16.5666, 'head_w': 0.3449} cap None kl 0.03105 head clip 0.0516 pg -0.00086 v 0.12165
+16:27:02 update 3: credit 0.0 raw 0.8434 hands 22.4976 sum 22.4414 cos -0.0826 l2 {'wd': 0.01, 'rows_w': 16.5484, 'head_w': 0.424} cap None kl 0.03167 head clip 0.0403 pg -0.00054 v 0.11942
+16:27:02 update 4: credit 0.0 raw 1.1536 hands 22.56389 sum 22.52961 cos -0.054 l2 {'wd': 0.01, 'rows_w': 16.5229, 'head_w': 0.5108} cap None kl 0.03222 head clip 0.0343 pg -0.00055 v 0.14206
+16:27:02 update 5: credit 0.0 raw 1.22778 hands 22.69246 sum 22.6441 cos -0.0697 l2 {'wd': 0.01, 'rows_w': 16.5054, 'head_w': 0.5682} cap None kl 0.03209 head clip 0.0357 pg 0.00021 v 0.13514
+16:27:02 update 6: credit 0.5 raw 1.33106 hands 22.5892 sum 22.58977 cos -0.0325 l2 {'wd': 0.01, 'rows_w': 16.495, 'head_w': 0.5636} cap None kl 0.03518 head clip 0.0924 pg 0.00338 v 0.12922
+16:27:02 update 7: credit 0.5 raw 1.39523 hands 22.63396 sum 22.65161 cos -0.0247 l2 {'wd': 0.01, 'rows_w': 16.4784, 'head_w': 0.5841} cap None kl 0.03593 head clip 0.0696 pg 0.00224 v 0.13276
+16:27:02 update 8: credit 0.5 raw 1.58601 hands 22.58978 sum 22.50554 cos -0.0976 l2 {'wd': 0.01, 'rows_w': 16.4628, 'head_w': 0.7258} cap None kl 0.03588 head clip 0.0717 pg 0.00101 v 0.12938
+16:27:02 update 9: credit 1.0 raw 2.46299 hands 22.50334 sum 22.35762 cos -0.1098 l2 {'wd': 0.01, 'rows_w': 16.453, 'head_w': 0.8271} cap None kl 0.04121 head clip 0.0855 pg 0.0022 v 0.14252
+16:27:02 update 10: credit 1.0 raw 2.90151 hands 22.47094 sum 22.18215 cos -0.1621 l2 {'wd': 0.01, 'rows_w': 16.4384, 'head_w': 0.868} cap None kl 0.04066 head clip 0.0837 pg 0.00143 v 0.12573
+16:27:02 PASS no NaN
+16:27:02 PASS no piece skipped
+16:27:02 PASS the credit reached 1
+16:27:02 PASS the head's own scores under 60
+16:27:02 PASS the hands' target logits under 60
+16:27:02 PASS his step (kl) under 0.1 every update
+16:27:02 PASS the head's clip share under 0.3
+16:27:02 FAIL the head's part levels off: under 0.5 an update over the last three ([0.19, 0.88, 0.44])
+16:27:02 PASS the hands' part under 30 (22.47094)
+16:27:02 PASS the hands' part not shrunk: over 19 at every update (b1.2d's about 22; dry run 1 without the L2: 21.6 to 24.1) ([21.60351, 22.62884, 22.4976, 22.56389, 22.69246, 22.5892, 22.63396, 22.58978, 22.50334, 22.47094])
+16:27:04 add 1.0 live True
+16:27:04 PASS the save loads for the checks with add 1
+16:27:04 FAILED

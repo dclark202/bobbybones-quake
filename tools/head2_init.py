@@ -1,10 +1,12 @@
 """v0.4.3: give a network the strategy head (sim/head2.py) with its outputs at zero, and prove it answers as before.
 
   python tools/head2_init.py add <in policy.pt> <out policy.pt> [--gate G] [--opt <in opt.pt> <out opt.pt>] [--off hands,ctrl]
-      [--ctrl-src none|belief|both]
+      [--ctrl-src none|belief|both] [--add 1] [--chrono-lo 1]
       the head added (plan_in and target at zero, so the network answers exactly as without it whatever the gate); the gate
       written into head2.gate (default 1: the trainer's --head2-open 0 holds it there; 0: shut). --opt copies the optimizer's
-      state (the trainer adds the head's own group after the others when it loads one saved without it).
+      state (the trainer adds the head's own group after the others when it loads one saved without it). --add 1 (1.3b): the
+      head's own scores added to the hands' (head2.add; target at zero: the same answers); --chrono-lo: its memory speeds
+      spread evenly in log from this to 300 ticks.
   python tools/head2_init.py same <a.pt> <b.pt> [--frames 400] [--seats 8]
       the checks' numpy forward pass (test_suite.Policy) of both on the same random inputs, the same draws: the largest
       difference of his memory and of the actions (the brain stepped in both, as in training)
@@ -35,17 +37,18 @@ def add(a):
     L = head2_.layout(brain=int(ck["belief"]["hid"]), trk=int(sd["track.2.weight"].shape[0]), trz=tz, ahead=ah, ctrl=a.ctrl,
                       hands=int(ck["hidden"]), enc=256, size=a.size, inp=a.inp_w, plan=a.plan,
                       n_target=int(ck["action_dims"][INTENT_HEAD]), every=int(ck["belief"]["every"]), gamma=a.gamma,
-                      on={p: 0 for p in a.off.split(",") if p}, ctrl_src=a.ctrl_src)
+                      on={p: 0 for p in a.off.split(",") if p}, ctrl_src=a.ctrl_src, chrono_lo=a.chrono_lo)
     assert max(L["obs_cols"]) < int(ck["obs_dim"]), "docs/INPUTS.csv does not fit the network's {} inputs".format(ck["obs_dim"])
     m = head2_.make_module(L)
     with torch.no_grad():
         m.gate.fill_(a.gate)
+        m.add.fill_(float(a.add))
     for k, v in m.state_dict().items():
         sd["head2." + k] = v.clone()
     ck["head2"] = L
     torch.save(ck, a.out)
     print(head2_.describe(L))
-    print("wrote {} (gate {:g}; plan_in and target at zero)".format(a.out, a.gate))
+    print("wrote {} (gate {:g}, add {:g}; plan_in and target at zero)".format(a.out, a.gate, float(a.add)))
     if a.opt:
         shutil.copyfile(a.opt[0], a.opt[1])
         print("copied the optimizer's state {} -> {} (the head's group is added by the trainer)".format(*a.opt))
@@ -59,8 +62,8 @@ def same(a):
             print("{}: its strategy head is shut by its zero links: played as the force test below".format(os.path.basename(a.a if p is pa else a.b)))
     # (a head at zero links is not stepped: force it, so that the test runs the head's whole numpy path)
     for p in (pa, pb):
-        if getattr(p, "h2", None) is not None and float(p.h2W["gate"]) > 0:
-            p.h2_live = True
+        if getattr(p, "h2", None) is not None and (float(p.h2W["gate"]) > 0 or float(p.h2W.get("add", 0.0)) > 0):
+            p.h2_live = True                                  # (1.3b: or its add)
     assert pa.brain_on and pb.brain_on, "the brain is not stepped (its token's gate shut): nothing to compare"
     rng = np.random.default_rng(3)
     B, F = a.seats, a.frames
@@ -109,6 +112,8 @@ def main():
     p.add_argument("--inp-w", type=int, default=256)
     p.add_argument("--plan", type=int, default=64)
     p.add_argument("--gamma", type=float, default=0.9998)
+    p.add_argument("--add", type=int, default=0, help="(1.3b) the head's own scores added to the hands' (head2.add)")
+    p.add_argument("--chrono-lo", type=float, default=0.0, help="(1.3b) its memory speeds evenly in log from this to 300 ticks (0: as before)")
     q = sp.add_parser("same")
     q.add_argument("a")
     q.add_argument("b")
