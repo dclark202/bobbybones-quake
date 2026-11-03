@@ -82,3 +82,8 @@ The head plans for his whole pay: combat, the item table and the win correction;
 
 | Time | Change | Why |
 |---|---|---|
+| 11-03 11:12 | **stopped at update 21** (owner: "STop the b1.4 run. I don't trust it. There's enough issues with b1.3 that I think we need to redesign and start over there") | `stop_run.py duel_gru_b1_4a b14a --now`: the save of update 20 kept as `keep/policy_end_b14a.pt` with its optimizer |
+
+## The result
+
+Stopped 2026-11-03 11:12 at update 21 (owner: "I don't trust it. There's enough issues with b1.3 that I think we need to redesign and start over there"); end = the save of update 20 (`keep/policy_end_b14a.pt` with its optimizer, mix 0.04); the check of update 10 (mix 0) 87-113, 43.5% against the start; the head's own target scores' length 16 → 29 and its agreement with the rules 87% → 61% in the first eight updates of the mix. The mix written by the ramp reached the rollouts three updates late (with `--overlap` the next rollout is launched before the ramp writes). Not used.
