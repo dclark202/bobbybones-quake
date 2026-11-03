@@ -1,15 +1,12 @@
-"""b1.4a's fades (owner, 2026-11-02 evening: "B1.4 - fade OLD rules out"; CARD.md): live dials in a straight line each, on one clock of
-updates that stops while a hold is on, written after each new update (live.json, read between rollouts):
-  A  H2_MIX 0 -> 1 over clock 10 to 50: his target choice moves from the hands' (the rules' imprint, frozen) to the head's own
-     H2_COPY 1 -> 0 over clock 10 to 70: the copy lesson (the head held near the hands' choice) fades behind it
-  B  INTENT_HOLD 8 -> 0 over clock 50 to 80: the target lock out
-  C  INTENT_SEEK_W 1 -> 0 over clock 80 to 110: the way pay out
-(--scale stretches or shrinks every span; the card's numbers are at 1.) Each save during the fades is kept with its optimizer
-(keep/policy_fade<update>_b14a.pt); the first save past each fade's end as keep/policy_<A|B|C>done_b14a.pt.
-A check of 40% or less against the start holds the clock until a later check is above it; a check under 50% is flagged. The tripwire
-(flagged, nothing stopped): the head's own target logits' centred length over --raw-lim, a non-finite number, a skipped piece.
-Nothing here stops the run.
-    python docs/runs/b1.4/b1.4a/ramp_b14a.py <run> [--start 10] [--scale 1] [--raw-lim 60] [--poll S] [--settle S] [--dir D]"""
+"""b1.4a's fade (owner, 2026-11-03: "MIX fades to 0.5, HEAD learns the whole time. For B1.4a, fade the HEAD in over 80 updates, 10--90";
+"Do not stop the fade, just let it go over the 80 updates"; CARD.md): one live dial in a straight line, written after each new update
+(live.json, read between rollouts):
+  H2_MIX 0 -> 0.5 over updates 10 to 90: his target choice from the hands' (the rules' imprint, frozen) to half the head's own
+(--scale stretches or shrinks the span; the card's numbers are at 1.) No hold: the fade runs whatever the checks read. Each save during the
+fade is kept with its optimizer (keep/policy_fade<update>_b14a.pt); the first save at its end as keep/policy_Adone_b14a.pt.
+A check under 50% against the start is flagged. The tripwire (flagged, nothing stopped): the head's own target logits' centred length over
+--raw-lim, a non-finite number, a skipped piece. Nothing here stops the run.
+    python docs/runs/b1.4/b1.4a/ramp_b14a.py <run> [--start 10] [--scale 1] [--mix-to 0.5] [--raw-lim 60] [--poll S] [--settle S] [--dir D]"""
 import argparse
 import json
 import math
@@ -19,17 +16,7 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-# name: (from, to, clock start, clock end) at --scale 1, the clock counted from --start
-DIALS = {"H2_MIX": (0.0, 1.0, 0, 40), "H2_COPY": (1.0, 0.0, 0, 60), "INTENT_HOLD": (8.0, 0.0, 40, 70), "INTENT_SEEK_W": (1.0, 0.0, 70, 100)}
-DONE = (("A", 40, "his target choice the head's"), ("B", 70, "the target lock out"), ("C", 100, "the way pay out"))
-HOLD_AT = 0.40
-
-
-def value(spec, c, scale):
-    s_, e_, c0, c1 = spec
-    c0, c1 = c0 * scale, c1 * scale
-    f = 0.0 if c <= c0 else 1.0 if c >= c1 else (c - c0) / (c1 - c0)
-    return round(s_ + f * (e_ - s_), 6)
+SPAN = 80                                                     # updates, at --scale 1, counted from --start
 
 
 def main():
@@ -37,6 +24,7 @@ def main():
     ap.add_argument("run")
     ap.add_argument("--start", type=int, default=10)
     ap.add_argument("--scale", type=float, default=1.0)
+    ap.add_argument("--mix-to", type=float, default=0.5)
     ap.add_argument("--raw-lim", type=float, default=60.0)
     ap.add_argument("--poll", type=float, default=30)
     ap.add_argument("--settle", type=float, default=20)
@@ -48,6 +36,7 @@ def main():
     WD, LIVE, POL, OPT, KEEP, MET = os.path.join(D, "watch"), os.path.join(D, "live.json"), os.path.join(D, "policy.pt"), os.path.join(D, "opt.pt"), os.path.join(D, "keep"), os.path.join(D, "metrics.jsonl")
     os.makedirs(WD, exist_ok=True)
     os.makedirs(KEEP, exist_ok=True)
+    end_ = SPAN * a.scale
 
     def log(s):
         line = time.strftime("%m-%d %H:%M:%S ") + s
@@ -87,12 +76,11 @@ def main():
 
     def write(c):
         d = json.load(open(LIVE, encoding="utf-8"))
-        for k_, sp_ in DIALS.items():
-            d[k_] = value(sp_, c, a.scale)
+        d["H2_MIX"] = round(a.mix_to * min(1.0, max(0.0, c / end_)), 6)
         with open(LIVE + ".tmp", "w", encoding="utf-8") as fh:
             fh.write(json.dumps(d))
         os.replace(LIVE + ".tmp", LIVE)
-        return {k_: d[k_] for k_ in DIALS}
+        return d["H2_MIX"]
 
     def trip(m):
         h = m.get("head2") or {}
@@ -108,14 +96,12 @@ def main():
         return bad
 
     cur = json.load(open(LIVE, encoding="utf-8"))
-    for k_, sp_ in DIALS.items():
-        assert abs(float(cur.get(k_, sp_[0])) - sp_[0]) < 1e-9, "{} is {} in live.json, not {}".format(k_, cur.get(k_), sp_[0])
+    assert abs(float(cur.get("H2_MIX", 0.0))) < 1e-9, "H2_MIX is {} in live.json, not 0".format(cur.get("H2_MIX"))
     write(0.0)
     threading.Thread(target=flags, daemon=True).start()
-    log("ramp_b14a on for {}: the clock from update {}, every span x {}: {}; held at a check of {:.0%} or less; tripwire: raw over {}".format(
-        a.run, a.start, a.scale, DIALS, HOLD_AT, a.raw_lim))
-    c, done_n, seen, held, done_kept, tripped = 0.0, 0, mtime(), False, set(), 0
-    end_ = max(sp_[3] for sp_ in DIALS.values()) * a.scale
+    log("ramp_b14a on for {}: H2_MIX 0 -> {} over updates {} to {} (no hold); tripwire: raw over {}".format(
+        a.run, a.mix_to, a.start, a.start + end_, a.raw_lim))
+    c, done_n, seen, done_kept, tripped = 0.0, 0, mtime(), False, 0
     while True:
         time.sleep(a.poll)
         L = jl(MET)
@@ -124,27 +110,19 @@ def main():
             for b_ in trip(m):
                 log("TRIPWIRE update {}: {}".format(m.get("update"), b_))
         tripped = len(L)
-        ck_ = jl(os.path.join(WD, "checks_prev.jsonl"))
-        low = bool(ck_) and ck_[-1]["won"] / max(1, ck_[-1]["won"] + ck_[-1]["lost"]) <= HOLD_AT
-        if low != held:
-            held = low
-            log(("HOLD at update {}: the last check {}-{} is {:.0%} or less; the clock stays at {:.1f}" if low else "the hold lifts at update {}: the last check {}-{} is above {:.0%}; the clock goes on from {:.1f}").format(
-                n, ck_[-1]["won"], ck_[-1]["lost"], HOLD_AT, c))
         if n > done_n:
             inc_ = max(0, n - max(done_n, a.start))
-            if not held and inc_ > 0 and c < end_:
+            if inc_ > 0 and c < end_:
                 c = min(end_, c + inc_)
-                v_ = write(c)
-                log("CLOCK {:.1f} after update {}: {}".format(c, n, v_))
+                log("CLOCK {:.1f} after update {}: H2_MIX {}".format(c, n, write(c)))
             done_n = n
         m_ = mtime()
         if m_ > seen and time.time() - m_ >= a.settle:
             seen = m_
-            for nm_, cend_, what_ in DONE:
-                if c >= cend_ * a.scale and nm_ not in done_kept:
-                    keep("policy_{}done_b14a.pt".format(nm_))
-                    done_kept.add(nm_)
-                    log("fade {} done ({}): kept keep/policy_{}done_b14a.pt at the save of update {}".format(nm_, what_, nm_, n))
+            if c >= end_ and not done_kept:
+                keep("policy_Adone_b14a.pt")
+                done_kept = True
+                log("the fade done (H2_MIX {}): kept keep/policy_Adone_b14a.pt at the save of update {}".format(a.mix_to, n))
             if c < end_:
                 keep("policy_fade{}_b14a.pt".format(n))
                 log("save at update {} kept with its optimizer (clock {:.1f})".format(n, c))

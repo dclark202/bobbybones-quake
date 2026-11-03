@@ -18,6 +18,8 @@ def main():
     ap.add_argument("--out", default="")
     ap.add_argument("--contact-a", default="0", help="(b1.3a) save A's chance of a free contact")
     ap.add_argument("--contact-b", default="0", help="(b1.3a) save B's")
+    ap.add_argument("--mix-a", default="", help="(b1.4a) save A's target choice moved this far to its strategy head's own (1: the head's alone; default: the save's)")
+    ap.add_argument("--mix-b", default="", help="(b1.4a) save B's")
     ap.add_argument("--games", type=int, default=16)
     ap.add_argument("--maps", default=",".join(MAPS))
     ap.add_argument("--batch", type=int, default=4)
@@ -39,6 +41,7 @@ def main():
                    "--minutes", "10", "--procs", "2", "--swap", "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225", "--round", "600", "--opp-round", "600",
                    "--hold", a.hold_a, "--opp-hold", a.hold_b, "--contact", a.contact_a, "--opp-contact", a.contact_b]
             cmd += [x for s_ in sets for x in ("--set", s_)]
+            cmd += (["--head2-mix", a.mix_a] if a.mix_a else []) + (["--opp-head2-mix", a.mix_b] if a.mix_b else [])
             jobs.append((mp, js, subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=open(js + ".log", "w"), stderr=subprocess.STDOUT)))
         for mp, js, p in jobs:
             p.wait()

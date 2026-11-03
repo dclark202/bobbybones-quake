@@ -60,3 +60,9 @@ Unchanged from b1.2d: the head does not act. The table is the baseline, win pay 
 
 | Time | Change | Why |
 |---|---|---|
+
+## The result (2026-11-03)
+
+Ended 07:17 at update 130 (owner), `keep/policy_end_b13a.pt` with its optimizer. The copy: agreement 86.8% (KL 0.145), flat from update 50. Play with the hands choosing about level with b1.2d's end (58.5 / 52.5 / 44.0 / 48.0 / 49.5% at updates 10 / 30 / 50 / 90 / 110; 52% against b1.1 at 70); the panel green.
+
+**The head alone** (`head2head.py --mix-a 1`, its choice in place of the hands', against b1.2d's end, 200 games, [headalone.log](headalone.log)): **74-126, 37.0%**, frag share 43.5%; by map from 33% (Blood Run) to 61% (Lost World). Under the 45% bar: the head copies the hands where the hands' choices led, and alone it meets places it never saw. The owner: "he was always going to suck with a hard swap ... The only reasonable way to do this is to blend the two in together": b1.4a.

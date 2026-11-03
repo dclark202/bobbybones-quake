@@ -23,4 +23,4 @@ Holds: a check at 40% or less holds the fade in progress, under 50% flagged.
 
 | Attempt | Started from | What | State | Result |
 |---|---|---|---|---|
-| [b1.4a](b1.4a/CARD.md) | b1.3a's end | the old rules out (above) | built 11-02 night, its trial passed; waits for b1.3a's verdict and the owner's go (11-03 ~9:00) | |
+| [b1.4a](b1.4a/CARD.md) | b1.3a's end | replanned 11-03 after the head-alone test (37%): the head blended in to half (mix 0 → 0.5 over updates 10 to 90), learning from pay the whole time; the copy lesson off; the rules' imprint frozen; the lock and the way pay stay; 12 h | **started 2026-11-03 09:18**, 12 h | |

@@ -1,5 +1,5 @@
-# b1.4a's start (owner, 2026-11-02 evening: "B1.4 - fade OLD rules out"; docs/runs/b1.4/b1.4a/CARD.md): from b1.3a's end, his target choice moved
-# from the hands' to the head's, then the target lock and the way pay out (ramp_b14a.py).
+# b1.4a's start (owner, 2026-11-03: the head blended in to half, learning the whole time; docs/runs/b1.4/b1.4a/CARD.md): from b1.3a's end, his target choice moved
+# halfway from the hands' (the rules' imprint, frozen) to the head's over updates 10 to 90 (ramp_b14a.py); the copy lesson off.
 # Refuses unless: no trainer runs; b1.3a's end and its optimizer and the controls are there; the start's head is shut (gate 0) with mix 0; the
 # settings check passes against b1.3a's command; trial_b14a.log has ALL PASSED (or -NoTrial on the owner's word); the run folder is new.
 # Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.4\b1.4a\start.ps1 [-Minutes 720] [-From <policy save; default b1.3a's end>] [-NoTrial]
@@ -38,7 +38,7 @@ if (Test-Path (Join-Path $R1 "policy.pt")) { Log "$R1 already has a policy.pt: n
 New-Item -ItemType Directory -Force (Join-Path $R1 "snapshots"), (Join-Path $R1 "keep"), (Join-Path $R1 "watch") | Out-Null
 Copy-Item $END (Join-Path $R1 "policy.pt")
 Copy-Item $OPTF (Join-Path $R1 "opt.pt")
-& $PY -c "import json, sys; d = json.load(open(sys.argv[1])); d.update(H2_GATE_CAP=0.0, H2_GATE_OPEN=0.0, H2_MIX=0.0, H2_COPY=1.0, INTENT_HOLD=8.0, INTENT_SEEK_W=1.0, VALUE_WARM=0); json.dump(d, open(sys.argv[2], 'w')); print('live.json:', d)" (Join-Path $R0 "live.json") (Join-Path $R1 "live.json") | ForEach-Object { Log $_ }
+& $PY -c "import json, sys; d = json.load(open(sys.argv[1])); d.update(H2_GATE_CAP=0.0, H2_GATE_OPEN=0.0, H2_MIX=0.0, H2_COPY=0.0, INTENT_HOLD=8.0, INTENT_SEEK_W=1.0, VALUE_WARM=0); json.dump(d, open(sys.argv[2], 'w')); print('live.json:', d)" (Join-Path $R0 "live.json") (Join-Path $R1 "live.json") | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "live.json not made: not started"; exit 1 }
 Copy-Item (Join-Path $R1 "policy.pt") (Join-Path $R1 "keep\policy_start_b14a.pt")
 Copy-Item (Join-Path $R1 "opt.pt") (Join-Path $R1 "keep\opt_start_b14a.pt")
@@ -70,4 +70,4 @@ $r = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "ramp_b14a.py"),
 $r.ProcessorAffinity = $CHK
 $s = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\selfplay_loop.py"), $RUN, "--every", "40", "--games", "5", "--par", "1" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "selfplay_stdout.log") -RedirectStandardError (Join-Path $WD "selfplay_stderr.log")
 $s.ProcessorAffinity = $CHK
-Log ("watcher " + $w.Id + " | ramp and tripwire " + $r.Id + " (A: the mix 0 -> 1 over updates 10 to 50, the copy 1 -> 0 to 70; B: the lock 8 -> 0 over 50 to 80; C: the way pay 1 -> 0 over 80 to 110) | self-play logger " + $s.Id + " | no guard (owner: never stop the run)")
+Log ("watcher " + $w.Id + " | ramp and tripwire " + $r.Id + " (the mix 0 -> 0.5 over updates 10 to 90, no hold; the copy lesson off; the lock and the way pay stay) | self-play logger " + $s.Id + " | no guard (owner: never stop the run)")
