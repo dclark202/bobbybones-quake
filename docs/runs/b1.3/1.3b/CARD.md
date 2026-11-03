@@ -12,7 +12,7 @@ Today one small layer picks his target (an item, the enemy, a holding place) fro
 
 | | |
 |---|---|
-| Started from | **not started** · b1.2d's end with its optimizer (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt`, the network on the public servers), the head added new (`tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief`). b1.3a's and b1.4a's saves are not used |
+| Started from | **started 2026-11-03 16:31, to 08:00 on 11-04 (929 minutes)** on the owner's word ("Commit and start"; without the last dry run's verdict: `-NoTrial`) · b1.2d's end with its optimizer (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt`, the network on the public servers), the head added new (`tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief`). b1.3a's and b1.4a's saves are not used |
 | Run | `duel_gru_1_3b` |
 | What | his target logits = the hands' 17 target rows on the fast memory h **plus** the head's target layer on the slow memory s (`--head2-add 1`). One set of logits, one lesson. The credit for the choice moves from his own advantage (about 1 s ahead) to the head's (λ 0.995, about 5 s, and its two-minute value) over updates 10 to 90 |
 | How his target is chosen | scores = W_h·h + b + W_s·s; W_h and b are b1.2d's target rows, W_s starts at zero. Where the head has no state yet (a respawn to its first tick, 0.2 s) the rows alone |
@@ -58,7 +58,7 @@ Today one small layer picks his target (an item, the enemy, a holding place) fro
 | The third dry run, L2 0.01 on both parts as first built (on the scores' level too, and reaching his memory) (`scratch_13b_dry3`) | **broke him; stopped at update 4:** the hands' part 22 → 7.3 → 4.0 → 1.8 (targets near random), his step 31 nats at update 1 and 6.6 at update 2 (normal 0.03): the penalty's gradient went through his shared memory |
 | The fourth dry run: an L2 of 0.001 in the loss on both, centred, each part's own layer only (`scratch_13b_dry4`) | stopped at update 1: the hands' part 22 → 13.8 in one update (Adam sizes a steady pull's steps by the other gradients' noise, so a small λ still moves the rows fast) |
 | **The fifth dry run: decoupled weight decay 0.01 on both target layers** (`scratch_13b_dry5`, 15:47 to 16:27) | **every check passed but one:** his step 0.031 to 0.041 (normal); the hands' part 21.6 to 22.7, never shrunk (the first dry run without any L2: 21.6 to 24.1); the head's part 0.06 → 2.9 (the first dry run: 9.3), the cosine −0.16 to 0 (the first: −0.41). **Failed:** "the head's part levels off": +0.19, +0.88, +0.44 over the last three updates, the +0.88 when this dry run's dial jumped 0.5 → 1 at once (the run's ramp moves 0.0125 an update). Before the dial: +0.06 to +0.36 an update |
-| The owner's go and the length | ❓ |
+| The owner's go and the length | ✅ 11-03 ("Commit and start"; until 08:00); **started 16:31** (`start.log`): settings check PASS, 0 actions differ, the random head layer 1,107 |
 
 ## Judged by
 
@@ -100,4 +100,4 @@ The choice is learnt on his whole pay as b1.2d's was; what changes is what it ca
 
 ## The result
 
-Not started.
+Running.

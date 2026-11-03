@@ -13,4 +13,4 @@
 | Attempt | Started from | What | State | Result |
 |---|---|---|---|---|
 | [b1.3a](b1.3a/CARD.md) | b1.2d's end | the head in, shut in play, learning to copy his target choice (the copy design, owner 11-02 evening; the sole-learner design moves to b1.4) | ended 11-03 07:17 at update 130 (owner); the copy 86.8%; play about level with b1.2d's end; **the head alone 74-126, 37.0%** against b1.2d's end ([headalone.log](b1.3a/headalone.log)) | the copy holds while the hands choose; a hard swap to the head fails: b1.4a blends the two |
-| [1.3b](1.3b/CARD.md) | b1.2d's end | the head's own scores added to the hands' (one chooser, its slow-memory part at zero at the start), the credit moved to the head's advantage over updates 10 to 90; the head's memory speeds spread; no copy, no blend | built 11-03, not started | |
+| [1.3b](1.3b/CARD.md) | b1.2d's end | the head's own scores added to the hands' (one chooser, its slow-memory part at zero at the start), the credit moved to the head's advantage over updates 10 to 90; the head's memory speeds spread; no copy, no blend | started 11-03 16:31, to 08:00 on 11-04 | |
