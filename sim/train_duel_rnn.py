@@ -1019,6 +1019,9 @@ def main():
                                                                    "no first moment and the median second moment of their parameter (a zero one makes Adam's first steps on them huge); their new first layer starts fresh. Does nothing to a state that fits")
     ap.add_argument("--head2-sole", type=int, default=0, help="(--head2, b1.3a) the head alone learns his target choice: the hands' target logits take no lesson (policy, entropy, teachers: nothing reaches his memory through them) "
                                                               "and their rows of pi stay as they are; the head's lesson has the target's entropy bonus. b1.2a's blowup: two learners on different pay added to one logit")
+    ap.add_argument("--head2-copy", type=float, default=0.0, help="(--head2, b1.3a; owner 2026-11-02) the weight of a lesson that teaches the head's own target choice (softmax of its "
+                                                                   "target layer, the gate left out) to copy his choice as the hands make it (their distribution, a number), by KL, on the "
+                                                                   "frames his intention is read and the head has a state. Its gradient reaches the head only. 0: none")
     ap.add_argument("--head2-pay", default="all", choices=("all", "combat_win"), help="(--head2, b1.2a) what its value and advantage count: his whole pay, or combat (frags, deaths, damage) plus the win part, not the item pay")
     ap.add_argument("--head2-v", type=float, default=0.5, help="(--head2) the weight of its value's lesson")
     ap.add_argument("--head2-plan-grad", type=float, default=0.0, help="(--head2) the share of the hands' gradient that goes on into the head through the "
@@ -2704,6 +2707,9 @@ def main():
         with torch.no_grad():
             H2_ROWS = (pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])].clone(), pol.pi.bias[HD_I0:HD_I0 + int(H2L["n_target"])].clone())
         print("head2-sole: the head alone learns his target; the hands' {} target rows are held".format(int(H2L["n_target"])), flush=True)
+    H2C_CHK = [False]                                        # (--head2-copy) its gradient checked once
+    if H2 and a.head2_copy > 0:
+        print("head2-copy: the head learns to copy his target choice at weight {} (KL to the hands' choice on read frames); its gate stays as set".format(a.head2_copy), flush=True)
     BDROP = None                                             # (--brain-drop) the columns the brain does not read
     if a.brain_drop:
         assert BEL, "--brain-drop: with --belief"
@@ -4502,7 +4508,7 @@ def main():
             B_HR = R.get("b_hr") if R.get("b_hr") is not None else b_rew
             H2_PAYS = [float(B_HR.abs().mean()), float(b_rew.abs().mean())]   # (a frame's |pay|: the head's, his)
             ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), lam)
-            h2_acc = torch.zeros(12, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
+            h2_acc = torch.zeros(17, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
             #                                                              bias's (centred, on read frames), the hands' intention logits' (same), read
             #                                                              frames, grad norm (sum, count), |gin| / |e| (sum, pieces), the ratio's clip share
         IF_ACC = torch.zeros(len(IF_MAPS), IF_OK.shape[1], device=dev)   # (--item-floor) epoch 0: sum of p over read frames, by map and item
@@ -4659,6 +4665,30 @@ def main():
                     vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
                     vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
                     loss = loss + H2_PG_[0] * H2_PG_[2] * pg2_ + a.head2_v * vl2_
+                    if a.head2_copy > 0:                                 # (--head2-copy, b1.3a) the head's own choice taught to copy the hands'
+                        mc_ = m2_ * ho2_["alive"]                         # (read frames with a head state: none from a reset to its next tick)
+                        msc_ = mc_.sum().clamp(min=1.0)
+                        lqc_ = torch.log_softmax(pol.head2.target(ho2_["s_held"]), -1)
+                        lpc_ = torch.log_softmax(ho2_["hands_int"].float(), -1)
+                        klc_ = (lpc_.exp() * (lpc_ - lqc_)).sum(-1)
+                        cl_ = (klc_ * mc_).sum() / msc_
+                        loss = loss + a.head2_copy * cl_
+                        if not H2C_CHK[0]:                               # (once) its gradient reaches the head only: refuse to go on otherwise
+                            H2C_CHK[0] = True
+                            np_ = [(n_, p_) for n_, p_ in pol.named_parameters() if p_.requires_grad]
+                            gs_ = torch.autograd.grad(cl_, [p_ for _, p_ in np_], retain_graph=True, allow_unused=True)
+                            hit_ = [n_ for (n_, _), g_ in zip(np_, gs_) if g_ is not None and bool((g_ != 0).any())]
+                            out_ = [n_ for n_ in hit_ if not n_.startswith("head2.")]
+                            print("head2-copy: its gradient reaches {} (the head's) and {} others {}".format([n_ for n_ in hit_ if n_.startswith("head2.")], len(out_), out_[:5]), flush=True)
+                            assert not out_, "--head2-copy: the lesson's gradient reaches more than the head"
+                        if epoch == 0:
+                            with torch.no_grad():
+                                ai_ = A[..., I_HEAD]
+                                h2_acc[12] += mc_.sum()
+                                h2_acc[13] += cl_.detach() * msc_
+                                h2_acc[14] += ((lqc_.argmax(-1) == lpc_.argmax(-1)).float() * mc_).sum()
+                                h2_acc[15] += ((lqc_.argmax(-1) == ai_).float() * mc_).sum()
+                                h2_acc[16] += ((lpc_.argmax(-1) == ai_).float() * mc_).sum()
                     if a.head2_sole:                                     # (--head2-sole) the target's entropy bonus is the head's now
                         lq2_ = torch.log_softmax(ho2_["hands_int"] + ho2_["bias"], -1)
                         loss = loss - ent_coef * ent_heads[I_HEAD] * ((-(lq2_.exp() * lq2_).sum(-1)) * m2_).sum() / ms2_
@@ -5408,6 +5438,10 @@ def main():
                 plan_in_w=round(float(pin_), 6), target_w=round(float(pol.head2.target.weight.norm()), 6),
                 pay=a.head2_pay, pay_abs=[round(x_, 6) for x_ in H2_PAYS], v=round(float(B_VH[:T].mean()), 4), ret=round(float(RET_H.mean()), 4), adv_sd=round(float(ADV_H.std()), 4),
                 lr=opt.param_groups[-1]["lr"], opp_open=bool(snaps and opp.h2_open))
+            if a.head2_copy > 0:                                         # (--head2-copy) KL to the hands' choice; the head's first choice = the hands'; each beside the
+                fc_ = max(1.0, float(ha2_[12]))                          # choice as played
+                rec["head2"]["copy"] = dict(w=a.head2_copy, frames=int(ha2_[12]), kl=round(float(ha2_[13]) / fc_, 5), agree=round(float(ha2_[14]) / fc_, 4),
+                                              head_played=round(float(ha2_[15]) / fc_, 4), hands_played=round(float(ha2_[16]) / fc_, 4))
         if HEADL:                                                        # (--head) the plan's size, plan_in, the head's part of his target, its
             ha_ = hd_acc.numpy()                                         # values' and win head's losses, the read, its step (first pass)
             rs_ = torch.stack(HO_[1]).sum(0).cpu().numpy() if HO_[1] else np.zeros(3)

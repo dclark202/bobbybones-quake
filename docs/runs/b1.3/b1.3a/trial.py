@@ -1,17 +1,21 @@
-"""b1.3a's trial (2026-11-01), on the CPU, with no trainer needed on the card: the run's train.cmd made small (2 workers, 8 matches, 96 steps) from b1.2c's end given the head, gate open at once, for --minutes (default 40), into data/sim_runs/scratch_b13a_trial. It must run after b1.2c has ended.
+"""b1.3a's trial (2026-11-01; on b1.2d 2026-11-02), on the CPU, with no trainer needed on the card: the run's train.cmd made small (2 workers, 8 matches, 96 steps) from a b1.2d save given the head
+(default b1.2d's end; any save kept with its optimizer), gate open at once, b1.2d's end dials, for --minutes (default 40), into data/sim_runs/scratch_b13a_trial.
+On 2 of the owner's efficiency cores (16, 17: 0x30000; owner 11-02: "2 of my 4 E cores, to test anything"), so it can run beside b1.2d.
 Passes when: exit 0 on the CPU, 40 updates or more; no NaN and no piece skipped; the hands' target rows of pi the same to the bit from start to end, other rows of pi moved, the head's target layer moved; the hands' target length steady (within 25%); the bias's length levels off (the last quarter's mean under 1.5 x the third quarter's); a check with a head in both seats finishes.
 Prints all of it: read it beside the card's blowup. Then `start.ps1` may run.
-    %USERPROFILE%\\anaconda3\\python.exe docs\\runs\\b1.3\\b1.3a\\trial.py [minutes] > docs\\runs\\b1.3\\b1.3a\\trial.log"""
+    %USERPROFILE%\\anaconda3\\python.exe docs\\runs\\b1.3\\b1.3a\\trial.py [minutes] [policy save] > docs\\runs\\b1.3\\b1.3a\\trial.log"""
 import json, os, shutil, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 PY = sys.executable
 SR = os.path.join(ROOT, "data", "sim_runs")
-R0 = os.path.join(SR, "duel_gru_b1_2c")
+R0 = os.path.join(SR, "duel_gru_b1_2d")
 RUN = "scratch_b13a_trial"
 D = os.path.join(SR, RUN)
 BS = "\\"
 MINS = sys.argv[1] if len(sys.argv) > 1 else "40"
+FROM = sys.argv[2] if len(sys.argv) > 2 else os.path.join(R0, "keep", "policy_end_b12d.pt")
+END_DIALS = dict(ITEM_PT_MIX=1.0, SPEED_PAY=0.125, DMG_TAKEN_W=0.8, STACK_DIFF=0.0, RAIL_FAR_PAY=0.25)   # b1.2d's end values (its card)
 
 
 def say(s):
@@ -22,7 +26,12 @@ def main():
     if os.path.exists(D):
         say(D + " is there: not started (look at it first; nothing deleted)")
         return 1
-    END, OPT = os.path.join(R0, "keep", "policy_end_b12c.pt"), os.path.join(R0, "keep", "opt_end_b12c.pt")
+    END = FROM
+    OPT = os.path.join(os.path.dirname(END), os.path.basename(END).replace("policy_", "opt_", 1))
+    if not (os.path.exists(END) and os.path.exists(OPT)):
+        say("missing {} or {}: not started".format(END, OPT))
+        return 1
+    say("from {} with {}".format(END, OPT))
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1")
     cenv = dict(env, CUDA_VISIBLE_DEVICES="-1", OMP_NUM_THREADS="1")
     for s_ in ("snapshots", "keep", "watch"):
@@ -32,10 +41,10 @@ def main():
         say("head2_init add failed")
         return 1
     shutil.copy2(os.path.join(D, "policy.pt"), os.path.join(D, "keep", "policy_start.pt"))
-    shutil.copy2(END, os.path.join(D, "snapshots", "anchor_b12c.pt"))
+    shutil.copy2(END, os.path.join(D, "snapshots", "anchor_b12d.pt"))
     shutil.copy2(os.path.join(R0, "live_settings.env"), os.path.join(D, "live_settings.env"))
     lv = json.load(open(os.path.join(R0, "live.json"), encoding="utf-8"))
-    lv.update(H2_GATE_CAP=1.0, H2_GATE_OPEN=1.0, VALUE_WARM=0)
+    lv.update(END_DIALS, H2_GATE_CAP=1.0, H2_GATE_OPEN=1.0, VALUE_WARM=0)
     json.dump(lv, open(os.path.join(D, "live.json"), "w", encoding="utf-8"))
     say("live.json: {}".format(lv))
     t = open(os.path.join(HERE, "train.cmd"), encoding="ascii").read().replace("\r\n", "\n")
@@ -44,7 +53,7 @@ def main():
     t = re.sub(r"--minutes \d+ --gamma", "--minutes {} --gamma".format(MINS), t)
     subs = [("set ROOT=%~dp0.." + BS + ".." + BS + ".." + BS + "..", "set ROOT={}\nset CUDA_VISIBLE_DEVICES=-1\nset OMP_NUM_THREADS=1".format(ROOT)),
             ("call %~dp0aim2_env.cmd", "call " + os.path.join(HERE, "aim2_env.cmd")),
-            ("/affinity C3FFF", "/affinity 3C000"), ("--workers 30 ", "--workers 2 "), ("--matches 168 ", "--matches 8 "),
+            ("/affinity C03C3", "/affinity 30000"), ("--workers 30 ", "--workers 2 "), ("--matches 168 ", "--matches 8 "),
             ("--steps 384 ", "--steps 96 "), ("--minibatches 360 ", "--minibatches 4 "), ("--run duel_gru_b1_3a ", "--run " + RUN + " "),
             ("--head2-cap 0 --head2-gate 0 ", "--head2-cap 1 --head2-gate 1 "),
             ("data" + BS + "sim_runs" + BS + "duel_gru_b1_3a.log", "data" + BS + "sim_runs" + BS + RUN + ".log")]
