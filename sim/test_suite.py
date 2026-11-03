@@ -202,6 +202,13 @@ class Policy:
         self.h2W = dict(self.h2W, gate=np.float32(g))
         self.h2_live = head2_.np_open(self.h2W)
 
+    def set_head2_mix(self, m):
+        """(b1.4a, checks) play his target choice moved this far from the hands' to the strategy head's (1: the head's alone)"""
+        assert self.h2 is not None, "this network has no strategy head"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, mix=np.float32(m))
+        self.h2_live = head2_.np_open(self.h2W)
+
     def set_gate(self, g):
         """(v0.4.1, checks) play the brain's token at this gate (0: shut, the network without it)"""
         assert g <= 0 or self.btok is not None, "this network has no brain token"
@@ -309,7 +316,8 @@ class Policy:
             zo, h = self.slow_step(self.slowP, self.slow, x, h, hf)
         logits = zo @ self.wp.T + self.bp
         if b2 is not None:
-            logits[:, int(np.sum(self.dims[:10])):int(np.sum(self.dims[:11]))] += b2
+            si2_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
+            logits[:, si2_] = head2_.np_mix_in(self.h2W, self.h2, h2s, logits[:, si2_]) + b2     # (b1.4a: the mix; none at mix 0)
         if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
             _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
             logits[:, self.head_si] += t_add

@@ -366,7 +366,8 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
         zo, h = P["_slow"][2](P["_slow"][1], P["_slow"][0], x, h, hf)
     logits = zo @ P["wp"].T + P["bp"]
     if b2 is not None:
-        logits[:, head_slices(P)[0]] += b2
+        si2_ = head_slices(P)[0]                             # (b1.4a: the mix, his target choice moved toward the head's own; none at mix 0)
+        logits[:, si2_] = P["_head2"][2].np_mix_in(P["_head2"][1], P["_head2"][0], h2s, logits[:, si2_]) + b2
     if hh is not None:                                       # (v0.4) the head ticks after the fast memory's step (on its frames) and its
         _, t_add, w_add, hh = hm.np_tick(hW, hlay, x, hfast, hh, events)    # target and way are added to the hands' (held between ticks)
         si, sw = head_slices(P)

@@ -435,6 +435,8 @@ def main():
     ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
     ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--head2-mix", type=float, default=None, help="(b1.4a) his target choice moved this far to his strategy head's own (default: his checkpoint's; 1: the head's alone)")
+    ap.add_argument("--opp-head2-mix", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--contact", default="", help="(b1.3a) his seats' own chance of a free contact (default: CONTACT_FREE, the same for both)")
     ap.add_argument("--opp-contact", default="", help="(b1.3a) the opponent's seats' own chance of a free contact")
     ap.add_argument("--hold", default="", help="(b1.2) his seats' own target lock, seconds (default: INTENT_HOLD, the same for both)")
@@ -453,8 +455,11 @@ def main():
         pol.set_rule_fade(a.rule_fade_g)
     if a.head2_gate is not None:
         pol.set_head2_gate(a.head2_gate)
+    if a.head2_mix is not None:
+        pol.set_head2_mix(a.head2_mix)
     if getattr(pol, "h2", None) is not None:
-        print("strategy head: gate {:g} ({})".format(float(pol.h2W["gate"]), "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
+        print("strategy head: gate {:g}, mix {:g} ({})".format(float(pol.h2W["gate"]), float(pol.h2W.get("mix", 0.0)),
+              "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
     if getattr(pol, "rf", None) is not None:
         print("rule fade: g {:g} ({}); the simulator's readers {}".format(pol.rfg, "none" if pol.rfg <= 0 else "{} columns faded".format(len(pol.rf_cols)),
               "on the brain's answer for a life drawn at g (BRAIN_READ=1)" if pol.rf_read else "on the rule"), flush=True)
@@ -473,6 +478,8 @@ def main():
             opp_pol.set_rule_fade(a.opp_rule_fade_g)
         if a.opp_head2_gate is not None:
             opp_pol.set_head2_gate(a.opp_head2_gate)
+        if a.opp_head2_mix is not None:
+            opp_pol.set_head2_mix(a.opp_head2_mix)
         oo = names(a.opp_inputs)
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])

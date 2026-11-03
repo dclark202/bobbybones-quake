@@ -1,0 +1,38 @@
+20:32:05 from data/sim_runs/scratch_b13a_copy/keep/policy_trialsrc.pt with data/sim_runs/scratch_b13a_copy/keep\opt_trialsrc.pt
+20:32:05 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.125, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_MIX': 0.0, 'H2_COPY': 1.0, 'INTENT_SEEK_W': 1.0}
+20:32:05 the trial trainer and the ramp started, 60 minutes
+21:32:40 PASS the trainer exited 0
+21:32:40 PASS on the CPU
+21:32:40 PASS the head alone learns his target
+21:32:40 PASS 40 updates or more (136)
+21:32:40 update 1: mix 0.0 seek_w 1.0 copy_w 1.0 agree 0.4 raw 7.0072 hands 19.61972 pg_loss -0.00314 v_loss 0.0128 no_state 0.5745
+21:32:40 update 10: mix 0.5 seek_w 1.0 copy_w 0.6 agree 0.4561 raw 9.8905 hands 21.79194 pg_loss 0.04692 v_loss 0.09545 no_state 0.0
+21:32:40 update 19: mix 1.0 seek_w 1.0 copy_w 0.0 agree 0.4103 raw 12.2797 hands 23.94173 pg_loss 0.00837 v_loss 0.09395 no_state 0.0
+21:32:40 update 28: mix 1.0 seek_w 0.13333 copy_w 0.0 agree 0.1486 raw 10.4593 hands 24.57879 pg_loss 0.00872 v_loss 0.03615 no_state 0.0
+21:32:40 update 37: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.1746 raw 11.7479 hands 24.33356 pg_loss -0.00173 v_loss 0.19848 no_state 0.0
+21:32:40 update 46: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.2264 raw 11.2278 hands 23.71752 pg_loss -0.01677 v_loss 0.06644 no_state 0.0
+21:32:40 update 55: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.1688 raw 11.8802 hands 22.80452 pg_loss -0.00413 v_loss 0.02032 no_state 0.0
+21:32:40 update 64: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.1667 raw 13.3902 hands 23.43919 pg_loss 0.00416 v_loss 0.02285 no_state 0.0
+21:32:40 update 73: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.3377 raw 11.5432 hands 24.01293 pg_loss 0.00363 v_loss 0.0138 no_state 0.0
+21:32:40 update 82: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.209 raw 11.3305 hands 23.69474 pg_loss -0.00284 v_loss 0.02883 no_state 0.0
+21:32:40 update 91: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.0727 raw 12.3005 hands 24.04692 pg_loss 0.00947 v_loss 0.03425 no_state 0.0
+21:32:40 update 100: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.2105 raw 11.2406 hands 22.75046 pg_loss 0.00605 v_loss 0.04021 no_state 0.0
+21:32:40 update 109: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.2545 raw 11.3554 hands 23.29211 pg_loss 0.02029 v_loss 0.08185 no_state 0.0
+21:32:40 update 118: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.1067 raw 11.3924 hands 22.42529 pg_loss 0.05561 v_loss 0.03174 no_state 0.0
+21:32:40 update 127: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.0909 raw 10.595 hands 22.01658 pg_loss 0.02441 v_loss 0.03436 no_state 0.0
+21:32:40 update 136: mix 1.0 seek_w 0.0 copy_w 0.0 agree 0.0357 raw 9.7742 hands 22.75006 pg_loss -0.02677 v_loss 0.02048 no_state 0.0
+21:32:40 PASS the mix reached 1
+21:32:40 PASS the way pay's factor reached 0
+21:32:40 PASS the lock reached 0 in the simulators (live_applied: 0.0)
+21:32:40 PASS no NaN
+21:32:40 PASS no piece skipped
+21:32:40 PASS no TRIPWIRE
+21:32:40 PASS the ramp kept the fades' saves
+21:32:43 PASS the hands' target rows the same to the bit
+21:32:43 PASS the hands' other rows moved
+21:32:43 PASS the head's target layer moved
+21:32:43 PASS the save's mix 1 (1.0)
+21:38:08 21:38:07 {'bloodrun': '0-2 0%'}
+trial: A policy.pt at 8 s against B policy_start.pt at 8 s: 0-2, win rate 0.0%, frag share 0.0%
+21:38:08 PASS a check with the save at its mix finishes
+21:38:08 ALL PASSED
