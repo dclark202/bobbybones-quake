@@ -1,0 +1,15 @@
+11-02 13:33:06 b1.2c ended its dials
+11-02 13:33:06 allowed set DMG_ENEMY_ONLY: run '1' | reference '<unset>'
+11-02 13:33:06 allowed set ITEM_DECAY: run '0.002' | reference '<unset>'
+11-02 13:33:06 allowed set ITEM_PT_HI: run '0.002' | reference '<unset>'
+11-02 13:33:06 allowed set ITEM_PT_LO: run '0.004' | reference '<unset>'
+11-02 13:33:06 allowed set SM_PASS: run '1' | reference '<unset>'
+11-02 13:33:06 allowed arg --minutes: run '720' | reference '1344'
+11-02 13:33:06 allowed arg --run: run 'duel_gru_b1_2d' | reference 'duel_gru_b1_2c'
+11-02 13:33:06 settings check: PASS
+11-02 13:33:19 backup: copied 293 files 1.8 GB to T:\BobbyBones_backup
+11-02 13:33:19 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 0.0, 'SPEED_PAY': 0.25, 'DMG_TAKEN_W': 1.0, 'STACK_DIFF': 0.7, 'RAIL_FAR_PAY': 0.12}
+11-02 13:33:19 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2c\keep\policy_nojerk_b12c.pt
+11-02 13:33:19 trainer started: cmd 23708, from b1.2c
+11-02 13:33:24 b1.2c's final check of update 250 started: 25648 (results in duel_gru_b1_2c\watch\watch.log)
+11-02 13:33:24 watcher 23616 | ramp 24148 (five dials faded together over updates 10 to 70; held only at a check of 40% or less) | self-play logger 16136

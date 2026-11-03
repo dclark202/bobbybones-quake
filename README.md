@@ -1,18 +1,18 @@
-# What it is
+# BobbyBones
 
 BobbyBones is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
 games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
 on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
 
-# Play against him
-
-## Online
+## Play him online
 
 Quake Live servers:
-- `Duel BobbyBones the self taught Quake bot | US Chicago` (`193.239.237.127:27970`)
-- `Duel BobbyBones the self taught Quake bot | EU Frankfurt` (`45.140.42.214:27970`)
+- `Duel BobbyBones the self taught Quake bot | US Chicago` (`45.76.17.177:27970`)
+- `Duel BobbyBones the self taught Quake bot | EU Amsterdam` (`78.141.211.228:27970`)
 
-## Via a local install
+We keep a local leaderboard and game log (with detailed game stats) across the two servers, see it [here](https://dclark202.github.io/bobbybones-leaderboard/) 
+
+## Run him locally
 
 The networks that have played on the public server are released as open weights, one
 [GitHub Release](https://github.com/dclark202/bobbybones-quake/releases) per model, tagged at the code the server ran it with
@@ -39,9 +39,11 @@ as you like, with credit to "BobbyBones by Duncan Clark (github.com/dclark202/bo
 - **Simulator** (`sim/`): ioquake3's player movement and collision compiled into one library (`qsim.dll` / `libqsim.so`)
   with Quake Live's settings, loading the game's own maps. A numpy game layer (`sim/duel_env.py`) adds the weapons, items,
   sounds, clock and score as measured on a real server. It runs thousands of players at once on one PC.
-- **Network**: about 1.75 million weights. 791 inputs every 25 ms (what he sees, hears and remembers; [docs/INPUTS.csv](docs/INPUTS.csv)),
+- **Network**: about 3 million weights. 868 inputs every 25 ms (what he sees, hears and remembers; [docs/INPUTS.csv](docs/INPUTS.csv)),
   an encoder and attention over groups of inputs (the enemy, the items, the map's places), a GRU memory of 512, and
   outputs for keys, mouse, fire, weapon and the item or place he is heading for.
+  A part of it, the brain, learns to predict from his senses alone where the enemy is and will be, his health and armor,
+  and who takes the next items; the rest acts on those predictions.
 - **Training** (`sim/train_duel_rnn.py`): PPO on whole ten-minute duels on ten of the game's duel maps, against a league
   of his own past snapshots and the previous best network.
 - **Game server**: a Docker image with the Quake Live dedicated server and [minqlx](https://github.com/MinoMino/minqlx).

@@ -1,0 +1,139 @@
+"""One live setting stepped on the clock, each step right after a save (owner, 2026-10-29: v0.6.1's pull toward level faded,
+"one 0.01 step per 10 updates"; v0.6.1b's brain fade). A save is the trainer rewriting <run>/policy.pt (every 10 updates; the
+watcher's keep/ copy is not needed, so it works in a smoke run without one): once the file has stood still for --settle s, the
+first save is kept under --keep-as (the network before the first step), then NAME is set to FROM + STEP at once and one STEP more
+right after each later save, at least --min-s apart, until TO. Logs <run>/watch/ramp.log and a RAMP line in watch.log. Nothing
+else is touched.
+
+    python tools/run/ramp_live.py <run> LEVEL_PULL 0.95 1.0 0.01 --keep-as policy_prelevel_v061.pt
+--also NAME:FROM:TO:STEP (v0.6.1c, repeatable): more settings stepped in the same write as NAME at each step, each clamped at
+its own TO (give them the same number of steps as NAME)."""
+import argparse
+import json
+import os
+import shutil
+import time
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("run")
+    ap.add_argument("name")
+    ap.add_argument("frm", type=float)
+    ap.add_argument("to", type=float)
+    ap.add_argument("step", type=float)
+    ap.add_argument("--every", type=int, default=1, help="saves between steps (a save every 10 updates)")
+    ap.add_argument("--min-s", type=float, default=25 * 60)
+    ap.add_argument("--keep-as", default="", help="keep the save before the first step as keep/<this>")
+    ap.add_argument("--dir", default="", help="the run's folder (default data/sim_runs/<run>)")
+    ap.add_argument("--sleep", type=float, default=30)
+    ap.add_argument("--settle", type=float, default=20, help="seconds policy.pt must stand still before it counts as saved")
+    ap.add_argument("--also", action="append", default=[], help="NAME:FROM:TO:STEP, stepped with NAME in the same write")
+    ap.add_argument("--values", default="", help="(b1.1) the steps' values, comma-separated, in place of a fixed STEP (the last must be TO)")
+    ap.add_argument("--keep-each", default="", help="(b1.2) the save before each step kept with its optimizer; a name with {} for the value it was at")
+    ap.add_argument("--hold-at", type=float, default=0.0, help="(b1.1) no step while the last check in watch/checks_prev.jsonl is at or under this win rate (0: off)")
+    a = ap.parse_args()
+    D = a.dir or os.path.join(ROOT, "data", "sim_runs", a.run)
+    LIVE, MET, POL, KEEP, WD = (os.path.join(D, x) for x in ("live.json", "metrics.jsonl", "policy.pt", "keep", "watch"))
+
+    def log(s):
+        line = time.strftime("%m-%d %H:%M:%S ") + s
+        os.makedirs(WD, exist_ok=True)
+        for f in ("ramp.log", "watch.log"):
+            with open(os.path.join(WD, f), "a") as fh:
+                fh.write(line + "\n")
+        print(line, flush=True)
+
+    def update():
+        try:
+            with open(MET) as f:
+                L = [x for x in f if x.strip()]
+        except FileNotFoundError:                            # (a fresh run: no update yet)
+            return 0
+        return int(json.loads(L[-1])["update"]) if L else 0
+
+    def mtime():
+        try:
+            return os.path.getmtime(POL)
+        except FileNotFoundError:
+            return 0.0
+
+    ALSO = []
+    for s_ in a.also:
+        n_, f_, t_, st_ = s_.split(":")
+        ALSO.append([n_, float(f_), float(t_), float(st_), float(f_)])
+
+    def put(v):
+        d = json.load(open(LIVE, encoding="utf-8"))
+        d[a.name] = v
+        for x_ in ALSO:
+            d[x_[0]] = x_[4]
+        open(LIVE + ".tmp", "w", encoding="utf-8").write(json.dumps(d))
+        os.replace(LIVE + ".tmp", LIVE)
+
+    cur = json.load(open(LIVE, encoding="utf-8")).get(a.name)
+    assert cur is None or abs(float(cur) - a.frm) < 1e-9, "{} is {} in live.json, not {}".format(a.name, cur, a.frm)
+    for x_ in ALSO:
+        c_ = json.load(open(LIVE, encoding="utf-8")).get(x_[0])
+        assert c_ is None or abs(float(c_) - x_[1]) < 1e-9, "{} is {} in live.json, not {}".format(x_[0], c_, x_[1])
+    sign = 1.0 if a.to >= a.frm else -1.0
+    v = a.frm
+    log("ramp_live on for {}: {} {} -> {} by {} right after a save (policy.pt rewritten), every {} save(s), at least {:g} min apart".format(
+        a.run, a.name, a.frm, a.to, a.step, a.every, a.min_s / 60))
+    seen = mtime()                                           # (the start file, or the last save before now: not a new save)
+    saves, t_last = 0, 0.0
+    SEQ = [float(x) for x in a.values.split(",")] if a.values else []
+    while sign * (a.to - v) > 1e-9:
+        time.sleep(a.sleep)
+        m_ = mtime()
+        if m_ <= seen or time.time() - m_ < a.settle:
+            continue
+        seen = m_
+        saves += 1
+        n = update()
+        if (saves - 1) % a.every or time.time() - t_last < a.min_s:
+            log("save at update {}: no step (every {} saves, at least {:g} min apart)".format(n, a.every, a.min_s / 60))
+            continue
+        if a.hold_at > 0:
+            try:
+                with open(os.path.join(WD, "checks_prev.jsonl")) as f:
+                    c_ = json.loads([x for x in f if x.strip()][-1])
+                wr_ = c_["won"] / max(1, c_["won"] + c_["lost"])
+            except (FileNotFoundError, IndexError):
+                wr_ = 1.0
+            if wr_ <= a.hold_at:
+                log("HOLD at the save of update {}: the last check {:.1%} is {:.0%} or less".format(n, wr_, a.hold_at))
+                continue
+        if a.keep_as and t_last == 0.0:
+            os.makedirs(KEEP, exist_ok=True)
+            shutil.copy2(POL, os.path.join(KEEP, a.keep_as))
+            o_ = os.path.join(D, "opt.pt")                   # (the owner's standing rule: a kept save keeps its optimizer)
+            if os.path.exists(o_):
+                shutil.copy2(o_, os.path.join(KEEP, a.keep_as.replace("policy_", "opt_", 1)))
+            log("kept the save of update {} as keep/{} with its optimizer (before the first step)".format(n, a.keep_as))
+        if a.keep_each:
+            os.makedirs(KEEP, exist_ok=True)
+            ke_ = a.keep_each.format("{:g}".format(v))
+            shutil.copy2(POL, os.path.join(KEEP, ke_))
+            shutil.copy2(os.path.join(D, "opt.pt"), os.path.join(KEEP, ke_.replace("policy_", "opt_", 1)))
+            log("kept the save of update {} as keep/{} with its optimizer".format(n, ke_))
+        if SEQ:
+            v = SEQ.pop(0)
+        else:
+            v = round(v + sign * a.step, 6)
+            v = a.to if sign * (v - a.to) > 0 else v
+        for x_ in ALSO:
+            sg_ = 1.0 if x_[2] >= x_[1] else -1.0
+            w_ = round(x_[4] + sg_ * x_[3], 6)
+            x_[4] = x_[2] if sg_ * (w_ - x_[2]) > 0 else w_
+        put(v)
+        log("RAMP {} {}{} (right after the save of update {}; it takes effect at the next rollout)".format(
+            a.name, v, "".join(", {} {}".format(x_[0], x_[4]) for x_ in ALSO), n))
+        t_last = time.time()
+    log("ramp_live done: {} at {}{}".format(a.name, v, "".join(", {} at {}".format(x_[0], x_[4]) for x_ in ALSO)))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,22 @@
+15:55:53 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_1a\keep\policy_b1.1.pt
+15:55:53 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0}
+15:55:53 the smoke trainer started
+16:08:03 PASS the trainer exited 0
+16:08:03 PASS on the CPU
+16:08:03 PASS 10 or more updates (104)
+16:08:03 contact, the last 10 updates (begun, free, readings, changes, to the enemy): [[11.0, 11.0, 77.0, 36.0, 2.0], [12.0, 12.0, 60.0, 28.0, 3.0], [2.0, 2.0, 59.0, 32.0, 1.0], [9.0, 9.0, 55.0, 35.0, 1.0], [7.0, 7.0, 49.0, 26.0, 1.0], [7.0, 7.0, 65.0, 33.0, 1.0], [7.0, 7.0, 55.0, 23.0, 0.0], [5.0, 5.0, 48.0, 24.0, 1.0], [4.0, 4.0, 49.0, 29.0, 3.0], [4.0, 4.0, 37.0, 16.0, 2.0]]
+16:08:03 PASS contacts begun and all free
+16:08:03 PASS readings and changes in them
+16:08:03 the ledger, the last update: {'dmg_dealt': 0.9177, 'dmg_taken': -1.2031, 'high': 0.0, 'item_flat_other': -0.0586, 'big_order': 0.0938, 'items_other': -0.0, 'speed': 0.8877, 'intent_switch': -0.2812, 'stack_diff': -0.1026, 'know': 0.0058, 'watch': 0.02, 'preaim': 0.0595, 'win_part': -0.1088}
+16:08:03 PASS no shot price, fire toggle, weapon switch or jerk in the ledger
+16:08:03 PASS the small items paid (item_flat_other in the ledger)
+16:08:03 pickups by item, the last update: {'H5': [2.344, 5.0], 'H25': [0.0, 0.0], 'H50': [0.0, 0.0], 'MH': [0.0, 0.0], 'A5': [0.0, 0.0], 'A25': [0.0, 0.0], 'A50': [0.0, 0.0], 'A100': [0.0, 0.0]}
+16:08:03 PASS the counters by item
+16:08:03 PASS the rule at its floor in force
+16:08:05 the last save's dials: {'INTENT_HOLD': '8.0', 'ITEM_RATE_HP': None, 'ITEM_RATE_AR': None, 'COST_FIRE_W': None, 'COST_JERK_W': None, 'CONTACT_FREE': '1.0'}
+16:08:05 PASS the last save: no head, the lock at 8 s, contact 1
+16:08:05 PASS test_suite.Policy loads it
+16:11:44 16:11:44 {'bloodrun': '1-1 46%'}
+smoke: A policy.pt at 8 s against B policy_b1.1.pt at 8 s: 1-1, win rate 50.0%, frag share 45.5%
+16:11:44 PASS a check with each seat's contact finishes
+16:11:44 ALL PASSED

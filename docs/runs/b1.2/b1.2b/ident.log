@@ -1,0 +1,31 @@
+PASS bloodrun HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+PASS bloodrun HEAD against shut: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+bloodrun pickups H5 H25 H50 MH A5 A25 A50 A100: [10.0, 6.0, 2.0, 4.0, 45.0, 0.0, 5.0, 0.0]; points: [50.0, 105.43534088134766, 43.0, 400.00000762939453, 225.0, 0.0, 217.0933837890625, 0.0]; the item pay 2.380, points x rate 2.380; a match's largest item net 0.00e+00
+PASS bloodrun the table: the game the same
+PASS bloodrun small items picked up and paid
+PASS bloodrun the item pay zero-sum
+PASS bloodrun the pay is points x rate
+bloodrun the terms, off: {'shot_price': 5.654, 'fire_toggle': 26.919, 'weapon_switch': 50.86, 'jerk': 25.752}
+PASS bloodrun the three firing terms were there
+bloodrun contact (begun, free, readings, changes, to the enemy): [67.0, 67.0, 464.0, 429.0, 26.0]; frames silent 16045; target changes 713 against 348
+PASS bloodrun contacts counted and all free
+PASS bloodrun target changes up, the game differs, the rule silent
+PASS bloodrun COST_FIRE_W 0: the game the same, the three terms nothing, jerk as before
+bloodrun COST_JERK_W 0: game same True, jerk 0.0, the three's differences [-1.1059455573558807e-09, 2.721790224313736e-07, -1.0635703802108765e-06] (a term is a difference of float32 running pay, so rounding moves with what came before it)
+PASS bloodrun COST_JERK_W 0: the game the same, jerk nothing, the three as before to rounding
+PASS aerowalk HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+PASS aerowalk HEAD against shut: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+aerowalk pickups H5 H25 H50 MH A5 A25 A50 A100: [39.0, 12.0, 0.0, 1.0, 0.0, 4.0, 5.0, 2.0]; points: [194.99999237060547, 201.3293113708496, 0.0, 100.00000762939453, 0.0, 100.0, 250.0, 200.0]; the item pay 2.341, points x rate 2.341; a match's largest item net 0.00e+00
+PASS aerowalk the table: the game the same
+PASS aerowalk small items picked up and paid
+PASS aerowalk the item pay zero-sum
+PASS aerowalk the pay is points x rate
+aerowalk the terms, off: {'shot_price': 5.572, 'fire_toggle': 26.826, 'weapon_switch': 34.56, 'jerk': 25.649}
+PASS aerowalk the three firing terms were there
+aerowalk contact (begun, free, readings, changes, to the enemy): [116.0, 116.0, 940.0, 872.0, 55.0]; frames silent 32984; target changes 1071 against 348
+PASS aerowalk contacts counted and all free
+PASS aerowalk target changes up, the game differs, the rule silent
+PASS aerowalk COST_FIRE_W 0: the game the same, the three terms nothing, jerk as before
+aerowalk COST_JERK_W 0: game same True, jerk 0.0, the three's differences [-3.777677193284035e-08, 2.668239176273346e-07, -7.37607479095459e-07] (a term is a difference of float32 running pay, so rounding moves with what came before it)
+PASS aerowalk COST_JERK_W 0: the game the same, jerk nothing, the three as before to rounding
+ALL PASSED

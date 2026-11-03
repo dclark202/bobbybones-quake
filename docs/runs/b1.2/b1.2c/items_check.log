@@ -1,0 +1,47 @@
+﻿bloodrun: 23 small items in 11 places (sizes [5, 3, 3, 3, 2, 2, 1, 1, 1, 1, 1]), 8 slots; belief wrong on 7.8% of readings (it should be some: he doesn't see everything); make 1.3 s, a frame 10.59 ms
+  player 0 at [227. -35.  88.], health 100, armor 113
+  1 shards     fwd -0.01 left +0.02 up -0.01 | way 0.01 step -0.30 +0.95 | there 1 | gives 0.10
+  2 shards     fwd +0.15 left +0.33 up -0.01 | way 0.12 step +0.49 +0.87 | there 1 | gives 0.10
+  3 25 health  fwd +0.72 left -0.15 up -0.04 | way 0.25 step +1.00 +0.06 | there 1 | gives 0.00
+  4 bubbles    fwd -0.51 left +1.19 up -0.01 | way 0.51 step -0.04 +1.00 | there 1 | gives 0.20
+  5 bubbles    fwd -0.25 left -0.22 up +0.34 | way 0.55 step +0.94 -0.34 | there 1 | gives 0.30
+  6 50 health  fwd +0.19 left -0.35 up +0.44 | way 0.68 step -0.04 +1.00 | there 1 | gives 0.00
+  7 25 health  fwd +0.90 left +0.48 up +0.31 | way 0.81 step +0.94 -0.34 | there 1 | gives 0.00
+  8 25 health  fwd +0.94 left +0.46 up +0.31 | way 0.82 step +0.94 -0.34 | there 1 | gives 0.00
+  player 7 at [1089.  523.  391.], health 41, armor 0
+  1 bubbles    fwd +0.47 left -0.62 up +0.04 | way 0.28 step +0.53 -0.85 | there 1 | gives 0.30
+  2 50 health  fwd +0.68 left -1.02 up +0.14 | way 0.49 step +0.53 -0.85 | there 1 | gives 1.00
+  3 shards     fwd +0.81 left -0.63 up -0.31 | way 0.51 step +0.96 +0.28 | there 1 | gives 0.30
+  4 shards     fwd +1.14 left -0.52 up -0.31 | way 0.52 step +0.96 +0.28 | there 1 | gives 0.30
+  5 bubbles    fwd +1.28 left +0.55 up -0.31 | way 0.71 step +0.96 +0.28 | there 1 | gives 0.20
+  6 25 health  fwd +1.20 left -1.26 up -0.35 | way 0.72 step +0.96 +0.28 | there 1 | gives 0.50
+  7 25 health  fwd +1.77 left -0.95 up +0.01 | way 0.79 step +0.53 -0.85 | there 1 | gives 0.50
+  8 25 health  fwd +1.78 left -0.99 up +0.01 | way 0.79 step +0.53 -0.85 | there 1 | gives 0.50
+PASS bloodrun off: the first 868 inputs, pay and ends as HEAD
+PASS bloodrun off: the new inputs zeros
+PASS bloodrun on: the game the same
+bloodrun a frame: off 10.16 ms, on 10.59 ms; making the world: off 1.3 s, on 1.3 s
+cure: 24 small items in 12 places (sizes [5, 5, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1]), 8 slots; belief wrong on 8.7% of readings (it should be some: he doesn't see everything); make 1.5 s, a frame 12.27 ms
+  player 0 at [ 484.  279. -104.], health 72, armor 83
+  1 25 health  fwd -0.68 left +0.46 up -0.01 | way 0.27 step -0.48 +0.88 | there 1 | gives 0.50
+  2 shards     fwd +0.50 left -0.42 up -0.01 | way 0.28 step +0.74 +0.67 | there 1 | gives 0.50
+  3 25 health  fwd +0.00 left +0.61 up +0.38 | way 0.29 step +0.03 +1.00 | there 1 | gives 0.50
+  4 50 health  fwd +0.85 left -0.62 up -0.01 | way 0.39 step +0.74 +0.67 | there 1 | gives 0.56
+  5 25 health  fwd -0.49 left -0.00 up +0.05 | way 0.42 step -0.48 +0.88 | there 1 | gives 0.50
+  6 green      fwd -0.66 left +0.42 up +0.44 | way 0.49 step -0.48 +0.88 | there 1 | gives 0.50
+  7 25 health  fwd -0.70 left +0.19 up +0.44 | way 0.51 step -0.48 +0.88 | there 1 | gives 0.50
+  8 25 health  fwd -0.24 left -0.58 up +0.02 | way 0.59 step -0.48 +0.88 | there 1 | gives 0.50
+  player 7 at [-365.   41.    4.], health 56, armor 21
+  1 25 health  fwd +0.37 left +0.17 up -0.12 | way 0.14 step +0.96 -0.28 | there 1 | gives 0.50
+  2 25 health  fwd +0.25 left -0.31 up -0.05 | way 0.15 step +0.60 -0.80 | there 1 | gives 0.50
+  3 25 health  fwd +0.11 left -0.93 up -0.08 | way 0.32 step +0.60 -0.80 | there 0 | gives 0.00
+  4 shards     fwd -0.07 left -0.88 up -0.08 | way 0.35 step +0.60 -0.80 | there 1 | gives 0.30
+  5 25 health  fwd +0.20 left -0.03 up +0.33 | way 0.37 step -0.06 -1.00 | there 1 | gives 0.50
+  6 green      fwd +0.36 left +0.13 up +0.33 | way 0.45 step -0.06 -1.00 | there 1 | gives 0.50
+  7 shards     fwd +0.36 left -1.22 up +0.14 | way 0.52 step -0.06 -1.00 | there 1 | gives 0.30
+  8 25 health  fwd +1.01 left -0.11 up +0.27 | way 0.54 step +0.96 -0.28 | there 1 | gives 0.50
+PASS cure off: the first 868 inputs, pay and ends as HEAD
+PASS cure off: the new inputs zeros
+PASS cure on: the game the same
+cure a frame: off 11.85 ms, on 12.27 ms; making the world: off 1.5 s, on 1.5 s
+ALL PASSED

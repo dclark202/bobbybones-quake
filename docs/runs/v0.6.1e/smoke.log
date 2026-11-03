@@ -1,0 +1,37 @@
+08:09:45 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_W': 0.5, 'FADE_V': 0.125, 'WIN_SHAPE_K': 0.0, 'VALUE_WARM': 0, 'WIN_GAIN': 0.33, 'LEVEL_PULL': 0.95, 'ADV_PAY_REF': 10.0, 'BRAIN_FADE': 0.0}
+08:09:45 the smoke trainer and the fades started
+10-31 08:10:25 ramp_live on for scratch_v061e_smoke: BRAIN_FADE 0.0 -> 1.0 by 0.125 right after a save (policy.pt rewritten), every 1 save(s), at least 0 min apart
+10-31 08:11:15 kept the save of update 13 as keep/policy_prefade_v061e.pt (before the first step)
+10-31 08:11:15 RAMP BRAIN_FADE 0.125, LEVEL_PULL 0.95625 (right after the save of update 13; it takes effect at the next rollout)
+10-31 08:12:15 RAMP BRAIN_FADE 0.25, LEVEL_PULL 0.9625 (right after the save of update 23; it takes effect at the next rollout)
+10-31 08:13:15 RAMP BRAIN_FADE 0.375, LEVEL_PULL 0.96875 (right after the save of update 34; it takes effect at the next rollout)
+10-31 08:14:15 RAMP BRAIN_FADE 0.5, LEVEL_PULL 0.975 (right after the save of update 44; it takes effect at the next rollout)
+10-31 08:15:10 RAMP BRAIN_FADE 0.625, LEVEL_PULL 0.98125 (right after the save of update 53; it takes effect at the next rollout)
+10-31 08:16:10 RAMP BRAIN_FADE 0.75, LEVEL_PULL 0.9875 (right after the save of update 63; it takes effect at the next rollout)
+10-31 08:17:10 RAMP BRAIN_FADE 0.875, LEVEL_PULL 0.99375 (right after the save of update 73; it takes effect at the next rollout)
+10-31 08:18:10 RAMP BRAIN_FADE 1.0, LEVEL_PULL 1.0 (right after the save of update 83; it takes effect at the next rollout)
+10-31 08:18:10 ramp_live done: BRAIN_FADE at 1.0, LEVEL_PULL at 1.0
+08:21:55 PASS the trainer exited 0
+08:21:55 PASS on the CPU
+08:21:55 PASS 20 or more updates (121)
+08:21:55 PASS the blend taken live
+08:21:55 PASS adv_pay in every update
+08:21:55 adv_pay first {'k': 1.0065, 'warm': 3.0, 'size_mean': 7.0443, 'size': 7.0443, 'ref': 10.0} last {'k': 1.2989, 'warm': 3.0, 'size_mean': 7.6989, 'size': 5.323, 'ref': 10.0}
+08:21:55 PASS above 1 after the opening, the target 10
+08:21:55 sizes over the last 10 updates: win paid 4.47 (gain 1 10.27), old paid 3.53 (combat 3.29, other 3.76), paid 7.78
+08:21:55 PASS the win pay and the old pay within a factor of 2.5
+08:21:55 PASS the brain's dial went 0 -> 1 ([0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0])
+08:21:55 PASS live.json ended at BRAIN_FADE 1, LEVEL_PULL 1
+08:21:55 PASS the blend still held at the end
+PASS state dict keys unchanged
+PASS g 0: the same as without the entry, bit for bit
+PASS g 0.3: the same as the inputs times 0.7 (max diff 9.46e-07)
+PASS g 1: the faded columns change nothing
+PASS g 1: the other columns still count
+PASS numpy brain, no entry: weights as saved
+PASS numpy brain at g 0.5 = the trainer's (max diff 1.07e-05; numpy against torch without the fade 7.45e-06)
+PASS numpy brain did not change the saved weights
+ALL PASSED
+08:21:57 PASS brain_fade_check on the last save
+08:21:58 PASS test_suite.Policy loads the last save
+08:21:58 ALL PASSED

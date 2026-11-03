@@ -1,0 +1,12 @@
+10-28 20:05:02 judge: {'run': 'duel_gru_v0_6_0', 'tags': ['u40', 'u50', 'u60', 'u70', 'u80'], 'counts': {'games': 300, 'ot_games': 42, 'rows': 160200, 'rows_left_out': 25200}, 'logloss': 0.3781443884957982, 'vs_B2': 0.3797967285734376, 'vs_A': 0.39197861036149356, 'axioms_ok': True, 'made': '2026-10-28 19:54', 'version': 2, 'weapons': "RL and RG set to LG's worth by hand (owner, 2026-10-28)", 'logloss_all_original': 0.3747271798983119, 'logloss_all_edited': 0.3753342798826135, 'made_from': 'judge_v060.npz'}
+10-28 20:05:02 allowed set WIN_JUDGE: run 'data\\sim_runs\\judge\\judge_v060_wpn.npz' | reference '<unset>'
+10-28 20:05:02 allowed arg --minutes: run '1440' | reference '510'
+10-28 20:05:02 allowed arg --run: run 'duel_gru_v0_6_1' | reference 'duel_gru_v0_6_0'
+10-28 20:05:02 settings check: PASS
+10-28 20:05:02 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_SHAPE_K': 0.0, 'VALUE_WARM': 0}
+10-28 20:05:02 trainer started: cmd 5564
+10-28 20:05:07 watcher 648 | ramp 24804 (RAMP_ALWAYS, WIN_GAIN from the run's updates 21..30, no shaping) | self-play logger 29820 | no guard (owner: never stop the run)
+10-29 11:43:28 fade_level: not idle (update 242, checks running True, last save kept True): try at the next save
+10-29 11:45:59 fade_level: watcher 648 stopped (idle at update 242)
+10-29 11:45:59 fade_level: watcher restarted: 15188 (checks and panels at each save's own pull)
+10-29 11:45:59 fade_level: ramp_live 29060: the next save kept as keep\policy_prelevel_v061.pt, then LEVEL_PULL 0.96 .. 1.0, one 0.01 right after each save

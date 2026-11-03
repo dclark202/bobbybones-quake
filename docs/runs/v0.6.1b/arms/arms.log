@@ -1,0 +1,7 @@
+10-30 07:22:44 allowed arg --ent-coef: run '0.002' | reference '0.005'
+10-30 07:22:44 allowed arg --minutes: run '130' | reference '720'
+10-30 07:22:44 allowed arg --run: run 'arm_v061b_ent002' | reference 'duel_gru_v0_6_1b'
+10-30 07:22:44 settings check: PASS
+10-30 07:22:44 arm_v061b_ent002 started (watcher 35964)
+10-30 07:51:56 arm A skipped (owner, 2026-10-30: decide on arm B alone; v0.6.1b's last 30 updates are the control): its .cmd renamed .skipped, so the runner refuses it after arm B
+10-30 08:31:18 arm B stopped by hand at ~update 17 (owner, 2026-10-30 08:30: revert to v0.6.1's u250 as v0.6.1c); its last save u10 (08:00)

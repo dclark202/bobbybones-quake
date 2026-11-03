@@ -1,0 +1,24 @@
+11-01 09:08:10 allowed arg --head2: run '1' | reference '<unset>'
+11-01 09:08:10 allowed arg --head2-cap: run '0' | reference '<unset>'
+11-01 09:08:10 allowed arg --head2-ctrl-src: run 'belief' | reference '<unset>'
+11-01 09:08:10 allowed arg --head2-gate: run '0' | reference '<unset>'
+11-01 09:08:10 allowed arg --head2-open: run '1' | reference '<unset>'
+11-01 09:08:10 allowed arg --head2-pay: run 'combat_win' | reference '<unset>'
+11-01 09:08:10 allowed arg --head2-start: run '%H2_START%' | reference '<unset>'
+11-01 09:08:10 allowed arg --minutes: run '1440' | reference '885'
+11-01 09:08:10 allowed arg --run: run 'duel_gru_b1_2a' | reference 'duel_gru_b1_1a'
+11-01 09:08:10 settings check: PASS
+11-01 09:08:11 backup: copied 0 files 0.0 GB to T:\BobbyBones_backup
+11-01 09:08:12 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 940 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 673,874 weights
+11-01 09:08:12 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2a\watch\start_head_gate1.pt (gate 1; plan_in and target at zero)
+11-01 09:08:18 start_head_gate1.pt: its strategy head is shut by its zero links: played as the force test below
+11-01 09:08:18 same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0
+11-01 09:08:18   (b's strategy head ran: its state's mean |s| 0.0609, valid 1.00)
+11-01 09:08:20 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 940 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 673,874 weights
+11-01 09:08:20 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2a\policy.pt (gate 0; plan_in and target at zero)
+11-01 09:08:20 copied the optimizer's state C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_1a\keep\opt_b1.1.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2a\opt.pt (the head's group is added by the trainer)
+11-01 09:08:25 same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0
+11-01 09:08:25   (b's strategy head ran: its state's mean |s| 0.0000, valid 0.00)
+11-01 09:08:27 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 1.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0}
+11-01 09:08:28 trainer started: cmd 41168, from policy_b1.1.pt with opt_b1.1.pt
+11-01 09:08:33 watcher 8384 | ramp 16832 (the head: shut 10 updates, the gate +0.1 a step, the head-open save; then the lock 8 to 0 s; held only at a check of 40% or less) | self-play logger 12140 | no guard (owner: never stop the run)

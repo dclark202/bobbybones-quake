@@ -4,7 +4,7 @@
 
 1. every relative link in README.md, CLAUDE.md and docs/**/*.md leads to a file;
 2. every entry of the results log (a "## <date> ..." section in docs/results/<date>.md) has its line in the index
-   (docs/RESULTS.md), and every line of the index has its entry;
+   (docs/archive/RESULTS.md), and every line of the index has its entry;
 3. every backlog ID (B-nn) is there once (docs/BACKLOG.md and docs/archive/BACKLOG_closed.md together), and the IDs
    named in the plan's "Now" section exist.
 Exit code 1 if anything is wrong. Standard library only."""
@@ -26,6 +26,8 @@ files = ["README.md", "CLAUDE.md"]
 for dp, dn, fn in os.walk(os.path.join(ROOT, "docs")):
     files += [os.path.relpath(os.path.join(dp, f), ROOT).replace("\\", "/") for f in fn if f.endswith(".md")]
 for rel in files:
+    if rel.startswith("docs/archive/"):                     # (the archive is frozen as it was written: its links are to the old layout)
+        continue
     for m in LINK.finditer(read(rel)):
         t = m.group(1)
         if re.match(r"[a-z]+:", t):
@@ -36,23 +38,23 @@ for rel in files:
 # the results log and its index
 index = {}
 day = None
-for line in read("docs/RESULTS.md").splitlines():
+for line in read("docs/archive/RESULTS.md").splitlines():
     m = re.match(r"## \[([^\]]+)\]\(results/([^)]+)\.md\)", line)
     if m:
         day = m.group(2)
         index[day] = []
     elif day and line.startswith("- "):
         index[day].append(line[2:].strip())
-rdir = os.path.join(ROOT, "docs", "results")
+rdir = os.path.join(ROOT, "docs", "archive", "results")
 for f in sorted(os.listdir(rdir)):
     d = f[:-3]
     titles = []
-    for line in read("docs/results/" + f).splitlines():
+    for line in read("docs/archive/results/" + f).splitlines():
         if line.startswith("## "):
             t = line[3:].strip()
             titles.append(re.sub(r"^\d{4}-\d{2}-\d{2}\s*", "", t).strip() or t)
     if d not in index:
-        bad.append("results: docs/results/{} is not in the index".format(f))
+        bad.append("results: docs/archive/results/{} is not in the index".format(f))
         continue
     for t in titles:
         if t not in index[d]:
@@ -62,7 +64,7 @@ for f in sorted(os.listdir(rdir)):
             bad.append("results: the index has a line without an entry, {}: {}".format(d, t[:70]))
 for d in index:
     if not os.path.exists(os.path.join(rdir, d + ".md")):
-        bad.append("results: the index names docs/results/{}.md, which is not there".format(d))
+        bad.append("results: the index names docs/archive/results/{}.md, which is not there".format(d))
 
 # the backlog
 ids = {}

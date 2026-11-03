@@ -1,0 +1,15 @@
+gate at updates 10, 11, 30, 50, 70, 90, 110: [0.0, 0.0125, 0.25, 0.5, 0.75, 1.0, 1.0]
+PASS the gate open at the end
+PASS the head-open save kept with its optimizer
+PASS shut to update 10; a straight line: 0.25 at 30, half at 50, open at 90
+PASS the ramp's saves kept with their optimizers (10 to 80)
+PASS the head-open save is the save of update 90
+PASS no tripwire before the bad numbers
+PASS the tripwire: bias, hands, skipped, NaN
+ALL PASSED
+gate at updates 10, 11, 30, 50, 70, 90, 110: [0.0, 0.0125, 0.2375, 0.25, 0.5, 0.75, 1.0]
+PASS the gate open at the end
+PASS the head-open save kept with its optimizer
+PASS no movement while the check stood at 37.5% (updates 30 to 49)
+PASS a flag under 50% and a HOLD logged
+ALL PASSED

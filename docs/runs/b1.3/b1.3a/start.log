@@ -1,0 +1,29 @@
+11-02 20:22:21 b1.2d ended its dials
+11-02 20:22:21 train.cmd for 720 minutes: written
+11-02 20:22:21 allowed arg --head2: run '1' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-cap: run '0' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-copy: run '1' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-ctrl-src: run 'belief' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-gate: run '0' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-open: run '0' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-pay: run 'all' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-pg: run '0' | reference '<unset>'
+11-02 20:22:21 allowed arg --head2-start: run '%H2_START%' | reference '<unset>'
+11-02 20:22:21 allowed arg --run: run 'duel_gru_b1_3a' | reference 'duel_gru_b1_2d'
+11-02 20:22:21 settings check: PASS
+11-02 20:22:21 started without the trial's verdict (owner's word, 11-02 20:25: the trial stopped at update 102; the copy's gradient reached the head only, gate 0, KL 2.26 -> about 1.45)
+11-02 20:22:22 backup: copied 98 files 0.83 GB to T:\BobbyBones_backup
+11-02 20:22:24 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 940 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 673,874 weights
+11-02 20:22:24 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_3a\watch\start_head_gate1.pt (gate 1; plan_in and target at zero)
+11-02 20:22:29 start_head_gate1.pt: its strategy head is shut by its zero links: played as the force test below
+11-02 20:22:29 same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0
+11-02 20:22:29   (b's strategy head ran: its state's mean |s| 0.0711, valid 1.00)
+11-02 20:22:31 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 940 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 673,874 weights
+11-02 20:22:31 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_3a\policy.pt (gate 0; plan_in and target at zero)
+11-02 20:22:31 copied the optimizer's state C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\opt_end_b12d.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_3a\opt.pt (the head's group is added by the trainer)
+11-02 20:22:36 same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0
+11-02 20:22:36   (b's strategy head ran: its state's mean |s| 0.0000, valid 0.00)
+11-02 20:22:36 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.125, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0}
+11-02 20:22:37 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\policy_end_b12d.pt
+11-02 20:22:37 trainer started: cmd 22412, from b1.2d's end
+11-02 20:22:42 watcher 20172 | self-play logger 13952 | the head shut all run (gate 0), copying | no guard (owner: never stop the run)

@@ -7,7 +7,7 @@
         the last line
 
 board.json is tools/board_merge.py's. The page shows what the servers' !top shows, for everyone: the in-game name a
-person was last seen with, the rating (Glicko-1 per frag, plugins/ratings.py), the frags with BobbyBones, the full duel
+person was last seen with, the rating (Glicko-1 per counted game, plugins/ratings.py), the frags with BobbyBones, the full duel
 games against him (won-lost, and on which server), and BobbyBones' own line. Nothing else leaves: no Steam id, no
 anonymous key, no QLStats number. A person who said !anonymous (board.json "private") is "Anonymous" here too: his rating
 after his last game is on the game history, so a name beside it on the board would give him away. The site is published
@@ -51,7 +51,8 @@ def wld(r, draws=True):
     return "{}&ndash;{}".format(r[0], r[1]) + ("&ndash;{}".format(r[2]) if draws and r[2] else "")
 
 
-def render(b, stamp):
+def render(b, stamp, linked=False):
+    """linked: the site has the people's pages (tools/board_games.py), so a name links to them"""
     players = b["players"]
     bobby = b.get("bobby")
     rows = R.Table()
@@ -67,7 +68,8 @@ def render(b, stamp):
         n, of = rows.rank(bobby, bobby)
         rec_all, rec_now = (b.get("duels") or {}).get("all", [0, 0, 0]), (b.get("duels") or {}).get(ver, [0, 0, 0])
         tot = bp["won"] + bp["lost"]
-        out.append('<section class="bobby"><h2>BobbyBones {}</h2><div class="stats">'.format(e(ver)))
+        out.append('<section class="bobby"><h2>{} {}</h2><div class="stats">'.format(
+            '<a class="plink" href="players/bobby.html">BobbyBones</a>' if linked else "BobbyBones", e(ver)))
         out.append('<div class="stat"><b>{:.0f}</b><span>rating (&plusmn;{:.0f}), rank {} of {}</span></div>'.format(bp["r"], 2 * bp["rd"], n, of))
         out.append('<div class="stat"><b>{}&ndash;{}</b><span>frags with people, made&ndash;taken ({:.0%})</span></div>'.format(
             bp["won"], bp["lost"], bp["won"] / max(1, tot)))
@@ -78,16 +80,16 @@ def render(b, stamp):
     out.append('<div class="tbl"><table id="board"><thead><tr><th class="n">#</th><th>Player</th><th class="n">Rating</th>'
                '<th class="n">Games</th><th class="n">W&ndash;L vs Bobby</th><th class="n">Frags vs Bobby</th><th>Played on</th></tr></thead><tbody>')
     ranked = [(n, k, p) for n, (k, p) in enumerate(board, 1)]
-    unranked = sorted(((None, k, p) for k, p in players.items() if not k.startswith(R.BOT) and p["won"] + p["lost"] < R.MIN_FRAGS),
-                      key=lambda x: -x[2]["r"])
+    unranked = sorted(((None, k, p) for k, p in players.items() if not k.startswith(R.BOT) and p.get("games", 0) < R.MIN_GAMES),
+                      key=lambda x: -(x[2]["won"] + x[2]["lost"]))
     for n, k, p in ranked + unranked:
-        num = n if n else '<small title="ranked from {} frags with BobbyBones">&ndash;</small>'.format(R.MIN_FRAGS)
+        num = n if n else '<small title="ranked from the first full game">&ndash;</small>'
         if k == bobby:
             rec = (b.get("duels") or {}).get("all") or [0, 0, 0]
-            out.append('<tr class="me" data-name="bobbybones"><td class="n">{}</td><td class="nm">BobbyBones <small>{}</small></td>'
+            out.append('<tr class="me" data-name="bobbybones"><td class="n">{}</td><td class="nm">{} <small>{}</small></td>'
                        '<td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td><td class="n">{} <small>(his own)</small></td>'
                        '<td class="n"><small>the bot</small></td><td>both</td></tr>'.format(
-                           num, e(ver), p["r"], 2 * p["rd"], sum(rec), wld(rec)))
+                           num, '<a class="plink" href="players/bobby.html">BobbyBones</a>' if linked else "BobbyBones", e(ver), p["r"], 2 * p["rd"], sum(rec), wld(rec)))
             continue
         pp = people.get(k) or {}
         nm = "Anonymous" if (k in private or not p.get("name") or p["name"] == k) else p["name"]
@@ -95,26 +97,28 @@ def render(b, stamp):
         tot_d = [sum(v[i] for v in du.values()) for i in range(3)]
         by = " &middot; ".join("{} {}".format(s.upper(), wld(v)) for s, v in sorted(du.items()) if sum(v))
         on = " + ".join(s.upper() for s in sorted(fr) if sum(fr[s])) or "-"
-        out.append('<tr data-name="{}"><td class="n">{}</td><td class="nm">{}</td><td class="n">{:.0f} <small>&plusmn;{:.0f}</small></td><td class="n">{}</td>'
+        cell = '<a class="plink" href="players/{}.html">{}</a>'.format(R.page_id(k), e(nm)) if linked and nm != "Anonymous" else e(nm)
+        out.append('<tr data-name="{}"><td class="n">{}</td><td class="nm">{}</td><td class="n">{}</td><td class="n">{}</td>'
                    '<td class="n">{}{}</td><td class="n">{}&ndash;{}</td><td>{}</td></tr>'.format(
-                       e(nm.lower(), quote=True), num, e(nm), p["r"], 2 * p["rd"], sum(tot_d) or "-",
+                       e(nm.lower(), quote=True), num, cell,
+                       "{:.0f} <small>&plusmn;{:.0f}</small>".format(p["r"], 2 * p["rd"]) if p.get("games", 0) >= R.MIN_GAMES else "-", sum(tot_d) or "-",
                        wld(tot_d) if sum(tot_d) else "-", " <small>({})</small>".format(by) if len(du) > 1 and by else "",
                        p["won"], p["lost"], on))
     out.append('</tbody></table></div>')
     out.append('<div class="pager"><button id="prev" type="button">&larr; Prev</button><span id="pn"></span>'
                '<button id="next" type="button">Next &rarr;</button></div></section>')
-    trend = sorted(((k, p) for k, p in players.items() if k.startswith(R.BOT)), key=lambda kp: float(kp[1].get("since") or 0))
+    trend = sorted(((k, p) for k, p in players.items() if k.startswith(R.BOT) and p.get("games")), key=lambda kp: float(kp[1].get("since") or 0))
     if len(trend) > 1:
         out.append('<section><h2>BobbyBones by version</h2>' + trend_svg(trend, bobby)
                    + '<p class="note">Each version&rsquo;s rating against people, oldest to newest; the filled point is the version playing now.</p></section>')
     out.append('<div class="notes">')
     if unranked:
-        out.append("<p>A player is ranked from {} frags with BobbyBones; {} {} not ranked yet (# &ndash;).</p>".format(
-            R.MIN_FRAGS, len(unranked), "is" if len(unranked) == 1 else "are"))
-    out.append("<p>Every frag between a person and BobbyBones in a live game counts, on either server (warmup frags do not count). The rating is "
-               "Glicko-1, one update per frag (a frag counts as a quarter of a game); everyone starts at 1500. A difference of "
-               "100 points means the higher one makes about 64% of the frags between the two. &plusmn; is twice the rating's "
-               "uncertainty. Games are full ten-minute duels against BobbyBones, won&ndash;lost from the player's side.</p>")
+        out.append("<p>A player is ranked from their first full game; {} {} not ranked yet (# &ndash;).</p>".format(
+            len(unranked), "is" if len(unranked) == 1 else "are"))
+    out.append("<p>The rating counts games won and lost against BobbyBones, on either server: Glicko-1, one update per game; everyone starts "
+               "at 1500. A quit counts as a loss if the player quitting is behind after more than 5 minutes; any other quit does not count. "
+               "A difference of 100 points means the higher one wins about 64% of the games between the two. &plusmn; is twice the "
+               "rating's uncertainty, which is large after only a few games. Frags are shown beside the rating and do not move it.</p>")
     out.append("<p>Names are the in-game name a player was last seen with; <b>!anonymous</b> in the game shows a player as "
                "Anonymous here and in the game history. Updated a few minutes after a game. {}</p>".format(e(stamp)))
     out.append('<p>About the bot: <a href="{0}">{0}</a></p></div>'.format(REPO))
@@ -129,28 +133,28 @@ def render(b, stamp):
 def trend_svg(trend, bobby):
     """Bobby's rating by version, oldest to newest (inline SVG, no library); the version playing now is the last point"""
     e = html.escape
-    W, H, L, Rt, T, Bt = 560, 240, 46, 30, 26, 42
+    W, H, L, Rt, T, Bt = 960, 260, 56, 10, 24, 34
     vals = [p["r"] for _, p in trend]
-    lo, hi = min(vals) - 30, max(vals) + 30
+    lo, hi = min(vals) - 15, max(vals)
     step = 50 if hi - lo > 150 else 25
     lo, hi = step * int(lo // step), step * int(-(-hi // step))
-    x = lambda i: L + (W - L - Rt) * (i / max(1, len(trend) - 1))
+    x = lambda i: L + 14 + (W - L - Rt - 30) * (i / max(1, len(trend) - 1))
     y = lambda v: T + (H - T - Bt) * (1 - (v - lo) / max(1.0, hi - lo))
-    s = ['<svg class="trend" viewBox="0 0 {} {}" role="img" aria-label="BobbyBones rating by version">'.format(W, H)]
+    s = ['<div class="trend-wide"><svg class="trend" viewBox="0 0 {} {}" role="img" aria-label="BobbyBones rating by version">'.format(W, H)]
     v = lo
     while v <= hi:
         s.append('<line class="grid" x1="{}" x2="{}" y1="{:.1f}" y2="{:.1f}"/><text class="ax" x="{}" y="{:.1f}" text-anchor="end">{}</text>'.format(
-            L, W - Rt, y(v), y(v), L - 6, y(v) + 4, v))
+            L, W - Rt, y(v), y(v), L - 8, y(v) + 4, v))
         v += step
     s.append('<polyline class="ln" points="{}"/>'.format(" ".join("{:.1f},{:.1f}".format(x(i), y(p["r"])) for i, (_, p) in enumerate(trend))))
     for i, (k, p) in enumerate(trend):
         now = k == bobby
         s.append('<circle class="{}" cx="{:.1f}" cy="{:.1f}" r="{}"><title>{} {:.0f}</title></circle>'.format(
             "pt now" if now else "pt", x(i), y(p["r"]), 5 if now else 3.5, e(vname(k[len(R.BOT):])), p["r"]))
-        s.append('<text class="val" x="{:.1f}" y="{:.1f}" text-anchor="middle">{:.0f}</text>'.format(x(i), y(p["r"]) - 9, p["r"]))
+        s.append('<text class="val" x="{:.1f}" y="{:.1f}" text-anchor="middle">{:.0f}</text>'.format(x(i), y(p["r"]) - 10, p["r"]))
         s.append('<text class="ax{}" x="{:.1f}" y="{}" text-anchor="middle">{}</text>'.format(
-            " nowt" if now else "", x(i), H - Bt + 18, e(vname(k[len(R.BOT):]))))
-    s.append("</svg>")
+            " nowt" if now else "", x(i), H - Bt + 24, e(vname(k[len(R.BOT):]))))
+    s.append("</svg></div>")
     return "".join(s)
 
 
@@ -181,7 +185,8 @@ def main():
     if b is None:
         sys.exit("no board in {}".format(src))
     stamp = "Board as of {} UTC.".format(time.strftime("%Y-%m-%d %H:%M", time.gmtime(float(b.get("saved") or time.time()))))
-    page = render(b, stamp)
+    linked = bool(a.history)
+    page = render(b, stamp, linked)
     os.makedirs(out_dir, exist_ok=True)
     tmp = os.path.join(out_dir, "index.html.tmp")
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
@@ -190,12 +195,12 @@ def main():
     open(os.path.join(out_dir, ".nojekyll"), "w").close()
     with open(os.path.join(out_dir, "README.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(README)
-    h = hashlib.sha256(render(b, "").encode("utf-8"))
+    h = hashlib.sha256(render(b, "", linked).encode("utf-8"))
     if a.history:
         with open(a.history, encoding="utf-8") as f:
             rows = json.load(f)["games"]
         BG.clear(out_dir)
-        files = BG.write_site(out_dir, rows, a.games, a.maps, a.items)
+        files = BG.write_site(out_dir, rows, a.games, a.maps, a.items, board=b)
         for rel in sorted(files):
             h.update(rel.encode("utf-8"))
             h.update(files[rel].encode("utf-8"))

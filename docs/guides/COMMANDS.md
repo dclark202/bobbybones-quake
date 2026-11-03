@@ -83,9 +83,9 @@ rooms (where Bobby's body is a scripted target) do not. It is local to the serve
 | `!qlstats off` / `!qlstats on` | (only where the lookup is switched on) `off`: what the server had stored of your QLStats rating is deleted and you are not looked up again; `on` allows it again |
 | `!ladder` | (the owner) what the plugin has read since it was loaded: deaths seen, paired with a killer, counted, left out |
 
-The rating is Glicko-1 with one update per frag (`plugins/ratings.py`): a number and how unsure it is. Everybody starts
-at 1500. A difference of 100 points means 64% of the frags between the two, 200 points 76%, 400 points 91%. A frag
-counts as a quarter of a game, because frags come in streaks. A person is ranked from 20 frags with Bobby. Every
+The rating is Glicko-1 with one update per counted game (`plugins/ratings.py`): a number and how unsure it is. Everybody starts
+at 1500. A difference of 100 points means 64% of the games between the two, 200 points 76%, 400 points 91%. A full game
+counts, and a quit by a person behind after more than 5 minutes is their loss; frags do not move it. A person is ranked from their first counted game. Every
 person meets only Bobby here, so a person's number says how he does against Bobby, and Bobby's says how he does against
 the people who come. A new network of Bobby has its own row and starts at the last one's number, unsure enough that it
 is his number that moves, not the people's, when he has got better or worse.

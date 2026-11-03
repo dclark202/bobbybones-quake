@@ -1,0 +1,14 @@
+10:43:56 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.0, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0}
+10:43:56 the smoke trainer and the ramp started
+10:56:06 PASS the trainer exited 0
+10:56:06 PASS on the CPU
+10:56:06 PASS 12 or more updates (120)
+10:56:06 PASS WIN_ADD taken live to 0.33
+10:56:06 PASS live.json ended at WIN_ADD 0.33, WIN_W 0, FADE_V 0
+10:56:06 PASS no rescale
+10:56:06 sizes: first update {'minutes': 0.6, 'win_g1_per_player_min': 0.4916, 'win_g1_size': 18.5518, 'combat_per_player_min': -0.5558, 'combat_size': 0.5558, 'other_size': 4.1884, 'paid_size': 4.7216, 'blend_frames': 0, 'combat_to_win_g1': 0.03}
+10:56:06 sizes over the last 6 updates: win at gain 1 19.35, combat 6.51, other 4.01, paid 16.52; 0.33 x win 6.39, win's share of the sum 38%
+10:56:06 PASS paid size above the table's largest part
+10:56:06 PASS the blend's frames counted
+10:56:08 PASS test_suite.Policy loads the last save
+10:56:08 ALL PASSED

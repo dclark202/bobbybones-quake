@@ -1,0 +1,32 @@
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 940 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 673,874 weights
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_b12a_smoke\policy.pt (gate 1; plan_in and target at zero)
+copied the optimizer's state C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_0a\keep\opt_end_b10a.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_b12a_smoke\opt.pt (the head's group is added by the trainer)
+21:43:48 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'H2_GATE_CAP': 1.0, 'H2_GATE_OPEN': 1.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'BRAIN_FADE': 1.0, 'LEVEL_PULL': 1.0, 'INTENT_HOLD': 1.0}
+21:43:48 the smoke trainer started
+21:55:58 PASS the trainer exited 0
+21:55:58 PASS on the CPU
+21:55:58 PASS 20 or more updates (102)
+21:55:58 head2 first: {'gate': 1.0, 'cap': 1.0, 'open_min': 1.0, 'pg_w': 1.0, 'plan_grad': 0.0, 'pg_loss': -0.00329, 'v_loss': 0.00978, 'plan': 0.3737, 'gin_share': 0.000343, 'bias': 0.00067, 'bias_share': 4e-05, 'clip_share': 0.0, 'grad': 0.28178, 'plan_in_w': 0.052737, 'target_w': 0.020237, 'pay': 'combat_win', 'pay_abs': [0.005239, 0.00767], 'v': 0.0, 'ret': -0.0008, 'adv_sd': 0.1426, 'lr': 0.0001, 'opp_open': False}
+21:55:58 head2 last:  {'gate': 1.0, 'cap': 1.0, 'open_min': 1.0, 'pg_w': 1.0, 'plan_grad': 0.0, 'pg_loss': 0.00346, 'v_loss': 0.00967, 'plan': 2.9017, 'gin_share': 0.055154, 'bias': 3.15916, 'bias_share': 0.12105, 'clip_share': 0.0, 'grad': 1.49324, 'plan_in_w': 0.384911, 'target_w': 0.37022, 'pay': 'combat_win', 'pay_abs': [0.001941, 0.003118], 'v': 0.2305, 'ret': 0.2278, 'adv_sd': 0.1282, 'lr': 0.0001, 'opp_open': False}
+21:55:58 PASS the head's gate open
+21:55:58 PASS the head's value and lesson finite
+21:55:58 PASS its links rose from zero (plan_in 0.384911, target 0.37022)
+21:55:58 PASS its bias a share of his target choice (0.12105)
+21:55:58 PASS its pay is combat_win
+21:55:58 a frame's |pay|, the last 10 updates: the head's 0.00316, his 0.00472
+21:55:58 PASS the head's pay is not his whole pay and not zero
+21:55:58 PASS the win pay in force
+21:55:58 PASS the dials as set (WIN_ADD 0.33, rule 1.0)
+21:56:00 PASS the last save: the head, the brain's dial at 1, the lock at 1 s
+PASS state dict keys unchanged
+PASS g 0: the same as without the entry, bit for bit
+PASS g 0.3: the same as the inputs times 0.7 (max diff 9.54e-07)
+PASS g 1: the faded columns change nothing
+PASS g 1: the other columns still count
+PASS numpy brain, no entry: weights as saved
+PASS numpy brain at g 0.5 = the trainer's (max diff 1.32e-05; numpy against torch without the fade 1.06e-05)
+PASS numpy brain did not change the saved weights
+ALL PASSED
+21:56:03 PASS brain_fade_check on that save
+21:56:03 PASS test_suite.Policy loads it
+21:56:03 ALL PASSED

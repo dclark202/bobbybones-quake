@@ -80,13 +80,18 @@ def step_logits(pol, obs, h, xl=None, pose=None, zmap=None):
     x = np.clip((obs - pol.mean) / np.sqrt(pol.var + 1e-8), -10, 10).astype(np.float32)
     xa = x
     bt, bst = pol.token_pre(obs, pose, zmap, hb) if hb is not None else (None, None)   # (v0.4.1) the brain's token, if its gate is open
+    xh = xa
+    if getattr(pol, "rfg", 0.0) > 0 and len(pol.rf_cols):    # (v0.4.2a) the hands' inputs: the rule-made columns faded (test_suite's act)
+        import rule_fade as rfade_
+        xh = x = rfade_.apply_np(x, pol.rf_cols, pol.rfg)
     if pol.cell is not None:
         ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(pol.cell) - 1)
         x = np.concatenate([x[:, :-2], pol.cell[ids[:, 0]], pol.cell[ids[:, 1]]], 1)
     x = np.tanh(x @ pol.w0.T + pol.b0)
     x = np.tanh(x @ pol.w1.T + pol.b1)
     if pol.attP is not None:
-        x = x + pol.attn_fwd(pol.attn, pol.attP, xa, hm=h, bt=bt, bg=pol.bgate if bt is not None else 0.0)
+        bta = bt if pol.bgate > 0 else None
+        x = x + pol.attn_fwd(pol.attn, pol.attP, xh, hm=h, bt=bta, bg=pol.bgate if bta is not None else 0.0)
     if bt is not None:
         hb = pol.token_post(xa, pose, zmap, bst)
     xf = x

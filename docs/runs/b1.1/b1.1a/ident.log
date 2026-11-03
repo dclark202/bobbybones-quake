@@ -1,0 +1,7 @@
+bloodrun HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'changes': True, 'counters': True}
+bloodrun HEAD against live8: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'changes': True, 'counters': True}
+bloodrun target changes: at 8 s 348, at 1 s 1053; the game differs True
+aerowalk HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'changes': True, 'counters': True}
+aerowalk HEAD against live8: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'changes': True, 'counters': True}
+aerowalk target changes: at 8 s 348, at 1 s 1043; the game differs True
+ALL PASSED

@@ -49,7 +49,7 @@ class Policy:
         self.mean, self.var = ck["obs_mean"], ck["obs_var"]
         self.dims = [int(x) for x in ck["action_dims"]]
         self.minutes = float(ck.get("minutes", 0.0))
-        self.react_ms = float(ck.get("react_ms", 150.0))
+        self.react_ms = float(ck.get("react_ms", 100.0))      # (a checkpoint without it: !aim default; 150 until branch aim2)
         self.acquire_ms = float(ck.get("acquire_ms", 200.0))  # (B-226) the trainer's --acquire-ms; 200: the simulator's own
         self.round_secs = float(ck.get("round_secs") or 120.0)    # his clock, score and memory start over every this many seconds; 600: whole games, never (tools/duel_eval.py SeatClock)
         self.H = self.whh.shape[1]

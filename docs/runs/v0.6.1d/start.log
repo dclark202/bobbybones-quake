@@ -1,0 +1,9 @@
+10-30 17:41:17 judge axioms_ok True logloss 0.38418490538176603
+10-30 17:41:17 allowed arg --adv-pay-ref: run '10' | reference '8.5'
+10-30 17:41:17 allowed arg --minutes: run '915' | reference '720'
+10-30 17:41:17 allowed arg --run: run 'duel_gru_v0_6_1d' | reference 'duel_gru_v0_6_1c'
+10-30 17:41:17 settings check: PASS
+10-30 17:41:18 backup: copied 119 files 0.61 GB to T:\BobbyBones_backup
+10-30 17:41:18 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_W': 0.8, 'FADE_V': 0.5, 'WIN_SHAPE_K': 0.0, 'VALUE_WARM': 0, 'WIN_GAIN': 0.35, 'LEVEL_PULL': 0.95, 'ADV_PAY_REF': 10.0, 'BRAIN_FADE': 0.0}
+10-30 17:41:18 trainer started: cmd 9164
+10-30 17:41:23 watcher 33420 | fades 33484 (the pull 0.95 -> 1 and the brain 0 -> 1 together, eight steps, after saves, 25 min apart) | self-play logger 35188 | no guard (owner: never stop the run)

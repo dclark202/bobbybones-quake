@@ -1,0 +1,105 @@
+"""The generated starts' bias, from what he does not do in games (owner, 2026-10-25: "if the report shows he's not using the rail
+on campgrounds say then it puts him more and more with rail or near its spawn so he learns to use it"; "specifically aimed
+towards getting him to do stuff he is not doing in games (e.g. going for certain weapons)").
+
+Reads his numbers per map from the weapon watch (one line a save: pick_per_min, held_in_view, items_det_per_min; short whole
+games of the save) and the pros' from data/behaviour/pros_baseline.json, and writes GEN_BIAS (sim/duel_env.py's
+GEN_START_SHARE) for the next starts:
+  a gap        = 1 - his / the pros' (0 when he does it as much as they do or more; maps where the pros barely do it: none)
+  near[w]      = NEAR_W x the pickup gap of weapon w (RL, RG) or big item (RA, MH): the chance the first seat starts within
+                 GEN_NEAR of its spawn (a weapon: half the time not owned, so he takes it; half owned, so he uses it there)
+  own[w]       = OWN_W x the in-hand gap: added to the chance he owns it at the start
+  hand[w]      = 1 + HAND_W x the in-hand gap: its weight as the weapon in hand at the start
+Each value moves STEP (a quarter) of the way from the last file's toward the new target and at most MAX_MOVE a line (a slow,
+smooth bias: one watch line is a few games a map; owner: "suitably gentle"), and is capped (the simulator caps the near chances at 0.6 a start in all). A line in gen_bias.log per write.
+Run after every weapon-watch line:  python tools/gen_bias.py --watch <weapon_watch.jsonl> --out <run>/gen_bias.json"""
+import argparse, json, os, time
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+NEAR_W, OWN_W, HAND_W, STEP = 0.60, 0.35, 3.0, 0.25          # (owner, 2026-10-25: "they don't need to be wimpy": firm targets, reached smoothly)
+MAX_MOVE = dict(near=0.05, own=0.05, hand=0.5)               # (owner, 2026-10-25: "suitably gentle": the most one line moves a value)
+NEAR_CAP = 0.50                                              # (owner, 2026-10-25 ~22:45: the generated starts, now 10% of training, "targeted specifically for things we want him to do")
+PRIOR_OWN_BASE = 0.35                                        # (owner, 2026-10-25 ~22:30: "He should probably draw LG less frequently in the
+PRIOR_OWN = {"RL": 0.30, "RG": 0.15}                         # mid game starts, rockets more often"): a fixed prior on every map under the
+PRIOR_HAND = {"RL": 2.0, "LG": 0.4}                          # gaps' part: each weapon owned 35% (the rocket +30, the rail +15), the rocket
+#                                                              twice as likely in hand, the lightning gun 0.4 times; the gaps' part on top
+HOLD = {"aerowalk": ("RA",)}                                # (owner, 2026-10-25: "hold out aerowalk red armor for now ... he still cant figure out how to get there")
+
+
+def gap(his, pro, floor):
+    if pro is None or pro < floor or his is None:
+        return 0.0
+    return max(0.0, min(1.0, 1.0 - float(his) / float(pro)))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--watch", required=True)
+    ap.add_argument("--baseline", default=os.path.join(r"C:\Users\dacla\ql-bot", "data", "behaviour", "pros_baseline.json"))
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--update", type=int, default=None, help="the watch line of this save (default: the newest)")
+    ap.add_argument("--step", type=float, default=STEP)
+    ap.add_argument("--fresh", action="store_true", help="ignore the last file: the targets at once")
+    a = ap.parse_args()
+    L = [json.loads(l) for l in open(a.watch, encoding="utf-8") if l.strip()]
+    rec = [r for r in L if a.update is None or int(r["update"]) == a.update][-1]
+    base = json.load(open(a.baseline, encoding="utf-8"))["maps"]
+    old = {}
+    if os.path.exists(a.out) and not a.fresh:
+        old = json.load(open(a.out, encoding="utf-8"))
+    gap_old = old.get("gap") or old.get("maps") or {}         # (the gaps' part alone; a file before the prior: its values were that part)
+    out = dict(heat=old.get("heat", 1.0), uniform=old.get("uniform", 0.1), own=PRIOR_OWN_BASE, maps={}, gap={},
+               made=time.strftime("%Y-%m-%d %H:%M"), from_update=int(rec["update"]), step=a.step)
+    st = 1.0 if (a.fresh or not old) else a.step
+    notes = []
+    for mp, his in rec["maps"].items():
+        pro = {k: v["pooled"] for k, v in (base.get(mp) or {}).get("measures", {}).items()}
+        om = gap_old.get(mp) or {}
+        tg = dict(near={}, own={}, hand={})
+        for w in ("rl", "rg"):
+            g_pick = gap((his.get("pick_per_min") or {}).get(w), pro.get("pick_" + w), 0.1)
+            g_hold = gap((his.get("held_in_view") or {}).get(w), pro.get("held_" + w), 0.05)
+            tg["near"][w.upper()] = NEAR_W * g_pick
+            tg["own"][w.upper()] = OWN_W * g_hold
+            tg["hand"][w.upper()] = 1.0 + HAND_W * g_hold
+        for it in ("ra", "mh"):
+            tg["near"][it.upper()] = 0.5 * NEAR_W * gap((his.get("items_det_per_min") or {}).get(it), pro.get("pick_" + it), 0.3)
+        m_ = {}
+        for part, t_ in tg.items():
+            o_ = om.get(part) or {}
+            m_[part] = {}
+            for k, v in t_.items():
+                prev = float(o_.get(k, 1.0 if part == "hand" else 0.0))
+                x = prev + st * (v - prev)
+                if not (a.fresh or not old):
+                    x = prev + max(-MAX_MOVE[part], min(MAX_MOVE[part], x - prev))
+                x = min(NEAR_CAP, x) if part == "near" else x
+                if k in HOLD.get(mp, ()):
+                    x = 1.0 if part == "hand" else 0.0
+                m_[part][k] = round(x, 4)
+        out["gap"][mp] = m_
+        eff = dict(near=dict(m_["near"]), own={}, hand={})
+        for k in set(m_["own"]) | set(PRIOR_OWN):
+            eff["own"][k] = round(min(0.6, PRIOR_OWN.get(k, 0.0) + m_["own"].get(k, 0.0)), 4)
+        for k in set(m_["hand"]) | set(PRIOR_HAND):
+            eff["hand"][k] = round(PRIOR_HAND.get(k, 1.0) * m_["hand"].get(k, 1.0), 4)
+        out["maps"][mp] = eff
+        top = sorted(((v, "near " + k) for k, v in m_["near"].items()), reverse=True)[:2] + \
+            sorted(((v, "own " + k) for k, v in m_["own"].items()), reverse=True)[:1]
+        notes.append("{} {}".format(mp, ",".join("{} {:.2f}".format(n, v) for v, n in top if v >= 0.01) or "-"))
+    tmp = a.out + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=1)
+    for _ in range(20):
+        try:
+            os.replace(tmp, a.out)
+            break
+        except PermissionError:
+            time.sleep(0.5)
+    line = "{} u{}: {}".format(time.strftime("%m-%d %H:%M"), rec["update"], " | ".join(notes))
+    with open(os.path.join(os.path.dirname(os.path.abspath(a.out)), "gen_bias.log"), "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+    print(line)
+
+
+if __name__ == "__main__":
+    main()

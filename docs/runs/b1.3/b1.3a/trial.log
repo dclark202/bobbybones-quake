@@ -1,0 +1,34 @@
+16:58:06 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\policy_fade40_b12d.pt with C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\opt_fade40_b12d.pt
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 940 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 673,874 weights
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_b13a_trial\policy.pt (gate 1; plan_in and target at zero)
+copied the optimizer's state C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\opt_fade40_b12d.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_b13a_trial\opt.pt (the head's group is added by the trainer)
+16:58:08 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.125, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 1.0, 'H2_GATE_OPEN': 1.0}
+16:58:08 the trial trainer started, 60 minutes
+17:58:40 PASS the trainer exited 0
+17:58:40 PASS on the CPU
+17:58:40 PASS the head alone learns
+17:58:40 PASS 40 updates or more (170)
+17:58:40 PASS no NaN
+17:58:40 PASS no piece skipped
+17:58:40 update 1: bias 0.0006 hands 20.05335 target_w 0.014026 share 3e-05 grad 0.39572
+17:58:40 update 15: bias 0.40095 hands 22.15337 target_w 0.131196 share 0.01778 grad 0.81345
+17:58:40 update 29: bias 1.08816 hands 21.53915 target_w 0.176749 share 0.04809 grad 1.54904
+17:58:40 update 43: bias 1.38653 hands 22.34847 target_w 0.228487 share 0.05842 grad 1.58064
+17:58:40 update 57: bias 1.85106 hands 22.5451 target_w 0.264063 share 0.07588 grad 1.63606
+17:58:40 update 71: bias 3.50634 hands 21.1198 target_w 0.358927 share 0.14238 grad 2.18877
+17:58:40 update 85: bias 4.49582 hands 21.94633 target_w 0.405301 share 0.17002 grad 1.72316
+17:58:40 update 99: bias 4.88488 hands 21.56281 target_w 0.448993 share 0.1847 grad 2.18684
+17:58:40 update 113: bias 6.13284 hands 21.93118 target_w 0.512257 share 0.21853 grad 2.02707
+17:58:40 update 127: bias 6.27787 hands 21.78489 target_w 0.502569 share 0.22371 grad 2.75423
+17:58:40 update 141: bias 6.56668 hands 23.14198 target_w 0.525126 share 0.22104 grad 1.98
+17:58:40 update 155: bias 7.0574 hands 22.10929 target_w 0.562307 share 0.24197 grad 2.04361
+17:58:40 update 169: bias 7.07726 hands 22.49355 target_w 0.562487 share 0.23933 grad 2.76903
+17:58:40 PASS the bias's length levels off: third quarter 5.67, last 6.69
+17:58:40 PASS the hands' target length steady: first quarter 21.92, last 22.02
+17:58:42 PASS the hands' target rows the same to the bit
+17:58:42 PASS the hands' other rows moved
+17:58:42 PASS the head's target layer moved
+18:04:01 18:04:01 {'bloodrun': '0-2 31%'}
+trial: A policy.pt at 8 s against B policy.pt at 8 s: 0-2, win rate 0.0%, frag share 30.6%
+18:04:01 PASS a check with a head in both seats finishes
+18:04:01 ALL PASSED

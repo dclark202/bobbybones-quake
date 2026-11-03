@@ -1199,6 +1199,8 @@ class duelbot(minqlx.Plugin):
             env.it_t[:], env.e_got[:], env.e_life[:] = 99.0, 0.0, 99.0
             if hasattr(env, "bel_t"):
                 env.bel_t[:] = 99.0
+                if getattr(env, "sm_bel", None) is not None:
+                    env.sm_bel[:] = 99.0
             env._v02_round(np.ones(env.n, bool))
 
     @staticmethod
@@ -1568,6 +1570,7 @@ class duelbot(minqlx.Plugin):
             turn, dpit = float(t_[i]), float(p_[i])
         yaw = (yaw + turn + 180.0) % 360.0 - 180.0
         lev = 1.0 if (nine and env.seen_t[i] <= 0.5) else env.level     # newer simulators: no pull while an enemy is in view
+        #                                                  (B-275: env.level is the policy.npz's LEVEL_PULL from v0.4.3 on, set before the module loads; 0.95 unset)
         pitch = float(np.clip(pitch * lev + dpit, -89, 89))
         names = E.WEAPONS
         ncol = env.has.shape[1]

@@ -1,0 +1,108 @@
+# v0.6.1b: the old hand-built belief out of the brain, overnight, from v0.6.1's end
+
+*2026-10-29 (owner): "I'm not opposed to doing v0.6.3 B first (before v0.6.2), as a short overnight run"; "Write the card".
+Group B of [v0.6.3](../v0.6.3/CARD.md), moved ahead of the strategy head so that the head ([v0.6.2](../../archive/versions/v0.6.2/CARD.md))
+learns once, on the brain it keeps. Started 2026-10-29 19:59 on the owner's go ("Start it now, let it run for 12 hours"); ends ~08:00 10-30.*
+
+**Marks:** ✅ built and tested · ⏳ building · 🧪 to measure · ❓ owner's decision · ⏸ later
+
+## What it does, in plain terms
+
+The brain predicts where the enemy is (now and 1, 2, 4 s ahead), his stack, and who takes the next items, from Bobby's
+senses. Among its inputs are 76 numbers that are the old **hand-written guess** of the same things:
+- the believed place of the unseen enemy and the ways to and from it;
+- the enemy-stack filter;
+- the pre-fire spots;
+- the emergence point.
+
+They were faded out of the hands in v0.4.2, but the brain still reads them unfaded (`sim/rule_fade.py`: "The brain ...
+keeps reading the unfaded inputs"). So the hand-built belief still reaches him through the brain. This run fades them out
+of the brain too. The brain then has to find the enemy from what he saw and heard alone. The raw sensed facts stay: time
+since seen or heard, where heard, damage, pickups and weapons seen.
+
+## The owner's page
+
+| | |
+|---|---|
+| Network | v0.6.1's end with its optimizer (`keep/policy_end_v061.pt`) |
+| The one new thing | a dial g (`--brain-fade 1`, live `BRAIN_FADE`) on the same 76 columns as the hands' fade, on the brain's inputs: × (1 - g), from 0 to 1. At 0 the brain is exactly v0.6.1's |
+| The fix with it | the game-end pay fix ([WINPAY_END.md](../v0.6.1/WINPAY_END.md)): a correction to the pay, in from the start. The first 10 updates read it alone |
+| Pay | win chance only, as v0.6.1 (`WIN_W` 1, `FADE_V` 1, `WIN_GAIN` 0.33), **the judge refitted on v0.6.1's own 350 self-play games** (`judge_v061_wpn.npz`: held-out log loss 0.3842, level with B2, better than A, the axioms hold, the simulator's parity check passed; the rail set to the lightning gun's worth by hand, as v0.6.1's; owner, 2026-10-29: "That seems fair. Let's do that."). The pros' 786 games were tried for the weapons' worth (`tools/run/fit_pro_weapons.py`): they barely move it (the pros' held-out log loss -0.0002 at most) and price owning the rail near its floor, as his games do; not used |
+| Ramp | shut until the first save (~10 updates), then g +0.1 right after each save (every 10 updates, at least 25 min) to 1 at ~update 100, then held at 1 to the end. On the clock as v0.6.2's ramp ("keep going unless a collapse"); a hold or a step back is by hand, on the owner's word ❓ |
+| Timing | ~4 min an update: g reaches 1 after ~7 h; `--minutes 720` (12 h; owner, 2026-10-29: "let it run for 12 hours") leaves ~5 h at 1. Whether v0.6.2 starts from its end: [the go list](#go-list-is-v061bs-end-ready-for-v062) |
+| Aim, mix, maps | as v0.6.1 (`!aim default`; 65% whole games / 35% the pros' mid-game starts; the ten maps) |
+| League | v0.6.1's end and v0.6.0's end as anchors |
+| Checks | every 10 updates, 160 games against v0.6.1's end, every fourth against the long-term control (v0.6.0's end); the behaviour panel. Under 40% flagged, under 30% posted. Never stopped |
+| The brain's scores | from the metrics, against v0.6.1's last 20 updates: the place now and 1/2/4 s ahead, the stack band, who takes the next item, the "in control" readout. Expected: a dip while `g_b` rises, back during the hold |
+| Run folder | `duel_gru_v0_6_1b` |
+| Saved | `keep/policy_end_v061b.pt` with its optimizer: v0.6.2's start |
+| Play test | not planned (overnight); the owner's call |
+
+## Before the start
+
+The code is on `main` in the working tree, uncommitted. It is inert unless a network carries `belief.fade` or the trainer gets
+`--brain-fade 1`, so v0.6.1's running checks are unaffected.
+
+| Step | Where it stands |
+|---|---|
+| **The brain's dial** ✅ | **In the trainer** (`sim/belief.py`): the brain's first layer reads the 76 columns' weights times (1 - g). For a linear layer this is the same sums as those inputs times (1 - g). `g` and the columns are plain attributes from the checkpoint's `belief["fade"]`, so the state dict is unchanged. **In the trainer's wiring** (`sim/train_duel_rnn.py`): `--brain-fade 1`; live `BRAIN_FADE` (0..1, read between rollouts); each rollout played and learnt at one g (`bfg` in the rollout's record); saved in every checkpoint; `brain_fade` in `metrics.jsonl`. Without `--brain-fade` a network's own g stays as it is, so v0.6.2 keeps 1 from v0.6.1b's end. **In the numpy copy** (`sim/btoken.py`, `numpy_brain`): the same weights for the checks, the self-play logger and the servers (`test_suite.Policy`, `plugins/netpass.py`, `sim/export_duel.py`, which carry `belief` as is) |
+| **The people lesson** ✅ | `--brain-human` runs the same brain module (`belief_.seq(pol.belief, ...)`), so the demo frames are faded by the same g, nothing extra |
+| **League opponents** ✅ | In training, every seat's brain is his current one (the rollout steps `net.belief` for all seats), so they read the same g. In the checks each network plays at its own file's g (v0.6.1's end: none) |
+| **`BRAIN_READ`** | The simulator's readers (the legs' look point, hunt, contest, openings) read the brain's answer in every life, so they move with it. Intended; watched through the hunt and openings counters |
+| **Identity** ✅ | `tools/run/brain_fade_check.py` on v0.6.0's end (2026-10-29, all passed): state dict keys unchanged; g 0 bit for bit as without the entry; g 0.3 the same as the inputs × 0.7 (1.0e-6); g 1 the faded columns change nothing and the others still count; numpy = torch at g 0.5 (1.07e-5, the same float noise as with no fade, 9.7e-6). `start.ps1` runs it again on v0.6.1's real end and refuses on a failure |
+| **The trainer's smoke run** ✅ | `docs/runs/v0.6.1b/smoke.py`, **after v0.6.1 ends**, ~20-25 min on the CPU: v0.6.1b's command made small, the dial stepped 0 → 0.5 → 1 by the ramp tool. It checks the metrics, the save's entry, the identity check on that save, and `test_suite.Policy` on it. Not run before then, so v0.6.1 is not slowed (owner, 2026-10-29). Ran 17:55-18:20; its printed verdict was not kept, so its checks were run again on its outputs at 19:54: ALL PASSED |
+| **The ramp** ✅ | `tools/run/ramp_live.py` (as v0.6.1's level fade): `BRAIN_FADE` 0 → 1 by 0.1 right after each save, at least 25 min apart; the save before the first step kept as `keep/policy_prefade_v061b.pt`. On the clock, as v0.6.2's (owner: "keep going unless a collapse") ❓ |
+| **Settings check** ✅ | `train.cmd` (made from v0.6.1's by the scratchpad's `make_cmd_v061b.py`) against v0.6.1's: PASS, only `--run`, `--minutes` (720, from 780 at the owner's go), `--brain-fade`, `WIN_END` and `WIN_JUDGE` differ. `aim2_env.cmd` copied unchanged (identical to v0.6.1's and v0.6.2's). `start.ps1` refuses otherwise |
+| **The game-end fix** ✅ (merge ⏳) | `WIN_END` (branch `v062pay`, commit 129c1d2; off = v0.6.1's simulator to the bit, on = every game pays `scale x (result - start chance)` exactly: `tools/win_end_test.py`), merged into `main` right after v0.6.1 ends. Set in `train.cmd` (`set WIN_END=1`), allowed in the settings check (PASS: `--run`, `--minutes`, `--brain-fade`, `WIN_END`), and `$FIX_MARK = "WIN_END"` in `start.ps1`, which refuses until the merged code carries it (v0.6.1's session, 2026-10-29) |
+| **Review fixes (v0.6.1's session, 2026-10-29)** ✅ | `start.ps1` did not parse (`"$JUDGE: ..."` reads as a drive): `${JUDGE}`; `tools/run/ramp_live.py` waited for the watcher's `keep/` copies and read `metrics.jsonl` before the run had one, so the smoke run's dial would never have moved: it now takes a save from `policy.pt` being rewritten (tested mid-run and on a fresh run); `smoke.py` read its last save from `keep/`, empty without a watcher: it now reads the trainer's `policy.pt` |
+| **The servers** ⏸ | the numpy brain handles the entry; an image rebuild and an input recording (`OBSDUMP`) come before this network goes on any server. Not needed for the run |
+
+If any of these is not done and checked by the evening, it does not start that night (the calibration rule).
+
+## Start order (after v0.6.1 ends, on the owner's go)
+
+1. The game-end fix in the code, with its own identity check; `$FIX_MARK` set in `start.ps1`.
+2. `%USERPROFILE%\anaconda3\python.exe docs\runs\v0.6.1b\smoke.py`: must end ALL PASSED (~25 min).
+3. `powershell -ExecutionPolicy Bypass -File docs\runs\v0.6.1b\start.ps1`. It runs the settings check, the judge's axioms, the
+   identity check on v0.6.1's end and the live.json check (WIN_W 1, FADE_V 1), then starts the trainer, the watcher, the ramp and
+   the self-play logger.
+
+## Started
+
+2026-10-29 19:59 (`start.log`): the settings check PASS, the judge's axioms, the brain's dial check on v0.6.1's end (ALL PASSED),
+v0.6.1's live.json at WIN_W 1, FADE_V 1, WIN_GAIN 0.33, LEVEL_PULL 1.0 (no pull). The trainer, the watcher, the ramp and the
+self-play logger running. The 06:30 report (10-30) answers the go list below.
+
+## Go list: is v0.6.1b's end ready for v0.6.2?
+
+Proposed 2026-10-29 evening, from the owner's rules (a dip held under 50%, rolled back under 45%; games won-lost first). All
+must hold for a go; the owner decides in the band marked so.
+
+| # | Test | Go |
+|---|---|---|
+| 1 | Ran clean | the log ends in `exit 0` after ~720 min; no stall over 10 min, no crash; `keep/policy_end_v061b.pt` + `opt_end_v061b.pt` kept |
+| 2 | The fade complete | `BRAIN_FADE` reached 1 and held at least ~40 updates (4+ checks); the end save carries g 1; `brain_fade_check` passes on it (`start.ps1` of v0.6.2 refuses otherwise) |
+| 3 | Level against v0.6.1's end | the checks at g 1 pooled (~480+ games): **go** at 50% or more and no check under 40%; **the owner's call** at 45-50% (a fair price for the crutch's removal if the last checks are flat or rising); **no-go** under 45%, or two checks in a row under 45%: v0.6.2 then starts from v0.6.1's end and the fade is tried again later |
+| 4 | The control | against v0.6.0's end at least 50% (v0.6.1 ended 51-57% against it) |
+| 5 | The brain back | its scores (the place now and 1/2/4 s ahead, the stack band, the next item, "in control") back in v0.6.1's range (its last 20 updates), or at least half the dip regained and still improving over the last 20 updates. Still getting worse at the end = no-go even with good checks (the head reads the brain) |
+| 6 | The game-end fix | the first 10 updates (the fix alone) no drop; the ledger: games paid their result, no sign flips, negative scores or lopsided games |
+| 7 | No behaviour collapse | against v0.6.1's end: megas and red armors within ~20% (0.80, 0.95 a player-minute), frags a minute, the lightning gun's share not running away, the rail, the hunt and openings counters, roaming, no spawn camping |
+| 8 | The data | v0.6.1b's self-play games logged (for a later judge refit) |
+
+## The checklist
+
+| | |
+|---|---|
+| Hand-built / assumed parts | the 76 columns, the hands' list (`rule_fade.FADE`) taken as is; the ramp's schedule (ten steps, on the clock); the hold of 10 updates; the people lesson faded alike |
+| Weaknesses | The brain's predictions get worse while it relearns, and the hands lean on them, so the checks may dip in the middle. With only one night, the brain may not be fully back by morning. Fading the 76 out of the brain leaves the rule's numbers in the input files for nothing; a later version can drop them. The game-end fix and the fade are in one run: the fix's effect reads in the first 10 updates, the fade's after |
+| Pay pathologies (ledger) | as v0.6.1: negative scores, sign flips, lopsided games in the self-play games |
+| Watched | the brain's scores (above); time the enemy is found after being lost; hunt and openings counters; items a player-minute; the lightning gun's share |
+
+## What changes for v0.6.2
+
+Done 2026-10-29 evening (owner: "Yes, prepare it"; see [v0.6.2's card](../../archive/versions/v0.6.2/CARD.md)):
+- It starts from `keep/policy_end_v061b.pt` with its optimizer; `start.ps1` checks the end's brain dial at 1 and the head's identity on it.
+- Its checks are against v0.6.1b's end, every fourth against v0.6.0's; the league anchors are v0.6.1b's end and v0.6.0's end.
+- Its `train.cmd` is made from v0.6.1b's (settings check PASS: only `--run`, `--minutes` and the head's arguments differ;
+  `--brain-fade 1` kept with live `BRAIN_FADE` 1).
+- The judge stays `judge_v061_wpn.npz` (no refit on v0.6.1b's mid-fade games).

@@ -249,7 +249,24 @@ def pros(a):
     import pro_yardsticks as Y
     out_s, out_f = [], []
     for mp in a.maps.split(","):
-        if a.set == "trance":
+        if a.set == "pooled":                                 # (owner, 2026-10-27) the archive + the tournament set with its old map
+            import csv                                        # versions (subfolders "_..."), a fixed-seed sample of a.limit a map
+            cat = {}
+            catf = "T:/quake-demos/trance/catalog.csv"
+            if os.path.exists(catf):
+                for r in csv.DictReader(open(catf, encoding="utf-8", errors="replace")):
+                    cat[os.path.basename(r["file"].replace("\\", "/"))] = r
+            tr = sorted(glob.glob(os.path.join("T:/quake-demos/trance/by_map", mp, "*.dm_*"))
+                        + glob.glob(os.path.join("T:/quake-demos/trance/by_map", mp, "_*", "*.dm_*")))
+            tr = [f for f in tr if cat.get(os.path.basename(f), {}).get("snap_ms", "25.0") in ("25.0", "25", "")]
+            ar = sorted(f for f in glob.glob(os.path.join(Y.demo_root(), "demos", mp, "*.dm_*")) if not f.endswith(".part"))
+            pool_ = tr + ar
+            rs_ = np.random.default_rng(20261027 + a.maps.split(",").index(mp))
+            files = sorted(rs_.choice(pool_, size=min(a.limit, len(pool_)), replace=False).tolist()) if pool_ else []
+            with open(a.out + ".list.txt", "a", encoding="utf-8") as fl_:
+                for f in files:
+                    fl_.write("{} {} {}\n".format(mp, "tournament" if f in tr else "archive", f))
+        elif a.set == "trance":
             files = sorted(glob.glob(os.path.join("T:/quake-demos/trance/by_map", mp, "*.dm_*")))
             cat = {}
             catf = "T:/quake-demos/trance/catalog.csv"
@@ -260,12 +277,13 @@ def pros(a):
             files = [f for f in files if cat.get(os.path.basename(f), {}).get("snap_ms", "25.0") in ("25.0", "25", "")]
         else:
             files = sorted(f for f in glob.glob(os.path.join(Y.demo_root(), "demos", mp, "*.dm_*")) if not f.endswith(".part"))
-        if a.limit:
+        if a.limit and a.set != "pooled":
             files = files[::max(1, len(files) // a.limit)][:a.limit]
         tmp = tempfile.mkdtemp(prefix="aim2p_")
         t0 = time.time()
         with mp_.Pool(a.procs, initializer=_init, initargs=(mp, tmp)) as pool:
-            res = pool.map(_one, [(f, 1000 + len(out_s) * 0 + k + 100000 * (1 + a.maps.split(",").index(mp))) for k, f in enumerate(files)],
+            res = pool.map(_one, [(f, 1000 + k + 100000 * (1 + a.maps.split(",").index(mp)) + (5000000 if "trance" not in f.replace("\\", "/") else 0))
+                                  for k, f in enumerate(files)],
                            chunksize=2)
         ok = [r for r in res if r is not None]
         for r in ok:
@@ -336,7 +354,8 @@ def play(job):
     E = importlib.import_module(envmod)
     _recorder(E)
     _REC.clear()
-    DE.play(job)
+    res_ = DE.play(job)
+    swap_ = bool(job[12]) and job[9] is not None
     B = {k: np.stack(v) for k, v in _REC["B"].items()}
     mp = job[2]
     from qsim import World
@@ -369,12 +388,12 @@ def play(job):
                             score=score[:, p], enemy=enemy, enemy_score=score[:, o], clock=tm, alive=alive,
                             eye_h=np.where(B["duck"][:, p], 12.0, 26.0), enemy_air=B["air"][:, o].astype(np.int64),
                             hits=np.cumsum(upd))
-        r, f = rows_of(rec, w, src=1)
+        r, f = rows_of(rec, w, src=10 + (p + int(swap_)) % 2)      # src 10: his side, 11: the opponent's (duel_eval's sides)
         S.append(r)
         F.append(f)
     a2 = B["a2"].reshape(-1, 3)
     a2 = a2[a2[:, 0] > 0]
-    return mp, np.concatenate(S), np.concatenate(F), a2
+    return mp, np.concatenate(S), np.concatenate(F), a2, res_
 
 
 def sim(a):
@@ -389,21 +408,29 @@ def sim(a):
     import test_suite as TS
     pol = TS.Policy(a.policy, seed=1)
     idx = np.arange(len(pol.mean))
-    delays = (pol.react_ms, pol.acquire_ms, pol.react_ms, pol.acquire_ms)
+    rm_ = float(envvars.get("REACT_MS") or pol.react_ms)          # (--sets REACT_MS=, ACQUIRE_MS=: an !aim level's delays, every seat)
+    am_ = float(envvars.get("ACQUIRE_MS") or pol.acquire_ms)
+    delays = (rm_, am_, rm_, am_)
     if "BRAIN_READ" not in envvars and getattr(pol, "rf_read", False) and pol.rfg > 0:
         envvars["BRAIN_READ"] = "1"
-    jobs = [(a.env, envvars, mp, a.games, a.minutes, a.seed + 17 * q, pol, idx, "policy", pol, idx, (600.0, 600.0, False), False,
-             delays) for q, mp in enumerate(a.maps.split(","))]
+    if a.aim_he or a.aim_opp:                                # (the suite: each side its own aim; seats swapped every second job)
+        envvars["SEAT_AIM_HE"], envvars["SEAT_AIM_OPP"] = a.aim_he, a.aim_opp
+        delays = (a.react_he or rm_, a.acquire_he or am_, a.react_opp or rm_, a.acquire_opp or am_)
+    per_ = max(1, a.split)
+    jobs = [(a.env, envvars, mp, a.games // per_ + (1 if k < a.games % per_ else 0), a.minutes, a.seed + 17 * q + 1000 * k, pol, idx,
+             "policy", pol, idx, (600.0, 600.0, False), bool(k % 2), delays)
+            for q, mp in enumerate(a.maps.split(",")) for k in range(per_)]
     t0 = time.time()
-    S, F, A2 = [], [], []
+    S, F, A2, G = [], [], [], []
     with mp_.Pool(min(a.procs, len(jobs)), maxtasksperchild=1) as pool:
-        for mp, s, f, a2 in pool.imap_unordered(play, jobs):
+        for mp, s, f, a2, r_ in pool.imap_unordered(play, jobs):
             S.append(s)
             F.append(f)
             A2.append(a2)
+            G += [[mp] + list(sc_) + list(kl_) for sc_, kl_ in zip(r_["score"], r_["kills"])]
             print("sim {}: {} shots, {:.0f} s".format(mp, len(s), time.time() - t0), file=sys.stderr, flush=True)
     np.savez(a.out, shots=np.concatenate(S), flicks=np.concatenate(F), a2=np.concatenate(A2) if A2 else np.zeros((0, 3)),
-             about=np.array(json.dumps(dict(kind="sim", policy=a.policy, sets=a.set, maps=a.maps, games=a.games,
+             games=np.array(json.dumps(G)), about=np.array(json.dumps(dict(kind="sim", policy=a.policy, sets=a.set, maps=a.maps, games=a.games,
                                             minutes=a.minutes))))
 
 
@@ -499,28 +526,132 @@ def report(paths):
 
 
 def spread(path, min_shots=None):
-    """the pros' spread: per demo (src) hit rates by weapon, distance-matched to the whole set's rate by band (100 = the
-    pros' average), with the 10th, 50th, 90th percentiles; and the same for the rail's first shot after a sighting"""
+    """the pros' spread: per demo (src) hit share by weapon, distance-matched to the whole set's rate by band (100 = the
+    pros' average), with its percentiles (demos with enough shots of the weapon)"""
     Z = np.load(path)
     S = Z["shots"]
     C = {c: i for i, c in enumerate(SHOT_COLS)}
+    edges = np.array([250.0, 500.0, 750.0, 1100.0])
     print("| weapon | demos | p10 | p25 | median | p75 | p90 | (distance-matched, % of the pros' mean) |")
     print("|---|---|---|---|---|---|---|---|")
+    out = {}
     for label, nm in STYLES:
         wq = NAMES.index(nm)
         m0 = (S[:, 0] == wq) & np.isfinite(S[:, C["dist"]])
         if m0.sum() < 100:
             continue
+        X = S[m0]
+        b = np.searchsorted(edges, X[:, C["dist"]], side="right")
+        w, h = X[:, 1], X[:, 2] * X[:, 1]
+        rate_b = np.bincount(b, h, 5) / np.maximum(np.bincount(b, w, 5), 1e-9)
+        _, d = np.unique(X[:, C["src"]], return_inverse=True)
+        got = np.bincount(d, h)
+        exp_ = np.bincount(d, w * rate_b[b])
+        n_ = np.bincount(d, w)
         mn = min_shots or (300 if nm in ("lg", "mg") else 40 if nm in ("rg", "rl", "pg") else 15)
-        vals = []
-        for d in np.unique(S[m0, C["src"]]):
-            md = m0 & (S[:, C["src"]] == d)
-            if S[md, 1].sum() < mn:
-                continue
-            vals.append(_matched(S, C, md, m0)[0])
-        v = np.array([x for x in vals if np.isfinite(x)])
+        v = 100.0 * got[n_ >= mn] / np.maximum(exp_[n_ >= mn], 1e-9)
         if len(v):
-            print("| {} | {} | {} |".format(nm, len(v), " | ".join("{:.0f}".format(np.percentile(v, q)) for q in (10, 25, 50, 75, 90))))
+            q = [np.percentile(v, x) for x in (10, 25, 50, 75, 90)]
+            out[nm] = q
+            print("| {} | {} | {} |".format(nm, len(v), " | ".join("{:.0f}".format(x) for x in q)))
+    return out
+
+
+def _ratio_by(S, C, sel, ref, groups):
+    """per group (demo): hits of sel against what the pooled rate by distance band of ref would give sel's shots"""
+    edges = np.array([250.0, 500.0, 750.0, 1100.0])
+    b = np.searchsorted(edges, np.nan_to_num(S[:, C["dist"]], nan=1e9), side="right")
+    w, h = S[:, 1], S[:, 2] * S[:, 1]
+    rb = np.bincount(b[ref], h[ref], 5) / np.maximum(np.bincount(b[ref], w[ref], 5), 1e-9)
+    G = int(groups.max()) + 1
+    got = np.bincount(groups[sel], h[sel], G)
+    exp_ = np.bincount(groups[sel], (w * rb[b])[sel], G)
+    n_ = np.bincount(groups[sel], w[sel], G)
+    return got, exp_, n_
+
+
+def measures(path, per_demo=True):
+    """the style measures, per demo (src) for the pros or one value for a simulator file:
+    dm (hits against the pooled pros by distance), rev (0.1-0.2 s after a reversal against steady), dmg (after damage against
+    calm), flick hit % and median time of the first shot after a sighting (rail, shotgun, LG, RL)"""
+    Z = np.load(path)
+    S, F = Z["shots"], Z["flicks"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    _, grp = np.unique(S[:, C["src"]], return_inverse=True) if per_demo else (None, np.zeros(len(S), np.int64))
+    out = {}
+    for label, nm in STYLES:
+        wq = NAMES.index(nm)
+        m0 = (S[:, 0] == wq) & np.isfinite(S[:, C["dist"]])
+        if m0.sum() < 50:
+            continue
+        mn = (200 if nm in ("lg", "mg") else 30 if nm in ("rg", "rl", "pg") else 10) if per_demo else 1
+        got, exp_, n_ = _ratio_by(S, C, m0, m0, grp)
+        ok = n_ >= mn
+        o = out[nm] = {"dm": 100 * got[ok] / np.maximum(exp_[ok], 1e-9)}
+        rv = m0 & (S[:, C["rev"]] >= 0.1) & (S[:, C["rev"]] < 0.2)
+        st = m0 & (S[:, C["rev"]] >= 0.6)
+        g1, e1, n1 = _ratio_by(S, C, rv, st, grp)
+        g2, e2, n2 = _ratio_by(S, C, st, st, grp)
+        ok2 = (n1 >= mn / 4) & (n2 >= mn / 2) & (e1 > 0) & (e2 > 0) & (g2 > 0)
+        o["rev"] = 100 * (g1[ok2] / e1[ok2]) / (g2[ok2] / e2[ok2])
+        dmg = m0 & (S[:, C["took"]] > 0)
+        calm = m0 & (S[:, C["took"]] == 0)
+        g1, e1, n1 = _ratio_by(S, C, dmg, calm, grp)
+        g2, e2, n2 = _ratio_by(S, C, calm, calm, grp)
+        ok3 = (n1 >= mn / 4) & (n2 >= mn / 2) & (e1 > 0) & (e2 > 0) & (g2 > 0)
+        o["dmg"] = 100 * (g1[ok3] / e1[ok3]) / (g2[ok3] / e2[ok3])
+        if nm in ("rg", "sg", "lg", "rl"):
+            fm = F[:, 0] == wq
+            if fm.sum() >= 20:
+                if per_demo:
+                    u, gi = np.unique(F[fm, -1], return_inverse=True)
+                    cnt = np.bincount(gi)
+                    okf = cnt >= 5
+                    o["flick_hit"] = 100 * (np.bincount(gi, F[fm, 3]) / np.maximum(cnt, 1))[okf]
+                    o["flick_time"] = np.array([np.median(F[fm, 2][gi == k]) for k in np.nonzero(okf)[0]])
+                else:
+                    o["flick_hit"] = np.array([100 * F[fm, 3].mean()])
+                    o["flick_time"] = np.array([np.median(F[fm, 2])])
+    return out
+
+
+def distribution(pro_path, sims):
+    """the pros' percentiles of each measure (by demo) and where each simulator file lands among them (its percentile)"""
+    P = measures(pro_path, True)
+    Ss = [(os.path.basename(p), measures(p, False)) for p in sims]
+    PS = np.load(pro_path)["shots"]
+    C = {c: i for i, c in enumerate(SHOT_COLS)}
+    edges = np.array([250.0, 500.0, 750.0, 1100.0])
+    for (_, s), p in zip(Ss, sims):                          # a simulator's dm: against the pros' rate by band, not its own
+        X = np.load(p)["shots"]
+        for nm in s:
+            wq = NAMES.index(nm)
+            mp_ = (PS[:, 0] == wq) & np.isfinite(PS[:, C["dist"]])
+            bp = np.searchsorted(edges, PS[mp_, C["dist"]], side="right")
+            rb = np.bincount(bp, PS[mp_, 2] * PS[mp_, 1], 5) / np.maximum(np.bincount(bp, PS[mp_, 1], 5), 1e-9)
+            mx = (X[:, 0] == wq) & np.isfinite(X[:, C["dist"]])
+            bx = np.searchsorted(edges, X[mx, C["dist"]], side="right")
+            s[nm]["dm"] = np.array([100 * (X[mx, 2] * X[mx, 1]).sum() / max((X[mx, 1] * rb[bx]).sum(), 1e-9)])
+    print("| style | measure | pro demos | p10 | p25 | p50 | p75 | p90 | " + " | ".join(n for n, _ in Ss) + " |")
+    print("|---|---|---|---|---|---|---|---|" + "---|" * len(Ss))
+    for label, nm in STYLES:
+        if nm not in P:
+            continue
+        for k, v in P[nm].items():
+            v = v[np.isfinite(v)]
+            if len(v) < 10:
+                continue
+            q = np.percentile(v, (10, 25, 50, 75, 90))
+            cells = []
+            for _, s in Ss:
+                x = s.get(nm, {}).get(k)
+                if x is None or not len(x) or not np.isfinite(x[0]):
+                    cells.append("-")
+                else:
+                    cells.append("{:.0f} (p{:.0f})".format(x[0], 100 * (v < x[0]).mean()) if k != "flick_time" else
+                                 "{:.2f} (p{:.0f})".format(x[0], 100 * (v < x[0]).mean()))
+            fmt = "{:.2f}" if k == "flick_time" else "{:.0f}"
+            print("| {} | {} | {} | {} | {} |".format(nm, k, len(v), " | ".join(fmt.format(x) for x in q), " | ".join(cells)))
 
 
 def versus(pro_path, paths):
@@ -569,7 +700,7 @@ def versus(pro_path, paths):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=("pros", "sim", "report", "spread", "vs"))
+    ap.add_argument("mode", choices=("pros", "sim", "report", "spread", "vs", "dist"))
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--set", default="demos")
     ap.add_argument("--maps", default="bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged")
@@ -584,12 +715,21 @@ def main():
     ap.add_argument("--run-cmd", default="")
     ap.add_argument("--live", default="")
     ap.add_argument("--sets", dest="set_", action="append", default=[], help="NAME=VALUE (sim)")
+    ap.add_argument("--aim-he", default="", help="(sim) the even side's own aim (duel_eval --aim-he); src 10 in the rows")
+    ap.add_argument("--aim-opp", default="", help="(sim) the other side's (src 11)")
+    ap.add_argument("--react-he", type=float, default=None)
+    ap.add_argument("--acquire-he", type=float, default=None)
+    ap.add_argument("--react-opp", type=float, default=None)
+    ap.add_argument("--acquire-opp", type=float, default=None)
+    ap.add_argument("--split", type=int, default=1, help="(sim) jobs a map (seats swapped every second job)")
     a = ap.parse_args()
     if a.mode == "pros":
         pros(a)
     elif a.mode == "sim":
         a.set = a.set_
         sim(a)
+    elif a.mode == "dist":
+        distribution(a.paths[0], a.paths[1:])
     elif a.mode == "vs":
         versus(a.paths[0], a.paths[1:])
     elif a.mode == "spread":

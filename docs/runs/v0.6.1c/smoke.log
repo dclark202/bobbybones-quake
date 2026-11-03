@@ -1,0 +1,25 @@
+08:53:48 PASS the trainer exited 0
+08:53:48 PASS on the CPU
+08:53:48 PASS 20 or more updates (120)
+08:53:48 adv_pay k by update: [1.0018, 1.0012, 0.9925, 0.9907, 1.0092, 1.027, 1.0371, 1.0868, 1.1107, 1.1778, 1.2336, 1.3109, 1.3532, 1.3573, 1.4131, 1.439, 1.3981, 1.3572, 1.3899, 1.5404, 1.5289, 1.5908, 1.6653, 1.729, 1.8464, 2.2133, 2.3114, 2.9348, 2.7966, 2.9575, 3.2931, 2.7479, 2.6366, 2.4552, 2.4876, 2.1198, 2.0711, 2.1107, 2.2316, 2.4694, 2.6017, 2.5905, 2.4291, 2.2905, 2.5513, 2.7083, 2.3052, 2.0794, 2.1897, 2.2359, 2.2449, 2.3985, 2.2271, 2.6057, 2.7114, 2.2856, 2.5972, 2.6546, 3.0054, 2.8068, 3.0101, 2.8086, 3.0022, 2.9122, 2.9674, 2.7319, 2.7128, 3.0934, 3.3342, 3.8608, 3.9458, 4.0, 4.0, 3.6145, 3.1934, 3.2618, 3.3008, 2.5601, 2.8636, 3.0706, 3.2007, 3.5364, 3.8531, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0]
+08:53:48 adv_pay first {'k': 1.0018, 'warm': 3.0, 'size_mean': 7.6521, 'size': 7.6521, 'ref': 8.5} last {'k': 4.0, 'warm': 3.0, 'size_mean': 2.658, 'size': 3.2424, 'ref': 12.0}
+08:53:48 PASS adv_pay in every update
+08:53:48 PASS its factor near 1 at the start (the opening has begun by the first update: 1.0018)
+08:53:48 PASS above 1 after the opening and within 1/4 .. 4
+08:53:48 PASS ADV_PAY_REF taken live: 8.5 before, 12 at the end (8.5 -> 12.0)
+08:53:48 PASS the brain's dial went 0 -> 1 ([0.0, 0.5, 1.0])
+08:53:48 PASS live.json ended at BRAIN_FADE 1, LEVEL_PULL 1 (1.0, 1.0)
+08:53:48 PASS the trainer took LEVEL_PULL 1.0 live
+08:53:49 PASS the last save carries the brain's dial at 1
+PASS state dict keys unchanged
+PASS g 0: the same as without the entry, bit for bit
+PASS g 0.3: the same as the inputs times 0.7 (max diff 1.03e-06)
+PASS g 1: the faded columns change nothing
+PASS g 1: the other columns still count
+PASS numpy brain, no entry: weights as saved
+PASS numpy brain at g 0.5 = the trainer's (max diff 1.15e-05; numpy against torch without the fade 1.40e-05)
+PASS numpy brain did not change the saved weights
+ALL PASSED
+08:53:51 PASS brain_fade_check on that save
+08:53:51 PASS test_suite.Policy loads it
+08:53:51 ALL PASSED

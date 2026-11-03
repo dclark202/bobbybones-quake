@@ -1,0 +1,20 @@
+10-29 19:58:59 judge: {'run': 'duel_gru_v0_6_1', 'tags': ['u40', 'u80', 'u120', 'u160', 'u200', 'u240', 'u320'], 'counts': {'games': 350, 'ot_games': 43, 'rows': 189960, 'rows_left_out': 25800}, 'logloss': 0.38418490538176603, 'vs_B2': 0.38412469057500725, 'vs_A': 0.3906867827593928, 'axioms_ok': True, 'made': '2026-10-29 18:28', 'version': 2, 'weapons': "RG set to LG's worth by hand (owner)", 'made_from': 'judge_v061.npz', 'logloss_all_original': 0.37988504050650684, 'logloss_all_edited': 0.38098887382051183}
+10-29 19:58:59 allowed set WIN_END: run '1' | reference '<unset>'
+10-29 19:58:59 allowed set WIN_JUDGE: run 'data\\sim_runs\\judge\\judge_v061_wpn.npz' | reference 'data\\sim_runs\\judge\\judge_v060_wpn.npz'
+10-29 19:58:59 allowed arg --brain-fade: run '1' | reference '<unset>'
+10-29 19:58:59 allowed arg --minutes: run '720' | reference '1440'
+10-29 19:58:59 allowed arg --run: run 'duel_gru_v0_6_1b' | reference 'duel_gru_v0_6_1'
+10-29 19:58:59 settings check: PASS
+10-29 19:59:01 PASS state dict keys unchanged
+10-29 19:59:01 PASS g 0: the same as without the entry, bit for bit
+10-29 19:59:01 PASS g 0.3: the same as the inputs times 0.7 (max diff 1.18e-06)
+10-29 19:59:01 PASS g 1: the faded columns change nothing
+10-29 19:59:01 PASS g 1: the other columns still count
+10-29 19:59:01 PASS numpy brain, no entry: weights as saved
+10-29 19:59:01 PASS numpy brain at g 0.5 = the trainer's (max diff 9.69e-06; numpy against torch without the fade 8.60e-06)
+10-29 19:59:01 PASS numpy brain did not change the saved weights
+10-29 19:59:01 ALL PASSED
+10-29 19:59:01 v0.6.1 ended at WIN_W 1, FADE_V 1, WIN_GAIN 0.33 , LEVEL_PULL 1.0
+10-29 19:59:01 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_W': 1.0, 'FADE_V': 1.0, 'WIN_SHAPE_K': 0.0, 'VALUE_WARM': 0, 'WIN_GAIN': 0.33, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 0.0}
+10-29 19:59:01 trainer started: cmd 13336
+10-29 19:59:06 watcher 12924 | brain's ramp 7280 (BRAIN_FADE 0 -> 1 by 0.1 after each save, 25 min apart) | self-play logger 32476 | no guard (owner: never stop the run)

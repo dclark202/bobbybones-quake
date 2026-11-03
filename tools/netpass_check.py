@@ -8,6 +8,9 @@ export_duel.py before v0.4.1) and --old-netpass (the netpass.py before), gate 0 
     CUDA_VISIBLE_DEVICES=-1 OPENBLAS_NUM_THREADS=1 python tools/netpass_check.py --policy <policy.pt> --npz <its export by
         sim/export_duel.py> [--legs-net <the export's legs.npz>] [--map bloodrun] [--frames 800] [--env duel_env_ffa]
 
+(v0.4.2a) A network with the rule fade (sim/rule_fade.py) is replayed also at the fade's g 0, 0.5 and 1 (NET_RULE_FADE_G on the
+export, test_suite.Policy.set_rule_fade), with the token open and (its readers on: the brain stepped for them alone) shut.
+
 The bar: every difference 0 (the two paths make the same sums in the same order). Run 2026-10-23 on scratch_v041_d's save:
 0 at every gate, 1,600 frames on Blood Run and 900 on Aerowalk; the server image's numpy (2.2.6) the same.
 """
@@ -98,9 +101,11 @@ def logp(lg, dims, act):
     return s
 
 
-def play_policy(g):
+def play_policy(g, fg=None):
     p = T.Policy(a.policy, seed=11)
     p.set_gate(g)
+    if fg is not None:
+        p.set_rule_fade(fg)
     hh = p.zeros(n)
     box, prof = watch(T.Policy.act.__code__)
     A_, H_ = [], []
@@ -114,11 +119,14 @@ def play_policy(g):
     return np.array(A_), np.array(H_), box, p.dims
 
 
-def play_net(mod, path, g):
+def play_net(mod, path, g, fg=None):
     if g is not None:
         os.environ["NET_BTOKEN_GATE"] = str(g)
+    if fg is not None:
+        os.environ["NET_RULE_FADE_G"] = str(fg)
     P, A = mod.load(path)
     os.environ.pop("NET_BTOKEN_GATE", None)
+    os.environ.pop("NET_RULE_FADE_G", None)
     rng = np.random.default_rng(11)
     hh = np.zeros((n, mod.width(P)), np.float32)
     box, prof = watch(mod.step.__code__)
@@ -147,10 +155,11 @@ def compare(tag, x, y, dims):
     return lx, all(v == 0 for v in out.values())
 
 
+RF_ = T.Policy(a.policy).rf is not None                  # (v0.4.2a) the rule fade: at g 0 for the token's gates
 ok, L = True, {}
 for g in (0.0, 0.1, 1.0):
-    rp = play_policy(g)
-    L[g], ok_ = compare("gate {:g}: test_suite.Policy vs netpass".format(g), rp, play_net(N, a.npz, g), rp[3])
+    rp = play_policy(g, 0.0 if RF_ else None)
+    L[g], ok_ = compare("gate {:g}: test_suite.Policy vs netpass".format(g), rp, play_net(N, a.npz, g, 0.0 if RF_ else None), rp[3])
     ok &= ok_
     if g == 0.0 and a.old_npz and a.old_netpass:
         sp_ = importlib.util.spec_from_file_location("netpass_old", a.old_netpass)
@@ -158,6 +167,13 @@ for g in (0.0, 0.1, 1.0):
         sp_.loader.exec_module(NO)
         ok &= compare("gate 0: the old netpass and export vs the new", play_net(NO, a.old_npz, None), play_net(N, a.npz, 0.0), rp[3])[1]
 print("the token moves the network: logits at gate 1 vs 0, max |diff| {:.3g}".format(float(np.abs(L[1.0] - L[0.0]).max())))
+if RF_:                                                  # (v0.4.2a) the rule fade at 0, 0.5, 1; the token open, and shut
+    LF = {}
+    for g, fg in ((1.0, 0.0), (1.0, 0.5), (1.0, 1.0), (0.0, 0.5), (0.0, 1.0)):
+        rp = play_policy(g, fg)
+        LF[(g, fg)], ok_ = compare("gate {:g}, rule fade {:g}: test_suite.Policy vs netpass".format(g, fg), rp, play_net(N, a.npz, g, fg), rp[3])
+        ok &= ok_
+    print("the fade moves the network: logits at fade 1 vs 0 (gate 1), max |diff| {:.3g}".format(float(np.abs(LF[(1.0, 1.0)] - LF[(1.0, 0.0)]).max())))
 for g in (0.0, 1.0):
     os.environ["NET_BTOKEN_GATE"] = str(g)
     P, A = N.load(a.npz)

@@ -1,0 +1,4 @@
+widened: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_b12c_full\policy.pt (980 inputs, 112 new, attention tokens 62, new and shut: ['small'])
+widened: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_b12c_full\snapshots\anchor_b11.pt (980 inputs, 112 new, attention tokens 62, new and shut: ['small'])
+widened: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_b12c_full\snapshots\anchor_v060_end.pt (980 inputs, 112 new, attention tokens 62, new and shut: ['small'])
+18:51:15 the dry trainer starts, 14 minutes

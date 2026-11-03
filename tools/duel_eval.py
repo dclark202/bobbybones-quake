@@ -154,6 +154,29 @@ def play(job):
     sw_ = int(bool(swap) and opp_pol is not None)             # opponent: his tracking delay, the simulator's own acquire delay
     set_ = T_.set_delays(E, env, [(np.arange(sw_, env.n, 2), delays[0], delays[1])]
                          + ([(np.arange(1 - sw_, env.n, 2), delays[2], delays[3])] if opp_pol is not None else []))
+    if envvars.get("SEAT_HOLD_HE") or envvars.get("SEAT_HOLD_OPP"):   # (--hold / --opp-hold, b1.2) each side's own target lock
+        env.hold_seat = np.full(env.n, float(E.INTENT_HOLD), np.float32)
+        if envvars.get("SEAT_HOLD_HE"):
+            env.hold_seat[np.arange(sw_, env.n, 2)] = float(envvars["SEAT_HOLD_HE"])
+        if envvars.get("SEAT_HOLD_OPP"):
+            env.hold_seat[np.arange(1 - sw_, env.n, 2)] = float(envvars["SEAT_HOLD_OPP"])
+    if envvars.get("SEAT_CONTACT_HE") or envvars.get("SEAT_CONTACT_OPP"):   # (--contact / --opp-contact, b1.3a) each side's own chance of a free contact
+        env.contact_seat = np.full(env.n, float(E.CONTACT_FREE), np.float32)
+        if envvars.get("SEAT_CONTACT_HE"):
+            env.contact_seat[np.arange(sw_, env.n, 2)] = float(envvars["SEAT_CONTACT_HE"])
+        if envvars.get("SEAT_CONTACT_OPP"):
+            env.contact_seat[np.arange(1 - sw_, env.n, 2)] = float(envvars["SEAT_CONTACT_OPP"])
+    sa_he, sa_op = envvars.get("SEAT_AIM_HE", ""), envvars.get("SEAT_AIM_OPP", "")
+    if sa_he or sa_op:                                        # (--aim-he / --aim-opp, branch aim2) each side's own aim settings
+        sa_ = {}
+        for txt_, seats_ in ((sa_he, np.arange(sw_, env.n, 2)), (sa_op, np.arange(1 - sw_, env.n, 2))):
+            for kv_ in [x for x in txt_.split(",") if "=" in x]:
+                k_, v_ = kv_.split("=", 1)
+                assert k_ in env.SEAT_AIM, "not a per-seat aim setting: " + k_
+                if k_ not in sa_:
+                    sa_[k_] = np.full(env.n, float(np.asarray(env._sa(k_)).ravel()[0]), np.float64)
+                sa_[k_][seats_] = float(v_)
+        env.seat_aim = sa_
     env.arena_stack = False
     env.arena_sets = [(E.MG,)]
     env.loadout_p = (0.0, 1.0, 0.0, 0.0)
@@ -170,6 +193,14 @@ def play(job):
         env.arena_len = 1e9
     env.round_t[:] = 1e9
     n = env.n
+    BR_ = bool(getattr(E, "BRAIN_READ", False))              # (v0.4.2a) the readers on the brain's answer: each side's lives drawn at
+    if BR_:                                                   # its own fade (a network without one, a scripted seat: the rule)
+        sw0_ = int(bool(swap) and opp_pol is not None)
+        g_ = np.zeros(n, np.float32)
+        g_[np.arange(sw0_, n, 2)] = pol.rfg if getattr(pol, "rf_read", False) else 0.0
+        if opp_pol is not None:
+            g_[np.arange(1 - sw0_, n, 2)] = opp_pol.rfg if getattr(opp_pol, "rf_read", False) else 0.0
+        env.set_brain_g(g_)
     obs, _, _, _ = env.step(np.zeros((n, len(E.ACTION_DIMS)), np.int64))
     env.round_len = env.arena_len = 1e9                          # one game, no restarts
     env.round_t[:] = 0.0
@@ -247,6 +278,14 @@ def play(job):
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}))
             a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
+        if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
+            ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
+            for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
+                an_ = p_.brain_answer(hs_) if hasattr(p_, "brain_answer") else None
+                if an_ is not None:
+                    for k_ in ans_:
+                        ans_[k_][m_] = an_[k_]
+            env.brain_in(ans_)
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
         if getattr(E, "LEGS_IN", False) and (pol.legsP is not None or (opp_pol is not None and opp_pol.legsP is not None)):
@@ -392,6 +431,17 @@ def main():
                     "sides got 47 percent of the frags on the even seats: B-220); give --procs an even number")
     ap.add_argument("--btoken-gate", type=float, default=None, help="(v0.4.1) play his brain token at this gate (default: his checkpoint's; 0: shut)")
     ap.add_argument("--opp-btoken-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--rule-fade-g", type=float, default=None, help="(v0.4.2a) play his rule fade at this gate (default: his checkpoint's; 0: none)")
+    ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
+    ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--contact", default="", help="(b1.3a) his seats' own chance of a free contact (default: CONTACT_FREE, the same for both)")
+    ap.add_argument("--opp-contact", default="", help="(b1.3a) the opponent's seats' own chance of a free contact")
+    ap.add_argument("--hold", default="", help="(b1.2) his seats' own target lock, seconds (default: INTENT_HOLD, the same for both)")
+    ap.add_argument("--opp-hold", default="", help="... the opponent's seats")
+    ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
+                    "PERCEPT_SIGMA=0.48,AIM2_W=0); the rest of his aim is the process's. Needs AIM2, AIM2_SPLIT, AIM2_FOCUS on (--set) to seat AIM2 beside the old model")
+    ap.add_argument("--aim-opp", default="", help="... the opponent's seats")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
@@ -399,6 +449,15 @@ def main():
     pol = T.Policy(path, seed=1)
     if a.btoken_gate is not None:
         pol.set_gate(a.btoken_gate)
+    if a.rule_fade_g is not None:
+        pol.set_rule_fade(a.rule_fade_g)
+    if a.head2_gate is not None:
+        pol.set_head2_gate(a.head2_gate)
+    if getattr(pol, "h2", None) is not None:
+        print("strategy head: gate {:g} ({})".format(float(pol.h2W["gate"]), "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
+    if getattr(pol, "rf", None) is not None:
+        print("rule fade: g {:g} ({}); the simulator's readers {}".format(pol.rfg, "none" if pol.rfg <= 0 else "{} columns faded".format(len(pol.rf_cols)),
+              "on the brain's answer for a life drawn at g (BRAIN_READ=1)" if pol.rf_read else "on the rule"), flush=True)
     if getattr(pol, "btok", None) is not None:
         print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
@@ -410,11 +469,29 @@ def main():
         opp_pol = T.Policy(a.opp[7:], seed=2)
         if a.opp_btoken_gate is not None:
             opp_pol.set_gate(a.opp_btoken_gate)
+        if a.opp_rule_fade_g is not None:
+            opp_pol.set_rule_fade(a.opp_rule_fade_g)
+        if a.opp_head2_gate is not None:
+            opp_pol.set_head2_gate(a.opp_head2_gate)
         oo = names(a.opp_inputs)
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
+    if a.contact:
+        envvars["SEAT_CONTACT_HE"] = a.contact
+    if a.opp_contact:
+        envvars["SEAT_CONTACT_OPP"] = a.opp_contact
+    if a.hold:
+        envvars["SEAT_HOLD_HE"] = a.hold
+    if a.opp_hold:
+        envvars["SEAT_HOLD_OPP"] = a.opp_hold
+    if a.aim_he:
+        envvars["SEAT_AIM_HE"] = a.aim_he
+    if a.aim_opp:
+        envvars["SEAT_AIM_OPP"] = a.aim_opp
+    if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp_pol) if p_ is not None) and "BRAIN_READ" not in envvars:
+        envvars["BRAIN_READ"] = "1"                              # (v0.4.2a) a network trained with the readers on the brain plays so
     delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,
               None if opp_pol is None else (opp_pol.react_ms if a.opp_react_ms is None else a.opp_react_ms),
               None if opp_pol is None else (opp_pol.acquire_ms if a.opp_acquire_ms is None else a.opp_acquire_ms))

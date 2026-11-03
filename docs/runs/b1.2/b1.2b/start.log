@@ -1,0 +1,9 @@
+11-01 16:12:12 allowed set ITEM_RATE_AR: run '0.002' | reference '<unset>'
+11-01 16:12:12 allowed set ITEM_RATE_HP: run '0.0025' | reference '<unset>'
+11-01 16:12:12 allowed arg --minutes: run '1185' | reference '885'
+11-01 16:12:12 allowed arg --run: run 'duel_gru_b1_2b' | reference 'duel_gru_b1_1a'
+11-01 16:12:12 settings check: PASS
+11-01 16:12:13 backup: copied 19 files 0.17 GB to T:\BobbyBones_backup
+11-01 16:12:15 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 1.0, 'COST_JERK_W': 1.0, 'CONTACT_FREE': 0.0}
+11-01 16:12:15 trainer started: cmd 42728, from b1.1
+11-01 16:12:20 watcher 3792 | ramp 23828 (the table from the start; fourteen steps; held only at a check of 40% or less) | self-play logger 42828 | no guard (owner: never stop the run)

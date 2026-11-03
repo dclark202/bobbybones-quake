@@ -2,10 +2,62 @@
 
 A Quake Live duel bot that learns to play from scratch: a recurrent network trained by self-play in a fast
 simulator of the game, checked on a real Quake Live server, play-tested by people. Repo:
-`dclark202/bobbybones-quake` (public, GPL-3.0 because of the bundled minqlx and ioquake3 code). Local path: the
-`ql-bot` folder in the owner's home directory.
+`dclark202/bobbybones-quake` (public, GPL-3.0 because of the bundled minqlx and ioquake3 code). Local path:
+`Documents\gh\BobbyBones` in the owner's home directory (moved there 2026-10-28; older notes say `ql-bot`).
+
+## HARD RULES (read before doing anything)
+
+1. **Never delete anything outside git's tracked files.** No `rm -rf`, `Remove-Item -Recurse`, `rmdir /s`, or
+   `git worktree remove --force` on any folder. On 2026-10-28 a cleanup did that near links into `data/` and wiped the whole
+   data folder (every run's checkpoints): see [docs/HISTORY.md](docs/HISTORY.md). A link (junction) is removed only with
+   `cmd /c rmdir "<link>"` (no `/s`) after checking with `(Get-Item <path>).LinkType`, and the target is checked after.
+   Any delete of data needs the owner's word for that exact delete and a backup first (`python tools/run/backup.py`). `tools/hooks/no_delete.py` (a hook in `.claude/settings.json`) asks him before any delete command runs.
+2. **Do only what the owner asks.** A question is not a go. Ask before starting runs, servers, agents, or anything that
+   changes something outside this session; before renaming or restarting fresh. Public servers only on his word.
+3. **Settings check before every run, check and calibration, and before using its numbers:**
+   `python tools/run/check_settings.py <train.cmd> --ref <reference.cmd>` (and `--ck <checkpoint>` for a run's own saves).
+   Any difference not deliberately allowed = the data is not used. Never build a run tool from an older copy.
+4. **Correctness over speed.** Never skip or approximate a calibration to meet a start time; say what is missing and when.
+5. **Red-team before a go.** Every run card lists each hand-built or assumed part of the pay and design, its measured
+   alternative, and the ledger's pathology check (negative frags, sign flips, lopsided games). Volunteer weaknesses unasked.
+6. **Never stop a run** unless the owner says so (2026-10-27); a check under 30% won-lost is posted in the chat.
+7. **No personal data** in the repo (Steam IDs, IPs, usernames, passwords); public-server details stay in `private/`.
+8. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most 1-2
+   times a day; one working tree (the repo) plus at most one worktree per active run, made without links into `data/`.
+
+## Where things are
+
+| | |
+|---|---|
+| `docs/PLAN.md` | the goal, where things stand, what's next |
+| `docs/HISTORY.md` | every version and experiment: what, result, lesson. Read it before proposing anything |
+| `docs/BACKLOG.md` | open work and ideas, numbered `B-nn` |
+| `docs/runs/bN.N/` | one folder per family of runs: a `README.md` (the goal, the attempts) and a folder per attempt, `bN.Nx/` (older runs: `docs/runs/<version>/`), each with: `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
+| `docs/design/` | current designs (aim2, ...) · `docs/guides/` how-tos · `docs/archive/` old versions and the old daily log (frozen) |
+| `tools/run/` | the run tools: `check_settings`, `make_train_cmd`, `watch` (checks), `panel` (behaviour), `selfplay_loop` / `selfplay_log` (B data), `backup` |
+| `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` |
+| `private/` (git-ignored) | the public servers' notes and scripts |
+
+## Starting a run
+
+1. The owner's go on the run's `CARD.md` (both parts filled in). **Run length (owner, 2026-10-30): 12 hours by default (`--minutes 720`), and ask him to specify the length before starting anything.**
+2. `powershell -ExecutionPolicy Bypass -File docs\runs\<version>\start.ps1`: it runs the settings check and refuses on any
+   difference, checks the files are there and no trainer runs, then starts the trainer, the watcher and the self-play logger.
+3. One line an hour while it runs; the 06:30 report after a night.
 
 ## The owner's goals (read first)
+- **One goal: win games** (owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 and the priority
+  list of 2026-10-10 are retired). Goals are set per generation. **b1 (2026-10-31; the current series, it replaces the vN.N.N names and
+  v0.4.x to v0.6.x's goal of pay by win chance only)**: win chance pay is purely additive (or subtractive) on top of the pay table, which stays:
+  combat skills and likely item incentives remain hard rules, and win pay gives him a reason to win and items a value that depends on the game. Then the
+  hard-coded rules come out and the strategy head comes in, one step at a time; the fairness limits stay. Open items beside them: rocket jumps, failed
+  movement jumps (Aerowalk's red armor), grenades less so. Every change is stated by the equilibrium it leads to in self-play and the behaviour it brings out
+  on the way; only winning matters in the long run. The steps: `docs/PLAN.md`; the reasons: `docs/design/B1_PLAN.md`.
+- **Names (owner, 2026-10-31)**: bN is the series (BobbyBones 1: b1); bN.N is a family of runs, each with a specific goal of its own; each run in it is bN.Nx, where the attempts are x = a, b, c, ... (b1.0a, b1.0b). In `docs/runs/b1.0/` (the family: its `README.md` says the goal and lists the attempts) with a folder per attempt, `docs/runs/b1.0/b1.0a/`,
+  and `data/sim_runs/duel_gru_b1_0a`. The v0.x names below are history: use them only for what was run under them.
+- **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
+  trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
+  a dip lasts 20 to 30 updates at most). Two new things open one after the other.
 - He wants genuine learned behavior (strafe jumping, weapon choice, item control, positioning), not hand-coded
   rules or knob tuning. Long-term focus: smooth, fast movement and good position and weapon choices, not just aim.
 - **Fair**: human physics (125 fps), human senses (sight with line of sight, sound), mouse-like aim with
@@ -16,7 +68,7 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - Judge by results: the test suite scorecard, sparring against Nightmare, and human play tests. Say plainly what
   did not work.
 - Log as much as possible from human-played rounds. Keep everything.
-- **Goal 1 (2026-10-05)**: human-like play in one small arena, the yard (`arena1`, with items), showing
+- **Goal 1 (2026-10-05; history: the yard is dropped, see the one goal above)**: human-like play in one small arena, the yard (`arena1`, with items), showing
   knowledge of the map and efficient movement on it, one against one or all against all up to four players, and
   beating Nightmare there. See `docs/PLAN.md`. Method: tighten the human limits until the right play appears;
   do not add rewards for single behaviors without asking.
@@ -36,13 +88,13 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - No powerups anywhere (owner, 2026-10-09: no quad, no "protection", on any server or in training) and a map's
   **duel** items in every mode, free-for-all too: `plugins/powerups.py` does both on the servers; the simulator has
   always had a map's duel items and no powerups.
-- **His priority list for the next models (2026-10-10)**: strafe jumping and keeping speed; rockets; plasma and
+- **His priority list of 2026-10-10 (retired 2026-10-24 by the one goal; kept as history)**: strafe jumping and keeping speed; rockets; plasma and
   grenades, the shotgun less; then game awareness (not through a teleporter the enemy watches, not always the same
   path: it needs more model build-out and comes when the first two or three are there). Every plan addresses these
   and any odd behaviour seen in a run or in duels.
 - **The control in every run (2026-10-10)**: the last best network stays in the league (`--anchor-p`) and every
   checked save plays it head to head, beside the stand-in; a network is promoted only if it beats the control.
-- **Names (owner, 2026-10-11)**: "The v15c bot that exists on the server is now: v0.1. We're building v0.2 currently, any
+- **Older names (owner, 2026-10-11; replaced by bN.Nx on 2026-10-31)**: "The v15c bot that exists on the server is now: v0.1. We're building v0.2 currently, any
   exploration phases will get a further index e.g., v0.2.1, etc."; "v1.0 starts when he can beat me." v0.2 = ten maps, the
   rocket changes, the enemy as a target and stage A of the attention model (`docs/v0.2/MANIFEST_v0.2.md`); the write-up of
   2026-10-11 that first carried the name v0.2.1 (`MANIFEST_v15e.md`) was never run; since 2026-10-12 v0.2.1 is the run after v0.2, from
@@ -58,26 +110,14 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - The owner prefers concise answers and doable batches. Do not start a training run without his go-ahead when he
   has asked to test first.
 
-## Docs (keep in sync, one commit; the routine is `docs/README.md`)
-- `docs/PLAN.md`: the goal, the approach, today's status table, the "Now" list (the owner's priority list and backlog
-  numbers only), owner decisions. History does not go into it: the plan as it stood is in `docs/archive/`.
-- `docs/BACKLOG.md`: the open work by number (`B-nn`), grouped by the owner's priority list; a closed item moves with
-  its row to `docs/archive/BACKLOG_closed.md`. A new item takes the highest number in both files plus one.
-- `docs/RESULTS.md` is the index of the results log; the log is one file a day in `docs/results/<date>.md`, newest
-  first, what did not work included. Add an entry with `python tools/add_result.py entry.md` (first line
-  `## <date> <time> — <the finding>`; links written as from `docs/results/`). "RESULTS 2026-10-08 18:45" anywhere
-  means the entry of that time in `docs/results/2026-10-08.md`.
-- `docs/v<model>/` (`v0.4/`, `v0.3.5/`, `v0.3.4/`, `v0.3.2/`, `v0.3.1/`, `v0.3/`, `v0.2.2/`, `v0.2.1/`, `v0.2/`; since the clean-up of 2026-10-15 everything before v0.2 (`docs/legacy/`, `docs/v0.1/`, the V16 design files, the old plans, the log before 2026-10-11, `INPUTS_v7` to `INPUTS_v15b.csv`, old evals and yardsticks) is kept locally in the git-ignored `data/docs_old/docs/`, same paths; a `docs/...` path below that is gone from the repo is there: owner, 2026-10-13, "group the docs in docs/ into sub folders by their model"): a model's run documents and its design proposals together. Older text and code comments that say `docs/runs/...` or `docs/design/<a model's file>` mean the model's folder. A run's own documents: `RUN_v<n>.md` (one page in plain words, the one the owner reads and gives his go on: owner, 2026-10-13, "your manifests are getting rather long and complicated and difficult for me to follow"; keep it to one page and current), `MANIFEST_v<n>.md` (the run in full, for the owner's go before a start; changes
-  during the run go into its section 0), `MIDRUN_v<n>.md`, `REPORT_v<n>.md` (the full report, ending with what to try next).
-- `docs/guides/` (PLAYTEST, COMMANDS, LOGS: the schemas of recorded data, ATLAS), `docs/design/`
-  (what belongs to no one model: QLSTATS, the jumps' and places' pictures), `docs/archive/`.
-- `docs/INPUTS*.csv`, `docs/*.json`, `docs/MAPS.md`: data that tools and the Dockerfile read by path; they stay there
-  until every path moves with them (B-203).
-- `README.md`: the public page (goal, fairness rules, how it works, what he can do, in progress, planned; no dated
-  status table: owner, 2026-10-08). The owner wants it kept current
-  with the docs (2026-10-08).
-After any run, test or decision: an entry in the log, the backlog, the plan if its status or "Now" changed, then
-`python tools/docs_check.py` (links, the log's index, backlog numbers) before the commit.
+## Docs (keep in sync, one commit)
+- **At a run's start (owner, 2026-10-31)**: its row in `docs/HISTORY.md`'s family tree (what it started from, its folder) and its line in the series' table; a stopped run, a side arm and a failed try too. Its card's first row is "Started from".
+- After a run, test or decision: the run's folder (`docs/runs/<version>/`: card, report), a line in `docs/HISTORY.md`, the
+  backlog, `docs/PLAN.md` if its status changed, then `python tools/docs_check.py` (links, backlog numbers) before the commit.
+- The old daily log (`docs/archive/results/`, "RESULTS 2026-10-08 18:45" = that entry) and the per-version folders
+  (`docs/archive/versions/v<n>/`; older text that says `docs/v<n>/...` means there) are frozen.
+- `docs/INPUTS*.csv`, `docs/*.json`, `docs/MAPS.md`: data that tools read by path; they stay at `docs/` (B-203).
+- `README.md` is the public page; keep it current with the docs.
 
 ## Architecture
 - **Simulator** (`sim/`): `sim_api.c` + vendored ioquake3 movement and collision (`sim/q3`) -> `qsim.dll`
@@ -157,6 +197,27 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
 - **The guessing game's eight questions and the silent rule (2026-10-12 evening; `docs/v0.2.1/ENEMY_MODEL.md`)**: the trainer's `--aux-heads` names the questions of the `--aux` lesson: the first four (`place`, `appear`, `fight`, `items`: the default, with which the trainer is what it was) and `near` (the landmark the enemy is nearest to now and `--aux-near-frames` on: odds over the intention's list), `target` (the enemy's own intention), `strength` (his stack in four bands, the weapon in his hand), `first` (who takes the mega and the red armor within `--aux-first-frames`); their truth is six more columns of `info["aux"]`, labels only, never inputs. New questions' layers start at zero; a network carries its layers (`aux.*`, `aux_heads`) and the checks' tools and the export drop them. `--aux-warm <minutes>` counts from `--fade-start`: a restart that is a new stage (a new fade start) must pass `--aux-warm 0` or the lesson falls back to nothing. Eight questions pull on the shared layers about five times as hard as four at the same weight (his step 0.20 an update at 0.3 with no warm-up, against 0.06). `RULE_CONTEST=<seconds>` (a training switch): the item rule's label is silent where he believes the enemy nearer to the item it names. `PERCEPT_SPEED` (a `PLAY_VAR`, 0 at every aim level) is the one aim limit measured that lowers lightning and leaves rail (B-228).
 - **v0.3 (2026-10-14; `duel_gru_v0_3`, `docs/v0.3/RUN_v0.3.md`)**: `OVERTIME=1` (two more minutes while level at 10:00, at most ten periods, shown as the game's last two minutes again, as on the servers); `STYLE_P=0` in training, and `sim/export_duel.py` writes it so the plugins draw no style either. The plugins' `intent_release` handles a holding place as his target (an index past the item list before). The judge that sees the truth (`--priv-value`) and the slow memory (`--slow-mem`) were tried and left out (RESULTS 2026-10-14 20:15).
 - **v0.3.1's belief and hunt (2026-10-15 night; B-257, B-256; both off by default, off = today's simulator in fixed runs)**: 773 inputs in `duel_env`, 797 in the group module: the last six (`N_ES`, group `v031 enemy stack`, a token kind of its own, `stack`, in `sim/attn.py`'s `LATE`) are the enemy's stack as he believes it (`EN_STACK=1`): a filter from his senses only (a known spawn 125/0, his own hits through `note_dealt`, pickups heard or seen through `note_take`, the pain sound's band, over 100 ticking down, a drift to the unseen enemy's average `ES_MU_*`/`ES_SD_*` with `ES_TAU` while out of view); zeros with it off. `HUNT=1`: the intention "the enemy" (`EN_INTENT`, the ninth) leads his way and legs to the route goal nearest the place he believes the enemy at (`v02_bel`); reached when the enemy is in view, nothing paid for the way (`EN_ON` = `FIGHT_TARGET` or `HUNT`). `tools/hunt_init.py` (`widen`, `never`, `open --from-nothing s` / `--from <choice> s`, `same`) converts a network of v0.3's shape with both parts closed; v0.3 never chooses "nothing", so opened out of it the enemy stays unchosen. The plugins keep the belief (`note_dealt` from the game's damage count, the pain sound after any hurt, `_es_update` in `v02_tick`, `_es_set` for a newcomer) and the hunt's reach in `intent_release`.
+- **v0.3.2 to v0.3.11 (2026-10-16 to 10-23)**: one movement network: the legs switch is retired (the legs' share is 0; the
+  movement network `move_v17_look` remains only as an input, `LEGS_IN`, and its look point, `LEGS_LOOK`); rockets, pre-fire
+  and the emergence point as inputs (v0.3.6); the pay for watching the right doorway before a sighting (`OPENINGS`, v0.3.10);
+  the weapon teacher's weight is 0. **Live settings**: `<run>/live.json` (numbers; `ITEM_FLAT` as the string
+  `MH:0.35,RA:0.30,YA:0.15`) and `<run>/live_settings.env`, read between rollouts; a value of the wrong type refuses the whole
+  file (the trainer's log says REFUSED). Every version's end is kept as `keep/policy_end_<ver>.pt` with its optimizer.
+- **v0.4.x (2026-10-22 on; `docs/v0.4.0/`)**: 868 inputs, about 3 million weights. **v0.4.0/0.4.0b, the brain**: learned
+  predictions from his senses only (the enemy's place now and 1, 2, 4 s ahead, his stack band, who takes the next items),
+  labelled in hindsight (`RUN_v0.4.0.md`). **v0.4.1, the token**: the brain's answer into the hands (`btoken` in the checkpoint,
+  `--btoken-start`, live `BTOK_GATE_CAP`; the checks' `--btoken-gate`). **v0.4.2, the fade**: the 76 rule-made input columns
+  (`sim/rule_fade.py`) times (1 - g) in the hands only, the brain reads them unfaded (`--rule-fade*`, live `FADE_CAP`,
+  `FADE_OPEN`); `BRAIN_READ=1` puts the simulator's readers (legs' look, hunt, `RULE_CONTEST`, `RULE_HUNT`, openings) on the
+  brain's answer for a life drawn with chance g; `BLIND_BRAIN=1` frees pre-fire where the brain expects him; the checks play
+  each save at its own fade (`tools/duel_eval.py --rule-fade-g`). **Win-chance pay** (the generation's goal): `WIN_PAY`
+  (built, never run: a frame's pay = the change in his chance of winning, `sim/win_chance.json`; the last frame of an
+  overtime period reads 120 s instead of 0, to fix before use), `PAY_SPLIT` and `WIN_SHADOW` (record only, on in v0.4.2;
+  bit-identical off and on), `tools/win_table.py`, `pay_ledger.py`, `pay_align.py`, `value_ready.py`, `winpay_games.py`,
+  `winpay_ident.py`. Code: v0.4.2 runs from the worktree `ql-bot-v042a` (branch `v042a`, with `winpay` merged), not yet
+  merged into `v0.4`. The checks: every 20 updates 160 games against the previous best, every fourth against the long-term
+  control (v0.3.10's end from v0.4.2; a control swept 160-0 is replaced at the next version), with the training's input
+  switches (`RL_AIM`, `PREFIRE`, `EMERGE_IN`, `HOP_QUIET_HEARD`, `RJ_CLEARED` were missing until v0.4.1's end).
 - **After the wiring review (2026-10-08)**: the trainer credits the left hand's outputs (movement keys, weapon key) only on the frames the simulator reads them (`env.key_dec`, one in four) and keeps the input statistics frozen; `sim/renorm_policy.py` gives a network fresh input statistics without changing its output (run it when the maps or inputs change; sample from `train_duel_rnn.py --obs-dump`). Checkpoints carry `env_vars` (the simulator switches of `PLAY_VARS`) and the round lengths; `sim/export_duel.py` writes them into `policy.npz` (`--set NAME=VALUE` for runs before v13, e.g. `EXPORT_ARGS="--set INTENT_HOLD=8"` for the server scripts) and the plugins set them before loading the simulator. Checks: `tools/input_check.py` (dead inputs; the real game's inputs beside the simulator's), `tools/teacher_check.py` (can the walking teacher's own pupil reach every item), `tools/nav_prune.py` (takes the jump and drop links the walker cannot take out of a map's graph), `tools/shot_prices.py`.
 - **The map audit (2026-10-09)**: the game's maps set beside the simulator (RESULTS that day): `plugins/maplab.py` lists the
   real game's items per map and mode (`data/maplab/`; `tools/duel_items.py` -> `plugins/duel_items.json`), `plugins/poollab.py`
@@ -187,7 +248,7 @@ After any run, test or decision: an entry in the log, the backlog, the plan if i
   `tools/duel_items.py`); since 2026-10-23 (owner) the servers are 1v1 only: no free-for-all (`ffabot.py` is not loaded,
   `!mode` says so), no `testlab` or `arena1` on `!map`, no Workshop item. `banlist.py`: the
   owner's `!kick` and `!ban` (bans by Steam ID in the server's data folder, never in the repo). `ladder.py`: the
-  leaderboard, local to a server (every frag between a person and Bobby, warmup included; Glicko-1 per frag in
+  leaderboard, local to a server (games won and lost between a person and Bobby (owner, 2026-10-30), frags kept beside them; Glicko-1 per game in
   `ratings.py`; who made a frag is read from the kills and deaths counters each frame; `tools/elo.py` reads its files).
   A chat line must not have a percent sign before a letter: the game takes it for a printf format. `banter.py`: what
   the bots say (a line at a game's end, a few during a game); the four bots' names are `duelbot.BOT_NAMES`, and a Bobby
@@ -270,7 +331,10 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - A fitted start for a new choice must pass a full level check before a run, not a probe: the enemy as a target by the narrow rule read level in 48 games and 45.9% in 128 (2026-10-11): it was left out of v0.2.
 - The attention part's graph for whole sequences fills the card: with 10,080 players the update is cut into 240 pieces (`--minibatches 240`), the part runs at half precision on the card (`ATTN_AMP`), and a first update that does not come within about six minutes means the card is full.
 - `ctypes.windll.kernel32.SetPriorityClass(GetCurrentProcess(), ...)` with default types fails silently on 64-bit Python (the handle is cut): set `restype`/`argtypes` (done in the tools on 2026-10-11); `subprocess` `creationflags=0x4000` works.
-- **Every process of ours runs on the eight performance cores only** (2026-10-12; process affinity `0xC03C3` = logical 0, 1, 6, 7, 8, 9, 18, 19; children inherit it; `start "" /b /wait /affinity C03C3 <command>` in a `.cmd`, `cmd //c start "" //b //wait //affinity C03C3 ...` from Git Bash). On this PC (Core Ultra 7 265K, BIOS of August 2024, microcode 0x110) a thread pushed off an EFFICIENCY core in mid-work now and then resumes a few instructions early and the process dies with no traceback (an access violation at a plain numpy line, exit 0xC0000005 or 0xC0000409, "_multiarray_umath" in Windows' log): 8 of 67 runs against 0 of 66 on a performance core, plain Python and numpy enough to show it; a busy PC brings it out, a quiet one hides it (v0.2's night was clean). Until the owner has updated the BIOS: the mask on everything that runs for long, `PYTHONFAULTHANDLER=1` in every job, exit codes kept, and a pool that loses a worker is a dead job (it hangs). RESULTS 2026-10-12 13:00. **A job pinned alone to an efficiency core is not safe either** (3 dead of 20 jobs of 17 minutes, then 4 of 20, the same afternoon; the morning's 0 of 120 were one-minute jobs): an efficiency core only for a job that is watched and started again (`sim/pin.py`; the scratch `lvl/sup.py`). The run's checks share the performance cores with the trainer at low priority.
+- **The cores (Core Ultra 7 265K: 8 performance, 12 efficiency, 20 logical).** Performance = logical 0, 1, 6, 7, 8, 9, 18, 19 (mask `0xC03C3`); efficiency = 2 to 5 and 10 to 17 (mask `0x3FC3C`). Set by `start "" /b /wait /affinity <mask> <command>` in a `.cmd` (Git Bash: `cmd //c start "" //b //wait //affinity <mask> ...`) or `.ProcessorAffinity` in a start script; children inherit it.
+  - **The efficiency-core crash is fixed** (owner, 2026-11-02). It was: a thread moved off an efficiency core in mid-work resumed a few instructions early and the process died with no traceback (exit 0xC0000005 or 0xC0000409, "_multiarray_umath"; 8 of 67 runs against 0 of 66 on a performance core; RESULTS 2026-10-12 13:00). Efficiency cores are safe for long jobs again. Keep `PYTHONFAULTHANDLER=1` and the exit codes anyway.
+  - **As b1.2c runs (checked 2026-11-02):** the trainer and its simulators on 16 cores (`0xC3FFF`: all but efficiency cores 14 to 17, left for Windows, Quake Live and a play-test server); the watcher (and so every check and panel job, which inherit it) and the self-play logger on the 8 performance cores (`0xC03C3`, the old crash workaround); the ramp unpinned. So the checks share the performance cores with the trainer.
+  - **From b1.2d (owner, 2026-11-02):** the trainer alone on the 8 performance cores (`0xC03C3`), everything beside it on 8 efficiency cores (2-5, 10-13: `0x3C3C`; `CHECK_BATCH=4`), 14-17 left for the owner. The core test: an update 4.54 min against 4.31 on 16 cores (+5%). **Checks every 20 updates with 20 games a map, 200 a check** (`CHECK_EVERY=20`, `CHECK_GAMES=20`, owner 11-02): 160 games and the panel take 43 to 53 min on those cores, more than 10 updates; 200 about 55 to 65.
 - The PC's commit limit is 67 GB (63 GB of memory and a 4 GB page file), and **numpy's OpenBLAS reserves a work buffer a core in every process**: a simulator worker committed 0.69 GB and touched 0.08; with `OPENBLAS_NUM_THREADS=1` in the environment before Python starts it commits 0.10 GB (a trainer's 30 workers: 3 GB, not 21). Without it Windows ran out twice on 2026-10-12 while 36 GB of memory were free. Set it in every `.cmd` and for every pool; watch `(Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory` beside a run.
 - **Where an update's time goes** (2026-10-12, 791 inputs, 360 pieces): 40% the rollout (the simulators; the card nearly idle), 60% the learning step with the card at half load and the trainer's main thread full: three passes of `--minibatches` pieces, each stepping the GRU through 384 frames in Python, so its time goes with the number of pieces whatever their size (B-237). More simulator cores help the 40% only.
 - A new choice opened by a bias over all his readings costs what it displaces: the places at 5% of readings were 22% of his time (a choice holds for `INTENT_HOLD`) and came out of the armors' time (38% of the frags on Blood Run against the same network). Open a choice out of the one it stands in for (`tools/targets_init.py open --from-nothing`: a copy of that row, exact) and let it be left for an item (`TARGETS_FREE=2`); and mind the entropy bonus, which spreads his choice over new equal choices whatever they pay.

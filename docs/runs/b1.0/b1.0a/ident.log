@@ -1,0 +1,7 @@
+bloodrun HEAD against WIN_ADD unset: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+bloodrun HEAD against WIN_ADD zero: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+bloodrun WIN_ADD 0.33 against 0: the same game {'obs': True, 'done': True, 'rl': True}; |added| summed 25.44; added - A x win 5.96e-08; the seats' sum 6.15e-08
+aerowalk HEAD against WIN_ADD unset: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+aerowalk HEAD against WIN_ADD zero: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'counters': True}
+aerowalk WIN_ADD 0.33 against 0: the same game {'obs': True, 'done': True, 'rl': True}; |added| summed 36.96; added - A x win 5.96e-08; the seats' sum 8.94e-08
+ALL PASSED

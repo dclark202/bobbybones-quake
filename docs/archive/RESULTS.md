@@ -1,0 +1,114 @@
+# BobbyBones: results log (index)
+
+What we tried, what we measured, and what it means, **including what did not work**. Newest first. Each
+entry names the backlog items it settles or raises ([BACKLOG.md](BACKLOG.md), `B-nn`); the plan is in
+[PLAN.md](PLAN.md); log formats are in [LOGS.md](guides/LOGS.md). Numbers are from local runs; raw data lives in
+the git-ignored `data/` folder (paths given so results can be re-checked).
+
+The log itself is one file a day in [results/](results/): each entry there is a dated section, newest first. This
+page lists every entry. A new entry goes at the top of today's file and gets a line here.
+
+## [2026-10-26](results/2026-10-26.md)
+
+- 21:10 — v0.5.0 evening: !aim settled by the owner's play (one fast-target cap of 1.5°, rail 1.0°); the self-play calibration misled; servers on Python 3.12 (Amsterdam); v0.5.1 becomes pay by win chance only (the head is v0.5.2)
+- 16:30 — v0.4.3 and v0.4.4 scrapped: the spawn camping (target choice unguided after the item rule faded, a weapon target as a free "hold here", too-easy instant-hit aim, then the head); v0.5.0 started from v0.4.2b's end with the loopholes closed, one `!aim` calibrated to the pros, and a behaviour panel
+- 10:15 — v0.4.4: the generated mid-game starts tried overnight and switched off; the strategy head opening (69% against v0.4.3's end); the rocket's collapse is not the simulator's physics but its too-easy instant-hit aim (calibrated fix: PERCEPT_SPEED 0.05); Campgrounds' rail is his choice; the EU server moved to Amsterdam
+
+## [2026-10-25](results/2026-10-25.md)
+
+- 18:00 — v0.4.3 on the weapon-variety code (practice runs to the weapons he skips, a per-map item floor); u70 66.2% against v0.4.2's end; a power cut; behaviour checks against the pros; the public servers' !aim fix and frame stalls; the v0.4.4 / v0.4.5 numbering
+- 13:30 — Weapon variety before the strategy head: he never takes Campgrounds' rail (every version), Hektik leans on the rail since v0.4.2; v0.4.3 re-planned (equal weapon pay, mid-game starts up, targeted practice runs); a false alarm about jump pads
+- 11:00 — v0.4.2 ended (v0.4.2b u140); v0.4.3 started 07:35 (item rule fade first); v0.4.1 on the public servers, listed as 1/8
+- 06:30 — v0.4.2b's night: the brain taught on people's games reads the owner far better (target 24% -> 34%, rocket launcher 6% -> 47%), games level or up
+
+## [2026-10-24](results/2026-10-24.md)
+
+- 14:00 — v0.4.2: the first try dipped at fade 0 (42.5% twice, cause unknown); restarted with the fade from update 1, 48.1% and 53.1% at fade 0.1 and 0.18
+- 13:20 — The owner plays v0.4.1's end: Bobby wins a duel 10-8; item control the gap on Sinister and Campgrounds
+
+## [2026-10-23](results/2026-10-23.md)
+
+- 21:30 — the owner's play test of v0.4.1 (save 110): "I can tell that he actually is keeping track of me, and it leads him to pushing more"
+- 15:30 — v0.4.1's gate check passed (85-75); the gate opening and the rocket-jump lesson on; the view's pull toward level measured (B-275 step 1)
+- 14:30 — v0.4.0b (zones, speed + direction) passed; v0.4.1 connected the brain at 12:15; the pros' decision report; the public servers moved
+- 06:00 — v0.4.0 overnight: the hands at 55-57% against v0.3.10's end, the brain past the old belief everywhere, no gradient into the hands
+- 00:30 — Watching the right spot before a sighting makes the good pre-aims, but the watching pay barely built the habit
+
+## [2026-10-22](results/2026-10-22.md)
+
+- 19:50 — v0.3.x closes: the enemy picture and the hands need separate memories; v0.4.0 (the brain) being built
+- 16:30 — The decision report's baseline (v0.3.10): fights follow the stack gap, items do not; v0.3.10 beat v0.3.9 46-0-34 in whole games; v0.3.11 running
+- 12:10 — v0.3.9 (pre-aiming) the biggest step since v0.3.7: 65.2% against v0.3.8's end at equal delays, rail frags 3.9% → 9.5%; v0.3.10 (look-back pay) running, v0.3.11 (the knowledge pay) built
+
+## [2026-10-21](results/2026-10-21.md)
+
+- 13:00 — v0.3.8 resumed from save 90 without the drift inputs; jumps opened in games by measured success, jump practice varied and fixed; hearing loosened; shares 70/20/10
+
+## [2026-10-20](results/2026-10-20.md)
+
+- 17:10 — v0.3.7 ends at 71.7% against v0.3.6; the day's audits find the rail held back by a one-frame shot delay, his senses leaking, his aim ~50 ms quicker than the pros; v0.3.8 starts with all of it fixed
+
+## [2026-10-18](results/2026-10-18.md)
+
+- 12:20 — The speed pay in games (0.05) is 2 to 3% of the frag pay and has not raised his trip speed; save 60 reads 45.0% against v0.3.1's end; what did not work this weekend
+- 11:30 — v0.3.5 without the switch: flat at 43 to 44% against v0.3.1's end for 40 updates, 45.7% at save 50 after the legs' learning rate went from 0.25 to 1.0; he loses on speed in games, his aim is the same
+- 06:49 — The switch fade failed: at its full bias of 8 his legs switch was still on 35 to 39% of his game time; he learned round it. v0.3.5 removes the switch output (started 06:55)
+- 03:43 — v0.3.4's stage 1 (B removed) climbed steadily to 57.5% against v0.3.1's end (save 223, 106 won, 49 lost); stage 2, the switch fade, started
+
+## [2026-10-17](results/2026-10-17.md)
+
+- 18:20 — v0.3.4's turn-down dial (part B) took the run off its rails from 16:00 to 18:00 (kl 0.03 to 0.54, a check at 27%); B removed, the run started again from save 90
+- 07:25 — v0.3.2 (step 1 of one movement network, the turn correction) is level with v0.3.1 over 140 updates: he leans on his legs more, not less; v0.3.3 stopped after five updates
+
+## [2026-10-16](results/2026-10-16.md)
+
+- 20:00 — v0.3.1 ends at about 62 to 64% of the frags against v0.3's end; the owner's play test: "much better than v0.3"; the blinders of his legs found; v0.3.1 goes public
+- 19:30 — v0.3.1's restart with his legs learning, the game's physics, the hunt and the believed stack ends at 63.8% against v0.3's end (128 games to 29); it goes on the public server as v0.3.1
+- 08:45 — Rocket jump runs built (B-252), all off by default; a scripted player clears 104 of the 174 pros' links in the corrected simulator (75% of the pros' rocket jumps); off = v0.3.1's simulator by fixed runs
+- 06:30 — v0.3.1's night: from level to 60% against v0.3's end (110 games to 45), no collapse; he wins the fights he gets, he does not seek more
+- 01:25 — Quake Live's movement measured case by case (B-258): four differences from the simulator found and fixed behind switches (all off); with them every measured case is within 5%. Bobby has never auto-hopped on the servers
+
+## [2026-10-15](results/2026-10-15.md)
+
+- 21:25 — The rocket jump check (B-252): as of v0.3 the simulator's rocket jumps are wrong (the blast comes 3 frames late, damage is off by up to 10, jumps are 60 units too low); two switches, both off by default, bring it within 5% and 1 point
+- 21:40 — B-253 stage (b) built: his legs branch can learn from games (`--legs-learn`), off = stage (a) exactly
+- 21:15 — v0.3.1's belief of the enemy's stack (B-257) and the hunt (B-256) built behind switches, off = today's simulator; the belief's error is a quarter of a fixed guess's
+- 20:53 — v0.3.1 started: v0.3 resumed from its 18:00 stop with the owner's pay table and the faster learning step
+- 16:50 — How soon the pros fire the rail after an enemy appears: Bobby is not slower at first, he fires less often later (B-255)
+- 12:45 — The pros' rocket jumps found in 5,039 demos: on every map, 1 to 11 a game, with the links they repeat (B-252)
+- 06:15 — v0.3's night: from level to 57.5% against v0.2 at update 70, then two falls to 52.1%; no stall, no weapon collapse
+
+## [2026-10-14](results/2026-10-14.md)
+
+- 22:30 — The architecture for the model after v0.3 proposed, Pluto's way: a store of his past read by attention, a judge of the game's result, the pay leaning on winning, a network of about 13.7 M weights; the owner's two thoughts answered
+- 20:15 — The owner's play test: V30 better than v0.2, S40 fought worse; the judge that sees the truth did not help and is left out; v0.3, the new baseline, started 20:17
+- 16:00 — v0.2.2's setting (V) holds 53.5% against v0.2 under the fixed clock; the slow memory (S) is level at update 10 and two points under at 20, 21% slower an update; counterplay unchanged in every run
+
+## [2026-10-13](results/2026-10-13.md)
+
+- 07:00 — v0.2.1's first start fell to 25% against the control in 20 updates and was stopped (23:30); seven arms in the night: the lesson that makes his own keys copy the movement network is the cause, alone and with the shared layers held out; started again at 06:43 without it, first half only, to 19:00
+
+## [2026-10-12](results/2026-10-12.md)
+
+- 20:35 — v0.2.1 started (20:31, the owner's go); before it, the game's reach for a pickup measured in 7,767 recorded pickups: the simulator's reach lies inside it, so it is not why he passes items; the owner's notes from watching v0.2
+- 20:00 — v0.2.1 rewritten around the owner's four goals: the guessing game gets four more questions (eight in all); his choice of what to do next does not use where the enemy is (the blindfold, with its control); eight questions at three times the weight move him three times as hard at first and his aim holds; a tracking limit lowers lightning and leaves rail; his aim stays as it is
+- 16:00 — The second aim step: the aim level is a weak lever, the tracking delay is the strong one and takes the rail with it; no setting gives all three; leg 2 takes the small step
+- 15:15 — v0.2 is on the public server (the owner: "yes send him to the public server"); his answers to v0.2.1's questions; the run waits for his go at about 21:00
+- 15:00 — v0.2.1's pretests on the card: both legs fit and run on the eight performance cores; the legs' lesson takes at once and leaves his aim alone; the place choice as first opened cost him the big items; 60% of an update is the learning step, not the simulators; an efficiency core is not safe even for a job pinned alone
+- 13:00 — Python jobs on the PC began to die at random at 11:12: not our code but the processor's efficiency cores (a thread pushed off one in mid-work now and then resumes a few instructions early); stages B and C merged; everything of ours now runs on the eight performance cores
+- 09:45 — The server batch of the owner's remarks: a game's own end with the map vote, weapons back in 5 s, the owner marked, people tied to their sessions, F3 in 1v1 found and fixed, the Discord line, the QLStats lookup; proven on a private server, not on the public one yet
+- 06:55 — "Awaiting snapshot" again on the public server: the seat guard of 2026-10-10 read a field the header has wrong
+- 05:00 — v0.2 at seven hours: 56.7% against v0.1, all of the gain on the four maps v0.1 never played games on; his way of playing has not moved (scorecard 47%); stages B and C all built and merged in a copy
+
+## [2026-10-11](results/2026-10-11.md)
+
+- 23:40 — v0.2 plays on a real server (private, both plugins: its 143 inputs and the attention part); stage B parts 1 and 2 and stage C part 1 built in copies; the checks' noise measured (the same network against itself: 48.8%)
+- 22:00 — v0.2 built and started (21:49): attention stage A with 143 new inputs, the two-minute value estimate, the hop-gain pay, the first aim step, ten maps; the enemy as a target left out after a proper level check (45.9% in 128 games); Dismemberment in place of Delirium as the second held-out map
+- 19:10 — Fights taken and refused, and the flick curve, from the pros' demos with v15c's end beside them: he stays in twice as many fights as the pros and the same in every situation; up to 40 degrees off target his first hit comes sooner than a pro's, and the enemy appears within 20 degrees of his view 28% of the time (the pros 65%)
+- 19:00 — The afternoon before v16: the pros' measures and how near he is to them (48% of the way on fourteen measures), the enemy as a target (lost by a broad rule, level by a narrow one), the three rocket changes tried (no change in his rocket use), the server's timing for the attention model (passes), a held-out map, the duel check made even between its seats
+- 13:40 — `duel_gru_v15c` (v15b's end with the weapon work, two readings to switch his legs off, speed pay 0.5): level with v15b, no gain in speed kept or in rockets; the real game plays his legs (B-213) and both beat the game's Nightmare bot; v15c on the public server
+- 12:50 — The public server's data: a fuller daily pull (raw logs, seven days on the server, an index, a second copy)
+- 07:00 — `duel_gru_v15b` after its night: he strafe jumps on his legs (9.2% of his travelling time at 400 or more; v14's end 1.3%, the pros 17.5%) and his duels rose to 56% against v14's end; his time at speed did not rise in training
+
+The log of 2026-10-02 to 2026-10-10 (the first approach and the numbered models v1 to v15b, before v0.1) is kept
+locally, out of the repo.
