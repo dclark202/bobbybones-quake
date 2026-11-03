@@ -1,4 +1,4 @@
-# b1.2d's start (owner, 2026-11-02; docs/runs/b1.2/b1.2d/CARD.md): from b1.2c's end, five pay changes faded in together over 40 updates by the ramp: the table by the point, speed pay, damage taken, stack lead, long rail.
+# b1.2d's start (owner, 2026-11-02; docs/runs/b1.2/b1.2d/CARD.md): from b1.2c's end, five pay changes faded in together over updates 10 to 70 by the ramp: the table by the point, speed pay, damage taken, stack lead, long rail.
 # Refuses unless: no trainer runs; the start save and its optimizer, and b1.2c's widened controls, are there; b1.2c's dials ended at their end values; the settings check passes against b1.2c's command;
 # pay_check.log and ramp_test.log end ALL PASSED; the run folder is new.
 # Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.2\b1.2d\start.ps1 [-From <a b1.2c save, default keep\policy_nojerk_b12c.pt>]

@@ -1,5 +1,5 @@
 """v0.6.1's watch (from v0.5.1's, scratchpad v050/watch_v051.py). Every save is kept (keep/policy_<n>.pt, n = the metrics line).
-  1. games: 160 ten-minute games on ten maps, seats swapped, against the previous best (CTRL_PREV, default v0.6.0's end; every
+  1. games: CHECK_GAMES (16) ten-minute games a map on ten maps, seats swapped, against the previous best (CTRL_PREV, default v0.6.0's end; every
      fourth check the reference CTRL_REF, default v0.4.2b's end), both seats at !aim default with the panel's settings
      (panel_v061.settings: the run's live PERCEPT_SPEED and caps, PANEL_SETS for v0.6.0's aim switches); the first at update 10,
      then one every CHECK_EVERY (10) updates when none still runs. Written to checks_prev.jsonl / checks_ref.jsonl; the stop rule (under 45%, or two under 50%).
@@ -27,6 +27,7 @@ PREV_LABEL = os.environ.get("CTRL_PREV_LABEL") or "v0.4.2b's end (the start, bot
 REF_LABEL = os.environ.get("CTRL_REF_LABEL") or "v0.4.2b's end (reference)"
 PAR_BUSY = int(os.environ.get("PANEL_PAR_BUSY") or 3)
 CHECK_EVERY = int(os.environ.get("CHECK_EVERY") or 20)   # (v0.6.1: the ramp steps every 10 updates and waits for a check after its step)
+CHECK_GAMES = int(os.environ.get("CHECK_GAMES") or 16)   # games a map, seats swapped (owner, 2026-11-02: 20 from the run after b1.2d, with CHECK_EVERY 20)
 CHECK_BATCH = int(os.environ.get("CHECK_BATCH") or 5)    # (b1.2d) maps played at once in a check (two processes each): 4 on 8 efficiency cores
 MAPS = ["bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure"]
 WD = os.path.join(SR, RUN, "watch")
@@ -77,7 +78,7 @@ def games(pol, upd, ctrl, label, ps):
         for mp in MAPS[w:w + CHECK_BATCH]:
             js = os.path.join(WD, "chk_{}_{}_{}.json".format(upd, tag, mp))
             cmd = [PY, "tools/duel_eval.py", "--run", RUN, "--policy", pol, "--opp", "policy:" + ctrl, "--opp-inputs",
-                   os.path.join(P.CODE, "docs", "INPUTS.csv"), "--map", mp, "--games", "16", "--minutes", "10", "--procs", "2", "--swap",
+                   os.path.join(P.CODE, "docs", "INPUTS.csv"), "--map", mp, "--games", str(CHECK_GAMES), "--minutes", "10", "--procs", "2", "--swap",
                    "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225",
                    "--round", "600", "--opp-round", "600"]
             cmd += [x for s_ in sets for x in ("--set", s_)]

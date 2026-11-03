@@ -1,0 +1,7 @@
+11-02 17:13:53 waiting for update 71 (now 47)
+11-02 19:00:54 update 71: stop_run waits for the next save, update 80's
+19:00:54 waiting for the next save; the last was Mon Nov  2 18:56:02 2026
+19:41:34 kept the save of Mon Nov  2 19:41:14 2026 as b12d
+19:41:35 stopping [8696, 24148, 16136]
+19:42:06 still running: [4208, 27480]
+11-02 19:42:06 stop_run exit 1; the end at update 80

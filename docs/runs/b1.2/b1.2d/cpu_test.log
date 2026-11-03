@@ -1,0 +1,17 @@
+12:53:40 the trainer starts on the performance cores, 30 minutes, from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2c\keep\policy_nojerk_b12c.pt
+13:01:02 the check batch starts beside it: 4 maps, 2 processes each, on the check cores
+13:01:02 update 1 at minute 7.3 of the run | load: performance 51%, check cores 3%, the owner's 1%
+13:05:23 the check batch done in 4.3 min, exits [0, 0, 0, 0]
+13:05:43 update 2 at minute 12.0 of the run | load: performance 56%, check cores 6%, the owner's 1%
+13:10:03 update 3 at minute 16.4 of the run | load: performance 39%, check cores 4%, the owner's 1%
+13:14:33 update 4 at minute 20.9 of the run | load: performance 38%, check cores 2%, the owner's 1%
+13:19:14 update 5 at minute 25.5 of the run | load: performance 46%, check cores 7%, the owner's 8%
+13:23:54 update 6 at minute 30.2 of the run | load: performance 55%, check cores 5%, the owner's 1%
+13:28:34 update 7 at minute 34.9 of the run | load: performance 20%, check cores 2%, the owner's 0%
+load over the test: performance cores 54%, check cores 13%, the owner's four 3%
+PASS an update 4.54 min against b1.2c's 4.31 (at most 10% more)
+PASS the trainer and its simulators only on the performance cores
+PASS the check's processes only on the check cores
+PASS the check batch finished (4.3 min)
+ALL PASSED
+exit 0

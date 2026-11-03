@@ -9,11 +9,11 @@
 | | |
 |---|---|
 | Started from | **b1.2c's save of update 250** (`duel_gru_b1_2c/keep/policy_nojerk_b12c.pt`, with its optimizer), the first save after its jerk fade ended (owner, 11-02); b1.2c's end values kept |
-| Started by | the owner, in another session (`start.ps1`), after the core test below |
+| Started by | `start.ps1` on the owner's go, 2026-11-02 13:33, after the core test passed |
 | Run | `duel_gru_b1_2d` |
 | Goal | the pay table as the baseline, win chance pay as the correction to it; combat wins his decisions |
 | Stays | damage dealt, frags, deaths, `WIN_ADD` 0.33, the target-switch cost (0.02; owner, 11-02: "Stack lead only"), fairness limits, `!aim default`, b1.2c's end values of the firing costs, contact and jerk |
-| Length | **12 hours** (`--minutes 720`; owner, 11-02: "I will likely cancel it early and start B1.3 tonight, but i'd rather it go long than have to restart it") |
+| Length | **Ends at its save of update 80, about 19:40** (owner, 11-02 17:10: "let's end the 1.2d at update 80"; `end_at_80.py`, started 17:13: `stop_run.py duel_gru_b1_2d b12d --keep-checks`, the end kept as `keep/policy_end_b12d.pt` with its optimizer, the watcher left to check it). Written as  (`--minutes 720`; owner, 11-02: "I will likely cancel it early and start B1.3 tonight, but i'd rather it go long than have to restart it") |
 | Kept | each save of the fade with its optimizer, and the first save with it done |
 
 ## Why
@@ -93,6 +93,8 @@ b1.2c's final check (its update 250 against b1.1, 160 games) runs beside b1.2d's
 
 Checks: against the start (b1.2c's end), every fourth against b1.1; the league keeps b1.1, v0.6.0's end and b1.2c's end as anchors.
 
+**Checks every 20 updates (owner, 2026-11-02 16:40): "Just set the checks to every 20 updates, I think it's probably fine"; nothing restarted.** On the 8 check cores a check and its panel take 43 to 53 minutes against 45 between saves at 10, so the update 20 check was skipped ("a check still runs") and the checks land about every 20 updates anyway; the watcher keeps `CHECK_EVERY=10` for this run, and the ramp's hold reacts only that often. Every later start script sets `CHECK_EVERY=20` and **20 games a map** (`CHECK_GAMES=20`: 200 games a check; owner, 11-02), about 55 to 65 minutes a check on these cores.
+
 ## The cores
 
 Owner, 2026-11-02: "Use the 8 P cores for training ONLY", "Leave 4 E cores free for my ordinary computer use", "Use 8 of the E cores for the checks", "up to half can be used for testing during the run if it's deemed necessary". The efficiency-core crash of October is fixed (owner).
@@ -120,7 +122,7 @@ The checks sized to 8 cores: 4 maps at a time, 2 processes each (`CHECK_BATCH=4`
 | Pay by group (`pay_terms`) | combat 1.8× items and movement | combat at least 2× |
 | Speed on his way, cells roamed | | hold |
 | Rail far shots a minute, far hit rate | 5 far shots in 785 minutes, 0.20 | up |
-| The owner's play test | "tunnel vision" | picks up what's near; still fights |
+| The owner's play test | "tunnel vision" | picks up what's near; still fights. **2026-11-02 evening, the end save on a local server (`qlbot:b12d`, built from today's code), two ten-minute games at `!aim better` (Aerowalk 26-6, Furious Heights 7-5): "1.2d is a success"; "there's still plenty of places for improvement, but the goals are met. He was clearly engaging more in fights, and would quickly redirect to fight when he heard me nearby (for fights that I believe could've won). The rocket fights are getting much better too" (owner)**. Beside it: the panel of update 80 flagged Hektik's targets, the enemy 22% against the control's 10%: the same change |
 
 ## Red team
 
@@ -147,16 +149,25 @@ The checks sized to 8 cores: 4 maps at a time, 2 processes each (`CHECK_BATCH=4`
 | `tools/ffa_check.py` | ❌ cannot run: its test map `maps/sim.bsp` is missing (not this change); `pay_check` runs on the group module instead |
 | `make_files.py` → `train.cmd`; settings check against b1.2c's: only `--run`, `--minutes`, `ITEM_PT_*`, `SM_PASS` differ | ✅ |
 | `ITEM_PT_MIX` (live): the fade from the old rates; at 0 with enemy-only damage at weight 1 it pays as b1.2c to the bit (`pay_check.log`) | ✅ |
-| `ramp_b12d.py`: the five dials in one 40-update line; `ramp_test.log` (also with a hold) | ✅ ALL PASSED |
+| `ramp_b12d.py`: the five dials in one line over updates 10 to 70; `ramp_test.log` (also with a hold) | ✅ ALL PASSED |
 | `start.ps1`: refuses on a trainer running, b1.2c's dials not at their ends, a failed settings check or log; controls b1.2c's end and b1.1 widened | ✅ parsed; a check job with b1.2d's settings against b1.1 widened played |
 | A dry run on the card | not done (owner: "just start it after c") |
 | The cores: `train.cmd` on `C03C3`, `start.ps1` on `0x3C3C` with the checks sized; `cpu_test.py` written | ✅ built; the test runs once b1.2c is done 🧪 |
 | Length | 12 hours, written (`make_files.py 720`) ✅ |
 | The fade from update 10 over 60 updates; `ramp_test.log` (also with a hold) | ✅ ALL PASSED |
-| b1.2c stopped at its update 250 save, kept with its optimizer as `policy_nojerk_b12c.pt` (owner, 11-02) | ⏳ about 12:51 |
-| The core test (`cpu_test.py`) | 🧪 after b1.2c stops; results below |
-| The start | the owner, in another session |
+| b1.2c stopped at its update 250 save, kept with its optimizer as `policy_nojerk_b12c.pt` (owner, 11-02) | ✅ 12:52 |
+| The core test (`cpu_test.py`) | ✅ ALL PASSED (results below) |
+| The start | ✅ 2026-11-02 13:33 (owner's go) |
 
 ## The core test's results
 
-*(filled in when it has run)*
+**ALL PASSED** (2026-11-02, 12:53 to 13:29, `cpu_test.log`; nothing else of ours running):
+
+| Test | Result |
+|---|---|
+| An update | **4.54 min** against b1.2c's 4.31 (+5%; at most 10%). Updates 2 to 7: 4.7, 4.4, 4.5, 4.6, 4.7, 4.7 |
+| The trainer and its simulators | only on the performance cores ✅ (their load 54% over the test) |
+| The check batch (4 maps, 2 processes each) | only on the check cores ✅, done in 4.3 min, all exits 0 (check cores 13% over the test) |
+| The owner's four cores | 3% over the test, nothing of ours on them ✅ |
+
+**Not measured:** a full check (160 ten-minute games) on the 8 efficiency cores; the test's batch was 4 games of 4 minutes a map. Its time shows in the first real check, at update 10 (b1.2c's took about 45 minutes on the shared performance cores). The performance cores' 54% means the trainer does not fill them.
