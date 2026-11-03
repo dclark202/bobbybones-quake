@@ -11,7 +11,7 @@ Every run gets a row here at its start, and a line in its series' table below (a
 | Network | Started from | Run folder (`data/sim_runs/`) | Result, in a word |
 |---|---|---|---|
 | b1.3a | b1.2d's end (`keep/policy_end_b12d.pt`), its own optimizer, given the strategy head shut (`tools/head2_init.py add --gate 0`) | `duel_gru_b1_3a` | started 2026-11-02 20:22, 12 h: the head shut in play, learning to copy his target choice |
-| b1.2d | b1.2c's save of update 250 (`keep/policy_nojerk_b12c.pt`), its own optimizer | `duel_gru_b1_2d` | 2026-11-02 13:33 to 19:41, ended at update 80 (owner), `keep/policy_end_b12d.pt` with its optimizer; **a success** (owner, after his play test); checks 56.2 / 57.5 / 51.2% against the start at updates 10 / 30 / 40, 59.4% against b1.1 at 60 |
+| b1.2d | b1.2c's save of update 250 (`keep/policy_nojerk_b12c.pt`), its own optimizer | `duel_gru_b1_2d` | 2026-11-02 13:33 to 19:41, ended at update 80 (owner), `keep/policy_end_b12d.pt` with its optimizer; **a success** (owner, after his play test); on the public servers and released as open weights 11-02 evening; checks 56.2 / 57.5 / 51.2% against the start at updates 10 / 30 / 40, 59.4% against b1.1 at 60 |
 | b1.2c | b1.1 widened to 980 inputs, the optimizer of b1.1a's update 170 (no head) | `duel_gru_b1_2c` | stopped 2026-11-02 12:52 at update 250 (owner); final check 55.6% against b1.1 (89-71) |
 | b1.2b | b1.1, the optimizer of b1.1a's update 170 (no head) | `duel_gru_b1_2b` | 2026-11-01 16:12 to 17:40, update 20: stopped (owner) to give him the small items as inputs; 53.1% against b1.1 at update 10 |
 | not approved | b1.1 | `duel_gru_b1_3a_UNAPPROVED_DO_NOT_USE` | a rejected command that ran, 11-01 15:44 to 16:08; not used |

@@ -93,7 +93,7 @@ def main():
         print("inputs beyond 4 in size:", [(round(m, 1), n_[1]) for m, n_ in big][:12])
     heads = ("forward", "strafe", "vertical", "turn", "pitch", "fire", "weapon", "walk", "zoom", "lift", "intention")
     print("his actions: " + " | ".join("{} {}".format(heads[k], np.round(np.bincount(acts[:, k], minlength=E.ACTION_DIMS[k]) / len(acts), 2).tolist())
-                                      for k in range(acts.shape[1]) if k not in (3, 4)))
+                                      for k in range(min(acts.shape[1], len(heads))) if k not in (3, 4)))   # (the heads after the intention: not named here)
     if not a.real:
         return
     real = np.load(a.real)[a.skip:]
