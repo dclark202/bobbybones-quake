@@ -34,7 +34,7 @@ The network does not change. What comes out are the hand-written pieces around h
 | 70 to 90 | **the speed pay out** (today +0.35 a player-minute, less 0.06 given back from trips he abandons) | live `SPEED_PAY` 0.125 → 0 | ✅ live already |
 | 90 to the end (about 145) | settles | | |
 
-**Gates** (the standing rule): a dial holds while a check reads under 50%; it steps back 10 updates if a check is under 45% or two checks are under 50%; a dip lasts 20 to 30 updates at most. A hold delays the later dials; the run still ends at 12 hours.
+**Gates: none from update 21 (owner, 2026-11-04: "Don't hold the ramps just go forward with them").** The dials go forward on the clock; every check's win rate is reported, one under 40% flagged at once as a major problem; the owner decides to hold or stop. (Until update 21 the ramp held under 50% and stepped back under 45% or two checks under 50%; it never fired. The ramp restarted at 10:11 with `--free --resume`.)
 
 **Not on this card:** the way pay (`INTENT_SEEK_W`) is already zero (`--item-reward 0`). With the speed pay out, the claw-back of abandoned trips has nothing left to give back. The dead rule code stays until its own bit-identical proof, apart from a run.
 

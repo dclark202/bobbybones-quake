@@ -20,7 +20,9 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 4. **Correctness over speed.** Never skip or approximate a calibration to meet a start time; say what is missing and when.
 5. **Red-team before a go.** Every run card lists each hand-built or assumed part of the pay and design, its measured
    alternative, and the ledger's pathology check (negative frags, sign flips, lopsided games). Volunteer weaknesses unasked.
-6. **Never stop a run** unless the owner says so (2026-10-27); a check under 30% won-lost is posted in the chat.
+6. **Never stop a run** unless the owner says so (2026-10-27). **Ramps never hold or step back on their own (owner, 2026-11-04):** "Don't hold
+   the ramps just go forward with them"; "All you do is report, not hold. You report with urgency when things look bad and we decide
+   together." Every check's win rate is reported; one **under 40%** is flagged in the chat at once as a major problem. He decides hold or stop.
 7. **No personal data** in the repo (Steam IDs, IPs, usernames, passwords); public-server details stay in `private/`.
 8. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most 1-2
    times a day; one working tree (the repo) plus at most one worktree per active run, made without links into `data/`.
@@ -69,7 +71,7 @@ Small, identity-checked changes start the real run directly; its first 10 update
   did: name which part a proposal takes from them, where it differs and why (one PC, our data, fairness). "Those two clearly
   worked": inspiration, not a copy. The rules taken so far: [docs/HISTORY.md](docs/HISTORY.md) (lessons that are now rules).
 - **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
-  trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
+  trial): shut at the start, opened slowly with the checks reported (no automatic hold or step-back since 2026-11-04: rule 6;
   a dip lasts 20 to 30 updates at most). Two new things open one after the other.
 - He wants genuine learned behavior (strafe jumping, weapon choice, item control, positioning), not hand-coded
   rules or knob tuning. Long-term focus: smooth, fast movement and good position and weapon choices, not just aim.

@@ -9,7 +9,10 @@ dial. Every save while the clock is under its end is kept with its optimizer (ke
 clock at 10, 70 and 90 as keep/policy_step<10|70|90>_14b.pt. Flagged in watch.log: a check under 50%; a part of his target scores over 40;
 his speed on trips or its share over 320 more than 10% under the run's first five updates; his trips a minute more than 50% over them.
 Nothing here stops the run.
-    python docs/runs/b1.4/1.4b/ramp_14b.py <run> [--back 10] [--zero 0.5] [--poll S] [--settle S] [--dir D]"""
+    python docs/runs/b1.4/1.4b/ramp_14b.py <run> [--back 10] [--zero 0.5] [--poll S] [--settle S] [--dir D] [--free] [--resume]
+--free (owner, 2026-11-04: "Don't hold the ramps just go forward with them"; "under 40% win rate flag in chat as a major problem"): the clock
+never holds or steps back; every check is logged with its win rate, and one under 40% as a MAJOR PROBLEM. --resume: a restart of the ramp
+beside a running trainer: the clock is the updates done, live.json is not asserted at the start values, the marks already kept stay."""
 import argparse
 import json
 import os
@@ -37,6 +40,8 @@ def main():
     ap.add_argument("--poll", type=float, default=30)
     ap.add_argument("--settle", type=float, default=20)
     ap.add_argument("--dir", default="")
+    ap.add_argument("--free", action="store_true")
+    ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
     D = a.dir or os.path.join(ROOT, "data", "sim_runs", a.run)
     WD, LIVE, POL, OPT, KEEP, MET = (os.path.join(D, "watch"), os.path.join(D, "live.json"), os.path.join(D, "policy.pt"), os.path.join(D, "opt.pt"),
@@ -44,6 +49,7 @@ def main():
     os.makedirs(WD, exist_ok=True)
     os.makedirs(KEEP, exist_ok=True)
     HOLD, BACK = 0.50 + (a.zero - 0.5), 0.45 + (a.zero - 0.5)
+    MAJOR = 0.40
 
     def log(s):
         line = time.strftime("%m-%d %H:%M:%S ") + s
@@ -69,7 +75,10 @@ def main():
             for f_, n_ in seen.items():
                 R = jl(os.path.join(WD, f_))
                 for d in R[n_:]:
-                    if wr(d) < HOLD:
+                    if a.free:
+                        log(("MAJOR PROBLEM " if wr(d) < MAJOR else "") + "check update {} against {}: {}-{} = {:.1%}{}".format(
+                            d["update"], names[f_], d["won"], d["lost"], wr(d), " (under 40%)" if wr(d) < MAJOR else ""))
+                    elif wr(d) < HOLD:
                         log("FLAG check update {} against {}: {}-{} = {:.1%} (the bar {:.1%})".format(d["update"], names[f_], d["won"], d["lost"], wr(d), HOLD))
                 seen[f_] = len(R)
             for m_ in jl(MET)[seen_m[0]:]:
@@ -113,17 +122,24 @@ def main():
         return {n_: d[n_] for n_, *_ in DIALS}
 
     cur = json.load(open(LIVE, encoding="utf-8"))
-    for n_, lo, hi, v0, v1 in DIALS:
+    for n_, lo, hi, v0, v1 in ([] if a.resume else DIALS):
         assert abs(float(cur.get(n_, -1)) - v0) < 1e-9, "{} is {} in live.json, not {}".format(n_, cur.get(n_), v0)
     threading.Thread(target=flags, daemon=True).start()
-    log("ramp_14b on for {}: {}; the clock stops under {:.1%}, back {} updates under {:.1%} or two checks under {:.1%} (zero point {:.1%})".format(
+    log(("ramp_14b on for {}: {}; FREE: the clock never holds or steps back, a check under 40% is a MAJOR PROBLEM{}".format(
+        a.run, ", ".join("{} {} -> {} over {} to {}".format(n_, v0, v1, lo, hi) for n_, lo, hi, v0, v1 in DIALS), " (resumed)" if a.resume else "")) if a.free else
+        "ramp_14b on for {}: {}; the clock stops under {:.1%}, back {} updates under {:.1%} or two checks under {:.1%} (zero point {:.1%})".format(
         a.run, ", ".join("{} {} -> {} over {} to {}".format(n_, v0, v1, lo, hi) for n_, lo, hi, v0, v1 in DIALS), HOLD, a.back, BACK, HOLD, a.zero))
     clock, done_n, seen, held, n_checks, marked = 0.0, 0, mtime(), False, 0, set()
+    if a.resume:                                             # (the marks already kept stay; the checks already read are not acted on)
+        marked = {k_ for k_ in MARKS if os.path.exists(os.path.join(KEEP, "policy_step{}_14b.pt".format(k_)))}
+        n_checks = len(jl(os.path.join(WD, "checks_prev.jsonl")))
     while True:
         time.sleep(a.poll)
         L = jl(MET)
         n = int(L[-1]["update"]) if L else 0
         C = jl(os.path.join(WD, "checks_prev.jsonl"))
+        if a.free:
+            n_checks = len(C)                                # (--free: the checks are only logged, by flags())
         if len(C) > n_checks:                                # a new check: hold, lift or step back
             n_checks = len(C)
             last = wr(C[-1])
