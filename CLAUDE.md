@@ -40,10 +40,15 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 
 ## Starting a run
 
+**No dry run for small changes (owner, 2026-11-04, said several times):** "You do not need to do a dry run, that's just the first 10 updates
+of the run." A dry run is only for changes we are not sure of (a new lesson, a new part of the network, a new pay whose step is unknown).
+Small, identity-checked changes start the real run directly; its first 10 updates and the extra check at update 10 are the trial.
+
 1. The owner's go on the run's `CARD.md` (both parts filled in). **Run length (owner, 2026-10-30): 12 hours by default (`--minutes 720`), and ask him to specify the length before starting anything.**
 2. `powershell -ExecutionPolicy Bypass -File docs\runs\<version>\start.ps1`: it runs the settings check and refuses on any
    difference, checks the files are there and no trainer runs, then starts the trainer, the watcher and the self-play logger.
-3. One line an hour while it runs; the 06:30 report after a night.
+3. One line an hour while it runs; the 06:30 report after a night. From 1.4b on both carry the league table (frag share and win
+   chance gained against each league network, carried from run to run; [BACKLOG B-300](docs/BACKLOG.md)) beside the checks.
 
 ## The owner's goals (read first)
 - **One goal: win games** (owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 and the priority
@@ -56,8 +61,13 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 - **Names (owner, 2026-10-31)**: bN is the series (BobbyBones 1: b1); bN.N is a family of runs, each with a specific goal of its own; each run in it is bN.Nx, where the attempts are x = a, b, c, ... (b1.0a, b1.0b). In `docs/runs/b1.0/` (the family: its `README.md` says the goal and lists the attempts) with a folder per attempt, `docs/runs/b1.0/b1.0a/`,
   and `data/sim_runs/duel_gru_b1_0a`. The v0.x names below are history: use them only for what was run under them.
   **The b dropped (owner, 2026-11-03):** "I want to drop the B from our bot naming convention. So, this is just 1.3b, 1.4b,c": new runs are
-  N.Nx (1.3b, 1.4b), in the family's existing folder (`docs/runs/b1.3/1.3b/`) and `data/sim_runs/duel_gru_1_3b`; what was run as b1.0a to b1.4a
+  N.Nx (1.3b, 1.4b), in the family's existing folder (`docs/runs/b1.3/1.3b/`; a new family: `docs/runs/1.5/`) and `data/sim_runs/duel_gru_1_3b`; what was run as b1.0a to b1.4a
   keeps its name and folders.
+- **Design from AlphaStar and Pluto (owner, 2026-11-03)**: for anything strategic (the head, target and plan choices, memory,
+  the league, the value and pay, handing a choice from rules to a learner), and above all when he asks how to implement a change,
+  start from what AlphaStar (DeepMind, Nature 2019) and Pluto (tscmoo's Brood War bot; [archive/versions/v0.3/PLUTO.md](docs/archive/versions/v0.3/PLUTO.md))
+  did: name which part a proposal takes from them, where it differs and why (one PC, our data, fairness). "Those two clearly
+  worked": inspiration, not a copy. The rules taken so far: [docs/HISTORY.md](docs/HISTORY.md) (lessons that are now rules).
 - **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
   trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
   a dip lasts 20 to 30 updates at most). Two new things open one after the other.

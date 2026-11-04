@@ -30,7 +30,7 @@ if ($LASTEXITCODE -ne 0) { Log "1.3b's dials are not at their ends: not started"
 if ($LASTEXITCODE -ne 0) { Log "make_files failed: not started"; exit 1 }
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\b1.3\1.3b\train.cmd") "--allow=--run,--minutes,--pfsp,--pfsp-fixed,WEAPON_OWN,INTENT_SWITCH" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 1.3b's command): not started"; exit 1 }
-& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ck $END "--allow=WEAPON_OWN,INTENT_SWITCH" | ForEach-Object { Log $_ }
+& $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ck $END "--allow=WEAPON_OWN,INTENT_SWITCH,CONTACT_FREE,LEVEL_PULL,RAIL_FAR_PAY" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 1.3b's end): not started"; exit 1 }
 if (Test-Path (Join-Path $R1 "policy.pt")) { Log "$R1 already has a policy.pt: not started (nothing overwritten)"; exit 1 }
 
@@ -40,6 +40,8 @@ Copy-Item $END (Join-Path $R1 "policy.pt")
 Copy-Item $OPTF (Join-Path $R1 "opt.pt")
 & $PY -c "import json, sys; d = json.load(open(sys.argv[1])); d.update(PFSP=0.0, VALUE_WARM=0); json.dump(d, open(sys.argv[2], 'w')); print('live.json:', d)" (Join-Path $R0 "live.json") (Join-Path $R1 "live.json") | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "live.json not made: not started"; exit 1 }
+& $PY (Join-Path $HERE "live_check.py") $END (Join-Path $R1 "live.json") | ForEach-Object { Log $_ }
+if ($LASTEXITCODE -ne 0) { Log "live.json does not carry the save's live dials: not started"; exit 1 }
 Copy-Item (Join-Path $R1 "policy.pt") (Join-Path $R1 "keep\policy_start_14b.pt")
 Copy-Item (Join-Path $R1 "opt.pt") (Join-Path $R1 "keep\opt_start_14b.pt")
 $CK = Join-Path $R1 "keep\control_13b.pt"; $CR = Join-Path $R1 "keep\control_b12d.pt"
