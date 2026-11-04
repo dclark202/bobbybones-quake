@@ -23,6 +23,6 @@ Holds: a check at 40% or less holds the fade in progress, under 50% flagged.
 
 | Attempt | Started from | What | State | Result |
 |---|---|---|---|---|
-| [1.4c](1.4c/CARD.md) | 1.4b's end | (owner, 11-03 evening) the lock as a learned commitment; to design during 1.4b | planned | |
+| [1.4c](1.4c/CARD.md) | 1.4b's end | (owner, 11-04) the target lock out by a learned choice to keep or re-decide (AlphaStar's no-op), handed the lock rule's readings by a share 0 → 1 over updates 10 to 90; the blind-fire cost out | built 11-04 (branch `b14c`); to start tonight after 1.4b's end, the level check and the dry run | |
 | [1.4b](1.4b/CARD.md) | 1.3b's end | (owner, 11-03 evening) 12 h: the switch cost out and a weapon he holds choosable from the start; matchmaking by difficulty over updates 0 to 10; the item rule's lesson out over 10 to 70; the speed pay out over 70 to 90 (the lock moved to 1.4c) | **started 11-04 08:15** from 1.3b's update 170 | |
 | [b1.4a](b1.4a/CARD.md) | b1.3a's end | replanned 11-03 after the head-alone test (37%): the head blended in to half (mix 0 → 0.5 over updates 10 to 90), learning from pay the whole time; the copy lesson off; the rules' imprint frozen; the lock and the way pay stay; 12 h | **stopped 11-03 11:12 at update 21** (owner) | 43.5% at update 10 (mix 0); the head's scores 16 → 29, agreement 87% → 61%: b1.3 to be redesigned |

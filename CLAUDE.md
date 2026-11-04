@@ -26,6 +26,13 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 7. **No personal data** in the repo (Steam IDs, IPs, usernames, passwords); public-server details stay in `private/`.
 8. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most 1-2
    times a day; one working tree (the repo) plus at most one worktree per active run, made without links into `data/`.
+9. **The running run gets full priority (owner, 2026-11-04): "The run that is going gets full priority. Period."** No side job
+   (a smoke run, a dry run, a level check, a measurement, a server) is started on my own while a run trains: "You bring any side
+   runs to me, and we decide together whether they can go in parallel"; "you need to be very clear with me what cores they run on
+   and whether they will slow down training". So every proposal names its cores (by mask), its length, and what it shares with the
+   run (the graphics card, the trainer's cores, the check cores the watcher uses). On 2026-11-04 a 1.4c smoke and a level check were
+   started beside 1.4b without asking. To stop a job's processes, match each one's own command line: Windows reuses process IDs,
+   so a walk down parent IDs caught two unrelated `tail -F` monitors that day.
 
 ## Where things are
 
