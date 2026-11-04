@@ -12,7 +12,7 @@ Today one small layer picks his target (an item, the enemy, a holding place) fro
 
 | | |
 |---|---|
-| Started from | **started 2026-11-03 16:31, to 08:00 on 11-04 (929 minutes)** on the owner's word ("Commit and start"; without the last dry run's verdict: `-NoTrial`) · b1.2d's end with its optimizer (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt`, the network on the public servers), the head added new (`tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief`). b1.3a's and b1.4a's saves are not used |
+| Started from | **started 2026-11-03 16:31; stopped 11-04 at update 170 (owner: "strongest boy yet")**; planned to 08:00 (929 minutes) on the owner's word ("Commit and start"; without the last dry run's verdict: `-NoTrial`) · b1.2d's end with its optimizer (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt`, the network on the public servers), the head added new (`tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief`). b1.3a's and b1.4a's saves are not used |
 | Run | `duel_gru_1_3b` |
 | What | his target logits = the hands' 17 target rows on the fast memory h **plus** the head's target layer on the slow memory s (`--head2-add 1`). One set of logits, one lesson. The credit for the choice moves from his own advantage (about 1 s ahead) to the head's (λ 0.995, about 5 s, and its two-minute value) over updates 10 to 90 |
 | How his target is chosen | scores = W_h·h + b + W_s·s; W_h and b are b1.2d's target rows, W_s starts at zero. Where the head has no state yet (a respawn to its first tick, 0.2 s) the rows alone |
@@ -100,4 +100,32 @@ The choice is learnt on his whole pay as b1.2d's was; what changes is what it ca
 
 ## The result
 
-Running.
+**Stopped 2026-11-04 at update 170 on the owner's word** ("This is awesome, really strong results. I think we can stop him at u170. Absolutely save and log this guy right away strongest boy yet"). End = the save of update 170 (06:50): `keep/policy_end_13b.pt` with its optimizer (`keep/opt_end_13b.pt`), on the backup drive. (The stop tool was started six minutes after that save and waited for update 180's; it was cancelled and update 170's files kept by hand, checked byte for byte against `keep/policy_170.pt`; the trainer was stopped at update 178, before its next save.)
+
+| Update | Credit | Against b1.2d's end | Against b1.1 |
+|---|---|---|---|
+| 10 | 0 | 120-80, 60.0% | |
+| 30 | 0.25 | 139-61, 69.5% | |
+| 50 | 0.5 | 154-46, 77.0% | |
+| 70 | 0.75 | | 169-31, 84.5% |
+| 90 | 1 | 177-23, 88.5% | |
+| 110 | 1 | 178-22, 89.0% | |
+| 130 | 1 | 168-32, 84.0% | |
+| 150 | 1 | | 174-26, 87.0% |
+| 170 | 1 | 🧪 playing | |
+
+By map (pooled against b1.2d's end): 72% (Furious Heights, Toxicity) to 83% (Sinister); no weak map. The checks' zero point is 51.2%. The credit dial: no hold, no step-back; 1 at update 91.
+
+| | Start | Update 170 |
+|---|---|---|
+| The hands' part of his target scores | 22.5 | 17.7 (the weight decay: the rows' weights 16.6 → 13.8, −17%) |
+| The head's part | 0 | 8.5 (level from about update 100) |
+| The sum | 22.4 | 18.5: his target choice somewhat softer than b1.2d's |
+| Their cosine | 0 | −0.10 → −0.21 at update 50 → −0.15: mild opposition, stable |
+| His step (kl) | 0.033 | 0.037 |
+| Frags a match-minute | 1.61 (update 10) | 1.99 |
+| The enemy's share of his targets | 7.8% (update 10) | 7 to 9%: not clearly up (the red armor up to 27%, the mega down 18% → 13%) |
+
+The pay ledger (a player-minute, the end): frags +1.07, deaths −0.98, damage +1.76 / −1.48, speed +0.38, switch cost −0.28, claw-back −0.06, win part about 0: no negative frags, no sign flips, nothing lopsided.
+
+**Not good:** the panel flagged camping near the red armor on Campgrounds (19 to 23% of the time from update 80 on, b1.2d's end 8%) and fewer rockets at mid range (0.23 to 0.27, b1.2d's end 0.37; the lightning gun up 0.50 → 0.63 of the time in hand with the enemy in view). **Not done:** the blanked-head check at update 100 (not wired into the watcher); it runs on the end save after update 170's check 🧪.
