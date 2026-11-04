@@ -6,6 +6,8 @@
 
 **A candidate to fade, not decided: the pre-aim pays** (`PREAIM_PAY` 0.05, `WATCH_PAY` 0.03). The owner's concern (2026-11-04): he keeps facing the enemy when he backs off. Measured on 1.3b (the 1.4b card, "Before the start"), these pays are not what keeps him facing: backing off costs him 0.014 a player-minute out of about 10. Like the other hand-built pays, they can go once win pay is shown to carry pre-aiming.
 
+**Out in 1.4c (owner, 2026-11-04: "make sure its out in 1.4c"): the blind-fire cost.** This is `BLIND_FIRE_COST`, 0.003 for every frame he holds fire with a hitscan weapon after seeing or hearing nothing of the enemy for a second (`duel_env.py`, the `BLIND_RULE` block of `step`; pre-firing at where the enemy must be is exempt). The fire-cost dial (`COST_FIRE_W`) doesn't scale it, so it stayed on when the other fire costs went. In 1.3b it came to -0.0014 a player-minute. Blind rockets already cost nothing (`BLIND_RL_DMG` 0). To build: a setting (`BLIND_FIRE_W`, 0 in 1.4c's command), identity-checked at 1.
+
 ## The result
 
 Not started.
