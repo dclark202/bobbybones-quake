@@ -4,6 +4,8 @@
 
 **Watch: speed** (owner, 2026-11-03: "speed is the thing to watch"). 1.4b fades the speed pay out (0.125 → 0 over updates 70 to 90); from then on fast movement is paid only by what it wins. Every 1.5 report carries his speed on trips (1.3b at update 37: 339, 52% of trip time over 320), air time and who takes the contested items first, beside 1.3b's end, with a flag if they slide.
 
+**To address in 1.5: the lightning gun habit** (owner, 2026-11-04: "The LG habit is concerning, but I will address it in 1.5. My hope is that we can get through b and c before having to address it"). In 1.4b the lightning gun's share of his time in hand rose from 0.54 at update 10 to 0.62 at update 30, and rockets fell from 0.25 to 0.21 (the pros: rockets 0.41, lightning 0.32). 1.5's weapon leaners (does he answer the enemy's weapon?) are the first place to take it on.
+
 ## The items
 
 | Item | What | Where it came from |
