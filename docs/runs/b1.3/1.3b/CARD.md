@@ -65,13 +65,13 @@ Today one small layer picks his target (an item, the enemy, a holding place) fro
 | Measure | Wanted |
 |---|---|
 | Win rate against b1.2d's end | level or better at the end, read against the zero point; no check under 45% |
-| The head blanked | plays worse than with it (the head adds something) |
+| The head blanked | plays worse than with it (the head adds something): ✅ 25.0% blanked against 93.5% with it (update 170) |
 | The head's own scores' centred length (`head2.raw`) | bounded: flagged over 60 |
 | The enemy's share of his targets | holds or rises |
 | Items a minute, stack at fights, time at spawns | hold (floors from b1.2d's end) |
 | No spawn camping, no holding a spot all game | the panel |
 | Against b1.1 and v0.6.0's end | holds |
-| The owner's play test | |
+| The owner's play test | 11-04 morning, a local server with the end (`qlbot:13b`, `data/duellive_13b`): "just wanted to quickly confirm he was looking good"; stopped after |
 
 ## The equilibrium
 
@@ -112,7 +112,7 @@ The choice is learnt on his whole pay as b1.2d's was; what changes is what it ca
 | 110 | 1 | 178-22, 89.0% | |
 | 130 | 1 | 168-32, 84.0% | |
 | 150 | 1 | | 174-26, 87.0% |
-| 170 | 1 | 🧪 playing | |
+| 170 | 1 | **187-13, 93.5%** (every map 16-4 or better; Battleforged, Campgrounds, Hektik 20-0) | |
 
 By map (pooled against b1.2d's end): 72% (Furious Heights, Toxicity) to 83% (Sinister); no weak map. The checks' zero point is 51.2%. The credit dial: no hold, no step-back; 1 at update 91.
 
@@ -128,4 +128,4 @@ By map (pooled against b1.2d's end): 72% (Furious Heights, Toxicity) to 83% (Sin
 
 The pay ledger (a player-minute, the end): frags +1.07, deaths −0.98, damage +1.76 / −1.48, speed +0.38, switch cost −0.28, claw-back −0.06, win part about 0: no negative frags, no sign flips, nothing lopsided.
 
-**Not good:** the panel flagged camping near the red armor on Campgrounds (19 to 23% of the time from update 80 on, b1.2d's end 8%) and fewer rockets at mid range (0.23 to 0.27, b1.2d's end 0.37; the lightning gun up 0.50 → 0.63 of the time in hand with the enemy in view). **Not done:** the blanked-head check at update 100 (not wired into the watcher); it runs on the end save after update 170's check 🧪.
+**Not good:** the panel flagged camping near the red armor on Campgrounds (19 to 23% of the time from update 80 on, b1.2d's end 8%) and fewer rockets at mid range (0.23 to 0.27, b1.2d's end 0.37; the lightning gun up 0.50 → 0.63 of the time in hand with the enemy in view). **The head blanked** (the end save with the head's part out of his target scores, `tools/run/blank_head.py`; the same seeds and opponent as update 170's check): **50-150, 25.0%** against b1.2d's end, against 187-13 (93.5%) with it; every map lost (Hektik 0-20, Toxicity 1-19; at best Lost World 11-9). He depends on the head's part for his target choice; the two parts were trained together and the rows shrank by 17%, so this shows reliance, not what the same training without a head would have reached (that needs a run without one). The check at update 100 was not run (not wired into the watcher).
