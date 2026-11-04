@@ -74,6 +74,8 @@ def settings(ps, pol=None):
             S_["CONTACT_FREE"] = str(ev_["CONTACT_FREE"])
         if ev_.get("SM_ITEMS") not in (None, ""):            # (b1.2c) and the small items as inputs: without it the check's simulator gives him zeros there
             S_["SM_ITEMS"] = str(ev_["SM_ITEMS"])
+        if ev_.get("WEAPON_OWN") not in (None, ""):          # (1.4b) and whether a weapon he holds may be his target (a check of two: each seat's own, --wown)
+            S_["WEAPON_OWN"] = str(ev_["WEAPON_OWN"])
     return ["{}={}".format(k, v) for k, v in S_.items() if k != "OVERTIME"] + ["OVERTIME=1"]
 
 

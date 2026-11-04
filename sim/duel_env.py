@@ -391,6 +391,12 @@ TARGETS_FREE = int(float(os.environ.get("TARGETS_FREE") or 0.0))
 #                  spawn), as the enemy is without HUNT. Going for a weapon he lacks, or to refill one that is low, stays.
 #                  Off: as before, bit for bit.
 WEAPON_FREE = float(os.environ.get("WEAPON_FREE") or 0.0) > 0
+#   WEAPON_OWN=1   (1.4b, a PLAY_VAR; owner 2026-11-03: "He should be able to decide 'oh I need rocket ammo the most right now' and go
+#                  get the ammo") with WEAPON_FREE: (2) is off, a weapon he holds may be chosen whatever its ammunition; (1) stays (taking
+#                  the weapon he chose ends the choice). A held weapon's pickup pays nothing (BIG_PICK_SEQ: once a life, never one he held).
+#                  env.wown_seat [players] (a check of two networks): each seat's own (1: may choose it); None: the one setting.
+#                  Counted: stats["weapon_own"] (his readings; those of a held weapon turned into "nothing").
+WEAPON_OWN = float(os.environ.get("WEAPON_OWN") or 0.0) > 0
 # v0.5.0's other loophole fixes (owner, 2026-10-26, the audit of v0.4.4's simulator; RESULTS 2026-10-26), each off by default:
 #   SPEED_LOS=1        the speed pay (SPEED_PAY) only while the enemy is out of his LINE OF SIGHT: before, out of his view cone
 #                      was enough, so facing away from the enemy kept it coming (a pay for not looking)
@@ -455,7 +461,8 @@ WAY_MEASURE = WAYS or float(os.environ.get("WAY_MEASURE") or 0.0) > 0
 WAY_HEAD, N_WAYS = 12, 3
 N_B3, B3_LONGER = N_WAYS + 2 * (N_WAYS - 1), 5.0
 WT_EVERY, WT_MAX, WT_MIN_S, WT_MAX_S = 4, 202, 1.0, 20.0   # a trip's path: a point every WT_EVERY frames, at most WT_MAX; the trips that count
-INTENT_EVERY, INTENT_SWITCH = 40, 0.02
+INTENT_EVERY = 40
+INTENT_SWITCH = float(os.environ.get("INTENT_SWITCH") or 0.02)     # (1.4b, owner 2026-11-03: the switch cost "can just go") a change of target's cost; unset: 0.02
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
@@ -1225,7 +1232,7 @@ LEVEL_PULL = float(_lp_) if (_lp_ or "").strip() else 0.95
 if not 0.0 <= LEVEL_PULL <= 1.0:
     raise ValueError("LEVEL_PULL must be within 0 .. 1")
 PLAY_VARS = PLAY_VARS + ("LEVEL_PULL",)
-PLAY_VARS = PLAY_VARS + ("WEAPON_FREE", "GONE_BELIEF", "TELEFRAG", "PERCEPT_SPEED_MAX", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG")                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
+PLAY_VARS = PLAY_VARS + ("WEAPON_FREE", "WEAPON_OWN", "GONE_BELIEF", "TELEFRAG", "PERCEPT_SPEED_MAX", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG")                   # (v0.5.0: a weapon he holds is no target; see WEAPON_FREE)
 #   RJ_COPY=1     (the owner, 2026-10-23, "option 1": "one route that works that he has to use when he wants to get there") the
 #                 whole route as a lesson: step() gives info["rj_copy"], per player and output (int8, -1 = no label) the scripted
 #                 runner's choice for his NEXT frame in a rocket jump run (RJ_RUN_P), from the try's start to its landing: his
@@ -1982,7 +1989,7 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "jump_b", "jump_lab_off", "lo", "long_dirs", "pad_dest", "pads", "persona_p", "shot_fire", "shot_scarce", "shot_way", "spam_places",
                  "spawn_yaw", "spawns", "spots", "t_bins", "t_goal", "t_route", "t_turn", "tele_in", "tele_out", "up_dirs", "v02_pf", "v02_pp",
                  "v02_ways", "v02_zs", "view_grid", "w_table", "wall_dirs", "xpts", "open_first", "open_rank", "open_kind", "rule_tn", "hand_buf",
-                 "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "hold_seat", "g_end",
+                 "foe", "fidx", "others", "grp", "slot", "legs_keep_who", "react_seat", "acquire_seat", "hold_seat", "wown_seat", "g_end",
                  "intent_live", "intent_changed", "intent_teach", "key_dec", "legs_live", "legs_on", "way_live", "legs_lab", "legs_wh", "win_pay",
                  "r_long", "op_lab", "pf_node", "emg_links",
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
@@ -3462,6 +3469,7 @@ class DuelEnv:
         self.react_seat = self.acquire_seat = None             # (SEAT_DELAYS) one a seat, in a check of two networks
         self.hold_seat = None                                  # (b1.2, a check of two networks) INTENT_HOLD a seat, seconds; None: the one number
         self.contact_seat = None                               # (b1.3a, a check of two networks) CONTACT_FREE a seat; None: the one number
+        self.wown_seat = None                                  # (1.4b, a check of two networks) WEAPON_OWN a seat; None: the one setting
         self.ct_in = self.ct_free = None                       # (CONTACT_FREE) in contact; this contact is free
         self.ct_rng = np.random.default_rng(int(seed) + 771235)     # (its draw: a stream of its own)
         self.vis_run = np.zeros(2 * n_matches, np.int64)       # frames the opponent has been in view without a break
@@ -6937,9 +6945,15 @@ class DuelEnv:
             choice = np.where(choice == EN_INTENT, 0, choice)
         choice = np.where(choice >= HOLD_INTENT + self.hold_n, 0, choice)     # (a holding place: only with TARGETS, and one the map has)
         if WEAPON_FREE:                                      # (v0.5.0) a weapon he holds with a pickup's worth of ammunition: "nothing"
+            own_ = np.full(n, WEAPON_OWN) if self.wown_seat is None else (self.wown_seat[:n] > 0)    # (WEAPON_OWN) seats that may choose it
+            wo_ = np.zeros(2)                                # (stats["weapon_own"]) his readings, those of a held weapon turned into "nothing"
             for w_, lab_ in ((RL, "RL"), (RG, "RG"), (LG, "LG")):
-                full_ = self.has[:n, w_] & (self.ammo[:n, w_] >= WEAPON_PICK_AMMO[w_])
-                choice = np.where((choice == INTENTS.index(lab_)) & full_, 0, choice)
+                full_ = self.has[:n, w_] & (self.ammo[:n, w_] >= WEAPON_PICK_AMMO[w_]) & ~own_
+                hit_ = (choice == INTENTS.index(lab_)) & full_
+                wo_[1] += float((hit_ & live).sum())
+                choice = np.where(hit_, 0, choice)
+            wo_[0] = float(live.sum())
+            self.stats["weapon_own"] = self.stats.get("weapon_own", np.zeros(2)) + wo_
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= (INTENT_HOLD if self.hold_seat is None else self.hold_seat[:n])) | self.intent_gone     # a choice holds (INTENT_HOLD)
         if TARGETS_FREE == 1:                                # (a holding place can be left at any reading, as "nothing")
             may = may | (self.intent >= HOLD_INTENT)
