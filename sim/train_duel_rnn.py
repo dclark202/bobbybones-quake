@@ -146,6 +146,10 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             hint_kill = [e for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and G == 2 and int(env.kind[e["killer"] // G]) == 0]
             delta["match_of_kill"] = [e["killer"] // G for e in hint_kill]
             delta["even_kill"] = [e["killer"] % G % 2 == 0 for e in hint_kill]
+            wr_ = getattr(env, "wb_raw", None)               # (1.4b, the league table) his win chance gained in the league's games
+            if wr_ is not None and len(wr_) == env.n and G == 2:     # (the judge's win part at G = 1; his even seats of the second half)
+                s_ = np.arange(env.n)
+                delta["league_win"] = float(wr_[(s_ >= env.n // 2) & (s_ % 2 == 0) & (env.kind[s_ // G] == 0)].sum())
             lx_ = env.legs_prep() if legs_in else None       # (LEGS_IN) the movement network's inputs of the next frame
             t_lp = time.perf_counter()
             tw_["legs_prep"] += t_lp - t_st
@@ -213,6 +217,7 @@ BRAIN_PFX = BRAIN_PFX + ("control.",)                               # (v0.4.3, -
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
                 "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W",
                 "INTENT_TEACH_W")   # (v0.4.3: a factor on the item rule's weight, its floor included: 0 silences it)   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
+LIVE_TRAINER = LIVE_TRAINER + ("PFSP",)                            # (1.4b, --pfsp) matchmaking by difficulty: even (0) to full (1)
 LIVE_TRAINER = LIVE_TRAINER + ("CONTROL_W",)                       # (v0.4.3, --control) a factor on the lesson "in control"   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
 LIVE_TRAINER = LIVE_TRAINER + ("BRAIN_HUMAN_W",)                   # (brainppl, --brain-human) the people's lesson's weight beside self-play's
 LIVE_TRAINER = LIVE_TRAINER + ("BRAIN_FADE",)                      # (v0.6.1b, --brain-fade) the old belief's columns out of the brain: its gate g
@@ -1128,6 +1133,11 @@ def main():
     ap.add_argument("--near-item-p", type=float, default=0.0, help="share of spawns within 2 s of the mega or the red armor")
     ap.add_argument("--close-minutes", type=float, default=90, help="near-spawn curriculum: 100%% -> 20%% over this time")
     ap.add_argument("--snapshot-min", type=float, default=20)
+    ap.add_argument("--pfsp", type=float, default=-1.0,
+                    help="(1.4b, B-300) matchmaking by difficulty (sim/league.py): the dial at the start, 0 (even) to 1 (by (1 - his frag share)^2); "
+                         "live: PFSP. Also keeps the league table (--league-table). Below 0 (the default): neither, the draw as before")
+    ap.add_argument("--pfsp-fixed", default="", help="(1.4b) league files (names, comma) that keep the even share: the checks' opponent")
+    ap.add_argument("--league-table", default="", help="(1.4b) the league table's file (default: data/sim_runs/league_table.json)")
     ap.add_argument("--anchor-p", type=float, default=0.0,
                     help="the share of rollouts whose league players are an anchor's (snapshots/anchor_*.pt: networks that never "
                          "leave the league, e.g. the run's starting network) and not one of the last eight snapshots'")
@@ -2888,6 +2898,13 @@ def main():
     SNAP_G = {}                                                        # (v0.4.1) a league file's own gate of the brain token
     SNAP_FG = {}                                                       # (v0.4.2a) ... and of the rule fade
     SNAP_NS = {}                                                       # (--no-switch) id(state dict) -> its switch is retired (a step-6 network)
+    LG_NAME = {}                                                       # (1.4b, --pfsp) id(state dict) -> its league file's name
+    LG = None
+    if a.pfsp >= 0:
+        import league as league_
+        LG = league_.League(a.league_table or os.path.join(ROOT, "data", "sim_runs", "league_table.json"), a.run, a.pfsp_fixed.split(","))
+    PFSP_D = [min(1.0, max(0.0, float(a.pfsp)))]                       # (live PFSP) the dial
+    OPP_NAME = [None]                                                  # (--pfsp) this rollout's league file
     OPP_NS = [False]                                                   # ... the league network of this rollout's
     if a.resume:                                                       # the league survives a restart
         import glob
@@ -2896,6 +2913,7 @@ def main():
                         key=lambda f_: (int((re_.findall(r"\d+", os.path.basename(f_)) or ["0"])[0]), f_))[-8:]:
             ck_ = torch.load(f, weights_only=False, map_location=dev)
             snaps.append(ck_["model"])
+            LG_NAME[id(snaps[-1])] = a.run + "/" + os.path.basename(f)
             SNAP_G[id(snaps[-1])] = float((ck_.get("btoken") or {}).get("gate", 0.0)) if any(k_.startswith("attn.btok_") for k_ in ck_["model"]) else 0.0
             SNAP_FG[id(snaps[-1])] = float((ck_.get("rule_fade") or {}).get("g", 0.0))
             SNAP_NS[id(snaps[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")   # (--no-switch) a step-6 file
@@ -2905,10 +2923,14 @@ def main():
         for f in sorted(glob.glob(os.path.join(out, "snapshots", "anchor_*.pt"))):
             ck_ = torch.load(f, weights_only=False, map_location=dev)
             anchors.append(ck_["model"])
+            LG_NAME[id(anchors[-1])] = os.path.basename(f)
             SNAP_G[id(anchors[-1])] = float((ck_.get("btoken") or {}).get("gate", 0.0)) if any(k_.startswith("attn.btok_") for k_ in ck_["model"]) else 0.0
             SNAP_FG[id(anchors[-1])] = float((ck_.get("rule_fade") or {}).get("g", 0.0))
             SNAP_NS[id(anchors[-1])] = str((ck_.get("env_vars") or {}).get("NO_SWITCH", "0")) not in ("0", "", "0.0")
         print("league anchors: {} (in {:.0%} of the rollouts)".format(len(anchors), a.anchor_p), flush=True)
+    if LG is not None:
+        print("league: matchmaking by difficulty, the dial {:.2f} (live PFSP); fixed at the even share: {}; the table {} ({} files known)".format(
+            PFSP_D[0], sorted(LG.fixed) or "none", LG.path, len(LG.tab)), flush=True)
     opp = copy.deepcopy(pol).eval()
     opp.fade = None                                          # (--switch-fade: the learner's alone)
     last_snap = time.time()
@@ -3056,6 +3078,7 @@ def main():
                        **({"RJ_TEACH_W": float(a.rj_teach)} if RJ_LAB else {}),
                        **({"RJ_COPY_W": float(a.rj_copy)} if RJC_LAB else {}),
                        **({"INTENT_TEACH_W": 1.0} if a.intent_teach > 0 else {}),
+                       **({"PFSP": PFSP_D[0]} if LG is not None else {}),
                        **({"BRAIN_HUMAN_W": float(a.brain_human_w)} if BH is not None else {}),
                        ITEM_FLOOR=float(a.item_floor), ITEM_FLOOR_W=float(a.item_floor_w), VALUE_WARM=float(a.value_warm),
                        **({"FADE_CAP": float(a.rule_fade_cap), "FADE_OPEN": float(a.rule_fade_open)} if RF_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
@@ -3220,6 +3243,10 @@ def main():
                     RJ_LIVE[0] = float(lt_.get("RJ_TEACH_W", RJ_LIVE[0]))            # (--rj-teach: the lesson's weight; its warm-up from the first minute above 0)
                     RJC_LIVE[0] = float(lt_.get("RJ_COPY_W", RJC_LIVE[0]))           # (--rj-copy: the lesson's weight; its warm-up from the first minute above 0)
                     CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
+                    if LG is not None:                                               # (1.4b, --pfsp) the draw's dial, from this rollout's draw
+                        PFSP_D[0] = min(1.0, max(0.0, float(lt_.get("PFSP", PFSP_D[0]))))
+                    elif "PFSP" in lt_:
+                        print("live: PFSP ignored (--pfsp below 0: no matchmaking by difficulty)", flush=True)
                     WV_LIVE[0] = float(lt_.get("WIN_VALUE_W", WV_LIVE[0]))           # (--win-value: a factor on its rate; 0 stops it)
                     if "VALUE_WARM" in cht_:                                         # (v0.6.1) a new critic warm-up: from this rollout's update
                         VW_[:] = [update, int(round(float(cht_["VALUE_WARM"])))]
@@ -3255,6 +3282,7 @@ def main():
                                   **({"RJ_TEACH_W": RJ_LIVE[0]} if RJ_LAB else {}),
                                   **({"RJ_COPY_W": RJC_LIVE[0]} if RJC_LAB else {}),
                                   **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
+                                  **({"PFSP": PFSP_D[0]} if LG is not None else {}),
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
                                   **({"INTENT_TEACH_W": IT_LIVE[0]} if a.intent_teach > 0 else {}),
                                   **({"BRAIN_HUMAN_W": BH_LIVE[0]} if BH is not None else {}),
@@ -3330,9 +3358,15 @@ def main():
             SNAP_NS[id(snaps[-1])] = NO_SW                               # (--no-switch: his own new snapshots are step-6 networks)
             snaps = snaps[-8:]
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
+            LG_NAME[id(snaps[-1])] = a.run + "/snap_{:04d}.pt".format(int(mins))
         if snaps:                                                        # pick this rollout's opponent
             vs_anchor = bool(anchors) and np.random.random() < a.anchor_p
-            sd_o_ = anchors[np.random.randint(len(anchors))] if vs_anchor else snaps[np.random.randint(len(snaps))]
+            pool_ = anchors if vs_anchor else snaps
+            if LG is not None and PFSP_D[0] > 0 and len(pool_) > 1:  # (1.4b, --pfsp) by difficulty within the group
+                sd_o_ = pool_[LG.pick([LG_NAME.get(id(x_), "?") for x_ in pool_], PFSP_D[0], np.random.random())]
+            else:                                                        # (the even draw: today's random calls)
+                sd_o_ = pool_[np.random.randint(len(pool_))]
+            OPP_NAME[0] = LG_NAME.get(id(sd_o_))
             load_net(opp, sd_o_)
             if BTOK:                                                     # (v0.4.1) the file's own gate (0: no token, or shut)
                 opp.attn.bgate = float(SNAP_G.get(id(sd_o_), 0.0)) if BTOK_ON else 0.0
@@ -3346,8 +3380,16 @@ def main():
                 p.send(("brain_g", gs_[w_off[w_]:w_off[w_ + 1]]))
             for p in pipes:
                 p.recv()
+        lg_sh_ = None                                                    # (1.4b, --pfsp) the draw's chances this rollout, by file
+        if LG is not None and snaps:
+            lg_sh_ = {}
+            for grp_, pool_ in ((a.anchor_p if anchors else 0.0, anchors), (1.0 - (a.anchor_p if anchors else 0.0), snaps)):
+                nm_ = [LG_NAME.get(id(x_), "?") for x_ in pool_]
+                if nm_:
+                    for n_, s_ in zip(nm_, LG.shares(nm_, PFSP_D[0])):
+                        lg_sh_[n_] = round(float(grp_ * s_), 4)
         return dict(mins=mins, live_rec=LIVE_REC, live_settings=LS_REC, close_p=close_p, seek_now=seek_now, vs_anchor=vs_anchor,
-                    has_snaps=bool(snaps), n_snaps=len(snaps), opp_ns=bool(OPP_NS[0]))
+                    has_snaps=bool(snaps), n_snaps=len(snaps), opp_ns=bool(OPP_NS[0]), opp_name=OPP_NAME[0], pfsp=PFSP_D[0], lg_shares=lg_sh_)
 
     TRK_BINS = ("in_view", "0-2s", "2-5s", "5-10s", "10s+", "unseen_since_spawn")   # (--track) the counters by time unseen
 
@@ -4118,6 +4160,7 @@ def main():
         mins, LIVE_REC, close_p, seek_now = RM["mins"], RM["live_rec"], RM["close_p"], RM["seek_now"]
         LS_REC = RM.get("live_settings")                                # (live_settings.env) read before this rollout
         R_VA, R_SN, R_NS = RM["vs_anchor"], RM["has_snaps"], RM["n_snaps"]    # (the league of this rollout: --overlap changes it before the record)
+        R_LG = (RM.get("opp_name"), RM.get("pfsp"), RM.get("lg_shares"))     # (1.4b, --pfsp) its league file, the dial, the draw's chances
         if obs_count < OBS_FREEZE:
             flat = np.concatenate(raw)
             bm, bv, bc = flat.mean(0), flat.var(0), len(flat)
@@ -5635,6 +5678,15 @@ def main():
             rec["control"] = CTL_REC
         if WV_REC is not None:                                           # (--win-value) the shadow win value: its lesson, its calibration
             rec["win_value"] = WV_REC
+        if LG is not None and R_SN and R_LG[0]:                          # (1.4b, --pfsp) this slice into the league table
+            lw_ = float(agg.get("league_win", 0.0))
+            LG.record(R_LG[0], lk[0], lk[1], lw_, update)
+            try:
+                LG.save()
+            except OSError as e_:
+                print("league table: not written ({})".format(e_), flush=True)
+            rec["league"] = dict(pfsp=round(float(R_LG[1]), 4), opp=R_LG[0], kills=[int(lk[0]), int(lk[1])], win=round(lw_, 3),
+                                 p={n_: round(LG.p(n_), 3) for n_ in (R_LG[2] or {})}, shares=R_LG[2])
         if AUX_W > 0 and ax_w > 0:                                       # (--aux) each loss, and how well he foretells (first pass of the update)
             def q_(i_, d_=4):
                 return round(float(ax_s[i_] / max(1.0, float(ax_n[int(AUX_MI[i_])]))), d_)

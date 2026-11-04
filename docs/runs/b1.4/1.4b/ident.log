@@ -1,0 +1,15 @@
+PASS bloodrun HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True}
+PASS bloodrun HEAD against seat0: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True}
+PASS bloodrun switch cost 0: the game the same
+bloodrun switch cost 0: pay up 7.540 in 377 frames (377 charged changes); changes of target 810
+PASS bloodrun switch cost 0: every difference a whole number of 0.02, none negative, some
+bloodrun held weapons turned into nothing (readings, turned): unset [1922.0, 83.0], WEAPON_OWN=1 [1922.0, 0.0]
+PASS bloodrun WEAPON_OWN=1: none turned (unset: some); the game differs
+PASS aerowalk HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True}
+PASS aerowalk HEAD against seat0: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True}
+PASS aerowalk switch cost 0: the game the same
+aerowalk switch cost 0: pay up 10.200 in 511 frames (510 charged changes); changes of target 1156
+PASS aerowalk switch cost 0: every difference a whole number of 0.02, none negative, some
+aerowalk held weapons turned into nothing (readings, turned): unset [1967.0, 54.0], WEAPON_OWN=1 [1967.0, 0.0]
+PASS aerowalk WEAPON_OWN=1: none turned (unset: some); the game differs
+ALL PASSED
