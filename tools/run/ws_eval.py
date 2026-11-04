@@ -288,7 +288,13 @@ def play(job):
     t = -1
     while t + 1 < end_:
         t += 1
-        a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
+        nA_ = len(E.ACTION_DIMS)
+        kp_ = hasattr(env, "keep_feat") and (getattr(pol, "keep_on", False) or getattr(opp_pol, "keep_on", False))
+        a = np.zeros((n, nA_ + int(kp_)), np.int64)                            # (1.4c) the keep column after the outputs: -1 the lock rule
+        kf_ = None
+        if kp_:
+            a[:, -1] = -1
+            kf_ = env.keep_feat()
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -300,12 +306,18 @@ def play(job):
             import btoken as btoken_
             pz_, zz_ = btoken_.pose_from_env(env, mp)
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
-                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}))
-        a[ev, :min(al.shape[1], a.shape[1])] = al[:, :a.shape[1]]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
+                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
+                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}))
+        a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]
+        if kp_ and pol.keep_on:
+            a[ev, -1] = al[:, -1]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
-                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}))
-            a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
+                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
+                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}))
+            a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
+            if kp_ and opp_pol.keep_on:
+                a[od, -1] = ao[:, -1]
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
             for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):

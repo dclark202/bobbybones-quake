@@ -54,6 +54,13 @@ How it learns (the trainer; the routing of its gradient)
   The head's sequence is re-run in the learning step from the stored u of the rollout's ticks and the state at its start
   (truncated there: 48 ticks, 9.6 s, of backpropagation through time; its state itself is carried across rollouts).
 
+The keep choice (1.4c; the layout's "keep", absent before): at each reading of his target, keep it or re-decide (the
+simulator's keep column, sim/duel_env.py). z = keep(cat[s, hands' memory (a number), f]) -> 1, the logit of re-deciding;
+f = keep_x(): his target's age out of contact (s / 10, at most 2), contact (0 or 1), the held target's log-probability under
+the present scores (clipped to -10, / 5; a number). Its start (tools/keep_init.py): the lock made soft, the weights on s and
+the hands' memory zero. keep_g (a buffer, 0 for a save without it): the share of the readings it decides (the rest: the lock
+rule). Learnt in the head's own term with the target (the trainer).
+
 Numpy only at the top level (the game server imports this file); torch inside the torch functions.
 """
 import csv
@@ -64,6 +71,8 @@ import numpy as np
 
 VERSION = 1
 PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "obs", "hands")
+KEEP_F = 3                                                   # (1.4c) the keep choice's own numbers: age out of contact, contact, log p held
+KEEP_AGE_MAX, KEEP_LP_MIN = 20.0, -10.0
 CTRL_SRCS = ("none", "belief", "both")                     # (the ctrl slot's source: sim/control.py's readouts by name)
 CLIP = 10.0
 # (group, input) of docs/INPUTS.csv; an input of None: every row of the group
@@ -113,7 +122,8 @@ def u_width(L):
 
 def n_weights(L):
     U, I, S, P, E, N, Hh = u_width(L), L["inp"], L["size"], L["plan"], L["enc"], L["n_target"], L["widths"]["hands"]
-    return (U * I + I) + 3 * S * (I + S) + 6 * S + (S * P + P) + (P * E + E) + (S * N + N) + (S + Hh + 1)
+    return (U * I + I) + 3 * S * (I + S) + 6 * S + (S * P + P) + (P * E + E) + (S * N + N) + (S + Hh + 1) + \
+        ((S + Hh + KEEP_F + 1) if L.get("keep") else 0)
 
 
 def describe(L):
@@ -149,6 +159,11 @@ def make_module(L, seed=4044):
             self.plan_in = nn.Linear(int(L["plan"]), int(L["enc"]))
             self.target = nn.Linear(S, int(L["n_target"]))
             self.v = nn.Linear(S + int(L["widths"]["hands"]), 1)
+            if L.get("keep"):                                # (1.4c) the keep choice: zeros here, its start from tools/keep_init.py
+                self.keep = nn.Linear(S + int(L["widths"]["hands"]) + KEEP_F, 1)
+                nn.init.zeros_(self.keep.weight)
+                nn.init.zeros_(self.keep.bias)
+                self.register_buffer("keep_g", torch.zeros(()))
             self.register_buffer("gate", torch.zeros(()))
             self.register_buffer("mix", torch.zeros(()))     # (b1.4a) his target choice moved from the hands' to the head's
             self.register_buffer("add", torch.zeros(()))     # (1.3b) the head's own scores added to the hands'
@@ -171,6 +186,8 @@ def make_module(L, seed=4044):
                 state_dict[prefix + "mix"] = torch.zeros(())
             if prefix + "add" not in state_dict:             # (a save from before 1.3b: no add, 0)
                 state_dict[prefix + "add"] = torch.zeros(())
+            if L.get("keep") and prefix + "keep_g" not in state_dict:     # (1.4c) no share in the file: 0
+                state_dict[prefix + "keep_g"] = torch.zeros(())
             super()._load_from_state_dict(state_dict, prefix, *args, **kw)
 
     with torch.random.fork_rng(devices=[]):
@@ -322,6 +339,26 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
                 a=mod.add * am)
 
 
+def has_keep(mod):
+    """(1.4c) the module has the keep choice"""
+    return mod is not None and hasattr(mod, "keep")
+
+
+def keep_x(feat, lp_held):
+    """(1.4c) the keep choice's own numbers [..., KEEP_F] from the simulator's keep_feat [..., 3] (age s, contact, target) and
+    the held target's log-probability [...] (numbers: no gradient)"""
+    import torch
+    c = feat[..., 1].float()
+    age = (1.0 - c) * feat[..., 0].float().clamp(0.0, KEEP_AGE_MAX) / 10.0
+    return torch.stack([age, c, lp_held.float().clamp(min=KEEP_LP_MIN) / 5.0], -1).detach()
+
+
+def keep_logit(mod, s, h, f):
+    """(1.4c) the logit of re-deciding [...] from the head's held state s, the hands' memory h (a number) and f (keep_x)"""
+    import torch
+    return mod.keep(torch.cat([s, h.detach().float(), f], -1)).squeeze(-1)
+
+
 def gae(rew, val, done, gamma, lam):
     """the head's advantages and returns: rew, done [T, B], val [T + 1, B]"""
     import torch
@@ -392,6 +429,26 @@ def np_mix_in(W, L, hs, lg):
     k = np.float32(m) * ok
     raw = s @ W["target.weight"].T + W["target.bias"]
     return ((1.0 - k) * lg + (k + np.float32(ad) * ok) * raw).astype(np.float32)
+
+
+def np_has_keep(W):
+    """(1.4c) the arrays have the keep choice"""
+    return "keep.weight" in W
+
+
+def np_keep_x(feat, lp_held):
+    """keep_x() in numpy"""
+    feat = np.asarray(feat, np.float32)
+    c = feat[:, 1]
+    age = (1.0 - c) * np.clip(feat[:, 0], 0.0, KEEP_AGE_MAX) / 10.0
+    return np.stack([age, c, np.maximum(np.asarray(lp_held, np.float32), KEEP_LP_MIN) / 5.0], 1).astype(np.float32)
+
+
+def np_keep_logit(W, L, hs, h, f):
+    """keep_logit() in numpy: hs [B, np_state_width] (the held state), h [B, hands] the hands' memory, f [B, KEEP_F]"""
+    S = int(L["size"])
+    x = np.concatenate([hs[:, :S], np.asarray(h, np.float32), f], 1)
+    return (x @ W["keep.weight"].T + W["keep.bias"])[:, 0].astype(np.float32)
 
 
 def np_adds(W, L, hs):

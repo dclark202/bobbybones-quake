@@ -463,6 +463,14 @@ N_B3, B3_LONGER = N_WAYS + 2 * (N_WAYS - 1), 5.0
 WT_EVERY, WT_MAX, WT_MIN_S, WT_MAX_S = 4, 202, 1.0, 20.0   # a trip's path: a point every WT_EVERY frames, at most WT_MAX; the trips that count
 INTENT_EVERY = 40
 INTENT_SWITCH = float(os.environ.get("INTENT_SWITCH") or 0.02)     # (1.4b, owner 2026-11-03: the switch cost "can just go") a change of target's cost; unset: 0.02
+BLIND_FIRE_W = float(os.environ.get("BLIND_FIRE_W") or 1.0)        # (1.4c, owner 2026-11-04: "make sure its out in 1.4c") a factor on BLIND_FIRE_COST; unset: 1
+# (1.4c, owner 2026-11-04) the keep choice. A policy seat may send one more column beside its actions (env.step): -1 the
+# lock rule decides its reading, 0 keep, 1 re-decide. At a reading of his target that is not forced (the target ended:
+# "nothing", taken, gone, a reading at once after a spawn or a weapon taken) a seat with 0 or 1 decides itself whether the
+# reading counts: keep, the target stays whatever was drawn; re-decide, the draw counts (it may be the same). The policy
+# draws the column with the share g of its file (sim/head2.py, the keep layer): with chance 1 - g it sends -1. Without the
+# column (every older caller, the plugins): the lock rule, as before. env.keep_live: the readings the seat's choice decided;
+# env.keep_feat(): what the choice reads for the next frame.
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
@@ -3734,6 +3742,8 @@ class DuelEnv:
         self.intent_changed = np.zeros(self.n, bool)
         self.intent_new = np.ones(self.n, bool)             # just spawned: read the head at once
         self.intent_done = np.zeros(self.n, bool)           # the chosen item was taken since the choice
+        self.keep_in = None                                 # (1.4c) the keep column of this frame (None: the lock rule)
+        self.keep_live = np.zeros(self.n, bool)             # (1.4c) the readings his keep choice decided
         self.int_tick = 0
         self.intent_seek = 0.0                              # reward per second of the chosen way gained
         self.item_loss = 0.5                                # an enemy's mega or red costs this share of its pickup reward
@@ -6924,6 +6934,12 @@ class DuelEnv:
             out = np.where(pick > 0, pick, out)
         return out
 
+    def keep_feat(self):
+        """(1.4c) what the keep choice reads, per seat, after this frame: [his target's age (s), contact (the enemy seen in
+        the last CONTACT_S), his target]"""
+        n = self.n
+        return np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n]], 1).astype(np.float32)
+
     def intend(self, choice, who, way=None):
         """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
         who = the players it applies to (the game-server plugin passes one). Returns who was read this frame."""
@@ -6961,6 +6977,31 @@ class DuelEnv:
             may = may | ((self.intent >= HOLD_INTENT) & (choice >= 1) & (choice < HOLD_INTENT))
         if ct_on:
             may = may | self.ct_free
+        kin_ = getattr(self, "keep_in", None)                # (1.4c) the keep choice: a seat's own decision at a reading not forced
+        forced_ = (self.intent == 0) | self.intent_done | self.intent_gone | self.intent_new
+        if kin_ is not None and len(kin_) >= n:
+            lrn_ = live & ~forced_ & (kin_[:n] >= 0)
+            rule_may_ = may
+            may = np.where(lrn_, kin_[:n] == 1, may)
+        else:
+            lrn_ = np.zeros(n, bool)
+            rule_may_ = may
+        self.keep_live = lrn_
+        rd_ = live & ~forced_                                # (stats["keep"]) the readings not forced: who decided, what came of it
+        held_ = rd_ & ~may                                   # ... held (the rule's lock or his keep)
+        diff_ = choice != self.intent
+        ct_now_ = self.seen_t[:n] < CONTACT_S
+        heard_ = (self.snd_t[:n].min(1) < 1.0) | (self.pain_t[:n] < 1.0)
+        kp_ = self.stats.get("keep")
+        if kp_ is None or len(kp_) != 16:
+            kp_ = np.zeros(16)
+        kp_ += np.array([(rd_ & ~lrn_).sum(), (rd_ & ~lrn_ & ~rule_may_).sum(), (rd_ & ~lrn_ & ~rule_may_ & diff_).sum(),
+                         lrn_.sum(), (lrn_ & may).sum(), (lrn_ & may & diff_).sum(), (lrn_ & ~may & diff_).sum(),
+                         (lrn_ & ct_now_).sum(), (lrn_ & ct_now_ & may).sum(), (live & forced_).sum(),
+                         (held_ & ~ct_now_ & heard_).sum(), (held_ & ~ct_now_ & heard_ & diff_).sum(),
+                         (held_ & ~ct_now_ & ~heard_).sum(), (held_ & ~ct_now_ & ~heard_ & diff_).sum(),
+                         (rd_ & may & ~ct_now_ & heard_ & diff_).sum(), (rd_ & ~ct_now_ & heard_).sum()], np.float64)
+        self.stats["keep"] = kp_
         live = live & may
         changed = live & (choice != self.intent)
         if ct_on and "contact" in self.stats:
@@ -11997,6 +12038,10 @@ class DuelEnv:
     def step(self, actions):
         a = np.array(actions, copy=True)
         n = self.n
+        self.keep_in = None                                  # (1.4c) the keep column, if the caller sent one
+        if a.ndim == 2 and a.shape[1] == len(ACTION_DIMS) + 1:
+            self.keep_in = a[:, -1].astype(np.int64)
+            a = a[:, :-1]
         if HEAD_EVENTS:                                      # (HEAD_EVENTS) the rows of ended rounds start again; this frame's game
             self._hd_begin()
         ar = np.arange(n)
@@ -12243,10 +12288,10 @@ class DuelEnv:
                     nf_ = fu_[0] & ((al_ > 0) & (np.linalg.norm(to_ - al_[..., None] * fd_[:, None, :], axis=2) <= PREFIRE_R)).any(1)
                     bill[pa_[nf_]] = False
                     self.stats["prefire_ahead"] = self.stats.get("prefire_ahead", 0) + int(nf_.sum())
-            reward -= BLIND_FIRE_COST * bill
+            reward -= BLIND_FIRE_W * BLIND_FIRE_COST * bill     # (1.4c: BLIND_FIRE_W, 1 unset: 1.0 x the cost is the cost)
             self.stats["blind_bill"] += int(bill.sum())
         else:
-            reward -= BLIND_FIRE_COST * blind
+            reward -= BLIND_FIRE_W * BLIND_FIRE_COST * blind
         self._ps("blind_fire", reward)
         fight = human & (pkind != MOVE) & ((pkind != COURSE) | self.gun)
         if LEGS:
