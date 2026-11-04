@@ -5,9 +5,9 @@
 #  3. waits for 1.4b's running check (duel_eval of duel_gru_1_4b) to finish, at most 80 min, then stops 1.4b's watcher, ramp and
 #     self-play logger (the run is over: tools\run\stop_run.py's list, its trainer already gone)
 #  4. merges branch b14c into main (the main checkout clean, no rebase), so the main checkout has 1.4c's code
-#  5. the level check of the start at share 1 (level.py level, 200 games, the 8 efficiency cores) and the dry run (dryrun_14c.py, 10
-#     updates on the graphics card and the 8 performance cores), side by side
-#  6. if both passed: start.ps1 -Minutes <Minutes> (its own refusals stand)
+#  5. the level check of the start at share 1 (level.py level, 200 games): the one begun during 1.4b on cores 14-17 (owner, 11-04), waited
+#     for if it still plays; if none, now on 1.4b's end on the efficiency cores. No dry run (owner, 11-04: a small change)
+#  6. if it passed: start.ps1 -Minutes <Minutes> (its own refusals stand)
 # Usage (PowerShell, detached):  powershell -ExecutionPolicy Bypass -File <this file> [-Minutes 720]
 param([int]$Minutes = 720)
 $ErrorActionPreference = "Stop"
@@ -50,18 +50,17 @@ $msg = "Merge branch 'b14c': 1.4c's keep choice (the target lock out by a learne
 & git -C $MAIN merge --no-ff b14c -m $msg 2>&1 | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "the merge failed: stopped (git merge --abort puts it back)"; exit 1 }
 Log ("merged: " + ((& git -C $MAIN log --oneline -1) -join ""))
-# 5.
+# 5. (no dry run: owner, 11-04, a small change) the level check: the one run during 1.4b on cores 14-17 if it is there, else now on 1.4b's end
 $env:OPENBLAS_NUM_THREADS = "1"; $env:OMP_NUM_THREADS = "1"; $env:PYTHONFAULTHANDLER = "1"
-$lv = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "set CUDA_VISIBLE_DEVICES=-1&& set PANEL_RUN=duel_gru_1_4b&& start `"`" /b /wait /low /affinity 3C3C `"$PY`" `"$D14C\level.py`" level `"$END`" --out `"$D14C\level`" --run duel_gru_1_4b > `"$D14C\level.log`" 2>&1" -WorkingDirectory $MAIN -WindowStyle Hidden -PassThru
-Log ("level check started (" + $lv.Id + "): the start at share 1 against 1.4b's end, 200 games, efficiency cores")
-$dr = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$PY`" `"$D14C\dryrun_14c.py`" > `"$D14C\dryrun_14c.log`" 2>&1" -WorkingDirectory $MAIN -WindowStyle Hidden -PassThru
-Log ("dry run started (" + $dr.Id + "): 10 updates at full size, share 0.5")
-$lv.WaitForExit(); $dr.WaitForExit()
+while ((Procs "*1.4c\level.py level*").Count -gt 0) { Start-Sleep 60 }       # (the one begun during 1.4b, still playing)
+if (-not (Select-String -Path (Join-Path $D14C "level.log") -Pattern "LEVEL PASS|LEVEL FAIL" -Quiet -ErrorAction SilentlyContinue)) {
+    $lv = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "set CUDA_VISIBLE_DEVICES=-1&& set PANEL_RUN=duel_gru_1_4b&& start `"`" /b /wait /low /affinity 3FC3C `"$PY`" `"$D14C\level.py`" level `"$END`" --out `"$D14C\level`" --run duel_gru_1_4b > `"$D14C\level.log`" 2>&1" -WorkingDirectory $MAIN -WindowStyle Hidden -PassThru
+    Log ("level check started (" + $lv.Id + "): the start at share 1 against 1.4b's end, 200 games, the 12 efficiency cores (no run trains)")
+    $lv.WaitForExit()
+}
 Get-Content (Join-Path $D14C "level.log") -Tail 3 | ForEach-Object { Log ("level: " + $_) }
-Get-Content (Join-Path $D14C "dryrun_14c.log") | Select-String -Pattern "PASS|FAIL" | ForEach-Object { Log ("dry run: " + $_.Line) }
 if (-not (Select-String -Path (Join-Path $D14C "level.log") -Pattern "LEVEL PASS" -Quiet)) { Log "the level check did not pass: 1.4c not started"; exit 1 }
-if (-not (Select-String -Path (Join-Path $D14C "dryrun_14c.log") -Pattern "ALL PASSED" -Quiet)) { Log "the dry run did not pass: 1.4c not started"; exit 1 }
 # 6.
-Log "both passed: start.ps1 -Minutes $Minutes"
+Log "the level check passed: start.ps1 -Minutes $Minutes"
 & powershell -ExecutionPolicy Bypass -File (Join-Path $D14C "start.ps1") -Minutes $Minutes | ForEach-Object { Log ("start: " + $_) }
 Log ("tonight: done (start.ps1 exit " + $LASTEXITCODE + ")")

@@ -4,7 +4,8 @@
 # Refuses unless: no trainer runs; 1.4b's end, its optimizer and the controls are there; 1.4b's dials ended at their end values; the settings
 # check passes against 1.4b's command (only the run name, the length, the checks' fixed anchor, --keep-g and BLIND_FIRE_W differ) and against
 # 1.4b's end (its live dials carried in live.json); the start answers as 1.4b's end (keep_init same: 0 actions differ); the level check of the
-# start at share 1 and the dry run passed (level/summary.json, dryrun_14c.log; -NoTrial skips these two on the owner's word); the run folder is new.
+# start at share 1 against a 1.4b save passed (level/summary.json; -NoTrial skips it on the owner's word); the run folder is new. No dry run
+# (owner, 2026-11-04: a small change; its first 10 updates and the check at update 10 are the trial).
 # Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\b1.4\1.4c\start.ps1 [-Minutes 720] [-Zero 0.5] [-NoTrial]
 param([int]$Minutes = 720, [double]$Zero = 0.5, [switch]$NoTrial)    # (-Zero: the checks' zero point, the same network against itself)
 $ErrorActionPreference = "Stop"
@@ -34,13 +35,11 @@ if ($LASTEXITCODE -ne 0) { Log "make_files failed: not started"; exit 1 }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 1.4b's command): not started"; exit 1 }
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ck $END "--allow=CONTACT_FREE,LEVEL_PULL,RAIL_FAR_PAY" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 1.4b's end): not started"; exit 1 }
-if (-not $NoTrial) {
-    $LV = Join-Path $HERE "level\summary.json"; $DR = Join-Path $HERE "dryrun_14c.log"
-    if (-not (Test-Path $LV) -or -not (Test-Path $DR)) { Log "the level check or the dry run has not run (level\summary.json, dryrun_14c.log): not started (-NoTrial on the owner's word)"; exit 1 }
-    & $PY -c "import hashlib, json, sys; d = json.load(open(sys.argv[1])); sha = hashlib.sha256(open(sys.argv[2], 'rb').read()).hexdigest(); ok = d['win_rate'] >= 0.45 and d.get('from_sha') == sha; print('level check of the start at share 1: {}-{} = {:.1%}'.format(d['won'], d['lost'], d['win_rate']) + ('' if ok else ' NOT PASSED (or not of this 1.4b end)')); sys.exit(0 if ok else 1)" $LV $END | ForEach-Object { Log $_ }
+if (-not $NoTrial) {                                 # (no dry run: a small change, its first 10 updates are the trial; owner, 11-04)
+    $LV = Join-Path $HERE "level\summary.json"
+    if (-not (Test-Path $LV)) { Log "the level check has not run (level\summary.json): not started (-NoTrial on the owner's word)"; exit 1 }
+    & $PY -c "import hashlib, json, sys; d = json.load(open(sys.argv[1])); sha = hashlib.sha256(open(sys.argv[2], 'rb').read()).hexdigest(); ok = d['win_rate'] >= 0.45 and 'duel_gru_1_4b' in d['ref']; print('level check of the start at share 1 (from {}{}): {}-{} = {:.1%}'.format(d['ref'], ', 1.4b\'s end itself' if d.get('from_sha') == sha else ', a save of 1.4b before its end', d['won'], d['lost'], d['win_rate']) + ('' if ok else ' NOT PASSED')); sys.exit(0 if ok else 1)" $LV $END | ForEach-Object { Log $_ }
     if ($LASTEXITCODE -ne 0) { Log "the level check did not pass: not started"; exit 1 }
-    if (-not (Select-String -Path $DR -Pattern "ALL PASSED" -Quiet)) { Log "the dry run did not pass ($DR): not started"; exit 1 }
-    Log "the level check and the dry run passed"
 }
 if (Test-Path (Join-Path $R1 "policy.pt")) { Log "$R1 already has a policy.pt: not started (nothing overwritten)"; exit 1 }
 
