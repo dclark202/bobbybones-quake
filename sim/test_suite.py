@@ -126,6 +126,7 @@ class Policy:
             self.W = self.h2_at + head2_.np_state_width(self.h2)
         self.keep_g = 0.0                                    # (1.4c) the keep choice's share of his readings (the file's head2.keep_g)
         self.krng = np.random.default_rng(int(seed) + 1414)  # ... its draws: a stream of their own (the outputs' draws untouched)
+        self.k_r = None                                      # (1.7a) the seats whose head ticked on the frame before (their keep reading)
         if self.h2 is not None and self.h2.get("keep") and "keep.weight" in self.h2W:
             self.keep_g = float(np.asarray(self.h2W.get("keep_g", 0.0)))
         self.h2_tick = None
@@ -267,8 +268,8 @@ class Policy:
 
     @property
     def keep_on(self):
-        """(1.4c) the keep choice decides a share of his readings: act(kf=...) gives one more column (-1 the lock rule, 0 keep,
-        1 re-decide)"""
+        """(1.4c, 1.7a) the keep choice decides a share of his seconds: act(kf=...) gives one more column, d + 2 c + 4 r (its draw,
+        the hand-over's coin, a keep reading: the frame after the head's tick; sim/duel_env.py KEEP_FEAT)"""
         return self.keep_g > 0
 
     def set_keep_g(self, g):
@@ -278,7 +279,7 @@ class Policy:
 
     def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
-        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, 3]: (1.4c,
+        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, KEEP_FEAT]: (1.4c,
         with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice"""
         dadd = gadd = h2_ = lgl_ = ok_ = None
         if self.needs_xl:
@@ -369,11 +370,16 @@ class Policy:
             kx_ = head2_.np_keep_x(kf, lsm_[np.arange(len(cur_)), cur_])
             kz_ = head2_.np_keep_logit(self.h2W, self.h2, h2s, hfast, kx_)
             kd_ = (self.krng.random(len(kz_)) < sig(kz_)).astype(np.int64)
-            kcol = np.where(self.krng.random(len(kz_)) < self.keep_g, kd_, -1)
+            kc_ = (self.krng.random(len(kz_)) < self.keep_g).astype(np.int64)
+            if self.k_r is None or len(self.k_r) != len(kz_):
+                self.k_r = np.zeros(len(kz_), bool)
+            kcol = kd_ + 2 * kc_ + 4 * self.k_r.astype(np.int64)     # (1.7a) the seats whose head ticked on the frame before: a keep reading
         if h2s is not None:                                  # (v0.4.3) the strategy head ticks with the brain, after the frame
+            self.k_r = np.zeros(len(h2s), bool)              # (1.7a) whose head ticks on this frame: the next frame is their keep reading
             if self.h2_live and self.h2_tick is not None:
                 import head2 as head2_
                 tk_, sb_, o1_, o2_ = self.h2_tick
+                self.k_r = np.asarray(tk_, bool).copy()
                 u_ = head2_.np_feats(self.h2, brain=sb_, trk=o1_, trz=o2_,
                                      ahead=head2_.np_mlp(self.h2_ah, sb_) if self.h2_ah is not None else None,
                                      ctrl=head2_.np_ctrl(self.h2_ct, sb_, hfast[tk_]),

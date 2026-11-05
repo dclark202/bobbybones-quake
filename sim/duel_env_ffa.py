@@ -464,13 +464,19 @@ WT_EVERY, WT_MAX, WT_MIN_S, WT_MAX_S = 4, 202, 1.0, 20.0   # a trip's path: a po
 INTENT_EVERY = 40
 INTENT_SWITCH = float(os.environ.get("INTENT_SWITCH") or 0.02)     # (1.4b, owner 2026-11-03: the switch cost "can just go") a change of target's cost; unset: 0.02
 BLIND_FIRE_W = float(os.environ.get("BLIND_FIRE_W") or 1.0)        # (1.4c, owner 2026-11-04: "make sure its out in 1.4c") a factor on BLIND_FIRE_COST; unset: 1
-# (1.4c, owner 2026-11-04) the keep choice. A policy seat may send one more column beside its actions (env.step): -1 the
-# lock rule decides its reading, 0 keep, 1 re-decide. At a reading of his target that is not forced (the target ended:
-# "nothing", taken, gone, a reading at once after a spawn or a weapon taken) a seat with 0 or 1 decides itself whether the
-# reading counts: keep, the target stays whatever was drawn; re-decide, the draw counts (it may be the same). The policy
-# draws the column with the share g of its file (sim/head2.py, the keep layer): with chance 1 - g it sends -1. Without the
-# column (every older caller, the plugins): the lock rule, as before. env.keep_live: the readings the seat's choice decided;
-# env.keep_feat(): what the choice reads for the next frame.
+# (1.4c, owner 2026-11-04; 1.7a, owner 2026-11-04 night: "it should read at the heads rate 5 times/s") the keep choice. A
+# policy seat may send one more column beside its actions (env.step): -1, the lock rule; otherwise d + 2 c + 4 r with d its
+# draw (1 re-decide, 0 keep), c the hand-over's coin (drawn with the share g of its file, sim/head2.py) and r this frame is a
+# keep reading (the frame after the head's tick: five a second). At each of a seat's lock-rule readings (once a second,
+# staggered, as before) its coin gives the next second to the keep choice (c 1) or to the lock rule (c 0, as before). In a
+# second of the keep choice the lock rule's reading is not made; at each keep reading his draw decides whether a reading not
+# forced counts: keep, the target stays whatever was drawn; re-decide, the draw counts (it may be the same). Forced, there as
+# in the lock rule's: the target ended ("nothing", taken, gone, a reading at once after a spawn or a weapon taken). An
+# arrival (the enemy hunted in view, the holding place stood at: intent_arr) is not an end for the keep choice: it is kept or
+# left by its draw (the lock rule still re-reads it at once, as before). At share 0 (c always 0) every reading is the lock
+# rule's to the bit. Without the column (every older caller, the plugins): the lock rule. env.keep_live: the readings the
+# seat's choice decided; env.keep_feat(): what the choice reads for the next frame (KEEP_FEAT columns).
+KEEP_FEAT = 7                                                      # (1.7a) age, contact, target, arrived, since arrival, since a sound, since a hit unseen
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
@@ -3762,6 +3768,10 @@ class DuelEnv:
         self.intent_done = np.zeros(self.n, bool)           # the chosen item was taken since the choice
         self.keep_in = None                                 # (1.4c) the keep column of this frame (None: the lock rule)
         self.keep_live = np.zeros(self.n, bool)             # (1.4c) the readings his keep choice decided
+        self.kown = np.zeros(self.n, bool)                  # (1.7a) this second of his readings is the keep choice's (the coin at his last lock reading)
+        self.intent_arr = np.zeros(self.n, bool)            # (1.7a) his target is arrived, not ended: the enemy hunted in view, the holding place stood at
+        self.arr_t = np.zeros(self.n, np.float32)           # (1.7a) seconds since the arrival
+        self.khit_t = np.full(self.n, 99.0, np.float32)     # (1.7a) seconds since he was hit with the enemy out of his view
         self.int_tick = 0
         self.intent_seek = 0.0                              # reward per second of the chosen way gained
         self.item_loss = 0.5                                # an enemy's mega or red costs this share of its pickup reward
@@ -6972,17 +6982,34 @@ class DuelEnv:
         return out
 
     def keep_feat(self):
-        """(1.4c) what the keep choice reads, per seat, after this frame: [his target's age (s), contact (the enemy seen in
-        the last CONTACT_S), his target]"""
+        """(1.4c; 1.7a) what the keep choice reads, per seat, after this frame (KEEP_FEAT columns): [his target's age (s),
+        contact (the enemy seen or heard in the last CONTACT_S), his target, arrived (intent_arr), seconds since the arrival,
+        seconds since he heard the enemy (a sound, a pickup, a pain sound), seconds since he was hit with the enemy out of view]"""
         n = self.n
-        return np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n]], 1).astype(np.float32)
+        snd_ = np.minimum(np.minimum(self.ear_t[:n], self.snd_t[:n].min(1)), self.pain_t[:n])
+        return np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n], self.intent_arr[:n], self.arr_t[:n],
+                         snd_, self.khit_t[:n]], 1).astype(np.float32)
 
     def intend(self, choice, who, way=None):
         """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
-        who = the players it applies to (the game-server plugin passes one). Returns who was read this frame."""
+        who = the players it applies to (the game-server plugin passes one). Returns who was read this frame.
+        (1.7a) With a keep column (env.step; see KEEP_FEAT): in a second the coin gave to the keep choice, read at its keep
+        readings (five a second) instead."""
         n = self.n
         self.int_tick += 1
-        live = who & (((self.int_tick + np.arange(n)) % INTENT_EVERY == 0) | self.intent_new)
+        lock_ = ((self.int_tick + np.arange(n)) % INTENT_EVERY == 0)
+        kin_ = getattr(self, "keep_in", None)                # (1.4c, 1.7a) the keep column: d + 2 c + 4 r, or -1 (the lock rule)
+        if kin_ is not None and len(kin_) >= n:
+            k_ = np.asarray(kin_[:n], np.int64)
+            has_ = k_ >= 0
+            kd_, kc_, kr_ = has_ & ((k_ & 1) > 0), has_ & ((k_ & 2) > 0), has_ & ((k_ & 4) > 0)
+            self.kown = np.where(lock_, kc_, self.kown[:n]) & has_     # (the coin at his lock reading: the next second)
+        else:
+            kd_ = kr_ = np.zeros(n, bool)
+            self.kown = np.zeros(n, bool)
+        self.intent_arr = self.intent_arr[:n] & ~self.intent_new[:n] & ~self.intent_gone[:n] & (self.intent[:n] > 0)   # (a reading at once ends an arrival)
+        kread_ = who & self.kown & (kr_ | self.intent_new)   # (1.7a) the keep choice's readings: five a second in its seconds
+        live = (who & ~self.kown & (lock_ | self.intent_new)) | kread_
         ct_on = CONTACT_FREE > 0 or self.contact_seat is not None
         if ct_on:                                            # (CONTACT_FREE) a contact begins: drawn once, a reading at once if it is free
             if self.ct_in is None or len(self.ct_in) != n:
@@ -6992,7 +7019,7 @@ class DuelEnv:
             p_ = CONTACT_FREE if self.contact_seat is None else self.contact_seat[:n]
             self.ct_free = np.where(new_, self.ct_rng.random(n) < p_, self.ct_free & in_)
             self.ct_in = in_
-            live = live | (who & new_ & self.ct_free)
+            live = live | (who & new_ & self.ct_free & ~self.kown)   # (1.7a: in the keep choice's seconds its own readings)
         choice = np.asarray(choice, np.int64)
         if not EN_ON:                                        # (the enemy as a target: only with the switch, FIGHT_TARGET or HUNT)
             choice = np.where(choice == EN_INTENT, 0, choice)
@@ -7014,15 +7041,11 @@ class DuelEnv:
             may = may | ((self.intent >= HOLD_INTENT) & (choice >= 1) & (choice < HOLD_INTENT))
         if ct_on:
             may = may | self.ct_free
-        kin_ = getattr(self, "keep_in", None)                # (1.4c) the keep choice: a seat's own decision at a reading not forced
         forced_ = (self.intent == 0) | self.intent_done | self.intent_gone | self.intent_new
-        if kin_ is not None and len(kin_) >= n:
-            lrn_ = live & ~forced_ & (kin_[:n] >= 0)
-            rule_may_ = may
-            may = np.where(lrn_, kin_[:n] == 1, may)
-        else:
-            lrn_ = np.zeros(n, bool)
-            rule_may_ = may
+        ended_ = (self.intent == 0) | (self.intent_done & ~self.intent_arr) | self.intent_gone | self.intent_new   # (1.7a) an arrival is not an end
+        lrn_ = kread_ & ~ended_                              # (1.4c, 1.7a) the keep choice: a seat's own decision at a reading not forced
+        rule_may_ = may
+        may = np.where(lrn_, kd_, np.where(kread_, True, may))     # (its forced readings count, as the lock rule's)
         self.keep_live = lrn_
         rd_ = live & ~forced_                                # (stats["keep"]) the readings not forced: who decided, what came of it
         held_ = rd_ & ~may                                   # ... held (the rule's lock or his keep)
@@ -7039,15 +7062,29 @@ class DuelEnv:
                          (held_ & ~ct_now_ & ~heard_).sum(), (held_ & ~ct_now_ & ~heard_ & diff_).sum(),
                          (rd_ & may & ~ct_now_ & heard_ & diff_).sum(), (rd_ & ~ct_now_ & heard_).sum()], np.float64)
         self.stats["keep"] = kp_
+        if kread_.any() or "keep2" in self.stats:           # (1.7a, stats["keep2"]) the keep choice's seconds and readings
+            k2_ = self.stats.get("keep2")
+            if k2_ is None or len(k2_) != 14:
+                k2_ = np.zeros(14)
+            rk_ = lrn_ & kd_
+            k2_ += np.array([(who & self.kown).sum(), kread_.sum(), (kread_ & ended_).sum(), lrn_.sum(), rk_.sum(), (rk_ & diff_).sum(),
+                             (lrn_ & self.intent_arr).sum(), (rk_ & self.intent_arr).sum(), (lrn_ & ct_now_).sum(), (rk_ & ct_now_).sum(),
+                             (lrn_ & ~ct_now_ & heard_).sum(), (rk_ & ~ct_now_ & heard_).sum(), (lrn_ & ~ct_now_ & ~heard_).sum(),
+                             (rk_ & ~ct_now_ & ~heard_).sum()], np.float64)
+            self.stats["keep2"] = k2_
         live = live & may
         changed = live & (choice != self.intent)
+        same_ = kread_ & ended_ & live & ~changed & (self.intent > 0)    # (1.7a) a forced reading of the keep choice that drew the
+        #                                                                  same target: a new choice of it (the lock rule keeps "reached")
         if ct_on and "contact" in self.stats:
             self.stats["contact"] += (float(new_.sum()), float((new_ & self.ct_free).sum()), float((live & self.ct_free).sum()),
                                       float((changed & self.ct_free).sum()), float((changed & self.ct_free & (choice == EN_INTENT)).sum()))
         self.intent = np.where(live, choice, self.intent)
         self.intent_t = np.where(changed, 0.0, self.intent_t + DT * who).astype(np.float32)
         self.intent_new = np.where(live, False, self.intent_new)
-        self.intent_done = np.where(changed, False, self.intent_done)
+        self.intent_done = np.where(changed | (same_ & ~self.intent_gone), False, self.intent_done)
+        self.intent_arr = self.intent_arr & ~changed & ~same_
+        self.arr_t = np.where(self.intent_arr, self.arr_t[:n] + DT, 0.0).astype(np.float32)
         self.intent_live, self.intent_changed = live, changed
         if WAYS:                                             # his way: read on the frames his intention is, held with it (see WAYS)
             self.way_was = self.way.copy()
@@ -8268,6 +8305,7 @@ class DuelEnv:
         en_ = self.intent == EN_INTENT
         vis_ = np.asarray(self.visible, bool)[:len(en_)]
         self.intent_done = self.intent_done | (en_ & vis_)
+        self.intent_arr = self.intent_arr | (en_ & vis_)      # (1.7a) arrived, not ended: the keep choice may keep the hunt
         self.intent_gone = self.intent_gone | (en_ & ~np.asarray(valid, bool))
         return en_, vis_
 
@@ -8637,6 +8675,7 @@ class DuelEnv:
         at = self._hold_at(np.arange(self.n), self.intent)
         new = at & ~self.intent_done
         self.intent_done = self.intent_done | at
+        self.intent_arr = self.intent_arr | at                # (1.7a) arrived, not ended: the keep choice may hold the place
         return at, new
 
     def _b2(self, pos, c, si):
@@ -12814,6 +12853,8 @@ class DuelEnv:
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
         self.fb = np.stack([np.minimum(dealt / 100.0, 2.0), np.minimum(dmg_taken / 100.0, 2.0),
                             np.sin(ang) * hitby, np.cos(ang) * hitby], 1).astype(np.float32)
+        un_ = hitby[:self.n] & ~np.asarray(self.visible, bool)[:self.n]                   # (1.7a, the keep choice's number) hit, the enemy out of view
+        self.khit_t = np.where(un_, 0.0, np.minimum(self.khit_t[:self.n] + DT, 99.0)).astype(np.float32)
 
         # items: pickups, respawns, decay above 100
         self.item_t = np.maximum(0.0, self.item_t - DT)

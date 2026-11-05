@@ -54,12 +54,15 @@ How it learns (the trainer; the routing of its gradient)
   The head's sequence is re-run in the learning step from the stored u of the rollout's ticks and the state at its start
   (truncated there: 48 ticks, 9.6 s, of backpropagation through time; its state itself is carried across rollouts).
 
-The keep choice (1.4c; the layout's "keep", absent before): at each reading of his target, keep it or re-decide (the
-simulator's keep column, sim/duel_env.py). z = keep(cat[s, hands' memory (a number), f]) -> 1, the logit of re-deciding;
-f = keep_x(): his target's age out of contact (s / 10, at most 2), contact (0 or 1), the held target's log-probability under
-the present scores (clipped to -10, / 5; a number). Its start (tools/keep_init.py): the lock made soft, the weights on s and
-the hands' memory zero. keep_g (a buffer, 0 for a save without it): the share of the readings it decides (the rest: the lock
-rule). Learnt in the head's own term with the target (the trainer).
+The keep choice (1.4c; 1.7a: the layout's "keep" 2, KEEP_F 7; 1.4c's "keep" 1 with three numbers is retired, never run): at
+each keep reading of his target (five a second: the frame after the head's tick), keep it or re-decide (the simulator's keep
+column, sim/duel_env.py). z = keep(cat[s, hands' memory (a number), f]) -> 1, the logit of re-deciding; f = keep_x(): his
+target's age out of contact and arrival (s / 10, at most 2), contact (0 or 1), the held target's log-probability under the
+present scores (clipped to -10, / 5; a number), arrived out of contact (0 or 1), the seconds since the arrival out of contact
+(/ 10, at most 2), a sound heard and a hit taken with the enemy out of view (each exp(-seconds / KEEP_RECENT): 1 just now).
+Its start (tools/keep_init.py): the lock made soft, the weights on s, the hands' memory and the last three numbers zero.
+keep_g (a buffer, 0 for a save without it): the share of his seconds it decides (the coin at each lock-rule reading; the rest:
+the lock rule). Learnt in the head's own term with the target (the trainer).
 
 The weapon part (1.5a; the layout's "weapon", absent before; tools/weapon_init.py): the head informs his weapon choice. wsc(s)
 -> one score per choice of the weapon key (no press and the nine weapons), held from tick to tick as the target's scores; wadd
@@ -79,8 +82,9 @@ import numpy as np
 
 VERSION = 1
 PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "obs", "hands", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide)
-KEEP_F = 3                                                   # (1.4c) the keep choice's own numbers: age out of contact, contact, log p held
-KEEP_AGE_MAX, KEEP_LP_MIN = 20.0, -10.0
+KEEP_F = 7                                                   # (1.7a) the keep choice's own numbers: age, contact, log p held, arrived, since arrival, sound, hit unseen
+KEEP_FEAT = 7                                                # (1.7a) the simulator's keep_feat() columns (duel_env.KEEP_FEAT)
+KEEP_AGE_MAX, KEEP_LP_MIN, KEEP_RECENT = 20.0, -10.0, 2.0
 CTRL_SRCS = ("none", "belief", "both")                     # (the ctrl slot's source: sim/control.py's readouts by name)
 CLIP = 10.0
 # (group, input) of docs/INPUTS.csv; an input of None: every row of the group
@@ -188,6 +192,7 @@ def make_module(L, seed=4044):
             self.target = nn.Linear(S, int(L["n_target"]))
             self.v = nn.Linear(S + int(L["widths"]["hands"]), 1)
             if L.get("keep"):                                # (1.4c) the keep choice: zeros here, its start from tools/keep_init.py
+                assert int(L["keep"]) == 2, "1.4c's keep choice (three numbers, once a second) is retired: tools/keep_init.py add gives 1.7a's"
                 self.keep = nn.Linear(S + int(L["widths"]["hands"]) + KEEP_F, 1)
                 nn.init.zeros_(self.keep.weight)
                 nn.init.zeros_(self.keep.bias)
@@ -404,12 +409,16 @@ def has_keep(mod):
 
 
 def keep_x(feat, lp_held):
-    """(1.4c) the keep choice's own numbers [..., KEEP_F] from the simulator's keep_feat [..., 3] (age s, contact, target) and
-    the held target's log-probability [...] (numbers: no gradient)"""
+    """(1.4c, 1.7a) the keep choice's own numbers [..., KEEP_F] from the simulator's keep_feat [..., KEEP_FEAT] (age s, contact,
+    target, arrived, since arrival s, since a sound s, since a hit unseen s) and the held target's log-probability [...]
+    (numbers: no gradient)"""
     import torch
-    c = feat[..., 1].float()
-    age = (1.0 - c) * feat[..., 0].float().clamp(0.0, KEEP_AGE_MAX) / 10.0
-    return torch.stack([age, c, lp_held.float().clamp(min=KEEP_LP_MIN) / 5.0], -1).detach()
+    feat = feat.float()
+    c, ar = feat[..., 1], feat[..., 3] * (1.0 - feat[..., 1])
+    age = (1.0 - c) * (1.0 - ar) * feat[..., 0].clamp(0.0, KEEP_AGE_MAX) / 10.0
+    sa = ar * feat[..., 4].clamp(0.0, KEEP_AGE_MAX) / 10.0
+    return torch.stack([age, c, lp_held.float().clamp(min=KEEP_LP_MIN) / 5.0, ar, sa, torch.exp(-feat[..., 5].clamp(min=0.0) / KEEP_RECENT),
+                        torch.exp(-feat[..., 6].clamp(min=0.0) / KEEP_RECENT)], -1).detach()
 
 
 def keep_logit(mod, s, h, f):
@@ -516,9 +525,11 @@ def np_has_keep(W):
 def np_keep_x(feat, lp_held):
     """keep_x() in numpy"""
     feat = np.asarray(feat, np.float32)
-    c = feat[:, 1]
-    age = (1.0 - c) * np.clip(feat[:, 0], 0.0, KEEP_AGE_MAX) / 10.0
-    return np.stack([age, c, np.maximum(np.asarray(lp_held, np.float32), KEEP_LP_MIN) / 5.0], 1).astype(np.float32)
+    c, ar = feat[:, 1], feat[:, 3] * (1.0 - feat[:, 1])
+    age = (1.0 - c) * (1.0 - ar) * np.clip(feat[:, 0], 0.0, KEEP_AGE_MAX) / 10.0
+    sa = ar * np.clip(feat[:, 4], 0.0, KEEP_AGE_MAX) / 10.0
+    return np.stack([age, c, np.maximum(np.asarray(lp_held, np.float32), KEEP_LP_MIN) / 5.0, ar, sa,
+                     np.exp(-np.maximum(feat[:, 5], 0.0) / KEEP_RECENT), np.exp(-np.maximum(feat[:, 6], 0.0) / KEEP_RECENT)], 1).astype(np.float32)
 
 
 def np_keep_logit(W, L, hs, h, f):

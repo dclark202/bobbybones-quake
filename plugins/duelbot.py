@@ -2348,6 +2348,9 @@ class duelbot(minqlx.Plugin):
                     env._hear(3, np.array([1]))                      # teleported
             self.prev_opp = (env.state[1, :3].copy(), float(env.state[1, 6]))
             env.fb[0] = self.fb_next
+            if hasattr(env, "khit_t"):                       # (1.7a, the keep choice's number) hit with the enemy out of view, as step() keeps it
+                hit_ = float(np.hypot(self.fb_next[2], self.fb_next[3])) > 0 and not bool(env.visible[0])
+                env.khit_t[0] = 0.0 if hit_ else min(float(env.khit_t[0]) + E.DT, 99.0)
         self.senses(env, E)
         if hasattr(E, "NW"):
             env.weapon[0] = self.held(env, 0)                # the chosen weapon, as the simulator shows it

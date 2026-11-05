@@ -293,9 +293,9 @@ def keep_g(P):
 def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
-    kf [B, 3] (1.4c, keep_g(P) above 0): the simulator's keep_feat() rows after the frame before; the keep column of this frame
-    (-1 the lock rule, 0 keep, 1 re-decide; test_suite.Policy's sums, its own stream P["_krng"]) is left in P["_keep"] [B]
-    for the simulator's keep_in (None: no keep choice)
+    kf [B, KEEP_FEAT] (1.4c, 1.7a; keep_g(P) above 0): the simulator's keep_feat() rows after the frame before; the keep column
+    of this frame (d + 2 c + 4 r: the draw, the hand-over's coin, a keep reading on the frame after the head's tick; test_suite.Policy's
+    sums, its own stream P["_krng"]) is left in P["_keep"] [B] for the simulator's keep_in (None: no keep choice)
     and the new memory.
     events [B, 32] (v0.4, a network with a head): what the head is told on its tick (the simulator's head_events(),
     fetched when head_due() says the coming frame ticks); None: zeros. Read on the tick frames only.
@@ -406,10 +406,14 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         if P.get("_krng") is None:
             P["_krng"] = np.random.default_rng(1414)
         kd_ = (P["_krng"].random(len(kz_)) < sig(kz_)).astype(np.int64)
-        P["_keep"] = np.where(P["_krng"].random(len(kz_)) < kg_, kd_, -1)
+        kc_ = (P["_krng"].random(len(kz_)) < kg_).astype(np.int64)
+        kr_ = P.get("_k_r")
+        kr_ = np.zeros(len(kz_), np.int64) if kr_ is None or len(kr_) != len(kz_) else np.asarray(kr_, np.int64)
+        P["_keep"] = kd_ + 2 * kc_ + 4 * kr_                 # (1.7a) the seats whose head ticked on the frame before: a keep reading
     if bst is not None:                                      # (v0.4.1) the brain reads the frame's normalised inputs; at its tick the readouts'
         br_, tk_ = bst                                       # answer is kept in map coordinates (his pose of this frame): test_suite's token_post
         tkd_ = br_.frame(xa)
+        P["_k_r"] = np.asarray(tkd_, bool) & bool(h2s is not None and P["_head2"][5])   # (1.7a) whose head ticks now: their next frame a keep reading
         if tkd_.any():
             o1_, o2_ = br_.readouts(tkd_)
             tk_.answer(tkd_, o1_, o2_, np.asarray(pose, np.float32)[tkd_], np.asarray(zmap)[tkd_])

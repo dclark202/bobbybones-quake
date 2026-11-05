@@ -1,0 +1,22 @@
+﻿08:59:31 scratch_17a_id_base_r3: done in 0.7 min; the log ends: exit 0
+08:59:31 PASS base: the trainer ran 2 updates and dumped them (2 dumps)
+08:59:31 PASS base: the optimizer's state loaded from opt.pt, not a cold start
+09:00:01 scratch_17a_id_base2_r3: done in 0.5 min; the log ends: exit 0
+09:00:01 PASS base2: the trainer ran 2 updates and dumped them (2 dumps)
+09:00:01 PASS base2: the optimizer's state loaded from opt.pt, not a cold start
+09:00:31 scratch_17a_id_a1_r3: done in 0.5 min; the log ends: exit 0
+09:00:31 PASS a1: the trainer ran 2 updates and dumped them (2 dumps)
+09:00:31 PASS a1: the optimizer's state loaded from opt.pt, not a cold start
+09:01:01 scratch_17a_id_a2_r3: done in 0.5 min; the log ends: exit 0
+09:01:01 PASS a2: the trainer ran 2 updates and dumped them (2 dumps)
+09:01:01 PASS a2: the optimizer's state loaded from opt.pt, not a cold start
+09:01:01 PASS a2 announced the keep choice
+09:01:31 scratch_17a_id_a3_r3: done in 0.5 min; the log ends: exit 0
+09:01:31 PASS a3: the trainer ran 2 updates and dumped them (2 dumps)
+09:01:31 PASS a3: the optimizer's state loaded from opt.pt, not a cold start
+09:01:31 PASS a3 announced the keep choice
+09:01:31 PASS the trainer repeats itself at a fixed seed (base = base2, both updates, actions and log p)
+09:01:31 PASS 1.7a's code with nothing new set = the code under it (a1 = base, both updates)
+09:01:31 PASS the keep choice at share 0 = 1.6a's play (a2 = base, both updates, actions and log p)
+09:01:31 PASS the keep choice at share 1 decides: update 1's actions differ from base (0.0945 of them)
+09:01:31 ALL PASSED

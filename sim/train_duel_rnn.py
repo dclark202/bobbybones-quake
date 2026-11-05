@@ -1048,6 +1048,8 @@ def main():
                                                                "hands' 17 target rows of pi and the head's target layer shrink by lr x this a step; live H2_L2 "
                                                                "(the value itself). An L2 in the loss went through Adam's scaling: dry runs of 11-03")
     ap.add_argument("--head2-lam", type=float, default=-1.0, help="(--head2, 1.3b) the lambda of the head's own advantage (-1: --lam). 0.995: about 5 s of credit")
+    ap.add_argument("--opt-cold-ok", action="store_true", help="(1.7a) on --resume, an opt.pt that does not fit the network's groups starts the "
+                                                               "optimizer cold; without it the trainer stops (1.4c's resume chain met a cold start silently)")
     ap.add_argument("--keep-g", type=float, default=-1.0, help="(1.4c, a network with the keep choice: sim/head2.py, tools/keep_init.py) the share of his "
                                                                "readings it decides at the start (live KEEP_G; -1: the file's own); the rest the lock rule. "
                                                                "Each league network plays at the share in its own file (none: 0)")
@@ -2597,12 +2599,23 @@ def main():
         if os.path.exists(op_):
             try:
                 os_ = torch.load(op_, weights_only=False, map_location=dev)
+                pgl_ = [len(g_["params"]) for g_ in os_["param_groups"]]    # (1.7a) the saved groups' sizes: the keep choice's 2, the weapon part's 4
                 if WPN and KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 3:
-                    trk_group()                               # (1.5a: saved with the weapon part's group, after the keep choice's)
-                    trz_group()
+                    trk_group()                               # (1.5a: saved with the weapon part's group, after the keep choice's;
+                    trz_group()                               # 1.7a: given the keep choice after the weapon part's, saved so)
                     v41_group()
                     h2_group()
-                    keep_group()
+                    if pgl_[-1] == 2 and pgl_[-2] == 4:
+                        wpn_group()
+                        keep_group()
+                    else:
+                        keep_group()
+                        wpn_group()
+                elif WPN and KEEP and N_V41 and TRK and pgl_[-1] == 4 and                         len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 2:
+                    trk_group()                               # (1.7a's start: 1.5a's or 1.6a's save, the weapon part's group after the head's,
+                    trz_group()                               # no keep choice: its group is added after the load, the last)
+                    v41_group()
+                    h2_group()
                     wpn_group()
                 elif WPN and not KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 2:
                     trk_group()                               # (1.5a from 1.3b's end: saved with the weapon part's group after the head's, no keep choice)
@@ -2680,7 +2693,9 @@ def main():
                 print("optimizer: its state loaded from opt.pt{}".format(
                     " (--learn-nosync: {} step counts moved to the host)".format(n_st_) if a.learn_nosync else ""), flush=True)
             except Exception as e_:                           # noqa: BLE001  (another layout of groups: a cold start)
-                print("optimizer: opt.pt does not fit ({}): a cold start".format(str(e_)[:120]), flush=True)
+                if not a.opt_cold_ok:                         # (1.7a) a run that resumes with an opt.pt never starts it cold unasked
+                    raise SystemExit("optimizer: opt.pt does not fit ({}): NOT STARTED (--opt-cold-ok starts it cold on purpose)".format(str(e_)[:300]))
+                print("optimizer: opt.pt does not fit ({}): a cold start (--opt-cold-ok)".format(str(e_)[:120]), flush=True)
         else:
             print("optimizer: no opt.pt, a cold start", flush=True)
     trk_group()                                              # (--track) the readout's group, if the optimizer's state did not bring it
@@ -3903,7 +3918,7 @@ def main():
             b_lpk = torch.zeros(T, N, device=dev)
             KF_ = C.get("kf")
             if KF_ is None:
-                KF_ = torch.zeros(N, 3, device=dev)
+                KF_ = torch.zeros(N, head2_.KEEP_FEAT, device=dev)
             KG_PLAY = float(net.head2.keep_g)                            # (each network's share, read once a rollout)
             KG_OPP = (float(onet.head2.keep_g) if has_snaps and not HEADL and onet.h2_open and head2_.has_keep(onet.head2) else 0.0)
         BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
@@ -4029,7 +4044,8 @@ def main():
                     kz_ = head2_.keep_logit(net.head2, s_keep_, h, kx_)
                     kd_ = (torch.rand(N, generator=KGEN, device=dev) < torch.sigmoid(kz_)).float()
                     kc_ = torch.rand(N, generator=KGEN, device=dev) < KG_PLAY
-                    kcol_ = torch.where(kc_, kd_.long(), torch.full_like(cur_, -1))
+                    kr_ = 4 * int(t % BK == 0)                           # (1.7a) a keep reading: the frame after the head's tick (s_keep_ is that tick's)
+                    kcol_ = kd_.long() + 2 * kc_.long() + kr_            # (1.7a) d + 2 c + 4 r: the simulator takes the coin at his lock readings
                     b_kd[t], b_kx[t] = kd_, kx_
                     b_lpk[t] = torch.nn.functional.logsigmoid(torch.where(kd_ > 0, kz_, -kz_))
                     if has_snaps:
@@ -4038,7 +4054,7 @@ def main():
                             kzo_ = head2_.keep_logit(onet.head2, H2O.s, h_opp, head2_.keep_x(KF_, lpo_))
                             kdo_ = (torch.rand(N, generator=KGEN, device=dev) < torch.sigmoid(kzo_)).long()
                             kco_ = torch.rand(N, generator=KGEN, device=dev) < KG_OPP
-                            kcolo_ = torch.where(kco_, kdo_, torch.full_like(cur_, -1))
+                            kcolo_ = kdo_ + 2 * kco_.long() + kr_
                         else:
                             kcolo_ = torch.full_like(cur_, -1)           # (a league file without it: the lock rule)
                         kcol_ = torch.where(snap_players, kcolo_, kcol_)
@@ -4371,6 +4387,15 @@ def main():
             """(1.4c) the keep choice's log-probability of what he drew [T, n], counted where it decided (zeros elsewhere); its logit"""
             kz = head2_.keep_logit(pol.head2, ho2["s_held"], hs, B_KX[:, chunk])
             return torch.nn.functional.logsigmoid(torch.where(B_KD[:, chunk] > 0, kz, -kz)) * B_KL[:, chunk], kz
+
+        def keep_parts(ho2, hs, chunk):
+            """(1.7a, the record) its logit's parts [T, n]: from the head's state, from the hands' memory, from its own numbers
+            (the bias aside): whose decision it is"""
+            w_ = pol.head2.keep.weight[0].detach().float()
+            S_ = int(H2L["size"])
+            hw_ = hs.shape[-1]
+            return (ho2["s_held"].detach().float() @ w_[:S_], hs.detach().float() @ w_[S_:S_ + hw_],
+                    B_KX[:, chunk].float() @ w_[S_ + hw_:])
         B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
         RFG_R = float(R.get("rfg") or 0.0)                               # (v0.4.2a) the rule fade's gate he played at: learnt at it
         BFG_R = float(R.get("bfg") or 0.0)                               # (v0.6.1b) the brain's gate he played at: learnt at it (the people's
@@ -4873,7 +4898,7 @@ def main():
             B_HR = R.get("b_hr") if R.get("b_hr") is not None else b_rew
             H2_PAYS = [float(B_HR.abs().mean()), float(b_rew.abs().mean())]   # (a frame's |pay|: the head's, his)
             ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else lam)    # (1.3b: --head2-lam)
-            KEEP_ACC = torch.zeros(8, dtype=torch.float64, device=dev)   # (1.4c) the keep choice: its readings (his, weighted), p(re-decide) there,
+            KEEP_ACC = torch.zeros(16, dtype=torch.float64, device=dev)  # (1.4c) the keep choice: its readings (his, weighted), p(re-decide) there,
             WP_ACC = torch.zeros(12, dtype=torch.float64, device=dev)    # (1.5a) the weapon key on the head's clock: its frames, its term, clipped; (the last
             #                                                              pass) log p played - now, frames; the parts' sizes, cosine, the head's top = his
             #                                                              in contact and p there, re-decisions drawn; (the last pass) log p played - now, its readings
@@ -4950,6 +4975,14 @@ def main():
                                 KEEP_ACC[2] += (km_ * ct_).sum().double()
                                 KEEP_ACC[3] += (pk_ * km_ * ct_).sum().double()
                                 KEEP_ACC[4] += (km_ * B_KD[:, chunk]).sum().double()
+                                kps_ = keep_parts(HO2_[0], hs_all, chunk)          # (1.7a) whose decision: the parts' sizes, where it decided
+                                KEEP_ACC[7] += (km_ * kps_[0].abs()).sum().double()
+                                KEEP_ACC[8] += (km_ * kps_[1].abs()).sum().double()
+                                KEEP_ACC[9] += (km_ * kps_[2].abs()).sum().double()
+                                ar_ = B_KX[:, chunk, 3]                            # (1.7a) arrivals out of contact
+                                KEEP_ACC[10] += (km_ * ar_).sum().double()
+                                KEEP_ACC[11] += (pk_ * km_ * ar_).sum().double()
+                                KEEP_ACC[12] += (km_ * ar_ * B_KD[:, chunk]).sum().double()
                             else:
                                 KEEP_ACC[5] += ((B_LPK[:, chunk] * B_KL[:, chunk] - lk_) * km_).sum().double()
                                 KEEP_ACC[6] += km_.sum().double()
@@ -5530,6 +5563,9 @@ def main():
                     nn.utils.clip_grad_norm_(VW_PS, 0.5)
                 H2GR_ = None
                 if H2:                                                   # (--head2) its gradient clipped on its own and kept out of the rest's clip
+                    if KEEP and not bool(B_KL[:, chunk].any()):          # (1.7a) a piece where the keep choice decided nothing: no gradient of its
+                        for p_ in pol.head2.keep.parameters():           # own (its zeros in the clip's sum moved the rest by rounding: share 0 is
+                            p_.grad = None                               # 1.6a's learning to the bit)
                     h2_acc[7] += nn.utils.clip_grad_norm_(pol.head2.parameters(), 0.5).detach().double()
                     h2_acc[8] += 1.0
                     H2GR_ = [p_.grad for p_ in pol.head2.parameters()]
@@ -5940,7 +5976,16 @@ def main():
                              forced=int(kp_[9])),
                     blinders=dict(held_after_sound=int(kp_[10]), held_after_sound_draw_differs=q_(kp_[11], kp_[10]),
                                   held_quiet=int(kp_[12]), held_quiet_draw_differs=q_(kp_[13], kp_[12]),
-                                  after_sound=int(kp_[15]), after_sound_changed=q_(kp_[14], kp_[15])))
+                                  after_sound=int(kp_[15]), after_sound_changed=q_(kp_[14], kp_[15])),
+                    pull=dict(s=q_(ka_[7], ka_[0]), hands=q_(ka_[8], ka_[0]), own=q_(ka_[9], ka_[0])),    # (1.7a) the logit's parts, mean size where it decided
+                    arrived=dict(share=q_(ka_[10], ka_[0]), p=q_(ka_[11], ka_[10]), redecide_drawn=q_(ka_[12], ka_[10])))
+                k2_ = np.atleast_1d(agg.get("keep2", np.zeros(14))).astype(np.float64)    # (1.7a) the simulators' count of its seconds and readings
+                if len(k2_) == 14 and k2_[0] > 0:
+                    rec["keep"]["sim2"] = dict(
+                        seconds=round(float(k2_[0]) * E_.DT, 1), readings_a_second=q_(k2_[1], k2_[0] * E_.DT, 3), forced=q_(k2_[2], k2_[1]),
+                        decided=int(k2_[3]), redecide=q_(k2_[4], k2_[3]), changed=q_(k2_[5], k2_[3]), arrived=int(k2_[6]),
+                        redecide_arrived=q_(k2_[7], k2_[6]), contact=int(k2_[8]), redecide_contact=q_(k2_[9], k2_[8]),
+                        heard=int(k2_[10]), redecide_heard=q_(k2_[11], k2_[10]), quiet=int(k2_[12]), redecide_quiet=q_(k2_[13], k2_[12]))
             if WCR or WPN:                                               # (1.5a) the weapon key on the head's clock (B) and the head's weapon scores (D)
                 wa_ = WP_ACC.cpu().numpy()
                 q_ = lambda x_, y_, d_=4: round(float(x_) / max(1.0, float(y_)), d_)

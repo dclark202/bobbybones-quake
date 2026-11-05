@@ -246,10 +246,11 @@ def play(job):
           + [w + x for w in E.WEAPONS for x in ("_frags", "_shots", "_hits")] if k in env.stats]
     for k_, n_, on_ in (("big_seq", 6, bool(getattr(E, "BIG_PICK_SEQ", ()))), ("rg_far", 4, getattr(E, "RG_FAR_PRICE", 0.0) > 0),
                         ("weapon_own", 2, bool(getattr(E, "WEAPON_FREE", False)) and hasattr(E, "WEAPON_OWN")),   # (1.4b) readings, held weapons turned into "nothing"
-                        ("keep", 16, hasattr(env, "keep_feat"))):          # (1.4c) the readings not forced: who decided, what came of it (duel_env.intend)
+                        ("keep", 16, hasattr(env, "keep_feat")),           # (1.4c) the readings not forced: who decided, what came of it (duel_env.intend)
+                        ("keep2", 14, hasattr(env, "kown"))):              # (1.7a) the keep choice's seconds and readings (duel_env.intend)
         if on_:                                                 # (v0.3.8) counters a simulator makes at their first use: made now
             env.stats.setdefault(k_, np.zeros(n_))
-    SK += [k for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep") if k in env.stats]   # (the raw counters, every seat: --json's st_raw; 1.4c: keep)
+    SK += [k for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep", "keep2") if k in env.stats]   # (the raw counters, every seat: --json's st_raw; 1.4c: keep; 1.7a: keep2)
     st0 = {k: np.array(env.stats[k], np.float64).copy() for k in SK}
     side = (np.arange(n) + int(swap)) % 2                       # 0: he, 1: the opponent
     # by the kind of life (STYLE_P, STYLE_MIX; a scripted player's lives are all general): rows he / the opponent, columns

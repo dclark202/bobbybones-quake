@@ -1,0 +1,68 @@
+﻿PASS update 5: KEEP_G 0 (0.0)
+PASS mark 10 kept
+PASS not held by a check of 35%: clock 20 (KEEP_G 0.1250 = 10/80)
+PASS the check of 35% logged as a MAJOR PROBLEM
+PASS targets reached 0.30 against 0.5 flagged
+PASS the keep record logged
+PASS no save kept between marks
+PASS the keep step over 0.05 flagged
+PASS a firing cost above zero flagged
+PASS update 50: KEEP_G 0.5 (0.5)
+PASS mark 50 kept
+PASS update 90: KEEP_G 1 (1.0)
+PASS mark 90 kept
+PASS held at 1 past the end (1.0)
+PASS the other dials untouched ({'KEEP_G': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'COST_FIRE_W': 0.0, 'H2_PG': 1.0})
+11-05 07:58:35 ramp_17a on for fake: KEEP_G 0.0 -> 1.0 over updates 10 to 90; FREE: the clock never holds or steps back, a check under 40% is a MAJOR PROBLEM
+11-05 07:58:35 update 1: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:58:35 update 1: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:58:35 update 1: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:58:36 clock 1 after update 1: {'KEEP_G': 0.0}
+11-05 07:58:38 update 2: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:58:38 update 2: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:58:38 update 2: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:58:38 clock 2 after update 2: {'KEEP_G': 0.0}
+11-05 07:58:42 update 3: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:58:42 update 3: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:58:42 update 3: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:58:43 clock 3 after update 3: {'KEEP_G': 0.0}
+11-05 07:58:47 update 4: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:58:47 update 4: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:58:47 update 4: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:58:47 clock 4 after update 4: {'KEEP_G': 0.0}
+11-05 07:58:52 update 5: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:58:52 update 5: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:58:52 update 5: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:58:53 clock 5 after update 5: {'KEEP_G': 0.0}
+11-05 07:58:57 update 10: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:58:57 update 10: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:58:57 update 10: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:58:57 clock 10 after update 10: {'KEEP_G': 0.0}
+11-05 07:58:58 kept keep/policy_u10_17a.pt with its optimizer (the mark 10)
+11-05 07:59:07 MAJOR PROBLEM check update 10 against the start (1.6a's end): 70-130 = 35.0% (under 40%)
+11-05 07:59:13 update 20: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:59:13 update 20: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:59:13 update 20: trips a player-minute 18.0 reached 0.3 | speed on trips 339 over 320 0.52
+11-05 07:59:13 FLAG update 20: targets reached 0.3 (start 0.500): flicker?
+11-05 07:59:13 clock 20 after update 20: {'KEEP_G': 0.125}
+11-05 07:59:22 update 30: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.08 | arrivals 0.1 p 0.37
+11-05 07:59:22 FLAG update 30: the keep choice's step on the head's term 0.08 (over 0.05)
+11-05 07:59:22 update 30: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.01 
+11-05 07:59:22 FLAG update 30: A FIRING COST ABOVE ZERO: shot cost 0.01 {}
+11-05 07:59:22 update 30: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:59:23 clock 30 after update 30: {'KEEP_G': 0.25}
+11-05 07:59:28 update 50: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:59:28 update 50: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:59:28 update 50: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:59:28 clock 50 after update 50: {'KEEP_G': 0.5}
+11-05 07:59:28 kept keep/policy_u50_17a.pt with its optimizer (the mark 50)
+11-05 07:59:38 clock 90 after update 90: {'KEEP_G': 1.0}
+11-05 07:59:38 update 90: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:59:38 update 90: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:59:38 update 90: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+11-05 07:59:38 kept keep/policy_u90_17a.pt with its optimizer (the mark 90)
+11-05 07:59:48 update 140: keep share 0.5 | its seconds 900.0 readings a second 5.0 decided 4000 re-decide 0.12 (contact None, heard None, quiet None, arrived None) | pull: head state 0.1 hands 0.0 own numbers 3.2 | kl 0.001 | arrivals 0.1 p 0.37
+11-05 07:59:48 update 140: big weapons owned 1.7 | in hand in games rockets None lightning None rail None | firing cost 0.0 
+11-05 07:59:48 update 140: trips a player-minute 18.0 reached 0.5 | speed on trips 339 over 320 0.52
+
+ALL PASSED
