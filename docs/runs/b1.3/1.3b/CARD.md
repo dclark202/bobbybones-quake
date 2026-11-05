@@ -71,7 +71,7 @@ Today one small layer picks his target (an item, the enemy, a holding place) fro
 | Items a minute, stack at fights, time at spawns | hold (floors from b1.2d's end) |
 | No spawn camping, no holding a spot all game | the panel |
 | Against b1.1 and v0.6.0's end | holds |
-| The owner's play test | 11-04 morning, a local server with the end (`qlbot:13b`, `data/duellive_13b`): "just wanted to quickly confirm he was looking good"; stopped after |
+| The owner's play test | 11-04 morning, a local server with the end (`qlbot:13b`, `data/duellive_13b`): "just wanted to quickly confirm he was looking good"; stopped after. 11-04 evening, the same server again: "He's getting much better. There's things to iron out still, but I feel reinvigorated for this project now that the head is working"; stopped after |
 
 ## The equilibrium
 
