@@ -20,10 +20,19 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 4. **Correctness over speed.** Never skip or approximate a calibration to meet a start time; say what is missing and when.
 5. **Red-team before a go.** Every run card lists each hand-built or assumed part of the pay and design, its measured
    alternative, and the ledger's pathology check (negative frags, sign flips, lopsided games). Volunteer weaknesses unasked.
-6. **Never stop a run** unless the owner says so (2026-10-27); a check under 30% won-lost is posted in the chat.
+6. **Never stop a run** unless the owner says so (2026-10-27). **Ramps never hold or step back on their own (owner, 2026-11-04):** "Don't hold
+   the ramps just go forward with them"; "All you do is report, not hold. You report with urgency when things look bad and we decide
+   together." Every check's win rate is reported; one **under 40%** is flagged in the chat at once as a major problem. He decides hold or stop.
 7. **No personal data** in the repo (Steam IDs, IPs, usernames, passwords); public-server details stay in `private/`.
 8. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most 1-2
    times a day; one working tree (the repo) plus at most one worktree per active run, made without links into `data/`.
+9. **The running run gets full priority (owner, 2026-11-04): "The run that is going gets full priority. Period."** No side job
+   (a smoke run, a dry run, a level check, a measurement, a server) is started on my own while a run trains: "You bring any side
+   runs to me, and we decide together whether they can go in parallel"; "you need to be very clear with me what cores they run on
+   and whether they will slow down training". So every proposal names its cores (by mask), its length, and what it shares with the
+   run (the graphics card, the trainer's cores, the check cores the watcher uses). On 2026-11-04 a 1.4c smoke and a level check were
+   started beside 1.4b without asking. To stop a job's processes, match each one's own command line: Windows reuses process IDs,
+   so a walk down parent IDs caught two unrelated `tail -F` monitors that day.
 
 ## Where things are
 
@@ -40,10 +49,15 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
 
 ## Starting a run
 
+**No dry run for small changes (owner, 2026-11-04, said several times):** "You do not need to do a dry run, that's just the first 10 updates
+of the run." A dry run is only for changes we are not sure of (a new lesson, a new part of the network, a new pay whose step is unknown).
+Small, identity-checked changes start the real run directly; its first 10 updates and the extra check at update 10 are the trial.
+
 1. The owner's go on the run's `CARD.md` (both parts filled in). **Run length (owner, 2026-10-30): 12 hours by default (`--minutes 720`), and ask him to specify the length before starting anything.**
 2. `powershell -ExecutionPolicy Bypass -File docs\runs\<version>\start.ps1`: it runs the settings check and refuses on any
    difference, checks the files are there and no trainer runs, then starts the trainer, the watcher and the self-play logger.
-3. One line an hour while it runs; the 06:30 report after a night.
+3. One line an hour while it runs; the 06:30 report after a night. From 1.4b on both carry the league table (frag share and win
+   chance gained against each league network, carried from run to run; [BACKLOG B-300](docs/BACKLOG.md)) beside the checks.
 
 ## The owner's goals (read first)
 - **One goal: win games** (owner, 2026-10-24: "There is only one goal: win games"; the five goals of 2026-10-13 and the priority
@@ -55,8 +69,16 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
   on the way; only winning matters in the long run. The steps: `docs/PLAN.md`; the reasons: `docs/design/B1_PLAN.md`.
 - **Names (owner, 2026-10-31)**: bN is the series (BobbyBones 1: b1); bN.N is a family of runs, each with a specific goal of its own; each run in it is bN.Nx, where the attempts are x = a, b, c, ... (b1.0a, b1.0b). In `docs/runs/b1.0/` (the family: its `README.md` says the goal and lists the attempts) with a folder per attempt, `docs/runs/b1.0/b1.0a/`,
   and `data/sim_runs/duel_gru_b1_0a`. The v0.x names below are history: use them only for what was run under them.
+  **The b dropped (owner, 2026-11-03):** "I want to drop the B from our bot naming convention. So, this is just 1.3b, 1.4b,c": new runs are
+  N.Nx (1.3b, 1.4b), in the family's existing folder (`docs/runs/b1.3/1.3b/`; a new family: `docs/runs/1.5/`) and `data/sim_runs/duel_gru_1_3b`; what was run as b1.0a to b1.4a
+  keeps its name and folders.
+- **Design from AlphaStar and Pluto (owner, 2026-11-03)**: for anything strategic (the head, target and plan choices, memory,
+  the league, the value and pay, handing a choice from rules to a learner), and above all when he asks how to implement a change,
+  start from what AlphaStar (DeepMind, Nature 2019) and Pluto (tscmoo's Brood War bot; [archive/versions/v0.3/PLUTO.md](docs/archive/versions/v0.3/PLUTO.md))
+  did: name which part a proposal takes from them, where it differs and why (one PC, our data, fairness). "Those two clearly
+  worked": inspiration, not a copy. The rules taken so far: [docs/HISTORY.md](docs/HISTORY.md) (lessons that are now rules).
 - **How runs start (owner, 2026-10-24)**: one new thing per round; a round with one new thing starts directly (no separate
-  trial): shut at the start, opened slowly and tied to the checks (hold under 50%, back under 45% or two checks under 50%;
+  trial): shut at the start, opened slowly with the checks reported (no automatic hold or step-back since 2026-11-04: rule 6;
   a dip lasts 20 to 30 updates at most). Two new things open one after the other.
 - He wants genuine learned behavior (strafe jumping, weapon choice, item control, positioning), not hand-coded
   rules or knob tuning. Long-term focus: smooth, fast movement and good position and weapon choices, not just aim.

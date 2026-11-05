@@ -1,0 +1,13 @@
+11-03 09:18:48 the start: head shut (gate 0), mix 0; target |w| 316.95
+11-03 09:18:48 train.cmd for 720 minutes: written
+11-03 09:18:48 allowed arg --head2-mix: run '0' | reference '<unset>'
+11-03 09:18:48 allowed arg --head2-pg: run '1' | reference '0'
+11-03 09:18:48 allowed arg --head2-sole: run '1' | reference '<unset>'
+11-03 09:18:48 allowed arg --run: run 'duel_gru_b1_4a' | reference 'duel_gru_b1_3a'
+11-03 09:18:48 settings check: PASS
+11-03 09:18:48 started without the trial's verdict (-NoTrial: the owner's word)
+11-03 09:18:51 backup: copied 156 files 1.28 GB to T:\BobbyBones_backup
+11-03 09:18:51 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.125, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_MIX': 0.0, 'H2_COPY': 0.0, 'INTENT_SEEK_W': 1.0}
+11-03 09:18:51 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_3a\keep\policy_end_b13a.pt
+11-03 09:18:51 trainer started: cmd 29080, from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_3a\keep\policy_end_b13a.pt
+11-03 09:18:56 watcher 36544 | ramp and tripwire 35804 (the mix 0 -> 0.5 over updates 10 to 90, no hold; the copy lesson off; the lock and the way pay stay) | self-play logger 35648 | no guard (owner: never stop the run)

@@ -1,10 +1,16 @@
-"""b1.3a's train.cmd (owner, 2026-11-01), from b1.2a's: --run duel_gru_b1_3a; the head open from the start; DMG_ENEMY_ONLY=1. CONTACT_FREE and DMG_TAKEN_W start at their shut values in live.json (start.ps1).
-    python docs/runs/b1.3/b1.3a/make_files.py"""
+"""b1.4a's train.cmd (owner, 2026-11-02 evening: "B1.4 - fade OLD rules out"; CARD.md): b1.3a's command (rule 3: the run it starts
+from) with --run duel_gru_b1_4a; --minutes as given; the head learns from his whole pay (--head2-pg 1) as the only learner of his target
+(--head2-sole 1: the hands' target outputs frozen), the mix from 0 (--head2-mix 0; live H2_MIX, ramp_b14a.py). The copy lesson stays
+(--head2-copy 1, live H2_COPY fades it). The trainer on the 8 performance cores (0xC03C3), as b1.3a.
+    python docs/runs/b1.4/b1.4a/make_files.py <minutes>"""
 import os
+import re
 import shutil
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-t = open(os.path.join(HERE, "..", "..", "b1.2", "b1.2a", "train.cmd"), encoding="ascii").read().replace("\r\n", "\n")
+SRC = os.path.join(HERE, "..", "..", "b1.3", "b1.3a")
+t = open(os.path.join(SRC, "train.cmd"), encoding="ascii").read().replace("\r\n", "\n")
 
 
 def sub(a, b):
@@ -13,13 +19,15 @@ def sub(a, b):
     t = t.replace(a, b)
 
 
-t = t.replace("duel_gru_b1_2a", "duel_gru_b1_3a")
-sub("--head2-cap 0 --head2-gate 0 ", "--head2-cap 1 --head2-gate 1 ")
-sub("set GONE_BELIEF=1\n", "set GONE_BELIEF=1\nrem (b1.3a) DMG_TAKEN_W on an enemy's damage only; his own splash, falls and hazards at full cost\nset DMG_ENEMY_ONLY=1\n")
-sub("rem the repo root: this file lives in docs\\runs\\b1.2\\b1.2a\\",
-    "rem ==== b1.3a (owner, 2026-11-01; docs/runs/b1.3/b1.3a/CARD.md): free target choice in contact, damage taken to 0.65 on an enemy's damage, the item rule out, by live dials (ramp_b13.py). b1.2a's command with: run duel_gru_b1_3a;\n"
-    "rem  the head open from the start; DMG_ENEMY_ONLY=1. Made by make_files.py.\n"
-    "rem the repo root: this file lives in docs\\runs\\b1.3\\b1.3a\\")
+MIN = sys.argv[1]
+t = t.replace("duel_gru_b1_3a", "duel_gru_b1_4a")
+assert len(re.findall(r"--minutes \d+ --gamma ", t)) == 1
+t = re.sub(r"--minutes \d+ --gamma ", "--minutes {} --gamma ".format(MIN), t)
+sub(" --head2-pay all --head2-pg 0 --head2-copy 1 %LEARN% >> ", " --head2-pay all --head2-pg 1 --head2-copy 1 --head2-mix 0 --head2-sole 1 %LEARN% >> ")
+sub("rem the repo root: this file lives in docs\\runs\\b1.3\\b1.3a\\",
+    "rem ==== b1.4a (owner, 2026-11-02 evening; docs/runs/b1.4/b1.4a/CARD.md): the old rules fade out: his target choice moves from the hands' to the head's (live H2_MIX), the head learns from his whole pay as the only learner of it, the copy lesson fades (H2_COPY), the target lock (INTENT_HOLD) and the way pay (INTENT_SEEK_W) out: ramp_b14a.py. b1.3a's command with: run duel_gru_b1_4a; --minutes; --head2-pg 1, --head2-mix 0, --head2-sole 1. Made by make_files.py.\n"
+    "rem the repo root: this file lives in docs\\runs\\b1.4\\b1.4a\\")
+assert "/affinity C03C3 " in t and "--minutes {} --gamma ".format(MIN) in t
 open(os.path.join(HERE, "train.cmd"), "w", encoding="ascii", newline="").write(t.replace("\n", "\r\n"))
-shutil.copy2(os.path.join(HERE, "..", "..", "b1.2", "b1.2a", "aim2_env.cmd"), os.path.join(HERE, "aim2_env.cmd"))
+shutil.copy2(os.path.join(SRC, "aim2_env.cmd"), os.path.join(HERE, "aim2_env.cmd"))
 print("written")

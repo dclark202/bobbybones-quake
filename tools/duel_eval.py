@@ -166,6 +166,12 @@ def play(job):
             env.contact_seat[np.arange(sw_, env.n, 2)] = float(envvars["SEAT_CONTACT_HE"])
         if envvars.get("SEAT_CONTACT_OPP"):
             env.contact_seat[np.arange(1 - sw_, env.n, 2)] = float(envvars["SEAT_CONTACT_OPP"])
+    if envvars.get("SEAT_WOWN_HE") or envvars.get("SEAT_WOWN_OPP"):   # (--wown / --opp-wown, 1.4b) each side's own WEAPON_OWN
+        env.wown_seat = np.full(env.n, float(E.WEAPON_OWN), np.float32)
+        if envvars.get("SEAT_WOWN_HE"):
+            env.wown_seat[np.arange(sw_, env.n, 2)] = float(envvars["SEAT_WOWN_HE"])
+        if envvars.get("SEAT_WOWN_OPP"):
+            env.wown_seat[np.arange(1 - sw_, env.n, 2)] = float(envvars["SEAT_WOWN_OPP"])
     sa_he, sa_op = envvars.get("SEAT_AIM_HE", ""), envvars.get("SEAT_AIM_OPP", "")
     if sa_he or sa_op:                                        # (--aim-he / --aim-opp, branch aim2) each side's own aim settings
         sa_ = {}
@@ -238,10 +244,12 @@ def play(job):
     SK = [k for k in ["dmg_h", "dmg_from_script", "w_dist", "close_v", "close_n", "know", "know_frames", "drops", "pick_drop",
                       "pick_drop_new", "self_dmg", "fall_dmg", "lob", "sc_frags_w"]
           + [w + x for w in E.WEAPONS for x in ("_frags", "_shots", "_hits")] if k in env.stats]
-    for k_, n_, on_ in (("big_seq", 6, bool(getattr(E, "BIG_PICK_SEQ", ()))), ("rg_far", 4, getattr(E, "RG_FAR_PRICE", 0.0) > 0)):
+    for k_, n_, on_ in (("big_seq", 6, bool(getattr(E, "BIG_PICK_SEQ", ()))), ("rg_far", 4, getattr(E, "RG_FAR_PRICE", 0.0) > 0),
+                        ("weapon_own", 2, bool(getattr(E, "WEAPON_FREE", False)) and hasattr(E, "WEAPON_OWN")),   # (1.4b) readings, held weapons turned into "nothing"
+                        ("keep", 16, hasattr(env, "keep_feat"))):          # (1.4c) the readings not forced: who decided, what came of it (duel_env.intend)
         if on_:                                                 # (v0.3.8) counters a simulator makes at their first use: made now
             env.stats.setdefault(k_, np.zeros(n_))
-    SK += [k for k in ("rail", "big_seq", "rg_far") if k in env.stats]   # (the raw counters, every seat: --json's st_raw)
+    SK += [k for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep") if k in env.stats]   # (the raw counters, every seat: --json's st_raw; 1.4c: keep)
     st0 = {k: np.array(env.stats[k], np.float64).copy() for k in SK}
     side = (np.arange(n) + int(swap)) % 2                       # 0: he, 1: the opponent
     # by the kind of life (STYLE_P, STYLE_MIX; a scripted player's lives are all general): rows he / the opponent, columns
@@ -260,7 +268,13 @@ def play(job):
     t = -1
     while t + 1 < end_:
         t += 1
-        a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
+        nA_ = len(E.ACTION_DIMS)
+        kp_ = hasattr(env, "keep_feat") and (getattr(pol, "keep_on", False) or getattr(opp_pol, "keep_on", False))
+        a = np.zeros((n, nA_ + int(kp_)), np.int64)                            # (1.4c) the keep column after the outputs: -1 the lock rule
+        kf_ = None
+        if kp_:
+            a[:, -1] = -1
+            kf_ = env.keep_feat()
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -272,12 +286,18 @@ def play(job):
             import btoken as btoken_
             pz_, zz_ = btoken_.pose_from_env(env, mp)
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
-                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}))
-        a[ev, :min(al.shape[1], a.shape[1])] = al[:, :a.shape[1]]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
+                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
+                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}))
+        a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]                        # (a network with an output the module lacks: LEGS_TURN_ADD off)
+        if kp_ and pol.keep_on:
+            a[ev, -1] = al[:, -1]
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
-                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}))
-            a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
+                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
+                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}))
+            a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
+            if kp_ and opp_pol.keep_on:
+                a[od, -1] = ao[:, -1]
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
             for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
@@ -435,8 +455,14 @@ def main():
     ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
     ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--head2-wadd", type=float, default=None, help="(1.5a) play his strategy head's weapon scores at this add (default: his checkpoint's; "
+                                                                   "0: blanked, the hands' weapon choice alone)")
+    ap.add_argument("--head2-mix", type=float, default=None, help="(b1.4a) his target choice moved this far to his strategy head's own (default: his checkpoint's; 1: the head's alone)")
+    ap.add_argument("--opp-head2-mix", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--contact", default="", help="(b1.3a) his seats' own chance of a free contact (default: CONTACT_FREE, the same for both)")
     ap.add_argument("--opp-contact", default="", help="(b1.3a) the opponent's seats' own chance of a free contact")
+    ap.add_argument("--wown", default="", help="(1.4b) his seats' own WEAPON_OWN, 0 / 1 (default: the process's, the same for both)")
+    ap.add_argument("--opp-wown", default="", help="(1.4b) the opponent's seats' own WEAPON_OWN")
     ap.add_argument("--hold", default="", help="(b1.2) his seats' own target lock, seconds (default: INTENT_HOLD, the same for both)")
     ap.add_argument("--opp-hold", default="", help="... the opponent's seats")
     ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
@@ -453,8 +479,13 @@ def main():
         pol.set_rule_fade(a.rule_fade_g)
     if a.head2_gate is not None:
         pol.set_head2_gate(a.head2_gate)
+    if a.head2_wadd is not None:                             # (1.5a) the blanked check of the head's weapon part
+        pol.set_head2_wadd(a.head2_wadd)
+    if a.head2_mix is not None:
+        pol.set_head2_mix(a.head2_mix)
     if getattr(pol, "h2", None) is not None:
-        print("strategy head: gate {:g} ({})".format(float(pol.h2W["gate"]), "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
+        print("strategy head: gate {:g}, mix {:g} ({})".format(float(pol.h2W["gate"]), float(pol.h2W.get("mix", 0.0)),
+              "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
     if getattr(pol, "rf", None) is not None:
         print("rule fade: g {:g} ({}); the simulator's readers {}".format(pol.rfg, "none" if pol.rfg <= 0 else "{} columns faded".format(len(pol.rf_cols)),
               "on the brain's answer for a life drawn at g (BRAIN_READ=1)" if pol.rf_read else "on the rule"), flush=True)
@@ -473,6 +504,8 @@ def main():
             opp_pol.set_rule_fade(a.opp_rule_fade_g)
         if a.opp_head2_gate is not None:
             opp_pol.set_head2_gate(a.opp_head2_gate)
+        if a.opp_head2_mix is not None:
+            opp_pol.set_head2_mix(a.opp_head2_mix)
         oo = names(a.opp_inputs)
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
@@ -482,6 +515,10 @@ def main():
         envvars["SEAT_CONTACT_HE"] = a.contact
     if a.opp_contact:
         envvars["SEAT_CONTACT_OPP"] = a.opp_contact
+    if a.wown:
+        envvars["SEAT_WOWN_HE"] = a.wown
+    if a.opp_wown:
+        envvars["SEAT_WOWN_OPP"] = a.opp_wown
     if a.hold:
         envvars["SEAT_HOLD_HE"] = a.hold
     if a.opp_hold:
@@ -546,7 +583,7 @@ def main():
         st = {k: np.sum([np.array(r["st"][k]) for r in res], 0) for k in res[0].get("st", {})}
         if "sc_frags_w" in st:                               # (staging) the scripted opponent's frags by weapon
             row["opponent"]["frags_w"] = {w: float(x) for w, x in zip(res[0]["weapons"], np.array(st["sc_frags_w"])) if x > 0}
-        row["st_raw"] = {k: np.asarray(st[k], np.float64).tolist() for k in ("rail", "big_seq", "rg_far") if k in st}
+        row["st_raw"] = {k: np.asarray(st[k], np.float64).tolist() for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep") if k in st}
         if "lob" in st:                                      # (staging) the lobber's frames firing at a place: plasma, grenades; at an exit
             row["opponent"]["lob"] = [float(x) for x in np.array(st["lob"])]
         if st:                                               # the learner's side, from the simulator's counters

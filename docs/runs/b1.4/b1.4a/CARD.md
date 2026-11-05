@@ -1,8 +1,6 @@
-# b1.4a: free choice in contact, exchanges that pay a little, the item rule out
+# b1.4a: the head blended in beside the rules, learning the whole time
 
-**Out of date (owner, 11-01): contact freedom moved to b1.2b, the rule's end to b1.3a's fix. Only stage 2, the damage weight, is left here. See the [family page](../README.md).**
-
-*2026-11-01 (owner): "Fight more", "Tunnel vision less", "Begin to fade out hard coded rules for items". On the damage weight: "He should net a bit from chip damage, I like the idea of damage taken being slightly less than damage given"; "We can go to 0.8". Moved here from b1.3 when that became the pay table and the costs. Rocket jumps and movement are left for later. The family: [README](../README.md). The diagnosis behind it: [TARGET_LOCK.md](../../../design/TARGET_LOCK.md).*
+*2026-11-02 evening (owner): "B1.3 - fade head IN. It starts overnight and is ready sometime tomorrow. B1.4 - fade OLD rules out"; "we bring it in in b1.3 to learn how to copy the rules that exist, and then once we know it can, we remove those rules and let the head train"; "I'm fine leaving combat, item and win pay in him. I view the win pay as the correction factor on top of those". 2026-11-03 morning, after the head-alone test (b1.3a's head choosing alone: 74-126, 37%): "he was always going to suck with a hard swap ... The only reasonable way to do this is to blend the two in together"; "we need to show that it can be stable with both before trying to fade the hard coded rules out"; "H2 copy has to go ... The point of the copy was the pretrain it. That's done now. MIX fades to 0.5, HEAD learns the whole time. For B1.4a, fade the HEAD in over 80 updates, 10--90. Let it run for 12 hours, I will review this evening for the 8s lock." The family: [README](../README.md). The earlier plan on this card (the head to mix 1, then the lock and the way pay out, with the copy lesson fading behind) was replaced on 11-03; its trial (`trial_b14a.log`, ALL PASSED) tested that plan's code.*
 
 **Marks:** ✅ built and tested · ⏳ to build · 🧪 to measure · ❓ owner's decision
 
@@ -10,84 +8,82 @@
 
 | | |
 |---|---|
-| Started from | b1.3a's end with its optimizer (`duel_gru_b1_3a/keep/policy_end_b13a.pt`, `opt_end_b13a.pt`) |
+| Started from | **started 2026-11-03 09:18, 12 h** · **b1.3a's end** with its optimizer (`keep/policy_end_b13a.pt`): the head shut in play (mix 0), its copy of the rules' choice at 87% agreement |
 | Run | `duel_gru_b1_4a` |
-| Stage 1: free choice in contact | the lock does not apply while the enemy is in contact (noticed or heard in the last ~2 s), with a reading at once on first contact. The item rule is silent in contact. Opened by a live dial, the chance a contact is free. Out of contact the 8 s lock stands. Code written, one bug's fix ready ⏳ |
-| Stage 2: exchanges pay a little | `DMG_TAKEN_W` 1 → 0.9 → 0.8 (owner), on enemy damage only (owner): his own splash, falls and hazards stay at full cost. Live dial ✅; enemy damage only: code written ⏳ |
-| Stage 3: the item rule out | `INTENT_TEACH_W` 1 → 0.75 → 0.5 → 0.25 → 0, everywhere. Live dial ✅ |
-| Stays | b1.3a's table and its costs gone, `WIN_ADD` 0.33, the head on combat plus win pay, the fairness limits, `!aim default`, 65% games / 35% pro starts |
-| Hold rule | as b1.2a: goes on above 40%; a check under 50% flagged in the chat; 40% or less holds the next step (owner, 11-01) |
-| Length | `--minutes 1440` (24 h) ❓ to confirm at the start |
-| League, checks | the start and v0.6.0's end as anchors; 160 games, about every 20 updates, against the start, each seat at its own contact dial; every fourth against v0.6.0's end; the panel. Never stopped |
-| Kept | with its optimizer: the save before each step, the saves at the stages' ends, and `keep/policy_end_b14a.pt` |
+| What | his target choice becomes a blend: the head's share rises 0 → 0.5 and the rules' share falls 1 → 0.5 with it. The head learns from his whole pay the whole time. Nothing is removed: the goal is to show the two are stable together before the rules fade out |
+| How his target is chosen | the target scores are (1 - mix) x the hands' scores (the rules' imprint) + mix x the head's own scores (`H2_MIX`, a buffer in the network). Where the head has no state yet (respawn to its first tick) the hands' choice stands; counted (`head2.copy.no_state`; 0 in the trial) |
+| The hands' target outputs | **frozen** (`--head2-sole 1`): the rules' imprint stays exactly as b1.3a left it; no gradient, entropy or rule label reaches it. One learner on the choice (b1.2a's blowup). The rest of the hands (movement, aim, weapon) learns as usual |
+| The head | learns from his whole pay from update 0 (`--head2-pg 1`, `--head2-pay all`); its pull on the choice grows with the mix |
+| The copy lesson (`H2_COPY`) | **off from the start** (0): it was b1.3a's pretraining, done |
+| The 8 s target lock (`INTENT_HOLD`) | **stays at 8 s**; the owner reviews it this evening ❓ |
+| The way pay (`INTENT_SEEK_W`) | stays (1) |
+| Combat, item, win pay | unchanged |
+| Length | **12 hours** (`--minutes 720`) |
+| League, checks | b1.3a's end, b1.2d's end, b1.1 and v0.6.0's end as anchors; 200 games (20 a map) every 20 updates against the start (b1.3a's end at mix 0), every fourth against b1.1; each save checked at its own mix; the panel. Never stopped |
+| Cores | the trainer on the 8 performance cores; the checks, panel, ramp and logger on 8 efficiency cores; 4 left for the owner |
+| Kept | every save during the fade with its optimizer (`keep/policy_fade<update>_b14a.pt`), the first save at mix 0.5 (`policy_Adone_b14a.pt`), the end (`policy_end_b14a.pt`) |
 
-## The schedule
+## The schedule (`ramp_b14a.py`, on one clock of updates that stops while a hold is on)
 
-Hours from the start, at ~4.6 minutes an update. A step comes right after a save, every 20 updates (owner). A hold adds to it.
+| Updates | `H2_MIX` (head's share) | Rules' share | `H2_COPY` | Head learns | Lock | Way pay |
+|---|---|---|---|---|---|---|
+| 0 to 10 | 0 | 1 | 0 | yes (no pull on play yet) | 8 s | 1 |
+| 10 to 90 | 0 → 0.5, a straight line (+0.00625 an update) | 1 → 0.5 | 0 | yes | 8 s | 1 |
+| 90 to the end (about 160) | 0.5 | 0.5 | 0 | yes | 8 s | 1 |
 
-| Update | Hours | What | Save kept |
-|---|---|---|---|
-| 0 to 10 | 0 to 0:45 | nothing changes | `policy_start_b14a.pt` |
-| 10 / 30 / 50 / 70 | 0:45 / 2:20 / 3:50 / 5:20 | **contact** 25% / 50% / 75% / 100%, the rule silent with it | one before each step |
-| 70 to 90 | 5:20 to 6:55 | held; read | `policy_contact_b14a.pt` at 90 |
-| 90 / 110 | 6:55 / 8:25 | **`DMG_TAKEN_W`** 0.9 / 0.8 | one before each step |
-| 110 to 130 | 8:25 to 10:00 | held; read; possible play test | `policy_fight_b14a.pt` at 130 |
-| 130 / 150 / 170 / 190 | 10:00 / 11:30 / 13:00 / 14:35 | **`INTENT_TEACH_W`** 0.75 / 0.5 / 0.25 / 0 | one before each step |
-| 190 to ~313 | 14:35 to 24:00 | settles; play test | the end |
+The mix at each check: update 20: 0.06 · 40: 0.19 · 60: 0.31 · 80: 0.44 · 100 on: 0.5.
 
-From ~08:00 on 11-02, after a look at b1.3a's end and the owner's go.
+**No hold (owner, 11-03: "Do not stop the fade, just let it go over the 80 updates. If it goes badly just respond here and we will review"):** the mix runs 10 to 90 whatever the checks read; a check under 50% is flagged in the chat for the owner to review.
 
-## Judged by
+**Tripwire (flagged in the chat at once; the run never stopped):** the head's own target scores' centred length over 60 (`--raw-lim`; the copy's end about 20), a non-finite number, a skipped piece.
 
-| Measure | Now | Wanted |
-|---|---|---|
-| Win rate against the start, against v0.6.0's end | | at least 50% |
-| Enemy's share of his targets | 1.8% (u49 of b1.2a, gate 0.4); 1.2% before the head | clearly up; number set from b1.3a's end ⏳ |
-| Off by 30+ degrees, the owner in sight under 800 u | 25-30% (the owner: 15-18%), b1.0a's games | near a person's |
-| Closing speed, same frames | -17 to -34 u/s | about 0 or better |
-| Closing after a sighting; fires within 1 s (`tools/bobby_yardsticks.py`) | from b1.3a's end 🧪 | pros: +5 u/s, 79% |
-| Chip damage: exchanges with no death | 5.1 to 5.3 a minute; stack taken 107-139 by him, 154-181 by the owner, b1.0a's games (`play_read.py`) ⏳ | stack taken by him up |
-| Stack at the start of a fight | 139-160 against the owner's 198-254 | does not fall |
-| Items a minute, time at spawns | | floors set from b1.3a's end ⏳ |
-| Rule agreement, trips a minute, targets reached | 72%, 12.5, 40% | read through stage 3 |
-| The owner's play tests | "tunnel vision" | "he picks fights" |
-
-## The equilibrium
-
-**Stage 1:** both players re-decide at contact, so a commitment holds only while nobody is about, and the better answer to the enemy's presence wins. **Stage 2:** at 0.8 a point dealt pays 0.0055 and a point taken from the enemy costs 0.0044, so an even exchange pays both a little (per 100 damage each: +0.11). With b1.3a's costs gone and today's volume, that takes an even exchange from about -0.08 to about +0.23 a player-minute. Chip damage nets a bit, and frags, deaths and win pay still decide the game. **Stage 3:** targets are chosen by the head and the hands' pay, so items are taken when they matter. Expected on the way: more fights and shorter item trips; then fewer pickups. The danger is trading when low, which frags and the win part price.
-
-## Red team
-
-| | |
-|---|---|
-| 0.8 is a guess at the size | +0.23 a minute is still under speed pay's +0.75, and more if he fights more. It may not be enough, or it may pay trades that lose games. The dial is live, and a change is for the owner's word |
-| It reverses a fix, more gently | v0.5.0 raised 0.75 to 1.0 because even trades paid both. That is now the aim, at a smaller size. Win rate against v0.6.0's end is the guard |
-| Self-play may mislead | both copies trade happily, while a person punishes trades (21-0 and 12-0 came largely from stack). Only play tests can catch this |
-| Stack | more fights from behind may lose more games. Stage 3 may lower stack further |
-| It may not fix the looking | stage 1 starts only once he has noticed. No pay rewards looking; b1.3a's jerk fade removes a cost on it, and that this is enough is untested |
-| Item rule, spawn camping | v0.4.4's camping came with the rule's fade. Some loopholes are fixed since. The panel flags it. Its real pull is unknown: weight 0.1, agreement 72% |
-| What stage 3 does not remove | `ITEM_RATE`, `BIG_PICK_SEQ`, `ITEM_BELIEF`, the pros' tables, `RULE_WALK`'s ways. Openings' labels: to confirm they scale with the dial |
-| Flicker in contact | he re-samples every second in contact. It only moves his way input and target, but the reviewer suspects it disturbs the hands (aim error is the read) |
-| Contact steps | 20 updates a step (owner), one check at each value. b1.1a's harm took about 40 updates to show, so a cost may appear one step late |
-| A young start | b1.3a's last change has ~3 h behind it at this run's start. Its slow costs may read as this run's |
-| Hold at 40% (owner) | below b1.1a's failure (41-42%), which it would have passed: a slow loss goes through, flagged only. The stage saves are the way back |
-| Target switch cost | `INTENT_SWITCH` 0.02 (-0.23 a minute) still taxes re-deciding. Left in: its size against a hit is small. Measured alternative: free in contact |
-| Hand-built / assumed | the ~2 s contact window, what counts as contact, every schedule, the 0.8, the rule's silence in contact, the head's pay |
-| Pay pathologies (ledger) | watched in self-play games: mutual chip with few frags, negative scores, sign flips, lopsided games, value drift |
-| Rocket jumps, movement jumps | important, not in this run (owner) |
+**How fast the head learns as it fades in:** the pay's push on the head's scores is scaled by the mix (a sixteenth of full at 0.06, half at 0.5), but Adam sizes each step by the gradient's own recent size and the head has its own group, so its steps are about the same size at any mix. What changes is what it learns from: at a low mix it nudges a choice the rules still make; only near 0.5 do its own choices shape the games. Its memory (GRU) also learns from its own value, which the mix does not scale.
 
 ## Before the start
 
 | Step | Where it stands |
 |---|---|
-| Contact in the simulator, per seat in the checks | written in the worktree `BobbyBones-b13`; the identity test found the rule speaking on a contact's first reading, the fix is ready, not applied ⏳ |
-| Enemy damage only | written; to pass the identity test ⏳ |
-| Contact on a server | it must reach the plugin (`env_vars`); tried on a private server ⏳ |
-| The measures | chip damage in `play_read.py` written; floors and the enemy's share from b1.3a's end ⏳ |
-| Command, ramp, start script, smoke | written for the earlier plan; to redo from b1.3a's ⏳ |
-| The owner's go ❓ | ~08:00 on 11-02 |
+| The mix in the network, the trainer, the checks, the plugin, the export | ✅ built and tested (`mix_unit.py`; the trial of 11-02) |
+| `make_files.py` (b1.3a's command with `--head2-pg 1 --head2-mix 0 --head2-sole 1`), settings check against b1.3a's | ✅ PASS (unchanged by the new schedule) |
+| `ramp_b14a.py` for this schedule: `H2_MIX` 0 → 0.5 over 10 to 90 only, no hold; the copy, lock and way pay dials out of it | ✅ built 11-03; tested on fake files at a tenth scale (the mix line, the kept saves) |
+| `start.ps1`: `H2_COPY=0` in live.json (was 1); its log line | ✅ |
+| A trial | skipped on the owner's word ("you do not need to do a 10 update dry run, just start the run"; `-NoTrial`) |
+| The owner's go | ✅ 11-03 morning; **started 09:18** (`start.log`) |
+
+## Judged by
+
+| Measure | Wanted |
+|---|---|
+| Win rate against the start (b1.3a's end) | at least 50% at mix 0.5 for three checks in a row: the sign that the two are stable together and b1.4b can fade the rules out |
+| Against b1.1 and v0.6.0's end | holds |
+| The head's own scores' length | bounded, no runaway |
+| How often the blend's choice differs from the rules' alone | rises with the mix (the head has a say); reported |
+| The enemy's share of his targets | up ("he needs to fight more") |
+| Items a minute, stack at fights, time at spawns | hold (floors from b1.3a's end) |
+| No spawn camping (v0.4.4), no holding a spot all game | the panel |
+| The owner's play test | |
+
+## The equilibrium
+
+The head plans for his whole pay: combat, the item table and the win correction; in self-play the combat and item parts are zero-sum and the win part is the correction both copies gain from getting right. Half his choice stays the rules' frozen imprint, so his play cannot drift far from b1.3a's while the head learns: a blend that settles where the head adds what the rules miss (more fights when level or ahead, items when behind or the enemy is far). The risk is a head that undervalues the items' timing, which only the rules carried.
+
+## Red team
+
+| | |
+|---|---|
+| The head alone was 37% | the blend at 0.5 had never been measured; the fade runs anyway and a check under 50% is flagged for review |
+| The checks lag | a check takes about an hour: its number is for a mix 10 to 15 updates older than the run's |
+| The optimizer's memory | the head's Adam state comes from the copy lesson; its first steps on pay are sized by that history for about an update |
+| Frozen rules | their labels are still computed and reach nothing (the cost of the rule code stays until b1.4b removes it) |
+| The lock reviewed this evening | a change mid-run is a second new thing in the run: at a save, with the optimizer kept, and only after the fade has finished |
+| Pay pathologies (ledger) | negative frags, sign flips, lopsided games: watched |
 
 ## Changes on the fly
 
 | Time | Change | Why |
 |---|---|---|
+| 11-03 11:12 | **stopped at update 21** (owner: "STop the b1.4 run. I don't trust it. There's enough issues with b1.3 that I think we need to redesign and start over there") | `stop_run.py duel_gru_b1_4a b14a --now`: the save of update 20 kept as `keep/policy_end_b14a.pt` with its optimizer |
+
+## The result
+
+Stopped 2026-11-03 11:12 at update 21 (owner: "I don't trust it. There's enough issues with b1.3 that I think we need to redesign and start over there"); end = the save of update 20 (`keep/policy_end_b14a.pt` with its optimizer, mix 0.04); the check of update 10 (mix 0) 87-113, 43.5% against the start; the head's own target scores' length 16 → 29 and its agreement with the rules 87% → 61% in the first eight updates of the mix. The mix written by the ramp reached the rollouts three updates late (with `--overlap` the next rollout is launched before the ramp writes). Not used.

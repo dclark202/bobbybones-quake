@@ -16,16 +16,30 @@ def main():
     for n_ in ("label", "run", "a", "hold_a", "b", "hold_b"):
         ap.add_argument(n_)
     ap.add_argument("--out", default="")
-    ap.add_argument("--contact-a", default="0", help="(b1.3a) save A's chance of a free contact")
-    ap.add_argument("--contact-b", default="0", help="(b1.3a) save B's")
+    ap.add_argument("--contact-a", default="", help="(b1.3a) save A's chance of a free contact (default: the save's own CONTACT_FREE, as the watcher)")
+    ap.add_argument("--contact-b", default="", help="(b1.3a) save B's")
+    ap.add_argument("--mix-a", default="", help="(b1.4a) save A's target choice moved this far to its strategy head's own (1: the head's alone; default: the save's)")
+    ap.add_argument("--mix-b", default="", help="(b1.4a) save B's")
     ap.add_argument("--games", type=int, default=16)
     ap.add_argument("--maps", default=",".join(MAPS))
     ap.add_argument("--batch", type=int, default=4)
+    ap.add_argument("--seed", default="", help="the games' seed (default: duel_eval's, 100, as every check)")
     a = ap.parse_args()
     os.environ["PANEL_RUN"] = a.run
     sys.path.insert(0, os.path.join(ROOT, "tools", "run"))
     import panel as P
     sets = [s for s in P.settings(0.0, a.a) if not s.startswith("INTENT_HOLD=")] + ["INTENT_HOLD=8"]
+    import torch
+    for k_, p_ in (("contact_a", a.a), ("contact_b", a.b)):              # (review of 2026-11-03: the default was 0 for both, training has 1)
+        if getattr(a, k_) == "":
+            ev_ = torch.load(p_, map_location="cpu", weights_only=False).get("env_vars") or {}
+            setattr(a, k_, str(ev_.get("CONTACT_FREE") or 0))
+    print("contact: A {}, B {}".format(a.contact_a, a.contact_b), flush=True)
+    wown_ = []                                                           # (1.4b) each save's own WEAPON_OWN (older saves: off)
+    for p_ in (a.a, a.b):
+        ev_ = torch.load(p_, map_location="cpu", weights_only=False).get("env_vars") or {}
+        wown_.append("1" if str(ev_.get("WEAPON_OWN") or "0") not in ("0", "", "0.0") else "0")
+    print("weapon own: A {}, B {}".format(*wown_), flush=True)
     out = a.out or os.path.join(ROOT, "data", "sim_runs", a.run, "watch", "h2h_" + a.label)
     os.makedirs(out, exist_ok=True)
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1", CUDA_VISIBLE_DEVICES="-1")
@@ -37,8 +51,11 @@ def main():
             js = os.path.join(out, mp + ".json")
             cmd = [sys.executable, "tools/duel_eval.py", "--run", a.run, "--policy", a.a, "--opp", "policy:" + a.b, "--opp-inputs", os.path.join(ROOT, "docs", "INPUTS.csv"), "--map", mp, "--games", str(a.games),
                    "--minutes", "10", "--procs", "2", "--swap", "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225", "--round", "600", "--opp-round", "600",
-                   "--hold", a.hold_a, "--opp-hold", a.hold_b, "--contact", a.contact_a, "--opp-contact", a.contact_b]
+                   "--hold", a.hold_a, "--opp-hold", a.hold_b, "--contact", a.contact_a, "--opp-contact", a.contact_b,
+                   "--wown", wown_[0], "--opp-wown", wown_[1]]
             cmd += [x for s_ in sets for x in ("--set", s_)]
+            cmd += (["--head2-mix", a.mix_a] if a.mix_a else []) + (["--opp-head2-mix", a.mix_b] if a.mix_b else [])
+            cmd += ["--seed", a.seed] if a.seed else []
             jobs.append((mp, js, subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=open(js + ".log", "w"), stderr=subprocess.STDOUT)))
         for mp, js, p in jobs:
             p.wait()

@@ -1,0 +1,41 @@
+PASS update 5: KEEP_G 0 ({'KEEP_G': 0.0, 'PFSP': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_PG': 1.0})
+PASS step 10 kept
+PASS update 20: KEEP_G 0.125 (0.125)
+PASS held at clock 20 by a check of 49% (0.125)
+PASS the save of update 30 kept while held
+PASS lifted: clock 40 after update 50 (0.3750 = 30/80)
+PASS back 10: clock 30 (0.2500 = 20/80)
+PASS past the end: KEEP_G 1 ({'KEEP_G': 1.0, 'PFSP': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_PG': 1.0})
+PASS steps 50 and 90 kept
+PASS no save kept after the end
+PASS the other dials untouched ({'KEEP_G': 1.0, 'PFSP': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_PG': 1.0})
+PASS the flags written (trips, targets reached, the keep step)
+11-04 10:11:36 ramp_14c on for fake: KEEP_G 0.0 -> 1.0 over 10 to 90; the clock stops under 50.0%, back 10 updates under 45.0% or two checks under 50.0% (zero point 50.0%)
+11-04 10:11:37 clock 1 after update 1: {'KEEP_G': 0.0}
+11-04 10:11:39 clock 2 after update 2: {'KEEP_G': 0.0}
+11-04 10:11:40 clock 3 after update 3: {'KEEP_G': 0.0}
+11-04 10:11:42 clock 4 after update 4: {'KEEP_G': 0.0}
+11-04 10:11:44 clock 5 after update 5: {'KEEP_G': 0.0}
+11-04 10:11:45 clock 10 after update 10: {'KEEP_G': 0.0}
+11-04 10:11:46 the clock at 10: kept keep/policy_step10_14c.pt at the save of update 10
+11-04 10:11:46 save at update 10 kept with its optimizer (clock 10)
+11-04 10:11:49 clock 20 after update 20: {'KEEP_G': 0.125}
+11-04 10:11:49 save at update 20 kept with its optimizer (clock 20)
+11-04 10:11:52 FLAG check update 20 against the start (1.4b's end): 98-102 = 49.0% (the bar 50.0%)
+11-04 10:11:52 HOLD at update 20: the last check 49.0% is under 50.0%; the clock stays at 20
+11-04 10:11:54 save at update 30 kept with its optimizer (clock 20)
+11-04 10:11:56 the hold lifts at update 30: the last check 52.5% is not under 50.0%; the clock goes on from 20
+11-04 10:11:58 clock 40 after update 50: {'KEEP_G': 0.375}
+11-04 10:12:00 FLAG check update 50 against the start (1.4b's end): 80-120 = 40.0% (the bar 50.0%)
+11-04 10:12:00 BACK at update 50: the check of update 50 80-120 = 40.0%; the clock 40 -> 30: {'KEEP_G': 0.25}
+11-04 10:12:00 HOLD at update 50: the last check 40.0% is under 50.0%; the clock stays at 30
+11-04 10:12:01 the hold lifts at update 50: the last check 55.0% is not under 50.0%; the clock goes on from 30
+11-04 10:12:03 FLAG update 61: the keep choice's step 0.2 (over 0.05)
+11-04 10:12:03 FLAG update 61: targets reached 0.1 (start 0.250): flicker?
+11-04 10:12:03 FLAG update 61: trips a player-minute 40.0 (start 20.0): flicker?
+11-04 10:12:03 clock 41 after update 61: {'KEEP_G': 0.3875}
+11-04 10:12:04 clock 90 after update 130: {'KEEP_G': 1.0}
+11-04 10:12:05 the clock at 50: kept keep/policy_step50_14c.pt at the save of update 130
+11-04 10:12:05 the clock at 90: kept keep/policy_step90_14c.pt at the save of update 130
+
+ALL PASSED

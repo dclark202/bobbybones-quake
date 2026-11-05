@@ -92,3 +92,7 @@ Then: `python docs/runs/b1.2/b1.2c/make_files.py <minutes>`, `powershell -Execut
 
 | Time | Change | Why |
 |---|---|---|
+
+## The result (2026-11-02)
+
+Stopped at update 250, 12:52 (owner), for b1.2d, which started from this save (`keep/policy_nojerk_b12c.pt`). Final check 89-71 (55.6%) against b1.1, frag share 51.6%: level with b1.1 or a little above. He reads the small items' inputs but barely acts on them (small items taken near his way 22% to 23%). The prechecks found checks that would have failed all night: a change of inputs must go through the checks, panel and logger as the start script sets them.

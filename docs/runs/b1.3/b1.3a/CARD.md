@@ -25,7 +25,7 @@
 |---|---|---|
 | The head's first choice = the hands' first choice, on read frames | 90% or more (proposal ❓), on every map; also in fights, at low stack, when bare | `metrics.jsonl` `head2.copy.agree` (by map and situation: 🧪 a read of the end save, to build) |
 | The copy's KL | falling, then flat | `head2.copy.kl` |
-| **The head plays alone** (his target from the head's choice, the hands' target outputs left out) against b1.2d's end, 200 games | about level (45% or more ❓) | ⏳ a mode of the checks' tools, built during the run |
+| **The head plays alone** (his target from the head's choice, the hands' target outputs left out) against b1.2d's end, 200 games | about level (45% or more ❓) | **74-126, 37.0%** (below; 11-03) |
 | Play | as b1.2d: checks about 50% against the start | the watcher |
 | The head's value | its loss falls | `head2.v_loss` |
 
@@ -60,3 +60,9 @@ Unchanged from b1.2d: the head does not act. The table is the baseline, win pay 
 
 | Time | Change | Why |
 |---|---|---|
+
+## The result (2026-11-03)
+
+Ended 07:17 at update 130 (owner), `keep/policy_end_b13a.pt` with its optimizer. The copy: agreement 86.8% (KL 0.145), flat from update 50. Play with the hands choosing about level with b1.2d's end (58.5 / 52.5 / 44.0 / 48.0 / 49.5% at updates 10 / 30 / 50 / 90 / 110; 52% against b1.1 at 70); the panel green.
+
+**The head alone** (`head2head.py --mix-a 1`, its choice in place of the hands', against b1.2d's end, 200 games, [headalone.log](headalone.log)): **74-126, 37.0%**, frag share 43.5%; by map won-lost from 4-16 (20%, Blood Run) to 10-10 (Campgrounds), Lost World 9-11 (the frag shares 33% to 61%; corrected 11-03: the per-map numbers were frag shares). Under the 45% bar: the head copies the hands where the hands' choices led, and alone it meets places it never saw. The owner: "he was always going to suck with a hard swap ... The only reasonable way to do this is to blend the two in together": b1.4a.

@@ -1,0 +1,119 @@
+switches: {'BRAIN_READ': '1', 'CONTACT_FREE': '1', 'HUNT': '1', 'INTENT_HOLD': '8.0', 'SM_ITEMS': '1'}
+C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\policy_end_b12d.pt on bloodrun: 24928 frames of inputs from the simulator
+inputs that never change in the simulator on this map: 224 of 980
+   self             dead (0); crouched (0)
+   walls            wall distance at 67.5 deg (-1); wall distance at 90.0 deg (-1); wall distance at 112.5 deg (-1); wall distance at 135.0 deg (-1); wall distance at 157.5 deg (-1); wall distance at 180.0 deg (-1); wall distance at 202.5 deg (-1); wall distance at 225.0 deg (-1); wall distance at 247.5 deg (-1); wall distance at 270.0 deg (-1); wall distance at 292.5 deg (-1)
+   projectiles      nearest enemy projectile: is a grenade (0); second nearest enemy projectile: is a rocket (0); second nearest enemy projectile: is a grenade (0); his own nearest projectile: is a grenade (0); his own second nearest projectile: is a grenade (0); third nearest enemy projectile: is a rocket (0); third nearest enemy projectile: is a grenade (0); fourth nearest enemy projectile: velocity up (0); fourth nearest enemy projec
+   weapons          holding heavy machine gun (0); holding gauntlet (0); owns machine gun (1); owns heavy machine gun (0); owns gauntlet (1); ammo: heavy machine gun (0); ammo: gauntlet (0)
+   items            nearest mega health: exists (1); nearest red armor: exists (1); nearest rocket launcher: exists (1); nearest railgun: exists (1); nearest lightning gun: exists (1); nearest shotgun: exists (1); nearest grenade launcher: exists (1); nearest plasma gun: exists (1); nearest heavy machine gun: forward (0); nearest heavy machine gun: left (0); nearest heavy machine gun: up (0); nearest heavy machine gun: exists (0); neare
+   movement goal    goal set (0); goal: forward (0); goal: left (0); goal: up (0); next waypoint: forward (0); next waypoint: left (0); next waypoint: up (0)
+   more items       nearest health (25 or 50): exists (1); nearest health (25 or 50): seen gone (0); second nearest health: exists (1); second nearest health: seen gone (0); nearest health bubble or armor shard: exists (1); second nearest bubble or shard: exists (1)
+   sight            ceiling: up and left (-1); ceiling: up and behind (-1); ceiling: up and right (-1); long distance at 90 deg (-1); long distance at 135 deg (-1); long distance at 180 deg (-1); long distance at 225 deg (-1); long distance at 270 deg (-1)
+   enemy            enemy holds grenade launcher (0); enemy holds heavy machine gun (0); enemy holds gauntlet (0); enemy crouched (0)
+   place            map has a teleporter (1); map has a jump pad (1)
+   enemy shots      last shot was a grenade launcher (0); last shot was a heavy machine gun (0); last shot was a gauntlet (0)
+   memory           enemy seen with grenade launcher (0); enemy seen with heavy machine gun (0); enemy seen with gauntlet (0)
+   more enemies     second enemy in view (0); second enemy: position forward (0); second enemy: position left (0); second enemy: position up (0); second enemy: direction sin (0); second enemy: direction cos (0); second enemy: direction up-down (0); second enemy faces him (0); second enemy holds rockets (0); second enemy holds rail (0); second enemy holds lightning (0); third enemy in view (0); third enemy: position forward (0); third en
+   hearing          coming or going (0)
+   hazards          lava at 270 deg, 96 units (0); deadly drop at 0 deg, 96 units (0); deadly drop at 45 deg, 96 units (0); deadly drop at 90 deg, 96 units (0); deadly drop at 135 deg, 96 units (0); deadly drop at 180 deg, 96 units (0); deadly drop at 225 deg, 96 units (0); deadly drop at 270 deg, 96 units (0); deadly drop at 315 deg, 96 units (0); deadly drop at 0 deg, 224 units (0); deadly drop at 45 deg, 224 units (0); deadly drop at
+   style            playing style: general (1); playing style: rockets (0); playing style: rail (0); playing style: lightning (0)
+   grenade arc      grenade arc: view error left-right, coarse (0); grenade arc: view error left-right, fine (0); grenade arc: view error up-down, coarse (0); grenade arc: view error up-down, fine (0); the grenade's flight time (0); the grenade reaches (0)
+   his legs         the switch to his legs is on (0); his legs carried him on the last frame (0)
+   v02 items        since he took: nearest heavy machine gun (1)
+   v02 places       place 1: slot holds a place (1); place 2: slot holds a place (1); place 3: slot holds a place (1); place 4: slot holds a place (1); place 5: slot holds a place (1); place 6: slot holds a place (1); place 7: slot holds a place (1); place 8: slot holds a place (1)
+   b2 holds         hold 1: share of the pros' holds (0.84); hold 1: outcome over expected standing there (0.12); hold 1: his target (0); hold 1: slot holds a place (1); hold 2: share of the pros' holds (0.66); hold 2: outcome over expected standing there (0.11); hold 2: slot holds a place (1); hold 3: share of the pros' holds (0.47); hold 3: outcome over expected standing there (0.0966667); hold 3: his target (0); hold 3: slot holds a 
+   b3 ways          his way: the shortest (0); his way: the second (0); his way: the third (0); the second way: longer (0); the third way: longer (0); the second way: differs (0); the third way: differs (0)
+   v038 drift       drift: yaw rate (0); drift: pitch rate (0); drift: yaw rate smoothed (0); drift: pitch rate smoothed (0)
+   b12 small items  small place 1: there (1); small place 1: is green armor (0); small place 2: there (1); small place 2: is green armor (0); small place 3: there (1); small place 3: is green armor (0); small place 4: there (1); small place 4: is green armor (0); small place 5: there (1); small place 5: is green armor (0); small place 6: there (1); small place 6: is green armor (0); small place 7: there (1); small place 7: is green armo
+his actions: forward [0.11, 0.15, 0.74] | strafe [0.41, 0.11, 0.48] | vertical [0.93, 0.07, 0.0] | fire [0.9, 0.1] | weapon [0.49, 0.15, 0.02, 0.07, 0.05, 0.01, 0.01, 0.15, 0.06, 0.0] | walk [1.0, 0.0] | zoom [0.72, 0.28] | lift [0.56, 0.44] | intention [0.0, 0.18, 0.23, 0.05, 0.05, 0.03, 0.24, 0.16, 0.04, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+11600 frames from the real game
+never change in the real game, but do in the simulator:
+    59 projectiles  nearest enemy projectile: is a rocket    real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.01 sd  0.08 [ 0.00.. 1.00]
+    80 weapons      owns rocket launcher                     real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.66 sd  0.48 [ 0.00.. 1.00]
+    81 weapons      owns railgun                             real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.48 sd  0.50 [ 0.00.. 1.00]
+    82 weapons      owns lightning gun                       real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.56 sd  0.50 [ 0.00.. 1.00]
+    84 weapons      owns shotgun                             real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.25 sd  0.43 [ 0.00.. 1.00]
+    85 weapons      owns grenade launcher                    real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.25 sd  0.43 [ 0.00.. 1.00]
+    86 weapons      owns plasma gun                          real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.44 sd  0.50 [ 0.00.. 1.00]
+   164 clock and sc his frags this round                     real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.08 sd  0.12 [-0.10.. 0.50]
+   165 clock and sc enemy frags this round                   real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.08 sd  0.12 [-0.10.. 0.50]
+   166 clock and sc score difference                         real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.01 sd  0.36 [-0.80.. 0.80]
+   194 sounds       heard: teleport                          real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.01 sd  0.08 [ 0.00.. 1.00]
+   204 sounds       teleport sound: position forward         real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.00 sd  0.16 [-1.88.. 1.91]
+   205 sounds       teleport sound: position left            real   0.00 sd  0.00 [-0.00..-0.00] | simulator  -0.00 sd  0.13 [-1.51.. 2.09]
+   206 sounds       teleport sound: position up              real   0.00 sd  0.00 [-0.00..-0.00] | simulator   0.01 sd  0.07 [-0.03.. 0.57]
+   207 sounds       pickup heard was mega health             real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.05 sd  0.22 [ 0.00.. 1.00]
+   208 sounds       pickup heard was red armor               real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.04 sd  0.20 [ 0.00.. 1.00]
+   229 sight        ceiling: straight up                     real  -1.00 sd  0.00 [-1.00..-1.00] | simulator  -0.99 sd  0.09 [-1.00.. 1.00]
+   243 enemy        enemy holds railgun                      real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.01 sd  0.11 [ 0.00.. 1.00]
+   244 enemy        enemy holds lightning gun                real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.02 sd  0.14 [ 0.00.. 1.00]
+   245 enemy        enemy holds machine gun                  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.01 sd  0.08 [ 0.00.. 1.00]
+   274 enemy shots  last shot was a railgun                  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.03 sd  0.16 [ 0.00.. 1.00]
+   275 enemy shots  last shot was a lightning gun            real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.07 sd  0.25 [ 0.00.. 1.00]
+   276 enemy shots  last shot was a machine gun              real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.01 sd  0.08 [ 0.00.. 1.00]
+   287 enemy shots  line just appeared                       real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.02 sd  0.12 [ 0.00.. 1.00]
+   311 memory       enemy has the mega health                real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.42 sd  0.49 [ 0.00.. 1.00]
+   312 memory       enemy has the red armor                  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.40 sd  0.49 [ 0.00.. 1.00]
+   314 memory       enemy seen with railgun                  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.18 sd  0.39 [ 0.00.. 1.00]
+   315 memory       enemy seen with lightning gun            real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.47 sd  0.50 [ 0.00.. 1.00]
+   316 memory       enemy seen with machine gun              real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.19 sd  0.40 [ 0.00.. 1.00]
+   366 hearing      railgun hum                              real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.01 sd  0.12 [ 0.00.. 1.00]
+   367 hearing      lightning gun hum                        real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.03 sd  0.17 [ 0.00.. 1.00]
+   449 intention    going for the rocket launcher            real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.08 sd  0.28 [ 0.00.. 1.00]
+   450 intention    going for the railgun                    real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.05 sd  0.21 [ 0.00.. 1.00]
+   497 dropped weap the dropped weapon is a railgun          real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.00 sd  0.06 [ 0.00.. 1.00]
+   523 projectiles  third nearest enemy projectile: velocity real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator  -0.00 sd  0.05 [-2.00..-0.00]
+   605 v02 believed times he took the mega health this life  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.32 sd  0.41 [ 0.00.. 1.00]
+   606 v02 believed times he took the red armor this life    real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.30 sd  0.40 [ 0.00.. 1.00]
+   609 v02 believed seen with rail this life                 real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.18 sd  0.39 [ 0.00.. 1.00]
+   610 v02 believed seen with lightning this life            real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.47 sd  0.50 [ 0.00.. 1.00]
+   613 v02 items    since he took: nearest rocket launcher   real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.79 sd  0.33 [ 0.00.. 1.00]
+   616 v02 items    since he took: nearest shotgun           real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.92 sd  0.23 [ 0.00.. 1.00]
+   617 v02 items    since he took: nearest grenade launcher  real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.93 sd  0.20 [ 0.00.. 1.00]
+never change in the simulator, but do in the real game:
+   172 more items   nearest health (25 or 50): seen gone     real   0.00 sd  0.05 [ 0.00.. 1.00] | simulator   0.00 sd  0.00 [ 0.00.. 0.00]
+   413 projectiles  his own nearest projectile: is a grenade real   0.00 sd  0.06 [ 0.00.. 1.00] | simulator   0.00 sd  0.00 [ 0.00.. 0.00]
+   517 grenade arc  grenade arc: view error up-down, fine    real  -0.00 sd  0.05 [-1.00.. 1.00] | simulator   0.00 sd  0.00 [ 0.00.. 0.00]
+   519 grenade arc  the grenade reaches                      real   0.00 sd  0.05 [ 0.00.. 1.00] | simulator   0.00 sd  0.00 [ 0.00.. 0.00]
+the largest differences in the mean (in units of the spread):
+  1.7    84 weapons      owns shotgun                             real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.25 sd  0.43 [ 0.00.. 1.00]
+  1.7    85 weapons      owns grenade launcher                    real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.25 sd  0.43 [ 0.00.. 1.00]
+  1.3    93 weapons      ammo: shotgun                            real   0.87 sd  0.24 [ 0.40.. 1.00] | simulator   0.17 sd  0.29 [ 0.00.. 1.00]
+  1.1    86 weapons      owns plasma gun                          real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.44 sd  0.50 [ 0.00.. 1.00]
+  1.0    81 weapons      owns railgun                             real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.48 sd  0.50 [ 0.00.. 1.00]
+  1.0   317 memory       enemy seen with shotgun                  real   0.62 sd  0.49 [ 0.00.. 1.00] | simulator   0.01 sd  0.11 [ 0.00.. 1.00]
+  1.0   159 clock and sc round time                               real   0.26 sd  0.14 [ 0.01.. 0.51] | simulator   0.68 sd  0.27 [ 0.05.. 1.00]
+  1.0   577 v02 game     time left in the round                   real   0.74 sd  0.14 [ 0.49.. 0.99] | simulator   0.32 sd  0.27 [ 0.00.. 0.95]
+  0.9   315 memory       enemy seen with lightning gun            real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.47 sd  0.50 [ 0.00.. 1.00]
+  0.9   610 v02 believed seen with lightning this life            real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.47 sd  0.50 [ 0.00.. 1.00]
+  0.8    82 weapons      owns lightning gun                       real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.56 sd  0.50 [ 0.00.. 1.00]
+  0.8   311 memory       enemy has the mega health                real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.42 sd  0.49 [ 0.00.. 1.00]
+  0.8    90 weapons      ammo: railgun                            real   0.71 sd  0.28 [ 0.40.. 1.00] | simulator   0.24 sd  0.30 [ 0.00.. 1.00]
+  0.8   312 memory       enemy has the red armor                  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.40 sd  0.49 [ 0.00.. 1.00]
+  0.8    94 weapons      ammo: grenade launcher                   real   0.40 sd  0.01 [ 0.36.. 1.00] | simulator   0.16 sd  0.28 [ 0.00.. 0.88]
+  0.7   605 v02 believed times he took the mega health this life  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.32 sd  0.41 [ 0.00.. 1.00]
+  0.7   606 v02 believed times he took the red armor this life    real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.30 sd  0.40 [ 0.00.. 1.00]
+  0.7    80 weapons      owns rocket launcher                     real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.66 sd  0.48 [ 0.00.. 1.00]
+  0.6   277 enemy shots  last shot was a shotgun                  real   0.38 sd  0.48 [ 0.00.. 1.00] | simulator   0.01 sd  0.08 [ 0.00.. 1.00]
+  0.6   613 v02 items    since he took: nearest rocket launcher   real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.79 sd  0.33 [ 0.00.. 1.00]
+  0.6    95 weapons      ammo: plasma gun                         real   0.42 sd  0.25 [ 0.03.. 1.00] | simulator   0.14 sd  0.21 [ 0.00.. 1.00]
+  0.6   164 clock and sc his frags this round                     real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.08 sd  0.12 [-0.10.. 0.50]
+  0.6   603 v02 believed seconds since his life began             real   0.35 sd  0.26 [ 0.00.. 1.00] | simulator   0.70 sd  0.36 [ 0.00.. 1.00]
+  0.6   165 clock and sc enemy frags this round                   real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.08 sd  0.12 [-0.10.. 0.50]
+  0.5   319 memory       enemy seen with plasma gun               real   0.01 sd  0.10 [ 0.00.. 1.00] | simulator   0.34 sd  0.47 [ 0.00.. 1.00]
+  0.5   323 memory       enemy's last death known                 real   0.90 sd  0.30 [ 0.00.. 1.00] | simulator   0.50 sd  0.50 [ 0.00.. 1.00]
+  0.5   604 v02 believed his last death is known                  real   0.90 sd  0.30 [ 0.00.. 1.00] | simulator   0.50 sd  0.50 [ 0.00.. 1.00]
+  0.5   316 memory       enemy seen with machine gun              real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.19 sd  0.40 [ 0.00.. 1.00]
+  0.5   314 memory       enemy seen with railgun                  real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.18 sd  0.39 [ 0.00.. 1.00]
+  0.5   609 v02 believed seen with rail this life                 real   0.00 sd  0.00 [ 0.00.. 0.00] | simulator   0.18 sd  0.39 [ 0.00.. 1.00]
+  0.4   792 v031 enemy s believed stack: armor                    real   0.04 sd  0.05 [ 0.00.. 0.28] | simulator   0.17 sd  0.21 [ 0.00.. 1.00]
+  0.4   246 enemy        enemy holds shotgun                      real   0.17 sd  0.38 [ 0.00.. 1.00] | simulator   0.00 sd  0.02 [ 0.00.. 1.00]
+  0.4   313 memory       enemy seen with rocket launcher          real   0.12 sd  0.33 [ 0.00.. 1.00] | simulator   0.47 sd  0.50 [ 0.00.. 1.00]
+  0.4   608 v02 believed seen with rockets this life              real   0.12 sd  0.33 [ 0.00.. 1.00] | simulator   0.47 sd  0.50 [ 0.00.. 1.00]
+  0.4   793 v031 enemy s believed stack: health and armor         real   0.33 sd  0.11 [ 0.00.. 0.58] | simulator   0.46 sd  0.18 [ 0.00.. 1.03]
+  0.4    77 weapons      holding plasma gun                       real   0.67 sd  0.47 [ 0.00.. 1.00] | simulator   0.32 sd  0.46 [ 0.00.. 1.00]
+  0.3   616 v02 items    since he took: nearest shotgun           real   1.00 sd  0.00 [ 1.00.. 1.00] | simulator   0.92 sd  0.23 [ 0.00.. 1.00]
+  0.3   794 v031 enemy s believed stack: spread                   real   0.21 sd  0.08 [ 0.01.. 0.36] | simulator   0.27 sd  0.10 [ 0.01.. 0.46]
+  0.3   611 v02 items    since he took: nearest mega health       real   0.51 sd  0.31 [ 0.00.. 1.00] | simulator   0.73 sd  0.34 [ 0.00.. 1.00]
+  0.3    92 weapons      ammo: machine gun                        real   0.85 sd  0.17 [ 0.67.. 1.00] | simulator   0.74 sd  0.15 [ 0.53.. 1.00]

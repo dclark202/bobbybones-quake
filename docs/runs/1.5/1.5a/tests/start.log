@@ -1,0 +1,8 @@
+PASS b as built: 400 frames x 8 seats: |h a - h b| 0, |head a - head b| 0, actions that differ 0
+PASS wsc random: the weapon key differs 406 times, the other outputs 0; |h| 0, |head| 0
+PASS winp random too: the head's state moves (0.491); the hands' memory 0 (the plan's gate 0.0)
+PASS wadd 0 (the blanked check): actions that differ 0 with wsc random and its add 0
+ALL PASSED
+
+18:24:10 PASS weapon_init same, 1.3b's end against it given the head's weapon scores
+18:24:10 ALL PASSED

@@ -1035,7 +1035,10 @@ class duelbot(minqlx.Plugin):
         if _net.needs_pose(self.P):                          # (v0.4.1) the brain's token: his place and view yaw as the game gives them
             p_, z_ = _net.pose(self.P, self.env, self.mapname)    # (fill_player put them in the simulator this frame)
             pz = dict(pose=p_[:1], zmap=z_[:1])
-        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **pz)
+        kf = (self.env.keep_feat()[:1] if (hasattr(_net, "keep_g") and _net.keep_g(self.P) > 0 and hasattr(self.env, "keep_feat"))
+              else None)                                     # (1.4c) what his keep choice reads (the simulator's numbers after the last frame)
+        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, kf=kf, **pz) if kf is not None else \
+            _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **pz)
         if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
             _net.brain_feed(self.P, self.env, self.h, [0])
         return [int(v) for v in acts[0]]
@@ -2484,6 +2487,8 @@ class duelbot(minqlx.Plugin):
         if h_in_ is not None:
             self.inputs_log(now, ob[0], h_in_, a)
         if len(a) > 10 and hasattr(env, "intend"):           # the intention head (v8), as in training
+            k_ = self.P.get("_keep") if hasattr(env, "keep_feat") else None
+            env.keep_in = None if k_ is None else np.concatenate([np.asarray(k_, np.int64)[:1], np.full(env.n - 1, -1, np.int64)])   # (1.4c) his keep choice
             env.intend(np.full(env.n, int(a[10]), np.int64), np.arange(env.n) == 0)
         yaw_in_, pitch_in_ = float(yaw), float(pitch)
         w, fire, pitch, yaw, keys = self.drive(bobby, env, E, 0, a, pitch, yaw, only=self.drill)

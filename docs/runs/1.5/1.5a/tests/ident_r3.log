@@ -1,0 +1,22 @@
+18:30:56 scratch_15a_id_base_r3: done in 0.5 min; the log ends: exit 0
+18:30:56 PASS base: the trainer ran 2 updates and dumped them (2 dumps)
+18:31:26 scratch_15a_id_base2_r3: done in 0.5 min; the log ends: exit 0
+18:31:26 PASS base2: the trainer ran 2 updates and dumped them (2 dumps)
+18:31:56 scratch_15a_id_a1_r3: done in 0.5 min; the log ends: exit 0
+18:31:56 PASS a1: the trainer ran 2 updates and dumped them (2 dumps)
+18:32:26 scratch_15a_id_a2_r3: done in 0.5 min; the log ends: exit 0
+18:32:26 PASS a2: the trainer ran 2 updates and dumped them (2 dumps)
+18:32:26 PASS a2 announced the weapon part and its credit
+18:32:56 scratch_15a_id_a3_r3: done in 0.5 min; the log ends: exit 0
+18:32:56 PASS a3: the trainer ran 2 updates and dumped them (2 dumps)
+18:33:26 scratch_15a_id_a4_r3: done in 0.5 min; the log ends: exit 0
+18:33:26 PASS a4: the trainer ran 2 updates and dumped them (2 dumps)
+18:33:26 PASS a4 announced the habits
+18:33:26 PASS the trainer repeats itself at a fixed seed (base = base2, both updates, actions and log p)
+18:33:26 PASS 1.5a's code with nothing new set = the code under it (a1 = base, both updates)
+18:33:26 PASS the head's weapon scores at zero, credit 0: update 1 = 1.3b's play (a2 = base, actions and log p)
+18:33:26   (update 2: a2 against base, actions that differ 0.0188: the scores and the hands' weapon rows learnt from update 1)
+18:33:26 PASS habits at share 0 = none (a3 = a2, both updates)
+18:33:26 FAIL habits at share 1: update 1's self-play matches = a2's (a4 = a2 there)
+18:33:26 PASS habits at share 1: the league seats' weapon key differs (0.1810 of their frames)
+18:33:26 FAILED

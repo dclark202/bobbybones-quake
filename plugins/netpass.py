@@ -283,9 +283,19 @@ def legs_feed(P, env, E, rows=None):
         env.legs_lg = lg
 
 
-def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
+def keep_g(P):
+    """(1.4c) the keep choice's share of his readings in this file (0: none, the lock rule; sim/head2.py)"""
+    if P.get("_head2") is None or not P["_head2"][0].get("keep") or "keep.weight" not in P["_head2"][1]:
+        return 0.0
+    return float(np.asarray(P["_head2"][1].get("keep_g", 0.0)))
+
+
+def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
+    kf [B, 3] (1.4c, keep_g(P) above 0): the simulator's keep_feat() rows after the frame before; the keep column of this frame
+    (-1 the lock rule, 0 keep, 1 re-decide; test_suite.Policy's sums, its own stream P["_krng"]) is left in P["_keep"] [B]
+    for the simulator's keep_in (None: no keep choice)
     and the new memory.
     events [B, 32] (v0.4, a network with a head): what the head is told on its tick (the simulator's head_events(),
     fetched when head_due() says the coming frame ticks); None: zeros. Read on the tick frames only.
@@ -369,7 +379,12 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
         zo, h = P["_slow"][2](P["_slow"][1], P["_slow"][0], x, h, hf)
     logits = zo @ P["wp"].T + P["bp"]
     if b2 is not None:
-        logits[:, head_slices(P)[0]] += b2
+        si2_ = head_slices(P)[0]                             # (b1.4a: the mix, his target choice moved toward the head's own; none at mix 0)
+        logits[:, si2_] = P["_head2"][2].np_mix_in(P["_head2"][1], P["_head2"][0], h2s, logits[:, si2_]) + b2
+        wa2_ = P["_head2"][2].np_wadd(P["_head2"][1], P["_head2"][0], h2s)    # (1.5a) its weapon scores on the weapon key's
+        if wa2_ is not None:
+            o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])
+            logits[:, int(o_[6]):int(o_[7])] += wa2_
     if hh is not None:                                       # (v0.4) the head ticks after the fast memory's step (on its frames) and its
         _, t_add, w_add, hh = hm.np_tick(hW, hlay, x, hfast, hh, events)    # target and way are added to the hands' (held between ticks)
         si, sw = head_slices(P)
@@ -381,6 +396,20 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None):
     if P.get("_uni") is not None and P["_uni"][4] is not None:     # (--legs-gate) g(zo) x the legs' choice, the motor layer
         logits = logits + LU_.np_gate_add(lay_u, *T_u, zo, h2_, lgl_, ok_, int(np.sum(P["action_dims"])))
     P["_zo"] = zo                                            # (--legs-residual: legs_feed's rows read it)
+    P["_keep"] = None
+    kg_ = keep_g(P)
+    if kg_ > 0 and kf is not None and h2s is not None:      # (1.4c) the keep choice: the head's state this frame's outputs read (before its
+        hm2_ = P["_head2"][2]                                # tick), the hands' memory after the frame, its own numbers (test_suite.Policy)
+        si_ = head_slices(P)[0]
+        li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
+        lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
+        cur_ = np.clip(np.asarray(kf)[:, 2].astype(np.int64), 0, lsm_.shape[1] - 1)
+        kx_ = hm2_.np_keep_x(kf, lsm_[np.arange(len(cur_)), cur_])
+        kz_ = hm2_.np_keep_logit(P["_head2"][1], P["_head2"][0], h2s, hfast, kx_)
+        if P.get("_krng") is None:
+            P["_krng"] = np.random.default_rng(1414)
+        kd_ = (P["_krng"].random(len(kz_)) < sig(kz_)).astype(np.int64)
+        P["_keep"] = np.where(P["_krng"].random(len(kz_)) < kg_, kd_, -1)
     if bst is not None:                                      # (v0.4.1) the brain reads the frame's normalised inputs; at its tick the readouts'
         br_, tk_ = bst                                       # answer is kept in map coordinates (his pose of this frame): test_suite's token_post
         tkd_ = br_.frame(xa)

@@ -159,6 +159,16 @@ The checks sized to 8 cores: 4 maps at a time, 2 processes each (`CHECK_BATCH=4`
 | The core test (`cpu_test.py`) | ✅ ALL PASSED (results below) |
 | The start | ✅ 2026-11-02 13:33 (owner's go) |
 
+## On the public servers (2026-11-02 evening, owner: "put him up on the live server"; "Just publish to the release page")
+
+| Step | Result |
+|---|---|
+| The code | `main` merged into the servers' branch `pub-perf` (`abf5930`, pushed): the small items' inputs, contact freedom. Conflicts: the ladder's name colour kept as the servers' (solid light blue), the simulator took main's seat aims with the servers' fast clip, the group module regenerated. `tools/pub_ident_b12d.py`: the build against main's simulator at b1.2d's end settings, inputs, pay and round ends **the same to the bit** (Blood Run, Aerowalk, 2400 frames each) |
+| A private spar on Amsterdam, offline (owner: "you can take one of the servers offline") | 15 min against the game's Hardcore bot on Blood Run, image `qlbot:pub-abf5930` built on the box. **Frame time:** median 14.3 ms (b1.1 there, 307 public minutes: 13.3 ms; the inputs 7.2 against 5.9 ms), frames over 25 ms 2.2% (b1.1: 5.6%). **Inputs** (`server_input_check.py`, `server_input_check.log`): the small items' inputs as in the simulator (none among the differences); the rest is the spar's warmup (every weapon held, no score) |
+| Deployed | Amsterdam about 21:19, Chicago about 21:25 (CT): `push_bobby.sh CODE=1 NOPULL=1 IMAGE=qlbot:pub-abf5930`, the network from `data/duellive_b12d`, b1.1's kept as `*_prev.npz`, `EARLY_BOBBY=0` as before. Amsterdam was offline for the spar, so its people check was skipped (`FORCE=1`); Chicago's showed nobody on. Both answer, no frame errors |
+| Open weights | release [b1.2d](https://github.com/dclark202/bobbybones-quake/releases/tag/b1.2d), tagged at `abf5930`: the six network files and the maps (v0.6.0's, unchanged) |
+| Logs for the review of games against people | the mind log records both players' places, his health and armor, the clock and score, the brain's belief and predictions, his targets and win estimates every eighth frame; not the enemy's own stack |
+
 ## The core test's results
 
 **ALL PASSED** (2026-11-02, 12:53 to 13:29, `cpu_test.log`; nothing else of ours running):
@@ -171,3 +181,7 @@ The checks sized to 8 cores: 4 maps at a time, 2 processes each (`CHECK_BATCH=4`
 | The owner's four cores | 3% over the test, nothing of ours on them ✅ |
 
 **Not measured:** a full check (160 ten-minute games) on the 8 efficiency cores; the test's batch was 4 games of 4 minutes a map. Its time shows in the first real check, at update 10 (b1.2c's took about 45 minutes on the shared performance cores). The performance cores' 54% means the trainer does not fill them.
+
+## The result (2026-11-02)
+
+Ended at its save of update 80 (owner), `keep/policy_end_b12d.pt` with its optimizer. Against the start (b1.2c's update 250): 90-70 (56.2%) at u10, 92-68 (57.5%) at u30, 82-78 (51.2%) at u40, **93-67 (58.1%) at u80**; against b1.1 95-65 (59.4%) at u60. **A success** (owner, after his play test); on the public servers and released as open weights 11-02 evening.

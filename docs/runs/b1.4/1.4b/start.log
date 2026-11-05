@@ -1,0 +1,33 @@
+11-04 08:14:39 1.3b dials at their ends
+11-04 08:14:40 train.cmd for 720 minutes: written
+11-04 08:14:40 allowed set INTENT_SWITCH: run '0' | reference '<unset>'
+11-04 08:14:40 allowed set WEAPON_OWN: run '1' | reference '<unset>'
+11-04 08:14:40 allowed arg --minutes: run '720' | reference '929'
+11-04 08:14:40 allowed arg --pfsp: run '0' | reference '<unset>'
+11-04 08:14:40 allowed arg --pfsp-fixed: run 'anchor_13b.pt' | reference '<unset>'
+11-04 08:14:40 allowed arg --run: run 'duel_gru_1_4b' | reference 'duel_gru_1_3b'
+11-04 08:14:40 settings check: PASS
+11-04 08:14:41 DIFF    checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-04 08:14:41 DIFF    checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-04 08:14:41 DIFF    checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-04 08:14:41 settings check: 3 difference(s) not allowed: FAIL
+11-04 08:14:41 SETTINGS CHECK FAILED (against 1.3b's end): not started
+11-04 08:15:41 1.3b dials at their ends
+11-04 08:15:41 train.cmd for 720 minutes: written
+11-04 08:15:41 allowed set INTENT_SWITCH: run '0' | reference '<unset>'
+11-04 08:15:41 allowed set WEAPON_OWN: run '1' | reference '<unset>'
+11-04 08:15:41 allowed arg --minutes: run '720' | reference '929'
+11-04 08:15:41 allowed arg --pfsp: run '0' | reference '<unset>'
+11-04 08:15:41 allowed arg --pfsp-fixed: run 'anchor_13b.pt' | reference '<unset>'
+11-04 08:15:41 allowed arg --run: run 'duel_gru_1_4b' | reference 'duel_gru_1_3b'
+11-04 08:15:41 settings check: PASS
+11-04 08:15:43 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-04 08:15:43 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-04 08:15:43 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-04 08:15:43 settings check: PASS
+11-04 08:15:44 backup: copied 1 files 0.02 GB to T:\BobbyBones_backup
+11-04 08:15:44 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.125, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_PG': 1.0, 'H2_MIX': 0.0, 'H2_COPY': 0.0, 'PFSP': 0.0}
+11-04 08:15:45 live.json carries the save's live dials
+11-04 08:15:46 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_3b\keep\policy_end_13b.pt with its optimizer; anchors 1.3b's end (fixed share), b1.2d's end, b1.1, v0.6.0's end
+11-04 08:15:46 trainer started: cmd 36304, from 1.3b's end, 720 minutes
+11-04 08:15:51 watcher 38412 | ramp 12888 (PFSP 0 -> 1 over 0 to 10, INTENT_TEACH_W 1 -> 0 over 10 to 70, SPEED_PAY 0.125 -> 0 over 70 to 90; the clock held and stepped back by the checks, zero point 0.5) | self-play logger 33812 | no guard (owner: never stop the run)

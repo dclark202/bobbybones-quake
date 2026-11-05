@@ -1,0 +1,34 @@
+PASS update 5: PFSP 0.5, rule 1, speed 0.125 ({'PFSP': 0.5, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125, 'H2_PG': 1.0})
+PASS update 10: PFSP 1, rule 1 ({'PFSP': 1.0, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125, 'H2_PG': 1.0})
+PASS step 10 kept
+PASS held at clock 10 by a check of 49% ({'PFSP': 1.0, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125, 'H2_PG': 1.0})
+PASS the save of update 20 kept while held
+PASS lifted: clock 30 after update 40 (rule 0.6667 = 1 - 20/60)
+PASS back 10: clock 20 (rule 0.8333 = 1 - 10/60)
+PASS past the end: rule 0, speed 0, PFSP 1 ({'PFSP': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_PG': 1.0})
+PASS steps 70 and 90 kept
+PASS no save kept after the end
+PASS H2_PG untouched (1.0)
+11-03 20:14:54 ramp_14b on for fake: PFSP 0.0 -> 1.0 over 0 to 10, INTENT_TEACH_W 1.0 -> 0.0 over 10 to 70, SPEED_PAY 0.125 -> 0.0 over 70 to 90; the clock stops under 50.0%, back 10 updates under 45.0% or two checks under 50.0% (zero point 50.0%)
+11-03 20:14:56 clock 1 after update 1: {'PFSP': 0.1, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125}
+11-03 20:14:57 clock 2 after update 2: {'PFSP': 0.2, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125}
+11-03 20:14:59 clock 3 after update 3: {'PFSP': 0.3, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125}
+11-03 20:15:01 clock 4 after update 4: {'PFSP': 0.4, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125}
+11-03 20:15:02 clock 5 after update 5: {'PFSP': 0.5, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125}
+11-03 20:15:04 clock 10 after update 10: {'PFSP': 1.0, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125}
+11-03 20:15:04 the clock at 10: kept keep/policy_step10_14b.pt at the save of update 10
+11-03 20:15:04 save at update 10 kept with its optimizer (clock 10)
+11-03 20:15:07 FLAG check update 10 against the start (1.3b's end): 98-102 = 49.0% (the bar 50.0%)
+11-03 20:15:07 HOLD at update 10: the last check 49.0% is under 50.0%; the clock stays at 10
+11-03 20:15:09 save at update 20 kept with its optimizer (clock 10)
+11-03 20:15:12 the hold lifts at update 20: the last check 52.5% is not under 50.0%; the clock goes on from 10
+11-03 20:15:13 clock 30 after update 40: {'PFSP': 1.0, 'INTENT_TEACH_W': 0.666667, 'SPEED_PAY': 0.125}
+11-03 20:15:15 FLAG check update 40 against the start (1.3b's end): 80-120 = 40.0% (the bar 50.0%)
+11-03 20:15:15 BACK at update 40: the check of update 40 80-120 = 40.0%; the clock 30 -> 20: {'PFSP': 1.0, 'INTENT_TEACH_W': 0.833333, 'SPEED_PAY': 0.125}
+11-03 20:15:15 HOLD at update 40: the last check 40.0% is under 50.0%; the clock stays at 20
+11-03 20:15:17 the hold lifts at update 40: the last check 55.0% is not under 50.0%; the clock goes on from 20
+11-03 20:15:18 clock 90 after update 130: {'PFSP': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0}
+11-03 20:15:19 the clock at 70: kept keep/policy_step70_14b.pt at the save of update 130
+11-03 20:15:19 the clock at 90: kept keep/policy_step90_14b.pt at the save of update 130
+
+ALL PASSED

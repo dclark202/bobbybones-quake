@@ -1,0 +1,129 @@
+18:25:46 E1/E3: C:/Users/dacla/Documents/gh/BobbyBones/data/sim_runs/duel_gru_1_3b/keep/policy_end_13b.pt against itself, 10 maps x 10 ten-minute games, 4 at once (PERCEPT_SPEED 0.0)
+18:39:37 eval_bloodrun.json done (exit 0)
+18:39:37 eval_aerowalk.json done (exit 0)
+18:40:07 eval_sinister.json done (exit 0)
+18:46:27 eval_lostworld.json done (exit 0)
+18:54:18 eval_campgrounds.json done (exit 0)
+18:56:18 eval_battleforged.json done (exit 0)
+18:59:18 eval_furiousheights.json done (exit 0)
+19:00:48 eval_hektik.json done (exit 0)
+19:07:58 eval_toxicity.json done (exit 0)
+19:09:28 eval_cure.json done (exit 0)
+{
+ "frames": 638862,
+ "files": 10,
+ "E1_owning": {
+  "rl": 0.7956,
+  "rg": 0.2817,
+  "lg": 0.6943
+ },
+ "E1_owning_all_three": 0.2183,
+ "E1_in_hand": {
+  "in view": {
+   "rl": 0.2401,
+   "rg": 0.0217,
+   "lg": 0.6083
+  },
+  "out of view": {
+   "rl": 0.244,
+   "rg": 0.0174,
+   "lg": 0.5657
+  }
+ },
+ "E1_in_view_by_distance": {
+  "0-300": {
+   "frames": 39576,
+   "hand": {
+    "rl": 0.2501,
+    "rg": 0.0223,
+    "lg": 0.593
+   },
+   "owns_all_frames": 9374,
+   "hand_owning_all": {
+    "rl": 0.0906,
+    "rg": 0.0037,
+    "lg": 0.7971
+   },
+   "given_owned": {
+    "rl": 0.292,
+    "rg": 0.0729,
+    "lg": 0.8158
+   }
+  },
+  "300-700": {
+   "frames": 51786,
+   "hand": {
+    "rl": 0.2342,
+    "rg": 0.0223,
+    "lg": 0.6245
+   },
+   "owns_all_frames": 13151,
+   "hand_owning_all": {
+    "rl": 0.0793,
+    "rg": 0.0074,
+    "lg": 0.8379
+   },
+   "given_owned": {
+    "rl": 0.2797,
+    "rg": 0.0684,
+    "lg": 0.8413
+   }
+  },
+  "700-": {
+   "frames": 9530,
+   "hand": {
+    "rl": 0.23,
+    "rg": 0.0162,
+    "lg": 0.5834
+   },
+   "owns_all_frames": 2108,
+   "hand_owning_all": {
+    "rl": 0.0778,
+    "rg": 0.0062,
+    "lg": 0.7984
+   },
+   "given_owned": {
+    "rl": 0.2845,
+    "rg": 0.0559,
+    "lg": 0.8167
+   }
+  }
+ },
+ "E1_first_big_after_spawn": {
+  "rl": 0.6133,
+  "rg": 0.0864,
+  "lg": 0.3003
+ },
+ "E1_first_big_after_spawn_n": 949,
+ "E3_weapon_key": {
+  "rail, enemy in view over 768, rail owned not in hand": {
+   "frames": 1717,
+   "p_mean": 0.00179,
+   "p_median": 0.0,
+   "share_over_5pct": 0.0058,
+   "per_second": 0.0179
+  },
+  "rail, enemy in view 500-768, rail owned not in hand": {
+   "frames": 5937,
+   "p_mean": 0.00067,
+   "p_median": 0.0,
+   "share_over_5pct": 0.0029,
+   "per_second": 0.0067
+  },
+  "rockets, enemy in view under 300, rockets owned not in hand": {
+   "frames": 23380,
+   "p_mean": 0.00362,
+   "p_median": 0.0,
+   "share_over_5pct": 0.0133,
+   "per_second": 0.0362
+  },
+  "lightning, enemy in view over 768, lightning owned not in hand": {
+   "frames": 873,
+   "p_mean": 0.02045,
+   "p_median": 0.001,
+   "share_over_5pct": 0.063,
+   "per_second": 0.2045
+  }
+ },
+ "E3_note": "p: his chance of pressing that weapon's key at a reading of the key (read every 4th frame: 10 a second); per_second: the expected presses a second in that state"
+}
