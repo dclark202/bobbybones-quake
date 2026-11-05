@@ -33,6 +33,20 @@ simulator of the game, checked on a real Quake Live server, play-tested by peopl
    run (the graphics card, the trainer's cores, the check cores the watcher uses). On 2026-11-04 a 1.4c smoke and a level check were
    started beside 1.4b without asking. To stop a job's processes, match each one's own command line: Windows reuses process IDs,
    so a walk down parent IDs caught two unrelated `tail -F` monitors that day.
+10. **Build the approved design, never a simplified one (owner, 2026-11-05).** "Changing my approved build design for simplification
+   to meet some arbitrary deadline based on your inability to understand time correctly is unacceptable. I approve the design and
+   that's what you build. You do not manage time, I manage that. I ask, you do, and then when it's ready we decide." On 2026-11-05 1.7
+   was built cut down (one rule-picked candidate a kind, no pointer, no brain lesson, no fit to the pros) "so it's ready tonight";
+   he rejected it: "You build it as it was originally specced." Every part of an approved design is built; an unspecified detail is
+   decided from the design's intent and recorded; a real structural fork goes to him. No start times, schedules or time estimates
+   drive what is built: when it is ready (built and tested), he decides.
+11. **A decision made from the sum of two learned outputs is always regularized (owner, 2026-11-05).** "Anytime we have a 'decision'
+   (as in the case of weapon, item, and now firing) that is the sum of two learned outputs ... there needs to be some kind of
+   regularization. That sum just seems like a prime spot ... to get some opposite sign blowup." Where a choice's logits are the
+   hands' rows plus a head's scores (the target since 1.3b, the weapon key since 1.5a, the fire key and the order's pointer on the
+   targets and the way since 1.7), both parts get the decay (`H2_L2`, one coefficient: the decoupled weight decay in
+   `sim/train_duel_rnn.py` after `opt.step()`) from the moment the sum is live, and each part's size is recorded and flagged over 40
+   by the run's ramp. A new sum is not built without both.
 
 ## Where things are
 

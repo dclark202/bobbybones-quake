@@ -1,7 +1,7 @@
 """1.7a's dials (owner, 2026-11-04 night: "start the lock handover ... and let it go for 80 updates"; CARD.md), on the clock of updates done:
   KEEP_G          0 -> 1      over updates 10 to 90    (the hand-over: the share of his seconds the keep choice decides; the lock rule the rest)
   CMB_G           0 -> 1      over updates 90 to 170   (1.7, the order: the share of his readings the head's combat order is asked at)
-  PADD            0 -> 0.3    over updates 90 to 170   (... the pointer's scores on his targets' and his way's: its ceiling the level
+  PADD            0 -> 0.3    over updates 90 to 170   (... the pointer's scores on his targets' and his way's: held at 0.3 after: the level
                                                          checks' (11-05: at 1 30.5%, at 0.3 53.5% against 1.6a's end))
   ORD_GATE  -30, -12 -> 0     over updates 90 to 170   (... the order's attention token: shut until 90, then from -12 to open)
   FADD            0 -> 1      over updates 90 to 170   (1.7, the fire push: its add on the fire key)

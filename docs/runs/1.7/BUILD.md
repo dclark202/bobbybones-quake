@@ -197,5 +197,5 @@ Until 21:00 on Friday 11-06 (`start.ps1 -Until "2026-11-06 21:00"`). The ways (`
 | 4 | The rarer start: "yes, the rarer start is good" |
 | 5 | The length: "run it until 9pm tomorrow (friday 11/6)" |
 | 6 | The ways (`WAYS`, the order's third level): "We can leave the routes for the next round" ([BACKLOG](../../BACKLOG.md) B-301: the ways' tables measured again with today's legs, his way choice opened from "the shortest", a level check). Built behind the switch; inert in 1.7a |
-| 7 | `PADD`'s ceiling: the highest of 1 and 0.3 that passes the level check, else 0 (my proposal, not objected to): 0.3 |
+| 7 | `PADD`'s end value (0 to it over updates 90 to 170, then held; a fixed dial): the highest of 1 and 0.3 that passes the level check, else 0: **0.3** |
 | 8 | Checks: "Run whatever checks you need, you don't need to ask me"; 1.6a's leftover processes stopped (owner) |

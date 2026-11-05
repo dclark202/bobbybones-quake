@@ -24,7 +24,7 @@ build, part by part: [BUILD.md](../BUILD.md)); every test passed; the start leve
 | 0 to 10 | as 1.6a's end: the trial, a check at update 10 | |
 | 10 to 90 | **the lock handed to the keep choice**, +0.0125 an update ✅ (owner: 80 updates) | live `KEEP_G` 0 → 1 |
 | 90 to 170 | **the order and the fire push opened together** ✅ (owner, 11-05): the order asked at a share, its pointer's scores on his targets and his way, its token for the hands; the head's push on the trigger, half the trigger's credit on the head's clock (owner: "Ok that seems fair") | live `CMB_G` 0 → 1, `PADD` 0 → 0.3, `ORD_GATE` −12 → 0 (shut before); `FADD` 0 → 1, `H2_FPG` 0 → 0.5 |
-| 170 to the end | all at their ceilings | |
+| 170 to the end | every dial held at its end value (`PADD` 0.3, `H2_FPG` 0.5, the rest 1) | |
 | Length | ✅ until 21:00 on Friday 11-06 (owner, 11-05 evening): `start.ps1 -Until "2026-11-06 21:00"` works out the minutes | `--minutes` |
 
 ## The combat order as built (11-05) ✅ (part by part: [BUILD.md](../BUILD.md))
@@ -160,7 +160,7 @@ and the enemy, long ones on item timing and at angles that pay, less churn in fi
 | The way's third level inert without `WAYS` (one way to each target) | the owner's call: the ways next round (B-301) | `WAYS=1` | the way's adds choose nothing until then |
 | The rarer start: the new kinds 4.5 times rarer than the pros' fit | measured: the fit as is 32%, this 47% at full share | the fit as is | p by kind (`cmb.p`) climbing where orders pay |
 | The pros' labels after the two fixes (sight and sound; no break off across a death) | measured: 23% → 5% of spam labels without a candidate; break off 7.7% → 3.5% of moments | the first labels | the level check |
-| `PADD`'s ceiling 0.3 | measured (at full weight 30.5% (61-139: fails); at 0.3 53.5% (107-93: passes)) | 1 | his target choice's two parts (`cmb.sums.targets`): the add against the hands' |
+| `PADD` held at 0.3 from update 170 (a fixed dial, live-settable; the pointer's scores themselves keep learning) | measured (at full weight 30.5% (61-139: fails); at 0.3 53.5% (107-93: passes)) | 1 | his target choice's two parts (`cmb.sums.targets`): the add against the hands' |
 | A sum of two outputs regularized (rule 11): `H2_L2` 0.01 on both parts of the fire key and of the pointer's adds | the owner's rule | none | each part's size; a flag over 40 |
 | The trigger's credit only halfway (`H2_FPG` 0.5) | the owner's call | all the way | hits and accuracy by weapon |
 | Pay pathologies (the ledger) | | | negative frags, sign flips, lopsided games |
@@ -179,7 +179,7 @@ and the enemy, long ones on item timing and at angles that pay, less churn in fi
 | 6c | ✅ the ways (`WAYS`): "We can leave the routes for the next round" (B-301) | owner, 11-05 evening |
 | 6d | ✅ the rarer start: "yes, the rarer start is good" | owner, 11-05 evening |
 | 6e | ✅ a decision from a sum of two learned outputs is regularized (CLAUDE.md rule 11) | owner, 11-05 evening |
-| 6f | ✅ `PADD`'s ceiling: the highest of 1 and 0.3 that passes the level check, else 0: 0.3 | owner, 11-05 evening ("OK just give me the results") |
+| 6f | ✅ `PADD`'s end value (0 to it over updates 90 to 170, then held): the highest of 1 and 0.3 that passes the level check, else 0: **0.3** | owner, 11-05 evening ("OK just give me the results") |
 | 7 | the start, on his command, in a new session | |
 
 ## The result
