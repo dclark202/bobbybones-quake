@@ -145,6 +145,7 @@ class SeatClock:
 
 
 _DO, _DI, _DK, _DH, _DP, _DE, _DV, _DS = [], [], [0], [], [], [], [], []
+_DW = []                                                     # (1.5a, E3) his weapon key's chances on the dumped frames
 _OUT = os.environ.get("DUMP_OUT") or r"C:	mp_never"
 
 
@@ -243,7 +244,13 @@ def play(job):
     t = -1
     while t + 1 < end_:
         t += 1
-        a = np.zeros((n, len(E.ACTION_DIMS)), np.int64)
+        nA_ = len(E.ACTION_DIMS)
+        kp_ = hasattr(env, "keep_feat") and (getattr(pol, "keep_on", False) or getattr(opp_pol, "keep_on", False))
+        a = np.zeros((n, nA_ + int(kp_)), np.int64)                            # (1.4c) the keep column after the outputs: -1 the lock rule
+        kf_ = None
+        if kp_:
+            a[:, -1] = -1
+            kf_ = env.keep_feat()
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -255,16 +262,27 @@ def play(job):
             import btoken as btoken_
             pz_, zz_ = btoken_.pose_from_env(env, mp)
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
-                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}))
-        a[ev, :min(al.shape[1], a.shape[1])] = al[:, :a.shape[1]]
+                        **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
+                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}))
+        a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]
+        if kp_ and pol.keep_on:
+            a[ev, -1] = al[:, -1]
         _DK[0] += 1
         if _DK[0] % 4 == 0:
             _DO.append(np.asarray(obs[ev][:, idx], np.float32).copy()); _DI.append(np.asarray(al[:, 10]).astype(np.int16).copy())
-            _DH.append(np.asarray(env.intent)[ev].astype(np.int16).copy()); _DP.append(np.asarray(env.state)[ev, :3].astype(np.float32).copy()); _DE.append(np.asarray(env.state)[np.asarray(ev) ^ 1, :3].astype(np.float32).copy()); _DV.append(np.asarray(env.visible, bool)[ev].copy() if hasattr(env, 'visible') else np.zeros(len(ev), bool)); _DS.append(np.asarray(ev).astype(np.int16).copy())          # (a network with an output the module lacks: LEGS_TURN_ADD off)
+            _DH.append(np.asarray(env.intent)[ev].astype(np.int16).copy()); _DP.append(np.asarray(env.state)[ev, :3].astype(np.float32).copy()); _DE.append(np.asarray(env.state)[np.asarray(ev) ^ 1, :3].astype(np.float32).copy()); _DV.append(np.asarray(env.visible, bool)[ev].copy() if hasattr(env, 'visible') else np.zeros(len(ev), bool)); _DS.append(np.asarray(ev).astype(np.int16).copy())
+            if getattr(pol, "last_logits", None) is not None:   # (1.5a, E3) the weapon key's chances as he played (its logits after every part)
+                o6_ = int(np.sum(pol.dims[:6]))
+                lw_ = np.asarray(pol.last_logits[:, o6_:o6_ + int(pol.dims[6])], np.float64)
+                lw_ = np.exp(lw_ - lw_.max(1, keepdims=True))
+                _DW.append((lw_ / lw_.sum(1, keepdims=True)).astype(np.float16))          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
-                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}))
-            a[od, :min(ao.shape[1], a.shape[1])] = ao[:, :a.shape[1]]
+                                 **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
+                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}))
+            a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
+            if kp_ and opp_pol.keep_on:
+                a[od, -1] = ao[:, -1]
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
             for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
@@ -383,7 +401,7 @@ def play(job):
         st_reg = {k: np.array(env.stats[k], np.float64) for k in SK}
     flip = slice(None, None, -1) if swap else slice(None)
     os.makedirs(_OUT, exist_ok=True)
-    np.savez(os.path.join(_OUT, "dump_{}_{}.npz".format(mp, os.getpid())), obs=np.concatenate(_DO), intent=np.concatenate(_DI), held=np.concatenate(_DH), pos=np.concatenate(_DP), en=np.concatenate(_DE), vis=np.concatenate(_DV), seat=np.concatenate(_DS), items_pos=np.asarray(env.item_pos, np.float32), items_lab=np.array([str(d_[4] or '') for d_ in env.item_def]))
+    np.savez(os.path.join(_OUT, "dump_{}_{}.npz".format(mp, os.getpid())), obs=np.concatenate(_DO), intent=np.concatenate(_DI), held=np.concatenate(_DH), pos=np.concatenate(_DP), en=np.concatenate(_DE), vis=np.concatenate(_DV), seat=np.concatenate(_DS), **({"wkp": np.concatenate(_DW)} if _DW and len(_DW) == len(_DO) else {}), items_pos=np.asarray(env.item_pos, np.float32), items_lab=np.array([str(d_[4] or '') for d_ in env.item_def]))
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 overtime_periods=ot_n,
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),

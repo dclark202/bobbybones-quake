@@ -1,0 +1,23 @@
+PASS bloodrun HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True, 'no keep decided': True}
+PASS bloodrun HEAD against km1: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True, 'no keep decided': True}
+PASS bloodrun blind-fire cost 0: the game the same
+bloodrun blind-fire cost 0: pay up 35.2200 in 11740 frames (11740 billed frames; the counter: 11740)
+PASS bloodrun blind-fire cost 0: every difference a whole number of the cost, none negative, some
+bloodrun keep everywhere: readings his choice decided 1859, target changes where not forced 5 (to nothing: 5), forced readings 62
+PASS bloodrun keep everywhere: his choice decided readings; no change of target where not forced but resets to nothing
+bloodrun re-decide everywhere: readings decided 1666, of them counted 1666; changes of target 1790 (unset: 805)
+PASS bloodrun re-decide everywhere: every reading his choice decided counted; more changes than the lock
+bloodrun random keep column: stats keep [0, 0, 0, 1749, 920, 871, 782, 575, 280, 172, 39, 35, 495, 471, 52, 94]
+PASS bloodrun random keep column: the game differs; decided readings counted (1749 = stats 1749)
+PASS aerowalk HEAD against now: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True, 'no keep decided': True}
+PASS aerowalk HEAD against km1: {'obs': True, 'rew': True, 'done': True, 'rl': True, 'ch': True, 'counters': True, 'no keep decided': True}
+PASS aerowalk blind-fire cost 0: the game the same
+aerowalk blind-fire cost 0: pay up 27.6840 in 9228 frames (9228 billed frames; the counter: 9228)
+PASS aerowalk blind-fire cost 0: every difference a whole number of the cost, none negative, some
+aerowalk keep everywhere: readings his choice decided 1905, target changes where not forced 5 (to nothing: 5), forced readings 63
+PASS aerowalk keep everywhere: his choice decided readings; no change of target where not forced but resets to nothing
+aerowalk re-decide everywhere: readings decided 1708, of them counted 1708; changes of target 1837 (unset: 1158)
+PASS aerowalk re-decide everywhere: every reading his choice decided counted; more changes than the lock
+aerowalk random keep column: stats keep [0, 0, 0, 1791, 929, 879, 813, 1008, 535, 176, 136, 127, 253, 240, 160, 302]
+PASS aerowalk random keep column: the game differs; decided readings counted (1791 = stats 1791)
+ALL PASSED

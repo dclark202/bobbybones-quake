@@ -54,6 +54,21 @@ How it learns (the trainer; the routing of its gradient)
   The head's sequence is re-run in the learning step from the stored u of the rollout's ticks and the state at its start
   (truncated there: 48 ticks, 9.6 s, of backpropagation through time; its state itself is carried across rollouts).
 
+The keep choice (1.4c; the layout's "keep", absent before): at each reading of his target, keep it or re-decide (the
+simulator's keep column, sim/duel_env.py). z = keep(cat[s, hands' memory (a number), f]) -> 1, the logit of re-deciding;
+f = keep_x(): his target's age out of contact (s / 10, at most 2), contact (0 or 1), the held target's log-probability under
+the present scores (clipped to -10, / 5; a number). Its start (tools/keep_init.py): the lock made soft, the weights on s and
+the hands' memory zero. keep_g (a buffer, 0 for a save without it): the share of the readings it decides (the rest: the lock
+rule). Learnt in the head's own term with the target (the trainer).
+
+The weapon part (1.5a; the layout's "weapon", absent before; tools/weapon_init.py): the head informs his weapon choice. wsc(s)
+-> one score per choice of the weapon key (no press and the nine weapons), held from tick to tick as the target's scores; wadd
+(a buffer, 0 for a save without it) times it is added to the hands' weapon-key logits where the head has a state (the trainer,
+the checks): one set of weapon-key scores, as the target's since 1.3b. Its own inputs: the part "wobs" at the end of u (the
+columns of W_OBS: the weapon in his hand and whether he can fire, the enemy's weapon in view and since his last death, the hums
+heard, the enemy in view and his last known place), read by a layer of their own, winp, added to inp's: tanh(inp(u before
+wobs) + winp(wobs)). winp and wsc start at exactly zero: a network given the part answers exactly as it did.
+
 Numpy only at the top level (the game server imports this file); torch inside the torch functions.
 """
 import csv
@@ -63,17 +78,25 @@ import os
 import numpy as np
 
 VERSION = 1
-PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "obs", "hands")
+PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "obs", "hands", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide)
+KEEP_F = 3                                                   # (1.4c) the keep choice's own numbers: age out of contact, contact, log p held
+KEEP_AGE_MAX, KEEP_LP_MIN = 20.0, -10.0
 CTRL_SRCS = ("none", "belief", "both")                     # (the ctrl slot's source: sim/control.py's readouts by name)
 CLIP = 10.0
 # (group, input) of docs/INPUTS.csv; an input of None: every row of the group
 OBS_SEL = (("self", "health"), ("self", "armor"), ("weapons", "owns "), ("weapons", "ammo: "),
            ("items", "nearest mega health: "), ("items", "nearest red armor: "),
            ("clock and score", None), ("v02 game", None), ("v02 items", None), ("intention", None))
+# (1.5a) the weapon part's own inputs ("wobs"): what he holds and whether he can fire it, the enemy's weapon (in view, since his last
+# death, the hums heard), the enemy in view and his last known place (exact while in view)
+W_OBS = (("weapons", "holding "), ("self", "weapon not ready"), ("enemy", "enemy holds "), ("memory", "enemy seen with "),
+         ("hearing", "railgun hum"), ("hearing", "lightning gun hum"), ("enemy", "noticed in view"), ("enemy", "seen or heard recently"),
+         ("enemy", "last known position: "))
 
 
-def obs_cols(inputs_csv=None):
-    """the indices of OBS_SEL's inputs in docs/INPUTS.csv (an input name ending in a space or ': ' is a prefix)"""
+def obs_cols(inputs_csv=None, sel=OBS_SEL):
+    """the indices of OBS_SEL's inputs (sel: W_OBS for the weapon part's) in docs/INPUTS.csv (an input name ending in a space or ': '
+    is a prefix)"""
     if inputs_csv is None:
         inputs_csv = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "INPUTS.csv")
     out = []
@@ -81,7 +104,7 @@ def obs_cols(inputs_csv=None):
         g, n = r["group"], r["input"]
         if "believed" in n:                                  # (the old rule-made belief stays out: v0.4.2's fade)
             continue
-        for sg, sn in OBS_SEL:
+        for sg, sn in sel:
             if g == sg and (sn is None or n == sn or (sn.endswith(" ") and n.startswith(sn))):
                 out.append(int(r["index"]))
                 break
@@ -102,33 +125,48 @@ def layout(brain=256, trk=27, trz=28, ahead=0, ctrl=4, obs=None, hands=512, enc=
                 **({"chrono_lo": float(chrono_lo)} if chrono_lo > 0 else {}))
 
 
+def add_weapon(L, wobs, n):
+    """(1.5a) a layout with the weapon part: n scores (the weapon key's choices), its inputs the columns wobs"""
+    wobs = [int(c) for c in wobs]
+    return dict(L, widths=dict(L["widths"], wobs=len(wobs)), on=dict(L["on"], wobs=1), wobs_cols=wobs, weapon=int(n))
+
+
 def ctrl_src(L):
     """the ctrl slot's source ("none" for a layout made before it was wired)"""
     return str(L.get("ctrl_src", "none") or "none")
 
 
 def u_width(L):
-    return int(sum(L["widths"][p] for p in PARTS))
+    return int(sum(int(L["widths"].get(p, 0)) for p in PARTS))
+
+
+def u0_width(L):
+    """(1.5a) u's width before the weapon part's inputs: what inp reads"""
+    return u_width(L) - int(L["widths"].get("wobs", 0))
 
 
 def n_weights(L):
-    U, I, S, P, E, N, Hh = u_width(L), L["inp"], L["size"], L["plan"], L["enc"], L["n_target"], L["widths"]["hands"]
-    return (U * I + I) + 3 * S * (I + S) + 6 * S + (S * P + P) + (P * E + E) + (S * N + N) + (S + Hh + 1)
+    U, I, S, P, E, N, Hh = u0_width(L), L["inp"], L["size"], L["plan"], L["enc"], L["n_target"], L["widths"]["hands"]
+    Wo, Nw = int(L["widths"].get("wobs", 0)), int(L.get("weapon", 0) or 0)
+    return (U * I + I) + 3 * S * (I + S) + 6 * S + (S * P + P) + (P * E + E) + (S * N + N) + (S + Hh + 1) + \
+        ((S + Hh + KEEP_F + 1) if L.get("keep") else 0) + ((Wo * I + I) + (S * Nw + Nw) if Nw else 0)
 
 
 def describe(L):
     return ("strategy head (v0.4.3): GRU {} a tick every {} frames ({:.2f} s) on {} numbers ({}), plan {} into the hands' "
             "input, a bias on {} intentions, its value at gamma {} ({:.0f} s); {:,} weights").format(
         L["size"], L["every"], L["every"] * 0.025, u_width(L),
-        " + ".join("{} {}{}".format(p, L["widths"][p], "" if L["on"].get(p, 1) else " (off)") for p in PARTS if L["widths"][p]),
-        L["plan"], L["n_target"], L["gamma"], 0.025 / max(1e-9, 1.0 - L["gamma"]), n_weights(L))
+        " + ".join("{} {}{}".format(p, L["widths"].get(p, 0), "" if L["on"].get(p, 1) else " (off)") for p in PARTS if L["widths"].get(p, 0)),
+        L["plan"], L["n_target"], L["gamma"], 0.025 / max(1e-9, 1.0 - L["gamma"]), n_weights(L)) + \
+        ("; its weapon part: {} scores added to the weapon key's, its {} inputs read by winp".format(L["weapon"], L["widths"].get("wobs", 0))
+         if L.get("weapon") else "")
 
 
 def _offs(L):
     o, out = 0, {}
     for p in PARTS:
-        out[p] = (o, o + int(L["widths"][p]))
-        o += int(L["widths"][p])
+        out[p] = (o, o + int(L["widths"].get(p, 0)))
+        o += int(L["widths"].get(p, 0))
     return out
 
 
@@ -143,12 +181,17 @@ def make_module(L, seed=4044):
         def __init__(self):
             super().__init__()
             S = int(L["size"])
-            self.inp = nn.Linear(u_width(L), int(L["inp"]))
+            self.inp = nn.Linear(u0_width(L), int(L["inp"]))
             self.gru = nn.GRUCell(int(L["inp"]), S)
             self.plan_out = nn.Linear(S, int(L["plan"]))
             self.plan_in = nn.Linear(int(L["plan"]), int(L["enc"]))
             self.target = nn.Linear(S, int(L["n_target"]))
             self.v = nn.Linear(S + int(L["widths"]["hands"]), 1)
+            if L.get("keep"):                                # (1.4c) the keep choice: zeros here, its start from tools/keep_init.py
+                self.keep = nn.Linear(S + int(L["widths"]["hands"]) + KEEP_F, 1)
+                nn.init.zeros_(self.keep.weight)
+                nn.init.zeros_(self.keep.bias)
+                self.register_buffer("keep_g", torch.zeros(()))
             self.register_buffer("gate", torch.zeros(()))
             self.register_buffer("mix", torch.zeros(()))     # (b1.4a) his target choice moved from the hands' to the head's
             self.register_buffer("add", torch.zeros(()))     # (1.3b) the head's own scores added to the hands'
@@ -165,12 +208,23 @@ def make_module(L, seed=4044):
                         tau = 1.0 + torch.rand(S) * (tmax - 1.0)
                     self.gru.bias_ih[S:2 * S] = torch.log((tau - 1.0).clamp(min=1e-3))
                     self.gru.bias_hh[S:2 * S] = 0.0
+            if L.get("weapon"):                              # (1.5a) the weapon part: zeros here (after the draws above: their stream as before)
+                self.winp = nn.Linear(int(L["widths"]["wobs"]), int(L["inp"]))
+                self.wsc = nn.Linear(S, int(L["weapon"]))
+                for l_ in (self.winp, self.wsc):
+                    nn.init.zeros_(l_.weight)
+                    nn.init.zeros_(l_.bias)
+                self.register_buffer("wadd", torch.zeros(()))
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
             if prefix + "mix" not in state_dict:             # (a save from before b1.4a: no mix, 0)
                 state_dict[prefix + "mix"] = torch.zeros(())
             if prefix + "add" not in state_dict:             # (a save from before 1.3b: no add, 0)
                 state_dict[prefix + "add"] = torch.zeros(())
+            if L.get("keep") and prefix + "keep_g" not in state_dict:     # (1.4c) no share in the file: 0
+                state_dict[prefix + "keep_g"] = torch.zeros(())
+            if L.get("weapon") and prefix + "wadd" not in state_dict:     # (1.5a) no add in the file: 0
+                state_dict[prefix + "wadd"] = torch.zeros(())
             super()._load_from_state_dict(state_dict, prefix, *args, **kw)
 
     with torch.random.fork_rng(devices=[]):
@@ -182,12 +236,12 @@ def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, ha
     """u [B, u_width] (float32 holding half-precision numbers) from the parts (a part None or off: zeros). obs: his
     normalised inputs [B, all inputs] (the columns are taken here)"""
     import torch
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs)
     ref = next(v for v in src.values() if v is not None)
     B = ref.shape[0]
     cols = []
     for p in PARTS:
-        w = int(L["widths"][p])
+        w = int(L["widths"].get(p, 0))
         if w == 0:
             continue
         v = src[p]
@@ -195,14 +249,28 @@ def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, ha
             cols.append(torch.zeros(B, w, device=ref.device))
             continue
         v = v.float()
-        if p == "obs":
-            v = v[:, torch.as_tensor(L["obs_cols"], dtype=torch.long, device=v.device)]
+        if p in ("obs", "wobs"):                             # (1.5a: wobs, the weapon part's columns of the same inputs)
+            v = v[:, torch.as_tensor(L[p + "_cols"], dtype=torch.long, device=v.device)]
         if v.shape[1] != w:                                  # (ctrl: the readout's first columns, zeros past its end)
             v = v[:, :w] if v.shape[1] > w else torch.cat([v, v.new_zeros(B, w - v.shape[1])], 1)
         if p in ("trk", "trz", "ahead", "ctrl"):
             v = v.clamp(-CLIP, CLIP)
         cols.append(v)
     return torch.cat(cols, 1).half().float()
+
+
+def has_weapon(mod):
+    """(1.5a) the module has the weapon part"""
+    return mod is not None and hasattr(mod, "wsc")
+
+
+def pre(mod, u):
+    """the GRU's input from u: tanh(inp(u)); (1.5a) with the weapon part tanh(inp(u before wobs) + winp(wobs))"""
+    import torch
+    if not has_weapon(mod):
+        return torch.tanh(mod.inp(u))
+    n0 = int(mod.inp.in_features)
+    return torch.tanh(mod.inp(u[..., :n0].contiguous()) + mod.winp(u[..., n0:].contiguous()))
 
 
 def outs(mod, s):
@@ -247,6 +315,7 @@ class State:
         self.plan = torch.zeros(n, int(L["plan"]), device=dev)
         self.bias = torch.zeros(n, int(L["n_target"]), device=dev)
         self.raw = torch.zeros(n, int(L["n_target"]), device=dev)     # (b1.4a) its own target choice, held as the bias is
+        self.wraw = torch.zeros(n, int(L["weapon"]), device=dev) if L.get("weapon") else None   # (1.5a) its weapon scores, held so
 
     def refresh(self, mod):
         """before a rollout: the held outputs made again from the state with the weights and gate it is played at (the
@@ -256,19 +325,24 @@ class State:
             p, b = outs(mod, self.s)
             self.plan, self.bias = p * self.valid[:, None], b * self.valid[:, None]
             self.raw = mod.target(self.s) * self.valid[:, None]
+            if self.wraw is not None and has_weapon(mod):
+                self.wraw = mod.wsc(self.s) * self.valid[:, None]
 
     def adds(self, mod):
         """(what the hands' fast GRU input gets, what the intention's logits get, the mix k [n, 1], the head's own choice, the
-        add [n, 1]) on this frame"""
+        add [n, 1], (1.5a) what the weapon key's logits get [n, weapon] or None) on this frame"""
         return (mod.gate * mod.plan_in(self.plan) * self.valid[:, None], self.bias, mod.mix * self.valid[:, None], self.raw,
-                mod.add * self.valid[:, None])
+                mod.add * self.valid[:, None],
+                mod.wadd * self.valid[:, None] * self.wraw if (self.wraw is not None and has_weapon(mod)) else None)
 
     def tick(self, mod, u):
         import torch
-        self.s = mod.gru(torch.tanh(mod.inp(u)), self.s)
+        self.s = mod.gru(pre(mod, u), self.s)
         self.valid = torch.ones_like(self.valid)
         self.plan, self.bias = outs(mod, self.s)
         self.raw = mod.target(self.s)
+        if self.wraw is not None and has_weapon(mod):
+            self.wraw = mod.wsc(self.s)
 
     def reset(self, d):
         k = 1.0 - d
@@ -277,6 +351,8 @@ class State:
         self.plan = self.plan * k[:, None]
         self.bias = self.bias * k[:, None]
         self.raw = self.raw * k[:, None]
+        if self.wraw is not None:
+            self.wraw = self.wraw * k[:, None]
 
     def snap(self):
         return self.s.clone(), self.valid.clone()
@@ -290,7 +366,7 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
     -> dict gin [T, B, enc] (into the fast GRU's input), bias [T, B, n_target], s_held [T, B, size] (the state each frame's
     outputs read; zeros after a reset), alive [T, B], s [J, B, size], plan [J + 1, B, plan] (the held plans: the rollout's
     own first), raw [T, B, n_target] (b1.4a: its own target choice), k [T, B, 1] (the mix where it has a state), a [T, B, 1]
-    (1.3b: the add where it has a state)"""
+    (1.3b: the add where it has a state), w [T, B, weapon] (1.5a: wadd x its weapon scores where it has a state; None without)"""
     import torch
     T, B = dn.shape
     K = int(L["every"])
@@ -301,7 +377,7 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
     for j in range(J):
         f0 = j * K
         keep = dn[max(f0 - 1, 0):f0 + K - 1].prod(0)       # no reset since the last tick (the rollout's start: s0 is after it)
-        s = mod.gru(torch.tanh(mod.inp(U[j])), s * keep[:, None])
+        s = mod.gru(pre(mod, U[j]), s * keep[:, None])
         S_l.append(s)
     St = torch.stack(S_l)                                    # [J + 1, B, size]: the state each segment's frames read
     P, Bi = outs(mod, St)
@@ -319,7 +395,27 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
     gin = mod.gate * mod.plan_in(Pf) * am
     Sh = St[idx] * am
     return dict(gin=gin, bias=Bi[idx] * am, s_held=Sh, alive=alive, s=St[1:], plan=P, raw=mod.target(Sh) * am, k=mod.mix * am,
-                a=mod.add * am)
+                a=mod.add * am, w=(mod.wadd * am * mod.wsc(Sh)) if has_weapon(mod) else None)
+
+
+def has_keep(mod):
+    """(1.4c) the module has the keep choice"""
+    return mod is not None and hasattr(mod, "keep")
+
+
+def keep_x(feat, lp_held):
+    """(1.4c) the keep choice's own numbers [..., KEEP_F] from the simulator's keep_feat [..., 3] (age s, contact, target) and
+    the held target's log-probability [...] (numbers: no gradient)"""
+    import torch
+    c = feat[..., 1].float()
+    age = (1.0 - c) * feat[..., 0].float().clamp(0.0, KEEP_AGE_MAX) / 10.0
+    return torch.stack([age, c, lp_held.float().clamp(min=KEEP_LP_MIN) / 5.0], -1).detach()
+
+
+def keep_logit(mod, s, h, f):
+    """(1.4c) the logit of re-deciding [...] from the head's held state s, the hands' memory h (a number) and f (keep_x)"""
+    import torch
+    return mod.keep(torch.cat([s, h.detach().float(), f], -1)).squeeze(-1)
 
 
 def gae(rew, val, done, gamma, lam):
@@ -374,6 +470,8 @@ def np_state_width(L):
 def np_open(W):
     """the head acts (its gate above 0 and plan_in or target not all zero; or, b1.4a, its mix above 0 and target not all zero)"""
     tg_ = np.abs(W["target.weight"]).sum() + np.abs(W["target.bias"]).sum()
+    if np_wadd_on(W):                                        # (1.5a) its weapon scores added and not all zero
+        return True
     if (float(np.asarray(W.get("mix", 0.0))) > 0 or float(np.asarray(W.get("add", 0.0))) > 0) and tg_ > 0:
         return True
     return float(np.asarray(W.get("gate", 0.0))) > 0 and (np.abs(W["plan_in.weight"]).sum() + np.abs(W["plan_in.bias"]).sum() + tg_) > 0
@@ -392,6 +490,42 @@ def np_mix_in(W, L, hs, lg):
     k = np.float32(m) * ok
     raw = s @ W["target.weight"].T + W["target.bias"]
     return ((1.0 - k) * lg + (k + np.float32(ad) * ok) * raw).astype(np.float32)
+
+
+def np_wadd_on(W):
+    """(1.5a) the arrays have the weapon part, its add above 0 and its scores not all zero"""
+    return ("wsc.weight" in W and float(np.asarray(W.get("wadd", 0.0))) > 0
+            and float(np.abs(W["wsc.weight"]).sum() + np.abs(W["wsc.bias"]).sum()) > 0)
+
+
+def np_wadd(W, L, hs):
+    """(1.5a) what the weapon key's logits get [B, weapon] from the state hs [B, np_state_width]: wadd x its scores where it has a
+    state; None without the part or at wadd 0"""
+    if "wsc.weight" not in W or not float(np.asarray(W.get("wadd", 0.0))) > 0:
+        return None
+    S = int(L["size"])
+    s, ok = hs[:, :S], hs[:, S:S + 1]
+    return (np.float32(np.asarray(W["wadd"])) * ok * (s @ W["wsc.weight"].T + W["wsc.bias"])).astype(np.float32)
+
+
+def np_has_keep(W):
+    """(1.4c) the arrays have the keep choice"""
+    return "keep.weight" in W
+
+
+def np_keep_x(feat, lp_held):
+    """keep_x() in numpy"""
+    feat = np.asarray(feat, np.float32)
+    c = feat[:, 1]
+    age = (1.0 - c) * np.clip(feat[:, 0], 0.0, KEEP_AGE_MAX) / 10.0
+    return np.stack([age, c, np.maximum(np.asarray(lp_held, np.float32), KEEP_LP_MIN) / 5.0], 1).astype(np.float32)
+
+
+def np_keep_logit(W, L, hs, h, f):
+    """keep_logit() in numpy: hs [B, np_state_width] (the held state), h [B, hands] the hands' memory, f [B, KEEP_F]"""
+    S = int(L["size"])
+    x = np.concatenate([hs[:, :S], np.asarray(h, np.float32), f], 1)
+    return (x @ W["keep.weight"].T + W["keep.bias"])[:, 0].astype(np.float32)
 
 
 def np_adds(W, L, hs):
@@ -444,11 +578,11 @@ def np_ctrl(P, s_brain, hands=None):
 
 def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None):
     """feats() in numpy"""
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs)
     B = len(next(v for v in src.values() if v is not None))
     cols = []
     for p in PARTS:
-        w = int(L["widths"][p])
+        w = int(L["widths"].get(p, 0))
         if w == 0:
             continue
         v = src[p]
@@ -456,8 +590,8 @@ def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None,
             cols.append(np.zeros((B, w), np.float32))
             continue
         v = np.asarray(v, np.float32)
-        if p == "obs":
-            v = v[:, np.asarray(L["obs_cols"], np.int64)]
+        if p in ("obs", "wobs"):                             # (1.5a: wobs, the weapon part's columns of the same inputs)
+            v = v[:, np.asarray(L[p + "_cols"], np.int64)]
         if v.shape[1] != w:
             v = v[:, :w] if v.shape[1] > w else np.concatenate([v, np.zeros((B, w - v.shape[1]), np.float32)], 1)
         if p in ("trk", "trz", "ahead", "ctrl"):
@@ -470,7 +604,12 @@ def np_tick(W, L, u, hs):
     """a tick for these rows: u [m, u_width], hs [m, np_state_width] -> the state after"""
     S = int(L["size"])
     s = hs[:, :S]
-    p = np.tanh(u @ W["inp.weight"].T + W["inp.bias"])
+    n0 = int(W["inp.weight"].shape[1])                      # (1.5a) with the weapon part: inp on u before wobs, winp on wobs
+    if "winp.weight" in W and u.shape[1] > n0:
+        p = np.tanh(np.ascontiguousarray(u[:, :n0]) @ W["inp.weight"].T + W["inp.bias"] +
+                    (np.ascontiguousarray(u[:, n0:]) @ W["winp.weight"].T + W["winp.bias"]))
+    else:
+        p = np.tanh(u @ W["inp.weight"].T + W["inp.bias"])
     gi = p @ W["gru.weight_ih"].T + W["gru.bias_ih"]
     gh = s @ W["gru.weight_hh"].T + W["gru.bias_hh"]
     r = 1.0 / (1.0 + np.exp(-(gi[:, :S] + gh[:, :S])))

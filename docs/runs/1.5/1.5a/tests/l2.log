@@ -1,0 +1,17 @@
+18:29:18 scratch_15a_l2on_r2: done in 0.5 min; the log ends: exit 0
+18:29:18 PASS l2on: ran (--head2-l2 50)
+18:29:48 scratch_15a_l2off_r2: done in 0.5 min; the log ends: exit 0
+18:29:48 PASS l2off: ran (--head2-l2 0)
+18:29:48   the hands' weapon-key rows: start 10.8767, with L2 9.6470, without 10.8766: ratio 0.8869
+18:29:48 PASS the L2 reaches the hands' weapon-key rows (0.8869, about 0.89 expected for 24 steps)
+18:29:48   the head's weapon scores: start 2.4461, with L2 2.1693, without 2.4462: ratio 0.8868
+18:29:48 PASS the L2 reaches the head's weapon scores (0.8868, about 0.89 expected for 24 steps)
+18:29:48   the hands' target rows: start 13.7544, with L2 12.1955, without 13.7544: ratio 0.8867
+18:29:48 PASS the L2 reaches the hands' target rows (0.8867, about 0.89 expected for 24 steps)
+18:29:48   the head's target scores: start 3.0920, with L2 2.7407, without 3.0917: ratio 0.8865
+18:29:48 PASS the L2 reaches the head's target scores (0.8865, about 0.89 expected for 24 steps)
+18:29:48   the hands' other rows (no L2): start 24.8680, with L2 24.8691, without 24.8690: ratio 1.0000
+18:29:48 PASS the hands' other rows (no L2) about the same with and without (1.0000)
+18:29:48   the head's value (no L2): start 1.4422, with L2 1.4422, without 1.4425: ratio 0.9998
+18:29:48 PASS the head's value (no L2) about the same with and without (0.9998)
+18:29:48 ALL PASSED

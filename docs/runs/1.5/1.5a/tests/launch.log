@@ -1,0 +1,10 @@
+written
+18:39:44 PASS the small command keeps the three settings and the new flags
+18:40:14 scratch_15a_launch_r3: done in 0.5 min; the log ends: exit 0
+18:40:14 PASS the trainer exited 0
+18:40:14 PASS 3 updates (3)
+18:40:14 PASS the weapon key's credit 0 at the start ([0.0, 0.0, 0.0])
+18:40:14 PASS the head's weapon scores learn from update 1 on the hands' credit ([0.01892, 0.02673, 0.03356])
+18:40:14 PASS habits at 0.3 ([{'none': 480, 'pro': 96, 'rg': 192, 'rl': 0}, {'none': 480, 'pro': 96, 'rg': 192, 'rl': 0}, {'none': 452, 'pro': 109, 'rg': 201, 'rl': 6}])
+18:40:14 PASS the save carries WEAPON_OWN=1 (1)
+18:40:14 ALL PASSED

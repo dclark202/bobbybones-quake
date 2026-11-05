@@ -124,6 +124,10 @@ class Policy:
             self.h2_ct = head2_.np_ctrl_params(sd, self.h2)     # (the ctrl slot: the layout's "ctrl_src" readout, None: zeros)
             self.h2_live = head2_.np_open(self.h2W)          # (gate 0 or its links at zero: the network without it, not stepped)
             self.W = self.h2_at + head2_.np_state_width(self.h2)
+        self.keep_g = 0.0                                    # (1.4c) the keep choice's share of his readings (the file's head2.keep_g)
+        self.krng = np.random.default_rng(int(seed) + 1414)  # ... its draws: a stream of their own (the outputs' draws untouched)
+        if self.h2 is not None and self.h2.get("keep") and "keep.weight" in self.h2W:
+            self.keep_g = float(np.asarray(self.h2W.get("keep_g", 0.0)))
         self.h2_tick = None
         self.brain_at = None                                 # (v0.4.1) the brain's and the token's state, at the end of a seat's array
         if self.btok is not None:
@@ -202,6 +206,13 @@ class Policy:
         self.h2W = dict(self.h2W, gate=np.float32(g))
         self.h2_live = head2_.np_open(self.h2W)
 
+    def set_head2_wadd(self, w):
+        """(1.5a, checks) play the strategy head's weapon scores at this add (0: blanked, the hands' weapon choice alone)"""
+        assert self.h2 is not None and "wsc.weight" in self.h2W, "this network has no weapon part in its strategy head"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, wadd=np.float32(w))
+        self.h2_live = head2_.np_open(self.h2W)
+
     def set_head2_mix(self, m):
         """(b1.4a, checks) play his target choice moved this far from the hands' to the strategy head's (1: the head's alone)"""
         assert self.h2 is not None, "this network has no strategy head"
@@ -254,9 +265,21 @@ class Policy:
             lg = LU_.np_residual(*self.uniR, lg, zo)
         return lg
 
-    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None):
+    @property
+    def keep_on(self):
+        """(1.4c) the keep choice decides a share of his readings: act(kf=...) gives one more column (-1 the lock rule, 0 keep,
+        1 re-decide)"""
+        return self.keep_g > 0
+
+    def set_keep_g(self, g):
+        """(1.4c, the checks) the keep choice's share, in place of the file's (a network without it: refused)"""
+        assert self.h2 is not None and self.h2.get("keep"), "set_keep_g: this network has no keep choice"
+        self.keep_g = float(g)
+
+    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
-        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame"""
+        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, 3]: (1.4c,
+        with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice"""
         dadd = gadd = h2_ = lgl_ = ok_ = None
         if self.needs_xl:
             import legs_unify as LU_
@@ -318,6 +341,9 @@ class Policy:
         if b2 is not None:
             si2_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
             logits[:, si2_] = head2_.np_mix_in(self.h2W, self.h2, h2s, logits[:, si2_]) + b2     # (b1.4a: the mix; none at mix 0)
+            wa2_ = head2_.np_wadd(self.h2W, self.h2, h2s)    # (1.5a) its weapon scores on the weapon key's (none without the part or at wadd 0)
+            if wa2_ is not None:
+                logits[:, int(np.sum(self.dims[:6])):int(np.sum(self.dims[:7]))] += wa2_
         if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
             _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
             logits[:, self.head_si] += t_add
@@ -332,6 +358,18 @@ class Policy:
         self.last_logits = logits                            # (sim/brain_fit.py: the play effect of a brain, the distributions per output)
         if bt is not None:
             hb = self.token_post(xa, pose, zmap, bst)
+        kcol = None
+        if self.keep_on and kf is not None and h2s is not None:   # (1.4c) the keep choice: the head's state this frame's outputs read
+            import head2 as head2_                           # (before its tick), the hands' memory after the frame, its own numbers
+            si_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
+            li_ = logits[:, si_]
+            li_ = li_ - li_.max(1, keepdims=True)
+            lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
+            cur_ = np.clip(np.asarray(kf)[:, 2].astype(np.int64), 0, lsm_.shape[1] - 1)
+            kx_ = head2_.np_keep_x(kf, lsm_[np.arange(len(cur_)), cur_])
+            kz_ = head2_.np_keep_logit(self.h2W, self.h2, h2s, hfast, kx_)
+            kd_ = (self.krng.random(len(kz_)) < sig(kz_)).astype(np.int64)
+            kcol = np.where(self.krng.random(len(kz_)) < self.keep_g, kd_, -1)
         if h2s is not None:                                  # (v0.4.3) the strategy head ticks with the brain, after the frame
             if self.h2_live and self.h2_tick is not None:
                 import head2 as head2_
@@ -364,6 +402,8 @@ class Policy:
             out[:, 11] = 0
         if hb is not None:                                   # (v0.4.1) the brain's state back at the end of the array
             h = np.concatenate([h, hb.astype(np.float32)], 1)
+        if kcol is not None:                                 # (1.4c) the keep column after the outputs (the simulator takes it off)
+            out = np.concatenate([out, kcol[:, None]], 1)
         return out, h
 
 
