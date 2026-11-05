@@ -140,7 +140,7 @@ the one cost is a slow slide in item control.** 1.7 starts from its end.
 | u30 against the start (teacher at 0.25) | 91-109 | 45.5% | 47.9% |
 | u50 against the start (both at 0 from u40) | 101-99 | 50.5% | 50.3% |
 | u70 against b1.2d's end (reference) | 188-12 | 94.0% | 73.5% (1.5a at u70: 88.0%) |
-| u80, the head's weapon scores off, against 1.5a's end | 79-81 on 8 of 10 maps (running) | | |
+| u80, the head's weapon scores off, against 1.5a's end | 107-93 | 53.5% | 53.3% (1.5a's end the same way: 113-87, 56.5%) |
 
 No check against the start after u50 (the watcher's every fourth went to the reference at u70; the run ends before u90).
 
