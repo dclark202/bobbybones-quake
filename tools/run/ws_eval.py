@@ -477,6 +477,8 @@ def main():
     ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
     ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--head2-wadd", type=float, default=None, help="(1.5a) play his strategy head's weapon scores at this add (default: his checkpoint's; "
+                                                                   "0: blanked, the hands' weapon choice alone)")
     ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
                     "PERCEPT_SIGMA=0.48,AIM2_W=0); the rest of his aim is the process's. Needs AIM2, AIM2_SPLIT, AIM2_FOCUS on (--set) to seat AIM2 beside the old model")
     ap.add_argument("--aim-opp", default="", help="... the opponent's seats")
@@ -493,6 +495,8 @@ def main():
         pol.set_rule_fade(a.rule_fade_g)
     if a.head2_gate is not None:
         pol.set_head2_gate(a.head2_gate)
+    if a.head2_wadd is not None:                             # (1.5a) the blanked check of the head's weapon part
+        pol.set_head2_wadd(a.head2_wadd)
     if getattr(pol, "h2", None) is not None:
         print("strategy head: gate {:g} ({})".format(float(pol.h2W["gate"]), "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
     if getattr(pol, "rf", None) is not None:

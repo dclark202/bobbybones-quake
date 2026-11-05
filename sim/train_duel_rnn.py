@@ -230,6 +230,7 @@ LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --
 LIVE_TRAINER = LIVE_TRAINER + ("ITEM_FLOOR", "ITEM_FLOOR_W")          # (2026-10-25, --item-floor) the floor on his item intentions by map, its weight
 LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD", "H2_MIX", "H2_COPY", "INTENT_SEEK_W", "H2_L2")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
 LIVE_TRAINER = LIVE_TRAINER + ("KEEP_G",)                          # (1.4c) the share of his readings the keep choice decides (the rest: the lock rule)
+LIVE_TRAINER = LIVE_TRAINER + ("H2_WPG", "HABIT_P")                 # (1.5a) the weapon key's credit on the head's clock; the league seats' weapon habits
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1050,6 +1051,18 @@ def main():
     ap.add_argument("--keep-g", type=float, default=-1.0, help="(1.4c, a network with the keep choice: sim/head2.py, tools/keep_init.py) the share of his "
                                                                "readings it decides at the start (live KEEP_G; -1: the file's own); the rest the lock rule. "
                                                                "Each league network plays at the share in its own file (none: 0)")
+    ap.add_argument("--head2-wpg", type=float, default=-1.0, help="(1.5a, part B; --head2) the share of the weapon key's credit moved from the hands' "
+                                                                  "advantage to the head's own (its own clipped term, the head's advantage, on the frames "
+                                                                  "his hand read the key): the main term keeps 1 - c of the key's gradient, the head's term "
+                                                                  "c. Live H2_WPG (0 to 1). -1: off (the trainer as before)")
+    ap.add_argument("--habit-p", type=float, default=-1.0, help="(1.5a, part C) the share of the league seats' lives played with a weapon habit (drawn per "
+                                                                "life, a stream of its own; never his own seats): a push on the frozen network's weapon-key "
+                                                                "logits. Live HABIT_P. -1: off (no draws: the trainer as before)")
+    ap.add_argument("--habit-push", type=float, default=2.0, help="(--habit-p) the push on the leaning weapon's logit while owned with ammunition; the pros' "
+                                                                  "hand: this times the pros' share of each owned weapon (rockets, rail, lightning)")
+    ap.add_argument("--habit-kinds", default="pro:1,rg:1,rl:1", help="(--habit-p) the habits' weights: pro (the pros' weapon by distance in view, "
+                                                                     "their travelling weapon out of view: docs/pro_tables.json, sim/pro_hand.json), "
+                                                                     "rg (rail leaner), rl (rocket leaner)")
     ap.add_argument("--head2-chrono-lo", type=float, default=0.0, help="(--head2, 1.3b, a new head) its update gate's time scales evenly in log from this to "
                                                                        "--head2's chrono (300 ticks); 0: evenly from 1 to 300 (as before)")
     ap.add_argument("--head2-pay", default="all", choices=("all", "combat_win"), help="(--head2, b1.2a) what its value and advantage count: his whole pay, or combat (frags, deaths, damage) plus the win part, not the item pay")
@@ -1586,6 +1599,10 @@ def main():
     assert 0.0 <= a.rj_copy_trunk <= 1.0, "--rj-copy-trunk: a share, 0 to 1"
     HAND_HEAD = 6                                            # ... the weapon key's output, where its choices begin among all outputs' and
     HAND_O, HAND_D = sum(ACTION_DIMS[:HAND_HEAD]), ACTION_DIMS[HAND_HEAD]      # how many they are ("keep", then a choice a weapon)
+
+    def wkey_add(lg, w):
+        """(1.5a) his logits with w [..., HAND_D] added to the weapon key's"""
+        return torch.cat([lg[..., :HAND_O], lg[..., HAND_O:HAND_O + HAND_D] + w, lg[..., HAND_O + HAND_D:]], -1)
 
     def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
@@ -2249,6 +2266,8 @@ def main():
                 lg_ = self.pi(h)
                 if g2 is not None:                               # (--head2) ... and its bias on his intention's logits
                     lg_ = head2_.mix_in(lg_, g2, HD_I0)          # (b1.4a: and the mix)
+                    if len(g2) > 5 and g2[5] is not None:        # (1.5a) ... and its weapon scores on the weapon key's
+                        lg_ = wkey_add(lg_, g2[5])
                 return self.out_(lg_, h, gadd), self.v(h).squeeze(-1), h
             z = slowmem_.live(self.slow, sm, e, h)               # (--slow-mem) z = h + door(s); the slow GRU ticks on its frames
             self.zl = z
@@ -2379,12 +2398,19 @@ def main():
                 for k_, v_ in net.head2.state_dict().items():
                     if k_.startswith(("keep.", "keep_g")):
                         sd["head2." + k_] = torch.zeros_like(v_)
+            if head2_.has_weapon(getattr(net, "head2", None)) and "head2.wsc.weight" not in sd:   # (1.5a) a file without the weapon
+                sd = dict(sd)                                # part (1.4c's end, the anchors): zeros, its add 0 (the hands' choice alone)
+                for k_, v_ in net.head2.state_dict().items():
+                    if k_.startswith(("winp.", "wsc.", "wadd")):
+                        sd["head2." + k_] = torch.zeros_like(v_)
             load_net9_(net, sd)
             if getattr(net, "head2", None) is not None:      # its head counts only if its gate is open and a link of it is not zero
                 net.h2_open = bool((float(net.head2.gate) > 0 and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters()
                                                                       if n_.startswith(("plan_in.", "target."))))
                                    or ((float(net.head2.mix) > 0 or float(net.head2.add) > 0)          # (1.3b: or its add)
-                                       and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters() if n_.startswith("target."))))
+                                       and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters() if n_.startswith("target.")))
+                                   or (head2_.has_weapon(net.head2) and float(net.head2.wadd) > 0               # (1.5a: or its weapon scores)
+                                       and any(float(p_.abs().sum()) > 0 for n_, p_ in net.head2.named_parameters() if n_.startswith("wsc."))))
 
     if SLOW:                                                 # (--slow-mem) a network without the part (the control, older league files, the
         load_net0_ = load_net                                # start before conversion) gets one with its door shut: it answers as it did
@@ -2530,8 +2556,8 @@ def main():
         """(--head2) the strategy head in a group of its own after all the others: an optimizer saved without it loads into the
         groups before it"""
         if H2 and not H2_GROUP[0]:
-            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith("keep.")],
-                                 "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})     # (1.4c: the keep choice in its own)
+            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "winp.", "wsc."))],
+                                 "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})     # (1.4c: the keep choice in its own; 1.5a: the weapon part too)
             H2_GROUP[0] = True
     KEEP = H2 and head2_.has_keep(pol.head2)                 # (1.4c) the keep choice (a file from tools/keep_init.py)
     KEEP_GROUP = [False]
@@ -2542,6 +2568,20 @@ def main():
         if KEEP and not KEEP_GROUP[0]:
             opt.add_param_group({"params": list(pol.head2.keep.parameters()), "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
             KEEP_GROUP[0] = True
+    WPN = H2 and head2_.has_weapon(pol.head2)               # (1.5a) the head's weapon part (a file from tools/weapon_init.py)
+    WPN_GROUP = [False]
+    WCR = H2 and a.head2_wpg >= 0                            # (1.5a, part B) the weapon key's credit split (the hands' term, the head's)
+    H2_WPG = [min(1.0, max(0.0, float(a.head2_wpg)))]        # ... its share in the head's term (live H2_WPG)
+    assert not WPN or a.head2_add, "the weapon part: with --head2-add (1.3b on: the head's scores added to the hands'): not built otherwise"
+    assert not WPN or WCR, "the weapon part (1.5a) with --head2-wpg (its credit, 0 to 1): the head's own term needs it"
+
+    def wpn_group():
+        """(1.5a) the head's weapon part (winp, wsc) in a group of its own after the keep choice's, at the head's rate: an optimizer
+        saved without it (1.4c's) loads into the groups before it"""
+        if WPN and not WPN_GROUP[0]:
+            opt.add_param_group({"params": list(pol.head2.winp.parameters()) + list(pol.head2.wsc.parameters()),
+                                 "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
+            WPN_GROUP[0] = True
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
@@ -2557,7 +2597,20 @@ def main():
         if os.path.exists(op_):
             try:
                 os_ = torch.load(op_, weights_only=False, map_location=dev)
-                if KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 2:
+                if WPN and KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 3:
+                    trk_group()                               # (1.5a: saved with the weapon part's group, after the keep choice's)
+                    trz_group()
+                    v41_group()
+                    h2_group()
+                    keep_group()
+                    wpn_group()
+                elif WPN and not KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 2:
+                    trk_group()                               # (1.5a from 1.3b's end: saved with the weapon part's group after the head's, no keep choice)
+                    trz_group()
+                    v41_group()
+                    h2_group()
+                    wpn_group()
+                elif KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 2:
                     trk_group()                               # (1.4c: saved with the keep choice's group, after the head's)
                     trz_group()
                     v41_group()
@@ -2674,6 +2727,14 @@ def main():
     WV_ST = [None]                                           # (the per-seat stream, made at the first rollout)
     h2_group()                                               # (v0.4.3) the strategy head's, the last
     keep_group()                                             # (1.4c) ... then the keep choice's
+    wpn_group()                                              # (1.5a) ... then the head's weapon part's
+    if WPN:
+        print("weapon part (1.5a): the head's scores (wsc on its state, {} choices) added x wadd {:g} to the weapon key's; its {} inputs by winp; "
+              "|wsc| {:.4g} |winp| {:.4g}".format(HAND_D, float(pol.head2.wadd), int(H2L["widths"].get("wobs", 0)),
+                                                  float(pol.head2.wsc.weight.norm()), float(pol.head2.winp.weight.norm())), flush=True)
+        assert int(H2L["weapon"]) == HAND_D, "the head's weapon part has {} scores, the weapon key {}".format(H2L["weapon"], HAND_D)
+    if WCR:
+        print("weapon key's credit (1.5a, part B): the head's own term at c = {:.4f} (live H2_WPG), the hands' 1 - c".format(H2_WPG[0]), flush=True)
     if KEEP:
         print("keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), {} numbers]); its share from --keep-g {} (live KEEP_G); "
               "its weights: bias {:.3f}, on its own numbers {}".format(head2_.KEEP_F, a.keep_g, float(pol.head2.keep.bias),
@@ -2925,6 +2986,63 @@ def main():
     n_groups = int(sum(w_match[:a.workers]))                               # the games' groups and players: what the game numbers
     NP = int(w_off[a.workers])                                             # are counted over (a move-only simulator has its own, by map)
     snap_players = torch.from_numpy(league & is_odd).to(dev)          # controlled by the snapshot
+    HB_ON = a.habit_p >= 0                                             # (1.5a, part C) weapon habits on the league seats' lives
+    HB_SEAT = league & is_odd                                          # (the league's seats, numpy)
+    HB_KIND = np.zeros(N, np.int64)                                    # each seat's habit this life: 0 none, 1 the pros' hand, 2 rail, 3 rockets
+    HB_P = [min(1.0, max(0.0, float(a.habit_p)))]                      # (live HABIT_P)
+    HB_RNG = np.random.default_rng(4051)                               # (its own stream: his play's draws untouched)
+    HB_NAMES = ("none", "pro", "rg", "rl")
+    HB_FIRST = [True]                                                  # (the league seats' first lives drawn at the first call)
+    if HB_ON:
+        assert all(int(g_) == 2 for g_ in w_group[:a.workers]), "--habit-p: duels only (the kills are told by the match's odd seat)"
+        kw_ = dict((k_.split(":")[0], float(k_.split(":")[1])) for k_ in a.habit_kinds.split(",") if k_)
+        HB_W = np.array([kw_.get(n_, 0.0) for n_ in HB_NAMES[1:]], np.float64)
+        assert HB_W.sum() > 0, "--habit-kinds: no weight"
+        HB_W = HB_W / HB_W.sum()
+        import csv as csv_
+        IC_ = {r_["input"]: int(r_["index"]) for r_ in csv_.DictReader(open(os.path.join(ROOT, "docs", "INPUTS.csv"), encoding="utf-8"))}
+        HB_C = dict(dead=IC_["dead"], inv=IC_["noticed in view"], pos=[IC_["last known position: " + d_] for d_ in ("forward", "left", "up")],
+                    own=[IC_["owns " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")],
+                    ammo=[IC_["ammo: " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")])
+        assert tuple(WEAPONS[:3]) == ("rl", "rg", "lg"), WEAPONS
+        pt_ = json.load(open(os.path.join(ROOT, "docs", "pro_tables.json"), encoding="utf-8"))["all"]
+        HB_IN = np.stack([np.asarray(pt_["in_hand_by_distance"][w_], np.float64) for w_ in ("rl", "rg", "lg")], 1)   # [bins of 50 units, 3]
+        ph_ = json.load(open(os.path.join(HERE, "pro_hand.json"), encoding="utf-8"))
+        sh_ = np.asarray(ph_["maps"]["all"]["share"][0], np.float64)[:, :3]   # travelling, by band since seen: rockets, rail, lightning
+        mn_ = np.asarray(ph_["maps"]["all"]["minutes"][0], np.float64)
+        HB_OUT = (sh_ * mn_[:, None]).sum(0) / mn_.sum()
+        print("habits (1.5a, part C): share {:.3f} of the league seats' lives (live HABIT_P), push {:g}; kinds pro / rail / rockets {}; the pros' "
+              "travelling hand (rockets, rail, lightning) {}".format(HB_P[0], a.habit_push, [round(float(x_), 3) for x_ in HB_W],
+                                                                   [round(float(x_), 3) for x_ in HB_OUT / HB_OUT.sum()]), flush=True)
+
+    def habit_push(obs_raw, acc):
+        """(1.5a, part C) [N, HAND_D] the push on the weapon key's logits of the league seats with a habit this frame (zeros elsewhere);
+        a seat's habit is drawn at the first call (its first life) and again on every frame it is dead (so once a life, at its last dead
+        frame); acc [4, 3] gets each kind's league frames"""
+        dead_ = (obs_raw[:, HB_C["dead"]] > 0.5) & HB_SEAT
+        if HB_FIRST[0]:
+            dead_, HB_FIRST[0] = HB_SEAT.copy(), False
+        if dead_.any():
+            n_ = int(dead_.sum())
+            k_ = np.where(HB_RNG.random(n_) < HB_P[0], 1 + HB_RNG.choice(3, size=n_, p=HB_W), 0)
+            HB_KIND[dead_] = k_
+        HB_KIND[~HB_SEAT] = 0
+        acc[:, 0] += np.bincount(HB_KIND[HB_SEAT], minlength=4)
+        b_ = np.zeros((N, HAND_D), np.float32)
+        own_ = (obs_raw[:, HB_C["own"]] > 0.5) & (obs_raw[:, HB_C["ammo"]] > 0.0)       # [N, 3] rockets, rail, lightning
+        m_ = (HB_KIND == 2) & own_[:, 1]
+        b_[m_, 2] = a.habit_push                                       # (the key: 0 keep, then 1 + the weapon's index)
+        m_ = (HB_KIND == 3) & own_[:, 0]
+        b_[m_, 1] = a.habit_push
+        pm_ = HB_KIND == 1
+        if pm_.any():
+            d_ = 1000.0 * np.sqrt((obs_raw[:, HB_C["pos"]].astype(np.float64) ** 2).sum(1))
+            bin_ = np.clip((d_ // 50.0).astype(np.int64), 0, len(HB_IN) - 1)
+            sh_ = np.where((obs_raw[:, HB_C["inv"]] > 0.5)[:, None], HB_IN[bin_], HB_OUT[None, :]) * own_
+            tot_ = sh_.sum(1)
+            ok_ = pm_ & (tot_ > 0)
+            b_[ok_, 1:4] = (a.habit_push * sh_[ok_] / tot_[ok_, None]).astype(np.float32)
+        return b_
     learn = (~snap_players).float()                                    # trained on
     snaps = []                                                         # frozen past policies (state dicts)
     SNAP_G = {}                                                        # (v0.4.1) a league file's own gate of the brain token
@@ -2978,6 +3096,7 @@ def main():
     H2_G, H2_LAST, H2_T0 = [0.0], [None], 0.0
     H2_M, H2_CW, SEEK_W = [0.0], [1.0], [1.0]                # (b1.4a) the mix, a factor on the copy lesson, a factor on the way pay (all live)
     KEEP_GV = [0.0]                                          # (1.4c) the keep choice's share (live KEEP_G)
+    HB_ACC = [None]                                          # (1.5a, part C) the last rollout's habit counts: [kind, league frames / his frags / its frags]
     if H2:
         H2S, H2O = head2_.State(N, H2L, dev), head2_.State(N, H2L, dev)
         if KEEP:                                             # (1.4c) the keep choice's draws: a stream of their own (his play's untouched)
@@ -3318,6 +3437,16 @@ def main():
                             KEEP_GV[0] = min(1.0, max(0.0, float(lt_["KEEP_G"])))
                         else:
                             print("live: KEEP_G ignored (the network has no keep choice)", flush=True)
+                    if "H2_WPG" in lt_:                                                # (1.5a, B) the weapon key's credit on the head's clock, from the next update
+                        if WCR:
+                            H2_WPG[0] = min(1.0, max(0.0, float(lt_["H2_WPG"])))
+                        else:
+                            print("live: H2_WPG ignored (--head2-wpg off)", flush=True)
+                    if "HABIT_P" in lt_:                                               # (1.5a, C) the habits' share of league lives, from the next draw
+                        if HB_ON:
+                            HB_P[0] = min(1.0, max(0.0, float(lt_["HABIT_P"])))
+                        else:
+                            print("live: HABIT_P ignored (--habit-p off)", flush=True)
                     H2_CW[0] = max(0.0, float(lt_.get("H2_COPY", H2_CW[0])))         # (... a factor on the copy lesson)
                     SEEK_W[0] = max(0.0, float(lt_.get("INTENT_SEEK_W", SEEK_W[0]))) # (... a factor on the way pay)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
@@ -3338,6 +3467,7 @@ def main():
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}),
                                   **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1], "H2_MIX": H2_M[0], "H2_COPY": H2_CW[0], "H2_L2": H2_L2_[0]} if H2 else {}),
                                   **({"KEEP_G": KEEP_GV[0]} if KEEP else {}),
+                                  **({"H2_WPG": H2_WPG[0]} if WCR else {}), **({"HABIT_P": HB_P[0]} if HB_ON else {}),
                                   INTENT_SEEK_W=SEEK_W[0])
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
@@ -3755,6 +3885,8 @@ def main():
             b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
         b_u2 = b_vh = b_lpi = h2s0 = None
+        b_lpw = torch.zeros(T, N, device=dev) if WCR else None          # (1.5a, B) the weapon key's log-probability as played
+        hb_acc = np.zeros((4, 3), np.float64) if HB_ON else None         # (1.5a, C) each habit's league frames, his frags and its against it
         if H2:                                                           # (--head2) its ticks' inputs (host, half precision), its value, the
             b_u2 = torch.zeros(T // BK, N, head2_.u_width(H2L), dtype=torch.float16)      # intention's log-probability as played; the
             b_vh = torch.zeros(T + 1, N, device=dev)                     # held outputs made again with the weights it plays with; its start
@@ -3877,12 +4009,16 @@ def main():
                 lps = [d.log_prob(act[:, i]) for i, d in enumerate(ds)]
                 if H2:                                                   # (--head2) the intention as played, for its own ratio
                     b_lpi[t] = lps[I_HEAD]
+                if WCR:                                                  # (1.5a, B) the weapon key as played, for the head's own ratio
+                    b_lpw[t] = lps[HAND_HEAD]
                 if has_snaps and HEADL:                                      # (--head) the league's network with its own head, if open
                     lo, _, h_opp = onet.step(x, h_opp, hd=HS_O if onet.head_open else None, ev=ev_, xl=xlu_)
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
                 elif has_snaps:
                     lo, _, h_opp = onet.step(x, h_opp, sm=SM_O, xl=xlu_, bt=bt_t, g2=H2O.adds(onet.head2) if (H2 and onet.h2_open) else None)
+                    if HB_ON:                                            # (1.5a, C) the league seats' weapon habits on their weapon key
+                        lo = wkey_add(lo, torch.from_numpy(habit_push(obs, hb_acc)).to(lo.device))
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
                 if KEEP:                                                 # (1.4c) the keep choice of every seat: drawn with its own stream
@@ -4065,6 +4201,8 @@ def main():
                 for mk, ek in zip(r[3]["match_of_kill"], r[3]["even_kill"]):
                     if mk >= w_match[w_] // 2:                           # second half of the worker = league matches
                         lk[0 if ek else 1] += 1
+                        if hb_acc is not None and has_snaps:             # (1.5a, C) by the league seat's habit (the match's odd seat)
+                            hb_acc[HB_KIND[w_off[w_] + 2 * int(mk) + 1], 1 if ek else 2] += 1
             RP_["gather"] += time.perf_counter() - tp4_                  # (the replies put together and onto the card, the counters)
         for p in pipes:                                                  # (time.rollout_parts) the workers' own seconds of this rollout
             p.send(("times", None))
@@ -4113,7 +4251,7 @@ def main():
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
-                    b_btok=b_btok, btg=btg_, rfg=rfg_, bfg=bfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0,
+                    b_btok=b_btok, btg=btg_, rfg=rfg_, bfg=bfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0, b_lpw=b_lpw, hb_acc=hb_acc,
                     b_kd=b_kd, b_kx=b_kx, b_kl=b_kl, b_lpk=b_lpk, kg=KG_PLAY if KEEP else 0.0,
                     h2g=float(net.head2.gate) if H2 else 0.0, h2m=float(net.head2.mix) if H2 else 0.0, wv=WV_ST[0].take() if WV_ON else None)
 
@@ -4223,6 +4361,8 @@ def main():
             H2M_R = float(R.get("h2m") or 0.0)                           # (b1.4a) ... and the mix
         B_KD, B_KX, B_KL, B_LPK = (R.get(k_) for k_ in ("b_kd", "b_kx", "b_kl", "b_lpk"))      # (1.4c) the keep choice as played
         KG_R = float(R.get("kg") or 0.0)                                 # ... at the share it was played at
+        B_LPW = R.get("b_lpw")                                           # (1.5a, B) the weapon key as played
+        HB_ACC[0] = R.get("hb_acc")                                      # (1.5a, C) the habits' counts
         if KEEP:                                                         # ... his target's and its log-probability together, where each
             B_LPI = B_LPI * b_live + B_LPK * B_KL                        # counted: the head's term's reference (the target where it was
             #                                                              read, the keep choice where it decided)
@@ -4403,6 +4543,9 @@ def main():
                     HO2_[0]["hands_g"] = lg_[..., HD_I0:HD_I0 + int(H2L["n_target"])]
                 lg_ = head2_.mix_in(lg_, (None, HO2_[0]["bias"].detach(), HO2_[0]["k"], HO2_[0]["raw"] if H2ADD else HO2_[0]["raw"].detach(),
                                           HO2_[0]["a"]), HD_I0)    # (b1.4a: and the mix; 1.3b: and the add)
+                if WPN and HO2_[0].get("w") is not None:         # (1.5a, D) its weapon scores on the weapon key's, with their gradient
+                    HO2_[0]["hands_w"] = lg_[..., HAND_O:HAND_O + HAND_D]
+                    lg_ = wkey_add(lg_, HO2_[0]["w"])
             return lg_
         UG_ = [None, None, None]                                         # (--legs-feat, --legs-guide) the last seq_pass's guide addition, the
         #                                                                  branch's logits and its "has a way" (for pi_t and the counters)
@@ -4645,10 +4788,12 @@ def main():
         OV_ = None                                                       # (--overlap) the staleness: the network that played (ACT, one update
         LP_PX = ISW = IS_ = None                                         # (decoupled) the learner's log p before the update, the capped weights
         LPI_PX = ISW2 = None                                             # (--head2) ... of his target alone: the head's own term clips around it
+        LPW_PX = ISWW = None                                             # (1.5a, B) ... of his weapon key alone: the head's weapon term clips around it
         if DEC:                                                          # (--overlap-ppo decoupled) the proximal pass: pol before any step of
             with torch.no_grad():                                        # this update on the whole batch: its log p of what he did (as the
                 LP_PX = torch.zeros(T, N, device=dev)                    # learning passes count it), its values; per head for kl_heads
                 LPI_PX = torch.zeros(T, N, device=dev) if H2 else None
+                LPW_PX = torch.zeros(T, N, device=dev) if WCR else None
                 V_PX = torch.zeros(T, N, device=dev)
                 V2_PX = torch.zeros(T, N, 2, device=dev) if LONG else None
                 if a.kl_heads and (update % a.kl_heads == 0 or update <= 20):
@@ -4668,6 +4813,8 @@ def main():
                             old_h[:, chunk, j] = l_
                         if LPI_PX is not None and j == I_HEAD:
                             LPI_PX[:, chunk] = l_
+                        if LPW_PX is not None and j == HAND_HEAD:
+                            LPW_PX[:, chunk] = l_
                         lp_ = lp_ + l_ * (1.0 if hm_[j] is None else hm_[j])
                     if KEEP:                                             # (1.4c) the keep choice where it decided: in his whole log p, and
                         lk_px_, _ = keep_lp(HO2_[0], hs_, chunk)         # beside his target's in the head's own (as B_LPI)
@@ -4687,6 +4834,8 @@ def main():
                 ISW = r_.clamp(max=a.overlap_is_cap)
                 if LPI_PX is not None:                                   # (--head2) the same weight for his target alone
                     ISW2 = (LPI_PX - B_LPI).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
+                if LPW_PX is not None:                                   # (1.5a, B) ... and for his weapon key alone
+                    ISWW = (LPW_PX - B_LPW).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
                 OV_ = torch.stack([w_.sum(), (d_ * w_).sum(), (((r_ - 1.0).abs() > clip).float() * w_).sum(), ((r_ - 1.0).abs() * w_).sum(),
                                    ((V_PX - b_val[:T]).abs() * w_).sum(), (r_.clamp(max=1e3) * w_).sum()]).double().cpu()
                 IS_ = [float((ISW * w_).sum() / w_.sum().clamp(min=1.0)), float((r_ * (w_ > 0)).max()),
@@ -4725,6 +4874,8 @@ def main():
             H2_PAYS = [float(B_HR.abs().mean()), float(b_rew.abs().mean())]   # (a frame's |pay|: the head's, his)
             ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else lam)    # (1.3b: --head2-lam)
             KEEP_ACC = torch.zeros(8, dtype=torch.float64, device=dev)   # (1.4c) the keep choice: its readings (his, weighted), p(re-decide) there,
+            WP_ACC = torch.zeros(12, dtype=torch.float64, device=dev)    # (1.5a) the weapon key on the head's clock: its frames, its term, clipped; (the last
+            #                                                              pass) log p played - now, frames; the parts' sizes, cosine, the head's top = his
             #                                                              in contact and p there, re-decisions drawn; (the last pass) log p played - now, its readings
             h2_acc = torch.zeros(26, dtype=torch.float64, device=dev)    # first pass: frames, the lesson's loss, the value's, the plan's size, the
             #                                                              bias's (centred, on read frames), the hands' intention logits' (same), read
@@ -4778,6 +4929,10 @@ def main():
                     c_ = min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2]))
                     lt_ = ds[I_HEAD].log_prob(A[..., I_HEAD]) * (1.0 if hm[I_HEAD] is None else hm[I_HEAD])
                     lp = lp - c_ * (lt_ - lt_.detach())
+                cw_ = min(1.0, max(0.0, H2_WPG[0])) if WCR else 0.0
+                if WCR and cw_ > 0:                                      # (1.5a, B) the weapon key's share of this term's gradient: 1 - cw (its value as it is)
+                    lw_ = ds[HAND_HEAD].log_prob(A[..., HAND_HEAD]) * (1.0 if hm[HAND_HEAD] is None else hm[HAND_HEAD])
+                    lp = lp - cw_ * (lw_ - lw_.detach())
                 lk_ = kz_l_ = None
                 if KEEP:                                                 # (1.4c) the keep choice where it decided: in his whole log p (its
                     lk_, kz_l_ = keep_lp(HO2_[0], hs_all, chunk)         # value; its gradient only in the head's own term at c = 1, as
@@ -4932,6 +5087,41 @@ def main():
                                     h2_acc[22] += nc2_.detach() * ms2_
                                     h2_acc[23] += ((hn2_ > a.head2_norm_cap).float() * m2_).sum()
                                     h2_acc[24] += ((rn2_ > a.head2_norm_cap).float() * m2_).sum()
+                    if WCR and cw_ > 0:                                  # (1.5a, B) the weapon key on the head's clock: its own clipped term with the
+                        mw_ = (1.0 if hm[HAND_HEAD] is None else hm[HAND_HEAD]) * wgt   # head's advantage, on the frames his hand read the key
+                        msw_ = mw_.sum().clamp(min=1.0)
+                        lw2_ = ds[HAND_HEAD].log_prob(A[..., HAND_HEAD])
+                        rw_ = (lw2_ - (LPW_PX if DEC else B_LPW)[:, chunk]).clamp(max=30.0).exp()
+                        aw_ = ADV_H[:, chunk]
+                        muw_ = (aw_ * mw_).sum() / msw_
+                        aw_ = (aw_ - muw_) / (((aw_ - muw_).pow(2) * mw_).sum() / msw_).sqrt().clamp(min=1e-8)
+                        pgwt_ = torch.min(rw_ * aw_, rw_.clamp(1 - clip, 1 + clip) * aw_)
+                        pgwt_ = torch.where(aw_ < 0, torch.max(pgwt_, 3.0 * aw_), pgwt_)     # (the second clip, as the target's)
+                        pgw_ = -((ISWW[:, chunk] if DEC else 1.0) * pgwt_ * mw_).sum() / msw_
+                        loss = loss + cw_ * pgw_
+                        if epoch == 0:
+                            with torch.no_grad():
+                                WP_ACC[0] += msw_.double()
+                                WP_ACC[1] += pgw_.detach().double() * msw_
+                                WP_ACC[2] += ((((rw_ - 1.0).abs() > clip).float()) * mw_).sum().double()
+                        if epoch == 2:
+                            with torch.no_grad():
+                                WP_ACC[3] += (((LPW_PX if DEC else B_LPW)[:, chunk] - lw2_) * mw_).sum().double()
+                                WP_ACC[4] += mw_.sum().double()
+                    if WPN and epoch == 0 and ho2_.get("hands_w") is not None:   # (1.5a, D) the two parts of the weapon key's logits, on
+                        with torch.no_grad():                            # the frames his hand read it: sizes (centred), cosine, the head's top
+                            mk2_ = (1.0 if hm[HAND_HEAD] is None else hm[HAND_HEAD]) * wgt * ho2_["alive"]     # choice his
+                            hw_ = ho2_["hands_w"] - ho2_["hands_w"].mean(-1, keepdim=True)
+                            ww_ = ho2_["w"] - ho2_["w"].mean(-1, keepdim=True)
+                            hn_, wn_ = hw_.norm(dim=-1), ww_.norm(dim=-1)
+                            WP_ACC[5] += mk2_.sum().double()
+                            WP_ACC[6] += (hn_ * mk2_).sum().double()
+                            WP_ACC[7] += (wn_ * mk2_).sum().double()
+                            mv_ = mk2_ * (wn_ > 1e-6).float()
+                            WP_ACC[8] += ((hw_ * ww_).sum(-1) / (hn_ * wn_).clamp(min=1e-9) * mv_).sum().double()
+                            WP_ACC[9] += mv_.sum().double()
+                            WP_ACC[10] += ((ho2_["w"].argmax(-1) == A[..., HAND_HEAD]).float() * mv_).sum().double()
+                            WP_ACC[11] += ((ds[HAND_HEAD].probs.argmax(-1) == A[..., HAND_HEAD]).float() * mk2_).sum().double()
                     vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
                     vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
                     loss = loss + (min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])) if H2ADD else H2_PG_[0] * H2_PG_[2]) * pg2_ + a.head2_v * vl2_
@@ -5393,6 +5583,10 @@ def main():
                         n2_ = int(H2L["n_target"])                       # target layer shrink by lr x wd a step. (An L2 in the loss went through
                         pol.pi.weight[HD_I0:HD_I0 + n2_] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]    # Adam's scaling: the rows' size
                         pol.head2.target.weight *= 1.0 - opt.param_groups[-1]["lr"] * H2_L2_[0]          # 22 -> 14 in one update, dry run 4)
+                if WPN and H2_L2_[0] > 0:                                # (1.5a, D) the same on the weapon key's two parts: the hands' rows and
+                    with torch.no_grad():                                # the head's weapon scores (the owner's one coefficient for both, 11-03)
+                        pol.pi.weight[HAND_O:HAND_O + HAND_D] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
+                        pol.head2.wsc.weight *= 1.0 - opt.param_groups[-1]["lr"] * H2_L2_[0]
                 if H2_ROWS is not None:                                  # (--head2-sole) held as they were (Adam's moments move them otherwise)
                     with torch.no_grad():
                         pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])] = H2_ROWS[0]
@@ -5747,6 +5941,23 @@ def main():
                     blinders=dict(held_after_sound=int(kp_[10]), held_after_sound_draw_differs=q_(kp_[11], kp_[10]),
                                   held_quiet=int(kp_[12]), held_quiet_draw_differs=q_(kp_[13], kp_[12]),
                                   after_sound=int(kp_[15]), after_sound_changed=q_(kp_[14], kp_[15])))
+            if WCR or WPN:                                               # (1.5a) the weapon key on the head's clock (B) and the head's weapon scores (D)
+                wa_ = WP_ACC.cpu().numpy()
+                q_ = lambda x_, y_, d_=4: round(float(x_) / max(1.0, float(y_)), d_)
+                rec["weapon"] = dict(
+                    credit=round(H2_WPG[0], 4) if WCR else None, frames=int(wa_[0]), pg=q_(wa_[1], wa_[0], 6), clip_share=q_(wa_[2], wa_[0]),
+                    kl=q_(wa_[3], wa_[4], 6),
+                    **(dict(wadd=round(float(pol.head2.wadd), 3), hands=q_(wa_[6], wa_[5]), head=q_(wa_[7], wa_[5]), cos=q_(wa_[8], wa_[9]),
+                            head_top_his=q_(wa_[10], wa_[9]), his_top_his=q_(wa_[11], wa_[5]),
+                            w=dict(wsc=round(float(pol.head2.wsc.weight.norm()), 5), winp=round(float(pol.head2.winp.weight.norm()), 5),
+                                   rows=round(float(pol.pi.weight[HAND_O:HAND_O + HAND_D].norm()), 4))) if WPN else {}))
+            if HB_ON and HB_ACC[0] is not None:                          # (1.5a, C) the habits: their share of league frames, his frag share against each
+                ha_ = HB_ACC[0]
+                rec["habit"] = dict(p=round(HB_P[0], 4), push=a.habit_push,
+                                    frames={n_: int(ha_[i_, 0]) for i_, n_ in enumerate(HB_NAMES)},
+                                    frags={n_: [int(ha_[i_, 1]), int(ha_[i_, 2])] for i_, n_ in enumerate(HB_NAMES)},
+                                    share={n_: (round(float(ha_[i_, 1] / (ha_[i_, 1] + ha_[i_, 2])), 3) if ha_[i_, 1] + ha_[i_, 2] > 0 else None)
+                                           for i_, n_ in enumerate(HB_NAMES)})
             if a.head2_copy > 0:                                         # (--head2-copy) KL to the hands' choice; the head's first choice = the hands'; each beside the
                 fc_ = max(1.0, float(ha2_[12]))                          # choice as played
                 rec["head2"]["copy"] = dict(w=round(a.head2_copy * H2_CW[0], 5), frames=int(ha2_[12]), no_state=round(1.0 - float(ha2_[12]) / max(1.0, float(ha2_[6])), 4),

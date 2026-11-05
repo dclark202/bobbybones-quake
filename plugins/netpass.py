@@ -378,6 +378,10 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
     if b2 is not None:
         si2_ = head_slices(P)[0]                             # (b1.4a: the mix, his target choice moved toward the head's own; none at mix 0)
         logits[:, si2_] = P["_head2"][2].np_mix_in(P["_head2"][1], P["_head2"][0], h2s, logits[:, si2_]) + b2
+        wa2_ = P["_head2"][2].np_wadd(P["_head2"][1], P["_head2"][0], h2s)    # (1.5a) its weapon scores on the weapon key's
+        if wa2_ is not None:
+            o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])
+            logits[:, int(o_[6]):int(o_[7])] += wa2_
     if hh is not None:                                       # (v0.4) the head ticks after the fast memory's step (on its frames) and its
         _, t_add, w_add, hh = hm.np_tick(hW, hlay, x, hfast, hh, events)    # target and way are added to the hands' (held between ticks)
         si, sw = head_slices(P)

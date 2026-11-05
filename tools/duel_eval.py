@@ -455,6 +455,8 @@ def main():
     ap.add_argument("--opp-rule-fade-g", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--head2-gate", type=float, default=None, help="(v0.4.3) play his strategy head at this gate (default: his checkpoint's; 0: none)")
     ap.add_argument("--opp-head2-gate", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
+    ap.add_argument("--head2-wadd", type=float, default=None, help="(1.5a) play his strategy head's weapon scores at this add (default: his checkpoint's; "
+                                                                   "0: blanked, the hands' weapon choice alone)")
     ap.add_argument("--head2-mix", type=float, default=None, help="(b1.4a) his target choice moved this far to his strategy head's own (default: his checkpoint's; 1: the head's alone)")
     ap.add_argument("--opp-head2-mix", type=float, default=None, help="... the opponent network's (default: its checkpoint's)")
     ap.add_argument("--contact", default="", help="(b1.3a) his seats' own chance of a free contact (default: CONTACT_FREE, the same for both)")
@@ -477,6 +479,8 @@ def main():
         pol.set_rule_fade(a.rule_fade_g)
     if a.head2_gate is not None:
         pol.set_head2_gate(a.head2_gate)
+    if a.head2_wadd is not None:                             # (1.5a) the blanked check of the head's weapon part
+        pol.set_head2_wadd(a.head2_wadd)
     if a.head2_mix is not None:
         pol.set_head2_mix(a.head2_mix)
     if getattr(pol, "h2", None) is not None:

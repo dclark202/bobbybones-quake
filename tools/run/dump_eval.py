@@ -145,6 +145,7 @@ class SeatClock:
 
 
 _DO, _DI, _DK, _DH, _DP, _DE, _DV, _DS = [], [], [0], [], [], [], [], []
+_DW = []                                                     # (1.5a, E3) his weapon key's chances on the dumped frames
 _OUT = os.environ.get("DUMP_OUT") or r"C:	mp_never"
 
 
@@ -269,7 +270,12 @@ def play(job):
         _DK[0] += 1
         if _DK[0] % 4 == 0:
             _DO.append(np.asarray(obs[ev][:, idx], np.float32).copy()); _DI.append(np.asarray(al[:, 10]).astype(np.int16).copy())
-            _DH.append(np.asarray(env.intent)[ev].astype(np.int16).copy()); _DP.append(np.asarray(env.state)[ev, :3].astype(np.float32).copy()); _DE.append(np.asarray(env.state)[np.asarray(ev) ^ 1, :3].astype(np.float32).copy()); _DV.append(np.asarray(env.visible, bool)[ev].copy() if hasattr(env, 'visible') else np.zeros(len(ev), bool)); _DS.append(np.asarray(ev).astype(np.int16).copy())          # (a network with an output the module lacks: LEGS_TURN_ADD off)
+            _DH.append(np.asarray(env.intent)[ev].astype(np.int16).copy()); _DP.append(np.asarray(env.state)[ev, :3].astype(np.float32).copy()); _DE.append(np.asarray(env.state)[np.asarray(ev) ^ 1, :3].astype(np.float32).copy()); _DV.append(np.asarray(env.visible, bool)[ev].copy() if hasattr(env, 'visible') else np.zeros(len(ev), bool)); _DS.append(np.asarray(ev).astype(np.int16).copy())
+            if getattr(pol, "last_logits", None) is not None:   # (1.5a, E3) the weapon key's chances as he played (its logits after every part)
+                o6_ = int(np.sum(pol.dims[:6]))
+                lw_ = np.asarray(pol.last_logits[:, o6_:o6_ + int(pol.dims[6])], np.float64)
+                lw_ = np.exp(lw_ - lw_.max(1, keepdims=True))
+                _DW.append((lw_ / lw_.sum(1, keepdims=True)).astype(np.float16))          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
@@ -395,7 +401,7 @@ def play(job):
         st_reg = {k: np.array(env.stats[k], np.float64) for k in SK}
     flip = slice(None, None, -1) if swap else slice(None)
     os.makedirs(_OUT, exist_ok=True)
-    np.savez(os.path.join(_OUT, "dump_{}_{}.npz".format(mp, os.getpid())), obs=np.concatenate(_DO), intent=np.concatenate(_DI), held=np.concatenate(_DH), pos=np.concatenate(_DP), en=np.concatenate(_DE), vis=np.concatenate(_DV), seat=np.concatenate(_DS), items_pos=np.asarray(env.item_pos, np.float32), items_lab=np.array([str(d_[4] or '') for d_ in env.item_def]))
+    np.savez(os.path.join(_OUT, "dump_{}_{}.npz".format(mp, os.getpid())), obs=np.concatenate(_DO), intent=np.concatenate(_DI), held=np.concatenate(_DH), pos=np.concatenate(_DP), en=np.concatenate(_DE), vis=np.concatenate(_DV), seat=np.concatenate(_DS), **({"wkp": np.concatenate(_DW)} if _DW and len(_DW) == len(_DO) else {}), items_pos=np.asarray(env.item_pos, np.float32), items_lab=np.array([str(d_[4] or '') for d_ in env.item_def]))
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 overtime_periods=ot_n,
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),

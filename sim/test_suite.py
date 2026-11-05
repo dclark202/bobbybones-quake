@@ -206,6 +206,13 @@ class Policy:
         self.h2W = dict(self.h2W, gate=np.float32(g))
         self.h2_live = head2_.np_open(self.h2W)
 
+    def set_head2_wadd(self, w):
+        """(1.5a, checks) play the strategy head's weapon scores at this add (0: blanked, the hands' weapon choice alone)"""
+        assert self.h2 is not None and "wsc.weight" in self.h2W, "this network has no weapon part in its strategy head"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, wadd=np.float32(w))
+        self.h2_live = head2_.np_open(self.h2W)
+
     def set_head2_mix(self, m):
         """(b1.4a, checks) play his target choice moved this far from the hands' to the strategy head's (1: the head's alone)"""
         assert self.h2 is not None, "this network has no strategy head"
@@ -334,6 +341,9 @@ class Policy:
         if b2 is not None:
             si2_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
             logits[:, si2_] = head2_.np_mix_in(self.h2W, self.h2, h2s, logits[:, si2_]) + b2     # (b1.4a: the mix; none at mix 0)
+            wa2_ = head2_.np_wadd(self.h2W, self.h2, h2s)    # (1.5a) its weapon scores on the weapon key's (none without the part or at wadd 0)
+            if wa2_ is not None:
+                logits[:, int(np.sum(self.dims[:6])):int(np.sum(self.dims[:7]))] += wa2_
         if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
             _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
             logits[:, self.head_si] += t_add
