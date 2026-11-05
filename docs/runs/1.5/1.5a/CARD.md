@@ -359,4 +359,20 @@ close, update by update.
 
 ## The result
 
-Not started.
+Ran 2026-11-04 19:17 to 11-05 07:18 (update 133; end kept as `keep/policy_end_15a.pt` with its optimizer). **He wins more; his weapon
+did not move toward the pros'.**
+
+| | |
+|---|---|
+| Checks against 1.3b's end (200 games) | u10 49.5%, u30 56.0%, u50 54.0%, u90 55.0%, u110 56.5% (frag share 54.6%) |
+| Against b1.2d's end | u70 176-24 (88.0%) |
+| The head's weapon scores switched off | u50 100-100 (50.0%) against 108-92 with them: within the noise; the end save's blanked check runs 11-05 morning on cores 14-17 |
+| His weapon, self-play (E1, u90 against 1.3b's end) | owns rail 28 → 17%; in view rockets 24 → 25%, rail 2.2 → 1.2%, lightning 61 → 62%; lightning when owned 82-84 → 86-89%; flat by distance |
+| His chance of a weapon key (E3) | rail at range 0.18 → 0.09% a reading; rockets close 0.36 → 0.42% |
+| Training games, in hand | rockets 0.26 → 0.215, lightning 0.56 → 0.61, rail about 0.016 throughout |
+| Big weapons owned | 1.80 (1.3b's end) → 1.71 by u50 → 1.70 to u130, with the item teacher on: 1.4b's slide was not the fade alone |
+| The head's weapon part | its size 0.08 → 2.0 (the hands' 18.7) |
+| Behaviour panel | RED at u50, u60 (camping near the red armor on Blood Run 16% against 6%), u70, u80, u100 (the lightning gun his target on Campgrounds 21-22% against 10%); GREEN at u110, u120 |
+| The prefit to the pros (1.5b, measured overnight, never run) | push 1: 47.5% against 1.3b's end; push 2.5: 56.5% untrained, rockets in view 24 → 37%, lightning 61 → 50%, rail untouched, flat by distance |
+
+The owner's call (11-05): no 1.5b; [1.6a](../../1.6/1.6a/CARD.md) from this end, then 1.7.

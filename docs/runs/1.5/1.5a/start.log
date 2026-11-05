@@ -1,0 +1,31 @@
+11-04 19:16:30 1.3b dials at their ends
+11-04 19:16:30 train.cmd for 720 minutes: written
+11-04 19:16:30 allowed set BLIND_FIRE_W: run '0' | reference '<unset>'
+11-04 19:16:30 allowed set INTENT_SWITCH: run '0' | reference '<unset>'
+11-04 19:16:30 allowed set WEAPON_OWN: run '1' | reference '<unset>'
+11-04 19:16:30 allowed arg --habit-kinds: run 'pro:1,rg:1,rl:1' | reference '<unset>'
+11-04 19:16:30 allowed arg --habit-p: run '0.3' | reference '<unset>'
+11-04 19:16:30 allowed arg --habit-push: run '2' | reference '<unset>'
+11-04 19:16:30 allowed arg --head2-wpg: run '0' | reference '<unset>'
+11-04 19:16:30 allowed arg --minutes: run '720' | reference '929'
+11-04 19:16:30 allowed arg --run: run 'duel_gru_1_5a' | reference 'duel_gru_1_3b'
+11-04 19:16:30 settings check: PASS
+11-04 19:16:32 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-04 19:16:32 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-04 19:16:32 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-04 19:16:32 settings check: PASS
+11-04 19:16:34 backup: copied 127 files 1.14 GB to T:\BobbyBones_backup
+11-04 19:16:36 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 975 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 685,660 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp
+11-04 19:16:36 its inputs (wobs, 35): [6, 35, 36, 37, 38, 39, 71, 72, 73, 74, 75, 76, 77, 78, 79, 242, 243, 244, 245, 246, 247, 248, 249, 250, 313, 314, 315, 316, 317, 318, 319, 320, 321, 366, 367]
+11-04 19:16:36 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_5a\policy.pt: the weapon part at zero, wadd 1
+11-04 19:16:36 copied the optimizer's state C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_3b\keep\opt_end_13b.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_5a\opt.pt (the weapon part's group is added by the trainer)
+11-04 19:16:53 PASS b as built: 400 frames x 8 seats: |h a - h b| 0, |head a - head b| 0, actions that differ 0
+11-04 19:16:53 PASS wsc random: the weapon key differs 406 times, the other outputs 0; |h| 0, |head| 0
+11-04 19:16:53 PASS winp random too: the head's state moves (0.491); the hands' memory 0 (the plan's gate 0.0)
+11-04 19:16:53 PASS wadd 0 (the blanked check): actions that differ 0 with wsc random and its add 0
+11-04 19:16:53 ALL PASSED
+11-04 19:16:53 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.125, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_PG': 1.0, 'H2_MIX': 0.0, 'H2_COPY': 0.0, 'H2_WPG': 0.0, 'HABIT_P': 0.3}
+11-04 19:16:55 live.json carries the save's live dials
+11-04 19:16:55 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_3b\keep\policy_end_13b.pt with its optimizer, given the head's weapon scores at zero; anchors 1.3b's end, b1.2d's end, b1.1, v0.6.0's end (1.3b's even draw)
+11-04 19:16:55 trainer started: cmd 33788, from 1.3b's end, 720 minutes
+11-04 19:17:00 watcher 35240 | ramp 2360 (H2_WPG 0 -> 1 over updates 10 to 90, never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log; the head's weapon scores switched off for a check at update 50) | self-play logger 32052 | no guard (owner: never stop the run)

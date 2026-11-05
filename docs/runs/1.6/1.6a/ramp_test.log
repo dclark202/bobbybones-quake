@@ -1,0 +1,54 @@
+PASS update 5: teacher 0.875, speed 0.109375 ({'INTENT_TEACH_W': 0.875, 'SPEED_PAY': 0.109375, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'COST_FIRE_W': 0.0, 'H2_PG': 1.0})
+PASS mark 10 kept
+PASS not held by a check of 35%: clock 20 (teacher 0.5000)
+PASS the check of 35% logged as a MAJOR PROBLEM
+PASS big weapons owned 1.60 against 1.70 flagged
+PASS no save kept between marks
+PASS a firing cost above zero flagged
+PASS update 40: both at 0 ({'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'COST_FIRE_W': 0.0, 'H2_PG': 1.0})
+PASS mark 40 kept
+PASS held at 0 at update 60 ({'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'COST_FIRE_W': 0.0, 'H2_PG': 1.0})
+PASS mark 80 kept
+PASS the other dials untouched ({'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'COST_FIRE_W': 0.0, 'H2_PG': 1.0})
+11-05 07:11:57 ramp_16a on for fake: INTENT_TEACH_W 1.0 -> 0.0 over updates 0 to 40, SPEED_PAY 0.125 -> 0.0 over updates 0 to 40; FREE: the clock never holds or steps back, a check under 40% is a MAJOR PROBLEM
+11-05 07:11:59 update 1: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:11:59 update 1: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:11:59 clock 1 after update 1: {'INTENT_TEACH_W': 0.975, 'SPEED_PAY': 0.121875}
+11-05 07:12:01 update 2: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:01 update 2: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:01 clock 2 after update 2: {'INTENT_TEACH_W': 0.95, 'SPEED_PAY': 0.11875}
+11-05 07:12:02 update 3: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:02 update 3: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:02 clock 3 after update 3: {'INTENT_TEACH_W': 0.925, 'SPEED_PAY': 0.115625}
+11-05 07:12:04 update 4: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:04 update 4: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:04 clock 4 after update 4: {'INTENT_TEACH_W': 0.9, 'SPEED_PAY': 0.1125}
+11-05 07:12:05 update 5: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:05 update 5: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:05 clock 5 after update 5: {'INTENT_TEACH_W': 0.875, 'SPEED_PAY': 0.109375}
+11-05 07:12:07 update 10: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:07 update 10: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:07 clock 10 after update 10: {'INTENT_TEACH_W': 0.75, 'SPEED_PAY': 0.09375}
+11-05 07:12:07 kept keep/policy_u10_16a.pt with its optimizer (the mark 10)
+11-05 07:12:10 MAJOR PROBLEM check update 10 against the start (1.5a's end): 70-130 = 35.0% (under 40%)
+11-05 07:12:12 update 20: big weapons owned 1.6 | firing cost 0.0 
+11-05 07:12:12 FLAG update 20: big weapons owned 1.6 (start 1.700): 1.4b's drift?
+11-05 07:12:12 update 20: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:12 clock 20 after update 20: {'INTENT_TEACH_W': 0.5, 'SPEED_PAY': 0.0625}
+11-05 07:12:15 update 30: big weapons owned 1.7 | firing cost 0.01 
+11-05 07:12:15 FLAG update 30: A FIRING COST ABOVE ZERO: shot cost 0.01 {}
+11-05 07:12:15 clock 30 after update 30: {'INTENT_TEACH_W': 0.25, 'SPEED_PAY': 0.03125}
+11-05 07:12:15 update 30: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:17 update 40: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:17 update 40: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:17 clock 40 after update 40: {'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0}
+11-05 07:12:17 kept keep/policy_u40_16a.pt with its optimizer (the mark 40)
+11-05 07:12:20 update 60: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:20 update 60: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:20 clock 60 after update 60: {'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0}
+11-05 07:12:23 update 80: big weapons owned 1.7 | firing cost 0.0 
+11-05 07:12:23 update 80: in hand in games rockets None lightning None rail None | weapon credit None head part None hands None cos None kl None | habits None
+11-05 07:12:23 clock 80 after update 80: {'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0}
+11-05 07:12:23 kept keep/policy_u80_16a.pt with its optimizer (the mark 80)
+
+ALL PASSED

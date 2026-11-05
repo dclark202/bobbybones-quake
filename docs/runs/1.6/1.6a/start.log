@@ -1,0 +1,19 @@
+11-05 07:22:09 1.5a dials at their ends
+11-05 07:22:09 train.cmd for 600 minutes (a cap; 80 updates): written
+11-05 07:22:09 no firing cost: every one at zero
+11-05 07:22:09 allowed set SHOT_COST: run '0' | reference '0.10'
+11-05 07:22:09 allowed arg --head2-wpg: run '1' | reference '0'
+11-05 07:22:09 allowed arg --max-updates: run '80' | reference '<unset>'
+11-05 07:22:09 allowed arg --minutes: run '600' | reference '720'
+11-05 07:22:09 allowed arg --run: run 'duel_gru_1_6a' | reference 'duel_gru_1_5a'
+11-05 07:22:09 settings check: PASS
+11-05 07:22:11 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-05 07:22:11 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-05 07:22:11 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-05 07:22:11 settings check: PASS
+11-05 07:22:13 backup: copied 154 files 1.08 GB to T:\BobbyBones_backup
+11-05 07:22:13 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 1.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.125, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_PG': 1.0, 'H2_MIX': 0.0, 'H2_COPY': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3}
+11-05 07:22:15 live.json carries the save's live dials
+11-05 07:22:15 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_5a\keep\policy_end_15a.pt with its optimizer; anchors 1.5a's end, 1.3b's end, b1.2d's end, b1.1, v0.6.0's end (1.5a's even draw)
+11-05 07:22:15 trainer started: cmd 33092, from 1.5a's end, 80 updates (cap 600 minutes)
+11-05 07:22:20 watcher 32404 | ramp 30868 (INTENT_TEACH_W 1 -> 0 and SPEED_PAY 0.125 -> 0 over updates 0 to 40, held to 80, never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log; the head's weapon scores switched off for a check at update 80) | self-play logger 37452 | no guard (owner: never stop the run)
