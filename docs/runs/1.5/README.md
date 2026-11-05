@@ -33,4 +33,4 @@ Matchmaking by difficulty (AlphaStar's) goes earlier, as soon as possible ([BACK
 
 | Attempt | Started from | What | State | Result |
 |---|---|---|---|---|
-| [1.5a](1.5a/CARD.md) | 1.4c's end | (owner, 11-04) the weapon follows the fight: the weapon key credited on the head's clock (B, over updates 0 to 60), weapon habits in the league (C: the leaners above, extended), and the head's own scores added to the weapon choice (D: "ABSOLUTELY D"), all from update 0; the game's switch (A) out, E2 measured and reported only | built 11-04 (branch `b15a`); tests written, not run; starts on the owner's command | |
+| [1.5a](1.5a/CARD.md) | 1.3b's end | (owner, 11-04 evening) the head contributes to his weapon choice before anything is faded: its weapon scores added to the hands' (at zero at the start), the weapon key's credit on the head's clock over updates 10 to 90, weapon habits on 30% of the league seats' lives; the switch cost, the weapon override and the blind-fire cost out at update 0; the item teacher and the lock as 1.3b (their fades: [1.6](../1.6/README.md)) | **running** since 2026-11-04 19:17 (12 h), on the owner's word; tests passed | |

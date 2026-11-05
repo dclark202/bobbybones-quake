@@ -68,6 +68,7 @@ Three pieces, all from update 0 (above: 1, 2, 3; in the sections below by their 
 
 | | |
 |---|---|
+| **Started** | ✅ **2026-11-04 19:16:55** on the owner's word ("If so you can start now"), 720 minutes; `b15a` merged into `main` (f81dbc2); `start.ps1`: settings checks PASS, backup, `weapon_init same` ALL PASSED, the optimizer's state loaded |
 | Started from | ✅ 1.3b's end with its optimizer (`data/sim_runs/duel_gru_1_3b/keep/policy_end_13b.pt`, update 170: "strongest boy yet", 93.5% against b1.2d's end), the head's weapon part added at zero (owner, 11-04: "Start 1.5a from 1.3b end"; 1.4c not continued) |
 | Run | `duel_gru_1_5a` |
 | Length | ❓ 12 hours by default (`--minutes 720`), overnight (owner: "Run overnight") |
