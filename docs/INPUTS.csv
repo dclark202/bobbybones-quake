@@ -979,3 +979,13 @@ index,group,input,meaning,scale,added in
 977,b12 small items,small place 8: step left,"(SM_ITEMS; zeros with it off, and past a map's places) a small health or armor place, the nearer first; a place is an item, or a group of bubbles or of shards: the same",a unit vector,b1.2c
 978,b12 small items,small place 8: something there,"(SM_ITEMS; zeros with it off, and past a map's places) a small health or armor place, the nearer first; a place is an item, or a group of bubbles or of shards: by what he has seen, heard or taken himself; not the truth",0 or 1,b1.2c
 979,b12 small items,small place 8: gives him,"(SM_ITEMS; zeros with it off, and past a map's places) a small health or armor place, the nearer first; a place is an item, or a group of bubbles or of shards: the points it would give him now, by its cap",points / 50,b1.2c
+980,b17 order,order: cut off,(COMBAT; zeros with it off) the head's order he follows: cut the enemy off where the brain puts him ahead,0 or 1,1.7
+981,b17 order,order: spam,(COMBAT; zeros with it off) the head's order: spam a point on the enemy's way,0 or 1,1.7
+982,b17 order,order: break off,(COMBAT; zeros with it off) the head's order: break off to a way out,0 or 1,1.7
+983,b17 order,point: to shoot,"(COMBAT; zeros with it off) the point is one to shoot (spam), not one to watch",0 or 1,1.7
+984,b17 order,point: direction sin,"(COMBAT; zeros with it off) the point to watch or shoot (an order's; the enemy believed; a hold's lane; an item: the enemy 1 s ahead), from his crosshair, left +",sin,1.7
+985,b17 order,point: direction cos,(COMBAT; zeros with it off) the same,cos,1.7
+986,b17 order,point: pitch,"(COMBAT; zeros with it off) the same, up and down (+: below)","degrees / 90, -1 to 1",1.7
+987,b17 order,point: distance,(COMBAT; zeros with it off) from his eyes,"units / 2000, at most 2",1.7
+988,b17 order,point: height,(COMBAT; zeros with it off) above his place,"units / 200, -3 to 3",1.7
+989,b17 order,point: valid,(COMBAT; zeros with it off) there is a point,0 or 1,1.7

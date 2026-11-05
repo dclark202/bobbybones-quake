@@ -1,0 +1,40 @@
+settings read once from 1.6a's command and its live files: C:\Users\dacla\AppData\Local\Temp\i17a_ident_mj6eph4p\settings.json
+PASS bloodrun HEAD against now: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'new inputs zero': True, 'counters': True, 'no keep decided': True}
+PASS bloodrun HEAD against km1: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'new inputs zero': True, 'counters': True, 'no keep decided': True}
+PASS bloodrun HEAD against k0s: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'new inputs zero': True, 'counters': True, 'no keep decided': True}
+PASS bloodrun HEAD against cmbq0: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'counters': True, 'no keep decided': True}
+bloodrun keep everywhere: his seconds the keep choice's 1.000; its readings 5.00 a second (decided 8901, forced 58)
+PASS bloodrun keep everywhere: all his seconds the keep choice's; about five readings a second
+bloodrun keep everywhere: target changes where not ended 5 (to nothing: 5); arrivals read 0 times, changed 0; changes 43 (lock: 805)
+PASS bloodrun keep everywhere: no change where not ended but resets to nothing; arrivals never changed
+bloodrun re-decide everywhere: readings decided 8047, of them counted 8047; changes of target 8374 (lock: 805)
+PASS bloodrun re-decide everywhere: every reading his choice decided counted; more changes than the lock
+bloodrun random coin and draws: stats keep2 [34634, 4330, 258, 4072, 2052, 1939, 30, 19, 1157, 560, 230, 115, 2685, 1377]; his seconds the keep choice's 0.485
+PASS bloodrun random coin and draws: the game differs; decided readings counted (4072 = keep2 4072); about half his seconds
+bloodrun random coin and draws: arrivals decided 30 (kept 11, of them changed 0; re-decided 19, of them counted 19)
+PASS bloodrun arrivals keepable: decided by the keep choice, kept ones never changed, re-decided ones counted
+bloodrun the combat order: asked 2801; chosen [767, 685, 634, 715]; frames [17839, 18502, 15873, 19366]; arrivals [0, 61, 146, 21]; damage [9, 14, 0, 9]
+bloodrun the combat order: readings with an order 2034, off the enemy without a reset 0; a kind left at a reset 0
+bloodrun the combat order's candidates valid (share of seats): targets [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.49000000953674316, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], cut off [1.0, 1.0, 1.0], spam [0.949999988079071, 0.9599999785423279, 0.949999988079071, 0.9599999785423279, 0.949999988079071, 0.9300000071525574, 0.9200000166893005, 0.9300000071525574], break off [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], ways [0.9900000095367432, 0.0, 0.0]
+PASS bloodrun the combat order: every kind chosen and followed; arrivals for cut off, spam, break off; no target learnt under an order
+bloodrun frames 3000
+PASS aerowalk HEAD against now: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'new inputs zero': True, 'counters': True, 'no keep decided': True}
+PASS aerowalk HEAD against km1: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'new inputs zero': True, 'counters': True, 'no keep decided': True}
+PASS aerowalk HEAD against k0s: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'new inputs zero': True, 'counters': True, 'no keep decided': True}
+PASS aerowalk HEAD against cmbq0: {'rew': True, 'done': True, 'rl': True, 'ch': True, 'obs': True, 'counters': True, 'no keep decided': True}
+aerowalk keep everywhere: his seconds the keep choice's 1.000; its readings 5.00 a second (decided 8900, forced 61)
+PASS aerowalk keep everywhere: all his seconds the keep choice's; about five readings a second
+aerowalk keep everywhere: target changes where not ended 5 (to nothing: 5); arrivals read 779 times, changed 0; changes 42 (lock: 1158)
+PASS aerowalk keep everywhere: no change where not ended but resets to nothing; arrivals never changed
+aerowalk re-decide everywhere: readings decided 8184, of them counted 8184; changes of target 8372 (lock: 1158)
+PASS aerowalk re-decide everywhere: every reading his choice decided counted; more changes than the lock
+aerowalk random coin and draws: stats keep2 [34634, 4330, 243, 4087, 2051, 1929, 43, 22, 2277, 1165, 667, 319, 1143, 567]; his seconds the keep choice's 0.485
+PASS aerowalk random coin and draws: the game differs; decided readings counted (4087 = keep2 4087); about half his seconds
+aerowalk random coin and draws: arrivals decided 43 (kept 21, of them changed 0; re-decided 22, of them counted 22)
+PASS aerowalk arrivals keepable: decided by the keep choice, kept ones never changed, re-decided ones counted
+aerowalk the combat order: asked 2792; chosen [752, 676, 651, 713]; frames [17894, 18086, 16352, 19248]; arrivals [0, 90, 223, 37]; damage [160, 153, 302, 77]
+aerowalk the combat order: readings with an order 2040, off the enemy without a reset 0; a kind left at a reset 0
+aerowalk the combat order's candidates valid (share of seats): targets [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.8100000023841858, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], cut off [1.0, 1.0, 1.0], spam [0.9700000286102295, 0.9700000286102295, 0.9800000190734863, 0.9800000190734863, 0.9700000286102295, 0.9800000190734863, 0.9700000286102295, 0.9700000286102295], break off [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], ways [0.9800000190734863, 0.0, 0.0]
+PASS aerowalk the combat order: every kind chosen and followed; arrivals for cut off, spam, break off; no target learnt under an order
+aerowalk frames 3000
+ALL PASSED

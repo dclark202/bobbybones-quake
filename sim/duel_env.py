@@ -464,13 +464,52 @@ WT_EVERY, WT_MAX, WT_MIN_S, WT_MAX_S = 4, 202, 1.0, 20.0   # a trip's path: a po
 INTENT_EVERY = 40
 INTENT_SWITCH = float(os.environ.get("INTENT_SWITCH") or 0.02)     # (1.4b, owner 2026-11-03: the switch cost "can just go") a change of target's cost; unset: 0.02
 BLIND_FIRE_W = float(os.environ.get("BLIND_FIRE_W") or 1.0)        # (1.4c, owner 2026-11-04: "make sure its out in 1.4c") a factor on BLIND_FIRE_COST; unset: 1
-# (1.4c, owner 2026-11-04) the keep choice. A policy seat may send one more column beside its actions (env.step): -1 the
-# lock rule decides its reading, 0 keep, 1 re-decide. At a reading of his target that is not forced (the target ended:
-# "nothing", taken, gone, a reading at once after a spawn or a weapon taken) a seat with 0 or 1 decides itself whether the
-# reading counts: keep, the target stays whatever was drawn; re-decide, the draw counts (it may be the same). The policy
-# draws the column with the share g of its file (sim/head2.py, the keep layer): with chance 1 - g it sends -1. Without the
-# column (every older caller, the plugins): the lock rule, as before. env.keep_live: the readings the seat's choice decided;
-# env.keep_feat(): what the choice reads for the next frame.
+# (1.4c, owner 2026-11-04; 1.7a, owner 2026-11-04 night: "it should read at the heads rate 5 times/s") the keep choice. A
+# policy seat may send one more column beside its actions (env.step): -1, the lock rule; otherwise d + 2 c + 4 r with d its
+# draw (1 re-decide, 0 keep), c the hand-over's coin (drawn with the share g of its file, sim/head2.py) and r this frame is a
+# keep reading (the frame after the head's tick: five a second). At each of a seat's lock-rule readings (once a second,
+# staggered, as before) its coin gives the next second to the keep choice (c 1) or to the lock rule (c 0, as before). In a
+# second of the keep choice the lock rule's reading is not made; at each keep reading his draw decides whether a reading not
+# forced counts: keep, the target stays whatever was drawn; re-decide, the draw counts (it may be the same). Forced, there as
+# in the lock rule's: the target ended ("nothing", taken, gone, a reading at once after a spawn or a weapon taken). An
+# arrival (the enemy hunted in view, the holding place stood at: intent_arr) is not an end for the keep choice: it is kept or
+# left by its draw (the lock rule still re-reads it at once, as before). At share 0 (c always 0) every reading is the lock
+# rule's to the bit. Without the column (every older caller, the plugins): the lock rule. env.keep_live: the readings the
+# seat's choice decided; env.keep_feat(): what the choice reads for the next frame (KEEP_FEAT columns).
+KEEP_FEAT = 7                                                      # (1.7a) age, contact, target, arrived, since arrival, since a sound, since a hit unseen
+# (1.7, owner 2026-11-04 night and 11-05: "chase an enemy, decide to cut the enemy off X seconds into the future, decide to hold
+# an angle for a rail shot, decide to spam a corridor or chokepoint ... and that decision happens every 0.2s"; "break off needs to be
+# part of it too"; "it's all 1.7"; docs/runs/1.7/README.md, BUILD.md) COMBAT=1 (a PLAY_VAR): the strategy head's combat order. At
+# each keep reading (the frame after the head's tick) order_feat() gives every seat's candidates of every kind with their numbers:
+# the 17 targets (CMB_T rows: their numbers for the head's scores added to the target's), the order's new kinds (CMB_NEW rows: cut
+# him off where the brain puts him 1, 2, 4 s ahead; spam: of the map's spam points, sim/order_maps/<map>.npz, the CMB_SLOT nearest
+# the brain's places ahead; break off: of the map's ways out and the health and armor items, the CMB_SLOT the brain's places do not
+# see that favour him most), and the three ways to his target (CMB_W rows: the head's scores added to the way's). The keep column
+# (above) carries the order: + 8 kind (CMB_KINDS: 0 the target as chosen, 1 cut off, 2 spam, 3 break off) + 32 candidate + 256 q
+# (asked: the head's share, cmb_g). At a reading that counts an order of a new kind takes the place of the drawn target: his target
+# is "the enemy" (EN_INTENT) and the hunt's way leads to the order's point (the hunt's reader of _bel_src), his legs look at its look
+# point. Cut off and its point follow the brain's place as it moves; spam's place to fire from and its point, break off's way out,
+# are kept from the reading. Arrived (keepable): cut off within CMB_ARRIVE_R or the enemy in view; spam at its place to fire from
+# or its point in sight within CMB_SPAM_RANGE; break off at a place out of the brain's places' sight. Ended (forced): break off at
+# its item; any order without its point (given up). The drawn target is not applied under an order (cmb_over: the trainer does not
+# learn it there); the order is learnt where it was asked (cmb_live). stats["cmb"]: readings asked; by kind chosen, frames, arrivals, damage dealt.
+# With no order asked nothing changes (COMBAT on or off: the simulator to the bit).
+COMBAT = float(os.environ.get("COMBAT") or 0.0) > 0
+CMB_KINDS = ("target", "cut", "spam", "out")
+CMB_SLOT = 8                                                       # candidates of spam and of break off
+CMB_SLOTS = (0, 3, CMB_SLOT, CMB_SLOT)                             # each kind's candidates (cut off: the three horizons)
+CMB_C0 = (0, 0, 3, 3 + CMB_SLOT)                                   # each kind's first among the CMB_NEW
+CMB_NEW = sum(CMB_SLOTS)
+CMB_T, CMB_W = 17, 3                                               # the targets' rows (INTENTS), the ways' rows
+CMB_ROWS = CMB_T + CMB_NEW + CMB_W
+CMB_FEAT = ("k_none", "k_item", "k_enemy", "k_hold", "k_cut", "k_spam", "k_out", "k_way", "valid", "t_me", "t_en", "height", "range",
+            "fwd", "left", "up", "sees_1", "sees_2", "sees_4", "seen_me", "door", "corridor", "width", "tele_out", "tele_in",
+            "item_up", "item_back", "pro_rl", "pro_gl", "pro_pg", "pro_hold", "pass_1", "pass_2", "pass_4")
+CMB_F = len(CMB_FEAT)
+CMB_PASS0 = CMB_FEAT.index("pass_1")                               # (the brain's odds: written in by the trainer, sim/passodds.py)
+CMB_CTX = ("contact", "seen_ago", "health", "armor", "en_health", "en_armor", "ahead_ok", "belief_ok", "ahead_range", "ahead_height",
+           "w_rl", "w_lg", "w_rg", "w_other")
+CMB_ARRIVE_R, CMB_SPAM_R, CMB_SPAM_RANGE, CMB_OUT_R, CMB_PATH = 300.0, 200.0, 1500.0, 80.0, 30
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
@@ -815,6 +854,7 @@ INTENT_HEAD, LEGS_HEAD, LEGS_TAKES = 10, 11, (0, 1, 2, 3, 7, 8)
 LEGS_IN = LEGS and float(os.environ.get("LEGS_IN") or 0.0) > 0
 LEGS_IN_CHECK = LEGS_IN and float(os.environ.get("LEGS_IN_CHECK") or 0.0) > 0
 PLAY_VARS = PLAY_VARS + ("LEGS_IN",)
+PLAY_VARS = PLAY_VARS + ("COMBAT",)                                 # (1.7) the combat order: a network trained with it plays with it
 # v0.3.2 (the owner's play test of 2026-10-16: on his legs, 54% of his time, he has "blinders": they own his view's turn and
 # know nothing of the enemy). LEGS_TURN_ADD=1 (with LEGS; a PLAY_VAR): one more output, the last (TA_HEAD: his own turn
 # correction, the TA_BINS degrees a frame, the first of them 0), drawn every frame. On the frames his legs carry him his
@@ -2680,6 +2720,15 @@ N_DRIFT = 4
 SM_ITEMS = float(os.environ.get("SM_ITEMS") or 0.0) > 0
 SM_SLOTS, SM_F, SM_GROUP = 8, 14, 200.0                    # (with groups the ten maps hold 7 to 12 places)
 N_ITEMS = SM_SLOTS * SM_F
+# (1.7, COMBAT; docs/runs/1.7/BUILD.md part 6: "the point to watch or shoot as a few inputs of the hands (its direction from his view,
+# its distance, its height), beside the way") the last N_ORD inputs (group "b17 order", one attention token): the order he follows
+# (cut off, spam, break off: one-hot; the target as chosen: none), whether its point is one to shoot (spam), and the point to watch or
+# shoot: its direction from his crosshair (sine and cosine of the yaw, the pitch / 90), its distance (/ 2000, at most 2), its height
+# from him (/ 200, -3 to 3), valid. The point: an order's look point (cut off: the brain's place for the enemy at its horizon; spam:
+# the spam point; break off: the brain's place 1 s ahead); the target as chosen: the enemy, where he believes him; a holding place,
+# the first of the brain's places 1, 2, 4 s ahead its lane sees; an item, the brain's place 1 s ahead. All from his own senses and his
+# brain. Zeros with COMBAT off.
+N_ORD = 10
 SM_KINDS = {("hp", 5): 0, ("hp", 25): 1, ("hp", 50): 2, ("ar", 5): 3, ("ar", 25): 4}
 DRIFT_DELAY = float(os.environ.get("DRIFT_DELAY") or 0.0)
 DRIFT_SIGMA = float(os.environ.get("DRIFT_SIGMA") or 0.0)
@@ -2863,7 +2912,7 @@ BRAIN_BAND_MID = np.array([37.5, 100.0, 162.5, 250.0], np.float32)    # the stac
 BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
 BRAIN_ERR_BINS = ("0-2s", "2-5s", "5-10s", "10s+")
 PLAY_VARS = PLAY_VARS + ("BRAIN_READ", "BRAIN_KNOWN", "SM_ITEMS")
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -3744,6 +3793,25 @@ class DuelEnv:
         self.intent_done = np.zeros(self.n, bool)           # the chosen item was taken since the choice
         self.keep_in = None                                 # (1.4c) the keep column of this frame (None: the lock rule)
         self.keep_live = np.zeros(self.n, bool)             # (1.4c) the readings his keep choice decided
+        self.kown = np.zeros(self.n, bool)                  # (1.7a) this second of his readings is the keep choice's (the coin at his last lock reading)
+        self.intent_arr = np.zeros(self.n, bool)            # (1.7a) his target is arrived, not ended: the enemy hunted in view, the holding place stood at
+        self.arr_t = np.zeros(self.n, np.float32)           # (1.7a) seconds since the arrival
+        self.khit_t = np.full(self.n, 99.0, np.float32)     # (1.7a) seconds since he was hit with the enemy out of his view
+        self.cmb_k = np.zeros(self.n, np.int64)             # (1.7, COMBAT) the kind of order he follows (0: the target as chosen)
+        self.cmb_c = np.zeros(self.n, np.int64)             # ... its candidate
+        self.cmb_live = np.zeros(self.n, bool)              # ... the readings the order was asked at and counted
+        self.cmb_over = np.zeros(self.n, bool)              # ... and those where an order of a new kind took the drawn target's place
+        self.cmb_crt = np.zeros((self.n, CMB_NEW, 3), np.float32)   # ... the new kinds' candidates of the last order_feat(): where to go,
+        self.cmb_clk = np.zeros((self.n, CMB_NEW, 3), np.float32)   # where to look, valid, an item
+        self.cmb_cok = np.zeros((self.n, CMB_NEW), bool)
+        self.cmb_citem = np.zeros((self.n, CMB_NEW), bool)
+        self.cmb_frt = np.zeros((self.n, 3), np.float32)    # ... the order's kept points (spam, break off)
+        self.cmb_flk = np.zeros((self.n, 3), np.float32)
+        self.cmb_fitem = np.zeros(self.n, bool)
+        self.cmb_rt = np.zeros((self.n, 3), np.float32)     # ... its point for his way, and whether there is one
+        self.cmb_ok = np.zeros(self.n, bool)
+        self.cmb_lk = np.zeros((self.n, 3), np.float32)     # ... its point for his look, and whether it gives one
+        self.cmb_lok = np.zeros(self.n, bool)
         self.int_tick = 0
         self.intent_seek = 0.0                              # reward per second of the chosen way gained
         self.item_loss = 0.5                                # an enemy's mega or red costs this share of its pickup reward
@@ -3862,6 +3930,21 @@ class DuelEnv:
                         for j_ in range(self.hold_n):
                             self.intent_gi[HOLD_INTENT + j_] = self.hold_g0 + j_
                         self.hold_tg = [[float(x_) for x_ in p_] for p_ in self.hold_pos]
+        self.om = None                                      # (1.7, COMBAT) the map's numbers for the order (tools/order_maps.py)
+        if COMBAT and self.route is not None:
+            of_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "order_maps", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
+            if os.path.exists(of_):
+                z_ = np.load(of_)
+                nn_ = len(self.route.nodes)
+                if len(z_["nodes"]) == nn_ and np.allclose(z_["nodes"], self.route.nodes):
+                    self.om = dict(vis=np.unpackbits(z_["vis"], axis=1)[:, :nn_].astype(bool), walk=z_["walk_t"].astype(np.float32),
+                                   spam_pos=z_["spam_pos"], spam_node=z_["spam_node"], spam_kind=z_["spam_kind"], spam_corr=z_["spam_corridor"],
+                                   spam_width=z_["spam_width"], spam_pro=z_["spam_pro_w"],
+                                   spam_fire=np.unpackbits(z_["spam_fire"], axis=1)[:, :nn_].astype(bool),
+                                   out_pos=z_["out_pos"], out_node=z_["out_node"], out_kind=z_["out_kind"],
+                                   tele_in=z_["tele_in_node"], tele_out=z_["tele_out_node"])
+                else:
+                    print("COMBAT: {} was made for another walking map: no order's candidates on it".format(of_), flush=True)
         self.jumps, self.route_j, self.jump_tries = [], None, {}     # JUMPS: the pros' jumps, his ways with them, jump -> [(goal, start points, ways)]
         self.jfields = []                                   # ... the sets of ways of a jump run's players (0: route_j; JUMP_ALL: one more a jump)
         self.jrun_f = np.zeros(self.n, np.int64)            # ... which of them his try has
@@ -4513,6 +4596,8 @@ class DuelEnv:
         if self.intent[i] > 0 and not self.intent_done[i]:
             self.stats["intent_trips"][3] += 1
         self.intent[i], self.intent_t[i], self.intent_new[i], self.intent_done[i] = 0, 0.0, True, False
+        if COMBAT:                                           # (1.7) a new life ends the order with the target (its inputs and the
+            self.cmb_k[i] = 0                                # legs' look point read the kind before the next reading)
         self.way[i], self.wt_from[i] = 0, -1                # (WAYS, WAY_MEASURE)
         self.pad[i], self.pad_lift[i], self.ear_t[i] = 0.0, 0, 99.0
         self.walk_last[i] = False
@@ -5176,7 +5261,21 @@ class DuelEnv:
         """the believed place of the unseen enemy [n, 3] and that he believes one [n] as the reader `key` reads them: the
         rule's (v02_bel, v02_bel_ok, kept by _v02 at the last observe(): the very objects, so a simulator without BRAIN_READ
         or with no life on the brain is unchanged) or, for a life on the brain (BRAIN_READ), the brain's answer. rows: the
-        seats the reader reads (for the counters only)"""
+        seats the reader reads (for the counters only). (1.7, COMBAT) The hunt's way and the legs' look of a seat under an
+        order read the order's points (_cmb_points; new arrays, the readers' own untouched)"""
+        bel, ok = self._bel_base(key, rows)
+        if COMBAT and key in ("hunt", "legs_look") and bel is not None and ok is not None and len(bel) == self.n:
+            on_ = self.cmb_k[:self.n] > 0
+            if key == "legs_look":
+                on_ = on_ & self.cmb_lok[:self.n]
+            if on_.any():
+                pt_, pk_ = (self.cmb_rt, self.cmb_ok) if key == "hunt" else (self.cmb_lk, self.cmb_lok)
+                bel = np.where(on_[:, None], pt_[:self.n], np.asarray(bel, np.float32)).astype(np.float32)
+                ok = np.where(on_, pk_[:self.n], np.asarray(ok, bool))
+        return bel, ok
+
+    def _bel_base(self, key, rows=None):
+        """_bel_src without the combat order's points"""
         bel, ok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
         if not BRAIN_READ or bel is None or ok is None or len(bel) != self.n:
             return bel, ok
@@ -6934,18 +7033,357 @@ class DuelEnv:
             out = np.where(pick > 0, pick, out)
         return out
 
-    def keep_feat(self):
-        """(1.4c) what the keep choice reads, per seat, after this frame: [his target's age (s), contact (the enemy seen in
-        the last CONTACT_S), his target]"""
+    def _cmb_ahead(self):
+        """(1.7) the brain's places for the enemy 1, 2, 4 s ahead [n, 3, 3] and which seats have them; the places he believes him at
+        now [n, 3] and which; the places ahead or, without them, the belief, and which seats have either"""
         n = self.n
-        return np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n]], 1).astype(np.float32)
+        bel, bok = self._bel_base("hunt", np.zeros(0, np.int64))
+        bel = np.zeros((n, 3), np.float32) if bel is None else np.asarray(bel, np.float32)[:n]
+        bok = np.zeros(n, bool) if bok is None else np.asarray(bok, bool)[:n]
+        fut = getattr(self, "brain_fut", None)
+        fok = np.zeros(n, bool)
+        if fut is not None and len(fut) == n and BRAIN_READ and getattr(self, "brain_life", None) is not None:
+            fok = np.asarray(self.brain_life, bool)[:n] & np.asarray(self.brain_ok, bool)[:n]
+        else:
+            fut = np.zeros((n, 3, 3), np.float32)
+        pred = np.where(fok[:, None, None], fut, bel[:, None, :]).astype(np.float32)
+        return fut, fok, bel, bok, pred, fok | bok
+
+    def _cmb_points(self):
+        """(1.7, COMBAT) the order's points for this frame, for the seats under one: cut off, the brain's place for him at its
+        horizon as it moves (none without it); spam, its kept place to fire from and its point; break off, its kept way out, his
+        legs looking at the brain's place 1 s ahead (else where he believes him)"""
+        n = self.n
+        k = self.cmb_k[:n]
+        self.cmb_ok = np.zeros(n, bool)
+        self.cmb_lok = np.zeros(n, bool)
+        if not (k > 0).any():
+            return
+        fut, fok, bel, bok, pred, pok = self._cmb_ahead()
+        h_ = np.clip(self.cmb_c[:n], 0, 2)
+        c_ = (k == 1) & fok
+        self.cmb_rt[c_] = fut[c_, h_[c_]]
+        self.cmb_lk[c_] = fut[c_, h_[c_]]
+        self.cmb_ok[c_] = self.cmb_lok[c_] = True
+        c_ = k == 2
+        self.cmb_rt[c_], self.cmb_lk[c_] = self.cmb_frt[c_], self.cmb_flk[c_]
+        self.cmb_ok[c_] = self.cmb_lok[c_] = True
+        c_ = k == 3
+        self.cmb_rt[c_] = self.cmb_frt[c_]
+        self.cmb_lk[c_] = pred[c_, 0]
+        self.cmb_ok[c_] = True
+        self.cmb_lok[c_] = pok[c_]
+
+    def _cmb_arrive(self):
+        """(1.7, COMBAT) after the hunt's own notes: cut off arrived (keepable) at its point; spam at its place to fire from or with
+        its point in sight within CMB_SPAM_RANGE; break off at a way out that the brain's places do not see (an item: ended); an
+        order without its point given up"""
+        n = self.n
+        k = self.cmb_k[:n]
+        m = (k > 0) & (self.intent[:n] == EN_INTENT)
+        if not m.any():
+            return
+        d_ = np.linalg.norm(self.state[:n, :3] - self.cmb_rt[:n], axis=1)
+        cut_ = m & (k == 1) & self.cmb_ok & (d_ < CMB_ARRIVE_R)
+        sp_ = m & (k == 2) & self.cmb_ok
+        spa_ = sp_ & (d_ < CMB_SPAM_R)
+        w_ = np.nonzero(sp_ & ~spa_)[0]
+        if len(w_):
+            eye_ = self._eye(self.state[w_])
+            near_ = np.linalg.norm(self.cmb_lk[w_] - eye_, axis=1) < CMB_SPAM_RANGE
+            if near_.any():
+                los_ = self._los(eye_[near_], self.cmb_lk[w_][near_])
+                spa_[w_[near_][los_]] = True
+        at_ = m & (k == 3) & self.cmb_ok & (d_ < CMB_OUT_R)
+        end_ = at_ & self.cmb_fitem[:n]
+        oa_ = at_ & ~self.cmb_fitem[:n]
+        if oa_.any() and self.om is not None:                # (a way out that is not an item: arrived where the brain's places do not see it)
+            _, _, _, _, pred, pok = self._cmb_ahead()
+            R = self.route
+            w_ = np.nonzero(oa_)[0]
+            seen_ = self.om["vis"][R.locate(self.state[w_, :3])[:, None], R.locate(pred[w_].reshape(-1, 3)).reshape(-1, 3)].any(1) & pok[w_]
+            oa_[w_[seen_]] = False
+        arr_ = cut_ | spa_ | oa_
+        new_ = (arr_ & ~self.intent_arr[:n]) | (end_ & ~self.intent_done[:n])          # (counted once)
+        self.intent_done = self.intent_done | arr_ | end_
+        self.intent_arr = (self.intent_arr | arr_) & ~end_
+        self.intent_gone = self.intent_gone | (m & ~self.cmb_ok)
+        c_ = self.stats.get("cmb")
+        if c_ is not None:
+            cnt_ = self._counted(np.arange(n))
+            np.add.at(c_, 1 + 2 * len(CMB_KINDS) + k[new_ & cnt_], 1.0)
+
+    def order_feat(self):
+        """(1.7, COMBAT) every seat's candidates and their numbers, for the head at the keep reading (the frame after its tick) ->
+        x [n, CMB_ROWS, CMB_F] (rows: the 17 targets, the new kinds' CMB_NEW, the CMB_W ways to his target; columns CMB_FEAT, the
+        brain's odds left at 0 for the trainer), ctx [n, len(CMB_CTX)] (the situation, for the kind), pts [n, CMB_ROWS, 3] (the
+        candidates' places, for the brain's lesson). The new kinds' candidates are kept for the next reading (cmb_c*)."""
+        br_ = self.stats.get("brain_read")                   # (its readings of the belief count no reader: the counters as without it)
+        br_ = None if br_ is None else np.copy(br_)
+        try:
+            return self._order_feat()
+        finally:
+            if br_ is not None:
+                self.stats["brain_read"] = br_
+            else:
+                self.stats.pop("brain_read", None)
+
+    def _order_feat(self):
+        n = self.n
+        X = np.zeros((n, CMB_ROWS, CMB_F), np.float32)
+        P = np.zeros((n, CMB_ROWS, 3), np.float32)
+        C = np.zeros((n, len(CMB_CTX)), np.float32)
+        self.cmb_cok = np.zeros((n, CMB_NEW), bool)
+        R, om = self.route, self.om
+        if R is None or om is None:
+            return X, C, P
+        s = self.state[:n]
+        pos = s[:, :3].astype(np.float32)
+        eye = self._eye(s)
+        nh = R.locate(pos)
+        fut, fok, bel, bok, pred, pok = self._cmb_ahead()
+        nb = R.locate(bel)
+        npd = R.locate(pred.reshape(-1, 3)).reshape(n, 3)
+        V, WT = om["vis"], om["walk"]
+        yaw = np.radians(self.yaw[:n])
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        F = {f_: j_ for j_, f_ in enumerate(CMB_FEAT)}
+
+        def fill(r0, pts, nodes, valid, kind, t_me=None):
+            """rows r0.. of every seat: places pts [n, m, 3], their walking points [n, m], valid [n, m]"""
+            m_ = pts.shape[1]
+            rr = slice(r0, r0 + m_)
+            P[:, rr] = pts
+            X[:, rr, F[kind]] = 1.0
+            X[:, rr, F["valid"]] = valid
+            tm = WT[nodes, nh[:, None]] if t_me is None else t_me
+            te = np.where(bok[:, None], WT[nodes, nb[:, None]], 60.0)
+            X[:, rr, F["t_me"]] = np.clip(tm / 10.0, 0.0, 2.0) * valid
+            X[:, rr, F["t_en"]] = np.clip(te / 10.0, 0.0, 2.0) * valid
+            d = pts - eye[:, None, :]
+            X[:, rr, F["height"]] = np.clip((pts[..., 2] - pos[:, None, 2]) / 200.0, -3.0, 3.0) * valid
+            X[:, rr, F["range"]] = np.clip(np.linalg.norm(d, axis=2) / 1000.0, 0.0, 4.0) * valid
+            X[:, rr, F["fwd"]] = np.clip((cy[:, None] * d[..., 0] + sy[:, None] * d[..., 1]) / 1000.0, -4.0, 4.0) * valid
+            X[:, rr, F["left"]] = np.clip((-sy[:, None] * d[..., 0] + cy[:, None] * d[..., 1]) / 1000.0, -4.0, 4.0) * valid
+            X[:, rr, F["up"]] = np.clip(d[..., 2] / 1000.0, -4.0, 4.0) * valid
+            for h_, f_ in enumerate(("sees_1", "sees_2", "sees_4")):
+                X[:, rr, F[f_]] = V[nodes, npd[:, h_, None]] * pok[:, None] * valid
+            X[:, rr, F["seen_me"]] = V[nodes, nh[:, None]] * valid
+
+        # the 17 targets: nothing (where he stands), the items (the instance his way finds first), the enemy (his belief), the holds
+        tp = np.repeat(pos[:, None, :], CMB_T, 1).copy()
+        tv = np.zeros((n, CMB_T), np.float32)
+        tv[:, 0] = 1.0
+        grp = np.arange(n) // (self._others_arr().shape[1] + 1)
+        for k_ in range(1, CMB_T):
+            if k_ == EN_INTENT:
+                tp[:, k_] = bel
+                tv[:, k_] = bok
+            elif k_ >= HOLD_INTENT:
+                j_ = k_ - HOLD_INTENT
+                if j_ < self.hold_n:
+                    tp[:, k_] = self.hold_pos[j_]
+                    tv[:, k_] = 1.0
+                    X[:, k_, F["pro_hold"]] = self.hold_feat[j_, 0]
+            else:
+                gi_ = self._trip_goal(np.full(n, k_), nh, who=np.arange(n))
+                ok_ = gi_ >= 0
+                if ok_.any():
+                    g_ = np.maximum(gi_, 0)
+                    tp[:, k_] = np.where(ok_[:, None], R.goals[g_], pos)
+                    tv[:, k_] = ok_
+                    it_ = np.minimum(g_, len(self.route_item) - 1)
+                    for gg_ in np.unique(it_[ok_]):
+                        w_ = ok_ & (it_ == gg_)
+                        up_, back_ = (np.asarray(x_) for x_ in self._goal_state(int(gg_), grp))
+                        up_, back_ = (x_[w_] if len(x_) == n else x_[w_] for x_ in (up_, back_))
+                        X[w_, k_, F["item_up"]] = up_.astype(np.float32)
+                        X[w_, k_, F["item_back"]] = np.minimum(back_ / 30.0, 2.0)
+        tn = R.locate(tp.reshape(-1, 3)).reshape(n, CMB_T)
+        fill(0, tp, tn, tv, "k_item")
+        X[:, :CMB_T, F["k_item"]] = 0.0
+        X[:, 0, F["k_none"]] = 1.0
+        X[:, 1:EN_INTENT, F["k_item"]] = 1.0
+        X[:, EN_INTENT, F["k_enemy"]] = 1.0
+        X[:, HOLD_INTENT:CMB_T, F["k_hold"]] = 1.0
+        # cut off: the brain's places 1, 2, 4 s ahead
+        r0 = CMB_T + CMB_C0[1]
+        cn = R.locate(fut.reshape(-1, 3)).reshape(n, 3)
+        cv = np.repeat(fok[:, None], 3, 1).astype(np.float32)
+        fill(r0, fut, cn, cv, "k_cut")
+        self.cmb_crt[:, CMB_C0[1]:CMB_C0[1] + 3] = fut
+        self.cmb_clk[:, CMB_C0[1]:CMB_C0[1] + 3] = fut
+        self.cmb_cok[:, CMB_C0[1]:CMB_C0[1] + 3] = cv > 0
+        self.cmb_citem[:, CMB_C0[1]:CMB_C0[1] + 3] = False
+        # spam: the CMB_SLOT spam points nearest the brain's places ahead (else the belief), each with the place to fire from
+        # nearest him by his way
+        S = len(om["spam_pos"])
+        if S:
+            dmin = np.linalg.norm(om["spam_pos"][None, :, None, :] - pred[:, None, :, :], axis=3).min(2)   # [n, S]
+            k_ = min(CMB_SLOT, S)
+            pick = np.argsort(dmin, axis=1)[:, :k_]
+            Fm = om["spam_fire"][pick]                                   # [n, k, nodes]
+            tm = np.where(Fm, WT[:, nh].T[:, None, :], np.inf)           # (his seconds to each place to fire from)
+            fn = tm.argmin(2)
+            ft = tm.min(2)
+            sv = (np.isfinite(ft) & (ft < 1e4) & pok[:, None]).astype(np.float32)
+            sp = om["spam_pos"][pick]
+            r0 = CMB_T + CMB_C0[2]
+            fill(r0, sp, om["spam_node"][pick], sv, "k_spam", t_me=np.where(np.isfinite(ft), ft, 60.0))
+            rr = slice(r0, r0 + k_)
+            kd_ = om["spam_kind"][pick]
+            X[:, rr, F["door"]] = (kd_ == 0) * sv
+            X[:, rr, F["corridor"]] = om["spam_corr"][pick] * sv
+            X[:, rr, F["width"]] = np.minimum(om["spam_width"][pick] / 1000.0, 1.0) * sv
+            X[:, rr, F["tele_out"]] = (kd_ == 1) * sv
+            X[:, rr, F["pro_rl"]], X[:, rr, F["pro_gl"]], X[:, rr, F["pro_pg"]] = (om["spam_pro"][pick][..., j_] / 100.0 * sv for j_ in range(3))
+            c0 = CMB_C0[2]
+            self.cmb_crt[:, c0:c0 + k_] = R.nodes[fn]
+            self.cmb_clk[:, c0:c0 + k_] = sp
+            self.cmb_cok[:, c0:c0 + k_] = sv > 0
+            self.cmb_citem[:, c0:c0 + k_] = False
+        # break off: the ways out and the health and armor items (up, or due within his way) that the brain's places ahead do not
+        # see, the CMB_SLOT whose way favours him most (the enemy's seconds from his belief minus his)
+        op = [om["out_pos"]]
+        on = [om["out_node"]]
+        okd = [om["out_kind"]]
+        oit = []
+        for gi_, lab_ in enumerate(self.route_goal):
+            if lab_ in ("MH", "RA", "YA", "YA2"):
+                oit.append(gi_)
+        if oit:
+            op.append(R.goals[oit])
+            on.append(R.locate(R.goals[oit]))
+            okd.append(np.full(len(oit), 4))
+        op, on, okd = np.concatenate(op).astype(np.float32), np.concatenate(on), np.concatenate(okd)
+        if len(op):
+            tm = WT[on][:, nh].T                                        # [n, k]
+            te = np.where(bok[:, None], WT[on][:, nb].T, 60.0)
+            seen = V[on][:, npd.reshape(-1)].reshape(len(on), n, 3).any(2).T & pok[:, None]
+            okit = np.ones((n, len(on)), bool)
+            for j_, gi_ in enumerate(oit):                              # (an item only up or back within his way)
+                up_, back_ = (np.asarray(x_) for x_ in self._goal_state(gi_, grp))
+                up_ = up_[:n] if len(up_) >= n else up_
+                back_ = back_[:n] if len(back_) >= n else back_
+                okit[:, len(om["out_pos"]) + j_] = up_.astype(bool) | (back_ <= tm[:, len(om["out_pos"]) + j_])
+            sc = np.where(~seen & okit & (tm < 1e4), te - tm, -1e9)
+            k_ = min(CMB_SLOT, len(op))
+            pick = np.argsort(-sc, axis=1)[:, :k_]
+            ov = (np.take_along_axis(sc, pick, 1) > -1e8).astype(np.float32)
+            r0 = CMB_T + CMB_C0[3]
+            fill(r0, op[pick], on[pick], ov, "k_out")
+            rr = slice(r0, r0 + k_)
+            X[:, rr, F["door"]] = (okd[pick] == 1) * ov
+            X[:, rr, F["tele_in"]] = (okd[pick] == 3) * ov
+            X[:, rr, F["pro_hold"]] = (okd[pick] == 2) * ov * 0.0
+            c0 = CMB_C0[3]
+            self.cmb_crt[:, c0:c0 + k_] = op[pick]
+            self.cmb_clk[:, c0:c0 + k_] = pred[:, :1, :]
+            self.cmb_cok[:, c0:c0 + k_] = ov > 0
+            self.cmb_citem[:, c0:c0 + k_] = okd[pick] == 4
+            for j_, gi_ in enumerate(oit):                              # (an item's numbers as a target's)
+                w_ = pick == len(om["out_pos"]) + j_
+                if w_.any():
+                    up_, back_ = (np.asarray(x_) for x_ in self._goal_state(gi_, grp))
+                    up_ = (up_[:n] if len(up_) >= n else up_).astype(np.float32)
+                    back_ = back_[:n] if len(back_) >= n else back_
+                    ii_, jj_ = np.nonzero(w_)
+                    X[ii_, r0 + jj_, F["item_up"]] = up_[ii_]
+                    X[ii_, r0 + jj_, F["item_back"]] = np.minimum(back_[ii_] / 30.0, 2.0)
+        # his target's three ways: their seconds, the least distance of each way's next CMB_PATH points to the brain's places
+        # ahead, the share of those points the places see
+        r0 = CMB_T + CMB_NEW
+        gi_ = self._trip_goal(self.intent[:n], nh, who=np.arange(n))
+        Xw = self.way_field if WAYS else None
+        for w_ in range(CMB_W):
+            ok_ = gi_ >= 0
+            g_ = np.maximum(gi_, 0)
+            if w_ == 0:
+                ok_ &= g_ < len(R.T)
+                gq_ = np.minimum(g_, len(R.T) - 1)
+                t_ = np.where(ok_, R.T[gq_, nh], 1e9)
+                nx_ = R.walk if getattr(R, "walk", None) is not None else R.next
+                step = lambda a_, gq=gq_, nx=nx_: np.where(a_ >= 0, nx[gq, np.maximum(a_, 0)], -1)
+            else:
+                if Xw is None:
+                    continue
+                ok_ &= g_ < Xw.wT.shape[1]
+                gq_ = np.minimum(g_, Xw.wT.shape[1] - 1)
+                t_ = np.where(ok_, Xw.wT[w_ - 1, gq_, nh], 1e9)
+                step = lambda a_, gq=gq_, k=w_ - 1: np.where(a_ >= 0, Xw.wnext[k, gq, np.maximum(a_, 0)], -1)
+            ok_ &= t_ < 1e8
+            a_ = nh.copy()
+            path = [a_]
+            for _ in range(CMB_PATH):
+                a_ = step(a_)
+                path.append(a_)
+            path = np.stack(path, 1)                                    # [n, CMB_PATH + 1] (-1 past the goal)
+            pv = path >= 0
+            pp = R.nodes[np.maximum(path, 0)]
+            dmin = np.where(pv[..., None], np.linalg.norm(pp[:, :, None, :] - pred[:, None, :, :], axis=3), 1e9).min(1)    # [n, 3]
+            vv = ok_.astype(np.float32)
+            rr = r0 + w_
+            X[:, rr, F["k_way"]] = 1.0
+            X[:, rr, F["valid"]] = vv
+            X[:, rr, F["t_me"]] = np.clip(t_ / 10.0, 0.0, 2.0) * vv
+            X[:, rr, F["range"]] = np.clip(dmin.min(1) / 1000.0, 0.0, 4.0) * vv * pok
+            for h_, f_ in enumerate(("sees_1", "sees_2", "sees_4")):
+                sh_ = (V[np.maximum(path, 0), npd[:, h_, None]] & pv).sum(1) / np.maximum(pv.sum(1), 1)
+                X[:, rr, F[f_]] = sh_ * vv * pok
+            P[:, rr] = pp[:, min(CMB_PATH, 8)]
+        # the situation
+        st_ = self.seen_t[:n]
+        C[:, 0] = st_ < CONTACT_S
+        C[:, 1] = np.minimum(st_ / 10.0, 2.0)
+        C[:, 2] = self.hp[:n] / 100.0
+        C[:, 3] = self.armor[:n] / 100.0
+        if EN_STACK and getattr(self, "es_h", None) is not None:
+            C[:, 4] = self.es_h[:n, 0] / 100.0
+            C[:, 5] = self.es_a[:n, 0] / 100.0
+        C[:, 6], C[:, 7] = fok, bok
+        C[:, 8] = np.clip(np.linalg.norm(pred[:, 0] - pos, axis=1) / 1000.0, 0.0, 4.0) * pok
+        C[:, 9] = np.clip((pred[:, 0, 2] - pos[:, 2]) / 200.0, -3.0, 3.0) * pok
+        wpn_ = self.weapon[:n]
+        C[:, 10], C[:, 11], C[:, 12] = wpn_ == RL, wpn_ == LG, wpn_ == RG
+        C[:, 13] = ~np.isin(wpn_, (RL, LG, RG))
+        return X, C, P
+
+    def keep_feat(self):
+        """(1.4c; 1.7a) what the keep choice reads, per seat, after this frame (KEEP_FEAT columns): [his target's age (s),
+        contact (the enemy seen or heard in the last CONTACT_S), his target, arrived (intent_arr), seconds since the arrival,
+        seconds since he heard the enemy (a sound, a pickup, a pain sound), seconds since he was hit with the enemy out of view]"""
+        n = self.n
+        snd_ = np.minimum(np.minimum(self.ear_t[:n], self.snd_t[:n].min(1)), self.pain_t[:n])
+        return np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n], self.intent_arr[:n], self.arr_t[:n],
+                         snd_, self.khit_t[:n]], 1).astype(np.float32)
 
     def intend(self, choice, who, way=None):
         """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
-        who = the players it applies to (the game-server plugin passes one). Returns who was read this frame."""
+        who = the players it applies to (the game-server plugin passes one). Returns who was read this frame.
+        (1.7a) With a keep column (env.step; see KEEP_FEAT): in a second the coin gave to the keep choice, read at its keep
+        readings (five a second) instead."""
         n = self.n
         self.int_tick += 1
-        live = who & (((self.int_tick + np.arange(n)) % INTENT_EVERY == 0) | self.intent_new)
+        lock_ = ((self.int_tick + np.arange(n)) % INTENT_EVERY == 0)
+        kin_ = getattr(self, "keep_in", None)                # (1.4c, 1.7a) the keep column: d + 2 c + 4 r, or -1 (the lock rule)
+        if kin_ is not None and len(kin_) >= n:
+            k_ = np.asarray(kin_[:n], np.int64)
+            has_ = k_ >= 0
+            kd_, kc_, kr_ = has_ & ((k_ & 1) > 0), has_ & ((k_ & 2) > 0), has_ & ((k_ & 4) > 0)
+            self.kown = np.where(lock_, kc_, self.kown[:n]) & has_     # (the coin at his lock reading: the next second)
+            cq_ = has_ & ((k_ & 256) > 0) & COMBAT                     # (1.7, COMBAT) the order asked, its kind and candidate
+            co_ = np.where(cq_, (k_ >> 3) & 3, 0)
+            cc_ = np.where(cq_, (k_ >> 5) & 7, 0)
+            ci_ = np.array(CMB_C0)[co_] + np.minimum(cc_, np.maximum(np.array(CMB_SLOTS)[co_] - 1, 0))
+            okc_ = np.where(co_ > 0, self.cmb_cok[np.arange(n), np.minimum(ci_, CMB_NEW - 1)], True)
+            co_ = np.where(okc_, co_, 0)                               # (a candidate that was none: the target as chosen)
+        else:
+            kd_ = kr_ = np.zeros(n, bool)
+            self.kown = np.zeros(n, bool)
+            cq_, co_, cc_, ci_ = np.zeros(n, bool), np.zeros(n, np.int64), np.zeros(n, np.int64), np.zeros(n, np.int64)
+        self.intent_arr = self.intent_arr[:n] & ~self.intent_new[:n] & ~self.intent_gone[:n] & (self.intent[:n] > 0)   # (a reading at once ends an arrival)
+        kread_ = who & self.kown & (kr_ | self.intent_new)   # (1.7a) the keep choice's readings: five a second in its seconds
+        live = (who & ~self.kown & (lock_ | self.intent_new)) | kread_
         ct_on = CONTACT_FREE > 0 or self.contact_seat is not None
         if ct_on:                                            # (CONTACT_FREE) a contact begins: drawn once, a reading at once if it is free
             if self.ct_in is None or len(self.ct_in) != n:
@@ -6955,7 +7393,7 @@ class DuelEnv:
             p_ = CONTACT_FREE if self.contact_seat is None else self.contact_seat[:n]
             self.ct_free = np.where(new_, self.ct_rng.random(n) < p_, self.ct_free & in_)
             self.ct_in = in_
-            live = live | (who & new_ & self.ct_free)
+            live = live | (who & new_ & self.ct_free & ~self.kown)   # (1.7a: in the keep choice's seconds its own readings)
         choice = np.asarray(choice, np.int64)
         if not EN_ON:                                        # (the enemy as a target: only with the switch, FIGHT_TARGET or HUNT)
             choice = np.where(choice == EN_INTENT, 0, choice)
@@ -6970,6 +7408,8 @@ class DuelEnv:
                 choice = np.where(hit_, 0, choice)
             wo_[0] = float(live.sum())
             self.stats["weapon_own"] = self.stats.get("weapon_own", np.zeros(2)) + wo_
+        if COMBAT:                                           # (1.7) an order in place of the drawn target: "the enemy", its point the order's
+            choice = np.where(co_ > 0, EN_INTENT, choice)
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= (INTENT_HOLD if self.hold_seat is None else self.hold_seat[:n])) | self.intent_gone     # a choice holds (INTENT_HOLD)
         if TARGETS_FREE == 1:                                # (a holding place can be left at any reading, as "nothing")
             may = may | (self.intent >= HOLD_INTENT)
@@ -6977,15 +7417,11 @@ class DuelEnv:
             may = may | ((self.intent >= HOLD_INTENT) & (choice >= 1) & (choice < HOLD_INTENT))
         if ct_on:
             may = may | self.ct_free
-        kin_ = getattr(self, "keep_in", None)                # (1.4c) the keep choice: a seat's own decision at a reading not forced
         forced_ = (self.intent == 0) | self.intent_done | self.intent_gone | self.intent_new
-        if kin_ is not None and len(kin_) >= n:
-            lrn_ = live & ~forced_ & (kin_[:n] >= 0)
-            rule_may_ = may
-            may = np.where(lrn_, kin_[:n] == 1, may)
-        else:
-            lrn_ = np.zeros(n, bool)
-            rule_may_ = may
+        ended_ = (self.intent == 0) | (self.intent_done & ~self.intent_arr) | self.intent_gone | self.intent_new   # (1.7a) an arrival is not an end
+        lrn_ = kread_ & ~ended_                              # (1.4c, 1.7a) the keep choice: a seat's own decision at a reading not forced
+        rule_may_ = may
+        may = np.where(lrn_, kd_, np.where(kread_, True, may))     # (its forced readings count, as the lock rule's)
         self.keep_live = lrn_
         rd_ = live & ~forced_                                # (stats["keep"]) the readings not forced: who decided, what came of it
         held_ = rd_ & ~may                                   # ... held (the rule's lock or his keep)
@@ -7002,16 +7438,52 @@ class DuelEnv:
                          (held_ & ~ct_now_ & ~heard_).sum(), (held_ & ~ct_now_ & ~heard_ & diff_).sum(),
                          (rd_ & may & ~ct_now_ & heard_ & diff_).sum(), (rd_ & ~ct_now_ & heard_).sum()], np.float64)
         self.stats["keep"] = kp_
+        if kread_.any() or "keep2" in self.stats:           # (1.7a, stats["keep2"]) the keep choice's seconds and readings
+            k2_ = self.stats.get("keep2")
+            if k2_ is None or len(k2_) != 14:
+                k2_ = np.zeros(14)
+            rk_ = lrn_ & kd_
+            k2_ += np.array([(who & self.kown).sum(), kread_.sum(), (kread_ & ended_).sum(), lrn_.sum(), rk_.sum(), (rk_ & diff_).sum(),
+                             (lrn_ & self.intent_arr).sum(), (rk_ & self.intent_arr).sum(), (lrn_ & ct_now_).sum(), (rk_ & ct_now_).sum(),
+                             (lrn_ & ~ct_now_ & heard_).sum(), (rk_ & ~ct_now_ & heard_).sum(), (lrn_ & ~ct_now_ & ~heard_).sum(),
+                             (rk_ & ~ct_now_ & ~heard_).sum()], np.float64)
+            self.stats["keep2"] = k2_
         live = live & may
-        changed = live & (choice != self.intent)
+        changed = live & ((choice != self.intent) | (co_ != self.cmb_k[:n]) | ((co_ > 0) & (cc_ != self.cmb_c[:n])))   # (1.7: another order is another target)
+        same_ = kread_ & ended_ & live & ~changed & (self.intent > 0)    # (1.7a) a forced reading of the keep choice that drew the
+        #                                                                  same target: a new choice of it (the lock rule keeps "reached")
         if ct_on and "contact" in self.stats:
             self.stats["contact"] += (float(new_.sum()), float((new_ & self.ct_free).sum()), float((live & self.ct_free).sum()),
                                       float((changed & self.ct_free).sum()), float((changed & self.ct_free & (choice == EN_INTENT)).sum()))
         self.intent = np.where(live, choice, self.intent)
         self.intent_t = np.where(changed, 0.0, self.intent_t + DT * who).astype(np.float32)
         self.intent_new = np.where(live, False, self.intent_new)
-        self.intent_done = np.where(changed, False, self.intent_done)
+        self.intent_done = np.where(changed | (same_ & ~self.intent_gone), False, self.intent_done)
+        self.intent_arr = self.intent_arr & ~changed & ~same_
+        self.arr_t = np.where(self.intent_arr, self.arr_t[:n] + DT, 0.0).astype(np.float32)
         self.intent_live, self.intent_changed = live, changed
+        if COMBAT:                                           # (1.7) the order he follows; the drawn target not applied under an order
+            on_ = live & (co_ > 0)
+            self.cmb_k = np.where(live, co_, self.cmb_k[:n])
+            self.cmb_c = np.where(live, cc_, self.cmb_c[:n])
+            if on_.any():                                    # (the kept points: spam's place to fire from and its point, break off's way out)
+                w_ = np.nonzero(on_)[0]
+                self.cmb_frt[w_] = self.cmb_crt[w_, ci_[w_]]
+                self.cmb_flk[w_] = self.cmb_clk[w_, ci_[w_]]
+                self.cmb_fitem[w_] = self.cmb_citem[w_, ci_[w_]]
+            self.cmb_k = np.where(self.intent == EN_INTENT, self.cmb_k, 0)
+            self.cmb_live = live & cq_
+            self.cmb_over = live & (co_ > 0)                  # (the drawn target not applied: the trainer does not learn it there)
+            c_ = self.stats.get("cmb")
+            nk_ = len(CMB_KINDS)
+            if c_ is None or len(c_) != 1 + 4 * nk_:
+                c_ = np.zeros(1 + 4 * nk_)
+            cnt_ = self._counted(np.arange(n)) & who
+            c_[0] += float((self.cmb_live & cnt_).sum())
+            np.add.at(c_, 1 + co_[self.cmb_live & cnt_], 1.0)
+            al_ = cnt_ & (self.hp[:n] > 0)
+            np.add.at(c_, 1 + nk_ + self.cmb_k[al_], 1.0)
+            self.stats["cmb"] = c_
         if WAYS:                                             # his way: read on the frames his intention is, held with it (see WAYS)
             self.way_was = self.way.copy()
             if way is not None:
@@ -7425,8 +7897,48 @@ class DuelEnv:
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
-                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot)], 1)
+                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
+                              self._ord(pos, eye, yaw, pit)], 1)
         return obs.astype(np.float32)
+
+    def _ord(self, pos, eye, yaw, pit):
+        """(1.7, COMBAT) the inputs of N_ORD (see there). Reads only; keeps nothing."""
+        n = self.n
+        out = np.zeros((n, N_ORD), np.float32)
+        if not COMBAT or self.om is None or self.route is None:
+            return out
+        k = self.cmb_k[:n]
+        fut, fok, bel, bok, pred, pok = self._cmb_ahead()
+        pt = np.zeros((n, 3), np.float32)
+        ok = np.zeros(n, bool)
+        it = self.intent[:n]
+        m = (k == 0) & (it == EN_INTENT)                     # the target as chosen: the enemy where he believes him
+        pt[m], ok[m] = bel[m], bok[m]
+        m = (k == 0) & (it >= 1) & (it < EN_INTENT)          # ... an item: the brain's place for him 1 s ahead
+        pt[m], ok[m] = pred[m, 0], pok[m]
+        hj = it - HOLD_INTENT
+        m = np.nonzero((k == 0) & (hj >= 0) & (hj < self.hold_n) & pok)[0]
+        if len(m) and len(self.hold_node):                   # ... a holding place: the first of the brain's places ahead its lane sees
+            R = self.route
+            pn = R.locate(pred[m].reshape(-1, 3)).reshape(len(m), 3)
+            see = self.om["vis"][self.hold_node[hj[m]][:, None], pn]
+            has = see.any(1)
+            first = see.argmax(1)
+            pt[m[has]] = pred[m[has], first[has]]
+            ok[m[has]] = True
+        m = k > 0                                            # an order: its look point
+        pt[m], ok[m] = self.cmb_lk[:n][m], self.cmb_lok[:n][m]
+        out[:, 0], out[:, 1], out[:, 2] = k == 1, k == 2, k == 3
+        out[:, 3] = k == 2
+        ey, ep = self._aim_at(eye, pt, yaw, pit)
+        okf = ok.astype(np.float32)
+        out[:, 4] = np.sin(np.radians(ey)) * okf
+        out[:, 5] = np.cos(np.radians(ey)) * okf
+        out[:, 6] = np.clip(ep / 90.0, -1.0, 1.0) * okf
+        out[:, 7] = np.minimum(np.linalg.norm(pt - eye, axis=1) / 2000.0, 2.0) * okf
+        out[:, 8] = np.clip((pt[:, 2] - pos[:, 2]) / 200.0, -3.0, 3.0) * okf
+        out[:, 9] = okf
+        return out
 
     def _drift(self, ey, ep, visible, pos, known, opp):
         """the inputs of N_DRIFT (see DRIFT_IN): the perceived crosshair-to-enemy angle's rate, raw and smoothed. Keeps the
@@ -8186,6 +8698,7 @@ class DuelEnv:
         en_ = self.intent == EN_INTENT
         vis_ = np.asarray(self.visible, bool)[:len(en_)]
         self.intent_done = self.intent_done | (en_ & vis_)
+        self.intent_arr = self.intent_arr | (en_ & vis_)      # (1.7a) arrived, not ended: the keep choice may keep the hunt
         self.intent_gone = self.intent_gone | (en_ & ~np.asarray(valid, bool))
         return en_, vis_
 
@@ -8555,6 +9068,7 @@ class DuelEnv:
         at = self._hold_at(np.arange(self.n), self.intent)
         new = at & ~self.intent_done
         self.intent_done = self.intent_done | at
+        self.intent_arr = self.intent_arr | at                # (1.7a) arrived, not ended: the keep choice may hold the place
         return at, new
 
     def _b2(self, pos, c, si):
@@ -12098,6 +12612,8 @@ class DuelEnv:
         if WAYS and a.shape[1] > WAY_HEAD:                   # his way: the thirteenth output; the shortest in an item run or a jump run
             wy_ = np.where(in_run, 0, a[:, WAY_HEAD])
         self.intend(ch_, human, wy_)
+        if COMBAT:                                           # (1.7) the order's points for this frame's ways and looks
+            self._cmb_points()
         if self.ct_free is not None and len(self.ct_free) == n:   # (CONTACT_FREE) the rule's lesson, the openings' too, is silent in a free contact, from its first reading
             self.intent_teach = np.where(self.ct_free & human, -1, self.intent_teach)
         self.intent_live = self.intent_live & ~in_run       # (and the intention head is not trained on those frames)
@@ -12705,6 +13221,9 @@ class DuelEnv:
             np.add.at(st_[:, 7], self.style[live], self.has[live][:, [RL, RG, LG]].sum(1))
         self._ps("style", reward)
         self.dmg_life += dealt
+        if COMBAT and "cmb" in self.stats:                   # (1.7) damage dealt under each order
+            cnt_ = self._counted(ar[:self.n]) & (dealt[:self.n] > 0)
+            np.add.at(self.stats["cmb"], 1 + 3 * len(CMB_KINDS) + self.cmb_k[:self.n][cnt_], dealt[:self.n][cnt_])   # (by kind)
         hitby = (attacker >= 0) & (attacker != ar) & (dmg_taken > 0)
         if self.flinch_on and hitby.any():                  # a hit throws the aim off at once, and for a moment after
             fm_ = self._sa("FLINCH_MAX")
@@ -12718,6 +13237,8 @@ class DuelEnv:
         ang = np.arctan2(s[opp_all, 1] - s[:, 1], s[opp_all, 0] - s[:, 0]) - np.radians(self.yaw)
         self.fb = np.stack([np.minimum(dealt / 100.0, 2.0), np.minimum(dmg_taken / 100.0, 2.0),
                             np.sin(ang) * hitby, np.cos(ang) * hitby], 1).astype(np.float32)
+        un_ = hitby[:self.n] & ~np.asarray(self.visible, bool)[:self.n]                   # (1.7a, the keep choice's number) hit, the enemy out of view
+        self.khit_t = np.where(un_, 0.0, np.minimum(self.khit_t[:self.n] + DT, 99.0)).astype(np.float32)
 
         # items: pickups, respawns, decay above 100
         self.item_t = np.maximum(0.0, self.item_t - DT)
@@ -12969,6 +13490,8 @@ class DuelEnv:
                 self.intent_gone = valid & ~soon_b & (self.intent > 0) & (self.intent < HOLD_INTENT)
             if EN_ON:                                        # the enemy as the target: reached when he is in view, given up when
                 en_, vis_ = self.note_hunt(valid)            # nothing is known of him any more (FIGHT_TARGET, HUNT)
+                if COMBAT:                                   # (1.7) the order's own arrivals and ends
+                    self._cmb_arrive()
                 self.stats["en_frames"] += np.array([(en_ & (self.script == 0) & (self.hp > 0)).sum(), (en_ & self.legs_on).sum(),
                                                      (en_ & vis_ & (self.script == 0)).sum()], np.float64)
             if self.hold_n:                                  # a holding place as the target (TARGETS): reached where he stands at it,

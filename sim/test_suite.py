@@ -124,10 +124,25 @@ class Policy:
             self.h2_ct = head2_.np_ctrl_params(sd, self.h2)     # (the ctrl slot: the layout's "ctrl_src" readout, None: zeros)
             self.h2_live = head2_.np_open(self.h2W)          # (gate 0 or its links at zero: the network without it, not stepped)
             self.W = self.h2_at + head2_.np_state_width(self.h2)
+        self.o_at = None                                     # (1.7) the combat order's held numbers a seat (head2.CMB_HELD), after the head's state
+        if self.h2 is not None and self.h2.get("cmb") and "op_v.weight" in self.h2W:
+            import head2 as head2_
+            self.o_at = self.W
+            self.W = self.o_at + head2_.CMB_HELD
+        self.passL = self.passW = None                       # (1.7) the brain's pass readout (sim/passodds.py): the candidates' odds
+        if ck.get("passodds") is not None and "passr.l1.weight" in sd:
+            self.passL = ck["passodds"]
+            self.passW = {k_[len("passr."):]: np.asarray(v_, np.float32) for k_, v_ in sd.items() if k_.startswith("passr.")}
         self.keep_g = 0.0                                    # (1.4c) the keep choice's share of his readings (the file's head2.keep_g)
         self.krng = np.random.default_rng(int(seed) + 1414)  # ... its draws: a stream of their own (the outputs' draws untouched)
+        self.k_r = None                                      # (1.7a) the seats whose head ticked on the frame before (their keep reading)
         if self.h2 is not None and self.h2.get("keep") and "keep.weight" in self.h2W:
             self.keep_g = float(np.asarray(self.h2W.get("keep_g", 0.0)))
+        self.cmb_g = 0.0                                     # (1.7) the combat order's share of his readings (the file's head2.cmb_g)
+        if self.o_at is not None:
+            self.cmb_g = float(np.asarray(self.h2W.get("cmb_g", 0.0)))
+            self.h2_live = self.h2_live or self.cmb_g > 0    # (the order reads the head's state: it is stepped)
+        self.fut = None                                      # (1.7) the brain's places ahead of these seats (kept at their ticks)
         self.h2_tick = None
         self.brain_at = None                                 # (v0.4.1) the brain's and the token's state, at the end of a seat's array
         if self.btok is not None:
@@ -172,7 +187,10 @@ class Policy:
             return None
         import btoken as btoken_
         _, tk_ = btoken_.unpack(self.brainP, self.btok, h[:, self.brain_at:])
-        return btoken_.answer_of(tk_)
+        d_ = btoken_.answer_of(tk_)
+        if self.fut is not None and len(self.fut) == len(h):    # (1.7) the places ahead, as the trainer sends them (COMBAT)
+            d_["fut"] = self.fut.copy()
+        return d_
 
     def token_pre(self, obs, pose, zmap, hb):
         """(v0.4.1) before a frame: the brain's last answer turned to his pose now, as the trainer makes it ([B, F] float32, the
@@ -197,6 +215,14 @@ class Policy:
             o1_, o2_ = br_.readouts(tk)
             tk_.answer(tk, o1_, o2_, np.asarray(pose, np.float32)[tk], np.asarray(zmap)[tk])
             self.h2_tick = (tk, br_.s[tk], o1_, o2_)        # (v0.4.3) what the strategy head reads at the tick
+            if self.h2 is not None and self.h2.get("cmb") and self.h2_ah is not None:   # (1.7) the readout ahead's places, kept in map
+                import head2 as head2_                       # coordinates at the tick (btoken.answer_fut's), for the combat order
+                if self.fut is None or len(self.fut) != len(tk):
+                    self.fut = np.zeros((len(tk), 3, 3), np.float32)
+                f_ = np.asarray(head2_.np_mlp(self.h2_ah, br_.s[tk]), np.float64)[:, :15].reshape(-1, 3, 5)
+                pz_ = np.asarray(pose, np.float64)[tk]
+                x_, y_ = btoken_._turn(np.repeat(pz_[:, 3:4], 3, 1), f_[..., 0] * 1000.0, f_[..., 1] * 1000.0)
+                self.fut[tk] = np.stack([pz_[:, None, 0] + x_, pz_[:, None, 1] + y_, pz_[:, None, 2] + f_[..., 2] * 1000.0], -1)
         return btoken_.pack(br_, tk_).astype(np.float32)
 
     def set_head2_gate(self, g):
@@ -267,19 +293,54 @@ class Policy:
 
     @property
     def keep_on(self):
-        """(1.4c) the keep choice decides a share of his readings: act(kf=...) gives one more column (-1 the lock rule, 0 keep,
-        1 re-decide)"""
-        return self.keep_g > 0
+        """(1.4c, 1.7a) the keep choice decides a share of his seconds, or (1.7) the combat order is asked at a share of his readings:
+        act(kf=...) gives one more column, d + 2 c + 4 r (its draw, the hand-over's coin, a keep reading: the frame after the head's
+        tick; sim/duel_env.py KEEP_FEAT) + (8 kind + 32 candidate + 256) where the order is asked"""
+        return self.keep_g > 0 or self.cmb_g > 0
+
+    @property
+    def order_on(self):
+        """(1.7) the order plays: asked at a share, or its adds on the targets' and the way's above 0"""
+        return self.o_at is not None and (self.cmb_g > 0 or float(np.asarray(self.h2W.get("padd", 0.0))) > 0)
+
+    @property
+    def order_due(self):
+        """(1.7) the coming frame is a keep reading for some seat (their head ticked on this one): give its act() ox= (the simulator's
+        order_feat() after this frame's step, these rows)"""
+        return self.order_on and self.k_r is not None and bool(self.k_r.any())
+
+    def set_cmb_g(self, g):
+        """(1.7, the checks) the combat order's share, in place of the file's (a network without it: refused)"""
+        assert self.o_at is not None, "set_cmb_g: this network has no combat order"
+        self.cmb_g = float(g)
+        if self.cmb_g > 0:
+            self.h2_live = True
+
+    def set_padd(self, p):
+        """(1.7, the checks) the pointer's adds on the targets' and the way's at this share (0: none)"""
+        assert self.o_at is not None, "set_padd: this network has no combat order"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, padd=np.float32(p))
+        self.h2_live = head2_.np_open(self.h2W) or self.cmb_g > 0
+
+    def set_fadd(self, f):
+        """(1.7, the checks) the head's push on the fire key at this add (0: none)"""
+        assert self.h2 is not None and "fsc.weight" in self.h2W, "set_fadd: this network has no fire push"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, fadd=np.float32(f))
+        self.h2_live = head2_.np_open(self.h2W) or self.cmb_g > 0
 
     def set_keep_g(self, g):
         """(1.4c, the checks) the keep choice's share, in place of the file's (a network without it: refused)"""
         assert self.h2 is not None and self.h2.get("keep"), "set_keep_g: this network has no keep choice"
         self.keep_g = float(g)
 
-    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None):
+    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
-        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, 3]: (1.4c,
-        with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice"""
+        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, KEEP_FEAT]: (1.4c,
+        with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice.
+        ox: (1.7, with order_due after the frame before) the simulator's order_feat() of these rows after the frame before (X, C, ...):
+        the seats with a keep reading make their order from it (the trainer's order_tick) before this frame's outputs"""
         dadd = gadd = h2_ = lgl_ = ok_ = None
         if self.needs_xl:
             import legs_unify as LU_
@@ -288,9 +349,11 @@ class Policy:
             h2_, lgl_ = LU_.np_branch(self.legsP, xl)
             dadd = LU_.np_door(self.uniD[0], self.uniD[1], h2_, ok_) if self.uniD is not None else None
             gadd = LU_.np_guide_add(self.uni, self.uniG, lgl_, ok_, sum(self.dims)) if self.uniG is not None else None
-        hh = hb = h2s = None
+        hh = hb = h2s = ohs = None
         if self.brain_at is not None:                        # (v0.4.1) the brain's packed state, at the end of the array
             hb, h = h[:, self.brain_at:], h[:, :self.brain_at]
+        if self.o_at is not None:                            # (1.7) the order's held numbers, after the head's state
+            ohs, h = h[:, self.o_at:], h[:, :self.o_at]
         if self.h2 is not None:                              # (v0.4.3) the strategy head's state, before the brain's
             h2s, h = h[:, self.h2_at:], h[:, :self.h2_at]
         if self.head is not None:
@@ -321,6 +384,20 @@ class Policy:
             xf = x + self.hm.np_plan_in(self.headP, hh[:, o_[0]:o_[1]])
         if dadd is not None:                                 # (--legs-feat) only his fast GRU reads the legs' features
             xf = xf + dadd
+        ord_ = None
+        if ohs is not None and self.order_on and ox is not None and self.k_r is not None and len(self.k_r) == len(ohs) and self.k_r.any():
+            import head2 as head2_                           # (1.7) a keep reading (the frame after the head's tick): the order made from
+            r_ = np.nonzero(self.k_r)[0]                     # the candidates the simulator made after that frame, the brain's odds written
+            X_ = np.array(np.asarray(ox[0])[r_], np.float32)    # in (its state: the tick's), held to the next reading (the trainer's order_tick)
+            C_ = np.asarray(ox[1], np.float32)[r_]
+            if self.passW is not None and bst is not None:
+                import passodds as passodds_
+                X_[..., head2_.CMB_PASS0:head2_.CMB_PASS0 + 3] = passodds_.np_forward(self.passW, self.passL, bst[0].s[r_], X_)
+            kl_, ps_, ta_, ya_, ok_ = head2_.np_order_scores(self.h2W, self.h2, h2s[r_], X_, C_)
+            okf_ = ok_.astype(np.float32)[:, None]
+            ohs = ohs.copy()
+            ohs[r_] = np.concatenate([kl_, ps_, ta_ * okf_, ya_ * okf_], 1)
+            ord_ = (r_, kl_, ps_, ok_)
         b2 = None
         if h2s is not None and self.h2_live:                 # (v0.4.3) the plan of its last tick into his fast GRU, its bias on his intention
             import head2 as head2_
@@ -344,6 +421,17 @@ class Policy:
             wa2_ = head2_.np_wadd(self.h2W, self.h2, h2s)    # (1.5a) its weapon scores on the weapon key's (none without the part or at wadd 0)
             if wa2_ is not None:
                 logits[:, int(np.sum(self.dims[:6])):int(np.sum(self.dims[:7]))] += wa2_
+            fa2_ = head2_.np_fadd(self.h2W, self.h2, h2s)    # (1.7) its fire scores on the fire key's (none without the part or at fadd 0)
+            if fa2_ is not None:
+                logits[:, int(np.sum(self.dims[:5])):int(np.sum(self.dims[:6]))] += fa2_
+            pa_ = float(np.asarray(self.h2W.get("padd", 0.0))) if ohs is not None else 0.0
+            if pa_ > 0:                                      # (1.7) the pointer's scores held from the last reading on the targets' and the way's
+                o0_ = head2_.CMB_NK + head2_.CMB_NEW
+                i0_ = int(np.sum(self.dims[:10]))
+                logits[:, i0_:i0_ + head2_.CMB_T] += np.float32(pa_) * ohs[:, o0_:o0_ + head2_.CMB_T]
+                if len(self.dims) > 12:
+                    w0_ = int(np.sum(self.dims[:12]))
+                    logits[:, w0_:w0_ + head2_.CMB_W] += np.float32(pa_) * ohs[:, o0_ + head2_.CMB_T:]
         if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
             _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
             logits[:, self.head_si] += t_add
@@ -369,11 +457,30 @@ class Policy:
             kx_ = head2_.np_keep_x(kf, lsm_[np.arange(len(cur_)), cur_])
             kz_ = head2_.np_keep_logit(self.h2W, self.h2, h2s, hfast, kx_)
             kd_ = (self.krng.random(len(kz_)) < sig(kz_)).astype(np.int64)
-            kcol = np.where(self.krng.random(len(kz_)) < self.keep_g, kd_, -1)
+            kc_ = (self.krng.random(len(kz_)) < self.keep_g).astype(np.int64)
+            if self.k_r is None or len(self.k_r) != len(kz_):
+                self.k_r = np.zeros(len(kz_), bool)
+            kcol = kd_ + 2 * kc_ + 4 * self.k_r.astype(np.int64)     # (1.7a) the seats whose head ticked on the frame before: a keep reading
+            if ord_ is not None and self.cmb_g > 0:          # (1.7) the order's kind and candidate drawn at the reading (the keep choice's
+                r_, kl_, ps_, ok_ = ord_                     # stream), asked with its share where the head has a state: + 8 k + 32 c + 256
+
+                def pick_(z_):
+                    p_ = np.exp(z_ - z_.max(1, keepdims=True))
+                    p_ /= p_.sum(1, keepdims=True)
+                    return np.minimum((p_.cumsum(1) < self.krng.random((len(z_), 1))).sum(1), z_.shape[1] - 1).astype(np.int64)
+                ko_ = pick_(kl_)
+                co_ = np.zeros_like(ko_)
+                for k_ in range(1, head2_.CMB_NK):
+                    c0_, m_ = head2_.CMB_C0[k_], head2_.CMB_SLOTS[k_]
+                    co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
+                oq_ = ((self.krng.random(len(r_)) < self.cmb_g) & ok_).astype(np.int64)
+                kcol[r_] = kcol[r_] + (8 * ko_ + 32 * co_ + 256) * oq_
         if h2s is not None:                                  # (v0.4.3) the strategy head ticks with the brain, after the frame
+            self.k_r = np.zeros(len(h2s), bool)              # (1.7a) whose head ticks on this frame: the next frame is their keep reading
             if self.h2_live and self.h2_tick is not None:
                 import head2 as head2_
                 tk_, sb_, o1_, o2_ = self.h2_tick
+                self.k_r = np.asarray(tk_, bool).copy()
                 u_ = head2_.np_feats(self.h2, brain=sb_, trk=o1_, trz=o2_,
                                      ahead=head2_.np_mlp(self.h2_ah, sb_) if self.h2_ah is not None else None,
                                      ctrl=head2_.np_ctrl(self.h2_ct, sb_, hfast[tk_]),
@@ -381,6 +488,8 @@ class Policy:
                 h2s = h2s.copy()
                 h2s[tk_] = head2_.np_tick(self.h2W, self.h2, u_, h2s[tk_])
             h = np.concatenate([h, h2s.astype(np.float32)], 1)
+            if ohs is not None:                              # (1.7) the order's held numbers back after it
+                h = np.concatenate([h, ohs.astype(np.float32)], 1)
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()

@@ -114,13 +114,14 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
         t_got = time.perf_counter()
         tw_["idle"] += t_got - t_idle                        # (waiting for the trainer: its network, the other workers)
         if cmd == "step":
-            if isinstance(data, tuple) and len(data) == 3:   # (v0.4.2a, --rule-fade with BRAIN_READ) the brain's answer of this frame
-                env.brain_in(data[2])                        # too (the legs' logits or None)
-                if data[1] is not None:
+            want_ = False                                    # (1.7, COMBAT) the order's candidates after this step (a tick's frame)
+            if isinstance(data, tuple):                      # (the actions; LEGS_IN: the branch's logits [players, 17]; v0.4.2a, --rule-fade
+                if len(data) >= 4:                           # with BRAIN_READ: the brain's answer of this frame; 1.7: want_)
+                    want_ = bool(data[3])
+                if len(data) >= 3 and data[2] is not None:
+                    env.brain_in(data[2])
+                if len(data) >= 2 and data[1] is not None:
                     env.legs_lg = data[1]
-                data = data[0]
-            elif isinstance(data, tuple):                    # (LEGS_IN) the actions and the branch's logits [players, 17]
-                env.legs_lg = data[1]
                 data = data[0]
             wv_pre = ((env.game.copy(), env.g_tick.copy()) if getattr(env, "ws_tab", None) is not None else None)   # (--win-value)
             obs, rew, done, info = env.step(data)
@@ -173,7 +174,11 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (((1.0 - float(E_.WIN_W)) * info["win_blend"][:, 1] + info["win_blend"][:, 2]).astype(np.float32)   # (--head2-pay combat_win) combat plus the win part
                           if "win_blend" in info else None),                   # (--win-value) shadow pay, cut, in a game
                          (env.keep_live.copy() if hasattr(env, "keep_live") else None),                     # (1.4c) the readings his keep choice decided
-                         (env.keep_feat() if hasattr(env, "keep_feat") else None)))                         # (1.4c) what it reads on the next frame
+                         (env.keep_feat() if hasattr(env, "keep_feat") else None),                          # (1.4c) what it reads on the next frame
+                         ((env.cmb_live.astype(np.int8) + env.cmb_over.astype(np.int8))                       # (1.7) the readings the combat order counted
+                          if getattr(env, "cmb_live", None) is not None else None),                          # at: 1 the target as chosen, 2 a new kind
+                         (tuple(v_.astype(np.float16) for v_ in env.order_feat()) if want_ else None),     # (1.7) the candidates for the next reading
+                         (env.way_live.copy() if getattr(env, "way_live", None) is not None else None)))    # (1.7, WAYS) the readings his way counted at
             tw_["send"] += time.perf_counter() - t_lp        # (the reply's pickling and the pipe)
         elif cmd == "brain_g":                               # (v0.4.2a, --rule-fade with BRAIN_READ) each seat's chance that a life
             env.set_brain_g(data)                            # begun from now on reads the brain's answer
@@ -216,6 +221,7 @@ def jump_far_rec(agg, agg_map):
 
 BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
 BRAIN_PFX = BRAIN_PFX + ("control.",)                               # (v0.4.3, --control) the readout "in control": a brain layer
+BRAIN_PFX = BRAIN_PFX + ("passr.",)                                 # (1.7) the brain's pass readout: a brain layer
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
                 "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W",
                 "INTENT_TEACH_W")   # (v0.4.3: a factor on the item rule's weight, its floor included: 0 silences it)   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
@@ -230,6 +236,9 @@ LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --
 LIVE_TRAINER = LIVE_TRAINER + ("ITEM_FLOOR", "ITEM_FLOOR_W")          # (2026-10-25, --item-floor) the floor on his item intentions by map, its weight
 LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD", "H2_MIX", "H2_COPY", "INTENT_SEEK_W", "H2_L2")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
 LIVE_TRAINER = LIVE_TRAINER + ("KEEP_G",)                          # (1.4c) the share of his readings the keep choice decides (the rest: the lock rule)
+LIVE_TRAINER = LIVE_TRAINER + ("ORD_GATE",)                        # (1.7) the order's attention token's gate (shut -30 .. open 0; never lowered)
+LIVE_TRAINER = LIVE_TRAINER + ("CMB_G", "FADD", "PADD", "PASS_W", "H2_FPG")   # (1.7) the combat order's share, the fire push's add, the pointer's
+#                                                                    adds' share on the targets and the ways, the brain's pass lesson, the fire key's credit
 LIVE_TRAINER = LIVE_TRAINER + ("H2_WPG", "HABIT_P")                 # (1.5a) the weapon key's credit on the head's clock; the league seats' weapon habits
 
 
@@ -1048,6 +1057,19 @@ def main():
                                                                "hands' 17 target rows of pi and the head's target layer shrink by lr x this a step; live H2_L2 "
                                                                "(the value itself). An L2 in the loss went through Adam's scaling: dry runs of 11-03")
     ap.add_argument("--head2-lam", type=float, default=-1.0, help="(--head2, 1.3b) the lambda of the head's own advantage (-1: --lam). 0.995: about 5 s of credit")
+    ap.add_argument("--cmb-g", type=float, default=-1.0, help="(1.7, a network with the combat order: tools/order_init.py; COMBAT=1) the share "
+                                                               "of his readings the order is asked at (live CMB_G; -1: the file's own)")
+    ap.add_argument("--padd", type=float, default=-1.0, help="(1.7) the pointer's scores added to the targets' and the ways' (live PADD; -1: the file's)")
+    ap.add_argument("--pass-odds", type=float, default=0.0, help="(1.7, COMBAT) the brain's lesson of the odds that the enemy passes each "
+                                                                "candidate within 1, 2, 4 s (sim/passodds.py): its weight (live PASS_W); a network that "
+                                                                "has the readout keeps it; 0 and none: off")
+    ap.add_argument("--pass-warm", type=float, default=30.0, help="... minutes over which its lesson rises from nothing")
+    ap.add_argument("--head2-fpg", type=float, default=-1.0, help="(1.7, the fire push) the share of the fire key's credit moved from the hands' "
+                                                                 "term to the head's own (live H2_FPG); -1: none (the hands' term alone)")
+    ap.add_argument("--fadd", type=float, default=-1.0, help="(1.7, a network with the fire push) its scores' add on the fire key (live FADD; "
+                                                            "-1: the file's own)")
+    ap.add_argument("--opt-cold-ok", action="store_true", help="(1.7a) on --resume, an opt.pt that does not fit the network's groups starts the "
+                                                               "optimizer cold; without it the trainer stops (1.4c's resume chain met a cold start silently)")
     ap.add_argument("--keep-g", type=float, default=-1.0, help="(1.4c, a network with the keep choice: sim/head2.py, tools/keep_init.py) the share of his "
                                                                "readings it decides at the start (live KEEP_G; -1: the file's own); the rest the lock rule. "
                                                                "Each league network plays at the share in its own file (none: 0)")
@@ -1604,7 +1626,31 @@ def main():
         """(1.5a) his logits with w [..., HAND_D] added to the weapon key's"""
         return torch.cat([lg[..., :HAND_O], lg[..., HAND_O:HAND_O + HAND_D] + w, lg[..., HAND_O + HAND_D:]], -1)
 
-    def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False):
+    FIRE_O = sum(ACTION_DIMS[:5])                            # (1.7) the fire key's logits (the sixth output, 2 choices)
+    import head2 as head2_                                   # (numpy at the top; the strategy head's own import below binds the same module)
+    CMB_ROWS, CMB_F, CMB_NCTX = head2_.CMB_ROWS, head2_.CMB_F, head2_.CMB_NCTX     # (1.7) the order's numbers (the simulator's the same)
+    CMB_PASS0 = getattr(E_, "CMB_PASS0", 0)
+    if getattr(E_, "COMBAT", False):
+        assert (E_.CMB_ROWS, E_.CMB_F, len(E_.CMB_CTX), E_.CMB_KINDS, E_.CMB_SLOTS, E_.CMB_C0, E_.CMB_PASS0, E_.CMB_FEAT[head2_.CMB_VALID]) == \
+            (head2_.CMB_ROWS, head2_.CMB_F, head2_.CMB_NCTX, head2_.CMB_KINDS, head2_.CMB_SLOTS, head2_.CMB_C0, head2_.CMB_PASS0, "valid"), \
+            "the order's numbers differ"
+
+    def order_draw(kl, ps):
+        """(1.7) the kind and its candidate drawn from the held logits (the keep choice's stream: his play's draws untouched)"""
+        ko = torch.multinomial(torch.softmax(kl.float(), -1), 1, generator=KGEN).squeeze(1)
+        co = torch.zeros_like(ko)
+        for k_ in range(1, head2_.CMB_NK):
+            c0_, m_ = head2_.CMB_C0[k_], head2_.CMB_SLOTS[k_]
+            pk_ = torch.softmax(ps[:, c0_:c0_ + m_].float(), -1)
+            ck_ = torch.multinomial(torch.nan_to_num(pk_, nan=1.0 / m_).clamp(min=1e-12), 1, generator=KGEN).squeeze(1)
+            co = torch.where(ko == k_, ck_, co)
+        return ko, co
+
+    def fkey_add(lg, f):
+        """(1.7) his logits with f [..., 2] added to the fire key's"""
+        return torch.cat([lg[..., :FIRE_O], lg[..., FIRE_O:FIRE_O + 2] + f, lg[..., FIRE_O + 2:]], -1)
+
+    def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False, lt=None, wl=None):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
         intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his).
         (LEGS_KEYS_ADD) act: his choices [..., outputs]: on his legs his own output of a column counts where he chose "mine"
@@ -1617,7 +1663,7 @@ def main():
             assert act is not None, "LEGS_KEYS_ADD: head_masks needs his choices"
             mine_ = {c_: (act[..., KA_HEAD + i_] == 1).to(lo.dtype) for i_, c_ in enumerate(KA_COLS)}
         for j in range(len(ACTION_DIMS)):
-            m = dc if j in KEY_HEADS else (lv if j == I_HEAD else (ll if j == L_HEAD else None))
+            m = dc if j in KEY_HEADS else ((lv if lt is None else lt) if j == I_HEAD else (ll if j == L_HEAD else None))   # (1.7: lt the target's)
             if JE and j == V_HEAD and not ent:                   # (JUMP_EVERY) the jump read on every frame
                 m = None
             if j == L_HEAD and so is not None and a.solo_self_drive:     # (--solo-self-drive) not in his runs
@@ -1625,7 +1671,7 @@ def main():
             if j == L_HEAD and NO_SW:                            # (--no-switch) the switch's lesson dropped
                 m = ll * 0.0
             if j == W_HEAD:                                      # (WAYS) his way: on the frames the intention was read; on none with the switch off
-                m = lv if W_ON else lv * 0.0
+                m = (lv if wl is None else wl) if W_ON else lv * 0.0   # (1.7: wl, the simulators' own)
             if j in L_TAKES:
                 g_ = (1.0 - lo) if j not in mine_ else (1.0 - lo) + lo * mine_[j]      # (LEGS_KEYS_ADD) and where "mine" took it
                 m = g_ if m is None else m * g_
@@ -1721,6 +1767,7 @@ def main():
     TRZ_CK = None                                            # (--track-z, v0.4.0) the readout's second part: comes with the network
     BTOK_CK = None                                           # (--btoken, v0.4.1) the brain's token: comes with the network
     AH_CK = None                                             # (--ahead, v0.4.1) the readout of what comes next: comes with the network
+    PASS_CK = None                                           # (1.7) the brain's pass readout: comes with the network
     CTL_CK = None                                            # (--control, v0.4.3) the readout "in control": comes with the network
     RF_CK = None                                             # (--rule-fade, v0.4.2a) the faded columns and the gate: come with the network
     H2_CK = None                                             # (--head2, v0.4.3) the strategy head's layout: comes with the network
@@ -1739,6 +1786,7 @@ def main():
         TRZ_CK = ck0_.get("track_z") if any(k_.startswith("trackz.") for k_ in ck0_["model"]) else None
         BTOK_CK = ck0_.get("btoken") if any(k_.startswith("attn.btok_") for k_ in ck0_["model"]) else None
         AH_CK = ck0_.get("ahead") if any(k_.startswith("ahead.") for k_ in ck0_["model"]) else None
+        PASS_CK = ck0_.get("passodds") if any(k_.startswith("passr.") for k_ in ck0_["model"]) else None
         CTL_CK = ck0_.get("control") if any(k_.startswith("control.") for k_ in ck0_["model"]) else None
         RF_CK = ck0_.get("rule_fade")
         H2_CK = ck0_.get("head2") if any(k_.startswith("head2.") for k_ in ck0_["model"]) else None
@@ -1825,7 +1873,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - getattr(E_, "N_ORD", 0) - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
     BEL_SEEN = [0]
 
@@ -1855,7 +1903,9 @@ def main():
     BEL = BEL_L is not None
     BK = int(BEL_L["every"]) if BEL else 0
     if BEL:
-        assert int(BEL_L["obs_dim"]) in (OBS_DIM, OBS_DIM - getattr(E_, "N_ITEMS", 0)), "the belief reads {} inputs, the simulator has {}".format(BEL_L["obs_dim"], OBS_DIM)
+        n_it_, n_or_ = getattr(E_, "N_ITEMS", 0), getattr(E_, "N_ORD", 0)      # (the brain reads the inputs it was made with: the first
+        assert int(BEL_L["obs_dim"]) in (OBS_DIM, OBS_DIM - n_or_, OBS_DIM - n_it_ - n_or_), \
+            "the belief reads {} inputs, the simulator has {}".format(BEL_L["obs_dim"], OBS_DIM)                # ones; b1.2c's and 1.7's are the hands')
         assert a.belief <= 0 or (int(a.belief) == int(BEL_L["hid"]) and int(a.belief_every) == BK), \
             "--belief {} --belief-every {}: the network's belief is {} every {}".format(a.belief, a.belief_every, BEL_L["hid"], BK)
         assert a.steps % BK == 0, "--steps {} is not a whole number of the belief's ticks ({})".format(a.steps, BK)
@@ -1895,6 +1945,7 @@ def main():
     TRZ_LR = float(a.track_z_lr_scale) if a.track_z_lr_scale >= 0 else float(a.track_lr_scale)
     import btoken as btoken_                                 # (v0.4.1) the brain's token (sim/btoken.py) and the readout ahead (sim/ahead.py)
     import ahead as ahead_
+    import passodds as passodds_                             # (1.7) the brain's lesson of the odds he passes the order's candidates
     import control as control_                               # (v0.4.3) the readout "in control" (sim/control.py)
     BTOK_L = BTOK_CK
     if BTOK_L is None and a.btoken:
@@ -1963,6 +2014,18 @@ def main():
         print("ahead (v0.4.1): the brain's readout of the enemy in {} s, what he goes for ({}), when he appears; {}; lesson {} rising over {} min, "
               "its layers at {} times --lr".format(AH_L["horiz"], AH_L["n_target"], "from the network" if AH_CK is not None else "new (its last layer at zero)",
                                                     AH_PARTS if AH_ON else "off", a.ahead_warm, AH_LR), flush=True)
+    PASS_L = PASS_CK                                         # (1.7) the brain's pass readout: from the network, or new with --pass-odds
+    if PASS_L is None and a.pass_odds > 0:
+        assert BEL and AH and bool(getattr(E_, "COMBAT", False)), "--pass-odds: with --belief, the readout ahead and COMBAT=1"
+        PASS_L = passodds_.layout(E_.CMB_FEAT, inp=int(BEL_L["hid"]))
+    PASS = PASS_L is not None
+    PASS_ON = PASS and TRK_ON and a.pass_odds > 0
+    PASS_LIVE = [float(a.pass_odds)]
+    if PASS:
+        TRK_SAVE["passodds"] = PASS_L
+        print("pass odds (1.7): the brain's readout of the odds he passes each candidate within {} s; {}; lesson {} rising over {} min, its "
+              "layers at {} times --lr".format(PASS_L["horiz"], "from the network" if PASS_CK is not None else "new (its last layer at zero)",
+                                               a.pass_odds if PASS_ON else "off", a.pass_warm, AH_LR), flush=True)
     if CTL_CK is not None and int(CTL_CK.get("version", 1)) != 2:  # (v0.4.2b) a one-readout layout of branch v043-control: not carried over
         print("control: the network's readout (layout version {}) is left out; new readouts are made".format(CTL_CK.get("version", 1)), flush=True)
         CTL_CK = None
@@ -1989,8 +2052,11 @@ def main():
                   "from the network" if CTL_CK is not None else "new (their last layers at zero)", a.control if CTL_ON else "off",
                   a.control_lr, a.control_warm, "this process's start" if a.control_start < 0 else a.control_start,
                   CTL_L["every"], CTL_L["horizon"], CTL_L["width"]), flush=True)
-    BA_SEND = bool(getattr(E_, "BLIND_AHEAD", False))     # (v0.4.3, BLIND_AHEAD) the readout ahead's places go with the brain's answer
-    if BA_SEND:
+    BA_SEND = bool(getattr(E_, "BLIND_AHEAD", False)) or bool(getattr(E_, "COMBAT", False))   # (v0.4.3, BLIND_AHEAD; 1.7, COMBAT: the cut-off's
+    if bool(getattr(E_, "COMBAT", False)):               # and the spam's places) the readout ahead's places go with the brain's answer
+        assert RF_READ and AH, "COMBAT=1: with BRAIN_READ=1 and the readout ahead (--ahead): the order's places are the brain's"
+        print("combat order (1.7): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer", flush=True)
+    elif BA_SEND:
         assert RF_READ and AH and bool(getattr(E_, "BLIND_BRAIN", False)), \
             "BLIND_AHEAD=1: with BRAIN_READ=1, BLIND_BRAIN=1 and the readout ahead (--ahead): its places are what the waiver reads"
         print("blind ahead (v0.4.3): the out-of-view shot cost also waived where the brain says the enemy will be in {} s "
@@ -2135,8 +2201,12 @@ def main():
             if HAS_CELLS:
                 self.cell = nn.Embedding(E_.MAX_CELLS, CELL_DIM)
                 nn.init.normal_(self.cell.weight, 0.0, 0.1)
-            self.enc = nn.Sequential(nn.Linear(OBS_DIM - 2 + 2 * CELL_DIM if HAS_CELLS else OBS_DIM, 256), nn.Tanh(),
-                                     nn.Linear(256, 256), nn.Tanh())
+            n_ord_ = int(getattr(E_, "N_ORD", 0))                # (1.7) the order's inputs: their columns made at zero after the rest's start,
+            e0_ = nn.Linear((OBS_DIM - 2 + 2 * CELL_DIM if HAS_CELLS else OBS_DIM) - n_ord_, 256)   # so the random stream after is the one
+            if n_ord_:                                           # without them (a fixed seed's check against 1.6a's code)
+                e0_.weight = nn.Parameter(torch.cat([e0_.weight.data, e0_.weight.data.new_zeros(256, n_ord_)], 1))
+                e0_.in_features += n_ord_
+            self.enc = nn.Sequential(e0_, nn.Tanh(), nn.Linear(256, 256), nn.Tanh())
             self.gru = nn.GRUCell(256, H)
             self.pi = nn.Linear(H, sum(ACTION_DIMS))
             if LEGS_IN:                                          # (LEGS_IN) his legs' branch: its own inputs, no memory
@@ -2163,6 +2233,8 @@ def main():
                 self.trackz = trz_.make_module(int(TRZ_L["inp"]), TRZ_L)    # its last layer at zero
             if AH:                                               # (--ahead, v0.4.1) the readout of what comes next: its own stream, last layer at zero
                 self.ahead = ahead_.make_module(int(AH_L["inp"]), AH_L)
+            if PASS:                                             # (1.7) the brain's pass readout: its own stream, its last layer at zero
+                self.passr = passodds_.make_module(PASS_L)
             if CTL:                                              # (--control, v0.4.3) the readout "in control": its own stream, last layer at zero
                 self.control = control_.make_module(CTL_L)
             if ORDER:                                            # (--ordered-heads) a table a link: a row for each choice before, at zero
@@ -2268,6 +2340,13 @@ def main():
                     lg_ = head2_.mix_in(lg_, g2, HD_I0)          # (b1.4a: and the mix)
                     if len(g2) > 5 and g2[5] is not None:        # (1.5a) ... and its weapon scores on the weapon key's
                         lg_ = wkey_add(lg_, g2[5])
+                    if len(g2) > 6 and g2[6] is not None:        # (1.7) ... and its fire scores on the fire key's
+                        lg_ = fkey_add(lg_, g2[6])
+                    if len(g2) > 8 and g2[7] is not None:        # (1.7) ... and the pointer's scores on the targets' and the way's (padd x)
+                        nt_ = g2[7].shape[-1]
+                        lg_ = torch.cat([lg_[..., :HD_I0], lg_[..., HD_I0:HD_I0 + nt_] + g2[7], lg_[..., HD_I0 + nt_:]], -1)
+                        if HD_W0 >= 0:
+                            lg_ = torch.cat([lg_[..., :HD_W0], lg_[..., HD_W0:HD_W0 + 3] + g2[8], lg_[..., HD_W0 + 3:]], -1)
                 return self.out_(lg_, h, gadd), self.v(h).squeeze(-1), h
             z = slowmem_.live(self.slow, sm, e, h)               # (--slow-mem) z = h + door(s); the slow GRU ticks on its frames
             self.zl = z
@@ -2393,6 +2472,17 @@ def main():
                 sd = dict(sd)
                 for k_, v_ in net.head2.state_dict().items():
                     sd["head2." + k_] = torch.zeros_like(v_) if k_.startswith(("plan_in.", "target.", "gate")) else v_
+            if getattr(net, "passr", None) is not None and "passr.l1.weight" not in sd:                # (1.7) a file without the brain's
+                sd = dict(sd)                                                                           # pass readout: the network's own
+                for k_, v_ in net.passr.state_dict().items():                                           # (the league plays its seats with
+                    sd["passr." + k_] = v_                                                              # the learner's odds)
+            for has_, key_, pfx_ in ((head2_.has_cmb, "head2.op_v.weight", ("ok_", "op_", "cmb_g", "padd")),   # (1.7) a file without the combat
+                                     (head2_.has_fire, "head2.fsc.weight", ("fsc.", "fadd"))):        # order or the fire push (1.6a's end,
+                if has_(getattr(net, "head2", None)) and key_ not in sd:                              # the anchors): zeros, share and add 0
+                    sd = dict(sd)
+                    for k_, v_ in net.head2.state_dict().items():
+                        if k_.startswith(pfx_):
+                            sd["head2." + k_] = torch.zeros_like(v_)
             if head2_.has_keep(getattr(net, "head2", None)) and "head2.keep.weight" not in sd:   # (1.4c) a file without the keep
                 sd = dict(sd)                                # choice (1.4b's end, the anchors): zeros, its share 0 (the lock rule)
                 for k_, v_ in net.head2.state_dict().items():
@@ -2518,6 +2608,12 @@ def main():
     if LEGS_LEARN:                                           # (--legs-learn) the branch in a group of its own; every setting of the rate
         opt.add_param_group({"params": list(pol.legs.parameters()), "lr": a.lr * a.legs_learn, "lr_scale": a.legs_learn})   # keeps its share
     LEGS_GROUP = len(opt.param_groups) - 1                   # (the record's legs_learn rate: the branch's group, whatever comes after it)
+    GROUP_NAMES = []                                         # (1.7) the groups added after these, by name in their order: saved with opt.pt, so a
+    #                                                          resume adds them back in that order (a save without names: by their sizes, below)
+
+    def group_lr(name):
+        """(1.7) the rate of a group added by name (GROUP_NAMES, after LEGS_GROUP)"""
+        return opt.param_groups[LEGS_GROUP + 1 + GROUP_NAMES.index(name)]["lr"]
     TRK_GROUP = [False]
 
     def trk_group():
@@ -2525,8 +2621,10 @@ def main():
         before it, and one saved with it loads whole"""
         if TRK and not TRK_GROUP[0]:
             opt.add_param_group({"params": list(pol.track.parameters()), "lr": a.lr * a.track_lr_scale, "lr_scale": a.track_lr_scale})
+            GROUP_NAMES.append("trk")
             if BEL:                                          # (--belief, v0.4.0 A) the belief's own group, after the readout's
                 opt.add_param_group({"params": list(pol.belief.parameters()), "lr": a.lr * BEL_LR, "lr_scale": BEL_LR})
+                GROUP_NAMES.append("bel")
             TRK_GROUP[0] = True
 
     TRZ_GROUP = [False]
@@ -2536,6 +2634,7 @@ def main():
         (v0.4.0's) loads into the groups before it"""
         if TRZ and not TRZ_GROUP[0]:
             opt.add_param_group({"params": list(pol.trackz.parameters()), "lr": a.lr * TRZ_LR, "lr_scale": TRZ_LR})
+            GROUP_NAMES.append("trz")
             TRZ_GROUP[0] = True
     V41_GROUP = [False]
     N_V41 = int(BTOK) + int(AH)
@@ -2547,8 +2646,10 @@ def main():
             if BTOK:
                 opt.add_param_group({"params": [p_ for n_, p_ in pol.named_parameters() if n_.startswith("attn.btok_")],
                                      "lr": a.lr * a.btoken_lr_scale, "lr_scale": a.btoken_lr_scale})
+                GROUP_NAMES.append("btok")
             if AH:
                 opt.add_param_group({"params": list(pol.ahead.parameters()), "lr": a.lr * AH_LR, "lr_scale": AH_LR})
+                GROUP_NAMES.append("ahead")
             V41_GROUP[0] = True
     H2_GROUP = [False]
 
@@ -2556,8 +2657,9 @@ def main():
         """(--head2) the strategy head in a group of its own after all the others: an optimizer saved without it loads into the
         groups before it"""
         if H2 and not H2_GROUP[0]:
-            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "winp.", "wsc."))],
+            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "winp.", "wsc.", "ok_", "op_", "fsc."))],
                                  "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})     # (1.4c: the keep choice in its own; 1.5a: the weapon part too)
+            GROUP_NAMES.append("h2")
             H2_GROUP[0] = True
     KEEP = H2 and head2_.has_keep(pol.head2)                 # (1.4c) the keep choice (a file from tools/keep_init.py)
     KEEP_GROUP = [False]
@@ -2567,9 +2669,33 @@ def main():
         (1.4b's) loads into the groups before it"""
         if KEEP and not KEEP_GROUP[0]:
             opt.add_param_group({"params": list(pol.head2.keep.parameters()), "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
+            GROUP_NAMES.append("keep")
             KEEP_GROUP[0] = True
+    CMB = H2 and head2_.has_cmb(pol.head2)                   # (1.7) the combat order (a file from tools/cmb_init.py)
+    FIRE = H2 and head2_.has_fire(pol.head2)                 # (1.7) the fire push
+    assert not CMB or (KEEP and bool(getattr(E_, "COMBAT", False))), "the combat order: with the keep choice and COMBAT=1 (its column rides on the keep's)"
+    CMB_GROUP = [False]
+
+    def cmb_group():
+        """(1.7) the combat order's and the fire push's layers in a group of their own, at the head's rate"""
+        if (CMB or FIRE) and not CMB_GROUP[0]:
+            ps_ = ([p_ for n_, p_ in pol.head2.named_parameters() if n_.startswith(("ok_", "op_"))] if CMB else []) + \
+                  (list(pol.head2.fsc.parameters()) if FIRE else [])
+            opt.add_param_group({"params": ps_, "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
+            GROUP_NAMES.append("cmb")
+            CMB_GROUP[0] = True
+    PASS_GROUP = [False]
+
+    def pass_group():
+        """(1.7) the brain's pass readout in a group of its own, at the readouts' rate"""
+        if PASS and not PASS_GROUP[0]:
+            opt.add_param_group({"params": list(pol.passr.parameters()), "lr": a.lr * AH_LR, "lr_scale": AH_LR})
+            GROUP_NAMES.append("pass")
+            PASS_GROUP[0] = True
     WPN = H2 and head2_.has_weapon(pol.head2)               # (1.5a) the head's weapon part (a file from tools/weapon_init.py)
     WPN_GROUP = [False]
+    FCR = H2 and head2_.has_fire(pol.head2) and a.head2_fpg >= 0    # (1.7, S6) the fire key's credit split (the hands' term, the head's)
+    H2_FPG = [min(1.0, max(0.0, float(a.head2_fpg)))]        # ... its share in the head's term (live H2_FPG)
     WCR = H2 and a.head2_wpg >= 0                            # (1.5a, part B) the weapon key's credit split (the hands' term, the head's)
     H2_WPG = [min(1.0, max(0.0, float(a.head2_wpg)))]        # ... its share in the head's term (live H2_WPG)
     assert not WPN or a.head2_add, "the weapon part: with --head2-add (1.3b on: the head's scores added to the hands'): not built otherwise"
@@ -2581,6 +2707,7 @@ def main():
         if WPN and not WPN_GROUP[0]:
             opt.add_param_group({"params": list(pol.head2.winp.parameters()) + list(pol.head2.wsc.parameters()),
                                  "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
+            GROUP_NAMES.append("wpn")
             WPN_GROUP[0] = True
     obs_mean, obs_var, obs_count = np.zeros(OBS_DIM), np.ones(OBS_DIM), 1e-4
     elapsed0 = 0.0
@@ -2597,12 +2724,31 @@ def main():
         if os.path.exists(op_):
             try:
                 os_ = torch.load(op_, weights_only=False, map_location=dev)
-                if WPN and KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 3:
-                    trk_group()                               # (1.5a: saved with the weapon part's group, after the keep choice's)
-                    trz_group()
+                pgl_ = [len(g_["params"]) for g_ in os_["param_groups"]]    # (1.7a) the saved groups' sizes: the keep choice's 2, the weapon part's 4
+                names_ = os_.pop("names", None) if isinstance(os_, dict) else None
+                if names_ is not None:                        # (1.7) saved with its groups' names: added back in that order
+                    fn_ = dict(trk=trk_group, bel=trk_group, trz=trz_group, btok=v41_group, ahead=v41_group, h2=h2_group, keep=keep_group,
+                               wpn=wpn_group, cmb=cmb_group)
+                    fn_["pass"] = pass_group
+                    for nm_ in names_:
+                        fn_[nm_]()
+                    assert GROUP_NAMES == list(names_), "the optimizer's groups {} are not the save's {}".format(GROUP_NAMES, list(names_))
+                elif WPN and KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 3:
+                    trk_group()                               # (1.5a: saved with the weapon part's group, after the keep choice's;
+                    trz_group()                               # 1.7a: given the keep choice after the weapon part's, saved so)
                     v41_group()
                     h2_group()
-                    keep_group()
+                    if pgl_[-1] == 2 and pgl_[-2] == 4:
+                        wpn_group()
+                        keep_group()
+                    else:
+                        keep_group()
+                        wpn_group()
+                elif WPN and KEEP and N_V41 and TRK and pgl_[-1] == 4 and                         len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 2:
+                    trk_group()                               # (1.7a's start: 1.5a's or 1.6a's save, the weapon part's group after the head's,
+                    trz_group()                               # no keep choice: its group is added after the load, the last)
+                    v41_group()
+                    h2_group()
                     wpn_group()
                 elif WPN and not KEEP and N_V41 and TRK and len(os_["param_groups"]) == len(opt.param_groups) + 1 + int(BEL) + int(TRZ) + N_V41 + 2:
                     trk_group()                               # (1.5a from 1.3b's end: saved with the weapon part's group after the head's, no keep choice)
@@ -2642,7 +2788,8 @@ def main():
                         for p_, i_ in zip(g_["params"], s_["params"]):
                             m_ = os_["state"].get(i_)
                             n_ = nm_.get(id(p_))
-                            if m_ is None or tuple(m_["exp_avg"].shape) == tuple(p_.shape) or n_ not in ("enc.0.weight", "attn.mark"):
+                            if m_ is None or tuple(m_["exp_avg"].shape) == tuple(p_.shape) or \
+                                    n_ not in ("enc.0.weight", "attn.mark", "head2.inp.weight", "head2.winp.weight"):
                                 continue
                             old_ = tuple(m_["exp_avg"].shape)
                             for k2_ in ("exp_avg", "exp_avg_sq"):
@@ -2650,8 +2797,13 @@ def main():
                                 new_ = torch.zeros(tuple(p_.shape), dtype=v_.dtype, device=v_.device)
                                 fill_ = float(v_.median()) if k2_ == "exp_avg_sq" else 0.0
                                 new_.fill_(fill_)
-                                if n_ == "enc.0.weight":
+                                if n_ in ("enc.0.weight", "head2.winp.weight"):     # (1.7: the weapon part's inputs, the order's at the end)
                                     new_[:, :old_[1]] = v_
+                                elif n_ == "head2.inp.weight":        # (1.7, tools/order_init.py) the order's columns at the end of the obs part
+                                    ex_ = int(p_.shape[1]) - old_[1]
+                                    o1_ = head2_._offs(H2L)["obs"][1] - ex_
+                                    new_[:, :o1_] = v_[:, :o1_]
+                                    new_[:, o1_ + ex_:] = v_[:, o1_:]
                                 else:                         # (the summary token's mark stays the last)
                                     new_[:old_[0] - 1] = v_[:-1]
                                     new_[-1] = v_[-1]
@@ -2680,7 +2832,9 @@ def main():
                 print("optimizer: its state loaded from opt.pt{}".format(
                     " (--learn-nosync: {} step counts moved to the host)".format(n_st_) if a.learn_nosync else ""), flush=True)
             except Exception as e_:                           # noqa: BLE001  (another layout of groups: a cold start)
-                print("optimizer: opt.pt does not fit ({}): a cold start".format(str(e_)[:120]), flush=True)
+                if not a.opt_cold_ok:                         # (1.7a) a run that resumes with an opt.pt never starts it cold unasked
+                    raise SystemExit("optimizer: opt.pt does not fit ({}): NOT STARTED (--opt-cold-ok starts it cold on purpose)".format(str(e_)[:300]))
+                print("optimizer: opt.pt does not fit ({}): a cold start (--opt-cold-ok)".format(str(e_)[:120]), flush=True)
         else:
             print("optimizer: no opt.pt, a cold start", flush=True)
     trk_group()                                              # (--track) the readout's group, if the optimizer's state did not bring it
@@ -2728,6 +2882,8 @@ def main():
     h2_group()                                               # (v0.4.3) the strategy head's, the last
     keep_group()                                             # (1.4c) ... then the keep choice's
     wpn_group()                                              # (1.5a) ... then the head's weapon part's
+    cmb_group()                                              # (1.7) ... then the combat order's and the fire push's
+    pass_group()                                             # (1.7) ... then the brain's pass readout's
     if WPN:
         print("weapon part (1.5a): the head's scores (wsc on its state, {} choices) added x wadd {:g} to the weapon key's; its {} inputs by winp; "
               "|wsc| {:.4g} |winp| {:.4g}".format(HAND_D, float(pol.head2.wadd), int(H2L["widths"].get("wobs", 0)),
@@ -2735,6 +2891,8 @@ def main():
         assert int(H2L["weapon"]) == HAND_D, "the head's weapon part has {} scores, the weapon key {}".format(H2L["weapon"], HAND_D)
     if WCR:
         print("weapon key's credit (1.5a, part B): the head's own term at c = {:.4f} (live H2_WPG), the hands' 1 - c".format(H2_WPG[0]), flush=True)
+    if FCR:
+        print("fire key's credit (1.7, S6): the head's own term at c = {:.4f} (live H2_FPG), the hands' 1 - c".format(H2_FPG[0]), flush=True)
     if KEEP:
         print("keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), {} numbers]); its share from --keep-g {} (live KEEP_G); "
               "its weights: bias {:.3f}, on its own numbers {}".format(head2_.KEEP_F, a.keep_g, float(pol.head2.keep.bias),
@@ -2810,6 +2968,14 @@ def main():
         print("btoken: gate {:.4f} now; shut until minute {:.1f} (--btoken-start {:.1f} + --btoken-delay {:g}), then 0 -> 1 over {:g} min, "
               "never above {:g} (live: BTOK_GATE_CAP, BTOK_GATE_OPEN; BELIEF_LR the brain's rate, now {:g})".format(
                   BTOK_G[0], BTOK_T0 + a.btoken_delay, BTOK_T0, a.btoken_delay, a.btoken_open, a.btoken_cap, BEL_LR_NOW[0]), flush=True)
+
+    PASS_T0 = float(elapsed0)
+
+    def pass_lesson_w(mins):
+        """(1.7) the brain's pass lesson's factor at this minute: rising from nothing over --pass-warm"""
+        if not PASS_ON:
+            return 0.0
+        return PASS_LIVE[0] * (min(1.0, max(0.0, mins - PASS_T0) / a.pass_warm) if a.pass_warm > 0 else 1.0)
 
     def ah_lesson_w(mins):
         """(--ahead) the factor of its lesson at this minute: rising from nothing over --ahead-warm"""
@@ -2971,7 +3137,9 @@ def main():
                         **({"live_settings": dict(LS["file"])} if LS["file"] else {})),   # (live_settings.env: the file in force)   # (B-265) once a live.json is applied: the values in force
                    path)
         if os.path.basename(path) == "policy.pt":       # (2026-10-18) the optimizer's state beside it, for a resume
-            torch.save(opt.state_dict(), os.path.join(os.path.dirname(path), "opt.pt.tmp"))
+            osd_ = opt.state_dict()
+            osd_["names"] = list(GROUP_NAMES)                # (1.7) the groups' names: a resume adds them back in this order
+            torch.save(osd_, os.path.join(os.path.dirname(path), "opt.pt.tmp"))
             os.replace(os.path.join(os.path.dirname(path), "opt.pt.tmp"), os.path.join(os.path.dirname(path), "opt.pt"))
 
     # league: odd players of the second half of every worker's matches are played by a frozen snapshot
@@ -3096,6 +3264,8 @@ def main():
     H2_G, H2_LAST, H2_T0 = [0.0], [None], 0.0
     H2_M, H2_CW, SEEK_W = [0.0], [1.0], [1.0]                # (b1.4a) the mix, a factor on the copy lesson, a factor on the way pay (all live)
     KEEP_GV = [0.0]                                          # (1.4c) the keep choice's share (live KEEP_G)
+    CMB_GV, FADD_V = [0.0], [0.0]                            # (1.7) the combat order's share (live CMB_G), the fire push's add (live FADD)
+    PADD_V = [0.0]                                           # (1.7) the pointer's adds on the targets and the way (live PADD)
     HB_ACC = [None]                                          # (1.5a, part C) the last rollout's habit counts: [kind, league frames / his frags / its frags]
     if H2:
         H2S, H2O = head2_.State(N, H2L, dev), head2_.State(N, H2L, dev)
@@ -3116,6 +3286,24 @@ def main():
                     pol.head2.keep_g.fill_(min(1.0, float(a.keep_g)))
             KEEP_GV[0] = float(pol.head2.keep_g)
             print("keep choice: share {:.4f} of his readings not forced (the rest: the lock rule, INTENT_HOLD)".format(KEEP_GV[0]), flush=True)
+        if CMB:                                              # (1.7) the combat order's share: the file's own unless set; live CMB_G
+            with torch.no_grad():
+                if a.cmb_g >= 0:
+                    pol.head2.cmb_g.fill_(min(1.0, float(a.cmb_g)))
+            CMB_GV[0] = float(pol.head2.cmb_g)
+            with torch.no_grad():
+                if a.padd >= 0:
+                    pol.head2.padd.fill_(float(a.padd))
+            PADD_V[0] = float(pol.head2.padd)
+            print("combat order (1.7): asked at a share {:.4f} of his readings ({}); the pointer's adds on the targets and the way x {:.4f}; "
+                  "the kinds' bias {}, |op_v| {:.4g}".format(CMB_GV[0], ", ".join(head2_.CMB_KINDS), PADD_V[0],
+                                                            [round(float(x_), 3) for x_ in pol.head2.ok_c.bias], float(pol.head2.op_v.weight.norm())), flush=True)
+        if FIRE:                                             # (1.7) the fire push's add: the file's own unless set; live FADD
+            with torch.no_grad():
+                if a.fadd >= 0:
+                    pol.head2.fadd.fill_(float(a.fadd))
+            FADD_V[0] = float(pol.head2.fadd)
+            print("fire push (1.7): the head's 2 fire scores x {:.4f} on the fire key's".format(FADD_V[0]), flush=True)
         if a.head2_add:                                      # (1.3b) the head's own scores added to the hands'
             assert not a.head2_sole, "--head2-add with --head2-sole: the add is one learner of the hands' rows and the head together"
             assert H2_M[0] == 0.0, "--head2-add with a mix above 0: not built"
@@ -3185,6 +3373,17 @@ def main():
     GATE_M = None                                                        # (--gate-open) the tokens whose gate is below zero in the network
     if pol.attn is not None and getattr(pol.attn, "gate", None) is not None:   # he starts from: the ones the opening is for
         GATE_M = pol.attn.gate < 0
+    ORD_M, ORD_GV = None, [None]                                         # (1.7) the order's token (kind "order"): its gate by live ORD_GATE
+    if GATE_M is not None and any(k_["name"] == "order" for k_ in ATT["kinds"]):
+        ORD_M = torch.zeros_like(GATE_M)
+        r_ = 0
+        for k_ in ATT["kinds"]:
+            if k_["name"] == "order":
+                ORD_M[r_:r_ + len(k_["idx"])] = True
+            r_ += len(k_["idx"])
+        GATE_M = GATE_M & ~ORD_M                                         # (--gate-open's line never opens it: 1.6a's command carries one, long done)
+        print("the order's token (1.7): gate {:.2f} now (live ORD_GATE opens it, never lowered; --gate-open leaves it)".format(
+            float(pol.attn.gate[ORD_M].max())), flush=True)
     assert a.gate_open <= 0 or (GATE_M is not None and a.gate_from <= 0), \
         "--gate-open: the network has no gated attention part (tools/targets_init.py makes one), or --gate-from is above 0"
     ka0 = a.keys_add_start if a.keys_add_start >= 0 else elapsed0       # (--keys-add-open) the minute its clock counts from
@@ -3432,11 +3631,26 @@ def main():
                     H2_PG_[1] = float(lt_.get("H2_PLAN_GRAD", H2_PG_[1]))            # (... the plan's gradient into it)
                     if "H2_MIX" in lt_:                                                # (b1.4a) the mix itself, from the next rollout
                         H2_M[0] = min(1.0, max(0.0, float(lt_["H2_MIX"])))
+                    if "CMB_G" in lt_ and CMB:                                         # (1.7) the combat order's share, from the next rollout
+                        CMB_GV[0] = min(1.0, max(0.0, float(lt_["CMB_G"])))
+                    if "FADD" in lt_ and FIRE:                                         # (1.7) the fire push's add, from the next rollout
+                        FADD_V[0] = max(0.0, float(lt_["FADD"]))
                     if "KEEP_G" in lt_:                                                # (1.4c) the keep choice's share, from the next rollout
                         if KEEP:
                             KEEP_GV[0] = min(1.0, max(0.0, float(lt_["KEEP_G"])))
                         else:
                             print("live: KEEP_G ignored (the network has no keep choice)", flush=True)
+                    if "H2_FPG" in lt_ and FCR:                                        # (1.7, S6) the fire key's credit on the head's clock
+                        H2_FPG[0] = min(1.0, max(0.0, float(lt_["H2_FPG"])))
+                    if "PADD" in lt_ and CMB:                                          # (1.7) the pointer's adds on the targets and the way
+                        PADD_V[0] = max(0.0, float(lt_["PADD"]))
+                    if "PASS_W" in lt_:                                                # (1.7) the brain's pass lesson
+                        PASS_LIVE[0] = max(0.0, float(lt_["PASS_W"]))
+                    if "ORD_GATE" in lt_:                                              # (1.7) the order's token's gate, from the next rollout
+                        if ORD_M is not None:
+                            ORD_GV[0] = min(0.0, float(lt_["ORD_GATE"]))
+                        else:
+                            print("live: ORD_GATE ignored (no token of kind 'order')", flush=True)
                     if "H2_WPG" in lt_:                                                # (1.5a, B) the weapon key's credit on the head's clock, from the next update
                         if WCR:
                             H2_WPG[0] = min(1.0, max(0.0, float(lt_["H2_WPG"])))
@@ -3466,8 +3680,12 @@ def main():
                                   ITEM_FLOOR=IF_LIVE[1], ITEM_FLOOR_W=IF_LIVE[0], VALUE_WARM=float(VW_[1]),
                                   **({"FADE_CAP": a.rule_fade_cap, "FADE_OPEN": a.rule_fade_open} if RF_ON else {}),
                                   **({"H2_GATE_CAP": a.head2_cap, "H2_GATE_OPEN": a.head2_open, "H2_PG": H2_PG_[2], "H2_PLAN_GRAD": H2_PG_[1], "H2_MIX": H2_M[0], "H2_COPY": H2_CW[0], "H2_L2": H2_L2_[0]} if H2 else {}),
-                                  **({"KEEP_G": KEEP_GV[0]} if KEEP else {}),
+                                  **({"KEEP_G": KEEP_GV[0]} if KEEP else {}), **({"CMB_G": CMB_GV[0]} if CMB else {}),
+                                  **({"FADD": FADD_V[0]} if FIRE else {}),
                                   **({"H2_WPG": H2_WPG[0]} if WCR else {}), **({"HABIT_P": HB_P[0]} if HB_ON else {}),
+                                  **({"H2_FPG": H2_FPG[0]} if FCR else {}), **({"PADD": PADD_V[0]} if CMB else {}),
+                                  **({"PASS_W": PASS_LIVE[0]} if PASS else {}),
+                                  **({"ORD_GATE": ORD_GV[0]} if ORD_GV[0] is not None else {}),
                                   INTENT_SEEK_W=SEEK_W[0])
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
@@ -3491,6 +3709,11 @@ def main():
                 pol.head2.mix.fill_(H2_M[0])                             # (b1.4a) the mix of this rollout: played and learnt at it
                 if KEEP:
                     pol.head2.keep_g.fill_(KEEP_GV[0])                   # (1.4c) the keep choice's share of this rollout (the file's too)
+                if CMB:
+                    pol.head2.cmb_g.fill_(CMB_GV[0])                     # (1.7) the combat order's share of this rollout (the file's too)
+                    pol.head2.padd.fill_(PADD_V[0])                      # ... the pointer's adds
+                if FIRE:
+                    pol.head2.fadd.fill_(FADD_V[0])                      # (1.7) the fire push's add of this rollout (the file's too)
         if RF_ON:                                                        # (v0.4.2a) the rule fade's gate of this rollout: played and learnt at it
             RF_G[0] = btoken_.gate_step(RF_G[0], mins, RF_LAST[0], RF_T0, a.rule_fade_delay, a.rule_fade_open, a.rule_fade_cap)
             RF_LAST[0] = mins
@@ -3503,6 +3726,9 @@ def main():
             g_now = a.gate_from * (1.0 - gf_) if gf_ < 1.0 else 0.0
             with torch.no_grad():
                 pol.attn.gate[GATE_M] = pol.attn.gate[GATE_M].clamp(min=g_now)
+        if ORD_GV[0] is not None:                                        # (1.7, live ORD_GATE) the order's token, played and learnt at it
+            with torch.no_grad():
+                pol.attn.gate[ORD_M] = pol.attn.gate[ORD_M].clamp(min=ORD_GV[0])
         if a.keys_add_open > 0 and KA_ON:                                # (--keys-add-open) before the rollout, as the turn's below
             kf_ = min(1.0, max(0.0, mins - ka0) / a.keys_add_open)
             if kf_ < 1.0 or update == 1:
@@ -3886,6 +4112,7 @@ def main():
         h0 = h.clone()
         b_u2 = b_vh = b_lpi = h2s0 = None
         b_lpw = torch.zeros(T, N, device=dev) if WCR else None          # (1.5a, B) the weapon key's log-probability as played
+        b_lpf = torch.zeros(T, N, device=dev) if FCR else None          # (1.7, S6) the fire key's
         hb_acc = np.zeros((4, 3), np.float64) if HB_ON else None         # (1.5a, C) each habit's league frames, his frags and its against it
         if H2:                                                           # (--head2) its ticks' inputs (host, half precision), its value, the
             b_u2 = torch.zeros(T // BK, N, head2_.u_width(H2L), dtype=torch.float16)      # intention's log-probability as played; the
@@ -3896,6 +4123,9 @@ def main():
                 H2O.refresh(onet.head2)
             h2s0 = H2S.snap()
         b_kd = b_kx = b_kl = b_lpk = None
+        b_ok = b_oc = b_ol = b_oon = b_lpo = b_x = b_c = b_p = b_xm = OX_ = None
+        b_wl = torch.zeros(T, N, device=dev) if (CMB and W_ON) else None    # (1.7, WAYS) the readings his way counted at (the simulators')
+        b_lpwy = torch.zeros(T, N, device=dev) if (CMB and W_ON) else None  # ... and its log-probability as played
         if KEEP:                                                         # (1.4c) the keep choice: drawn (1 re-decide), what it read, the
             b_kd = torch.zeros(T, N, device=dev)                         # readings it decided (the simulators' keep_live, his seats), its
             b_kx = torch.zeros(T, N, head2_.KEEP_F, device=dev)          # log-probability as played; the simulators' numbers for the next
@@ -3903,8 +4133,22 @@ def main():
             b_lpk = torch.zeros(T, N, device=dev)
             KF_ = C.get("kf")
             if KF_ is None:
-                KF_ = torch.zeros(N, 3, device=dev)
+                KF_ = torch.zeros(N, head2_.KEEP_FEAT, device=dev)
             KG_PLAY = float(net.head2.keep_g)                            # (each network's share, read once a rollout)
+            if CMB:                                                      # (1.7) the combat order: its kind and candidate drawn, where it was asked
+                JK_ = T // BK                                            # and counted (his seats), where a new kind took the target's place, its
+                b_ok = torch.zeros(T, N, dtype=torch.long, device=dev)   # log-probability as played; the candidates of each keep reading (on the
+                b_oc = torch.zeros(T, N, dtype=torch.long, device=dev)   # host: their numbers, the situation's, their places)
+                b_ol = torch.zeros(T, N, device=dev)
+                b_oon = torch.zeros(T, N, device=dev)
+                b_lpo = torch.zeros(T, N, device=dev)
+                b_x = torch.zeros(JK_, N, CMB_ROWS, CMB_F, dtype=torch.float16)
+                b_c = torch.zeros(JK_, N, CMB_NCTX, dtype=torch.float16)
+                b_p = torch.zeros(JK_, N, CMB_ROWS, 3, dtype=torch.float16)
+                b_xm = torch.zeros(JK_, dtype=torch.bool)               # (the readings that had them)
+                OX_ = C.get("ox")                                        # (made after the tick's frame: carried over to the next rollout)
+            CG_PLAY = float(net.head2.cmb_g) if CMB else 0.0
+            CG_OPP = (float(onet.head2.cmb_g) if CMB and has_snaps and not HEADL and onet.h2_open and head2_.has_cmb(onet.head2) else 0.0)
             KG_OPP = (float(onet.head2.keep_g) if has_snaps and not HEADL and onet.h2_open and head2_.has_keep(onet.head2) else 0.0)
         BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
         if WV_ON and WV_ST[0] is None:                                   # (--win-value) the per-seat stream, carried from rollout to rollout
@@ -3969,6 +4213,17 @@ def main():
                 ev_ = head_events()
                 b_ev[t // HD_K] = ev_
             with torch.no_grad():
+                OT_ = CMB and t % BK == 0 and OX_ is not None            # (1.7) a keep reading (the frame after the head's tick): the order made
+                if OT_:                                                  # before the frame's step from the candidates the simulators made after
+                    X_ = torch.from_numpy(OX_[0]).to(dev).float()       # the tick's frame, the brain's odds written in (its state is the tick's),
+                    Cc_ = torch.from_numpy(OX_[1]).to(dev).float()      # held to the next reading: its adds on the targets and the way play from
+                    if PASS:                                             # this frame on, as the learning step reads them (segment j: reading j)
+                        X_[..., CMB_PASS0:CMB_PASS0 + 3] = torch.sigmoid(net.passr(BS_.s, X_)).to(X_.dtype)
+                    j_ = t // BK
+                    b_x[j_], b_c[j_], b_p[j_], b_xm[j_] = X_.half().cpu(), Cc_.half().cpu(), torch.from_numpy(OX_[2]), True
+                    H2S.order_tick(net.head2, X_, Cc_)
+                    if has_snaps and onet.h2_open and head2_.has_cmb(onet.head2):
+                        H2O.order_tick(onet.head2, X_, Cc_)
                 if HEADL:
                     t_hd = time.time()
                     logits, val, h = net.step(x, h, hd=HS, ev=ev_, xl=xlu_)
@@ -4011,6 +4266,8 @@ def main():
                     b_lpi[t] = lps[I_HEAD]
                 if WCR:                                                  # (1.5a, B) the weapon key as played, for the head's own ratio
                     b_lpw[t] = lps[HAND_HEAD]
+                if FCR:                                                  # (1.7, S6) the fire key as played, so
+                    b_lpf[t] = lps[5]
                 if has_snaps and HEADL:                                      # (--head) the league's network with its own head, if open
                     lo, _, h_opp = onet.step(x, h_opp, hd=HS_O if onet.head_open else None, ev=ev_, xl=xlu_)
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
@@ -4029,7 +4286,19 @@ def main():
                     kz_ = head2_.keep_logit(net.head2, s_keep_, h, kx_)
                     kd_ = (torch.rand(N, generator=KGEN, device=dev) < torch.sigmoid(kz_)).float()
                     kc_ = torch.rand(N, generator=KGEN, device=dev) < KG_PLAY
-                    kcol_ = torch.where(kc_, kd_.long(), torch.full_like(cur_, -1))
+                    kr_ = 4 * int(t % BK == 0)                           # (1.7a) a keep reading: the frame after the head's tick (s_keep_ is that tick's)
+                    kcol_ = kd_.long() + 2 * kc_.long() + kr_            # (1.7a) d + 2 c + 4 r: the simulator takes the coin at his lock readings
+                    if CMB:                                              # (1.7) the combat order at the keep reading (the frame after the tick):
+                        ko_ = torch.zeros(N, dtype=torch.long, device=dev)   # the candidates the simulators made after the tick's frame, the brain's
+                        co_ = torch.zeros(N, dtype=torch.long, device=dev)   # odds written in, the head's order made and held, its kind and
+                        oq_ = torch.zeros(N, dtype=torch.bool, device=dev)   # candidate drawn on the keep choice's stream, asked with its share
+                        if OT_:                                          # where the head has a state; + 8 kind + 32 candidate + 256 q
+                            okl_, ops_, ov_ = H2S.order(net.head2)       # (made before the step: OT_)
+                            ko_, co_ = order_draw(okl_, ops_)
+                            b_lpo[t] = head2_.order_logp(okl_, ops_, ko_, co_)[0]
+                            oq_ = (torch.rand(N, generator=KGEN, device=dev) < CG_PLAY) & ov_
+                        b_ok[t], b_oc[t] = ko_, co_
+                        kcol_ = kcol_ + (8 * ko_ + 32 * co_ + 256) * oq_.long()
                     b_kd[t], b_kx[t] = kd_, kx_
                     b_lpk[t] = torch.nn.functional.logsigmoid(torch.where(kd_ > 0, kz_, -kz_))
                     if has_snaps:
@@ -4038,7 +4307,12 @@ def main():
                             kzo_ = head2_.keep_logit(onet.head2, H2O.s, h_opp, head2_.keep_x(KF_, lpo_))
                             kdo_ = (torch.rand(N, generator=KGEN, device=dev) < torch.sigmoid(kzo_)).long()
                             kco_ = torch.rand(N, generator=KGEN, device=dev) < KG_OPP
-                            kcolo_ = torch.where(kco_, kdo_, torch.full_like(cur_, -1))
+                            kcolo_ = kdo_ + 2 * kco_.long() + kr_
+                            if CMB and CG_OPP > 0 and OT_:               # (1.7) the league network's own order, at its share
+                                oklo_, opso_, ovo_ = H2O.order(onet.head2)
+                                koo_, coo_ = order_draw(oklo_, opso_)
+                                oqo_ = (torch.rand(N, generator=KGEN, device=dev) < CG_OPP) & ovo_
+                                kcolo_ = kcolo_ + (8 * koo_ + 32 * coo_ + 256) * oqo_.long()
                         else:
                             kcolo_ = torch.full_like(cur_, -1)           # (a league file without it: the lock rule)
                         kcol_ = torch.where(snap_players, kcolo_, kcol_)
@@ -4094,15 +4368,17 @@ def main():
                 RP_["legs_net"] += tp2_ - tp1_
                 for w_, p in enumerate(pipes):
                     p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])
-                            + ((TOK_.answer_rows(w_off[w_], w_off[w_ + 1]),) if RF_READ else ())))
+                            + ((TOK_.answer_rows(w_off[w_], w_off[w_ + 1]),) if RF_READ else ((None,) if CMB else ()))
+                            + ((CMB and (t + 1) % BK == 0,) if CMB else ())))
             elif RF_READ:                                                # (v0.4.2a, BRAIN_READ) the brain's answer goes with the actions
                 tp2_ = time.perf_counter()
                 for w_, p in enumerate(pipes):
-                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], None, TOK_.answer_rows(w_off[w_], w_off[w_ + 1]))))
+                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], None, TOK_.answer_rows(w_off[w_], w_off[w_ + 1]))
+                            + ((CMB and (t + 1) % BK == 0,) if CMB else ())))
             else:
                 tp2_ = time.perf_counter()
                 for w_, p in enumerate(pipes):
-                    p.send(("step", an[w_off[w_]:w_off[w_ + 1]]))
+                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], None, None, (t + 1) % BK == 0) if CMB else an[w_off[w_]:w_off[w_ + 1]]))
             tp3_ = time.perf_counter()
             RP_["send"] += tp3_ - tp2_
             res = [p.recv() for p in pipes]
@@ -4134,6 +4410,15 @@ def main():
                 kl_ = torch.from_numpy(np.concatenate([r[22] if r[22] is not None else np.zeros(len(r[2]), bool) for r in res]).astype(np.float32)).to(dev)
                 b_kl[t] = kl_ * (~snap_players).float() if has_snaps else kl_    # it reads on the next frame
                 KF_ = torch.from_numpy(np.concatenate([r[23] for r in res]).astype(np.float32)).to(dev)
+                if CMB:                                                  # (1.7) the readings the combat order counted at (his seats), where a new
+                    oc_ = torch.from_numpy(np.concatenate([r[24] if r[24] is not None else np.zeros(len(r[2]), np.int8) for r in res]).astype(np.float32)).to(dev)
+                    mine_ = (~snap_players).float() if has_snaps else 1.0   # kind took the target's place; the candidates after a tick's frame
+                    b_ol[t] = (oc_ > 0.5).float() * mine_
+                    b_oon[t] = (oc_ > 1.5).float()
+                    if res[0][25] is not None:
+                        OX_ = tuple(np.concatenate([r[25][i_] for r in res]) for i_ in range(3))
+                    if b_wl is not None:
+                        b_wl[t] = torch.from_numpy(np.concatenate([r[26] if r[26] is not None else np.zeros(len(r[2]), bool) for r in res]).astype(np.float32)).to(dev)
             b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
             dec = torch.from_numpy(np.concatenate([r[8] for r in res]).astype(np.float32)).to(dev)
             if JE:                                                       # (JUMP_EVERY) the code: 1 the hand read, 2 the jump alone was read
@@ -4153,9 +4438,14 @@ def main():
                 av_ = jump_only(act[:, V_HEAD], jcode)
                 b_act[t, :, V_HEAD] = av_.to(b_act.device)
                 lps[V_HEAD] = ds[V_HEAD].log_prob(av_)
-            b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(dec, live, ll, lo, act, b_so[t])))
+            b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(
+                dec, live, ll, lo, act, b_so[t], lt=live * (1.0 - b_oon[t]) if CMB else None, wl=b_wl[t] if b_wl is not None else None)))
             if KEEP:                                                     # (1.4c) the keep choice joins what he did, where it decided
                 b_logp[t] = b_logp[t] + b_lpk[t] * b_kl[t]
+            if CMB:                                                      # (1.7) the combat order too, where it was asked and counted
+                b_logp[t] = b_logp[t] + b_lpo[t] * b_ol[t]
+                if b_wl is not None:                                     # (WAYS) and the way's log-probability as played, for the head's term
+                    b_lpwy[t] = lps[W_HEAD]
             if LEGS_LEARN:                                               # (--legs-learn) the branch's own draws (before the hand rule) join
                 b_lr[t] = torch.from_numpy(np.concatenate([r[16] for r in res])).to(dev)        # what he did on the frames his legs moved him
                 with torch.no_grad():
@@ -4245,14 +4535,18 @@ def main():
         C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl, rjc=rjc)
         if KEEP:
             C["kf"] = KF_                                                # (1.4c) what the keep choice reads on the next rollout's first frame
+        if CMB:
+            C["ox"] = OX_                                                # (1.7) the candidates for the next rollout's first keep reading
         return dict(b_hr=b_hr, b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
-                    b_btok=b_btok, btg=btg_, rfg=rfg_, bfg=bfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0, b_lpw=b_lpw, hb_acc=hb_acc,
+                    b_btok=b_btok, btg=btg_, rfg=rfg_, bfg=bfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0, b_lpw=b_lpw, b_lpf=b_lpf, hb_acc=hb_acc,
                     b_kd=b_kd, b_kx=b_kx, b_kl=b_kl, b_lpk=b_lpk, kg=KG_PLAY if KEEP else 0.0,
+                    b_ok=b_ok, b_oc=b_oc, b_ol=b_ol, b_oon=b_oon, b_lpo=b_lpo, b_x=b_x, b_c=b_c, b_p=b_p, b_xm=b_xm, b_wl=b_wl, b_lpwy=b_lpwy,
+                    cg=CG_PLAY if CMB else 0.0,
                     h2g=float(net.head2.gate) if H2 else 0.0, h2m=float(net.head2.mix) if H2 else 0.0, wv=WV_ST[0].take() if WV_ON else None)
 
     def launch(upd):
@@ -4362,15 +4656,39 @@ def main():
         B_KD, B_KX, B_KL, B_LPK = (R.get(k_) for k_ in ("b_kd", "b_kx", "b_kl", "b_lpk"))      # (1.4c) the keep choice as played
         KG_R = float(R.get("kg") or 0.0)                                 # ... at the share it was played at
         B_LPW = R.get("b_lpw")                                           # (1.5a, B) the weapon key as played
+        B_LPF = R.get("b_lpf")                                           # (1.7, S6) the fire key as played
         HB_ACC[0] = R.get("hb_acc")                                      # (1.5a, C) the habits' counts
+        B_OK, B_OC, B_OL, B_OON, B_LPO = (R.get(k_) for k_ in ("b_ok", "b_oc", "b_ol", "b_oon", "b_lpo"))   # (1.7) the combat order as played,
+        B_X, B_C, B_P, B_XM, B_WL, B_LPWY = (R.get(k_) for k_ in ("b_x", "b_c", "b_p", "b_xm", "b_wl", "b_lpwy"))   # its candidates (host)
+        CG_R = float(R.get("cg") or 0.0)
+        B_LT = b_live * (1.0 - B_OON) if CMB else b_live                # (1.7) the target's readings: not where a new kind took its place
         if KEEP:                                                         # ... his target's and its log-probability together, where each
-            B_LPI = B_LPI * b_live + B_LPK * B_KL                        # counted: the head's term's reference (the target where it was
+            B_LPI = B_LPI * B_LT + B_LPK * B_KL                          # counted: the head's term's reference (the target where it was
             #                                                              read, the keep choice where it decided)
+        if CMB:                                                          # (1.7) ... the combat order where it was asked and counted, the way
+            B_LPI = B_LPI + B_LPO * B_OL                                 # where it was read (WAYS)
+            if B_WL is not None:
+                B_LPI = B_LPI + B_LPWY * B_WL
+
+        def order_lp(ho2, chunk):
+            """(1.7) the combat order's log-probability of what he drew [T, n], counted where it was asked (zeros elsewhere); the kinds'
+            log-probabilities [T, n, CMB_NK]"""
+            lo, lk = head2_.order_logp(ho2["okl"], ho2["ops"], B_OK[:, chunk], B_OC[:, chunk])
+            return lo * B_OL[:, chunk], lk
 
         def keep_lp(ho2, hs, chunk):
             """(1.4c) the keep choice's log-probability of what he drew [T, n], counted where it decided (zeros elsewhere); its logit"""
             kz = head2_.keep_logit(pol.head2, ho2["s_held"], hs, B_KX[:, chunk])
             return torch.nn.functional.logsigmoid(torch.where(B_KD[:, chunk] > 0, kz, -kz)) * B_KL[:, chunk], kz
+
+        def keep_parts(ho2, hs, chunk):
+            """(1.7a, the record) its logit's parts [T, n]: from the head's state, from the hands' memory, from its own numbers
+            (the bias aside): whose decision it is"""
+            w_ = pol.head2.keep.weight[0].detach().float()
+            S_ = int(H2L["size"])
+            hw_ = hs.shape[-1]
+            return (ho2["s_held"].detach().float() @ w_[:S_], hs.detach().float() @ w_[S_:S_ + hw_],
+                    B_KX[:, chunk].float() @ w_[S_ + hw_:])
         B_BTOK, BTG_R = R.get("b_btok"), float(R.get("btg") or 0.0)      # (v0.4.1) the token as he saw it, the gate he played at
         RFG_R = float(R.get("rfg") or 0.0)                               # (v0.4.2a) the rule fade's gate he played at: learnt at it
         BFG_R = float(R.get("bfg") or 0.0)                               # (v0.6.1b) the brain's gate he played at: learnt at it (the people's
@@ -4546,6 +4864,16 @@ def main():
                 if WPN and HO2_[0].get("w") is not None:         # (1.5a, D) its weapon scores on the weapon key's, with their gradient
                     HO2_[0]["hands_w"] = lg_[..., HAND_O:HAND_O + HAND_D]
                     lg_ = wkey_add(lg_, HO2_[0]["w"])
+                if FIRE and HO2_[0].get("f") is not None:        # (1.7) its fire scores on the fire key's (the head's state a number)
+                    HO2_[0]["hands_f"] = lg_[..., FIRE_O:FIRE_O + 2].detach()
+                    lg_ = fkey_add(lg_, HO2_[0]["f"])
+                if CMB and HO2_[0].get("tadd") is not None:      # (1.7) the pointer's scores on the targets' (with H2ADD: one set of
+                    nt_ = int(H2L["n_target"])                    # target logits, as the head's own; its credit as the target's) and on the
+                    ta_ = HO2_[0]["tadd"] if H2ADD else HO2_[0]["tadd"].detach()   # way's (a number here: the head's term learns it)
+                    lg_ = torch.cat([lg_[..., :HD_I0], lg_[..., HD_I0:HD_I0 + nt_] + ta_, lg_[..., HD_I0 + nt_:]], -1)
+                    if W_HEAD >= 0:
+                        HO2_[0]["hands_way"] = lg_[..., HD_W0:HD_W0 + 3].detach()
+                        lg_ = torch.cat([lg_[..., :HD_W0], lg_[..., HD_W0:HD_W0 + 3] + HO2_[0]["yadd"].detach(), lg_[..., HD_W0 + 3:]], -1)
             return lg_
         UG_ = [None, None, None]                                         # (--legs-feat, --legs-guide) the last seq_pass's guide addition, the
         #                                                                  branch's logits and its "has a way" (for pi_t and the counters)
@@ -4606,6 +4934,17 @@ def main():
                     with torch.no_grad():
                         ho2_["gin_share"] = ho2_["gin"].norm(dim=-1).mean() / (eg_.norm(dim=-1).mean() + 1e-8)
                 eg_ = eg_ + ho2_["gin"]
+                if CMB:                                                  # (1.7) the order's numbers at each keep reading (frame j K: the state of its
+                    ci_ = hchunk(chunk)                                  # segment) from the stored candidates, held over the segment's frames
+                    xo_ = hsel(B_X, 1, chunk, ci_).float()
+                    co_ = hsel(B_C, 1, chunk, ci_).float()
+                    okl_, ops_, ta_, ya_ = head2_.order_scores(pol.head2, ho2_["s_held"][::BK], xo_, co_)
+                    sg_ = torch.arange(T, device=dev) // BK
+                    al_ = ho2_["alive"][..., None]
+                    ho2_["okl"], ho2_["ops"] = okl_[sg_], ops_[sg_]
+                    ho2_["tadd"] = pol.head2.padd * ta_[sg_] * al_
+                    ho2_["yadd"] = pol.head2.padd * ya_[sg_] * al_
+                    ho2_["xo"], ho2_["ci"] = xo_, ci_
                 HO2_[0] = ho2_
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk], lay=gru_layout(DN_H[:, hchunk(chunk)], dev) if NOSYNC else None)
@@ -4662,6 +5001,17 @@ def main():
             ys_ = None
             NPA_ = len(ahead_.PARTS)
             ah_acc = torch.zeros(2 * NPA_ + 4, dtype=torch.float64, device=ADEV)  # the parts' loss sums, their frames, the place's error at 1, 2, 4 s, frames
+        ps_w = pass_lesson_w(mins) if (PASS_ON and trk_w > 0 and CMB and R.get("b_p") is not None) else 0.0
+        if ps_w > 0:                                                     # (1.7) the brain's pass lesson: its truth at each keep reading, on the card
+            PSC_ = [TRK_IX[c_] for c_ in passodds_.COLS]                 # a piece at a time, kept off it
+            pys_, pms_ = [], []
+            for c0_ in range(0, N, 2048):
+                y_, m_ = passodds_.labels(b_aux[:, c0_:c0_ + 2048][..., PSC_].float().to(dev), b_done[:, c0_:c0_ + 2048].to(dev),
+                                          passodds_.COLS, BK, R["b_p"][:, c0_:c0_ + 2048].float().to(dev))
+                pys_.append(y_.to(torch.uint8).cpu())
+                pms_.append((m_ * R["b_xm"][:, None, None, None].to(dev).float()).to(torch.uint8).cpu())
+            PASS_Y, PASS_M = torch.cat(pys_, 1), torch.cat(pms_, 1)
+            pys_ = pms_ = None
         BTOK_ISO = None
         if trk_w > 0:
             TRK_Y = b_aux[:T][..., TRK_TC]                               # [T, N, 13] float16, off the card (a piece goes over with its minibatch)
@@ -4776,7 +5126,8 @@ def main():
                         lg_, v_, hs_, _ = seq_pass(chunk, h0[chunk])
                         if ORDER:
                             lg_ = ord_lg(pol, lg_, b_act[:, chunk])
-                        hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
+                        hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
+                                         lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
                         lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                         if LEGS_LEARN:
                             lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
@@ -4789,11 +5140,13 @@ def main():
         LP_PX = ISW = IS_ = None                                         # (decoupled) the learner's log p before the update, the capped weights
         LPI_PX = ISW2 = None                                             # (--head2) ... of his target alone: the head's own term clips around it
         LPW_PX = ISWW = None                                             # (1.5a, B) ... of his weapon key alone: the head's weapon term clips around it
+        LPF_PX = ISWF = None                                             # (1.7, S6) ... of his fire key alone
         if DEC:                                                          # (--overlap-ppo decoupled) the proximal pass: pol before any step of
             with torch.no_grad():                                        # this update on the whole batch: its log p of what he did (as the
                 LP_PX = torch.zeros(T, N, device=dev)                    # learning passes count it), its values; per head for kl_heads
                 LPI_PX = torch.zeros(T, N, device=dev) if H2 else None
                 LPW_PX = torch.zeros(T, N, device=dev) if WCR else None
+                LPF_PX = torch.zeros(T, N, device=dev) if FCR else None
                 V_PX = torch.zeros(T, N, device=dev)
                 V2_PX = torch.zeros(T, N, 2, device=dev) if LONG else None
                 if a.kl_heads and (update % a.kl_heads == 0 or update <= 20):
@@ -4805,7 +5158,8 @@ def main():
                     lg_, v_, hs_, v2_ = seq_pass(chunk, h0[chunk])
                     if ORDER:
                         lg_ = ord_lg(pol, lg_, b_act[:, chunk])
-                    hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
+                    hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
+                                     lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
                     lp_ = 0
                     for j, dd in enumerate(dists(lg_)):
                         l_ = dd.log_prob(b_act[:, chunk, j])
@@ -4815,11 +5169,20 @@ def main():
                             LPI_PX[:, chunk] = l_
                         if LPW_PX is not None and j == HAND_HEAD:
                             LPW_PX[:, chunk] = l_
+                        if LPF_PX is not None and j == 5:
+                            LPF_PX[:, chunk] = l_
                         lp_ = lp_ + l_ * (1.0 if hm_[j] is None else hm_[j])
                     if KEEP:                                             # (1.4c) the keep choice where it decided: in his whole log p, and
                         lk_px_, _ = keep_lp(HO2_[0], hs_, chunk)         # beside his target's in the head's own (as B_LPI)
                         lp_ = lp_ + lk_px_
-                        LPI_PX[:, chunk] = LPI_PX[:, chunk] * b_live[:, chunk] + lk_px_
+                        LPI_PX[:, chunk] = LPI_PX[:, chunk] * B_LT[:, chunk] + lk_px_
+                    if CMB:                                              # (1.7) the combat order where it was asked, so; the way where read
+                        lo_px_, _ = order_lp(HO2_[0], chunk)
+                        lp_ = lp_ + lo_px_
+                        LPI_PX[:, chunk] = LPI_PX[:, chunk] + lo_px_
+                        if B_WL is not None:
+                            lyw_px_ = torch.log_softmax(HO2_[0]["hands_way"] + HO2_[0]["yadd"], -1).gather(-1, b_act[:, chunk][..., W_HEAD:W_HEAD + 1].to(dev)).squeeze(-1)
+                            LPI_PX[:, chunk] = LPI_PX[:, chunk] + lyw_px_ * B_WL[:, chunk]
                     if LEGS_LEARN:                                       # (the legs' part, as in the learning passes)
                         lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
                         lp_ = lp_ + legs_lp(lgl_, b_lr[:, chunk], b_dec[:, chunk], b_lo[:, chunk])[0]
@@ -4836,6 +5199,8 @@ def main():
                     ISW2 = (LPI_PX - B_LPI).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
                 if LPW_PX is not None:                                   # (1.5a, B) ... and for his weapon key alone
                     ISWW = (LPW_PX - B_LPW).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
+                if LPF_PX is not None:                                   # (1.7, S6) ... and for his fire key alone
+                    ISWF = (LPF_PX - B_LPF).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
                 OV_ = torch.stack([w_.sum(), (d_ * w_).sum(), (((r_ - 1.0).abs() > clip).float() * w_).sum(), ((r_ - 1.0).abs() * w_).sum(),
                                    ((V_PX - b_val[:T]).abs() * w_).sum(), (r_.clamp(max=1e3) * w_).sum()]).double().cpu()
                 IS_ = [float((ISW * w_).sum() / w_.sum().clamp(min=1.0)), float((r_ * (w_ > 0)).max()),
@@ -4859,7 +5224,8 @@ def main():
                     lg_, v_, hs_, _ = seq_pass(chunk, h0[chunk])
                     if ORDER:
                         lg_ = ord_lg(pol, lg_, b_act[:, chunk])
-                    hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
+                    hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
+                                     lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
                     lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                     if LEGS_LEARN:                                       # (the legs' part of the ratio, as in the learning passes)
                         lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
@@ -4873,7 +5239,13 @@ def main():
             B_HR = R.get("b_hr") if R.get("b_hr") is not None else b_rew
             H2_PAYS = [float(B_HR.abs().mean()), float(b_rew.abs().mean())]   # (a frame's |pay|: the head's, his)
             ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else lam)    # (1.3b: --head2-lam)
-            KEEP_ACC = torch.zeros(8, dtype=torch.float64, device=dev)   # (1.4c) the keep choice: its readings (his, weighted), p(re-decide) there,
+            CMB_ACC = torch.zeros(2 + 2 * head2_.CMB_NK + 4 + 3, dtype=torch.float64, device=dev)   # (1.7) the combat order: asked, p(an order),
+            #                                                              drawn by kind, p by kind; the brain's pass lesson: loss sum, questions, Brier,
+            #                                                              base rate; the fire key on the head's clock: frames, its term, clipped
+            KEEP_ACC = torch.zeros(16, dtype=torch.float64, device=dev)  # (1.4c) the keep choice: its readings (his, weighted), p(re-decide) there,
+            SUM_ACC = torch.zeros(12, dtype=torch.float64, device=dev)   # (1.7) the two new sums' parts: [frames, hands, head's, cosine sum, its frames]
+            #                                                                  for the fire key (0..4), the targets with the pointer's add (5..9; 10, 11:
+            #                                                                  the way's add: its frames, its size)
             WP_ACC = torch.zeros(12, dtype=torch.float64, device=dev)    # (1.5a) the weapon key on the head's clock: its frames, its term, clipped; (the last
             #                                                              pass) log p played - now, frames; the parts' sizes, cosine, the head's top = his
             #                                                              in contact and p there, re-decisions drawn; (the last pass) log p played - now, its readings
@@ -4908,7 +5280,8 @@ def main():
                 dst = ds                                                 # what the teachers' losses read
                 if UNI_GUIDE and epoch == 0:                             # (--legs-guide) his own choice against the branch's (switch off)
                     with torch.no_grad():
-                        hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk])
+                        hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
+                                          lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
                         for i_, (o_, mp_) in enumerate(UGM.mapped(UG_[1])):
                             m_ = (1.0 if hmu_[o_] is None else hmu_[o_]) * UG_[2] * b_w[:, chunk]
                             ug_acc[i_] += HC_(torch.stack([m_.sum(), ((mp_.argmax(-1) == b_act[:, chunk, o_]).float() * m_).sum(),
@@ -4923,7 +5296,8 @@ def main():
                 A = b_act[:, chunk]
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
-                hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk])
+                hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk],
+                                lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
                 if H2ADD:                                                # (1.3b) the target's share of this term's gradient: 1 - c (its value as it is)
                     c_ = min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2]))
@@ -4933,6 +5307,24 @@ def main():
                 if WCR and cw_ > 0:                                      # (1.5a, B) the weapon key's share of this term's gradient: 1 - cw (its value as it is)
                     lw_ = ds[HAND_HEAD].log_prob(A[..., HAND_HEAD]) * (1.0 if hm[HAND_HEAD] is None else hm[HAND_HEAD])
                     lp = lp - cw_ * (lw_ - lw_.detach())
+                cf_ = min(1.0, max(0.0, H2_FPG[0])) if FCR else 0.0
+                if FCR and cf_ > 0:                                      # (1.7, S6) the fire key's share of this term's gradient: 1 - cf
+                    lf_ = ds[5].log_prob(A[..., 5]) * (1.0 if hm[5] is None else hm[5])
+                    lp = lp - cf_ * (lf_ - lf_.detach())
+                lo_ = None
+                if CMB:                                                  # (1.7) the combat order where it was asked: in his whole log p, its
+                    lo_, lop_ = order_lp(HO2_[0], chunk)                 # gradient only in the head's own term (as the keep choice's)
+                    lp = lp + lo_
+                    if H2ADD:
+                        lp = lp - c_ * (lo_ - lo_.detach())
+                    if epoch == 0:
+                        with torch.no_grad():
+                            om_ = B_OL[:, chunk] * b_w[:, chunk]
+                            CMB_ACC[0] += om_.sum().double()
+                            CMB_ACC[1] += ((1.0 - lop_[..., 0].exp()) * om_).sum().double()
+                            for j_ in range(head2_.CMB_NK):
+                                CMB_ACC[2 + j_] += ((B_OK[:, chunk] == j_).float() * om_).sum().double()
+                                CMB_ACC[2 + head2_.CMB_NK + j_] += (lop_[..., j_].exp() * om_).sum().double()
                 lk_ = kz_l_ = None
                 if KEEP:                                                 # (1.4c) the keep choice where it decided: in his whole log p (its
                     lk_, kz_l_ = keep_lp(HO2_[0], hs_all, chunk)         # value; its gradient only in the head's own term at c = 1, as
@@ -4950,10 +5342,19 @@ def main():
                                 KEEP_ACC[2] += (km_ * ct_).sum().double()
                                 KEEP_ACC[3] += (pk_ * km_ * ct_).sum().double()
                                 KEEP_ACC[4] += (km_ * B_KD[:, chunk]).sum().double()
+                                kps_ = keep_parts(HO2_[0], hs_all, chunk)          # (1.7a) whose decision: the parts' sizes, where it decided
+                                KEEP_ACC[7] += (km_ * kps_[0].abs()).sum().double()
+                                KEEP_ACC[8] += (km_ * kps_[1].abs()).sum().double()
+                                KEEP_ACC[9] += (km_ * kps_[2].abs()).sum().double()
+                                ar_ = B_KX[:, chunk, 3]                            # (1.7a) arrivals out of contact
+                                KEEP_ACC[10] += (km_ * ar_).sum().double()
+                                KEEP_ACC[11] += (pk_ * km_ * ar_).sum().double()
+                                KEEP_ACC[12] += (km_ * ar_ * B_KD[:, chunk]).sum().double()
                             else:
                                 KEEP_ACC[5] += ((B_LPK[:, chunk] * B_KL[:, chunk] - lk_) * km_).sum().double()
                                 KEEP_ACC[6] += km_.sum().double()
-                hme = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk], ent=True) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
+                hme = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk], ent=True,
+                                 lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
                 ent = sum(w_ * dd.entropy() * (1.0 if hme[j] is None else hme[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's part of what he did, the same advantage
@@ -5051,15 +5452,23 @@ def main():
                                 IF_LS[3] += g3_.norm().double()
                 if H2:                                                   # (--head2) its own lessons: the bias by its advantage (the hands' logits
                     ho2_ = HO2_[0]                                       # as numbers), its value on every learner frame
-                    m2_ = lv * wgt if not KEEP else (lv + B_KL[:, chunk]).clamp(max=1.0) * wgt     # (1.4c: and where the keep choice decided)
+                    m2_ = lv * wgt if not KEEP else (lv + B_KL[:, chunk] + (B_OL[:, chunk] if CMB else 0.0)
+                                                     + (B_WL[:, chunk] if B_WL is not None else 0.0)).clamp(max=1.0) * wgt     # (1.4c: and where the keep choice decided; 1.7: the order asked, the way read)
                     ms2_ = m2_.sum().clamp(min=1.0)
                     if H2ADD:                                            # (1.3b) the logits as played, every part with its gradient
                         lmx_ = ho2_["hands_g"] + ho2_["a"] * ho2_["raw"] + ho2_["bias"]
+                        if CMB:                                          # (1.7) and the pointer's scores on the targets
+                            lmx_ = lmx_ + ho2_["tadd"]
                     else:
                         lmx_ = (1.0 - ho2_["k"]) * ho2_["hands_int"] + ho2_["k"] * ho2_["raw"] + ho2_["bias"]     # (b1.4a: the mix; k 0: as before)
                     lpi_ = torch.log_softmax(lmx_, -1).gather(-1, A[..., I_HEAD:I_HEAD + 1]).squeeze(-1)
                     if KEEP:                                             # (1.4c) his target where it was read, the keep choice where it decided
-                        lpi_ = lpi_ * lv + lk_
+                        lpi_ = lpi_ * (B_LT[:, chunk] if CMB else lv) + lk_
+                    if CMB:                                              # (1.7) and the combat order where it was asked, the way where read
+                        lpi_ = lpi_ + lo_                                # (the hands' way scores a number, the pointer's with their gradient)
+                        if B_WL is not None:
+                            lyw_ = torch.log_softmax(ho2_["hands_way"] + ho2_["yadd"], -1).gather(-1, A[..., W_HEAD:W_HEAD + 1]).squeeze(-1)
+                            lpi_ = lpi_ + lyw_ * B_WL[:, chunk]
                     r2_ = (lpi_ - (LPI_PX if DEC else B_LPI)[:, chunk]).clamp(max=30.0).exp()     # (decoupled: around the learner before the
                     #                                                  update, as the hands' (review of 2026-11-03, B5); capped: b1.2a's overflow)
                     ah_ = ADV_H[:, chunk]
@@ -5108,6 +5517,44 @@ def main():
                             with torch.no_grad():
                                 WP_ACC[3] += (((LPW_PX if DEC else B_LPW)[:, chunk] - lw2_) * mw_).sum().double()
                                 WP_ACC[4] += mw_.sum().double()
+                    if FCR and cf_ > 0:                                  # (1.7, S6) the fire key on the head's clock: its own clipped term with the
+                        mf_ = (1.0 if hm[5] is None else hm[5]) * wgt     # head's advantage (a lob pays 1 to 3 s after it leaves), as the weapon key's
+                        msf_ = mf_.sum().clamp(min=1.0)
+                        lf2_ = ds[5].log_prob(A[..., 5])
+                        rf_ = (lf2_ - (LPF_PX if DEC else B_LPF)[:, chunk]).clamp(max=30.0).exp()
+                        af_ = ADV_H[:, chunk]
+                        muf_ = (af_ * mf_).sum() / msf_
+                        af_ = (af_ - muf_) / (((af_ - muf_).pow(2) * mf_).sum() / msf_).sqrt().clamp(min=1e-8)
+                        pgft_ = torch.min(rf_ * af_, rf_.clamp(1 - clip, 1 + clip) * af_)
+                        pgft_ = torch.where(af_ < 0, torch.max(pgft_, 3.0 * af_), pgft_)
+                        pgf_ = -((ISWF[:, chunk] if DEC else 1.0) * pgft_ * mf_).sum() / msf_
+                        loss = loss + cf_ * pgf_
+                        if epoch == 0:
+                            with torch.no_grad():
+                                CMB_ACC[14] += msf_.double()
+                                CMB_ACC[15] += pgf_.detach().double() * msf_
+                                CMB_ACC[16] += ((((rf_ - 1.0).abs() > clip).float()) * mf_).sum().double()
+                    if (FIRE or CMB) and epoch == 0:                     # (1.7) the two new sums' parts, on the frames each output is read: centred
+                        def two_(o_, hp_, ap_, mk_):                     # sizes and cosine (the ramp flags a part over 40)
+                            hc_ = hp_ - hp_.mean(-1, keepdim=True)
+                            ac_ = ap_ - ap_.mean(-1, keepdim=True)
+                            hn_, an_ = hc_.norm(dim=-1), ac_.norm(dim=-1)
+                            mv_ = mk_ * (an_ > 1e-6).float()
+                            SUM_ACC[o_] += mk_.sum().double()
+                            SUM_ACC[o_ + 1] += (hn_ * mk_).sum().double()
+                            SUM_ACC[o_ + 2] += (an_ * mk_).sum().double()
+                            SUM_ACC[o_ + 3] += ((hc_ * ac_).sum(-1) / (hn_ * an_).clamp(min=1e-9) * mv_).sum().double()
+                            SUM_ACC[o_ + 4] += mv_.sum().double()
+                        with torch.no_grad():
+                            if FIRE and ho2_.get("hands_f") is not None and ho2_.get("f") is not None:
+                                two_(0, ho2_["hands_f"], ho2_["f"], (1.0 if hm[5] is None else hm[5]) * wgt * ho2_["alive"])
+                            if CMB and ho2_.get("tadd") is not None:
+                                two_(5, ho2_["hands_int"], ho2_["tadd"], (1.0 if hm[I_HEAD] is None else hm[I_HEAD]) * wgt * ho2_["alive"])
+                                if W_HEAD >= 0 and ho2_.get("hands_way") is not None:
+                                    mw_ = (1.0 if hm[W_HEAD] is None else hm[W_HEAD]) * wgt * ho2_["alive"]
+                                    yc_ = ho2_["yadd"] - ho2_["yadd"].mean(-1, keepdim=True)
+                                    SUM_ACC[10] += mw_.sum().double()
+                                    SUM_ACC[11] += (yc_.norm(dim=-1) * mw_).sum().double()
                     if WPN and epoch == 0 and ho2_.get("hands_w") is not None:   # (1.5a, D) the two parts of the weapon key's logits, on
                         with torch.no_grad():                            # the frames his hand read it: sizes (centred), cosine, the head's top
                             mk2_ = (1.0 if hm[HAND_HEAD] is None else hm[HAND_HEAD]) * wgt * ho2_["alive"]     # choice his
@@ -5322,6 +5769,22 @@ def main():
                         if epoch == 0:
                             with torch.no_grad():
                                 ah_acc += HC_(torch.cat([ap_ * an_.clamp(min=1.0), an_, ahead_.errors(ao_, ay_, am_) * an_[0], an_[0:1]]).double())
+                    if ps_w > 0:                                         # (1.7) the brain's pass lesson: on its state at each keep reading (the tick
+                        bsk_ = torch.cat([BS0[chunk][None].to(bs_.dtype), bs_[:-1]], 0)    # before it; the rollout's start for the first) and
+                        xo_ = HO2_[0]["xo"] if HO2_[0] is not None and HO2_[0].get("xo") is not None else hsel(B_X, 1, chunk, ci_).float()
+                        py_ = hsel(PASS_Y, 1, chunk, ci_).float()        # the stored candidates; their truth; valid candidates of the learner's frames
+                        pm_ = hsel(PASS_M, 1, chunk, ci_).float() * xo_[..., head2_.CMB_VALID:head2_.CMB_VALID + 1] * \
+                            wgt.index_select(0, torch.arange(0, T, BK, device=dev))[..., None, None]
+                        plo_ = pol.passr(bsk_, xo_)
+                        pl_, pn_ = passodds_.loss(plo_, py_, pm_)
+                        tl_ = tl_ + (ps_w / trk_w) * pl_
+                        if epoch == 0:
+                            with torch.no_grad():
+                                pp_ = torch.sigmoid(plo_)
+                                CMB_ACC[10] += (pl_ * pn_).double()
+                                CMB_ACC[11] += pn_.double()
+                                CMB_ACC[12] += (((pp_ - py_) ** 2) * pm_).sum().double()
+                                CMB_ACC[13] += (py_ * pm_).sum().double()
                     if trz_w > 0:                                        # (--track-z) the second part's lesson on the same state and frames
                         zl_, zp_ = trz_.loss(pol.trackz(bs_), hsel(TRZ_Y, 1, chunk, ci_).float(), TRZ_PARTS, tm_)
                         tl_ = tl_ + (trz_w / trk_w) * zl_                # (so that trk_w * tl_ is both lessons)
@@ -5530,6 +5993,16 @@ def main():
                     nn.utils.clip_grad_norm_(VW_PS, 0.5)
                 H2GR_ = None
                 if H2:                                                   # (--head2) its gradient clipped on its own and kept out of the rest's clip
+                    if KEEP and not bool(B_KL[:, chunk].any()):          # (1.7a) a piece where the keep choice decided nothing: no gradient of its
+                        for p_ in pol.head2.keep.parameters():           # own (its zeros in the clip's sum moved the rest by rounding: share 0 is
+                            p_.grad = None                               # 1.6a's learning to the bit)
+                    if CMB and not bool(B_OL[:, chunk].any()):           # (1.7) so the order's kind where it was asked at no reading, and its
+                        for n_, p_ in pol.head2.named_parameters():      # pointer too where nothing added it to the targets or the way
+                            if n_.startswith("ok_") or (n_.startswith("op_") and not float(pol.head2.padd) > 0):
+                                p_.grad = None
+                    if FIRE and not float(pol.head2.fadd) > 0:           # (1.7) and the fire push at add 0
+                        for p_ in pol.head2.fsc.parameters():
+                            p_.grad = None
                     h2_acc[7] += nn.utils.clip_grad_norm_(pol.head2.parameters(), 0.5).detach().double()
                     h2_acc[8] += 1.0
                     H2GR_ = [p_.grad for p_ in pol.head2.parameters()]
@@ -5557,6 +6030,8 @@ def main():
                     nn.utils.clip_grad_norm_(pol.trackz.parameters(), 0.5)
                 if AH:                                                   # (--ahead) on its own, as the readout's
                     nn.utils.clip_grad_norm_(pol.ahead.parameters(), 0.5)
+                if PASS:                                                 # (1.7) the brain's pass readout: on its own, as the other readouts
+                    nn.utils.clip_grad_norm_(pol.passr.parameters(), 0.5)
                 if AUX:
                     nn.utils.clip_grad_norm_([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("aux.") and not n_.startswith(UNI_PFX)
                                               and not (LEGS_LEARN and n_.startswith("legs.")) and not (HEADL and n_.startswith("head."))
@@ -5582,11 +6057,23 @@ def main():
                     with torch.no_grad():                                # own weights, one coefficient: the hands' 17 target rows and the head's
                         n2_ = int(H2L["n_target"])                       # target layer shrink by lr x wd a step. (An L2 in the loss went through
                         pol.pi.weight[HD_I0:HD_I0 + n2_] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]    # Adam's scaling: the rows' size
-                        pol.head2.target.weight *= 1.0 - opt.param_groups[-1]["lr"] * H2_L2_[0]          # 22 -> 14 in one update, dry run 4)
+                        pol.head2.target.weight *= 1.0 - group_lr("h2") * H2_L2_[0]                     # 22 -> 14 in one update, dry run 4;
+                        #                                                  1.7: the head's group's rate by name, 1.6a's last group was the weapon part's at the same rate)
                 if WPN and H2_L2_[0] > 0:                                # (1.5a, D) the same on the weapon key's two parts: the hands' rows and
                     with torch.no_grad():                                # the head's weapon scores (the owner's one coefficient for both, 11-03)
                         pol.pi.weight[HAND_O:HAND_O + HAND_D] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
-                        pol.head2.wsc.weight *= 1.0 - opt.param_groups[-1]["lr"] * H2_L2_[0]
+                        pol.head2.wsc.weight *= 1.0 - group_lr("wpn") * H2_L2_[0]
+                if FIRE and H2_L2_[0] > 0 and FADD_V[0] > 0:             # (1.7, owner 11-05: a sum of two outputs is regularized) the same on the
+                    with torch.no_grad():                                # fire key's two parts, the hands' rows and the head's push, once it is live
+                        pol.pi.weight[FIRE_O:FIRE_O + 2] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
+                        pol.head2.fsc.weight *= 1.0 - group_lr("cmb") * H2_L2_[0]
+                if CMB and H2_L2_[0] > 0 and PADD_V[0] > 0:              # (1.7) ... and on the pointer's scores added to the targets and the way
+                    with torch.no_grad():                                # (its last layer), the way's rows, and the target rows where 1.3b's
+                        pol.head2.op_v.weight *= 1.0 - group_lr("cmb") * H2_L2_[0]          # decay above does not run
+                        if W_HEAD >= 0:
+                            pol.pi.weight[HD_W0:HD_W0 + 3] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
+                        if not H2ADD:
+                            pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
                 if H2_ROWS is not None:                                  # (--head2-sole) held as they were (Adam's moments move them otherwise)
                     with torch.no_grad():
                         pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])] = H2_ROWS[0]
@@ -5921,6 +6408,33 @@ def main():
                 plan_in_w=round(float(pin_), 6), target_w=round(float(pol.head2.target.weight.norm()), 6),
                 pay=a.head2_pay, pay_abs=[round(x_, 6) for x_ in H2_PAYS], v=round(float(B_VH[:T].mean()), 4), ret=round(float(RET_H.mean()), 4), adv_sd=round(float(ADV_H.std()), 4),
                 lr=opt.param_groups[-1]["lr"], opp_open=bool(snaps and opp.h2_open))
+            if CMB or FIRE:                                              # (1.7) the combat order: its share, readings asked, p(an order), drawn and
+                K_ = head2_.CMB_KINDS                                    # p by kind (the learner's pass); the simulators' count (stats["cmb"]); the
+                NK_ = len(K_)                                            # brain's pass lesson; the pointer's sizes; the fire push and its credit
+                ca_ = CMB_ACC.cpu().numpy() if (CMB or FCR) else np.zeros(2 + 2 * NK_ + 7)
+                c_ = np.atleast_1d(agg.get("cmb", np.zeros(1 + 4 * NK_))).astype(np.float64)
+                c_ = c_ if len(c_) == 1 + 4 * NK_ else np.zeros(1 + 4 * NK_)
+                q_ = lambda x_, y_, d_=4: round(float(x_) / max(1.0, float(y_)), d_)
+                rec["cmb"] = dict(
+                    g=round(CG_R, 5), g_next=round(CMB_GV[0], 5), padd=round(PADD_V[0], 5), asked=int(ca_[0]), p_order=q_(ca_[1], ca_[0]),
+                    drawn={k_: q_(ca_[2 + j_], ca_[0]) for j_, k_ in enumerate(K_)}, p={k_: q_(ca_[2 + NK_ + j_], ca_[0]) for j_, k_ in enumerate(K_)},
+                    sim=dict(asked=int(c_[0]), chosen={k_: int(c_[1 + j_]) for j_, k_ in enumerate(K_)},
+                             frames={k_: int(c_[1 + NK_ + j_]) for j_, k_ in enumerate(K_)},
+                             arrived={k_: int(c_[1 + 2 * NK_ + j_]) for j_, k_ in enumerate(K_)},
+                             dealt={k_: round(float(c_[1 + 3 * NK_ + j_]), 1) for j_, k_ in enumerate(K_)}),
+                    passodds=dict(w=round(PASS_LIVE[0], 4), loss=q_(ca_[10], ca_[11], 5), brier=q_(ca_[12], ca_[11], 5), base=q_(ca_[13], ca_[11]),
+                                  questions=int(ca_[11])) if PASS else None,
+                    w=dict(ok_s=round(float(pol.head2.ok_s.weight.norm()), 5), ok_c=round(float(pol.head2.ok_c.weight.norm()), 5),
+                           op_s=round(float(pol.head2.op_s.weight.norm()), 5), op_x=round(float(pol.head2.op_x.weight.norm()), 5),
+                           op_v=round(float(pol.head2.op_v.weight.norm()), 5)) if CMB else None,
+                    token_gate=round(float(pol.attn.gate[ORD_M].max()), 3) if ORD_M is not None else None,     # (live ORD_GATE)
+                    sums=dict(l2=H2_L2_[0], fire=dict(hands=q_(SUM_ACC[1], SUM_ACC[0]), head=q_(SUM_ACC[2], SUM_ACC[0]),
+                                                      cos=q_(SUM_ACC[3], SUM_ACC[4]), rows=round(float(pol.pi.weight[FIRE_O:FIRE_O + 2].norm()), 4))
+                              if FIRE else None,
+                              targets=dict(hands=q_(SUM_ACC[6], SUM_ACC[5]), add=q_(SUM_ACC[7], SUM_ACC[5]), cos=q_(SUM_ACC[8], SUM_ACC[9]),
+                                           way_add=q_(SUM_ACC[11], SUM_ACC[10])) if CMB else None),
+                    fire=dict(add=round(FADD_V[0], 5), fsc=round(float(pol.head2.fsc.weight.norm()), 5), credit=round(H2_FPG[0], 4) if FCR else None,
+                              frames=int(ca_[14]), pg=q_(ca_[15], ca_[14], 6), clip_share=q_(ca_[16], ca_[14])) if FIRE else None)
             if KEEP:                                                     # (1.4c) the keep choice: its share, its readings and choices (the learner's
                 ka_ = KEEP_ACC.cpu().numpy()                             # pass), what the simulators counted (stats["keep"]), its weights
                 kp_ = np.atleast_1d(agg.get("keep", np.zeros(16))).astype(np.float64)
@@ -5940,7 +6454,16 @@ def main():
                              forced=int(kp_[9])),
                     blinders=dict(held_after_sound=int(kp_[10]), held_after_sound_draw_differs=q_(kp_[11], kp_[10]),
                                   held_quiet=int(kp_[12]), held_quiet_draw_differs=q_(kp_[13], kp_[12]),
-                                  after_sound=int(kp_[15]), after_sound_changed=q_(kp_[14], kp_[15])))
+                                  after_sound=int(kp_[15]), after_sound_changed=q_(kp_[14], kp_[15])),
+                    pull=dict(s=q_(ka_[7], ka_[0]), hands=q_(ka_[8], ka_[0]), own=q_(ka_[9], ka_[0])),    # (1.7a) the logit's parts, mean size where it decided
+                    arrived=dict(share=q_(ka_[10], ka_[0]), p=q_(ka_[11], ka_[10]), redecide_drawn=q_(ka_[12], ka_[10])))
+                k2_ = np.atleast_1d(agg.get("keep2", np.zeros(14))).astype(np.float64)    # (1.7a) the simulators' count of its seconds and readings
+                if len(k2_) == 14 and k2_[0] > 0:
+                    rec["keep"]["sim2"] = dict(
+                        seconds=round(float(k2_[0]) * E_.DT, 1), readings_a_second=q_(k2_[1], k2_[0] * E_.DT, 3), forced=q_(k2_[2], k2_[1]),
+                        decided=int(k2_[3]), redecide=q_(k2_[4], k2_[3]), changed=q_(k2_[5], k2_[3]), arrived=int(k2_[6]),
+                        redecide_arrived=q_(k2_[7], k2_[6]), contact=int(k2_[8]), redecide_contact=q_(k2_[9], k2_[8]),
+                        heard=int(k2_[10]), redecide_heard=q_(k2_[11], k2_[10]), quiet=int(k2_[12]), redecide_quiet=q_(k2_[13], k2_[12]))
             if WCR or WPN:                                               # (1.5a) the weapon key on the head's clock (B) and the head's weapon scores (D)
                 wa_ = WP_ACC.cpu().numpy()
                 q_ = lambda x_, y_, d_=4: round(float(x_) / max(1.0, float(y_)), d_)

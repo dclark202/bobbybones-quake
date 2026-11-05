@@ -76,6 +76,8 @@ def settings(ps, pol=None):
             S_["SM_ITEMS"] = str(ev_["SM_ITEMS"])
         if ev_.get("WEAPON_OWN") not in (None, ""):          # (1.4b) and whether a weapon he holds may be his target (a check of two: each seat's own, --wown)
             S_["WEAPON_OWN"] = str(ev_["WEAPON_OWN"])
+        if ev_.get("COMBAT") not in (None, "", "0", 0):      # (1.7) and the combat order (a network without it plays as before with it on)
+            S_["COMBAT"] = "1"
     return ["{}={}".format(k, v) for k, v in S_.items() if k != "OVERTIME"] + ["OVERTIME=1"]
 
 

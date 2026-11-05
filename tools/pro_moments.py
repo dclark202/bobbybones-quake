@@ -299,7 +299,9 @@ def judge_rows(judge, E, rec, clock, cn, other, clients, dth, eh, ea, ehas, T, o
     counts["judge: games"] += 1
 
 
-def one_demo(MI, demo, tmp, every, life_s, rng, counts, judge=None):
+def one_demo(MI, demo, tmp, every, life_s, rng, counts, judge=None, tracks=None):
+    """tracks: (1.7, tools/order_pros.py) a dict given the demo's frames (rec, the enemy's entity, his worked-out stack, the takes)
+    and each moment its frame `f`"""
     E = MI.E
     out = parse(demo, tmp)
     if out is None:
@@ -574,6 +576,8 @@ def one_demo(MI, demo, tmp, every, life_s, rng, counts, judge=None):
     for f in np.nonzero((step > TELE) | (estep > TELE))[0]:
         tele[max(0, f - 20):f + 20] = True
     seg = rec["seg"]
+    if tracks is not None:                                   # (1.7, tools/order_pros.py) the frames, for its labels in hindsight
+        tracks.update(rec=rec, en=en, eh=eh, ea=ea, T=T, clock=clock, cn=cn, other=other, takes=takes, seg=seg, tele=tele, shots=shots, pain=pain, dth=dth)
     off = float(rng.uniform(0, every))
     marks = np.arange(off + 5.0, 595.0, every)
     fr = np.searchsorted(np.where(np.isfinite(clock), clock, -1.0), marks)
@@ -636,7 +640,7 @@ def one_demo(MI, demo, tmp, every, life_s, rng, counts, judge=None):
             yaw=(float(rec["yaw"][f]), float(en["ang"][f][1])), pitch=(float(rec["pitch"][f]), float(en["ang"][f][0])),
             hp=(float(rec["health"][f]), float(eh[f])), armor=(float(rec["armor"][f]), float(ea[f])),
             has=(ah, ehas[f]), ammo=(aam, eammo[f]), weapon=(int(rec["weapon"][f]), int(en["wpn"][f]) if en["wpn"][f] >= 0 else E.MG),
-            life=(float(life_rec[f]), float(life_en[f])), left=left, who=who, uns=uns))
+            life=(float(life_rec[f]), float(life_en[f])), left=left, who=who, uns=uns, f=int(f)))
         counts["moments"] += 1
     return out
 
