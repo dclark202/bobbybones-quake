@@ -1,0 +1,6 @@
+11-04 16:15:08 waiting for the save of update 110
+11-04 16:15:15 waiting for the save of update 110
+11-04 17:55:02 stop_at_110.ps1 never fired: the ramp keeps no u-saves after its last mark (update 90), so keep/policy_u110_14b.pt never came
+11-04 17:55:02 policy.pt (17:39:24) and opt.pt (17:39:25) are the save of update 110 (the same file as the watcher's keep/policy_110.pt): kept as keep/policy_end_14b.pt and opt_end_14b.pt
+11-04 17:55:02 the trainer stopped at update 113 (taskkill of its cmd and children); the ramp and the self-play logger stopped; trainers still running: 0
+11-04 17:55:08 the watcher stays: the check of update 110 against 1.3b's end runs (started 17:39)

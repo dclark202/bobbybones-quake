@@ -99,4 +99,4 @@ The network does not change. What comes out are the hand-written pieces around h
 
 ## The result
 
-Running since 2026-11-04 08:15.
+**Scrapped (owner, 2026-11-04 ~18:30: "stop everything with 1.4b I'm going to scrap it and try something else").** Stopped at update 113; its end kept as `keep/policy_end_14b.pt` with its optimizer (the save of update 110). Checks against 1.3b's end: update 10 52.5%, 30 56.0%, 50 54.5%, 90 53.5% (the update-110 check stopped before its result); against b1.2d's end at update 70: 90.5% (181-19). Speed held (339 at the start, 338 at update 106). The behaviour panel RED from update 60: roaming 22 to 24 map cells a minute (1.3b's end 28.5), the red armor held 34 to 39% on Blood Run and Campgrounds, camping near the red armor on Blood Run 18% at update 110 (control 6%), the lightning gun as his target on Campgrounds 21% (control 10%), rockets at mid range 0.18 (control 0.24).
