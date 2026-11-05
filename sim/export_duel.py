@@ -160,6 +160,9 @@ if ck.get("head2") is not None:                              # (its value is the
     assert "head2.plan_in.weight" in head2 and "head2.gate" in head2, "the checkpoint names a strategy head and has no weights for it"
 else:
     assert a.head2_gate < 0, "--head2-gate: this network has no strategy head"
+if head2 and ck.get("passodds") is not None and "passr.l1.weight" in sd:      # (1.7) the brain's pass readout: the order's candidates' odds
+    head2["passodds"] = np.array(json.dumps(ck["passodds"]))
+    head2.update({k: v for k, v in sd.items() if k.startswith("passr.")})
 rfade = {}                                                   # (v0.4.2a, sim/rule_fade.py) the faded columns and the gate g; plugins/netpass.py
 if ck.get("rule_fade") is not None:                          # fades them as test_suite.Policy does (and with "readers", the simulator's
     rf_ = dict(ck["rule_fade"])                              # readers take the brain's answer: BRAIN_READ in env_vars)

@@ -1,9 +1,17 @@
-"""1.7a's dial (owner, 2026-11-04 night: "start the lock handover ... and let it go for 80 updates"; CARD.md), on the clock of updates done:
-  KEEP_G          0 -> 1      over updates 10 to 90  (the hand-over: the share of his seconds the keep choice decides; the lock rule the rest)
-then held at 1 to the run's end (the lock out of his play). Written to live.json (read between rollouts) after each new update. The clock
-never holds or steps back (owner, 2026-11-04; CLAUDE.md rule 6): every check is logged with its win rate, one under 40% as a MAJOR PROBLEM,
-and the owner decides. Kept with their optimizers: the first saves at or past updates 10 (share 0), 50 (0.5) and 90 (1)
-(keep/policy_u<update>_17a.pt). Logged in watch.log each update: the keep choice's record (its share, readings a second in its seconds,
+"""1.7a's dials (owner, 2026-11-04 night: "start the lock handover ... and let it go for 80 updates"; CARD.md), on the clock of updates done:
+  KEEP_G          0 -> 1      over updates 10 to 90    (the hand-over: the share of his seconds the keep choice decides; the lock rule the rest)
+  CMB_G           0 -> 1      over updates 90 to 170   (1.7, the order: the share of his readings the head's combat order is asked at)
+  PADD            0 -> 0.3    over updates 90 to 170   (... the pointer's scores on his targets' and his way's: its ceiling the level
+                                                         checks' (11-05: at 1 30.5%, at 0.3 53.5% against 1.6a's end))
+  ORD_GATE  -30, -12 -> 0     over updates 90 to 170   (... the order's attention token: shut until 90, then from -12 to open)
+  FADD            0 -> 1      over updates 90 to 170   (1.7, the fire push: its add on the fire key)
+  H2_FPG          0 -> 0.5    over updates 90 to 170   (... half the fire key's credit on the head's clock, half kept by the hands)
+then held to the run's end (owner, 11-05: the lock first, then the new choice and its say on firing together; the trigger's credit only
+halfway in this run). The owner's rule: two new things open one after the other (2026-10-24): the order once the keep choice has the lock's
+place.
+The brain's pass lesson runs from update 0 (--pass-odds; no dial). Written to live.json (read between rollouts) after each new update. The
+clock never holds or steps back (owner, 2026-11-04; CLAUDE.md rule 6): every check is logged with its win rate, one under 40% as a MAJOR
+PROBLEM, and the owner decides. Kept with their optimizers: the first saves at or past the marks (keep/policy_u<update>_17a.pt). Logged in watch.log each update: the keep choice's record (its share, readings a second in its seconds,
 re-decisions in contact, heard, quiet and at arrivals, the parts of its logit: the head's state against its own numbers, i.e. whose decision
 it is), trips and targets reached, speed, big weapons owned, his weapon in hand, the firing cost. Flagged: targets reached 30% under the run's
 first five updates or trips a minute 50% over (b1.1a's flicker), speed 10% under, big weapons owned 0.05 under, the keep choice's step on
@@ -19,14 +27,18 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
-DIALS = (("KEEP_G", 10, 90, 0.0, 1.0),)
+DIALS = (("KEEP_G", 10, 90, 0.0, 1.0, 0.0),                 # (name, from update, to update, its value there, at the end, before)
+         ("CMB_G", 90, 170, 0.0, 1.0, 0.0), ("PADD", 90, 170, 0.0, 0.3, 0.0), ("ORD_GATE", 90, 170, -12.0, 0.0, -30.0),
+         ("FADD", 90, 170, 0.0, 1.0, 0.0), ("H2_FPG", 90, 170, 0.0, 0.5, 0.0))
 END = max(d[2] for d in DIALS)
-MARKS = (10, 50, 90)
+MARKS = (10, 50, 90, 130, 170)
 SIZE_FLAG = 40.0
 MAJOR = 0.40
 
 
-def dial_at(clock, lo, hi, v0, v1):
+def dial_at(clock, lo, hi, v0, v1, pre):
+    if clock < lo:
+        return pre
     f = min(1.0, max(0.0, (clock - lo) / float(hi - lo)))
     return v0 + (v1 - v0) * f
 
@@ -81,6 +93,23 @@ def main():
                 s2_ = k_.get("sim2") or {}
                 pl_ = k_.get("pull") or {}
                 ar_ = k_.get("arrived") or {}
+                cm_ = m_.get("cmb") or {}
+                if cm_:
+                    cs_ = cm_.get("sim") or {}
+                    log("update {}: combat order share {} adds {} token gate {} asked {} p(an order) {} drawn {} p {} | chosen {} frames {} arrived {} "
+                        "damage {} | pass lesson {} | weights {} | fire {}".format(
+                            u_, cm_.get("g"), cm_.get("padd"), cm_.get("token_gate"), cm_.get("asked"), cm_.get("p_order"), cm_.get("drawn"),
+                            cm_.get("p"), cs_.get("chosen"), cs_.get("frames"), cs_.get("arrived"), cs_.get("dealt"), cm_.get("passodds"),
+                            cm_.get("w"), cm_.get("fire")))
+                    sm_ = cm_.get("sums") or {}                       # (owner, 11-05) a sum of two outputs: each part's size
+                    big3_ = {"{} {}".format(k1_, k2_): v2_ for k1_ in ("fire", "targets") for k2_, v2_ in (sm_.get(k1_) or {}).items()
+                             if k2_ in ("hands", "head", "add", "way_add") and (v2_ or 0) > SIZE_FLAG}
+                    if big3_:
+                        log("FLAG update {}: a part of a sum over {}: {}".format(u_, SIZE_FLAG, big3_))
+                    po_ = cm_.get("passodds") or {}
+                    if po_.get("brier") is not None and po_.get("base") is not None and (po_.get("questions") or 0) > 0 and                             (u_ or 0) >= 20 and po_["brier"] > po_["base"]:
+                        log("FLAG update {}: the brain's pass odds no better than their base rate (Brier {} against {})".format(
+                            u_, po_["brier"], po_["base"]))
                 log("update {}: keep share {} | its seconds {} readings a second {} decided {} re-decide {} (contact {}, heard {}, quiet {}, "
                     "arrived {}) | pull: head state {} hands {} own numbers {} | kl {} | arrivals {} p {}".format(
                         u_, k_.get("g"), s2_.get("seconds"), s2_.get("readings_a_second"), s2_.get("decided"), s2_.get("redecide"),
@@ -139,19 +168,20 @@ def main():
 
     def write(clock):
         d = json.load(open(LIVE, encoding="utf-8"))
-        for n_, lo, hi, v0, v1 in DIALS:
-            d[n_] = round(dial_at(clock, lo, hi, v0, v1), 6)
+        for n_, lo, hi, v0, v1, pre in DIALS:
+            d[n_] = round(dial_at(clock, lo, hi, v0, v1, pre), 6)
         with open(LIVE + ".tmp", "w", encoding="utf-8") as fh:
             fh.write(json.dumps(d))
         os.replace(LIVE + ".tmp", LIVE)
         return {n_: d[n_] for n_, *_ in DIALS}
 
     cur = json.load(open(LIVE, encoding="utf-8"))
-    for n_, lo, hi, v0, v1 in ([] if a.resume else DIALS):
-        assert abs(float(cur.get(n_, -1)) - v0) < 1e-9, "{} is {} in live.json, not {}".format(n_, cur.get(n_), v0)
+    for n_, lo, hi, v0, v1, pre in ([] if a.resume else DIALS):
+        assert abs(float(cur.get(n_, -99)) - pre) < 1e-9, "{} is {} in live.json, not {}".format(n_, cur.get(n_), pre)
     threading.Thread(target=flags, daemon=True).start()
     log("ramp_17a on for {}: {}; FREE: the clock never holds or steps back, a check under 40% is a MAJOR PROBLEM{}".format(
-        a.run, ", ".join("{} {} -> {} over updates {} to {}".format(n_, v0, v1, lo, hi) for n_, lo, hi, v0, v1 in DIALS), " (resumed)" if a.resume else ""))
+        a.run, ", ".join("{} {} -> {} over updates {} to {} ({} before)".format(n_, v0, v1, lo, hi, pre) for n_, lo, hi, v0, v1, pre in DIALS),
+        " (resumed)" if a.resume else ""))
     L0 = jl(MET)
     done_n = int(L0[-1]["update"]) if (a.resume and L0) else 0
     seen, marked = mtime(), set()

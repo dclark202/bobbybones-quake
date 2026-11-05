@@ -1,22 +1,27 @@
-﻿08:59:31 scratch_17a_id_base_r3: done in 0.7 min; the log ends: exit 0
-08:59:31 PASS base: the trainer ran 2 updates and dumped them (2 dumps)
-08:59:31 PASS base: the optimizer's state loaded from opt.pt, not a cold start
-09:00:01 scratch_17a_id_base2_r3: done in 0.5 min; the log ends: exit 0
-09:00:01 PASS base2: the trainer ran 2 updates and dumped them (2 dumps)
-09:00:01 PASS base2: the optimizer's state loaded from opt.pt, not a cold start
-09:00:31 scratch_17a_id_a1_r3: done in 0.5 min; the log ends: exit 0
-09:00:31 PASS a1: the trainer ran 2 updates and dumped them (2 dumps)
-09:00:31 PASS a1: the optimizer's state loaded from opt.pt, not a cold start
-09:01:01 scratch_17a_id_a2_r3: done in 0.5 min; the log ends: exit 0
-09:01:01 PASS a2: the trainer ran 2 updates and dumped them (2 dumps)
-09:01:01 PASS a2: the optimizer's state loaded from opt.pt, not a cold start
-09:01:01 PASS a2 announced the keep choice
-09:01:31 scratch_17a_id_a3_r3: done in 0.5 min; the log ends: exit 0
-09:01:31 PASS a3: the trainer ran 2 updates and dumped them (2 dumps)
-09:01:31 PASS a3: the optimizer's state loaded from opt.pt, not a cold start
-09:01:31 PASS a3 announced the keep choice
-09:01:31 PASS the trainer repeats itself at a fixed seed (base = base2, both updates, actions and log p)
-09:01:31 PASS 1.7a's code with nothing new set = the code under it (a1 = base, both updates)
-09:01:31 PASS the keep choice at share 0 = 1.6a's play (a2 = base, both updates, actions and log p)
-09:01:31 PASS the keep choice at share 1 decides: update 1's actions differ from base (0.0945 of them)
-09:01:31 ALL PASSED
+15:14:24 scratch_17a_id_base_f8: done in 0.7 min; the log ends: exit 0
+15:14:24 PASS base: the trainer ran 2 updates and dumped them (2 dumps)
+15:14:24 PASS base: the optimizer's state loaded from opt.pt, not a cold start
+15:14:54 scratch_17a_id_base2_f8: done in 0.5 min; the log ends: exit 0
+15:14:54 PASS base2: the trainer ran 2 updates and dumped them (2 dumps)
+15:14:54 PASS base2: the optimizer's state loaded from opt.pt, not a cold start
+15:15:33 scratch_17a_id_a1_f8: done in 0.5 min; the log ends: exit 0
+15:15:33 PASS a1: the trainer ran 2 updates and dumped them (2 dumps)
+15:15:33 PASS a1: the optimizer's state loaded from opt.pt, not a cold start
+15:16:21 scratch_17a_id_a2_f8: done in 0.7 min; the log ends: exit 0
+15:16:21 PASS a2: the trainer ran 2 updates and dumped them (2 dumps)
+15:16:21 PASS a2: the optimizer's state loaded from opt.pt, not a cold start
+15:16:21 PASS a2 announced the keep choice, the combat order, the fire push, the order's token and the pass odds
+15:16:21 PASS a2: the optimizer's moments carried over the widened inputs (the encoder, the marks, the head's inputs)
+15:17:09 scratch_17a_id_a3_f8: done in 0.7 min; the log ends: exit 0
+15:17:09 PASS a3: the trainer ran 2 updates and dumped them (2 dumps)
+15:17:09 PASS a3: the optimizer's state loaded from opt.pt, not a cold start
+15:17:09 PASS a3 announced the keep choice, the combat order, the fire push, the order's token and the pass odds
+15:17:09 PASS a3: the optimizer's moments carried over the widened inputs (the encoder, the marks, the head's inputs)
+15:17:09 PASS the trainer repeats itself at a fixed seed (base = base2, both updates, actions and log p)
+15:17:09 PASS 1.7's code, its inputs widened, nothing else set = 1.6a's code up to the rounding of the wider first layer (a1 against base, update 1: actions that differ 0.00000, log p within 0.00013, value within 7.2e-07)
+15:17:09 PASS 1.7's code, its inputs widened, nothing else set = 1.6a's code up to the rounding of the wider first layer (a1 against base, update 2: actions that differ 0.00000, log p within 2.5e-05, value within 1.7e-06)
+15:17:09 PASS the keep choice and the order at share 0, the adds and the fire push at 0, the token shut, the pass lesson on, COMBAT=1 = the same network without them, to the bit, in its first update (a2 = a1, actions, log p and value)
+15:17:09 a2 against a1 in update 2 (the hands' and the head's new input columns learnt in update 1 from the order's inputs, which COMBAT fills; the pass lesson on its own layers): actions that differ 0.12514, log p within 9.53, value within 2.43
+15:17:09 PASS ... and in its second update only what the new inputs' first learning moves: on its first frame value within 3.33e-05, log p of the same actions within 0.0034 (under 1e-3 and 0.05)
+15:17:09 PASS at share 1 they decide: update 1's actions differ from base (0.1621 of them)
+15:17:09 ALL PASSED

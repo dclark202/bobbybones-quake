@@ -1,6 +1,6 @@
-﻿07:54:36 the start: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_5a\keep\policy_end_15a.pt
+14:46:54 the start: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_6a\keep\policy_end_16a.pt
 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 975 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 686,436 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp
-wrote C:\Users\dacla\Documents\gh\BobbyBones-17a\data\sim_runs\scratch_17a_start\s1.pt: the keep choice at share 0 (layout keep 2, 7 numbers); its start at 5.0 readings a second:
+wrote C:\Users\dacla\Documents\gh\BobbyBones-17b\data\sim_runs\scratch_17a_start_policy_end_16a\s1_keep.pt: the keep choice at share 0 (layout keep 2, 7 numbers); its start at 5.0 readings a second:
   out of contact, quiet: z = 0.6800 x age + -7.6600 a reading (1.4c's start a second: sigmoid(0.75 x (age - 8.5)))
    age s     start /s       fit /s fit /reading held S fit-start
        1       0.0036       0.0046       0.0009          -0.0008
@@ -15,8 +15,11 @@ wrote C:\Users\dacla\Documents\gh\BobbyBones-17a\data\sim_runs\scratch_17a_start
       15       0.9924       1.0000       0.9269          -0.0000
   seconds held (quiet, out of contact): the start 7.80, the fit 7.76
   in contact: 0.3690 a reading (0.9 a second); arrived out of contact: 0.3690 a reading (0.9 a second)
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 995 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 81 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 711,843 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+wrote C:\Users\dacla\Documents\gh\BobbyBones-17b\data\sim_runs\scratch_17a_start_policy_end_16a\s1_order.pt: 10 new inputs (b17 order), new tokens ['order']; the order (share 0, adds 0), the fire push (add 0), the pass readout; the order's start: fitted to the pros (C:\Users\dacla\Documents\gh\BobbyBones-17b\docs\runs\1.7\1.7a\order_fit.json)
+14:47:00 the order's start: the pros' fit C:\Users\dacla\Documents\gh\BobbyBones-17b\docs\runs\1.7\1.7a\order_fit.json
 same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0
-  (b's strategy head ran: its state's mean |s| 0.4707, valid 1.00)
+  (b's strategy head ran: its state's mean |s| 0.4983, valid 1.00)
 share 0: PASS (the same to the bit)
 share 1.0: the coin 1.000 of frames; keep readings 0.122 of frames (the head ticks every few frames)
   share 1, ('age', 0): re-decided 0.005 of 213 (the start at the band's middle, held log p aside: 0.001)
@@ -33,5 +36,10 @@ share 1: young targets kept 0.995 a reading, old ones re-decided 0.811 a reading
 share 0.5: the coin 0.512 of frames; keep readings 0.122 of frames (the head ticks every few frames)
 ALL PASSED
 
-07:57:14 PASS keep_init same, the start against it given the keep choice
-07:57:14 ALL PASSED
+14:47:14 PASS keep_init same, the start against it given the keep choice
+share 0, adds 0: 400 frames x 8 seats, actions that differ: 0 -> PASS
+share 1: asked 392 times; kinds drawn [0.615 0.031 0.069 0.286] (the start's odds on the same situations: [0.638 0.037 0.052 0.274])
+ALL PASSED
+
+14:47:25 PASS order_init same, the start against it given the keep choice and the whole order
+14:47:25 ALL PASSED

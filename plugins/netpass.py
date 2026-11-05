@@ -83,8 +83,18 @@ def load(path):
         if os.environ.get("NET_HEAD2_GATE", "") != "":
             W2["gate"] = np.array(np.float32(float(os.environ["NET_HEAD2_GATE"])))
         base2 = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
-        P["_head2"] = (lay2, W2, head2_, head2_.np_state_width(lay2), base2, head2_.np_open(W2),
-                       head2_.mlp_of(P, "ahead"), head2_.np_ctrl_params(P, lay2))
+        cmb_ = bool(lay2.get("cmb")) and "op_v.weight" in W2      # (1.7) the combat order: its held numbers after the head's state
+        if os.environ.get("NET_CMB_G", "") != "" and cmb_:
+            W2["cmb_g"] = np.array(np.float32(float(os.environ["NET_CMB_G"])))
+        P["_ord"] = (base2 + head2_.np_state_width(lay2), head2_.CMB_HELD) if cmb_ else None
+        cg_ = float(np.asarray(W2.get("cmb_g", 0.0))) if cmb_ else 0.0
+        P["_head2"] = (lay2, W2, head2_, head2_.np_state_width(lay2) + (head2_.CMB_HELD if cmb_ else 0), base2,
+                       head2_.np_open(W2) or cg_ > 0, head2_.mlp_of(P, "ahead"), head2_.np_ctrl_params(P, lay2))
+        P["_pass"] = None                                    # (1.7) the brain's pass readout (sim/passodds.py): the candidates' odds
+        if "passodds" in P and "passr.l1.weight" in P:
+            import passodds as passodds_                     # (numpy at the top: torch inside its torch functions only)
+            P["_pass"] = (json.loads(str(P["passodds"])), {k[len("passr."):]: np.asarray(v, np.float32) for k, v in P.items()
+                                                           if k.startswith("passr.")}, passodds_.np_forward)
     P["_brain"] = None                                       # (v0.4.1) the brain and its token: (brain weights, token layout, btoken, where
     if "btoken" in P and "belief" in P:                      # its state starts in a seat's array, the gate); played only while the gate is open
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -161,7 +171,10 @@ def brain_answer(P, h):
     if not brain_on(P):
         return None
     B_, bl_, bt_, at_, _ = P["_brain"]
-    return bt_.answer_of(bt_.unpack(B_, bl_, np.asarray(h)[:, at_:])[1])
+    an = bt_.answer_of(bt_.unpack(B_, bl_, np.asarray(h)[:, at_:])[1])
+    if P.get("_fut") is not None and len(P["_fut"]) == len(h):     # (1.7) the brain's places ahead, for the simulator's order
+        an["fut"] = P["_fut"].copy()
+    return an
 
 
 def _readers(P, env):
@@ -188,6 +201,10 @@ def brain_feed(P, env, h, seats):
     env._brain_init()
     r = np.asarray(seats)
     env.brain_bel[r], env.brain_ok[r], env.brain_band[r], env.brain_ztop[r] = an["bel"], an["ok"], an["band"], an["ztop"]
+    if "fut" in an:                                          # (1.7, COMBAT) the brain's places ahead: the order's cut off and spam
+        if getattr(env, "brain_fut", None) is None or len(env.brain_fut) != env.n:
+            env.brain_fut = np.zeros((env.n, 3, 3), np.float32)
+        env.brain_fut[r] = an["fut"]
 
 
 def pose(P, env, mapname=None):
@@ -290,7 +307,30 @@ def keep_g(P):
     return float(np.asarray(P["_head2"][1].get("keep_g", 0.0)))
 
 
-def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None):
+def cmb_g(P):
+    """(1.7) the combat order's share of his readings in this file (0: none; sim/head2.py)"""
+    if P.get("_ord") is None:
+        return 0.0
+    return float(np.asarray(P["_head2"][1].get("cmb_g", 0.0)))
+
+
+def column_on(P):
+    """(1.4c, 1.7) step() gives the keep column (kf= needed): the keep choice or the combat order at a share above 0"""
+    return keep_g(P) > 0 or cmb_g(P) > 0
+
+
+def order_on(P):
+    """(1.7) the order plays: asked at a share, or its adds on the targets' and the way's above 0"""
+    return P.get("_ord") is not None and (cmb_g(P) > 0 or float(np.asarray(P["_head2"][1].get("padd", 0.0))) > 0)
+
+
+def order_due(P):
+    """(1.7) the coming frame is a keep reading for some seat: give step() ox= (the simulator's order_feat() after this frame, these rows)"""
+    kr_ = P.get("_k_r")
+    return order_on(P) and kr_ is not None and bool(np.asarray(kr_).any())
+
+
+def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
     kf [B, KEEP_FEAT] (1.4c, 1.7a; keep_g(P) above 0): the simulator's keep_feat() rows after the frame before; the keep column
@@ -300,7 +340,9 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
     events [B, 32] (v0.4, a network with a head): what the head is told on its tick (the simulator's head_events(),
     fetched when head_due() says the coming frame ticks); None: zeros. Read on the tick frames only.
     xl [B, the branch's inputs] (--legs-feat, --legs-guide, needs_xl(P)): the simulator's legs_prep() rows of this frame.
-    pose [B, 4], zmap [B] (v0.4.1, needs_pose(P)): these rows of pose(P, env, mapname) of this frame."""
+    pose [B, 4], zmap [B] (v0.4.1, needs_pose(P)): these rows of pose(P, env, mapname) of this frame.
+    ox (1.7, order_due(P) after the frame before): (X, C) of the simulator's order_feat() for these rows; the seats with a keep reading
+    make their order from it before this frame's outputs (test_suite.Policy's sums)."""
     dadd = gadd = None
     if P.get("_uni") is not None:                            # (--legs-feat, --legs-guide) the branch on this frame's inputs
         lay_u, D_u, G_u, LU_, T_u = P["_uni"]
@@ -313,10 +355,13 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
     if P.get("_brain") is not None:                          # (v0.4.1) the brain's packed state, at the very end of the array
         hb = h[:, P["_brain"][3]:]
         h = h[:, :P["_brain"][3]]
-    h2s = None
+    h2s = ohs = None
     if P.get("_head2") is not None:                          # (v0.4.3) the strategy head's state, before the brain's
         h2s = h[:, P["_head2"][4]:]
         h = h[:, :P["_head2"][4]]
+        if P.get("_ord") is not None:                        # (1.7) the order's held numbers after it
+            w2_ = P["_head2"][2].np_state_width(P["_head2"][0])
+            ohs, h2s = h2s[:, w2_:], h2s[:, :w2_]
     hh = None
     if "_head" in P:                                         # (v0.4) the head's state at the end of the array
         hh = h[:, P["_head"][4]:]
@@ -342,6 +387,20 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         y_[:, rf[0]] = y_[:, rf[0]] * np.float32(1.0 - float(rf[1]))
         x = y_
     xh = x                                                   # (the hands' attention reads these)
+    ord_ = None
+    kr0_ = P.get("_k_r")
+    if ohs is not None and order_on(P) and ox is not None and kr0_ is not None and len(kr0_) == len(ohs) and np.asarray(kr0_).any():
+        hm2o_ = P["_head2"][2]                               # (1.7) a keep reading: the order made from the candidates the simulator made
+        r_ = np.nonzero(np.asarray(kr0_, bool))[0]           # after the head's tick, the brain's odds written in (test_suite's sums)
+        X_ = np.array(np.asarray(ox[0])[r_], np.float32)
+        C_ = np.asarray(ox[1], np.float32)[r_]
+        if P.get("_pass") is not None and bst is not None:
+            X_[..., hm2o_.CMB_PASS0:hm2o_.CMB_PASS0 + 3] = P["_pass"][2](P["_pass"][1], P["_pass"][0], bst[0].s[r_], X_)
+        kl_, ps_, ta_, ya_, ok_ = hm2o_.np_order_scores(P["_head2"][1], P["_head2"][0], h2s[r_], X_, C_)
+        okf_ = ok_.astype(np.float32)[:, None]
+        ohs = np.array(ohs, np.float32, copy=True)
+        ohs[r_] = np.concatenate([kl_, ps_, ta_ * okf_, ya_ * okf_], 1)
+        ord_ = (r_, kl_, ps_, ok_)
     if "cell" in P:                                          # the learned map (v8): the last two inputs are cell numbers
         ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
         x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
@@ -379,9 +438,19 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         si2_ = head_slices(P)[0]                             # (b1.4a: the mix, his target choice moved toward the head's own; none at mix 0)
         logits[:, si2_] = P["_head2"][2].np_mix_in(P["_head2"][1], P["_head2"][0], h2s, logits[:, si2_]) + b2
         wa2_ = P["_head2"][2].np_wadd(P["_head2"][1], P["_head2"][0], h2s)    # (1.5a) its weapon scores on the weapon key's
+        o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])
         if wa2_ is not None:
-            o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])
             logits[:, int(o_[6]):int(o_[7])] += wa2_
+        fa2_ = P["_head2"][2].np_fadd(P["_head2"][1], P["_head2"][0], h2s)    # (1.7) its fire scores on the fire key's
+        if fa2_ is not None:
+            logits[:, int(o_[5]):int(o_[6])] += fa2_
+        pa_ = float(np.asarray(P["_head2"][1].get("padd", 0.0))) if ohs is not None else 0.0
+        if pa_ > 0:                                          # (1.7) the pointer's scores held from the last reading on the targets' and the way's
+            hm2a_ = P["_head2"][2]
+            o0_ = hm2a_.CMB_NK + hm2a_.CMB_NEW
+            logits[:, int(o_[10]):int(o_[10]) + hm2a_.CMB_T] += np.float32(pa_) * ohs[:, o0_:o0_ + hm2a_.CMB_T]
+            if len(o_) > 13:
+                logits[:, int(o_[12]):int(o_[12]) + hm2a_.CMB_W] += np.float32(pa_) * ohs[:, o0_ + hm2a_.CMB_T:]
     if hh is not None:                                       # (v0.4) the head ticks after the fast memory's step (on its frames) and its
         _, t_add, w_add, hh = hm.np_tick(hW, hlay, x, hfast, hh, events)    # target and way are added to the hands' (held between ticks)
         si, sw = head_slices(P)
@@ -394,8 +463,9 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         logits = logits + LU_.np_gate_add(lay_u, *T_u, zo, h2_, lgl_, ok_, int(np.sum(P["action_dims"])))
     P["_zo"] = zo                                            # (--legs-residual: legs_feed's rows read it)
     P["_keep"] = None
+    P["_logits"] = logits                                    # (a parity check with test_suite.Policy's last_logits)
     kg_ = keep_g(P)
-    if kg_ > 0 and kf is not None and h2s is not None:      # (1.4c) the keep choice: the head's state this frame's outputs read (before its
+    if column_on(P) and kf is not None and h2s is not None:  # (1.4c) the keep choice: the head's state this frame's outputs read (before its
         hm2_ = P["_head2"][2]                                # tick), the hands' memory after the frame, its own numbers (test_suite.Policy)
         si_ = head_slices(P)[0]
         li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
@@ -410,6 +480,21 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         kr_ = P.get("_k_r")
         kr_ = np.zeros(len(kz_), np.int64) if kr_ is None or len(kr_) != len(kz_) else np.asarray(kr_, np.int64)
         P["_keep"] = kd_ + 2 * kc_ + 4 * kr_                 # (1.7a) the seats whose head ticked on the frame before: a keep reading
+        if ord_ is not None and cmb_g(P) > 0:                # (1.7) the order's kind and candidate drawn at the reading, asked with its
+            r_, kl_, ps_, ok_ = ord_                         # share where the head has a state: + 8 k + 32 c + 256
+
+            def pick_(z_):
+                p_ = np.exp(z_ - z_.max(1, keepdims=True))
+                p_ /= p_.sum(1, keepdims=True)
+                return np.minimum((p_.cumsum(1) < P["_krng"].random((len(z_), 1))).sum(1), z_.shape[1] - 1).astype(np.int64)
+            hm2d_ = P["_head2"][2]
+            ko_ = pick_(kl_)
+            co_ = np.zeros_like(ko_)
+            for k_ in range(1, hm2d_.CMB_NK):
+                c0_, m_ = hm2d_.CMB_C0[k_], hm2d_.CMB_SLOTS[k_]
+                co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
+            oq_ = ((P["_krng"].random(len(r_)) < cmb_g(P)) & ok_).astype(np.int64)
+            P["_keep"][r_] = P["_keep"][r_] + (8 * ko_ + 32 * co_ + 256) * oq_
     if bst is not None:                                      # (v0.4.1) the brain reads the frame's normalised inputs; at its tick the readouts'
         br_, tk_ = bst                                       # answer is kept in map coordinates (his pose of this frame): test_suite's token_post
         tkd_ = br_.frame(xa)
@@ -417,6 +502,14 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         if tkd_.any():
             o1_, o2_ = br_.readouts(tkd_)
             tk_.answer(tkd_, o1_, o2_, np.asarray(pose, np.float32)[tkd_], np.asarray(zmap)[tkd_])
+            if P.get("_ord") is not None and P["_head2"][6] is not None:     # (1.7) the readout ahead's places, kept in map coordinates
+                hm2f_, ah2f_ = P["_head2"][2], P["_head2"][6]                    # at the tick, for the simulator's order (test_suite's token_post)
+                if P.get("_fut") is None or len(P["_fut"]) != len(tkd_):
+                    P["_fut"] = np.zeros((len(tkd_), 3, 3), np.float32)
+                f_ = np.asarray(hm2f_.np_mlp(ah2f_, br_.s[tkd_]), np.float64)[:, :15].reshape(-1, 3, 5)
+                pz_ = np.asarray(pose, np.float64)[tkd_]
+                x_, y_ = bt_m._turn(np.repeat(pz_[:, 3:4], 3, 1), f_[..., 0] * 1000.0, f_[..., 1] * 1000.0)
+                P["_fut"][tkd_] = np.stack([pz_[:, None, 0] + x_, pz_[:, None, 1] + y_, pz_[:, None, 2] + f_[..., 2] * 1000.0], -1)
             if h2s is not None and P["_head2"][5]:           # (v0.4.3) the strategy head ticks with the brain, after the frame
                 lay2, W2, hm2, _, _, _, ah2, ct2 = P["_head2"]
                 sb_ = br_.s[tkd_]
@@ -427,6 +520,8 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         hb = P["_brain"][2].pack(br_, tk_)
     if h2s is not None:
         h = np.concatenate([h, np.asarray(h2s, np.float32)], 1)
+    if ohs is not None:                                      # (1.7) the order's held numbers back after the head's state
+        h = np.concatenate([h, np.asarray(ohs, np.float32)], 1)
     if float(P.get("switch_fade", 0.0)) > 0:                 # (--switch-fade) off the switch's "legs" choice, as in training
         logits = logits.copy()
         logits[:, int(np.sum(P["action_dims"][:11])) + 1] -= float(P["switch_fade"])

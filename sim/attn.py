@@ -37,12 +37,17 @@ LATE = [("stack", ("v031 enemy stack",)),                  # (v0.3.1, B-257: the
 LATE_SPLIT = [("prefire", ("v036 prefire",))]               # (v0.3.6, PREFIRE: a token a pre-fire place; after the late kinds)
 LATE2 = [("drift", ("v038 drift",))]                         # (v0.3.8, DRIFT_IN: after every older kind, so that their rows stay)
 LATE3 = [("small", ("b12 small items",))]                    # (b1.2c, SM_ITEMS: a token a small item; after every older kind)
+LATE4 = [("order", ("b17 order",))]                          # (1.7, COMBAT: the order and its point, one token; after every older kind)
 # A layout may say "gated": the network then carries "gate" among its weights (not trained: a buffer), a number a token
 # (the summary token too) that is added to every look at that token before the softmax of both blocks. A network that
 # is given new tokens answers as before while their gate is very negative (GATE_SHUT: nothing looks at them;
 # tools/targets_init.py makes such a network and opens the gate). Every file of a run has its own gate: the league's
 # older selves keep theirs shut when the learner's is opened. Not gated: the sums are what they were.
 GATE_SHUT = -30.0
+# (1.7) The tokens of these kinds are left out altogether while their gate is at GATE_SHUT or below: the sums are exactly those of the
+# network without them (a start given the order answers as the network it was made from, to the bit); opened above it, they are there.
+# Older kinds' shut tokens keep the e^-30 weight their files were trained with.
+DROP_SHUT = ("order",)
 # (v0.4, the proposal's change 4; the trainer's --attn-mem-query) A layout may say "mem": H. Block 2's query for its read rows
 # then also comes from his memory of the frame before (h_{t-1}, the fast GRU's state before this frame's step, read at half
 # precision so that the trainer can keep it for the learning step): q = Wq norm(x) + mq(h_{t-1}), the layer mq at zero to
@@ -98,6 +103,11 @@ def layout_from_csv(path):
             used[idx] = True
     for name, groups in LATE3:
         split(name, groups)
+    for name, groups in LATE4:
+        idx = [int(r["index"]) for r in rows if r["group"] in groups]
+        if idx:
+            kinds.append(dict(name=name, idx=[idx]))
+            used[idx] = True
     rest = [i for i in range(n) if not used[i]]
     if rest:
         kinds.append(dict(name="rest", idx=[rest]))
@@ -107,6 +117,26 @@ def layout_from_csv(path):
     self_row = [k["name"] for k in kinds].index("self")           # (the kinds before "self" would shift it: it is the first)
     assert self_row == 0
     return dict(obs_dim=n, D=D_TOKEN, heads=HEADS, kinds=kinds, read=[n_tok, 0], tokens=n_tok + 1)   # the summary token is the last row
+
+
+def drop_rows(lay):
+    """(1.7, DROP_SHUT) the token rows of the kinds left out while shut"""
+    rows, r = [], 0
+    for k in lay["kinds"]:
+        if k["name"] in DROP_SHUT:
+            rows += list(range(r, r + len(k["idx"])))
+        r += len(k["idx"])
+    return rows
+
+
+def kept_rows(lay, gate):
+    """(1.7) -> (the rows kept, the read rows among them) for this gate [tokens] (numbers), or (None, read) when every row is kept"""
+    dr = [i for i in drop_rows(lay) if float(gate[i]) <= GATE_SHUT]
+    if not dr:
+        return None, list(lay["read"])
+    keep = [i for i in range(int(lay["tokens"])) if i not in dr]
+    pos = {r_: j for j, r_ in enumerate(keep)}
+    return keep, [pos[r_] for r_ in lay["read"]]
 
 
 def describe(lay):
@@ -152,7 +182,14 @@ def make_module(lay, out_dim=256, seed=0):
         def __init__(self):
             super().__init__()
             g = torch.Generator().manual_seed(seed)
-            self.emb = nn.ModuleList([nn.Linear(len(k["idx"][0]), D, bias=False) for k in lay["kinds"]])
+            embs = []
+            for k in lay["kinds"]:
+                if k["name"] in DROP_SHUT:                       # (1.7) its throwaway default start from a stream of its own: the global
+                    with torch.random.fork_rng(devices=[]):      # stream after is the network's without the kind (its weights come from g)
+                        embs.append(nn.Linear(len(k["idx"][0]), D, bias=False))
+                else:
+                    embs.append(nn.Linear(len(k["idx"][0]), D, bias=False))
+            self.emb = nn.ModuleList(embs)
             for k_, e in zip(lay["kinds"], self.emb):
                 self.register_buffer("idx_" + k_["name"], torch.tensor(k_["idx"], dtype=torch.long) % (lay["obs_dim"] + 1), persistent=False)   # -1 -> a column of zeros
                 with torch.no_grad():
@@ -166,6 +203,8 @@ def make_module(lay, out_dim=256, seed=0):
             self.door = nn.Linear(2 * D, out_dim, bias=False)
             nn.init.zeros_(self.door.weight)
             self.read = list(lay["read"])
+            self._kv = None                                      # (1.7, DROP_SHUT) the rows kept for the gate as it was last looked at
+            self._keep, self._read_k = None, list(lay["read"])
             if lay.get("gated"):                                 # (see GATE_SHUT)
                 self.register_buffer("gate", torch.zeros(lay["tokens"]))
             else:
@@ -183,6 +222,19 @@ def make_module(lay, out_dim=256, seed=0):
                 nn.init.zeros_(self.mq.weight)
                 nn.init.zeros_(self.mq.bias)
 
+        def kept(self):
+            """(1.7, DROP_SHUT) the rows kept and the read rows among them; looked at again only when the gate was changed (its
+            version: the trainer sets it in place between rollouts) or moved"""
+            g = self.gate
+            if g is None or not drop_rows(lay):
+                return None, self.read
+            kv = (g._version, g.data_ptr())
+            if kv != self._kv:
+                keep, rd = kept_rows(lay, g.detach().float().cpu().numpy())
+                self._keep = None if keep is None else torch.tensor(keep, dtype=torch.long, device=g.device)
+                self._read_k, self._kv = rd, kv
+            return self._keep, self._read_k
+
         def forward(self, x, hm=None, bt=None, bg=None):
             """bt [B, F]: the brain's token's numbers (a layout with "btok"); bg: its gate (default: self.bgate). With the gate
             at 0 or no bt the token is left out: exactly the sums without it"""
@@ -193,6 +245,10 @@ def make_module(lay, out_dim=256, seed=0):
                 toks = [e(xp[:, getattr(self, "idx_" + k_["name"])]) for k_, e in zip(lay["kinds"], self.emb)]
                 t = torch.cat(toks + [x.new_zeros(x.shape[0], 1, D)], 1) + self.mark
                 gate = self.gate
+                keep, read = self.kept()
+                if keep is not None:                             # (1.7, DROP_SHUT) a shut order token: not there at all
+                    t = t.index_select(1, keep)
+                    gate = gate.index_select(0, keep)
                 if use_b:                                        # ("btok") the brain's token, after the summary
                     tb = (self.btok_emb(bt.float()) + self.btok_mark)[:, None]
                     t = torch.cat([t, tb.to(t.dtype)], 1)
@@ -202,7 +258,7 @@ def make_module(lay, out_dim=256, seed=0):
                 qa = None
                 if hm is not None and getattr(self, "mq", None) is not None:
                     qa = self.mq(hm.half().float()).view(x.shape[0], len(self.read), D)
-                r = self.b2(t[:, self.read], t, gate, qa)
+                r = self.b2(t[:, read], t, gate, qa)
                 out = self.door(norm(r.reshape(x.shape[0], 2 * D)))
             return out.float()
 
@@ -250,6 +306,11 @@ def forward_np(lay, P, x, hm=None, bt=None, bg=0.0):
         toks.append(xp[:, idx] @ P["emb.{}.weight".format(i)].T)
     t = np.concatenate(toks + [np.zeros((len(x), 1, lay["D"]), np.float32)], 1) + P["mark"]
     gate = np.asarray(P["gate"], np.float32) if lay.get("gated") else None
+    read = list(lay["read"])
+    if gate is not None:                                     # (1.7, DROP_SHUT) a shut order token: not there at all
+        keep, read = kept_rows(lay, gate)
+        if keep is not None:
+            t, gate = t[:, keep], gate[keep]
     if bt is not None and float(bg) > 0.0 and lay.get("btok") and "btok_emb.weight" in P:      # ("btok") the brain's token
         tb = np.asarray(bt, np.float32) @ np.asarray(P["btok_emb.weight"], np.float32).T + P["btok_mark"]
         t = np.concatenate([t, tb[:, None].astype(np.float32)], 1)
@@ -260,5 +321,5 @@ def forward_np(lay, P, x, hm=None, bt=None, bg=0.0):
     if hm is not None and lay.get("mem") and "mq.weight" in P:
         h16 = np.asarray(hm, np.float32).astype(np.float16).astype(np.float32)
         qa = (h16 @ np.asarray(P["mq.weight"], np.float32).T + P["mq.bias"]).reshape(len(x), len(lay["read"]), lay["D"])
-    r = _block(P, "b2", t[:, lay["read"]], t, lay["heads"], gate, qa)
+    r = _block(P, "b2", t[:, read], t, lay["heads"], gate, qa)
     return _norm(r.reshape(len(x), -1)) @ P["door.weight"].T

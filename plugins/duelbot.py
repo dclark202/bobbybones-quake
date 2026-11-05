@@ -1030,10 +1030,14 @@ class duelbot(minqlx.Plugin):
         if _net.needs_pose(self.P):                          # (v0.4.1) the brain's token: his place and view yaw as the game gives them
             p_, z_ = _net.pose(self.P, self.env, self.mapname)    # (fill_player put them in the simulator this frame)
             pz = dict(pose=p_[:1], zmap=z_[:1])
-        kf = (self.env.keep_feat()[:1] if (hasattr(_net, "keep_g") and _net.keep_g(self.P) > 0 and hasattr(self.env, "keep_feat"))
+        col_ = (_net.column_on(self.P) if hasattr(_net, "column_on") else (hasattr(_net, "keep_g") and _net.keep_g(self.P) > 0))
+        kf = (self.env.keep_feat()[:1] if (col_ and hasattr(self.env, "keep_feat"))
               else None)                                     # (1.4c) what his keep choice reads (the simulator's numbers after the last frame)
-        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, kf=kf, **pz) if kf is not None else \
-            _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **pz)
+        kw_ = {} if kf is None else dict(kf=kf)
+        if hasattr(_net, "order_due") and _net.order_due(self.P) and hasattr(self.env, "order_feat"):
+            X_, C_, _ = self.env.order_feat()                # (1.7) a keep reading: the combat order's candidates now (the checks' and the
+            kw_["ox"] = (X_[:1], C_[:1])                     # trainer's: after the head's tick)
+        acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **kw_, **pz)
         if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
             _net.brain_feed(self.P, self.env, self.h, [0])
         return [int(v) for v in acts[0]]
@@ -2392,6 +2396,8 @@ class duelbot(minqlx.Plugin):
             k_ = self.P.get("_keep") if hasattr(env, "keep_feat") else None
             env.keep_in = None if k_ is None else np.concatenate([np.asarray(k_, np.int64)[:1], np.full(env.n - 1, -1, np.int64)])   # (1.4c) his keep choice
             env.intend(np.full(env.n, int(a[10]), np.int64), np.arange(env.n) == 0)
+            if getattr(E, "COMBAT", False) and hasattr(env, "_cmb_points"):
+                env._cmb_points()                            # (1.7) the order's points for this frame's way and look, as step() does
         yaw_in_, pitch_in_ = float(yaw), float(pitch)
         w, fire, pitch, yaw, keys = self.drive(bobby, env, E, 0, a, pitch, yaw, only=self.drill)
         if os.environ.get("DUEL_AIMDUMP"):                   # debugging: what became of the mouse output, frame by frame
@@ -2629,6 +2635,8 @@ class duelbot(minqlx.Plugin):
             env.intent_done = env.intent_done | (en_ & np.asarray(env.visible, bool)[:len(en_)] & mine_)
             gone = gone | (en_ & ~valid)
         env.intent_gone = np.where(mine_, gone, False)
+        if getattr(E, "COMBAT", False) and getattr(E, "EN_ON", False) and hasattr(env, "_cmb_arrive"):
+            env._cmb_arrive()                                # (1.7) the order's own arrivals and ends, after the hunt's, as step() does
 
     def took_chosen(self, env, E, k, cls):
         """player k took an item: was it the one he was going for (then the choice is done, as in the simulator)"""

@@ -37,6 +37,13 @@ def names(path):
     return [(r["group"], r["input"]) for r in csv.DictReader(open(path, encoding="utf-8"))]
 
 
+def fit_list(lst, n):
+    """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
+    if len(lst) > n and all(g_ == "b17 order" for g_, _ in lst[n:]):
+        return lst[:n]
+    return lst
+
+
 GAME_SECS = 600.0     # a seat whose round is this long or longer is a whole-games seat (the simulator's GAME_LEN)
 
 
@@ -251,6 +258,9 @@ def play(job):
         if kp_:
             a[:, -1] = -1
             kf_ = env.keep_feat()
+        ox_ = None                                                              # (1.7) the combat order's candidates after the frame before
+        if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False)):
+            ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -263,7 +273,8 @@ def play(job):
             pz_, zz_ = btoken_.pose_from_env(env, mp)
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
                         **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
-                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}))
+                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}),
+                        **({"ox": (ox_[0][ev], ox_[1][ev])} if (ox_ is not None and pol.order_due) else {}))
         a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]
         if kp_ and pol.keep_on:
             a[ev, -1] = al[:, -1]
@@ -279,17 +290,21 @@ def play(job):
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
-                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}))
+                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}),
+                                 **({"ox": (ox_[0][od], ox_[1][od])} if (ox_ is not None and opp_pol.order_due) else {}))
             a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
             if kp_ and opp_pol.keep_on:
                 a[od, -1] = ao[:, -1]
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
+            if getattr(E, "COMBAT", False):                                     # (1.7) the brain's places ahead: the combat order's
+                ans_["fut"] = np.zeros((n, 3, 3), np.float32)
             for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
                 an_ = p_.brain_answer(hs_) if hasattr(p_, "brain_answer") else None
                 if an_ is not None:
                     for k_ in ans_:
-                        ans_[k_][m_] = an_[k_]
+                        if k_ in an_:
+                            ans_[k_][m_] = an_[k_]
             env.brain_in(ans_)
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
@@ -461,7 +476,7 @@ def main():
     if getattr(pol, "btok", None) is not None:
         print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
-    old = names(a.inputs)
+    old = fit_list(names(a.inputs), len(pol.mean))
     assert len(old) == len(pol.mean), "the network has {} inputs, {} lists {}".format(len(pol.mean), a.inputs, len(old))
     idx = np.array([now.index(x) for x in old])
     opp_pol, opp_idx, kind = None, None, a.opp
@@ -473,7 +488,7 @@ def main():
             opp_pol.set_rule_fade(a.opp_rule_fade_g)
         if a.opp_head2_gate is not None:
             opp_pol.set_head2_gate(a.opp_head2_gate)
-        oo = names(a.opp_inputs)
+        oo = fit_list(names(a.opp_inputs), len(opp_pol.mean))
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
