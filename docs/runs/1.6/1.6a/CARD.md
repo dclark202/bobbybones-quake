@@ -156,3 +156,8 @@ No check against the start after u50 (the watcher's every fourth went to the ref
 Read: the item teacher and the speed pay are gone with no loss of games against the start and a better margin over b1.2d's end than
 1.5a's. Speed did not need its pay. Item control slid about 5% (1.70 → 1.62 big weapons owned, 1.92 → 1.84 mega and red a minute)
 and had flattened by the end; nothing in the run replaces the teacher's pull, so 1.7 should watch both from its first update.
+
+**On the public servers** since 2026-11-05 ~22:30 CT (owner: "let's go ahead and put this version on the public servers"; no weights
+release): both US and Amsterdam, a code deploy (main merged into `pub-perf` at `4464445`, image `qlbot:pub-4464445` built on each box,
+`EARLY_BOBBY=0` as before), the files of `data/duellive_16a` (version line `1.6a`); b1.2d's kept there as `*_prev.npz`. Before it: a local
+test of the same image with 1.6a against the game's bot (a whole game, no error), and the owner's local play test.
