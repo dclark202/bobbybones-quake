@@ -73,7 +73,7 @@ on (`PREAIM_PAY` 0.05, `WATCH_PAY` 0.03).
 
 | | |
 |---|---|
-| 1.5a's end and its report | ❓ the owner's call that it passed (below) |
+| 1.5a's end and its report | ✅ the owner's call (decision 2): start from it |
 | Run files | from 1.5a's command (`docs/runs/1.5/1.5a/make_files.py`): the run name `duel_gru_1_6a`, the length, `SHOT_COST=0`, no `--pfsp`; `start.ps1` refusing any firing cost above zero; the settings check against 1.5a's command and its end (`python tools/run/check_settings.py`); `start.ps1` from 1.5a's end: its anchors, 1.5a's end as the control and an anchor, 1.3b's end an anchor |
 | The ramp | 1.4b's `ramp_14b.py` as the model, `--free` (never held: CLAUDE.md rule 6): `INTENT_TEACH_W` 1 → 0 and `SPEED_PAY` 0.125 → 0 over updates 0 to 40; its test on fake files (`ramp_test.py`) |
 | The records above | some exist (his targets' shares, `intent.share`; blind fire by weapon, `v14.blind_fire`; blind rockets by kind); the rest (a hunt's length and end, time and frags at holds, blind shots' places and damage, contacts on an item plan) added to the panel or the checks' JSON ⏳ 🧪: records only, play unchanged |
@@ -129,4 +129,30 @@ The combat, item and win parts stay; in self-play the items he takes are those t
 
 ## The result
 
-Started 2026-11-05 07:22 from 1.5a's end (update 133) with its optimizer; every start check passed (`start.log`). Running.
+Started 2026-11-05 07:22 from 1.5a's end (update 133) with its optimizer; every start check passed (`start.log`). **Ended 2026-11-05
+14:25 at update 80** as set (exit 0, no stall, no restart). End kept: `keep/policy_end_16a.pt` and `opt_end_16a.pt` (the same bytes as
+`policy_u80_16a.pt`, `opt_u80_16a.pt`); saves with their optimizer at updates 10, 40, 80. **The goal is met: both parts out, games held;
+the one cost is a slow slide in item control.** 1.7 starts from its end.
+
+| Check (200 games, ten maps) | Record | Win rate | Frag share |
+|---|---|---|---|
+| u10 against the start (1.5a's end) | 102-98 | 51.0% | 50.1% |
+| u30 against the start (teacher at 0.25) | 91-109 | 45.5% | 47.9% |
+| u50 against the start (both at 0 from u40) | 101-99 | 50.5% | 50.3% |
+| u70 against b1.2d's end (reference) | 188-12 | 94.0% | 73.5% (1.5a at u70: 88.0%) |
+| u80, the head's weapon scores off, against 1.5a's end | 79-81 on 8 of 10 maps (running) | | |
+
+No check against the start after u50 (the watcher's every fourth went to the reference at u70; the run ends before u90).
+
+| Measure | Start | End | |
+|---|---|---|---|
+| Big weapons owned | 1.70 (1.5a's end) | 1.62 | slid from u44 (1.67) to u67 (1.63), flat 1.62 from u71; the ramp flagged it from u71 (its own baseline read 1.678, update 1's transient) |
+| Mega + red armor a minute | 1.92 (u10) | 1.84 (u80) | |
+| Trip speed; share over 320 | 337-339; 0.50-0.53 | 339; 0.51 | held through the speed pay's fade |
+| Weapon in hand in games | rockets 0.22, lightning 0.58, rail 0.02 (u10) | rockets 0.22, lightning 0.61, rail 0.01 | no move toward the pros' (rockets 0.41, rail 0.14) |
+| Behaviour panel | | GREEN at every reading (u10 to u80) | |
+| Firing cost | 0 | 0 every update | |
+
+Read: the item teacher and the speed pay are gone with no loss of games against the start and a better margin over b1.2d's end than
+1.5a's. Speed did not need its pay. Item control slid about 5% (1.70 → 1.62 big weapons owned, 1.92 → 1.84 mega and red a minute)
+and had flattened by the end; nothing in the run replaces the teacher's pull, so 1.7 should watch both from its first update.

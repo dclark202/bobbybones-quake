@@ -15,4 +15,4 @@ once 1.5 is done." The item teacher and the speed pay out over updates 0 to 40, 
 
 | Attempt | Started from | What | State | Result |
 |---|---|---|---|---|
-| [1.6a](1.6a/CARD.md) | 1.5a's end | the item teacher and the speed pay out (updates 0 to 40), held to update 80 (about 7 hours); its records are 1.7's baseline | **running** since 2026-11-05 07:22 (80 updates, about 7 h), on the owner's word | |
+| [1.6a](1.6a/CARD.md) | 1.5a's end | the item teacher and the speed pay out (updates 0 to 40), held to update 80 (about 7 hours); its records are 1.7's baseline | **ended** 2026-11-05 14:25 at update 80: level with 1.5a's end (51.0, 45.5, 50.5%), 94.0% against b1.2d's end; big weapons owned 1.70 → 1.62 | |
