@@ -95,6 +95,10 @@ if ($sameOk -ne 0) { Log "THE START DOES NOT ANSWER AS 1.6a's END (keep_init sam
 if ($LASTEXITCODE -ne 0) { Log "live.json not made: not started"; exit 1 }
 & $PY (Join-Path $ROOT "docs\runs\b1.4\1.4c\live_check.py") $END (Join-Path $R1 "live.json") | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "live.json does not carry the save's live dials: not started"; exit 1 }
+# (1.7a's false start, 11-05: the trainer refused every live.json for the order's gate of -30 and trained on its command's values)
+# the file, and every one the ramp will write, read by the trainer's own reader
+& $PY (Join-Path $ROOT "tools\run\live_accept.py") (Join-Path $R1 "live.json") --env duel_env_ffa --ramp (Join-Path $HERE "ramp_17a.py") | ForEach-Object { Log $_ }
+if ($LASTEXITCODE -ne 0) { Log "THE TRAINER WOULD REFUSE live.json (or a file the ramp will write): not started"; exit 1 }
 Copy-Item (Join-Path $R1 "policy.pt") (Join-Path $R1 "keep\policy_start_17a.pt")
 Copy-Item (Join-Path $R1 "opt.pt") (Join-Path $R1 "keep\opt_start_17a.pt")
 $CK = Join-Path $R1 "keep\control_16a.pt"; $CR = Join-Path $R1 "keep\control_b12d.pt"
@@ -108,6 +112,16 @@ Log ("from " + $END + " given the keep choice and the combat order at zero effec
 
 $t = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", (Join-Path $HERE "train.cmd") -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru
 Log ("trainer started: cmd " + $t.Id + ", from 1.6a's end, " + $Minutes + " minutes")
+# (1.7a's false start) the trainer reads live.json before its first rollout and writes what became of it: applied, or refused (it then
+# stops itself). Nothing beside it starts until it says applied.
+$ST = Join-Path $R1 "live_status.json"; $t0 = Get-Date
+while (-not (Test-Path $ST) -and -not $t.HasExited -and ((Get-Date) - $t0).TotalMinutes -lt 20) { Start-Sleep 5 }
+$st = if (Test-Path $ST) { Get-Content $ST -Raw | ConvertFrom-Json } else { $null }
+if ($null -eq $st -or $st.status -ne "applied") {
+    Log ("THE TRAINER DID NOT APPLY live.json (" + $(if ($null -eq $st) { if ($t.HasExited) { "the trainer exited" } else { "no answer in 20 minutes" } } else { $st.reason }) + "): the watcher, the ramp and the logger not started; see " + $RUN + ".log")
+    exit 1
+}
+Log ("live.json applied by the trainer before its first rollout (" + $st.time + ")")
 $WD = Join-Path $R1 "watch"
 $env:CTRL_PREV = $CK; $env:CTRL_PREV_LABEL = "the start (1.6a's end)"
 $env:CTRL_REF = $CR; $env:CTRL_REF_LABEL = "b1.2d's end (reference)"

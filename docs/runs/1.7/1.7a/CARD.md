@@ -184,4 +184,28 @@ and the enemy, long ones on item timing and at angles that pay, less churn in fi
 
 ## The result
 
-Started 2026-11-05 18:01 (owner: "Go ahead and start it"), until 21:00 on 11-06 (1,618 minutes): settings check PASS, the start the same as 1.6a's end to the bit (keep and order `same`: 0 actions differ), the optimizer loaded; trainer on the performance cores (`0xC03C3`), the watcher, ramp and self-play logger on `0x3C3C`. Before it, the leftover 1.5a ramp and the local games and mind-log pages were stopped (owner).
+**A false start, 18:01 to 19:23 (update 14; kept aside as `data/sim_runs/duel_gru_1_7a_false_start` and its log).** The trainer refused
+every live.json: `start.ps1` and the ramp wrote the order's gate as −30, and the trainer's reader took any number below 0 as an error and
+refused the whole file. It then trained on its command's start values: the item teacher (weight 0.1 to 1.0), the speed pay (0.75 a
+player-minute), the jerk, weapon-switch and fire-toggle costs (−0.39, −0.10, −0.07 a player-minute), no win pay, damage taken 1.0, the
+long rail 0.12, and the keep choice's dial at 0 whatever the ramp wrote. The ramp flagged the costs every update from 18:10; nobody read it
+until 19:20. Its check at update 10 read about level with 1.6a's end on the maps played. Stopped on the owner's word ("Restart it and fix
+it. Whatever cause this to happen this way needs to isolated and mdae to not happen again").
+
+**Why nothing caught it:** `start.ps1` compared the file's values with 1.6a's end but never asked the trainer whether it accepts it; the
+ramp's test ran on fake files; `tests.py ident` set the dials by argument and `smoke` opened them all (to values of 0 or more); the trainer
+printed REFUSED and went on; the ramp's flag was a line in a log.
+
+**The fix (11-05 19:23 to 19:42):**
+
+| | |
+|---|---|
+| The trainer | `LIVE_RANGE` (a live name that may be below 0: `ORD_GATE` −30 .. 0; every other 0 .. inf); a file refused before the first rollout stops it (exit 3, "NOT TRAINING"); every read written to `<run>/live_status.json` |
+| Before a start | `tools/run/live_accept.py`: the start's file and every one the ramp will write (172, clocks 0 to 171) read with the trainer's own reader; in `start.ps1`, which then waits for the trainer's "applied" before it starts anything beside it |
+| While it runs | the ramp: a refusal, a dial not played as written (within the 3 updates the overlap takes), and any firing cost logged as MAJOR PROBLEM; `tools/run/watch.py` logs a refusal for every run |
+| Tests | `tests.py live` (the real trainer, small, on the CPU): the start's file applied, no cost, speed pay or teacher in the books, a dial written after update 1 played by update 4; a gate of −31 stops the trainer before any update: ALL PASSED. `ramp_test.py` with the new flags: ALL PASSED. `live_accept.py` on the old trainer code refuses the false start's file; on the new, accepts it |
+| Rules | CLAUDE.md (gotchas): every live name its range and a test on the real trainer; monitoring reads every FLAG and MAJOR line from update 1 |
+
+**Restarted 2026-11-05 19:42 from 1.6a's end**, until 21:00 on 11-06 (1,518 minutes): settings checks PASS, no firing cost, LIVE ACCEPT
+PASS, the start the same as 1.6a's end to the bit, live.json applied before the first rollout (19:42:33); update 1: no jerk, switch or toggle
+cost, no speed pay, the item teacher at 0, the win part in the books.

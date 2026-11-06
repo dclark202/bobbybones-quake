@@ -340,5 +340,58 @@ def smoke():
     return done()
 
 
+START_DIALS = dict(KEEP_G=0.0, CMB_G=0.0, PADD=0.0, ORD_GATE=-30.0, FADD=0.0, H2_FPG=0.0)    # (start.ps1's live.json at the start)
+
+
+def live():
+    """(1.7a's false start, 11-05) the real trainer with start.ps1's live.json: the trainer refused it (the order's gate of -30) and
+    trained 14 updates on its command's values. Arm A: the start's file is applied before the first rollout (live_status.json), the
+    costs, the speed pay and the item teacher at 1.6a's end (none in the books), a dial written after update 1 is played from the next
+    rollout on (KEEP_G 0.5, ORD_GATE -12). Arm B: a gate out of its range (-31): the trainer stops before its first rollout, no update."""
+    import torch
+    if not os.path.exists(S1):
+        say("no test starts: run `start` first")
+        return 1
+    run = "scratch_17a_live" + TAG
+    D = lay_out(ROOT, run, S1, S0O, live_extra=START_DIALS, widen=True)
+    tr = subprocess.Popen(["cmd.exe", "/c", make_cmd(ROOT, run, D, 8, NEW0, combat=True)], cwd=ROOT,
+                          env=dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1"))
+    MET, wrote, t0 = os.path.join(D, "metrics.jsonl"), False, time.time()
+    while tr.poll() is None and time.time() - t0 < 40 * 60:
+        time.sleep(5)
+        if not wrote and os.path.exists(MET) and os.path.getsize(MET) > 0:
+            lv = json.load(open(os.path.join(D, "live.json"), encoding="utf-8"))
+            lv.update(KEEP_G=0.5, ORD_GATE=-12.0)
+            json.dump(lv, open(os.path.join(D, "live.json"), "w", encoding="utf-8"))
+            wrote = True
+            say("after update 1: live.json KEEP_G 0.5, ORD_GATE -12")
+    if tr.poll() is None:
+        say("arm A: the trainer still runs after 40 min: left running")
+        return done()
+    log = open(os.path.join(ROOT, "data", "sim_runs", run + ".log"), encoding="utf-8", errors="replace").read()
+    st = json.load(open(os.path.join(D, "live_status.json"), encoding="utf-8")) if os.path.exists(os.path.join(D, "live_status.json")) else {}
+    M = [json.loads(x) for x in open(MET, encoding="utf-8") if x.strip()] if os.path.exists(MET) else []
+    check("arm A: no refusal in the log", "REFUSED" not in log)
+    check("arm A: live_status.json says applied ({})".format(st), st.get("status") == "applied")
+    check("arm A: 3 updates or more ({})".format(len(M)), len(M) >= 3)
+    pt = [((m.get("pay_terms") or {}).get("per_player_min") or {}) for m in M]
+    for m, p in zip(M, pt):
+        say("update {}: keep g {} | token gate {} | jerk {} weapon_switch {} fire_toggle {} speed {} | item teacher {}".format(
+            m["update"], (m.get("keep") or {}).get("g"), (m.get("cmb") or {}).get("token_gate"), p.get("jerk"), p.get("weapon_switch"),
+            p.get("fire_toggle"), p.get("speed"), m.get("intent_teach")))
+    check("arm A: no jerk, weapon-switch or fire-toggle cost in the books", pt and all(not p.get(k_) for p in pt for k_ in ("jerk", "weapon_switch", "fire_toggle")))
+    check("arm A: no speed pay in the books", pt and all(not p.get("speed") for p in pt))
+    check("arm A: update 1 at KEEP_G 0", M and (M[0].get("keep") or {}).get("g") == 0.0)
+    check("arm A: the dial written after update 1 played by the last update (KEEP_G 0.5)", M and (M[-1].get("keep") or {}).get("g") == 0.5)
+    run = "scratch_17a_live_bad" + TAG
+    D = lay_out(ROOT, run, S1, S0O, live_extra=dict(START_DIALS, ORD_GATE=-31.0), widen=True)
+    log = trainer(ROOT, make_cmd(ROOT, run, D, 8, NEW0, combat=True), run, 20) or ""
+    st = json.load(open(os.path.join(D, "live_status.json"), encoding="utf-8")) if os.path.exists(os.path.join(D, "live_status.json")) else {}
+    check("arm B: the trainer stopped before training ('NOT TRAINING' in its log)", "NOT TRAINING" in log)
+    check("arm B: live_status.json says refused ({})".format(st), st.get("status") == "refused")
+    check("arm B: no update", not os.path.exists(os.path.join(D, "metrics.jsonl")) or os.path.getsize(os.path.join(D, "metrics.jsonl")) == 0)
+    return done()
+
+
 if __name__ == "__main__":
-    sys.exit({"start": start, "ident": ident, "smoke": smoke}[sys.argv[1]]())
+    sys.exit({"start": start, "ident": ident, "smoke": smoke, "live": live}[sys.argv[1]]())

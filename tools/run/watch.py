@@ -166,6 +166,7 @@ def main():
     mt, n, last, stalled = os.path.getmtime(pol), len(lines()), time.time(), False
     gth, pth = [], []
     last_chk, n_chk = -100, 0
+    refused_at = None
     busy = lambda: any(t_.is_alive() for t_ in gth)          # noqa: E731
     while True:
         time.sleep(20)
@@ -194,6 +195,13 @@ def main():
                 t = threading.Thread(target=check_panel, args=(k, n, busy))
                 t.start()
                 pth.append(t)
+        try:                                                 # (1.7a's false start, 11-05) the trainer refused live.json: every run, any ramp
+            st_ = json.load(open(os.path.join(OUT, "live_status.json"), encoding="utf-8"))
+        except (OSError, ValueError):
+            st_ = {}
+        if st_.get("status") == "refused" and st_.get("update") != refused_at:
+            refused_at = st_.get("update")
+            say("MAJOR PROBLEM update", refused_at, ": THE TRAINER REFUSED live.json, nothing applied:", st_.get("reason"))
         if time.time() - last > 15 * 60 and not stalled:
             say("STALL: no new update for 15 min at update", n)
             stalled = True

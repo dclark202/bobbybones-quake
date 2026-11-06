@@ -239,6 +239,10 @@ LIVE_TRAINER = LIVE_TRAINER + ("KEEP_G",)                          # (1.4c) the 
 LIVE_TRAINER = LIVE_TRAINER + ("ORD_GATE",)                        # (1.7) the order's attention token's gate (shut -30 .. open 0; never lowered)
 LIVE_TRAINER = LIVE_TRAINER + ("CMB_G", "FADD", "PADD", "PASS_W", "H2_FPG")   # (1.7) the combat order's share, the fire push's add, the pointer's
 #                                                                    adds' share on the targets and the ways, the brain's pass lesson, the fire key's credit
+LIVE_RANGE = {"ORD_GATE": (-30.0, 0.0)}   # (1.7a's false start, 11-05) a live name whose values are not 0 or more; every other: 0 .. inf.
+#   The order's gate (shut -30, open 0) was refused as negative by the rule for every name, and the refusal took the whole file
+#   with it: 1.7a trained 14 updates on its command's start values instead of 1.6a's end dials. A refused file at the start now
+#   stops the trainer before its first rollout (LIVE_FIRST), and every read is written to <run>/live_status.json for the ramp.
 LIVE_TRAINER = LIVE_TRAINER + ("H2_WPG", "HABIT_P")                 # (1.5a) the weapon key's credit on the head's clock; the league seats' weapon habits
 
 
@@ -266,8 +270,9 @@ def live_read(path, E_, start, trainer_start):
                 f_ = float(x_)
             except ValueError:
                 return None, None, "{}: {!r} is not a number".format(k_, x_)
-            if not np.isfinite(f_) or f_ < 0:
-                return None, None, "{}: {!r} is not a number of 0 or more".format(k_, x_)
+            lo_, hi_ = LIVE_RANGE.get(k_, (0.0, np.inf))
+            if not np.isfinite(f_) or f_ < lo_ or f_ > hi_:
+                return None, None, "{}: {!r} is not a number within {} .. {}".format(k_, x_, lo_, hi_)
         if k_ in LIVE_TRAINER:
             tv[k_] = float(x_)
         else:
@@ -3443,8 +3448,18 @@ def main():
                        ITEM_FLOOR=float(a.item_floor), ITEM_FLOOR_W=float(a.item_floor_w), VALUE_WARM=float(a.value_warm),
                        **({"FADE_CAP": float(a.rule_fade_cap), "FADE_OPEN": float(a.rule_fade_open)} if RF_ON else {}))   # ... and its arguments (v0.3.11: --info-pay with the readout on; v0.3.11b: --track, --track-trunk)
     LIVE_SEEN = None                                                     # the file as last read (LIVE_KEPT: the values in force, None: the start's)
-    if LIVE_ON and os.path.exists(LIVE_PATH):
+    LIVE_FIRST = [bool(LIVE_ON and os.path.exists(LIVE_PATH))]          # (1.7a's false start) a file there at the start, not yet read
+    if LIVE_FIRST[0]:
         print("live: {} is there at the start: it is read before the first rollout".format(LIVE_PATH), flush=True)
+
+    def live_status_(upd_, why_):
+        """(1.7a's false start) every read of live.json: <run>/live_status.json, read by the ramp each update"""
+        try:
+            with open(os.path.join(out, "live_status.json"), "w", encoding="utf-8") as f_:
+                json.dump(dict(update=upd_, status="refused" if why_ else "applied", reason=why_,
+                               time=time.strftime("%Y-%m-%d %H:%M:%S")), f_)
+        except OSError:
+            pass
     OVL = bool(a.overlap)                                                # (--overlap, B-266) learn while the next games play
     DEC = OVL and a.overlap_ppo == "decoupled"                           # (--overlap-ppo) decoupled PPO around the learner's own network
     ACT = RS = STOP = None
@@ -3580,9 +3595,16 @@ def main():
                     lv_, lt_, why_ = None, None, "the simulator module {} has no live names".format(a.env)
                 else:
                     lv_, lt_, why_ = live_read(LIVE_PATH, E_, LIVE_START, LIVE_TSTART)
+                live_status_(update, why_)
                 if why_ is not None:
                     LIVE_REC = dict(refused=why_, from_update=update)
                     print("live: {} REFUSED, nothing applied: {}".format(LIVE_PATH, why_), flush=True)
+                    if LIVE_FIRST[0]:                                    # (1.7a's false start) the run's dials refused before it trains:
+                        print("live: the run's live.json is refused before the first rollout: NOT TRAINING on the start's "
+                              "values in its place. Fix the file (or the trainer's LIVE_RANGE) and start again.", flush=True)
+                        for p in pipes:
+                            p.send(("close", None))
+                        sys.exit(3)
                 else:
                     old_ = LIVE_KEPT or dict(sim=dict(LIVE_START), trainer=dict(LIVE_TSTART))
                     ch_ = {k_: v_ for k_, v_ in lv_.items() if old_["sim"].get(k_) != v_}
@@ -3693,6 +3715,7 @@ def main():
                     os.replace(os.path.join(out, "live_applied.json.tmp"), os.path.join(out, "live_applied.json"))
                     print("live: from update {} (before its rollout) in every simulator: changed {}; in force {}".format(
                         update, dict(ch_, **cht_) or "nothing", force_), flush=True)
+        LIVE_FIRST[0] = False                                            # (1.7a's false start) from here a refusal keeps the values in force
         LS_REC = live_settings_poll(LS, pipes, E_, update, mins, LIVE_START, LIVE_PATH)   # (the safe restart: live_settings.env)
         if TRK_ON:                                                       # (--info-pay) the pay's k of this rollout (live.json's INFO_PAY, the delay, the ramp)
             TRK_K[0] = trk_pay_k(mins)

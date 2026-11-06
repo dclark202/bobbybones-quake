@@ -56,6 +56,7 @@ def main():
                                      os.path.join(D, "keep"), os.path.join(D, "metrics.jsonl"))
     os.makedirs(WD, exist_ok=True)
     os.makedirs(KEEP, exist_ok=True)
+    WRITES, WRITES0, WLOCK = [], {}, threading.Lock()    # (1.7a's false start) the dials written after each update; at the ramp's start
 
     def log(s):
         line = time.strftime("%m-%d %H:%M:%S ") + s
@@ -79,6 +80,7 @@ def main():
         if a.resume:
             seen = {f_: len(jl(os.path.join(WD, f_))) for f_ in seen}
         seen_m, base, bw0 = [len(jl(MET)) if a.resume else 0], [], []
+        seen_st = [None]
         while True:
             for f_, n_ in seen.items():
                 R = jl(os.path.join(WD, f_))
@@ -86,10 +88,28 @@ def main():
                     log(("MAJOR PROBLEM " if wr(d) < MAJOR else "") + "check update {} against {}: {}-{} = {:.1%}{}".format(
                         d["update"], names[f_], d["won"], d["lost"], wr(d), " (under 40%)" if wr(d) < MAJOR else ""))
                 seen[f_] = len(R)
+            st_ = {}                                         # (1.7a's false start) the trainer's last read of live.json
+            try:
+                st_ = json.load(open(os.path.join(D, "live_status.json"), encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+            if st_.get("status") == "refused" and st_.get("update") != seen_st[0]:
+                seen_st[0] = st_.get("update")
+                log("MAJOR PROBLEM update {}: THE TRAINER REFUSED live.json, nothing applied: {}".format(st_.get("update"), st_.get("reason")))
             for m_ in jl(MET)[seen_m[0]:]:
                 seen_m[0] += 1
                 u_ = m_.get("update")
                 k_ = m_.get("keep") or {}
+                cm0_ = m_.get("cmb") or {}                   # (1.7a's false start) what the trainer played against what was written
+                got_ = {"KEEP_G": k_.get("g"), "CMB_G": cm0_.get("g"), "PADD": cm0_.get("padd")}
+                with WLOCK:
+                    cand_ = [v2_ for w2_, v2_ in WRITES if u_ is not None and w2_ < u_]          # (tests.py live: a dial written after
+                    cand_ = ([dict(WRITES0)] if len(cand_) < 4 else []) + cand_[-4:]          # update n is played by n+3 at the latest: --overlap)
+                off_ = {n2_: g2_ for n2_, g2_ in got_.items() if g2_ is not None and
+                        not any(abs(float(g2_) - float(c2_.get(n2_, g2_))) < 1e-3 for c2_ in cand_)}
+                if off_:
+                    log("MAJOR PROBLEM update {}: the trainer did not apply the dials written ({} played, {} written)".format(
+                        u_, off_, {n2_: [c2_.get(n2_) for c2_ in cand_] for n2_ in off_}))
                 s2_ = k_.get("sim2") or {}
                 pl_ = k_.get("pull") or {}
                 ar_ = k_.get("arrived") or {}
@@ -131,7 +151,7 @@ def main():
                     elif bw_ < sum(bw0) / len(bw0) - 0.05:
                         log("FLAG update {}: big weapons owned {} (start {:.3f}): 1.4b's drift?".format(u_, bw_, sum(bw0) / len(bw0)))
                 if (sc_ or 0) > 0 or any(v_ < 0 for v_ in fc_.values()):
-                    log("FLAG update {}: A FIRING COST ABOVE ZERO: shot cost {} {}".format(u_, sc_, fc_))
+                    log("MAJOR PROBLEM FLAG update {}: A FIRING COST ABOVE ZERO: shot cost {} {}".format(u_, sc_, fc_))
                 big_ = {k2_: wp_.get(k2_) for k2_ in ("hands", "head") if (wp_.get(k2_) or 0) > SIZE_FLAG}
                 if big_:
                     log("FLAG update {}: a part of his weapon-key scores over {}: {}".format(u_, SIZE_FLAG, big_))
@@ -173,9 +193,13 @@ def main():
         with open(LIVE + ".tmp", "w", encoding="utf-8") as fh:
             fh.write(json.dumps(d))
         os.replace(LIVE + ".tmp", LIVE)
-        return {n_: d[n_] for n_, *_ in DIALS}
+        v_ = {n_: d[n_] for n_, *_ in DIALS}
+        with WLOCK:
+            WRITES.append((clock, v_))
+        return v_
 
     cur = json.load(open(LIVE, encoding="utf-8"))
+    WRITES0.update({n_: cur.get(n_) for n_, *_ in DIALS})
     for n_, lo, hi, v0, v1, pre in ([] if a.resume else DIALS):
         assert abs(float(cur.get(n_, -99)) - pre) < 1e-9, "{} is {} in live.json, not {}".format(n_, cur.get(n_), pre)
     threading.Thread(target=flags, daemon=True).start()

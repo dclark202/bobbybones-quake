@@ -314,6 +314,15 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 `data/` is git-ignored (maps from the game, runs, sessions, tools, `owner.env`).
 
 ## Hard-won gotchas
+- **A refused live.json is refused whole, and the run then trains on its command's start values** (1.7a's false start,
+  2026-11-05): the ramp wrote the order's gate as −30, the trainer refused every number below 0, and for 14 updates 1.7a had
+  the item teacher, the speed pay and the firing costs back on, no win pay, and its dials never moving; the ramp flagged the
+  costs every update and nobody read it. Now: a live name that may be negative is listed in `LIVE_RANGE`
+  (`sim/train_duel_rnn.py`); a file refused before the first rollout stops the trainer; every read goes to
+  `<run>/live_status.json`; `tools/run/live_accept.py <live.json> --ramp <ramp.py>` (in `start.ps1`) reads the file and every
+  one the ramp will write with the trainer's own reader; the ramp logs a refusal or a dial not played as written as a MAJOR
+  PROBLEM. Every new live name: its range, and a test that runs the real trainer on the start's file (`tests.py live`). When
+  monitoring, read every FLAG and MAJOR line of `watch.log` from update 1, not only the checks.
 - Git Bash heredocs mangle backslashes: write patch scripts and `.cmd` files with the Write tool.
 - The PC has blue-screened twice under load; long runs should save often (they do, every 10 updates) and be resumed.
 - Write `.cmd` run files to the scratchpad and copy them over: writing over an existing one can fail silently in a chain,
