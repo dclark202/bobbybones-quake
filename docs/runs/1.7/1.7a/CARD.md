@@ -180,8 +180,8 @@ and the enemy, long ones on item timing and at angles that pay, less churn in fi
 | 6d | ✅ the rarer start: "yes, the rarer start is good" | owner, 11-05 evening |
 | 6e | ✅ a decision from a sum of two learned outputs is regularized (CLAUDE.md rule 11) | owner, 11-05 evening |
 | 6f | ✅ `PADD`'s end value (0 to it over updates 90 to 170, then held): the highest of 1 and 0.3 that passes the level check, else 0: **0.3** | owner, 11-05 evening ("OK just give me the results") |
-| 7 | the start, on his command, in a new session | |
+| 7 | ✅ the start: "Go ahead and start it" | owner, 11-05 18:00 |
 
 ## The result
 
-Not started: built and ready (11-05 evening); the owner starts it in a new session.
+Started 2026-11-05 18:01 (owner: "Go ahead and start it"), until 21:00 on 11-06 (1,618 minutes): settings check PASS, the start the same as 1.6a's end to the bit (keep and order `same`: 0 actions differ), the optimizer loaded; trainer on the performance cores (`0xC03C3`), the watcher, ramp and self-play logger on `0x3C3C`. Before it, the leftover 1.5a ramp and the local games and mind-log pages were stopped (owner).
