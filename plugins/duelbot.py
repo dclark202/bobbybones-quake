@@ -2355,6 +2355,9 @@ class duelbot(minqlx.Plugin):
             if hasattr(env, "khit_t"):                       # (1.7a, the keep choice's number) hit with the enemy out of view, as step() keeps it
                 hit_ = float(np.hypot(self.fb_next[2], self.fb_next[3])) > 0 and not bool(env.visible[0])
                 env.khit_t[0] = 0.0 if hit_ else min(float(env.khit_t[0]) + E.DT, 99.0)
+            if hasattr(env, "out_qt") and float(getattr(E, "OUT_LIVE", 0.0)) > 0:   # (1.7b, OUT_LIVE) the quiet clock, as step() keeps it
+                q_ = float(self.fb_next[0]) > 0 or float(np.hypot(self.fb_next[2], self.fb_next[3])) > 0 or bool(env.visible[0])
+                env.out_qt[0] = 0.0 if q_ else min(float(env.out_qt[0]) + E.DT, 99.0)
         self.senses(env, E)
         if hasattr(E, "NW"):
             env.weapon[0] = self.held(env, 0)                # the chosen weapon, as the simulator shows it

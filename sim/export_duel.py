@@ -154,7 +154,7 @@ head2 = {}                                                   # (v0.4.3, sim/head
 if ck.get("head2") is not None:                              # (its value is the trainer's alone), the readout ahead and an "in control"
     assert brain, "the strategy head reads the brain: the checkpoint has no brain token"     # readout it reads; plugins/netpass.py steps it
     head2 = {"head2": np.array(json.dumps(ck["head2"]))}    # as test_suite.Policy does
-    head2.update({k: v for k, v in sd.items() if k.startswith(("head2.", "ahead.", "control.")) and not k.startswith("head2.v.")})
+    head2.update({k: v for k, v in sd.items() if k.startswith(("head2.", "ahead.", "control.", "fight.")) and not k.startswith("head2.v.")})   # (1.7b: the fight odds the head reads)
     if a.head2_gate >= 0:
         head2["head2.gate"] = np.array(np.float32(a.head2_gate))
     assert "head2.plan_in.weight" in head2 and "head2.gate" in head2, "the checkpoint names a strategy head and has no weights for it"

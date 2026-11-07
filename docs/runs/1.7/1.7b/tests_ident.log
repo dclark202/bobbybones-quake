@@ -1,0 +1,30 @@
+'C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_17b_id_z0_3\aim2_env.cmd' is not recognized as an internal or external command,
+operable program or batch file.
+21:12:45 scratch_17b_id_z0_3: done in 0.3 min; the log ends: exit 0
+21:12:45 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+21:12:45 PASS z0: the optimizer's state loaded from opt.pt, not a cold start
+21:12:45 PASS z0: the optimizer's moments carried over the widened inputs (the encoder, the marks, the head's inp)
+'C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_17b_id_z0b_3\aim2_env.cmd' is not recognized as an internal or external command,
+operable program or batch file.
+21:13:10 scratch_17b_id_z0b_3: done in 0.3 min; the log ends: exit 0
+21:13:10 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+21:13:10 PASS z0b: the optimizer's state loaded from opt.pt, not a cold start
+21:13:10 PASS z0b: the optimizer's moments carried over the widened inputs (the encoder, the marks, the head's inp)
+'C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_17b_id_z1_3\aim2_env.cmd' is not recognized as an internal or external command,
+operable program or batch file.
+21:13:35 scratch_17b_id_z1_3: done in 0.3 min; the log ends: exit 0
+21:13:35 PASS z1: the trainer ran 2 updates and dumped them (2 dumps)
+21:13:35 PASS z1: the optimizer's state loaded from opt.pt, not a cold start
+21:13:35 PASS z1: the optimizer's moments carried over the widened inputs (the encoder, the marks, the head's inp)
+21:13:35 PASS z1: the fight odds announced (from the network, its lesson on) and the order's KL reference
+'C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_17b_id_z2_3\aim2_env.cmd' is not recognized as an internal or external command,
+operable program or batch file.
+21:14:01 scratch_17b_id_z2_3: done in 0.3 min; the log ends: exit 0
+21:14:01 PASS z2: the trainer ran 2 updates and dumped them (2 dumps)
+21:14:01 PASS z2: the optimizer's state loaded from opt.pt, not a cold start
+21:14:01 PASS z2: the optimizer's moments carried over the widened inputs (the encoder, the marks, the head's inp)
+21:14:01 PASS z2: the fight odds announced (from the network, its lesson on) and the order's KL reference
+21:14:01 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+21:14:01 PASS 1.7b's start as it is = without the fight odds, the labels and break off's new rule, to the bit, both updates (z1 = z0: actions, log p, value)
+21:14:01 PASS the order asked and learnt: update 1's actions differ from z1 (0.1183 of them)
+21:14:01 ALL PASSED

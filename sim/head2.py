@@ -94,7 +94,8 @@ import os
 import numpy as np
 
 VERSION = 1
-PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "obs", "hands", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide)
+PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "obs", "hands", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
+#                                                          (1.7b) fight: the brain's fight odds, two chances - 0.5 (sim/fightodds.py; without: 0 wide)
 KEEP_F = 7                                                   # (1.7a) the keep choice's own numbers: age, contact, log p held, arrived, since arrival, sound, hit unseen
 KEEP_FEAT = 7                                                # (1.7a) the simulator's keep_feat() columns (duel_env.KEEP_FEAT)
 KEEP_AGE_MAX, KEEP_LP_MIN, KEEP_RECENT = 20.0, -10.0, 2.0
@@ -140,13 +141,15 @@ def obs_cols(inputs_csv=None, sel=OBS_SEL):
 
 
 def layout(brain=256, trk=27, trz=28, ahead=0, ctrl=4, obs=None, hands=512, enc=256, size=256, inp=256, plan=64,
-           n_target=17, every=8, gamma=0.9998, chrono=300, on=None, ctrl_src="none", chrono_lo=0.0):
+           n_target=17, every=8, gamma=0.9998, chrono=300, on=None, ctrl_src="none", chrono_lo=0.0, fight=0):
     """the part's shape; kept in a checkpoint as "head2" (the gate is the state dict's head2.gate). obs: the input columns
     (obs_cols()); on: {part: 0 or 1} (default all on; a part off reads zeros)"""
     obs = [int(c) for c in (obs if obs is not None else obs_cols())]
     on_ = {p: 1 for p in PARTS}
     on_.update({str(k): int(v) for k, v in (on or {}).items()})
     w = dict(brain=int(brain), trk=int(trk), trz=int(trz), ahead=int(ahead), ctrl=int(ctrl), obs=len(obs), hands=int(hands))
+    if fight:
+        w["fight"] = int(fight)
     assert ctrl_src in CTRL_SRCS, "ctrl_src: one of {}".format(CTRL_SRCS)
     return dict(version=VERSION, widths=w, on=on_, obs_cols=obs, enc=int(enc), size=int(size), inp=int(inp), plan=int(plan),
                 n_target=int(n_target), every=int(every), gamma=float(gamma), chrono=int(chrono), ctrl_src=str(ctrl_src),
@@ -285,11 +288,11 @@ def make_module(L, seed=4044):
         return Head2()
 
 
-def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None):
+def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None):
     """u [B, u_width] (float32 holding half-precision numbers) from the parts (a part None or off: zeros). obs: his
     normalised inputs [B, all inputs] (the columns are taken here)"""
     import torch
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight)
     ref = next(v for v in src.values() if v is not None)
     B = ref.shape[0]
     cols = []
@@ -306,7 +309,7 @@ def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, ha
             v = v[:, torch.as_tensor(L[p + "_cols"], dtype=torch.long, device=v.device)]
         if v.shape[1] != w:                                  # (ctrl: the readout's first columns, zeros past its end)
             v = v[:, :w] if v.shape[1] > w else torch.cat([v, v.new_zeros(B, w - v.shape[1])], 1)
-        if p in ("trk", "trz", "ahead", "ctrl"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight"):
             v = v.clamp(-CLIP, CLIP)
         cols.append(v)
     return torch.cat(cols, 1).half().float()
@@ -354,6 +357,23 @@ def control_t(net, s_brain, hands=None, src="none"):
             m = int(c[src][0].in_features) - x.shape[1]
             x = torch.cat([x, hands.detach()[:, :m].float()], 1)
         return (torch.sigmoid(c[src](x.half().float()).float()) - 0.5).detach()
+
+
+def fight_t(net, s_brain, hands, L=None):
+    """(1.7b, the part fight) the network's fight odds readout (sim/fightodds.py; a ModuleDict `fight`, "both": the brain's state and the
+    hands' memory) -> [B, 2] its chances minus 0.5, a number (no_grad, detached); None (zeros in the part) for a layout without the
+    part or a network without the readout"""
+    import torch
+    if L is not None and not int(L["widths"].get("fight", 0)):
+        return None
+    f = getattr(net, "fight", None)
+    if f is None or not hasattr(f, "keys") or "both" not in f.keys():
+        return None
+    with torch.no_grad():
+        x = s_brain.detach().float()
+        m = int(f["both"][0].in_features) - x.shape[1]
+        x = torch.cat([x, hands.detach()[:, :m].float()], 1)
+        return (torch.sigmoid(f["both"](x.half().float()).float()) - 0.5).detach()
 
 
 class State:
@@ -508,6 +528,46 @@ def order_scores(mod, s, x, ctx):
     ta = torch.where(val[..., :t0], g[..., :t0], torch.zeros_like(g[..., :t0]))
     ya = torch.where(val[..., n0:], g[..., n0:], torch.zeros_like(g[..., n0:]))
     return kl, ps, ta, ya
+
+
+def order_scores_fixed(R, x, ctx):
+    """(1.7b, --ord-kl) the order's kind logits and new candidates' scores of a fixed reference R (a dict of tensors: ok_c.weight, ok_c.bias,
+    op_x.weight, op_x.bias, op_v.weight, op_v.bias; its state's layers ok_s, op_s at zero, as the pros' fit starts them), from the candidates
+    x [..., CMB_ROWS, CMB_F] and the situation ctx [..., CMB_NCTX], with order_scores' masks"""
+    import torch
+    import torch.nn.functional as F_
+    x = x.float()
+    val = x[..., CMB_VALID] > 0.5
+    g = F_.linear(torch.tanh(F_.linear(x, R["op_x.weight"], R["op_x.bias"])), R["op_v.weight"], R["op_v.bias"]).squeeze(-1)
+    neg = torch.finfo(g.dtype).min / 4
+    t0, n0 = CMB_T, CMB_T + CMB_NEW
+    ps = torch.where(val[..., t0:n0], g[..., t0:n0], torch.full_like(g[..., t0:n0], neg))
+    kl = F_.linear(ctx.float(), R["ok_c.weight"], R["ok_c.bias"])
+    has = [torch.ones_like(val[..., 0])] + [val[..., t0 + c0:t0 + c0 + k].any(-1) for c0, k in zip(CMB_C0[1:], CMB_SLOTS[1:])]
+    kl = torch.where(torch.stack(has, -1), kl, torch.full_like(kl, neg))
+    return kl, ps
+
+
+def order_kl(R, kl, ps, x, ctx, seg):
+    """(1.7b, --ord-kl; AlphaStar's KL to the human policy) KL(reference || the head's) of the order: over the kinds, and within each new
+    kind over its candidates weighted by the reference's chance of that kind -> [T, n]. kl, ps: the head's (order_scores, held per frame);
+    x, ctx: the candidates and the situation per segment, seg [T] each frame's segment. The reference is a number (no gradient)"""
+    import torch
+    with torch.no_grad():
+        kr, pr = order_scores_fixed(R, x, ctx)
+        kr, pr = kr[seg], pr[seg]
+        lkr = torch.log_softmax(kr, -1)
+        pkr = lkr.exp()
+    lk = torch.log_softmax(kl, -1)
+    out = (pkr * (lkr - lk)).sum(-1)
+    for k_ in range(1, CMB_NK):
+        c0, m = CMB_C0[k_], CMB_SLOTS[k_]
+        lc = torch.log_softmax(ps[..., c0:c0 + m], -1)
+        with torch.no_grad():
+            lcr = torch.log_softmax(pr[..., c0:c0 + m], -1)
+            pcr = lcr.exp()
+        out = out + pkr[..., k_] * (pcr * (lcr - lc)).sum(-1)
+    return out
 
 
 def order_logp(kl, ps, kind, cand):
@@ -755,9 +815,30 @@ def np_ctrl(P, s_brain, hands=None):
     return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
 
 
-def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None):
+def np_fight_params(sd, L):
+    """(1.7b, the part fight, numpy) the fight odds readout's arrays (sim/fightodds.py's "fight.both"), None for a layout without the
+    part or a network without the readout"""
+    if not int(L["widths"].get("fight", 0)):
+        return None
+    try:
+        return mlp_of(sd, "fight.both")
+    except KeyError:
+        return None
+
+
+def np_fight(P, s_brain, hands):
+    """(1.7b) fight_t() in numpy: P from np_fight_params (None: None)"""
+    if P is None:
+        return None
+    x = np.asarray(s_brain, np.float32)
+    m = int(P[0].shape[1]) - x.shape[1]
+    x = np.concatenate([x, np.asarray(hands, np.float32)[:, :m]], 1).astype(np.float16).astype(np.float32)
+    return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
+
+
+def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None):
     """feats() in numpy"""
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight)
     B = len(next(v for v in src.values() if v is not None))
     cols = []
     for p in PARTS:
@@ -773,7 +854,7 @@ def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None,
             v = v[:, np.asarray(L[p + "_cols"], np.int64)]
         if v.shape[1] != w:
             v = v[:, :w] if v.shape[1] > w else np.concatenate([v, np.zeros((B, w - v.shape[1]), np.float32)], 1)
-        if p in ("trk", "trz", "ahead", "ctrl"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight"):
             v = np.clip(v, -CLIP, CLIP)
         cols.append(v)
     return np.concatenate(cols, 1).astype(np.float16).astype(np.float32)

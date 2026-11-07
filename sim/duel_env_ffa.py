@@ -510,6 +510,11 @@ CMB_PASS0 = CMB_FEAT.index("pass_1")                               # (the brain'
 CMB_CTX = ("contact", "seen_ago", "health", "armor", "en_health", "en_armor", "ahead_ok", "belief_ok", "ahead_range", "ahead_height",
            "w_rl", "w_lg", "w_rg", "w_other")
 CMB_ARRIVE_R, CMB_SPAM_R, CMB_SPAM_RANGE, CMB_OUT_R, CMB_PATH = 300.0, 200.0, 1500.0, 80.0, 30
+# (1.7b, OUT_LIVE=s; docs/runs/1.7/1.7b/CARD.md part 2; 0 or unset: 1.7a's rule) break off is reached by living through it: arrived
+# (keepable, as cut off and spam) when for s seconds he has not seen the enemy and no damage has gone either way between them (out_qt,
+# kept every frame by step() and by the plugin), wherever he is; a way out that is an item still ends it when he gets there (taken).
+# From his own senses only (he cannot know whether the enemy sees him), so the arrival is fair as one of the keep choice's numbers.
+OUT_LIVE = float(os.environ.get("OUT_LIVE") or 0.0)
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
@@ -2729,6 +2734,12 @@ N_ITEMS = SM_SLOTS * SM_F
 # the first of the brain's places 1, 2, 4 s ahead its lane sees; an item, the brain's place 1 s ahead. All from his own senses and his
 # brain. Zeros with COMBAT off.
 N_ORD = 10
+# (1.7b, docs/runs/1.7/1.7b/CARD.md part 6; the owner, 2026-11-06 evening: the yellow armors' timers "can't hurt, as long as it doesn't
+# increase the latency too much") the last N_YT inputs (group "b17b timers"): for the yellow armor and the second yellow armor, as
+# the mega's and the red armor's have been since v6 (N_MEM): known to be taken (1: he took it, heard it taken or saw its place empty;
+# ITEM_BELIEF's books, bel_t, which every player keeps already) and the seconds since, against its 25 s (/ 25, at most 2; 0 while not
+# known). Zeros where the map has no such item or ITEM_BELIEF is off. From his own senses only (the heard error of SENSE_MINOR).
+N_YT = 4
 SM_KINDS = {("hp", 5): 0, ("hp", 25): 1, ("hp", 50): 2, ("ar", 5): 3, ("ar", 25): 4}
 DRIFT_DELAY = float(os.environ.get("DRIFT_DELAY") or 0.0)
 DRIFT_SIGMA = float(os.environ.get("DRIFT_SIGMA") or 0.0)
@@ -2913,7 +2924,7 @@ BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
 BRAIN_ERR_BINS = ("0-2s", "2-5s", "5-10s", "10s+")
 PLAY_VARS = PLAY_VARS + ("BRAIN_READ", "BRAIN_KNOWN", "SM_ITEMS")
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -3030,6 +3041,23 @@ CONTROL_D = int(round(CONTROL_H / DT))
 CONTROL_M = 16                                             # instances kept per match and item
 if CONTROL_TRUTH:
     AUX_COLS = AUX_COLS + ("ctl_lab", "ctl_one", "ctl_age", "ctl_ok", "ctl_mh", "ctl_ra")
+# (1.7b; docs/runs/1.7/1.7b/CARD.md part 1, sim/fightodds.py) FIGHT_TRUTH=1 (a training switch, off by default; off: info["aux"] as
+# above and nothing else changes) adds the truth of the brain's readout "the fight odds": how a fight that is on ends. Known only in
+# hindsight, so it is given FIGHT_H seconds late: the row of frame F carries the label of frame q = F - FIGHT_D. Labels only, never
+# inputs, never paid, never read by the simulator itself:
+#   fo_win    of frame q, 1: his enemy died within FIGHT_H seconds and before he did (or on the same frame); 0: not; -1: no label (q was
+#             not a duel's game with both alive, there was no damage either way between the two within FIGHT_PRE seconds of q (no
+#             fight on), a round ended inside the window, or F < FIGHT_D)
+#   fo_lose   the same for his own death first (a trade on one frame: both 1; neither died within the window: both 0, he got away)
+#   fo_age    the frames since the last fresh simulator, capped at FIGHT_D + 1: the trainer's check of the alignment
+#   fo_ok     1: THIS frame is a duel's game with both alive (it may have a label FIGHT_D frames on)
+FIGHT_TRUTH = float(os.environ.get("FIGHT_TRUTH") or 0.0) > 0
+FIGHT_H = float(os.environ.get("FIGHT_H") or 5.0)
+FIGHT_PRE = float(os.environ.get("FIGHT_PRE") or 1.0)
+FIGHT_D = int(round(FIGHT_H / DT))
+FIGHT_PF = int(round(FIGHT_PRE / DT))
+if FIGHT_TRUTH:
+    AUX_COLS = AUX_COLS + ("fo_win", "fo_lose", "fo_age", "fo_ok")
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -3815,6 +3843,7 @@ class DuelEnv:
         self.intent_arr = np.zeros(self.n, bool)            # (1.7a) his target is arrived, not ended: the enemy hunted in view, the holding place stood at
         self.arr_t = np.zeros(self.n, np.float32)           # (1.7a) seconds since the arrival
         self.khit_t = np.full(self.n, 99.0, np.float32)     # (1.7a) seconds since he was hit with the enemy out of his view
+        self.out_qt = np.zeros(self.n, np.float32)          # (1.7b, OUT_LIVE) seconds since he saw the enemy or damage went between them
         self.cmb_k = np.zeros(self.n, np.int64)             # (1.7, COMBAT) the kind of order he follows (0: the target as chosen)
         self.cmb_c = np.zeros(self.n, np.int64)             # ... its candidate
         self.cmb_live = np.zeros(self.n, bool)              # ... the readings the order was asked at and counted
@@ -7134,7 +7163,9 @@ class DuelEnv:
         at_ = m & (k == 3) & self.cmb_ok & (d_ < CMB_OUT_R)
         end_ = at_ & self.cmb_fitem[:n]
         oa_ = at_ & ~self.cmb_fitem[:n]
-        if oa_.any() and self.om is not None:                # (a way out that is not an item: arrived where the brain's places do not see it)
+        if OUT_LIVE > 0:                                     # (1.7b) arrived by living through it: OUT_LIVE seconds quiet, wherever he is
+            oa_ = m & (k == 3) & self.cmb_ok & (self.out_qt[:n] >= OUT_LIVE) & ~end_
+        elif oa_.any() and self.om is not None:              # (a way out that is not an item: arrived where the brain's places do not see it)
             _, _, _, _, pred, pok = self._cmb_ahead()
             R = self.route
             w_ = np.nonzero(oa_)[0]
@@ -7944,7 +7975,7 @@ class DuelEnv:
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
                               self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
-                              self._ord(pos, eye, yaw, pit)], 1)
+                              self._ord(pos, eye, yaw, pit), self._yt()], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -7981,6 +8012,24 @@ class DuelEnv:
             out[:, 11 * j:11 * j + 11] = blk * on[:, None]
         out[:, 16] = acq.sum(1) / 5.0
         out[:, 17] = (G - 2) / 4.0
+        return out
+
+    def _yt(self):
+        """(1.7b) the inputs of N_YT (see there): the yellow armors' timers from the item belief. Reads only; keeps nothing."""
+        n = self.n
+        out = np.zeros((n, N_YT), np.float32)
+        if not ITEM_BELIEF or not self.route_item:
+            return out
+        for j_, lab_ in enumerate(("YA", "YA2")):
+            if lab_ not in self.route_goal:
+                continue
+            g_ = self.route_goal.index(lab_)
+            if g_ >= self.bel_t.shape[1]:
+                continue
+            bt_ = self.bel_t[:n, g_]
+            kn_ = (bt_ < 90.0).astype(np.float32)
+            out[:, 2 * j_] = kn_
+            out[:, 2 * j_ + 1] = np.minimum(np.maximum(bt_, 0.0) / 25.0, 2.0) * kn_
         return out
 
     def _ord(self, pos, eye, yaw, pit):
@@ -12549,7 +12598,66 @@ class DuelEnv:
             out[:, C["ctl_one"]] = -1.0
             out[:, C["ctl_mh"]] = -1.0
             out[:, C["ctl_ra"]] = -1.0
+        if FIGHT_TRUTH:                                      # (FIGHT_TRUTH) no label here: step()'s _fight_step gives it
+            out[:, C["fo_win"]] = -1.0
+            out[:, C["fo_lose"]] = -1.0
         return out
+
+    def _fight_step(self, done, out, st, died):
+        """(FIGHT_TRUTH) once a frame at the end of step(): this frame's contacts (damage either way between a player and his enemy)
+        and deaths into the books of the last FIGHT_D frames' queries, and the label of the frame FIGHT_D ago into out (info["aux"];
+        see FIGHT_TRUTH). State kept for this only: no random number, nothing else reads it"""
+        n, D, PF = self.n, FIGHT_D, FIGHT_PF
+        R_ = D + 1
+        BIG = np.iinfo(np.int64).max
+        oth = self._others_arr()
+        if getattr(self, "fo_fc", None) is None or self.fo_fc.shape != (R_, n):
+            self.fo_f = 0
+            self.fo_okq = np.zeros((R_, n), bool)            # per query frame (a ring of R_ rows): a duel's game with both alive,
+            self.fo_fc = np.full((R_, n), BIG, np.int64)      # the first contact at or after it, his first death after it,
+            self.fo_md = np.full((R_, n), BIG, np.int64)      # his enemy's first death after it,
+            self.fo_fd = np.full((R_, n), BIG, np.int64)
+            self.fo_rs = np.zeros((R_, n), bool)             # a round end after it
+        F = self.fo_f
+        C = {k_: i_ for i_, k_ in enumerate(AUX_COLS)}
+        ok_ = np.zeros(n, bool)
+        foe = oth[:, 0]                                      # (a duel's enemy; with more players no label: ok_ stays 0)
+        grp = np.arange(n) // (oth.shape[1] + 1)
+        if oth.shape[1] == 1 and self.lab is None and self.fixed_kind is None:
+            ok_ = (self.kind[grp] == NORMAL) & (self.mode[grp] < 0) & (self.run_k[:n] < 0) & (self.run_k[foe] < 0) & \
+                (self.hp[:n] > 0) & (self.hp[foe] > 0)
+        r0 = F % R_                                         # 1. this frame as a query
+        self.fo_okq[r0] = ok_
+        self.fo_fc[r0], self.fo_md[r0], self.fo_fd[r0], self.fo_rs[r0] = BIG, BIG, BIG, False
+        ct_ = np.zeros(n, bool)                              # 2. this frame's contacts: for the queries of the last PF frames
+        for (i_, v_), d_ in (st["by"].items() if st is not None else ()):
+            if i_ != v_ and d_ > 0 and 0 <= i_ < n and 0 <= v_ < n:
+                ct_[i_] = ct_[v_] = True
+        if ct_.any():
+            rows_ = [(F - j) % R_ for j in range(min(PF, F) + 1)]
+            for r_ in rows_:
+                self.fo_fc[r_, ct_] = np.minimum(self.fo_fc[r_, ct_], F)
+        dd_ = np.asarray(died, bool)[:n] if died is not None else np.zeros(n, bool)
+        dn_ = np.asarray(done, bool)[:n]
+        if dd_.any() or dn_.any():                           # 3. deaths and round ends: for the queries before this frame
+            rows_ = [(F - j) % R_ for j in range(1, min(D, F) + 1)]
+            vi_ = np.nonzero(dd_)[0]
+            fo_ = foe[vi_]
+            for r_ in rows_:
+                self.fo_md[r_, vi_] = np.minimum(self.fo_md[r_, vi_], F)
+                self.fo_fd[r_, fo_] = np.minimum(self.fo_fd[r_, fo_], F)
+                self.fo_rs[r_, dn_] = True
+        out[:, C["fo_age"]] = min(F, D + 1)
+        out[:, C["fo_ok"]] = ok_
+        if F >= D:                                           # 4. the label of the frame D ago
+            q, rq = F - D, (F - D) % R_
+            lab_ = self.fo_okq[rq] & (self.fo_fc[rq] <= q + PF) & ~self.fo_rs[rq]
+            md_, fd_ = self.fo_md[rq], self.fo_fd[rq]
+            win_ = (fd_ <= F) & (fd_ <= md_)
+            lose_ = (md_ <= F) & (md_ <= fd_)
+            out[:, C["fo_win"]] = np.where(lab_, win_.astype(np.float32), -1.0)
+            out[:, C["fo_lose"]] = np.where(lab_, lose_.astype(np.float32), -1.0)
+        self.fo_f = F + 1
 
     def _ctl_step(self, done, out):
         """(CONTROL_TRUTH) once a frame at the end of step(): the books of the mega's and the red armor's spawns (who took
@@ -13335,6 +13443,13 @@ class DuelEnv:
                             np.sin(ang) * hitby, np.cos(ang) * hitby], 1).astype(np.float32)
         un_ = hitby[:self.n] & ~np.asarray(self.visible, bool)[:self.n]                   # (1.7a, the keep choice's number) hit, the enemy out of view
         self.khit_t = np.where(un_, 0.0, np.minimum(self.khit_t[:self.n] + DT, 99.0)).astype(np.float32)
+        if OUT_LIVE > 0:                                     # (1.7b, OUT_LIVE) the quiet clock: he saw the enemy, hit him or was hit by him
+            de_ = np.zeros(n, bool)
+            for (i_, v_), d_ in st["by"].items():
+                if i_ != v_ and d_ > 0:
+                    de_[i_] = True
+            qr_ = (de_ | hitby | np.asarray(self.visible, bool)[:n])[:self.n]
+            self.out_qt = np.where(qr_, 0.0, np.minimum(self.out_qt[:self.n] + DT, 99.0)).astype(np.float32)
 
         # items: pickups, respawns, decay above 100
         self.item_t = np.maximum(0.0, self.item_t - DT)
@@ -14208,6 +14323,8 @@ class DuelEnv:
         info["aux"] = self.aux(st, fall, events, died)      # (stage B, part 1) the truth the trainer's --aux lesson is made of
         if CONTROL_TRUTH:                                    # (CONTROL_TRUTH) "in control" of the frame CONTROL_D ago (labels only)
             self._ctl_step(done, info["aux"])
+        if FIGHT_TRUTH:                                      # (FIGHT_TRUTH) the fight odds' label of the frame FIGHT_D ago (labels only)
+            self._fight_step(done, info["aux"], st, died)
         if HEAD_EVENTS:                                      # (HEAD_EVENTS) the frame's events for the head
             dl_ = np.zeros(n, np.float32)
             for (i_, v_), d_ in st["by"].items():

@@ -23,8 +23,8 @@ WEAPON = {"g": 1, "mg": 2, "sg": 3, "gl": 4, "rl": 5, "lg": 6, "rg": 7, "pg": 8,
 REPEATS = 4
 
 
-def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None):
-    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre)
+def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None, pf=0, thp=200):
+    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre, pf=pf, thp=thp)
 
 
 SETS = {
@@ -52,6 +52,11 @@ SETS = {
     "4": dict(
         [("glp_{}".format(p_), spec("gl", dist=1300, aim="pitch", off=p_, frames=130)) for p_ in (0, -20, -45, 20, 45, 70)] +
         [("gl_self", spec("gl", aim="self", frames=130)), ("gl_150", spec("gl", dist=150, frames=130))]),
+    # (B-302, 2026-11-06) a switch started during the reload: fire `pre` once (frame 0), select `weapon` from frame 1 and hold fire;
+    # when does `weapon` first fire? The simulator waits for the reload: cool = max(cool, fire_cd + SWITCH). The target at 999 health
+    "5": dict(
+        [("rl_{}_{}".format(a, b), spec(b, hold=100, frames=110, pin=True, pre=a, pf=1, thp=999))
+         for a, b in (("rg", "lg"), ("rl", "lg"), ("rl", "rg"), ("rg", "rl"), ("sg", "lg"), ("gl", "lg"), ("mg", "lg"))]),
 }
 TESTS = SETS[os.environ.get("WEAPONLAB_SET", "1")]
 
@@ -142,7 +147,7 @@ class weaponlab(minqlx.Plugin):
         if f < 0:                                               # settle, weapon up, keep both still
             if f == -10:
                 for p in (shooter, target):
-                    p.health = 200
+                    p.health = 200 if p is shooter else int(sp_.get("thp", 200))
                     p.armor = 0
                     p.velocity(reset=True)
                 tgt = self.player(c["target"])
@@ -151,7 +156,8 @@ class weaponlab(minqlx.Plugin):
             minqlx.set_bot_input(c["shooter"], 0, 0, 0, 0, c["pre"], c["pitch"], c["yaw"])
             return
         firing = f < sp_["hold"]
-        minqlx.set_bot_input(c["shooter"], 0, 0, 0, 1 if firing else 0, c["weapon"], c["pitch"], c["yaw"])
+        wsel = c["pre"] if f < sp_.get("pf", 0) else c["weapon"]     # (set 5) the first pf frames fire the pre weapon, then the switch
+        minqlx.set_bot_input(c["shooter"], 0, 0, 0, 1 if firing else 0, wsel, c["pitch"], c["yaw"])
         row = [f]
         for pid in (c["shooter"], c["target"]):
             st = minqlx.player_state(pid)

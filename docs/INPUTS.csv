@@ -989,3 +989,7 @@ index,group,input,meaning,scale,added in
 987,b17 order,point: distance,(COMBAT; zeros with it off) from his eyes,"units / 2000, at most 2",1.7
 988,b17 order,point: height,(COMBAT; zeros with it off) above his place,"units / 200, -3 to 3",1.7
 989,b17 order,point: valid,(COMBAT; zeros with it off) there is a point,0 or 1,1.7
+990,b17b timers,yellow armor: known to be taken,"(ITEM_BELIEF; zeros with it off and where the map has none) as the mega's and the red armor's timers (memory): he took it, heard it taken or saw its place empty (the item belief, bel_t)",0 or 1,1.7b
+991,b17b timers,yellow armor: how long ago,(ITEM_BELIEF; zeros with it off and where the map has none) as the mega's and the red armor's timers (memory): against its 25 s timer,"seconds / 25, capped at 2",1.7b
+992,b17b timers,second yellow armor: known to be taken,"(ITEM_BELIEF; zeros with it off and where the map has none) as the mega's and the red armor's timers (memory): he took it, heard it taken or saw its place empty (the item belief, bel_t)",0 or 1,1.7b
+993,b17b timers,second yellow armor: how long ago,(ITEM_BELIEF; zeros with it off and where the map has none) as the mega's and the red armor's timers (memory): against its 25 s timer,"seconds / 25, capped at 2",1.7b

@@ -222,6 +222,7 @@ def jump_far_rec(agg, agg_map):
 BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) the brain's layers: the readout, its second part (--track-z), the belief
 BRAIN_PFX = BRAIN_PFX + ("control.",)                               # (v0.4.3, --control) the readout "in control": a brain layer
 BRAIN_PFX = BRAIN_PFX + ("passr.",)                                 # (1.7) the brain's pass readout: a brain layer
+BRAIN_PFX = BRAIN_PFX + ("fight.",)                                 # (1.7b, --fight-odds) the brain's fight odds: a brain layer (its own Adam)
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
                 "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W",
                 "INTENT_TEACH_W")   # (v0.4.3: a factor on the item rule's weight, its floor included: 0 silences it)   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
@@ -237,6 +238,7 @@ LIVE_TRAINER = LIVE_TRAINER + ("ITEM_FLOOR", "ITEM_FLOOR_W")          # (2026-10
 LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD", "H2_MIX", "H2_COPY", "INTENT_SEEK_W", "H2_L2")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
 LIVE_TRAINER = LIVE_TRAINER + ("KEEP_G",)                          # (1.4c) the share of his readings the keep choice decides (the rest: the lock rule)
 LIVE_TRAINER = LIVE_TRAINER + ("ORD_GATE",)                        # (1.7) the order's attention token's gate (shut -30 .. open 0; never lowered)
+LIVE_TRAINER = LIVE_TRAINER + ("FIGHT_W", "H2_OPG", "ORD_KL")              # (1.7b) the fight odds' lesson, the order's share of the head's term, its KL
 LIVE_TRAINER = LIVE_TRAINER + ("CMB_G", "FADD", "PADD", "PASS_W", "H2_FPG")   # (1.7) the combat order's share, the fire push's add, the pointer's
 #                                                                    adds' share on the targets and the ways, the brain's pass lesson, the fire key's credit
 LIVE_RANGE = {"ORD_GATE": (-30.0, 0.0)}   # (1.7a's false start, 11-05) a live name whose values are not 0 or more; every other: 0 .. inf.
@@ -1410,6 +1412,20 @@ def main():
                     "holds the horizon and a rollout: about 0.5 GB on the host with 10,080 players on the belief alone, 1.6 GB with the hands' "
                     "memory (both, belief,both))")
     ap.add_argument("--control-hid", type=int, default=64, help="... its hidden layer")
+    ap.add_argument("--fight-odds", type=float, default=0.0, help="(1.7b) the brain's readout 'the fight odds' (sim/fightodds.py): how a fight "
+                    "that is on ends (his enemy dead first, he dead first), a lesson only on the brain's state and his hands' memory; its weight (a "
+                    "factor on --fight-lr; live FIGHT_W). 0 = off (a network that has it keeps it). With --belief; the simulator's FIGHT_TRUTH=1 "
+                    "gives the truth. The strategy head reads its two chances where its layout has the part 'fight' (tools/b17b_init.py)")
+    ap.add_argument("--fight-lr", type=float, default=1e-3, help="... its own Adam's rate at weight 1")
+    ap.add_argument("--fight-warm", type=float, default=0.0, help="... minutes over which its lesson rises from nothing (from --fight-start)")
+    ap.add_argument("--fight-start", type=float, default=-1.0, help="... the minute its warm-up counts from (-1: this process's start)")
+    ap.add_argument("--fight-every", type=int, default=1, help="... the brain's state kept every this many of its ticks (1: 0.2 s)")
+    ap.add_argument("--fight-hid", type=int, default=64, help="... its hidden layer")
+    ap.add_argument("--head2-opg", type=float, default=1.0, help="(1.7b) the combat order's share of the head's own term's gradient (live "
+                    "H2_OPG): 0 the order as the start has it (asked, played, never learnt), 1 as 1.7a; its value in the ratio as it is")
+    ap.add_argument("--ord-kl", type=float, default=0.0, help="(1.7b, AlphaStar) the weight of a KL from the start's order (the checkpoint's "
+                    "order_ref, tools/b17b_init.py: the pros' fit) to the head's, its kinds and within each its candidates, on the readings "
+                    "the order is asked at (live ORD_KL; 0: none)")
     ap.add_argument("--control-src", default="belief", help="... what it reads: the brain's state (belief, 256) or the brain's "
                     "state and his hands' memory, both detached (both, 256 + 512: the probe of 2026-10-24 read more from his memory; "
                     "the ring then holds three times as much); belief,both: two readouts side by side on one ring, each scored and "
@@ -1774,6 +1790,9 @@ def main():
     AH_CK = None                                             # (--ahead, v0.4.1) the readout of what comes next: comes with the network
     PASS_CK = None                                           # (1.7) the brain's pass readout: comes with the network
     CTL_CK = None                                            # (--control, v0.4.3) the readout "in control": comes with the network
+    FOD_CK = None                                            # (--fight-odds, 1.7b) the fight odds: comes with the network
+    ORD_REF_CK = None                                        # (--ord-kl, 1.7b) the start's order, the KL's reference: comes with the network
+    H2_INP_MAP = None                                        # (1.7b) a widened head's inp: where its old columns went (the optimizer's carry-over)
     RF_CK = None                                             # (--rule-fade, v0.4.2a) the faded columns and the gate: come with the network
     H2_CK = None                                             # (--head2, v0.4.3) the strategy head's layout: comes with the network
     WV_CK = None                                             # (--win-value, v0.4.3) the shadow win value: its layout and weights
@@ -1793,6 +1812,9 @@ def main():
         AH_CK = ck0_.get("ahead") if any(k_.startswith("ahead.") for k_ in ck0_["model"]) else None
         PASS_CK = ck0_.get("passodds") if any(k_.startswith("passr.") for k_ in ck0_["model"]) else None
         CTL_CK = ck0_.get("control") if any(k_.startswith("control.") for k_ in ck0_["model"]) else None
+        FOD_CK = ck0_.get("fightodds") if any(k_.startswith("fight.") for k_ in ck0_["model"]) else None
+        ORD_REF_CK = ck0_.get("order_ref")
+        H2_INP_MAP = ck0_.get("head2_inp_map")                  # (1.7b, tools/b17b_init.py) the head's inp: each old column's new place
         RF_CK = ck0_.get("rule_fade")
         H2_CK = ck0_.get("head2") if any(k_.startswith("head2.") for k_ in ck0_["model"]) else None
         WV_CK = ck0_.get("win_value")                        # (--win-value) a top-level entry, never in "model"
@@ -1878,7 +1900,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - getattr(E_, "N_ORD", 0) - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - getattr(E_, "N_YT", 0) - getattr(E_, "N_ORD", 0) - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
     BEL_SEEN = [0]
 
@@ -1908,7 +1930,7 @@ def main():
     BEL = BEL_L is not None
     BK = int(BEL_L["every"]) if BEL else 0
     if BEL:
-        n_it_, n_or_ = getattr(E_, "N_ITEMS", 0), getattr(E_, "N_ORD", 0)      # (the brain reads the inputs it was made with: the first
+        n_it_, n_or_ = getattr(E_, "N_ITEMS", 0), getattr(E_, "N_ORD", 0) + getattr(E_, "N_YT", 0)   # (the brain reads the inputs it was made with: the first
         assert int(BEL_L["obs_dim"]) in (OBS_DIM, OBS_DIM - n_or_, OBS_DIM - n_it_ - n_or_), \
             "the belief reads {} inputs, the simulator has {}".format(BEL_L["obs_dim"], OBS_DIM)                # ones; b1.2c's and 1.7's are the hands')
         assert a.belief <= 0 or (int(a.belief) == int(BEL_L["hid"]) and int(a.belief_every) == BK), \
@@ -1952,6 +1974,7 @@ def main():
     import ahead as ahead_
     import passodds as passodds_                             # (1.7) the brain's lesson of the odds he passes the order's candidates
     import control as control_                               # (v0.4.3) the readout "in control" (sim/control.py)
+    import fightodds as fightodds_                           # (1.7b) the readout "the fight odds" (sim/fightodds.py)
     BTOK_L = BTOK_CK
     if BTOK_L is None and a.btoken:
         assert BEL and TRK, "--btoken: with --belief and its readout (--track)"
@@ -2049,6 +2072,28 @@ def main():
         assert tuple(control_.names(CTL_L)) == control_.parse_srcs(a.control_src), \
             "--control-src {}: the network's readouts are {}".format(a.control_src, control_.names(CTL_L))
         assert int(CTL_L["bel"]) == int(BEL_L["hid"]) and int(CTL_L["mem"]) in (0, H), "--control: the readouts' widths do not fit the network"
+    FOD_L = FOD_CK                                           # (--fight-odds, 1.7b) the fight odds: its layout, from the network or new
+    if FOD_L is None and a.fight_odds > 0:
+        assert BEL, "--fight-odds: with --belief (it reads the belief's state)"
+        assert all(c_ in tuple(getattr(E_, "AUX_COLS", ())) for c_ in fightodds_.COLS), "--fight-odds: the simulator gives no fo_ columns (FIGHT_TRUTH=1)"
+        FOD_L = fightodds_.layout(bel=int(BEL_L["hid"]), mem=H, hid=a.fight_hid, every=a.fight_every, horizon_frames=int(E_.FIGHT_D),
+                                  tick=int(BEL_L["every"]))
+    FOD = FOD_L is not None
+    FOD_ON = FOD and a.fight_odds > 0
+    if FOD_ON:
+        assert int(FOD_L["horizon"]) == int(E_.FIGHT_D) and int(FOD_L["tick"]) == int(BEL_L["every"]), \
+            "--fight-odds: the readout was made for a horizon of {} frames and ticks of {}; the simulator's FIGHT_D is {}".format(
+                FOD_L["horizon"], FOD_L["tick"], getattr(E_, "FIGHT_D", None))
+        assert int(FOD_L["bel"]) == int(BEL_L["hid"]) and int(FOD_L["mem"]) == H, "--fight-odds: the readout's widths do not fit the network"
+    if FOD:
+        TRK_SAVE["fightodds"] = FOD_L
+        print("fight odds (1.7b): the brain's readout of how a fight that is on ends (his enemy dead first, he dead first) within {} frames, "
+              "on the brain's state and his hands' memory ({} -> {} -> 2), {}; lesson {} (rate {} x weight, rising over {} min); its ring "
+              "every {} tick(s)".format(FOD_L["horizon"], FOD_L["width"], FOD_L["readouts"][0]["hid"],
+                                        "from the network" if FOD_CK is not None else "new (its last layer at zero)",
+                                        a.fight_odds if FOD_ON else "off", a.fight_lr, a.fight_warm, FOD_L["every"]), flush=True)
+    if ORD_REF_CK is not None:
+        TRK_SAVE["order_ref"] = ORD_REF_CK                   # (--ord-kl) carried from file to file
     if CTL:
         TRK_SAVE["control"] = CTL_L
         print("control (v0.4.3/v0.4.2b): the brain's readouts 'in control' ({}), {}; lesson {} (rate {} x weight, rising over {} min "
@@ -2206,7 +2251,7 @@ def main():
             if HAS_CELLS:
                 self.cell = nn.Embedding(E_.MAX_CELLS, CELL_DIM)
                 nn.init.normal_(self.cell.weight, 0.0, 0.1)
-            n_ord_ = int(getattr(E_, "N_ORD", 0))                # (1.7) the order's inputs: their columns made at zero after the rest's start,
+            n_ord_ = int(getattr(E_, "N_ORD", 0)) + int(getattr(E_, "N_YT", 0))   # (1.7) the order's inputs (1.7b: and the timers): their columns made at zero after the rest's start,
             e0_ = nn.Linear((OBS_DIM - 2 + 2 * CELL_DIM if HAS_CELLS else OBS_DIM) - n_ord_, 256)   # so the random stream after is the one
             if n_ord_:                                           # without them (a fixed seed's check against 1.6a's code)
                 e0_.weight = nn.Parameter(torch.cat([e0_.weight.data, e0_.weight.data.new_zeros(256, n_ord_)], 1))
@@ -2242,6 +2287,8 @@ def main():
                 self.passr = passodds_.make_module(PASS_L)
             if CTL:                                              # (--control, v0.4.3) the readout "in control": its own stream, last layer at zero
                 self.control = control_.make_module(CTL_L)
+            if FOD:                                              # (--fight-odds, 1.7b) the fight odds: its own stream, last layer at zero
+                self.fight = fightodds_.make_module(FOD_L)
             if ORDER:                                            # (--ordered-heads) a table a link: a row for each choice before, at zero
                 self.order = nn.Module()
                 for p_, c_ in ORDER:
@@ -2804,6 +2851,8 @@ def main():
                                 new_.fill_(fill_)
                                 if n_ in ("enc.0.weight", "head2.winp.weight"):     # (1.7: the weapon part's inputs, the order's at the end)
                                     new_[:, :old_[1]] = v_
+                                elif n_ == "head2.inp.weight" and H2_INP_MAP is not None and len(H2_INP_MAP) == old_[1]:
+                                    new_[:, torch.as_tensor(H2_INP_MAP, dtype=torch.long)] = v_     # (1.7b: the file's map, two places widened)
                                 elif n_ == "head2.inp.weight":        # (1.7, tools/order_init.py) the order's columns at the end of the obs part
                                     ex_ = int(p_.shape[1]) - old_[1]
                                     o1_ = head2_._offs(H2L)["obs"][1] - ex_
@@ -2853,6 +2902,20 @@ def main():
     CTL_G0 = {}                                              # ... each rollout's first row, by its update
     CTL_T0 = float(a.control_start) if a.control_start >= 0 else float(elapsed0)
     CTL_LIVE = [1.0]                                         # (live.json's CONTROL_W: a factor on the lesson)
+    FOD_OPT = ({n_: torch.optim.Adam(pol.fight[n_].parameters(), lr=a.fight_lr) for n_ in fightodds_.names(FOD_L)}
+               if FOD_ON else None)                          # (--fight-odds, 1.7b) its own Adam, cold at a start
+    FOD_GEN = torch.Generator().manual_seed(4048)            # ... the order of its minibatches: a stream of its own (his play's untouched)
+    FOD_RING, FOD_G, FOD_G0 = [None], [0], {}                # ... the states as played by global row; the next rollout's first row; each rollout's
+    FOD_T0 = float(a.fight_start) if a.fight_start >= 0 else float(elapsed0)
+    FOD_LIVE = [1.0]                                         # (live.json's FIGHT_W: a factor on the lesson)
+    H2_OPG_ = [min(1.0, max(0.0, float(a.head2_opg)))]       # (1.7b) the order's share of the head's term (live H2_OPG)
+    ORD_KL_ = [max(0.0, float(a.ord_kl))]                    # (1.7b) the KL to the start's order (live ORD_KL)
+    ORD_REF = None
+    if ORD_REF_CK is not None and H2 and head2_.has_cmb(pol.head2):
+        ORD_REF = {k_: torch.as_tensor(np.asarray(v_, np.float32)).to(dev) for k_, v_ in ORD_REF_CK.items()}
+        print("order KL (1.7b): the reference is the start's order ({}); weight {} (live ORD_KL); the order's share of the head's term {} "
+              "(live H2_OPG)".format(", ".join(sorted(ORD_REF)), ORD_KL_[0], H2_OPG_[0]), flush=True)
+    ORDKL_ACC = torch.zeros(6, dtype=torch.float64, device=dev)   # (1.7b) frames, KL summed, the KL's and the term's gradients on the kinds, pieces
     import win_value as wv_                                  # (v0.4.3, --win-value) the shadow win value (sim/win_value.py)
     WV_ON = a.win_value > 0
     WV = WV_ACT = WV_OPT = WV_L = None
@@ -3625,6 +3688,9 @@ def main():
                     RJ_LIVE[0] = float(lt_.get("RJ_TEACH_W", RJ_LIVE[0]))            # (--rj-teach: the lesson's weight; its warm-up from the first minute above 0)
                     RJC_LIVE[0] = float(lt_.get("RJ_COPY_W", RJC_LIVE[0]))           # (--rj-copy: the lesson's weight; its warm-up from the first minute above 0)
                     CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
+                    FOD_LIVE[0] = max(0.0, float(lt_.get("FIGHT_W", FOD_LIVE[0])))     # (1.7b, --fight-odds: a factor on its lesson; 0 stops it)
+                    H2_OPG_[0] = min(1.0, max(0.0, float(lt_.get("H2_OPG", H2_OPG_[0]))))   # (1.7b) the order's share of the head's term
+                    ORD_KL_[0] = max(0.0, float(lt_.get("ORD_KL", ORD_KL_[0])))       # (1.7b) the KL to the start's order
                     if LG is not None:                                               # (1.4b, --pfsp) the draw's dial, from this rollout's draw
                         PFSP_D[0] = min(1.0, max(0.0, float(lt_.get("PFSP", PFSP_D[0]))))
                     elif "PFSP" in lt_:
@@ -3694,6 +3760,8 @@ def main():
                                   **({"RJ_TEACH_W": RJ_LIVE[0]} if RJ_LAB else {}),
                                   **({"RJ_COPY_W": RJC_LIVE[0]} if RJC_LAB else {}),
                                   **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
+                                  **({"FIGHT_W": FOD_LIVE[0]} if FOD_ON else {}),
+                                  **({"H2_OPG": H2_OPG_[0], "ORD_KL": ORD_KL_[0]} if CMB else {}),
                                   **({"PFSP": PFSP_D[0]} if LG is not None else {}),
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
                                   **({"INTENT_TEACH_W": IT_LIVE[0]} if a.intent_teach > 0 else {}),
@@ -4176,6 +4244,12 @@ def main():
         BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
         if WV_ON and WV_ST[0] is None:                                   # (--win-value) the per-seat stream, carried from rollout to rollout
             WV_ST[0] = wv_.Stream(WV_L, N, "cpu", group=2)            # (on the host: a few vectors a frame)
+        if FOD_ON:                                                       # (--fight-odds, 1.7b) this rollout's first global row; the ring
+            FOD_G0[upd] = FOD_G[0]
+            if FOD_RING[0] is None:
+                FOD_RING[0] = fightodds_.Ring(FOD_L, N, T)
+                print("fight odds: the ring of states, {} slots of {} x {} ({:.2f} GB on the host)".format(
+                    FOD_RING[0].S, N, FOD_L["width"], FOD_RING[0].nbytes() / 1e9), flush=True)
         if CTL_ON:                                                       # (--control) this rollout's first global row; the ring
             CTL_G0[upd] = CTL_G[0]
             if CTL_RING[0] is None:
@@ -4261,17 +4335,21 @@ def main():
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
                 bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
+                if bt_ and FOD_ON and FOD_RING[0].kept(FOD_G0[upd] + t):  # (--fight-odds) the state of this tick, kept every --fight-every ticks
+                    FOD_RING[0].push(FOD_G0[upd] + t, torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if bt_ and CTL_ON and CTL_RING[0].kept(CTL_G0[upd] + t):  # (--control) the state of this tick, kept every --control-every ticks
                     CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if int(CTL_L["mem"]) == 0 else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if H2 and bt_:                                           # (--head2) a tick with the brain's: what it knows, his stack, the hands' memory
                     sb_ = BS_.s
                     rd_ = dict(brain=sb_, trk=net.track(sb_), trz=net.trackz(sb_) if TRZ else None, ahead=net.ahead(sb_) if AH else None,
                                obs=x)
-                    u2_ = head2_.feats(H2L, hands=h, ctrl=head2_.control_t(net, sb_, h, head2_.ctrl_src(H2L)), **rd_)
+                    u2_ = head2_.feats(H2L, hands=h, ctrl=head2_.control_t(net, sb_, h, head2_.ctrl_src(H2L)),
+                                       fight=head2_.fight_t(net, sb_, h, H2L), **rd_)
                     b_u2[t // BK] = u2_.half().cpu()
                     H2S.tick(net.head2, u2_)
                     if has_snaps and onet.h2_open:                       # (the league's own head on the same brain's answer, its own hands)
-                        H2O.tick(onet.head2, head2_.feats(H2L, hands=h_opp, ctrl=head2_.control_t(net, sb_, h_opp, head2_.ctrl_src(H2L)), **rd_))
+                        H2O.tick(onet.head2, head2_.feats(H2L, hands=h_opp, ctrl=head2_.control_t(net, sb_, h_opp, head2_.ctrl_src(H2L)),
+                                                          fight=head2_.fight_t(onet, sb_, h_opp, H2L), **rd_))
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
                     if BA_SEND:                                          # (v0.4.3, BLIND_AHEAD) ... and the readout ahead's places, kept so too
@@ -4548,6 +4626,12 @@ def main():
         if AUX_W > 0:
             if AUX_BEL:
                 b_bel[T] = torch.from_numpy(np.ascontiguousarray(obs[:, BEL_IX], dtype=np.float32))
+        fod_b = None
+        if FOD_ON:
+            FOD_G[0] = FOD_G0[upd] + T                                   # (--fight-odds) the next rollout's rows follow on
+            if b_aux is not None:                                        # ... the rows whose label came in this rollout, taken out now
+                fod_b = fightodds_.batch(FOD_RING[0], FOD_G0[upd], b_aux, TRK_IX, int(FOD_L["horizon"]))
+            FOD_G0.pop(upd, None)
         ctl_b = None
         if CTL_ON:
             CTL_G[0] = CTL_G0[upd] + T                                   # (--control) the next rollout's rows follow on
@@ -4563,7 +4647,7 @@ def main():
         return dict(b_hr=b_hr, b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
-                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
+                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, fod_b=fod_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
                     b_btok=b_btok, btg=btg_, rfg=rfg_, bfg=bfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0, b_lpw=b_lpw, b_lpf=b_lpf, hb_acc=hb_acc,
@@ -4671,6 +4755,7 @@ def main():
         b_rj = R.get("b_rj")                                             # (--rj-teach)
         b_rjc = R.get("b_rjc")                                           # (--rj-copy)
         CTL_B = R.pop("ctl_b", None)                                     # (--control) this rollout's labelled states
+        FOD_B = R.pop("fod_b", None)                                     # (--fight-odds) this rollout's labelled states
         WV_B = R.pop("wv", None)                                         # (--win-value) this rollout's kept states, segments and counters
         BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
         if H2:                                                           # (--head2) its ticks' inputs, values and the intention as played; learnt
@@ -4967,7 +5052,7 @@ def main():
                     ho2_["okl"], ho2_["ops"] = okl_[sg_], ops_[sg_]
                     ho2_["tadd"] = pol.head2.padd * ta_[sg_] * al_
                     ho2_["yadd"] = pol.head2.padd * ya_[sg_] * al_
-                    ho2_["xo"], ho2_["ci"] = xo_, ci_
+                    ho2_["xo"], ho2_["ci"], ho2_["co"] = xo_, ci_, co_
                 HO2_[0] = ho2_
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk], lay=gru_layout(DN_H[:, hchunk(chunk)], dev) if NOSYNC else None)
@@ -5488,7 +5573,8 @@ def main():
                     if KEEP:                                             # (1.4c) his target where it was read, the keep choice where it decided
                         lpi_ = lpi_ * (B_LT[:, chunk] if CMB else lv) + lk_
                     if CMB:                                              # (1.7) and the combat order where it was asked, the way where read
-                        lpi_ = lpi_ + lo_                                # (the hands' way scores a number, the pointer's with their gradient)
+                        og_ = H2_OPG_[0]                                 # (1.7b) its share of this term's gradient (its value as it is)
+                        lpi_ = lpi_ + (lo_ if og_ >= 1.0 else og_ * lo_ + (1.0 - og_) * lo_.detach())   # (the hands' way scores a number, the pointer's with their gradient)
                         if B_WL is not None:
                             lyw_ = torch.log_softmax(ho2_["hands_way"] + ho2_["yadd"], -1).gather(-1, A[..., W_HEAD:W_HEAD + 1]).squeeze(-1)
                             lpi_ = lpi_ + lyw_ * B_WL[:, chunk]
@@ -5500,6 +5586,23 @@ def main():
                     pg2t_ = torch.min(r2_ * ah_, r2_.clamp(1 - clip, 1 + clip) * ah_)
                     pg2t_ = torch.where(ah_ < 0, torch.max(pg2t_, 3.0 * ah_), pg2t_)     # (the second clip: a bad choice's ratio counts at most 3)
                     pg2_ = -((ISW2[:, chunk] if DEC else 1.0) * pg2t_ * m2_).sum() / ms2_
+                    if CMB and ORD_REF is not None:                      # (1.7b, --ord-kl) the KL from the start's order to the head's, where asked
+                        klo_ = head2_.order_kl(ORD_REF, ho2_["okl"], ho2_["ops"], ho2_["xo"], ho2_["co"], torch.arange(T, device=dev) // BK)
+                        mo_ = B_OL[:, chunk] * wgt
+                        mso_ = mo_.sum().clamp(min=1.0)
+                        klm_ = (klo_ * mo_).sum() / mso_
+                        if ORD_KL_[0] > 0:
+                            loss = loss + ORD_KL_[0] * klm_
+                        if epoch == 0:
+                            with torch.no_grad():
+                                ORDKL_ACC[0] += mo_.sum().double()
+                                ORDKL_ACC[1] += (klo_ * mo_).sum().double()
+                            if k_mb == 0 and float(mo_.sum()) > 0 and ho2_["okl"].requires_grad:   # (the sizing: the two pulls on the kinds' logits)
+                                g1_ = torch.autograd.grad(klm_, ho2_["okl"], retain_graph=True, allow_unused=True)[0]
+                                g2_ = torch.autograd.grad(pg2_, ho2_["okl"], retain_graph=True, allow_unused=True)[0]
+                                ORDKL_ACC[2] += (g1_.norm().double() if g1_ is not None else 0.0)
+                                ORDKL_ACC[3] += (g2_.norm().double() if g2_ is not None else 0.0)
+                                ORDKL_ACC[4] += 1.0
                     if H2ADD:                                            # (1.3b) the two parts' sizes, their cosine, the soft cap
                         hc2_ = ho2_["hands_g"] - ho2_["hands_g"].mean(-1, keepdim=True)
                         rr2_ = ho2_["a"] * ho2_["raw"]
@@ -6130,6 +6233,17 @@ def main():
         if RINGH is not None:                                            # (--head) the rollout's ticks join its ring
             RINGH.push(HD_PEND)
             HD_PEND = []
+        FOD_REC = None
+        if FOD_ON:                                                       # (--fight-odds) the labels of this rollout: of frames FIGHT_D rows back
+            t_fod = time.time()
+            fw_ = FOD_LIVE[0] * float(a.fight_odds) * (min(1.0, max(0.0, mins - FOD_T0) / a.fight_warm) if a.fight_warm > 0 else 1.0)
+            if FOD_B is not None:
+                FOD_REC = fightodds_.record(fightodds_.learn(pol.fight, FOD_OPT, FOD_L, *FOD_B, lr=a.fight_lr * fw_, dev=dev, gen=FOD_GEN),
+                                            fw_, FOD_L, ring_gb=FOD_RING[0].nbytes() / 1e9 if FOD_RING[0] is not None else None)
+            else:
+                FOD_REC = dict(w=round(float(fw_), 4), frames=0)        # (none yet: the first FIGHT_D rows of a process)
+            FOD_REC["secs"] = round(time.time() - t_fod, 3)
+            FOD_B = None
         CTL_REC = None
         if CTL_ON:                                                       # (--control) the labels of this rollout: of frames CONTROL_D rows back
             t_ctl = time.time()
@@ -6585,6 +6699,14 @@ def main():
                                            for i_, h_ in enumerate(ahead_.HORIZ)})
         if CTL_REC is not None:                                          # (--control) scored on each label before it is learnt from
             rec["control"] = CTL_REC
+        if FOD_REC is not None:                                          # (--fight-odds) scored on each label before it is learnt from
+            rec["fight"] = FOD_REC
+        if CMB:                                                          # (1.7b) the order's share of the head's term, its KL to the start's
+            oa_ = ORDKL_ACC.cpu().numpy()
+            rec["ordkl"] = dict(opg=round(H2_OPG_[0], 5), w=round(ORD_KL_[0], 5), ref=ORD_REF is not None, frames=int(oa_[0]),
+                                kl=round(float(oa_[1] / max(1.0, oa_[0])), 6), g_kl=round(float(oa_[2] / max(1.0, oa_[4])), 6),
+                                g_pg=round(float(oa_[3] / max(1.0, oa_[4])), 6))
+            ORDKL_ACC.zero_()
         if WV_REC is not None:                                           # (--win-value) the shadow win value: its lesson, its calibration
             rec["win_value"] = WV_REC
         if LG is not None and R_SN and R_LG[0]:                          # (1.4b, --pfsp) this slice into the league table

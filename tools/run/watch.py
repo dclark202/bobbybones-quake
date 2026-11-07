@@ -74,6 +74,9 @@ def games(pol, upd, ctrl, label, ps):
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1", CUDA_VISIBLE_DEVICES="-1")
     res = {}
     tag = "prev" if ctrl == CTRL_PREV else "ref"
+    cyd_ = os.path.join(WD, "cy", "u{}".format(upd)) if (tag == "prev" and os.environ.get("CHECK_CYPHER") == "1") else ""
+    if cyd_:                                                 # (1.7b) Cypher's measures of the check's games: each job's summary
+        env = dict(env, CY_REC=cyd_)
     for w in range(0, len(MAPS), CHECK_BATCH):
         jobs = []
         for mp in MAPS[w:w + CHECK_BATCH]:
@@ -101,6 +104,18 @@ def games(pol, upd, ctrl, label, ps):
         "|", {k: "{}-{} {:.0%}".format(v["won"], v["lost"], v["share"]) for k, v in res.items() if "share" in v})
     with open(os.path.join(WD, "checks_prev.jsonl" if ctrl == CTRL_PREV else "checks_ref.jsonl"), "a") as f:
         f.write(json.dumps(dict(update=upd, mean=mean, won=W_, lost=L_, percept_speed=ps, maps=res)) + "\n")
+    if cyd_:                                                 # (1.7b) the learner's and the control's fights by the stack ratio, beside the pros'
+        try:
+            r_ = subprocess.run([PY, "tools/run/cypher_measure.py", "check", cyd_, "--update", str(upd), "--out_", os.path.join(WD, "cypher.jsonl")],
+                                cwd=P.CODE, env=env, capture_output=True, text=True, timeout=600)
+            d_ = json.loads(r_.stdout.strip().splitlines()[-1])
+            h_, c_ = d_["he"], d_["control"]
+            say("Cypher's measures update", upd, "| out-stacked: he dies {} gets away {} (control {} / {}; pros 0.30 / 0.64) | weaker hits first {} (control {}; "
+                "pros 0.47) | bigger stack wins {} (pros 0.78) | dealt a minute {} | his items {}".format(
+                    h_["out_dies"], h_["out_escapes"], c_["out_dies"], c_["out_escapes"], h_["weaker_hits_first"], c_["weaker_hits_first"],
+                    h_["bigger_wins"], h_["dealt_per_min"], h_["items"]))
+        except Exception as e:                               # noqa: BLE001
+            say("Cypher's measures update", upd, ": not read ({})".format(repr(e)[:200]))
 
 
 def rule():

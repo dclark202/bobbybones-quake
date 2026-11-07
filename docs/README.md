@@ -6,7 +6,7 @@
 | [HISTORY.md](HISTORY.md) | every version and experiment: what it tried, what happened, the lesson |
 | [BACKLOG.md](BACKLOG.md) | open work and ideas, numbered `B-nn` (closed items: [archive/BACKLOG_closed.md](archive/BACKLOG_closed.md)) |
 | [runs/](runs/) | one folder per model run (from v0.6.0): `CARD.md`, its `train.cmd` and `start.ps1`, reports |
-| [design/](design/) | current designs: [AIM2_MODEL.md](design/AIM2_MODEL.md) (the aim), places, zones, jumps, openings, QLStats |
+| [design/](design/) | current designs: [AIM2_MODEL.md](design/AIM2_MODEL.md) (the aim), [CYPHER.md](design/CYPHER.md) (a champion's way of winning set against Bobby, the proposals B-302 to B-311), places, zones, jumps, openings, QLStats |
 | [guides/](guides/) | [RUNNING.md](guides/RUNNING.md) (runs and backups), [PLAYTEST.md](guides/PLAYTEST.md), [COMMANDS.md](guides/COMMANDS.md), [LOGS.md](guides/LOGS.md), [ATLAS.md](guides/ATLAS.md) |
 | [archive/](archive/) | frozen: the per-version folders v0.2 … v0.5.3 (`versions/`), the daily results log ([RESULTS.md](archive/RESULTS.md)), old plans |
 | `INPUTS*.csv`, `*.json`, `MAPS.md` | data that tools read by path (they stay here until the tools' paths move: B-203) |

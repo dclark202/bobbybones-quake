@@ -38,7 +38,7 @@ def names(path):
 
 def fit_list(lst, n):
     """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
-    if len(lst) > n and all(g_ == "b17 order" for g_, _ in lst[n:]):
+    if len(lst) > n and all(g_ in ("b17 order", "b17b timers") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
         return lst[:n]
     return lst
 
@@ -154,6 +154,12 @@ def play(job):
     (envmod, envvars, mp, games, minutes, seed, pol, idx, opp_kind, opp_pol, opp_idx, round_secs, swap, delays) = job
     os.environ.update(envvars)
     E = importlib.import_module(envmod)
+    CYR_ = os.environ.get("CY_REC") or ""                    # (1.7b) Cypher's measures of this job's games (tools/run/cypher_measure.py):
+    if CYR_:                                                 # every frame recorded, a small summary written at the end; off: as before
+        sys.path.insert(0, os.path.join(ROOT, "tools", "run"))
+        import cypher_measure as CY_
+        CY_._recorder(E)
+        CY_._REC.clear()
     nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
     env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
                     nav=nav_ if os.path.exists(nav_) else None)
@@ -426,6 +432,16 @@ def play(job):
             if OT_ and live_.any() and ot_n < int(getattr(E, "OT_CAP", 10)):
                 ot_n += 1
                 end_ += int(round(float(getattr(E, "OT_LEN", 120.0)) / E.DT))
+    if CYR_ and CY_._REC.get("R"):                          # (1.7b, CY_REC) the summary, by side (0: he, 1: the opponent)
+        try:
+            R_ = {k_: np.stack(v_) for k_, v_ in CY_._REC["R"].items()}
+            R_.update(dt=float(E.DT), big=np.array(CY_._REC["big_lab"]), big_pos=CY_._REC["big_pos"])
+            os.makedirs(CYR_, exist_ok=True)
+            with open(os.path.join(CYR_, "cy_{}_{}_{}.json".format(mp, seed, int(swap))), "w") as fh_:
+                json.dump(CY_.summarize(R_, side), fh_)
+        except Exception as e_:                              # noqa: BLE001  (a measure, never the check's result)
+            print("CY_REC: no summary ({})".format(repr(e_)[:200]), flush=True)
+        CY_._REC.clear()
     if reg_ is not None:
         kills, c, sty, first, st_reg = reg_
         score = final.reshape(-1)
