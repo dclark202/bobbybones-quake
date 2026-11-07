@@ -28,6 +28,46 @@ change by the distance of the fight they expect. Cypher: "everything you do in Q
 made before the sighting, not a reaction after it; Bobby's choice is a key press on the present frame, and the press that would change a
 plan (the rail at range, rockets before a corner) is almost never tried.
 
+## Experiments of 2026-11-07 (owner: "I'll let you run experiments now ... I just want more fighting and varied weapons")
+
+**Does he fight less than before? No.** From the watcher's checks (both sides, ten maps): frags a player per ten-minute game
+v0.6.0 9.3, b1.2a 6.6, b1.2d 7.7, 1.3b's end 9.6, 1.6a 11.3, 1.7a's u10 11.6, 1.7b's u90 10.4; the enemy in view 15 to 18% of
+the time throughout. **What changed is the weapon** (in hand with the enemy in view, rockets / rail / lightning):
+
+| | v0.6.0 | b1.1a's end | b1.2a | b1.2d | 1.3b start → end | 1.4b | 1.6a | 1.7a u10 | 1.7b u90 |
+|---|---|---|---|---|---|---|---|---|---|
+| in hand in view | 18 / 26 / 43% | 29 / 14 / 35% | 27 / 8 / 46% | 39 / 6 / 39% | 36 / 5 / 42 → 30 / 4 / 51% | 24 / 2 / 63% | 21 / 1 / 66% | 24 / 1 / 65% | 19 / 1 / 70% |
+
+The rail went over b1.1 to b1.2a (unexplained then, HISTORY b1.0a); the lightning gun took over in 1.3b's run and 1.4b.
+
+**A push on his weapon key at play time, no training** ([exp/wpush.py](exp/wpush.py): 1.7a's u90 pushed against itself plain,
+200 games, the u90 check's own settings read back and compared; `sim/test_suite.py` WeaponPush, `tools/duel_eval.py --wpush`).
+"share": every press of the three raised by p x the pros' share (the 1.5a habit seats' form); "ratio": a press of weapon j gets
+p x (log s_j - log s_held), the pros' shares (in view by distance, out of view their travelling hand).
+
+| arm | record (win rate) | rockets / rail / lightning in hand in view | ... out of view | rockets' share of his frags | kills a player per 10 min, pushed / plain |
+|---|---|---|---|---|---|
+| plain (the other side, every arm) | | 18 to 21 / 1 / 69 to 72% | 18 to 20 / 1 / 64 to 67% | 10% | |
+| share 2 | 111-89 (55.5%) | 21 / 1 / 70% | 22 / 1 / 65% | | 11.9 / 10.7 |
+| share 4 | 96-104 (48.0%) | 25 / 1 / 67% | 26 / 1 / 61% | | 10.8 / 11.0 |
+| ratio 0.5 | 98-102 (49.0%) | 22 / 1 / 69% | 21 / 1 / 64% | | 11.2 / 11.0 |
+| ratio 1 | 100-100 (50.0%) | 24 / 1 / 67% | 24 / 1 / 60% | 14% | 11.0 / 11.2 |
+| **ratio 3** | **85-115 (42.5%)** | **35 / 1 / 55%** | **38 / 1 / 47%** | **24%** | **9.8 / 11.8** |
+| the pros | | 41 / 14 / 32% | 57 / 12 / 9% | | |
+
+**Why a push moves him so little** ([exp/wkey_diag.py](exp/wkey_diag.py), 6 games of 5 min on Blood Run): at a reading of his
+weapon key with the lightning gun in hand out of view he gives "press the lightning gun" (a no-op) 0.67, "keep" 0.29, "press
+rockets" 0.003; with rockets in hand he presses back to the lightning gun 6 to 8% of readings. A press of another weapon is a
+rare event, and a push multiplies a rare event: ratio 1 (+1.8 on rockets from the lightning gun) took it to 0.0096.
+
+**What it says.** Up to ratio 1 the mix moves little and costs nothing (49 to 55%); at ratio 3 the mix comes halfway to the pros'
+and he loses 42.5%: his hands fight worse with rockets than with the lightning gun as they are. So the lightning gun is the best
+weapon *for today's hands*, which never practise rocket fights (b1.2d's hands did: 39% rockets, "the rocket fights are getting
+much better", owner). The rail is two problems: owned with ammunition 33% of his time on Aerowalk and held about 1%, and never
+owned on Campgrounds (0%; B-286); even ratio 3 left it at 1% (the push for it is large only in view beyond about 700 units,
+where he rarely is with it). Cypher's measures under ratio 3 (`wpush/r3/cypher.jsonl`): the pushed side out-stacked dies 55% (plain 53%),
+deals 327 a minute (plain 336); his items as before.
+
 ## The proposal (rough)
 
 **The weapon plan: the head holds the weapon he should have in hand**, five times a second, and he follows it unless his hands override.

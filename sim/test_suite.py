@@ -31,6 +31,55 @@ MAPS = ("bloodrun", "aerowalk", "lostworld")
 SUITE_VERSION = 1
 
 
+class WeaponPush:
+    """(1.7c experiments, 2026-11-07) a fixed push on the weapon key's logits toward the pros' weapon in hand, in the checks only
+    (tools/duel_eval.py --wpush): the trainer's habit seats' "pro" kind (sim/train_duel_rnn.py habit_push, 1.5a part C). With the
+    enemy noticed in view: p x the pros' share in hand at that distance (docs/pro_tables.json, bins of 50 units); out of view: p x
+    their travelling hand (sim/pro_hand.json, the four bands weighted by their minutes); each share among rockets, rail and the
+    lightning gun he owns with ammunition, on those three keys (the key: 0 keep, then 1 + the weapon's index). Nothing else moves.
+      p      the push (the habit seats': 2)
+      names  the network's input names, its columns in order (duel_eval's `old`)
+      form   "share" (above: every press of the three raised by p x the pros' share, so in view the lightning gun's about as much as
+             rockets'; it moved his hand 20 -> 22% at p 2) or "ratio" (by the weapon he holds: a press of weapon j gets
+             p x (log s_j - log s_held), the pros' shares floored at 0.03; plus where they prefer j to what he holds, minus where
+             less, nothing for the one in hand; holding none of the three: against the mean of the owned ones' logs)"""
+
+    def __init__(self, p, names, form="share"):
+        self.p = float(p)
+        assert form in ("share", "ratio"), form
+        self.form = form
+        ix = {(n_[1] if isinstance(n_, (tuple, list)) else n_): i_ for i_, n_ in enumerate(names)}   # (duel_eval's names: (group, input))
+        self.hold = [ix["holding " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
+        self.inv = ix["noticed in view"]
+        self.pos = [ix["last known position: " + d_] for d_ in ("forward", "left", "up")]
+        self.own = [ix["owns " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
+        self.ammo = [ix["ammo: " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
+        pt_ = json.load(open(os.path.join(ROOT, "docs", "pro_tables.json"), encoding="utf-8"))["all"]
+        self.tin = np.stack([np.asarray(pt_["in_hand_by_distance"][w_], np.float64) for w_ in ("rl", "rg", "lg")], 1)
+        ph_ = json.load(open(os.path.join(HERE, "pro_hand.json"), encoding="utf-8"))
+        sh_ = np.asarray(ph_["maps"]["all"]["share"][0], np.float64)[:, :3]
+        mn_ = np.asarray(ph_["maps"]["all"]["minutes"][0], np.float64)
+        self.tout = (sh_ * mn_[:, None]).sum(0) / mn_.sum()
+
+    def __call__(self, obs):
+        """obs [B, his inputs] raw -> [B, 3] the adds on the keys of rockets, rail, lightning"""
+        own_ = (obs[:, self.own] > 0.5) & (obs[:, self.ammo] > 0.0)
+        d_ = 1000.0 * np.sqrt((obs[:, self.pos].astype(np.float64) ** 2).sum(1))
+        bin_ = np.clip((d_ // 50.0).astype(np.int64), 0, len(self.tin) - 1)
+        if self.form == "ratio":
+            lp_ = np.log(np.maximum(np.where((obs[:, self.inv] > 0.5)[:, None], self.tin[bin_], self.tout[None, :]), 0.03))
+            hd_ = obs[:, self.hold] > 0.5
+            no_ = own_.sum(1)
+            ref_ = np.where(hd_.any(1), (lp_ * hd_).sum(1), (lp_ * own_).sum(1) / np.maximum(no_, 1))
+            return (self.p * (lp_ - ref_[:, None]) * own_).astype(np.float32)
+        sh_ = np.where((obs[:, self.inv] > 0.5)[:, None], self.tin[bin_], self.tout[None, :]) * own_
+        tot_ = sh_.sum(1)
+        b_ = np.zeros((len(obs), 3), np.float32)
+        ok_ = tot_ > 0
+        b_[ok_] = (self.p * sh_[ok_] / tot_[ok_, None]).astype(np.float32)
+        return b_
+
+
 def sig(x):
     return 1.0 / (1.0 + np.exp(-x))
 
@@ -496,6 +545,9 @@ class Policy:
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()
             logits[:, int(o_[11]) + 1] -= self.fade
+        if getattr(self, "wpush", None) is not None:        # (1.7c experiments, checks only) the fixed push toward the pros' weapon
+            logits = logits.copy()
+            logits[:, int(o_[6]) + 1:int(o_[6]) + 4] += self.wpush(obs)
         u_ = [self.rng.random((len(logits), 1)) for _ in self.dims]       # (one number a player and output, in the outputs' order)
         out = np.zeros((len(logits), len(self.dims)), np.int64)
 

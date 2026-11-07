@@ -245,7 +245,8 @@ def play(job):
                                   "standing", "stuck", "own_deaths", "fire_vis", "both", "lower", "higher", "vis_lower", "vis_higher", "empty", "empty_fire",
                                   "legs", "at400",        # (LEGS) frames his legs carried him; frames at 400 units a second or more
                                   "unseen_hits", "unseen_dmg",    # hits he takes (10 points or more on a frame) while the other side has nobody in view
-                                  "exposed", "watching")}         # the other side has him in view and he has nobody in view; the reverse
+                                  "exposed", "watching",          # the other side has him in view and he has nobody in view; the reverse
+                                  "out", "out_rl", "out_rg", "out_lg")}   # (1.7c) alive with nobody in view: frames, and with each in hand
     still = np.zeros(n)                                         # seconds he has been standing (under 50 units a second)
     life, got, was = np.zeros(n), np.zeros(n, bool), np.zeros(n, bool)
     first = [[], []]
@@ -280,6 +281,7 @@ def play(job):
     end_ = frames
     final = None
     ot_n, reg_ = 0, None
+    fw_ = np.zeros((2, len(E.WEAPONS)))                       # (1.7c) frags by weapon, he / the opponent (overtime included)
     t = -1
     while t + 1 < end_:
         t += 1
@@ -354,6 +356,8 @@ def play(job):
             if k >= 0 and k != v:
                 score[k] += 1
                 kills[k] += 1
+                if int(e.get("weapon", -1)) >= 0:                # (1.7c) frags by weapon, each side its own (the simulator's counters add both networks)
+                    fw_[side[k], int(e["weapon"])] += 1
                 sty["frags"][side[k], sty0[k]] += 1
             else:
                 score[v] -= 1                                   # his own hand or the map: a point off, as in the game
@@ -408,6 +412,10 @@ def play(job):
                 c["unseen_dmg"][s_] += -(dh + da)[hit_ & m].sum()
                 c["exposed"][s_] += (alive & ~vis & vis[other])[m].sum()
                 c["watching"][s_] += (vis & alive[other] & ~vis[other])[m].sum()
+            oov_ = alive & ~vis
+            c["out"][s_] += oov_[m].sum()
+            for w_, k_ in zip(big, ("out_rl", "out_rg", "out_lg")):
+                c[k_][s_] += (oov_ & (env.weapon == w_))[m].sum()
             c["standing"][s_] += (alive & (spd < 50.0))[m].sum()
             c["stuck"][s_] += (still > 3.0)[m].sum()
             c["wp"][s_] += gain_w[m].sum()
@@ -451,7 +459,7 @@ def play(job):
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 overtime_periods=ot_n,
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),
-                sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_,
+                sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_, fw=fw_.tolist(),
                 st={k: (st_reg[k] - st0[k]).tolist() for k in SK})
 
 
@@ -501,6 +509,10 @@ def main():
     ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
                     "PERCEPT_SIGMA=0.48,AIM2_W=0); the rest of his aim is the process's. Needs AIM2, AIM2_SPLIT, AIM2_FOCUS on (--set) to seat AIM2 beside the old model")
     ap.add_argument("--aim-opp", default="", help="... the opponent's seats")
+    ap.add_argument("--wpush", type=float, default=0.0, help="(1.7c experiments) a fixed push of this size on his weapon key toward the pros' weapon "
+                    "in hand (sim/test_suite.py WeaponPush: in view by distance, out of view their travelling hand); 0: none")
+    ap.add_argument("--opp-wpush", type=float, default=0.0, help="... on the opponent network's")
+    ap.add_argument("--wpush-form", default="share", help="(1.7c experiments) share or ratio (sim/test_suite.py WeaponPush)")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
@@ -528,6 +540,9 @@ def main():
     old = fit_list(names(a.inputs), len(pol.mean))
     assert len(old) == len(pol.mean), "the network has {} inputs, {} lists {}".format(len(pol.mean), a.inputs, len(old))
     idx = np.array([now.index(x) for x in old])
+    if a.wpush:                                              # (1.7c experiments) the fixed push toward the pros' weapon, his seats
+        pol.wpush = T.WeaponPush(a.wpush, old, a.wpush_form)
+        print("weapon push {:g} ({}) toward the pros' hand (in view by distance, out of view their travelling hand)".format(a.wpush, a.wpush_form), flush=True)
     opp_pol, opp_idx, kind = None, None, a.opp
     if a.opp.startswith("policy:"):
         opp_pol = T.Policy(a.opp[7:], seed=2)
@@ -542,6 +557,8 @@ def main():
         oo = fit_list(names(a.opp_inputs), len(opp_pol.mean))
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
+        if a.opp_wpush:
+            opp_pol.wpush = T.WeaponPush(a.opp_wpush, oo, a.wpush_form)
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
     if a.contact:
@@ -603,7 +620,8 @@ def main():
                             lower_in_view=round(float(c["vis_lower"][s_] / max(1.0, c["vis"][s_])), 3), higher_in_view=round(float(c["vis_higher"][s_] / max(1.0, c["vis"][s_])), 3),
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
                             mega_share=round(float(c["mega"][s_] / (pm * 60 / 35.0)), 3), red_share=round(float(c["red"][s_] / (pm * 60 / 25.0)), 3),
-                            yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2))
+                            yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2),
+                            in_hand_out_of_view={w_: round(float(c["out_" + w_][s_] / max(1.0, c["out"][s_])), 3) for w_ in ("rl", "rg", "lg")})   # (1.7c) travelling
             # by the kind of life: lives begun; the share of his time alive in such lives; frags, deaths (of any kind) and frags a
             # death; of that time the share with the enemy in view; of the time in view the share with each of the three in hand
             row[who]["by_style"] = {nm: dict(lives=int(sy["lives"][s_, j]), time=round(float(sy["alive"][s_, j] / max(1.0, sy["alive"][s_].sum())), 3),
@@ -613,6 +631,8 @@ def main():
                                              in_hand_in_view={w: round(float(sy["hand"][s_, j, q] / max(1.0, sy["vis"][s_, j])), 3)
                                                               for q, w in enumerate(("rl", "rg", "lg"))})
                                     for j, nm in enumerate(SN)}
+            fws_ = np.sum([np.array(r["fw"])[s_] for r in res if "fw" in r], 0)     # (1.7c) this side's own frags by weapon
+            row[who]["frags_by_weapon"] = {w_: round(float(x_ / max(1.0, np.sum(fws_))), 3) for w_, x_ in zip(res[0]["weapons"], np.atleast_1d(fws_)) if x_ > 0}
         st = {k: np.sum([np.array(r["st"][k]) for r in res], 0) for k in res[0].get("st", {})}
         if "sc_frags_w" in st:                               # (staging) the scripted opponent's frags by weapon
             row["opponent"]["frags_w"] = {w: float(x) for w, x in zip(res[0]["weapons"], np.array(st["sc_frags_w"])) if x > 0}
