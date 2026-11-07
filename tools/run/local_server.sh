@@ -5,8 +5,8 @@
 # <save>: a file in the run's folder, or a full path. Never public: the server is unlisted and its games stay out of the public site.
 # It refuses if the save is missing, or another container holds the port (it never stops a server: someone may be on it).
 # Options: PORT (27970), MAP, IMAGE (qlbot:playaim2), ENVMOD (duel_env_ffa), LEGS (move_v17_look), CARD_CMD (the run's train.cmd, for the settings check),
-# DATA (data/duellive_<version without dots>), EXPORT_ONLY=1 (stop after the !aim files), WEAPONS (off, light or strong: the !weapons
-# dial's setting at a map's start, plugins/duelbot.py DUEL_WEAPONS; default off).
+# DATA (data/duellive_<version without dots>), EXPORT_ONLY=1 (stop after the !aim files), WEAPONS (off, light, strong or pros: the !weapons
+# dial's setting at a map's start, plugins/duelbot.py DUEL_WEAPONS; default off; pros: the table chooses his weapon).
 set -e
 export MSYS_NO_PATHCONV=1
 RUN="${1:?run}"; SAVE="${2:?save}"; VER="${3:?version}"; MAP="${4:-${MAP:-bloodrun}}"

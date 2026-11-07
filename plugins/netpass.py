@@ -538,6 +538,12 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         P["_no_switch"] = str(json.loads(str(P["env_vars"])).get("NO_SWITCH", "0")) not in ("0", "", "0.0") if "env_vars" in P else False
     if P["_no_switch"] and out.shape[1] > 11:
         out[:, 11] = 0
+    if P.get("_wdial_mode") == "replace":                    # (!weapons pros) the dial's replace form: the owner's table chooses his weapon
+        if P.get("_wdial_rng") is None:                      # the dial's own stream: every other output drawn exactly as with it off
+            P["_wdial_rng"] = np.random.default_rng(101)
+        a_ = _weapon_dial().choose(obs, P.setdefault("_wdial_state", {}), P["_wdial_rng"])    # (sim/weapon_dial.py; test_suite.Policy the same)
+        P["_wdial_act"] = a_
+        out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])        # in place of the network's weapon key where he owns one of the three
     if hb is not None:                                       # (v0.4.1) the brain's state back at the very end of the array
         h = np.concatenate([h, np.asarray(hb, np.float32)], 1)
     return out, h

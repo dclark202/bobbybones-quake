@@ -71,3 +71,51 @@ then a map change to Sinister), the dial on strong (`meta.json`). Bobby held the
 the machine gun 13%, the shotgun under 1% (the whole game, whether or not he owned rockets). That is still a lightning-gun player:
 a push on a key press he almost never makes cannot change how he plays. The server and the mind log were stopped on his word; the
 dial stays in the code, off by default, and is not on the public servers.
+
+## The replace form, `!weapons pros` (2026-11-07 evening; branch `wdial`)
+
+*Owner: "go ahead and build what you think is the right normalization for him in human play."* The table **chooses** his weapon
+instead of nudging a press ([sim/weapon_dial.py](../../../../sim/weapon_dial.py) `choose()`; the design and the training plan behind
+it: [TRAIN_UNDER_TABLE.md](TRAIN_UNDER_TABLE.md)): among rockets, the rail and the lightning gun that he owns with ammunition, one is
+drawn from the table's row for his situation and the weapon key's action is set to it (a press until it is in hand, then keep). Held
+1.5 s across a band's edge; drawn again at once when the row gives the weapon in hand nothing; where the row allows none of the three
+he owns, the network's key stands. Fire, aim and movement are his. `!weapons pros` on a server (`WEAPONS=pros` in
+`tools/run/local_server.sh`); in the checks `--wpush 1 --wpush-form replace`; `WDIAL_LOG=<file>` writes one line a player a frame
+(seat, row, held, pick, action, distance, in view) for a diagnosis.
+
+| Check | Result |
+|---|---|
+| [exp/dial_parity.py](exp/dial_parity.py), the plugin's path against the checks' | ALL PASSED: the same weapon key action in both every frame (200 frames x 8 players); every press of a weapon owned with ammunition; where the row allows none the network's key stands and every other output is exactly the dial-off draw (the dial has its own random stream) |
+| Does he hold what the table chose? (`WDIAL_LOG`, Blood Run 2 games; Aerowalk and Campgrounds 2 games) | held = chosen on 98 to 99% of the frames the dial is active; a switch lands in a median of 1 frame (mean 1.8, p90 4), 94% of the choices realised. **In view at long range with the dial active: rockets 79 / rail 17 / lightning 4%** (Aerowalk, Campgrounds) |
+| When does it stand aside? | the row allows none of the three he owns on 14 to 16% of all frames (a spawn's machine gun), and on **40% of the long-range frames in view on Aerowalk and Campgrounds**: no rockets with ammunition and no rail. That, not the dial, is the lightning gun he still shows at range (the check's bands: lightning in hand at over 700 units 50%, all maps) |
+
+**In the simulator** (1.7a's update 90 under the table against the same save plain, 200 ten-minute games on ten maps, the u90 check's own
+settings; `wpush.py --form replace --cy`; [exp/wsum.py](exp/wsum.py)):
+
+| | record (win rate) | frag share | rockets / rail / lightning in hand in view | ... out of view | frags by rockets / lightning | kills a player per 10 min, table / plain |
+|---|---|---|---|---|---|---|
+| **pros (the replace form)** | **69-131 (34.5%)** | 44.0% | **53 / 2 / 40%** | 53 / 3 / 33% | **41 / 57%** | 8.8 / 11.4 |
+| strong (the push, p 4) | 67-133 (33.5%) | 43.4% | 41 / 1 / 49% | 43 / 1 / 41% | 18 / 77% | 9.2 / 11.9 |
+| plain (the other side) | | | 18 / 1 / 74% | 19 / 1 / 68% | 12 / 84% | |
+| the pros | | | 41 / 14 / 32% | 57 / 12 / 9% | | |
+
+Maps: Toxicity 10-10, Blood Run 9-11, Campgrounds 8-12, Cure 8-12, Lost World 7-13, Hektik 7-13, Sinister 6-14, Aerowalk 5-15,
+Furious Heights 5-15, Battleforged 4-16. His hits under the table: rockets 48%, lightning 36%, the rail 22% (0.2 shots a minute: too
+rarely owned to judge his trigger with it). Lives a minute 2.50 against 1.93 (he dies more); the mega 41% against 49%; damage from
+unseen 16 against 23 a minute (he fires less blind).
+
+| Cypher's measures (`cypher_measure.py check`, 6,875 fights) | him under the table | the plain side | the pros |
+|---|---|---|---|
+| out-stacked: dies / escapes | 51.7 / 45.2% | 45.4 / 48.3% | 29.9 / 63.9% |
+| the weaker side hits first | 17.9% | 34.5% | 46.9% |
+| the bigger stack wins the fight | 79.7% | 89.9% | 77.5% |
+
+**What it says.** The replace form does what the push could not: the weapon in his hand is the table's (rockets 53% in view, the pros'
+41%; frags by rockets 41% against 12%), and it costs what the push at "strong" cost (34.5% against himself; the owner: acceptable).
+His hands fight worse with rockets against a copy that has lightning: 8.8 kills to 11.4, dies more, and as the weaker side he hits
+first half as often (rockets land later than lightning). **None of Cypher's numbers improves before training**: the table changes the
+weapon, not the fight decision; whether they move is what the run under the table ([TRAIN_UNDER_TABLE.md](TRAIN_UNDER_TABLE.md))
+measures. **The rail stays out of his hand (2 to 3%) because he does not own it**, and at long range he lacks rockets with
+ammunition or the rail 40% of the time on the long maps: the items side (the rail and rocket ammunition as things worth taking) is a
+limit the dial cannot move and the run's panel must report. His rockets' hits (48%) are above the pros' (36%) against a copy; against
+people they are measured in the play test's `player_stats` before any public server.

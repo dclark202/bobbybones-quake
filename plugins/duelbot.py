@@ -236,7 +236,7 @@ class duelbot(minqlx.Plugin):
         # (owner, 2026-10-26: duels on the ten maps only: !duel, !match, !reflex, !movement, !room, !rooms, !drill, !arena,
         # !spar, !nosg removed; their code below is no longer reachable from chat)
         self.add_command("aim", self.cmd_aim, 0, usage="[worse|default|better|max]")
-        self.add_command("weapons", self.cmd_weapons, 0, usage="[off|light|strong]")
+        self.add_command("weapons", self.cmd_weapons, 0, usage="[off|light|strong|pros]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
         if os.environ.get("DUEL_MIND", "") == "1":           # (owner, 2026-10-24: "make it so the mind records the game") on from the start
@@ -469,8 +469,8 @@ class duelbot(minqlx.Plugin):
 
     AIM_WELCOME = ("^3My aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains ^6(default)^7, ^2!aim better^7 sharper, "
                    "^2!aim max^7 no human limits. The player in the duel can change it at any time.")
-    WEAPONS_WELCOME = ("^3My weapons:^7 ^2!weapons off^7 as he trains, ^2!weapons light^7 or ^2!weapons strong^7: more rockets close "
-                       "and mid range and when out of sight, the rail at long range.")
+    WEAPONS_WELCOME = ("^3My weapons:^7 ^2!weapons off^7 as he trains, ^2!weapons light^7 or ^2!weapons strong^7: a nudge toward rockets "
+                       "close and mid range and when out of sight, the rail at long range; ^2!weapons pros^7: that table chooses my weapon.")
 
     def on_player_loaded(self, player):
         if not is_bot(player):
@@ -1046,6 +1046,7 @@ class duelbot(minqlx.Plugin):
             X_, C_, _ = self.env.order_feat()                # (1.7) a keep reading: the combat order's candidates now (the checks' and the
             kw_["ox"] = (X_[:1], C_[:1])                     # trainer's: after the head's tick)
         self.P["_wdial"] = self.WDIAL_LEVELS.get(getattr(self, "wdial", "off"), 0.0)    # (!weapons) the dial's push, read in step()
+        self.P["_wdial_mode"] = "replace" if getattr(self, "wdial", "off") == self.WDIAL_REPLACE else None    # (!weapons pros) the table chooses
         acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **kw_, **pz)
         if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
             _net.brain_feed(self.P, self.env, self.h, [0])
@@ -1836,21 +1837,24 @@ class duelbot(minqlx.Plugin):
     # ------------------------------------------------------------------ !weapons (owner, 2026-11-07)
     # "What I want to see is him use rockets both in close and medium range, and for zoning. Use LG at close range, and rail
     # at long range ... perhaps there's a way to nudge toward that for play against people?" A push on his weapon key toward
-    # the owner's table (sim/weapon_dial.py; netpass.step adds it): off (the network as it trained), light, strong. Takes
-    # effect at once (the push is read every frame). As !aim: the person in the duel or the server's owner may change it;
-    # back to the default (DUEL_WEAPONS, else off) on a new map and when the person in the duel leaves.
+    # the owner's table (sim/weapon_dial.py; netpass.step adds it): off (the network as it trained), light, strong; and pros (the
+    # replace form, 11-07 evening, after the push "didnt do fucking anything": the table chooses his weapon in place of the
+    # network's key, weapon_dial.choose in netpass.step). Takes effect at once (read every frame). As !aim: the person in the
+    # duel or the server's owner may change it; back to the default (DUEL_WEAPONS, else off) on a new map and when the person
+    # in the duel leaves.
     try:
         import weapon_dial as _wd                            # (/sim is on the path)
-        WDIAL_LEVELS = dict(_wd.LEVELS)
+        WDIAL_LEVELS = {s_: float(_wd.LEVELS.get(s_, 0.0)) for s_ in _wd.SETTINGS}    # the push of each setting (0 for off and pros)
+        WDIAL_REPLACE = _wd.REPLACE
     except Exception:                                        # noqa: BLE001 - an older sim/ without the dial: no !weapons
-        WDIAL_LEVELS = {}
+        WDIAL_LEVELS, WDIAL_REPLACE = {}, "pros"
     WDIAL_DEFAULT = os.environ.get("DUEL_WEAPONS", "off") if os.environ.get("DUEL_WEAPONS", "off") in WDIAL_LEVELS else "off"
 
     def wdial_set(self, level, why):
         """the dial's setting now, recorded in the session's events and the log"""
         was = getattr(self, "wdial", "off")
         self.wdial = level
-        self.record(event="weapons", level=level, push=self.WDIAL_LEVELS.get(level, 0.0), was=was, why=why)
+        self.record(event="weapons", level=level, push=self.WDIAL_LEVELS.get(level, 0.0), replace=(level == self.WDIAL_REPLACE), was=was, why=why)
         self.log("weapons {} (was {}): {}".format(level, was, why))
 
     def wdial_reset(self, why):
@@ -1859,14 +1863,14 @@ class duelbot(minqlx.Plugin):
             self.msg("^3weapons reset to:^7 ^2{}^7".format(self.WDIAL_DEFAULT))
 
     def cmd_weapons(self, player, msg, channel):
-        """!weapons: the dial now. !weapons off|light|strong: that setting at once (the person playing the duel, or the
+        """!weapons: the dial now. !weapons off|light|strong|pros: that setting at once (the person playing the duel, or the
         server's owner)"""
         if not self.WDIAL_LEVELS:
             player.tell("^3The weapon dial is not on this server.^7")
             return
         cur = getattr(self, "wdial", "off")
         if len(msg) < 2:
-            player.tell("^3Weapons^7 ^2{}^7 (^2!weapons off|light|strong^7 to change)".format(cur))
+            player.tell("^3Weapons^7 ^2{}^7 (^2!weapons {}^7 to change)".format(cur, "|".join(self.WDIAL_LEVELS)))
             return
         lv = msg[1].lower().strip()
         if lv not in self.WDIAL_LEVELS:

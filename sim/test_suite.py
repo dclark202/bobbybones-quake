@@ -43,13 +43,16 @@ class WeaponPush:
              rockets'; it moved his hand 20 -> 22% at p 2) or "ratio" (by the weapon he holds: a press of weapon j gets
              p x (log s_j - log s_held), the pros' shares floored at 0.03; plus where they prefer j to what he holds, minus where
              less, nothing for the one in hand; holding none of the three: against the mean of the owned ones' logs) or "dial" (the
-             ratio form on the owner's table instead of the pros': sim/weapon_dial.py, the servers' !weapons)"""
+             ratio form on the owner's table instead of the pros': sim/weapon_dial.py, the servers' !weapons) or "replace" (no push:
+             the owner's table chooses his weapon and the key's action is set to it in place of the network's, sim/weapon_dial.py
+             choose(); the servers' !weapons pros; p only switches it on)"""
 
     def __init__(self, p, names, form="share"):
         self.p = float(p)
-        assert form in ("share", "ratio", "dial"), form
+        assert form in ("share", "ratio", "dial", "replace"), form
         self.form = form
-        if form == "dial":                                   # (owner, 2026-11-07) the owner's table: sim/weapon_dial.py, as the servers run it
+        self.state = {}                                      # (replace) weapon_dial.choose's memory of the seats, frame to frame
+        if form in ("dial", "replace"):                      # (owner, 2026-11-07) the owner's table: sim/weapon_dial.py, as the servers run it
             return                                           # (no module kept on self: the checks' pools pickle the policy)
         ix = {(n_[1] if isinstance(n_, (tuple, list)) else n_): i_ for i_, n_ in enumerate(names)}   # (duel_eval's names: (group, input))
         self.hold = [ix["holding " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
@@ -65,7 +68,9 @@ class WeaponPush:
         self.tout = (sh_ * mn_[:, None]).sum(0) / mn_.sum()
 
     def __call__(self, obs):
-        """obs [B, his inputs] raw -> [B, 3] the adds on the keys of rockets, rail, lightning"""
+        """obs [B, his inputs] raw -> [B, 3] the adds on the keys of rockets, rail, lightning (zeros in the replace form: actions())"""
+        if self.form == "replace":
+            return np.zeros((len(obs), 3), np.float32)
         if self.form == "dial":
             import weapon_dial
             return weapon_dial.push(obs, self.p)
@@ -84,6 +89,14 @@ class WeaponPush:
         ok_ = tot_ > 0
         b_[ok_] = (self.p * sh_[ok_] / tot_[ok_, None]).astype(np.float32)
         return b_
+
+    def actions(self, obs, rng):
+        """(replace) [B] the weapon key's action the table chooses this frame, -1 where the network's own stands (none of the three
+        owned with ammunition); None in the push forms"""
+        if self.form != "replace":
+            return None
+        import weapon_dial
+        return weapon_dial.choose(obs, self.state, rng)
 
 
 def sig(x):
@@ -109,6 +122,7 @@ class Policy:
         self.round_secs = float(ck.get("round_secs") or 120.0)    # his clock, score and memory start over every this many seconds; 600: whole games, never (tools/duel_eval.py SeatClock)
         self.H = self.whh.shape[1]
         self.rng = np.random.default_rng(seed)
+        self.seed = int(seed)                                # (the weapon dial's own stream, replace form: seed + 101)
         self.attn = ck.get("attn")                           # (v0.2) the attention part: its layout and weights; skipped while its door is shut
         self.attP = None
         if self.attn is not None:
@@ -569,6 +583,11 @@ class Policy:
             one(int(c_), logits[:, o_[c_]:o_[c_ + 1]] + self.orderT[int(c_)][out[:, int(p_)]])
         if self.no_switch and out.shape[1] > 11:             # (NO_SWITCH) drawn as before, then off: his own network drives
             out[:, 11] = 0
+        if getattr(self, "wpush", None) is not None and self.wpush.form == "replace":     # (the dial's replace form, !weapons pros)
+            if getattr(self, "wrng", None) is None:          # the dial's own stream: every other output drawn exactly as with it off
+                self.wrng = np.random.default_rng(int(self.seed) + 101)
+            a_ = self.wpush.actions(obs, self.wrng)         # the table's weapon in place of the network's key (drawn as before, then set)
+            out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])
         if hb is not None:                                   # (v0.4.1) the brain's state back at the end of the array
             h = np.concatenate([h, hb.astype(np.float32)], 1)
         if kcol is not None:                                 # (1.4c) the keep column after the outputs (the simulator takes it off)

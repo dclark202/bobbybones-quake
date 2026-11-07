@@ -43,7 +43,7 @@ def main():
     ap.add_argument("--opp", default=U90)
     ap.add_argument("--push", type=float, required=True)
     ap.add_argument("--opp-push", type=float, default=0.0)
-    ap.add_argument("--form", default="share", help="share or ratio (sim/test_suite.py WeaponPush)")
+    ap.add_argument("--form", default="share", help="share, ratio, dial or replace (sim/test_suite.py WeaponPush; replace: the table chooses, --push 1)")
     ap.add_argument("--games", type=int, default=20)
     ap.add_argument("--minutes", type=float, default=10.0)
     ap.add_argument("--batch", type=int, default=4)
@@ -78,6 +78,12 @@ def main():
     mine.update({am_[k]: v for k, v in hd_.items()})
     ref_all = dict(ref_, **seat_)
     diff = sorted(set(mine) ^ set(ref_all)) + sorted(k for k in set(mine) & set(ref_all) if str(mine[k]) != str(ref_all[k]))
+    if "LEGS_NET" in diff and os.path.isfile(str(mine.get("LEGS_NET"))) and os.path.isfile(str(ref_all.get("LEGS_NET"))):
+        import hashlib                                       # (a worktree with its own copy of data/: the same file by another path is allowed,
+        h_ = [hashlib.sha256(open(p_, "rb").read()).hexdigest() for p_ in (mine["LEGS_NET"], ref_all["LEGS_NET"])]   # a different file is not)
+        if h_[0] == h_[1]:
+            diff.remove("LEGS_NET")
+            print("LEGS_NET: another path to the same file (sha256 {}): allowed".format(h_[0][:12]), flush=True)
     if diff:
         print("REFUSED: the settings differ from 1.7a's u90 check:", {k: (mine.get(k), ref_all.get(k)) for k in diff}, flush=True)
         sys.exit(1)

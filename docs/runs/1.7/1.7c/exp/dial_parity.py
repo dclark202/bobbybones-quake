@@ -21,7 +21,7 @@ import test_suite as T  # noqa: E402
 import weapon_dial as WD  # noqa: E402
 
 OK = [True]
-U90 = os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_7a", "keep", "policy_90.pt")
+U90 = os.environ.get("U90") or os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_7a", "keep", "policy_90.pt")   # (U90=<path>: from a worktree without data/)
 
 
 def check(name, c):
@@ -89,6 +89,57 @@ def main():
                 lv, dw, npush, B * F, rows.tolist()), dw < 1e-6 and npush > 0)
         else:
             check("off: nothing pushed ({} rows)".format(npush), npush == 0)
+    # the replace form ("pros", 11-07 evening): both paths seeded alike draw alike, so the weapon key's action must be the same in
+    # both every frame; every press is of one of the three he owns with ammunition; where he owns none of them the network's own
+    # key stands (the same as a run with the dial off on the same numbers); he presses when the row forbids the weapon in hand
+    NP.draw = orig_draw
+    pol_r, pol_0 = T.Policy(U90, seed=11), T.Policy(U90, seed=11)
+    pol_r.wpush = T.WeaponPush(1.0, [], "replace")
+    pol_r.wrng = np.random.default_rng(77)                   # the dial's own stream, the same in both paths
+    P["_wdial"], P["_wdial_mode"], P["_wdial_state"], P["_wdial_rng"] = 0.0, "replace", {}, np.random.default_rng(77)
+    h_r, h_0, h_n = pol_r.zeros(B), pol_0.zeros(B), np.zeros((B, NP.width(P)), np.float32)
+    nrng = np.random.default_rng(11)
+    pol_r.krng, pol_0.krng = np.random.default_rng(5), np.random.default_rng(5)   # (the keep choice's own stream, alike in both)
+    rng = np.random.default_rng(3)
+    pose, zmap = np.zeros((B, 4), np.float32), np.zeros(B, np.int64)
+    same_tn = same_none = True
+    bad_press = presses = forced = none_rows = 0
+    prev = None
+    for t in range(F):
+        raw = rng.normal(pol_r.mean, np.sqrt(pol_r.var) + 1e-3, size=(B, len(pol_r.mean))).astype(np.float32)
+        raw[:, list(WD.HOLD)] = 0.0
+        raw[np.arange(B), np.array(WD.HOLD)[rng.integers(0, 3, B)]] = 1.0
+        raw[:, list(WD.OWN)] = (rng.random((B, 3)) < 0.6)
+        raw[:, list(WD.AMMO)] = rng.uniform(0.0, 1.0, (B, 3)) * (rng.random((B, 3)) < 0.9)
+        raw[:, WD.INVIEW] = rng.random(B) < 0.5
+        raw[:, list(WD.POS)] = rng.normal(0, 1, (B, 3)) * rng.uniform(0.05, 0.6, (B, 1))
+        pose[:, :3] += rng.normal(0, 10, (B, 3)).astype(np.float32)
+        pose[:, 3] = rng.uniform(-180, 180, B)
+        kf = np.stack([rng.uniform(0, 16, B), (rng.random(B) < 0.3), rng.integers(0, pol_r.dims[10], B), np.zeros(B), np.zeros(B),
+                       np.full(B, 20.0), np.full(B, 20.0)], 1).astype(np.float32)
+        xl = rng.normal(0, 1, (B, pol_r.legsP[0].shape[1])).astype(np.float32) if pol_r.needs_xl else None
+        kw = {"xl": xl} if xl is not None else {}
+        ar, h_r = pol_r.act(raw, h_r, pose=pose, zmap=zmap, kf=kf, **kw)
+        a0, h_0 = pol_0.act(raw, h_0, pose=pose, zmap=zmap, kf=kf, **kw)
+        an, h_n = NP.step(P, Aa, raw, h_n, nrng, pose=pose, zmap=zmap, kf=kf, **kw)
+        own_ = (raw[:, list(WD.OWN)] > 0.5) & (raw[:, list(WD.AMMO)] > 0.0)
+        row_ = WD.situation(raw)
+        any_ = ((WD.TABLE[row_] >= WD.FLOOR) & own_).any(1)   # the row allows one of the three he owns
+        same_tn = same_tn and bool((ar[:, 6] == an[:, 6]).all())
+        same_none = same_none and bool((ar[~any_, 6] == a0[~any_, 6]).all()) and bool((ar[:, :6] == a0[:, :6]).all()) \
+            and bool((ar[:, 7:] == a0[:, 7:]).all())          # and every other output exactly as with the dial off
+        none_rows += int((~any_).sum())
+        pr_ = any_ & (ar[:, 6] > 0)
+        presses += int(pr_.sum())
+        bad_press += int((pr_ & ~own_[np.arange(B), np.clip(ar[:, 6] - 1, 0, 2)]).sum())
+        hd_ = np.array(WD.HOLD)[None, :] == np.array(WD.HOLD)[raw[:, list(WD.HOLD)].argmax(1)][:, None]
+        forbid_ = any_ & (WD.TABLE[row_][hd_] < WD.FLOOR)   # the weapon in hand gets nothing in this row (and the row allows another he owns)
+        forced += int((forbid_ & (ar[:, 6] == 0)).sum())
+    check("pros: the weapon key's action the same in the checks' path and the plugin's every frame ({} frames x {} players)".format(F, B), same_tn)
+    check("pros: where the row allows none of the three he owns the network's own key stands ({} rows), and every other output is "
+          "exactly the dial-off draw".format(none_rows), same_none and none_rows > 0)
+    check("pros: every press is of a weapon he owns with ammunition ({} presses, {} not owned)".format(presses, bad_press), presses > 0 and bad_press == 0)
+    check("pros: the weapon in hand forbidden by the row is never kept ({} kept)".format(forced), forced == 0)
     print("ALL PASSED" if OK[0] else "FAILED")
     return 0 if OK[0] else 1
 
