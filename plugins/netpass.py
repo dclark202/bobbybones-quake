@@ -527,6 +527,12 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     if float(P.get("switch_fade", 0.0)) > 0:                 # (--switch-fade) off the switch's "legs" choice, as in training
         logits = logits.copy()
         logits[:, int(np.sum(P["action_dims"][:11])) + 1] -= float(P["switch_fade"])
+    wd_ = float(P.get("_wdial") or 0.0)
+    if wd_ > 0:                                              # (owner, 2026-11-07, duelbot's !weapons) the weapon dial: a push on the presses
+        o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])    # of rockets, rail and the lightning gun
+        logits = logits.copy()                               # toward the owner's table (sim/weapon_dial.py; P["_logits"] stays the network's)
+        P["_wdial_add"] = _weapon_dial().push(obs, wd_)
+        logits[:, int(o_[6]) + 1:int(o_[6]) + 4] += P["_wdial_add"]
     out = draw(P, logits, rng)
     if P.get("_no_switch") is None:                          # (v0.3.5, NO_SWITCH) the switch retired: drawn as before, then off
         P["_no_switch"] = str(json.loads(str(P["env_vars"])).get("NO_SWITCH", "0")) not in ("0", "", "0.0") if "env_vars" in P else False
@@ -535,6 +541,16 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     if hb is not None:                                       # (v0.4.1) the brain's state back at the very end of the array
         h = np.concatenate([h, np.asarray(hb, np.float32)], 1)
     return out, h
+
+
+def _weapon_dial():
+    """sim/weapon_dial.py (on a server /sim is on the path: plugins/duelbot.py; in the repo the folder beside plugins/)"""
+    try:
+        import weapon_dial
+    except ImportError:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sim"))
+        import weapon_dial
+    return weapon_dial
 
 
 def draw(P, logits, rng):

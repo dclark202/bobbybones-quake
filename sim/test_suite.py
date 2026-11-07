@@ -42,12 +42,15 @@ class WeaponPush:
       form   "share" (above: every press of the three raised by p x the pros' share, so in view the lightning gun's about as much as
              rockets'; it moved his hand 20 -> 22% at p 2) or "ratio" (by the weapon he holds: a press of weapon j gets
              p x (log s_j - log s_held), the pros' shares floored at 0.03; plus where they prefer j to what he holds, minus where
-             less, nothing for the one in hand; holding none of the three: against the mean of the owned ones' logs)"""
+             less, nothing for the one in hand; holding none of the three: against the mean of the owned ones' logs) or "dial" (the
+             ratio form on the owner's table instead of the pros': sim/weapon_dial.py, the servers' !weapons)"""
 
     def __init__(self, p, names, form="share"):
         self.p = float(p)
-        assert form in ("share", "ratio"), form
+        assert form in ("share", "ratio", "dial"), form
         self.form = form
+        if form == "dial":                                   # (owner, 2026-11-07) the owner's table: sim/weapon_dial.py, as the servers run it
+            return                                           # (no module kept on self: the checks' pools pickle the policy)
         ix = {(n_[1] if isinstance(n_, (tuple, list)) else n_): i_ for i_, n_ in enumerate(names)}   # (duel_eval's names: (group, input))
         self.hold = [ix["holding " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
         self.inv = ix["noticed in view"]
@@ -63,6 +66,9 @@ class WeaponPush:
 
     def __call__(self, obs):
         """obs [B, his inputs] raw -> [B, 3] the adds on the keys of rockets, rail, lightning"""
+        if self.form == "dial":
+            import weapon_dial
+            return weapon_dial.push(obs, self.p)
         own_ = (obs[:, self.own] > 0.5) & (obs[:, self.ammo] > 0.0)
         d_ = 1000.0 * np.sqrt((obs[:, self.pos].astype(np.float64) ** 2).sum(1))
         bin_ = np.clip((d_ // 50.0).astype(np.int64), 0, len(self.tin) - 1)

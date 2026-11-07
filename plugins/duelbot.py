@@ -13,7 +13,7 @@ human is measured with the same metrics, giving a human baseline card (docs/guid
 Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
 there. The server is held in warmup on the three maps.
 
-Chat commands: !help, !maps, !aim, !note <text>, !mind (the owner); !map is plugins/botmode.py's. (Test rooms: no chat command since 2026-10-26.)
+Chat commands: !help, !maps, !aim, !weapons, !note <text>, !mind (the owner); !map is plugins/botmode.py's. (Test rooms: no chat command since 2026-10-26.)
 Load with QLX_PLUGINS="botctl, duelbot". Needs /tmp/practice/policy.npz (sim/export_duel.py); rooms need
 /maps/nav_<map>_sim.json. Writes /tmp/practice/sessions/<session>/ and /tmp/practice/suite/.
 """
@@ -236,6 +236,7 @@ class duelbot(minqlx.Plugin):
         # (owner, 2026-10-26: duels on the ten maps only: !duel, !match, !reflex, !movement, !room, !rooms, !drill, !arena,
         # !spar, !nosg removed; their code below is no longer reachable from chat)
         self.add_command("aim", self.cmd_aim, 0, usage="[worse|default|better|max]")
+        self.add_command("weapons", self.cmd_weapons, 0, usage="[off|light|strong]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
         if os.environ.get("DUEL_MIND", "") == "1":           # (owner, 2026-10-24: "make it so the mind records the game") on from the start
@@ -244,6 +245,7 @@ class duelbot(minqlx.Plugin):
             self.log("mind view: on from the start (DUEL_MIND=1; mind.jsonl in the data folder)")
         self.aim_prof, self.aim_names, self.aim_bad, self.aim_who = {}, [], {}, set()   # (!aim, aim_build, aim_frame)
         self.aim_reset()                                     # (the start: the default aim, whatever policy.npz was left at)
+        self.wdial = self.WDIAL_DEFAULT                      # (!weapons) the weapon dial's setting
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
         self.no_sg = False
         self.no_walk = False
@@ -324,7 +326,8 @@ class duelbot(minqlx.Plugin):
         meta = dict(schema=SCHEMA, started=round(time.time(), 2), map=mapname, opponent=kind,
                     opponent_name=opp.clean_name if is_bot(opp) else "human", policy=str(self.P["run"]),
                     train_minutes=int(self.P["minutes"]), env=str(self.P["env"]),
-                    react_ms=int(self.react_ms), frame_ms=25, frame_columns=FRAME_COLS)
+                    react_ms=int(self.react_ms), frame_ms=25, frame_columns=FRAME_COLS,
+                    weapons=getattr(self, "wdial", "off"))           # (!weapons, the dial at the session's start; changes: events "weapons")
         with open(os.path.join(self.sess, "meta.json"), "w") as f:
             json.dump(meta, f, indent=1)
         self.frames_f = open(os.path.join(self.sess, "frames.csv"), "a")
@@ -466,6 +469,8 @@ class duelbot(minqlx.Plugin):
 
     AIM_WELCOME = ("^3My aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains ^6(default)^7, ^2!aim better^7 sharper, "
                    "^2!aim max^7 no human limits. The player in the duel can change it at any time.")
+    WEAPONS_WELCOME = ("^3My weapons:^7 ^2!weapons off^7 as he trains, ^2!weapons light^7 or ^2!weapons strong^7: more rockets close "
+                       "and mid range and when out of sight, the rail at long range.")
 
     def on_player_loaded(self, player):
         if not is_bot(player):
@@ -473,6 +478,8 @@ class duelbot(minqlx.Plugin):
             player.tell(self.WELCOME)
             if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
                 player.tell(self.AIM_WELCOME)
+                if self.WDIAL_LEVELS:                        # (!weapons, owner, 2026-11-07)
+                    player.tell(self.WEAPONS_WELCOME)
             lad = minqlx.Plugin._loaded_plugins.get("ladder")
             if lad is not None:                              # owner, 2026-10-09: "see how I rank on the leaderboard"
                 for line in (lad.welcome_lines(player) if hasattr(lad, "welcome_lines") else [lad.WELCOME]):
@@ -886,6 +893,7 @@ class duelbot(minqlx.Plugin):
         self.room, self.queue = None, []
         self.game_over_t, self.go_f3 = 0.0, 0.0              # a new map: a game's end sequence is over with it
         self.aim_reset()
+        self.wdial_reset("new map")
         if EARLY_BOBBY:
             self.add_early()
 
@@ -1037,6 +1045,7 @@ class duelbot(minqlx.Plugin):
         if hasattr(_net, "order_due") and _net.order_due(self.P) and hasattr(self.env, "order_feat"):
             X_, C_, _ = self.env.order_feat()                # (1.7) a keep reading: the combat order's candidates now (the checks' and the
             kw_["ox"] = (X_[:1], C_[:1])                     # trainer's: after the head's tick)
+        self.P["_wdial"] = self.WDIAL_LEVELS.get(getattr(self, "wdial", "off"), 0.0)    # (!weapons) the dial's push, read in step()
         acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **kw_, **pz)
         if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
             _net.brain_feed(self.P, self.env, self.h, [0])
@@ -1813,6 +1822,7 @@ class duelbot(minqlx.Plugin):
 
     def aim_left(self, player, why):
         """the person in the duel left (disconnected, or went to spectate): back to the default for the next person"""
+        self.wdial_reset("the player in the duel " + why)
         try:
             if self.aim_level() in (self.AIM_DEFAULT, "?"):
                 return
@@ -1822,6 +1832,58 @@ class duelbot(minqlx.Plugin):
         except Exception as e:                               # noqa: BLE001
             self.log("aim reset ({}): {!r}".format(why, e))
 
+
+    # ------------------------------------------------------------------ !weapons (owner, 2026-11-07)
+    # "What I want to see is him use rockets both in close and medium range, and for zoning. Use LG at close range, and rail
+    # at long range ... perhaps there's a way to nudge toward that for play against people?" A push on his weapon key toward
+    # the owner's table (sim/weapon_dial.py; netpass.step adds it): off (the network as it trained), light, strong. Takes
+    # effect at once (the push is read every frame). As !aim: the person in the duel or the server's owner may change it;
+    # back to the default (DUEL_WEAPONS, else off) on a new map and when the person in the duel leaves.
+    try:
+        import weapon_dial as _wd                            # (/sim is on the path)
+        WDIAL_LEVELS = dict(_wd.LEVELS)
+    except Exception:                                        # noqa: BLE001 - an older sim/ without the dial: no !weapons
+        WDIAL_LEVELS = {}
+    WDIAL_DEFAULT = os.environ.get("DUEL_WEAPONS", "off") if os.environ.get("DUEL_WEAPONS", "off") in WDIAL_LEVELS else "off"
+
+    def wdial_set(self, level, why):
+        """the dial's setting now, recorded in the session's events and the log"""
+        was = getattr(self, "wdial", "off")
+        self.wdial = level
+        self.record(event="weapons", level=level, push=self.WDIAL_LEVELS.get(level, 0.0), was=was, why=why)
+        self.log("weapons {} (was {}): {}".format(level, was, why))
+
+    def wdial_reset(self, why):
+        if getattr(self, "wdial", self.WDIAL_DEFAULT) != self.WDIAL_DEFAULT:
+            self.wdial_set(self.WDIAL_DEFAULT, why)
+            self.msg("^3weapons reset to:^7 ^2{}^7".format(self.WDIAL_DEFAULT))
+
+    def cmd_weapons(self, player, msg, channel):
+        """!weapons: the dial now. !weapons off|light|strong: that setting at once (the person playing the duel, or the
+        server's owner)"""
+        if not self.WDIAL_LEVELS:
+            player.tell("^3The weapon dial is not on this server.^7")
+            return
+        cur = getattr(self, "wdial", "off")
+        if len(msg) < 2:
+            player.tell("^3Weapons^7 ^2{}^7 (^2!weapons off|light|strong^7 to change)".format(cur))
+            return
+        lv = msg[1].lower().strip()
+        if lv not in self.WDIAL_LEVELS:
+            player.tell(self.WEAPONS_WELCOME)
+            return
+        try:
+            team_, bot_ = getattr(player, "team", "spectator"), is_bot(player)
+        except Exception:                                    # noqa: BLE001
+            team_, bot_ = "spectator", False
+        if not self.aim_may(team_, bot_, self.aim_owner(player)):
+            player.tell("^3Only the player in the duel can change the weapons.^7")
+            return
+        if lv == cur:
+            self.msg("^3Weapons^7 ^2{}^7 stays.".format(lv))
+            return
+        self.wdial_set(lv, "!weapons")
+        self.msg("^3Weapons now^7 ^2{}^7.".format(lv))
 
     # ------------------------------------------------------------------ B-283: the mind view (plugins/mindlog.py, tools/mind_view.py)
     # The owner's live view of what Bobby thinks, on a second monitor (2026-10-24: nothing in the game's centre print or

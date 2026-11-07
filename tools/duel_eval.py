@@ -512,7 +512,7 @@ def main():
     ap.add_argument("--wpush", type=float, default=0.0, help="(1.7c experiments) a fixed push of this size on his weapon key toward the pros' weapon "
                     "in hand (sim/test_suite.py WeaponPush: in view by distance, out of view their travelling hand); 0: none")
     ap.add_argument("--opp-wpush", type=float, default=0.0, help="... on the opponent network's")
-    ap.add_argument("--wpush-form", default="share", help="(1.7c experiments) share or ratio (sim/test_suite.py WeaponPush)")
+    ap.add_argument("--wpush-form", default="share", help="(1.7c experiments) share, ratio or dial (sim/test_suite.py WeaponPush; dial: sim/weapon_dial.py)")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
@@ -542,7 +542,8 @@ def main():
     idx = np.array([now.index(x) for x in old])
     if a.wpush:                                              # (1.7c experiments) the fixed push toward the pros' weapon, his seats
         pol.wpush = T.WeaponPush(a.wpush, old, a.wpush_form)
-        print("weapon push {:g} ({}) toward the pros' hand (in view by distance, out of view their travelling hand)".format(a.wpush, a.wpush_form), flush=True)
+        print("weapon push {:g} ({}) toward {} (in view by distance, out of view the travelling hand)".format(
+            a.wpush, a.wpush_form, "the owner's table (sim/weapon_dial.py)" if a.wpush_form == "dial" else "the pros' hand"), flush=True)
     opp_pol, opp_idx, kind = None, None, a.opp
     if a.opp.startswith("policy:"):
         opp_pol = T.Policy(a.opp[7:], seed=2)

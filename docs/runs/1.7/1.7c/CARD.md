@@ -68,6 +68,8 @@ owned on Campgrounds (0%; B-286); even ratio 3 left it at 1% (the push for it is
 where he rarely is with it). Cypher's measures under ratio 3 (`wpush/r3/cypher.jsonl`): the pushed side out-stacked dies 55% (plain 53%),
 deals 327 a minute (plain 336); his items as before.
 
+**The weapon dial for play against people** (owner, 11-07: "Build the dial for play against people and I'll play test it when it's ready. Then afterwards we'll consider 1.7c"): [DIAL.md](DIAL.md). `!weapons light`: 48.0% against himself, rockets in view 27%; `!weapons strong`: 33.5%, rockets in view 41%; the rail does not move. On the local server for his play test.
+
 ## The proposal (rough)
 
 **The weapon plan: the head holds the weapon he should have in hand**, five times a second, and he follows it unless his hands override.

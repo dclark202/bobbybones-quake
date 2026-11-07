@@ -5,7 +5,8 @@
 # <save>: a file in the run's folder, or a full path. Never public: the server is unlisted and its games stay out of the public site.
 # It refuses if the save is missing, or another container holds the port (it never stops a server: someone may be on it).
 # Options: PORT (27970), MAP, IMAGE (qlbot:playaim2), ENVMOD (duel_env_ffa), LEGS (move_v17_look), CARD_CMD (the run's train.cmd, for the settings check),
-# DATA (data/duellive_<version without dots>), EXPORT_ONLY=1 (stop after the !aim files).
+# DATA (data/duellive_<version without dots>), EXPORT_ONLY=1 (stop after the !aim files), WEAPONS (off, light or strong: the !weapons
+# dial's setting at a map's start, plugins/duelbot.py DUEL_WEAPONS; default off).
 set -e
 export MSYS_NO_PATHCONV=1
 RUN="${1:?run}"; SAVE="${2:?save}"; VER="${3:?version}"; MAP="${4:-${MAP:-bloodrun}}"
@@ -30,7 +31,7 @@ for f in policy.npz policy_worse.npz policy_default.npz policy_better.npz policy
 [ -n "$EXPORT_ONLY" ] && { echo "exported to $DATA"; exit 0; }
 # (playaim2 predates sim/btoken.py's current form: the server of v0.6.1c mounted it too. EARLY_BOBBY=0 as the public servers)
 RW="$(pwd -W)"
-MIND=1 EARLY_BOBBY=0 NAME="$NAME" DATA="$DATA" IMAGE="$IMAGE" PORT="$PORT" DOCKER_EXTRA="-v $RW/sim/btoken.py:/sim/btoken.py:ro" bash tools/duel_server.sh - "$MAP" | tail -1
+MIND=1 EARLY_BOBBY=0 NAME="$NAME" DATA="$DATA" IMAGE="$IMAGE" PORT="$PORT" DOCKER_EXTRA="-v $RW/sim/btoken.py:/sim/btoken.py:ro${WEAPONS:+ -e DUEL_WEAPONS=$WEAPONS}" bash tools/duel_server.sh - "$MAP" | tail -1
 free_port() {
     p=$1; while netstat -an | grep -qE "[:.]$p +.*LISTENING"; do p=$((p + 2)); done; echo "$p"
 }
