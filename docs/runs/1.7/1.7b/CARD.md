@@ -7,9 +7,11 @@ years. So if there's a person to model bobby's behavior after, it's him. We can 
 can't hurt, as long as it doesn't increase the latency too much I don't see why not to add it." 1.7a's result is its update 90 (owner,
 11-06: "That has JUST the choice redesign and no rule redesign. We can build from there"). The sources: [Cypher set against Bobby](../../../design/CYPHER.md),
 [1.7a's postmortem](../1.7a/POSTMORTEM.md). **A start, to refine once the checks are in. Nothing built, nothing run; the run starts only
-on the owner's command.***
+on the owner's command.*** **Built and tested 11-06 evening ([BUILD.md](BUILD.md)); started 21:49.**
 
-**Started from:** ❓ 1.7a's result, the save of update 90 (`data/sim_runs/duel_gru_1_7a/keep/policy_end_17a.pt`, the same file as
+**Started:** ✅ **2026-11-06 21:49** on the owner's word ("let's start 1.7b now"), 150 updates (`--max-updates 150`, a cap of 1080 minutes); `b17b` merged into `main` (ce8fb99); `start.ps1`: every check PASS (the settings against 1.7a's command and the save, the start = update 90 to the bit, live.json and the ramp's 122 files accepted), the optimizer's state loaded and carried over the widened layers, live.json applied before the first rollout.
+
+**Started from:** ✅ 1.7a's result, the save of update 90 (`data/sim_runs/duel_gru_1_7a/keep/policy_end_17a.pt`, the same file as
 `policy_90.pt`) with its optimizer (`opt_end_17a.pt`): the keep choice at full share, the order never asked (share 0, its token shut).
 
 **Marks:** ✅ known or decided · ⏳ to build · 🧪 to measure · ❓ owner's decision

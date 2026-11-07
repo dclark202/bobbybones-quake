@@ -1,0 +1,56 @@
+11-06 21:48:18 train.cmd, a cap of 1080 minutes, 150 updates: written
+11-06 21:48:18 no firing cost: every one at zero
+11-06 21:48:18 allowed set FIGHT_TRUTH: run '1' | reference '<unset>'
+11-06 21:48:18 allowed set OUT_LIVE: run '1.5' | reference '<unset>'
+11-06 21:48:18 allowed arg --fight-odds: run '1' | reference '<unset>'
+11-06 21:48:18 allowed arg --fight-warm: run '0' | reference '<unset>'
+11-06 21:48:18 allowed arg --head2-opg: run '0' | reference '<unset>'
+11-06 21:48:18 allowed arg --keep-g: run '1' | reference '0'
+11-06 21:48:18 allowed arg --max-updates: run '150' | reference '<unset>'
+11-06 21:48:18 allowed arg --minutes: run '1080' | reference '1518'
+11-06 21:48:18 allowed arg --ord-kl: run '0' | reference '<unset>'
+11-06 21:48:18 allowed arg --run: run 'duel_gru_1_7b' | reference 'duel_gru_1_7a'
+11-06 21:48:18 settings check: PASS
+11-06 21:48:19 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-06 21:48:19 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-06 21:48:19 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-06 21:48:19 settings check: PASS
+11-06 21:48:41 backup: copied 394 files 3.02 GB to T:\BobbyBones_backup
+11-06 21:48:43 the order's layers are those of C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\policy_10.pt to the bit (the order never learnt before)
+11-06 21:48:43 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1005 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + obs 89 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 714,403 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+11-06 21:48:43 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\policy.pt: 4 new inputs (b17b timers), new tokens ['timers'] (shut); the head's inp 950 -> 960 columns (obs +8, fight 2, at zero); the fight odds readout (last layer at zero; horizon 200 frames); the order's reference (ok_c.weight, ok_c.bias, op_x.weight, op_x.bias, op_v.weight, op_v.bias)
+11-06 21:48:55 the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+11-06 21:48:55 keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+11-06 21:48:55 ALL PASSED
+11-06 21:48:57 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\snapshots\anchor_17a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-06 21:48:58 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\snapshots\anchor_16a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-06 21:49:00 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\snapshots\anchor_15a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-06 21:49:02 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\snapshots\anchor_13b.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-06 21:49:04 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\snapshots\anchor_b12d.pt: 4 new inputs, new tokens ['timers']
+11-06 21:49:06 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\snapshots\anchor_b11.pt: 4 new inputs, new tokens ['timers']
+11-06 21:49:07 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\snapshots\anchor_v060_end.pt: 4 new inputs, new tokens ['timers']
+11-06 21:49:08 live.json: {'BTOK_GATE_CAP': 1.0, 'RJ_TEACH_W': 0.0, 'FADE_CAP': 1.0, 'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'FADE_V': 0.0, 'WIN_GAIN': 1.0, 'WIN_SHAPE_K': 0.0, 'LEVEL_PULL': 1.0, 'BRAIN_FADE': 1.0, 'INTENT_HOLD': 8.0, 'INTENT_TEACH_W': 0.0, 'VALUE_WARM': 0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'CONTACT_FREE': 1.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'SPEED_PAY': 0.0, 'DMG_TAKEN_W': 0.8, 'STACK_DIFF': 0.0, 'RAIL_FAR_PAY': 0.25, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_PG': 1.0, 'H2_MIX': 0.0, 'H2_COPY': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'KEEP_G': 1.0, 'CMB_G': 0.0, 'PADD': 0.0, 'ORD_GATE': -30.0, 'FADD': 0.0, 'H2_FPG': 0.0, 'H2_OPG': 0.0, 'ORD_KL': 0.0, 'FIGHT_W': 1.0}
+11-06 21:49:09 live.json carries the save's live dials
+11-06 21:49:10 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7b\live.json: accepted
+11-06 21:49:10 the ramp ramp_17b.py: 122 files (clocks 0 to 121), all accepted
+11-06 21:49:10 LIVE ACCEPT: PASS
+11-06 21:49:10 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\policy_end_17a.pt given 1.7b's parts at zero effect, with its optimizer; anchors (widened) 1.7a's update 90, 1.6a's end, 1.5a's end, 1.3b's end, b1.2d's end, b1.1, v0.6.0's end (1.7a's even draw)
+11-06 21:49:10 trainer started: cmd 23668, from 1.7a's update 90, 150 updates (a cap of 1080 minutes)
+11-06 21:49:25 live.json applied by the trainer before its first rollout (2026-11-06 21:49:22)
+11-06 21:49:30 watcher 28456 | ramp 33636 (its dials: ramp_17b.py; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 33160 | no guard (owner: never stop the run)
+11-06 21:49:40 trainer: pass odds (1.7): the brain's readout of the odds he passes each candidate within [1.0, 2.0, 4.0] s; from the network; lesson 0.3 rising over 0.0 min, its layers at 5.0 times --lr
+11-06 21:49:40 trainer: fight odds (1.7b): the brain's readout of how a fight that is on ends (his enemy dead first, he dead first) within 200 frames, on the brain's state and his hands' memory (768 -> 64 -> 2), from the network; lesson 1.0 (rate 0.001 x weight, rising over 0.0 min); its ring every 1 tick(s)
+11-06 21:49:40 trainer: combat order (1.7): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer
+11-06 21:49:40 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1005 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + obs 89 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 714,403 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+11-06 21:49:40 trainer: optimizer: the small tokens' first layer starts fresh
+11-06 21:49:40 trainer: optimizer: attn.mark carried over, (64, 96) -> (65, 96)
+11-06 21:49:40 trainer: optimizer: enc.0.weight carried over, (256, 990) -> (256, 994)
+11-06 21:49:40 trainer: optimizer: head2.inp.weight carried over, (256, 950) -> (256, 960)
+11-06 21:49:40 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 107 step counts moved to the host)
+11-06 21:49:40 trainer: order KL (1.7b): the reference is the start's order (ok_c.bias, ok_c.weight, op_v.bias, op_v.weight, op_x.bias, op_x.weight); weight 0.0 (live ORD_KL); the order's share of the head's term 0.0 (live H2_OPG)
+11-06 21:49:40 trainer: keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 1.0 (live KEEP_G); its weights: bias -7.646, on its own numbers [6.709, 7.195, -0.293, 7.088, -0.038, 0.041, 0.038]
+11-06 21:49:40 trainer: keep choice: share 1.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+11-06 21:49:40 trainer: combat order (1.7): asked at a share 0.0000 of his readings (target, cut, spam, out); the pointer's adds on the targets and the way x 0.0000; the kinds' bias [0.15, -4.903, -4.347, -5.501], |op_v| 8.371
+11-06 21:49:40 trainer: the order's token (1.7): gate -30.00 now (live ORD_GATE opens it, never lowered; --gate-open leaves it)
+11-06 21:49:40 trainer: live: from update 1 (before its rollout) in every simulator: changed {'ITEM_FLAT': 'MH:0.35,RA:0.30,YA:0.15', 'SPEED_PAY': '0.0', 'RAIL_FAR_PAY': '0.25', 'STACK_DIFF': '0.0', 'LEVEL_PULL': '1.0', 'INTENT_HOLD': '8.0', 'CONTACT_FREE': '1.0', 'COST_FIRE_W': '0.0', 'COST_JERK_W': '0.0', 'ITEM_PT_MIX': '1.0', 'WIN_ADD': '0.33', 'WIN_W': '0.0', 'WIN_GAIN': '1.0', 'FADE_V': '0.0', 'WIN_SHAPE_K': '0.0', 'DMG_TAKEN_W': 0.8, 'INTENT_TEACH_W': 0.0, 'BRAIN_FADE': 1.0, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_PG': 1.0, 'H2_MIX': 0.0, 'H2_COPY': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'KEEP_G': 1.0, 'CMB_G': 0.0, 'PADD': 0.0, 'ORD_GATE': -30.0, 'FADD': 0.0, 'H2_FPG': 0.0, 'H2_OPG': 0.0, 'ORD_KL': 0.0, 'FIGHT_W': 1.0}; in force {'ITEM_FLAT': {'MH': 0.35, 'RA': 0.3, 'YA': 0.15}, 'SPEED_PAY': 0.0, 'SPEED_PAY_RUN': 0.4, 'HOP_PAY': 0.0, 'HOP_QUIET': True, 'HOP_QUIET_HEARD': 1.0, 'HOP_QUIET_NEAR': 300.0, 'HIGH_PAY': 0.0, 'HIGH_Z': 128.0, 'RAIL_FAR_PAY': 0.25, 'RAIL_FAR_LO': 500.0, 'RAIL_FAR_HI': 800.0, 'STACK_DIFF': 0.0, 'BLIND_RL_DMG': 0.0, 'HOP_CHAIN': 0.0, 'HOP_CHAIN_MS': 150.0, 'HOP_CHAIN_TOL': 15.0, 'HOP_CHAIN_STEP': 0.5, 'HOP_CHAIN_CAP': 3.0, 'JUMP_EVERY': 1.0, 'BIG_PICK_SEQ': (0.1, 0.06, 0.05), 'RG_FAR_PRICE': 0.0, 'RG_FAR_DIST': 700.0, 'JUMP_COST': 0.0, 'LG_QUIET_COST': 0.0, 'WATCH_PAY': 0.03, 'LEVEL_PULL': 1.0, 'INTENT_HOLD': 8.0, 'CONTACT_FREE': 1.0, 'ITEM_RATE_HP': 0.0025, 'ITEM_RATE_AR': 0.002, 'COST_FIRE_W': 0.0, 'COST_JERK_W': 0.0, 'ITEM_PT_LO': 0.004, 'ITEM_PT_HI': 0.002, 'ITEM_DECAY': 0.002, 'ITEM_PT_MIX': 1.0, 'BLIND_AHEAD_P': 1.0, 'PERCEPT_SPEED': 0.0, 'PERCEPT_SPEED_MAX_RG': 0.001, 'PERCEPT_SPEED_MAX_LG': 0.0, 'WIN_ADD': 0.33, 'WIN_W': 0.0, 'WIN_GAIN': 1.0, 'FADE_V': 0.0, 'WIN_LONG': False, 'WIN_STACK': False, 'WIN_TAU': 32.5, 'WIN_PA': 2.7546, 'WIN_PS': 300.0, 'WIN_PRL': 0.4277, 'WIN_PLG': 0.4485, 'WIN_PRG': 0.2922, 'WIN_SHAPE_K': 0.0, 'WIN_SHAPE_TAU': 32.5, 'WIN_SHAPE_G': 0.999, 'AIM2_W': 1.0, 'AIM2_C_SLIP': 0.023, 'AIM2_S0': 5.0, 'AIM2_CAP_SLIP': 2.1, 'AIM2_C_ECC': 0.06, 'AIM2_E0': 0.0, 'AIM2_CAP_ECC': 2.8, 'AIM2_SPLIT_W': 1.0, 'AIM2_FOCUS_GAIN': 0.0, 'AIM2_FOCUS_SIG': 1.0, 'AIM2_SMOOTH_K': 1.0, 'FLINCH_PER_DMG': 0.012, 'FLINCH_MAX': 0.7, 'FLINCH_TAU': 0.3, 'DMG_TAKEN_W': 0.8, 'DMG_REWARD': 0.0055, 'INFO_PAY': 0.0, 'TRACK_W': 0.3, 'TRACK_TRUNK': 0.1, 'TRACK_Z_W': 1.0, 'BTOK_GATE_CAP': 1.0, 'BTOK_GATE_OPEN': 240.0, 'BELIEF_LR': 2.5, 'AHEAD_W': 1.0, 'RJ_TEACH_W': 0.0, 'CONTROL_W': 1.0, 'FIGHT_W': 1.0, 'H2_OPG': 0.0, 'ORD_KL': 0.0, 'WIN_VALUE_W': 1.0, 'INTENT_TEACH_W': 0.0, 'BRAIN_HUMAN_W': 0.35, 'BRAIN_FADE': 1.0, 'ITEM_FLOOR': 0.02, 'ITEM_FLOOR_W': 0.0, 'VALUE_WARM': 0.0, 'FADE_CAP': 1.0, 'FADE_OPEN': 250.0, 'H2_GATE_CAP': 0.0, 'H2_GATE_OPEN': 0.0, 'H2_PG': 1.0, 'H2_PLAN_GRAD': 0.0, 'H2_MIX': 0.0, 'H2_COPY': 0.0, 'H2_L2': 0.01, 'KEEP_G': 1.0, 'CMB_G': 0.0, 'FADD': 0.0, 'H2_WPG': 1.0, 'HABIT_P': 0.3, 'H2_FPG': 0.0, 'PADD': 0.0, 'PASS_W': 0.3, 'ORD_GATE': -30.0, 'INTENT_SEEK_W': 1.0}
+11-06 21:49:40 trainer: fight odds: the ring of states, 75 slots of 10080 x 768 (1.16 GB on the host)
