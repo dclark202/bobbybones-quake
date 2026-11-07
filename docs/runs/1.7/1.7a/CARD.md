@@ -209,3 +209,6 @@ printed REFUSED and went on; the ramp's flag was a line in a log.
 **Restarted 2026-11-05 19:42 from 1.6a's end**, until 21:00 on 11-06 (1,518 minutes): settings checks PASS, no firing cost, LIVE ACCEPT
 PASS, the start the same as 1.6a's end to the bit, live.json applied before the first rollout (19:42:33); update 1: no jerk, switch or toggle
 cost, no speed pay, the item teacher at 0, the win part in the books.
+
+**Ended on the owner's word 2026-11-06 19:15 at update 246** (end: the save of update 240, `keep/policy_end_17a.pt` + `opt_end_17a.pt`): level with 1.6a's end (49.5% at update 210) after 63-64% at updates 90 to 130; the keep choice won games but flickered (trips 25 -> 81 a player-minute, reached 24% -> 8%); the order was learnt away (2.1% -> 0.02% of readings); [postmortem](POSTMORTEM.md).
+
