@@ -134,3 +134,33 @@ while the value learns which pay. On the way: fewer even trades, more breaks off
 | 10 | the weapon as a held choice (B-305: the head picks the weapon to hold five times a second, the simulator presses the key, a KL to the pros' weapon by situation) | ❓ **1.7c, from 1.7b's end** (recommended): one new thing a round (1.7a's lesson); 1.7b's zero-sum damage alone may move his weapon (the trade bonus pays the lightning gun's steady stream), and its checks will show how much; the order's hands phase must work first. The alternative: a phase of 1.7b after update 120 (a longer run, the two not told apart) | |
 
 ## The result
+
+**Stopped on the owner's word 2026-11-07 07:42 at update 103** ("Go ahead and stop it now"), after the check of update 90 lost 62-138 (31.0%)
+to 1.7a's update 90 and the keep choice's quiet re-decisions crossed decision 8's 0.08. Its end is the save of update 100 (07:24), kept as
+`keep/policy_end_17b.pt` with `opt_end_17b.pt`; the marks' saves `keep/policy_u10_17b.pt`, `u30`, `u60`, `u90` with their optimizers.
+
+| Update | Against | Record | Win rate | Cypher: out-stacked dies / gets away; weaker hits first |
+|---|---|---|---|---|
+| 10 | 1.7a's update 90 | 89-111 | 44.5% | 56 / 41%; 21% |
+| 30 | 1.7a's update 90 | 99-101 | 49.5% | 58 / 37%; 23% |
+| 50 | 1.7a's update 90 | 91-109 | 45.5% | 56 / 39%; 22% |
+| 70 | b1.2d's end | 186-14 | 93.0% | |
+| 90 | 1.7a's update 90 | 62-138 | **31.0%** (MAJOR PROBLEM) | 57 / 39%; 20% |
+
+| Part | Worked? | The evidence |
+|---|---|---|
+| The fight odds | ✅ | Brier 0.12 against the best constant's 0.21, AUC 0.89, from update 10 on |
+| Break off reached by living | ✅ (the mechanics) | arrivals 720 to 770 an update once asked |
+| The hands first (30 to 60) | ✅ (as built) | the order asked at the start's rates (3.2%), the arrivals counted |
+| The head learning the order with the KL (60 on) | ❓ never tested | the kinds did not move (target 96.8%, cut off 0.6%, spam 0.9%, break off 1.7% throughout): the KL at 1.0 (its sizing fell back: below) held them |
+| ORD_KL's sizing | ❌ (the build) | the two pulls were measured on one piece of each update; with orders on 3% of readings the pieces of updates 61 to 63 had none: the ramp's fallback 1.0; the later updates point to 0.3 to 0.5 |
+| The damage pay zero-sum | no effect seen on his weapon | rockets / lightning / rail in hand 19 / 67 / 0.8% (update 18) -> 20 / 66 / 0.7% (update 102) |
+| The yellow timers | ❓ | Campgrounds: the yellow armor his target 28% at update 100 (the control 12%; BEHAVIOUR RED); the yellows' time after a spawn 6.6 -> 5.5 s |
+| **The keep choice** | ❌ **drifted into flicker on its own** | quiet re-decisions 0.051 (update 18) -> 0.088 (update 101); trips 66 -> 82 a player-minute, targets reached 10.6% -> 7.0% (FLAGged every update from 74); 1.7a's slide had the same sign, so the pointer's adds (out in 1.7b) were not its cause |
+| Cypher's measures | no movement | out-stacked he died 56 to 58% of his fights and got away from 37 to 41% (the pros 30 / 64%) at every check |
+
+**The lessons.** The keep choice keeps learning after its hand-over, and what it learns out of contact is to re-decide more: that drift came
+with the slide in both 1.7a and 1.7b, with or without the pointer, so it has to be held (decision 8's KL to its start on quiet readings, or
+its learning held) before anything is added on top. The order was not tested: held at the pros' rates by a KL whose size fell back to 1.0, it
+never moved; a measure that sizes a dial must read enough frames (every piece, not the first). Four things changed beside the order (zero-sum
+damage, the yellow timers, the fight odds, break off's rule), so the slide cannot be pinned on one of them by these checks alone.
