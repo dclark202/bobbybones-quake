@@ -64,4 +64,10 @@ spam away).
 
 Server `qlduel_17a-dial` on port 27970 (`connect 127.0.0.1:27970`), image `qlbot:17a-dial`, 1.7a's update 90, aim default, the dial
 **strong** at every map's start (`WEAPONS=strong`); `!weapons off` / `light` to compare. Data: `data/duellive_17a-dial`; the mind
-viewer http://localhost:8765/ and the games site http://localhost:8766/history/. ❓ The owner's verdict: ...
+viewer http://localhost:8765/ and the games site http://localhost:8766/history/.
+
+**The owner's verdict (2026-11-07 evening): "didnt do fucking anything".** One game on Blood Run, about 3.5 minutes (19:31 to 19:34,
+then a map change to Sinister), the dial on strong (`meta.json`). Bobby held the lightning gun 53% of the game, rockets 26%,
+the machine gun 13%, the shotgun under 1% (the whole game, whether or not he owned rockets). That is still a lightning-gun player:
+a push on a key press he almost never makes cannot change how he plays. The server and the mind log were stopped on his word; the
+dial stays in the code, off by default, and is not on the public servers.
