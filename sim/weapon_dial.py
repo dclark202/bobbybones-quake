@@ -22,7 +22,9 @@ has been held HOLD_FRAMES frames: no flapping at a distance band's edge), at onc
 nothing (the lightning gun with the enemy at long range), or when the weapon is no longer owned with ammunition (a new
 life, the ammunition out). Fire, aim and movement stay his. Where the row allows none of the three he owns (the machine gun
 of a spawn; the lightning gun alone with the enemy at long range) the network's key stands. The same function runs in the checks (WeaponPush form "replace", tools/duel_eval.py --wpush-form
-replace) and on the servers (!weapons pros): choose().
+replace) and on the servers (!weapons pros): choose(). The rail: a rule on his target (target(), below) was built in three forms and
+measured; every form cost games for a few points of rail ownership, so it is off unless WDIAL_RAIL=1, and the rail is the training
+plan's (docs/runs/1.7/1.7c/TRAIN_UNDER_TABLE.md).
 
     python sim/weapon_dial.py            the input columns checked against docs/INPUTS.csv, the push on a few rows printed
 """
@@ -153,6 +155,10 @@ INTENT_RL, INTENT_RG = 3, 4                                 # duel_env.INTENTS: 
 # when it is within TARGET_NEAR units of him (the map's distance) and he carries rockets with ammunition; then always (TARGET_P 1),
 # held at most TARGET_MAX frames. The rocket launcher's part (its ammunition out: 0 to 3% of his frames) is dropped: one rule, measured.
 import os as _os
+# **Measured (200 games against u90 plain): 45-155 (22.5%) against 69-131 (34.5%) for the weapon rule alone**, for the rail in his hand
+# 2 → 4% in view and 3 → 8% out of view, the mega taken 948 against 1,209 times: the trips displace the item game. So the target rule is
+# OFF unless WDIAL_RAIL=1 (an experiment's switch); "pros" is the weapon rule alone, and the rail is the training plan's.
+TARGET_ON = (_os.environ.get("WDIAL_RAIL") or "0").strip() == "1"
 TARGET_NEAR = float(_os.environ.get("WDIAL_NEAR") or 0.70)  # units / 1000: the railgun within 700 units of him (WDIAL_NEAR: an experiment's setting)
 TARGET_P = 1.0                                              # near and armed: he goes (a roll kept for a share under 1)
 TARGET_REROLL = 200                                         # 5 s between rolls while the conditions hold and he is not on a trip (a roll lost, a trip given up)
@@ -162,9 +168,14 @@ HEALTH_FLOOR = float(_os.environ.get("WDIAL_HP") or 0.30)   # 60 health: below i
 
 def target(obs, state, rng):
     """the target rule of the replace form: [players] the intention output's action (INTENT_RG) while the rule holds him on a trip to
-    the railgun, -1 where his own stands. state: the dial's (new_state; the trip's memory is added here); rng: the dial's own stream"""
+    the railgun, -1 where his own stands (all -1 with TARGET_ON false: the default). state: the dial's (new_state; the trip's memory is
+    added here); rng: the dial's own stream"""
     obs = np.asarray(obs)
     n_ = len(obs)
+    if not TARGET_ON:
+        out_ = np.full(n_, -1, np.int64)
+        state["tgt_last"] = out_
+        return out_
     if state.get("tgt") is None or len(state["tgt"]) != n_:
         state["tgt"], state["tgt_age"], state["tgt_wait"] = np.full(n_, -1, np.int64), np.zeros(n_, np.int64), np.zeros(n_, np.int64)
     tgt_, age_, wait_ = state["tgt"], state["tgt_age"], state["tgt_wait"]
@@ -233,7 +244,9 @@ def main():
     a3 = int(choose(y3, new_state(1), np.random.default_rng(1))[0])
     print("hold: a band's edge crossed keeps the choice for {} frames: {}; the lightning gun at long range changed at once: {}".format(
         HOLD_FRAMES, "yes" if same else "NO", "yes" if a3 in (1, 2) else "NO"))
-    # the target rule: out of view, alive, healthy, the map has both; lacking the rail -> the rail; lacking rocket ammunition too -> the nearer
+    # the target rule (WDIAL_RAIL=1; off by default): out of view, alive, healthy, armed, the railgun near -> the railgun
+    global TARGET_ON
+    was_on, TARGET_ON = TARGET_ON, True
     z = np.zeros((5, max(rows) + 1), np.float32)
     z[:, HEALTH] = 0.5
     z[:, list(OWN)] = 1.0
@@ -282,8 +295,12 @@ def main():
           "given up at {} frames: {}".format(first, TARGET_MAX, "yes" if held_ok else "NO", "yes" if ended else "NO",
                                               "yes" if far_quiet else "NO", TARGET_MAX, "yes" if gave else "NO"))
     ended = ended and far_quiet and gave
-    print("target rule as designed: {}".format("yes" if tgt_ok and held_ok and ended else "NO"))
-    return 1 if bad or not same or a3 not in (1, 2) or not (tgt_ok and held_ok and ended) else 0
+    TARGET_ON = False
+    off_quiet = bool((target(z, new_state(5), np.random.default_rng(0)) == -1).all())
+    TARGET_ON = was_on
+    print("target rule as designed: {}; silent with WDIAL_RAIL off (the default): {}".format(
+        "yes" if tgt_ok and held_ok and ended else "NO", "yes" if off_quiet else "NO"))
+    return 1 if bad or not same or a3 not in (1, 2) or not (tgt_ok and held_ok and ended and off_quiet) else 0
 
 
 if __name__ == "__main__":
