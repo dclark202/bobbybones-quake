@@ -1,7 +1,9 @@
 # 1.7a postmortem
 
-Ended on the owner's word 2026-11-06 19:15 at update 246; its end is the save of update 240 (18:35), kept as
-`keep/policy_end_17a.pt` with `keep/opt_end_17a.pt`. Every save from update 10 on is in `keep/` (`policy_110.pt`,
+Ended on the owner's word 2026-11-06 19:15 at update 246. **1.7a's result is the save of update 90** (owner, 11-06: "save that as 1.7a;
+update 90. That has JUST the choice redesign and no rule redesign. We can build from there"): the keep choice alone (its share 0.975), the
+order never asked; 63.0% against 1.6a's end. It is `keep/policy_end_17a.pt` with `keep/opt_end_17a.pt`; the last save (update 240, 18:35)
+is kept as `keep/policy_u240_17a.pt` with `opt_u240_17a.pt`. Every save from update 10 on is in `keep/` (`policy_110.pt`,
 `policy_130.pt`, ...). Numbers from `watch/watch.log`, `watch/ramp.log` and `watch/behaviour.jsonl`, averaged over five updates.
 
 ## In short
@@ -115,7 +117,7 @@ speed on trips 336 → 333; weapon switches 12 to 16 a minute (the control 14.6)
 
 | | Proposal | From |
 |---|---|---|
-| The network to keep | the save of update 110 or 130 (64%, 63% against 1.6a's end), not the end (49.5%) | the checks |
+| The network to keep | ✅ the save of update 90 (owner, 11-06): the keep choice alone; 110 and 130 (64%, 63%) add only a trace of the order | the checks |
 | The keep choice | keep it; hold the quiet re-decisions down: a level check of the update-130 save with `PADD` 0 against 0.3 tells whether the pointer is the cause (a side job: no run trains now) | the flicker table |
 | The order, next attempt | open the hands' token **before** the order's share (the hands learn to carry out an order while the head still asks it at the start's rate), and keep the pros' fit as a KL term through the run, not only the start | AlphaStar; cause 1 and 2 above |
 | One new thing per round | the order, the pointer on the targets and the fire push opened together, so the slide cannot be pinned on one | the owner's rule of 10-24 |

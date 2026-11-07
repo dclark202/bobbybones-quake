@@ -9,7 +9,8 @@ stream of its own.
 """
 import math
 
-import torch
+# numpy only at the top: the game servers have no torch (netpass imports this module for np_forward); torch inside the functions
+# that need it
 
 HORIZ = (1.0, 2.0, 4.0)
 FR = tuple(int(round(h / 0.025)) for h in HORIZ)
@@ -26,6 +27,7 @@ def layout(feat_names, inp=256, hid=64):
 
 
 def make_module(L, seed=4171):
+    import torch
     import torch.nn as nn
 
     class Pass(nn.Module):
@@ -54,6 +56,7 @@ def labels(aux, done, cols, K, pts):
     at reading j (frame j K) -> (y [J, N, R, 3] 1 where the enemy came within R_XY across and R_Z up or down of the place within the
     horizon, m [J, N, R, 3] the questions that count: his truth there on the reading and over the window, no reset or frag in it,
     the window inside the rollout)"""
+    import torch
     C = {c: i for i, c in enumerate(cols)}
     T = done.shape[0]
     aux = aux.float()
@@ -97,6 +100,7 @@ def labels(aux, done, cols, K, pts):
 
 def loss(logits, y, m, w=None):
     """the masked binary cross-entropy (w [..., R]: a weight a candidate, e.g. valid) -> (the loss, its questions)"""
+    import torch
     mm = m if w is None else m * w[..., None]
     n = mm.sum().clamp(min=1.0)
     return (torch.nn.functional.binary_cross_entropy_with_logits(logits.float(), y, reduction="none") * mm).sum() / n, mm.sum()
