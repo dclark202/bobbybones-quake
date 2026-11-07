@@ -119,11 +119,77 @@ def choose(obs, state, rng):
     if _LOG is not None:                                                # (WDIAL_LOG=<file>: a diagnostic, one line a player a frame)
         d_ = 1000.0 * np.sqrt((obs[:, list(POS)].astype(np.float64) ** 2).sum(1))
         for i_ in range(n_):
-            _LOG.write("{} {} {} {} {} {:.0f} {}\n".format(i_, row_[i_], held_[i_], pick_[i_], out_[i_], d_[i_], int(obs[i_, INVIEW] > 0.5)))
+            _LOG.write("{} {} {} {} {} {:.0f} {} {} {} {:.2f} {}\n".format(
+                i_, row_[i_], held_[i_], pick_[i_], out_[i_], d_[i_], int(obs[i_, INVIEW] > 0.5), int(obs[i_, OWN[0]] > 0.5),
+                int(obs[i_, OWN[1]] > 0.5), float(obs[i_, AMMO[0]]), int(state.get("tgt_last", np.full(n_, -1))[i_]) if "tgt_last" in state else -1))
     return out_
 
 
+# ---- the target rule (owner, 2026-11-07 evening: "It needs to address rail as well ... we need both"): the rail he does not own
+# The check of the replace form: the rail was in his hand 2 to 3% of the time because he does not own it (Campgrounds: never), and on
+# the long maps he lacked rockets with ammunition or the rail on 40% of his long-range frames in view. A weapon rule cannot give him a
+# weapon he has not taken, so the second half of "pros" is a rule on his TARGET: when the map has a railgun and he does not own it
+# (or has no ammunition for it), the enemy is not noticed in view, he is alive with HEALTH_FLOOR or more and he has not just seen the
+# railgun taken, the rule may send him for it: one roll (TARGET_P) when the lack begins and every TARGET_REROLL frames while it lasts;
+# a trip once decided is HELD (his intention output set to the railgun every frame) until he has it, the enemy is noticed in view, his
+# health falls under the floor, he sees it taken, or TARGET_MAX frames pass (then a new roll after TARGET_REROLL). The same for the
+# rocket launcher he owns with its ammunition out (a pickup refills it); lacking both, the nearer one by the map's distance. The
+# simulator reads the intention at its own readings and keeps its hold and his keep choice: the rule is his choice at a reading, not a
+# lock. Everything else (the mega, the armors, their timing) stays the head's. **The first form, a coin on every frame (TARGET_P of his
+# frames), was a disaster (11-189 against u90 plain, frag share 20%): at every reading his target flipped between the weapon and his own
+# choice, and he arrived nowhere.** Hence the held trip.
+HEALTH = 4                                                  # his health, / 200
+DEAD = 8
+ITEM_RL = dict(pos=(110, 111, 112), exists=113, gone=115)   # nearest rocket launcher: forward, left, up (units / 1000); the map has one; seen gone
+ITEM_RG = dict(pos=(116, 117, 118), exists=119, gone=121)   # nearest railgun
+NAMES.update({HEALTH: "health", DEAD: "dead", ITEM_RL["exists"]: "nearest rocket launcher: exists", ITEM_RL["gone"]: "nearest rocket launcher: seen gone",
+              ITEM_RG["exists"]: "nearest railgun: exists", ITEM_RG["gone"]: "nearest railgun: seen gone",
+              ITEM_RL["pos"][0]: "nearest rocket launcher: forward", ITEM_RG["pos"][0]: "nearest railgun: forward"})
+INTENT_RL, INTENT_RG = 3, 4                                 # duel_env.INTENTS: ("none", "MH", "RA", "RL", "RG", "LG", ...)
+# The second form (a held trip for the rail whenever he lacked it, from anywhere, TARGET_P 0.5, 15 s) was a disaster too on the two
+# rail maps (Aerowalk 0-2, Campgrounds 0-2 at 5.6% frag share): the trips began at a spawn with the machine gun and crossed the map,
+# he died on the way, and the trip displaced the item game that keeps him alive (he held none of the three 34% of the time).
+# So the rule is the pros' habit, not a quest: TAKE THE RAIL WHEN IT IS NEAR AND HE IS ARMED. He goes for the railgun he lacks only
+# when it is within TARGET_NEAR units of him (the map's distance) and he carries rockets with ammunition; then always (TARGET_P 1),
+# held at most TARGET_MAX frames. The rocket launcher's part (its ammunition out: 0 to 3% of his frames) is dropped: one rule, measured.
 import os as _os
+TARGET_NEAR = float(_os.environ.get("WDIAL_NEAR") or 0.70)  # units / 1000: the railgun within 700 units of him (WDIAL_NEAR: an experiment's setting)
+TARGET_P = 1.0                                              # near and armed: he goes (a roll kept for a share under 1)
+TARGET_REROLL = 200                                         # 5 s between rolls while the conditions hold and he is not on a trip (a roll lost, a trip given up)
+TARGET_MAX = int(_os.environ.get("WDIAL_MAX") or 320)       # 8 s: a trip not finished by then is given up (a new roll after TARGET_REROLL)
+HEALTH_FLOOR = float(_os.environ.get("WDIAL_HP") or 0.30)   # 60 health: below it the rule is silent (the head's health first)
+
+
+def target(obs, state, rng):
+    """the target rule of the replace form: [players] the intention output's action (INTENT_RG) while the rule holds him on a trip to
+    the railgun, -1 where his own stands. state: the dial's (new_state; the trip's memory is added here); rng: the dial's own stream"""
+    obs = np.asarray(obs)
+    n_ = len(obs)
+    if state.get("tgt") is None or len(state["tgt"]) != n_:
+        state["tgt"], state["tgt_age"], state["tgt_wait"] = np.full(n_, -1, np.int64), np.zeros(n_, np.int64), np.zeros(n_, np.int64)
+    tgt_, age_, wait_ = state["tgt"], state["tgt_age"], state["tgt_wait"]
+    own_ = (obs[:, list(OWN)] > 0.5) & (obs[:, list(AMMO)] > 0.0)
+    d_rg_ = np.sqrt((obs[:, list(ITEM_RG["pos"])].astype(np.float64) ** 2).sum(1))
+    need_rg_ = ~own_[:, 1] & (obs[:, ITEM_RG["exists"]] > 0.5) & (obs[:, ITEM_RG["gone"]] < 0.5)
+    ok_ = (obs[:, INVIEW] < 0.5) & (obs[:, DEAD] < 0.5) & (obs[:, HEALTH] >= HEALTH_FLOOR) & own_[:, 0]    # out of view, alive, healthy, armed
+    keep_ = (tgt_ >= 0) & ok_ & need_rg_ & (age_ < TARGET_MAX)         # the trip goes on (once begun, the distance no longer counts)
+    gave_up_ = (tgt_ >= 0) & ok_ & need_rg_ & (age_ >= TARGET_MAX)
+    tgt_[~keep_] = -1
+    wait_[gave_up_] = TARGET_REROLL
+    wait_[:] = np.maximum(wait_ - 1, 0)
+    roll_ = (tgt_ < 0) & ok_ & need_rg_ & (d_rg_ <= TARGET_NEAR) & (wait_ == 0)
+    if roll_.any():
+        u_ = rng.random(n_)
+        go_ = roll_ & (u_ < TARGET_P)
+        tgt_[go_] = INTENT_RG
+        age_[go_] = 0
+        wait_[roll_ & ~go_] = TARGET_REROLL
+    age_ += 1
+    out_ = np.where(tgt_ >= 0, tgt_, -1).astype(np.int64)
+    state["tgt_last"] = out_
+    return out_
+
+
 _LOG = open(_os.environ["WDIAL_LOG"], "a") if _os.environ.get("WDIAL_LOG") else None
 
 
@@ -167,7 +233,57 @@ def main():
     a3 = int(choose(y3, new_state(1), np.random.default_rng(1))[0])
     print("hold: a band's edge crossed keeps the choice for {} frames: {}; the lightning gun at long range changed at once: {}".format(
         HOLD_FRAMES, "yes" if same else "NO", "yes" if a3 in (1, 2) else "NO"))
-    return 1 if bad or not same or a3 not in (1, 2) else 0
+    # the target rule: out of view, alive, healthy, the map has both; lacking the rail -> the rail; lacking rocket ammunition too -> the nearer
+    z = np.zeros((5, max(rows) + 1), np.float32)
+    z[:, HEALTH] = 0.5
+    z[:, list(OWN)] = 1.0
+    z[:, list(AMMO)] = 0.5
+    z[:, [ITEM_RL["exists"], ITEM_RG["exists"]]] = 1.0
+    z[:, ITEM_RL["pos"][0]], z[:, ITEM_RG["pos"][0]] = 0.4, 0.5
+    z[0, OWN[1]] = 0.0                                     # no rail, near (500 units), armed: he goes
+    z[1, OWN[1]], z[1, ITEM_RG["pos"][0]] = 0.0, 0.9       # no rail, far (900 units): silent
+    z[2, OWN[1]], z[2, INVIEW] = 0.0, 1.0                  # no rail, near, the enemy in view: silent
+    z[3, OWN[1]], z[3, AMMO[0]] = 0.0, 0.0                 # no rail, near, rockets empty (unarmed): silent
+    #                                                      # row 4: owns everything: silent
+    cnt = np.zeros((5, 3))
+    for s_ in range(2000):                                 # the first roll of a fresh lack
+        t_ = target(z, new_state(5), np.random.default_rng(s_))
+        for i_ in range(5):
+            cnt[i_, {-1: 0, INTENT_RL: 1, INTENT_RG: 2}[int(t_[i_])]] += 1
+    cnt /= cnt.sum(1, keepdims=True)
+    print("target rule, the first roll (share: his own / rocket launcher / railgun):")
+    for i_, nm_ in enumerate(("no rail, near, armed", "no rail, far", "no rail, near, enemy in view", "no rail, near, rockets empty", "owns all")):
+        print("  {:36s} {:.2f} / {:.2f} / {:.2f}".format(nm_, *cnt[i_]))
+    tgt_ok = abs(cnt[0, 2] - TARGET_P) < 0.05 and cnt[1, 0] == 1 and cnt[2, 0] == 1 and cnt[3, 0] == 1 and cnt[4, 0] == 1
+    # the trip is held: once sent, the railgun every frame until TARGET_MAX; a roll lost waits TARGET_REROLL frames; the enemy in view ends it
+    st_ = new_state(1)
+    rg_ = np.random.default_rng(0)
+    first = None
+    for k_ in range(4 * TARGET_REROLL):                    # until a roll sends him
+        if int(target(z[0:1], st_, rg_)[0]) == INTENT_RG:
+            first = k_
+            break
+    seq = [int(target(z[0:1], st_, rg_)[0]) for _ in range(TARGET_MAX)]     # the trip's remaining frames, then the frame after
+    held_ok = first is not None and all(v == INTENT_RG for v in seq[:TARGET_MAX - 1]) and seq[-1] == -1
+    zz = z[0:1].copy()
+    st2 = new_state(1)
+    rg2 = np.random.default_rng(0)
+    s2 = [int(target(zz, st2, rg2)[0]) for _ in range(3)]
+    zz[0, INVIEW] = 1.0
+    ended = s2[0] == INTENT_RG and int(target(zz, st2, rg2)[0]) == -1
+    zz[0, INVIEW] = 0.0
+    zz[0, ITEM_RG["pos"][0]] = 0.9                         # out of view again, the railgun now far: no new trip
+    far_quiet = int(target(zz, st2, rg2)[0]) == -1
+    st3 = new_state(1)
+    zz[0, ITEM_RG["pos"][0]] = 0.5
+    s3 = [int(target(zz, st3, np.random.default_rng(1))[0]) for _ in range(TARGET_MAX + 1)]
+    gave = all(v == INTENT_RG for v in s3[:TARGET_MAX]) and s3[TARGET_MAX] == -1
+    print("trip held from frame {} to the end at {} frames: {}; the enemy in view ends it: {}; far after that, no new trip: {}; "
+          "given up at {} frames: {}".format(first, TARGET_MAX, "yes" if held_ok else "NO", "yes" if ended else "NO",
+                                              "yes" if far_quiet else "NO", TARGET_MAX, "yes" if gave else "NO"))
+    ended = ended and far_quiet and gave
+    print("target rule as designed: {}".format("yes" if tgt_ok and held_ok and ended else "NO"))
+    return 1 if bad or not same or a3 not in (1, 2) or not (tgt_ok and held_ok and ended) else 0
 
 
 if __name__ == "__main__":

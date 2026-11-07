@@ -119,3 +119,26 @@ measures. **The rail stays out of his hand (2 to 3%) because he does not own it*
 ammunition or the rail 40% of the time on the long maps: the items side (the rail and rocket ammunition as things worth taking) is a
 limit the dial cannot move and the run's panel must report. His rockets' hits (48%) are above the pros' (36%) against a copy; against
 people they are measured in the play test's `player_stats` before any public server.
+
+### The rail: a rule on his target (owner, 11-07 evening: "It needs to address rail as well. Rockets is a good start, but we need both")
+
+The weapon rule cannot give him a weapon he has not taken, so the rail got a rule on his **target** (`weapon_dial.target()`, in the same
+`pros` setting): his intention output set to the railgun, the simulator's readings, hold and his keep choice as ever. Three forms were
+built and measured the same way (the two rail maps with the frame log, then 200 games against u90 plain where it was worth them):
+
+| Form | Rule | Aerowalk, Campgrounds (2 games each) | 200 games, all maps |
+|---|---|---|---|
+| 1. a coin a frame | lacking the rail (or rocket ammunition): the railgun on 50% of his frames | rail owned 33%; Aerowalk 0-2, Campgrounds 0-2 (14% share) | **11-189 (5.5%)**, frag share about 20%: at every reading his target flipped between the weapon and his own choice; he arrived nowhere |
+| 2. a held trip from anywhere | one roll (50%) when the lack begins and every 5 s; the trip held 15 s or until he has it, the enemy appears, health under 60 | rail owned 40%; 192 trips, 68 ended with the rail; he held none of the three 34% of the time; Aerowalk 0-2, Campgrounds 0-2 (5.6%) | **19-181 (9.5%)**: the trips began at a spawn with the machine gun and crossed the map; he died on the way, and the trip displaced the item game |
+| 3. near and armed (the pros' habit) | the railgun within 700 units, rockets with ammunition in hand, out of view, alive, 60 health or more: he goes, held 8 s at most | rail owned 35% (no rule: 33%); 96 trips, 38 ended with the rail; Aerowalk 0-2 (37.5%), Campgrounds 1-1 (51.8%) | **45-155 (22.5%)**, frag share 36.6%: the rail in hand in view 2 → 4%, out of view 3 → 8%, frags by the rail 1% still; kills 7.1 against 12.4; the mega taken 948 against 1,209 times (the trips displace the item game); Cypher's numbers unchanged |
+| 3b. the same within 1,200 units, 100 health or more (`WDIAL_NEAR=1.2 WDIAL_HP=0.5`) | | rail owned 38%; 109 trips, 39 ended with the rail; Aerowalk 0-2 (19.1%), Campgrounds 1-1 (55.2%) | not run: ownership barely moves while the cost grows |
+
+**What it says.** Rail ownership is not a matter of him passing the rail and not taking it: with the rail near and rockets in hand he
+takes it anyway, and a rule adds a few points of ownership (33 → 35 → 38%) at a cost that grows with the rule's reach. Sent for it from
+anywhere he dies. **The rail in his hand at long range needs the head to value the rail**, which in the lightning equilibrium it does
+not (b1.1 to b1.2a: the rail went 26 → 1% as lightning took his hand). That is a training matter, part 2 of the plan
+([TRAIN_UNDER_TABLE.md](TRAIN_UNDER_TABLE.md)): under the table the rail has value at range for the first time, the head's target is
+trained on it with the win pay, and the rail owned by map is one of the run's measured targets (the fallback, if the head does not learn
+it by update 40, is a price on the rail pickup in the item table: a hand rule in training, the owner's call). **Form 3 cost 12 points for
+two points of rail in hand, so the target rule is off: `pros` is the weapon rule alone**; the code stays behind `WDIAL_RAIL=1` (with
+`WDIAL_NEAR`, `WDIAL_HP`, `WDIAL_MAX`) for experiments.

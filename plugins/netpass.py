@@ -544,6 +544,9 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         a_ = _weapon_dial().choose(obs, P.setdefault("_wdial_state", {}), P["_wdial_rng"])    # (sim/weapon_dial.py; test_suite.Policy the same)
         P["_wdial_act"] = a_
         out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])        # in place of the network's weapon key where he owns one of the three
+        t_ = _weapon_dial().target(obs, P["_wdial_state"], P["_wdial_rng"])    # the weapon he lacks (the rail, rocket ammunition) as his
+        P["_wdial_tgt"] = t_                                 # target where the rule speaks; the simulator's readings and hold as ever
+        out[:, 10] = np.where(t_ >= 0, t_, out[:, 10])
     if hb is not None:                                       # (v0.4.1) the brain's state back at the very end of the array
         h = np.concatenate([h, np.asarray(hb, np.float32)], 1)
     return out, h

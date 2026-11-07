@@ -98,6 +98,14 @@ class WeaponPush:
         import weapon_dial
         return weapon_dial.choose(obs, self.state, rng)
 
+    def targets(self, obs, rng):
+        """(replace) [B] the intention output's action where the dial's target rule speaks (the railgun or the rocket launcher he lacks,
+        sim/weapon_dial.py target()), -1 where his own stands; None in the push forms"""
+        if self.form != "replace":
+            return None
+        import weapon_dial
+        return weapon_dial.target(obs, self.state, rng)
+
 
 def sig(x):
     return 1.0 / (1.0 + np.exp(-x))
@@ -588,6 +596,8 @@ class Policy:
                 self.wrng = np.random.default_rng(int(self.seed) + 101)
             a_ = self.wpush.actions(obs, self.wrng)         # the table's weapon in place of the network's key (drawn as before, then set)
             out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])
+            t_ = self.wpush.targets(obs, self.wrng)         # the weapon he lacks as his target where the rule speaks (the simulator's
+            out[:, 10] = np.where(t_ >= 0, t_, out[:, 10])  # readings, hold and his keep choice as ever)
         if hb is not None:                                   # (v0.4.1) the brain's state back at the end of the array
             h = np.concatenate([h, hb.astype(np.float32)], 1)
         if kcol is not None:                                 # (1.4c) the keep column after the outputs (the simulator takes it off)

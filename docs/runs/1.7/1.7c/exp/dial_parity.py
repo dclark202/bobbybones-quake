@@ -12,6 +12,7 @@ import sys
 
 import numpy as np
 
+os.environ["WDIAL_RAIL"] = "1"                               # the target rule on for its checks (off by default in play: weapon_dial.TARGET_ON)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE)))))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
@@ -104,6 +105,8 @@ def main():
     pose, zmap = np.zeros((B, 4), np.float32), np.zeros(B, np.int64)
     same_tn = same_none = True
     bad_press = presses = forced = none_rows = 0
+    tgt_same = True
+    tgt_n = tgt_bad = tgt_could = 0
     prev = None
     for t in range(F):
         raw = rng.normal(pol_r.mean, np.sqrt(pol_r.var) + 1e-3, size=(B, len(pol_r.mean))).astype(np.float32)
@@ -113,6 +116,12 @@ def main():
         raw[:, list(WD.AMMO)] = rng.uniform(0.0, 1.0, (B, 3)) * (rng.random((B, 3)) < 0.9)
         raw[:, WD.INVIEW] = rng.random(B) < 0.5
         raw[:, list(WD.POS)] = rng.normal(0, 1, (B, 3)) * rng.uniform(0.05, 0.6, (B, 1))
+        raw[:, WD.HEALTH] = rng.uniform(0.0, 1.0, B)          # (the target rule's columns made real)
+        raw[:, WD.DEAD] = rng.random(B) < 0.1
+        for it_ in (WD.ITEM_RL, WD.ITEM_RG):
+            raw[:, it_["exists"]] = rng.random(B) < 0.8
+            raw[:, it_["gone"]] = rng.random(B) < 0.1
+            raw[:, list(it_["pos"])] = rng.normal(0, 1, (B, 3)) * rng.uniform(0.1, 1.0, (B, 1))
         pose[:, :3] += rng.normal(0, 10, (B, 3)).astype(np.float32)
         pose[:, 3] = rng.uniform(-180, 180, B)
         kf = np.stack([rng.uniform(0, 16, B), (rng.random(B) < 0.3), rng.integers(0, pol_r.dims[10], B), np.zeros(B), np.zeros(B),
@@ -126,8 +135,15 @@ def main():
         row_ = WD.situation(raw)
         any_ = ((WD.TABLE[row_] >= WD.FLOOR) & own_).any(1)   # the row allows one of the three he owns
         same_tn = same_tn and bool((ar[:, 6] == an[:, 6]).all())
+        tgt_same = tgt_same and bool((ar[:, 10] == an[:, 10]).all())
+        spoke_ = ar[:, 10] != a0[:, 10]                        # the target rule spoke (the intention differs from the dial-off draw)
+        could_ = (raw[:, WD.INVIEW] < 0.5) & (raw[:, WD.DEAD] < 0.5) & (raw[:, WD.HEALTH] >= WD.HEALTH_FLOOR) & own_[:, 0] & (
+            ~own_[:, 1] & (raw[:, WD.ITEM_RG["exists"]] > 0.5) & (raw[:, WD.ITEM_RG["gone"]] < 0.5))   # (a trip begun near may go on from far)
+        tgt_n += int(spoke_.sum())
+        tgt_could += int(could_.sum())
+        tgt_bad += int((spoke_ & ~could_).sum()) + int((spoke_ & (ar[:, 10] != WD.INTENT_RG)).sum())
         same_none = same_none and bool((ar[~any_, 6] == a0[~any_, 6]).all()) and bool((ar[:, :6] == a0[:, :6]).all()) \
-            and bool((ar[:, 7:] == a0[:, 7:]).all())          # and every other output exactly as with the dial off
+            and bool((ar[:, 7:10] == a0[:, 7:10]).all()) and bool((ar[:, 11:] == a0[:, 11:]).all())   # every other output as with the dial off
         none_rows += int((~any_).sum())
         pr_ = any_ & (ar[:, 6] > 0)
         presses += int(pr_.sum())
@@ -140,6 +156,9 @@ def main():
           "exactly the dial-off draw".format(none_rows), same_none and none_rows > 0)
     check("pros: every press is of a weapon he owns with ammunition ({} presses, {} not owned)".format(presses, bad_press), presses > 0 and bad_press == 0)
     check("pros: the weapon in hand forbidden by the row is never kept ({} kept)".format(forced), forced == 0)
+    check("pros: the target rule's intention the same in both paths every frame", tgt_same)
+    check("pros: the target rule spoke on {} rows of {} where it may (random inputs: a trip rarely outlives a frame), {} where it may not or "
+          "with another target".format(tgt_n, tgt_could, tgt_bad), tgt_bad == 0 and tgt_n > 0)
     print("ALL PASSED" if OK[0] else "FAILED")
     return 0 if OK[0] else 1
 
