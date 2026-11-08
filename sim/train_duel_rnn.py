@@ -5300,7 +5300,8 @@ def main():
                         if ORDER:
                             lg_ = ord_lg(pol, lg_, b_act[:, chunk])
                         hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
-                                         lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
+                                         lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None,
+                                         wd=B_WD[:, chunk] if B_WD is not None else None)
                         lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                         if LEGS_LEARN:
                             lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
@@ -5332,7 +5333,8 @@ def main():
                     if ORDER:
                         lg_ = ord_lg(pol, lg_, b_act[:, chunk])
                     hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
-                                     lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
+                                     lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None,
+                                     wd=B_WD[:, chunk] if B_WD is not None else None)   # (1.7c: the same mask as the learner's, or the ratio lies)
                     lp_ = 0
                     for j, dd in enumerate(dists(lg_)):
                         l_ = dd.log_prob(b_act[:, chunk, j])
@@ -5398,7 +5400,8 @@ def main():
                     if ORDER:
                         lg_ = ord_lg(pol, lg_, b_act[:, chunk])
                     hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
-                                     lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
+                                     lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None,
+                                     wd=B_WD[:, chunk] if B_WD is not None else None)   # (1.7c: the same mask as the learner's, or the ratio lies)
                     lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                     if LEGS_LEARN:                                       # (the legs' part of the ratio, as in the learning passes)
                         lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
@@ -5454,7 +5457,8 @@ def main():
                 if UNI_GUIDE and epoch == 0:                             # (--legs-guide) his own choice against the branch's (switch off)
                     with torch.no_grad():
                         hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
-                                          lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
+                                          lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None,
+                                          wd=B_WD[:, chunk] if B_WD is not None else None)
                         for i_, (o_, mp_) in enumerate(UGM.mapped(UG_[1])):
                             m_ = (1.0 if hmu_[o_] is None else hmu_[o_]) * UG_[2] * b_w[:, chunk]
                             ug_acc[i_] += HC_(torch.stack([m_.sum(), ((mp_.argmax(-1) == b_act[:, chunk, o_]).float() * m_).sum(),
