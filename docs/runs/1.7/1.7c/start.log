@@ -1,0 +1,78 @@
+11-07 19:46:52 train.cmd, 970 minutes: written
+11-07 19:46:53 weapon_dial: input columns: all as docs/INPUTS.csv
+11-07 19:46:53 weapon_dial: the pros' table as copied here = docs/pro_tables.json + sim/pro_hand.json: yes (largest difference in view 0.0000, out of view 0.0001)
+11-07 19:46:53 weapon_dial: by the reports' bands (rockets / rail / lightning): in view, close 60% / 7% / 33%; in view, medium 35% / 22% / 43%; in view, long 19% / 74% / 8%; out of view 72% / 16% / 12%
+11-07 19:46:53 weapon_dial:   in view, close   holding lightning rail owned 1: push at p 1 rockets +0.53 rail -1.59 lightning +0.00
+11-07 19:46:53 weapon_dial:   in view, medium  holding lightning rail owned 1: push at p 1 rockets -0.45 rail -0.72 lightning +0.00
+11-07 19:46:53 weapon_dial:   in view, long    holding lightning rail owned 1: push at p 1 rockets +0.59 rail +1.74 lightning +0.00
+11-07 19:46:53 weapon_dial:   out of view      holding lightning rail owned 1: push at p 1 rockets +1.78 rail +0.25 lightning +0.00
+11-07 19:46:53 weapon_dial:   out of view      holding rockets   rail owned 1: push at p 1 rockets +0.00 rail -1.53 lightning -1.78
+11-07 19:46:53 weapon_dial:   out of view      holding lightning rail owned 0: push at p 1 rockets +1.78 rail +0.00 lightning +0.00
+11-07 19:46:53 weapon_dial: replace form ("pros"): the share of the first choice over 2000 draws, rockets / rail / lightning (-1: his own key)
+11-07 19:46:53 weapon_dial:   in view, close   holding lightning rail owned 1: 59% / 7% / 34%
+11-07 19:46:53 weapon_dial:   in view, medium  holding lightning rail owned 1: 30% / 23% / 47%
+11-07 19:46:53 weapon_dial:   in view, long    holding lightning rail owned 1: 21% / 67% / 12%
+11-07 19:46:53 weapon_dial:   out of view      holding lightning rail owned 1: 73% / 15% / 12%
+11-07 19:46:53 weapon_dial:   out of view      holding rockets   rail owned 1: 73% / 15% / 12%
+11-07 19:46:53 weapon_dial:   out of view      holding lightning rail owned 0: 86% / 0% / 14%
+11-07 19:46:53 weapon_dial: hold: a band's edge crossed keeps the choice for 60 frames: yes; the lightning gun at long range changed at once: yes
+11-07 19:46:53 weapon_dial: target rule, the first roll (share: his own / rocket launcher / railgun):
+11-07 19:46:53 weapon_dial:   no rail, near, armed                 0.00 / 0.00 / 1.00
+11-07 19:46:53 weapon_dial:   no rail, far                         1.00 / 0.00 / 0.00
+11-07 19:46:53 weapon_dial:   no rail, near, enemy in view         1.00 / 0.00 / 0.00
+11-07 19:46:53 weapon_dial:   no rail, near, rockets empty         1.00 / 0.00 / 0.00
+11-07 19:46:53 weapon_dial:   owns all                             1.00 / 0.00 / 0.00
+11-07 19:46:53 weapon_dial: trip held from frame 0 to the end at 320 frames: yes; the enemy in view ends it: yes; far after that, no new trip: yes; given up at 320 frames: yes
+11-07 19:46:53 weapon_dial: target rule as designed: yes; silent with WDIAL_RAIL off (the default): yes
+11-07 19:46:53 no firing cost in the command: every one at zero
+11-07 19:46:53 allowed arg --habit-p: run '0' | reference '0.3'
+11-07 19:46:53 allowed arg --head2-wpg: run '0' | reference '1'
+11-07 19:46:53 allowed arg --keep-freeze: run '1' | reference '<unset>'
+11-07 19:46:53 allowed arg --keep-g: run '0.975' | reference '0'
+11-07 19:46:53 allowed arg --minutes: run '970' | reference '1518'
+11-07 19:46:53 allowed arg --run: run 'duel_gru_1_7c' | reference 'duel_gru_1_7a'
+11-07 19:46:53 allowed arg --wrule: run '0' | reference '<unset>'
+11-07 19:46:53 allowed arg --wrule-imit: run '0.1' | reference '<unset>'
+11-07 19:46:53 settings check: PASS
+11-07 19:46:55 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-07 19:46:55 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-07 19:46:55 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-07 19:46:55 settings check: PASS
+11-07 19:46:57 backup: copied 123 files 0.99 GB to T:\BobbyBones_backup
+11-07 19:46:59 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\policy.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-07 19:47:10 the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+11-07 19:47:10 keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+11-07 19:47:10 ALL PASSED
+11-07 19:47:12 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\snapshots\anchor_17a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-07 19:47:14 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\snapshots\anchor_16a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-07 19:47:15 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\snapshots\anchor_15a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-07 19:47:17 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\snapshots\anchor_13b.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-07 19:47:19 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\snapshots\anchor_b12d.pt: 4 new inputs, new tokens ['timers']
+11-07 19:47:21 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\snapshots\anchor_b11.pt: 4 new inputs, new tokens ['timers']
+11-07 19:47:23 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\snapshots\anchor_v060_end.pt: 4 new inputs, new tokens ['timers']
+11-07 19:47:24 live.json: from 1.7a's last live.json (not in the save's record): H2_GATE_CAP = 0.0
+11-07 19:47:24 live.json: from 1.7a's last live.json (not in the save's record): H2_GATE_OPEN = 0.0
+11-07 19:47:24 live.json: from 1.7a's last live.json (not in the save's record): H2_PG = 1.0
+11-07 19:47:24 live.json: from 1.7a's last live.json (not in the save's record): H2_MIX = 0.0
+11-07 19:47:24 live.json: the save (1.7a's update 90) played: {"BRAIN_FADE": 1.0, "BTOK_GATE_CAP": 1.0, "CMB_G": 0.0, "CONTACT_FREE": 1.0, "COST_FIRE_W": 0.0, "COST_JERK_W": 0.0, "DMG_TAKEN_W": 0.8, "FADD": 0.0, "FADE_CAP": 1.0, "FADE_V": 0.0, "H2_COPY": 0.0, "H2_FPG": 0.0, "H2_GATE_CAP": 0.0, "H2_GATE_OPEN": 0.0, "H2_MIX": 0.0, "H2_PG": 1.0, "H2_WPG": 1.0, "HABIT_P": 0.3, "INTENT_HOLD": 8.0, "INTENT_TEACH_W": 0.0, "ITEM_DECAY": 0.002, "ITEM_FLAT": "MH:0.35,RA:0.30,YA:0.15", "ITEM_PT_HI": 0.002, "ITEM_PT_LO": 0.004, "ITEM_PT_MIX": 1.0, "ITEM_RATE_AR": 0.002, "ITEM_RATE_HP": 0.0025, "KEEP_G": 0.975, "LEVEL_PULL": 1.0, "ORD_GATE": -30.0, "PADD": 0.0, "RAIL_FAR_PAY": 0.25, "RJ_TEACH_W": 0.0, "SPEED_PAY": 0.0, "STACK_DIFF": 0.0, "VALUE_WARM": 0.0, "WIN_ADD": 0.33, "WIN_GAIN": 1.0, "WIN_SHAPE_K": 0.0, "WIN_W": 0.0}
+11-07 19:47:24 live.json: 1.7c changes: {"HABIT_P": [0.3, 0.0], "H2_WPG": [1.0, 0.0], "WRULE_P": [null, 0.0]}
+11-07 19:47:24 live.json: differs from 1.7a's last live.json (update 246): {"CMB_G": [1.0, 0.0], "FADD": [1.0, 0.0], "H2_FPG": [0.5, 0.0], "H2_WPG": [1.0, 0.0], "HABIT_P": [0.3, 0.0], "KEEP_G": [1.0, 0.975], "ORD_GATE": [0.0, -30.0], "PADD": [0.3, 0.0], "VALUE_WARM": [0, 0.0], "WRULE_P": [null, 0.0]}
+11-07 19:47:24 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\live.json
+11-07 19:47:25 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7c\live.json: accepted
+11-07 19:47:25 the ramp ramp_17c.py: 22 files (clocks 0 to 21), all accepted
+11-07 19:47:25 LIVE ACCEPT: PASS
+11-07 19:47:25 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\policy_end_17a.pt as it is, with its optimizer; anchors 1.7a's update 90, 1.6a's end, 1.5a's end, 1.3b's end, b1.2d's end, b1.1, v0.6.0's end
+11-07 19:47:25 trainer started: cmd 25980, from 1.7a's update 90, 970 minutes
+11-07 19:47:40 live.json applied by the trainer before its first rollout (2026-11-07 19:47:37)
+11-07 19:47:45 watcher 35436 | ramp 38312 (its dial: ramp_17c.py, WRULE_P 0 -> 1 over updates 0 to 20; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 38620 | no guard (owner: never stop the run)
+11-07 19:47:55 trainer: combat order (1.7): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer
+11-07 19:47:55 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1005 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + obs 89 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 714,403 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+11-07 19:47:55 trainer: optimizer: the small tokens' first layer starts fresh
+11-07 19:47:55 trainer: optimizer: attn.mark carried over, (64, 96) -> (65, 96)
+11-07 19:47:55 trainer: optimizer: enc.0.weight carried over, (256, 990) -> (256, 994)
+11-07 19:47:55 trainer: optimizer: head2.inp.weight carried over, (256, 950) -> (256, 960)
+11-07 19:47:55 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 107 step counts moved to the host)
+11-07 19:47:55 trainer: keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.975 (live KEEP_G); its weights: bias -7.646, on its own numbers [6.709, 7.195, -0.293, 7.088, -0.038, 0.041, 0.038]
+11-07 19:47:55 trainer: the pros' weapon table (1.7c): share 0.000 of every network seat's lives (live WRULE_P); the weapon key's policy gradient and entropy off on those frames; copy loss 0.1 (the key's own layer); keep choice FROZEN (--keep-freeze)
+11-07 19:47:55 trainer: keep choice: share 0.9750 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+11-07 19:47:55 trainer: combat order (1.7): asked at a share 0.0000 of his readings (target, cut, spam, out); the pointer's adds on the targets and the way x 0.0000; the kinds' bias [0.15, -4.903, -4.347, -5.501], |op_v| 8.371
