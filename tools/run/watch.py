@@ -58,8 +58,9 @@ def live_ps():
         return 0.0
 
 
-def hold_args(pol, ctrl):
-    """(b1.2) each side at the target lock it was trained at (its env_vars), not one lock for both"""
+def hold_args(pol, ctrl, table=False):
+    """(b1.2) each side at the target lock it was trained at (its env_vars), not one lock for both; table (1.7c): the control plays under
+    the pros' weapon table too"""
     import torch
     out = []
     for name, cname, wname, p_ in (("--hold", "--contact", "--wown", pol), ("--opp-hold", "--opp-contact", "--opp-wown", ctrl)):
@@ -71,16 +72,16 @@ def hold_args(pol, ctrl):
         out += [wname, "1" if str(ev_.get("WEAPON_OWN") or "0") not in ("0", "", "0.0") else "0"]   # (1.4b) its own WEAPON_OWN (older saves: off)
     if torch.load(pol, map_location="cpu", weights_only=False).get("wrule"):      # (1.7c) a save trained under the pros' weapon table plays under it
         out += ["--wpush", "1", "--wpush-form", "replace"]
-    if CTRL_TABLE and ctrl == CTRL_TABLE:                     # (1.7c) the second control plays under the table too
+    if table:                                                # (1.7c) the second control plays under the table too
         out += ["--opp-wpush", "1"] + ([] if "--wpush-form" in out else ["--wpush-form", "replace"])
     return out
 
 
-def games(pol, upd, ctrl, label, ps):
+def games(pol, upd, ctrl, label, ps, table=False):
     sets = P.settings(ps, pol)
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1", CUDA_VISIBLE_DEVICES="-1")
     res = {}
-    tag = "prev" if ctrl == CTRL_PREV else ("table" if (CTRL_TABLE and ctrl == CTRL_TABLE) else "ref")   # (1.7c: the control under the table)
+    tag = "table" if table else ("prev" if ctrl == CTRL_PREV else "ref")   # (1.7c: the control under the table; by the flag, not the path: it may be the same file)
     cyd_ = os.path.join(WD, "cy", "u{}".format(upd)) if (tag == "prev" and os.environ.get("CHECK_CYPHER") == "1") else ""
     if cyd_:                                                 # (1.7b) Cypher's measures of the check's games: each job's summary
         env = dict(env, CY_REC=cyd_)
@@ -94,7 +95,7 @@ def games(pol, upd, ctrl, label, ps):
                    "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225",
                    "--round", "600", "--opp-round", "600"]
             cmd += [x for s_ in sets for x in ("--set", s_)]
-            cmd += hold_args(pol, ctrl)
+            cmd += hold_args(pol, ctrl, table)
             jobs.append((mp, js, subprocess.Popen(cmd, cwd=P.CODE, env=env, creationflags=0x4000 | 0x08000000, stdout=open(js + ".log", "w"),
                                                   stderr=subprocess.STDOUT)))
         for mp, js, p in jobs:
@@ -148,7 +149,7 @@ def rule():
 def check_games(pol, upd, ctrl, label):
     games(pol, upd, ctrl, label, live_ps())
     if CTRL_TABLE and ctrl == CTRL_PREV:                     # (1.7c) and the same save against the start under the table, in the same turn
-        games(pol, upd, CTRL_TABLE, TABLE_LABEL, live_ps())
+        games(pol, upd, CTRL_TABLE, TABLE_LABEL, live_ps(), table=True)
     if ctrl == CTRL_PREV and os.environ.get("CHECK_RULE") != "0":    # (b1.0a: CHECK_RULE=0, the run's own ramp flags its checks)
         rule()
 
