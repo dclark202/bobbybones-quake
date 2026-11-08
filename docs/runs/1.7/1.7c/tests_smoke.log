@@ -1,0 +1,28 @@
+19:44:48 scratch_17c_smoke_r5: done in 0.8 min; the log ends: exit 0
+19:44:48 PASS the trainer exited 0
+19:44:48 PASS on the CPU
+19:44:48 PASS the optimizer's state loaded from S0's opt.pt
+19:44:48 PASS the pros' weapon table announced, the keep choice frozen
+19:44:48 PASS 8 or more updates (10)
+19:44:48 update 1: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.6693, 'imit': 0.1, 'frames': 308, 'loss': 2.6438, 'agree': 0.3279, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 2: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.7025, 'imit': 0.1, 'frames': 394, 'loss': 2.2296, 'agree': 0.3426, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 3: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.7894, 'imit': 0.1, 'frames': 400, 'loss': 1.8657, 'agree': 0.42, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 4: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.7871, 'imit': 0.1, 'frames': 471, 'loss': 1.7434, 'agree': 0.4777, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 5: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.7926, 'imit': 0.1, 'frames': 460, 'loss': 1.5427, 'agree': 0.5087, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 6: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.8809, 'imit': 0.1, 'frames': 460, 'loss': 1.4353, 'agree': 0.5739, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 7: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.9062, 'imit': 0.1, 'frames': 514, 'loss': 1.1887, 'agree': 0.6206, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 8: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.9189, 'imit': 0.1, 'frames': 528, 'loss': 1.0055, 'agree': 0.6818, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 9: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.9232, 'imit': 0.1, 'frames': 534, 'loss': 0.9737, 'agree': 0.7079, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 update 10: wrule {'p': 1.0, 'lives': 1.0, 'set': 0.9232, 'imit': 0.1, 'frames': 518, 'loss': 1.0696, 'agree': 0.6834, 'keep_frozen': True} | keep {'g': 0.975, 'kl': 0.0}
+19:44:48 PASS every seat under the table (lives 1) and the key set by it on over half the frames
+19:44:48 PASS the copy loss finite on every update and lower at the end than at the start (2.6438 -> 1.0696); the agreement rising (0.3279 -> 0.6834)
+19:44:48 PASS no NaN in the head's lessons
+19:44:48 PASS the save carries wrule (the checks play it under the table)
+19:45:08 scratch_17c_smoke_r5: done in 0.3 min; the log ends: exit 0
+19:45:08 PASS a restart from the save with its optimizer: loaded, no cold start, one more update (10 -> 11)
+19:46:05 check: exit 0; memory never start over) | opponent the whole game (clock, score and memory never start over)
+    he        bare 17% | first weapon 3.5 s | 150+ 54% | weapons 2.25/min | mega 44%, red 31% of spawns | yellow 1.75/min | in view 22% | firing 15% (60% of the time in view) | speed 330, standing 3% (over 3 s: 0%) | lives 3.0/min, own deaths 0.0 a game
+    opponent  bare 16% | first weapon 1.4 s | 150+ 42% | weapons 1.5/min | mega 29%, red 52% of spawns | yellow 1.5/min | in view 21% | firing 14% (62% of the time in view) | speed 332, standing 3% (over 3 s: 0%) | lives 3.0/min, own deaths 0.0 a game
+
+19:46:05 PASS a one-map check of the save under the table against S0 plain finished (1-1; owned {'rl': 0.247, 'rg': 0.122, 'lg': 0.733})
+19:46:05 ALL PASSED
