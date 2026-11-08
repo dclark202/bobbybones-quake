@@ -1,0 +1,22 @@
+19:41:52 scratch_17c_id_z0_r5: done in 0.5 min; the log ends: exit 0
+19:41:52 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+19:41:52 PASS z0: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:41:52 PASS z0: the pros' weapon table announced not at all (off)
+19:42:14 scratch_17c_id_z0b_r5: done in 0.3 min; the log ends: exit 0
+19:42:14 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+19:42:14 PASS z0b: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:42:35 scratch_17c_id_z1_r5: done in 0.3 min; the log ends: exit 0
+19:42:35 PASS z1: the trainer ran 2 updates and dumped them (2 dumps)
+19:42:35 PASS z1: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:42:35 PASS z1: the pros' weapon table announced (on)
+19:42:57 scratch_17c_id_z2_r5: done in 0.3 min; the log ends: exit 0
+19:42:57 PASS z2: the trainer ran 2 updates and dumped them (2 dumps)
+19:42:57 PASS z2: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:42:57 PASS z2: the pros' weapon table announced (on)
+19:42:57 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+19:42:57 PASS 1.7c's rule on at share 0 = the trainer before it, to the bit, both updates (z1 = z0: actions, log p, value)
+19:42:57 PASS under the table: update 1's actions differ from z1 (0.2502 of them)
+19:42:57 z2 wrule: [{'p': 1.0, 'lives': 1.0, 'set': 0.5811, 'imit': 0.1, 'frames': 331, 'loss': 2.7947, 'agree': 0.3021, 'keep_frozen': True}, {'p': 1.0, 'lives': 1.0, 'set': 0.7835, 'imit': 0.1, 'frames': 435, 'loss': 2.4034, 'agree': 0.3678, 'keep_frozen': True}]
+19:42:57 PASS z2: every seat under the table (lives 1), the key set by it on most frames, the copy loss on frames and finite
+19:42:57 PASS z1: the share 0 played (lives 0, the key never set, no copy frames)
+19:42:57 ALL PASSED

@@ -246,7 +246,8 @@ def play(job):
                                   "legs", "at400",        # (LEGS) frames his legs carried him; frames at 400 units a second or more
                                   "unseen_hits", "unseen_dmg",    # hits he takes (10 points or more on a frame) while the other side has nobody in view
                                   "exposed", "watching",          # the other side has him in view and he has nobody in view; the reverse
-                                  "out", "out_rl", "out_rg", "out_lg")}   # (1.7c) alive with nobody in view: frames, and with each in hand
+                                  "out", "out_rl", "out_rg", "out_lg",    # (1.7c) alive with nobody in view: frames, and with each in hand
+                                  "own_rl", "own_rg", "own_lg")}          # (1.7c) alive and owning each of the three (the rail: the run's measured target)
     still = np.zeros(n)                                         # seconds he has been standing (under 50 units a second)
     life, got, was = np.zeros(n), np.zeros(n, bool), np.zeros(n, bool)
     first = [[], []]
@@ -416,6 +417,8 @@ def play(job):
             c["out"][s_] += oov_[m].sum()
             for w_, k_ in zip(big, ("out_rl", "out_rg", "out_lg")):
                 c[k_][s_] += (oov_ & (env.weapon == w_))[m].sum()
+            for w_, k_ in zip(big, ("own_rl", "own_rg", "own_lg")):
+                c[k_][s_] += (alive & env.has[:, w_])[m].sum()
             c["standing"][s_] += (alive & (spd < 50.0))[m].sum()
             c["stuck"][s_] += (still > 3.0)[m].sum()
             c["wp"][s_] += gain_w[m].sum()
@@ -625,7 +628,8 @@ def main():
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
                             mega_share=round(float(c["mega"][s_] / (pm * 60 / 35.0)), 3), red_share=round(float(c["red"][s_] / (pm * 60 / 25.0)), 3),
                             yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2),
-                            in_hand_out_of_view={w_: round(float(c["out_" + w_][s_] / max(1.0, c["out"][s_])), 3) for w_ in ("rl", "rg", "lg")})   # (1.7c) travelling
+                            in_hand_out_of_view={w_: round(float(c["out_" + w_][s_] / max(1.0, c["out"][s_])), 3) for w_ in ("rl", "rg", "lg")},   # (1.7c) travelling
+                            weapons_owned={w_: round(float(c["own_" + w_][s_] / al), 3) for w_ in ("rl", "rg", "lg")})   # (1.7c) of his time alive
             # by the kind of life: lives begun; the share of his time alive in such lives; frags, deaths (of any kind) and frags a
             # death; of that time the share with the enemy in view; of the time in view the share with each of the three in hand
             row[who]["by_style"] = {nm: dict(lives=int(sy["lives"][s_, j]), time=round(float(sy["alive"][s_, j] / max(1.0, sy["alive"][s_].sum())), 3),

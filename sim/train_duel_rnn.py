@@ -246,6 +246,7 @@ LIVE_RANGE = {"ORD_GATE": (-30.0, 0.0)}   # (1.7a's false start, 11-05) a live n
 #   with it: 1.7a trained 14 updates on its command's start values instead of 1.6a's end dials. A refused file at the start now
 #   stops the trainer before its first rollout (LIVE_FIRST), and every read is written to <run>/live_status.json for the ramp.
 LIVE_TRAINER = LIVE_TRAINER + ("H2_WPG", "HABIT_P")                 # (1.5a) the weapon key's credit on the head's clock; the league seats' weapon habits
+LIVE_TRAINER = LIVE_TRAINER + ("WRULE_P",)                          # (1.7c) the share of lives under the pros' weapon table (--wrule)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1144,6 +1145,16 @@ def main():
     ap.add_argument("--intent-teach-floor", type=float, default=0.0, help="the item rule's weight never fades below this (0: to zero)")
     ap.add_argument("--weapon-teach", type=float, default=0.0, help="weight of imitating the weapon rule on the weapon key (env._weapon_teach)")
     ap.add_argument("--weapon-teach-minutes", type=float, default=240.0, help="that weight fades to zero over this time")
+    ap.add_argument("--wrule", type=float, default=-1.0, help="(1.7c, docs/runs/1.7/1.7c/TRAIN_UNDER_TABLE.md) the share of lives, every network seat's "
+                                                             "(his and the league's), played under the pros' weapon table: sim/weapon_dial.py choose() sets "
+                                                             "the weapon key's action in place of the network's (as !weapons pros and the checks' --wpush-form "
+                                                             "replace); on those frames the weapon key gets no policy gradient and no entropy bonus. Live "
+                                                             "WRULE_P. -1: off (the trainer as before)")
+    ap.add_argument("--wrule-imit", type=float, default=0.0, help="(--wrule) the weapon key copies the table's choice: a cross-entropy on the frames the key "
+                                                                 "was read under the rule, his seats, from the shared layers detached (the key's own layer "
+                                                                 "learns it alone); standing, never faded")
+    ap.add_argument("--keep-freeze", type=int, default=0, help="(1.7c) 1: the keep choice plays at its share but learns nothing (its log-probability "
+                                                               "out of the policy term: it drifted into flicker in 1.7a and 1.7b)")
     ap.add_argument("--hand-teach", type=float, default=0.0,
                     help="the pros' weapon in hand with nobody in view, as a standing pull (0 = off): on the frames the simulator gives a "
                          "label (HAND_TEACH=1: the pros' shares of the weapons he owns, for his map, travelling or holding, by how long "
@@ -1671,7 +1682,7 @@ def main():
         """(1.7) his logits with f [..., 2] added to the fire key's"""
         return torch.cat([lg[..., :FIRE_O], lg[..., FIRE_O:FIRE_O + 2] + f, lg[..., FIRE_O + 2:]], -1)
 
-    def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False, lt=None, wl=None):
+    def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False, lt=None, wl=None, wd=None):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
         intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his).
         (LEGS_KEYS_ADD) act: his choices [..., outputs]: on his legs his own output of a column counts where he chose "mine"
@@ -1685,6 +1696,8 @@ def main():
             mine_ = {c_: (act[..., KA_HEAD + i_] == 1).to(lo.dtype) for i_, c_ in enumerate(KA_COLS)}
         for j in range(len(ACTION_DIMS)):
             m = dc if j in KEY_HEADS else ((lv if lt is None else lt) if j == I_HEAD else (ll if j == L_HEAD else None))   # (1.7: lt the target's)
+            if j == HAND_HEAD and wd is not None:                # (1.7c, --wrule) the weapon key counts only where the table did not set it
+                m = m * (wd < 0).to(m.dtype)
             if JE and j == V_HEAD and not ent:                   # (JUMP_EVERY) the jump read on every frame
                 m = None
             if j == L_HEAD and so is not None and a.solo_self_drive:     # (--solo-self-drive) not in his runs
@@ -3194,6 +3207,7 @@ def main():
                            else ({"win_value": WV_CK} if WV_CK is not None else {})),         # (v0.4.3, --win-value: never in "model")
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
+                        **({"wrule": 1} if a.wrule >= 0 else {}),      # (1.7c) trained under the pros' weapon table: the checks play the save under it
                         react_ms=a.react_ms, acquire_ms=a.acquire_ms, no_walk=bool(a.no_walk),
                         env_vars=dict({k_: os.environ[k_] for k_ in getattr(E_, "PLAY_VARS", ()) if os.environ.get(k_)}, **({"NO_SWITCH": "1"} if NO_SW else {}),
                                       **({"AUTO_HOP": "1" if E_.AUTO_HOP else "0"} if hasattr(E_, "AUTO_HOP") else {})),    # (v0.3.7: always said)
@@ -3250,6 +3264,38 @@ def main():
         print("habits (1.5a, part C): share {:.3f} of the league seats' lives (live HABIT_P), push {:g}; kinds pro / rail / rockets {}; the pros' "
               "travelling hand (rockets, rail, lightning) {}".format(HB_P[0], a.habit_push, [round(float(x_), 3) for x_ in HB_W],
                                                                    [round(float(x_), 3) for x_ in HB_OUT / HB_OUT.sum()]), flush=True)
+
+    WR_ON = a.wrule >= 0                                               # (1.7c) the pros' weapon table chooses the weapon (--wrule)
+    WR_P = [min(1.0, max(0.0, float(a.wrule)))]                        # (live WRULE_P) the share of lives under it
+    KEEP_FREEZE = bool(a.keep_freeze)
+    if WR_ON:
+        import csv as csv_w
+        import weapon_dial as WDIAL_
+        assert tuple(WEAPONS[:3]) == ("rl", "rg", "lg"), WEAPONS
+        assert tuple(WDIAL_.KEY_IDX) == (1, 2, 3) and HAND_HEAD == 6, (WDIAL_.KEY_IDX, HAND_HEAD)
+        WR_DEAD = {r_["input"]: int(r_["index"]) for r_ in csv_w.DictReader(open(os.path.join(ROOT, "docs", "INPUTS.csv"), encoding="utf-8"))}["dead"]
+        WR_RNG = np.random.default_rng(4052)                           # (its own stream: his play's draws untouched)
+        WR_LIFE = np.zeros(N, bool)                                    # the seats under the table this life
+        WR_FIRST = [True]
+        WR_STATE = WDIAL_.new_state(N)                                    # the dial's memory of every seat (choose())
+        WR_ACC = np.zeros(3, np.float64)                               # frames: all, under the table, the key set by it (a press or keep)
+        print("the pros' weapon table (1.7c): share {:.3f} of every network seat's lives (live WRULE_P); the weapon key's policy gradient and entropy "
+              "off on those frames; copy loss {:g} (the key's own layer); keep choice {}".format(
+                  WR_P[0], a.wrule_imit, "FROZEN (--keep-freeze)" if KEEP_FREEZE else "learning"), flush=True)
+
+    def wrule_act(obs_raw):
+        """(1.7c) [N] the weapon key's action under the pros' table this frame (sim/weapon_dial.py choose()), -1 where the network's own stands:
+        a seat not under the table this life, or none of rockets, rail, lightning owned with ammunition. A seat's life is drawn at the first
+        call and again on every frame it is dead (so once a life, at its last dead frame), with chance WR_P"""
+        dead_ = obs_raw[:, WR_DEAD] > 0.5
+        if WR_FIRST[0]:
+            dead_, WR_FIRST[0] = np.ones(N, bool), False
+        if dead_.any():
+            WR_LIFE[dead_] = WR_RNG.random(int(dead_.sum())) < WR_P[0]
+        a_ = WDIAL_.choose(obs_raw, WR_STATE, WR_RNG)
+        a_ = np.where(WR_LIFE, a_, -1)
+        WR_ACC[:] = WR_ACC + np.array((N, float(WR_LIFE.sum()), float((a_ >= 0).sum())))     # (in place: the name stays the outer one)
+        return a_
 
     def habit_push(obs_raw, acc):
         """(1.5a, part C) [N, HAND_D] the push on the weapon key's logits of the league seats with a habit this frame (zeros elsewhere);
@@ -3749,6 +3795,11 @@ def main():
                             HB_P[0] = min(1.0, max(0.0, float(lt_["HABIT_P"])))
                         else:
                             print("live: HABIT_P ignored (--habit-p off)", flush=True)
+                    if "WRULE_P" in lt_:                                               # (1.7c) the share of lives under the pros' weapon table, from the next draw
+                        if WR_ON:
+                            WR_P[0] = min(1.0, max(0.0, float(lt_["WRULE_P"])))
+                        else:
+                            print("live: WRULE_P ignored (--wrule off)", flush=True)
                     H2_CW[0] = max(0.0, float(lt_.get("H2_COPY", H2_CW[0])))         # (... a factor on the copy lesson)
                     SEEK_W[0] = max(0.0, float(lt_.get("INTENT_SEEK_W", SEEK_W[0]))) # (... a factor on the way pay)
                     assert all(n_ == now_[0] for n_ in now_), "live: the simulators disagree"
@@ -3773,6 +3824,7 @@ def main():
                                   **({"KEEP_G": KEEP_GV[0]} if KEEP else {}), **({"CMB_G": CMB_GV[0]} if CMB else {}),
                                   **({"FADD": FADD_V[0]} if FIRE else {}),
                                   **({"H2_WPG": H2_WPG[0]} if WCR else {}), **({"HABIT_P": HB_P[0]} if HB_ON else {}),
+                                  **({"WRULE_P": WR_P[0]} if WR_ON else {}),
                                   **({"H2_FPG": H2_FPG[0]} if FCR else {}), **({"PADD": PADD_V[0]} if CMB else {}),
                                   **({"PASS_W": PASS_LIVE[0]} if PASS else {}),
                                   **({"ORD_GATE": ORD_GV[0]} if ORD_GV[0] is not None else {}),
@@ -4205,6 +4257,9 @@ def main():
         b_lpw = torch.zeros(T, N, device=dev) if WCR else None          # (1.5a, B) the weapon key's log-probability as played
         b_lpf = torch.zeros(T, N, device=dev) if FCR else None          # (1.7, S6) the fire key's
         hb_acc = np.zeros((4, 3), np.float64) if HB_ON else None         # (1.5a, C) each habit's league frames, his frags and its against it
+        b_wd = torch.full((T, N), -1, dtype=torch.long, device=dev) if WR_ON else None     # (1.7c) the table's weapon key action, -1 where his own
+        if WR_ON:
+            WR_ACC[:] = 0.0                                              # (this rollout's frames under the table)
         if H2:                                                           # (--head2) its ticks' inputs (host, half precision), its value, the
             b_u2 = torch.zeros(T // BK, N, head2_.u_width(H2L), dtype=torch.float16)      # intention's log-probability as played; the
             b_vh = torch.zeros(T + 1, N, device=dev)                     # held outputs made again with the weights it plays with; its start
@@ -4379,6 +4434,10 @@ def main():
                         lo = wkey_add(lo, torch.from_numpy(habit_push(obs, hb_acc)).to(lo.device))
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
+                if WR_ON:                                                # (1.7c) the pros' weapon table chooses the weapon of every seat under it:
+                    wd_ = torch.from_numpy(wrule_act(obs)).to(dev)       # the key's action set after the draw (as the checks and the servers do);
+                    b_wd[t] = wd_                                        # the key's log-probability counts only where his own stood (head_masks)
+                    act[:, HAND_HEAD] = torch.where(wd_ >= 0, wd_, act[:, HAND_HEAD])
                 if KEEP:                                                 # (1.4c) the keep choice of every seat: drawn with its own stream
                     NI_ = ACTION_DIMS[I_HEAD]                            # (his play's draws untouched); each network at the share in its file
                     cur_ = KF_[:, 2].long().clamp(0, NI_ - 1)
@@ -4510,6 +4569,8 @@ def main():
             if KEEP:                                                     # (1.4c) the readings his keep choice decided (his seats), the numbers
                 kl_ = torch.from_numpy(np.concatenate([r[22] if r[22] is not None else np.zeros(len(r[2]), bool) for r in res]).astype(np.float32)).to(dev)
                 b_kl[t] = kl_ * (~snap_players).float() if has_snaps else kl_    # it reads on the next frame
+                if KEEP_FREEZE:                                          # (1.7c, --keep-freeze) the keep choice plays, learns nothing
+                    b_kl[t] = b_kl[t] * 0.0
                 KF_ = torch.from_numpy(np.concatenate([r[23] for r in res]).astype(np.float32)).to(dev)
                 if CMB:                                                  # (1.7) the readings the combat order counted at (his seats), where a new
                     oc_ = torch.from_numpy(np.concatenate([r[24] if r[24] is not None else np.zeros(len(r[2]), np.int8) for r in res]).astype(np.float32)).to(dev)
@@ -4540,7 +4601,8 @@ def main():
                 b_act[t, :, V_HEAD] = av_.to(b_act.device)
                 lps[V_HEAD] = ds[V_HEAD].log_prob(av_)
             b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(
-                dec, live, ll, lo, act, b_so[t], lt=live * (1.0 - b_oon[t]) if CMB else None, wl=b_wl[t] if b_wl is not None else None)))
+                dec, live, ll, lo, act, b_so[t], lt=live * (1.0 - b_oon[t]) if CMB else None, wl=b_wl[t] if b_wl is not None else None,
+                wd=b_wd[t] if b_wd is not None else None)))
             if KEEP:                                                     # (1.4c) the keep choice joins what he did, where it decided
                 b_logp[t] = b_logp[t] + b_lpk[t] * b_kl[t]
             if CMB:                                                      # (1.7) the combat order too, where it was asked and counted
@@ -4648,6 +4710,7 @@ def main():
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, fod_b=fod_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
+                    b_wd=b_wd,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
                     b_btok=b_btok, btg=btg_, rfg=rfg_, bfg=bfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0, b_lpw=b_lpw, b_lpf=b_lpf, hb_acc=hb_acc,
@@ -4740,6 +4803,7 @@ def main():
         b_lr, b_llp, b_lab, b_iteach, b_teach, b_aux, b_ht, b_bel = (R[k_] for k_ in ("b_lr", "b_llp", "b_lab", "b_iteach", "b_teach", "b_aux", "b_ht", "b_bel"))
         b_ev, b_wg, b_wb, b_hand, h0, raw, agg, agg_map, lk = (R[k_] for k_ in ("b_ev", "b_wg", "b_wb", "b_hand", "h0", "raw", "agg", "agg_map", "lk"))
         keep_raw, t_roll = R["keep_raw"], R["t_roll"]
+        B_WD = R.get("b_wd")                                             # (1.7c) the table's weapon key action, -1 where his own stood
         if a.adv_pay_ref > 0:                                            # (v0.6.1c, --adv-pay-ref) the advantages' factor: ref / the pay's size
             WBk_ = np.atleast_1d(agg.get("win_blend", np.zeros(8))).astype(np.float64)   # a player-minute in games (a running mean)
             ps_ = float(WBk_[6]) / (float(WBk_[0]) * DT_MIN) if len(WBk_) > 6 and WBk_[0] > 0 else None
@@ -4918,6 +4982,7 @@ def main():
         ik_l = torch.zeros(())
         wk = a.weapon_teach * max(0.0, 1.0 - (mins - fade0) / a.weapon_teach_minutes)
         wk_l = torch.zeros(())
+        WR_LACC = [0.0, 0.0, 0.0]                                        # (1.7c) the copy loss this update: its frames, the loss's sum, agreements
         lt_w = a.legs_teach * (min(1.0, max(0.0, mins - fade0) / a.legs_teach_warm) if a.legs_teach_warm > 0 else 1.0)   # (--legs-teach)
         lt_acc = torch.zeros(4, 6, dtype=torch.float64, device=dev)      # ... per output: its frames, the sum of its loss, his likeliest choice is the label's,
         #                                                                  the chance he gives the label; its frames in withheld stretches, his likeliest right there
@@ -5405,7 +5470,8 @@ def main():
                 lv = b_live[:, chunk]
                 dc = b_dec[:, chunk]
                 hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk],
-                                lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None)
+                                lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None,
+                                wd=B_WD[:, chunk] if B_WD is not None else None)
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
                 if H2ADD:                                                # (1.3b) the target's share of this term's gradient: 1 - c (its value as it is)
                     c_ = min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2]))
@@ -5462,7 +5528,8 @@ def main():
                                 KEEP_ACC[5] += ((B_LPK[:, chunk] * B_KL[:, chunk] - lk_) * km_).sum().double()
                                 KEEP_ACC[6] += km_.sum().double()
                 hme = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk], ent=True,
-                                 lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
+                                 lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None,
+                                 wd=B_WD[:, chunk] if B_WD is not None else None) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
                 ent = sum(w_ * dd.entropy() * (1.0 if hme[j] is None else hme[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's part of what he did, the same advantage
@@ -5973,6 +6040,17 @@ def main():
                     wm_ = (wl_ >= 0).float() * wgt
                     wk_l = -(dst[6].log_prob(wl_.clamp(min=0)) * wm_).sum() / wm_.sum().clamp(min=1.0)
                     loss = loss + wk * wk_l
+                if WR_ON and a.wrule_imit > 0 and B_WD is not None:      # (1.7c) the weapon key copies the table's choice where it set the key and
+                    wdl_ = B_WD[:, chunk]                                # the key was read, his seats; from the shared layers detached: the key's
+                    wdm_ = (wdl_ >= 0).float() * dc * wgt                # own layer learns it alone (standing, never faded)
+                    dstw_ = (LazyDists if NOSYNC else dists)(pi_t(hs_all.detach()))
+                    wd_l = -(dstw_[HAND_HEAD].log_prob(wdl_.clamp(min=0)) * wdm_).sum() / wdm_.sum().clamp(min=1.0)
+                    loss = loss + a.wrule_imit * wd_l
+                    if epoch == 0:
+                        with torch.no_grad():
+                            WR_LACC[0] += HC_(wdm_.sum().double())
+                            WR_LACC[1] += HC_((wd_l * wdm_.sum()).double())
+                            WR_LACC[2] += HC_(((dstw_[HAND_HEAD].probs.argmax(-1) == wdl_.clamp(min=0)).float() * wdm_).sum().double())
                 if ik > 0:                                               # the intention head leans on the item rule at first
                     it_ = b_iteach[:, chunk]
                     im_ = b_live[:, chunk] * wgt * (it_ >= 0).float()    # (TARGETS: a negative label: the rule names no item, the lesson is silent)
@@ -6440,6 +6518,12 @@ def main():
                    contact=[round(float(x_), 1) for x_ in np.atleast_1d(agg.get("contact", np.zeros(5)))],     # (CONTACT_FREE) begun, free, readings, changes, to the enemy
                    rule_blind=round(float(np.atleast_1d(agg.get("rule_blind", np.zeros(2)))[0]) / max(1.0, float(np.atleast_1d(agg.get("rule_blind", np.zeros(2)))[-1])), 4),      # (RULE_BLIND) the share of the rule's frames silenced by a fresh belief   # (RULE_CONTEST) the share of the rule's item frames silenced
                    weapon_teach=[round(wk, 3), round(float(wk_l), 3)],
+                   **({"wrule": dict(p=WR_P[0], lives=round(float(WR_ACC[1] / max(1.0, WR_ACC[0])), 4),      # (1.7c) the share of seat-frames under the table,
+                                     set=round(float(WR_ACC[2] / max(1.0, WR_ACC[0])), 4),                   # of them the key set by it (one of the three owned)
+                                     imit=a.wrule_imit, frames=int(float(WR_LACC[0])),                       # the copy loss: its frames, the loss, his likeliest = the table's
+                                     loss=round(float(WR_LACC[1]) / max(1.0, float(WR_LACC[0])), 4),
+                                     agree=round(float(WR_LACC[2]) / max(1.0, float(WR_LACC[0])), 4),
+                                     keep_frozen=KEEP_FREEZE)} if WR_ON else {}),
                    weapon_rule_agree=round(float(agg.get("wrule_agree", 0) / max(1, agg.get("wrule_frames", 0))), 3),
                    stack=dict(over=round(float(agg.get("stack_over", 0)) / max(1, agg.get("stack_frames", 0)), 3),
                               big_weapons=round(float(agg.get("stack_big", 0)) / max(1, agg.get("stack_frames", 0)), 2),

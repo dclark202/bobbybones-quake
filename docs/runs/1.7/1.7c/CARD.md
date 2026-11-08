@@ -1,14 +1,56 @@
-# 1.7c: the weapon plan (a draft, to refine while 1.7b runs)
+# 1.7c: the weapons, under the pros' table
 
-*2026-11-06 evening (owner): "we'll hold it out for 1.7c. I think we need to revisit his weapon usage and really get it to a more equal state,
-he just uses LG constantly and it's not very enjoyable to play against imo. More rockets would be great, and rails too ... while it's going
-why don't you have a good think about how we can follow up with 1.7c to get better weapon usage." Starts from ❓ 1.7b's end (or its best
-save). **A draft: nothing decided, nothing built, nothing run.** Sources: [Cypher set against Bobby](../../../design/CYPHER.md) (B-303,
-B-305), [1.5a's card](../../1.5/1.5a/CARD.md) (the weapon causes H1 to H5, the prefit 1.5b), [1.7b](../1.7b/CARD.md).*
+*Started from 1.7a's result, its save of update 90 (`keep/policy_end_17a.pt`), with its optimizer. Owner, 2026-11-07 evening: "ok let's do
+it then. start it when it's ready, 12 hrs is fine, or you can run it until noon tomorrow"; "It should be a focused train session to get the
+weapon goals"; "the pros table is the only one to consider"; "I honestly don't care if his win rate against himself plummets". The design
+and its reasons: [TRAIN_UNDER_TABLE.md](TRAIN_UNDER_TABLE.md); the dial it runs on and its checks: [DIAL.md](DIAL.md).*
 
-**Marks:** ✅ known or decided · ⏳ to build · 🧪 to measure · ❓ owner's decision
+**Started from:** 1.7a's update 90 (`data/sim_runs/duel_gru_1_7a/keep/policy_end_17a.pt` + `opt_end_17a.pt`), widened to today's 994 inputs
+with zero weights on 1.7b's four timer inputs (`tools/b17b_init.py widen-league`; it answers as update 90: `same`, 0 actions differ). Nothing
+of 1.7b's training.
 
-## What is known
+## The owner's page
+
+| | |
+|---|---|
+| The one new thing | **the pros' weapon table chooses the weapon in hand of every network seat** (his, the league's eight snapshots, the anchors): `sim/weapon_dial.py choose()` sets the weapon key's action in place of the network's, exactly as `!weapons pros` does on a server and `--wpush-form replace` in the checks. In view by the distance to the enemy in 50-unit bins, out of view their travelling hand (`docs/pro_tables.json`, `sim/pro_hand.json`; by band, rockets / rail / lightning: close 60 / 7 / 33%, medium 35 / 22 / 43%, long 19 / 74 / 8%, out of view 72 / 16 / 12%). Fire, aim, movement, items and targets stay his |
+| The weapon key | no policy gradient and no entropy bonus on the frames the table set it; it **copies the table** instead (cross-entropy 0.1 on the frames the key was read, from the shared layers detached: the key's own layer learns it alone; standing, never faded). At the end his own key is a fitted prior for the table, so that the choice can later be handed back with a standing leash and the dial can come off the servers |
+| Frozen | the keep choice at the save's share (0.975) and learning nothing (`--keep-freeze 1`: it drifted into flicker in 1.7a after update 130 and in 1.7b); the order shut as at update 90 (`CMB_G`, `PADD`, `FADD`, `H2_FPG` 0, `ORD_GATE` -30); the habit seats off (`HABIT_P` 0: the table replaces them); the head's weapon credit off (`H2_WPG` 0: the key is not his) |
+| Opening | live `WRULE_P` 0 -> 1 over updates 0 to 20 (`ramp_17c.py`): the share of lives under the table; reported, never held or stepped back (rule 6) |
+| Pay | **unchanged from update 90**: 0.0055 a damage point, a frag 1, `WIN_ADD` 0.33, `DMG_TAKEN_W` 0.8, `ITEM_FLAT` MH 0.35 / RA 0.30 / YA 0.15, no cost for firing. The start's live.json is the save's own record (`start_live.py`), not 1.7a's end file |
+| Length | the owner's: until noon 11-08 (`-Minutes` at the start; about 4.5 min an update) |
+| Checks | every 20 updates: his save **under the table** against update 90 **plain** (200 games: the yardstick; the start reads 29.0%) and against update 90 **under the table** (100 games: the same hands and table, what the training added; the start reads 50% by construction); b1.2d's end plain every fourth; Cypher's measures of every check; **the rail owned by map** (wanted: over 60% on the rail maps by update 80, Campgrounds over 30%); the panel |
+| Expected | against plain update 90 he starts at 29% and should climb as the hands learn rockets and the rail; he may end under 50% there (acceptable, the owner). What should appear: rocket prediction and splash, rail timing at range, dodging rockets, positions where the table's weapon is the better one, the rail taken because it is finally worth something. Cypher's three numbers can move here for a structural reason (escaping a lost fight is possible against rockets, not against lightning at 768 units); they are measured, not assumed |
+| Not in this run | spam at doorways and holding rail angles: watched on the panel (rockets fired out of view and their hits, damage from unseen), not forced; the next layer if they do not appear (a fire prior out of view from the demos; the pros' holding places). The rail's ownership by a play-time rule: measured and rejected ([DIAL.md](DIAL.md)) |
+
+## Red team
+
+| Part | Hand-built or assumed | The measured alternative | Watch |
+|---|---|---|---|
+| The table | the pros' pooled hand (3,712 demos, all maps): what they hold, not why | per map (`pro_tables.json` has a table a map); by the stack (B-304) | a map where his mix under the pooled table loses badly where the pros' per-map table differs |
+| The weapon choice as a rule | a hard-wired part on a choice the owner wants learnt (10-23: retire hard-wired parts by fading) | part 3 of the plan hands it back with a standing KL; the copy loss here is its fitted start | the copy loss falling and the agreement rising (the ramp logs both each update) |
+| No PG on the key | assumed: a trained key drifts back to lightning (every run so far) | a KL instead of a mask (part 3) | nothing here: the key is not played while the rule is on |
+| The keep choice frozen | its drift seen twice; frozen, it cannot adapt to the new fights either | let it learn with a flag | trips a player-minute and targets reached against the start (flagged at 1.5x / 0.7x) |
+| Fairness: his rockets | 48 to 51% hits against a copy (the pros 36%) | against people (the play test's `player_stats`), the stand-in | before any public server |
+| The rail he does not own | nothing here makes him take it; this run tests whether the head learns its value | a price on the rail pickup in the item table if the head has not moved it by update 40: the owner's call | rail owned by map at every check |
+| The fire key with the rail | his rail press rate was near zero when he chose it | 1.7a's fire-push machinery (`FADD`) as the fallback | rail shots a minute with the rail in hand (the panel) |
+| Pay pathologies | the ledger as every run | | negative frags, sign flips, lopsided games |
+
+## The checklist
+
+| | |
+|---|---|
+| built | `--wrule`, `--wrule-imit`, `--keep-freeze`, live `WRULE_P` in the trainer; `wrule` in the checkpoint; the watcher's checks under the table and the second control (`CTRL_TABLE`); the rail owned in the checks' stats (`weapons_owned`); the panel's player under the table; `ramp_17c.py`, `make_files.py`, `start_live.py`, `start.ps1`, `tests.py` |
+| tests | `tests.py start` (the widened start answers as update 90), `ident` (the rule at share 0 = the trainer before it, to the bit; under the table the actions differ, every seat under it), `live` (WRULE_P written mid-run is played), `smoke` (10 small updates under the table: the copy loss falls, the save carries `wrule`, a restart loads the optimizer, a one-map check under the table finishes): their logs beside this card |
+| level check of the start | 1.7a's update 90 under the pros' table against itself plain, 200 games: 58-142 (29.0%) ([DIAL.md](DIAL.md)) |
+| start | `start.ps1 -Minutes <until noon>` from the main checkout after `b17c` is merged (the settings check against 1.7a's command: only `--run`, `--minutes`, `--keep-g`, `--wrule`, `--wrule-imit`, `--keep-freeze`, `--habit-p`, `--head2-wpg` differ) |
+
+---
+
+*The earlier draft of this card (2026-11-06 evening: the head holds the weapon, fitted to the pros, a KL opened as 1.7b's order) follows as
+written; it is part 3 of the plan now.*
+
+## What is known (the draft of 11-06)
 
 | | Bobby (1.7a's update 90, 80 self-play games) | The pros | |
 |---|---|---|---|

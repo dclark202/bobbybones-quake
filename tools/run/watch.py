@@ -25,6 +25,9 @@ CTRL_PREV = os.environ.get("CTRL_PREV") or os.path.join(SR, "duel_gru_v0_4_2", "
 CTRL_REF = os.environ.get("CTRL_REF") or os.path.join(SR, "duel_gru_v0_4_2", "keep", "policy_end_v042.pt")
 PREV_LABEL = os.environ.get("CTRL_PREV_LABEL") or "v0.4.2b's end (the start, both at the new default)"
 REF_LABEL = os.environ.get("CTRL_REF_LABEL") or "v0.4.2b's end (reference)"
+CTRL_TABLE = os.environ.get("CTRL_TABLE") or ""            # (1.7c) a second control played UNDER the pros' weapon table (--opp-wpush): the same hands and
+TABLE_LABEL = os.environ.get("CTRL_TABLE_LABEL") or "the start under the table"   # the same table, so the check reads what the training added
+CHECK_TABLE_GAMES = int(os.environ.get("CHECK_TABLE_GAMES") or 10)   # games a map against it (after the previous-best check, in its thread)
 PAR_BUSY = int(os.environ.get("PANEL_PAR_BUSY") or 3)
 CHECK_EVERY = int(os.environ.get("CHECK_EVERY") or 20)   # (v0.6.1: the ramp steps every 10 updates and waits for a check after its step)
 CHECK_GAMES = int(os.environ.get("CHECK_GAMES") or 16)   # games a map, seats swapped (owner, 2026-11-02: 20 from the run after b1.2d, with CHECK_EVERY 20)
@@ -66,6 +69,10 @@ def hold_args(pol, ctrl):
             out += [name, str(v_)]
         out += [cname, str(ev_.get("CONTACT_FREE") or 0)]      # (b1.3a) and its own chance of a free contact (older saves: none)
         out += [wname, "1" if str(ev_.get("WEAPON_OWN") or "0") not in ("0", "", "0.0") else "0"]   # (1.4b) its own WEAPON_OWN (older saves: off)
+    if torch.load(pol, map_location="cpu", weights_only=False).get("wrule"):      # (1.7c) a save trained under the pros' weapon table plays under it
+        out += ["--wpush", "1", "--wpush-form", "replace"]
+    if CTRL_TABLE and ctrl == CTRL_TABLE:                     # (1.7c) the second control plays under the table too
+        out += ["--opp-wpush", "1"] + ([] if "--wpush-form" in out else ["--wpush-form", "replace"])
     return out
 
 
@@ -73,7 +80,7 @@ def games(pol, upd, ctrl, label, ps):
     sets = P.settings(ps, pol)
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1", PYTHONFAULTHANDLER="1", CUDA_VISIBLE_DEVICES="-1")
     res = {}
-    tag = "prev" if ctrl == CTRL_PREV else "ref"
+    tag = "prev" if ctrl == CTRL_PREV else ("table" if (CTRL_TABLE and ctrl == CTRL_TABLE) else "ref")   # (1.7c: the control under the table)
     cyd_ = os.path.join(WD, "cy", "u{}".format(upd)) if (tag == "prev" and os.environ.get("CHECK_CYPHER") == "1") else ""
     if cyd_:                                                 # (1.7b) Cypher's measures of the check's games: each job's summary
         env = dict(env, CY_REC=cyd_)
@@ -82,7 +89,8 @@ def games(pol, upd, ctrl, label, ps):
         for mp in MAPS[w:w + CHECK_BATCH]:
             js = os.path.join(WD, "chk_{}_{}_{}.json".format(upd, tag, mp))
             cmd = [PY, "tools/duel_eval.py", "--run", RUN, "--policy", pol, "--opp", "policy:" + ctrl, "--opp-inputs",
-                   os.path.join(P.CODE, "docs", "INPUTS.csv"), "--map", mp, "--games", str(CHECK_GAMES), "--minutes", "10", "--procs", "2", "--swap",
+                   os.path.join(P.CODE, "docs", "INPUTS.csv"), "--map", mp, "--games", str(CHECK_TABLE_GAMES if tag == "table" else CHECK_GAMES),
+                   "--minutes", "10", "--procs", "2", "--swap",
                    "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225",
                    "--round", "600", "--opp-round", "600"]
             cmd += [x for s_ in sets for x in ("--set", s_)]
@@ -93,7 +101,8 @@ def games(pol, upd, ctrl, label, ps):
             p.wait()
             try:
                 v = json.load(open(js))["maps"][mp]
-                res[mp] = dict(share=v["frag_share"], won=v["won"], lost=v["lost"], hit=v["he"]["hit_rate"], spm=v["he"]["shots_per_min"])
+                res[mp] = dict(share=v["frag_share"], won=v["won"], lost=v["lost"], hit=v["he"]["hit_rate"], spm=v["he"]["shots_per_min"],
+                               owned=v["he"].get("weapons_owned"), hand=v["he"].get("in_hand_by_distance"))   # (1.7c) the rail owned, his hand by distance
             except Exception as e:                           # noqa: BLE001
                 res[mp] = dict(error=str(e))
     ok = [v for v in res.values() if "share" in v]
@@ -102,7 +111,11 @@ def games(pol, upd, ctrl, label, ps):
     say("check update", upd, "against", label, "(ten maps, PERCEPT_SPEED {}):".format(ps), "record {}-{}".format(W_, L_),
         "win rate {:.1%}".format(W_ / max(1, W_ + L_)), "frag share {:.1%}".format(mean),
         "|", {k: "{}-{} {:.0%}".format(v["won"], v["lost"], v["share"]) for k, v in res.items() if "share" in v})
-    with open(os.path.join(WD, "checks_prev.jsonl" if ctrl == CTRL_PREV else "checks_ref.jsonl"), "a") as f:
+    ow_ = {k: v["owned"] for k, v in res.items() if v.get("owned")}
+    if ow_:                                                  # (1.7c) the rail owned by map: the one number the play-time rules could not move
+        say("check update", upd, "weapons owned (of his time alive), rail by map:", {k: "{:.0%}".format(v["rg"]) for k, v in ow_.items()},
+            "| all maps rockets / rail / lightning {:.0%} / {:.0%} / {:.0%}".format(*[sum(v[w] for v in ow_.values()) / len(ow_) for w in ("rl", "rg", "lg")]))
+    with open(os.path.join(WD, "checks_{}.jsonl".format(tag)), "a") as f:
         f.write(json.dumps(dict(update=upd, mean=mean, won=W_, lost=L_, percept_speed=ps, maps=res)) + "\n")
     if cyd_:                                                 # (1.7b) the learner's and the control's fights by the stack ratio, beside the pros'
         try:
@@ -134,6 +147,8 @@ def rule():
 
 def check_games(pol, upd, ctrl, label):
     games(pol, upd, ctrl, label, live_ps())
+    if CTRL_TABLE and ctrl == CTRL_PREV:                     # (1.7c) and the same save against the start under the table, in the same turn
+        games(pol, upd, CTRL_TABLE, TABLE_LABEL, live_ps())
     if ctrl == CTRL_PREV and os.environ.get("CHECK_RULE") != "0":    # (b1.0a: CHECK_RULE=0, the run's own ramp flags its checks)
         rule()
 

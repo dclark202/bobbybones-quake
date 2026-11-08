@@ -462,6 +462,10 @@ def main():
     import test_suite as T
     path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = T.Policy(path, seed=1)
+    import torch as torch_
+    if torch_.load(path, map_location="cpu", weights_only=False).get("wrule"):    # (1.7c) a save trained under the pros' weapon table plays under it
+        pol.wpush = T.WeaponPush(1.0, [], "replace")
+        print("weapon dial, replace form: the save was trained under the pros' table (wrule); played under it", flush=True)
     if a.btoken_gate is not None:
         pol.set_gate(a.btoken_gate)
     if a.rule_fade_g is not None:
