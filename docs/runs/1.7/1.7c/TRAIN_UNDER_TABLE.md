@@ -32,31 +32,40 @@ from the human prior (the standing KL to the human policy, the z statistic): thi
 
 ## Part 1 (built, 11-07 evening): the replace form of the dial, for play against people
 
-[sim/weapon_dial.py](../../../../sim/weapon_dial.py) `choose()`: the owner's table *chooses* his weapon among rockets, the rail and the
-lightning gun that he owns with ammunition, by his situation (the enemy noticed in view and the distance to where he last knew him; out
-of view: travelling or zoning); the key's action is set to it in place of the network's (a press until it is in hand, then keep). The
-choice is held: drawn again only when the situation's row changes and the weapon has been held 1.5 s (no flapping at a band's edge), at
-once when the row gives the weapon in hand nothing (lightning at long range), or when it is no longer owned with ammunition. Where the
-row allows none of the three he owns (a spawn's machine gun; lightning alone at long range) the network's own key stands. Fire, aim and
-movement stay his. The same function runs in the checks (`tools/duel_eval.py --wpush 1 --wpush-form replace`) and on the servers
-(`!weapons pros`; `WEAPONS=pros` in `tools/run/local_server.sh`); [exp/dial_parity.py](exp/dial_parity.py) proves the two paths choose
-alike every frame, every press is of an owned weapon, every other output is drawn exactly as with the dial off (its own random stream).
+[sim/weapon_dial.py](../../../../sim/weapon_dial.py) `choose()`: **the pros' table** *chooses* his weapon among rockets, the rail and the
+lightning gun that he owns with ammunition, by his situation (the enemy noticed in view and the distance to where he last knew him, in
+bins of 50 units; out of view: their travelling hand); the key's action is set to it in place of the network's (a press until it is in
+hand, then keep). The choice is held: drawn again only when the situation's band changes (close, medium, long, out of view) and the
+weapon has been held 1.5 s (no flapping at a band's edge), at once when the pros' share of the weapon in hand is under 3% (lightning at
+1,050 units and over), or when it is no longer owned with ammunition. Where the shares allow none of the three he owns (a spawn's machine
+gun) the network's own key stands. Fire, aim and movement stay his. The same function runs in the checks (`tools/duel_eval.py --wpush 1
+--wpush-form replace`) and on the servers (`!weapons pros`; `WEAPONS=pros` in `tools/run/local_server.sh`);
+[exp/dial_parity.py](exp/dial_parity.py) proves the two paths choose alike every frame, every press is of an owned weapon, every other
+output is drawn exactly as with the dial off (its own random stream).
 
-| The owner's table | rockets | rail | lightning gun |
+**The table is the pros' and nothing else (owner, 11-07 evening: "the pros table is the only one to consider")**: `docs/pro_tables.json`
+(the weapon in hand by the distance to the enemy in view, 3,712 demos, 34,238 minutes; `tools/pro_tables.py`) and `sim/pro_hand.json`
+(the hand out of view; `tools/pro_hand.py`), copied into the module (a server needs no file beside it) and checked against the two files
+by `python sim/weapon_dial.py`. The first dial's four-row table was another agent's draft, not measured; it is kept in [DIAL.md](DIAL.md)
+as history only. By the reports' bands:
+
+| The pros (rockets / rail / lightning gun) | rockets | rail | lightning gun |
 |---|---|---|---|
-| in view, close (under 300 units) | 50% | | 50% |
-| in view, medium (300 to 700) | 70% | | 30% |
-| in view, long (700 and over) | 30% | 70% (where he has it) | |
-| out of view (travelling, zoning) | 70% | 15% | 15% |
+| in view, close (under 300 units) | 60% | 7% | 33% |
+| in view, medium (300 to 700) | 35% | 22% | 43% |
+| in view, long (700 and over) | 19% | 74% | 8% |
+| out of view (travelling, zoning) | 72% | 16% | 12% |
 
 **Its check** (1.7a's update 90 under the table against the same save plain, 200 ten-minute games on ten maps, the u90 check's own
-settings, with Cypher's measures; the tables in [DIAL.md](DIAL.md)): **69-131 (34.5%)**, frag share 44%; in hand in view rockets 53 /
-rail 2 / lightning 40% (plain 18 / 1 / 74%; the pros 41 / 14 / 32%); frags by rockets 41% (plain 12%); kills 8.8 against 11.4 a player
-a game. He holds what the table chose on 98 to 99% of frames (a switch in a median of one frame). Cypher's numbers do not improve
-(out-stacked he dies 52% / escapes 45%, weaker side hits first 18%: worse than plain, rockets land later than lightning): the table
-changes the weapon, not the fight; training under it is where they can move. **The rail stays at 2 to 3% because he does not own it**,
-and on the long maps he lacks rockets with ammunition or the rail on 40% of his long-range frames in view, where the dial stands
-aside and lightning stays: the items side is a limit the dial cannot move (below, the red team).
+settings, with Cypher's measures; the tables in [DIAL.md](DIAL.md)): with the pros' table **58-142 (29.0%)**, frag share 41%; in hand in
+view rockets 49 / rail 3 / lightning 43% (plain 17 / 1 / 75%; the pros 41 / 14 / 32%); frags by rockets 23% (plain 12%); kills 8.7
+against 12.3 a player a game; his hits rockets 51%, the rail 33%. (The draft table read 69-131, 34.5%, rockets 53% in view, frags by
+rockets 41%: more rockets, fewer games lost; the owner ruled the pros' table the only one.) He holds what the table chose on 98 to 99%
+of frames (a switch in a median of one frame). Cypher's numbers do not improve (out-stacked he dies 53% / escapes 42%, the weaker side
+hits first 19%: worse than plain, rockets land later than lightning): the table changes the weapon, not the fight; training under it is
+where they can move. **The rail stays at 3% because he does not own it** (the pros 14%), and on the long maps he lacks rockets with
+ammunition or the rail on 40% of his long-range frames in view, where the dial stands aside and lightning stays: the items side is a
+limit the dial cannot move (below, the red team).
 
 **Why this is the right normalization for human play:** against a person none of cause 1 holds (a person does come through the
 corridor, does hold the angle), so the pros' mix is the right prior there; the table is deterministic where the push was a nudge; and
@@ -98,7 +107,7 @@ said that is acceptable ("I honestly don't care if his win rate against himself 
 
 | Part | Hand-built or assumed | The measured alternative | Watch |
 |---|---|---|---|
-| The table | the owner's draft (the pros hold lightning most at medium range: 34 / 43 / 17% close / medium / long) | the pros' table by distance (`docs/pro_tables.json`), one line of code | if his medium-range fights die with rockets in hand against lightning, the table's medium row is the suspect, not the hands |
+| The table | the pros' measured hand, pooled over 3,712 demos and all maps (`docs/pro_tables.json`, `sim/pro_hand.json`): what they hold, not why | per map (`pro_tables.json` has a table a map), or by the stack (B-304: their weapon by the fight's phase) | a map where his mix under the pooled table loses badly where the pros' per-map table differs |
 | The weapon choice as a rule | a hard-wired part on a choice the owner wants learnt | part 3 hands it back with a standing KL; the copy loss here is its fitted start | the copy loss's accuracy by update (should pass 90% on key frames) |
 | No PG on the weapon key | assumed: a trained key would drift back to lightning (it did in every run) | a KL to the table instead of a mask (part 3) | nothing here: the key is not played while the rule is on |
 | Fairness: his rockets | his rocket hits in self-play (49%, direct 20%) are above the pros' (36%, 10.5%), the target another Bobby | his rockets against people (the play test's `player_stats`), against the stand-in | if his rockets against people are over the pros', the aim limits per weapon style (aim2) are re-measured before any public server |

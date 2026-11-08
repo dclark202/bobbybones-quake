@@ -133,7 +133,8 @@ def main():
         an, h_n = NP.step(P, Aa, raw, h_n, nrng, pose=pose, zmap=zmap, kf=kf, **kw)
         own_ = (raw[:, list(WD.OWN)] > 0.5) & (raw[:, list(WD.AMMO)] > 0.0)
         row_ = WD.situation(raw)
-        any_ = ((WD.TABLE[row_] >= WD.FLOOR) & own_).any(1)   # the row allows one of the three he owns
+        sh_ = WD.shares(raw)
+        any_ = ((sh_ >= WD.FLOOR) & own_).any(1)              # the pros' shares allow one of the three he owns
         same_tn = same_tn and bool((ar[:, 6] == an[:, 6]).all())
         tgt_same = tgt_same and bool((ar[:, 10] == an[:, 10]).all())
         spoke_ = ar[:, 10] != a0[:, 10]                        # the target rule spoke (the intention differs from the dial-off draw)
@@ -149,7 +150,7 @@ def main():
         presses += int(pr_.sum())
         bad_press += int((pr_ & ~own_[np.arange(B), np.clip(ar[:, 6] - 1, 0, 2)]).sum())
         hd_ = np.array(WD.HOLD)[None, :] == np.array(WD.HOLD)[raw[:, list(WD.HOLD)].argmax(1)][:, None]
-        forbid_ = any_ & (WD.TABLE[row_][hd_] < WD.FLOOR)   # the weapon in hand gets nothing in this row (and the row allows another he owns)
+        forbid_ = any_ & (sh_[hd_] < WD.FLOOR)              # the weapon in hand gets nothing here (and the shares allow another he owns)
         forced += int((forbid_ & (ar[:, 6] == 0)).sum())
     check("pros: the weapon key's action the same in the checks' path and the plugin's every frame ({} frames x {} players)".format(F, B), same_tn)
     check("pros: where the row allows none of the three he owns the network's own key stands ({} rows), and every other output is "

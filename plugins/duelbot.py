@@ -469,8 +469,8 @@ class duelbot(minqlx.Plugin):
 
     AIM_WELCOME = ("^3My aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains ^6(default)^7, ^2!aim better^7 sharper, "
                    "^2!aim max^7 no human limits. The player in the duel can change it at any time.")
-    WEAPONS_WELCOME = ("^3My weapons:^7 ^2!weapons off^7 as he trains, ^2!weapons light^7 or ^2!weapons strong^7: a nudge toward rockets "
-                       "close and mid range and when out of sight, the rail at long range; ^2!weapons pros^7: that table chooses my weapon.")
+    WEAPONS_WELCOME = ("^3My weapons:^7 ^2!weapons off^7 as he trains; ^2!weapons pros^7: the pros' weapon for the distance is put in my hand "
+                       "(rockets close, lightning mid, rail long, rockets on the move); ^2light^7 and ^2strong^7 only nudge toward it.")
 
     def on_player_loaded(self, player):
         if not is_bot(player):

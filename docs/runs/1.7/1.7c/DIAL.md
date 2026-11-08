@@ -9,12 +9,14 @@ of rockets, the rail or the lightning gun (owned with ammunition) gets p x (log 
 situation he perceives (the enemy noticed in view, the distance to where he last knew him). Keep and the other weapons are untouched.
 A hand-built rule, not learned; the network is 1.7a's update 90 unchanged.
 
-| The owner's table (the draft he left as it was) | rockets | rail | lightning gun |
+| The draft table of the push (another agent's, 11-07; **superseded by the pros' table that evening**, owner: "the pros table is the only one to consider") | rockets | rail | lightning gun |
 |---|---|---|---|
 | in view, close (under 300 units) | 50% | | 50% |
 | in view, medium (300 to 700) | 70% | | 30% |
 | in view, long (700 and over) | 30% | 70% (where he has it) | |
 | out of view (travelling, zoning) | 70% | 15% | 15% |
+
+The push forms (light, strong) were measured on this draft; the code now reads the pros' shares for them too.
 
 **On the servers.** `!weapons off|light|strong` in the 1v1 plugin (plugins/duelbot.py; the push in plugins/netpass.py `step()`),
 beside `!aim`: the player in the duel or the server's owner; at once; back to the default (`DUEL_WEAPONS`, else off) on a new map
@@ -77,11 +79,17 @@ dial stays in the code, off by default, and is not on the public servers.
 *Owner: "go ahead and build what you think is the right normalization for him in human play."* The table **chooses** his weapon
 instead of nudging a press ([sim/weapon_dial.py](../../../../sim/weapon_dial.py) `choose()`; the design and the training plan behind
 it: [TRAIN_UNDER_TABLE.md](TRAIN_UNDER_TABLE.md)): among rockets, the rail and the lightning gun that he owns with ammunition, one is
-drawn from the table's row for his situation and the weapon key's action is set to it (a press until it is in hand, then keep). Held
-1.5 s across a band's edge; drawn again at once when the row gives the weapon in hand nothing; where the row allows none of the three
+drawn from the table's shares for his situation and the weapon key's action is set to it (a press until it is in hand, then keep). Held
+1.5 s across a band's edge; drawn again at once when the shares give the weapon in hand under 3%; where they allow none of the three
 he owns, the network's key stands. Fire, aim and movement are his. `!weapons pros` on a server (`WEAPONS=pros` in
 `tools/run/local_server.sh`); in the checks `--wpush 1 --wpush-form replace`; `WDIAL_LOG=<file>` writes one line a player a frame
-(seat, row, held, pick, action, distance, in view) for a diagnosis.
+(seat, row, held, pick, action, distance, in view, owns rockets, owns the rail, rocket ammunition, the target rule) for a diagnosis.
+
+**The table.** The first replace form ran on the draft table above (the rows below marked "draft"). The same evening the owner ruled
+("the pros table is the only one to consider") and the dial reads **the pros' measured hand**: `docs/pro_tables.json` (the weapon in
+hand by the distance to the enemy in view, bins of 50 units, 3,712 demos) and `sim/pro_hand.json` (out of view), copied into the module
+and checked against the files by `python sim/weapon_dial.py`. By the reports' bands, rockets / rail / lightning: close 60 / 7 / 33%,
+medium 35 / 22 / 43%, long 19 / 74 / 8%, out of view 72 / 16 / 12%. The rows marked "pros" below are with it.
 
 | Check | Result |
 |---|---|
@@ -94,7 +102,8 @@ settings; `wpush.py --form replace --cy`; [exp/wsum.py](exp/wsum.py)):
 
 | | record (win rate) | frag share | rockets / rail / lightning in hand in view | ... out of view | frags by rockets / lightning | kills a player per 10 min, table / plain |
 |---|---|---|---|---|---|---|
-| **pros (the replace form)** | **69-131 (34.5%)** | 44.0% | **53 / 2 / 40%** | 53 / 3 / 33% | **41 / 57%** | 8.8 / 11.4 |
+| **pros: the replace form, the pros' table** | **58-142 (29.0%)** | 40.6% | **49 / 3 / 43%** | 54 / 3 / 32% | **23 / 73%** | 8.7 / 12.3 |
+| the replace form, the draft table | 69-131 (34.5%) | 44.0% | 53 / 2 / 40% | 53 / 3 / 33% | **41 / 57%** | 8.8 / 11.4 |
 | strong (the push, p 4) | 67-133 (33.5%) | 43.4% | 41 / 1 / 49% | 43 / 1 / 41% | 18 / 77% | 9.2 / 11.9 |
 | plain (the other side) | | | 18 / 1 / 74% | 19 / 1 / 68% | 12 / 84% | |
 | the pros | | | 41 / 14 / 32% | 57 / 12 / 9% | | |
@@ -104,11 +113,16 @@ Furious Heights 5-15, Battleforged 4-16. His hits under the table: rockets 48%, 
 rarely owned to judge his trigger with it). Lives a minute 2.50 against 1.93 (he dies more); the mega 41% against 49%; damage from
 unseen 16 against 23 a minute (he fires less blind).
 
-| Cypher's measures (`cypher_measure.py check`, 6,875 fights) | him under the table | the plain side | the pros |
-|---|---|---|---|
-| out-stacked: dies / escapes | 51.7 / 45.2% | 45.4 / 48.3% | 29.9 / 63.9% |
-| the weaker side hits first | 17.9% | 34.5% | 46.9% |
-| the bigger stack wins the fight | 79.7% | 89.9% | 77.5% |
+With the pros' table (the row in bold; maps: Campgrounds 9-11, Furious Heights 9-11, Sinister 8-12, Lost World 7-13, Blood Run 6-14,
+Hektik 6-14, Toxicity 5-15, Battleforged 4-16, Cure 3-17, Aerowalk 1-19): his hits rockets 51%, lightning 36%, the rail 33% (0.4 shots a
+minute); lightning in hand in view 43% against the pros' 32% because the rail is his 3% of the time against their 14% (not owned); lives
+a minute 2.68 against 1.93; the mega 40% against 50%.
+
+| Cypher's measures (`cypher_measure.py check`; the draft table 6,875 fights, the pros' 6,697) | him, the draft table | him, the pros' table | the plain side | the pros |
+|---|---|---|---|---|
+| out-stacked: dies / escapes | 51.7 / 45.2% | 53.4 / 42.1% | 45.4 / 48.3% | 29.9 / 63.9% |
+| the weaker side hits first | 17.9% | 19.1% | 34.5% | 46.9% |
+| the bigger stack wins the fight | 79.7% | 77.6% | 89.9% | 77.5% |
 
 **What it says.** The replace form does what the push could not: the weapon in his hand is the table's (rockets 53% in view, the pros'
 41%; frags by rockets 41% against 12%), and it costs what the push at "strong" cost (34.5% against himself; the owner: acceptable).

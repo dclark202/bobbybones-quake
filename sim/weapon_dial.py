@@ -30,14 +30,26 @@ plan's (docs/runs/1.7/1.7c/TRAIN_UNDER_TABLE.md).
 """
 import numpy as np
 
-# the owner's table (2026-11-07; the draft he did not correct): the weapon in hand he wants, rockets / rail / lightning gun
-NEAR, FAR = 300.0, 700.0                                   # units: close below NEAR, long from FAR (the lightning gun reaches 768)
-TABLE = np.array([[0.50, 0.00, 0.50],                      # in view, close: rockets or the lightning gun
-                  [0.70, 0.00, 0.30],                      # in view, medium: mostly rockets
-                  [0.30, 0.70, 0.00],                      # in view, long: the rail where he has it, else rockets
-                  [0.70, 0.15, 0.15]], np.float64)         # out of view (travelling, zoning): mostly rockets
+# THE PROS' TABLE (owner, 2026-11-07 evening: "the pros table is the only one to consider"; the first dial's four-row table was another
+# agent's draft). The weapon in hand among rockets, the rail and the lightning gun, measured in the pros' demos (3,712 demos, 34,238
+# minutes; tools/pro_tables.py -> docs/pro_tables.json "in_hand_by_distance", the share of the three by the distance to the enemy in
+# view in bins of 50 units, 0 to 1,500 and over; tools/pro_hand.py -> sim/pro_hand.json, their hand out of view, the four bands since
+# the enemy was seen weighted by their minutes, normalised over the three). Copied here so that a server needs no file beside this
+# module; main() checks the copy against the two files.
+NEAR, FAR = 300.0, 700.0                                   # units: the bands of the hold (a redraw when the band changes) and of the reports
+BIN = 50.0                                                 # the pros' table's bins (units)
+PRO_IN = np.array([                                        # [31, 3] rockets, rail, lightning gun by the bin of the distance to the enemy in view
+    [0.628, 0.071, 0.302], [0.620, 0.063, 0.316], [0.621, 0.061, 0.318], [0.610, 0.064, 0.326], [0.586, 0.070, 0.344],
+    [0.554, 0.082, 0.364], [0.512, 0.099, 0.389], [0.472, 0.123, 0.405], [0.416, 0.154, 0.431], [0.356, 0.187, 0.457],
+    [0.301, 0.229, 0.470], [0.267, 0.272, 0.461], [0.249, 0.324, 0.427], [0.232, 0.377, 0.391], [0.232, 0.449, 0.319],
+    [0.222, 0.536, 0.242], [0.248, 0.590, 0.162], [0.212, 0.670, 0.118], [0.193, 0.726, 0.081], [0.175, 0.758, 0.068],
+    [0.167, 0.773, 0.060], [0.174, 0.788, 0.038], [0.174, 0.790, 0.036], [0.174, 0.795, 0.031], [0.178, 0.798, 0.024],
+    [0.183, 0.801, 0.017], [0.172, 0.817, 0.011], [0.193, 0.793, 0.013], [0.175, 0.803, 0.022], [0.148, 0.814, 0.038],
+    [0.158, 0.821, 0.021]], np.float64)
+PRO_OUT = np.array([0.575, 0.124, 0.097], np.float64)      # out of view: their travelling hand (over the eight weapons; normalised below)
+PRO_OUT = PRO_OUT / PRO_OUT.sum()
 ROWS = ("in view, close", "in view, medium", "in view, long", "out of view")
-FLOOR = 0.03
+FLOOR = 0.03                                               # a share under it counts as none: the weapon is left at once (lightning at 1,050 and over)
 LEVELS = {"off": 0.0, "light": 2.0, "strong": 4.0}         # p of each push setting (measured in the checks: docs/runs/1.7/1.7c/DIAL.md)
 REPLACE = "pros"                                           # the replace form's setting: the table chooses (choose() below; LEVELS has no p for it)
 SETTINGS = ("off", "light", "strong", REPLACE)             # !weapons' settings, in the order they are offered
@@ -58,23 +70,43 @@ NAMES.update(dict(zip(OWN, ("owns rocket launcher", "owns railgun", "owns lightn
 NAMES.update(dict(zip(AMMO, ("ammo: rocket launcher", "ammo: railgun", "ammo: lightning gun"))))
 
 
-def situation(obs):
-    """the table's row of each player: 0 to 2 in view by distance, 3 out of view"""
+def distance(obs):
+    """[players] the distance to where he last knew the enemy (units), from his own inputs"""
     obs = np.asarray(obs)
-    d_ = 1000.0 * np.sqrt((obs[:, list(POS)].astype(np.float64) ** 2).sum(1))
+    return 1000.0 * np.sqrt((obs[:, list(POS)].astype(np.float64) ** 2).sum(1))
+
+
+def situation(obs):
+    """the band of each player: 0 to 2 in view by distance (NEAR, FAR), 3 out of view (the hold's rows and the reports')"""
+    obs = np.asarray(obs)
+    d_ = distance(obs)
     row_ = np.where(d_ < NEAR, 0, np.where(d_ < FAR, 1, 2))
     return np.where(obs[:, INVIEW] > 0.5, row_, 3)
 
 
+def band_table():
+    """[4, 3] the pros' shares by the reports' bands (the mean over the bins of each band; out of view): for the docs and main()"""
+    return np.stack([PRO_IN[:6].mean(0), PRO_IN[6:14].mean(0), PRO_IN[14:].mean(0), PRO_OUT])
+
+
+def shares(obs):
+    """[players, 3] the pros' shares of rockets, the rail and the lightning gun in hand in his situation: in view by the bin of the
+    distance to where he last knew the enemy, out of view their travelling hand"""
+    obs = np.asarray(obs)
+    b_ = np.minimum((distance(obs) // BIN).astype(np.int64), len(PRO_IN) - 1)
+    return np.where((obs[:, INVIEW] > 0.5)[:, None], PRO_IN[b_], PRO_OUT[None, :])
+
+
 def push(obs, p):
     """[players, 3]: what is added to the scores of the presses of rockets, the rail and the lightning gun (the weapon key's
-    choices 1 + RL, 1 + RG, 1 + LG); zeros at p = 0"""
+    choices 1 + RL, 1 + RG, 1 + LG); zeros at p = 0. (The push forms, light and strong, were measured on the draft table: DIAL.md;
+    they read the pros' shares now.)"""
     obs = np.asarray(obs)
     n_ = len(obs)
     if not p:
         return np.zeros((n_, 3), np.float32)
     own_ = (obs[:, list(OWN)] > 0.5) & (obs[:, list(AMMO)] > 0.0)
-    lt_ = np.log(np.maximum(TABLE, FLOOR))[situation(obs)]
+    lt_ = np.log(np.maximum(shares(obs), FLOOR))
     hd_ = obs[:, list(HOLD)] > 0.5
     ref_ = np.where(hd_.any(1), (lt_ * hd_).sum(1), (lt_ * own_).sum(1) / np.maximum(own_.sum(1), 1))
     return (float(p) * (lt_ - ref_[:, None]) * own_).astype(np.float32)
@@ -99,7 +131,8 @@ def choose(obs, state, rng):
     own_ = (obs[:, list(OWN)] > 0.5) & (obs[:, list(AMMO)] > 0.0)      # [n, 3] the three he may choose from
     hd_ = obs[:, list(HOLD)] > 0.5
     held_ = np.where(hd_.any(1), hd_.argmax(1), -1)                     # the one of the three in hand, else -1
-    t_ = np.where(TABLE[row_] >= FLOOR, TABLE[row_], 0.0) * own_        # the row's shares over what he owns (true zeros stay zero)
+    sh_ = shares(obs)
+    t_ = np.where(sh_ >= FLOOR, sh_, 0.0) * own_                        # the pros' shares over what he owns (under FLOOR: none)
     any_ = t_.sum(1) > 0                                                # the row allows one he owns; else the network's own key stands
     pick_, prow_, age_ = state["pick"], state["row"], state["age"]
     ar_ = np.arange(n_)
@@ -211,6 +244,22 @@ def main():
     rows = {int(r["index"]): r["input"] for r in csv.DictReader(open(path, encoding="utf-8"))}
     bad = {c: (n, rows.get(c)) for c, n in NAMES.items() if rows.get(c) != n}
     print("input columns:", "all as docs/INPUTS.csv" if not bad else "WRONG {}".format(bad))
+    import json
+    root_ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pt_ = json.load(open(os.path.join(root_, "docs", "pro_tables.json"), encoding="utf-8"))["all"]
+    in_ = np.stack([np.asarray(pt_["in_hand_by_distance"][w_], np.float64) for w_ in ("rl", "rg", "lg")], 1)
+    ph_ = json.load(open(os.path.join(root_, "sim", "pro_hand.json"), encoding="utf-8"))["maps"]["all"]
+    sh_ = np.asarray(ph_["share"][0], np.float64)[:, :3]
+    mn_ = np.asarray(ph_["minutes"][0], np.float64)
+    out_ = (sh_ * mn_[:, None]).sum(0) / mn_.sum()
+    out_ = out_ / out_.sum()
+    tab_ok = in_.shape == PRO_IN.shape and float(np.abs(in_ - PRO_IN).max()) < 2e-3 and float(np.abs(out_ - PRO_OUT).max()) < 2e-3 \
+        and pt_["edges"][1] - pt_["edges"][0] == BIN
+    print("the pros' table as copied here = docs/pro_tables.json + sim/pro_hand.json: {} (largest difference in view {:.4f}, out of view {:.4f})".format(
+        "yes" if tab_ok else "NO", float(np.abs(in_ - PRO_IN).max()) if in_.shape == PRO_IN.shape else 9, float(np.abs(out_ - PRO_OUT).max())))
+    bad = bad or not tab_ok
+    print("by the reports' bands (rockets / rail / lightning): " + "; ".join(
+        "{} {:.0%} / {:.0%} / {:.0%}".format(r_, *b_) for r_, b_ in zip(ROWS, band_table())))
     x = np.zeros((6, max(rows) + 1), np.float32)
     x[:, list(OWN)] = 1.0
     x[:, list(AMMO)] = 0.5
@@ -240,7 +289,7 @@ def main():
     y2[0, POS[0]] = 0.25                                   # close now: 50 / 50; held, not drawn again before HOLD_FRAMES
     same = all(int(choose(y2, st_, rng_)[0]) == int(a0) for _ in range(HOLD_FRAMES - 2))
     y3 = y.copy()
-    y3[0, POS[0]] = 0.9                                    # long: the lightning gun gets nothing there -> at once rockets or the rail
+    y3[0, POS[0]] = 1.2                                    # 1,200 units: the pros hold lightning under FLOOR there -> at once rockets or the rail
     a3 = int(choose(y3, new_state(1), np.random.default_rng(1))[0])
     print("hold: a band's edge crossed keeps the choice for {} frames: {}; the lightning gun at long range changed at once: {}".format(
         HOLD_FRAMES, "yes" if same else "NO", "yes" if a3 in (1, 2) else "NO"))
