@@ -5,10 +5,11 @@ The simulator (sim/duel_env_ffa.py) keeps building its full list (docs/INPUTS.cs
     brain   the columns the brain reads (and the hands too): the first n_brain
     hands   the columns only the hands read (the small items): up to n_hands. The hands' encoder reads the first n_hands, the brain the
             first n_brain
-    tail    kept in the list, read by no network's first layer: the 76 rule-made columns that were faded out of the hands (v0.4.2) and of
-            the brain (b1.1) (the trainer's guessing lesson reads five of them as marks; the pre-fire and emergence stay on the owner's
-            word), and the yellow armors' timers (the strategy head's own columns only)
-What is not in a list is cut: dead by construction (a part that is off for good, a ray outside his field of view, a hazard the maps do not
+    tail    kept in the list, read by no network's first layer: the four columns of the old rule-made belief that the trainer's guessing
+            lesson reads as marks (MARKS: a place is believed, and where), and the yellow armors' timers (the strategy head's own columns only)
+What is not in a list is cut: the other 72 rule-made columns of v0.2 to v0.3.6 (the believed place's ways, the places' belief flags, the
+stack by rule, the pre-fire places, the emergence point: faded out of the hands in v0.4.2 and of the brain in b1.1, read by no network
+since; owner, 2026-11-11: "remove the ones that are dead or so outdated they no longer fit the plan"), and what is dead by construction (a part that is off for good, a ray outside his field of view, a hazard the maps do not
 have, a flag that is always 1 on the ten maps, the order / space / targets inputs that were never opened). A column that only never
 changed in self-play (the enemy crouched, a gauntlet in his hand, a fifth projectile in view) is NOT cut: a person can cause it.
 
@@ -29,6 +30,10 @@ CUT_GROUPS = {"more enemies": "free-for-all only", "movement goal": "movement ro
               "his legs": "the legs switch was retired", "v038 drift": "DRIFT_IN=0", "b17 order": "never opened (2.1 defines its own)",
               "b20b space": "never opened (2.0b)", "b20b targets": "never opened (2.0b)"}
 TAIL_GROUPS = ("b17b timers",)                              # the strategy head's only
+MARKS = (("v02 believed", "a place is believed"), ("v02 believed", "believed place: forward"), ("v02 believed", "believed place: left"),
+         ("v02 believed", "believed place: up"))            # (sim/train_duel_rnn.py BEL_IX: the guessing lesson's masks and measures; the fifth,
+#                                                             "how far he can have got since", is a live input)
+FADED_WHY = "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network"
 
 
 def full_rows():
@@ -69,8 +74,12 @@ def build(version, sample, faded, n_brain_old=868):
                 n.endswith(": exists") or n.endswith("slot holds a place") or (g == "b12 small items" and n.endswith(": there"))):
             cut[i] = "always 1 on the ten maps"
     fd = set(int(c) for c in faded)
-    assert not (fd & set(cut)), "a faded column is cut"
-    tail = [i for i in range(len(R)) if i in fd] + [i for i, r in enumerate(R) if r["group"] in TAIL_GROUPS]
+    assert not (fd & set(cut)), "a faded column is dead by construction too"
+    marks = [i for i, r in enumerate(R) if (r["group"], r["input"]) in MARKS]
+    assert len(marks) == len(MARKS) and set(marks) <= fd, "the guessing lesson's marks are not four of the faded columns"
+    for i in sorted(fd - set(marks)):
+        cut[i] = FADED_WHY
+    tail = marks + [i for i, r in enumerate(R) if r["group"] in TAIL_GROUPS]
     ts = set(tail)
     brain = [i for i in range(n_brain_old) if i not in cut and i not in ts]
     hands = [i for i in range(n_brain_old, len(R)) if i not in cut and i not in ts]
@@ -86,7 +95,7 @@ def build(version, sample, faded, n_brain_old=868):
         w.writerow(["index", "group", "input", "meaning", "scale", "added in", "read by"])
         for j, i in enumerate(order):
             who = "brain, hands" if j < len(brain) else ("hands" if j < len(brain) + len(hands) else
-                                                         ("head" if R[i]["group"] in TAIL_GROUPS else "none (kept)"))
+                                                         ("head" if R[i]["group"] in TAIL_GROUPS else "none (the guessing lesson's marks)"))
             w.writerow([j, R[i]["group"], R[i]["input"], R[i]["meaning"], R[i]["scale"], R[i]["added in"], who])
     return L
 

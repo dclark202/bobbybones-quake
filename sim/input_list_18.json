@@ -3189,10 +3189,6 @@
 "small place 8: gives him"
 ],
 [
-"v02 position",
-"height above the believed enemy"
-],
-[
 "v02 believed",
 "a place is believed"
 ],
@@ -3207,290 +3203,6 @@
 [
 "v02 believed",
 "believed place: up"
-],
-[
-"v02 believed",
-"way to the believed place"
-],
-[
-"v02 believed",
-"way from the believed place to the mega health"
-],
-[
-"v02 believed",
-"way from the believed place to the red armor"
-],
-[
-"v02 places",
-"place 1: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 1: nearest to the believed enemy"
-],
-[
-"v02 places",
-"place 2: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 2: nearest to the believed enemy"
-],
-[
-"v02 places",
-"place 3: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 3: nearest to the believed enemy"
-],
-[
-"v02 places",
-"place 4: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 4: nearest to the believed enemy"
-],
-[
-"v02 places",
-"place 5: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 5: nearest to the believed enemy"
-],
-[
-"v02 places",
-"place 6: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 6: nearest to the believed enemy"
-],
-[
-"v02 places",
-"place 7: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 7: nearest to the believed enemy"
-],
-[
-"v02 places",
-"place 8: distance from the believed enemy"
-],
-[
-"v02 places",
-"place 8: nearest to the believed enemy"
-],
-[
-"v031 enemy stack",
-"believed stack: health"
-],
-[
-"v031 enemy stack",
-"believed stack: armor"
-],
-[
-"v031 enemy stack",
-"believed stack: health and armor"
-],
-[
-"v031 enemy stack",
-"believed stack: spread"
-],
-[
-"v031 enemy stack",
-"believed stack: weak"
-],
-[
-"v036 prefire",
-"pre-fire place 1: yaw"
-],
-[
-"v036 prefire",
-"pre-fire place 1: pitch"
-],
-[
-"v036 prefire",
-"pre-fire place 1: distance"
-],
-[
-"v036 prefire",
-"pre-fire place 1: enemy could be there"
-],
-[
-"v036 prefire",
-"pre-fire place 1: flight"
-],
-[
-"v036 prefire",
-"pre-fire place 1: clear"
-],
-[
-"v036 prefire",
-"pre-fire place 1: off the way"
-],
-[
-"v036 prefire",
-"pre-fire place 1: pros' share"
-],
-[
-"v036 prefire",
-"pre-fire place 1: grenade pitch"
-],
-[
-"v036 prefire",
-"pre-fire place 1: there"
-],
-[
-"v036 prefire",
-"pre-fire place 1: list rl"
-],
-[
-"v036 prefire",
-"pre-fire place 1: list gl"
-],
-[
-"v036 prefire",
-"pre-fire place 1: list pg"
-],
-[
-"v036 prefire",
-"pre-fire place 2: yaw"
-],
-[
-"v036 prefire",
-"pre-fire place 2: pitch"
-],
-[
-"v036 prefire",
-"pre-fire place 2: distance"
-],
-[
-"v036 prefire",
-"pre-fire place 2: enemy could be there"
-],
-[
-"v036 prefire",
-"pre-fire place 2: flight"
-],
-[
-"v036 prefire",
-"pre-fire place 2: clear"
-],
-[
-"v036 prefire",
-"pre-fire place 2: off the way"
-],
-[
-"v036 prefire",
-"pre-fire place 2: pros' share"
-],
-[
-"v036 prefire",
-"pre-fire place 2: grenade pitch"
-],
-[
-"v036 prefire",
-"pre-fire place 2: there"
-],
-[
-"v036 prefire",
-"pre-fire place 2: list rl"
-],
-[
-"v036 prefire",
-"pre-fire place 2: list gl"
-],
-[
-"v036 prefire",
-"pre-fire place 2: list pg"
-],
-[
-"v036 prefire",
-"pre-fire place 3: yaw"
-],
-[
-"v036 prefire",
-"pre-fire place 3: pitch"
-],
-[
-"v036 prefire",
-"pre-fire place 3: distance"
-],
-[
-"v036 prefire",
-"pre-fire place 3: enemy could be there"
-],
-[
-"v036 prefire",
-"pre-fire place 3: flight"
-],
-[
-"v036 prefire",
-"pre-fire place 3: clear"
-],
-[
-"v036 prefire",
-"pre-fire place 3: off the way"
-],
-[
-"v036 prefire",
-"pre-fire place 3: pros' share"
-],
-[
-"v036 prefire",
-"pre-fire place 3: grenade pitch"
-],
-[
-"v036 prefire",
-"pre-fire place 3: there"
-],
-[
-"v036 prefire",
-"pre-fire place 3: list rl"
-],
-[
-"v036 prefire",
-"pre-fire place 3: list gl"
-],
-[
-"v036 prefire",
-"pre-fire place 3: list pg"
-],
-[
-"v036 emergence",
-"emergence: live"
-],
-[
-"v036 emergence",
-"emergence: yaw sin"
-],
-[
-"v036 emergence",
-"emergence: yaw cos"
-],
-[
-"v036 emergence",
-"emergence: yaw"
-],
-[
-"v036 emergence",
-"emergence: pitch"
-],
-[
-"v036 emergence",
-"emergence: distance"
-],
-[
-"v036 emergence",
-"emergence: at the belief"
-],
-[
-"v036 emergence",
-"emergence: a way"
 ],
 [
 "b17b timers",
@@ -3591,13 +3303,33 @@
 "style|playing style: lightning": "STYLE_P=0 since v0.3",
 "his legs|the switch to his legs is on": "the legs switch was retired",
 "his legs|his legs carried him on the last frame": "the legs switch was retired",
+"v02 position|height above the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 believed|way to the believed place": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 believed|way from the believed place to the mega health": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 believed|way from the believed place to the red armor": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 1: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 1: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 1: slot holds a place": "always 1 on the ten maps",
+"v02 places|place 2: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 2: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 2: slot holds a place": "always 1 on the ten maps",
+"v02 places|place 3: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 3: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 3: slot holds a place": "always 1 on the ten maps",
+"v02 places|place 4: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 4: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 4: slot holds a place": "always 1 on the ten maps",
+"v02 places|place 5: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 5: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 5: slot holds a place": "always 1 on the ten maps",
+"v02 places|place 6: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 6: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 6: slot holds a place": "always 1 on the ten maps",
+"v02 places|place 7: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 7: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 7: slot holds a place": "always 1 on the ten maps",
+"v02 places|place 8: distance from the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v02 places|place 8: nearest to the believed enemy": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v02 places|place 8: slot holds a place": "always 1 on the ten maps",
 "b2 holds|hold 1: slot holds a place": "always 1 on the ten maps",
 "b2 holds|hold 2: slot holds a place": "always 1 on the ten maps",
@@ -3607,6 +3339,58 @@
 "b2 holds|hold 6: slot holds a place": "always 1 on the ten maps",
 "b2 holds|hold 7: slot holds a place": "always 1 on the ten maps",
 "b2 holds|hold 8: slot holds a place": "always 1 on the ten maps",
+"v031 enemy stack|believed stack: health": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v031 enemy stack|believed stack: armor": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v031 enemy stack|believed stack: health and armor": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v031 enemy stack|believed stack: spread": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v031 enemy stack|believed stack: weak": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: yaw": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: pitch": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: distance": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: enemy could be there": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: flight": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: clear": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: off the way": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: pros' share": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: grenade pitch": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: there": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: list rl": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: list gl": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 1: list pg": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: yaw": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: pitch": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: distance": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: enemy could be there": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: flight": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: clear": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: off the way": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: pros' share": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: grenade pitch": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: there": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: list rl": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: list gl": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 2: list pg": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: yaw": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: pitch": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: distance": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: enemy could be there": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: flight": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: clear": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: off the way": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: pros' share": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: grenade pitch": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: there": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: list rl": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: list gl": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 prefire|pre-fire place 3: list pg": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: live": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: yaw sin": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: yaw cos": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: yaw": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: pitch": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: distance": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: at the belief": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
+"v036 emergence|emergence: a way": "rule-made (v0.2 to v0.3.6), faded out of the hands (v0.4.2) and the brain (b1.1): read by no network",
 "v038 drift|drift: yaw rate": "DRIFT_IN=0",
 "v038 drift|drift: pitch rate": "DRIFT_IN=0",
 "v038 drift|drift: yaw rate smoothed": "DRIFT_IN=0",

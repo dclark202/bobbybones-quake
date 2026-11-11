@@ -64,7 +64,7 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
 | `docs/runs/<family>/` | one folder per family (`1.7/`, `2.0/`; older `b1.N/`, `v0.6.x/`): a `README.md` (the goal, the attempts) and a folder per attempt (`2.0/2.0c/`) with `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
 | `docs/design/` | current designs · `docs/guides/` how-tos · `docs/archive/` old versions, the old daily log, old CLAUDE.md (frozen) |
 | `tools/run/` | the run tools: `check_settings`, `make_train_cmd`, `watch` (checks), `panel` (behaviour), `selfplay_loop` / `selfplay_log`, `live_accept`, `backup` |
-| `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,watch,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` |
+| `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,watch,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` (the hidden task "BobbyBones nightly", `tools/run/nightly.py`, 04:30). **Intermediates live on T:, not C:** (owner, 2026-11-11): `tools/run/offload.py` moves the checks' recorded games (`watch/panel`), the snapshots but the anchors and the scratch test folders of runs not trained for 3 days to the same paths under `T:\BobbyBones_backup\data`, removing a file from C: only after its copy was read back with the same SHA-256; `keep/` is never moved. An old run's panel or snapshot is read from T: |
 | `private/` (git-ignored) | the public servers' notes and scripts (`private/PUBLIC_SERVER.md` first; machine details in `data/SERVER.md`) |
 
 ## Starting and watching a run
@@ -129,9 +129,10 @@ the real run directly; its first 10 updates and the extra check at update 10 are
   over 1% of rows at the clip, each group's share at each reader), and at a run's end 200 games with a new group blanked. No drop = it does
   not stay. The list's length is on every card.
 
-- **The cleaned list 18 (2026-11-11; `docs/design/INPUTS_CLEANUP.md` "As built")**: `sim/input_list.py` + `sim/input_list_18.json` (876 of the
-  simulator's 1,053 columns by name: the brain reads the first 691, the hands' encoder the first 796, a tail of 80 is read by no first
-  layer); `sim/duel_env_ffa18.py` is the group module giving that list (the trainer's `--env`; the simulator's own code is unchanged and
+- **The cleaned list 18 (2026-11-11; `docs/design/INPUTS_CLEANUP.md` "As built")**: `sim/input_list.py` + `sim/input_list_18.json` (804 of the
+  simulator's 1,053 columns by name: the brain reads the first 691, the hands' encoder the first 796, a tail of 8 is read by no first
+  layer: the guessing lesson's four marks and the yellows' timers; the other 72 rule-made columns of v0.2 to v0.3.6, the pre-fire and
+  emergence among them, were cut the same day on the owner's word); `sim/duel_env_ffa18.py` is the group module giving that list (the trainer's `--env`; the simulator's own code is unchanged and
   `duel_env_ffa` stays the full list for every older network); `tools/inputs18.py convert` brings a 1,053-input network to it (cut and
   folded, resized, the optimizer's moments too; `same` proves it on real rows); a checkpoint of a list carries `inputs` and `input_names`,
   and the check tools give each network its columns by name. `tools/run/input_health.py <policy> <sample>` is the health report.

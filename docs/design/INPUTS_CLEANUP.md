@@ -222,6 +222,17 @@ full size after the run (E).
 - The league's three files are converted the same way. v0.6.0's end has no brain fade of its own; the trainer has played every league
   file at the learner's fade since b1.1, so its brain is given the learner's list.
 
+**The second cut (owner, 2026-11-11, the next session: "remove the ones that are dead or so outdated they no longer fit the plan. Most of
+these seem to be from 0.n sessions").** 72 of the 76 rule-made columns leave the list: the believed place's height and ways (4), the
+places' belief flags (16), the stack by rule (5), the pre-fire places (39), the emergence point (8). All are made from v0.2's rule belief,
+were faded out of the hands in v0.4.2 and of the brain in b1.1, and read zero in every first layer, so nothing is folded and no weight
+changes. Kept in the tail: the four columns the trainer's guessing lesson reads as marks (a place is believed, and where: `BEL_IX`), with
+the yellows' timers. **List 18 is now 804 columns (249 cut); the brain's 691 and the hands' 796 are as before.** The ability the pre-fire
+and emergence inputs stood for (firing at a predicted point, watching the right opening) is 2.1's, from the brain's own forecast; an
+input for it would be a new one, made from the brain's belief, with its measured statistics. Still live and from v0.x, not touched (they
+are read, so cutting them is not exact; judged at full size after the run, E): the places (72), the holds (56), the rocket aim (20), the
+v0.2 items, position and believed-enemy facts.
+
 ## What a new session picks up
 
 1. The owner's review of [1.8a's card](../runs/1.8/1.8a/CARD.md) and his go; the run's row in `docs/RUNS.md` at its start.

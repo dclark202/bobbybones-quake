@@ -41,7 +41,7 @@ RB = os.path.join(ROOT, "data", "sim_runs", "duel_gru_b1_2d")
 S0, S0O = os.path.join(RB, "keep", "policy_end_b12d.pt"), os.path.join(RB, "keep", "opt_end_b12d.pt")
 C17 = os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_7a", "keep", "policy_end_17a.pt")
 ANCH = os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_3b", "snapshots")   # 1.3b's league: b1.2d's end, b1.1, v0.6.0's end (980 inputs)
-ST = os.path.join(ROOT, "data", "sim_runs", "scratch_18a_clean3")
+ST = os.path.join(ROOT, "data", "sim_runs", "scratch_18a_clean4")
 SAMPLE = os.path.join(ROOT, "data", "sim_runs", "inputs18", "sample_obs.npy")   # 38,421 rows of raw inputs of real play (audit_obs.py): the statistics' sample
 S1, S1O = os.path.join(ST, "s1.pt"), os.path.join(ST, "s1_opt.pt")
 CMD = os.path.join(HERE, "train.cmd")
@@ -122,12 +122,16 @@ def start():
           and len(g_["obs_mean"]) == I["n"])
     nm = [tuple(x) for x in g_["input_names"]]
     cutg = {"more enemies", "movement goal", "style", "his legs", "v038 drift", "b17 order", "b20b space", "b20b targets"}
-    check("nothing of the cut groups is in the list; the ways, the heavy machine gun, the gauntlet, the grenade arc, the pre-fire and the emergence are",
-          not any(g in cutg for g, _ in nm) and all(any(g == x for g, _ in nm) for x in ("b3 ways", "grenade arc", "v036 prefire", "v036 emergence"))
+    cutg |= {"v036 prefire", "v036 emergence"}              # (owner, 2026-11-11: the dead rule-made columns of v0.2 to v0.3.6 out)
+    check("nothing of the cut groups is in the list (the pre-fire and the emergence too); the ways, the heavy machine gun, the gauntlet and the grenade arc are",
+          not any(g in cutg for g, _ in nm) and all(any(g == x for g, _ in nm) for x in ("b3 ways", "grenade arc"))
           and any("heavy machine gun" in n for _, n in nm) and any("gauntlet" in n for _, n in nm))
     tail = nm[I["n_hands"]:]
-    check("the tail ({} columns the first layers do not read): the 76 rule-made columns and the yellows' four timers".format(len(tail)),
-          len(tail) == 80 and sum(1 for g, _ in tail if g == "b17b timers") == 4)
+    check("the tail ({} columns the first layers do not read): the guessing lesson's four marks and the yellows' four timers; no other rule-made column "
+          "in the list (the believed stack's 'since pinned' is a live input)".format(len(tail)),
+          len(tail) == 8 and sum(1 for g, _ in tail if g == "b17b timers") == 4 and sum(1 for g, _ in tail if g == "v02 believed") == 4
+          and I["n"] == 804 and [n_ for g, n_ in nm if g == "v031 enemy stack"] == ["believed stack: since pinned"]
+          and len((g_.get("rule_fade") or {}).get("cols", ())) == 4 and min(g_["rule_fade"]["cols"]) >= I["n_hands"])
     L = g_.get("head2") or {}
     hn = [nm[c] for c in L.get("obs_cols", ())]
     sf_ = (g_.get("rule_fade") or {}).get("more") or {}

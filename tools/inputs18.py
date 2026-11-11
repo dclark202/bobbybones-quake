@@ -4,8 +4,8 @@ full list (1,053 inputs, no strategy head yet) brought to the cleaned list 18, a
   cut      the columns that are dead by construction leave every first layer; a column that never changes contributes a fixed number,
            which is folded into the layer's bias (the hands' encoder, the brain's input layer) or into its token's mark (attention)
   routed   the hands' encoder reads the list's first n_hands columns, the brain its first n_brain; the 76 columns that were faded out
-           of both (rule_fade and the brain's fade, both at 1) and the yellows' timers are in the list's tail, read by no first layer
-           (their attention cells read a column of zeros, as the fade made them)
+           of both (rule_fade and the brain's fade, both at 1) read zero there, so they leave with nothing to fold: 72 are cut, the four
+           the guessing lesson reads as marks and the yellows' timers are in the list's tail, read by no first layer
   resized  every remaining column's average and spread measured on a sample of real play, the first layers rescaled so that the sums
            are the same: z_old(x) = a * z_new(x) + b for every column (a column that was at the +-10 clip: exact if it has two values,
            left with its old statistics otherwise; a feature that several tokens share: one a for all its rows)
@@ -86,7 +86,7 @@ def convert(a):
         assert sorted(int(c) for c in bfd.get("cols", ())) == fade and float(bfd.get("g", 0.0)) == 1.0, "the brain's fade is not the rule fade's at 1"
     nb0 = int(BL["obs_dim"])
     tail = src[nh:]
-    assert set(fade) <= set(tail), "a faded column is not in the list's tail"
+    assert all(o in tail or o not in new_of for o in fade), "a faded column is among the columns a first layer reads"
     timers = [o for o in tail if o not in set(fade)]
     assert float(sd_["enc.0.weight"][:, timers].abs().max()) == 0.0, "the hands have weights on the timers"
     cut = [o for o in range(L["full"]) if o not in new_of]
@@ -95,9 +95,10 @@ def convert(a):
     X = np.asarray(X, np.float64)
     m = np.asarray(ck["obs_mean"], np.float64)
     sd = np.sqrt(np.asarray(ck["obs_var"], np.float64) + EPS)
+    fs = set(fade)
     for o in cut:
-        assert float(X[:, o].max() - X[:, o].min()) == 0.0, "a cut column changes in the sample: {}".format(o)
-    zc = {o: float(np.clip((X[0, o] - m[o]) / sd[o], -10, 10)) for o in cut}     # a cut column's fixed number after the normalizer
+        assert o in fs or float(X[:, o].max() - X[:, o].min()) == 0.0, "a cut column changes in the sample: {}".format(o)
+    zc = {o: 0.0 if o in fs else float(np.clip((X[0, o] - m[o]) / sd[o], -10, 10)) for o in cut}   # a cut column's fixed number after the normalizer (a faded one read zero)
     live = src[:nh] + timers                                # (the faded tail keeps its old statistics: nothing reads it)
     P = plan(X, m, sd, live)
     # ---- a (z_old = a * z_new + b) per column; one a for every row of a feature that several tokens share
@@ -241,7 +242,8 @@ def convert(a):
     ck["belief"] = {k_: v_ for k_, v_ in dict(BL, obs_dim=nb).items() if k_ != "fade"}
     sc = [j for j, (g_, n_) in enumerate(L["names"]) if "believed" not in n_ and any(g_ == sg and (sn is None or sn == n_) for sg, sn in STRATEGY)]   # (as the head's own: nothing made from the old rule belief)
     assert sc and max(sc) < nh, "a strategy input is not among the hands' columns"
-    ck["rule_fade"] = dict(RF, cols=[new_of[o] for o in fade], more=dict(name="strategy", cols=sc, names=[list(L["names"][j]) for j in sc], g=0.0))
+    kept = [o for o in fade if o in new_of]                  # (the marks: still multiplied by zero, and read by no first layer)
+    ck["rule_fade"] = dict(RF, cols=[new_of[o] for o in kept], names=[list(L["names"][new_of[o]]) for o in kept], n=len(kept), more=dict(name="strategy", cols=sc, names=[list(L["names"][j]) for j in sc], g=0.0))
     if ck.get("btoken") is not None:
         ck["btoken"] = dict(ck["btoken"], seen_col=new_of[int(ck["btoken"]["seen_col"])])
     ck["inputs"] = dict(list=VERSION, n=n, n_brain=nb, n_hands=nh, full=L["full"])

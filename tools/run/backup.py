@@ -3,7 +3,7 @@ never deleting anything there. Copied when new or changed (size or time): every 
 optimizers), live.json, live_settings.env, snapshots/ and selfplay/ (the self-play games the judges are fitted on); the trainers'
 logs (data/sim_runs/*.log); data/maps; data/sim_runs/brainppl/ packs and shards; the movement
 network (data/sim_runs/move_v17_look); the win-chance judges (data/sim_runs/judge); data/owner.env and data/demo_root.txt. Logs to <backup>/backup.log.
-    python tools/run/backup.py            (the scheduled task "BobbyBones backup" runs it nightly)"""
+    python tools/run/backup.py            (the scheduled task "BobbyBones nightly" runs it at 04:30, then tools/run/offload.py: tools/run/nightly.py)"""
 import os
 import shutil
 import sys

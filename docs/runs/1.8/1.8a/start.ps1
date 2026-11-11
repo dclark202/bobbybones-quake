@@ -1,7 +1,7 @@
 # 1.8a (owner, 2026-11-11: "the fast track aim3 in at b1.2d ... Call this model 1.8"; docs/runs/1.8/1.8a/CARD.md), ON THE OWNER'S COMMAND ONLY.
 # From b1.2d's end (keep/policy_end_b12d.pt + opt_end_b12d.pt) widened to the simulator's 1,053 inputs with zero weights (tools/b18_init.py widen),
 # brought to the CLEANED INPUT LIST 18 (docs/design/INPUTS_CLEANUP.md; tools/inputs18.py convert: 177 dead columns cut and folded, the hands'
-# encoder the first 796 of its 876, the brain the first 691, every column's size re-measured, the optimizer's moments with them), the
+# encoder the first 796 of its 804, the brain the first 691, every column's size re-measured, the optimizer's moments with them), the
 # strategy head added as 1.3b's (tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief) and the keep choice as 1.7a's
 # (tools/keep_init.py add), both at zero effect; the tokens order, timers, space and targets shut for the whole run (--gate-open 0). The dials,
 # live, straight lines (ramp_18a.py): AIM3 over updates 0 to 30, the head's credit 50 to 130, the item rule's lesson and the speed pay in games
@@ -13,8 +13,11 @@
 # answer as b1.2d's end; a live.json the trainer would refuse (or one the ramp will write). Then: the trainer (the 8 performance cores, 0xC03C3),
 # the watcher (checks every 20 updates, 200 games, against b1.2d's end, the start; every fourth against 1.7a's update 90, the point re-reached;
 # Cypher's measures; BOTH SEATS UNDER AIM3 AT ITS END VALUES), the ramp and the self-play logger (all on 8 efficiency cores, 0x3C3C).
-# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\1.8\1.8a\start.ps1 -Minutes <n> [-Restart]
-param([int]$Minutes = 0, [switch]$Restart)
+#   start.ps1 -Minutes <n> -AutoRestart <m>   phase 1, and the restart done unattended: auto_restart.ps1 (hidden) waits for the kept save of
+#                                      update 150, stops the trainer (stop_18a.ps1 -Update 150) and runs start.ps1 -Restart -Minutes <m>
+#                                      (owner, 2026-11-11: "set it up so the second part starts automatically")
+# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\1.8\1.8a\start.ps1 -Minutes <n> [-Restart | -AutoRestart <m>]
+param([int]$Minutes = 0, [switch]$Restart, [int]$AutoRestart = 0)
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT = (Resolve-Path (Join-Path $HERE "..\..\..\..")).Path
@@ -31,6 +34,7 @@ function Log($m) { $l = (Get-Date -Format "MM-dd HH:mm:ss ") + $m; Add-Content -
 
 if ($Minutes -le 0) { Log "give the length: -Minutes <n> (owner, 2026-10-30: ask him to specify the length)"; exit 1 }
 if ($Minutes -le 60) { Log "under an hour left: not started"; exit 1 }
+if ($AutoRestart -ne 0 -and ($Restart -or $AutoRestart -le 60)) { Log "-AutoRestart <minutes of phase 2, over 60> goes with phase 1 only: not started"; exit 1 }
 if (-not (Select-String -Path (Join-Path $ROOT "sim\train_duel_rnn.py") -Pattern '"DMG_REWARD"' -Quiet) -or -not (Select-String -Path (Join-Path $ROOT "sim\duel_env_ffa.py") -Pattern '"AIM3_SIZE_A", "AIM3_SIZE_B"' -Quiet) -or -not (Test-Path (Join-Path $ROOT "tools\b18_init.py"))) { Log "the code here has no live DMG_REWARD, no AIM3 (sim/duel_env_ffa.py) or no tools/b18_init.py: not started"; exit 1 }
 if ((Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*train_duel_rnn*" } | Measure-Object).Count -gt 0) { Log "A TRAINER IS RUNNING: not started"; exit 1 }
 $END = Join-Path $K0 "policy_end_b12d.pt"; $OPTF = Join-Path $K0 "opt_end_b12d.pt"
@@ -95,9 +99,10 @@ if (-not $Restart) {
     Copy-Item $END $CK
     Copy-Item $C17 $CR
     Copy-Item (Join-Path $R0 "live_settings.env") (Join-Path $R1 "live_settings.env")
-    Log ("from " + $END + " on the cleaned input list 18 (876 inputs: the hands 796, the brain 691), the head and the keep choice added at zero effect, with its optimizer; anchors b1.2d's end, b1.1, v0.6.0's end; the judge " + $JUDGE)
+    Log ("from " + $END + " on the cleaned input list 18 (804 inputs: the hands 796, the brain 691), the head and the keep choice added at zero effect, with its optimizer; anchors b1.2d's end, b1.1, v0.6.0's end; the judge " + $JUDGE)
 } else {
-    Remove-Item (Join-Path $R1 "live_status.json") -ErrorAction SilentlyContinue   # (the trainer writes it anew at its first read: waited for below)
+    # (the trainer writes live_status.json anew at its first read, waited for below: phase 1's is renamed, nothing is deleted)
+    if (Test-Path (Join-Path $R1 "live_status.json")) { Move-Item (Join-Path $R1 "live_status.json") (Join-Path $R1 ("live_status.phase1_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".json")) }
     Log ("the planned restart from the save of update 150 (keep\policy_u150_18a.pt, the run's policy.pt and opt.pt as they are): INTENT_SWITCH 0, WEAPON_OWN 1")
 }
 & $PY (Join-Path $ROOT "tools\run\live_accept.py") (Join-Path $R1 "live.json") --env duel_env_ffa18 --ramp (Join-Path $HERE "ramp_18a.py") | ForEach-Object { Log $_ }
@@ -148,3 +153,7 @@ for ($i = 0; $i -lt 60; $i++) {                                    # (the optimi
 }
 if ($ok) { Select-String -Path $TL -Pattern "optimizer: |keep choice|strategy head|combat order|device " | ForEach-Object { Log ("trainer: " + $_.Line) } }
 else { Log "no optimizer line in the trainer's log after 10 minutes: look at it" }
+if (-not $Restart -and $AutoRestart -gt 0) {                        # (the planned restart at update 150, unattended: hidden, no window)
+    $ar = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", ('"' + (Join-Path $HERE "auto_restart.ps1") + '"'), "-Minutes", $AutoRestart -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru
+    Log ("the restart at update 150 is armed (auto_restart.ps1, process " + $ar.Id + "): phase 2 for " + $AutoRestart + " minutes; its lines: auto_restart.log")
+}

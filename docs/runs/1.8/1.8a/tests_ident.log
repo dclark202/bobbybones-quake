@@ -1,106 +1,106 @@
-11:51:37 scratch_18a_id_z0_c4: done in 0.3 min; the log ends: exit 0
-11:51:37 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
-11:51:37 PASS z0: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
-11:51:37 PASS z0: no weapon table, no REFUSED live file, no order
-11:51:37 PASS z0: the gates left as the file has them (no opening)
-11:51:37    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
-11:51:37    optimizer: the 4 new token(s)' first layer starts fresh
-11:51:37    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
-11:51:37    optimizer: its state loaded from opt.pt
-11:51:37    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
-11:51:37    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
-11:51:37    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
-11:51:37    update=1 steps=3072 minutes=22395.31 sps=522 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02545 clip_frac=0.4453 lr=0.0001 lam=0.98 know=0.218 drops=
-11:51:59 scratch_18a_id_z0b_c4: done in 0.3 min; the log ends: exit 0
-11:51:59 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
-11:51:59 PASS z0b: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
-11:51:59 PASS z0b: no weapon table, no REFUSED live file, no order
-11:51:59 PASS z0b: the gates left as the file has them (no opening)
-11:51:59    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
-11:51:59    optimizer: the 4 new token(s)' first layer starts fresh
-11:51:59    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
-11:51:59    optimizer: its state loaded from opt.pt
-11:51:59    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
-11:51:59    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
-11:51:59    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
-11:51:59    update=1 steps=3072 minutes=22395.31 sps=533 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02545 clip_frac=0.4453 lr=0.0001 lam=0.98 know=0.218 drops=
-11:52:21 scratch_18a_id_z2_c4: done in 0.3 min; the log ends: exit 0
-11:52:21 PASS z2: the trainer ran 2 updates and dumped them (2 dumps)
-11:52:21 PASS z2: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
-11:52:21 PASS z2: no weapon table, no REFUSED live file, no order
-11:52:21 PASS z2: the gates left as the file has them (no opening)
-11:52:21    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
-11:52:21    optimizer: the 4 new token(s)' first layer starts fresh
-11:52:21    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
-11:52:21    optimizer: its state loaded from opt.pt
-11:52:21    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
-11:52:21    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
-11:52:21    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
-11:52:21    update=1 steps=3072 minutes=22395.31 sps=491 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02544 clip_frac=0.4449 lr=0.0001 lam=0.98 know=0.218 drops=
-11:52:43 scratch_18a_id_z3_c4: done in 0.3 min; the log ends: exit 0
-11:52:43 PASS z3: the trainer ran 2 updates and dumped them (2 dumps)
-11:52:43 PASS z3: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
-11:52:43 PASS z3: no weapon table, no REFUSED live file, no order
-11:52:43 PASS z3: the gates left as the file has them (no opening)
-11:52:43    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
-11:52:43    optimizer: the 4 new token(s)' first layer starts fresh
-11:52:43    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
-11:52:43    optimizer: its state loaded from opt.pt
-11:52:43    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
-11:52:43    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
-11:52:43    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
-11:52:43    update=1 steps=3072 minutes=22395.31 sps=485 fire_in_view=0.254 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.01784 clip_frac=0.4327 lr=0.0001 lam=0.98 know=0.214 drops=
-11:53:05 scratch_18a_id_z4_c4: done in 0.3 min; the log ends: exit 0
-11:53:05 PASS z4: the trainer ran 2 updates and dumped them (2 dumps)
-11:53:05 PASS z4: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
-11:53:05 PASS z4: no weapon table, no REFUSED live file, no order
-11:53:05 PASS z4: the gates left as the file has them (no opening)
-11:53:05    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
-11:53:05    optimizer: the 4 new token(s)' first layer starts fresh
-11:53:05    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
-11:53:05    optimizer: its state loaded from opt.pt
-11:53:05    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
-11:53:05    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
-11:53:05    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
-11:53:05    update=1 steps=3072 minutes=22395.31 sps=475 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02416 clip_frac=0.401 lr=0.0001 lam=0.98 know=0.218 drops={
-11:53:27 scratch_18a_id_z5_c4: done in 0.3 min; the log ends: exit 0
-11:53:27 PASS z5: the trainer ran 2 updates and dumped them (2 dumps)
-11:53:27 PASS z5: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
-11:53:27 PASS z5: no weapon table, no REFUSED live file, no order
-11:53:27 PASS z5: the gates left as the file has them (no opening)
-11:53:27    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
-11:53:27    optimizer: the 4 new token(s)' first layer starts fresh
-11:53:27    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
-11:53:27    optimizer: its state loaded from opt.pt
-11:53:27    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
-11:53:27    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
-11:53:27    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
-11:53:27    update=1 steps=3072 minutes=22395.31 sps=500 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02548 clip_frac=0.4462 lr=0.0001 lam=0.98 know=0.218 drops=
-11:53:49 scratch_18a_id_z6_c4: done in 0.3 min; the log ends: exit 0
-11:53:49 PASS z6: the trainer ran 2 updates and dumped them (2 dumps)
-11:53:49 PASS z6: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
-11:53:49 PASS z6: no weapon table, no REFUSED live file, no order
-11:53:49 PASS z6: the gates left as the file has them (no opening)
-11:53:49    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
-11:53:49    optimizer: the 4 new token(s)' first layer starts fresh
-11:53:49    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
-11:53:49    optimizer: its state loaded from opt.pt
-11:53:49    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
-11:53:49    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
-11:53:49    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
-11:53:49    update=1 steps=3072 minutes=22395.31 sps=501 fire_in_view=0.384 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=39.1 contest={'rounds': 0, 'taken': 0.0} kl=0.01241 clip_frac=0.4379 lr=0.0001 lam=0.98 know=0.183 drops
-11:53:49 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
-11:53:49 PASS AIM3's END dials reach the simulators: update 1's actions differ from z0's (0.0982 of them)
-11:53:49 PASS the damage pay changes nothing before the first learning step (z2 = z0: update 1's actions and log p, to the bit)
-11:53:49 PASS ... and update 2's actions differ (0.0734 of them): the pay reached the learning step
-11:53:49 PASS the head's credit changes nothing before the first learning step (z4 = z0: update 1's actions and log p, to the bit)
-11:53:49 PASS ... and update 2's actions differ (0.1677 of them): the credit reached the learning step
-11:53:49 PASS the head's credit as written: z0 0.0 , z4 1.0
-11:53:49 update 1's ledger z0 (0.005): {'dmg_dealt': 0.1406, 'dmg_taken': -0.2812, 'frag': None, 'death': None, 'win_part': 0.1237}
-11:53:49 update 1's ledger z2 (0.0055): {'dmg_dealt': 0.1547, 'dmg_taken': -0.3094, 'frag': None, 'death': None, 'win_part': 0.1237}
-11:53:49 PASS the start pays damage at 0.005: z2's damage dealt and taken are 0.0055/0.005 of z0's (1.1003, 1.1003; wanted 1.1000)
-11:53:49 PASS update 1's win part, frags and deaths unchanged (1.0000, 1.0, 1.0)
-11:53:49 PASS the strategy inputs faded out of the hands (SFADE 1) change update 1's actions (0.2373 of them); the gate played is in the record ({'g': 1.0, 'cols': 29}; z0 {'g': 0.0, 'cols': 29})
-11:53:49 PASS the start weighs damage taken as dealt (zero-sum): at b1.2d's 0.8 (z5) update 1's actions are the same, damage dealt pays the same and damage taken between 0.8 and 1 of z0's (0.8001: his own splash and falls cost the full price at either weight, DMG_ENEMY_ONLY)
-11:53:49 PASS no firing cost in the ledger ({'intent_switch': -0.5625}; shot cost a player-minute 0.0)
-11:53:49 ALL PASSED
+12:32:32 scratch_18a_id_z0_c5: done in 0.3 min; the log ends: exit 0
+12:32:32 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+12:32:32 PASS z0: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
+12:32:32 PASS z0: no weapon table, no REFUSED live file, no order
+12:32:32 PASS z0: the gates left as the file has them (no opening)
+12:32:32    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
+12:32:32    optimizer: the 4 new token(s)' first layer starts fresh
+12:32:32    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
+12:32:32    optimizer: its state loaded from opt.pt
+12:32:32    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
+12:32:32    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
+12:32:32    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+12:32:32    update=1 steps=3072 minutes=22395.31 sps=430 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02545 clip_frac=0.4453 lr=0.0001 lam=0.98 know=0.218 drops=
+12:33:04 scratch_18a_id_z0b_c5: done in 0.5 min; the log ends: exit 0
+12:33:04 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+12:33:04 PASS z0b: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
+12:33:04 PASS z0b: no weapon table, no REFUSED live file, no order
+12:33:04 PASS z0b: the gates left as the file has them (no opening)
+12:33:04    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
+12:33:04    optimizer: the 4 new token(s)' first layer starts fresh
+12:33:04    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
+12:33:04    optimizer: its state loaded from opt.pt
+12:33:04    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
+12:33:04    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
+12:33:04    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+12:33:04    update=1 steps=3072 minutes=22395.31 sps=433 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02545 clip_frac=0.4453 lr=0.0001 lam=0.98 know=0.218 drops=
+12:33:26 scratch_18a_id_z2_c5: done in 0.3 min; the log ends: exit 0
+12:33:26 PASS z2: the trainer ran 2 updates and dumped them (2 dumps)
+12:33:26 PASS z2: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
+12:33:26 PASS z2: no weapon table, no REFUSED live file, no order
+12:33:26 PASS z2: the gates left as the file has them (no opening)
+12:33:26    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
+12:33:26    optimizer: the 4 new token(s)' first layer starts fresh
+12:33:26    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
+12:33:26    optimizer: its state loaded from opt.pt
+12:33:26    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
+12:33:26    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
+12:33:26    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+12:33:26    update=1 steps=3072 minutes=22395.31 sps=434 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02544 clip_frac=0.4449 lr=0.0001 lam=0.98 know=0.218 drops=
+12:33:48 scratch_18a_id_z3_c5: done in 0.3 min; the log ends: exit 0
+12:33:48 PASS z3: the trainer ran 2 updates and dumped them (2 dumps)
+12:33:48 PASS z3: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
+12:33:48 PASS z3: no weapon table, no REFUSED live file, no order
+12:33:48 PASS z3: the gates left as the file has them (no opening)
+12:33:48    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
+12:33:48    optimizer: the 4 new token(s)' first layer starts fresh
+12:33:48    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
+12:33:48    optimizer: its state loaded from opt.pt
+12:33:48    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
+12:33:48    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
+12:33:48    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+12:33:48    update=1 steps=3072 minutes=22395.31 sps=487 fire_in_view=0.254 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.01784 clip_frac=0.4327 lr=0.0001 lam=0.98 know=0.214 drops=
+12:34:10 scratch_18a_id_z4_c5: done in 0.3 min; the log ends: exit 0
+12:34:10 PASS z4: the trainer ran 2 updates and dumped them (2 dumps)
+12:34:10 PASS z4: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
+12:34:10 PASS z4: no weapon table, no REFUSED live file, no order
+12:34:10 PASS z4: the gates left as the file has them (no opening)
+12:34:10    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
+12:34:10    optimizer: the 4 new token(s)' first layer starts fresh
+12:34:10    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
+12:34:10    optimizer: its state loaded from opt.pt
+12:34:10    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
+12:34:10    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
+12:34:10    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+12:34:10    update=1 steps=3072 minutes=22395.31 sps=506 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02416 clip_frac=0.401 lr=0.0001 lam=0.98 know=0.218 drops={
+12:34:42 scratch_18a_id_z5_c5: done in 0.5 min; the log ends: exit 0
+12:34:42 PASS z5: the trainer ran 2 updates and dumped them (2 dumps)
+12:34:42 PASS z5: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
+12:34:42 PASS z5: no weapon table, no REFUSED live file, no order
+12:34:42 PASS z5: the gates left as the file has them (no opening)
+12:34:42    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
+12:34:42    optimizer: the 4 new token(s)' first layer starts fresh
+12:34:42    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
+12:34:42    optimizer: its state loaded from opt.pt
+12:34:42    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
+12:34:42    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
+12:34:42    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+12:34:42    update=1 steps=3072 minutes=22395.31 sps=402 fire_in_view=0.165 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=0.0 contest={'rounds': 0, 'taken': 0.0} kl=0.02548 clip_frac=0.4462 lr=0.0001 lam=0.98 know=0.218 drops=
+12:35:05 scratch_18a_id_z6_c5: done in 0.3 min; the log ends: exit 0
+12:35:05 PASS z6: the trainer ran 2 updates and dumped them (2 dumps)
+12:35:05 PASS z6: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start
+12:35:05 PASS z6: no weapon table, no REFUSED live file, no order
+12:35:05 PASS z6: the gates left as the file has them (no opening)
+12:35:05    strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 958 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 89 + hands 512), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s);
+12:35:05    optimizer: the 4 new token(s)' first layer starts fresh
+12:35:05    optimizer: attn.mark carried over, (63, 96) -> (67, 96)
+12:35:05    optimizer: its state loaded from opt.pt
+12:35:05    keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias -7.660, on its own numbers [6.8, 7.124, 0.0, 7.124, 0.0, 0.0, 0.0]
+12:35:05    habits (1.5a, part C): share 0.000 of the league seats' lives (live HABIT_P), push 2; kinds pro / rail / rockets [0.333, 0.333, 0.333]; the pros' travelling hand (rockets, rail, lightning) [0.722, 0.156, 0.122]
+12:35:05    keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+12:35:05    update=1 steps=3072 minutes=22395.31 sps=445 fire_in_view=0.384 shot_cost_per_player_min=0.0 shot_price=0.0 armor_soaked_per_player_min=39.1 contest={'rounds': 0, 'taken': 0.0} kl=0.01241 clip_frac=0.4379 lr=0.0001 lam=0.98 know=0.183 drops
+12:35:05 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+12:35:05 PASS AIM3's END dials reach the simulators: update 1's actions differ from z0's (0.0982 of them)
+12:35:05 PASS the damage pay changes nothing before the first learning step (z2 = z0: update 1's actions and log p, to the bit)
+12:35:05 PASS ... and update 2's actions differ (0.0734 of them): the pay reached the learning step
+12:35:05 PASS the head's credit changes nothing before the first learning step (z4 = z0: update 1's actions and log p, to the bit)
+12:35:05 PASS ... and update 2's actions differ (0.1677 of them): the credit reached the learning step
+12:35:05 PASS the head's credit as written: z0 0.0 , z4 1.0
+12:35:05 update 1's ledger z0 (0.005): {'dmg_dealt': 0.1406, 'dmg_taken': -0.2812, 'frag': None, 'death': None, 'win_part': 0.1237}
+12:35:05 update 1's ledger z2 (0.0055): {'dmg_dealt': 0.1547, 'dmg_taken': -0.3094, 'frag': None, 'death': None, 'win_part': 0.1237}
+12:35:05 PASS the start pays damage at 0.005: z2's damage dealt and taken are 0.0055/0.005 of z0's (1.1003, 1.1003; wanted 1.1000)
+12:35:05 PASS update 1's win part, frags and deaths unchanged (1.0000, 1.0, 1.0)
+12:35:05 PASS the strategy inputs faded out of the hands (SFADE 1) change update 1's actions (0.2373 of them); the gate played is in the record ({'g': 1.0, 'cols': 29}; z0 {'g': 0.0, 'cols': 29})
+12:35:05 PASS the start weighs damage taken as dealt (zero-sum): at b1.2d's 0.8 (z5) update 1's actions are the same, damage dealt pays the same and damage taken between 0.8 and 1 of z0's (0.8001: his own splash and falls cost the full price at either weight, DMG_ENEMY_ONLY)
+12:35:05 PASS no firing cost in the ledger ({'intent_switch': -0.5625}; shot cost a player-minute 0.0)
+12:35:05 ALL PASSED
