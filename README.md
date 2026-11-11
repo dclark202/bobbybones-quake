@@ -1,8 +1,12 @@
-# BobbyBones
+# Important
 
-BobbyBones is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
+This is a fork from BobbyBones, which is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
 games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
 on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
+
+We forked it and try to make it available for Quake3 as well - let's see how that goes.
+
+## Below Information is original README.md from the fork. We will have to adjust it going forward.
 
 ## Play him online
 
