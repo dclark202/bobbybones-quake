@@ -223,6 +223,7 @@ BRAIN_PFX = ("track.", "trackz.", "belief.", "ahead.")              # (v0.4.0) t
 BRAIN_PFX = BRAIN_PFX + ("control.",)                               # (v0.4.3, --control) the readout "in control": a brain layer
 BRAIN_PFX = BRAIN_PFX + ("passr.",)                                 # (1.7) the brain's pass readout: a brain layer
 BRAIN_PFX = BRAIN_PFX + ("fight.",)                                 # (1.7b, --fight-odds) the brain's fight odds: a brain layer (its own Adam)
+BRAIN_PFX = BRAIN_PFX + ("space.",)                                 # (2.0b, --space-read) the brain's readout "space": a brain layer (its own Adam)
 LIVE_TRAINER = ("DMG_TAKEN_W", "DMG_REWARD", "INFO_PAY", "TRACK_W", "TRACK_TRUNK", "TRACK_Z_W", "BTOK_GATE_CAP", "BTOK_GATE_OPEN",
                 "BELIEF_LR", "AHEAD_W", "RJ_TEACH_W", "FADE_CAP", "FADE_OPEN", "RJ_COPY_W",
                 "INTENT_TEACH_W")   # (v0.4.3: a factor on the item rule's weight, its floor included: 0 silences it)   # (v0.4.2a: the rule fade's cap and its opening's minutes)     # (v0.4.1: the brain token's gate: its cap and its opening's minutes; the brain's rate; the ahead lesson's factor)     # (B-265) the trainer's own live names: --dmg-taken-w, --dmg-reward, --info-pay (v0.3.11), --track, --track-trunk (v0.3.11b: the readout's lesson and its share into his memory)
@@ -247,6 +248,7 @@ LIVE_RANGE = {"ORD_GATE": (-30.0, 0.0)}   # (1.7a's false start, 11-05) a live n
 #   stops the trainer before its first rollout (LIVE_FIRST), and every read is written to <run>/live_status.json for the ramp.
 LIVE_TRAINER = LIVE_TRAINER + ("H2_WPG", "HABIT_P")                 # (1.5a) the weapon key's credit on the head's clock; the league seats' weapon habits
 LIVE_TRAINER = LIVE_TRAINER + ("WRULE_P",)                          # (1.7c) the share of lives under the pros' weapon table (--wrule)
+LIVE_TRAINER = LIVE_TRAINER + ("SPACE_W",)                          # (2.0b) the lesson of the readout "space" (--space-read)
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1432,6 +1434,15 @@ def main():
     ap.add_argument("--fight-start", type=float, default=-1.0, help="... the minute its warm-up counts from (-1: this process's start)")
     ap.add_argument("--fight-every", type=int, default=1, help="... the brain's state kept every this many of its ticks (1: 0.2 s)")
     ap.add_argument("--fight-hid", type=int, default=64, help="... its hidden layer")
+    ap.add_argument("--space-read", type=float, default=0.0, help="(2.0b) the brain's readout 'space' (sim/spaceread.py): the threat on him, what he "
+                    "puts on the enemy, the map's cover and each zone's, against the map's table at the true places (the simulator's "
+                    "SPACE_TRUTH=1); a lesson of its own layers only (a factor on --space-lr; live SPACE_W). 0 = off (a network that has it "
+                    "keeps it). With --belief")
+    ap.add_argument("--space-lr", type=float, default=1e-3, help="... its own Adam's rate at weight 1")
+    ap.add_argument("--space-warm", type=float, default=0.0, help="... minutes over which its lesson rises from nothing (from --space-start)")
+    ap.add_argument("--space-start", type=float, default=-1.0, help="... the minute its warm-up counts from (-1: this process's start)")
+    ap.add_argument("--space-every", type=int, default=2, help="... the brain's state kept every this many of its ticks (2: 0.4 s)")
+    ap.add_argument("--space-hid", type=int, default=128, help="... its hidden layer")
     ap.add_argument("--head2-opg", type=float, default=1.0, help="(1.7b) the combat order's share of the head's own term's gradient (live "
                     "H2_OPG): 0 the order as the start has it (asked, played, never learnt), 1 as 1.7a; its value in the ratio as it is")
     ap.add_argument("--ord-kl", type=float, default=0.0, help="(1.7b, AlphaStar) the weight of a KL from the start's order (the checkpoint's "
@@ -1804,6 +1815,7 @@ def main():
     PASS_CK = None                                           # (1.7) the brain's pass readout: comes with the network
     CTL_CK = None                                            # (--control, v0.4.3) the readout "in control": comes with the network
     FOD_CK = None                                            # (--fight-odds, 1.7b) the fight odds: comes with the network
+    SPR_CK = None                                            # (--space-read, 2.0b) the readout "space": comes with the network
     ORD_REF_CK = None                                        # (--ord-kl, 1.7b) the start's order, the KL's reference: comes with the network
     H2_INP_MAP = None                                        # (1.7b) a widened head's inp: where its old columns went (the optimizer's carry-over)
     RF_CK = None                                             # (--rule-fade, v0.4.2a) the faded columns and the gate: come with the network
@@ -1826,6 +1838,7 @@ def main():
         PASS_CK = ck0_.get("passodds") if any(k_.startswith("passr.") for k_ in ck0_["model"]) else None
         CTL_CK = ck0_.get("control") if any(k_.startswith("control.") for k_ in ck0_["model"]) else None
         FOD_CK = ck0_.get("fightodds") if any(k_.startswith("fight.") for k_ in ck0_["model"]) else None
+        SPR_CK = ck0_.get("spaceread") if any(k_.startswith("space.") for k_ in ck0_["model"]) else None
         ORD_REF_CK = ck0_.get("order_ref")
         H2_INP_MAP = ck0_.get("head2_inp_map")                  # (1.7b, tools/b17b_init.py) the head's inp: each old column's new place
         RF_CK = ck0_.get("rule_fade")
@@ -1913,7 +1926,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - getattr(E_, "N_YT", 0) - getattr(E_, "N_ORD", 0) - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - (getattr(E_, "N_YT", 0) + getattr(E_, "N_SP", 0) + getattr(E_, "N_SPT", 0)) - getattr(E_, "N_ORD", 0) - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
     BEL_SEEN = [0]
 
@@ -1943,7 +1956,7 @@ def main():
     BEL = BEL_L is not None
     BK = int(BEL_L["every"]) if BEL else 0
     if BEL:
-        n_it_, n_or_ = getattr(E_, "N_ITEMS", 0), getattr(E_, "N_ORD", 0) + getattr(E_, "N_YT", 0)   # (the brain reads the inputs it was made with: the first
+        n_it_, n_or_ = getattr(E_, "N_ITEMS", 0), getattr(E_, "N_ORD", 0) + (getattr(E_, "N_YT", 0) + getattr(E_, "N_SP", 0) + getattr(E_, "N_SPT", 0))   # (the brain reads the inputs it was made with: the first
         assert int(BEL_L["obs_dim"]) in (OBS_DIM, OBS_DIM - n_or_, OBS_DIM - n_it_ - n_or_), \
             "the belief reads {} inputs, the simulator has {}".format(BEL_L["obs_dim"], OBS_DIM)                # ones; b1.2c's and 1.7's are the hands')
         assert a.belief <= 0 or (int(a.belief) == int(BEL_L["hid"]) and int(a.belief_every) == BK), \
@@ -1988,6 +2001,7 @@ def main():
     import passodds as passodds_                             # (1.7) the brain's lesson of the odds he passes the order's candidates
     import control as control_                               # (v0.4.3) the readout "in control" (sim/control.py)
     import fightodds as fightodds_                           # (1.7b) the readout "the fight odds" (sim/fightodds.py)
+    import spaceread as spaceread_                           # (2.0b) the readout "space" (sim/spaceread.py)
     BTOK_L = BTOK_CK
     if BTOK_L is None and a.btoken:
         assert BEL and TRK, "--btoken: with --belief and its readout (--track)"
@@ -2105,6 +2119,23 @@ def main():
               "every {} tick(s)".format(FOD_L["horizon"], FOD_L["width"], FOD_L["readouts"][0]["hid"],
                                         "from the network" if FOD_CK is not None else "new (its last layer at zero)",
                                         a.fight_odds if FOD_ON else "off", a.fight_lr, a.fight_warm, FOD_L["every"]), flush=True)
+    SPR_L = SPR_CK                                           # (--space-read, 2.0b) the readout "space": its layout, from the network or new
+    if SPR_L is None and a.space_read > 0:
+        assert BEL, "--space-read: with --belief (it reads the belief's state)"
+        SPR_L = spaceread_.layout(bel=int(BEL_L["hid"]), mem=H, hid=a.space_hid, every=a.space_every, tick=int(BEL_L["every"]))
+    SPR = SPR_L is not None
+    SPR_ON = SPR and a.space_read > 0
+    if SPR_ON:
+        assert all(c_ in tuple(getattr(E_, "AUX_COLS", ())) for c_ in spaceread_.COLS), "--space-read: the simulator gives no sp_ columns (SPACE_TRUTH=1)"
+        assert int(SPR_L["tick"]) == int(BEL_L["every"]) and int(SPR_L["bel"]) == int(BEL_L["hid"]) and int(SPR_L["mem"]) == H, \
+            "--space-read: the readout's widths or tick do not fit the network"
+    if SPR:
+        TRK_SAVE["spaceread"] = SPR_L
+        print("space (2.0b): the brain's readout of the threat on him, what he puts on the enemy, the map's cover and {} zones', on the brain's "
+              "state and his hands' memory ({} -> {} -> {}), {}; lesson {} (rate {} x weight, rising over {} min); its ring every {} tick(s)".format(
+                  spaceread_.SP_Z, SPR_L["width"], SPR_L["readouts"][0]["hid"], SPR_L["d"],
+                  "from the network" if SPR_CK is not None else "new (its last layer at zero)",
+                  a.space_read if SPR_ON else "off", a.space_lr, a.space_warm, SPR_L["every"]), flush=True)
     if ORD_REF_CK is not None:
         TRK_SAVE["order_ref"] = ORD_REF_CK                   # (--ord-kl) carried from file to file
     if CTL:
@@ -2264,7 +2295,7 @@ def main():
             if HAS_CELLS:
                 self.cell = nn.Embedding(E_.MAX_CELLS, CELL_DIM)
                 nn.init.normal_(self.cell.weight, 0.0, 0.1)
-            n_ord_ = int(getattr(E_, "N_ORD", 0)) + int(getattr(E_, "N_YT", 0))   # (1.7) the order's inputs (1.7b: and the timers): their columns made at zero after the rest's start,
+            n_ord_ = int(getattr(E_, "N_ORD", 0)) + int((getattr(E_, "N_YT", 0) + getattr(E_, "N_SP", 0) + getattr(E_, "N_SPT", 0)))   # (1.7) the order's inputs (1.7b: and the timers): their columns made at zero after the rest's start,
             e0_ = nn.Linear((OBS_DIM - 2 + 2 * CELL_DIM if HAS_CELLS else OBS_DIM) - n_ord_, 256)   # so the random stream after is the one
             if n_ord_:                                           # without them (a fixed seed's check against 1.6a's code)
                 e0_.weight = nn.Parameter(torch.cat([e0_.weight.data, e0_.weight.data.new_zeros(256, n_ord_)], 1))
@@ -2302,6 +2333,8 @@ def main():
                 self.control = control_.make_module(CTL_L)
             if FOD:                                              # (--fight-odds, 1.7b) the fight odds: its own stream, last layer at zero
                 self.fight = fightodds_.make_module(FOD_L)
+            if SPR:                                              # (--space-read, 2.0b) the readout "space": its own stream, last layer at zero
+                self.space = spaceread_.make_module(SPR_L)
             if ORDER:                                            # (--ordered-heads) a table a link: a row for each choice before, at zero
                 self.order = nn.Module()
                 for p_, c_ in ORDER:
@@ -2845,11 +2878,15 @@ def main():
                     nm_ = {id(p_): n_ for n_, p_ in pol.named_parameters()}
                     nx_ = max(i_ for g_ in os_["param_groups"] for i_ in g_["params"]) + 1
                     for g_, s_ in zip(opt.param_groups, os_["param_groups"]):
-                        ks_ = [k_ for k_, p_ in enumerate(g_["params"]) if nm_.get(id(p_)) == "attn.emb.{}.weight".format(len(ATT["kinds"]) - 1)]
-                        if ks_ and len(g_["params"]) == len(s_["params"]) + 1:
-                            s_["params"] = s_["params"][:ks_[0]] + [nx_] + s_["params"][ks_[0]:]      # (no state: Adam starts it)
-                            nx_ += 1
-                            print("optimizer: the small tokens' first layer starts fresh", flush=True)
+                        d_ = len(g_["params"]) - len(s_["params"])    # (2.0b: two new tokens at once; before: one)
+                        new_k_ = ["attn.emb.{}.weight".format(len(ATT["kinds"]) - 1 - j_) for j_ in range(max(d_, 1))]
+                        ks_ = sorted(k_ for k_, p_ in enumerate(g_["params"]) if nm_.get(id(p_)) in new_k_)
+                        if d_ >= 1 and len(ks_) == d_:
+                            for k_ in ks_:
+                                s_["params"] = s_["params"][:k_] + [nx_] + s_["params"][k_:]      # (no state: Adam starts it)
+                                nx_ += 1
+                            print("optimizer: the {} new token(s)' first layer starts fresh".format(d_) if d_ > 1 else
+                                  "optimizer: the small tokens' first layer starts fresh", flush=True)
                         for p_, i_ in zip(g_["params"], s_["params"]):
                             m_ = os_["state"].get(i_)
                             n_ = nm_.get(id(p_))
@@ -2921,6 +2958,12 @@ def main():
     FOD_RING, FOD_G, FOD_G0 = [None], [0], {}                # ... the states as played by global row; the next rollout's first row; each rollout's
     FOD_T0 = float(a.fight_start) if a.fight_start >= 0 else float(elapsed0)
     FOD_LIVE = [1.0]                                         # (live.json's FIGHT_W: a factor on the lesson)
+    SPR_OPT = ({n_: torch.optim.Adam(pol.space[n_].parameters(), lr=a.space_lr) for n_ in spaceread_.names(SPR_L)}
+               if SPR_ON else None)                          # (--space-read, 2.0b) its own Adam, cold at a start
+    SPR_GEN = torch.Generator().manual_seed(4052)            # ... the order of its minibatches: a stream of its own (his play's untouched)
+    SPR_RING, SPR_G, SPR_G0 = [None], [0], {}                # ... the states as played by global row; the next rollout's first row; each rollout's
+    SPR_T0 = float(a.space_start) if a.space_start >= 0 else float(elapsed0)
+    SPR_LIVE = [1.0]                                         # (live.json's SPACE_W: a factor on the lesson)
     H2_OPG_ = [min(1.0, max(0.0, float(a.head2_opg)))]       # (1.7b) the order's share of the head's term (live H2_OPG)
     ORD_KL_ = [max(0.0, float(a.ord_kl))]                    # (1.7b) the KL to the start's order (live ORD_KL)
     ORD_REF = None
@@ -3735,6 +3778,7 @@ def main():
                     RJC_LIVE[0] = float(lt_.get("RJ_COPY_W", RJC_LIVE[0]))           # (--rj-copy: the lesson's weight; its warm-up from the first minute above 0)
                     CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
                     FOD_LIVE[0] = max(0.0, float(lt_.get("FIGHT_W", FOD_LIVE[0])))     # (1.7b, --fight-odds: a factor on its lesson; 0 stops it)
+                    SPR_LIVE[0] = max(0.0, float(lt_.get("SPACE_W", SPR_LIVE[0])))     # (2.0b, --space-read: a factor on its lesson; 0 stops it)
                     H2_OPG_[0] = min(1.0, max(0.0, float(lt_.get("H2_OPG", H2_OPG_[0]))))   # (1.7b) the order's share of the head's term
                     ORD_KL_[0] = max(0.0, float(lt_.get("ORD_KL", ORD_KL_[0])))       # (1.7b) the KL to the start's order
                     if LG is not None:                                               # (1.4b, --pfsp) the draw's dial, from this rollout's draw
@@ -3812,6 +3856,7 @@ def main():
                                   **({"RJ_COPY_W": RJC_LIVE[0]} if RJC_LAB else {}),
                                   **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
                                   **({"FIGHT_W": FOD_LIVE[0]} if FOD_ON else {}),
+                                  **({"SPACE_W": SPR_LIVE[0]} if SPR_ON else {}),
                                   **({"H2_OPG": H2_OPG_[0], "ORD_KL": ORD_KL_[0]} if CMB else {}),
                                   **({"PFSP": PFSP_D[0]} if LG is not None else {}),
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
@@ -4305,6 +4350,12 @@ def main():
                 FOD_RING[0] = fightodds_.Ring(FOD_L, N, T)
                 print("fight odds: the ring of states, {} slots of {} x {} ({:.2f} GB on the host)".format(
                     FOD_RING[0].S, N, FOD_L["width"], FOD_RING[0].nbytes() / 1e9), flush=True)
+        if SPR_ON:                                                       # (--space-read, 2.0b) this rollout's first global row; the ring
+            SPR_G0[upd] = SPR_G[0]
+            if SPR_RING[0] is None:
+                SPR_RING[0] = spaceread_.Ring(SPR_L, N, T)
+                print("space: the ring of states, {} slots of {} x {} ({:.2f} GB on the host)".format(
+                    SPR_RING[0].S, N, SPR_L["width"], SPR_RING[0].nbytes() / 1e9), flush=True)
         if CTL_ON:                                                       # (--control) this rollout's first global row; the ring
             CTL_G0[upd] = CTL_G[0]
             if CTL_RING[0] is None:
@@ -4392,6 +4443,8 @@ def main():
                 bt_ = BS_ is not None and BS_.frame(net.belief, x.half().float() if a.obs_half else x, (t + 1) % BK == 0)
                 if bt_ and FOD_ON and FOD_RING[0].kept(FOD_G0[upd] + t):  # (--fight-odds) the state of this tick, kept every --fight-every ticks
                     FOD_RING[0].push(FOD_G0[upd] + t, torch.cat([BS_.s.float(), h[:, :H].float()], 1))
+                if bt_ and SPR_ON and SPR_RING[0].kept(SPR_G0[upd] + t):  # (--space-read) the state of this tick, kept every --space-every ticks
+                    SPR_RING[0].push(SPR_G0[upd] + t, torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if bt_ and CTL_ON and CTL_RING[0].kept(CTL_G0[upd] + t):  # (--control) the state of this tick, kept every --control-every ticks
                     CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if int(CTL_L["mem"]) == 0 else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if H2 and bt_:                                           # (--head2) a tick with the brain's: what it knows, his stack, the hands' memory
@@ -4694,6 +4747,12 @@ def main():
             if b_aux is not None:                                        # ... the rows whose label came in this rollout, taken out now
                 fod_b = fightodds_.batch(FOD_RING[0], FOD_G0[upd], b_aux, TRK_IX, int(FOD_L["horizon"]))
             FOD_G0.pop(upd, None)
+        spr_b = None
+        if SPR_ON:
+            SPR_G[0] = SPR_G0[upd] + T                                   # (--space-read) the next rollout's rows follow on
+            if b_aux is not None:                                        # ... this rollout's kept rows with their own frame's truth
+                spr_b = spaceread_.batch(SPR_RING[0], SPR_G0[upd], b_aux, TRK_IX)
+            SPR_G0.pop(upd, None)
         ctl_b = None
         if CTL_ON:
             CTL_G[0] = CTL_G0[upd] + T                                   # (--control) the next rollout's rows follow on
@@ -4709,7 +4768,7 @@ def main():
         return dict(b_hr=b_hr, b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
-                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, fod_b=fod_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
+                    b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, fod_b=fod_b, spr_b=spr_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     b_wd=b_wd,
                     keep_raw=keep_raw, t_roll=t_roll, t_done=t_done, HD_RS0=HD_RS0, HD_PEND=HD_PEND, HD0=HD0, hd_secs=hd_secs,
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
@@ -4820,6 +4879,7 @@ def main():
         b_rjc = R.get("b_rjc")                                           # (--rj-copy)
         CTL_B = R.pop("ctl_b", None)                                     # (--control) this rollout's labelled states
         FOD_B = R.pop("fod_b", None)                                     # (--fight-odds) this rollout's labelled states
+        SPR_B = R.pop("spr_b", None)                                     # (--space-read) this rollout's states and their truth
         WV_B = R.pop("wv", None)                                         # (--win-value) this rollout's kept states, segments and counters
         BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
         if H2:                                                           # (--head2) its ticks' inputs, values and the intention as played; learnt
@@ -6326,6 +6386,17 @@ def main():
                 FOD_REC = dict(w=round(float(fw_), 4), frames=0)        # (none yet: the first FIGHT_D rows of a process)
             FOD_REC["secs"] = round(time.time() - t_fod, 3)
             FOD_B = None
+        SPR_REC = None
+        if SPR_ON:                                                       # (--space-read) this rollout's kept rows against their frame's truth
+            t_spr = time.time()
+            sw_ = SPR_LIVE[0] * float(a.space_read) * (min(1.0, max(0.0, mins - SPR_T0) / a.space_warm) if a.space_warm > 0 else 1.0)
+            if SPR_B is not None:
+                SPR_REC = spaceread_.record(spaceread_.learn(pol.space, SPR_OPT, SPR_L, *SPR_B, lr=a.space_lr * sw_, dev=dev, gen=SPR_GEN),
+                                            sw_, SPR_L, ring_gb=SPR_RING[0].nbytes() / 1e9 if SPR_RING[0] is not None else None)
+            else:
+                SPR_REC = dict(w=round(float(sw_), 4), frames=0)
+            SPR_REC["secs"] = round(time.time() - t_spr, 3)
+            SPR_B = None
         CTL_REC = None
         if CTL_ON:                                                       # (--control) the labels of this rollout: of frames CONTROL_D rows back
             t_ctl = time.time()
@@ -6789,6 +6860,8 @@ def main():
             rec["control"] = CTL_REC
         if FOD_REC is not None:                                          # (--fight-odds) scored on each label before it is learnt from
             rec["fight"] = FOD_REC
+        if SPR_REC is not None:                                          # (--space-read) scored on each row before it is learnt from
+            rec["space"] = SPR_REC
         if CMB:                                                          # (1.7b) the order's share of the head's term, its KL to the start's
             oa_ = ORDKL_ACC.cpu().numpy()
             rec["ordkl"] = dict(opg=round(H2_OPG_[0], 5), w=round(ORD_KL_[0], 5), ref=ORD_REF is not None, frames=int(oa_[0]),

@@ -1,0 +1,24 @@
+19:52:36 update 1 (9 min): kl 0.0309 entropy 2.083 | frags a match-minute 1.269 | dmg 0.2374 frag 0.6188 death -0.6845 win -0.0345 edge -0.0044 (share 0.004) | space {'thr': -0.274, 'put': -0.274, 'agg': 0.0, 'zones': 0.0} thr>20 0.1133 | keep {'g': 0.975, 'kl': 0.000999}
+19:57:56 update 2 (14 min): kl 0.0288 entropy 1.975 | frags a match-minute 1.509 | dmg 0.3055 frag 0.775 death -0.7552 win 0.007 edge -0.0014 (share 0.006) | space {'thr': 0.6349, 'put': 0.6717, 'agg': 0.4873, 'zones': 0.1565} thr>20 0.148 | keep {'g': 0.975, 'kl': 0.001795}
+20:03:36 update 3 (20 min): kl 0.02883 entropy 1.974 | frags a match-minute 1.876 | dmg 0.319 frag 0.8867 death -1.0218 win -0.0219 edge -0.0001 (share 0.0061) | space {'thr': 0.7141, 'put': 0.712, 'agg': 0.5563, 'zones': 0.2854} thr>20 0.1554 | keep {'g': 0.975, 'kl': 0.002183}
+20:09:16 update 4 (26 min): kl 0.03012 entropy 1.988 | frags a match-minute 2.188 | dmg 0.338 frag 1.1012 death -1.1334 win 0.168 edge 0.0007 (share 0.0057) | space {'thr': 0.73, 'put': 0.7234, 'agg': 0.5958, 'zones': 0.3961} thr>20 0.1658 | keep {'g': 0.975, 'kl': 0.00238}
+20:14:56 update 5 (31 min): kl 0.02983 entropy 1.991 | frags a match-minute 2.264 | dmg 0.3457 frag 1.1793 death -1.1409 win 0.0489 edge 0.0016 (share 0.0057) | space {'thr': 0.7336, 'put': 0.7194, 'agg': 0.6262, 'zones': 0.4465} thr>20 0.1707 | keep {'g': 0.975, 'kl': 0.002012}
+20:20:36 update 6 (37 min): kl 0.02862 entropy 1.963 | frags a match-minute 2.055 | dmg 0.3308 frag 1.1334 death -0.9598 win 0.5278 edge 0.0024 (share 0.0067) | space {'thr': 0.7498, 'put': 0.735, 'agg': 0.6442, 'zones': 0.4867} thr>20 0.1586 | keep {'g': 0.975, 'kl': 0.002157}
+20:26:16 update 7 (43 min): kl 0.02887 entropy 1.959 | frags a match-minute 2.18 | dmg 0.3325 frag 1.2388 death -0.9834 win 0.4581 edge 0.0098 (share 0.0068) | space {'thr': 0.7502, 'put': 0.7331, 'agg': 0.6545, 'zones': 0.5136} thr>20 0.159 | keep {'g': 0.975, 'kl': 0.00219}
+20:31:56 update 8 (48 min): kl 0.0294 entropy 1.94 | frags a match-minute 2.339 | dmg 0.3445 frag 1.3294 death -1.0392 win 0.3151 edge 0.0148 (share 0.0067) | space {'thr': 0.7594, 'put': 0.7398, 'agg': 0.6595, 'zones': 0.5283} thr>20 0.1663 | keep {'g': 0.975, 'kl': 0.002039}
+20:37:36 update 9 (54 min): kl 0.02873 entropy 1.928 | frags a match-minute 2.161 | dmg 0.3413 frag 1.1297 death -1.0665 win 0.1418 edge 0.0099 (share 0.0066) | space {'thr': 0.7667, 'put': 0.7503, 'agg': 0.6724, 'zones': 0.5572} thr>20 0.1692 | keep {'g': 0.975, 'kl': 0.002836}
+20:41:17 update 10 (58 min): kl 0.02863 entropy 1.881 | frags a match-minute 2.161 | dmg 0.3412 frag 1.1992 death -1.0045 win 0.1571 edge 0.0064 (share 0.0074) | space {'thr': 0.7625, 'put': 0.7436, 'agg': 0.6885, 'zones': 0.5672} thr>20 0.1706 | keep {'g': 0.975, 'kl': 0.00207}
+20:41:17 the trainer ended after 58 min: exit 0
+20:41:17 log: optimizer: the 2 new token(s)' first layer starts fresh
+20:41:17 log: optimizer: attn.mark carried over, (65, 96) -> (67, 96)
+20:41:17 log: optimizer: enc.0.weight carried over, (256, 994) -> (256, 1053)
+20:41:17 log: optimizer: head2.inp.weight carried over, (256, 960) -> (256, 1019)
+20:41:17 log: gate: 2 tokens (lowest now -30.00) open from -12 to 0 over 120 min, counted from minute 0.00 (this process starts at 25452.96)
+20:41:17 log: space (2.0b): the brain's readout of the threat on him, what he puts on the enemy, the map's cover and 24 zones', on the brain's state and his hands' memory (768 -> 128 -> 27), from the network; lesson 1.0 (rate 0.001 x weight, rising over 0.0 min); its ring e
+20:41:17 log: space: the ring of states, 26 slots of 10080 x 768 (0.40 GB on the host)
+20:41:17 log: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3981117 weights, device cuda, 99999.0 min
+20:41:17 PASS 10 updates, the trainer exited 0
+20:41:17 PASS no REFUSED live file; the optimizer loaded, no cold start
+20:41:17 the step by update (kl): [0.0309, 0.0288, 0.02883, 0.03012, 0.02983, 0.02862, 0.02887, 0.0294, 0.02873, 0.02863]; 2.0a's last updates read about 0.029
+20:41:17 PASS the step never over three times 2.0a's (kl under 0.09 on every update)
+20:41:17 ALL PASSED

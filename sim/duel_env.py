@@ -297,6 +297,24 @@ AIM2 = float(os.environ.get("AIM2") or 0.0) > 0
 AIM2_SPLIT = float(os.environ.get("AIM2_SPLIT") or 0.0) > 0
 AIM2_FOCUS = float(os.environ.get("AIM2_FOCUS") or 0.0) > 0
 AIM2_FLINCH = float(os.environ.get("AIM2_FLINCH") or 0.0) > 0
+# ---- AIM3 (2.0c, owner 2026-11-10: "the flicking feels weak"; docs/design/AIM3.md). Off by default: the simulator before, bit
+# for bit. With AIM2. AIM2 measures the slip and the eccentricity against his CROSSHAIR: a view that follows the target sees
+# it sharp, a still crosshair with an enemy crossing it (a held angle) or a target far off it (a flick's start) sees it worst
+# (the slip's and the eccentricity's caps: about 3 degrees on a body 1 degree wide). A person's EYES follow the target while
+# the hand holds still. AIM3=1 measures both against the eye:
+#   the slip: the eye pursues the target's bearing (as the world turns it, whatever his own view does: his own turn is known
+#             to him) with a lag of AIM3_PURSUIT_TAU seconds and a gain of AIM3_PURSUIT_GAIN, from rest when he is newly
+#             acquired; slip = |the bearing's rate - gain x the eye's rate|. A steady crosser is sharp after the lag; a
+#             change of direction (a dodge) blurs him for about the lag, whether the hand tracks or holds.
+#   the eccentricity: the eye goes to the target once he is acquired: the term x exp(-seconds acquired / AIM3_FIX_TAU).
+# The coefficients, thresholds and caps stay AIM2's (AIM2_C_SLIP, ...). AIM3_W (live, 0..1, 1 by default) blends: AIM2's two
+# terms x (1 - W) + these x W. All four are live and one a seat in a check (SEAT_AIM). Nothing here looks at the weapon in hand.
+#   the base error by how big he looks: PERCEPT_SIGMA x (AIM3_SIZE_A + AIM3_SIZE_B x his half width in degrees from here, at
+#             most AIM3_SIZE_MAX degrees). A = 1, B = 0 (the defaults): the fixed angle as before. Measured on the pros
+#             (tools/run/pro_knobs.py, 2026-11-10): their aim error is about one half body width at every distance (in
+#             degrees it falls from 3.1 at 200 units to 1.0 at 1,150), his under the fixed angle stops falling at 1.4 degrees
+#             from 400 units on. A 0.39, B 0.355: PERCEPT_SIGMA is then the error at 500 units (a half width of 1.72 degrees).
+AIM3 = AIM2 and float(os.environ.get("AIM3") or 0.0) > 0
 
 
 def _aim2_values(get):
@@ -308,7 +326,15 @@ def _aim2_values(get):
              AIM2_CAP_SLIP=f_("AIM2_CAP_SLIP", 2.0), AIM2_C_ECC=f_("AIM2_C_ECC", 0.04), AIM2_E0=f_("AIM2_E0", 2.0),
              AIM2_CAP_ECC=f_("AIM2_CAP_ECC", 2.0), AIM2_SPLIT_W=f_("AIM2_SPLIT_W", 1.0),
              AIM2_FOCUS_GAIN=f_("AIM2_FOCUS_GAIN", 0.0), AIM2_FOCUS_SIG=f_("AIM2_FOCUS_SIG", 0.75),
-             AIM2_SMOOTH_K=f_("AIM2_SMOOTH_K", 1.0))
+             AIM2_SMOOTH_K=f_("AIM2_SMOOTH_K", 1.0),
+             AIM3_W=f_("AIM3_W", 1.0), AIM3_PURSUIT_TAU=f_("AIM3_PURSUIT_TAU", 0.10), AIM3_PURSUIT_GAIN=f_("AIM3_PURSUIT_GAIN", 0.9),
+             AIM3_FIX_TAU=f_("AIM3_FIX_TAU", 0.15), AIM3_SIZE_A=f_("AIM3_SIZE_A", 1.0), AIM3_SIZE_B=f_("AIM3_SIZE_B", 0.0))
+    if not (0.0 <= v["AIM3_SIZE_A"] <= 5.0 and 0.0 <= v["AIM3_SIZE_B"] <= 5.0):
+        raise ValueError("AIM3_SIZE_A and AIM3_SIZE_B must be within 0 .. 5")
+    if not (0.0 <= v["AIM3_W"] <= 1.0 and 0.0 <= v["AIM3_PURSUIT_GAIN"] <= 1.0):
+        raise ValueError("AIM3_W and AIM3_PURSUIT_GAIN must be within 0 .. 1")
+    if not (0.01 <= v["AIM3_PURSUIT_TAU"] <= 10.0 and 0.01 <= v["AIM3_FIX_TAU"] <= 10.0):
+        raise ValueError("AIM3_PURSUIT_TAU and AIM3_FIX_TAU must be within 0.01 .. 10 (seconds)")
     for k_ in ("AIM2_W", "AIM2_SPLIT_W", "AIM2_FOCUS_SIG", "AIM2_SMOOTH_K"):
         if not 0.0 <= v[k_] <= 1.0:
             raise ValueError(k_ + " must be within 0 .. 1")
@@ -322,7 +348,9 @@ def _aim2_values(get):
 
 globals().update(_aim2_values(os.environ.get))
 AIM2_LIVE = ("AIM2_W", "AIM2_C_SLIP", "AIM2_S0", "AIM2_CAP_SLIP", "AIM2_C_ECC", "AIM2_E0", "AIM2_CAP_ECC", "AIM2_SPLIT_W",
-             "AIM2_FOCUS_GAIN", "AIM2_FOCUS_SIG", "AIM2_SMOOTH_K", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU")
+             "AIM2_FOCUS_GAIN", "AIM2_FOCUS_SIG", "AIM2_SMOOTH_K", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU",
+             "AIM3_W", "AIM3_PURSUIT_TAU", "AIM3_PURSUIT_GAIN", "AIM3_FIX_TAU", "AIM3_SIZE_A", "AIM3_SIZE_B")
+AIM3_SIZE_MAX = 5.0                                    # degrees: his half width as it counts for the base error, at most (nearer than 170 units)
 MOUSE_SMOOTH = 0.75                                    # view velocity inertia per frame
 JERK_COST = 0.00002                                    # reward cost per degree/frame of change in the turn command
 FOV_COS = math.cos(math.radians(55))
@@ -1653,7 +1681,7 @@ PAY_TERMS = ("jerk", "weapon_switch", "hop", "blind_fire", "move_round", "course
              "dmg_dealt", "dmg_taken", "high", "rail", "style", "item_MH", "item_RA", "item_YA", "item_flat_other", "big_order",
              "item_points", "item_loss", "items_other", "item_seek", "way", "way_claw", "speed", "speed_run", "intent_switch",
              "runs", "stack_diff", "stack_keep", "drops", "know", "frag", "death", "deaths_other", "win_pay", "watch", "preaim",
-             "lg_quiet", "win_part", "item_decay")
+             "lg_quiet", "win_part", "item_decay", "edge", "cover")
 PT_IX = {k_: i_ for i_, k_ in enumerate(PAY_TERMS)}
 WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay in games, summed", "its size", "his frames in games",
            "his games' frags (+1) and deaths (-1) counted")
@@ -2197,6 +2225,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "ITEM_PT_LO", "ITEM_PT_HI", "ITEM_DECAY", "ITEM_PT_MIX",                                               # (b1.2d, the table by the point)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
              "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
+             "EDGE_PAY", "COVER_PAY", "SPACE_GATE",                                                                # (2.0b, the pay by the place; the inputs' gate)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
 
@@ -2256,6 +2285,14 @@ def live_values(get):
     v["BLIND_AHEAD_P"] = float(bap_) if (bap_ or "").strip() else 1.0
     if not 0.0 <= v["BLIND_AHEAD_P"] <= 1.0:
         raise ValueError("BLIND_AHEAD_P must be within 0 .. 1")
+    v["EDGE_PAY"] = float(get("EDGE_PAY") or 0.0)            # (2.0b) the pay by the place, live; unset: 0
+    v["COVER_PAY"] = float(get("COVER_PAY") or 0.0)
+    if not (0.0 <= v["EDGE_PAY"] <= 0.01 and 0.0 <= v["COVER_PAY"] <= 0.1):
+        raise ValueError("EDGE_PAY must be within 0 .. 0.01 and COVER_PAY within 0 .. 0.1")
+    sg_ = get("SPACE_GATE")                                  # (2.0b) the inputs' gate, live; unset: 1
+    v["SPACE_GATE"] = float(sg_) if (sg_ or "").strip() else 1.0
+    if not 0.0 <= v["SPACE_GATE"] <= 1.0:
+        raise ValueError("SPACE_GATE must be within 0 .. 1")
     v.update(_win_live(get))                                 # (v0.5.1) the cross-fade to the win pay, its long part, the stack term
     v.update(_aim2_values(get))                              # (AIM2) its live numbers
     for k_, d_ in (("FLINCH_PER_DMG", "flinch_per_dmg"), ("FLINCH_MAX", "flinch_max"), ("FLINCH_TAU", "flinch_tau")):
@@ -2740,6 +2777,37 @@ N_ORD = 10
 # ITEM_BELIEF's books, bel_t, which every player keeps already) and the seconds since, against its 25 s (/ 25, at most 2; 0 while not
 # known). Zeros where the map has no such item or ITEM_BELIEF is off. From his own senses only (the heard error of SENSE_MINOR).
 N_YT = 4
+# (2.0b, docs/runs/2.0/2.0b/CARD.md part 2, docs/design/SPACE.md; sim/space.py: the table of a map) SPACE_IN=1 (a PLAY_VAR: a network
+# trained with it plays with it; off: the columns are zeros and nothing is kept) the last N_SP + N_SPT inputs, all from his own
+# belief of the enemy: his place = where he sees him, else where he believes him (the rule's belief or, for a life on the brain,
+# the brain's: _sp_bel); his weapon = the one last seen in his hand (the machine gun before any sighting and after his death).
+# The table spreads that place over the ground the enemy can walk to within 1.5 s. Every column times SPACE_GATE (live, 0 .. 1;
+# a PLAY_VAR too: a save plays at the gate it was trained at).
+#   group "b20b space" (N_SP = 8): he believes a place (0 or 1); the threat on him and the threat he puts on the enemy's place
+#   (damage a second / SP_DMG, at most 1.5); the edge (the second less the first; -1.5 .. 1.5); the direction, in his view's frame
+#   (forward, left), of the neighbouring walking point with the least threat, times its gain (/ SP_GAIN, at most 1); that gain;
+#   the map's cover (his share of the zones less the enemy's, by their size; -1 .. 1)
+#   group "b20b targets" (N_SPT = 3 for each intention, in INTENTS' order; zeros for "none", the enemy, a target the map has not):
+#   the threat on the target's place; the edge he would have standing there; the most threat on the next SP_HOPS points of his way
+#   to it (an item's way; a holding place: its own place)
+N_SP = 8
+N_SPT = 3 * len(INTENTS)
+SPACE_IN = float(os.environ.get("SPACE_IN") or 0.0) > 0
+_sg = (os.environ.get("SPACE_GATE") or "").strip()
+SPACE_GATE = float(_sg) if _sg else 1.0
+assert 0.0 <= SPACE_GATE <= 1.0, "SPACE_GATE must be within 0 .. 1"
+SP_DMG, SP_GAIN, SP_HOPS = 40.0, 20.0, 6
+# (2.0b part 3) the pay by the place, live, zero-sum between a duel's two players, from the true places and weapons:
+#   EDGE_PAY=a    a second pays a times the edge (the damage a second he puts on where the enemy is less what the enemy puts on
+#                 where he is: sim/space.py). 0: off. The ledger's term "edge"
+#   COVER_PAY=a   a second pays a times his cover of the item ground less the enemy's (-1 .. 1): the places of the mega, the red
+#                 and the yellow armors (weight 1 while there or back within SP_ITEM_SOON seconds, else SP_ITEM_AWAY) and of the
+#                 rockets, the rail and the lightning gun (SP_ITEM_AWAY); a cover of space.COVER_SCALE damage a second = 1.
+#                 0: off. The ledger's term "cover"
+EDGE_PAY = float(os.environ.get("EDGE_PAY") or 0.0)
+COVER_PAY = float(os.environ.get("COVER_PAY") or 0.0)
+assert 0.0 <= EDGE_PAY <= 0.01 and 0.0 <= COVER_PAY <= 0.1, "EDGE_PAY within 0 .. 0.01, COVER_PAY within 0 .. 0.1"
+SP_ITEM_SOON, SP_ITEM_AWAY = 10.0, 0.3
 SM_KINDS = {("hp", 5): 0, ("hp", 25): 1, ("hp", 50): 2, ("ar", 5): 3, ("ar", 25): 4}
 DRIFT_DELAY = float(os.environ.get("DRIFT_DELAY") or 0.0)
 DRIFT_SIGMA = float(os.environ.get("DRIFT_SIGMA") or 0.0)
@@ -2860,7 +2928,7 @@ HAND_BAND = float(os.environ.get("HAND_BAND") or 0.0) > 0
 HB_FC = float(os.environ.get("HB_FC") or 4.0)
 HB_BETA = float(os.environ.get("HB_BETA") or 0.5)
 PLAY_VARS = PLAY_VARS + ("HAND_BAND", "HB_FC", "HB_BETA")
-PLAY_VARS = PLAY_VARS + ("AIM2", "AIM2_SPLIT", "AIM2_FOCUS", "AIM2_FLINCH") + AIM2_LIVE + ("MOTOR_NOISE", "MOTOR_BASE")   # (AIM2)
+PLAY_VARS = PLAY_VARS + ("AIM2", "AIM2_SPLIT", "AIM2_FOCUS", "AIM2_FLINCH", "AIM3") + AIM2_LIVE + ("MOTOR_NOISE", "MOTOR_BASE")   # (AIM2)
 # DUEL_QL=1 (v0.3.8, off by default; a PLAY_VAR): the duel factory's numbers where they differ from free-for-all's, in
 #                    which every lab measurement before 2026-10-19 was made (the game's settings dump on the servers, which
 #                    run the duel factory: docs/v0.3.7/REPORT_PLAYTEST_2026-10-19.md section 1). (a) With QL_JUMP, no jump
@@ -2923,7 +2991,8 @@ BRAIN_BAND_MID = np.array([37.5, 100.0, 162.5, 250.0], np.float32)    # the stac
 BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
 BRAIN_ERR_BINS = ("0-2s", "2-5s", "5-10s", "10s+")
 PLAY_VARS = PLAY_VARS + ("BRAIN_READ", "BRAIN_KNOWN", "SM_ITEMS")
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT
+PLAY_VARS = PLAY_VARS + ("SPACE_IN", "SPACE_GATE")                   # (2.0b)
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT
 CELL_COLS = None                                           # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -3057,6 +3126,18 @@ FIGHT_D = int(round(FIGHT_H / DT))
 FIGHT_PF = int(round(FIGHT_PRE / DT))
 if FIGHT_TRUTH:
     AUX_COLS = AUX_COLS + ("fo_win", "fo_lose", "fo_age", "fo_ok")
+# (2.0b; docs/runs/2.0/2.0b/CARD.md part 1, sim/space.py, sim/spaceread.py) SPACE_TRUTH=1 (a training switch, off by default; off:
+# info["aux"] as above and nothing else changes) adds the truth of the brain's readout "space": the table read at the true places and
+# the weapons in the two hands, this frame (no hindsight, so no delay). Labels only, never inputs, never read by the simulator itself:
+#   sp_ok     1: a round in which he can meet the enemy, both alive, and the map has a table (else the columns below are 0)
+#   sp_thr    the threat on him: the damage a second the enemy puts on where he stands
+#   sp_put    the damage a second he puts on where the enemy stands;   sp_edge = sp_put - sp_thr
+#   sp_agg    the map's cover: his share of the zones less the enemy's, by their size (-1 .. 1)
+#   sp_z0 ..  the cover of each zone (-1 .. 1; SP_Z of them: zonemap.MAX_Z; a zone the map has not: 0)
+SPACE_TRUTH = float(os.environ.get("SPACE_TRUTH") or 0.0) > 0
+SP_Z = 24
+if SPACE_TRUTH:
+    AUX_COLS = AUX_COLS + ("sp_ok", "sp_thr", "sp_put", "sp_edge", "sp_agg") + tuple("sp_z{}".format(k_) for k_ in range(SP_Z))
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -3634,6 +3715,13 @@ class DuelEnv:
             if tb_:
                 self.w_table = np.array(tb_["weapon_by_100_units"], np.float32)
         self.map_id = MAP_IDS.index(name) if name in MAP_IDS else -1
+        self.space = None                               # (2.0b) the map's table (sim/space.py); None: no file, everything of it zeros
+        self.sp_w = None                                # (SPACE_IN) the weapon he last saw in the enemy's hand
+        self.sp_items = None                            # (COVER_PAY) the item ground: (the table's points, the item ids, always-low)
+        if SPACE_TRUTH or SPACE_IN or EDGE_PAY > 0 or COVER_PAY > 0 or "EDGE_PAY" in os.environ or "COVER_PAY" in os.environ:
+            import space as space_
+            self.space = space_.load(name)
+            assert self.space is None or space_.MAX_Z == SP_Z
         self.zones = None                               # (TRACK_Z) the map's zones (sim/zonemap.py), for the truth columns only
         if TRACK_Z:
             import zonemap as zones_
@@ -7479,6 +7567,11 @@ class DuelEnv:
                              (lrn_ & ~ct_now_ & heard_).sum(), (rk_ & ~ct_now_ & heard_).sum(), (lrn_ & ~ct_now_ & ~heard_).sum(),
                              (rk_ & ~ct_now_ & ~heard_).sum()], np.float64)
             self.stats["keep2"] = k2_
+        fi_ = getattr(self, "force_intent", None)       # (2.0c, tools/run/branch_hook.py: a measurement) a seat's target forced while
+        if fi_ is not None:                              # its entry is 0 or more: read at once and held; not there: nothing changes
+            f_ = who & (np.asarray(fi_[:n]) >= 0)
+            choice = np.where(f_, np.asarray(fi_[:n], np.int64), choice)
+            live, may = live | f_, may | f_
         live = live & may
         changed = live & ((choice != self.intent) | (co_ != self.cmb_k[:n]) | ((co_ > 0) & (cc_ != self.cmb_c[:n])))   # (1.7: another order is another target)
         same_ = kread_ & ended_ & live & ~changed & (self.intent > 0)    # (1.7a) a forced reading of the keep choice that drew the
@@ -7780,6 +7873,11 @@ class DuelEnv:
         if AIM2:                                             # (AIM2) his view and the target's bearing kept a frame, for the slip
             self._aim2_note(eye, n)
         psg_ = self._sa("PERCEPT_SIGMA")                     # (SEAT_AIM: one a seat in a check; else the simulator's own)
+        if AIM3:                                             # (AIM3) the base error by how big he looks (A 1, B 0: as before)
+            sa_, sb_ = self._sa("AIM3_SIZE_A"), self._sa("AIM3_SIZE_B")
+            if np.any(np.asarray(sb_) != 0.0) or np.any(np.asarray(sa_) != 1.0):
+                sz_ = np.minimum(np.degrees(np.arctan2(15.0, np.linalg.norm(known - eye, axis=1) + 1e-6)), AIM3_SIZE_MAX)
+                psg_ = (np.asarray(psg_, np.float64) * (sa_ + sb_ * sz_)).astype(np.float32)
         if np.any(np.asarray(psg_) > 0):                     # the enemy is seen a little off from where he is
             rho = math.exp(-DT / PERCEPT_TAU)
             ft_ = self._sa("FLINCH_TAU")
@@ -7929,8 +8027,151 @@ class DuelEnv:
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
                               self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
-                              self._ord(pos, eye, yaw, pit), self._yt()], 1)
+                              self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp)], 1)
         return obs.astype(np.float32)
+
+    # ------------------------------------------------------------------------------------------- 2.0b: the table of the map
+    def _sp_bel(self):
+        """(SPACE_IN) the believed place of the unseen enemy and that he believes one, as _bel_base reads them (the rule's, or the
+        brain's for a life on it), without the readers' counters"""
+        bel, ok = getattr(self, "v02_bel", None), getattr(self, "v02_bel_ok", None)
+        if bel is None or ok is None or len(bel) != self.n:
+            return None, None
+        if BRAIN_READ:
+            self._brain_init()
+            on = self.brain_life
+            if on.any():
+                bt = getattr(self, "v02_bt_now", None)
+                win = (np.asarray(bt, np.float32) < BRAIN_KNOWN) if (BRAIN_KNOWN > 0 and bt is not None and len(bt) == self.n) \
+                    else np.ones(self.n, bool)
+                return (np.where(on[:, None], self.brain_bel, np.asarray(bel, np.float32)).astype(np.float32),
+                        np.where(on, self.brain_ok & win, np.asarray(ok, bool)))
+        return np.asarray(bel, np.float32), np.asarray(ok, bool)
+
+    def _sp(self, pos, c, si, known, visible, opp):
+        """(2.0b) the inputs of N_SP + N_SPT (see SPACE_IN). Keeps sp_w (the weapon last seen in the enemy's hand) and nothing else"""
+        n = self.n
+        out = np.zeros((n, N_SP + N_SPT), np.float32)
+        S = self.space
+        if not SPACE_IN or S is None:
+            return out
+        opp = np.asarray(opp, np.int64)
+        vis = np.asarray(visible, bool)[:n]
+        if self.sp_w is None or len(self.sp_w) != n:
+            self.sp_w = np.full(n, MG, np.int64)
+        self.sp_w = np.where(self.hp[opp] <= 0, MG, np.where(vis, self.weapon[opp], self.sp_w)).astype(np.int64)
+        bel, bok = self._sp_bel()
+        if bel is None:
+            bel, bok = np.asarray(known, np.float32)[:n], np.zeros(n, bool)
+        place = np.where(vis[:, None], np.asarray(known, np.float32)[:n], bel)
+        ok = (vis | bok) & (self.hp[:n] > 0)
+        if not ok.any() or SPACE_GATE <= 0:
+            return out
+        me, en = S.at(pos), S.at(place)
+        wm, we = self.weapon[:n], self.sp_w
+        thr, put = S.threat(en, me, we), S.threat(me, en, wm)
+        d, gain = S.safer(me, en, we)
+        _, agg = S.zone_cover(me, en, wm, we)
+        blk = np.zeros((n, N_SP), np.float32)
+        blk[:, 0] = 1.0
+        blk[:, 1] = np.minimum(thr / SP_DMG, 1.5)
+        blk[:, 2] = np.minimum(put / SP_DMG, 1.5)
+        blk[:, 3] = np.clip((put - thr) / SP_DMG, -1.5, 1.5)
+        g_ = np.minimum(gain / SP_GAIN, 1.0)
+        blk[:, 4] = (c * d[:, 0] + si * d[:, 1]) * g_
+        blk[:, 5] = (-si * d[:, 0] + c * d[:, 1]) * g_
+        blk[:, 6] = g_
+        blk[:, 7] = agg
+        tg = np.zeros((n, len(INTENTS), 3), np.float32)
+        R = self.route
+        same_ = R is not None and len(R.nodes) == S.n
+        for k_ in range(1, len(INTENTS)):
+            if k_ == EN_INTENT:
+                continue
+            g = self.intent_gi[k_] if k_ < len(self.intent_gi) else -1
+            if g is not None and g >= 0 and g < len(self.route_item):
+                tp = self.item_pos[self.route_item[g]]
+            elif k_ >= HOLD_INTENT and (k_ - HOLD_INTENT) < len(self.hold_pos):
+                tp, g = self.hold_pos[k_ - HOLD_INTENT], -1
+            else:
+                continue
+            tn = np.full(n, int(S.at(tp[None])[0]), np.int64)
+            t_at = S.threat(en, tn, we)
+            tg[:, k_, 0] = np.minimum(t_at / SP_DMG, 1.5)
+            tg[:, k_, 1] = np.clip((S.threat(tn, en, wm) - t_at) / SP_DMG, -1.5, 1.5)
+            way = t_at * 0.0
+            if g >= 0 and same_ and g < len(R.next):         # (the way's next points: the walking map's own, the table's numbers)
+                cur = np.asarray(R.locate(pos), np.int64)
+                for _ in range(SP_HOPS):
+                    nx = R.next[g, cur]
+                    cur = np.where(nx >= 0, nx, cur)
+                    way = np.maximum(way, S.threat(en, cur, we))
+            else:
+                way = t_at
+            tg[:, k_, 2] = np.minimum(way / SP_DMG, 1.5)
+        out[:, :N_SP] = blk
+        out[:, N_SP:] = tg.reshape(n, -1)
+        out *= (ok.astype(np.float32) * np.float32(SPACE_GATE))[:, None]
+        return out
+
+    def _space_true(self):
+        """(2.0b) the table at the true places and the weapons in the two hands: ok, the threat on him, what he puts on the enemy,
+        the zones' cover [n, SP_Z], its aggregate, the two points. None: no table. Reads only"""
+        S = self.space
+        if S is None:
+            return None
+        n = self.n
+        oth = self._others_arr()
+        foe = getattr(self, "foe", None)
+        if foe is None:
+            foe = oth[:, 0]
+        grp = np.arange(n) // (oth.shape[1] + 1)
+        kd = self.kind[grp]
+        about = (kd != MOVE) & (kd != SOLO) & ((kd != COURSE) | self.gun)
+        ok = about & (self.hp[:n] > 0) & (self.hp[foe] > 0)
+        s = self.state
+        me, en = S.at(s[:n, :3]), S.at(s[foe, :3])
+        wm, we = self.weapon[:n], self.weapon[foe]
+        thr, put = S.threat(en, me, we), S.threat(me, en, wm)
+        cov, agg = S.zone_cover(me, en, wm, we)
+        return dict(ok=ok, thr=thr, put=put, cov=cov, agg=agg, me=me, en=en, foe=foe, grp=grp)
+
+    def _space_pay(self, reward):
+        """(EDGE_PAY, COVER_PAY) the pay by the place: see there. Zero-sum between a duel's two players (a group: each against the
+        enemy he attends to, not zero-sum)"""
+        T = self._space_true()
+        if T is None:
+            return
+        n = self.n
+        ok = T["ok"]
+        if EDGE_PAY > 0:
+            v = np.where(ok, (T["put"] - T["thr"]) * (EDGE_PAY * DT), 0.0)
+            reward[:n] += v
+            self._pt("edge", np.arange(n), v)
+        if COVER_PAY > 0:
+            S = self.space
+            if self.sp_items is None:
+                ids = [k_ for k_, d_ in enumerate(self.item_def) if d_[4] in ("MH", "RA", "YA") or
+                       (d_[0] == "wp" and int(d_[1]) in (RL, RG, LG))]
+                self.sp_items = (S.at(self.item_pos[ids]) if ids else np.zeros(0, np.int64), np.array(ids, np.int64),
+                                 np.array([self.item_def[k_][0] == "wp" for k_ in ids], bool))
+            pts, ids, low = self.sp_items
+            if len(ids):
+                import space as space_
+                grp, foe = T["grp"], T["foe"]
+                wm, we = self.weapon[:n], self.weapon[foe]
+                num = np.zeros(n, np.float64)
+                den = np.zeros(n, np.float64)
+                for q in range(len(ids)):
+                    tn = np.full(n, int(pts[q]), np.int64)
+                    cv = np.clip((S.threat(T["me"], tn, wm) - S.threat(T["en"], tn, we)) / space_.COVER_SCALE, -1.0, 1.0)
+                    soon = self.item_up[grp, ids[q]] | (self.item_t[grp, ids[q]] <= SP_ITEM_SOON)
+                    w_ = np.where(soon & (not low[q]), 1.0, SP_ITEM_AWAY)
+                    num += w_ * cv
+                    den += w_
+                v = np.where(ok, num / np.maximum(den, 1e-6) * (COVER_PAY * DT), 0.0)
+                reward[:n] += v
+                self._pt("cover", np.arange(n), v)
 
     def _yt(self):
         """(1.7b) the inputs of N_YT (see there): the yellow armors' timers from the item belief. Reads only; keeps nothing."""
@@ -8085,7 +8326,8 @@ class DuelEnv:
 
     SEAT_AIM = ("PERCEPT_SIGMA", "PERCEPT_SPEED", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU", "MOTOR_NOISE", "MOTOR_BASE",
                 "SURPRISE_MS", "AIM2_W", "AIM2_C_SLIP", "AIM2_S0", "AIM2_CAP_SLIP", "AIM2_C_ECC", "AIM2_E0", "AIM2_CAP_ECC",
-                "AIM2_SPLIT_W", "AIM2_FOCUS_GAIN", "AIM2_FOCUS_SIG", "AIM2_FLINCH")
+                "AIM2_SPLIT_W", "AIM2_FOCUS_GAIN", "AIM2_FOCUS_SIG", "AIM2_FLINCH",
+                "AIM3_W", "AIM3_PURSUIT_TAU", "AIM3_PURSUIT_GAIN", "AIM3_FIX_TAU", "AIM3_SIZE_A", "AIM3_SIZE_B")
 
     def _sa(self, name):
         """(SEAT_AIM, branch aim2) a check that seats two aim models: env.seat_aim = {name: one value a seat} for the names of
@@ -8107,8 +8349,27 @@ class DuelEnv:
         tb_ = self.known[:n] + np.array([0, 0, 4.0], np.float32) - eye
         by_ = np.degrees(np.arctan2(tb_[:, 1], tb_[:, 0]))
         bp_ = np.degrees(np.arctan2(tb_[:, 2], np.hypot(tb_[:, 0], tb_[:, 1]) + 1e-6))
-        self.a2_hist.append(np.stack([np.asarray(self.yaw[:n], np.float64), -np.asarray(self.pitch[:n], np.float64), by_, bp_,
-                                      np.asarray(self.acquired[:n], np.float64)], 1))
+        row_ = [np.asarray(self.yaw[:n], np.float64), -np.asarray(self.pitch[:n], np.float64), by_, bp_,
+                np.asarray(self.acquired[:n], np.float64)]
+        if AIM3:                                             # (AIM3) the eye on the target: its slip, and how far it has settled on him
+            acq_ = np.asarray(self.acquired[:n], bool)
+            if getattr(self, "a3_e", None) is None or len(self.a3_e) != n:
+                self.a3_e = np.zeros((n, 2), np.float64)     # the eye's rate after the target's bearing, degrees a frame (yaw on the screen, up)
+                self.a3_b = np.zeros((n, 2), np.float64)     # the bearing a frame ago
+                self.a3_ok = np.zeros(n, bool)               # ... of an acquired enemy
+                self.a3_run = np.zeros(n, np.float64)        # frames he has been acquired
+            br_ = np.stack([((by_ - self.a3_b[:, 0] + 180.0) % 360.0 - 180.0) * np.cos(np.radians(bp_)), bp_ - self.a3_b[:, 1]], 1)
+            two_ = acq_ & self.a3_ok
+            br_ = np.where(two_[:, None], br_, 0.0)
+            k_ = 1.0 - np.exp(-DT / np.asarray(self._sa("AIM3_PURSUIT_TAU"), np.float64))
+            e_ = np.where(two_[:, None], self.a3_e + (k_[:, None] if np.ndim(k_) else k_) * (br_ - self.a3_e), 0.0)
+            g_ = np.asarray(self._sa("AIM3_PURSUIT_GAIN"), np.float64)
+            sl_ = br_ - (g_[:, None] if np.ndim(g_) else g_) * e_
+            self.a3_run = np.where(acq_, self.a3_run + 1.0, 0.0)
+            self.a3_e, self.a3_b, self.a3_ok = e_, np.stack([by_, bp_], 1), acq_
+            row_ += [np.where(two_, np.hypot(sl_[:, 0], sl_[:, 1]) / DT, 0.0),
+                     np.exp(-np.maximum(self.a3_run - 1.0, 0.0) * DT / np.asarray(self._sa("AIM3_FIX_TAU"), np.float64))]
+        self.a2_hist.append(np.stack(row_, 1))
         keep = max(self.react_frames + FOCUS_LOSS, self.vel_frames) + 3
         while len(self.a2_hist) > keep:
             self.a2_hist.pop(0)
@@ -8117,6 +8378,10 @@ class DuelEnv:
         """(AIM2) no slip until two new frames: where a plugin clears opp_hist"""
         self.a2_hist = []
         self.a2_last = None
+        if getattr(self, "a3_ok", None) is not None:         # (AIM3) the eye starts again
+            self.a3_ok[:] = False
+            self.a3_run[:] = 0.0
+            self.a3_e[:] = 0.0
 
     def _aim2_err(self, n, pick, rf_):
         """(AIM2) the slip and eccentricity terms of the sight error (degrees, a player), as of his read delay: pick (the
@@ -8148,6 +8413,14 @@ class DuelEnv:
         g_ = self._sa
         err = (np.minimum(g_("AIM2_C_SLIP") * np.maximum(0.0, slip - g_("AIM2_S0")), g_("AIM2_CAP_SLIP"))
                + np.minimum(g_("AIM2_C_ECC") * np.maximum(0.0, ecc - g_("AIM2_E0")), g_("AIM2_CAP_ECC")))
+        if AIM3 and A.shape[2] >= 7:                         # (AIM3) the same two terms against the eye, blended by AIM3_W
+            slip3 = np.where((i1 >= 0) & (h1[:, 4] > 0), h1[:, 5], 0.0)
+            ecc3 = ecc * h1[:, 6]
+            err3 = (np.minimum(g_("AIM2_C_SLIP") * np.maximum(0.0, slip3 - g_("AIM2_S0")), g_("AIM2_CAP_SLIP"))
+                    + np.minimum(g_("AIM2_C_ECC") * np.maximum(0.0, ecc3 - g_("AIM2_E0")), g_("AIM2_CAP_ECC")))
+            w3_ = g_("AIM3_W")
+            err = (1.0 - w3_) * err + w3_ * err3
+            self.a3_last = (slip3.astype(np.float32), ecc3.astype(np.float32), (err * (self.script[:n] == 0)).astype(np.float32))
         err = err * (self.script[:n] == 0)
         self.a2_last = (slip.astype(np.float32), ecc.astype(np.float32), err.astype(np.float32))
         return err.astype(np.float32)
@@ -12517,6 +12790,16 @@ class DuelEnv:
         if FIGHT_TRUTH:                                      # (FIGHT_TRUTH) no label here: step()'s _fight_step gives it
             out[:, C["fo_win"]] = -1.0
             out[:, C["fo_lose"]] = -1.0
+        if SPACE_TRUTH:                                      # (SPACE_TRUTH) the table at the true places, this frame
+            T_ = self._space_true()
+            if T_ is not None:
+                k_ = T_["ok"].astype(np.float32)
+                out[:, C["sp_ok"]] = k_
+                out[:, C["sp_thr"]] = T_["thr"] * k_
+                out[:, C["sp_put"]] = T_["put"] * k_
+                out[:, C["sp_edge"]] = (T_["put"] - T_["thr"]) * k_
+                out[:, C["sp_agg"]] = T_["agg"] * k_
+                out[:, C["sp_z0"]:C["sp_z0"] + SP_Z] = T_["cov"] * k_[:, None]
         return out
 
     def _fight_step(self, done, out, st, died):
@@ -14177,6 +14460,8 @@ class DuelEnv:
             self._wb_blend(reward, info)
             if WIN_SHAPE_K > 0:                              # (WIN_SHAPE_K, v0.6.1) the shaping, after the blend: not faded
                 self._wsh_pay(reward, info)
+        if (EDGE_PAY > 0 or COVER_PAY > 0) and self.space is not None:     # (2.0b) the pay by the place, after the blend: not faded
+            self._space_pay(reward)
         self._pt_end(info)
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or

@@ -164,7 +164,7 @@ def same(a):
                 p.set_cmb_g(share)
         ha, hb = pa.zeros(B), pb.zeros(B)
         nb, na = len(pb.mean), len(pa.mean)
-        assert nb - na in (0, 4), (na, nb)
+        assert nb - na in (0, 4, 59, 63), (na, nb)             # (2.0b's 59 inputs after the timers: tools/b20b_init.py same)
         r2 = np.random.default_rng(5)
         dact = 0
         cols = 0

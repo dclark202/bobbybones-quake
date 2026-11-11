@@ -1,0 +1,14 @@
+19:45:52 PASS the start's live.json: every part shut, the lesson on ({'SPACE_GATE': 0.0, 'EDGE_PAY': 0.0, 'COVER_PAY': 0.0, 'SPACE_W': 1.0})
+19:46:06 after update 1: live.json {'SPACE_GATE': 0.5, 'EDGE_PAY': 0.00025}
+19:46:23 PASS no refusal in the log
+19:46:23 PASS live_status.json says applied ({'update': 4, 'status': 'applied', 'reason': None, 'time': '2026-11-09 19:46:09'})
+19:46:23 PASS 3 updates or more (5)
+19:46:23 update 1: edge None (size share None) | space {'thr': -0.2531, 'put': -0.2531, 'agg': 0.0, 'zones': 0.0}
+19:46:23 update 2: edge None (size share None) | space {'thr': -0.4333, 'put': -0.432, 'agg': 0.0066, 'zones': 0.0029}
+19:46:23 update 3: edge None (size share None) | space {'thr': -0.3691, 'put': -0.3737, 'agg': 0.0204, 'zones': 0.0102}
+19:46:23 update 4: edge -0.043 (size share 0.0038) | space {'thr': 0.0486, 'put': 0.0354, 'agg': 0.088, 'zones': 0.0206}
+19:46:23 update 5: edge -0.0464 (size share 0.0028) | space {'thr': 0.1423, 'put': 0.1282, 'agg': 0.1238, 'zones': 0.0245}
+19:46:23 PASS live_applied.json carries the mid values by the end ({'SPACE_GATE': 0.5, 'EDGE_PAY': 0.00025}, from update 4; written after update 1)
+19:46:23 PASS the ledger's edge: none at update 1, there at the last (None -> 0.0028)
+19:46:24 PASS the save carries the gate it trained at (SPACE_GATE 0.5)
+19:46:24 ALL PASSED

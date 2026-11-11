@@ -1,0 +1,63 @@
+# Runs: the table of every training run
+
+The single source of truth for what ran, when, from what, and how it ended. One row per run (a false start, a side arm and a
+stopped run too), newest first; `#` counts up in the order they started. The full write-ups stay in [HISTORY.md](HISTORY.md)
+(what, result, lesson) and each run's folder under [runs/](runs/) (card, report, postmortem).
+
+**Keeping it (CLAUDE.md, "Docs"):** a row is added at a run's start (`#`, run, from, start, change, card) and finished at its
+stop (stop, duration, updates, outcome, kept). Times are local (24 h); a `~` time is read from the last line of the run's
+`metrics.jsonl`. "vs ctl" = the decided-game win rate in the 200-game checks against the run's control (160 before b1.2d).
+Rows before v0.6.0 are from the archive's write-ups and the notes of the time: their times were not recorded (a `~` date is approximate) and most of their folders were lost on 2026-10-28.
+
+| # | Run | Started from | Start | Stop | Duration | Updates | The change (the new thing) | Outcome | Kept as | Card |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 46 | **2.0c** | 1.7a u90, widened to 1,053 inputs | 11-10 22:11 | 11-11 07:34 | 9 h 23 | 100 | AIM3 (sight error against the eye, base error by target size) + damage pay 0.0055 → 0.002 zero-sum, one ramp u0-40 | stopped by hand at u100 (owner's cap). vs 1.7a u90: 52.0 / 51.5 / **35.5** / **39.5%** (u10 / 30 / 50 / 90); vs 1.6a end 46.0% (u70). Under 40% flagged twice | `policy_end_20c.pt` + opt | [card](runs/2.0/2.0c/CARD.md) |
+| 45 | 2.0b | 2.0a end | 11-09 21:09 | 11-10 07:21 | 10 h 12 | 107 | space: the map's threat table; brain readout, 59 inputs (u30-60), edge pay (u60-100) | **stopped (owner)**. vs 1.7a u90: 40.5 / 35.0 / 40.5 / 30.0 / 27.0% (u10-90); target unstable, big items lost; edge pay never tested | `policy_end_20b.pt` (u100) | [card](runs/2.0/2.0b/CARD.md), [postmortem](runs/2.0/2.0b/POSTMORTEM.md) |
+| 44 | 2.0a | 1.7a u90, widened to 994 inputs | 11-08 21:29 | 11-09 06:56 | 9 h 27 | 98 | damage pay 0.0055 → 0.001 zero-sum, judge weight `WIN_ADD` 0.33 → 0.6 (u10-70) | ended (run window). vs 1.7a u90: 50.0 / 41.0 / 50.0 / **42.0%** (u10-90); vs 1.6a end 54.0%; still lightning-only | `policy_end_20a.pt` | [card](runs/2.0/2.0a/CARD.md), [report](runs/2.0/2.0a/REPORT.md) |
+| 43 | 1.7c | 1.7a u90, widened to 994 inputs | 11-08 07:09 | 11-08 13:17 | 6 h 08 | 62 | training under the pros' weapon table (the table picks the weapon, the key copies it) | **stopped (owner)**: no gain. vs plain u90 30.5 / 27.0 / 30.5% (start 29.0%); vs u90 under the table 46 / 38% | `policy_end_17c.pt` + opt | [card](runs/1.7/1.7c/CARD.md) |
+| 42 | 1.7c false start | 1.7a u90 | 11-07 19:47 | 11-08 07:05 | 11 h 18 | 111 | as 1.7c | **void**: PPO's reference pass lacked the weapon key's mask; checks 29 → 22.5%. Stopped (owner), folder `duel_gru_1_7c_false1` | — | [card](runs/1.7/1.7c/CARD.md) |
+| 41 | 1.7b | 1.7a u90 | 11-06 21:49 | 11-07 07:42 | 9 h 53 | 103 | the combat order rebuilt around Cypher's fight decision; fight odds; damage pay zero-sum; yellow timers | **stopped (owner)**. vs 1.7a u90: 44.5 / 49.5 / 45.5 / 31.0%; vs b1.2d 93.0%; keep choice flickered, order never moved | `policy_end_17b.pt` + opt (u100) | [card](runs/1.7/1.7b/CARD.md) |
+| 40 | **1.7a** | 1.6a end | 11-05 19:42 | 11-06 19:15 | 23 h 33 | 246 | keep-or-re-decide choice (lock out, u10-90); then the combat order (kind, pointer, way) + fire push (u90-170) | ended (owner). **Result = u90** (keep choice alone): 63.0% vs 1.6a end; the order was learnt away; slid to 49.5% by u210 | `policy_end_17a.pt` + opt (= u90); `policy_u240_17a.pt` | [card](runs/1.7/1.7a/CARD.md), [postmortem](runs/1.7/1.7a/POSTMORTEM.md) |
+| 39 | 1.7a false start | 1.6a end | 11-05 18:01 | 11-05 19:23 | 1 h 22 | 14 | as 1.7a | **void**: every live.json refused (order gate −30), trained on the command's values. Folder `duel_gru_1_7a_false_start` | — | [card](runs/1.7/1.7a/CARD.md) |
+| 38 | 1.6a | 1.5a end | 11-05 07:22 | 11-05 14:25 | 7 h 03 | 80 | item teacher and in-game speed pay out (u0-40); no firing cost | ended. vs 1.5a end 51.0 / 45.5 / 50.5%; vs b1.2d 94.0%. On both public servers 11-05 | `policy_end_16a.pt` | [card](runs/1.6/1.6a/CARD.md) |
+| 37 | 1.5a | 1.3b end (u170) | 11-04 19:17 | 11-05 07:18 | 12 h 01 | 133 | the head's weapon scores added to the weapon key; weapon habits on league seats; switch / override / blind-fire costs out | ended. vs 1.3b end 49.5 → 56.5%; vs b1.2d 88.0%; weapon not toward the pros | `policy_end_15a.pt` | [card](runs/1.5/1.5a/CARD.md) |
+| 36 | 1.4b | 1.3b end | 11-04 08:15 | 11-04 17:55 | 9 h 40 | 113 | hand-written target pieces out: switch cost, PFSP matchmaking, item rule lesson, speed pay | **scrapped (owner)**. vs 1.3b end 52.5-56.0%; vs b1.2d 90.5% | — | [card](runs/b1.4/1.4b/CARD.md) |
+| 35 | **1.3b** | b1.2d end | 11-03 16:31 | 11-04 ~07:32 | ~15 h 00 | 170 | the strategy head's own target scores added to the hands' (`--head2-add`), credit moved to the head, decoupled weight decay | ended (owner: **"strongest boy yet"**). vs b1.2d 60.0 → 89.0%; vs b1.1 84.5 / 87.0% | `policy_end_13b.pt` | [card](runs/b1.3/1.3b/CARD.md) |
+| 34 | b1.4a | b1.3a end | 11-03 09:18 | 11-03 11:12 | 1 h 54 | 21 | target choice a blend, the head's share 0 → 0.5, head learning on pay | **stopped (owner)**: "I don't trust it". vs start 43.5% (u10) | `policy_end_b14a.pt` (u20) | [card](runs/b1.4/b1.4a/CARD.md) |
+| 33 | b1.3a | b1.2d end | 11-02 20:22 | 11-03 07:17 | 10 h 55 | 130 | strategy head in, shut, learning to copy his target choice | ended (owner). Copy 87%; play level (58.5 / 52.5 / 44.0 / 48.0%); head alone 37.0% | `policy_end_b13a.pt` + opt | [card](runs/b1.3/b1.3a/CARD.md) |
+| 32 | **b1.2d** | b1.2c u250 | 11-02 13:33 | 11-02 19:41 | 6 h 08 | 80 | five pay changes (table by the point, speed pay halved, damage taken 0.8, stack lead out, long rail 0.25), u10-70 | **a success** (owner's play test). vs start 56.2 / 57.5 / 51.2%; vs b1.1 59.4%. Public servers + open weights 11-02 | `policy_end_b12d.pt` + opt | [card](runs/b1.2/b1.2d/CARD.md) |
+| 31 | b1.2c | b1.1, widened to 980 inputs | 11-01 19:36 | 11-02 12:52 | 17 h 16 | 250 | the small health and armor items as inputs; firing costs from u60 | stopped (owner) for b1.2d. vs b1.1 55.6% | `policy_nojerk_b12c.pt` (u250) | [card](runs/b1.2/b1.2c/CARD.md) |
+| 30 | b1.2b | b1.1 | 11-01 16:12 | 11-01 17:40 | 1 h 28 | 20 | the b1.2 pay plan without the small items as inputs | stopped (owner) to add the small items. vs b1.1 53.1% (u10) | — | [card](runs/b1.2/b1.2b/CARD.md) |
+| 29 | not approved | b1.1 | 11-01 15:44 | 11-01 16:08 | 0 h 24 | — | a rejected command that ran | **void**; folder `duel_gru_b1_3a_UNAPPROVED_DO_NOT_USE` | — | — |
+| 28 | b1.2a | b1.1, head added shut | 11-01 09:08 | 11-01 15:18 | 6 h 10 | 82 | the strategy head opened on its own pay | **unusable**: crashed; head and hands fought over the target logits (±260) | `policy_end_b12a_UNUSABLE.pt` | [card](runs/b1.2/b1.2a/CARD.md) |
+| 27 | b1.1a → **b1.1** | b1.0a end | 10-31 21:11 | 11-01 07:27 | 10 h 16 | 180 | the brain's old belief, the pull toward level and the target lock out | **b1.1 = u140** (before the lock fade; owner). 60.6% vs b1.0a end (u130); public servers 11-01 | `policy_b1.1.pt` (u140; its optimizer lost) | [card](runs/b1.1/b1.1a/CARD.md) |
+| 26 | **b1.0a** | v0.6.0 end | 10-31 10:56 | 10-31 21:00 | 10 h 04 | 160 | win-chance pay added on top of the pay table (`WIN_ADD` 0 → 0.33) | **a success** (owner). vs v0.6.0 end 49.4-61.9% | end of `duel_gru_b1_0a` | [card](runs/b1.0/b1.0a/CARD.md) |
+| 25 | v0.6.1e | v0.6.1 u90 | 10-31 08:22 | 10-31 ~10:17 | ~1 h 55 | ~30 | table and win chance to half, then the pull and the old belief | stopped (owner) for b1: too short to tell | — | [card](runs/v0.6.1e/CARD.md) |
+| 24 | v0.6.1d | v0.6.1 u110 | 10-30 17:41 | 10-31 ~07:55 | ~14 h 14 | ~219 | old pay and win pay equal; pull and old belief faded | stopped (owner). vs v0.6.0 end 50-67.5% but fought less (frags 1.75 → 1.32) | — | [card](runs/v0.6.1d/CARD.md) |
+| 23 | v0.6.1c | v0.6.1 u250 | 10-30 08:54 | 10-30 17:28 | 8 h 34 | 130 | advantage rescale + pull + old belief together | **failed**: 43.1% vs v0.6.0 end | — | [card](runs/v0.6.1c/CARD.md) |
+| 22 | v0.6.1b arm B | v0.6.1b end | 10-30 | 10-30 | — | ~17 | entropy bonus 0.002 | abandoned for v0.6.1c | — | [arms](runs/v0.6.1b/arms/) |
+| 21 | v0.6.1b | v0.6.1 end | 10-29 19:59 | 10-30 ~07:20 | ~11 h 21 | 181 | brain's old belief out, refit judge, `WIN_END` | **failed**: 43.8% vs start, 40.6% vs v0.6.0 end | — | [card](runs/v0.6.1b/CARD.md) |
+| 20 | v0.6.1 | v0.6.0 end | 10-28 20:05 | 10-29 17:52 | 21 h 47 | 340 | pay faded to win chance only (the judge); then the level pull out | level with v0.6.0 end (50.0%), weaker at the end; slower, rail out of hand | `policy_end_v061.pt` + opt, `policy_prelevel_v061.pt` | [card](runs/v0.6.1/CARD.md) |
+| 19 | **v0.6.0** (retrain) | v0.4.2b end | 10-28 12:58 | 10-28 18:09 | 5 h 11 | 80 | aim2: `!aim default` = the pros' mean, knob by knob; loophole fixes | **good**: vs v0.4.2b end 52.5-59.4%. Public servers to 11-01; open weights | `policy_end_v060.pt` + opt | [card](runs/v0.6.0/CARD.md) |
+| 18 | v0.6.0 (first) | v0.4.2b end | 10-27 night | 10-28 | — | 170 | as above | 52-64% vs v0.4.2b end; **all saves lost** in the 10-28 data loss | lost | — |
+| 17 | v0.5.1 | v0.5.0 end | 10-26/27 | | — | | pay by win chance only (cross-fade) | **failed**: 47 → 37%; more passive | lost | archive |
+| 16 | v0.5.0 | v0.4.2b end | 10-26 | | — | | loophole fixes; aim by one speed error tuned by feel | **failed**: never beat its start | lost | archive |
+| 15 | v0.4.4 | v0.4.3 u80 | 10-25 | 10-26 | — | | strategy head opened; generated mid-game starts | **scrapped**: spawn camping | lost | archive |
+| 14 | v0.4.3 | v0.4.2b end (u140) | 10-25 | 10-25 | — | 80 | item rule faded out | **scrapped** (a restart collapsed to 15%) | lost | archive |
+| 13 | **v0.4.2 / v0.4.2b** | v0.4.1 end (b: v0.4.2 save 160 + offline-tuned brain) | 10-24 07:14 | 10-25 | — | 160 / 140 | the 76 rule-made inputs faded out of the hands; brain taught on people's games | **best of its day**; start of v0.5.0 and v0.6.0 | `duel_gru_v0_4_2` (survives) | archive |
+| 12 | v0.4.1 | v0.4.0b end | 10-23 | 10-24 ~08:15 | — | | the brain's answer into the hands (attention token) | good: passed its gate 85-75 | lost | archive |
+| 11 | v0.4.0 / v0.4.0b | v0.3.10 end + a fresh brain | 10-22 | 10-23 | — | | the brain: a separate memory tracking the enemy; zones | good | lost | archive |
+| 10 | v0.3.11 | — | — | — | — | | knowledge pay | built, superseded by the brain | — | archive |
+| 9 | v0.3.10 | v0.3.9 | 10-22 | 10-22 | — | | pay for watching the right spot before a sighting | beat v0.3.9 46-0-34 | | archive |
+| 8 | v0.3.9 | v0.3.8 | ~10-21 | 10-22 noon | — | | pre-aim pay | 65.2% vs v0.3.8 | | archive |
+| 7 | v0.3.8 | v0.3.7 | ~10-20 | | — | | every aim limit written out; QL fire timing; senses fixed | audits | | archive |
+| 6 | v0.3.7 | v0.3.6 | ~10-19 | | — | | pro starts, auto-hop, the game's spawns | 71.7% vs v0.3.6 | | archive |
+| 5 | v0.3.2 → v0.3.6 | v0.3.1 | ~10-16 | ~10-19 | — | | one movement network (legs switch removed); rocket aim, pre-fire | the switch fade failed, removal worked | | archive |
+| 4 | v0.3 / v0.3.1 | v0.2.x | 10-14 | ~10-16 | — | | overtime; believed enemy stack, the hunt | v0.3.1 63.8% vs v0.3; public | | archive |
+| 3 | v0.2.1 / v0.2.2 | v0.2 end | 10-12 | 10-13 | — | 20 | stages B and C (places as targets, ways, whole games) | **fell to 25%**: the lesson grading his keys | | archive |
+| 2 | v0.2 | v0.1 | 10-11 night | 10-12 | — | | attention stage A, 143 inputs, ten maps | 56.7% vs v0.1; public 10-12 | | archive |
+| 1 | v0.1 (= v15c) and older | — | to 10-10 | | — | | the yard, movement teachers, the legs network | v0.1 on the first public server | | archive |
+
+**Not runs** (measurements without training; in [HISTORY.md](HISTORY.md)): the weapon dial and its forms (11-07), 1.7c's
+experiments (11-07), 1.4c (built 11-04, never run), 1.5b (a prefit, never run), v0.6.2a / v0.6.3 / v0.6.4 (cards only), 1.8 (designed,
+not built), 2.1 (designed, not built).

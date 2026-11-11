@@ -1,0 +1,22 @@
+21:25:01 scratch_20a_id_z0: done in 0.5 min; the log ends: exit 0
+21:25:01 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+21:25:01 PASS z0: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+21:25:01 PASS z0: no weapon table, no REFUSED live file
+21:25:33 scratch_20a_id_z0b: done in 0.5 min; the log ends: exit 0
+21:25:33 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+21:25:33 PASS z0b: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+21:25:33 PASS z0b: no weapon table, no REFUSED live file
+21:25:55 scratch_20a_id_z2: done in 0.3 min; the log ends: exit 0
+21:25:55 PASS z2: the trainer ran 2 updates and dumped them (2 dumps)
+21:25:55 PASS z2: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+21:25:55 PASS z2: no weapon table, no REFUSED live file
+21:25:55 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+21:25:55 PASS the END dials change nothing before the first learning step (z2 = z0: update 1's actions and log p, to the bit)
+21:25:55 PASS ... and update 2's actions differ (0.1631 of them): the pay reached the learning step
+21:25:55 update 1's ledger z0: {'dmg_dealt': 0.9109, 'dmg_taken': -0.0825, 'frag': 1.5625, 'death': None, 'win_part': 2.0063}
+21:25:55 update 1's ledger z2: {'dmg_dealt': 0.1656, 'dmg_taken': -0.0187, 'frag': 1.5625, 'death': None, 'win_part': 3.6478}
+21:25:55 PASS update 1's damage dealt pays 0.001/0.0055 of z0's (0.1818, wanted 0.1818)
+21:25:55 PASS update 1's damage taken pays (1.0 x 0.001)/(0.8 x 0.0055) of z0's (0.2267, wanted 0.2273)
+21:25:55 PASS update 1's win part pays 0.6/0.33 of z0's (1.8182, wanted 1.8182)
+21:25:55 FAIL update 1's frags and deaths unchanged (1.0, nan)
+21:25:55 FAILED

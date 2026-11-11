@@ -39,6 +39,7 @@ LATE2 = [("drift", ("v038 drift",))]                         # (v0.3.8, DRIFT_IN
 LATE3 = [("small", ("b12 small items",))]                    # (b1.2c, SM_ITEMS: a token a small item; after every older kind)
 LATE4 = [("order", ("b17 order",))]                          # (1.7, COMBAT: the order and its point, one token; after every older kind)
 LATE5 = [("timers", ("b17b timers",))]                      # (1.7b: the yellow armors' timers, one token; after every older kind)
+LATE6 = [("space", ("b20b space",)), ("targets", ("b20b targets",))]   # (2.0b: the map's table against his belief, two tokens; after every older kind)
 # A layout may say "gated": the network then carries "gate" among its weights (not trained: a buffer), a number a token
 # (the summary token too) that is added to every look at that token before the softmax of both blocks. A network that
 # is given new tokens answers as before while their gate is very negative (GATE_SHUT: nothing looks at them;
@@ -110,6 +111,11 @@ def layout_from_csv(path):
             kinds.append(dict(name=name, idx=[idx]))
             used[idx] = True
     for name, groups in LATE5:
+        idx = [int(r["index"]) for r in rows if r["group"] in groups]
+        if idx:
+            kinds.append(dict(name=name, idx=[idx]))
+            used[idx] = True
+    for name, groups in LATE6:
         idx = [int(r["index"]) for r in rows if r["group"] in groups]
         if idx:
             kinds.append(dict(name=name, idx=[idx]))

@@ -1,89 +1,126 @@
-# 1.8a: movement: the jumps he cannot make, the ways, rocket jumps
+# 1.8a: the 1.n series redone in one run from b1.2d's end, under AIM3
 
-*2026-11-05 evening (owner): "we need to revisit movement: rocket jumping and the strafe jumps/circle jumps he currently cannot make
-(aerowalk red, b2r, etc.)"; "I agree about 1.8 being movement focused. Please start a card for those items, I'll have another agent work
-on it." The family's page: [README.md](../README.md). **A card started, not a design:** what is there today, the steps proposed, what to
-measure first, the red team and the owner's open decisions. Nothing built, nothing run; the run starts only on the owner's command.*
+*2026-11-11 (owner): "the fast track aim3 in at b1.2d, which covers all the parts of the 1.n series that worked after and gets us to the
+same ending point as roughly 1.7a, all weapon fire costs out, speed pay out, win chance pay in (same portion), updated item pay table,
+strategy head, etc."; "We do not need to adhere to the 'order of operations' of the 1.n that existed, simply aggregate the most successful
+parts with hindsight in mind"; "the big change in performance was seen with the strategy layer opening, this I want to make sure we
+retain"; "Call this model 1.8". Why from b1.2d: the lightning took his hand inside 1.3b, in step with the head's credit (in hand 40% at
+update 10, 53% at 50, 56% at the end; rockets 37% to 26%), under an aim model whose error was largest where the rail and rockets need it
+smallest. The family: [README](../README.md). The aim: [design/AIM3.md](../../../design/AIM3.md). What comes after:
+[2.1](../../2.1/DESIGN.md).*
 
-**Started from:** ❓ 1.7a's end (to fill in at the start).
+**NOT STARTED, AND NOT READY TO START (2026-11-11 afternoon).** The owner's order of work: "fix the inputs + tune aim3; redo from 1.2d on; then
+get to 2.1"; "I will start 1.8 from a new session." Everything below was built and tested this morning on the UNCLEANED start (b1.2d's end
+widened to 1,053 inputs). The input clean-up ([design/INPUTS_CLEANUP.md](../../../design/INPUTS_CLEANUP.md), its "Final" table) changes the
+start network and every list, so **before a go these are redone on the cleaned start**: the start and its proofs (`tests.py start`), the
+identity, live, smoke and dry tests, the zero point; and **built new**: the last stage (the strategy inputs fading out of the hands). What
+carries over unchanged: the design, the schedule, the command's settings, the ramp, the restart, the scripts' logic.
 
-**Marks:** ✅ known or decided · ⏳ to build · 🧪 to measure · ❓ owner's decision
+**Marks:** ✅ exists and was tested in its own run · ⏳ to build and test before a go · 🧪 measured in the run · ❓ the owner's to decide
 
-## For the agent who builds it
+**Started from:** b1.2d's end (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt` + `opt_end_b12d.pt`; 980 inputs), widened with
+zero weights to today's 1,053 inputs, the strategy head (1.3b's form) and the keep choice (1.7a's form) added at zero effect.
 
-- Read [CLAUDE.md](../../../../CLAUDE.md)'s hard rules first. While 1.7a trains (until 21:00 on 11-06), **rule 9**: no side job (a
-  measurement, a replay, a level check) starts without the owner's word, with its cores by mask, its length and what it shares with the
-  run named. The trainer has the performance cores (`0xC03C3`); the watcher, the ramp and the self-play logger are on `0x3C3C`; 14 to 17
-  (`0x3C000`) are the owner's.
-- **Rule 10:** the design the owner approves is built whole. A real structural fork goes to him; an unspecified detail is decided from
-  the design's intent and recorded here.
-- **Rule 11:** a choice that is the sum of two learnt outputs (the way: the hands' rows plus the pointer's scores, `PADD`) is decayed
-  (`H2_L2`) from the moment it is live; each part's size flagged over 40.
-- Build on a branch of its own (`b18`) in a worktree without links into `data/` (rule 8); nothing in `sim/` of the main checkout changes
-  while 1.7a trains (its checks re-import the simulator).
-- Read [docs/HISTORY.md](../../../HISTORY.md) on v14 (Aerowalk's red armor), v15 (the jump runs), v0.3.6 and v0.3.7 (the rocket-jump
-  runs: 1 rocket in 200 tries) and v0.4.0b (zones and Aerowalk's red-armor rocket jump) before proposing anything.
-
-## What is there today ✅ (as 1.7a runs: `docs/runs/1.7/1.7a/train.cmd`)
+## The owner's page
 
 | | |
 |---|---|
-| The jump lists | `sim/pro_gaps/<map>.json` (from the pros' demos, `tools/pro_gaps.py`; an entry's `"use"` is the owner's), drawn by `tools/draw_gaps.py`; the jumps his ways take in games: `JUMP_OPEN` (per map, by number); left out: `JUMP_SKIP=aerowalk:16`; `JUMPS=1`, `JUMP_ALL=1` (tries at jumps on no item's way too) |
-| Jump practice | `JUMP_RUN_P=0` in 1.7a (jump runs off); the counters by map (`v15.runs_by_map`); `tools/jump_check.py` (him alone in jump runs) |
-| The walker | `RULE_WALK` (2026-10-10): the rules and item runs count a walker's ways only, so a jump he cannot make is never named |
-| The ways | `WAYS` off; `sim/ways.py`, `sim/pro_ways_legs/<map>.json` (of 2026-10-12, to re-measure: `tools/ways_check.py`); the way output's rows at bias 0, −20, −20 since v0.2.1 (always "the shortest"); the pointer's scores on each way built in 1.7, inert without the switch (B-301) |
-| Rocket jumps | the runs built behind switches (B-252), off in 1.7a (`RJ_RUN_P` unset: 0); set in 1.7a: `RJ_ONLY=aerowalk:1`, `RJ_CLEARED=1` (only the rocket jumps a scripted player clears: `sim/rj_clear.json`, 77 of the pros' 174), `RJ_LOOK_P=0.5`, `RJ_TEACH=1` with its weight at 0 (live `RJ_TEACH_W`); the simulator's rocket jump set close to the game's by `RL_QL` and `QL_FLOAT` (RESULTS 2026-10-15 21:25); the specialist teacher of B-272 not built |
-| The view's pull toward level | **already gone**: live `LEVEL_PULL` 1.0 in 1.7a (B-275: 1.0 = no pull). Not the cause of 1.7's rocket-jump numbers; v0.3.7's 1 rocket in 200 tries was under the old pull |
-| Hop | `AUTO_HOP=1` in training (a held jump re-jumps on landing); the plugins give it only with `BOBBY_AUTOHOP=1` (B-269: whether the servers set it is unknown) |
-| The movement network | `move_v17_look`, an input only (`LEGS_IN`) and its look point; the legs' switch retired (B-259) |
+| The goal | one network at roughly 1.7a's update 90 (the head choosing his target, the keep choice, no hand-written rule on his target, no firing cost, no speed pay in games), whose hands and head both learnt under AIM3, in the shape 2.1 builds on |
+| Length | **330 updates in one run, with one planned restart** at the save of update 150 (two simulator switches that are not live). The owner, 11-11, on the condensed schedule: "keep the head at 80. The rest looks fine." At 5.3 minutes an update (the dry run's and 2.0c's): about 29 hours of training |
+| What b1.2d's end already has (nothing to do) | win chance pay at the same portion (`WIN_ADD` 0.33); the item table by the point (`ITEM_PT_*`, `ITEM_FLAT` MH 0.35 / RA 0.30 / YA 0.15, the decay above 100); the stack lead at 0; the far-rail pay 0.25; the firing and jerk costs' weight at 0 (`COST_FIRE_W`, `COST_JERK_W`) |
+| Damage pay | **0.005 a point and zero-sum from update 0** (owner, 11-11: "Change the damage pay to 0.005 at the start"; "damage should be zero sum from the start"): `DMG_REWARD` 0.0055 → 0.005, `DMG_TAKEN_W` 0.8 → 1.0, both as a step at the start, not a ramp. A trade of equal damage pays neither side; a 100-damage hit pays 0.50 where it paid 0.55, and taking one costs 0.50 where it cost 0.44. Between the two players only (`DMG_ENEMY_ONLY=1`): his own splash and falls cost the full price, as before |
+| Checks | every 20 updates, 200 games, against b1.2d's end (the start); every fourth against **1.7a's update 90** (the point we are re-reaching; it beat b1.2d's end 91.5%); the extra one at update 10. Both seats under AIM3's end values, as in 2.0c. Never held: every check reported, one under 40% flagged at once |
+| Read at every check | games won; megas and reds head to head; **the weapon in his hand in view by range** (rockets, rail, lightning: a readout, not a target, rule 12); big weapons owned; the head's part and the hands' part of the target's sum (rule 11); quiet re-decisions; frags a match-minute |
 
-## The steps (proposed; ❓ the owner's at the card's review)
+## What is in, and where it comes from
 
-| Step | What | Done when |
+| Part | From | In 1.8a |
 |---|---|---|
-| **1. Can each jump be made?** 🧪 (no training) | The list of the jumps the owner means, by map and number in `sim/pro_gaps` (Aerowalk's red armor; ❓ "b2r" and the rest: the owner names them; B-284's spots: Blood Run's stairs to the yellow armor, Toxicity's blocks, behind the teleporters). For each: the pros' take-off and way replayed in the simulator **under his hand limits** (`KEY_RATE` 8, his turn and flick limits, 125 fps): made or not, and the margin. Then him alone in jump runs on them (`jump_check.py`): his rate today. B-269 settled (held jump with auto-hop on and off, flat ground, stairs, ledges: the game against the simulator). The rocket jump re-checked against the game (rise, distance, self-damage, knockback) | a table: each jump, made by the pros' inputs under his hands (yes, no, the margin), his rate alone today, the game against the simulator. **A jump that cannot be made with his hands goes to the owner** (a fairness limit, or the simulator, or the jump left out) |
-| **2. The ways, with the pros' jumps** | B-301 whole: the ways' tables re-measured; the pros' second and third ways with their jumps among his ways; the way output opened from "the shortest" by the pointer (`PADD` on the way, decayed: rule 11); jump practice at a share (`JUMP_RUN_P`) on the jumps of step 1 that can be made; a level check of the start (the 2026-10-11 rule) | the head takes a jump way where it pays; nothing names a jump |
-| **3. Rocket jumps** | rocket-jump practice (`RJ_RUN_P`) on the cleared list, its start from the pros' 174 (B-272's specialist, or a fit of his own outputs to the scripted jumper's: ❓ the owner's, a teacher being one of the hard-wired parts to retire); the rocket-jump ways among the ways of step 2, priced by the health they cost | a rocket jump taken in games where it pays (Aerowalk's red armor first) |
-| ❓ Weapon combos | the owner: "for later, possibly 1.8". Measured first (the pros' rocket hit or near miss followed within 0.6 s by the lightning gun, the rail or the shotgun, by map and range; his own; knockback and the flight after a hit, simulator against game); if a gap: two perceived inputs (the enemy in the air; the time since his splash hit, both read late as a person sees them) and a start for the weapon key fitted to the pros at those moments; no pay of its own | |
+| AIM3 at the default level (the average pro's parameters) | 2.0c's build ✅ | live, 0 → end values over updates 0 to 30 |
+| No firing cost of any kind: `SHOT_COST=0`, `BLIND_FIRE_W=0`, `COST_FIRE_W` 0, refused at the start if above zero | 1.5a, 1.6a ✅ | from update 0 |
+| The strategy head's target scores added to the hands' (`--head2-add`, memory speeds spread, λ 0.995, the item rule teaching the hands' rows alone, decoupled weight decay 0.01 on both parts) | 1.3b ✅ (89% against b1.2d's end; 25% with the head blanked) | attached at zero from update 0; its credit (`H2_PG`) 0 → 1 over updates 50 to 130, 1.3b's 80 updates |
+| The switch cost out, a weapon he holds choosable (`INTENT_SWITCH=0`, `WEAPON_OWN=1`) | 1.4b ✅ | at the restart, update 150 (as in 1.4b: after the head has the credit) |
+| The item rule's lesson out (`INTENT_TEACH_W` 1 → 0) and the speed pay in games out (`SPEED_PAY` 0.125 → 0) | 1.6a ✅ (level; the speed held) | together over updates 160 to 190, as 1.6a did (its 40 updates were level throughout) |
+| The keep choice in place of the 8-second lock (`KEEP_G` 0 → 0.975) | 1.7a's updates 10 to 90 ✅ (63% against 1.6a's end) | attached at share 0 from update 0; over updates 210 to 250, then held |
+| **The strategy inputs out of the hands** (owner, 11-11: "Once we get the head back in, those inputs can go from the hands. Put that at the end of this 1.8 run"): the clock and score (8), the mega's and red's timers and who has them, when he last took each item (12), the game's three: faded in the hands, the head keeps them | the input clean-up ⏳ to build (a second fade group, as v0.4.2's rule fade) | over updates 270 to 310, held to 330; removed from the hands' list after the run |
+| The 1,053 inputs of today's simulator; the tokens order, timers, space and targets shut (`--gate-open 0`) | 2.0c's start ✅ | all run; so 2.1 needs no widening |
+| Kept as b1.2d has them | | the win pay, the item table, the far-rail pay, the speed pay in item runs, the league's anchors, every delay and every other aim number |
 
-## Measured and judged by
+## What is scrapped from the 1.n suite
 
-| Measure | Wanted |
+| Part | Why |
 |---|---|
-| Win rate against 1.7a's end; against b1.2d's end (the long-term control) | level or better at each step; under 40% flagged at once (rule 6) |
-| Each named jump: tries, made, deaths and lava or falls on it, in practice and in games | made where it pays; Aerowalk's red armor taken over the jump |
-| His ways: the share of each way, the jump ways' share, the trips' seconds, his predictability (B-217, B-190) | jump ways used where they win the race |
-| Rocket jumps: tries, made, health spent, the item or place reached first | up where they pay; no rocket jumps that lose the stack fight |
-| Aerowalk by itself (a map's number read per map: the 2026-10-10 lesson) | never the v14 fall |
-| Speed, standing still, stuck at B-284's spots | hold; the stuck spots down |
-| Big weapons owned, the mega and red armor first, frag share | hold |
+| b1.3a's copy lesson, b1.4a's blend | failed (the head alone 37%; the blend ran away from the rules) |
+| 1.4b's matchmaking by difficulty (PFSP) | scrapped with its run; not in 1.7a either |
+| 1.5a's head scores on the weapon key (`H2_WPG`) | never shown to win games (off at update 50: 100-100); his weapon did not move; 2.1 makes the weapon part of the instruction |
+| 1.5a's weapon habits on 30% of the league seats | did not move his weapon; a third of them play the pros' weapon by range (rule 12 in spirit). ❓ 2.0b's lesson asks for a holder seat in the league: that is 2.1's to design |
+| 1.7a's combat order, the pointer on his targets, the fire push, the brain's pass odds (`COMBAT`, `CMB_G`, `PADD`, `FADD`, `H2_FPG`, `--pass-odds`) | learnt away or likely harmful; 2.1's instruction replaces them. Not added to the network at all; the simulator's side is off (`COMBAT=0`). **Found in the build:** with `COMBAT` on, the hands' ten "order" inputs carry the look point of his chosen target even when no order is asked, and 1.7a's update 90 had learnt to read them a little (those columns' weights 8% the size of an ordinary input's). In 1.8a they read zeros and his weights on them stay zero; they open with 2.1's instruction. The checks are played with `COMBAT` on so that 1.7a's update 90 keeps them (it changes nothing for 1.8a's network) |
+| 1.7b (timers, fight odds), 1.7c (the weapon table), 2.0a and 2.0c (the damage pay), 2.0b (the map's inputs and pay) | no gain or a loss. Their inputs exist at zero weight and stay shut |
+| The order of the old runs' settling time | 1.3b ran 80 updates after its dial was full, 1.5a 133, 1.7a's result was taken as its dial reached the top: about 160 updates saved |
 
-## Red team (to complete when designed)
+**So 1.8a's end differs from 1.7a's update 90 in five ways, on purpose:** AIM3; the damage pay 0.005, zero-sum; no head part on the weapon key; no weapon habits in the league; the hands do not read the look point of his target (the order's inputs).
 
-| Part | Hand-built or assumed | The measured alternative | Watch |
+## The schedule (updates; every dial live and straight; nothing holds or steps back on its own)
+
+| Updates | Opens | The mark kept (with its optimizer) | Passes when (reported, the owner decides) |
 |---|---|---|---|
-| The pros' jumps as the list | the pros' data | every jump the simulator finds possible (`JUMP_ALL`) | jumps the pros do not use |
-| His hand limits on hard jumps | the fairness limits (owner) | none: a jump only a machine makes | a jump made with less margin than the pros |
-| A teacher for rocket jumps (B-272) | a hard-wired part (owner, 10-23: retire them by fading) | practice and pay alone (1 in 200 tries made: B-272) | his rate once its weight fades |
-| Jump practice's share | hand-set | a share by how often he fails each jump (the jump flow rule: open in games at 50% success, back at 25%) | ❓ a per-jump gate against rule 6's "never hold on its own" |
-| The ways' choice opened by the pointer | 1.7's pattern | a soft rule | the way's share by update; the level check |
-| The simulator's jump physics | measured once (10-15, 10-16) | measured again in step 1 | a jump made in the simulator, failed on the server |
-| Pay pathologies (the ledger) | | | negative frags, sign flips, lopsided games |
+| 0 | fire costs out; the head and the keep choice attached at zero | start | the start answers as b1.2d's end (0 actions differ with the costs as b1.2d's) |
+| 0 to 30, held to 50 | AIM3 | **50: "b1.2d under AIM3"**, the control for the rest | level with b1.2d's end at 10, 30, 50 |
+| 50 to 130, held to 150 | the head's credit (1.3b's 80 updates: owner, "keep the head at 80") | **150: "1.3b under AIM3"** | the checks rise as 1.3b's did (60, 70, 77, 88% at its updates 10 to 90); the head blanked at 150 plays far worse; 🧪 the weapon in hand |
+| 150 (restart at the save) | the switch cost out, a held weapon choosable: the trainer alone is stopped right after the save of update 150 (`stop_18a.ps1 -Update 150`) and started again from it (`start.ps1 -Restart`); the watcher, the ramp and the logger keep running | | the update-170 check |
+| 160 to 190, held to 210 | the item rule's lesson and the speed pay in games out | **210: "1.6a under AIM3"** | level; megas and reds a minute, big weapons owned |
+| 210 to 250, held to 270 | the keep choice | **270: "1.7a under AIM3"** | games up; quiet re-decisions under 0.08; against 1.7a's update 90 level or better |
+| 270 to 310, held to 330 | the strategy inputs fade out of the hands ⏳ | **330 (the end)** | level; megas and reds head to head; the hands' part of his target scores |
 
-## The owner's decisions
+Each stage ends on an update the watcher checks (10, 30, 50, ...), so it is read at its end values before the next opens. As first written the
+run was 310 updates (AIM3 over 40, the teacher over 40, the keep choice over 80, no last stage). Condensing, volunteered: fewer checks a
+stage (two or three), and the keep choice's flicker, which rose with its share in 1.7a, arrives sooner.
 
-| | | |
+## Red team: what is hand-built or assumed, its measured alternative, the pathology checks
+
+| Part | Assumed | The alternative, and what is known |
 |---|---|---|
-| 1 | ✅ 1.8 is movement: rocket jumping and the strafe and circle jumps he cannot make | owner, 11-05 evening |
-| 2 | ✅ item pay by effective stack (B-297) out: "we have a simpler implementation that works well enough" | owner, 11-05 evening |
-| 3 | ❓ the jumps by name: Aerowalk's red armor; "b2r" and the rest | |
-| 4 | ❓ the ways (B-301) in 1.8 (proposed: step 2) | |
-| 5 | ❓ the steps as one run opened part after part, or a run a step | |
-| 6 | ❓ a rocket-jump teacher (B-272) or practice and pay alone | |
-| 7 | ❓ weapon combos in 1.8 or later | |
-| 8 | ❓ cores and a time for step 1's measuring while 1.7a trains (rule 9) | |
-| 9 | ❓ the length, the start: on his command | |
+| The lightning slide was the aim model's doing | the head learnt which fights pay with hands whose far and still aim was worst | **not proven.** The other candidate is the head's five-second credit on damage paid as it lands. This run tells them apart: if the lightning climbs with the credit again under AIM3 (updates 50 to 130), it is the credit, and the save of update 50 is where the damage pay or 2.1's lesson is tried instead |
+| The damage pay 0.005, taken at 1.0, as a step at update 0 (owner) | b1.2d itself moved taken 1.0 → 0.8 (one of five pay changes) and the owner's play test then read "clearly engaging more in fights"; 2.0a and 2.0c went zero-sum together with a much lower pay and fell | here the pay a point barely moves, so this run reads zero-sum nearly alone, but in the same updates as AIM3's ramp: a fall in the first 50 updates cannot be pinned on one of the two. Watched: frags a match-minute (the dry run at 0.8: 1.7) and the ledger's dealt and taken cancelling. `tests_ident2.log`: the ledger pays exactly these weights |
+| AIM3 holds level alone at full strength | 2.0c was level at updates 10 and 30 with the blend at 0.18 to 0.68 | never trained at full blend with the old pay. Updates 40 to 50 and the check of 50 are that test, before the head gets any credit |
+| 1.3b's recipe behaves the same in today's trainer | the head's code has since gained the weapon, keep and order parts | ✅ the dry run at full size: his step, both parts' sizes and their cosine as 1.3b's fifth dry run (the table below) |
+| The teacher and the speed pay can go together | 1.6a did it, level, with the head's weapon part present | here without that part; item control slid 5% in 1.6a and is watched (megas and reds head to head) |
+| The keep choice opens with the item rule's lesson already out | as in 1.7a | its flicker (trips 24 → 58 a player-minute by its update 90) comes with it; quiet re-decisions were 0.054 there, under the 0.08 alarm |
+| Six things in one run | each opens alone, with a kept save and a check between | a fall is pinned to the stage it came in; any stage can be re-run from the mark before it |
+| The checks under AIM3's end values from update 10 | he is checked on the aim he is moved to | as 2.0c |
 
-## The result
+**Pathologies watched from update 1** (every FLAG and MAJOR line read): a refused or unapplied `live.json` (MAJOR); any firing cost above
+zero (MAJOR); a check under 40% (MAJOR, told at once); a part of the target's sum over 40 (rule 11); his step over 0.1; megas or reds head
+to head 20% under the control's; frags a match-minute under 1.5; quiet re-decisions over 0.08; targets reached 30% under the start;
+lightning in hand over 50% (reported, not acted on). Negative frags and lopsided games: Cypher's measures of each check.
 
-Not started: a card (11-05 evening); another agent plans and builds it.
+**Weaknesses, volunteered:**
+- It is a new network, not 1.7a with better aim. The checks against 1.7a's update 90 say how near it lands; 91.5% against b1.2d's end
+  took 1.7a 470 updates, and this run has 310.
+- The rail is not addressed. b1.2d already holds it 5% of the time (v0.6.0: 22%); nothing in 1.8a puts him where a rail shot is the right
+  one. That is 2.1's work, and AIM3 only makes sure his hands can then learn it.
+- Without the head's weapon part his weapon is the hands' alone, as in 1.3b. If 2.1's instruction is late, he has no slow reason for a weapon.
+- One planned restart. A restart right after a save, with the optimizer, has been done many times; it is still the run's one seam.
+
+## Built and tested before the go (2026-11-11; scratch folders only, nothing of a real run touched)
+
+| | State |
+|---|---|
+| The start: b1.2d's end widened 980 → 1,053 (zero weights; `tools/b18_init.py widen`, new), the head added (`tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief`), the keep choice added (`tools/keep_init.py add`); 1.3b's three anchors widened | ✅ `tests_start.log`: every weight of b1.2d's end unchanged, the 73 new input columns zero, the four new tokens shut, the head's target layer zero, no weapon part, no order; **0 actions differ** from b1.2d's end (400 frames, 8 seats, the new inputs random too) |
+| `train.cmd` from 2.0c's by `make_files.py` (phase 1 and 2); the settings check against 1.7a's command | ✅ only these differ: the run, the minutes, the seven AIM3 names, `--gate-open`, `--head2-wpg 0`, `--pass-odds 0`, `--habit-p 0`, `COMBAT=0`, and until the restart `INTENT_SWITCH=0.02`, `WEAPON_OWN=0`. `start.ps1` runs it again and refuses on any other |
+| The start's `live.json` (`start_live.py`: b1.2d's own file, checked against its end save's record, plus the head's, the keep choice's and AIM3's names at their start and `DMG_REWARD` 0.005); the trainer's own reader on it and on all 292 files the ramp will write | ✅ `LIVE ACCEPT: PASS` |
+| The trainer at a fixed seed (six small runs; run again with the zero-sum start) | ✅ `tests_ident2.log` (`tests_ident.log`: the same at taken 0.8): damage taken weighs as dealt; it repeats itself to the bit; the damage pay changes nothing before the first learning step and the ledger pays exactly 0.005 against 0.0055; AIM3's end dials change the first update's actions (6%); the head's credit changes nothing before the first learning step and is played as written; no firing cost in the ledger; the optimizer's moments carried over the widened inputs |
+| The real trainer applies the start's `live.json` before its first rollout; mid values of all seven dials written after update 1 are applied and are in the save's record | ✅ `tests_live2.log` (the zero-sum start) |
+| Ten small updates with every dial stepped, then **the restart** (phase 2's two switches, the teacher and the speed pay out, the keep choice at 0.975), three more updates, a one-map check against b1.2d's end and against 1.7a's update 90 | ✅ `tests_smoke.log`. **Found and fixed:** the trainer's own update number starts at 1 again after a restart; the ramp read it, so every dial would have frozen at update 150. The ramp's clock is now the number of lines in `metrics.jsonl` (as the watcher counts). Also read there: the hands' weights on the order's and the map's inputs stay exactly zero |
+| `ramp_18a.py` on fake files, through the restart (`ramp_test.py`; run again on the condensed schedule, 11-11 afternoon; the last stage is not in it yet) | ✅ `ramp_test.log`: each dial on its stage, the marks kept once, the clock on from 150 after the restart with the trainer's number at 1, a check under 40% a MAJOR PROBLEM with the clock not held, the lightning over half and a firing cost flagged |
+| **The dry run of the head's opening at full size** (the graphics card, 10 updates, the credit 0 → 0.5 → 1 as 1.3b's fifth dry run, AIM3 at its start values; run before the owner's zero-sum word, so with damage taken at 0.8) | ✅ `tests_dry.log`: his step 0.032 to 0.041 (1.3b's dry run: 0.031 to 0.041); the hands' part of his target scores 21.6 to 22.6 (21.6 to 22.7); the head's part 0.07 → 2.0 (0.06 → 2.9); their cosine −0.06 to −0.18 (−0.16 to 0); the clip share under 0.10; **5.3 minutes an update**; in hand in games rockets 36%, lightning 39%, rail 4% |
+| The zero point against 1.7a's update 90 (`zero_point.py`: the start, 200 games, the checks' settings, both seats under AIM3's end values) | ✅ `zero_point.log`: **11-189, 5.5%**, frag share 20.3%; the start owns the rail 32% of its time alive there. Against b1.2d's end no games are needed: the two answer alike |
+| `start.ps1` (the start and `-Restart`), `stop_18a.ps1` (the trainer alone, by its own command line, only when the kept save of that update is the run's `policy.pt`) | ✅ written, parsed; their checks are the ones above. They run for the first time at the start |
+| `tools/aim2_levels.py` with AIM3's columns | not done (a play setting; not needed for the run) |
+
+**How it is run:** `start.ps1 -Minutes <n>`; at update 150 `stop_18a.ps1 -Update 150`, then `start.ps1 -Restart -Minutes <n>`; at the end `stop_18a.ps1 -Update 330 -All`. I do the restart and the end by hand while monitoring, on the card's word.
+
+## After the run
+
+The aim error tables of AIM3.md and the held-angle probe on the marks 50, 150 and the end, beside b1.2d's end; the report; then 2.1's
+gates open on the end.

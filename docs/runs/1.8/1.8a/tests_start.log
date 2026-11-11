@@ -1,0 +1,10 @@
+08:55:17 PASS every weight of b1.2d's end outside the attention part and the encoder's first layer is in the start unchanged (0 differ); the first 980 input columns equal, the other 73 zero
+08:55:17 PASS the only new parts are the strategy head's (['head2'])
+08:55:17 PASS the head: its add 1, its gate 0, its target layer zero, the keep choice (2) at share 0, no weapon part, no order, no fire push ({'keep': 2, 'weapon': None, 'cmb': None, 'fire': None})
+08:55:17 PASS the start's shut tokens are the order, the timers, space and targets ({'order': -30.0, 'timers': -30.0, 'space': -30.0, 'targets': -30.0})
+same: 400 frames x 8 seats: largest |h a - h b| = 2.82e-05; actions that differ: 0
+ALL PASSED
+08:55:22 PASS the start answers as b1.2d's end: 0 actions differ (400 frames, 8 seats, the new inputs random too, the head's whole path run)
+ALL PASSED
+08:55:30 PASS keep_init same: share 0 answers as without the keep choice; at share 1 the start is the lock made soft
+08:55:30 ALL PASSED

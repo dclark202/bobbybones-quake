@@ -38,7 +38,7 @@ def names(path):
 
 def fit_list(lst, n):
     """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
-    if len(lst) > n and all(g_ in ("b17 order", "b17b timers") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
+    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
         return lst[:n]
     return lst
 
@@ -283,9 +283,15 @@ def play(job):
     final = None
     ot_n, reg_ = 0, None
     fw_ = np.zeros((2, len(E.WEAPONS)))                       # (1.7c) frags by weapon, he / the opponent (overtime included)
+    BH_ = None                                                # (2.0c) a measurement's hook on this loop (BRANCH_HOOK: a module of tools/run)
+    if os.environ.get("BRANCH_HOOK"):
+        sys.path.insert(0, os.path.join(ROOT, "tools", "run"))
+        BH_ = importlib.import_module(os.environ["BRANCH_HOOK"]).Hook(E, env, mp, seed, ev, od)
     t = -1
     while t + 1 < end_:
         t += 1
+        if BH_ is not None:
+            BH_.top(t, obs, h, h2 if opp_pol is not None else None)
         nA_ = len(E.ACTION_DIMS)
         kp_ = hasattr(env, "keep_feat") and (getattr(pol, "keep_on", False) or getattr(opp_pol, "keep_on", False))
         a = np.zeros((n, nA_ + int(kp_)), np.int64)                            # (1.4c) the keep column after the outputs: -1 the lock rule
@@ -347,7 +353,11 @@ def play(job):
                         w0_, b0_, w1_, b1_, wp_, bp_ = env.teacher_w[:6]        # control) moves on the movement network's own sums, the other on
                         lg_[m_] = np.tanh(np.tanh(xl_[m_] @ w0_.T + b0_) @ w1_.T + b1_) @ wp_.T + bp_    # its learnt branch
             env.legs_lg = lg_                                                   # (None: the simulator's own sums for all)
+        if BH_ is not None and hasattr(BH_, "act"):                             # (2.0c) a measurement's own keys for some seats
+            BH_.act(t, obs, a)
         obs, r, done, info = env.step(a)                                        # falls in; a scripted seat's is never drawn: general)
+        if BH_ is not None:
+            BH_.after(t, r, info)
         c["restarts"][0] += int(done.any())
         died = np.zeros(n, bool)                                # (a death and the respawn fall in the same step here)
         for e in info["events"]:
@@ -459,6 +469,8 @@ def play(job):
     else:
         st_reg = {k: np.array(env.stats[k], np.float64) for k in SK}
     flip = slice(None, None, -1) if swap else slice(None)
+    if BH_ is not None:
+        BH_.end()
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 overtime_periods=ot_n,
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),

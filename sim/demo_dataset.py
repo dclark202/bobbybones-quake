@@ -269,10 +269,16 @@ def build_demo(E, env, binf, out, lite=False):
                 if acq:
                     env.known[0] = env.state[1, :3]
                 env.seen_t[0] = 0.0 if acq else env.seen_t[0] + DT
-                if lite:                                    # the few facts tools/pro_tables.py counts, without the inputs
+                if lite == 3:                               # (aim3) what the aim measures need: tools/run/pro_aim.py names the columns
+                    lite_out.append([env.hp[0], env.armor[0], env.weapon[0], act[k - i][5], float(vis), *pos[k], *env.state[1, :3],
+                                     *env.state[1, 3:6], ang[k][1], ang[k][0], float(present), float(d["ps"][k, D.PS["persistant"] + 1]),
+                                     float(me), *env.ammo[0], float(d["ps"][k, D.PS["weaponTime"]]), float(env.duck[0]), *vel[k]])
+                    obs_out.append(0)
+                elif lite:                                  # the few facts tools/pro_tables.py counts, without the inputs
                     lite_out.append([env.hp[0], env.armor[0], env.weapon[0], act[k - i][5], float(acq), *pos[k], *env.state[1, :3],
                                      env.weapon[1], *env.has[0].astype(np.float32), *(env.ammo[0] > 0).astype(np.float32),
-                                     ang[k][1], float(present)])
+                                     ang[k][1], float(present)] +
+                                    ([float(d["ps"][k, D.PS["persistant"] + 1])] if lite == 2 else []))   # (--lite2: his hit counter)
                     obs_out.append(0)
                 else:
                     obs_out.append(env.observe()[0].astype(np.float16))
@@ -374,6 +380,9 @@ def main():
     ap.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 4) - 2))
     ap.add_argument("--check", default=None)
     ap.add_argument("--lite", action="store_true", help="only the facts tools/pro_tables.py counts (health, armor, weapons, enemy, fire), into sets_lite/<map>: much faster")
+    ap.add_argument("--lite2", action="store_true", help="(2.0c) as --lite with one more column, the player's hit counter (PERS_HITS: one a hit he lands), into sets_lite2/<map>")
+    ap.add_argument("--lite3", action="store_true", help="(aim3) the aim measures' columns (the true sight, both view angles, the enemy's speed, the ammunition counts, the hit counter), into sets_lite3/<map>")
+    ap.add_argument("--stems", default="", help="a text file of demo names (without extension), one a line: only these")
     a = ap.parse_args()
     if a.check:
         return check(a.check)
@@ -381,10 +390,13 @@ def main():
     files = sorted(f for f in glob.glob(os.path.join(demo_root(), "demos", a.map, "*.dm_*")) if not f.endswith(".part"))
     if a.limit:
         files = files[:: max(1, len(files) // a.limit)][:a.limit]
-    out_dir = os.path.join(demo_root(), "sets_lite" if a.lite else "sets", a.map)
+    if a.stems:
+        keep_ = set(x.strip() for x in open(a.stems, encoding="utf-8") if x.strip())
+        files = [f for f in files if os.path.splitext(os.path.basename(f))[0] in keep_]
+    out_dir = os.path.join(demo_root(), "sets_lite3" if a.lite3 else "sets_lite2" if a.lite2 else "sets_lite" if a.lite else "sets", a.map)
     os.makedirs(out_dir, exist_ok=True)
     t0 = time.time()
-    chunks = [(a.map, files[k::a.procs], out_dir, k, a.lite) for k in range(a.procs)]
+    chunks = [(a.map, files[k::a.procs], out_dir, k, 3 if a.lite3 else 2 if a.lite2 else a.lite) for k in range(a.procs)]
     with mp_.Pool(a.procs) as pool:
         res = [x for r in pool.map(worker, chunks) for x in r]
     kept = sum(n for n, _ in res)

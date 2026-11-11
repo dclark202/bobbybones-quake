@@ -1,0 +1,44 @@
+08:58:47 after update 1: live.json {'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18}
+08:58:50 after update 2: live.json {'AIM3_W': 1.0, 'AIM3_SIZE_A': 0.39, 'AIM3_SIZE_B': 0.355}
+08:58:53 after update 3: live.json {'H2_PG': 0.33}
+08:58:56 after update 4: live.json {'H2_PG': 0.67}
+08:58:59 after update 5: live.json {'H2_PG': 1.0}
+08:59:17 PASS the trainer exited 0
+08:59:17 PASS on the CPU
+08:59:17 PASS the optimizer's state loaded from b1.2d's opt.pt
+08:59:17 PASS no weapon table, the keep choice not frozen, no REFUSED
+08:59:17 PASS 8 or more updates (10)
+08:59:17 update 1: dmg 0.1562 / -0.075 frag None win 1.2817 | frags a match-minute 0.0 | kl 0.03217 | head: credit 0.0 hands 19.49817 raw 0.00284 cos -0.1589 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 2: dmg 2.3624 / -1.8094 frag 1.5625 win -2.911 | frags a match-minute 1.562 | kl 0.0408 | head: credit 0.0 hands 21.54925 raw 0.03727 cos -0.1891 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 3: dmg 2.3203 / -1.2297 frag None win 1.1236 | frags a match-minute 3.125 | kl 0.04728 | head: credit 0.0 hands 22.3659 raw 0.05689 cos -0.0811 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 4: dmg 0.3281 / None frag None win 3.5952 | frags a match-minute 0.0 | kl 0.0214 | head: credit 0.0 hands 23.52014 raw 0.07248 cos -0.0513 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 5: dmg 0.8906 / -1.225 frag 1.5625 win -3.8102 | frags a match-minute 1.562 | kl 0.01315 | head: credit 0.33 hands 22.87811 raw 0.07618 cos -0.0558 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 6: dmg 1.0781 / -1.6266 frag None win -3.7248 | frags a match-minute 1.562 | kl 0.03156 | head: credit 0.67 hands 22.12533 raw 0.11995 cos -0.0729 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 7: dmg 1.253 / -1.3297 frag None win -0.6881 | frags a match-minute 0.0 | kl 0.02476 | head: credit 1.0 hands 22.21171 raw 0.11575 cos -0.1052 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 8: dmg 3.5781 / -2.8328 frag None win 2.8113 | frags a match-minute 4.688 | kl 0.03229 | head: credit 1.0 hands 21.30964 raw 0.15247 cos -0.1139 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 9: dmg 2.3883 / -1.4531 frag 3.125 win 3.7737 | frags a match-minute 3.125 | kl 0.02783 | head: credit 1.0 hands 22.62942 raw 0.14696 cos -0.0076 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 update 10: dmg 1.3281 / -0.525 frag 3.125 win 1.3917 | frags a match-minute 4.688 | kl 0.02903 | head: credit 1.0 hands 22.62212 raw 0.19976 cos -0.0263 | keep {'g': 0.0, 'kl': 0.0}
+08:59:17 PASS the ledger on every update
+08:59:17 PASS no NaN in the head's lessons or the trainer's kl and entropy
+08:59:17 PASS the head's credit followed the dial to 1 ([0.0, 0.0, 0.0, 0.0, 0.33, 0.67, 1.0, 1.0, 1.0, 1.0])
+08:59:17 PASS the head's own scores grew from zero and stay under 60 ([0.00284, 0.03727, 0.05689, 0.07248, 0.07618, 0.11995, 0.11575, 0.15247, 0.14696, 0.19976])
+08:59:17 PASS the keep choice's share 0 in phase 1 ([0.0])
+08:59:17 PASS the save: the head with its add, the keep choice, no weapon part, no order; env WEAPON_OWN 0
+08:59:17 after 10 updates: the hands' weights on the 73 newer inputs: order (10) 0.00e+00, timers (4) 5.06e-03, space and targets (59) 0.00e+00; their tokens' first layers [0.0, 0.0, 0.0, 0.0]
+08:59:17 PASS the hands' weights on the order's and the map's inputs are still zero (COMBAT and SPACE_IN off: those inputs read zeros), so a check played with COMBAT on for 1.7a's update 90 changes nothing for him
+08:59:37 scratch_18a_smoke: done in 0.3 min; the log ends: exit 0
+08:59:37 PASS the restart from the save with its optimizer: loaded, no cold start, 3 more updates (10 -> 13), no REFUSED
+08:59:37 update 1: kl 0.0555 | keep share 0.975 re-decide 0.2172 quiet 0.0 | head credit 1.0 raw 0.12387
+08:59:37 update 2: kl 0.01124 | keep share 0.975 re-decide 0.2088 quiet 0.0 | head credit 1.0 raw 0.2297
+08:59:37 update 3: kl 0.04295 | keep share 0.975 re-decide 0.2781 quiet 0.0111 | head credit 1.0 raw 0.27736
+08:59:37 PASS after the restart the keep choice decides at its share ([0.975, 0.975, 0.975]) and nothing is NaN
+08:59:37 PASS the save after the restart records WEAPON_OWN 1 (1)
+09:01:26 check against b12d: exit 0;  yellow 1.0/min | in view 15% | firing 9% (53% of the time in view) | speed 342, standing 2% (over 3 s: 0%) | lives 2.0/min, own deaths 0.0 a game
+    opponent  bare 10% | first weapon 5.2 s | 150+ 74% | weapons 1.75/min | mega 73%, red 0% of spawns | yellow 2.75/min | in view 18% | firing 14% (64% of the time in view) | speed 333, standing 2% (over 3 s: 0%) | lives 1.5/min, own deaths 0.0 a game
+
+09:01:26 PASS a one-map check of the save against b12d finished (0-2)
+09:02:30 check against 17a: exit 0;  yellow 3.0/min | in view 20% | firing 13% (55% of the time in view) | speed 341, standing 2% (over 3 s: 0%) | lives 2.0/min, own deaths 0.0 a game
+    opponent  bare 21% | first weapon 7.4 s | 150+ 36% | weapons 2.0/min | mega 58%, red 62% of spawns | yellow 1.0/min | in view 18% | firing 14% (66% of the time in view) | speed 342, standing 2% (over 3 s: 0%) | lives 2.0/min, own deaths 0.0 a game
+
+09:02:30 PASS a one-map check of the save against 17a finished (1-1)
+09:02:30 ALL PASSED

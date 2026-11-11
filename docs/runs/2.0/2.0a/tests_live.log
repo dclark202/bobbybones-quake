@@ -1,0 +1,13 @@
+21:24:30 PASS the start's live.json carries the save's values ({'DMG_REWARD': 0.0055, 'DMG_TAKEN_W': 0.8, 'WIN_ADD': 0.33})
+21:24:45 after update 1: live.json {'DMG_REWARD': 0.003, 'DMG_TAKEN_W': 0.9, 'WIN_ADD': 0.5}
+21:25:05 PASS no refusal in the log
+21:25:05 PASS live_status.json says applied ({'update': 4, 'status': 'applied', 'reason': None, 'time': '2026-11-08 21:24:48'})
+21:25:05 PASS 3 updates or more (5)
+21:25:05 update 1: dmg 0.9109 / -0.4572 frag None death None win 0.6155
+21:25:05 update 2: dmg 4.7008 / -3.728 frag 1.5625 death -1.5625 win 0.3841
+21:25:05 update 3: dmg 3.6352 / -2.757 frag 3.125 death -6.25 win 0.6011
+21:25:05 update 4: dmg 0.5109 / -0.5278 frag None death -1.5625 win -2.6017
+21:25:05 update 5: dmg 1.4062 / -1.0209 frag 3.125 death None win 2.0539
+21:25:05 PASS live_applied.json carries the mid values by the end ({'DMG_REWARD': 0.003, 'DMG_TAKEN_W': 0.9, 'WIN_ADD': 0.5}, from update 4)
+21:25:05 PASS the ledger's damage dealt per frag fell from update 1 to the last (910900000.000 -> 0.450)
+21:25:05 ALL PASSED

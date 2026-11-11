@@ -1,0 +1,14 @@
+22:06:14 PASS the start's live.json carries the save's values ({'DMG_REWARD': 0.0055, 'DMG_TAKEN_W': 0.8, 'WIN_ADD': 0.33, 'AIM3_W': 0.0, 'AIM3_SIZE_A': 1.0, 'AIM3_SIZE_B': 0.0})
+22:06:29 after update 1: live.json {'DMG_REWARD': 0.004, 'DMG_TAKEN_W': 0.9, 'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18}
+22:06:49 PASS no refusal in the log
+22:06:49 PASS live_status.json says applied ({'update': 4, 'status': 'applied', 'reason': None, 'time': '2026-11-10 22:06:33'})
+22:06:49 PASS 3 updates or more (5)
+22:06:49 update 1: dmg 0.1031 / -0.2114 frag None death None win 0.5825
+22:06:49 update 2: dmg 6.445 / -2.3932 frag 4.6875 death None win -0.3354
+22:06:49 update 3: dmg 3.2352 / -2.6002 frag None death -1.5625 win -1.5303
+22:06:49 update 4: dmg 1.4375 / -1.0462 frag 1.5625 death None win -0.3949
+22:06:49 update 5: dmg 1.8375 / -1.5131 frag 3.125 death -1.5625 win 4.8238
+22:06:49 PASS live_applied.json carries the mid values by the end ({'DMG_REWARD': 0.004, 'DMG_TAKEN_W': 0.9, 'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18}, from update 4)
+22:06:50 PASS the save's record of what the SIMULATORS played carries the aim's mid values ({'AIM3_W': '0.5', 'AIM3_SIZE_A': '0.7', 'AIM3_SIZE_B': '0.18'})
+22:06:50 PASS the ledger's damage dealt per frag fell from update 1 to the last (103100000.000 -> 0.588)
+22:06:50 ALL PASSED
