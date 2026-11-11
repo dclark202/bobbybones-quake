@@ -131,6 +131,15 @@ lightning in hand over 50% (reported, not acted on). Negative frags and lopsided
 `auto_restart.log` as AUTO RESTART FAILED and nothing is retried. Tested dry (the waiting and the hand-over); the two scripts it calls run
 for the first time in the run. The restart renames phase 1's `live_status.json` (it deleted it before): nothing is deleted.
 
+## The fallback (owner, 2026-11-11, during the run: "keep going as planned but have that as a fallback plan if things don't go well")
+
+If the head's stage fails here (the checks do not rise as 1.3b's did, or the lightning takes his hand again with the credit over updates
+50 to 130): **the head is opened once, in 2.1's form, from the save of update 50** ("b1.2d under AIM3", `keep/policy_u50_18a.pt` with its
+optimizer), with 2.1's changes already in place, not re-run in 1.3b's form. Why it was not the first plan: 2.1 is five new parts, none
+built or tested yet, and opening the head inside it would put the one known gain (1.3b's 89%) and five untested parts in one run. Seen
+before the credit opened: the lightning in his hand in training games rose from 43% to 50% over updates 10 to 39 under AIM3 alone
+(rockets 34% to 29%, rail 6% to 3%), so the head's credit is not the slide's only cause. He decides if and when the fallback is taken.
+
 ## After the run
 
 The aim error tables of AIM3.md and the held-angle probe on the marks 50, 150 and the end, beside b1.2d's end; the report; then 2.1's
