@@ -9,7 +9,7 @@ update 10, 53% at 50, 56% at the end; rockets 37% to 26%), under an aim model wh
 smallest. The family: [README](../README.md). The aim: [design/AIM3.md](../../../design/AIM3.md). What comes after:
 [2.1](../../2.1/DESIGN.md).*
 
-**BUILT AND TESTED ON THE CLEANED INPUTS (2026-11-11 evening); NOT STARTED: the owner's review and go, from a new session.**
+**STARTED 2026-11-11 14:00 (owner: "Go ahead and start it"): phase 1 for 900 minutes, the restart at update 150 unattended (`-AutoRestart 1050`). [RUNS.md](../../../RUNS.md) #47.** Built and tested on the cleaned inputs the same day.
 What changed since the morning's build: the start is on the cleaned input list 18 ([design/INPUTS_CLEANUP.md](../../../design/INPUTS_CLEANUP.md),
 "As built"), AIM3 is tuned ([design/AIM3.md](../../../design/AIM3.md) section 9), the schedule is the condensed one with the head at 80
 updates, and the last stage (the strategy inputs out of the hands) is built. Every test below was run again on that start.
