@@ -5,8 +5,8 @@ damage pay to 0.005 at the start"; "damage should be zero sum from the start": D
 import json
 import sys
 
-HEAD = dict(H2_GATE_CAP=0.0, H2_GATE_OPEN=0.0, H2_PG=0.0, H2_MIX=0.0, H2_COPY=0.0, H2_WPG=0.0, HABIT_P=0.0, KEEP_G=0.0)
-AIM = dict(AIM3_W=0.0, AIM3_SIZE_A=1.0, AIM3_SIZE_B=0.0, AIM3_PURSUIT_TAU=0.125, AIM3_PURSUIT_GAIN=1.0, AIM3_FIX_TAU=0.10)
+HEAD = dict(H2_GATE_CAP=0.0, H2_GATE_OPEN=0.0, H2_PG=0.0, H2_MIX=0.0, H2_COPY=0.0, H2_WPG=0.0, HABIT_P=0.0, KEEP_G=0.0, SFADE=0.0)
+AIM = dict(AIM3_W=0.0, AIM3_SIZE_A=1.0, AIM3_SIZE_B=0.0, AIM3_PURSUIT_TAU=0.125, AIM3_PURSUIT_GAIN=1.0, AIM3_FIX_TAU=0.05, AIM3_LEAD=0.0, AIM3_RELOAD=1.0)
 PAY = dict(DMG_REWARD=0.005, DMG_TAKEN_W=1.0)                 # (owner, 11-11: 0.005, and "damage should be zero sum from the start": b1.2d's 0.8 -> 1.0)
 WANT = dict(WIN_ADD=0.33, DMG_TAKEN_W=0.8, INTENT_TEACH_W=1.0, SPEED_PAY=0.125, COST_FIRE_W=0.0, COST_JERK_W=0.0, STACK_DIFF=0.0, RAIL_FAR_PAY=0.25,
             INTENT_HOLD=8.0, ITEM_PT_MIX=1.0, ITEM_FLAT="MH:0.35,RA:0.30,YA:0.15")

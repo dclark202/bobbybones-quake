@@ -1,0 +1,23 @@
+Traceback (most recent call last):
+  File "C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\1.8\1.8a\tests.py", line 495, in <module>
+    sys.exit({"start": start, "ident": ident, "smoke": smoke, "live": live, "dry": dry}[sys.argv[1]]())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\1.8\1.8a\tests.py", line 239, in ident
+    D = lay_out(run, live_extra=lv)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\1.8\1.8a\tests.py", line 201, in lay_out
+    widen(os.path.join(ANCH, name), w_)
+  File "C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\1.8\1.8a\tests.py", line 84, in widen
+    assert rc == 0, out
+           ^^^^^^^
+AssertionError: Traceback (most recent call last):
+  File "C:\Users\dacla\Documents\gh\BobbyBones\tools\inputs18.py", line 369, in <module>
+    main()
+  File "C:\Users\dacla\Documents\gh\BobbyBones\tools\inputs18.py", line 365, in main
+    sys.exit(int((convert(a) if a.cmd == "convert" else same(a)) or 0))
+                  ^^^^^^^^^^
+  File "C:\Users\dacla\Documents\gh\BobbyBones\tools\inputs18.py", line 79, in convert
+    assert sorted(int(c) for c in bfd.get("cols", ())) == fade and float(bfd.get("g", 0.0)) == 1.0, "the brain's fade is not the rule fade's at 1"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: the brain's fade is not the rule fade's at 1
+

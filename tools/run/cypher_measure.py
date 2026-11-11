@@ -154,7 +154,7 @@ def sim(a):
     if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp)) and "BRAIN_READ" not in envvars:
         envvars["BRAIN_READ"] = "1"
     now = DE.names(os.path.join(ROOT, "docs", "INPUTS.csv"))
-    idx = np.array([now.index(x) for x in DE.fit_list(now, len(pol.mean))])
+    idx = np.array([now.index(x) for x in (pol.names if getattr(pol, "names", None) else DE.fit_list(now, len(pol.mean)))])
     delays = (125.0, 225.0, 125.0, 225.0)
     json.dump(dict(policy=a.policy, run=a.run, sets=sets, games=a.games, procs=a.procs, maps=a.maps, delays=delays,
                    started=time.strftime("%Y-%m-%d %H:%M")), open(os.path.join(a.out, "meta.json"), "w"), indent=1)

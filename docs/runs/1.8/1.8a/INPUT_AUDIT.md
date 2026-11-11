@@ -4,6 +4,14 @@
 removed in previous runs, or that are actively hurting his ability ... blindspots ... for the mechanical and the brain/head networks."
 Nothing was changed. The network audited is 1.8a's start (b1.2d's end's weights, 1,053 inputs).*
 
+**Two corrections, found while building the clean-up (2026-11-11 evening):**
+1. **The brain does not read the 76 faded columns either.** Its own fade on them has been at 1.0 since b1.1. The "brain" column below was
+   measured without that fade: the rule-made belief's and the stack's "11% of the brain's signal" (item 4 under "What stands out") is
+   wrong, and the pre-fire and emergence are read by no network at all.
+2. **"Constant in play" is not "dead".** Of the 239 constant columns, 62 are things a person can cause that self-play never showed (the
+   enemy crouched, a gauntlet in his hand, a fifth projectile in view) or parts the owner keeps (the ways, the heavy machine gun, the
+   gauntlet). 177 were cut. As built: [design/INPUTS_CLEANUP.md](../../../design/INPUTS_CLEANUP.md), "As built".
+
 ## How it was measured
 
 | Measure | What it is | Tool, data |

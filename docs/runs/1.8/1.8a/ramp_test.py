@@ -1,6 +1,6 @@
 """ramp_18a.py on fake files (2026-11-11): a fake run folder in the temp directory (the start's live.json values, a policy.pt and opt.pt,
 metrics.jsonl and a check written by this script), the ramp run with a short poll. Checks: each dial follows the clock of metrics.jsonl's
-LINES (AIM3 0 to 30, H2_PG 50 to 130, INTENT_TEACH_W and SPEED_PAY 160 to 190, KEEP_G 210 to 250) and holds after; the other names are
+LINES (AIM3 0 to 30, H2_PG 50 to 130, INTENT_TEACH_W and SPEED_PAY 160 to 190, KEEP_G 210 to 250, SFADE 270 to 310) and holds after; the other names are
 untouched (DMG_REWARD 0.005); the marks are kept once with their optimizers; THE RESTART: the ramp stopped at 150 lines and started again with
 --resume while the trainer's own update number starts at 1 again: the clock goes on from 150, nothing steps back, no mark is kept twice; a
 check under 40% is logged as a MAJOR PROBLEM and the clock not held; a firing cost above zero and the lightning over half are flagged.
@@ -15,7 +15,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 D = tempfile.mkdtemp(prefix="ramp18a_")
 os.makedirs(os.path.join(D, "watch"))
-START = dict(AIM3_W=0.0, AIM3_SIZE_A=1.0, AIM3_SIZE_B=0.0, H2_PG=0.0, INTENT_TEACH_W=1.0, SPEED_PAY=0.125, KEEP_G=0.0, DMG_REWARD=0.005, DMG_TAKEN_W=0.8,
+START = dict(AIM3_W=0.0, AIM3_SIZE_A=1.0, AIM3_SIZE_B=0.0, AIM3_LEAD=0.0, AIM3_RELOAD=1.0, H2_PG=0.0, INTENT_TEACH_W=1.0, SPEED_PAY=0.125, KEEP_G=0.0, SFADE=0.0, DMG_REWARD=0.005, DMG_TAKEN_W=0.8,
              WIN_ADD=0.33, COST_FIRE_W=0.0, H2_WPG=0.0, HABIT_P=0.0)
 json.dump(START, open(os.path.join(D, "live.json"), "w"))
 for f in ("policy.pt", "opt.pt"):
@@ -59,7 +59,7 @@ def live():
 def wait_clock(n, t=20):
     t0 = time.time()
     while time.time() - t0 < t:
-        if "clock {} after update {}".format(min(n, 250), n) in (open(os.path.join(D, "watch", "ramp.log")).read() if os.path.exists(os.path.join(D, "watch", "ramp.log")) else ""):
+        if "clock {} after update {}".format(min(n, 310), n) in (open(os.path.join(D, "watch", "ramp.log")).read() if os.path.exists(os.path.join(D, "watch", "ramp.log")) else ""):
             time.sleep(1.2)                                  # (and the save's settle time, for the marks)
             return True
         time.sleep(0.2)
@@ -77,8 +77,8 @@ def near(a, b):
 
 p = ramp()
 time.sleep(1.5)
-for n, want in ((15, dict(AIM3_W=0.5, AIM3_SIZE_A=0.695, AIM3_SIZE_B=0.1775, H2_PG=0.0, INTENT_TEACH_W=1.0, SPEED_PAY=0.125, KEEP_G=0.0)),
-                (50, dict(AIM3_W=1.0, AIM3_SIZE_A=0.39, AIM3_SIZE_B=0.355, H2_PG=0.0)),
+for n, want in ((15, dict(AIM3_W=0.5, AIM3_SIZE_A=0.695, AIM3_SIZE_B=0.1775, AIM3_LEAD=0.5, AIM3_RELOAD=0.5, H2_PG=0.0, INTENT_TEACH_W=1.0, SPEED_PAY=0.125, KEEP_G=0.0)),
+                (50, dict(AIM3_W=1.0, AIM3_SIZE_A=0.39, AIM3_SIZE_B=0.355, AIM3_LEAD=1.0, AIM3_RELOAD=0.0, H2_PG=0.0)),
                 (90, dict(AIM3_W=1.0, H2_PG=0.5, INTENT_TEACH_W=1.0, KEEP_G=0.0)),
                 (150, dict(H2_PG=1.0, INTENT_TEACH_W=1.0, SPEED_PAY=0.125, KEEP_G=0.0))):
     feed(n)
@@ -99,9 +99,11 @@ feed.base = 150
 for n, want in ((175, dict(H2_PG=1.0, INTENT_TEACH_W=0.5, SPEED_PAY=0.0625, KEEP_G=0.0)),
                 (210, dict(INTENT_TEACH_W=0.0, SPEED_PAY=0.0, KEEP_G=0.0)),
                 (230, dict(KEEP_G=0.4875, INTENT_TEACH_W=0.0, H2_PG=1.0, AIM3_W=1.0)),
-                (300, dict(KEEP_G=0.975, INTENT_TEACH_W=0.0, SPEED_PAY=0.0, H2_PG=1.0, AIM3_W=1.0, AIM3_SIZE_A=0.39, AIM3_SIZE_B=0.355))):
-    feed(n, own=1, lg=0.6 if n == 230 else 0.4, shot=0.2 if n == 300 else 0.0)
-    got = wait_clock(n) if n <= 250 else (time.sleep(3) or True)
+                (270, dict(KEEP_G=0.975, SFADE=0.0)),
+                (290, dict(KEEP_G=0.975, SFADE=0.5, INTENT_TEACH_W=0.0)),
+                (320, dict(KEEP_G=0.975, SFADE=1.0, INTENT_TEACH_W=0.0, SPEED_PAY=0.0, H2_PG=1.0, AIM3_W=1.0, AIM3_SIZE_A=0.39, AIM3_SIZE_B=0.355))):
+    feed(n, own=1, lg=0.6 if n == 230 else 0.4, shot=0.2 if n == 320 else 0.0)
+    got = wait_clock(n) if n <= 310 else (time.sleep(3) or True)
     d = live()
     check("after the restart, {} lines (the trainer's own number {}): {}".format(n, n - 150, {k: d.get(k) for k in want}),
           got and all(near(d[k], v) for k, v in want.items()) and near(d["DMG_REWARD"], 0.005))
@@ -114,7 +116,7 @@ check("the marks after the restart by the run's update, none kept twice: {}".for
       all("policy_u{}_18a.pt".format(n) in kept for n in (50, 90, 150, 210, 230)) and len([k for k in kept if k.startswith("policy_")]) == len({k for k in kept if k.startswith("policy_")})
       and not any(k.startswith("policy_u") and int(k[8:-7]) < 150 and k not in kept0 for k in kept))
 check("the check under 40% logged as a MAJOR PROBLEM, and the clock went on", "MAJOR PROBLEM check update 150" in log and "clock 175 after update 175" in log)
-check("the lightning over half flagged (230) and a firing cost above zero a MAJOR PROBLEM (300)", "the lightning is in his hand 0.6" in log and "A FIRING COST ABOVE ZERO" in log)
+check("the lightning over half flagged (230) and a firing cost above zero a MAJOR PROBLEM (320)", "the lightning is in his hand 0.6" in log and "A FIRING COST ABOVE ZERO" in log)
 check("the head's parts logged each update", "his target scores: the hands' part 22.0 the head's part 3.0" in log)
 check("the resumed ramp says so and never wrote a clock under 150", "(resumed)" in log and not any("clock {} after".format(c) in log.split("(resumed)")[1] for c in range(1, 150)))
 print("ALL PASSED" if ok else "FAILED", "|", D)

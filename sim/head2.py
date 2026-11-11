@@ -116,6 +116,12 @@ OBS_SEL = (("self", "health"), ("self", "armor"), ("weapons", "owns "), ("weapon
            ("items", "nearest mega health: "), ("items", "nearest red armor: "),
            ("clock and score", None), ("v02 game", None), ("v02 items", None), ("intention", None),
            ("b17 order", None))                             # (1.7) the order he follows and its point (a layout before: tools/order_init.py adds them)
+# (1.8, owner 2026-11-11, docs/design/INPUTS_CLEANUP.md: the head at its birth) the head's own columns on a cleaned list: its job is the
+# strategy, so it is given the game's state by name: as OBS_SEL without the order's ten (cut), with the weapon in his hand, the enemy
+# noticed in view, and the timers of the mega, the red armor and both yellow armors
+OBS_SEL_18 = tuple(x for x in OBS_SEL if x[0] != "b17 order") + (("weapons", "holding "), ("enemy", "noticed in view"),
+                                                                ("memory", "mega health: "), ("memory", "red armor: "), ("b17b timers", None),
+                                                                ("memory", "enemy has the mega health"), ("memory", "enemy has the red armor"))
 # (1.5a) the weapon part's own inputs ("wobs"): what he holds and whether he can fire it, the enemy's weapon (in view, since his last
 # death, the hums heard), the enemy in view and his last known place (exact while in view)
 W_OBS = (("weapons", "holding "), ("self", "weapon not ready"), ("enemy", "enemy holds "), ("memory", "enemy seen with "),

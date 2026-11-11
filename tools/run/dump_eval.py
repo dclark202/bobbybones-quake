@@ -480,7 +480,7 @@ def main():
     if getattr(pol, "btok", None) is not None:
         print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
-    old = fit_list(names(a.inputs), len(pol.mean))
+    old = pol.names if getattr(pol, "names", None) else fit_list(names(a.inputs), len(pol.mean))   # (1.8: a network of a cleaned list carries its own)
     assert len(old) == len(pol.mean), "the network has {} inputs, {} lists {}".format(len(pol.mean), a.inputs, len(old))
     idx = np.array([now.index(x) for x in old])
     opp_pol, opp_idx, kind = None, None, a.opp
@@ -492,7 +492,7 @@ def main():
             opp_pol.set_rule_fade(a.opp_rule_fade_g)
         if a.opp_head2_gate is not None:
             opp_pol.set_head2_gate(a.opp_head2_gate)
-        oo = fit_list(names(a.opp_inputs), len(opp_pol.mean))
+        oo = opp_pol.names if getattr(opp_pol, "names", None) else fit_list(names(a.opp_inputs), len(opp_pol.mean))
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"

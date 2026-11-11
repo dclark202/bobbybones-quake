@@ -123,6 +123,7 @@ class Policy:
         self.wp, self.bp = sd["pi.weight"], sd["pi.bias"]
         self.cell = sd.get("cell.weight")                    # the learned map (v8): the last two inputs are cell numbers
         self.mean, self.var = ck["obs_mean"], ck["obs_var"]
+        self.names = [tuple(x_) for x_ in ck["input_names"]] if ck.get("input_names") else None   # (1.8, sim/input_list.py) a cleaned list: its inputs by name
         self.dims = [int(x) for x in ck["action_dims"]]
         self.minutes = float(ck.get("minutes", 0.0))
         self.react_ms = float(ck.get("react_ms", 100.0))      # (a checkpoint without it: !aim default; 150 until branch aim2)
@@ -447,11 +448,14 @@ class Policy:
         if self.rfg > 0 and len(self.rf_cols):               # (v0.4.2a) the hands' inputs: the rule-made columns times (1 - g)
             import rule_fade as rfade_
             x = rfade_.apply_np(x, self.rf_cols, self.rfg)
+        if self.rf is not None and (self.rf.get("more") or {}).get("cols") and float(self.rf["more"].get("g", 0.0)) > 0:   # (1.8) its second group:
+            import rule_fade as rfade_                       # the strategy inputs out of the hands (the head reads xa)
+            x = rfade_.apply_np(x, [int(c_) for c_ in self.rf["more"]["cols"]], float(self.rf["more"]["g"]))
         xh = x                                               # (the hands' attention reads these)
         if self.cell is not None:
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
             x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
-        x = np.tanh(x @ self.w0.T + self.b0)
+        x = np.tanh(x[:, :self.w0.shape[1]] @ self.w0.T + self.b0)   # (a cleaned list, sim/input_list.py: the hands' encoder reads its first n_hands columns)
         x = np.tanh(x @ self.w1.T + self.b1)
         if self.attP is not None:
             bta = bt if self.bgate > 0 else None             # (v0.4.2a: the brain stepped for the readers alone: its token stays out)

@@ -3,13 +3,16 @@ updates done, straight lines, each held after its end:
   AIM3_W          0     -> 1      updates 0 to 30      the sight error against his eye (docs/design/AIM3.md)
   AIM3_SIZE_A     1     -> 0.39   updates 0 to 30      the base sight error by how big the enemy looks
   AIM3_SIZE_B     0     -> 0.355  updates 0 to 30
+  AIM3_LEAD       0     -> 1      updates 0 to 30      the rocket's and plasma's meeting point leads over his own delay too (AIM3.md section 5)
+  AIM3_RELOAD     1     -> 0      updates 0 to 30      the slow weapons' random extra reload wait out (the pros fire on the reload's frame)
   H2_PG           0     -> 1      updates 50 to 130    the head's credit on his target (1.3b's dial, its 80 updates: owner, 11-11, "keep the head at 80")
   INTENT_TEACH_W  1     -> 0      updates 160 to 190   the item rule's lesson out (1.6a)
   SPEED_PAY       0.125 -> 0      updates 160 to 190   the speed pay in games out (1.6a)
   KEEP_G          0     -> 0.975  updates 210 to 250   the keep choice in place of the 8-second lock (1.7a's share at its update 90)
 (the condensed schedule, owner 11-11: "keep the head at 80. The rest looks fine"; each stage ends on an update the watcher checks.
-NOT YET HERE: the last stage, the strategy inputs fading out of the hands over updates 270 to 310, held to 330: built with the input
-clean-up, docs/design/INPUTS_CLEANUP.md)
+  SFADE           0     -> 1      updates 270 to 310   the strategy inputs out of the hands (the clock and score, the mega's and red's timers and who
+                                                       has them, when he last took each item, the game's two: 29 columns times (1 - g) in the
+                                                       hands; the head reads them unfaded: docs/design/INPUTS_CLEANUP.md change 7); held to 330)
 Fixed from the start in live.json: DMG_REWARD 0.005 and DMG_TAKEN_W 1.0 (owner, 11-11: zero-sum from the start), WIN_ADD 0.33, the item table by the point, COST_FIRE_W 0,
 H2_WPG 0, HABIT_P 0; the eye's lag, gain and fixation time. At update 150 the run is restarted from its save by start.ps1 -Restart (the two
 switches that are not live: INTENT_SWITCH 0.02 -> 0, WEAPON_OWN 0 -> 1) and this ramp with --resume.
@@ -18,6 +21,7 @@ Written to live.json (read between rollouts) after each new update. The clock ne
 every check is logged with its win rate, one under 40% as a MAJOR PROBLEM, and the owner decides. Kept with their optimizers: the first saves at
 or past the marks (keep/policy_u<update>_18a.pt): 50 (b1.2d under AIM3), 150 (the head credited), 210 (the teacher and the speed pay out), 270
 (the keep choice), 330 (the end), and every 20 updates between.
+At every kept mark: the input health report of the save (tools/run/input_health.py; its FLAG lines in the log).
 Logged in watch.log each update: the ledger, frags a match-minute, the head's and the hands' parts of his target scores, the keep choice's
 record, speed, big weapons owned, his weapon in hand, the firing cost. Flagged: the trainer refusing live.json (MAJOR); the dials in
 live_applied.json not what was written (MAJOR); a check under 40% (MAJOR); frags a match-minute under 1.5; quiet re-decisions over 0.08 a
@@ -28,6 +32,8 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
+import sys
 import threading
 import time
 
@@ -36,10 +42,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 DIALS = (("AIM3_W", 0, 30, 0.0, 1.0, 0.0),                  # (name, from update, to update, its value there, at the end, before)
          ("AIM3_SIZE_A", 0, 30, 1.0, 0.39, 1.0),
          ("AIM3_SIZE_B", 0, 30, 0.0, 0.355, 0.0),
+         ("AIM3_LEAD", 0, 30, 0.0, 1.0, 0.0),
+         ("AIM3_RELOAD", 0, 30, 1.0, 0.0, 1.0),
          ("H2_PG", 50, 130, 0.0, 1.0, 0.0),
          ("INTENT_TEACH_W", 160, 190, 1.0, 0.0, 1.0),
          ("SPEED_PAY", 160, 190, 0.125, 0.0, 0.125),
-         ("KEEP_G", 210, 250, 0.0, 0.975, 0.0))
+         ("KEEP_G", 210, 250, 0.0, 0.975, 0.0),
+         ("SFADE", 270, 310, 0.0, 1.0, 0.0))
 END = max(d[2] for d in DIALS)
 MARKS = (10, 30, 50, 70, 90, 110, 130, 150, 170, 190, 210, 230, 250, 270, 290, 310, 330)
 SIZE_FLAG = 40.0
@@ -212,9 +221,28 @@ def main():
         except FileNotFoundError:
             return 0.0
 
+    SAMPLE = os.path.join(ROOT, "data", "sim_runs", "inputs18", "sample_obs.npy")
+
+    def health(name):
+        """(CLAUDE.md "Inputs") the input health report of a kept save (tools/run/input_health.py on the standing sample of real play): its
+        summary and its FLAG lines into the log; each group's share at the hands', the brain's and the head's first layer in keep/"""
+        try:
+            r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "run", "input_health.py"), os.path.join(KEEP, name), SAMPLE, "--quiet", "--json",
+                                os.path.join(KEEP, name.replace("policy_", "input_health_", 1).replace(".pt", ".json"))],
+                               capture_output=True, text=True, timeout=900, env=dict(os.environ, CUDA_VISIBLE_DEVICES="-1", OPENBLAS_NUM_THREADS="1"),
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            for ln in (r.stdout or "").splitlines()[-40:]:
+                log("{} | {}".format(name, ln[:300]))
+            if r.returncode not in (0, 1):
+                log("input health of {} did not run: {}".format(name, (r.stderr or "")[-300:]))
+        except Exception as e:                               # noqa: BLE001
+            log("input health of {} did not run: {}".format(name, repr(e)[:200]))
+
     def keep(name):
         shutil.copy2(POL, os.path.join(KEEP, name))
         shutil.copy2(OPT, os.path.join(KEEP, name.replace("policy_", "opt_", 1)))
+        if not a.dir and os.path.exists(SAMPLE):             # (not on the fake files of ramp_test.py)
+            threading.Thread(target=health, args=(name,), daemon=True).start()
 
     def write(clock):
         d = json.load(open(LIVE, encoding="utf-8"))

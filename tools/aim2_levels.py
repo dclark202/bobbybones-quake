@@ -4,6 +4,7 @@ acquire_ms) and policy.npz = default. docs/v0.5.2/AIM_MODEL.md explains every va
 
     python tools/aim2_levels.py <data folder>              (policy_trained.npz in it)
     python tools/aim2_levels.py --show                     the table
+    python tools/aim2_levels.py [--show | <data folder>] --aim3      the table under AIM3 (default, better, max; docs/design/AIM3.md)
 
 default = the pros' typical values, worse and better around their 75th and 25th percentiles (knob by knob; see the table's
 comment and docs/runs/v0.6.0's notes for where a value departs from that); max = every perception and reaction limit the server can switch
@@ -40,6 +41,16 @@ TABLE = {   # FINAL 2026-10-27 evening (owner): the twelve knobs measured on the
                          VEL_DELAY_MS="25", VEL_WEBER="0", VEL_MIN="0", RANGE_WEBER="0", PROJ_NOTICE_MS="25", PROJ_READ_MS="25",
                          SM_FACE_DEG="0")),
 }
+# (2026-11-11, docs/design/AIM3.md section 4) the table under AIM3 (--aim3): default = the average pro's parameters, better = p90, max = every
+# limit off; "worse" is on hold (owner, 11-10). On top of the AIM2 rows above: the eye (its lag, gain and fixation time), the base error by
+# how big the enemy looks, the rocket lead over his own delay, no extra reload wait. NOT YET ON ANY SERVER: the plugins play a network of
+# the cleaned input list only after their forward pass is brought up to it.
+A3 = dict(AIM3="1", AIM3_W="1", AIM3_PURSUIT_GAIN="1.0", AIM3_FIX_TAU="0.05", AIM3_SIZE_A="0.39", AIM3_SIZE_B="0.355", AIM3_LEAD="1", AIM3_RELOAD="0")
+TABLE3 = {
+    "default": (125, 225, dict(TABLE["default"][2], AIM3_PURSUIT_TAU="0.125", **A3)),
+    "better": (100, 175, dict(TABLE["better"][2], PERCEPT_SIGMA="0.64", AIM3_PURSUIT_TAU="0.10", **A3)),
+    "max": (25, 25, dict(TABLE["max"][2], AIM3_PURSUIT_TAU="0.10", **dict(A3, AIM3_SIZE_A="1", AIM3_SIZE_B="0"))),
+}
 DROP = ("AIM_LEVEL", "AIM_NAME", "PERCEPT_SPEED", "PERCEPT_SPEED_MAX", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",
         "PERCEPT_SIGMA", "PERCEPT_TAU", "MOTOR_NOISE", "MOTOR_BASE", "SURPRISE_MS", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU")
 
@@ -54,6 +65,11 @@ def level_vars(name, ev0):
 
 
 def main():
+    aim3 = "--aim3" in sys.argv
+    if aim3:
+        sys.argv.remove("--aim3")
+        TABLE.clear()
+        TABLE.update(TABLE3)
     if sys.argv[1:] == ["--show"]:
         for k, (rm, am, ex) in TABLE.items():
             print(k, rm, am, ex)

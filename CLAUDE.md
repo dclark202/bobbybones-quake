@@ -129,6 +129,14 @@ the real run directly; its first 10 updates and the extra check at update 10 are
   over 1% of rows at the clip, each group's share at each reader), and at a run's end 200 games with a new group blanked. No drop = it does
   not stay. The list's length is on every card.
 
+- **The cleaned list 18 (2026-11-11; `docs/design/INPUTS_CLEANUP.md` "As built")**: `sim/input_list.py` + `sim/input_list_18.json` (876 of the
+  simulator's 1,053 columns by name: the brain reads the first 691, the hands' encoder the first 796, a tail of 80 is read by no first
+  layer); `sim/duel_env_ffa18.py` is the group module giving that list (the trainer's `--env`; the simulator's own code is unchanged and
+  `duel_env_ffa` stays the full list for every older network); `tools/inputs18.py convert` brings a 1,053-input network to it (cut and
+  folded, resized, the optimizer's moments too; `same` proves it on real rows); a checkpoint of a list carries `inputs` and `input_names`,
+  and the check tools give each network its columns by name. `tools/run/input_health.py <policy> <sample>` is the health report.
+  **The plugins and `sim/export_duel.py` do not know a list yet: no server with such a network.**
+
 ## Docs (keep in sync, one commit)
 
 - **`docs/RUNS.md` is the run table and the source of truth (owner, 2026-11-11).** Every run gets a row at its start (number,

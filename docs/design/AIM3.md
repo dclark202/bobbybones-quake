@@ -158,3 +158,22 @@ probe with and without it (`tools/run/hold_test.py`, tags h2 and h3: 292 and 293
 - **The held angle does not pay yet under either model** (the earlier small sample that read 38% against 46% was noise: 340 shots
   an arm). It is about 6 points behind free play over 8 s with his present hands. This is what the drills are for; the probe is
   the measure to repeat once he has trained under AIM3.
+
+## 9. Tuned (2026-11-11; owner: "fix the inputs + tune aim3")
+
+Four open points of sections 4, 5 and 7, each closed by a measurement on the pros (rule 12: a parameter from the pros' own value of
+that parameter; no hit rate was fitted).
+
+| Point | Measured | Change |
+|---|---|---|
+| **The eye's lag** (`AIM3_PURSUIT_TAU`, 0.125 s read by eye) | `tools/run/aim3_fit.py` on the 418,013 per-shot rows, frame by frame: after a turn-round the rail's error is 1.60 x settled at 25 ms, 1.43 at 50 to 75 ms, about 1.1 from 100 ms. A least-squares exponential: 95 ms fitted from 25 ms on, 125 ms from 50 ms on (the two fit equally well: rms 0.103, 0.105). The lightning's curve peaks at 75 ms and is the hand's, not the eye's | **none: 0.125 stays** (inside the fitted range); `better` stays 0.10 |
+| **The fixation time** (`AIM3_FIX_TAU`, 0.10 s read by eye) | the same fit after he comes into view (the lightning): the error is 1.20 x settled at 200 ms, 1.09 at 250, 1.00 at 300. From the notice on, the excess decays with 30 ms (fitted from 225 ms), 40 ms (200 ms), 50 ms (175 ms). The rail shows no excess at all after the notice (people fire it when lined up) | **0.10 → 0.05** at default and better: the eye is on him within about 50 ms of the notice; 0.10 kept the off-centre penalty for twice as long as the pros show |
+| **The rocket lead** (he aims 0.17 of a full lead behind a crossing enemy; the pros 0.02) | the code (`_v14`): the meeting point was the enemy as he saw him a reaction time ago (125 ms) plus the enemy's speed x the rocket's flight, so it lay behind by his speed x that delay, about what the readout shows | **`AIM3_LEAD`** (new, live, 0 = as before to the bit): at 1 the enemy's move over his own delay is added before the flight, from his own perceived speed (200 ms late, +-20%). In 1.8a 0 → 1 with `AIM3_W` |
+| **The slow weapons' reload wait** (`RELOAD_JITTER`: every shot of a slow weapon waits a random extra, mean about 43 ms, never none) | `tools/run/pro_refire.py`, 400 demos, pairs of shots fired back to back: the pros' next rocket leaves on the reload's own frame in 48% of 17,032 pairs (median extra 25 ms), grenades 77%, the shotgun 39%, the rail 25% (median 75 ms: a deliberate shot) | **`AIM3_RELOAD`** (new, live, a factor on that wait, 1 = as before to the bit): **0 under AIM3**. A held trigger has no such delay and a fresh press is already under his finger limits; the wait was a tax the lightning never paid. In 1.8a 1 → 0 with `AIM3_W` |
+| `better` and `max` | | in `tools/aim2_levels.py --aim3` (default, better, max; not on any server) |
+
+Both new switches: off, the simulator before to the bit (the fixed-seed fingerprints of section 6: `93f3408ebd109aaa`, `af9e70ce5978afab`).
+
+**The lead, untrained** (`tools/run/aim_rec.py --tag aim3lead`, 1.7a's update 90 against itself, 80 games, AIM3 at its end values with
+`AIM3_LEAD=1`): his rockets' lead moved from −0.17 to −0.135 of a full lead (the pros 0.02). The input is now right; he follows it
+little until he has trained with it (the lead inputs carry about 1% of the hands' signal). A readout, not a target.

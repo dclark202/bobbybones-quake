@@ -3,7 +3,7 @@
 # self-play logger are left running unless -All (the run's end). Every process is matched by its own command line (Windows reuses process
 # IDs): the trainer by "train_duel_rnn.py" and the run's name; its simulators by "multiprocessing.spawn" AND "parent_pid=<the trainer's id>".
 #   stop_18a.ps1 -Update 150           refuses unless keep\policy_u150_18a.pt and its optimizer are there and the run's policy.pt IS that save
-#   stop_18a.ps1 -Update 310 -All      the end: also the ramp and the logger (the watcher finishes its check); the end kept as policy_end_18a.pt
+#   stop_18a.ps1 -Update 330 -All      the end: also the ramp and the logger (the watcher finishes its check); the end kept as policy_end_18a.pt
 # ON THE OWNER'S WORD ONLY (the card's planned restart, or his word to end the run).
 param([Parameter(Mandatory = $true)][int]$Update, [switch]$All)
 $RUN = "duel_gru_1_8a"

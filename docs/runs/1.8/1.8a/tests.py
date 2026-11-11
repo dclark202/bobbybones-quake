@@ -1,4 +1,5 @@
-"""1.8a's tests (owner, 2026-11-11; docs/runs/1.8/1.8a/CARD.md); 2.0c's tests with 1.8a's start and dials. Nothing of a real run is touched:
+"""1.8a's tests (owner, 2026-11-11; docs/runs/1.8/1.8a/CARD.md); 2.0c's tests with 1.8a's start and dials, on the CLEANED input list 18
+(docs/design/INPUTS_CLEANUP.md: tools/inputs18.py, sim/duel_env_ffa18.py). Nothing of a real run is touched:
 scratch run folders only (data/sim_runs/scratch_18a_*), nothing deleted. CPU only, below normal; no run trains meanwhile. S0 = b1.2d's end
 (keep/policy_end_b12d.pt, with opt_end_b12d.pt, 980 inputs); S1 = 1.8a's start: S0 widened to today's 1,053 inputs with zero weights
 (tools/b18_init.py widen), the strategy head added as 1.3b's (tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief) and
@@ -40,14 +41,15 @@ RB = os.path.join(ROOT, "data", "sim_runs", "duel_gru_b1_2d")
 S0, S0O = os.path.join(RB, "keep", "policy_end_b12d.pt"), os.path.join(RB, "keep", "opt_end_b12d.pt")
 C17 = os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_7a", "keep", "policy_end_17a.pt")
 ANCH = os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_3b", "snapshots")   # 1.3b's league: b1.2d's end, b1.1, v0.6.0's end (980 inputs)
-ST = os.path.join(ROOT, "data", "sim_runs", "scratch_18a_start")
+ST = os.path.join(ROOT, "data", "sim_runs", "scratch_18a_clean3")
+SAMPLE = os.path.join(ROOT, "data", "sim_runs", "inputs18", "sample_obs.npy")   # 38,421 rows of raw inputs of real play (audit_obs.py): the statistics' sample
 S1, S1O = os.path.join(ST, "s1.pt"), os.path.join(ST, "s1_opt.pt")
 CMD = os.path.join(HERE, "train.cmd")
 OK = [True]
 TAG = os.environ.get("TEST_TAG", "")                     # (a re-run: new scratch folders beside the old, nothing deleted)
-AIM_END = dict(AIM3_W=1.0, AIM3_SIZE_A=0.39, AIM3_SIZE_B=0.355)
-START_DIALS = dict(DMG_REWARD=0.005, DMG_TAKEN_W=1.0, WIN_ADD=0.33, AIM3_W=0.0, AIM3_SIZE_A=1.0, AIM3_SIZE_B=0.0, H2_PG=0.0, KEEP_G=0.0,
-                   INTENT_TEACH_W=1.0, SPEED_PAY=0.125, COST_FIRE_W=0.0, H2_WPG=0.0, HABIT_P=0.0)
+AIM_END = dict(AIM3_W=1.0, AIM3_SIZE_A=0.39, AIM3_SIZE_B=0.355, AIM3_LEAD=1.0, AIM3_RELOAD=0.0)
+START_DIALS = dict(DMG_REWARD=0.005, DMG_TAKEN_W=1.0, WIN_ADD=0.33, AIM3_W=0.0, AIM3_SIZE_A=1.0, AIM3_SIZE_B=0.0, AIM3_LEAD=0.0, AIM3_RELOAD=1.0, AIM3_FIX_TAU=0.05, H2_PG=0.0, KEEP_G=0.0,
+                   INTENT_TEACH_W=1.0, SPEED_PAY=0.125, COST_FIRE_W=0.0, H2_WPG=0.0, HABIT_P=0.0, SFADE=0.0)
 
 
 def say(s):
@@ -74,8 +76,11 @@ def tool(*a):
 
 
 def widen(src, dst):
+    """a 980-input file to the cleaned list 18: widened to the simulator's 1,053 (b18_init), then cut, routed and resized (inputs18)"""
     if not os.path.exists(dst):
-        rc, out = tool("b18_init.py", "widen", src, dst)
+        rc, out = tool("b18_init.py", "widen", src, dst + ".1053.pt")
+        assert rc == 0, out
+        rc, out = tool("inputs18.py", "convert", dst + ".1053.pt", dst, "--sample", SAMPLE, "--league")
         assert rc == 0, out
 
 
@@ -84,43 +89,63 @@ def build():
     os.makedirs(ST, exist_ok=True)
     if os.path.exists(S1) and os.path.exists(S1O):
         return
-    w_, h_ = os.path.join(ST, "w.pt"), os.path.join(ST, "h.pt")
-    widen(S0, w_)
-    rc, out = tool("head2_init.py", "add", w_, h_, "--add", "1", "--chrono-lo", "1", "--gate", "0", "--ctrl-src", "belief")
+    w_, c_, h_ = os.path.join(ST, "w.pt"), os.path.join(ST, "c.pt"), os.path.join(ST, "h.pt")
+    rc, out = tool("b18_init.py", "widen", S0, w_)
     assert rc == 0, out
-    rc, out = tool("keep_init.py", "add", h_, S1, "--opt", S0O, S1O)
+    rc, out = tool("inputs18.py", "convert", w_, c_, "--sample", SAMPLE, "--opt", S0O, os.path.join(ST, "c_opt.pt"), "--report", os.path.join(ST, "c_report.json"))
+    print(out, flush=True)
+    assert rc == 0, out
+    rc, out = tool("head2_init.py", "add", c_, h_, "--add", "1", "--chrono-lo", "1", "--gate", "0", "--ctrl-src", "belief")
+    assert rc == 0, out
+    rc, out = tool("keep_init.py", "add", h_, S1, "--opt", os.path.join(ST, "c_opt.pt"), S1O)
     assert rc == 0, out
 
 
 def start():
     import torch
     build()
-    a_, g_ = torch.load(S0, map_location="cpu", weights_only=False)["model"], torch.load(S1, map_location="cpu", weights_only=False)
-    b_ = g_["model"]
-    dif = [k_ for k_ in a_ if not k_.startswith("attn.") and k_ != "enc.0.weight" and not (k_ in b_ and a_[k_].shape == b_[k_].shape and torch.equal(a_[k_], b_[k_]))]
-    w0, w1 = a_["enc.0.weight"], b_["enc.0.weight"]
-    check("every weight of b1.2d's end outside the attention part and the encoder's first layer is in the start unchanged ({} differ); the first 980 "
-          "input columns equal, the other {} zero".format(len(dif), w1.shape[1] - w0.shape[1]),
-          not dif and w1.shape[1] == 1053 and torch.equal(w1[:, :980], w0) and float(w1[:, 980:].abs().max()) == 0.0)
-    new_ = sorted({k_.split(".")[0] for k_ in b_} - {k_.split(".")[0] for k_ in a_})
-    check("the only new parts are the strategy head's ({})".format(new_), new_ == ["head2"])
+    w_, c_, h_ = os.path.join(ST, "w.pt"), os.path.join(ST, "c.pt"), os.path.join(ST, "h.pt")
+    rc, out = tool("b18_init.py", "same", S0, w_)
+    print(out[-300:], flush=True)
+    check("b1.2d's end widened to the simulator's 1,053 inputs answers as b1.2d's end: 0 actions differ", rc == 0 and "ALL PASSED" in out)
+    rc, out = tool("inputs18.py", "same", w_, c_, "--sample", SAMPLE)
+    print(out[-700:], flush=True)
+    check("the cleaned list: the network cut, routed and resized answers as before on real rows, each through its own list: at most 5 of 44,800 "
+          "choices differ with the brain's half-precision rounding off (single-precision rounding of the rescaled sums; with the rounding on "
+          "the two read their inputs on different grids)", rc == 0 and "ALL PASSED" in out)
+    rep = json.load(open(os.path.join(ST, "c_report.json")))
+    check("every first layer's sums unchanged on the sample (the largest differences: {})".format(rep["diff"]), max(rep["diff"].values()) < 1e-6)
+    g_ = torch.load(S1, map_location="cpu", weights_only=False)
+    b_, I = g_["model"], g_.get("inputs") or {}
+    check("the start is of list 18: {} inputs, the brain the first {}, the hands the first {} ({})".format(I.get("n"), I.get("n_brain"), I.get("n_hands"), tuple(b_["enc.0.weight"].shape)),
+          I.get("list") == 18 and b_["enc.0.weight"].shape[1] == I["n_hands"] and b_["belief.inp.weight"].shape[1] == I["n_brain"] and len(g_["input_names"]) == I["n"]
+          and len(g_["obs_mean"]) == I["n"])
+    nm = [tuple(x) for x in g_["input_names"]]
+    cutg = {"more enemies", "movement goal", "style", "his legs", "v038 drift", "b17 order", "b20b space", "b20b targets"}
+    check("nothing of the cut groups is in the list; the ways, the heavy machine gun, the gauntlet, the grenade arc, the pre-fire and the emergence are",
+          not any(g in cutg for g, _ in nm) and all(any(g == x for g, _ in nm) for x in ("b3 ways", "grenade arc", "v036 prefire", "v036 emergence"))
+          and any("heavy machine gun" in n for _, n in nm) and any("gauntlet" in n for _, n in nm))
+    tail = nm[I["n_hands"]:]
+    check("the tail ({} columns the first layers do not read): the 76 rule-made columns and the yellows' four timers".format(len(tail)),
+          len(tail) == 80 and sum(1 for g, _ in tail if g == "b17b timers") == 4)
     L = g_.get("head2") or {}
-    check("the head: its add 1, its gate 0, its target layer zero, the keep choice (2) at share 0, no weapon part, no order, no fire push ({})".format(
-        {k_: L.get(k_) for k_ in ("keep", "weapon", "cmb", "fire")}),
-        float(b_["head2.add"]) == 1.0 and float(b_["head2.gate"]) == 0.0 and float(b_["head2.target.weight"].abs().max()) == 0.0 and
-        int(L.get("keep") or 0) == 2 and float(b_["head2.keep_g"]) == 0.0 and not L.get("weapon") and not L.get("cmb") and not L.get("fire"))
-    gate_, r_ = {}, 0
-    for k_ in g_["attn"]["kinds"]:                           # (a kind's tokens: len(idx) rows of the gate, in order)
-        gg_ = b_["attn.gate"][r_:r_ + len(k_["idx"])]
-        r_ += len(k_["idx"])
-        if float(gg_.min()) < 0:
-            gate_[k_["name"]] = float(gg_.min())
-    check("the start's shut tokens are the order, the timers, space and targets ({})".format(gate_), sorted(gate_) == ["order", "space", "targets", "timers"])
-    rc, out = tool("b18_init.py", "same", S0, S1)
-    print(out, flush=True)
-    check("the start answers as b1.2d's end: 0 actions differ (400 frames, 8 seats, the new inputs random too, the head's whole path run)", rc == 0 and "ALL PASSED" in out)
-    rc, out = tool("keep_init.py", "same", os.path.join(ST, "h.pt"), S1)
-    print(out[-900:], flush=True)
+    hn = [nm[c] for c in L.get("obs_cols", ())]
+    sf_ = (g_.get("rule_fade") or {}).get("more") or {}
+    check("the strategy inputs' fade is in the start, shut: {} columns of the hands' ({}), every one also among the head's own".format(
+        len(sf_.get("cols", ())), sorted({nm[c][0] for c in sf_.get("cols", ())})), len(sf_.get("cols", ())) == 29 and float(sf_.get("g", 1)) == 0.0
+        and max(sf_["cols"]) < I["n_hands"] and set(sf_["cols"]) <= set(int(c) for c in L.get("obs_cols", ())))
+    check("the head: its add 1, its gate 0, its target layer zero, the keep choice (2) at share 0, no weapon part, no order; its own columns ({}) have "
+          "the weapon in his hand, the enemy in view and the four items' timers, and not the order's".format(len(hn)),
+          float(b_["head2.add"]) == 1.0 and float(b_["head2.gate"]) == 0.0 and float(b_["head2.target.weight"].abs().max()) == 0.0 and
+          int(L.get("keep") or 0) == 2 and float(b_["head2.keep_g"]) == 0.0 and not L.get("weapon") and not L.get("cmb") and not L.get("fire") and
+          sum(1 for g, n in hn if g == "weapons" and n.startswith("holding ")) == 9 and ("enemy", "noticed in view") in hn and
+          sum(1 for g, _ in hn if g == "b17b timers") == 4 and sum(1 for g, n in hn if g == "memory") == 6 and not any(g == "b17 order" for g, _ in hn))
+    rc, out = tool("b18_init.py", "same", c_, S1)
+    print(out[-300:], flush=True)
+    check("the head and the keep choice at zero effect: the start answers as the cleaned network without them (0 actions differ, the head's whole path run)",
+          rc == 0 and "ALL PASSED" in out)
+    rc, out = tool("keep_init.py", "same", h_, S1)
+    print(out[-600:], flush=True)
     check("keep_init same: share 0 answers as without the keep choice; at share 1 the start is the lock made soft", rc == 0 and "ALL PASSED" in out)
     return done()
 
@@ -211,7 +236,7 @@ def pm(m):
 
 def ident():
     import torch
-    arms = [("z0", None), ("z0b", None), ("z2", dict(DMG_REWARD=0.0055)), ("z3", dict(AIM_END)), ("z4", dict(H2_PG=1.0)), ("z5", dict(DMG_TAKEN_W=0.8))]
+    arms = [("z0", None), ("z0b", None), ("z2", dict(DMG_REWARD=0.0055)), ("z3", dict(AIM_END)), ("z4", dict(H2_PG=1.0)), ("z5", dict(DMG_TAKEN_W=0.8)), ("z6", dict(SFADE=1.0))]
     acts, mets = {}, {}
     for name, lv in arms:
         run = "scratch_18a_id_" + name + TAG
@@ -222,8 +247,8 @@ def ident():
         acts[name] = [torch.load(f, map_location="cpu") for f in dumps[:2]]
         mets[name] = metrics(D)
         if log:
-            check("{}: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs".format(name),
-                  "optimizer: its state loaded from opt.pt" in log and "cold start" not in log and "optimizer: enc.0.weight carried over" in log)
+            check("{}: the optimizer's state loaded from opt.pt (its moments converted with the weights: tools/inputs18.py), not a cold start".format(name),
+                  "optimizer: its state loaded from opt.pt" in log and "cold start" not in log)
             check("{}: no weapon table, no REFUSED live file, no order".format(name), "the pros' weapon table (1.7c)" not in log and "REFUSED" not in log)
             check("{}: the gates left as the file has them (no opening)".format(name), "open from" not in log)
             for ln_ in [x for x in log.splitlines() if any(w_ in x for w_ in ("optimizer: ", "keep choice", "strategy head", "combat order", "habit"))][:8]:
@@ -266,6 +291,10 @@ def ident():
         ratio("dmg_dealt"), ratio("dmg_taken"), 0.0055 / 0.005), near(ratio("dmg_dealt"), 1.1) and near(ratio("dmg_taken"), 1.1))
     check("update 1's win part, frags and deaths unchanged ({:.4f}, {}, {})".format(ratio("win_part"), ratio("frag"), ratio("death")),
           near(ratio("win_part"), 1.0, 1e-3) and near(ratio("frag"), 1.0, 1e-6) and near(ratio("death"), 1.0, 1e-6))
+    d6 = float((acts["z6"][0]["act"] != acts["z0"][0]["act"]).float().mean())
+    s6_, s0_ = ((mets["z6"][0].get("sfade") or {}) if mets["z6"] else {}), ((mets["z0"][0].get("sfade") or {}) if mets["z0"] else {})
+    check("the strategy inputs faded out of the hands (SFADE 1) change update 1's actions ({:.4f} of them); the gate played is in the record ({}; z0 {})".format(d6, s6_, s0_),
+          d6 > 0 and s6_.get("g") == 1.0 and s0_.get("g") == 0.0 and s0_.get("cols") == 29)
     p5 = pm(mets["z5"][0]) if mets["z5"] else {}
     r5 = (p5.get("dmg_taken") / p0.get("dmg_taken")) if p0.get("dmg_taken") and p5.get("dmg_taken") is not None else float("nan")
     check("the start weighs damage taken as dealt (zero-sum): at b1.2d's 0.8 (z5) update 1's actions are the same, damage dealt pays the same and damage "
@@ -308,7 +337,7 @@ def smoke():
     c_ = make_cmd(run, D, 30000)                             # (--minutes counts the resumed run's minutes: --max-updates ends it)
     t_ = open(c_, encoding="ascii").read().replace("--overlap 1 --learn-nosync 1", "--overlap 1 --learn-nosync 1 --max-updates 10")
     open(c_, "w", encoding="ascii", newline="").write(t_)
-    plan = {1: dict(AIM3_W=0.5, AIM3_SIZE_A=0.7, AIM3_SIZE_B=0.18), 2: dict(AIM_END), 3: dict(H2_PG=0.33), 4: dict(H2_PG=0.67), 5: dict(H2_PG=1.0)}
+    plan = {1: dict(AIM3_W=0.5, AIM3_SIZE_A=0.7, AIM3_SIZE_B=0.18, AIM3_LEAD=0.5, AIM3_RELOAD=0.5), 2: dict(AIM_END), 3: dict(H2_PG=0.33), 4: dict(H2_PG=0.67), 5: dict(H2_PG=1.0)}
     ok_ = step_live(D, popen(c_), plan, 90)
     log = open(os.path.join(ROOT, "data", "sim_runs", run + ".log"), encoding="utf-8", errors="replace").read() if ok_ else None
     check("the trainer exited 0", log is not None and log.rstrip().splitlines()[-1].strip() == "exit 0")
@@ -337,16 +366,13 @@ def smoke():
     L = ck.get("head2") or {}
     check("the save: the head with its add, the keep choice, no weapon part, no order; env WEAPON_OWN {}".format((ck.get("env_vars") or {}).get("WEAPON_OWN")),
           int(L.get("keep") or 0) == 2 and not L.get("weapon") and not L.get("cmb") and float(ck["model"]["head2.add"]) == 1.0)
-    w_ = ck["model"]["enc.0.weight"][:, 980:]
-    e_ = [float(ck["model"]["attn.emb.{}.weight".format(i_)].abs().max()) for i_, k_ in enumerate(ck["attn"]["kinds"]) if k_["name"] in ("order", "timers", "space", "targets")]
-    say("after 10 updates: the hands' weights on the 73 newer inputs: order (10) {:.2e}, timers (4) {:.2e}, space and targets (59) {:.2e}; their tokens' first layers {}".format(
-        float(w_[:, :10].abs().max()), float(w_[:, 10:14].abs().max()), float(w_[:, 14:].abs().max()), e_))
-    check("the hands' weights on the order's and the map's inputs are still zero (COMBAT and SPACE_IN off: those inputs read zeros), so a check played "
-          "with COMBAT on for 1.7a's update 90 changes nothing for him", float(w_[:, :10].abs().max()) == 0.0 and float(w_[:, 14:].abs().max()) == 0.0)
+    I_ = ck.get("inputs") or {}
+    check("the save is of list 18 with its names ({})".format(I_), I_.get("list") == 18 and len(ck.get("input_names") or ()) == I_.get("n")
+          and ck["model"]["enc.0.weight"].shape[1] == I_["n_hands"] and ck.get("env_module") == "duel_env_ffa18")
     # ---- the restart (the card's update 150): phase 2's switches, then the last two stages' dials at their ends
     n0 = len(M)
     lv = json.load(open(os.path.join(D, "live.json"), encoding="utf-8"))
-    lv.update(INTENT_TEACH_W=0.0, SPEED_PAY=0.0, KEEP_G=0.975)
+    lv.update(INTENT_TEACH_W=0.0, SPEED_PAY=0.0, KEEP_G=0.975, SFADE=1.0)
     json.dump(lv, open(os.path.join(D, "live.json"), "w", encoding="utf-8"))
     t2 = make_cmd(run, D, 30000, sets=(("INTENT_SWITCH", "0"), ("WEAPON_OWN", "1")))
     t_ = open(t2, encoding="ascii").read().replace("--overlap 1 --learn-nosync 1", "--overlap 1 --learn-nosync 1 --max-updates 3")
@@ -365,6 +391,9 @@ def smoke():
           M2[n0:] and all(abs(((m.get("keep") or {}).get("g") or 0) - 0.975) < 1e-6 for m in M2[n0 + 1:]) and
           all(math.isfinite(float(m.get("kl") or 0.0)) for m in M2[n0:]))
     ck2 = torch.load(os.path.join(D, "policy.pt"), map_location="cpu", weights_only=False)
+    check("after the restart the strategy inputs are out of the hands (the record's gate {}; the save's {})".format(
+        [(m.get("sfade") or {}).get("g") for m in M2[n0:]], ((ck2.get("rule_fade") or {}).get("more") or {}).get("g")),
+        all((m.get("sfade") or {}).get("g") == 1.0 for m in M2[n0 + 1:]) and ((ck2.get("rule_fade") or {}).get("more") or {}).get("g") == 1.0)
     check("the save after the restart records WEAPON_OWN 1 ({})".format((ck2.get("env_vars") or {}).get("WEAPON_OWN")), str((ck2.get("env_vars") or {}).get("WEAPON_OWN")) in ("1", "1.0"))
     sys.path.insert(0, os.path.join(ROOT, "tools", "run"))
     os.environ["PANEL_RUN"] = run
@@ -392,7 +421,7 @@ def live():
     c_ = make_cmd(run, D, 30000)
     t_ = open(c_, encoding="ascii").read().replace("--overlap 1 --learn-nosync 1", "--overlap 1 --learn-nosync 1 --max-updates 5")   # (a dial written after
     open(c_, "w", encoding="ascii", newline="").write(t_)                                                                              # update 1 is played by 4)
-    MID = dict(AIM3_W=0.5, AIM3_SIZE_A=0.7, AIM3_SIZE_B=0.18, H2_PG=0.4, INTENT_TEACH_W=0.5, SPEED_PAY=0.06, KEEP_G=0.5)
+    MID = dict(AIM3_W=0.5, AIM3_SIZE_A=0.7, AIM3_SIZE_B=0.18, AIM3_LEAD=0.5, AIM3_RELOAD=0.5, H2_PG=0.4, INTENT_TEACH_W=0.5, SPEED_PAY=0.06, KEEP_G=0.5, SFADE=0.3)
     ok_ = step_live(D, popen(c_), {1: MID}, 40)
     if not ok_:
         say("the trainer still runs after 40 min: left running")

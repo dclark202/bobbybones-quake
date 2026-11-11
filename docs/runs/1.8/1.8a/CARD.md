@@ -9,17 +9,18 @@ update 10, 53% at 50, 56% at the end; rockets 37% to 26%), under an aim model wh
 smallest. The family: [README](../README.md). The aim: [design/AIM3.md](../../../design/AIM3.md). What comes after:
 [2.1](../../2.1/DESIGN.md).*
 
-**NOT STARTED, AND NOT READY TO START (2026-11-11 afternoon).** The owner's order of work: "fix the inputs + tune aim3; redo from 1.2d on; then
-get to 2.1"; "I will start 1.8 from a new session." Everything below was built and tested this morning on the UNCLEANED start (b1.2d's end
-widened to 1,053 inputs). The input clean-up ([design/INPUTS_CLEANUP.md](../../../design/INPUTS_CLEANUP.md), its "Final" table) changes the
-start network and every list, so **before a go these are redone on the cleaned start**: the start and its proofs (`tests.py start`), the
-identity, live, smoke and dry tests, the zero point; and **built new**: the last stage (the strategy inputs fading out of the hands). What
-carries over unchanged: the design, the schedule, the command's settings, the ramp, the restart, the scripts' logic.
+**BUILT AND TESTED ON THE CLEANED INPUTS (2026-11-11 evening); NOT STARTED: the owner's review and go, from a new session.**
+What changed since the morning's build: the start is on the cleaned input list 18 ([design/INPUTS_CLEANUP.md](../../../design/INPUTS_CLEANUP.md),
+"As built"), AIM3 is tuned ([design/AIM3.md](../../../design/AIM3.md) section 9), the schedule is the condensed one with the head at 80
+updates, and the last stage (the strategy inputs out of the hands) is built. Every test below was run again on that start.
 
 **Marks:** ✅ exists and was tested in its own run · ⏳ to build and test before a go · 🧪 measured in the run · ❓ the owner's to decide
 
-**Started from:** b1.2d's end (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt` + `opt_end_b12d.pt`; 980 inputs), widened with
-zero weights to today's 1,053 inputs, the strategy head (1.3b's form) and the keep choice (1.7a's form) added at zero effect.
+**Started from:** b1.2d's end (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt` + `opt_end_b12d.pt`; 980 inputs), widened to the
+simulator's 1,053 (`tools/b18_init.py`), brought to **the cleaned list 18** (`tools/inputs18.py`: 876 inputs, 177 dead ones cut and folded,
+the hands' encoder the first 796, the brain the first 691, every input re-measured to its right size, the optimizer's moments with them),
+then the strategy head (1.3b's form, with 89 columns of its own) and the keep choice (1.7a's form) added at zero effect. The simulator:
+`sim/duel_env_ffa18.py` (the group module giving that list).
 
 ## The owner's page
 
@@ -37,6 +38,8 @@ zero weights to today's 1,053 inputs, the strategy head (1.3b's form) and the ke
 | Part | From | In 1.8a |
 |---|---|---|
 | AIM3 at the default level (the average pro's parameters) | 2.0c's build ✅ | live, 0 → end values over updates 0 to 30 |
+| AIM3's tuning (AIM3.md section 9): the fixation time 0.05 s (fitted; it was 0.10); the rocket lead over his own delay (`AIM3_LEAD` 0 → 1); no extra reload wait on the slow weapons (`AIM3_RELOAD` 1 → 0) | measured on the pros 11-11 ✅ (off = the simulator before, to the bit) | the fixation time fixed from the start; the two dials with AIM3, updates 0 to 30 |
+| The cleaned input list 18 and the input health report | the input audit and clean-up, 11-11 ✅ | from the start; the report at the start and at every kept mark |
 | No firing cost of any kind: `SHOT_COST=0`, `BLIND_FIRE_W=0`, `COST_FIRE_W` 0, refused at the start if above zero | 1.5a, 1.6a ✅ | from update 0 |
 | The strategy head's target scores added to the hands' (`--head2-add`, memory speeds spread, λ 0.995, the item rule teaching the hands' rows alone, decoupled weight decay 0.01 on both parts) | 1.3b ✅ (89% against b1.2d's end; 25% with the head blanked) | attached at zero from update 0; its credit (`H2_PG`) 0 → 1 over updates 50 to 130, 1.3b's 80 updates |
 | The switch cost out, a weapon he holds choosable (`INTENT_SWITCH=0`, `WEAPON_OWN=1`) | 1.4b ✅ | at the restart, update 150 (as in 1.4b: after the head has the credit) |
@@ -102,21 +105,22 @@ lightning in hand over 50% (reported, not acted on). Negative frags and lopsided
 - Without the head's weapon part his weapon is the hands' alone, as in 1.3b. If 2.1's instruction is late, he has no slow reason for a weapon.
 - One planned restart. A restart right after a save, with the optimizer, has been done many times; it is still the run's one seam.
 
-## Built and tested before the go (2026-11-11; scratch folders only, nothing of a real run touched)
+## Built and tested before the go (2026-11-11 evening, on the cleaned start; scratch folders only, nothing of a real run touched)
 
 | | State |
 |---|---|
-| The start: b1.2d's end widened 980 → 1,053 (zero weights; `tools/b18_init.py widen`, new), the head added (`tools/head2_init.py add --add 1 --chrono-lo 1 --gate 0 --ctrl-src belief`), the keep choice added (`tools/keep_init.py add`); 1.3b's three anchors widened | ✅ `tests_start.log`: every weight of b1.2d's end unchanged, the 73 new input columns zero, the four new tokens shut, the head's target layer zero, no weapon part, no order; **0 actions differ** from b1.2d's end (400 frames, 8 seats, the new inputs random too) |
-| `train.cmd` from 2.0c's by `make_files.py` (phase 1 and 2); the settings check against 1.7a's command | ✅ only these differ: the run, the minutes, the seven AIM3 names, `--gate-open`, `--head2-wpg 0`, `--pass-odds 0`, `--habit-p 0`, `COMBAT=0`, and until the restart `INTENT_SWITCH=0.02`, `WEAPON_OWN=0`. `start.ps1` runs it again and refuses on any other |
-| The start's `live.json` (`start_live.py`: b1.2d's own file, checked against its end save's record, plus the head's, the keep choice's and AIM3's names at their start and `DMG_REWARD` 0.005); the trainer's own reader on it and on all 292 files the ramp will write | ✅ `LIVE ACCEPT: PASS` |
-| The trainer at a fixed seed (six small runs; run again with the zero-sum start) | ✅ `tests_ident2.log` (`tests_ident.log`: the same at taken 0.8): damage taken weighs as dealt; it repeats itself to the bit; the damage pay changes nothing before the first learning step and the ledger pays exactly 0.005 against 0.0055; AIM3's end dials change the first update's actions (6%); the head's credit changes nothing before the first learning step and is played as written; no firing cost in the ledger; the optimizer's moments carried over the widened inputs |
-| The real trainer applies the start's `live.json` before its first rollout; mid values of all seven dials written after update 1 are applied and are in the save's record | ✅ `tests_live2.log` (the zero-sum start) |
-| Ten small updates with every dial stepped, then **the restart** (phase 2's two switches, the teacher and the speed pay out, the keep choice at 0.975), three more updates, a one-map check against b1.2d's end and against 1.7a's update 90 | ✅ `tests_smoke.log`. **Found and fixed:** the trainer's own update number starts at 1 again after a restart; the ramp read it, so every dial would have frozen at update 150. The ramp's clock is now the number of lines in `metrics.jsonl` (as the watcher counts). Also read there: the hands' weights on the order's and the map's inputs stay exactly zero |
-| `ramp_18a.py` on fake files, through the restart (`ramp_test.py`; run again on the condensed schedule, 11-11 afternoon; the last stage is not in it yet) | ✅ `ramp_test.log`: each dial on its stage, the marks kept once, the clock on from 150 after the restart with the trainer's number at 1, a check under 40% a MAJOR PROBLEM with the clock not held, the lightning over half and a firing cost flagged |
-| **The dry run of the head's opening at full size** (the graphics card, 10 updates, the credit 0 → 0.5 → 1 as 1.3b's fifth dry run, AIM3 at its start values; run before the owner's zero-sum word, so with damage taken at 0.8) | ✅ `tests_dry.log`: his step 0.032 to 0.041 (1.3b's dry run: 0.031 to 0.041); the hands' part of his target scores 21.6 to 22.6 (21.6 to 22.7); the head's part 0.07 → 2.0 (0.06 → 2.9); their cosine −0.06 to −0.18 (−0.16 to 0); the clip share under 0.10; **5.3 minutes an update**; in hand in games rockets 36%, lightning 39%, rail 4% |
-| The zero point against 1.7a's update 90 (`zero_point.py`: the start, 200 games, the checks' settings, both seats under AIM3's end values) | ✅ `zero_point.log`: **11-189, 5.5%**, frag share 20.3%; the start owns the rail 32% of its time alive there. Against b1.2d's end no games are needed: the two answer alike |
-| `start.ps1` (the start and `-Restart`), `stop_18a.ps1` (the trainer alone, by its own command line, only when the kept save of that update is the run's `policy.pt`) | ✅ written, parsed; their checks are the ones above. They run for the first time at the start |
-| `tools/aim2_levels.py` with AIM3's columns | not done (a play setting; not needed for the run) |
+| The start (`tests.py start`) | ✅ `tests_start.log`, ALL PASSED (10 checks): b1.2d's end widened answers as b1.2d's end (0 actions differ); the cleaned network answers as the widened one on 3,200 real rows, each through its own list (every first layer's sums the same to 1e-13; in the checks' single precision at most 5 of 44,800 choices may differ, and with the brain's half-precision input rounding 18 do: the two read their inputs on different grids); the list has nothing of the cut groups and keeps the ways, the heavy machine gun, the gauntlet, the grenade arc, the pre-fire and the emergence; the head and the keep choice at zero effect (0 actions differ); the head's 89 columns; the strategy fade's 29 columns, shut |
+| The settings check against 1.7a's command | ✅ only these differ: the run, the minutes, `--env duel_env_ffa18`, `--brain-fade 0` (nothing left for it to fade), `--gate-open`, `--head2-wpg 0`, `--pass-odds 0`, `--habit-p 0`, `COMBAT=0`, the AIM3 names, and until the restart `INTENT_SWITCH=0.02`, `WEAPON_OWN=0`. `start.ps1` runs it again and refuses on any other |
+| The trainer at a fixed seed, seven small runs (`tests.py ident`) | ✅ `tests_ident.log`, ALL PASSED (40 checks): it repeats itself to the bit; the damage pay 0.005 and zero-sum in the ledger; AIM3's end dials (the lead and the reload with them) change the first update's actions; the head's credit changes nothing before the first learning step; the strategy fade at 1 changes the first update's actions and is in the record; no firing cost |
+| The live file (`tests.py live`) | ✅ `tests_live.log`, ALL PASSED (7 checks): applied before the first rollout; mid values of all ten dials are applied and in the save's record |
+| Ten small updates with every dial stepped, **the restart**, the last two stages and the strategy fade at their ends, a one-map check against b1.2d's end and against 1.7a's update 90 in the full simulator (`tests.py smoke`) | ✅ `tests_smoke.log`, ALL PASSED (18 checks) |
+| `ramp_18a.py` on fake files through the restart (`ramp_test.py`) | ✅ `ramp_test.log`: all ten dials on their stages, the marks kept once, the clock on from 150 with the trainer's own number at 1; the trainer's reader accepts every file the ramp will write |
+| The cleaned start at full size (the graphics card; `tests.py dry`, stopped after two updates on the owner's word: "Is 55 minutes really needed") | ✅ `tests_dry.log` has no verdict; read from its metrics: his step 0.034 and 0.033 (the morning's uncleaned start: 0.033, 0.032), the hands' part of his target scores 21.55 and 22.54 (21.58, 22.59), the head's part 0.08 and 0.66 (0.07, 0.60), the optimizer's converted moments loaded, no cold start. The resized inputs and the converted moments train as before at full size. The head's opening at full size was shown by the morning's ten-update dry run (his step 0.032 to 0.041, the head's part 0.07 → 2.0, as 1.3b's dry run) |
+| The zero point against 1.7a's update 90 | not repeated on the cleaned start (stopped; the run's own fourth check gives it). The morning's, on the uncleaned start: 11-189, 5.5% |
+| The input health of the start (`tools/run/input_health.py`) | ✅ the live inputs' size after the normalizer: median 1.00 (b1.2d's own: 0.47); under half size 19% (53%): the unread tail and 41 rare columns left at their old statistics |
+| `start.ps1` (the start and `-Restart`), `stop_18a.ps1` | ✅ written, parsed; they run for the first time at the start |
+
+**Not done, and not needed for the run:** the plugins and the export on the cleaned list (before any server); the latency by input group.
 
 **How it is run:** `start.ps1 -Minutes <n>`; at update 150 `stop_18a.ps1 -Update 150`, then `start.ps1 -Restart -Minutes <n>`; at the end `stop_18a.ps1 -Update 330 -All`. I do the restart and the end by hand while monitoring, on the card's word.
 

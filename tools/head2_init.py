@@ -34,7 +34,12 @@ def add(a):
     assert ck.get("belief") is not None and "track.0.weight" in sd, "the strategy head reads the brain: a network with --belief and --track"
     tz = int(ck["track_z"]["d"]) if (ck.get("track_z") and "trackz.0.weight" in sd) else 0
     ah = int(ck["ahead"]["d"]) if (ck.get("ahead") and "ahead.0.weight" in sd) else 0
-    L = head2_.layout(brain=int(ck["belief"]["hid"]), trk=int(sd["track.2.weight"].shape[0]), trz=tz, ahead=ah, ctrl=a.ctrl,
+    oc_ = None
+    if ck.get("inputs"):                                     # (1.8) a network of a cleaned list: the head's own columns by name in ITS list
+        nm_ = [tuple(x_) for x_ in ck["input_names"]]
+        oc_ = sorted(j_ for j_, (g_, n_) in enumerate(nm_) if "believed" not in n_ and any(
+            g_ == sg_ and (sn_ is None or n_ == sn_ or (sn_.endswith(" ") and n_.startswith(sn_))) for sg_, sn_ in head2_.OBS_SEL_18))
+    L = head2_.layout(obs=oc_, brain=int(ck["belief"]["hid"]), trk=int(sd["track.2.weight"].shape[0]), trz=tz, ahead=ah, ctrl=a.ctrl,
                       hands=int(ck["hidden"]), enc=256, size=a.size, inp=a.inp_w, plan=a.plan,
                       n_target=int(ck["action_dims"][INTENT_HEAD]), every=int(ck["belief"]["every"]), gamma=a.gamma,
                       on={p: 0 for p in a.off.split(",") if p}, ctrl_src=a.ctrl_src, chrono_lo=a.chrono_lo)

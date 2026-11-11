@@ -1,10 +1,19 @@
-08:55:17 PASS every weight of b1.2d's end outside the attention part and the encoder's first layer is in the start unchanged (0 differ); the first 980 input columns equal, the other 73 zero
-08:55:17 PASS the only new parts are the strategy head's (['head2'])
-08:55:17 PASS the head: its add 1, its gate 0, its target layer zero, the keep choice (2) at share 0, no weapon part, no order, no fire push ({'keep': 2, 'weapon': None, 'cmb': None, 'fire': None})
-08:55:17 PASS the start's shut tokens are the order, the timers, space and targets ({'order': -30.0, 'timers': -30.0, 'space': -30.0, 'targets': -30.0})
 same: 400 frames x 8 seats: largest |h a - h b| = 2.82e-05; actions that differ: 0
 ALL PASSED
-08:55:22 PASS the start answers as b1.2d's end: 0 actions differ (400 frames, 8 seats, the new inputs random too, the head's whole path run)
+11:27:19 PASS b1.2d's end widened to the simulator's 1,053 inputs answers as b1.2d's end: 0 actions differ
+same (as played: the brain's inputs at half precision): 400 real rows x 8 seats, each network through its own list: largest |h a - h b| = 0.211; actions that differ: 18 of 44800
+same (the brain's rounding off): 400 real rows x 8 seats, each network through its own list: largest |h a - h b| = 0.000343; actions that differ: 1 of 44800
 ALL PASSED
-08:55:30 PASS keep_init same: share 0 answers as without the keep choice; at share 1 the start is the lock made soft
-08:55:30 ALL PASSED
+11:27:27 PASS the cleaned list: the network cut, routed and resized answers as before on real rows, each through its own list: at most 5 of 44,800 choices differ with the brain's half-precision rounding off (single-precision rounding of the rescaled 
+11:27:27 PASS every first layer's sums unchanged on the sample (the largest differences: {'enc': 8.526512829121202e-14, 'brain': 1.1368683772161603e-13, 'tokens': 2.1316282072803006e-14})
+11:27:27 PASS the start is of list 18: 876 inputs, the brain the first 691, the hands the first 796 ((256, 796))
+11:27:27 PASS nothing of the cut groups is in the list; the ways, the heavy machine gun, the gauntlet, the grenade arc, the pre-fire and the emergence are
+11:27:27 PASS the tail (80 columns the first layers do not read): the 76 rule-made columns and the yellows' four timers
+11:27:27 PASS the strategy inputs' fade is in the start, shut: 29 columns of the hands' (['clock and score', 'memory', 'v02 game', 'v02 items']), every one also among the head's own
+11:27:27 PASS the head: its add 1, its gate 0, its target layer zero, the keep choice (2) at share 0, no weapon part, no order; its own columns (89) have the weapon in his hand, the enemy in view and the four items' timers, and not the order's
+same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0
+ALL PASSED
+11:27:32 PASS the head and the keep choice at zero effect: the start answers as the cleaned network without them (0 actions differ, the head's whole path run)
+ALL PASSED
+11:27:40 PASS keep_init same: share 0 answers as without the keep choice; at share 1 the start is the lock made soft
+11:27:40 ALL PASSED

@@ -328,7 +328,10 @@ def _aim2_values(get):
              AIM2_FOCUS_GAIN=f_("AIM2_FOCUS_GAIN", 0.0), AIM2_FOCUS_SIG=f_("AIM2_FOCUS_SIG", 0.75),
              AIM2_SMOOTH_K=f_("AIM2_SMOOTH_K", 1.0),
              AIM3_W=f_("AIM3_W", 1.0), AIM3_PURSUIT_TAU=f_("AIM3_PURSUIT_TAU", 0.10), AIM3_PURSUIT_GAIN=f_("AIM3_PURSUIT_GAIN", 0.9),
-             AIM3_FIX_TAU=f_("AIM3_FIX_TAU", 0.15), AIM3_SIZE_A=f_("AIM3_SIZE_A", 1.0), AIM3_SIZE_B=f_("AIM3_SIZE_B", 0.0))
+             AIM3_FIX_TAU=f_("AIM3_FIX_TAU", 0.15), AIM3_SIZE_A=f_("AIM3_SIZE_A", 1.0), AIM3_SIZE_B=f_("AIM3_SIZE_B", 0.0),
+             AIM3_LEAD=f_("AIM3_LEAD", 0.0), AIM3_RELOAD=f_("AIM3_RELOAD", 1.0))
+    if not (0.0 <= v["AIM3_LEAD"] <= 1.0 and 0.0 <= v["AIM3_RELOAD"] <= 1.0):
+        raise ValueError("AIM3_LEAD and AIM3_RELOAD must be within 0 .. 1")
     if not (0.0 <= v["AIM3_SIZE_A"] <= 5.0 and 0.0 <= v["AIM3_SIZE_B"] <= 5.0):
         raise ValueError("AIM3_SIZE_A and AIM3_SIZE_B must be within 0 .. 5")
     if not (0.0 <= v["AIM3_W"] <= 1.0 and 0.0 <= v["AIM3_PURSUIT_GAIN"] <= 1.0):
@@ -349,7 +352,16 @@ def _aim2_values(get):
 globals().update(_aim2_values(os.environ.get))
 AIM2_LIVE = ("AIM2_W", "AIM2_C_SLIP", "AIM2_S0", "AIM2_CAP_SLIP", "AIM2_C_ECC", "AIM2_E0", "AIM2_CAP_ECC", "AIM2_SPLIT_W",
              "AIM2_FOCUS_GAIN", "AIM2_FOCUS_SIG", "AIM2_SMOOTH_K", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU",
-             "AIM3_W", "AIM3_PURSUIT_TAU", "AIM3_PURSUIT_GAIN", "AIM3_FIX_TAU", "AIM3_SIZE_A", "AIM3_SIZE_B")
+             "AIM3_W", "AIM3_PURSUIT_TAU", "AIM3_PURSUIT_GAIN", "AIM3_FIX_TAU", "AIM3_SIZE_A", "AIM3_SIZE_B", "AIM3_LEAD", "AIM3_RELOAD")
+# AIM3_RELOAD (2026-11-11, docs/design/AIM3.md section 5; with AIM3; live; 1 = as before to the bit): a factor on the slow weapons' random extra
+# wait after every shot (RELOAD_JITTER: mean about 43 ms, never none). Measured on the pros (tools/run/pro_refire.py, 400 demos): with the
+# trigger held their next rocket leaves on the reload's own frame in 48% of pairs (grenades 77%, shotgun 39%, rail 25%), the median wait 25 ms:
+# a held trigger has no such delay, and a fresh press is already under his finger limits. 0 = none.
+# AIM3_LEAD (2026-11-11, docs/design/AIM3.md section 5; with AIM3; live; 0 = as before to the bit): the rocket's and the plasma's meeting point
+# (the six "lead" inputs, _v14) was made from the enemy as he saw him a reaction time ago plus the enemy's speed x the shot's flight time,
+# so it lay behind a crossing enemy by his speed x that delay (his rockets: 0.17 of a full lead behind; the pros 0.02: a person leads over
+# his own delay too). At 1 the enemy's move over the delay (his own perceived speed, late and with its error, x react_frames x DT) is added
+# before the flight; between: that share of it. From his own senses only.
 AIM3_SIZE_MAX = 5.0                                    # degrees: his half width as it counts for the base error, at most (nearer than 170 units)
 MOUSE_SMOOTH = 0.75                                    # view velocity inertia per frame
 JERK_COST = 0.00002                                    # reward cost per degree/frame of change in the turn command
@@ -8409,7 +8421,7 @@ class DuelEnv:
     SEAT_AIM = ("PERCEPT_SIGMA", "PERCEPT_SPEED", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU", "MOTOR_NOISE", "MOTOR_BASE",
                 "SURPRISE_MS", "AIM2_W", "AIM2_C_SLIP", "AIM2_S0", "AIM2_CAP_SLIP", "AIM2_C_ECC", "AIM2_E0", "AIM2_CAP_ECC",
                 "AIM2_SPLIT_W", "AIM2_FOCUS_GAIN", "AIM2_FOCUS_SIG", "AIM2_FLINCH",
-                "AIM3_W", "AIM3_PURSUIT_TAU", "AIM3_PURSUIT_GAIN", "AIM3_FIX_TAU", "AIM3_SIZE_A", "AIM3_SIZE_B")
+                "AIM3_W", "AIM3_PURSUIT_TAU", "AIM3_PURSUIT_GAIN", "AIM3_FIX_TAU", "AIM3_SIZE_A", "AIM3_SIZE_B", "AIM3_LEAD", "AIM3_RELOAD")
 
     def _sa(self, name):
         """(SEAT_AIM, branch aim2) a check that seats two aim models: env.seat_aim = {name: one value a seat} for the names of
@@ -9544,6 +9556,11 @@ class DuelEnv:
         c_ = np.maximum(cs, 1.0)
         r0 = known + np.array([0, 0, 4.0], np.float32) - eye
         air = self._sm_e["air"] if SENSE_MINOR else self.state[opp, 6] < 0.5
+        if AIM3:                                             # (AIM3_LEAD) the enemy's move over his own delay, before the flight
+            ld_ = np.asarray(self._sa("AIM3_LEAD"), np.float64)
+            if np.any(ld_ > 0):
+                d_ = (ld_ * np.asarray(self.react_frames if self.react_seat is None else self.react_seat, np.float64) * DT).astype(np.float32) * np.ones(self.n, np.float32)
+                r0 = r0 + np.stack([opp_vel[:, 0] * d_, opp_vel[:, 1] * d_, np.where(air, opp_vel[:, 2] * d_, 0.0)], 1).astype(np.float32)
         t = np.linalg.norm(r0, axis=1) / c_
         for _ in range(3):                                   # the flight time and the enemy's place by then, each from the other
             t = np.minimum(t, 3.0)
@@ -13403,7 +13420,10 @@ class DuelEnv:
         self.fire_cd = np.where(shoot, W_REFIRE[self.weapon], self.fire_cd)
         if self.human_aim:                                  # nobody fires on the exact frame the reload ends
             slow = shoot & (W_REFIRE[self.weapon] >= 0.4) & (self.script == 0)
-            self.cool = self.cool + slow * np.minimum(self.rng.exponential(RELOAD_JITTER, n), RELOAD_JITTER_MAX).astype(np.float32)
+            jit_ = np.minimum(self.rng.exponential(RELOAD_JITTER, n), RELOAD_JITTER_MAX).astype(np.float32)   # (drawn as always: the stream is the same)
+            if AIM3:                                         # (AIM3_RELOAD) its factor: 1 as before, 0 none
+                jit_ = jit_ * (np.asarray(self._sa("AIM3_RELOAD"), np.float64) * np.ones(n)).astype(np.float32)
+            self.cool = self.cool + slow * jit_
         if out_ is not None:                                 # (RESPAWN_QL) a body waiting to respawn pays nothing for the trigger
             reward -= FIRE_TOGGLE_COST * COST_FIRE_W * ((fire != self.fire_prev) & ~out_)
         else:

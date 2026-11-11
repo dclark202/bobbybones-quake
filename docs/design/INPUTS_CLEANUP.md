@@ -192,20 +192,39 @@ The lists: the simulator about 840 columns; the hands about 760, about 730 after
 the belief and the hands' memory. Kept in the hands for now: the places, the holds, the small items (where his targets are), judged at
 full size after the run (E).
 
-## State and what a new session picks up (2026-11-11 afternoon)
+## As built (2026-11-11 evening)
 
-**Nothing of the clean-up is built.** Decided and recorded above; the owner starts the next session for it. In order:
+**Built and tested; nothing started.** The proofs are 1.8a's tests ([runs/1.8/1.8a/CARD.md](../runs/1.8/1.8a/CARD.md)).
 
-1. Time the building of each input group in the plugin (the latency baseline); make the audit a tool (`tools/run/input_health.py`, from
-   `docs/runs/1.8/1.8a/audit_obs.py` and the audit's two inline analyses: constants, size, clip, each group's share at each reader).
-2. The new list in `sim/duel_env.py` behind one switch; today's simulator frozen as a copy for every older network; `tools/make_ffa_env.py`'s
-   anchors; `docs/INPUTS.csv` and a frozen `docs/INPUTS_1053.csv`.
-3. The converter (by name; constants folded into the bias or the token's mark; the rescale with the optimizer's moments; each network's own
-   list in the checkpoint) for b1.2d's end, its optimizer and 1.3b's three anchors.
-4. Proofs: 0 actions differ against the unconverted network at fixed seeds; the plugin's inputs against the simulator's in a real game.
-5. AIM3's open points on the cleaned network.
-6. 1.8a's start and tests again on the cleaned start, the last stage built ([runs/1.8/1.8a/CARD.md](../runs/1.8/1.8a/CARD.md)); the owner's go.
+| Change of the final table | As built |
+|---|---|
+| 1. The dead columns out of every network | **177 cut, not about 213.** Reading the code corrected the audit: "never changed in 38,421 rows of self-play" is not "dead". Cut: what is dead by construction (free-for-all 24, movement goal 7, style 4, the legs switch 2, drift 4, order 10, space 8, targets 51, rays outside his field of view 19, deadly drops 16, flags that are always 1 on the ten maps 32). **Kept, though constant in the sample (62):** what a person can cause (the enemy crouched, a gauntlet or heavy machine gun in his hand, a fifth and sixth projectile in view, a second rocket in view) and the owner's list (the ways, the heavy machine gun, the gauntlet, the grenade arc). The fixed number a cut column fed is folded into the encoder's and the brain's bias and the tokens' marks |
+| 2. The 76 rule-made columns out of the hands | done, **and out of the brain**: the second correction of the audit. The brain was faded off these 76 in b1.1 (its own fade at 1.0), so no network reads them today, the pre-fire and emergence included; the audit's "11% of the brain's signal" was measured without that fade and is wrong. They are kept in the list's tail, read by no first layer (the trainer's guessing lesson uses five of them as marks). ❓ **the owner's call: should a network read the pre-fire and emergence again, and which** |
+| 3. The yellows' timers: the head only | done (the tail; the head's own columns) |
+| 4. Every input re-measured, the first layers rescaled, the optimizer's moments with them | done (`tools/inputs18.py`): the live columns' size after the normalizer, median 0.47 → 1.00; under half size 53% → 19% (what is left: the unread tail, and 41 rare columns that sat at the old clip and are not two-valued, left as they were to stay exact: projectiles, hits, some sounds). The sums of every first layer are the same to 1e-13 on the sample |
+| 5. Each network its own list by name | the checkpoint carries `input_names` and `inputs` (the brain reads the first 691, the hands' encoder the first 796, of 876); every check tool gives a network its own columns by name |
+| 6. The head at its birth | 89 columns of its own: + the weapon in his hand (9), the enemy noticed in view, the timers of the mega, the red and both yellows, who has the mega and the red; − the order's ten |
+| 7. The strategy inputs out of the hands at the end of 1.8 | built: the rule fade's second group (29 columns), the live `SFADE` 0 → 1 over updates 270 to 310 of 1.8a; the head reads them unfaded. Their removal from the list after the run is a converter step not yet written |
+| 8. The rules | in CLAUDE.md ("Inputs"); `tools/run/input_health.py` runs at the start and at every kept mark of 1.8a |
 
-1.8a's schedule as agreed (owner: "keep the head at 80. The rest looks fine"): AIM3 over updates 0 to 30; the head's credit 50 to 130; the
-restart at 150; the item teacher and the speed pay out 160 to 190; the keep choice 210 to 250; the strategy inputs out of the hands 270 to
-310; the end at 330 (about 29 hours at 5.3 minutes an update).
+**How it is built, and where it departs from "How it is done" above:**
+
+- **The simulator's own code is not changed.** `sim/duel_env_ffa18.py` is the group module with its `observe()` giving the list's 876 columns
+  in the list's order (`sim/input_list.py`, `sim/input_list_18.json`, `docs/INPUTS_18.csv`); the trainer runs it (`--env duel_env_ffa18`).
+  There is no frozen copy: `duel_env_ffa` IS today's simulator, and every older network plays in it as before. The checks play in the full
+  simulator and hand each network its columns by name, so a cleaned network meets 1.7a's update 90 there with nothing changed for either.
+- **So the simulator still builds all 1,053 columns each frame** and 177 are dropped at the door. No latency is saved yet: that needs the
+  dead groups' work skipped inside `observe()`, and **the plugin's time by group was not measured** (step 1 of the plan: not done).
+- **The plugins and the export do not know a cleaned list yet** (`plugins/netpass.py`, `sim/export_duel.py`: the encoder's prefix, the names):
+  a network of list 18 cannot go on a server until they do.
+- "He answers the same": exact in double precision. In the checks' single precision a handful of 44,800 choices can differ (rounding of the
+  rescaled sums), and with the brain's half-precision input rounding 18 do: the two networks read their inputs on different grids.
+- The league's three files are converted the same way. v0.6.0's end has no brain fade of its own; the trainer has played every league
+  file at the learner's fade since b1.1, so its brain is given the learner's list.
+
+## What a new session picks up
+
+1. The owner's review of [1.8a's card](../runs/1.8/1.8a/CARD.md) and his go; the run's row in `docs/RUNS.md` at its start.
+2. ❓ the pre-fire and emergence (above).
+3. Before any server use: the plugins and the export on list 18; the plugin's time by group; the dead groups skipped in `observe()`.
+4. After the run: the strategy inputs removed from the hands' list; the places, holds and small items judged at full size (E).

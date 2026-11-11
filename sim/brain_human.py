@@ -29,7 +29,8 @@ def track_loss(o, y, weights, mask, pm):
 
 
 class HumanLesson:
-    def __init__(self, path, obs_mean, obs_var, hid, dev, piece=384, lanes=0):
+    def __init__(self, path, obs_mean, obs_var, hid, dev, piece=384, lanes=0, cols=None):
+        self.cols = None if cols is None else np.asarray(cols, np.int64)   # (1.8, a cleaned list) the pack's columns the brain reads, in its order
         import torch
         self.path = path
         self.meta = json.load(open(os.path.join(path, "meta.json")))
@@ -74,7 +75,7 @@ class HumanLesson:
             self.s = s_
         p0, P, B = self.p0s[g], self.P, self.B
         self.p0 = p0
-        x = torch.from_numpy(np.ascontiguousarray(self.obs[p0:p0 + P, ln])).to(self.dev)
+        x = torch.from_numpy(np.ascontiguousarray(self.obs[p0:p0 + P, ln] if self.cols is None else np.asarray(self.obs[p0:p0 + P, ln])[..., self.cols])).to(self.dev)
         x = torch.clamp((x.float() - self.mean) / self.sd, -10, 10).half().float()
         d = torch.from_numpy(self.done[p0:p0 + P, ln].astype(np.float32)).to(self.dev)
         sl = slice(p0 // K, (p0 + P) // K)
