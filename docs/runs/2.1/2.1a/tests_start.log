@@ -1,0 +1,11 @@
+14:45:34    same: 400 real rows x 8 seats, the new columns random: largest |memory a - memory b| = 4.77e-05; actions that differ: 0 of 44800
+14:45:34 PASS list 21 answers as list 18 on real rows, the new columns random (0 actions differ)
+14:45:39    same: 400 real rows x 8 seats: actions that differ: 0 of 44800
+14:45:39 PASS the start (the head's instruction part added) answers as before it (0 actions differ)
+14:45:39 PASS the list: 852 inputs, the brain 691, the hands 844 (list 21)
+14:45:39 PASS the token 'instr' is the last kind and shut (gate -30)
+14:45:39 PASS every weight of update 50 is in the start: 119 tensors equal, 4 widened (attn.mark, attn.gate, enc.0.weight, head2.inp.weight), 0 missing
+14:45:39 PASS the hands' encoder: its 796 old columns unchanged, the 48 new at zero
+14:45:39 PASS the scorer inside the head (19 tensors), its share 0
+14:45:39 PASS the save's play variables as update 50's (WEAPON_OWN 0, INTENT_HOLD 8)
+14:45:39 ALL PASSED (8 checks)

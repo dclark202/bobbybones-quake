@@ -208,6 +208,34 @@ class Policy:
             import head2 as head2_
             self.o_at = self.W
             self.W = self.o_at + head2_.CMB_HELD
+        self.i_at = None                                     # (2.1) the head's choice of an instruction (sim/head2.py "ins": the scorer INSIDE
+        self.ins_pick, self.ins_g, self.ins_none = None, 0.0, -1   # the head, head2.ins_* of the network's weights, with the appraisals it reads):
+        if self.h2 is not None and self.h2.get("ins") and ck.get("ins") is not None and ck.get("appraise") is not None \
+                and "head2.ins_iv.weight" in ck["model"]:    # a seat's held instruction, after the order's
+            import appraise as appraise_
+            import head2 as head2_
+            self.insL = self.h2["ins"]
+            self.insW = head2_.np_ins_params({k_: v_ for k_, v_ in ck["model"].items() if str(k_).startswith("head2.ins_")})
+            self.ins_g = float(self.insW.get("ins_g", 0.0))
+            self.ins_none = int(ck["ins"].get("none_row", -1))
+            self.ins_warm = int(ck["ins"].get("seen", 0)) >= int(ck["ins"].get("warm", 0))
+            self.aprL, self.aprP = ck["appraise"]["layout"], appraise_.np_params(ck["appraise"]["model"])
+            self.insFILL = dict(ck["ins"].get("fill") or {})     # (the rows' columns the brain's answers are written into: sim/head2.py np_ins_prep)
+            self.knP = self.spP = self.msP = self.msL = None     # (the brain's readouts "does he know where I am", "where does he respawn"; the map
+            self.msT, self.ins_map = {}, None                    # sense where the rows read it: its table is the map's, named by the caller: ins_map)
+            if ck.get("known") is not None:
+                import knownodds as knownodds_
+                self.knP = knownodds_.np_params(ck["known"]["model"])
+            if ck.get("spawn") is not None:
+                import spawnodds as spawnodds_
+                self.spP = spawnodds_.np_params(ck["spawn"]["model"])
+            if int(self.insL.get("ms", 0) or 0) and ck.get("map_sense") is not None:
+                import mapsense as mapsense_
+                self.msL, self.msP = ck["map_sense"]["layout"], mapsense_.np_params(ck["map_sense"]["model"])
+            self.irng = np.random.default_rng(int(seed) + 4067)       # (its draws: a stream of their own)
+            self.i_at = self.W
+            self.W = self.i_at + head2_.ins_held_width(self.insL)    # (the row, its forecast then and now, the signals, weapon, age, on one, the coin, the brain's questions)
+            self.h2_live = self.h2_live or self.ins_g > 0            # (the scorer reads the head's state: it is stepped)
         self.passL = self.passW = None                       # (1.7) the brain's pass readout (sim/passodds.py): the candidates' odds
         if ck.get("passodds") is not None and "passr.l1.weight" in sd:
             self.passL = ck["passodds"]
@@ -236,6 +264,26 @@ class Policy:
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)
+
+    def _ins_u(self, st):
+        """(2.1) the part "ins" of the head's input from a seat's held numbers (sim/head2.py ins_u)"""
+        import head2 as head2_
+        return head2_.np_ins_held_u(self.insL, st)
+
+    def _ins_ms(self, tok, r_):
+        """(2.1) the map sense at the rows' places, for np_ins_prep: None where the network does not read it, the caller named no map
+        (ins_map) or the map has no table (data/maps/space_<map>.npz): the eight numbers are then zeros"""
+        if self.msP is None or not self.ins_map or tok is None:
+            return None
+        import mapsense as mapsense_
+        if self.ins_map not in self.msT:
+            self.msT[self.ins_map] = mapsense_.load_tables(os.environ.get("QLBOT_ROOT") or os.path.dirname(HERE), [self.ins_map])[0].get(self.ins_map)
+        S = self.msT.get(self.ins_map)
+        if S is None:
+            return None
+        en_, ok_, hd_ = np.asarray(tok.P, np.float32)[r_], np.asarray(tok.valid, bool)[r_], np.asarray(tok.hand)[r_].argmax(1)
+        return lambda P, pk, wme: mapsense_.rows_at(lambda x, row: mapsense_.np_forward(self.msP, x, row), self.msL, {self.ins_map: S},
+                                                    np.full(len(r_), self.ins_map), P, pk, en_, ok_, wme, hd_)
 
     @property
     def hm(self):
@@ -388,6 +436,19 @@ class Policy:
         order_feat() after this frame's step, these rows)"""
         return self.order_on and self.k_r is not None and bool(self.k_r.any())
 
+    @property
+    def ins_due(self):
+        """(2.1) the coming frame is a reading for some seat and this network gives instructions: give its act() ix= (sim/branch.py
+        worker_feat(env) of these rows) and, after it, the simulator its picks (ins_pick)"""
+        return self.i_at is not None and self.ins_g > 0 and self.k_r is not None and bool(self.k_r.any())
+
+    def set_ins_g(self, g):
+        """(2.1, the checks) the share of seats whose instruction is the head's, in place of the file's"""
+        assert self.i_at is not None, "set_ins_g: this network has no instruction scorer"
+        self.ins_g = float(g)
+        if self.ins_g > 0:
+            self.h2_live = True
+
     def set_cmb_g(self, g):
         """(1.7, the checks) the combat order's share, in place of the file's (a network without it: refused)"""
         assert self.o_at is not None, "set_cmb_g: this network has no combat order"
@@ -414,7 +475,7 @@ class Policy:
         assert self.h2 is not None and self.h2.get("keep"), "set_keep_g: this network has no keep choice"
         self.keep_g = float(g)
 
-    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None):
+    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
         --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, KEEP_FEAT]: (1.4c,
         with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice.
@@ -428,9 +489,11 @@ class Policy:
             h2_, lgl_ = LU_.np_branch(self.legsP, xl)
             dadd = LU_.np_door(self.uniD[0], self.uniD[1], h2_, ok_) if self.uniD is not None else None
             gadd = LU_.np_guide_add(self.uni, self.uniG, lgl_, ok_, sum(self.dims)) if self.uniG is not None else None
-        hh = hb = h2s = ohs = None
+        hh = hb = h2s = ohs = ist = None
         if self.brain_at is not None:                        # (v0.4.1) the brain's packed state, at the end of the array
             hb, h = h[:, self.brain_at:], h[:, :self.brain_at]
+        if self.i_at is not None:                            # (2.1) the instruction's held numbers, before the brain's state
+            ist, h = h[:, self.i_at:], h[:, :self.i_at]
         if self.o_at is not None:                            # (1.7) the order's held numbers, after the head's state
             ohs, h = h[:, self.o_at:], h[:, :self.o_at]
         if self.h2 is not None:                              # (v0.4.3) the strategy head's state, before the brain's
@@ -557,6 +620,25 @@ class Policy:
                     co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
                 oq_ = ((self.krng.random(len(r_)) < self.cmb_g) & okc_).astype(np.int64)
                 kcol[r_] = kcol[r_] + (8 * ko_ + 32 * co_ + 256) * oq_
+        self.ins_pick = None                                 # (2.1) this frame's picks of an instruction: (rows, c, w, who) or None
+        if self.i_at is not None and ix is not None and self.ins_g > 0 and h2s is not None and self.k_r is not None \
+                and len(self.k_r) == len(h2s) and self.k_r.any() and bst is not None:
+            import head2 as head2_                           # a reading (the frame after the head's tick): the rows filled with the brain's
+            S_ = int(self.h2["size"])                        # answers, scored on the head's state, a row, its weapon and quiet drawn
+            r_ = np.nonzero(self.k_r)[0]                     # (sim/head2.py np_ins_prep, np_ins_read: the trainer's rollout's sums, the
+            ixs_ = tuple(np.asarray(v_)[r_] for v_ in ix)    # one definition the plugin reads too)
+            ist = ist.copy()
+            sb_i, tk_i = np.asarray(bst[0].s, np.float32)[r_], bst[1]
+            X_, bq_ = head2_.np_ins_prep(ixs_, self.insFILL, self.insL, sb_i, hfast[r_, :self.H],
+                                         zone=np.asarray(tk_i.zone)[r_] if getattr(tk_i, "zone", None) is not None else None,
+                                         ah=head2_.np_mlp(self.h2_ah, sb_i) if self.h2_ah is not None else None, knP=self.knP, spP=self.spP,
+                                         ms=self._ins_ms(tk_i, r_))
+            sit_ = np.concatenate([sb_i, hfast[r_, :self.H], h2s[r_, :S_]], 1).astype(np.float32)
+            st_, pk_ = head2_.np_ins_read(self.insL, self.insW, self.aprL, self.aprP, self.ins_warm, self.ins_g, self.ins_none, self.h2["every"],
+                                          ist[r_], h2s[r_, :S_], sit_, X_, ixs_[1], ixs_[2], ixs_[3], ixs_[4], ixs_[5], ixs_[6],
+                                          (kd_[r_] > 0) if kcol is not None else np.ones(len(r_), bool), self.irng, bq_)
+            ist[r_] = st_
+            self.ins_pick = (r_,) + pk_
         if h2s is not None:                                  # (v0.4.3) the strategy head ticks with the brain, after the frame
             self.k_r = np.zeros(len(h2s), bool)              # (1.7a) whose head ticks on this frame: the next frame is their keep reading
             if self.h2_live and self.h2_tick is not None:
@@ -567,12 +649,15 @@ class Policy:
                                      ahead=head2_.np_mlp(self.h2_ah, sb_) if self.h2_ah is not None else None,
                                      ctrl=head2_.np_ctrl(self.h2_ct, sb_, hfast[tk_]),
                                      fight=head2_.np_fight(self.h2_fo, sb_, hfast[tk_]),
-                                     obs=xa[tk_], hands=hfast[tk_])
+                                     obs=xa[tk_], hands=hfast[tk_],
+                                     ins=(self._ins_u(ist[tk_]) if ist is not None else None))
                 h2s = h2s.copy()
                 h2s[tk_] = head2_.np_tick(self.h2W, self.h2, u_, h2s[tk_])
             h = np.concatenate([h, h2s.astype(np.float32)], 1)
             if ohs is not None:                              # (1.7) the order's held numbers back after it
                 h = np.concatenate([h, ohs.astype(np.float32)], 1)
+            if ist is not None:                              # (2.1) the instruction's held numbers back after them
+                h = np.concatenate([h, ist.astype(np.float32)], 1)
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()
@@ -844,7 +929,7 @@ def main():
     a = ap.parse_args()
     import importlib
     E = importlib.import_module(a.env)
-    path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
+    path = a.policy or os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = Policy(path, seed=11)
     maps = a.maps.split(",")[:1] if a.quick else a.maps.split(",")
     if a.lab:
@@ -852,8 +937,8 @@ def main():
     per_room = {}
     t0 = time.time()
     for mp in maps:
-        env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=a.matches, seed=7,
-                        nav=os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp)), close_p=1.0, loadout="all")
+        env = E.DuelEnv(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", mp + ".bsp"), n_matches=a.matches, seed=7,
+                        nav=os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "nav_{}_sim.json".format(mp)), close_p=1.0, loadout="all")
         dl_ = set_delays(E, env, [(np.arange(0, env.n, 2), pol.react_ms if a.react_ms is None else a.react_ms,       # (the subject is the
                                    pol.acquire_ms if a.acquire_ms is None else a.acquire_ms)])                    # even player of a match)
         if a.lab:
@@ -865,7 +950,7 @@ def main():
         print("{} done ({:.0f} s)".format(mp, time.time() - t0), flush=True)
     card = dict(suite=SUITE_VERSION, run=a.run, minutes=int(pol.minutes), maps=maps, subject="policy", delays_ms=dl_,
                 rooms={k: merge(v) for k, v in per_room.items()})
-    out = os.path.join(ROOT, "data", "sim_runs", a.run, "suite")
+    out = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, "suite")
     os.makedirs(out, exist_ok=True)
     stem = os.path.join(out, "{}_{:04d}{}".format("lab" if a.lab else "card", int(pol.minutes), "_quick" if a.quick else ""))
     other = json.load(open(a.compare)) if a.compare else None

@@ -13,7 +13,8 @@ import duel_env_ffa as _B
 import input_list as _IL
 
 INPUT_LIST = _IL.load(18)
-assert INPUT_LIST["full"] == _B.OBS_DIM, "the list was made for {} inputs, the simulator has {}".format(INPUT_LIST["full"], _B.OBS_DIM)
+assert INPUT_LIST["full"] <= _B.OBS_DIM, "the list was made for {} inputs, the simulator has {}".format(INPUT_LIST["full"], _B.OBS_DIM)   # (2.1: taken by name;
+#                                                             the full list may have grown at its end since)
 INPUT_NAMES = [tuple(x) for x in INPUT_LIST["names"]]
 INPUT_SRC = np.asarray(INPUT_LIST["src"], np.int64)
 N_BRAIN, N_HANDS = int(INPUT_LIST["n_brain"]), int(INPUT_LIST["n_hands"])

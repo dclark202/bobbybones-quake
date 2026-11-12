@@ -1,0 +1,5 @@
+usage: prune_inputs.py [-h] --groups GROUPS [--folds FOLDS] [--seeds SEEDS]
+                       [--epochs EPOCHS] [--hid HID] [--device DEVICE]
+                       [--lr LR] [--mb MB] [--out OUT]
+                       dumps [dumps ...]
+prune_inputs.py: error: the following arguments are required: dumps

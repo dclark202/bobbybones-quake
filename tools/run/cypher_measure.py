@@ -14,7 +14,11 @@ pros' (data/sim_runs/judge/pro_rows: tools/run/pro_judge_rows.py; sim/pro_moment
 What a record holds (one npz a job, <dir>/rec_<map>_<k>.npz), every frame of the game, every seat (seat 2m and 2m + 1 are match m):
   hp, ar (health, armor), alive, weapon (in hand), vis (he has the enemy in view: env.visible), pos (float16), dealt (damage he
   dealt this frame: the rise of env.dmg_life), up (the match's mega, red and yellow armors: there or not, columns `big`), kills
-  (t, victim, killer), side (0: the network under test, 1: its opponent; in self-play both are the same network).
+  (t, victim, killer), side (0: the network under test, 1: its opponent; in self-play both are the same network), fire (2.1: he
+  fired in this frame: the ammunition of the weapon in his hand fell; a pickup in the same frame can hide a shot), wfire (2.1: the
+  weapon in his hand before the step: the one a shot of this frame left), dealt_w (2.1: the damage he dealt another player in this
+  frame by the weapon that did it, [frames, players, weapons]: the simulator's own books of each hit, splash in it; for
+  tools/run/fin_rate.py), askw (2.1: the weapon his instruction asked for before the step; -1: none, or no instruction).
 Nothing here touches a run: it reads a save and plays it on the cores it is started on."""
 import argparse
 import glob
@@ -31,7 +35,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
-SR = os.path.join(ROOT, "data", "sim_runs")
+SR = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs")
 MAPS = ["bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure"]
 BIG = ("MH", "RA", "YA")
 _REC = {}
@@ -42,10 +46,27 @@ def _recorder(E):
     if getattr(E.DuelEnv, "_cy_rec", False):
         return
     step0 = E.DuelEnv.step
+    book0 = E.DuelEnv._book
+
+    def book(self, st, i, v, dmg, wpn):                      # (2.1) every hit as the simulator books it: by attacker and weapon
+        if int(i) != int(v) and "dw" in _REC:
+            _REC["dw"][int(i), int(wpn)] += float(dmg)
+        return book0(self, st, i, v, dmg, wpn)
+    E.DuelEnv._book = book
 
     def step(self, a):
+        am0 = np.asarray(self.ammo, np.float32).copy()       # (2.1) a shot = his ammunition of the weapon in his hand fell in this step
+        w0 = np.asarray(self.weapon).astype(np.int64).copy()
+        aw0 = (np.where(np.asarray(self.ins_v)[:len(w0)] > 0, np.asarray(self.ins_w)[:len(w0)], -1).astype(np.int8)
+               if getattr(self, "ins_w", None) is not None and getattr(self, "ins_v", None) is not None else np.full(len(w0), -1, np.int8))
+        _REC["dw"] = np.zeros((len(w0), int(E.NW)), np.float32)
         out = step0(self, a)
-        R = _REC.setdefault("R", {k: [] for k in ("hp", "ar", "alive", "weapon", "vis", "pos", "dealt", "up")})
+        R = _REC.setdefault("R", {k: [] for k in ("hp", "ar", "alive", "weapon", "vis", "pos", "dealt", "up", "fire", "wfire", "dealt_w", "askw")})
+        ar_ = np.arange(len(w0))
+        R["fire"].append(np.asarray(self.ammo, np.float32)[ar_, w0] < am0[ar_, w0])
+        R["wfire"].append(w0.astype(np.int8))
+        R["dealt_w"].append(_REC["dw"].astype(np.float16))
+        R["askw"].append(aw0)
         if "big" not in _REC:
             _REC["big"] = [k for k, d in enumerate(self.item_def) if d[4] in BIG]
             _REC["big_lab"] = [self.item_def[k][4] for k in _REC["big"]]
@@ -426,7 +447,7 @@ def _labels_for(mp, E):
     try:
         from qsim import World
         import duel_env as D
-        bsp = os.path.join(ROOT, "data", "maps", mp + ".bsp")
+        bsp = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", mp + ".bsp")
         env = D.DuelEnv(bsp, n_matches=1, seed=0)
         return [d[4] for d in env.item_def]
     except Exception as e:                                   # noqa: BLE001

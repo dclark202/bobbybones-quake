@@ -39,7 +39,7 @@ def names(path):
 
 def fit_list(lst, n):
     """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
-    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
+    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets", "b21 instruction") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
         return lst[:n]
     return lst
 

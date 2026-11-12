@@ -1,0 +1,26 @@
+PASS clock 15: every dial on its line
+PASS clock 15: the fixed names untouched
+PASS 15 (Part I): the drills and the frozen moments half open, the token's gate at -6, the speed pay at 0.078; the head's share 0
+PASS clock 60: every dial on its line
+PASS clock 60: the fixed names untouched
+PASS 60: Part I at its end values (the speed pay 0), the head's share still 0, the lock 8
+PASS clock 85: every dial on its line
+PASS clock 85: the fixed names untouched
+PASS 85 (Part II): the head's share at half; no pay on it
+PASS clock 109: every dial on its line
+PASS clock 109: the fixed names untouched
+PASS clock 135: every dial on its line
+PASS clock 135: the fixed names untouched
+PASS 135 (after a stop and --resume, the trainer's own number at 1 again): the head's share 1, the pay on its choices at half, nothing of the hands' inputs faded
+PASS clock 180: every dial on its line
+PASS clock 180: the fixed names untouched
+PASS 180 (Part III): the strategy inputs half out of the hands
+PASS clock 222: every dial on its line
+PASS clock 222: the fixed names untouched
+PASS 222: every dial at its end value and held
+PASS the marks kept once each with their optimizers (7): ['policy_u109_21a.pt', 'policy_u135_21a.pt', 'policy_u15_21a.pt', 'policy_u180_21a.pt', 'policy_u222_21a.pt', 'policy_u60_21a.pt', 'policy_u85_21a.pt']
+PASS a check under 40% is a MAJOR PROBLEM line and the clock went on
+PASS the target-switch cost is its own line and not a MAJOR one
+PASS a firing cost above zero is a MAJOR line; the old head's credit above 0 is a MAJOR line
+PASS the marks of the three parts are kept (60, 110 or the first save past it, 160 or past it, 220 or past it)
+ALL PASSED (the fake folder: C:\Users\dacla\AppData\Local\Temp\ramp21a_6hb0hjej)

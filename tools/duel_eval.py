@@ -38,7 +38,7 @@ def names(path):
 
 def fit_list(lst, n):
     """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
-    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
+    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets", "b21 instruction") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
         return lst[:n]
     return lst
 
@@ -160,8 +160,8 @@ def play(job):
         import cypher_measure as CY_
         CY_._recorder(E)
         CY_._REC.clear()
-    nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
+    nav_ = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
+    env = E.DuelEnv(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
                     nav=nav_ if os.path.exists(nav_) else None)
     import test_suite as T_                                   # (B-226) each network's seats at the delays it was trained with; a scripted
     sw_ = int(bool(swap) and opp_pol is not None)             # opponent: his tracking delay, the simulator's own acquire delay
@@ -302,6 +302,13 @@ def play(job):
         ox_ = None                                                              # (1.7) the combat order's candidates after the frame before
         if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False)):
             ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
+        ix_ = None                                                              # (2.1) the instruction's candidates of this reading (some seat's
+        if getattr(E, "INSTR", False) and hasattr(env, "instr_feat") and (getattr(pol, "ins_due", False) or getattr(opp_pol, "ins_due", False)):
+            import branch as branch_e                                           # head ticked on the frame before): the rows, the signals, the row he is on
+            ix_ = branch_e.worker_feat(env)
+            for p_m in (pol, opp_pol):                                          # (the map sense at a row's place reads this map's table)
+                if p_m is not None and hasattr(p_m, "ins_map"):
+                    p_m.ins_map = mp
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -315,7 +322,8 @@ def play(job):
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
                         **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
                         **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}),
-                        **({"ox": (ox_[0][ev], ox_[1][ev])} if (ox_ is not None and pol.order_due) else {}))
+                        **({"ox": (ox_[0][ev], ox_[1][ev])} if (ox_ is not None and pol.order_due) else {}),
+                        **({"ix": tuple(v_[ev] for v_ in ix_)} if (ix_ is not None and getattr(pol, "ins_due", False)) else {}))
         a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]                        # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if kp_ and pol.keep_on:
             a[ev, -1] = al[:, -1]
@@ -323,7 +331,8 @@ def play(job):
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
                                  **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}),
-                                 **({"ox": (ox_[0][od], ox_[1][od])} if (ox_ is not None and opp_pol.order_due) else {}))
+                                 **({"ox": (ox_[0][od], ox_[1][od])} if (ox_ is not None and opp_pol.order_due) else {}),
+                                 **({"ix": tuple(v_[od] for v_ in ix_)} if (ix_ is not None and getattr(opp_pol, "ins_due", False)) else {}))
             a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
             if kp_ and opp_pol.keep_on:
                 a[od, -1] = ao[:, -1]
@@ -353,6 +362,19 @@ def play(job):
                         w0_, b0_, w1_, b1_, wp_, bp_ = env.teacher_w[:6]        # control) moves on the movement network's own sums, the other on
                         lg_[m_] = np.tanh(np.tanh(xl_[m_] @ w0_.T + b0_) @ w1_.T + b1_) @ wp_.T + bp_    # its learnt branch
             env.legs_lg = lg_                                                   # (None: the simulator's own sums for all)
+        if ix_ is not None:                                                     # (2.1) the heads' picks of this reading, given before the step
+            ci_, wi_, wh_, qi_ = np.full(n, -1, np.int64), np.full(n, -1, np.int64), np.zeros(n, bool), np.zeros(n, np.int64)
+            for p_, rows_ in ((pol, ev), (opp_pol, od)):
+                pk_ = getattr(p_, "ins_pick", None) if p_ is not None else None
+                if pk_ is not None:
+                    q_ = np.asarray(rows_)[pk_[0]]
+                    ci_[q_], wi_[q_], wh_[q_], qi_[q_] = pk_[1], pk_[2], pk_[3], pk_[4]
+                    p_.ins_pick = None
+            if wh_.any():
+                if hasattr(env, "force_quiet"):                                 # (a simulator with the sixth field: quiet movement)
+                    env.instr_pick(ci_, wi_, wh_, qi_)
+                else:
+                    env.instr_pick(ci_, wi_, wh_)
         if BH_ is not None and hasattr(BH_, "act"):                             # (2.0c) a measurement's own keys for some seats
             BH_.act(t, obs, a)
         obs, r, done, info = env.step(a)                                        # falls in; a scripted seat's is never drawn: general)
@@ -531,7 +553,7 @@ def main():
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
-    path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
+    path = a.policy or os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = T.Policy(path, seed=1)
     if a.btoken_gate is not None:
         pol.set_gate(a.btoken_gate)

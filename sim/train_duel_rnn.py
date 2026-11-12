@@ -109,6 +109,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
     tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)      # (time.rollout_parts) this worker's seconds, since the last "times"
     t_idle = time.perf_counter()
     LSD = {} if os.environ.get("LIVE_DEBUG") == "1" else None        # (live_settings.env) LIVE_DEBUG=1: this worker's prints
+    BR_ = None                                               # (2.1, --branch) a hold's countdown (sim/branch.py); None: no hold is on
+    IW_ = False                                              # (2.1, --ins) the candidates of the next reading are wanted after this step
+    INS_W = bool(getattr(E_, "INSTR", False))                # (2.1) the simulator has the instruction (off: nothing of it runs here)
     while True:
         cmd, data = remote.recv()
         t_got = time.perf_counter()
@@ -151,10 +154,28 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             if wr_ is not None and len(wr_) == env.n and G == 2:     # (the judge's win part at G = 1; his even seats of the second half)
                 s_ = np.arange(env.n)
                 delta["league_win"] = float(wr_[(s_ >= env.n // 2) & (s_ % 2 == 0) & (env.kind[s_ // G] == 0)].sum())
+            if INS_W and getattr(env, "ins_drill", None) is not None and env.ins_drill.any():   # (2.1a) the drills: the drilled seats' frames by the
+                st_ = env.ins_st[:env.n][env.ins_drill[:env.n]]                                # instruction's state (on the way, doing, done, failed)
+                delta["idr_n"], delta["idr_doing"], delta["idr_done"], delta["idr_failed"] = (
+                    float(len(st_)), float((st_ == E_.INS_DOING).sum()), float((st_ == E_.INS_DONE).sum()), float((st_ == E_.INS_FAILED).sum()))
+            if INS_W and getattr(env, "ins_norow", None) is not None and env.ins_norow[0] > 0:      # (2.1a, INS_NO_NONE) the readings since the last step
+                delta["inr_n"], delta["inr_0"], delta["inr_map"] = (float(x_) for x_ in env.ins_norow)
+                env.ins_norow = np.zeros(3, np.float64)
+            if INS_W and getattr(E_, "INS_BIND", False):     # (2.1a, INS_BIND) the weapon key's action the instruction set on this frame
+                delta["ins_bind"] = [env.ins_bind_a.astype(np.int8)]     # (a list: per seat, not summed), -1 where his own stood; the counts
+                delta["ib_read"], delta["ib_bound"], delta["ib_diff"], delta["ib_sw"] = (float(x_) for x_ in env.ins_bind_n)
             lx_ = env.legs_prep() if legs_in else None       # (LEGS_IN) the movement network's inputs of the next frame
             t_lp = time.perf_counter()
             tw_["legs_prep"] += t_lp - t_st
-            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), env.intent_live.copy(), env.intent_teach.copy(),
+            il_, it_ = env.intent_live.copy(), env.intent_teach.copy()
+            kl_ = env.keep_live.copy() if hasattr(env, "keep_live") else None
+            if INS_W:                                        # (2.1, INSTR) a seat under an instruction: the target it drew was not played
+                import branch as branch_i
+                branch_i.worker_mask(env, il_, it_, kl_)
+            if BR_ is not None:                              # (2.1, --branch) a forced seat's target and keep choice were not his own
+                import branch as branch_w
+                BR_ = branch_w.worker_after(BR_, env, il_, it_, kl_)
+            remote.send((obs, rew, done, delta, env.script > 0, env.teach.copy(), il_, it_,
                          (env.key_dec.copy() if getattr(env, "je_rng", None) is None else (env.key_dec + 2 * env.key_jump).astype(np.int8))   # (JUMP_EVERY: 2 = the
                          if hasattr(env, "key_dec") else np.ones(env.n, bool),                               # jump alone was read)
                          env.legs_live.copy() if hasattr(env, "legs_live") else np.zeros(env.n, bool),      # (LEGS) the switch was read,
@@ -173,12 +194,14 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (wv_pack(env, wv_pre, info, G) if wv_pre is not None else None),
                          (((1.0 - float(E_.WIN_W)) * info["win_blend"][:, 1] + info["win_blend"][:, 2]).astype(np.float32)   # (--head2-pay combat_win) combat plus the win part
                           if "win_blend" in info else None),                   # (--win-value) shadow pay, cut, in a game
-                         (env.keep_live.copy() if hasattr(env, "keep_live") else None),                     # (1.4c) the readings his keep choice decided
+                         kl_,                                                                               # (1.4c) the readings his keep choice decided
                          (env.keep_feat() if hasattr(env, "keep_feat") else None),                          # (1.4c) what it reads on the next frame
                          ((env.cmb_live.astype(np.int8) + env.cmb_over.astype(np.int8))                       # (1.7) the readings the combat order counted
                           if getattr(env, "cmb_live", None) is not None else None),                          # at: 1 the target as chosen, 2 a new kind
                          (tuple(v_.astype(np.float16) for v_ in env.order_feat()) if want_ else None),     # (1.7) the candidates for the next reading
-                         (env.way_live.copy() if getattr(env, "way_live", None) is not None else None)))    # (1.7, WAYS) the readings his way counted at
+                         (env.way_live.copy() if getattr(env, "way_live", None) is not None else None))     # (1.7, WAYS) the readings his way counted at
+                        + ((branch_i.worker_feat(env),) if IW_ else ()))                                   # (2.1, --ins) the next reading's candidates (the last field)
+            IW_ = False
             tw_["send"] += time.perf_counter() - t_lp        # (the reply's pickling and the pipe)
         elif cmd == "brain_g":                               # (v0.4.2a, --rule-fade with BRAIN_READ) each seat's chance that a life
             env.set_brain_g(data)                            # begun from now on reads the brain's answer
@@ -199,6 +222,16 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             remote.send(ls_worker(E_, env, data, bsp, move_only, LSD))     # rollouts: the module's values as its import makes them
         elif cmd == "head_events":                           # (--head) the head's events since the last call, on its ticks (None: the
             remote.send(np.asarray(env.head_events(), np.float32) if hasattr(env, "head_events") else None)   # simulator has none: zeros)
+        elif cmd == "spawns":                                # (2.1, --spawn-odds) once: the map's spawn points and their count
+            import branch as branch_s
+            remote.send(branch_s.worker_spawns(env, data))
+        elif cmd == "instr":                                 # (2.1, --ins) before a step: the head's picks of this reading; no answer
+            import branch as branch_i
+            IW_ = branch_i.worker_instr(env, data)
+        elif cmd == "branch":                                # (2.1, --branch) between two rollouts: the moments copied, the first choices forced
+            import branch as branch_w
+            BR_ = branch_w.worker_start(env, data)
+            remote.send(True)
         elif cmd == "close":
             break
         t_idle = time.perf_counter()
@@ -245,13 +278,33 @@ LIVE_TRAINER = LIVE_TRAINER + ("ORD_GATE",)                        # (1.7) the o
 LIVE_TRAINER = LIVE_TRAINER + ("FIGHT_W", "H2_OPG", "ORD_KL")              # (1.7b) the fight odds' lesson, the order's share of the head's term, its KL
 LIVE_TRAINER = LIVE_TRAINER + ("CMB_G", "FADD", "PADD", "PASS_W", "H2_FPG")   # (1.7) the combat order's share, the fire push's add, the pointer's
 #                                                                    adds' share on the targets and the ways, the brain's pass lesson, the fire key's credit
-LIVE_RANGE = {"ORD_GATE": (-30.0, 0.0)}   # (1.7a's false start, 11-05) a live name whose values are not 0 or more; every other: 0 .. inf.
+LIVE_TRAINER = LIVE_TRAINER + ("INS_GATE",)                        # (2.1a) the instruction's attention token's gate (shut -30 .. open 0; never lowered)
+LIVE_RANGE = {"ORD_GATE": (-30.0, 0.0), "INS_GATE": (-30.0, 0.0)}   # (1.7a's false start, 11-05) a live name whose values are not 0 or more; every other: 0 .. inf.
 #   The order's gate (shut -30, open 0) was refused as negative by the rule for every name, and the refusal took the whole file
 #   with it: 1.7a trained 14 updates on its command's start values instead of 1.6a's end dials. A refused file at the start now
 #   stops the trainer before its first rollout (LIVE_FIRST), and every read is written to <run>/live_status.json for the ramp.
 LIVE_TRAINER = LIVE_TRAINER + ("H2_WPG", "HABIT_P")                 # (1.5a) the weapon key's credit on the head's clock; the league seats' weapon habits
 LIVE_TRAINER = LIVE_TRAINER + ("WRULE_P",)                          # (1.7c) the share of lives under the pros' weapon table (--wrule)
 LIVE_TRAINER = LIVE_TRAINER + ("SPACE_W",)                          # (2.0b) the lesson of the readout "space" (--space-read)
+LIVE_TRAINER = LIVE_TRAINER + ("MAP_SENSE_W", "MAP_SENSE_PULL", "APPRAISE_W", "BRANCH_P")   # (2.1) factors on the map sense's and the
+#   appraisals' lessons (0 stops one), the pull of the map sense's corrections toward zero, the share of the self-play matches a
+#   rollout's frozen moments are copied into (--map-sense, --appraise, --branch)
+LIVE_RANGE["BRANCH_P"] = (0.0, 1.0)
+LIVE_TRAINER = LIVE_TRAINER + ("INS_G", "INS_TEACH", "H2_INS_PG", "INS_TEMP", "INS_ENT")   # (2.1, --ins) the share of seats whose instruction is the
+LIVE_RANGE["INS_G"] = (0.0, 1.0)                             # head's; the lesson toward the appraisals' order; the game's pay on its choice;
+LIVE_RANGE["H2_INS_PG"] = (0.0, 1.0)                         # the lesson's temperature; the rows' entropy bonus
+LIVE_RANGE["INS_TEMP"] = (0.01, 100.0)
+LIVE_RANGE["INS_TEACH"] = (0.0, 100.0)
+LIVE_RANGE["INS_ENT"] = (0.0, 1.0)
+LIVE_TRAINER = LIVE_TRAINER + ("KNOWN_W", "SPAWN_W")         # (2.1, --known-odds, --spawn-odds) a factor on each of the brain's two new lessons
+LIVE_RANGE["KNOWN_W"] = (0.0, 100.0)
+LIVE_RANGE["SPAWN_W"] = (0.0, 100.0)
+LIVE_TRAINER = LIVE_TRAINER + ("BRANCH_LONG_P", "INS_LONG_W")       # (2.1, --branch-long) the share of a rollout's branches read over the long
+LIVE_RANGE["BRANCH_LONG_P"] = (0.0, 1.0)                     # window; the long window's share of the lesson's target
+LIVE_RANGE["INS_LONG_W"] = (0.0, 1.0)
+LIVE_TRAINER = LIVE_TRAINER + ("BRANCH_WPN_P",)              # (2.1, --branch-wpn-p; the owner's pattern: rockets or the rail to break him down, the
+LIVE_RANGE["BRANCH_WPN_P"] = (0.0, 1.0)                      # lightning gun to finish) the share of a rollout's frozen moments taken just after a chunk
+#   hit or a pain sound, or at a fight's start with both stacks high, whose branches keep one row and differ only in the weapon
 
 
 def live_read(path, E_, start, trainer_start):
@@ -1100,7 +1153,16 @@ def main():
                                                                      "rg (rail leaner), rl (rocket leaner)")
     ap.add_argument("--head2-chrono-lo", type=float, default=0.0, help="(--head2, 1.3b, a new head) its update gate's time scales evenly in log from this to "
                                                                        "--head2's chrono (300 ticks); 0: evenly from 1 to 300 (as before)")
-    ap.add_argument("--head2-pay", default="all", choices=("all", "combat_win"), help="(--head2, b1.2a) what its value and advantage count: his whole pay, or combat (frags, deaths, damage) plus the win part, not the item pay")
+    ap.add_argument("--head2-pay", default="all", choices=("all", "combat_win", "win"), help="(--head2, b1.2a) what its value and advantage count: his whole pay, or combat (frags, deaths, damage) plus the win part, not the item pay; "
+                    "(2.1) win: the win-chance stream alone (--ins-pay-win's stream: no entry of the pay table) for the head's OLDER parts too (its target scores, the keep choice, its weapon and fire parts)")
+    ap.add_argument("--ins-pay-win", type=float, default=0.0, help="(2.1; the owner, 2026-11-11: the head is paid by the win chance only, the pay table is the hands') 1: the head's side of 2.1 "
+                    "learns from the win judge's change in win chance alone (the simulator's HEAD_PAY_TRUTH=1: the aux column win_raw, times --ins-pay-gain): a value of its own inside the head "
+                    "(head2.ins_vv), and from it the frozen moments' dv over 8 s and over the long window (so the appraisals' dv and the instruction lesson's target) and the advantage of the "
+                    "pay on his instruction choices (H2_INS_PG). The hands' pay and the head's older parts are untouched (--head2-pay win moves those). 0: as before")
+    ap.add_argument("--ins-pay-gain", type=float, default=0.0, help="... the stream's scale: win_raw times this. 0: the simulator's WIN_ADD at the start (1 if that is 0), so its size is "
+                    "what the win part of the pay has today; fixed for the run: the hands' own dial of their win-chance pay stays the simulator's live WIN_ADD")
+    ap.add_argument("--branch-wpn-p", type=float, default=0.0, help="(2.1, --branch-ins) the share of a rollout's frozen moments taken at the owner's pattern (just after a chunk hit or a "
+                    "pain sound; a fight's start with both stacks high) whose branches keep one row and differ only in the weapon (live BRANCH_WPN_P). 0: none, the plan's draws as before")
     ap.add_argument("--head2-v", type=float, default=0.5, help="(--head2) the weight of its value's lesson")
     ap.add_argument("--head2-plan-grad", type=float, default=0.0, help="(--head2) the share of the hands' gradient that goes on into the head through the "
                                                                        "plan (0: plan_in learns from the hands' loss, the head only from its own lessons; live: H2_PLAN_GRAD)")
@@ -1437,6 +1499,77 @@ def main():
     ap.add_argument("--fight-start", type=float, default=-1.0, help="... the minute its warm-up counts from (-1: this process's start)")
     ap.add_argument("--fight-every", type=int, default=1, help="... the brain's state kept every this many of its ticks (1: 0.2 s)")
     ap.add_argument("--fight-hid", type=int, default=64, help="... its hidden layer")
+    ap.add_argument("--map-sense", type=float, default=0.0, help="(2.1) the map sense (sim/mapsense.py): what his place brings in the next 5 s with "
+                    "the enemy where the brain believes him, by the weapon in hand; a shared network over the map's seeds and a correction a "
+                    "place; a lesson of its own layers only, nothing reads it (a factor on --map-sense-lr; live MAP_SENSE_W). 0 = off (a "
+                    "checkpoint that has one keeps it). With --belief, --btoken and the simulator's truth (TRACK_TRUTH=1)")
+    ap.add_argument("--map-sense-lr", type=float, default=1e-3, help="... its own Adam's rate at weight 1")
+    ap.add_argument("--map-sense-hid", type=int, default=64, help="... its hidden layers")
+    ap.add_argument("--map-sense-every", type=int, default=5, help="... a sample every this many of the brain's ticks (5: a second)")
+    ap.add_argument("--map-sense-pull", type=float, default=1.0, help="... the corrections' pull toward zero: after each of its steps they are "
+                    "multiplied by 1 - rate x this (live MAP_SENSE_PULL; 0: none)")
+    ap.add_argument("--map-sense-init", default="", help="... the shared network's start from the pros' fit (tools/run/mapsense_init.py's file); "
+                    "none: its last layer at zero")
+    ap.add_argument("--appraise", type=float, default=0.0, help="(2.1) the appraisals (sim/appraise.py): what a candidate instruction brings over the "
+                    "next 8 s, learnt from the frozen moments' branches; a lesson of its own layers only, nothing reads it (a factor on "
+                    "--appraise-lr; live APPRAISE_W). 0 = off (a checkpoint that has one keeps it). With --head2 and --belief")
+    ap.add_argument("--appraise-lr", type=float, default=5e-4, help="... its own Adam's rate at weight 1")
+    ap.add_argument("--appraise-hid", type=int, default=256, help="... its hidden layers")
+    ap.add_argument("--branch", type=float, default=0.0, help="(2.1) the frozen-moment rounds (sim/branch.py) are on: between two rollouts moments "
+                    "of self-play matches are copied into other self-play matches, a first target forced for --branch-hold frames in each. "
+                    "The share is --branch-p (live BRANCH_P; it may start at 0 and be opened live). 0 and --branch-p 0 = off: nothing sent")
+    ap.add_argument("--branch-p", type=float, default=0.0, help="... the share of each simulator's self-play matches that are destinations (above 0 turns the rounds on)")
+    ap.add_argument("--branch-top", type=int, default=5, help="... a moment's candidates: his this many best targets")
+    ap.add_argument("--branch-rand", type=int, default=3, help="... and this many drawn from the rest")
+    ap.add_argument("--branch-hold", type=int, default=40, help="... frames the first choice is forced for (40: a second)")
+    ap.add_argument("--branch-win", type=int, default=320, help="... frames an outcome is read over (320: 8 s; within one rollout)")
+    ap.add_argument("--branch-dump", default="", help="(2.1, tools/run/branch_record.py) a folder: each rollout's INSTRUCTION branch rows as the appraisals "
+                                                    "read them (the situation, the candidate, the labels and their masks), one file a rollout, for "
+                                                    "tools/run/prune_inputs.py. Empty: nothing written")
+    ap.add_argument("--branch-log", type=int, default=1, help="... 1: every branch as a line of <run>/branches.jsonl")
+    ap.add_argument("--branch-long", type=float, default=0.0, help="(2.1, the score and the clock) 1: a share of the branches (--branch-long-p, live "
+                    "BRANCH_LONG_P) is read over a long window as well, across rollouts; the appraisals' seventh output learns it. 0: none")
+    ap.add_argument("--branch-long-spam", type=float, default=0.0, help="(2.1a; the owner, 2026-11-12) 1: every branch whose forced row is a spam row is read over "
+                                                                       "the long window, whatever --branch-long-p draws for the others (needs --branch-long 1)")
+    ap.add_argument("--branch-long-p", type=float, default=0.25, help="... that share of a rollout's branches")
+    ap.add_argument("--branch-long-secs", type=float, default=30.0, help="... the long window, seconds")
+    ap.add_argument("--ins-long-w", type=float, default=0.5, help="... the long window's share of the head's lesson target: (1 - w) x dV over 8 s + "
+                    "w x dV over the long window (live INS_LONG_W), once --ins-long-warm long branches have been learnt from")
+    ap.add_argument("--ins-long-warm", type=int, default=5000, help="... the long branches learnt from before the long forecast is read")
+    ap.add_argument("--ins-quiet", type=float, default=0.0, help="(2.1, quiet movement) 1: the instruction's sixth field: the head's third choice (one "
+                    "logit; the scorer from tools/head21_init.py add --quiet 1), sent with the pick; the appraisals read the bit. 0: none")
+    ap.add_argument("--branch-quiet-p", type=float, default=0.25, help="... the share of the forced instruction branches that are forced quiet "
+                    "(so the appraisals see both)")
+    ap.add_argument("--branch-ins", type=int, default=1, help="(2.1) with --ins: the branches force INSTRUCTIONS (a row and its weapon, the simulator's "
+                    "force_instr); 0: targets, as before the instruction")
+    ap.add_argument("--ins", type=float, default=0.0, help="(2.1) the head's choice of an instruction (sim/head2.py: its scorer over the simulator's "
+                    "candidate rows, layers of the head itself (head2.ins_*), learnt inside the head's own terms; a start from tools/head21_init.py). With "
+                    "--head2, --belief, --appraise and a simulator with INSTR=1. 0 (default): nothing of it is made, sent or kept")
+    ap.add_argument("--ins-bind", type=int, default=0, help="(2.1a; the owner, 2026-11-12) 1: the weapon an instruction asks for is binding. The switch is the "
+                                                           "simulator's (INS_BIND=1, a play variable: it sets the weapon key's action in its step); this flag "
+                                                           "only refuses a start where the two disagree. On the bound frames the weapon key gets no policy "
+                                                           "gradient and no entropy bonus (1.7c's path: b_wd, head2.bound_mask)")
+    ap.add_argument("--ins-g", type=float, default=-1.0, help="... the share of seats whose instruction is the head's (live INS_G; -1: the checkpoint's own)")
+    ap.add_argument("--ins-lr", type=float, default=3e-4, help="(retired 2026-11-11: the scorer is inside the head and learns at the head's rate, "
+                    "--head2-lr-scale, in the optimizer's group 'ins'; the value is read and not used)")
+    ap.add_argument("--ins-teach", type=float, default=1.0, help="... the lesson toward the appraisals' order (live INS_TEACH)")
+    ap.add_argument("--ins-pg", type=float, default=0.0, help="... the game's pay on its choice, by the head's own advantage (live H2_INS_PG)")
+    ap.add_argument("--ins-temp", type=float, default=0.05, help="... the lesson's temperature: softmax(the appraisals' dV / this) (live INS_TEMP)")
+    ap.add_argument("--ins-ent", type=float, default=0.0, help="... an entropy bonus on the rows (live INS_ENT; 0: none)")
+    ap.add_argument("--ins-ms", type=float, default=0.0, help="(2.1) the map sense at each candidate row's place (sim/mapsense.py's eight numbers against the brain's "
+                    "believed place of the enemy) is read by the scorer and the appraisals after the row's own numbers (a head made with it: "
+                    "tools/head21_init.py add --ms 1; with --map-sense). 0: not asked for")
+    ap.add_argument("--known-odds", type=float, default=0.0, help="(2.1) the brain's question 'does the enemy know where I am' (sim/knownodds.py; the simulator's "
+                    "KNOWN_TRUTH=1): its lesson's weight (live KNOWN_W). With --ins its chance is written into the candidates' rows and read by the head. 0: none")
+    ap.add_argument("--known-lr", type=float, default=1e-3)
+    ap.add_argument("--known-hid", type=int, default=64)
+    ap.add_argument("--known-every", type=int, default=6, help="... a sample every this many ticks of the head (the rollout's kept head inputs)")
+    ap.add_argument("--spawn-odds", type=float, default=0.0, help="(2.1) the brain's question 'where does he respawn' (sim/spawnodds.py; the simulator's "
+                    "SPAWN_TRUTH=1 with RESPAWN_QL): its lesson's weight (live SPAWN_W). With --ins its odds are written into the spawn rows. 0: none")
+    ap.add_argument("--spawn-lr", type=float, default=1e-3)
+    ap.add_argument("--spawn-hid", type=int, default=128)
+    ap.add_argument("--ins-warm", type=int, default=20000, help="... the appraisals' branches seen before their forecasts are read and taught toward")
+    ap.add_argument("--ins-seats", type=int, default=2048, help="... the seats whose readings are kept for the lesson, a rollout")
     ap.add_argument("--space-read", type=float, default=0.0, help="(2.0b) the brain's readout 'space' (sim/spaceread.py): the threat on him, what he "
                     "puts on the enemy, the map's cover and each zone's, against the map's table at the true places (the simulator's "
                     "SPACE_TRUTH=1); a lesson of its own layers only (a factor on --space-lr; live SPACE_W). 0 = off (a network that has it "
@@ -1637,7 +1770,7 @@ def main():
     LEGS_SD, LEGS_D, LEGS_SAID = {}, 0, []
     if LEGS_IN:
         assert a.teacher, "LEGS_IN=1: give --teacher <the movement network's run> (its policy.npz is the branch)"
-        z_ = np.load(os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz"))
+        z_ = np.load(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.teacher, "policy.npz"))
         LEGS_SD = {"legs.0.weight": z_["w0"], "legs.0.bias": z_["b0"], "legs.2.weight": z_["w1"], "legs.2.bias": z_["b1"],
                    "legs.4.weight": z_["wp"], "legs.4.bias": z_["bp"]}
         LEGS_D = int(z_["w0"].shape[1])
@@ -1710,8 +1843,8 @@ def main():
             mine_ = {c_: (act[..., KA_HEAD + i_] == 1).to(lo.dtype) for i_, c_ in enumerate(KA_COLS)}
         for j in range(len(ACTION_DIMS)):
             m = dc if j in KEY_HEADS else ((lv if lt is None else lt) if j == I_HEAD else (ll if j == L_HEAD else None))   # (1.7: lt the target's)
-            if j == HAND_HEAD and wd is not None:                # (1.7c, --wrule) the weapon key counts only where the table did not set it
-                m = m * (wd < 0).to(m.dtype)
+            if j == HAND_HEAD and wd is not None:                # (1.7c, --wrule; 2.1a, INS_BIND) the weapon key counts only where his own
+                m = head2_.bound_mask(m, wd)                     # choice stood (the one definition: sim/head2.py)
             if JE and j == V_HEAD and not ent:                   # (JUMP_EVERY) the jump read on every frame
                 m = None
             if j == L_HEAD and so is not None and a.solo_self_drive:     # (--solo-self-drive) not in his runs
@@ -1740,7 +1873,7 @@ def main():
         torch.cuda.set_per_process_memory_fraction(float(os.environ["GPU_MEM_FRACTION"]))
     if dev.type == "cpu":
         torch.set_num_threads(6)
-    out = os.path.join(ROOT, "data", "sim_runs", a.run)
+    out = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run)
     os.makedirs(os.path.join(out, "snapshots"), exist_ok=True)
     maps = a.map.split(",")
     os.environ["TEACHER_SKIP"] = a.teacher_skip              # (read by the simulators: the key labels of a map's runs)
@@ -1760,11 +1893,11 @@ def main():
     for w in range(len(w_map)):
         m = w_map[w]
         p_main, p_work = mp.Pipe()
-        mp.Process(target=worker, args=(p_work, os.path.join(ROOT, "data", "maps", m + ".bsp"), w_match[w], 3000 + w,
-                                        os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
+        mp.Process(target=worker, args=(p_work, os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", m + ".bsp"), w_match[w], 3000 + w,
+                                        os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "nav_{}_sim.json".format(m)), a.loadout,
                                         a.item_reward, a.drill_p, a.drill_weapons, (round(a.react_ms / 25), round(a.acquire_ms / 25)),
                                         tuple(float(x) for x in a.kind_p.split(",")), a.bot_p,
-                                        os.path.join(ROOT, "data", "sim_runs", a.teacher, "policy.npz") if (a.teacher and m not in a.teacher_skip.split(",")) else None,   # (the worker reads TEACH_RUNS_<map>)
+                                        os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.teacher, "policy.npz") if (a.teacher and m not in a.teacher_skip.split(",")) else None,   # (the worker reads TEACH_RUNS_<map>)
                                         tuple(a.lab_courses.split(",")), tuple(float(x) for x in a.lab_p.split(",")),
                                         tuple(float(x) for x in a.loadout_p.split(",")) if a.loadout_p else None, a.lab_items, a.lab_gun,
                                         a.dmg_taken_w, a.no_walk, a.arena_len, a.arena_full, a.env, w_group[w],
@@ -1825,6 +1958,8 @@ def main():
     INPUTS_CK = INPUT_NAMES_CK = None                        # (1.8, sim/input_list.py) the cleaned list the network reads
     H2_CK = None                                             # (--head2, v0.4.3) the strategy head's layout: comes with the network
     WV_CK = None                                             # (--win-value, v0.4.3) the shadow win value: its layout and weights
+    MS_CK = APR_CK = None                                    # (2.1, --map-sense, --appraise) top-level entries too, never in "model"
+    INS_CK = KN_CK = SPW_CK = None
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
         ATT = ck0_.get("attn")
@@ -1850,6 +1985,9 @@ def main():
         INPUT_NAMES_CK = ck0_.get("input_names")
         H2_CK = ck0_.get("head2") if any(k_.startswith("head2.") for k_ in ck0_["model"]) else None
         WV_CK = ck0_.get("win_value")                        # (--win-value) a top-level entry, never in "model"
+        MS_CK, APR_CK = ck0_.get("map_sense"), ck0_.get("appraise")    # (2.1) the same
+        INS_CK = ck0_.get("ins")                             # (2.1, --ins) the instruction's scorer: the same
+        KN_CK, SPW_CK = ck0_.get("known"), ck0_.get("spawn")  # (2.1, --known-odds, --spawn-odds) the brain's two new readouts: the same
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
         ATT = dict(ATT, mem=H)
@@ -1932,7 +2070,7 @@ def main():
             assert getattr(E_, "N_V02", 0) > 0, "--aux-fresh / --aux-measure: the simulator {} has not v0.2's inputs".format(a.env)
             # (v0.4: the enemy's stack, N_ES, comes last since the belief merge; until 2026-10-16 it was not subtracted here and the
             # five columns read were six to the left of the belief: only the guessing lesson's masks and measures read them)
-            o_ = OBS_DIM - (getattr(E_, "N_YT", 0) + getattr(E_, "N_SP", 0) + getattr(E_, "N_SPT", 0)) - getattr(E_, "N_ORD", 0) - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
+            o_ = OBS_DIM - (getattr(E_, "N_YT", 0) + getattr(E_, "N_SP", 0) + getattr(E_, "N_SPT", 0) + getattr(E_, "N_INS", 0)) - getattr(E_, "N_ORD", 0) - getattr(E_, "N_ITEMS", 0) - getattr(E_, "N_DRIFT", 0) - getattr(E_, "N_EMG", 0) - getattr(E_, "N_PREF", 0) - getattr(E_, "N_RAIM", 0) - getattr(E_, "N_ES", 0) - getattr(E_, "N_B3", 0) - getattr(E_, "N_B2", 0) - E_.N_V02 + E_.V02_GAME + E_.V02_POS
             BEL_IX = np.array([o_, o_ + 1, o_ + 2, o_ + 3, o_ + 8], np.int64)
             if getattr(E_, "INPUT_LIST", None) is not None:   # (1.8) a cleaned list: the same five columns, by name
                 BEL_IX = np.array([E_.col("v02 believed", n_) for n_ in ("a place is believed", "believed place: forward", "believed place: left",
@@ -2606,6 +2744,11 @@ def main():
                 for k_, v_ in net.head2.state_dict().items():
                     if k_.startswith(("keep.", "keep_g")):
                         sd["head2." + k_] = torch.zeros_like(v_)
+            if head2_.has_ins_layers(getattr(net, "head2", None)) and "head2.ins_iv.weight" not in sd:   # (2.1) a file without the
+                sd = dict(sd)                                # instruction's scorer (a league file, an anchor): the network's own layers, its
+                for k_, v_ in net.head2.state_dict().items():    # share 0 (a league seat is under no instruction: nothing reads them)
+                    if k_.startswith("ins_"):
+                        sd["head2." + k_] = torch.zeros_like(v_) if k_ == "ins_g" else v_
             if head2_.has_weapon(getattr(net, "head2", None)) and "head2.wsc.weight" not in sd:   # (1.5a) a file without the weapon
                 sd = dict(sd)                                # part (1.4c's end, the anchors): zeros, its add 0 (the hands' choice alone)
                 for k_, v_ in net.head2.state_dict().items():
@@ -2775,7 +2918,7 @@ def main():
         """(--head2) the strategy head in a group of its own after all the others: an optimizer saved without it loads into the
         groups before it"""
         if H2 and not H2_GROUP[0]:
-            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "winp.", "wsc.", "ok_", "op_", "fsc."))],
+            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "winp.", "wsc.", "ok_", "op_", "fsc.", "ins_"))],
                                  "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})     # (1.4c: the keep choice in its own; 1.5a: the weapon part too)
             GROUP_NAMES.append("h2")
             H2_GROUP[0] = True
@@ -2810,6 +2953,16 @@ def main():
             opt.add_param_group({"params": list(pol.passr.parameters()), "lr": a.lr * AH_LR, "lr_scale": AH_LR})
             GROUP_NAMES.append("pass")
             PASS_GROUP[0] = True
+    INSL = H2 and head2_.has_ins_layers(pol.head2)           # (2.1) the instruction's scorer inside the head (a file from tools/head21_init.py)
+    INS_GROUP = [False]
+
+    def ins_group():
+        """(2.1) the instruction's scorer (head2.ins_*) in a group of its own after every other, at the head's rate: an optimizer
+        saved without it (1.8's end) loads into the groups before it and Adam starts these fresh"""
+        if INSL and not INS_GROUP[0]:
+            opt.add_param_group({"params": head2_.ins_params(pol.head2), "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
+            GROUP_NAMES.append("ins")
+            INS_GROUP[0] = True
     WPN = H2 and head2_.has_weapon(pol.head2)               # (1.5a) the head's weapon part (a file from tools/weapon_init.py)
     WPN_GROUP = [False]
     FCR = H2 and head2_.has_fire(pol.head2) and a.head2_fpg >= 0    # (1.7, S6) the fire key's credit split (the hands' term, the head's)
@@ -2848,6 +3001,7 @@ def main():
                     fn_ = dict(trk=trk_group, bel=trk_group, trz=trz_group, btok=v41_group, ahead=v41_group, h2=h2_group, keep=keep_group,
                                wpn=wpn_group, cmb=cmb_group)
                     fn_["pass"] = pass_group
+                    fn_["ins"] = ins_group
                     for nm_ in names_:
                         fn_[nm_]()
                     assert GROUP_NAMES == list(names_), "the optimizer's groups {} are not the save's {}".format(GROUP_NAMES, list(names_))
@@ -3023,11 +3177,227 @@ def main():
     VW_ = [1, int(a.value_warm)]                             # (v0.6.1, --value-warm; live VALUE_WARM) the critic's warm-up: from update, updates
     WV_PREV = [None]                                         # (the last rollout's kept states: learnt one rollout late)
     WV_ST = [None]                                           # (the per-seat stream, made at the first rollout)
+    import mapsense as mapsense_                             # (2.1) the map sense (sim/mapsense.py), the appraisals (sim/appraise.py), the
+    import appraise as appraise_                             # frozen-moment rounds (sim/branch.py): none of them a part of `pol`
+    import branch as branch_
+    MS_ON, APR_ON = a.map_sense > 0, a.appraise > 0
+    BR_ON = a.branch > 0 or a.branch_p > 0
+    MS = MS_OPT = MS_L = APR = APR_OPT = APR_L = None
+    MS_TAB, MS_MISS, SEAT_MAP, BR_IX = {}, [], None, None
+    if (MS_CK is not None and not MS_ON) or (APR_CK is not None and not APR_ON):
+        print("2.1: the checkpoint's {} kept as {} (not learnt in this run)".format(
+            " and ".join(n_ for n_, c_, o_ in (("map sense", MS_CK, MS_ON), ("appraisals", APR_CK, APR_ON)) if c_ is not None and not o_), "they are"), flush=True)
+    if MS_ON or BR_ON:
+        assert TRK_ON and set(groups) == {2}, "--map-sense, --branch: duels with the simulator's truth (TRACK_TRUTH=1, --track or --info-pay)"
+        SEAT_MAP = np.array(IF_MAPS)[IF_PM]                  # each seat's map, by name
+        BR_IX = {k_: i_ for i_, k_ in enumerate(E_.AUX_COLS)}
+    if MS_ON:
+        assert BEL and BTOK_ON, "--map-sense: with --belief and --btoken (the enemy's place in its seeds is the brain's belief)"
+        MS_TAB, MS_MISS = mapsense_.load_tables(os.environ.get("QLBOT_ROOT") or ROOT, w_map[:a.workers])
+        MS_L = MS_CK["layout"] if MS_CK is not None else mapsense_.layout(MS_TAB, hid=a.map_sense_hid, every=a.map_sense_every, tick=BK)
+        for mp_ in sorted(MS_TAB):                           # (a checkpoint's layout: a map it has not, or whose table has other points, is skipped)
+            if mp_ not in MS_L["maps"] or int(MS_L["maps"][mp_]["n"]) != int(MS_TAB[mp_].n):
+                MS_MISS.append(mp_)
+                del MS_TAB[mp_]
+        assert int(MS_L["tick"]) == BK and a.steps >= int(MS_L["horizon"]) + 40 + BK, "--map-sense: its tick or its horizon does not fit --steps"
+        MS = mapsense_.make_module(MS_L).to(dev)
+        ms_from_ = "new (a forecast of 0)"
+        if MS_CK is not None:
+            MS.load_state_dict(MS_CK["model"])
+            ms_from_ = "from the checkpoint"
+        elif a.map_sense_init:
+            mapsense_.load_start(MS, a.map_sense_init)
+            ms_from_ = "the shared part from {} (the pros' fit), the corrections at zero".format(a.map_sense_init)
+        MS_OPT = torch.optim.Adam(MS.parameters(), lr=a.map_sense_lr)       # (cold at a start, as the readouts')
+        print("map sense (2.1, a lesson only; nothing reads it): {} seeds -> {} -> {} -> {} (dealt, taken x {}), {} corrections on {} maps; {}; "
+              "lesson {} (rate {} x weight; live MAP_SENSE_W), pull {} (live MAP_SENSE_PULL); a sample every {} ticks{}".format(
+                  MS_L["inp"], MS_L["hid"], MS_L["hid"], MS_L["d"], "/".join(MS_L["classes"]), MS_L["rows"], len(MS_TAB), ms_from_, a.map_sense,
+                  a.map_sense_lr, a.map_sense_pull, MS_L["every"],
+                  "; NO TABLE (data/maps/space_<map>.npz) for {}: those maps are skipped".format(", ".join(MS_MISS)) if MS_MISS else ""), flush=True)
+    MS_GEN = torch.Generator().manual_seed(4063)             # (the order of its minibatches: a stream of its own)
+    MS_LIVE = [1.0, max(0.0, float(a.map_sense_pull))]       # (live MAP_SENSE_W, MAP_SENSE_PULL)
+    if APR_ON:
+        assert BEL and H2, "--appraise: with --belief and --head2 (it reads their states)"
+        APR_L = APR_CK["layout"] if APR_CK is not None else appraise_.layout(
+            bel=int(BEL_L["hid"]), mem=H, head=int(H2L["size"]), targets=int(H2L["n_target"]), hid=a.appraise_hid, gamma=float(H2L["gamma"]),
+            hold=a.branch_hold, win=a.branch_win, xf=int(getattr(E_, "INS_F", 0) or 0) + (head2_.INS_MS if (a.ins_ms > 0 and getattr(E_, "INS_F", 0)) else 0), quiet=int(a.ins_quiet > 0))   # (2.1: a row of an instruction's candidates, where the simulator has them)
+        assert int(APR_L["bel"]) == int(BEL_L["hid"]) and int(APR_L["mem"]) == H and int(APR_L["head"]) == int(H2L["size"]) and \
+            int(APR_L["targets"]) == int(H2L["n_target"]), "--appraise: its widths do not fit the network"
+        APR = appraise_.make_module(APR_L).to(dev)
+        if APR_CK is not None:
+            APR.load_state_dict(APR_CK["model"])
+        APR_OPT = torch.optim.Adam(APR.parameters(), lr=a.appraise_lr)
+        print("appraisals (2.1, a lesson only; nothing reads it): {} + {} -> {} -> {} -> {} ({}); {}; lesson {} (rate {} x weight; live "
+              "APPRAISE_W); learnt from the frozen moments' branches{}".format(
+                  APR_L["sit"], APR_L["cand"], APR_L["hid"], APR_L["hid"], APR_L["d"], ", ".join(APR_L["outs"]),
+                  "from the checkpoint" if APR_CK is not None else "new (its last layer at zero)", a.appraise, a.appraise_lr,
+                  "" if BR_ON else " (--branch is off: it gets none)"), flush=True)
+    APR_GEN = torch.Generator().manual_seed(4064)
+    APR_LIVE = [1.0]                                         # (live APPRAISE_W)
+    BR_P = [min(1.0, max(0.0, float(a.branch_p)))]           # (live BRANCH_P)
+    BR_RNG = np.random.default_rng(4065)                     # (the frozen moments' own stream: which matches, which candidates)
+    BR_META = {}                                             # (a rollout's plan, by its update, until its buffers are read)
+    BR_LG = a.branch_long > 0                                # (2.1) the long window: the records being read across rollouts, the finished ones
+    BR_LONG, BR_LFIN = [], []
+    BR_LP = [min(1.0, max(0.0, float(a.branch_long_p))) if BR_LG else 0.0]     # (live BRANCH_LONG_P)
+    BR_LWIN = int(round(float(a.branch_long_secs) / 0.025))
+    INS_LW = [min(1.0, max(0.0, float(a.ins_long_w))) if BR_LG else 0.0]      # (live INS_LONG_W)
+    INS_LSEEN = [0]                                          # the long branches learnt from so far
+    BR_WP = [min(1.0, max(0.0, float(a.branch_wpn_p)))]      # (live BRANCH_WPN_P) the pattern's weapon-only moments
+    # (2.1, --ins-pay-win) THE HEAD'S PAY: the win chance alone. HW_ON: the stream is kept (b_hw [T, N]: win_raw x HW_G); HW_INS: 2.1's
+    # parts learn from it (the value head2.ins_vv, the branches' dv, the long window, the pay on his instruction choices)
+    HW_INS = a.ins_pay_win > 0
+    HW_ON = HW_INS or a.head2_pay == "win"
+    HW_IX, HW_G = -1, 1.0
+    if HW_ON:
+        assert "win_raw" in E_.AUX_COLS, "--ins-pay-win, --head2-pay win: the simulator gives no win_raw (HEAD_PAY_TRUTH=1)"
+        assert TRK_ON or AUX_W > 0, "--ins-pay-win: the simulator's truth must be kept (--track, --info-pay or --aux)"
+        assert not HW_INS or (H2 and a.ins > 0 and hasattr(pol.head2, "ins_vv")), \
+            "--ins-pay-win: with --ins and a head that has the win-chance value (head2.ins_vv: tools/head21_init.py add)"
+        HW_IX = list(E_.AUX_COLS).index("win_raw")
+        HW_G = float(a.ins_pay_gain) if a.ins_pay_gain > 0 else (float(getattr(E_, "WIN_ADD", 0.0)) or 1.0)
+        print("the head's pay (2.1): {} learn from the win judge's change in win chance alone (win_raw x {}): no entry of the pay table. "
+              "The hands: the pay table and the win part as today (their dial of it: the simulator's live WIN_ADD)".format(
+                  " and ".join(n_ for n_, o_ in (("the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices", HW_INS),
+                                                 ("the head's older parts (--head2-pay win)", a.head2_pay == "win")) if o_), HW_G), flush=True)
+    if BR_ON:
+        assert BEL and H2, "--branch: with --belief and --head2 (a moment's candidates are his targets; the outcome reads the head's value)"
+        assert 0 < a.branch_hold < a.branch_win <= a.steps, "--branch: 0 < --branch-hold < --branch-win <= --steps"
+        print("frozen moments (2.1): on; a share {} of each simulator's self-play matches are destinations (live BRANCH_P), {} + {} "
+              "candidates a moment, the first choice forced for {} frames, the outcome over {} frames{}".format(
+                  BR_P[0], a.branch_top, a.branch_rand, a.branch_hold, a.branch_win,
+                  "; every branch a line of branches.jsonl" if a.branch_log else ""), flush=True)
+    INS = a.ins > 0                                          # (2.1, --ins) the head's choice of an instruction
+    IST = IGEN = INS_RNG = None
+    INS_ACT = [None, None]                                   # (the rollout's own copy of the appraisals in [1]: it plays while they learn; the
+    #                                                          scorer is in the network that plays: net.head2)
+    INS_LIVE = dict(g=0.0, teach=0.0, pg=0.0, temp=1.0, ent=0.0)
+    INS_SEEN = [int((INS_CK or {}).get("seen", 0))]          # the appraisals' branches seen so far (the warm-up's count)
+    INS_VCOL, INS_NONE, INS_Q, INS_BLK = None, -1, False, None
+    if INSL and not INS:
+        print("the head has the instruction's scorer (head2.ins_*); --ins is off: it is kept as it is, nothing reads it", flush=True)
+    if INS:
+        assert H2 and BEL and APR_ON and BR_ON, "--ins: with --head2, --belief, --appraise and --branch"
+        assert head2_.has_ins(H2L) and INSL, "--ins: the head has no part 'ins' with its scorer inside (tools/head21_init.py add)"
+        assert all(hasattr(E_, k_) for k_ in ("INS_C", "INS_F", "NW")) and getattr(E_, "INSTR", False), "--ins: a simulator with INSTR=1 and its candidates (instr_feat)"
+        I_ = H2L["ins"]
+        assert int(I_["xf"]) == int(E_.INS_F) + int(I_.get("ms", 0) or 0) and int(I_["c"]) == int(E_.INS_C) and int(I_["nw"]) == int(E_.NW) and int(APR_L.get("xf", 0)) == int(I_["xf"]), \
+            "--ins: the scorer's shape ({}) is not the simulator's (rows {}, numbers {}, weapons {}) or the appraisals' (xf {})".format(
+                I_, E_.INS_C, E_.INS_F, E_.NW, APR_L.get("xf", 0))
+        if a.ins_g >= 0:
+            with torch.no_grad():
+                pol.head2.ins_g.fill_(min(1.0, max(0.0, float(a.ins_g))))
+        IGEN = torch.Generator(device=dev)
+        IGEN.manual_seed(4067)                               # (its draws: the row, the weapon, the seats' coins: a stream of their own)
+        INS_RNG = np.random.default_rng(4069)                # (the seats kept for the lesson)
+        IST = head2_.InsState(N, I_, dev)
+        INS_LIVE.update(g=float(pol.head2.ins_g), teach=max(0.0, float(a.ins_teach)), pg=min(1.0, max(0.0, float(a.ins_pg))),
+                        temp=max(0.01, float(a.ins_temp)), ent=max(0.0, float(a.ins_ent)))
+        nm_ = [str(x_) for x_ in getattr(E_, "INS_FEAT", ())]
+        INS_VCOL = [i_ for i_, x_ in enumerate(nm_) if x_.startswith("v_")] or None        # (the rows' verb columns, for the record)
+        INS_Q = a.ins_quiet > 0 and head2_.has_quiet(pol.head2)   # (quiet movement: the head has the logit and the appraisals read the bit)
+        assert not (a.ins_quiet > 0) or (INS_Q and bool(APR_L.get("quiet"))), \
+            "--ins-quiet: the scorer has no quiet logit (tools/head21_init.py add --quiet 1) or the appraisals do not read the bit"
+        bl_ = tuple(getattr(E_, "INS_BLOCKS", ()))           # (the simulator's row blocks: go, contest, ... the spawn rows apart from push and spam)
+        if bl_ and sum(int(m_) for _, m_ in bl_) == int(E_.INS_C):
+            INS_BLK = ([str(k_) for k_, _ in bl_], torch.as_tensor(np.repeat(np.arange(len(bl_)), [int(m_) for _, m_ in bl_]), device=dev))
+        INS_NONE = int(getattr(E_, "INS_NONE_ROW", -1))      # (the row "none": a candidate as any other; picked, he is under none)
+        print("the instruction (2.1): the head scores {} candidate rows of {} numbers a tick and a weapon of {}; its scorer INSIDE the head {} ({:,} weights, "
+              "the optimizer's group 'ins' at the head's rate; its terms in the head's loss: the gradient reaches the head's memory), "
+              "share {} (live INS_G), the lesson {} at temperature {} once the appraisals have seen {:,} branches (seen {:,}), the game's pay "
+              "on it {} (live H2_INS_PG); {} seats' readings kept a rollout".format(
+                  E_.INS_C, E_.INS_F, E_.NW, "from the checkpoint",
+                  sum(p_.numel() for p_ in head2_.ins_params(pol.head2)), INS_LIVE["g"], INS_LIVE["teach"], INS_LIVE["temp"], a.ins_warm, INS_SEEN[0],
+                  INS_LIVE["pg"], min(N, a.ins_seats)), flush=True)
+    # (2.1, the brain's questions; docs/runs/2.1/TRAINER_PARTS.md, the third build) "does the enemy know where I am" (sim/knownodds.py,
+    # --known-odds) and "where does he respawn" (sim/spawnodds.py, --spawn-odds): readouts on the brain's state and the hands' memory,
+    # each a module of its own beside the network with its own Adam (top-level "known" / "spawn" of the checkpoint), learnt after the
+    # PPO epochs from the rollout's kept head inputs and the simulator's truth. With --ins their answers, how sure the brain is (from
+    # its own readouts: no lesson) and, with --ins-ms, the map sense at each row's place are written into the candidates' rows as
+    # they come from the simulators (ins_prep), and three numbers go to the head's inputs. Off: nothing is made.
+    import knownodds as knownodds_
+    import spawnodds as spawnodds_
+    KN_ON, SPW_ON = a.known_odds > 0, a.spawn_odds > 0
+    KN = KN_OPT = KN_L = KN_GEN = SPW = SPW_OPT = SPW_L = SPW_GEN = None
+    KN_LIVE, SPW_LIVE = [1.0], [1.0]                         # (live KNOWN_W, SPAWN_W: a factor on each lesson; 0 stops it)
+    SPW_TAB = [None, None, None]                             # (the maps' spawn points [simulators, smax, 3], their counts, each seat's simulator)
+    Q_ACT = [None, None, None]                               # (the rollout's own copies: it plays while these learn: known, spawn, the map sense)
+    KQ_IX = {k_: i_ for i_, k_ in enumerate(tuple(getattr(E_, "AUX_COLS", ())))}
+    INS_MS = INS_BQ = False
+    INS_FILL = {}
+    for nm_, ck_, on_ in (("'does the enemy know where I am'", KN_CK, KN_ON), ("'where does he respawn'", SPW_CK, SPW_ON)):
+        if ck_ is not None and not on_:
+            print("2.1: the checkpoint's readout {} is kept as it is (not learnt in this run)".format(nm_), flush=True)
+    if KN_ON:
+        assert H2 and BEL and TRK_ON, "--known-odds: with --belief, --head2 and the simulator's truth (--track)"
+        assert all(c_ in KQ_IX for c_ in knownodds_.COLS + ("en_alive",)), "--known-odds: the simulator gives no en_knows / en_heard (KNOWN_TRUTH=1)"
+        KN_L = KN_CK["layout"] if KN_CK is not None else knownodds_.layout(bel=int(BEL_L["hid"]), mem=H, hid=a.known_hid, tick=BK, every=a.known_every)
+        assert int(KN_L["bel"]) == int(BEL_L["hid"]) and int(KN_L["mem"]) == H and int(KN_L["tick"]) == BK, "--known-odds: the readout's widths or tick do not fit the network"
+        KN = knownodds_.make_module(KN_L).to(dev)
+        if KN_CK is not None:
+            KN.load_state_dict(KN_CK["model"])
+        KN_OPT = torch.optim.Adam(KN.parameters(), lr=a.known_lr)
+        KN_GEN = torch.Generator().manual_seed(4072)
+        print("the brain's question 'does the enemy know where I am' (2.1): {} -> {} -> 2 (knows, heard), {}; its lesson {} at rate {} "
+              "(live KNOWN_W), every {} ticks".format(KN_L["width"], KN_L["readouts"][0]["hid"], "from the checkpoint" if KN_CK is not None
+                                                     else "new (a half each)", a.known_odds, a.known_lr, KN_L["every"]), flush=True)
+    if SPW_ON:
+        assert H2 and BEL and TRK_ON, "--spawn-odds: with --belief, --head2 and the simulator's truth (--track)"
+        assert all(c_ in KQ_IX for c_ in spawnodds_.COLS), "--spawn-odds: the simulator gives no en_spawn (SPAWN_TRUTH=1, with RESPAWN_QL)"
+        assert float(getattr(E_, "RESPAWN_QL", 0.0) or 0.0) > 0 and hasattr(E_, "SPAWN_MAX"), "--spawn-odds: RESPAWN_QL and a simulator with SPAWN_MAX"
+        SPW_L = SPW_CK["layout"] if SPW_CK is not None else spawnodds_.layout(
+            bel=int(BEL_L["hid"]), mem=H, hid=a.spawn_hid, smax=int(E_.SPAWN_MAX), tick=BK, back=int(getattr(E_, "RESPAWN_QL_FRAMES", 84)) + 2 * BK)
+        assert int(SPW_L["bel"]) == int(BEL_L["hid"]) and int(SPW_L["mem"]) == H and int(SPW_L["tick"]) == BK and int(SPW_L["smax"]) == int(E_.SPAWN_MAX), \
+            "--spawn-odds: the readout's widths, tick or spawn points do not fit"
+        SPW = spawnodds_.make_module(SPW_L).to(dev)
+        if SPW_CK is not None:
+            SPW.load_state_dict(SPW_CK["model"])
+        SPW_OPT = torch.optim.Adam(SPW.parameters(), lr=a.spawn_lr)
+        SPW_GEN = torch.Generator().manual_seed(4074)
+        print("the brain's question 'where does he respawn' (2.1): {} -> {} -> {} spawn points (masked to the map's), {}; its lesson {} at "
+              "rate {} (live SPAWN_W); a sample up to {} frames before a respawn".format(
+                  SPW_L["width"], SPW_L["hid"], SPW_L["smax"], "from the checkpoint" if SPW_CK is not None else "new (every point alike)",
+                  a.spawn_odds, a.spawn_lr, SPW_L["back"]), flush=True)
+    if INS:
+        INS_FILL = {str(k_): int(v_) for k_, v_ in dict(getattr(E_, "INS_FILL", {}) or {}).items()}
+        INS_BQ = int(H2L["ins"].get("bq", 0) or 0) > 0
+        INS_MS = int(H2L["ins"].get("ms", 0) or 0) > 0
+        assert not (a.ins_ms > 0) or INS_MS, "--ins-ms: the head was made without the map sense at a row's place (tools/head21_init.py add --ms 1)"
+        assert not INS_MS or MS_ON, "the scorer and the appraisals read the map sense at a row's place: with --map-sense"
+        print("the instruction's rows (2.1): the simulator's {} numbers{}; filled here: {}; the brain's questions among the head's "
+              "inputs: {}".format(E_.INS_F, " and the map sense at the row's place ({})".format(head2_.INS_MS) if INS_MS else "",
+                                  ", ".join(k_ for k_, o_ in (("known", KN is not None), ("unsure", True), ("spawn_odds", SPW is not None))
+                                            if o_ and k_ in INS_FILL) or "nothing", "yes" if INS_BQ else "no (a head made without them)"), flush=True)
+
+    def ins_prep(ix, sb, hh, tok, net_):
+        """(2.1) the candidates as the scorer and the appraisals read them: the simulators' rows with the brain's answers written in
+        (the chance the enemy knows where he is; how spread its zone odds are; its odds of each spawn row's point) and the map sense
+        at each row's place after them -> (the reply with its rows filled, the head's three numbers [N, INS_BQ])"""
+        ok_ = np.asarray(ix[1], bool)
+        known = spo = ms = None
+        bq = np.zeros((N, head2_.INS_BQ), np.float32)
+        with torch.no_grad():
+            if Q_ACT[0] is not None:
+                known = knownodds_.chance(Q_ACT[0], sb, hh)[:, 0].float().cpu().numpy()
+                bq[:, 0] = known - 0.5
+            zn_ = getattr(tok, "zone", None) if tok is not None else None
+            uz, us = head2_.np_brain_unsure(zn_, net_.ahead(sb).float().cpu().numpy() if AH else None, N)
+            bq[:, 1], bq[:, 2] = uz, us
+            if Q_ACT[1] is not None and len(ix) > 11:
+                spo = spawnodds_.odds(Q_ACT[1], sb, hh, torch.from_numpy(np.asarray(ix[11], np.int64)).to(dev)).float().cpu().numpy()
+            if INS_MS:
+                ms = np.zeros(ok_.shape + (head2_.INS_MS,), np.float32)
+                if Q_ACT[2] is not None and tok is not None and len(ix) > 10:
+                    ms = mapsense_.rows_at(mapsense_.torch_fwd(Q_ACT[2], dev), MS_L, MS_TAB, SEAT_MAP, ix[8], np.asarray(ix[9], bool) & ok_,
+                                           tok.P, tok.valid, ix[10], tok.hand.argmax(1))
+        X = head2_.np_ins_fill(ix[0], ok_, INS_FILL, known=known, unsure=uz, spodds=spo, cspawn=ix[7] if len(ix) > 7 else None, ms=ms)
+        return (X,) + tuple(ix[1:]), bq
     h2_group()                                               # (v0.4.3) the strategy head's, the last
     keep_group()                                             # (1.4c) ... then the keep choice's
     wpn_group()                                              # (1.5a) ... then the head's weapon part's
     cmb_group()                                              # (1.7) ... then the combat order's and the fire push's
     pass_group()                                             # (1.7) ... then the brain's pass readout's
+    ins_group()                                              # (2.1) ... then the instruction's scorer's (inside the head)
     if WPN:
         print("weapon part (1.5a): the head's scores (wsc on its state, {} choices) added x wadd {:g} to the weapon key's; its {} inputs by winp; "
               "|wsc| {:.4g} |winp| {:.4g}".format(HAND_D, float(pol.head2.wadd), int(H2L["widths"].get("wobs", 0)),
@@ -3269,6 +3639,17 @@ def main():
                         **({"rule_fade": dict(RF_L, g=float(RF_G[0]), **({"more": dict(RF_L["more"], g=float(SF_G[0]))} if SF else {}))} if RF else {}),   # (v0.4.2a: the fade's gate as it is now; 1.8: and its second group's)
                         **({"win_value": dict(layout=WV_L, model={k_: v_.detach().cpu() for k_, v_ in WV.state_dict().items()})} if WV is not None
                            else ({"win_value": WV_CK} if WV_CK is not None else {})),         # (v0.4.3, --win-value: never in "model")
+                        **({"map_sense": dict(layout=MS_L, model={k_: v_.detach().cpu() for k_, v_ in MS.state_dict().items()})} if MS is not None
+                           else ({"map_sense": MS_CK} if MS_CK is not None else {})),         # (2.1, --map-sense: never in "model")
+                        **({"appraise": dict(layout=APR_L, model={k_: v_.detach().cpu() for k_, v_ in APR.state_dict().items()})} if APR is not None
+                           else ({"appraise": APR_CK} if APR_CK is not None else {})),        # (2.1, --appraise: never in "model")
+                        **({"ins": dict(INS_CK or {}, seen=int(INS_SEEN[0]), warm=int(a.ins_warm), none_row=int(INS_NONE), fill=dict(INS_FILL))}
+                           if INS else ({"ins": INS_CK} if INS_CK is not None else {})),   # (2.1, --ins: what is not a weight: the branches
+                        #                                      seen, the warm-up, the row "none", the filled columns; the scorer is in "model": head2.ins_*)
+                        **({"known": dict(layout=KN_L, model={k_: v_.detach().cpu() for k_, v_ in KN.state_dict().items()})} if KN is not None
+                           else ({"known": KN_CK} if KN_CK is not None else {})),             # (2.1, --known-odds: never in "model")
+                        **({"spawn": dict(layout=SPW_L, model={k_: v_.detach().cpu() for k_, v_ in SPW.state_dict().items()})} if SPW is not None
+                           else ({"spawn": SPW_CK} if SPW_CK is not None else {})),           # (2.1, --spawn-odds: the same)
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
                         env_module=a.env, group=groups[0], groups=groups,
                         **({"inputs": INPUTS_CK, "input_names": INPUT_NAMES_CK} if INPUTS_CK else {}),   # (1.8) the cleaned list it reads, by name
@@ -3333,6 +3714,13 @@ def main():
                                                                    [round(float(x_), 3) for x_ in HB_OUT / HB_OUT.sum()]), flush=True)
 
     WR_ON = a.wrule >= 0                                               # (1.7c) the pros' weapon table chooses the weapon (--wrule)
+    INS_W_ON = bool(getattr(E_, "INSTR", False))                       # (2.1) the simulator has the instruction
+    BIND_ON = bool(getattr(E_, "INSTR", False) and getattr(E_, "INS_BIND", False))   # (2.1a) the instruction's weapon is binding (the simulator's switch)
+    assert BIND_ON == bool(a.ins_bind), "--ins-bind {} but the simulator has INSTR={} INS_BIND={}".format(a.ins_bind, getattr(E_, "INSTR", False), getattr(E_, "INS_BIND", False))
+    assert not (BIND_ON and WR_ON), "--ins-bind and --wrule both set the weapon key: one of them"
+    if BIND_ON:
+        print("the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's "
+              "policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)", flush=True)
     WR_P = [min(1.0, max(0.0, float(a.wrule)))]                        # (live WRULE_P) the share of lives under it
     KEEP_FREEZE = bool(a.keep_freeze)
     if WR_ON:
@@ -3403,7 +3791,7 @@ def main():
     LG = None
     if a.pfsp >= 0:
         import league as league_
-        LG = league_.League(a.league_table or os.path.join(ROOT, "data", "sim_runs", "league_table.json"), a.run, a.pfsp_fixed.split(","))
+        LG = league_.League(a.league_table or os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", "league_table.json"), a.run, a.pfsp_fixed.split(","))
     PFSP_D = [min(1.0, max(0.0, float(a.pfsp)))]                       # (live PFSP) the dial
     OPP_NAME = [None]                                                  # (--pfsp) this rollout's league file
     OPP_NS = [False]                                                   # ... the league network of this rollout's
@@ -3569,6 +3957,17 @@ def main():
         GATE_M = GATE_M & ~ORD_M                                         # (--gate-open's line never opens it: 1.6a's command carries one, long done)
         print("the order's token (1.7): gate {:.2f} now (live ORD_GATE opens it, never lowered; --gate-open leaves it)".format(
             float(pol.attn.gate[ORD_M].max())), flush=True)
+    INSG_M, INSG_V = None, [None]                                        # (2.1a) the instruction's token (kind "instr"): its gate by live INS_GATE alone
+    if GATE_M is not None and any(k_["name"] == "instr" for k_ in ATT["kinds"]):
+        INSG_M = torch.zeros_like(GATE_M)
+        r_ = 0
+        for k_ in ATT["kinds"]:
+            if k_["name"] == "instr":
+                INSG_M[r_:r_ + len(k_["idx"])] = True
+            r_ += len(k_["idx"])
+        GATE_M = GATE_M & ~INSG_M                                        # (--gate-open's line never opens it, nor the others with it)
+        print("the instruction's token (2.1a): gate {:.2f} now (live INS_GATE opens it, never lowered; --gate-open leaves it)".format(
+            float(pol.attn.gate[INSG_M].max())), flush=True)
     assert a.gate_open <= 0 or (GATE_M is not None and a.gate_from <= 0), \
         "--gate-open: the network has no gated attention part (tools/targets_init.py makes one), or --gate-from is above 0"
     ka0 = a.keys_add_start if a.keys_add_start >= 0 else elapsed0       # (--keys-add-open) the minute its clock counts from
@@ -3808,6 +4207,24 @@ def main():
                     CTL_LIVE[0] = float(lt_.get("CONTROL_W", CTL_LIVE[0]))           # (--control: a factor on its lesson; 0 stops it)
                     FOD_LIVE[0] = max(0.0, float(lt_.get("FIGHT_W", FOD_LIVE[0])))     # (1.7b, --fight-odds: a factor on its lesson; 0 stops it)
                     SPR_LIVE[0] = max(0.0, float(lt_.get("SPACE_W", SPR_LIVE[0])))     # (2.0b, --space-read: a factor on its lesson; 0 stops it)
+                    MS_LIVE[0] = max(0.0, float(lt_.get("MAP_SENSE_W", MS_LIVE[0])))   # (2.1, --map-sense: a factor on its lesson; 0 stops it)
+                    MS_LIVE[1] = max(0.0, float(lt_.get("MAP_SENSE_PULL", MS_LIVE[1])))  # ... the corrections' pull toward zero
+                    APR_LIVE[0] = max(0.0, float(lt_.get("APPRAISE_W", APR_LIVE[0])))  # (2.1, --appraise: a factor on its lesson; 0 stops it)
+                    KN_LIVE[0] = max(0.0, float(lt_.get("KNOWN_W", KN_LIVE[0])))       # (2.1, --known-odds: a factor on its lesson; 0 stops it)
+                    SPW_LIVE[0] = max(0.0, float(lt_.get("SPAWN_W", SPW_LIVE[0])))     # (2.1, --spawn-odds: the same)
+                    BR_P[0] = min(1.0, max(0.0, float(lt_.get("BRANCH_P", BR_P[0]))))  # (2.1, --branch: the share of destinations; 0: none)
+                    BR_WP[0] = min(1.0, max(0.0, float(lt_.get("BRANCH_WPN_P", BR_WP[0]))))   # (2.1: the pattern's weapon-only moments)
+                    if BR_LG:                                            # (2.1, --branch-long) the long window's share of the branches, of the target
+                        BR_LP[0] = min(1.0, max(0.0, float(lt_.get("BRANCH_LONG_P", BR_LP[0]))))
+                        INS_LW[0] = min(1.0, max(0.0, float(lt_.get("INS_LONG_W", INS_LW[0]))))
+                    if INS:                                              # (2.1, --ins) its share, its lesson, the pay on it, the temperature
+                        INS_LIVE["g"] = min(1.0, max(0.0, float(lt_.get("INS_G", INS_LIVE["g"]))))
+                        INS_LIVE["teach"] = max(0.0, float(lt_.get("INS_TEACH", INS_LIVE["teach"])))
+                        INS_LIVE["pg"] = min(1.0, max(0.0, float(lt_.get("H2_INS_PG", INS_LIVE["pg"]))))
+                        INS_LIVE["temp"] = max(0.01, float(lt_.get("INS_TEMP", INS_LIVE["temp"])))
+                        INS_LIVE["ent"] = max(0.0, float(lt_.get("INS_ENT", INS_LIVE["ent"])))
+                        with torch.no_grad():
+                            pol.head2.ins_g.fill_(INS_LIVE["g"])
                     H2_OPG_[0] = min(1.0, max(0.0, float(lt_.get("H2_OPG", H2_OPG_[0]))))   # (1.7b) the order's share of the head's term
                     ORD_KL_[0] = max(0.0, float(lt_.get("ORD_KL", ORD_KL_[0])))       # (1.7b) the KL to the start's order
                     if LG is not None:                                               # (1.4b, --pfsp) the draw's dial, from this rollout's draw
@@ -3860,6 +4277,11 @@ def main():
                             ORD_GV[0] = min(0.0, float(lt_["ORD_GATE"]))
                         else:
                             print("live: ORD_GATE ignored (no token of kind 'order')", flush=True)
+                    if "INS_GATE" in lt_:                                              # (2.1a) the instruction's token's gate, from the next rollout
+                        if INSG_M is not None:
+                            INSG_V[0] = min(0.0, float(lt_["INS_GATE"]))
+                        else:
+                            print("live: INS_GATE ignored (no token of kind 'instr')", flush=True)
                     if "H2_WPG" in lt_:                                                # (1.5a, B) the weapon key's credit on the head's clock, from the next update
                         if WCR:
                             H2_WPG[0] = min(1.0, max(0.0, float(lt_["H2_WPG"])))
@@ -3888,6 +4310,14 @@ def main():
                                   **({"CONTROL_W": CTL_LIVE[0]} if CTL_ON else {}),
                                   **({"FIGHT_W": FOD_LIVE[0]} if FOD_ON else {}),
                                   **({"SPACE_W": SPR_LIVE[0]} if SPR_ON else {}),
+                                  **({"MAP_SENSE_W": MS_LIVE[0], "MAP_SENSE_PULL": MS_LIVE[1]} if MS_ON else {}),
+                                  **({"APPRAISE_W": APR_LIVE[0]} if APR_ON else {}),
+                                  **({"KNOWN_W": KN_LIVE[0]} if KN_ON else {}),
+                                  **({"SPAWN_W": SPW_LIVE[0]} if SPW_ON else {}),
+                                  **({"BRANCH_P": BR_P[0], "BRANCH_WPN_P": BR_WP[0]} if BR_ON else {}),
+                                  **({"BRANCH_LONG_P": BR_LP[0], "INS_LONG_W": INS_LW[0]} if BR_LG else {}),
+                                  **({"INS_G": INS_LIVE["g"], "INS_TEACH": INS_LIVE["teach"], "H2_INS_PG": INS_LIVE["pg"],
+                                      "INS_TEMP": INS_LIVE["temp"], "INS_ENT": INS_LIVE["ent"]} if INS else {}),
                                   **({"H2_OPG": H2_OPG_[0], "ORD_KL": ORD_KL_[0]} if CMB else {}),
                                   **({"PFSP": PFSP_D[0]} if LG is not None else {}),
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
@@ -3904,6 +4334,7 @@ def main():
                                   **({"H2_FPG": H2_FPG[0]} if FCR else {}), **({"PADD": PADD_V[0]} if CMB else {}),
                                   **({"PASS_W": PASS_LIVE[0]} if PASS else {}),
                                   **({"ORD_GATE": ORD_GV[0]} if ORD_GV[0] is not None else {}),
+                                  **({"INS_GATE": INSG_V[0]} if INSG_V[0] is not None else {}),
                                   INTENT_SEEK_W=SEEK_W[0])
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
@@ -3928,6 +4359,8 @@ def main():
                 pol.head2.mix.fill_(H2_M[0])                             # (b1.4a) the mix of this rollout: played and learnt at it
                 if KEEP:
                     pol.head2.keep_g.fill_(KEEP_GV[0])                   # (1.4c) the keep choice's share of this rollout (the file's too)
+                if INS:
+                    pol.head2.ins_g.fill_(INS_LIVE["g"])                 # (2.1) the instruction's share of this rollout (the file's too)
                 if CMB:
                     pol.head2.cmb_g.fill_(CMB_GV[0])                     # (1.7) the combat order's share of this rollout (the file's too)
                     pol.head2.padd.fill_(PADD_V[0])                      # ... the pointer's adds
@@ -3951,6 +4384,9 @@ def main():
         if ORD_GV[0] is not None:                                        # (1.7, live ORD_GATE) the order's token, played and learnt at it
             with torch.no_grad():
                 pol.attn.gate[ORD_M] = pol.attn.gate[ORD_M].clamp(min=ORD_GV[0])
+        if INSG_V[0] is not None:                                        # (2.1a, live INS_GATE) the instruction's token, played and learnt at it
+            with torch.no_grad():
+                pol.attn.gate[INSG_M] = pol.attn.gate[INSG_M].clamp(min=INSG_V[0])
         if a.keys_add_open > 0 and KA_ON:                                # (--keys-add-open) before the rollout, as the turn's below
             kf_ = min(1.0, max(0.0, mins - ka0) / a.keys_add_open)
             if kf_ < 1.0 or update == 1:
@@ -4018,6 +4454,77 @@ def main():
                 if nm_:
                     for n_, s_ in zip(nm_, LG.shares(nm_, PFSP_D[0])):
                         lg_sh_[n_] = round(float(grp_ * s_), 4)
+        if SPW_ON and SPW_TAB[0] is None:                                # (2.1, --spawn-odds) once: every simulator's map's spawn points
+            for p in pipes:
+                p.send(("spawns", int(SPW_L["smax"])))
+            sp_r_ = [p.recv() for p in pipes]
+            SPW_TAB[0] = np.stack([r_[0] for r_ in sp_r_])
+            SPW_TAB[1] = np.array([int(r_[1]) for r_ in sp_r_], np.int64)
+            SPW_TAB[2] = np.repeat(np.arange(len(pipes)), np.diff(w_off)[:len(pipes)])
+            print("spawn points: {} to {} a map".format(int(SPW_TAB[1].min()), int(SPW_TAB[1].max())), flush=True)
+        if INS and (KN is not None or SPW is not None or INS_MS):        # (2.1) the brain's questions' own copies for the rollout
+            import copy as copy_q
+            Q_ACT[0] = copy_q.deepcopy(KN).eval() if KN is not None else None
+            Q_ACT[1] = copy_q.deepcopy(SPW).eval() if SPW is not None else None
+            Q_ACT[2] = copy_q.deepcopy(MS).eval() if (INS_MS and MS is not None) else None
+        if INS:                                                          # (2.1, --ins) the rollout's own copies: it plays while these learn
+            import copy as copy_
+            INS_ACT[1] = copy_.deepcopy(APR).eval()
+        if BR_ON:                                                        # (2.1, sim/branch.py) this rollout's frozen moments: the simulators copy
+            BR_META.pop(upd - 2, None)                                   # them, the trainer's rows of the same seats follow (the memories too)
+            if BR_P[0] > 0:
+                t_br = time.time()
+                nt_ = int(H2L["n_target"])
+                with torch.no_grad():                                    # his own scores of his targets now: the hands' rows and the head's part
+                    k_ = float(pol.head2.mix)
+                    sc_ = (1.0 - k_) * pol.pi(CARRY["h"][:, :H])[:, HD_I0:HD_I0 + nt_] + \
+                        (k_ + float(pol.head2.add)) * pol.head2.target(H2S.s) * H2S.valid[:, None]
+                    sc_ = sc_.float().cpu().numpy()
+                ax_ = np.asarray(CARRY["aux"], np.float32)
+                el_ = ax_[:, BR_IX["en_alive"]] > 0.5
+                el_ = el_ & el_[np.arange(N) ^ 1]                        # he and his enemy alive
+                if "trk_on" in BR_IX:
+                    el_ = el_ & (ax_[:, BR_IX["trk_on"]] > 0.5)          # ... in a game
+                ok_ = np.ones((N, nt_), bool)
+                ok_[:, 1:8] = IF_OK[IF_PM][:, 1:8]                       # (the items this map has; a holding place it has not becomes nothing: dropped)
+                wb_, xc_ = None, None
+                if INS and a.branch_ins and CARRY.get("ix") is not None:  # (2.1) the candidates are INSTRUCTIONS: the head's own scores of the
+                    with torch.no_grad():                                # simulator's rows now, and the weapon it scores best for each
+                        xc_ = torch.from_numpy(ins_prep(CARRY["ix"], CARRY["bs"].s, CARRY["h"], CARRY.get("tok"), pol)[0][0]).to(dev).float()   # (filled as a reading fills them)
+                        okc_ = torch.from_numpy(CARRY["ix"][1]).to(dev)
+                        wkc_ = torch.from_numpy(CARRY["ix"][2]).to(dev)
+                        st_ = torch.cat([CARRY["bs"].s.float(), CARRY["h"][:, :H].float(), H2S.s.float()], 1)
+                        ac_ = (appraise_.forecast_rows(APR, APR_L, st_, xc_) if INS_SEEN[0] >= a.ins_warm
+                               else torch.zeros(N, xc_.shape[1], head2_.INS_A, device=dev))
+                        sc_ = head2_.ins_scores(pol.head2, H2S.s, xc_, ac_.half().float(), okc_).float().cpu().numpy()
+                        C_ = xc_.shape[1]
+                        wb_ = head2_.ins_wscores(pol.head2, H2S.s[:, None, :].expand(-1, C_, -1), xc_, wkc_[:, None, :].expand(-1, C_, -1)).argmax(-1).cpu().numpy()
+                        ok_ = (okc_ & wkc_.any(1, keepdim=True)).cpu().numpy()
+                wpk_ = {}
+                if wb_ is not None and BR_WP[0] > 0 and len(CARRY["ix"]) > 12:   # (the pattern's moments: one row, each weapon)
+                    wpk_ = dict(wpn_p=BR_WP[0], pat=np.asarray(CARRY["ix"][12]), wok=np.asarray(CARRY["ix"][2], bool),
+                                cur=np.asarray(CARRY["ix"][5], np.int64), none_row=INS_NONE)
+                bm_ = branch_.start(BR_RNG, pipes[:a.workers], w_off, [(w_n[w_] // 2) // w_group[w_] for w_ in range(a.workers)], 2, BR_P[0],
+                                    a.branch_top, a.branch_rand, a.branch_hold, sc_, el_, ok_, wbest=wb_, long_p=BR_LP[0], quiet_p=(a.branch_quiet_p if (INS_Q and wb_ is not None) else None),
+                                    busy=branch_.long_busy(BR_LONG, list(BR_META.values()), N) if BR_LG else None,
+                                    long_rows=(np.nonzero(np.asarray(E_.INS_ROW_VERB) == int(E_.INS_SPAM))[0] if (BR_LG and a.branch_long_spam > 0 and wb_ is not None) else None),
+                                    **wpk_)
+                if bm_ is not None:
+                    if bm_.get("ins"):                                   # each forced row's numbers; each source's own instruction, if the head's
+                        sr_ = torch.as_tensor(bm_["src"], device=dev)
+                        bm_["X"] = xc_[torch.as_tensor(bm_["src"][bm_["dst_src"]], device=dev), torch.as_tensor(bm_["tg"], device=dev)].float().cpu().numpy()
+                        bm_["src_has"] = (IST.has[sr_] & IST.own[sr_]).cpu().numpy()
+                        bm_["src_X"], bm_["src_w"] = IST.xh[sr_].float().cpu().numpy(), IST.wh[sr_].cpu().numpy()
+                        bm_["src_q"] = IST.qh[sr_].cpu().numpy()
+                    for k_ in ("obs", "teach", "hand", "aux", "legs_x", "scr", "h", "h_opp", "rjl", "rjc", "kf", "ox", "ix", "bs", "tok"):
+                        branch_.copy_seats(CARRY.get(k_), bm_["rows_src"], bm_["rows_dst"], N)
+                    for x_ in (H2S, H2O, WV_ST[0]) + ((IST,) if INS else ()):
+                        branch_.copy_seats(x_, bm_["rows_src"], bm_["rows_dst"], N)
+                    if APR_ON:                                           # the situation each branch starts from: the three states its value reads
+                        i_ = torch.as_tensor(bm_["src"], device=dev)
+                        bm_["S"] = torch.cat([CARRY["bs"].s[i_].float(), CARRY["h"][i_, :H].float(), H2S.s[i_].float()], 1).half().cpu()
+                    bm_["secs"] = time.time() - t_br
+                    BR_META[upd] = bm_
         return dict(mins=mins, live_rec=LIVE_REC, live_settings=LS_REC, close_p=close_p, seek_now=seek_now, vs_anchor=vs_anchor,
                     has_snaps=bool(snaps), n_snaps=len(snaps), opp_ns=bool(OPP_NS[0]), opp_name=OPP_NAME[0], pfsp=PFSP_D[0], lg_shares=lg_sh_)
 
@@ -4336,10 +4843,42 @@ def main():
             b_bel = torch.zeros(T + 1, N, 5) if AUX_BEL else None                       # (--aux-fresh, --aux-measure) his belief inputs, raw
         h0 = h.clone()
         b_u2 = b_vh = b_lpi = h2s0 = None
+        ms_bel = np.zeros((T // BK, N, 5), np.float32) if (MS_ON and TOK_ is not None) else None    # (2.1, --map-sense) the brain's belief at its
+        #                                                                  ticks: the enemy's place (map), valid, the weapon believed in his hand
+        b_ws = torch.zeros(T, N) if (BR_ON and WV_ON) else None          # (2.1, --branch) the judge's shadow pay of each frame (host)
+        b_hw = torch.zeros(T, N, device=dev) if HW_ON else None          # (2.1, --ins-pay-win) the head's pay of each frame: the win chance's change
+        b_vw = torch.zeros(T + 1, N, device=dev) if (HW_INS and H2) else None    # ... and its own value of it (head2.ins_vv)
+        IB_ = IX_ = IU_ = None                                           # (2.1, --ins) the kept readings; the candidates of the next reading; the part of u
+        if INS:
+            IX_ = C.get("ix")
+            IU_ = IST.u() if IX_ is not None else None
+            mine_i = (~snap_players) if has_snaps else torch.ones(N, dtype=torch.bool, device=dev)
+            ss_ = np.sort(INS_RNG.choice(np.nonzero(mine_i.cpu().numpy())[0], size=min(int(a.ins_seats), int(mine_i.sum())), replace=False))
+            SS_ = torch.as_tensor(ss_, device=dev)
+            K_, J_, Ci_, Fi_, Wi_ = len(ss_), T // BK, int(E_.INS_C), int(H2L["ins"]["xf"]), int(E_.NW)
+            IB_ = dict(seats=ss_, X=torch.zeros(J_, K_, Ci_, Fi_, dtype=torch.float16),    # (no head state kept: the learning step re-runs the head)
+                       A=torch.zeros(J_, K_, Ci_, head2_.INS_A, dtype=torch.float16), ok=torch.zeros(J_, K_, Ci_, dtype=torch.bool),
+                       wok=torch.zeros(J_, K_, Wi_, dtype=torch.bool), xw=torch.zeros(J_, K_, Fi_, dtype=torch.float16),
+                       dvw=torch.zeros(J_, K_, Wi_), c=torch.zeros(J_, K_, dtype=torch.long), w=torch.zeros(J_, K_, dtype=torch.long),
+                       lp=torch.zeros(J_, K_), own=torch.zeros(J_, K_, dtype=torch.bool), tm=torch.zeros(J_, K_, dtype=torch.bool),
+                       read=torch.zeros(J_, dtype=torch.bool), verb=np.zeros(len(INS_VCOL) if INS_VCOL else 1), weapon=np.zeros(Wi_), picks=0,
+                       **(dict(block=np.zeros(len(INS_BLK[0])), block_names=INS_BLK[0]) if INS_BLK is not None else {}),
+                       **(dict(q=torch.zeros(J_, K_, dtype=torch.long), dq=torch.zeros(J_, K_), quiet=np.zeros(len(INS_VCOL) if INS_VCOL else 1)) if INS_Q else {}),
+                       warm=bool(INS_SEEN[0] >= a.ins_warm), g=float(net.head2.ins_g),
+                       sh=np.zeros((2, 9), np.float64),              # (2.1a, the tick readouts: [played, shadow] x [ticks with a tick before, the
+                       #                                               best row changed, the drawn row changed, the draw is the row he is on,
+                       #                                               the entropy's sum, ticks, the best row is the appraisals', ticks warm])
+                       lw=(INS_LW[0] if INS_LSEEN[0] >= a.ins_long_warm else 0.0))      # (the long window's share of the target, once it is learnt)
+            IST.own = torch.where(IST.has, IST.own, torch.rand(N, generator=IGEN, device=dev) < IB_["g"])   # the coin of a seat under no
+            #                                                              instruction, anew at the share in force (one he is on is not cut short)
+            bmf_ = BR_META.get(upd)                                      # the seats a frozen moment forces during its hold: not the head's own
+            BRF_ = torch.zeros(N, dtype=torch.bool, device=dev)
+            if bmf_ is not None:
+                BRF_[torch.as_tensor(bmf_["dst"], device=dev)] = True
         b_lpw = torch.zeros(T, N, device=dev) if WCR else None          # (1.5a, B) the weapon key's log-probability as played
         b_lpf = torch.zeros(T, N, device=dev) if FCR else None          # (1.7, S6) the fire key's
         hb_acc = np.zeros((4, 3), np.float64) if HB_ON else None         # (1.5a, C) each habit's league frames, his frags and its against it
-        b_wd = torch.full((T, N), -1, dtype=torch.long, device=dev) if WR_ON else None     # (1.7c) the table's weapon key action, -1 where his own
+        b_wd = torch.full((T, N), -1, dtype=torch.long, device=dev) if (WR_ON or BIND_ON) else None     # (1.7c) the table's weapon key action, -1 where his own; (2.1a) the binding's
         if WR_ON:
             WR_ACC[:] = 0.0                                              # (this rollout's frames under the table)
         if H2:                                                           # (--head2) its ticks' inputs (host, half precision), its value, the
@@ -4474,6 +5013,8 @@ def main():
                     logits, val, h = net.step(x, h, sm=SM, xl=xlu_, bt=bt_t, g2=H2S.adds(net.head2) if H2 else None)
                     if H2:                                               # (--head2) its value of this frame (before its tick)
                         b_vh[t] = head2_.value(net.head2, H2S.s, h)
+                        if b_vw is not None:                             # (2.1, --ins-pay-win) its value of the win-chance pay
+                            b_vw[t] = head2_.value_w(net.head2, H2S.s, h)
                         s_keep_ = H2S.s                                  # (1.4c) the state this frame's outputs read (before its tick)
                 if SM is not None and SM.ticked:                         # (--slow-mem) the tick's input, for the ring
                     SL_PEND.append((SM.u.half().cpu(), SM.r_tick.cpu()))
@@ -4489,7 +5030,7 @@ def main():
                     rd_ = dict(brain=sb_, trk=net.track(sb_), trz=net.trackz(sb_) if TRZ else None, ahead=net.ahead(sb_) if AH else None,
                                obs=x)
                     u2_ = head2_.feats(H2L, hands=h, ctrl=head2_.control_t(net, sb_, h, head2_.ctrl_src(H2L)),
-                                       fight=head2_.fight_t(net, sb_, h, H2L), **rd_)
+                                       fight=head2_.fight_t(net, sb_, h, H2L), ins=IU_ if INS else None, **rd_)
                     b_u2[t // BK] = u2_.half().cpu()
                     H2S.tick(net.head2, u2_)
                     if has_snaps and onet.h2_open:                       # (the league's own head on the same brain's answer, its own hands)
@@ -4497,6 +5038,8 @@ def main():
                                                           fight=head2_.fight_t(onet, sb_, h_opp, H2L), **rd_))
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
+                    if ms_bel is not None:                               # (2.1, --map-sense) this tick's belief, for the seeds
+                        ms_bel[t // BK, :, :3], ms_bel[t // BK, :, 3], ms_bel[t // BK, :, 4] = TOK_.P, TOK_.valid, TOK_.hand.argmax(1)
                     if BA_SEND:                                          # (v0.4.3, BLIND_AHEAD) ... and the readout ahead's places, kept so too
                         TOK_.answer_fut(net.ahead(BS_.s).float().cpu().numpy(), pose_)
                 #                                                          (--belief) every seat at once: the inputs as the update re-reads them
@@ -4600,6 +5143,120 @@ def main():
             if TS_ is not None and (bt_ if BS_ is not None else t % a.info_every == 0):    # (--track, --info-pay) his readout scored, the pay
                 tpay_ = trk_frame(net, aux, b_w[t], TS_, TK_, z=BS_.s if BS_ is not None else None)    # (added to the reward of this
                 #                                                          frame's action, below; --belief: on its ticks, from its state)
+            if INS and t % BK == 0 and IX_ is not None:                  # (2.1, --ins) a reading (the frame after the head's tick): the rows
+                with torch.no_grad():                                    # scored, a row and its weapon drawn, given to the simulators
+                    IXF_, bq_i = ins_prep(IX_, BS_.s, h, TOK_, net)       # (the brain's answers and the map sense written into the rows, on
+                    if IST.bq is not None:                               # this frame's memories: the checks' player does the same)
+                        IST.bq = torch.from_numpy(bq_i).to(dev)
+                    IB_["bqs"] = IB_.get("bqs", 0.0) + bq_i[mine_i.cpu().numpy()].sum(0)
+                    IB_["bqn"] = IB_.get("bqn", 0) + int(mine_i.sum())
+                    Xi_ = torch.from_numpy(IXF_[0]).to(dev).float()
+                    oki_ = torch.from_numpy(IX_[1]).to(dev)
+                    wki_ = torch.from_numpy(IX_[2]).to(dev)
+                    sg_ = torch.from_numpy(IX_[3]).to(dev).float()
+                    dr_ = torch.from_numpy(IX_[4]).to(dev)
+                    ar_ = torch.arange(N, device=dev)
+                    sit_ = torch.cat([BS_.s.float(), h[:, :H].float(), s_keep_.float()], 1)
+                    any_ = oki_.any(1) & wki_.any(1)
+                    Ai_ = torch.zeros(N, Xi_.shape[1], head2_.INS_A, device=dev)
+                    nd_ = torch.nonzero(mine_i & any_).squeeze(1)
+                    if IB_["warm"] and len(nd_):                         # the appraisals' forecast of every offered row (no weapon named)
+                        Ai_[nd_] = appraise_.forecast_rows(INS_ACT[1], APR_L, sit_[nd_], Xi_[nd_])
+                    Ai_ = Ai_.half().float()                             # (read as they are kept: the learning step scores the same numbers)
+                    # (inside the head, 2026-11-11) the draws come from the ONE definition of the masked log-probabilities
+                    # (sim/head2.py ins_row_logp, ins_wq_logp, ins_joint_logp), on the network that plays; the learning step
+                    # recomputes them with the same functions from the re-run head (1.7c's lesson: the same masks or the ratio lies)
+                    lr_i = head2_.ins_row_logp(net.head2, s_keep_, Xi_, Ai_, oki_, any_)
+                    cn_ = torch.multinomial(lr_i.exp(), 1, generator=IGEN).squeeze(1)
+                    xs_ = Xi_[ar_, cn_]
+                    lw_i, qz_i = head2_.ins_wq_logp(net.head2, s_keep_, xs_, wki_, any_)
+                    wn_ = torch.multinomial(lw_i.exp(), 1, generator=IGEN).squeeze(1)
+                    qn_ = torch.zeros_like(cn_)
+                    if INS_Q:                                            # quiet movement: the third draw
+                        qn_ = (torch.rand(N, generator=IGEN, device=dev) < torch.sigmoid(qz_i)).long()
+                    lpi_ = head2_.ins_joint_logp(lr_i, lw_i, qz_i if INS_Q else None, cn_, wn_, qn_ if INS_Q else None)
+                    cur_i = torch.from_numpy(IX_[5]).to(dev)
+                    on_i = (cur_i >= 0) & (cur_i != INS_NONE)            # he is under an instruction (a row other than "none")
+                    end_i = head2_.ins_end(sg_)                          # it is done, has failed, or a wake came (the one rule: sim/head2.py)
+                    redo_ = ~on_i | end_i | head2_.ins_redo(IST.age, BK)   # (2.1a; the owner, 11-12) drawn anew at EVERY tick (the one rule: sim/head2.py ins_redo)
+                    frc_ = (BRF_ & (t < a.branch_hold)) | torch.from_numpy(IX_[6]).to(dev)    # a frozen moment's hold, a drill's force
+                    pick_ = IST.own & mine_i & any_ & redo_ & ~dr_ & ~frc_
+                    # (2.1a, the owner 11-12: the tick readouts) every network seat, its coin on (played) or off (shadow: the head's rows are
+                    # scored on every seat): the best row and the drawn row against the tick before, "continue" = the draw is the row he is
+                    # on (a shadow seat: its own last draw; a played seat under none: the row "none"), the entropy, the appraisals' best row
+                    if getattr(IST, "sh_arg", None) is None or len(IST.sh_arg) != N:
+                        IST.sh_arg = torch.full((N,), -1, dtype=torch.long, device=dev)
+                        IST.sh_smp = torch.full((N,), -1, dtype=torch.long, device=dev)
+                    arg_ = lr_i.argmax(1)
+                    vd_ = mine_i & any_ & ~dr_ & ~frc_
+                    hp_ = vd_ & (IST.sh_arg >= 0)
+                    on_row_ = torch.where(IST.own, torch.where(on_i, cur_i, torch.full_like(cur_i, INS_NONE)), IST.sh_smp)
+                    p_i = lr_i.exp()
+                    ent_ = -(p_i * torch.where(p_i > 0, lr_i, torch.zeros_like(lr_i))).sum(1)
+                    agr_ = None
+                    if IB_["warm"]:
+                        agr_ = arg_ == torch.where(oki_, Ai_[..., 5], torch.full_like(Ai_[..., 5], -1e9)).argmax(1)
+                    un_ = ~((pick_ & (cn_ != INS_NONE)) | (IST.has & on_i & ~pick_))     # under none after this tick
+                    for g_s, m_s in ((0, IST.own), (1, ~IST.own)):
+                        a_s, b_s = hp_ & m_s, vd_ & m_s
+                        IB_["sh"][g_s] += np.array([float(a_s.sum()), float((a_s & (arg_ != IST.sh_arg)).sum()), float((a_s & (cn_ != IST.sh_smp)).sum()),
+                                                    float((a_s & (cn_ == on_row_)).sum()), float(ent_[b_s].sum()), float(b_s.sum()),
+                                                    float((b_s & agr_).sum()) if agr_ is not None else 0.0, float(b_s.sum()) if agr_ is not None else 0.0,
+                                                    float((b_s & un_).sum())])
+                    IST.sh_arg = torch.where(vd_, arg_, torch.full_like(arg_, -1))
+                    IST.sh_smp = torch.where(vd_, cn_, torch.full_like(cn_, -1))
+                    clr_ = on_i & ~IST.own & mine_i & ~dr_ & ~frc_       # a seat whose coin is off: under none
+                    IST.sig = sg_
+                    IST.xh = torch.where(pick_[:, None], xs_, IST.xh)
+                    IST.wh = torch.where(pick_, wn_, IST.wh)
+                    IST.qh = torch.where(pick_, qn_, IST.qh)
+                    IST.ath = torch.where(pick_[:, None], Ai_[ar_, cn_], IST.ath)
+                    IST.age = torch.where(pick_, torch.zeros_like(IST.age), IST.age + BK * 0.025)
+                    IST.has = ((pick_ & (cn_ != INS_NONE)) | (IST.has & on_i & ~pick_)) & ~clr_ & mine_i
+                    hs_ = torch.nonzero(IST.has).squeeze(1)
+                    IST.anow = torch.zeros_like(IST.anow)
+                    if IB_["warm"] and len(hs_):                         # the forecast of the instruction he is on, as it reads now
+                        IST.anow[hs_] = appraise_.forecast_rows(INS_ACT[1], APR_L, sit_[hs_], IST.xh[hs_][:, None, :], IST.wh[hs_][:, None])[:, 0]
+                    IU_ = IST.u()
+                    j_i = t // BK                                        # kept for the lesson: the sample's seats
+                    IB_["read"][j_i] = True
+                    IB_["X"][j_i], IB_["A"][j_i] = Xi_[SS_].half().cpu(), Ai_[SS_].half().cpu()
+                    IB_["ok"][j_i], IB_["wok"][j_i], IB_["xw"][j_i] = oki_[SS_].cpu(), wki_[SS_].cpu(), xs_[SS_].half().cpu()
+                    IB_["c"][j_i], IB_["w"][j_i], IB_["lp"][j_i] = cn_[SS_].cpu(), wn_[SS_].cpu(), lpi_[SS_].cpu()
+                    IB_["own"][j_i] = pick_[SS_].cpu()
+                    if INS_Q:
+                        IB_["q"][j_i] = qn_[SS_].cpu()
+                        if IB_["warm"]:                                  # the chosen row and weapon, quiet asked less not asked: the quiet logit's lesson
+                            fq_ = [appraise_.forecast_rows(INS_ACT[1], APR_L, sit_[SS_], xs_[SS_][:, None, :], wn_[SS_][:, None],
+                                                           quiet=torch.full((len(SS_), 1), q_, device=dev))[:, 0] for q_ in (1, 0)]
+                            IB_["dq"][j_i] = (head2_.ins_dv(fq_[0], IB_["lw"]) - head2_.ins_dv(fq_[1], IB_["lw"])).cpu()
+                    IB_["tm"][j_i] = (any_ & ~dr_ & ~frc_)[SS_].cpu()
+                    if IB_["warm"]:                                      # the chosen row under each weapon: the weapon's lesson
+                        Wn_ = wki_.shape[1]
+                        IB_["dvw_"] = appraise_.forecast_rows(INS_ACT[1], APR_L, sit_[SS_], xs_[SS_][:, None, :].expand(-1, Wn_, -1),
+                                                                  torch.arange(Wn_, device=dev)[None, :].expand(len(SS_), -1)).cpu()
+                        IB_["dvw"][j_i] = head2_.ins_dv(IB_["dvw_"], IB_["lw"])
+                    if bool(pick_.any()):                                # what was picked, for the record
+                        IB_["picks"] += int(pick_.sum())
+                        IB_["weapon"] += torch.bincount(wn_[pick_], minlength=wki_.shape[1]).cpu().numpy()[:wki_.shape[1]]
+                        if INS_BLK is not None:
+                            IB_["block"] += torch.bincount(INS_BLK[1][cn_[pick_]], minlength=len(INS_BLK[0])).cpu().numpy()
+                        if INS_VCOL is not None:
+                            IB_["verb"] += xs_[pick_][:, INS_VCOL].sum(0).cpu().numpy()
+                            if INS_Q:
+                                IB_["quiet"] += xs_[pick_ & (qn_ > 0)][:, INS_VCOL].sum(0).cpu().numpy()
+                    ch_ = (pick_ | clr_).cpu().numpy()
+                    if ch_.any():
+                        cs_ = torch.where(pick_, cn_, torch.full_like(cn_, -1)).cpu().numpy()
+                        ws_ = torch.where(pick_, wn_, torch.full_like(wn_, -1)).cpu().numpy()
+                        qs_i = torch.where(pick_, qn_, torch.zeros_like(qn_)).cpu().numpy()
+                        for w_, p in enumerate(pipes):
+                            if ch_[w_off[w_]:w_off[w_ + 1]].any():
+                                p.send(("instr", dict(c=cs_[w_off[w_]:w_off[w_ + 1]], w=ws_[w_off[w_]:w_off[w_ + 1]], who=ch_[w_off[w_]:w_off[w_ + 1]],
+                                                      **({"q": qs_i[w_off[w_]:w_off[w_ + 1]]} if INS_Q else {}))))
+            if INS and (t + 1) % BK == 0:                                # (a tick's frame: the next reading's candidates are wanted after its step)
+                for p in pipes:
+                    p.send(("instr", dict(want=True)))
             an = act.cpu().numpy()
             if KEEP:                                                     # (1.4c) the keep column beside the actions (the simulator takes it off)
                 an = np.concatenate([an, kcol_.cpu().numpy()[:, None].astype(an.dtype)], 1)
@@ -4632,6 +5289,8 @@ def main():
             tp3_ = time.perf_counter()
             RP_["send"] += tp3_ - tp2_
             res = [p.recv() for p in pipes]
+            if INS and len(res[0]) > 27 and res[0][27] is not None:      # (2.1, --ins) the candidates of the next reading
+                IX_ = tuple(np.concatenate([r[27][i_] for r in res]) for i_ in range(len(res[0][27])))   # (as the simulators give them: filled at the reading)
             tp4_ = time.perf_counter()
             RP_["wait"] += tp4_ - tp3_                                   # (the slowest worker's step and its reply: pickling, the pipe)
             obs = np.concatenate([r[0] for r in res])
@@ -4649,6 +5308,8 @@ def main():
             if WV_ON:                                                    # (--win-value) the frame's shadow pay, cut, in a game
                 wp_ = torch.from_numpy(np.concatenate([r[20] if r[20] is not None else np.zeros((len(r[2]), 3), np.float32) for r in res]))
                 WV_ST[0].frame(wp_[:, 0], wp_[:, 1], wp_[:, 2] > 0)
+                if b_ws is not None:                                     # (2.1, --branch) kept for the branches' "what the judge saw"
+                    b_ws[t] = wp_[:, 0]
             if HEADL and HD_WG >= 0:                                     # (--head) the frame's game and, on its last frame, its band (BUILD 3a:
                 wl_ = np.concatenate([r[12][:, [HD_WG, HD_WB]] if r[12] is not None else np.full((len(r[2]), 2), -1.0)   # the info of the step
                                       for r in res]).astype(np.float32)                                                  # that played frame t)
@@ -4673,6 +5334,9 @@ def main():
                         b_wl[t] = torch.from_numpy(np.concatenate([r[26] if r[26] is not None else np.zeros(len(r[2]), bool) for r in res]).astype(np.float32)).to(dev)
             b_iteach[t] = torch.from_numpy(np.concatenate([r[7] for r in res])).to(dev)
             dec = torch.from_numpy(np.concatenate([r[8] for r in res]).astype(np.float32)).to(dev)
+            if BIND_ON:                                                  # (2.1a) the weapon key's action the instruction set in the step that
+                b_wd[t] = torch.from_numpy(np.concatenate([r[3]["ins_bind"][0] for r in res]).astype(np.int64)).to(dev)   # played frame t: his own key
+                #                                                          does not count there (head_masks, here and in every pass of the learner)
             if JE:                                                       # (JUMP_EVERY) the code: 1 the hand read, 2 the jump alone was read
                 jcode = dec.long()
                 dec = (jcode == 1).float()
@@ -4715,6 +5379,8 @@ def main():
                                       for r in res]).astype(np.int8)
             if AUX_W > 0 or TRK_ON:
                 aux = np.concatenate([r[12] for r in res])
+                if b_hw is not None:                                     # (2.1, --ins-pay-win) this step's change in win chance, at full precision
+                    b_hw[t] = torch.from_numpy(np.ascontiguousarray(aux[:, HW_IX], dtype=np.float32)).to(dev) * HW_G
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
             if BS_ is not None:                                          # (--belief) ... and the belief's, by the same flag
@@ -4730,6 +5396,8 @@ def main():
             if H2S is not None:                                          # (--head2) ... and the strategy head's
                 H2S.reset(d)
                 H2O.reset(d)
+            if INS:                                                      # (2.1, --ins) ... and his instruction; the seat's coin anew
+                IST.reset(d, net.head2.ins_g, IGEN)
             for w_, r in enumerate(res):
                 for k, v in r[3].items():
                     if isinstance(v, list):
@@ -4770,6 +5438,8 @@ def main():
                                        g2=H2S.adds(net.head2) if H2 else None)
                 if H2:
                     b_vh[T] = head2_.value(net.head2, H2S.s, hT_)
+                    if b_vw is not None:
+                        b_vw[T] = head2_.value_w(net.head2, H2S.s, hT_)
             b_val[T] = vT_
             if LONG:
                 b_val2[T] = net.v2(net.zl)
@@ -4802,6 +5472,9 @@ def main():
             C["kf"] = KF_                                                # (1.4c) what the keep choice reads on the next rollout's first frame
         if CMB:
             C["ox"] = OX_                                                # (1.7) the candidates for the next rollout's first keep reading
+        if INS:
+            C["ix"] = IX_                                                # (2.1) the candidates for the next rollout's first reading
+            IB_["secs"] = BK * 0.025 * float(IB_["read"].sum()) * float(mine_i.sum())
         return dict(b_hr=b_hr, b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
                     b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
@@ -4813,7 +5486,8 @@ def main():
                     b_kd=b_kd, b_kx=b_kx, b_kl=b_kl, b_lpk=b_lpk, kg=KG_PLAY if KEEP else 0.0,
                     b_ok=b_ok, b_oc=b_oc, b_ol=b_ol, b_oon=b_oon, b_lpo=b_lpo, b_x=b_x, b_c=b_c, b_p=b_p, b_xm=b_xm, b_wl=b_wl, b_lpwy=b_lpwy,
                     cg=CG_PLAY if CMB else 0.0,
-                    h2g=float(net.head2.gate) if H2 else 0.0, h2m=float(net.head2.mix) if H2 else 0.0, wv=WV_ST[0].take() if WV_ON else None)
+                    h2g=float(net.head2.gate) if H2 else 0.0, h2m=float(net.head2.mix) if H2 else 0.0, wv=WV_ST[0].take() if WV_ON else None,
+                    ms_bel=ms_bel, b_ws=b_ws, ins=IB_, b_hw=b_hw, b_vw=b_vw)
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -4917,6 +5591,51 @@ def main():
         CTL_B = R.pop("ctl_b", None)                                     # (--control) this rollout's labelled states
         FOD_B = R.pop("fod_b", None)                                     # (--fight-odds) this rollout's labelled states
         SPR_B = R.pop("spr_b", None)                                     # (--space-read) this rollout's states and their truth
+        MS_B = BR_O = None
+        if MS_ON and R.get("ms_bel") is not None and R.get("b_aux") is not None:    # (2.1, --map-sense) this rollout's samples: the seeds
+            MS_B = mapsense_.batch(MS_L, MS_TAB, SEAT_MAP, R["b_aux"], R["b_done"], R.pop("ms_bel"), BR_IX)   # at the belief, the truth's next 5 s
+        KN_B = SPW_B = None
+        if (KN_ON or SPW_ON) and R.get("b_u2") is not None and R.get("b_aux") is not None:    # (2.1) the brain's two questions: the head's
+            ob_q, oh_q = head2_._offs(H2L)["brain"], head2_._offs(H2L)["hands"]              # kept inputs at its ticks, the truth of those frames
+            if KN_ON:
+                KN_B = knownodds_.batch(KN_L, R["b_u2"], ob_q, oh_q, R["b_aux"], KQ_IX)
+            if SPW_ON and SPW_TAB[0] is not None:
+                SPW_B = spawnodds_.batch(SPW_L, R["b_u2"], ob_q, oh_q, R["b_aux"], R["b_done"], KQ_IX, SPW_TAB[1][SPW_TAB[2]], tab=SPW_TAB[2])
+        if BR_ON:                                                        # (2.1, --branch) what this rollout's branches and their sources brought
+            bm_ = BR_META.pop(update, None)
+            if bm_ is not None and R.get("b_aux") is not None:
+                kw_ = dict(aux=R["b_aux"], done=R["b_done"], hr=R.get("b_hr") if R.get("b_hr") is not None else R["b_rew"], vh=R.get("b_vh"),
+                           ix=BR_IX, gamma=float(H2L["gamma"]), hold=a.branch_hold, win=a.branch_win, ws=R.get("b_ws"))
+                if HW_INS and R.get("b_vw") is not None:                 # (--ins-pay-win) dv from the win chance alone: its stream, its own value;
+                    kf_ = dict(kw_)                                      # the same branches by the whole pay and the head's old value, for the
+                    kw_ = dict(kw_, hr=R["b_hw"], vh=R["b_vw"])          # readout "would the best option be another by the full pay"
+                    od_f = branch_.outcomes(bm_["dst"], **kf_)
+                BR_O = (bm_, branch_.outcomes(bm_["dst"], **kw_), branch_.outcomes(bm_["src"], **kw_))
+                if HW_INS and R.get("b_vw") is not None:
+                    bm_["rank"] = branch_.rank_differs(bm_["dst_src"], BR_O[1]["dv"], od_f["dv"])
+            if BR_LG and R.get("b_vh") is not None:                      # (2.1) the long window: this rollout's frames added to the branches
+                hr_l = R.get("b_hr") if R.get("b_hr") is not None else R["b_rew"]     # being read; this rollout's own long branches begin
+                vh_l = R["b_vh"]
+                if HW_INS and R.get("b_vw") is not None:                 # (--ins-pay-win) the long window from the win chance alone
+                    hr_l, vh_l = R["b_hw"], R["b_vw"]
+                if bm_ is not None and bm_.get("long") is not None and bool(bm_["long"].any()) and APR_ON and bm_.get("S") is not None:
+                    lg_ = bm_["long"]
+                    if bm_.get("ins"):                                   # (its rows as the appraisals learn them: with the weapon, with none
+                        hs_l = bm_["src_long"] & np.asarray(bm_["src_has"], bool)       # named, and a source under the head's own instruction)
+                        st_l = np.concatenate([bm_["dst"][lg_], bm_["dst"][lg_], bm_["src"][hs_l]])
+                        si_l = np.concatenate([bm_["dst_src"][lg_], bm_["dst_src"][lg_], np.nonzero(hs_l)[0]])
+                        cd_l = appraise_.cand(APR_L, np.full(len(st_l), -1, np.int64),
+                                              weapon=np.concatenate([bm_["w"][lg_], np.full(int(lg_.sum()), -1, np.int64), np.asarray(bm_["src_w"], np.int64)[hs_l]]),
+                                              x=np.concatenate([bm_["X"][lg_], bm_["X"][lg_], np.asarray(bm_["src_X"])[hs_l]]),
+                                              quiet=(np.concatenate([bm_["q"][lg_], bm_["q"][lg_], np.asarray(bm_["src_q"], np.int64)[hs_l]])
+                                                     if bm_.get("q") is not None else None))
+                    else:
+                        st_l, si_l = bm_["dst"][lg_], bm_["dst_src"][lg_]
+                        cd_l = appraise_.cand(APR_L, bm_["tg"][lg_])
+                    BR_LONG.append(branch_.long_new(st_l, bm_["S"][torch.from_numpy(si_l)], cd_l, vh_l))
+                BR_LONG[:], fin_l = branch_.long_step(BR_LONG, hr_l, R["b_done"], vh_l, float(H2L["gamma"]), BR_LWIN, T)
+                BR_LFIN.extend(fin_l)
+        INS_B = R.pop("ins", None)                                       # (2.1, --ins) this rollout's kept readings
         WV_B = R.pop("wv", None)                                         # (--win-value) this rollout's kept states, segments and counters
         BS0 = R.get("bs0")                                               # (--belief) its state at the rollout's start
         if H2:                                                           # (--head2) its ticks' inputs, values and the intention as played; learnt
@@ -4944,6 +5663,48 @@ def main():
             log-probabilities [T, n, CMB_NK]"""
             lo, lk = head2_.order_logp(ho2["okl"], ho2["ops"], B_OK[:, chunk], B_OC[:, chunk])
             return lo * B_OL[:, chunk], lk
+
+        # (2.1, inside the head on the owner's word, 2026-11-11) the instruction's choice at this rollout's kept readings: the head is
+        # re-run over the sequence (head2_.seq, as for his target) and the kept readings are scored again from the re-run state, with
+        # the same functions the rollout drew from. Its three terms (the lesson toward the appraisals' order, the game's pay on his own
+        # readings, the entropy bonus) are added to the head's loss: their gradient goes into the scorer and through the state into
+        # the head's memory and input layer, is clipped and held aside with the head's other gradients, and is stepped by the main
+        # optimizer (the group "ins" and the head's own).
+        INS_K = None
+        INS_ACC = torch.zeros(20, dtype=torch.float64)                   # (the record's sums: see where they are added)
+        if INS and INS_B is not None and bool(INS_B["read"].any()):
+            js_k = torch.nonzero(INS_B["read"]).squeeze(1)
+            INS_K = dict(js=js_k, fr=(js_k * BK).to(dev), seats=torch.as_tensor(INS_B["seats"], device=dev),
+                         pos=torch.full((N,), -1, dtype=torch.long, device=dev), warm=bool(INS_B["warm"]), px=None)
+
+        def ins_piece(ho2, chunk, adv=None):
+            """(2.1) this piece's kept readings -> (the batch of sim/head2.py ins_loss on the card, the re-run head's state at the
+            readings [readings, seats, size] WITH its gradient, which kept seats) or None where the piece has none. adv: the head's
+            advantage [T, N] (None: not wanted: the proximal pass)"""
+            K_ = INS_K
+            K_["pos"].fill_(-1)
+            K_["pos"][chunk] = torch.arange(len(chunk), device=dev)
+            ps_ = K_["pos"][K_["seats"]]
+            kk_ = torch.nonzero(ps_ >= 0).squeeze(1)
+            if not len(kk_):
+                return None
+            kh_ = kk_.cpu()
+            g_ = lambda k_: INS_B[k_][K_["js"]][:, kh_].to(dev)          # noqa: E731  ([ticks, kept seats, ..] -> [readings, this piece's, ..])
+            s_ = ho2["s_held"][K_["fr"]][:, ps_[kk_]]
+            ok_, wok_, A_ = g_("ok"), g_("wok"), g_("A").float()
+            tm_ = g_("tm")
+            B_ = dict(X=g_("X").float(), A=A_, ok=ok_, wok=wok_, xw=g_("xw").float(), c=g_("c"), w=g_("w"), lp=g_("lp"), own=g_("own"),
+                      tq=head2_.ins_target(head2_.ins_dv(A_, INS_B["lw"]), ok_, INS_LIVE["temp"]), tm=tm_ & K_["warm"],
+                      tw=head2_.ins_target(g_("dvw"), wok_, INS_LIVE["temp"]), twm=tm_ & K_["warm"] & wok_.any(-1), em=tm_)
+            if "q" in INS_B:
+                B_["q"], B_["tqq"] = g_("q"), torch.sigmoid(g_("dq") / INS_LIVE["temp"])
+            if adv is not None:
+                st_ = K_["seats"][kk_]
+                B_["adv"] = adv[K_["fr"].to(adv.device)][:, st_.to(adv.device)].float().to(dev)
+            if K_["px"] is not None:                                     # (decoupled) the learner's own log p before the update, its capped weights
+                B_["ref"] = K_["px"][:, kk_]
+                B_["isw"] = (B_["ref"] - B_["lp"]).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
+            return B_, s_, kk_
 
         def keep_lp(ho2, hs, chunk):
             """(1.4c) the keep choice's log-probability of what he drew [T, n], counted where it decided (zeros elsewhere); its logit"""
@@ -5411,6 +6172,7 @@ def main():
         OV_ = None                                                       # (--overlap) the staleness: the network that played (ACT, one update
         LP_PX = ISW = IS_ = None                                         # (decoupled) the learner's log p before the update, the capped weights
         LPI_PX = ISW2 = None                                             # (--head2) ... of his target alone: the head's own term clips around it
+        INS_PX = [None]                                                  # (2.1) ... of his kept instruction choices [readings, kept seats]
         LPW_PX = ISWW = None                                             # (1.5a, B) ... of his weapon key alone: the head's weapon term clips around it
         LPF_PX = ISWF = None                                             # (1.7, S6) ... of his fire key alone
         if DEC:                                                          # (--overlap-ppo decoupled) the proximal pass: pol before any step of
@@ -5459,6 +6221,12 @@ def main():
                     if LEGS_LEARN:                                       # (the legs' part, as in the learning passes)
                         lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
                         lp_ = lp_ + legs_lp(lgl_, b_lr[:, chunk], b_dec[:, chunk], b_lo[:, chunk])[0]
+                    if INS_K is not None:                                # (2.1) the kept instruction choices under the learner before the update:
+                        ipx_ = ins_piece(HO2_[0], chunk)                 # the reference its own term clips around (the same functions, the
+                        if ipx_ is not None:                             # same masks as the play's and the learning passes')
+                            if INS_PX[0] is None:
+                                INS_PX[0] = torch.zeros(len(INS_K["js"]), len(INS_K["seats"]), device=dev)
+                            INS_PX[0][:, ipx_[2]] = head2_.ins_loss(pol.head2, ipx_[1], ipx_[0], 0.0, 0.0, 0.0)[1]["lp"]
                     LP_PX[:, chunk] = lp_
                     V_PX[:, chunk] = v_
                     if LONG:
@@ -5472,6 +6240,8 @@ def main():
                     ISW2 = (LPI_PX - B_LPI).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
                 if LPW_PX is not None:                                   # (1.5a, B) ... and for his weapon key alone
                     ISWW = (LPW_PX - B_LPW).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
+                if INS_K is not None:                                    # (2.1) ... and the reference for his instruction choices
+                    INS_K["px"] = INS_PX[0]
                 if LPF_PX is not None:                                   # (1.7, S6) ... and for his fire key alone
                     ISWF = (LPF_PX - B_LPF).clamp(max=30.0).exp().clamp(max=a.overlap_is_cap)
                 OV_ = torch.stack([w_.sum(), (d_ * w_).sum(), (((r_ - 1.0).abs() > clip).float() * w_).sum(), ((r_ - 1.0).abs() * w_).sum(),
@@ -5511,8 +6281,15 @@ def main():
                                         ((v_ - b_val[:T, chunk]).abs() * w_).sum(), (r_ * w_).sum()]).double().cpu()
         if H2:                                                           # (--head2) its own advantage: GAE of his whole pay at its gamma, from its value
             B_HR = R.get("b_hr") if R.get("b_hr") is not None else b_rew
+            B_HW, B_VW = R.get("b_hw"), R.get("b_vw")                    # (2.1, --ins-pay-win) the win chance's stream and the head's value of it
+            if a.head2_pay == "win":                                     # (the head's older parts too: its whole advantage from that stream)
+                B_HR = B_HW
             H2_PAYS = [float(B_HR.abs().mean()), float(b_rew.abs().mean())]   # (a frame's |pay|: the head's, his)
             ADV_H, RET_H = head2_.gae(B_HR, B_VH, b_done, float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else lam)    # (1.3b: --head2-lam)
+            ADV_W = RET_W = None
+            HW_ACC = torch.zeros(2, dtype=torch.float64, device=dev)     # (its value's loss, summed; the weights)
+            if HW_INS and B_VW is not None:                              # the instruction's own advantage and returns: the win chance alone
+                ADV_W, RET_W = head2_.gae(B_HW, B_VW, b_done, float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else lam)
             CMB_ACC = torch.zeros(2 + 2 * head2_.CMB_NK + 4 + 3, dtype=torch.float64, device=dev)   # (1.7) the combat order: asked, p(an order),
             #                                                              drawn by kind, p by kind; the brain's pass lesson: loss sum, questions, Brier,
             #                                                              base rate; the fire key on the head's clock: frames, its term, clipped
@@ -5867,6 +6644,42 @@ def main():
                     vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
                     vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
                     loss = loss + (min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])) if H2ADD else H2_PG_[0] * H2_PG_[2]) * pg2_ + a.head2_v * vl2_
+                    if RET_W is not None:                                # (2.1, --ins-pay-win) the head's value of the win-chance pay: its own
+                        vw_ = head2_.value_w(pol.head2, ho2_["s_held"], hs_all.detach())     # layer on the same state, the same weight
+                        vlw_ = (0.5 * (vw_ - RET_W[:, chunk]).pow(2) * wgt).sum() / wsum
+                        loss = loss + a.head2_v * vlw_
+                        if epoch == 0:
+                            HW_ACC += torch.stack([vlw_.detach() * wsum, wsum]).double()
+                    if INS_K is not None:                                # (2.1, inside the head) the instruction's choice at this piece's kept
+                        ip_ = ins_piece(ho2_, chunk, ADV_W if ADV_W is not None else ADV_H)   # readings, from the re-run head: its terms in the head's loss (--ins-pay-win: the advantage of the win chance alone)
+                        if ip_ is not None:
+                            li_, oi_ = head2_.ins_loss(pol.head2, ip_[1], ip_[0], INS_LIVE["teach"] if INS_K["warm"] else 0.0,
+                                                       INS_LIVE["pg"], INS_LIVE["ent"], clip)
+                            with torch.no_grad():
+                                own_i_ = ip_[0]["own"].float()
+                                dl_ = float(((ip_[0]["lp"] - oi_["lp"]) * own_i_).sum())
+                                if epoch == 0:                           # the record's counters (before this piece's step): rows, his own,
+                                    ci_ = head2_.ins_counts(ip_[0], oi_, teachable=ip_[0]["tm"])    # taught, entropy, the distance to the
+                                    for q_, k_ in enumerate(("rows", "own", "teach", "ent", "n_ok", "kl", "agree", "offered")):    # appraisals' order
+                                        INS_ACC[q_] += ci_[k_]
+                                    INS_ACC[8] += oi_["teach"]           # the three terms' sizes, a piece each
+                                    INS_ACC[9] += oi_["pg"]
+                                    INS_ACC[10] += oi_["ent"]
+                                    INS_ACC[11] += 1.0
+                                    INS_ACC[12] += dl_                   # log p(played) - log p(the learner now), his own readings: the
+                                    #                                      staleness of the network that played (--overlap), near 0 without
+                                elif epoch == 2:
+                                    INS_ACC[13] += dl_                   # ... after the update's steps: the choice's KL (played to learnt)
+                                    INS_ACC[14] += float(own_i_.sum())
+                            if li_.requires_grad:
+                                if epoch == 0 and k_mb == 0:             # whose gradient the head's memory gets: the instruction's terms beside
+                                    gw_ = pol.head2.gru.weight_hh        # his target's (the norms on the memory's own weights, once an update)
+                                    gi_ = torch.autograd.grad(li_, gw_, retain_graph=True, allow_unused=True)[0]
+                                    gt_ = torch.autograd.grad(pg2_, gw_, retain_graph=True, allow_unused=True)[0] if pg2_.requires_grad else None
+                                    INS_ACC[15] += float(gi_.norm()) if gi_ is not None else 0.0
+                                    INS_ACC[16] += float(gt_.norm()) if gt_ is not None else 0.0
+                                    INS_ACC[17] += 1.0
+                                loss = loss + li_
                     if a.head2_copy > 0:                                 # (--head2-copy, b1.3a) the head's own choice taught to copy the hands'
                         mc_ = m2_ * ho2_["alive"]                         # (read frames with a head state: none from a reset to its next tick)
                         msc_ = mc_.sum().clamp(min=1.0)
@@ -6435,6 +7248,138 @@ def main():
                 SPR_REC = dict(w=round(float(sw_), 4), frames=0)
             SPR_REC["secs"] = round(time.time() - t_spr, 3)
             SPR_B = None
+        MS_REC = APR_REC = BR_REC = None
+        if MS_ON:                                                        # (2.1, --map-sense) scored on each sample before it is learnt from
+            t_ms = time.time()
+            mw_ = MS_LIVE[0] * float(a.map_sense)
+            MS_REC = mapsense_.record(mapsense_.learn(MS, MS_OPT, MS_L, MS_B, lr=a.map_sense_lr * mw_, pull=MS_LIVE[1], dev=dev, gen=MS_GEN),
+                                      mw_, MS_LIVE[1], MS_L, skipped=MS_MISS)
+            MS_REC["secs"] = round(time.time() - t_ms, 3)
+            MS_B = None
+        KN_REC = SPW_REC = None
+        if KN_ON:                                                        # (2.1, --known-odds) scored on each sample before it is learnt from
+            t_kn = time.time()
+            kw_ = KN_LIVE[0] * float(a.known_odds)
+            KN_REC = knownodds_.record(knownodds_.learn(KN, KN_OPT, KN_L, *KN_B, lr=a.known_lr * kw_, dev=dev, gen=KN_GEN) if KN_B is not None else {},
+                                       kw_, KN_L)
+            KN_REC["secs"] = round(time.time() - t_kn, 3)
+            KN_B = None
+        if SPW_ON:                                                       # (2.1, --spawn-odds) the same
+            t_sw = time.time()
+            sw_q = SPW_LIVE[0] * float(a.spawn_odds)
+            SPW_REC = spawnodds_.record(spawnodds_.learn(SPW, SPW_OPT, SPW_L, SPW_B, lr=a.spawn_lr * sw_q, dev=dev, gen=SPW_GEN, tables=SPW_TAB[0]),
+                                        sw_q, SPW_L)
+            SPW_REC["secs"] = round(time.time() - t_sw, 3)
+            SPW_B = None
+        if BR_ON:                                                        # (2.1, --branch) the branches' outcomes: the appraisals' lesson, the log
+            t_ap = time.time()
+            n_br_, acc_ = 0, {}
+            aw_ = APR_LIVE[0] * float(a.appraise)
+            if BR_O is not None:
+                bm_, od_, os_ = BR_O
+                if bm_.get("ins"):                                       # (2.1) branches on instructions: a row's numbers and its weapon
+                    si_, xr_, wr_, kd_, Y_, M_ = branch_.rows_ins(bm_, od_, os_)
+                    cd_ = appraise_.cand(APR_L, np.full(len(si_), -1, np.int64), weapon=wr_, x=xr_, quiet=branch_.rows_q(bm_))
+                else:
+                    si_, tg_, kd_, Y_, M_ = branch_.rows(bm_, od_, os_, int(H2L["n_target"]))
+                    cd_ = appraise_.cand(APR_L, tg_)
+                n_br_ = len(si_)
+                INS_SEEN[0] += int(n_br_) if bm_.get("ins") else 0       # (the warm-up counts branches on instructions only)
+                if APR_ON and n_br_:
+                    acc_ = appraise_.learn(APR, APR_OPT, APR_L, bm_["S"][torch.from_numpy(si_)], torch.from_numpy(cd_),
+                                           torch.from_numpy(Y_), torch.from_numpy(M_), lr=a.appraise_lr * aw_, dev=dev, gen=APR_GEN)
+                if a.branch_dump and bm_.get("ins") and n_br_:           # (tools/run/branch_record.py) the rows as the appraisals read them
+                    xf_ = int(APR_L.get("xf", 0) or 0)
+                    nm_ = list(getattr(E_, "INS_FEAT", ()))
+                    nm_ = nm_ + ["ms_{}".format(j_) for j_ in range(max(0, xf_ - len(nm_)))]
+                    branch_.dump_rows(a.branch_dump, update, APR_L, bm_["S"][torch.from_numpy(si_)].float().cpu().numpy(), cd_, Y_, M_, kd_, si_, nm_[:xf_],
+                                      int(APR_L["verbs"]) + int(APR_L["targets"]) + int(APR_L["weapons"]))
+                if a.branch_log:
+                    branch_.log_rows(os.path.join(out, "branches.jsonl"), update, bm_, od_, os_, SEAT_MAP)
+                BR_REC = branch_.record(bm_, od_, os_, n_br_, bm_.get("secs", 0.0), BR_P[0])
+            else:
+                BR_REC = branch_.record(None, None, None, 0, 0.0, BR_P[0])
+            n_lg_ = 0
+            if BR_LG and APR_ON and BR_LFIN:                             # (2.1) the long branches played out: the appraisals' seventh output alone
+                for r_l in BR_LFIN:
+                    Yl_ = np.zeros((len(r_l["seats"]), APR_L["d"]), np.float32)
+                    Ml_ = np.zeros_like(Yl_)
+                    Yl_[:, 6], Ml_[:, 6] = r_l["dv"], 1.0
+                    appraise_.learn(APR, APR_OPT, APR_L, r_l["S"], torch.from_numpy(r_l["C"]), torch.from_numpy(Yl_), torch.from_numpy(Ml_),
+                                    lr=a.appraise_lr * aw_, dev=dev, gen=APR_GEN)
+                    n_lg_ += len(r_l["seats"])
+                INS_LSEEN[0] += n_lg_
+            BR_LFIN[:] = []
+            if BR_REC is not None and BR_LG:
+                BR_REC.update(long_p=round(BR_LP[0], 4), long_reading=int(sum(len(r_["seats"]) for r_ in BR_LONG)), long_learnt=int(n_lg_),
+                              long_seen=int(INS_LSEEN[0]))
+            if APR_ON:
+                APR_REC = appraise_.record(acc_, aw_, APR_L)
+                APR_REC["secs"] = round(time.time() - t_ap, 3)
+            BR_O = None
+        INS_REC = None
+        if INS and INS_B is not None:                                    # (2.1, --ins) the record of this rollout's kept readings (the lesson
+            t_in = time.time()                                           # itself was in the head's own terms, inside the PPO epochs)
+            rd_i = INS_B["read"]
+            acc_i, play_i = {}, dict(verb=INS_B["verb"], weapon=INS_B["weapon"], picks=INS_B["picks"], secs=INS_B.get("secs", 0.0), cal_n=0,
+                                     quiet=INS_B.get("quiet"), block=INS_B.get("block"), block_names=INS_B.get("block_names"))
+            if float(INS_ACC[0]) > 0:
+                acc_i = {k_: float(INS_ACC[q_]) for q_, k_ in enumerate(("rows", "own", "teach", "ent", "n_ok", "kl", "agree", "offered"))}
+            if bool(rd_i.any()):
+                js_ = torch.nonzero(rd_i).squeeze(1)
+                ss_i = torch.as_tensor(INS_B["seats"], device=ADV_H.device)
+                warm_i = bool(INS_B["warm"])
+                own_i = INS_B["own"][js_]
+                if warm_i and bool(own_i.any()):                         # the chosen rows' forecast against what the head's value says they brought
+                    Wc_, gm_ = int(a.branch_win), float(H2L["gamma"])
+                    f_l, g_l = [], []
+                    dsc_ = gm_ ** torch.arange(Wc_, device=ADV_H.device, dtype=torch.float32)
+                    for q_, j_ in enumerate(js_.tolist()):
+                        t0_ = j_ * BK
+                        o_ = INS_B["own"][j_]
+                        if t0_ + Wc_ > T or not bool(o_.any()):
+                            continue
+                        st_i = ss_i[o_.to(ss_i.device)]
+                        if bool((b_done[t0_:t0_ + Wc_][:, st_i] > 0.5).any()):
+                            ok_c = ~(b_done[t0_:t0_ + Wc_][:, st_i] > 0.5).any(0)
+                        else:
+                            ok_c = torch.ones(len(st_i), dtype=torch.bool, device=ADV_H.device)
+                        hr_c, vh_c = (B_HW, B_VW) if (HW_INS and B_VW is not None) else (B_HR, B_VH)     # (--ins-pay-win: what the win chance alone says they brought)
+                        g_ = (hr_c[t0_:t0_ + Wc_][:, st_i].float() * dsc_[:, None]).sum(0) + gm_ ** Wc_ * vh_c[t0_ + Wc_][st_i].float() - vh_c[t0_][st_i].float()
+                        f_ = INS_B["A"][j_][o_].float()[torch.arange(int(o_.sum())), INS_B["c"][j_][o_], 5]
+                        f_l.append(f_[ok_c.cpu()].double())
+                        g_l.append(g_[ok_c].double().cpu())
+                    if f_l:
+                        f_c, g_c = torch.cat(f_l), torch.cat(g_l)
+                        play_i.update(cal_n=len(f_c), cal_f=float(f_c.sum()), cal_g=float(g_c.sum()), cal_fg=float((f_c * g_c).sum()),
+                                      cal_ff=float((f_c * f_c).sum()), cal_gg=float((g_c * g_c).sum()))
+            INS_REC = head2_.ins_record(acc_i, play_i, H2L, INS_B["g"], INS_LIVE["teach"], INS_LIVE["pg"], INS_LIVE["temp"], INS_B["warm"])
+            INS_REC["seen"], INS_REC["secs"] = int(INS_SEEN[0]), round(time.time() - t_in, 3)
+            INS_REC["long_w"] = round(float(INS_B["lw"]), 4)
+            if INS_B.get("sh") is not None:                              # (2.1a) the tick readouts, played and shadow seats
+                dt_i = float(BK) * 0.025
+
+                def tick_rec(r_):
+                    t_ = max(float(r_[0]), 1.0)
+                    return dict(ticks=int(r_[5]), changes_a_second=round(float(r_[2]) / (t_ * dt_i), 3), best_changes_a_second=round(float(r_[1]) / (t_ * dt_i), 3),
+                                cont=round(float(r_[3]) / t_, 4), stands_secs=round(t_ * dt_i / max(float(r_[2]), 1.0), 3),
+                                entropy=round(float(r_[4]) / max(float(r_[5]), 1.0), 4), under_none=round(float(r_[8]) / max(float(r_[5]), 1.0), 6),
+                                best_agrees=(round(float(r_[6]) / float(r_[7]), 4) if float(r_[7]) > 0 else None))
+                INS_REC["tick"] = dict(played=tick_rec(INS_B["sh"][0]), shadow=tick_rec(INS_B["sh"][1]))
+            np_i = max(1.0, float(INS_ACC[11]))                          # (inside the head) the three terms' sizes (a piece's mean, the first
+            INS_REC["terms"] = dict(teach=round(float(INS_ACC[8]) / np_i, 5), pg=round(float(INS_ACC[9]) / np_i, 5),    # epoch), the choice's KL
+                                    ent=round(float(INS_ACC[10]) / np_i, 5), ent_w=round(float(INS_LIVE["ent"]), 5))
+            INS_REC["kl"] = dict(played_to_before=round(float(INS_ACC[12]) / max(1.0, float(INS_ACC[1])), 6),            # (his own readings: the
+                                 played_to_after=round(float(INS_ACC[13]) / max(1.0, float(INS_ACC[14])), 6))            # play's staleness; the update's move)
+            if float(INS_ACC[17]) > 0:                                   # the head's memory's gradient: from the instruction's terms, from his target's
+                INS_REC["head_grad"] = dict(ins=round(float(INS_ACC[15]) / float(INS_ACC[17]), 6), target=round(float(INS_ACC[16]) / float(INS_ACC[17]), 6))
+            INS_REC["scorer"] = dict(iv=round(float(pol.head2.ins_iv.weight.norm()), 5), wv=round(float(pol.head2.ins_wv.weight.norm()), 5),
+                                     **({"qv_bias": round(float(pol.head2.ins_qv.bias), 4)} if head2_.has_quiet(pol.head2) else {}))
+            if INS_B.get("bqn"):                                         # the brain's questions as the head read them: their means on his seats
+                bm_q = np.asarray(INS_B["bqs"], np.float64) / max(1, int(INS_B["bqn"]))
+                INS_REC["brain_q"] = dict(known=round(float(bm_q[0]) + 0.5, 4) if KN is not None else None, unsure_zones=round(float(bm_q[1]), 4),
+                                          unsure_ahead=round(float(bm_q[2]), 4), map_sense_rows=bool(INS_MS))
+            INS_B = None
         CTL_REC = None
         if CTL_ON:                                                       # (--control) the labels of this rollout: of frames CONTROL_D rows back
             t_ctl = time.time()
@@ -6902,6 +7847,37 @@ def main():
             rec["fight"] = FOD_REC
         if SPR_REC is not None:                                          # (--space-read) scored on each row before it is learnt from
             rec["space"] = SPR_REC
+        if MS_REC is not None:                                           # (2.1, --map-sense) scored on each sample before it is learnt from
+            rec["map_sense"] = MS_REC
+        if KN_REC is not None:                                           # (2.1, --known-odds) "does the enemy know where I am"
+            rec["known"] = KN_REC
+        if SPW_REC is not None:                                          # (2.1, --spawn-odds) "where does he respawn"
+            rec["spawn"] = SPW_REC
+        if APR_REC is not None:                                          # (2.1, --appraise) scored on each branch before it is learnt from
+            rec["appraise"] = APR_REC
+        if BR_REC is not None:                                           # (2.1, --branch) this rollout's frozen moments
+            rec["branch"] = BR_REC
+        if H2:                                                           # (2.1) which pay each network learns from, every update
+            rec["pay_of"] = dict(
+                hands="the pay table + the win part as today",
+                head_old=("win chance only" if a.head2_pay == "win" else ("combat + the win part" if a.head2_pay == "combat_win" else "his whole pay (the table + the win part)")),
+                head_ins=("win chance only" if HW_INS else "as the head's older parts") if INS or BR_ON else None,
+                **({"win_gain": round(HW_G, 4), "win_abs": round(float(B_HW.abs().mean()), 6), "full_abs": round(float(b_rew.abs().mean()), 6),
+                    "v_win": (round(float(B_VW[:T].mean()), 4) if B_VW is not None else None),
+                    "v_win_loss": (round(float(HW_ACC[0] / HW_ACC[1].clamp(min=1.0)), 6) if B_VW is not None else None)} if HW_ON and B_HW is not None else {}))
+        if INS_W_ON and agg.get("inr_n"):                                # (2.1a, INS_NO_NONE) living network seats' readings with no valid real row
+            rec["ins_norow"] = dict(readings=int(agg["inr_n"]), no_real_row=round(float(agg.get("inr_0", 0.0)) / float(agg["inr_n"]), 6),
+                                    n=int(agg.get("inr_0", 0.0)), on_a_map_without_tables=int(agg.get("inr_map", 0.0)), no_none=bool(getattr(E_, "INS_NO_NONE", False)))
+        if INS_W_ON and agg.get("idr_n"):                                # (2.1a) the drills: the drilled seats' frames and their share in each state
+            dn_ = float(agg["idr_n"])
+            rec["drill_ins"] = dict(seat_secs=round(dn_ * float(E_.DT), 1), doing=round(float(agg.get("idr_doing", 0.0)) / dn_, 4),
+                                    done=round(float(agg.get("idr_done", 0.0)) / dn_, 4), failed=round(float(agg.get("idr_failed", 0.0)) / dn_, 4))
+        if BIND_ON:                                                      # (2.1a) the binding weapon: of the network seats' hand readings alive, the
+            ib_ = [float(agg.get(k_, 0.0)) for k_ in ("ib_read", "ib_bound", "ib_diff", "ib_sw")]     # share bound; of those, the share where the
+            rec["ins_bind"] = dict(bound=round(ib_[1] / max(ib_[0], 1.0), 4), not_his_pick=round(ib_[2] / max(ib_[1], 1.0), 4),   # binding was not his own pick;
+                                   weapon_changes_min=round(ib_[3] / max(ib_[0] * float(getattr(E_, "KEY_EVERY", 4)) * float(E_.DT) / 60.0, 1e-9), 3))   # weapon changes a player-minute
+        if INS_REC is not None:                                          # (2.1, --ins) the head's choice of an instruction: played, taught
+            rec["ins"] = INS_REC
         if CMB:                                                          # (1.7b) the order's share of the head's term, its KL to the start's
             oa_ = ORDKL_ACC.cpu().numpy()
             rec["ordkl"] = dict(opg=round(H2_OPG_[0], 5), w=round(ORD_KL_[0], 5), ref=ORD_REF is not None, frames=int(oa_[0]),

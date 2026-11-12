@@ -1,0 +1,20 @@
+C:\Users\dacla\anaconda3\Lib\site-packages\numpy\lib\_nanfunctions_impl.py:2035: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+C:\Users\dacla\Documents\gh\BobbyBones-21\tools\run\prune_inputs.py:140: RuntimeWarning: Mean of empty slice
+  res = dict(rows=int(len(X)), moments=int(len(np.unique(grp))), fits=n, outs=outs, skill={o: float(np.nanmean(base[:, j])) for j, o in enumerate(outs)},
+  seed 0 fold 0: skill with every input {'dealt': -0.2108, 'taken': -0.157, 'he_dies': -0.0343, 'i_die': -0.0998, 'item': 0.1375, 'dv': -0.1025}
+  seed 0 fold 1: skill with every input {'dealt': 0.07, 'taken': -0.0576, 'he_dies': 0.2674, 'i_die': 0.1571, 'item': 0.0722, 'dv': -0.0086}
+  seed 0 fold 2: skill with every input {'dealt': -0.1641, 'taken': -0.213, 'he_dies': -0.0049, 'i_die': -0.1183, 'item': 0.2772, 'dv': -0.0294}
+  seed 0 fold 3: skill with every input {'dealt': -0.0312, 'taken': -0.0573, 'he_dies': 0.0963, 'i_die': 0.1266, 'item': 0.3359, 'dv': 0.0428}
+  seed 1 fold 0: skill with every input {'dealt': -0.0748, 'taken': -0.0979, 'he_dies': 0.0672, 'i_die': -0.0108, 'item': 0.3626, 'dv': 0.038}
+  seed 1 fold 1: skill with every input {'dealt': -0.1419, 'taken': -0.0287, 'he_dies': 0.1011, 'i_die': 0.1127, 'item': 0.089, 'dv': 0.1186}
+  seed 1 fold 2: skill with every input {'dealt': -0.0484, 'taken': -0.1095, 'he_dies': 0.1227, 'i_die': -0.0241, 'item': 0.2387, 'dv': -0.0169}
+  seed 1 fold 3: skill with every input {'dealt': 0.0306, 'taken': 0.1142, 'he_dies': 0.0763, 'i_die': 0.078, 'item': 0.2882, 'dv': 0.0097}
+6254 branch rows of 450 moments; 8 fits. Skill with every input (held-out): dealt -0.071, taken -0.076, he_dies +0.086, i_die +0.028, item +0.225, dv +0.006
+the noise (one fit's skill between seeds): dealt 0.0448, taken 0.0612, he_dies 0.0294, i_die 0.0187, item 0.0268, dv 0.0229
+finish         27 columns  gain on dV +0.0009 (se 0.0087, noise 0.0229)  does not pass   | dealt +0.0032, taken -0.0066, he_dies +0.0203, i_die -0.0031, item -0.0055
+known           1 columns  gain on dV +0.0000 (se 0.0000, noise 0.0229)  does not pass   | dealt +0.0000, taken +0.0000, he_dies +0.0000, i_die +0.0000, item +0.0000
+unsure          1 columns  gain on dV +0.0158 (se 0.0041, noise 0.0229)  does not pass   | dealt -0.0026, taken -0.0049, he_dies +0.0081, i_die -0.0087, item +0.0017
+mapsense        8 columns  gain on dV +0.0040 (se 0.0051, noise 0.0229)  does not pass   | dealt -0.0079, taken -0.0069, he_dies -0.0137, i_die -0.0180, item -0.0112
+weapon         10 columns  gain on dV +0.0041 (se 0.0084, noise 0.0229)  does not pass   | dealt +0.0057, taken +0.0103, he_dies +0.0018, i_die -0.0120, item -0.0031
+row            72 columns  gain on dV -0.0489 (se 0.0116, noise 0.0229)  does not pass   | dealt -0.1080, taken -0.0887, he_dies -0.0926, i_die -0.0936, item -0.0864

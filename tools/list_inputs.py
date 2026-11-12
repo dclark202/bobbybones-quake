@@ -296,7 +296,7 @@ add("his legs", "the switch to his legs is on", "the movement network moves him 
     "0 or 1", "v15b")
 add("his legs", "his legs carried him on the last frame", "", "0 or 1", "v15b")
 add("intention", "his intention is the enemy", "the ninth intention (FIGHT_TARGET; HUNT, v0.3.1: B-256): his way leads to where he believes the enemy is", "0 or 1", "v15f")     # ---- the enemy as a target (2026-10-11)
-assert len(rows) == E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_V02 - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 # ---- v0.2 (2026-10-11): stage A of the attention model, five groups (N_V02 in sim/duel_env.py; the tokens are cut by these group names)
 V02 = "v0.2"
 add("v02 game", "time left in the round", "the share of the round's length still to play (on a game server: of the game's time limit)", "0 to 1", V02)
@@ -352,7 +352,7 @@ for j in range(1, E.V02_SLOTS + 1):
     add("v02 places", "place {}: outcome over expected standing there".format(j), "as for his cell, for a pro seen standing within 128 units of it; zero where it is not known", "/ 0.3, between -1 and 1", V02)
     add("v02 places", "place {}: nearest to the believed enemy".format(j), "of all the map's places this one is nearest to " + BEL.split(":")[0], "0 or 1", V02)
     add("v02 places", "place {}: slot holds a place".format(j), "", "0 or 1", V02)
-assert len(rows) == E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_B2 - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 # ---- stage B part 2 (TARGETS; N_B2 in sim/duel_env.py): the map's holding places, slot by slot (a token each: the text before the colon)
 B2 = "stage B2"
 HOLD = ("one of the map's eight holding places (sim/pro_holds/<map>.json: where the pros hold longest and fare best), in the file's order: "
@@ -367,7 +367,7 @@ for j in range(1, E.HOLD_SLOTS + 1):
         "standing in its cell, less what his stack and the weapons would give anywhere", "/ 0.3, between -1 and 1", B2)
     add("b2 holds", "hold {}: his target".format(j), "his intention is this place (TARGETS)", "0 or 1", B2)
     add("b2 holds", "hold {}: slot holds a place".format(j), "", "0 or 1", B2)
-assert len(rows) == E.OBS_DIM - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_B3 - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 # ---- stage B part 3 (WAYS; N_B3 in sim/duel_env.py): his way to his target, and what the other ways are from where he stands (one token)
 B3 = "stage B3"
 WAYN = ("the shortest", "the second", "the third")
@@ -380,7 +380,7 @@ for j in range(1, E.N_WAYS):
 for j in range(1, E.N_WAYS):
     add("b3 ways", "{} way: differs".format(WAYN[j]), "from where he stands more than a quarter of that way's seconds lie farther than 128 units "
         "from the shortest way", "0 or 1", B3)
-assert len(rows) == E.OBS_DIM - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_ES - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 # ---- v0.3.1, B-257 (EN_STACK; N_ES in sim/duel_env.py): the enemy's stack as he believes it, from his senses only (one token)
 ES_ = "v0.3.1"
 ESW = "(EN_STACK; zeros with it off, and in movement rounds) "
@@ -392,7 +392,7 @@ add("v031 enemy stack", "believed stack: spread", ESW + "how unsure he is: the s
     "while the enemy is out of view, toward an unseen enemy's)", "/ 150", ES_)
 add("v031 enemy stack", "believed stack: since pinned", ESW + "seconds since a spawn he knows of or a pain sound of the three low bands", "seconds / 30, capped at 1", ES_)
 add("v031 enemy stack", "believed stack: weak", ESW + "the expected health and armor together are under 80 (ES_WEAK)", "0 or 1", ES_)
-assert len(rows) == E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_RAIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 # ---- v0.3.6 (RL_AIM, PREFIRE; N_RAIM, N_PREF in sim/duel_env.py): what a rocket is aimed at (docs/v0.4/ROCKETS_v0.3.6.md items 1 to 4)
 V36 = "v0.3.6"
 RA_ = "(RL_AIM; zeros with it off) with the rocket launcher in his hand: "
@@ -417,7 +417,7 @@ add("v036 rocket aim", "wall by him: direction cos", RV_ + "the same", "cos", V3
 add("v036 rocket aim", "wall by him: distance", RV_ + "from that place to the nearest wall (1: none)", "units / 192", V36)
 add("v036 rocket aim", "wall by him: yaw", RV_ + "from his crosshair to the point the trace hit", "degrees / 30, -1 to 1", V36)
 add("v036 rocket aim", "wall by him: pitch", RV_ + "the same, up and down", "degrees / 15, -1 to 1", V36)
-assert len(rows) == E.OBS_DIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_PREF - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 PF_ = ("(PREFIRE; zeros with it off, with the enemy in view, with nothing believed of him, without rockets, grenades or plasma) "
        "of the pros' blind-shot places of one weapon (sim/pro_places/<map>_rl/_gl/_pg.json: the weapon in his hand, else the first "
        "of rockets, grenades, plasma he has) the nearest to the enemy's believed way to him (least off the way first; none within "
@@ -436,7 +436,7 @@ for j in range(E.PF_SLOTS):
     add("v036 prefire", nm_ + ": there", PF_ + "the slot holds a place", "0 or 1", V36)
     for k_, w_ in zip(E.PF_KINDS, ("rockets", "grenades", "plasma")):
         add("v036 prefire", nm_ + ": list {}".format(k_), PF_ + "the list is the {} places".format(w_), "0 or 1", V36)
-assert len(rows) == E.OBS_DIM - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_EMG - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 EM_ = ("(EMERGE_IN; zeros with it off, with the enemy in view, with no belief of him in the last 5 s) where the enemy he believes "
        "in would come into his view: the walking map's way from the believed place to him, walked back from him to the last point "
        "his eyes see (worked out every 4 frames, held between): ")
@@ -448,7 +448,7 @@ add("v036 emergence", "emergence: pitch", EM_ + "from his view up and down to th
 add("v036 emergence", "emergence: distance", EM_ + "from his eyes", "units / 1500, to 2", V36)
 add("v036 emergence", "emergence: at the belief", EM_ + "the point is the believed place itself (he sees the whole way)", "0 or 1", V36)
 add("v036 emergence", "emergence: a way", EM_ + "a way from the believed place to him exists (0: the point inputs are zeros)", "0 or 1", V36)
-assert len(rows) == E.OBS_DIM - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT, (len(rows), E.OBS_DIM - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT)
+assert len(rows) == E.OBS_DIM - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS, (len(rows), E.OBS_DIM - E.N_DRIFT - E.N_ITEMS - E.N_ORD - E.N_YT - E.N_SP - E.N_SPT - E.N_INS)
 DR_ = ("(DRIFT_IN; zeros with it off, with the enemy not in view, while dead, on a sighting's first frame) how fast the enemy "
        "slides across his screen: the frame-to-frame change of the perceived crosshair-to-enemy angle (the enemy inputs' own: "
        "his delays and sight error; his own view turn included), with the motion sense's errors (DRIFT_WEBER, DRIFT_SIGMA), "
@@ -498,6 +498,42 @@ for nm_ in E.INTENTS:
     add("b20b targets", "target {}: the threat there".format(nm_), SP_ + "the threat on the target's place (zeros for none, the enemy, a target the map has not)", "damage a second / 40, at most 1.5", "2.0b")
     add("b20b targets", "target {}: his edge there".format(nm_), SP_ + "what he would put on the enemy from there less the threat there", "damage a second / 40, -1.5 to 1.5", "2.0b")
     add("b20b targets", "target {}: the threat on the way".format(nm_), SP_ + "the most threat on the next six points of his way to it (a holding place: its own place)", "damage a second / 40, at most 1.5", "2.0b")
+IN_ = "(INSTR; zeros with it off and for a seat under no instruction) the instruction the strategy head sends the hands (docs/runs/2.1/INSTRUCTION.md), everything about the enemy in it from the brain's belief: "
+for nm_ in E.INS_VERBS:
+    add("b21 instruction", "verb: {}".format(nm_), IN_ + "the verb he is under", "0 or 1", "2.1")
+add("b21 instruction", "state: doing", IN_ + "he is carrying it out (on the ground, in place with the weapon in hand, the enemy in view of a push)", "0 or 1", "2.1")
+add("b21 instruction", "state: done", IN_ + "it is done (the item taken, the place reached, the enemy met or dead, broken off)", "0 or 1", "2.1")
+add("b21 instruction", "state: failed", IN_ + "it has failed by what he knows (the item taken by the other, pushed off his place, no ammunition, the enemy did not come)", "0 or 1", "2.1")
+add("b21 instruction", "how long he has been on it", IN_ + "since it was given", "seconds / 10, capped at 2", "2.1")
+add("b21 instruction", "place: forward", IN_ + "where to be, from him, turned to his facing", "units / 1000, between -2 and 2", "2.1")
+add("b21 instruction", "place: left", IN_ + "where to be, from him, turned to his facing", "units / 1000, between -2 and 2", "2.1")
+add("b21 instruction", "place: up", IN_ + "where to be, its height from him", "units / 200, between -3 and 3", "2.1")
+add("b21 instruction", "place: walking time", IN_ + "the seconds of walking there (zero on maps without the order's map numbers)", "seconds / 10, capped at 2", "2.1")
+add("b21 instruction", "place: given", IN_ + "the instruction names a place", "0 or 1", "2.1")
+add("b21 instruction", "point: sideways from his crosshair", IN_ + "the point to watch or shoot", "degrees / 180, between -1 and 1", "2.1")
+add("b21 instruction", "point: up or down from his crosshair", IN_ + "the point to watch or shoot", "degrees / 90, between -1 and 1", "2.1")
+add("b21 instruction", "point: distance", IN_ + "from his eye", "units / 1000, capped at 3", "2.1")
+add("b21 instruction", "point: inside his field of view", IN_ + "the point is on his screen", "0 or 1", "2.1")
+add("b21 instruction", "point: clear line", IN_ + "his eye has a clear line to it", "0 or 1", "2.1")
+for nm_ in E.WEAPONS:
+    add("b21 instruction", "weapon asked for: {}".format(nm_), IN_ + "the weapon to have in hand", "0 or 1", "2.1")
+add("b21 instruction", "weapon asked for is in his hand", IN_, "0 or 1", "2.1")
+add("b21 instruction", "firing solution: there is one", IN_ + "the weapon asked for is rockets, plasma or grenades and the point is within its reach", "0 or 1", "2.1")
+add("b21 instruction", "firing solution: flight time", IN_ + "of a shot fired now to the point", "seconds / 2, capped at 2", "2.1")
+add("b21 instruction", "firing solution: aim sideways", IN_ + "from his crosshair to where the shot must leave", "degrees / 180, between -1 and 1", "2.1")
+add("b21 instruction", "firing solution: aim up or down", IN_ + "from his crosshair to where the shot must leave (a grenade's arc in it)", "degrees / 90, between -1 and 1", "2.1")
+add("b21 instruction", "firing solution: the enemy's time is known", IN_ + "the brain gives the seconds until the enemy is expected at the point", "0 or 1", "2.1")
+add("b21 instruction", "firing solution: the enemy's time", IN_ + "the seconds until he is expected at the point, counted down", "seconds / 4, capped at 2", "2.1")
+add("b21 instruction", "firing solution: flight time less the enemy's", IN_ + "0 = a shot fired now lands as he arrives; above = too late", "seconds / 2, between -1 and 1", "2.1")
+add("b21 instruction", "quiet asked", IN_ + "the instruction asks him to be quiet (nothing forces the walk key)", "0 or 1", "2.1")
+FN_ = "(INSTR; the finish time: his own measured damage a second of trigger held, by weapon and distance (FIN_RATE), against his BELIEF of the enemy's stack, never the truth) "
+add("b21 instruction", "finish, weapon asked for: seconds to finish him", FN_ + "the believed stack over his rate with the weapon the instruction asks for (zeros under no instruction or no weapon asked; 2: he cannot use it, a rate of 0, no belief)", "seconds / 5, capped at 2", "2.1")
+add("b21 instruction", "finish, weapon asked for: the cautious seconds", FN_ + "the same with the believed stack plus its spread", "seconds / 5, capped at 2", "2.1")
+add("b21 instruction", "finish, weapon asked for: seconds of fire he has", FN_ + "its ammunition times its refire time (the gauntlet: 2)", "seconds / 10, capped at 2", "2.1")
+add("b21 instruction", "finish, weapon in hand: seconds to finish him", FN_ + "with the weapon in his hand; live for every living seat, under an instruction or not", "seconds / 5, capped at 2", "2.1")
+add("b21 instruction", "finish, weapon in hand: the cautious seconds", FN_ + "the same with the believed stack plus its spread; live for every living seat", "seconds / 5, capped at 2", "2.1")
+add("b21 instruction", "finish, weapon in hand: seconds of fire he has", FN_ + "its ammunition times its refire time (the gauntlet: 2); live for every living seat", "seconds / 10, capped at 2", "2.1")
+add("b21 instruction", "finish: he has a belief of the enemy's stack", FN_ + "the brain's answer for a life on the brain, else the stack belief; live for every living seat", "0 or 1", "2.1")
 assert len(rows) == E.OBS_DIM, (len(rows), E.OBS_DIM)
 
 # ---- groups of more than two players (sim/duel_env_ffa.py): not in the network that is training now

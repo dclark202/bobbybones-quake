@@ -1,0 +1,10 @@
+12:10:57 scratch_21a_o_old_b: done in 0.3 min; the log ends: exit 0
+12:10:58 PASS o_old (the code of C:\Users\dacla\Documents\gh\BobbyBones): the trainer ran 2 updates on update 50 and dumped them (2 dumps)
+12:10:58 PASS o_old: the optimizer's state loaded, no REFUSED live file
+12:11:20 scratch_21a_o_new_b: done in 0.3 min; the log ends: exit 0
+12:11:20 PASS o_new (the code of C:\Users\dacla\Documents\gh\BobbyBones-21): the trainer ran 2 updates on update 50 and dumped them (2 dumps)
+12:11:20 PASS o_new: the optimizer's state loaded, no REFUSED live file
+12:11:20 PASS update 1: today's trainer with every 2.1 flag off = the trainer before the build, to the bit (5 keys)
+12:11:20 PASS update 2: today's trainer with every 2.1 flag off = the trainer before the build, to the bit (5 keys)
+12:11:20 PASS the two dumps carry the same keys
+12:11:20 ALL PASSED (7 checks)

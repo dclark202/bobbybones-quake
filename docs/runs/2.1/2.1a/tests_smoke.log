@@ -1,0 +1,28 @@
+12:53:59 after update 1: live.json {'DRILL_INS_P': 0.25, 'BRANCH_P': 0.3, 'INS_GATE': -6.0}
+12:54:23 after update 2: live.json {'INS_GATE': 0.0, 'BRANCH_P': 0.5}
+12:54:47 after update 3: live.json {'INS_G': 0.5, 'BRANCH_WPN_P': 0.3, 'BRANCH_LONG_P': 0.2, 'INS_LONG_W': 0.25}
+12:55:11 after update 4: live.json {'INS_G': 1.0, 'INS_LONG_W': 0.5}
+12:55:35 after update 5: live.json {'H2_INS_PG': 0.5}
+12:55:59 after update 6: live.json {'H2_INS_PG': 1.0}
+12:56:23 after update 7: live.json {'INTENT_TEACH_W': 0.5, 'SPEED_PAY': 0.06, 'INTENT_SWITCH': 0.01, 'WEAPON_OWN': 1.0}
+12:56:47 after update 8: live.json {'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'INTENT_SWITCH': 0.0}
+12:57:14 after update 9: live.json {'SFADE': 1.0}
+12:59:12 PASS ov: fourteen updates ran (14 in metrics)
+12:59:12 PASS ov: no NaN in his step (kl by update [0.0131, 0.0157, 0.0116, 0.013, 0.0092, 0.0123, 0.014, 0.0142, 0.0131, 0.0152, 0.0115, 0.0158, 0.0176, 0.0147])
+12:59:12 PASS ov: no REFUSED live file; ignored: ['BRAIN_FADE'] (BRAIN_FADE alone: the command has --brain-fade 0)
+12:59:12    update 14 ins: {"g": 1.0, "teach": 1.0, "pg": 1.0, "temp": 0.05, "warm": true, "rows": 2304, "own": 530, "taught": 2154, "entropy": 3.3147, "offered": 26.25, "kl_to_appraisals": 0.0016, "best_row_agrees": 0.0037, "verbs": [0.0453, 0.2358, 0.1226, 0.2943, 0.0792, 0.0302, 0.0, 0.083, 0.1094], "weapons": [0.0962, 0.1264, 0.0755, 0.2189, 0.0792, 0.1038, 0.0189, 0.0, 0.2811], "picks": 530, "row_blocks": {"go": 0.2358, "contest": 0.1226, "hold": 0.2943, "spam": 0.0717, "push": 0.0302, "cut": 0.0, "out": 0.083, "none": 0.0453, "spare": 0.0, "check": 0.1094, "spush": 0.0, "sspam": 0.0075}, "quiet": 0.0038, "quiet_by_verb": [0.0, 0.008, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0172], "changes_a_second": 1.1502, "forecast_dv
+12:59:12    update 14 ins_bind: {"bound": 0.7368, "not_his_pick": 0.3672, "weapon_changes_min": 41.732}
+12:59:12    update 14 drill_ins: {"seat_secs": 1.2, "doing": 0.0, "done": 0.0, "failed": 0.0}
+12:59:12    update 14 branch: {"p": 0.5, "moments": 2, "branches": 6, "held": 6, "rows": 14, "cut": 0.0, "wpn": {"branches": 0, "after_hit": 0, "fight_start": 0, "by_weapon": {}}, "best_by_win_vs_full": {"moments": 2, "differ": 0, "share": 0.0}, "net_forced": 20.33, "net_free": -2.5, "dv_forced": -0.1031, "dv_free": -0.6991, "secs": 0.014, "long_p": 0.2, "long_reading": 9, "long_learnt": 0, "long_seen": 15}
+12:59:12    update 14 appraise: {"w": 1.0, "rows": 14, "dealt": {"n": 14, "mean": 20.5714, "r2": -0.9191}, "taken": {"n": 14, "mean": 3.5, "r2": -91.1048}, "he_dies": {"n": 14, "mean": 0.1429, "brier": 0.1205, "brier_const": 0.1224, "skill": 0.0162}, "i_die": {"n": 14, "mean": 0.0, "brier": 0.0991, "brier_const": 0.0, "skill": null}, "item": {"n": 14, "mean": 0.0, "brier": 0.0496, "brier_const": 0.0, "skill": null}, "dv": {"n": 14, "mean": -0.1882, "r2": -0.0628}, "secs": 0.003}
+12:59:12    update 14 pay_of: {"hands": "the pay table + the win part as today", "head_old": "his whole pay (the table + the win part)", "head_ins": "win chance only", "win_gain": 1.0, "win_abs": 0.00578, "full_abs": 0.004455, "v_win": -0.0937, "v_win_loss": 0.280356}
+12:59:12 PASS ov: the instruction's records are there at the end (ins, ins_bind, branch, appraise, pay_of)
+12:59:12 PASS ov: the lesson toward the appraisals' order was taught ([0, 0, 0, 0, 0, 0, 0, 2180, 2231, 2183, 2195, 2166, 2166, 2154] readings by update)
+12:59:12 PASS ov: the instruction's choice: KL played-to-before small on every update that has it ([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.000213, 0.000323, 0.000433, 0.000443, 0.001067, 0.002238, -0.002445, 0.001029]; the rollouts run one update behind)
+12:59:12 PASS ov: the last dials were applied (SFADE 1.0, INTENT_SWITCH 0.0, WEAPON_OWN 1.0, INS_G 1.0, H2_INS_PG 1.0)
+12:59:12    the target-switch cost a player-minute by update: [-0.3398, -0.2852, -0.3242, -0.2852, -0.3008, -0.1484, -0.0352, -0.0156, -0.0156, -0.0176, 0.0, None, None, None]
+13:00:27 scratch_21a_smoke_ov_e: done in 1.3 min; the log ends: exit 0
+13:00:27 PASS ov: the resume from the save ran 2 more updates (14 -> 16), the optimizer's group 'ins' loaded by name
+13:00:27    optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)
+13:00:27    optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)
+13:00:27 ALL PASSED (8 checks)

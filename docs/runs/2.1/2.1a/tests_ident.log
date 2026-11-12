@@ -1,0 +1,119 @@
+14:46:56 scratch_21a_id_z0_z: done in 1.3 min; the log ends: exit 0
+14:46:58 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+14:46:58 PASS z0: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:46:58    optimizer: the small tokens' first layer starts fresh
+14:46:58    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:46:58    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:46:58    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:46:58    optimizer: its state loaded from opt.pt
+14:46:58    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:46:58    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:46:58    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:48:15 scratch_21a_id_z0b_z: done in 1.3 min; the log ends: exit 0
+14:48:15 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+14:48:15 PASS z0b: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:48:15    optimizer: the small tokens' first layer starts fresh
+14:48:15    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:48:15    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:48:15    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:48:15    optimizer: its state loaded from opt.pt
+14:48:15    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:48:15    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:48:15    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:49:36 scratch_21a_id_zd_z: done in 1.3 min; the log ends: exit 0
+14:49:36 PASS zd: the trainer ran 2 updates and dumped them (2 dumps)
+14:49:36 PASS zd: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:49:36    optimizer: the small tokens' first layer starts fresh
+14:49:36    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:49:36    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:49:36    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:49:36    optimizer: its state loaded from opt.pt
+14:49:36    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:49:36    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:49:36    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:50:53 scratch_21a_id_zr_z: done in 1.3 min; the log ends: exit 0
+14:50:53 PASS zr: the trainer ran 2 updates and dumped them (2 dumps)
+14:50:53 PASS zr: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:50:53    optimizer: the small tokens' first layer starts fresh
+14:50:53    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:50:53    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:50:53    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:50:53    optimizer: its state loaded from opt.pt
+14:50:53    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:50:53    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:50:53    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:52:10 scratch_21a_id_zb_z: done in 1.3 min; the log ends: exit 0
+14:52:10 PASS zb: the trainer ran 2 updates and dumped them (2 dumps)
+14:52:10 PASS zb: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:52:10    optimizer: the small tokens' first layer starts fresh
+14:52:10    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:52:10    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:52:10    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:52:10    optimizer: its state loaded from opt.pt
+14:52:10    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:52:10    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:52:10    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:53:27 scratch_21a_id_zg_z: done in 1.3 min; the log ends: exit 0
+14:53:27 PASS zg: the trainer ran 2 updates and dumped them (2 dumps)
+14:53:27 PASS zg: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:53:27    optimizer: the small tokens' first layer starts fresh
+14:53:27    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:53:27    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:53:27    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:53:27    optimizer: its state loaded from opt.pt
+14:53:27    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:53:27    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:53:27    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:54:43 scratch_21a_id_zp_z: done in 1.3 min; the log ends: exit 0
+14:54:43 PASS zp: the trainer ran 2 updates and dumped them (2 dumps)
+14:54:43 PASS zp: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:54:43    optimizer: the small tokens' first layer starts fresh
+14:54:43    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:54:43    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:54:43    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:54:43    optimizer: its state loaded from opt.pt
+14:54:43    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:54:43    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:54:43    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:56:00 scratch_21a_id_zs_z: done in 1.3 min; the log ends: exit 0
+14:56:00 PASS zs: the trainer ran 2 updates and dumped them (2 dumps)
+14:56:00 PASS zs: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:56:00    optimizer: the small tokens' first layer starts fresh
+14:56:00    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:56:00    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:56:00    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:56:00    optimizer: its state loaded from opt.pt
+14:56:00    appraisals (2.1, a lesson only; nothing reads it): 1024 + 119 -> 256 -> 256 -> 7 (dealt, taken, he_dies, i_die, item, dv, dv_long); from the checkpoint; lesson 1.0 (rate 0.0005 x weight; live APPRAISE_W); learnt from the frozen moments' branches
+14:56:00    the head's pay (2.1): the instruction's value, the frozen moments' dv, the lesson's target and the pay on his choices learn from the win judge's change in win chance alone (win_raw x 1.0): no entry of the pay table. The hands: the pay table and the win part as
+14:56:00    frozen moments (2.1): on; a share 0.0 of each simulator's self-play matches are destinations (live BRANCH_P), 2 + 1 candidates a moment, the first choice forced for 40 frames, the outcome over 320 frames; every branch a line of branches.jsonl
+14:57:17 scratch_21a_id_zq_z: done in 1.3 min; the log ends: exit 0
+14:57:17 PASS zq: the trainer ran 2 updates and dumped them (2 dumps)
+14:57:17 PASS zq: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+14:57:17    optimizer: the small tokens' first layer starts fresh
+14:57:17    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+14:57:17    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+14:57:17    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1060)
+14:57:17    optimizer: its state loaded from opt.pt
+14:57:17    2.1: the checkpoint's appraisals kept as they are (not learnt in this run)
+14:57:17    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+14:57:17    the instruction's token (2.1a): gate -30.00 now (live INS_GATE opens it, never lowered; --gate-open leaves it)
+14:57:17 PASS update 1: it repeats itself to the bit
+14:57:17 PASS update 2: it repeats itself to the bit
+14:58:34 scratch_21a_id_z18_z: done in 1.3 min; the log ends: exit 0
+14:58:34 PASS z18: 1.8a's command on update 50 ran
+14:58:34 PASS the first frame: the start on list 21 in the instruction's simulator values every seat as update 50 does under 1.8a's command (largest difference 4.8e-07), the first frame's pay equal
+14:58:34    (after the first frame the two cannot be set side by side: the wider network is made from the trainer's random stream before his first draw, so his draws differ. That his answers are the same on real rows is the start test's `same`: 0 of 44,800 actions)
+14:58:34 PASS the lessons and the head's choice on (z0) against off (zq): update 1's actions the same to the bit (0 of 344064 differ)
+14:58:34 PASS zd: the drills reach the simulators (update 1's or 2's actions differ from z0's)
+14:58:34 PASS zr: the drills begun in the middle of a game reach the simulators (update 1's or 2's actions differ from z0's)
+14:58:34 PASS zb: the frozen-moment rounds reach the simulators (update 1's or 2's actions differ from z0's)
+14:58:34 PASS zg: the head's own instructions reach the simulators (update 1's or 2's actions differ from z0's)
+14:58:34 PASS zs: the switch cost out and a held weapon choosable reach the simulators (update 1's or 2's actions differ from z0's)
+14:58:34 PASS zb: frozen moments were played ([6, 6] branches by update; the first plan is made before the second rollout)
+14:58:34 PASS zp: the pay on his own choice with the head's share 0 changes nothing of update 1's play
+14:58:34 PASS z0: the records are there (pay_of: the head's side on the win chance alone)
+14:58:34    z0's pay_of: {"hands": "the pay table + the win part as today", "head_old": "his whole pay (the table + the win part)", "head_ins": "win chance only", "win_gain": 1.0, "win_abs": 0.015153, "full_abs": 0.008403, "v_win": 0.0, "v_win_loss": 0.789422}
+14:58:34    zg's ins: {"g": 1.0, "teach": 1.0, "pg": 0.0, "temp": 0.05, "warm": false, "rows": 3072, "own": 3072, "taught": 0, "entropy": 3.2442, "offered": 25.79, "kl_to_appraisals": 0.0, "best_row_agrees": 0.0, "verbs": [0.0, 0.2428, 0.1107, 0.3089, 0.07, 0.0358, 0.0, 0.1175, 0.1143], "weapons": [0.083, 0.0967, 0.0726, 0.319, 0.0492, 0.0527, 0.0241, 0.0, 0.3027], "picks": 3072, "row_blocks": {"go": 0.2428, "contest": 0.1107, "hold": 0.3089, "spam": 0.07, "push": 0.0358, "cut": 0.0, "out": 0.1175, "none": 0.0, "spare": 0.0, "check": 0.1143, "spush": 0.0, "sspam": 0.0}, "quiet": 0.0023, "quiet_by_verb": [0.0, 0.004
+14:58:34    zg's ins_bind: {"bound": 1.0, "not_his_pick": 0.5898, "weapon_changes_min": 195.215}
+14:58:34 PASS zg: with the head's share at 1 the binding's counts are there
+14:58:34 ALL PASSED (32 checks)

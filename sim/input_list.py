@@ -100,6 +100,32 @@ def build(version, sample, faded, n_brain_old=868):
     return L
 
 
+def extend(version, base, groups):
+    """(2.1) a list made from another: the inputs of `groups` (in the full list's order) added to the hands' part, after the base's
+    hands and before its tail; the brain's part and the cuts as the base's. A network of the base is brought to it by
+    tools/inputs21.py (the new columns at zero weights)."""
+    B = json.load(open(path(base), encoding="utf-8"))
+    R = full_rows()
+    have = set(tuple(x) for x in B["names"])
+    new = [[r["group"], r["input"]] for r in R if r["group"] in groups]
+    assert new and not any(tuple(x) in have for x in new), "nothing to add, or the base has it already"
+    nh = int(B["n_hands"])
+    L = dict(version=version, base=base, full=len(R), n_brain=int(B["n_brain"]), n_hands=nh + len(new),
+             names=B["names"][:nh] + new + B["names"][nh:], cut=B["cut"], added=list(groups),
+             note="brain = the first n_brain; the hands' encoder = the first n_hands; the tail is read by no first layer")
+    json.dump(L, open(path(version), "w", encoding="utf-8"), indent=0)
+    full = {(r["group"], r["input"]): r for r in R}
+    with open(os.path.join(ROOT, "docs", "INPUTS_{}.csv".format(version)), "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f, lineterminator=chr(10))
+        w.writerow(["index", "group", "input", "meaning", "scale", "added in", "read by"])
+        for j, (g, n) in enumerate(L["names"]):
+            r = full[(g, n)]
+            who = "brain, hands" if j < L["n_brain"] else ("hands" if j < L["n_hands"] else
+                                                          ("head" if g in TAIL_GROUPS else "none (the guessing lesson's marks)"))
+            w.writerow([j, g, n, r["meaning"], r["scale"], r["added in"], who])
+    return L
+
+
 def show(version):
     import collections
     L = load(version)
@@ -110,7 +136,9 @@ def show(version):
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "build":
+    if sys.argv[1] == "extend":                              # python sim/input_list.py extend 21 18 "b21 instruction"
+        extend(int(sys.argv[2]), int(sys.argv[3]), tuple(sys.argv[4].split(",")))
+    elif sys.argv[1] == "build":
         import torch
         ck = torch.load(os.path.join(ROOT, "data", "sim_runs", "duel_gru_b1_2d", "keep", "policy_end_b12d.pt"), map_location="cpu", weights_only=False)
         build(int(sys.argv[2]), sys.argv[3], ck["rule_fade"]["cols"])

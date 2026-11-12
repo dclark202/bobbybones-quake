@@ -52,7 +52,8 @@ def load(path):
         import attn as attn_                                 # sim/attn.py: numpy only (torch is imported inside make_module alone)
         lay = json.loads(str(P["attn"]))
         W = {k[len("attn."):]: v for k, v in P.items() if k.startswith("attn.")}
-        assert int(lay["obs_dim"]) == P["w0"].shape[1], "the tokens are cut from {} inputs, the network has {}".format(lay["obs_dim"], P["w0"].shape[1])
+        aw_ = int(json.loads(str(P["inputs"]))["n"]) if "inputs" in P else P["w0"].shape[1]    # (a cleaned list: the tokens are cut from the whole list)
+        assert int(lay["obs_dim"]) == aw_, "the tokens are cut from {} inputs, the network has {}".format(lay["obs_dim"], aw_)
         if np.abs(W["door.weight"]).sum() > 0:
             # (the index lists as arrays once, not at every frame: forward_np takes either)
             lay = dict(lay, kinds=[dict(k_, idx=np.asarray(k_["idx"], np.int64)) for k_ in lay["kinds"]])
@@ -96,6 +97,29 @@ def load(path):
             import passodds as passodds_                     # (numpy at the top: torch inside its torch functions only)
             P["_pass"] = (json.loads(str(P["passodds"])), {k[len("passr."):]: np.asarray(v, np.float32) for k, v in P.items()
                                                            if k.startswith("passr.")}, passodds_.np_forward)
+    P["_ins"] = None                                         # (2.1) the head's choice of an instruction: the scorer, the appraisals it reads,
+    if "ins" in P and "appraise" in P and P.get("_head2") is not None and P["_head2"][0].get("ins"):    # the brain's readouts written into
+        if "/sim" not in sys.path and os.path.isdir("/sim"):                                             # the rows (sim/head2.py np_ins_prep,
+            sys.path.insert(0, "/sim")                                                                   # np_ins_read: the checks' own sums)
+        import appraise as appraise_                         # sim/appraise.py, sim/knownodds.py, sim/spawnodds.py, sim/mapsense.py: numpy at the top
+        ij_ = json.loads(str(P["ins"]))
+        f32_ = lambda pre_: {k[len(pre_):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith(pre_)}    # noqa: E731
+        Wi_ = f32_("ins.")
+        g_ = float(os.environ["NET_INS_G"]) if os.environ.get("NET_INS_G", "") != "" else float(np.asarray(Wi_.get("ins_g", 0.0)))
+        I_ = dict(I=P["_head2"][0]["ins"], W=Wi_, aprL=json.loads(str(P["appraise"])), aprP=appraise_.np_params(f32_("appraise.")),
+                  warm=int(ij_.get("seen", 0)) >= int(ij_.get("warm", 0)), g=g_, none=int(ij_.get("none_row", -1)), fill=dict(ij_.get("fill") or {}),
+                  knP=None, spP=None, msL=None, msP=None, tabs={}, rng=np.random.default_rng(4067))
+        if "known" in P:
+            import knownodds as knownodds_
+            I_["knP"] = knownodds_.np_params(f32_("known."))
+        if "spawn" in P:
+            import spawnodds as spawnodds_
+            I_["spP"] = spawnodds_.np_params(f32_("spawn."))
+        if "map_sense" in P and int(I_["I"].get("ms", 0) or 0):
+            I_["msL"], I_["msP"] = json.loads(str(P["map_sense"])), f32_("map_sense.")
+        P["_ins"] = I_
+        if g_ > 0:                                           # (the scorer reads the head's state: the head is stepped)
+            P["_head2"] = P["_head2"][:5] + (True,) + P["_head2"][6:]
     P["_brain"] = None                                       # (v0.4.1) the brain and its token: (brain weights, token layout, btoken, where
     if "btoken" in P and "belief" in P:                      # its state starts in a seat's array, the gate); played only while the gate is open
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -117,6 +141,12 @@ def load(path):
         if os.environ.get("NET_RULE_FADE_G", "") != "":
             rf_["g"] = float(os.environ["NET_RULE_FADE_G"])
         P["_rfade"] = (np.asarray(rf_["cols"], np.int64), float(rf_.get("g", 0.0)), bool(rf_.get("readers")))
+        m_ = rf_.get("more") or {}                           # (1.8a) the second fade group (the strategy inputs out of the hands)
+        if os.environ.get("NET_STRAT_FADE_G", "") != "":
+            m_ = dict(m_, g=float(os.environ["NET_STRAT_FADE_G"]))
+        if m_.get("cols"):
+            P["_rfade2"] = (np.asarray(m_["cols"], np.int64), float(m_.get("g", 0.0)))
+    P["_src"] = np.asarray(P["input_src"], np.int64) if "input_src" in P else None    # (a cleaned list: its columns in the simulator's full list)
     P["_uni"] = None                                         # (--legs-feat, --legs-guide) (layout, door or None, guide weights or None):
     if "legs_unify" in P:                                    # None while both parts are at zero (they add nothing then)
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -221,6 +251,8 @@ def clear(P, h, rows=None):
     the same frames whatever is cleared, as in training); everything else is zeros. For a network without a head the
     same as h[rows] = 0."""
     r = slice(None) if rows is None else rows
+    if P.get("_ist") is not None and len(P["_ist"]) == len(h):     # (2.1) the instruction's held numbers of these seats (kept beside the arrays)
+        P["_ist"][r] = 0.0
     end = None
     if P.get("_brain") is not None:                          # (v0.4.1) the brain and its answer, by the same flag (the trainer's reset:
         B_, _, bt_, end, _ = P["_brain"]                     # btoken.packed_clear keeps its tick clock and the time since he noticed
@@ -325,13 +357,34 @@ def order_on(P):
     return P.get("_ord") is not None and (cmb_g(P) > 0 or float(np.asarray(P["_head2"][1].get("padd", 0.0))) > 0)
 
 
+def ins_due(P):
+    """(2.1) the coming frame is a reading for some seat and this file's head gives instructions (its share above 0): give step()
+    ix= (sim/branch.py worker_feat(env), these rows) and mapname=; after it P["_ins_pick"] is (rows, c, w, who, q) for
+    env.instr_pick(c, w, who, q) of those rows, or None"""
+    I_, kr_ = P.get("_ins"), P.get("_k_r")
+    return I_ is not None and I_["g"] > 0 and kr_ is not None and bool(np.asarray(kr_).any())
+
+
+def bind_weapon(env, act, rows=None):
+    """(2.1a, INS_BIND: the weapon an instruction asks for is binding) the plugin's call after draw() and after
+    env.instr_pick(): act [k, outputs] the drawn actions of the seats `rows` (None: every seat), changed in place: the weapon
+    key's column (6) set to what the instruction binds. The definition is the simulator's own (env.instr_bind(), sim/duel_env.py
+    ins_bind_act: the one the simulator's step and the trainer's mask use); with the switch off (env_vars) nothing changes.
+    Returns [k] the action set (-1: his own stood)"""
+    b = np.asarray(env.instr_bind(), np.int64)
+    if rows is not None:
+        b = b[np.asarray(rows)]
+    act[:, 6] = np.where(b >= 0, b, act[:, 6])
+    return b
+
+
 def order_due(P):
     """(1.7) the coming frame is a keep reading for some seat: give step() ox= (the simulator's order_feat() after this frame, these rows)"""
     kr_ = P.get("_k_r")
     return order_on(P) and kr_ is not None and bool(np.asarray(kr_).any())
 
 
-def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None):
+def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None, mapname=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
     kf [B, KEEP_FEAT] (1.4c, 1.7a; keep_g(P) above 0): the simulator's keep_feat() rows after the frame before; the keep column
@@ -371,6 +424,9 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     if "_slow" in P:
         h = hf[:, :P["whh"].shape[1]]
     mean = P["obs_mean"]
+    obs_full = obs                                           # (the weapon dial reads the simulator's full list by position)
+    if P.get("_src") is not None and obs.shape[1] != len(mean):    # (a cleaned list, sim/input_list.py) the network's own columns, by
+        obs = obs[:, P["_src"]]                              # name, out of the simulator's inputs (a caller may give them already cut)
     if obs.shape[1] > len(mean):                             # an older network in a simulator with more inputs: they are appended at the end
         obs = obs[:, :len(mean)]
     x = np.clip((obs - mean) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
@@ -386,6 +442,11 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     if rf is not None and rf[1] > 0 and len(rf[0]):          # (v0.4.2a) the hands' inputs: the rule-made columns times (1 - g)
         y_ = np.array(x, copy=True)                          # (sim/rule_fade.py apply_np: the same sums)
         y_[:, rf[0]] = y_[:, rf[0]] * np.float32(1.0 - float(rf[1]))
+        x = y_
+    rf2 = P.get("_rfade2")
+    if rf2 is not None and rf2[1] > 0:                       # (1.8a) the second group, as test_suite.Policy: the same sums
+        y_ = np.array(x, copy=True)
+        y_[:, rf2[0]] = y_[:, rf2[0]] * np.float32(1.0 - float(rf2[1]))
         x = y_
     xh = x                                                   # (the hands' attention reads these)
     ord_ = None
@@ -405,7 +466,7 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     if "cell" in P:                                          # the learned map (v8): the last two inputs are cell numbers
         ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
         x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
-    x = np.tanh(x @ P["w0"].T + P["b0"])
+    x = np.tanh(x[:, :P["w0"].shape[1]] @ P["w0"].T + P["b0"])    # (a cleaned list: the encoder reads the list's first n_hands)
     x = np.tanh(x @ P["w1"].T + P["b1"])
     if A is not None:                                        # (v0.2) what the door lets through of the tokens
         if bt is None or not P["_brain"][4] > 0:             # (v0.4.2a: the brain stepped for the readers alone: its token stays out)
@@ -464,6 +525,7 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         logits = logits + LU_.np_gate_add(lay_u, *T_u, zo, h2_, lgl_, ok_, int(np.sum(P["action_dims"])))
     P["_zo"] = zo                                            # (--legs-residual: legs_feed's rows read it)
     P["_keep"] = None
+    kd_ = None                                               # (the keep choice's draw of this frame, where there is one: it gates a change of instruction)
     P["_logits"] = logits                                    # (a parity check with test_suite.Policy's last_logits)
     kg_ = keep_g(P)
     if column_on(P) and kf is not None and h2s is not None:  # (1.4c) the keep choice: the head's state this frame's outputs read (before its
@@ -496,6 +558,38 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
                 co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
             oq_ = ((P["_krng"].random(len(r_)) < cmb_g(P)) & okc_).astype(np.int64)
             P["_keep"][r_] = P["_keep"][r_] + (8 * ko_ + 32 * co_ + 256) * oq_
+    P["_ins_pick"] = None                                    # (2.1) this frame's picks of an instruction: (rows, c, w, who, q) for the
+    I_ = P.get("_ins")                                       # plugin's env.instr_pick, or None
+    kr1_ = P.get("_k_r")
+    if I_ is not None and ix is not None and I_["g"] > 0 and h2s is not None and bst is not None and kr1_ is not None \
+            and len(kr1_) == len(h2s) and np.asarray(kr1_).any():
+        hm2i_ = P["_head2"][2]                               # a reading (the frame after the head's tick): test_suite.Policy's sums
+        S_ = int(P["_head2"][0]["size"])
+        r_ = np.nonzero(np.asarray(kr1_, bool))[0]
+        ixs_ = tuple(np.asarray(v_)[r_] for v_ in ix)
+        if P.get("_ist") is None or len(P["_ist"]) != len(h2s):
+            P["_ist"] = np.zeros((len(h2s), hm2i_.ins_held_width(I_["I"])), np.float32)
+        sb_i, tk_i = np.asarray(bst[0].s, np.float32)[r_], bst[1]
+        ms_ = None
+        if I_["msP"] is not None and mapname:                # the map sense at the rows' places: this map's table, where the server has it
+            import mapsense as mapsense_
+            if mapname not in I_["tabs"]:
+                I_["tabs"][mapname] = mapsense_.load_tables(os.environ.get("QLBOT_ROOT") or "/", [mapname])[0].get(mapname)
+            S_t = I_["tabs"][mapname]
+            if S_t is not None:
+                en_, eo_, hd_ = np.asarray(tk_i.P, np.float32)[r_], np.asarray(tk_i.valid, bool)[r_], np.asarray(tk_i.hand)[r_].argmax(1)
+                ms_ = lambda Pp, pk, wme: mapsense_.rows_at(lambda x, row: mapsense_.np_forward(I_["msP"], x, row), I_["msL"], {mapname: S_t},   # noqa: E731
+                                                            np.full(len(r_), mapname), Pp, pk, en_, eo_, wme, hd_)
+        ah_i = P["_head2"][6]
+        X_, bq_ = hm2i_.np_ins_prep(ixs_, I_["fill"], I_["I"], sb_i, hfast[r_, :H],
+                                    zone=np.asarray(tk_i.zone)[r_] if getattr(tk_i, "zone", None) is not None else None,
+                                    ah=hm2i_.np_mlp(ah_i, sb_i) if ah_i is not None else None, knP=I_["knP"], spP=I_["spP"], ms=ms_)
+        sit_ = np.concatenate([sb_i, hfast[r_, :H], h2s[r_, :S_]], 1).astype(np.float32)
+        st_, pk_ = hm2i_.np_ins_read(I_["I"], I_["W"], I_["aprL"], I_["aprP"], I_["warm"], I_["g"], I_["none"], P["_head2"][0]["every"],
+                                     P["_ist"][r_], h2s[r_, :S_], sit_, X_, ixs_[1], ixs_[2], ixs_[3], ixs_[4], ixs_[5], ixs_[6],
+                                     (kd_[r_] > 0) if kd_ is not None else np.ones(len(r_), bool), I_["rng"], bq_)
+        P["_ist"][r_] = st_
+        P["_ins_pick"] = (r_,) + pk_
     if bst is not None:                                      # (v0.4.1) the brain reads the frame's normalised inputs; at its tick the readouts'
         br_, tk_ = bst                                       # answer is kept in map coordinates (his pose of this frame): test_suite's token_post
         tkd_ = br_.frame(xa)
@@ -516,7 +610,9 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
                 sb_ = br_.s[tkd_]
                 u_ = hm2.np_feats(lay2, brain=sb_, trk=o1_, trz=o2_, ahead=hm2.np_mlp(ah2, sb_) if ah2 is not None else None,
                                   ctrl=hm2.np_ctrl(ct2, sb_, hfast[tkd_]), fight=hm2.np_fight(fo2, sb_, hfast[tkd_]),
-                                  obs=xa[tkd_], hands=hfast[tkd_])
+                                  obs=xa[tkd_], hands=hfast[tkd_],
+                                  ins=(hm2.np_ins_held_u(P["_ins"]["I"], P["_ist"][tkd_]) if (P.get("_ins") is not None and P.get("_ist") is not None
+                                                                                            and len(P["_ist"]) == len(tkd_)) else None))
                 h2s = h2s.copy()
                 h2s[tkd_] = hm2.np_tick(W2, lay2, u_, h2s[tkd_])
         hb = P["_brain"][2].pack(br_, tk_)
@@ -531,7 +627,7 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     if wd_ > 0:                                              # (owner, 2026-11-07, duelbot's !weapons) the weapon dial: a push on the presses
         o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])    # of rockets, rail and the lightning gun
         logits = logits.copy()                               # toward the owner's table (sim/weapon_dial.py; P["_logits"] stays the network's)
-        P["_wdial_add"] = _weapon_dial().push(obs, wd_)
+        P["_wdial_add"] = _weapon_dial().push(obs_full, wd_)
         logits[:, int(o_[6]) + 1:int(o_[6]) + 4] += P["_wdial_add"]
     out = draw(P, logits, rng)
     if P.get("_no_switch") is None:                          # (v0.3.5, NO_SWITCH) the switch retired: drawn as before, then off
@@ -541,10 +637,10 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     if P.get("_wdial_mode") == "replace":                    # (!weapons pros) the dial's replace form: the owner's table chooses his weapon
         if P.get("_wdial_rng") is None:                      # the dial's own stream: every other output drawn exactly as with it off
             P["_wdial_rng"] = np.random.default_rng(101)
-        a_ = _weapon_dial().choose(obs, P.setdefault("_wdial_state", {}), P["_wdial_rng"])    # (sim/weapon_dial.py; test_suite.Policy the same)
+        a_ = _weapon_dial().choose(obs_full, P.setdefault("_wdial_state", {}), P["_wdial_rng"])    # (sim/weapon_dial.py; test_suite.Policy the same)
         P["_wdial_act"] = a_
         out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])        # in place of the network's weapon key where he owns one of the three
-        t_ = _weapon_dial().target(obs, P["_wdial_state"], P["_wdial_rng"])    # the weapon he lacks (the rail, rocket ammunition) as his
+        t_ = _weapon_dial().target(obs_full, P["_wdial_state"], P["_wdial_rng"])    # the weapon he lacks (the rail, rocket ammunition) as his
         P["_wdial_tgt"] = t_                                 # target where the rule speaks; the simulator's readings and hold as ever
         out[:, 10] = np.where(t_ >= 0, t_, out[:, 10])
     if hb is not None:                                       # (v0.4.1) the brain's state back at the very end of the array
