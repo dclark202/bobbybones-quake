@@ -131,6 +131,15 @@ lightning in hand over 50% (reported, not acted on). Negative frags and lopsided
 `auto_restart.log` as AUTO RESTART FAILED and nothing is retried. Tested dry (the waiting and the hand-over); the two scripts it calls run
 for the first time in the run. The restart renames phase 1's `live_status.json` (it deleted it before): nothing is deleted.
 
+## The restart (11-12)
+
+**The unattended restart failed at update 150 (03:29):** `stop_18a.ps1` named a variable `$all` beside its parameter `$All` (one name in
+PowerShell), found "0 trainers" and refused; phase 1 ran on until its 900 minutes ended at 05:05 (update 168). On the owner's word
+("Just start it from u150 as planned") phase 2 was started by hand at 07:12 from the save of update 150: phase 1's state after 150 is kept
+in `data/sim_runs/duel_gru_1_8a/phase1_after150/` (its policy and optimizer at 168, its metrics to 168, its live.json, the four snapshots
+after 150), the run's metrics cut back to its first 150 lines, live.json set to the ramp's dials at clock 150; nothing deleted. The stop
+script is fixed (`$procs`).
+
 ## The fallback (owner, 2026-11-11, during the run: "keep going as planned but have that as a fallback plan if things don't go well")
 
 If the head's stage fails here (the checks do not rise as 1.3b's did, or the lightning takes his hand again with the credit over updates
